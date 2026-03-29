@@ -1,0 +1,82 @@
+{
+  "headerTitle": "Tổng quan",
+  "balance": {
+    "title": "Tổng quan",
+    "totalBalance": 12450000,
+    "incomeThisMonth": 15000000,
+    "expenseThisMonth": 2550000,
+    "insightTitle": "Ổn định",
+    "insightSubtitle": "Thu tháng này đang giữ nhịp tốt, chi tiêu vẫn trong vùng an toàn để tiếp tục tối ưu giao dịch.",
+    "filterLabel": "Sao kê",
+    "chart": [
+      { "label": "T2", "value": 122000, "tone": "teal" },
+      { "label": "T3", "value": 158000, "tone": "mint" },
+      { "label": "T4", "value": 98000, "tone": "sky" },
+      { "label": "T5", "value": 178000, "tone": "mint" },
+      { "label": "T6", "value": 214000, "tone": "cyan" },
+      { "label": "T7", "value": 136000, "tone": "coral" },
+      { "label": "CN", "value": 154000, "tone": "rose" }
+    ]
+  },
+  "budgets": [
+    {
+      "name": "Ăn uống",
+      "spent": 4215000,
+      "limit": 6000000,
+      "daysRemainingText": "Còn 5 ngày",
+      "icon": "fork.knife.circle.fill",
+      "accent": "slate"
+    },
+    {
+      "name": "Mua sắm",
+      "spent": 5320000,
+      "limit": 8000000,
+      "daysRemainingText": "Còn 5 ngày",
+      "icon": "bag.circle.fill",
+      "accent": "coral"
+    },
+    {
+      "name": "Di chuyển",
+      "spent": 980000,
+      "limit": 2000000,
+      "daysRemainingText": "Còn 12 ngày",
+      "icon": "car.circle.fill",
+      "accent": "mint"
+    }
+  ],
+  "upcomingBills": [
+    {
+      "name": "Internet",
+      "amount": 165000,
+      "dueTime": "09:17",
+      "icon": "wifi.square.fill",
+      "accent": "indigo"
+    }
+  ],
+  "recentTransactions": [
+    {
+      "merchant": "Tiền điện Phòng",
+      "amount": 950000,
+      "timeLabel": "09:17",
+      "icon": "lightbulb.max.fill",
+      "accent": "slate",
+      "kind": "expense"
+    },
+    {
+      "merchant": "Highlands Coffee",
+      "amount": 58000,
+      "timeLabel": "23 phút trước",
+      "icon": "cup.and.saucer.fill",
+      "accent": "amber",
+      "kind": "expense"
+    },
+    {
+      "merchant": "Lương từ Công ty",
+      "amount": 15000000,
+      "timeLabel": "hôm qua",
+      "icon": "banknote.fill",
+      "accent": "mint",
+      "kind": "income"
+    }
+  ]
+}

@@ -1,0 +1,77 @@
+{
+  "headerTitle": "Kế hoạch",
+  "tabs": [
+    {
+      "id": "budget",
+      "title": "Ngân sách",
+      "icon": "dollarsign.circle.fill"
+    },
+    {
+      "id": "goals",
+      "title": "Mục tiêu",
+      "icon": "flag.circle.fill"
+    },
+    {
+      "id": "recurring",
+      "title": "Định kỳ",
+      "icon": "calendar.circle.fill"
+    }
+  ],
+  "summary": {
+    "totalBudget": 20000000,
+    "spent": 8650000,
+    "remaining": 11350000
+  },
+  "budgetSectionTitle": "Ngân sách",
+  "budgets": [
+    {
+      "name": "Ăn uống",
+      "spent": 4215000,
+      "limit": 6000000,
+      "daysRemainingText": "Còn 6 ngày",
+      "icon": "fork.knife",
+      "accent": "amber"
+    },
+    {
+      "name": "Mua sắm",
+      "spent": 5320000,
+      "limit": 8000000,
+      "daysRemainingText": "Còn 7 ngày",
+      "icon": "bag.fill",
+      "accent": "mint"
+    }
+  ],
+  "watchSectionTitle": "Cần chú ý",
+  "watchItems": [
+    {
+      "name": "Giải trí",
+      "spent": 4150000,
+      "limit": 4000000,
+      "trailingAmount": 150000,
+      "statusText": "Đã vượt",
+      "tone": "alert",
+      "icon": "gamecontroller.fill",
+      "accent": "amber"
+    },
+    {
+      "name": "Xăng xe",
+      "spent": 1430000,
+      "limit": 1500000,
+      "trailingAmount": 70000,
+      "statusText": "Còn dư",
+      "tone": "calm",
+      "icon": "car.fill",
+      "accent": "sky"
+    }
+  ],
+  "goalsPlaceholder": {
+    "title": "Mục tiêu",
+    "message": "Phần mục tiêu sẽ được hoàn thiện sau khi chốt xong hệ visual của kế hoạch.",
+    "icon": "flag.2.crossed.fill"
+  },
+  "recurringPlaceholder": {
+    "title": "Định kỳ",
+    "message": "Các khoản định kỳ sẽ dùng cùng style glass, hiện mình để chỗ trống để ưu tiên polish tab ngân sách trước.",
+    "icon": "arrow.trianglehead.2.clockwise"
+  }
+}
