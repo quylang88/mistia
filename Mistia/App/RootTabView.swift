@@ -201,6 +201,7 @@ struct RootTabView: View {
             : MistiaQuickCreateMenu.collapsedSize
 
         let x = quickCreateAnchorFrame.maxX - (width / 2)
+        // Set y to the anchor max y minus height / 2 so the bottom of the menu aligns with the bottom of the plus button
         let y = quickCreateAnchorFrame.maxY - (height / 2)
 
         return CGPoint(
@@ -285,13 +286,13 @@ private enum MistiaQuickCreateDestination: String, CaseIterable, Identifiable {
     var subtitle: String {
         switch self {
         case .expense:
-            "Lưu một khoản chi ra khỏi ví hoặc tài khoản của bạn."
+            "Lưu lại khoản chi từ ví hoặc tài khoản."
         case .income:
-            "Ghi lại tiền vừa về để số dư cập nhật ngay."
+            "Ghi nhận nguồn thu để cập nhật số dư."
         case .transfer:
-            "Di chuyển tiền giữa ví, thẻ và các tài khoản."
+            "Chuyển tiền giữa ví, thẻ và tài khoản."
         case .note:
-            "Thêm vài dòng nhắc nhanh rồi hoàn thiện chi tiết sau."
+            "Thêm ghi chú nhanh để hoàn thiện sau."
         }
     }
 
@@ -337,7 +338,7 @@ private enum MistiaQuickCreateDestination: String, CaseIterable, Identifiable {
 
 private struct MistiaQuickCreateMenu: View {
     static let collapsedSize: CGFloat = 50
-    static let expandedHeight: CGFloat = 340
+    static let expandedHeight: CGFloat = 380
 
     @Environment(\.colorScheme) private var colorScheme
     let isExpanded: Bool
