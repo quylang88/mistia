@@ -105,12 +105,6 @@ final class MistiaNativeTabBarController: UITabBarController, UITabBarController
     registerForTraitChanges([UITraitUserInterfaceStyle.self]) { (self: Self, _) in
       if self.currentAppearanceMode == .automatic {
         self.applyChromeAppearance()
-        if #available(iOS 18.0, *) {
-          // UITab automatically updates its appearance on trait changes.
-        } else {
-          // syncTabSymbols will re-apply images for iOS < 18 if needed,
-          // but UITabBarItem also handles trait changes automatically.
-        }
       }
     }
     configureTabsIfNeeded()
@@ -319,9 +313,6 @@ final class MistiaNativeTabBarController: UITabBarController, UITabBarController
 
   private func syncTabSymbols(selectedTab: MistiaTab?) {
     if #available(iOS 18.0, *) {
-      // In iOS 18+, UITab natively morphs the outline SF symbol to its .fill
-      // variant automatically during interactive selection and cross-fades the color.
-      // Modifying UITab.image dynamically here breaks that interactive behavior.
     } else {
       for tab in MistiaTab.nativeShellTabs {
         let controller = viewController(for: tab)
@@ -333,7 +324,7 @@ final class MistiaNativeTabBarController: UITabBarController, UITabBarController
 
   @available(iOS 18.0, *)
   private func makeRootTab(for tab: MistiaTab) -> UITab {
-    let config = UIImage.SymbolConfiguration(pointSize: 22, weight: .medium)
+    let config = UIImage.SymbolConfiguration(pointSize: 20, weight: .medium)
     let initialImage = UIImage(systemName: tab.outlineSystemImage, withConfiguration: config)
 
     let rootTab = UITab(
@@ -357,7 +348,7 @@ final class MistiaNativeTabBarController: UITabBarController, UITabBarController
     let searchTab = UISearchTab { _ in
       UIViewController()
     }
-    let config = UIImage.SymbolConfiguration(pointSize: 22, weight: .medium)
+    let config = UIImage.SymbolConfiguration(pointSize: 20, weight: .medium)
     searchTab.image = UIImage(systemName: "apple.intelligence", withConfiguration: config)
     searchTab.preferredPlacement = UITab.Placement.pinned
     if #available(iOS 26.0, *) {
