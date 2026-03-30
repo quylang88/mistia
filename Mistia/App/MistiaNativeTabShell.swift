@@ -247,11 +247,11 @@ final class MistiaNativeTabBarController: UITabBarController, UITabBarController
     stackedAppearance.selected.titlePositionAdjustment = UIOffset(horizontal: 0, vertical: 2)
     stackedAppearance.normal.titleTextAttributes = tabBarTitleAttributes(
       color: unselectedTint,
-      font: .systemFont(ofSize: 10.5, weight: .semibold)
+      font: .systemFont(ofSize: 11.5, weight: .semibold)
     )
     stackedAppearance.selected.titleTextAttributes = tabBarTitleAttributes(
       color: selectedTint,
-      font: .systemFont(ofSize: 10.5, weight: .semibold)
+      font: .systemFont(ofSize: 11.5, weight: .semibold)
     )
 
     appearance.inlineLayoutAppearance = stackedAppearance.copy()
@@ -327,11 +327,13 @@ final class MistiaNativeTabBarController: UITabBarController, UITabBarController
 
   private func syncTabSymbols(selectedTab: MistiaTab?) {
     if #available(iOS 18.0, *) {
+      let config = UIImage.SymbolConfiguration(pointSize: 22, weight: .medium)
       for tab in MistiaTab.nativeShellTabs {
         let isSelected = tab == selectedTab
         let tint = isSelected ? currentSelectedTint : currentUnselectedTint
         cachedRootTabs[tab]?.image = UIImage(
-          systemName: tab.systemImage(isSelected: isSelected)
+          systemName: tab.systemImage(isSelected: isSelected),
+          withConfiguration: config
         )?.mistiaRasterized(with: tint)
       }
     } else {
@@ -345,7 +347,8 @@ final class MistiaNativeTabBarController: UITabBarController, UITabBarController
 
   @available(iOS 18.0, *)
   private func makeRootTab(for tab: MistiaTab) -> UITab {
-    let initialImage = UIImage(systemName: tab.outlineSystemImage)?
+    let config = UIImage.SymbolConfiguration(pointSize: 22, weight: .medium)
+    let initialImage = UIImage(systemName: tab.outlineSystemImage, withConfiguration: config)?
       .mistiaRasterized(with: currentUnselectedTint)
 
     let rootTab = UITab(
@@ -369,7 +372,8 @@ final class MistiaNativeTabBarController: UITabBarController, UITabBarController
     let searchTab = UISearchTab { _ in
       UIViewController()
     }
-    searchTab.image = UIImage(systemName: "apple.intelligence")
+    let config = UIImage.SymbolConfiguration(pointSize: 22, weight: .medium)
+    searchTab.image = UIImage(systemName: "apple.intelligence", withConfiguration: config)
     searchTab.preferredPlacement = UITab.Placement.pinned
     if #available(iOS 26.0, *) {
       searchTab.automaticallyActivatesSearch = false
