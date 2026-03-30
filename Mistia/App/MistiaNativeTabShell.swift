@@ -106,8 +106,10 @@ final class MistiaNativeTabBarController: UITabBarController, UITabBarController
       if self.currentAppearanceMode == .automatic {
         self.applyChromeAppearance()
         if #available(iOS 18.0, *) {
-          let tab = self.selectedTab.flatMap { MistiaTab(identifier: $0.identifier) }
-          self.syncTabSymbols(selectedTab: tab)
+          // UITab automatically updates its appearance on trait changes.
+        } else {
+          // syncTabSymbols will re-apply images for iOS < 18 if needed,
+          // but UITabBarItem also handles trait changes automatically.
         }
       }
     }
@@ -315,27 +317,11 @@ final class MistiaNativeTabBarController: UITabBarController, UITabBarController
     view.bounds.maxX - view.safeAreaInsets.right - 41
   }
 
-  private var currentSelectedTint: UIColor {
-    let usesDarkTint = currentAppearanceMode == .dark || (currentAppearanceMode == .automatic && traitCollection.userInterfaceStyle == .dark)
-    return usesDarkTint ? mistiaDarkModeTabTintColor : mistiaAccentColor
-  }
-
-  private var currentUnselectedTint: UIColor {
-    let usesDarkTint = currentAppearanceMode == .dark || (currentAppearanceMode == .automatic && traitCollection.userInterfaceStyle == .dark)
-    return usesDarkTint ? mistiaDarkModeUnselectedTabTintColor : mistiaLightModeUnselectedTabTintColor
-  }
-
   private func syncTabSymbols(selectedTab: MistiaTab?) {
     if #available(iOS 18.0, *) {
-      let config = UIImage.SymbolConfiguration(pointSize: 22, weight: .medium)
-      for tab in MistiaTab.nativeShellTabs {
-        let isSelected = tab == selectedTab
-        let tint = isSelected ? currentSelectedTint : currentUnselectedTint
-        cachedRootTabs[tab]?.image = UIImage(
-          systemName: tab.systemImage(isSelected: isSelected),
-          withConfiguration: config
-        )?.mistiaRasterized(with: tint)
-      }
+      // In iOS 18+, UITab natively morphs the outline SF symbol to its .fill
+      // variant automatically during interactive selection and cross-fades the color.
+      // Modifying UITab.image dynamically here breaks that interactive behavior.
     } else {
       for tab in MistiaTab.nativeShellTabs {
         let controller = viewController(for: tab)
@@ -348,8 +334,7 @@ final class MistiaNativeTabBarController: UITabBarController, UITabBarController
   @available(iOS 18.0, *)
   private func makeRootTab(for tab: MistiaTab) -> UITab {
     let config = UIImage.SymbolConfiguration(pointSize: 22, weight: .medium)
-    let initialImage = UIImage(systemName: tab.outlineSystemImage, withConfiguration: config)?
-      .mistiaRasterized(with: currentUnselectedTint)
+    let initialImage = UIImage(systemName: tab.outlineSystemImage, withConfiguration: config)
 
     let rootTab = UITab(
       title: tab.title,
@@ -478,18 +463,6 @@ extension MistiaTab {
 extension Array {
   fileprivate subscript(safe index: Int) -> Element? {
     indices.contains(index) ? self[index] : nil
-  }
-}
-
-extension UIImage {
-  fileprivate func mistiaRasterized(with tintColor: UIColor) -> UIImage {
-    let format = UIGraphicsImageRendererFormat()
-    format.scale = self.scale
-    let renderer = UIGraphicsImageRenderer(size: self.size, format: format)
-    return renderer.image { _ in
-      tintColor.set()
-      self.withTintColor(tintColor).draw(in: CGRect(origin: .zero, size: self.size))
-    }.withRenderingMode(.alwaysOriginal)
   }
 }
 
