@@ -378,7 +378,6 @@ private struct MistiaHeaderCircleButton<Content: View>: View {
     @available(iOS 26.0, *)
     private var nativeGlassStyle: Glass {
         Glass.regular
-            .tint(colorScheme == .dark ? .white.opacity(0.12) : .white.opacity(0.30))
             .interactive()
     }
 }
@@ -441,6 +440,7 @@ struct MistiaPinnedTopBarScaffold<Content: View>: View {
             ToolbarItem(placement: .topBarLeading) {
                 leadingToolbarAccessory
             }
+            .sharedBackgroundVisibility(.hidden)
         }
     }
 
@@ -450,6 +450,7 @@ struct MistiaPinnedTopBarScaffold<Content: View>: View {
             ToolbarItem(placement: .topBarTrailing) {
                 trailingToolbarAccessory
             }
+            .sharedBackgroundVisibility(.hidden)
         }
     }
 
