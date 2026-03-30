@@ -201,8 +201,12 @@ struct RootTabView: View {
             : MistiaQuickCreateMenu.collapsedSize
 
         let x = quickCreateAnchorFrame.maxX - (width / 2)
-        // Set y to the anchor max y minus height / 2 so the bottom of the menu aligns with the bottom of the plus button
-        let y = quickCreateAnchorFrame.maxY - (height / 2)
+
+        // RootTabView's GeometryReader is bounds by safe areas, whereas the native tab shell ignores safe area.
+        // Therefore, the quickCreateAnchorFrame (which comes from UIKit) is in the screen's coordinate space.
+        // We must subtract the top safe area inset from the calculated y-coordinate to properly align in the GeometryProxy.
+        let safeAreaOffset = proxy.safeAreaInsets.top
+        let y = quickCreateAnchorFrame.maxY - (height / 2) - safeAreaOffset
 
         return CGPoint(
             x: min(max(x, width / 2), proxy.size.width - (width / 2)),
