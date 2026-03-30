@@ -19,16 +19,41 @@ enum MistiaTab: String, CaseIterable, Hashable {
         }
     }
 
-    var systemImage: String {
+    var outlineSystemImage: String {
+        switch self {
+        case .overview:
+            "house"
+        case .transactions:
+            "arrow.left.arrow.right.circle"
+        case .planning:
+            "flag"
+        case .settings:
+            "square.stack"
+        }
+    }
+
+    var selectedSystemImage: String {
         switch self {
         case .overview:
             "house.fill"
         case .transactions:
-            "list.bullet.rectangle.portrait.fill"
+            "arrow.left.arrow.right.circle.fill"
         case .planning:
-            "wallet.pass.fill"
+            "flag.fill"
         case .settings:
-            "tray.full.fill"
+            "square.stack.fill"
+        }
+    }
+
+    var systemImage: String {
+        selectedSystemImage
+    }
+
+    func systemImage(isSelected: Bool) -> String {
+        if isSelected {
+            selectedSystemImage
+        } else {
+            outlineSystemImage
         }
     }
 
@@ -47,35 +72,155 @@ enum MistiaTab: String, CaseIterable, Hashable {
 }
 
 struct RootTabView: View {
+    @Environment(\.colorScheme) private var colorScheme
     @AppStorage(MistiaAppStorageKey.appearanceMode) private var appearanceModeRawValue = MistiaAppearanceMode.automatic.rawValue
     @AppStorage(MistiaAppStorageKey.hideQuickCreate) private var hideQuickCreate = false
     @State private var selectedTab: MistiaTab = .overview
-    @State private var isAssistantPresented = false
-    @State private var isQuickCreatePresented = false
+    @State private var isQuickCreateMenuVisible = false
+    @State private var isQuickCreateMenuExpanded = false
+    @State private var activeSheet: RootSheet?
+    @State private var quickCreateButtonFrame: CGRect = .zero
+    @State private var quickCreateAnchorFrame: CGRect = .zero
+
+    private let quickCreateMenuAnimation = Animation.spring(response: 0.34, dampingFraction: 0.84)
+    private let quickCreateMenuDuration = 0.28
 
     var body: some View {
-        MistiaNativeTabShell(
-            selectedTab: $selectedTab,
-            appearanceMode: appearanceMode,
-            hidesQuickCreate: hideQuickCreate,
-            onAssistantTap: { isAssistantPresented = true },
-            onQuickCreateTap: { isQuickCreatePresented = true }
-        )
-        .ignoresSafeArea()
-        .sheet(isPresented: $isAssistantPresented) {
-            MistiaAssistantSheet()
-                .presentationDetents([.medium])
-                .presentationDragIndicator(.visible)
+        GeometryReader { proxy in
+            ZStack(alignment: .bottomTrailing) {
+                MistiaNativeTabShell(
+                    selectedTab: $selectedTab,
+                    appearanceMode: appearanceMode,
+                    hidesQuickCreate: hideQuickCreate || isQuickCreateMenuVisible,
+                    onAssistantTap: {
+                        dismissQuickCreateMenu()
+                        activeSheet = .assistant
+                    },
+                    onQuickCreateTap: toggleQuickCreateMenu,
+                    onQuickCreateFrameChange: { frame in
+                        if !isQuickCreateMenuVisible {
+                            quickCreateButtonFrame = frame
+                        }
+                    }
+                )
+                .ignoresSafeArea()
+
+                if isQuickCreateMenuVisible, quickCreateAnchorFrame.width > 0 {
+                    Color.black
+                        .opacity(isQuickCreateMenuExpanded ? (colorScheme == .dark ? 0.18 : 0.08) : 0)
+                        .ignoresSafeArea()
+                        .contentShape(Rectangle())
+                        .onTapGesture(perform: dismissQuickCreateMenu)
+                        .animation(quickCreateMenuAnimation, value: isQuickCreateMenuExpanded)
+
+                    MistiaQuickCreateMenu(
+                        isExpanded: isQuickCreateMenuExpanded,
+                        expandedWidth: max(quickCreateAnchorFrame.maxX - 12, MistiaQuickCreateMenu.collapsedSize)
+                    ) { destination in
+                        presentQuickCreateSheet(for: destination)
+                    }
+                    .position(quickCreateMenuPosition(in: proxy))
+                }
+            }
         }
-        .sheet(isPresented: $isQuickCreatePresented) {
-            MistiaQuickCreateSheet()
-                .presentationDetents([.medium])
-                .presentationDragIndicator(.visible)
+        .sheet(item: $activeSheet) { sheet in
+            switch sheet {
+            case .assistant:
+                MistiaAssistantSheet()
+                    .presentationDetents([.medium])
+                    .presentationDragIndicator(.visible)
+            case .quickCreate(let destination):
+                MistiaQuickCreateDetailSheet(destination: destination)
+                    .presentationDetents([.medium])
+                    .presentationDragIndicator(.visible)
+            }
+        }
+        .onChange(of: hideQuickCreate) { _, newValue in
+            if newValue {
+                dismissQuickCreateMenu()
+            }
+        }
+        .onChange(of: selectedTab) { _, _ in
+            dismissQuickCreateMenu()
         }
     }
 
     private var appearanceMode: MistiaAppearanceMode {
         MistiaAppearanceMode(rawValue: appearanceModeRawValue) ?? .automatic
+    }
+
+    private func toggleQuickCreateMenu() {
+        if isQuickCreateMenuVisible {
+            dismissQuickCreateMenu()
+        } else {
+            presentQuickCreateMenu()
+        }
+    }
+
+    private func dismissQuickCreateMenu() {
+        guard isQuickCreateMenuVisible else { return }
+
+        withAnimation(quickCreateMenuAnimation) {
+            isQuickCreateMenuExpanded = false
+        }
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + quickCreateMenuDuration) {
+            guard !isQuickCreateMenuExpanded else { return }
+            isQuickCreateMenuVisible = false
+        }
+    }
+
+    private func presentQuickCreateSheet(for destination: MistiaQuickCreateDestination) {
+        dismissQuickCreateMenu()
+        DispatchQueue.main.asyncAfter(deadline: .now() + quickCreateMenuDuration) {
+            activeSheet = .quickCreate(destination)
+        }
+    }
+
+    private func presentQuickCreateMenu() {
+        guard !hideQuickCreate else { return }
+        guard quickCreateButtonFrame.width > 0 else { return }
+
+        quickCreateAnchorFrame = quickCreateButtonFrame
+        isQuickCreateMenuVisible = true
+        isQuickCreateMenuExpanded = false
+
+        DispatchQueue.main.async {
+            withAnimation(quickCreateMenuAnimation) {
+                isQuickCreateMenuExpanded = true
+            }
+        }
+    }
+
+    private func quickCreateMenuPosition(in proxy: GeometryProxy) -> CGPoint {
+        let width = isQuickCreateMenuExpanded
+            ? max(quickCreateAnchorFrame.maxX - 12, MistiaQuickCreateMenu.collapsedSize)
+            : MistiaQuickCreateMenu.collapsedSize
+        let height = isQuickCreateMenuExpanded
+            ? MistiaQuickCreateMenu.expandedHeight
+            : MistiaQuickCreateMenu.collapsedSize
+
+        let x = quickCreateAnchorFrame.maxX - (width / 2)
+        let y = quickCreateAnchorFrame.maxY - (height / 2)
+
+        return CGPoint(
+            x: min(max(x, width / 2), proxy.size.width - (width / 2)),
+            y: min(max(y, height / 2), proxy.size.height - (height / 2))
+        )
+    }
+}
+
+private enum RootSheet: Identifiable {
+    case assistant
+    case quickCreate(MistiaQuickCreateDestination)
+
+    var id: String {
+        switch self {
+        case .assistant:
+            "assistant"
+        case .quickCreate(let destination):
+            "quick-create-\(destination.rawValue)"
+        }
     }
 }
 
@@ -116,30 +261,240 @@ private struct MistiaAssistantSheet: View {
     }
 }
 
-private struct MistiaQuickCreateSheet: View {
+private enum MistiaQuickCreateDestination: String, CaseIterable, Identifiable {
+    case expense
+    case income
+    case transfer
+    case note
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .expense:
+            "Chi tiêu"
+        case .income:
+            "Thu nhập"
+        case .transfer:
+            "Chuyển tiền"
+        case .note:
+            "Ghi nhanh"
+        }
+    }
+
+    var subtitle: String {
+        switch self {
+        case .expense:
+            "Lưu một khoản chi ra khỏi ví hoặc tài khoản của bạn."
+        case .income:
+            "Ghi lại tiền vừa về để số dư cập nhật ngay."
+        case .transfer:
+            "Di chuyển tiền giữa ví, thẻ và các tài khoản."
+        case .note:
+            "Thêm vài dòng nhắc nhanh rồi hoàn thiện chi tiết sau."
+        }
+    }
+
+    var placeholderMessage: String {
+        switch self {
+        case .expense:
+            "Flow tạo khoản chi sẽ đi từ menu popout này. Hiện tại mình đã chốt interaction để bạn duyệt UI trước."
+        case .income:
+            "Flow thêm thu nhập sẽ nối từ menu này. Hiện tại đang giữ chỗ bằng sheet riêng để state không phải làm lại."
+        case .transfer:
+            "Flow chuyển tiền giữa các nguồn sẽ được nối tại đây sau. Menu popout mới đã tách sẵn action riêng cho màn này."
+        case .note:
+            "Ghi nhanh sẽ dùng cho những entry cần capture thật gọn. Trước mắt đây là placeholder để bạn duyệt layout và nhịp mở menu."
+        }
+    }
+
+    var systemImage: String {
+        switch self {
+        case .expense:
+            "arrow.up.circle.fill"
+        case .income:
+            "arrow.down.circle.fill"
+        case .transfer:
+            "arrow.left.arrow.right.circle.fill"
+        case .note:
+            "square.and.pencil.circle.fill"
+        }
+    }
+
+    var accent: Color {
+        switch self {
+        case .expense:
+            Color(red: 0.94, green: 0.47, blue: 0.40)
+        case .income:
+            Color(red: 0.25, green: 0.79, blue: 0.61)
+        case .transfer:
+            Color(red: 0.31, green: 0.62, blue: 0.98)
+        case .note:
+            Color(red: 0.43, green: 0.23, blue: 0.76)
+        }
+    }
+}
+
+private struct MistiaQuickCreateMenu: View {
+    static let collapsedSize: CGFloat = 50
+    static let expandedHeight: CGFloat = 340
+
+    @Environment(\.colorScheme) private var colorScheme
+    let isExpanded: Bool
+    let expandedWidth: CGFloat
+    let onSelect: (MistiaQuickCreateDestination) -> Void
+
+    private var expandedTint: Color {
+        colorScheme == .dark ? .white.opacity(0.04) : .white.opacity(0.58)
+    }
+
+    private var collapsedTint: Color {
+        Color(red: 0.43, green: 0.23, blue: 0.76).opacity(colorScheme == .dark ? 0.78 : 0.64)
+    }
+
+    private var cornerRadius: CGFloat {
+        isExpanded ? 34 : 25
+    }
+
+    private var menuHeight: CGFloat {
+        isExpanded ? Self.expandedHeight : Self.collapsedSize
+    }
+
+    var body: some View {
+        ZStack(alignment: .bottomTrailing) {
+            if isExpanded {
+                VStack(spacing: 0) {
+                    ForEach(Array(MistiaQuickCreateDestination.allCases.enumerated()), id: \.element.id) { index, destination in
+                        Button {
+                            onSelect(destination)
+                        } label: {
+                            MistiaQuickCreateMenuRow(destination: destination)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .padding(.horizontal, 6)
+                                .padding(.vertical, 6)
+                        }
+                        .buttonStyle(MistiaPressableButtonStyle(cornerRadius: 24, tint: destination.accent))
+
+                        if index < MistiaQuickCreateDestination.allCases.count - 1 {
+                            Divider()
+                                .padding(.leading, 84)
+                                .padding(.trailing, 10)
+                        }
+                    }
+                }
+                .padding(10)
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                .opacity(isExpanded ? 1 : 0)
+                .scaleEffect(isExpanded ? 1 : 0.96, anchor: .bottomTrailing)
+            }
+
+            Image(systemName: "plus")
+                .font(.system(size: 20, weight: .semibold, design: .rounded))
+                .foregroundStyle(.white.opacity(0.98))
+                .opacity(isExpanded ? 0 : 1)
+                .scaleEffect(isExpanded ? 0.72 : 1)
+                .frame(width: Self.collapsedSize, height: Self.collapsedSize)
+                .animation(.easeInOut(duration: 0.16), value: isExpanded)
+        }
+        .frame(
+            width: isExpanded ? max(expandedWidth, Self.collapsedSize) : Self.collapsedSize,
+            height: menuHeight,
+            alignment: .bottomTrailing
+        )
+        .background {
+            MistiaRoundedGlassBackground(
+                cornerRadius: cornerRadius,
+                tint: isExpanded ? expandedTint : collapsedTint,
+                interactive: true
+            )
+        }
+        .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
+        .shadow(color: .black.opacity(colorScheme == .dark ? 0.26 : 0.10), radius: 22, y: 14)
+        .allowsHitTesting(isExpanded)
+        .accessibilityElement(children: .contain)
+    }
+}
+
+private struct MistiaQuickCreateMenuRow: View {
+    @Environment(\.colorScheme) private var colorScheme
+    let destination: MistiaQuickCreateDestination
+
+    private var iconTint: Color {
+        colorScheme == .dark ? destination.accent.opacity(0.24) : destination.accent.opacity(0.18)
+    }
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 14) {
+            Image(systemName: destination.systemImage)
+                .font(.system(size: 22, weight: .semibold, design: .rounded))
+                .foregroundStyle(.white.opacity(0.98))
+                .frame(width: 54, height: 54)
+                .background {
+                    MistiaRoundedGlassBackground(
+                        cornerRadius: 18,
+                        tint: iconTint,
+                        interactive: true
+                    )
+                }
+
+            VStack(alignment: .leading, spacing: 5) {
+                Text(destination.title)
+                    .font(.system(size: 18, weight: .bold, design: .rounded))
+                    .foregroundStyle(.primary)
+
+                Text(destination.subtitle)
+                    .font(.system(size: 13.5, weight: .medium, design: .rounded))
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.leading)
+                    .lineLimit(2)
+            }
+
+            Spacer(minLength: 8)
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 10)
+        .contentShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
+    }
+}
+
+private struct MistiaQuickCreateDetailSheet: View {
+    let destination: MistiaQuickCreateDestination
+
     var body: some View {
         ZStack {
             MistiaBackgroundView()
 
             VStack(spacing: 18) {
-                Text("Tạo nhanh")
+                Text(destination.title)
                     .font(.system(size: 24, weight: .bold, design: .rounded))
 
                 MistiaGlassCard(
                     cornerRadius: 28,
-                    tint: Color(red: 0.44, green: 0.24, blue: 0.78).opacity(0.14)
+                    tint: destination.accent.opacity(0.16)
                 ) {
                     VStack(spacing: 14) {
-                        Image(systemName: "plus")
-                            .font(.system(size: 26, weight: .bold, design: .rounded))
+                        Image(systemName: destination.systemImage)
+                            .font(.system(size: 28, weight: .semibold, design: .rounded))
                             .foregroundStyle(.white)
                             .frame(width: 76, height: 76)
-                            .background(.white.opacity(0.08), in: Circle())
+                            .background {
+                                MistiaRoundedGlassBackground(
+                                    cornerRadius: 24,
+                                    tint: destination.accent.opacity(0.24)
+                                )
+                            }
 
-                        Text("Nút plus đang là placeholder để chốt UI Slack-style trước. Chưa nối flow tạo giao dịch hoặc item mới.")
-                            .multilineTextAlignment(.center)
-                            .font(.system(size: 15, weight: .medium, design: .rounded))
-                            .foregroundStyle(.secondary)
+                        VStack(spacing: 6) {
+                            Text(destination.subtitle)
+                                .multilineTextAlignment(.center)
+                                .font(.system(size: 16, weight: .semibold, design: .rounded))
+                                .foregroundStyle(.primary)
+
+                            Text(destination.placeholderMessage)
+                                .multilineTextAlignment(.center)
+                                .font(.system(size: 14, weight: .medium, design: .rounded))
+                                .foregroundStyle(.secondary)
+                        }
                     }
                     .frame(maxWidth: .infinity)
                 }
