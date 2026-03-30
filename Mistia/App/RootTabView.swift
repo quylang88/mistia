@@ -316,13 +316,13 @@ private enum MistiaQuickCreateDestination: String, CaseIterable, Identifiable {
     var systemImage: String {
         switch self {
         case .expense:
-            "arrow.up.circle.fill"
+            "arrow.up.right"
         case .income:
-            "arrow.down.circle.fill"
+            "arrow.down.left"
         case .transfer:
-            "arrow.left.arrow.right.circle.fill"
+            "arrow.left.arrow.right"
         case .note:
-            "square.and.pencil.circle.fill"
+            "square.and.pencil"
         }
     }
 
@@ -388,7 +388,8 @@ private struct MistiaQuickCreateMenu: View {
                     }
                 }
                 .padding(10)
-                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                // align center so the options are evenly spaced between top and bottom
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
                 .opacity(isExpanded ? 1 : 0)
                 .scaleEffect(isExpanded ? 1 : 0.96, anchor: .bottomTrailing)
             }
@@ -431,7 +432,7 @@ private struct MistiaQuickCreateMenuRow: View {
     var body: some View {
         HStack(alignment: .top, spacing: 14) {
             Image(systemName: destination.systemImage)
-                .font(.system(size: 22, weight: .semibold, design: .rounded))
+                .font(.system(size: 22, weight: .medium, design: .rounded))
                 .foregroundStyle(.white.opacity(0.98))
                 .frame(width: 54, height: 54)
                 .background {
