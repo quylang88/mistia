@@ -332,7 +332,7 @@ final class MistiaNativeTabBarController: UITabBarController, UITabBarController
         let tint = isSelected ? currentSelectedTint : currentUnselectedTint
         cachedRootTabs[tab]?.image = UIImage(
           systemName: tab.systemImage(isSelected: isSelected)
-        )?.withTintColor(tint, renderingMode: .alwaysOriginal)
+        )?.mistiaRasterized(with: tint)
       }
     } else {
       for tab in MistiaTab.nativeShellTabs {
@@ -345,9 +345,12 @@ final class MistiaNativeTabBarController: UITabBarController, UITabBarController
 
   @available(iOS 18.0, *)
   private func makeRootTab(for tab: MistiaTab) -> UITab {
+    let initialImage = UIImage(systemName: tab.outlineSystemImage)?
+      .mistiaRasterized(with: currentUnselectedTint)
+
     let rootTab = UITab(
       title: tab.title,
-      image: UIImage(systemName: tab.outlineSystemImage)?.withTintColor(currentUnselectedTint, renderingMode: .alwaysOriginal),
+      image: initialImage,
       identifier: tab.tabIdentifier
     ) { [weak self] _ in
       guard let self else {
@@ -471,6 +474,18 @@ extension MistiaTab {
 extension Array {
   fileprivate subscript(safe index: Int) -> Element? {
     indices.contains(index) ? self[index] : nil
+  }
+}
+
+extension UIImage {
+  fileprivate func mistiaRasterized(with tintColor: UIColor) -> UIImage {
+    let format = UIGraphicsImageRendererFormat()
+    format.scale = self.scale
+    let renderer = UIGraphicsImageRenderer(size: self.size, format: format)
+    return renderer.image { _ in
+      tintColor.set()
+      self.withTintColor(tintColor).draw(in: CGRect(origin: .zero, size: self.size))
+    }.withRenderingMode(.alwaysOriginal)
   }
 }
 
