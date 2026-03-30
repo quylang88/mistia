@@ -105,6 +105,10 @@ final class MistiaNativeTabBarController: UITabBarController, UITabBarController
     registerForTraitChanges([UITraitUserInterfaceStyle.self]) { (self: Self, _) in
       if self.currentAppearanceMode == .automatic {
         self.applyChromeAppearance()
+        if #available(iOS 18.0, *) {
+          let tab = self.selectedTab.flatMap { MistiaTab(identifier: $0.identifier) }
+          self.syncTabSymbols(selectedTab: tab)
+        }
       }
     }
     configureTabsIfNeeded()
@@ -311,11 +315,24 @@ final class MistiaNativeTabBarController: UITabBarController, UITabBarController
     view.bounds.maxX - view.safeAreaInsets.right - 41
   }
 
-  private func syncTabSymbols(selectedTab: MistiaTab) {
+  private var currentSelectedTint: UIColor {
+    let usesDarkTint = currentAppearanceMode == .dark || (currentAppearanceMode == .automatic && traitCollection.userInterfaceStyle == .dark)
+    return usesDarkTint ? mistiaDarkModeTabTintColor : mistiaAccentColor
+  }
+
+  private var currentUnselectedTint: UIColor {
+    let usesDarkTint = currentAppearanceMode == .dark || (currentAppearanceMode == .automatic && traitCollection.userInterfaceStyle == .dark)
+    return usesDarkTint ? mistiaDarkModeUnselectedTabTintColor : mistiaLightModeUnselectedTabTintColor
+  }
+
+  private func syncTabSymbols(selectedTab: MistiaTab?) {
     if #available(iOS 18.0, *) {
       for tab in MistiaTab.nativeShellTabs {
+        let isSelected = tab == selectedTab
+        let tint = isSelected ? currentSelectedTint : currentUnselectedTint
         cachedRootTabs[tab]?.image = UIImage(
-          systemName: tab.systemImage(isSelected: tab == selectedTab))
+          systemName: tab.systemImage(isSelected: isSelected)
+        )?.withTintColor(tint, renderingMode: .alwaysOriginal)
       }
     } else {
       for tab in MistiaTab.nativeShellTabs {
@@ -330,7 +347,7 @@ final class MistiaNativeTabBarController: UITabBarController, UITabBarController
   private func makeRootTab(for tab: MistiaTab) -> UITab {
     let rootTab = UITab(
       title: tab.title,
-      image: UIImage(systemName: tab.outlineSystemImage),
+      image: UIImage(systemName: tab.outlineSystemImage)?.withTintColor(currentUnselectedTint, renderingMode: .alwaysOriginal),
       identifier: tab.tabIdentifier
     ) { [weak self] _ in
       guard let self else {
@@ -382,9 +399,11 @@ final class MistiaNativeTabBarController: UITabBarController, UITabBarController
   func tabBarController(
     _ tabBarController: UITabBarController, didSelectTab selectedTab: UITab, previousTab: UITab?
   ) {
-    guard let tab = MistiaTab(identifier: selectedTab.identifier) else { return }
+    let tab = MistiaTab(identifier: selectedTab.identifier)
     syncTabSymbols(selectedTab: tab)
-    chromeDelegate?.nativeTabBarController(self, didSelect: tab)
+    if let tab {
+      chromeDelegate?.nativeTabBarController(self, didSelect: tab)
+    }
   }
 
   func tabBarController(
