@@ -78,16 +78,29 @@ struct TransactionEditorSheet: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
-                    Button("Hủy") {
+                    Button {
                         dismiss()
+                    } label: {
+                        Image(systemName: "xmark")
+                            .font(.system(size: 16, weight: .semibold))
+                            .foregroundStyle(.secondary)
                     }
                 }
 
                 ToolbarItem(placement: .topBarTrailing) {
-                    Button(saveButtonTitle) {
+                    Button {
                         save()
+                    } label: {
+                        ZStack {
+                            Circle()
+                                .fill(Color(red: 0.65, green: 0.45, blue: 0.98))
+                                .frame(width: 30, height: 30)
+                            
+                            Image(systemName: "checkmark")
+                                .font(.system(size: 14, weight: .bold))
+                                .foregroundStyle(.white)
+                        }
                     }
-                    .fontWeight(.semibold)
                 }
             }
         }
@@ -127,7 +140,7 @@ struct TransactionEditorSheet: View {
             TransactionHintCard(
                 icon: "square.and.pencil",
                 tint: accentColor,
-                message: "Ghi nhanh chỉ lưu loại giao dịch và số tiền. Bạn sẽ hoàn thiện tài khoản, danh mục hoặc người liên quan ở tab Giao dịch sau."
+                message: "Ghi nhanh chỉ lưu loại giao dịch và số tiền. Hãy hoàn thiện chi tiết ở tab Giao dịch."
             )
         }
     }
@@ -277,7 +290,7 @@ struct TransactionEditorSheet: View {
                         TransactionEditorTextField(
                             title: "Tên người liên quan",
                             text: $draft.counterpartyName,
-                            placeholder: "Ví dụ: Minh Anh"
+                            placeholder: "Ví dụ: Nguyễn Văn A"
                         )
                     }
                 }
@@ -516,7 +529,7 @@ struct TransactionEditorSheet: View {
                 guard let counterpartyName = draft.counterpartyName.nilIfBlank,
                       let normalizedCounterpartyKey = TransactionLogic.normalizeCounterpartyName(counterpartyName)
                 else {
-                    alertMessage = "Nhập tên người liên quan để dễ tìm lại sau."
+                    alertMessage = "Nhập tên người liên quan."
                     return
                 }
 

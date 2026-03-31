@@ -404,11 +404,11 @@ private struct ManagementSignedOutCard: View {
     }
 
     private var buttonFill: Color {
-        colorScheme == .dark ? accent.opacity(0.28) : accent.opacity(0.08)
+        colorScheme == .dark ? .white.opacity(0.12) : .black.opacity(0.08)
     }
 
     private var buttonForeground: Color {
-        colorScheme == .dark ? .white.opacity(0.98) : accent
+        colorScheme == .dark ? Color(red: 0.65, green: 0.45, blue: 0.98) : accent
     }
 
     var body: some View {
@@ -450,12 +450,8 @@ private struct ManagementSignedOutCard: View {
                             Capsule()
                                 .fill(buttonFill)
                         }
-                        .overlay {
-                            Capsule()
-                                .strokeBorder(accent.opacity(colorScheme == .dark ? 0.34 : 0.14), lineWidth: 0.9)
-                        }
                 }
-                .buttonStyle(MistiaPressableButtonStyle(cornerRadius: 22, tint: accent))
+                .buttonStyle(MistiaPressableButtonStyle(cornerRadius: 22, tint: buttonForeground))
             }
             .padding(.horizontal, 14)
             .padding(.vertical, 14)
@@ -559,11 +555,11 @@ private struct ManagementFooterAddButton: View {
     let action: () -> Void
 
     private var buttonFill: Color {
-        colorScheme == .dark ? accent.opacity(0.22) : accent.opacity(0.08)
+        colorScheme == .dark ? .white.opacity(0.12) : .black.opacity(0.08)
     }
 
     private var buttonForeground: Color {
-        colorScheme == .dark ? .white.opacity(0.96) : accent
+        colorScheme == .dark ? Color(red: 0.65, green: 0.45, blue: 0.98) : accent
     }
 
     var body: some View {
@@ -576,21 +572,16 @@ private struct ManagementFooterAddButton: View {
                 Text(title)
                     .font(.system(size: 15.5, weight: .semibold, design: .rounded))
                     .foregroundStyle(buttonForeground)
-
-                Spacer()
             }
+            .frame(maxWidth: .infinity)
             .padding(.horizontal, 14)
             .padding(.vertical, 15)
             .background {
                 RoundedRectangle(cornerRadius: 16, style: .continuous)
                     .fill(buttonFill)
             }
-            .overlay {
-                RoundedRectangle(cornerRadius: 16, style: .continuous)
-                    .strokeBorder(accent.opacity(colorScheme == .dark ? 0.32 : 0.12), lineWidth: 0.9)
-            }
         }
-        .buttonStyle(MistiaPressableButtonStyle(cornerRadius: 16, tint: accent))
+        .buttonStyle(MistiaPressableButtonStyle(cornerRadius: 16, tint: buttonForeground))
     }
 }
 
@@ -605,11 +596,11 @@ private struct ManagementEmptyState: View {
     let action: () -> Void
 
     private var capsuleFill: Color {
-        colorScheme == .dark ? accent.opacity(0.26) : accent.opacity(0.08)
+        colorScheme == .dark ? .white.opacity(0.12) : .black.opacity(0.08)
     }
 
     private var buttonForeground: Color {
-        colorScheme == .dark ? .white.opacity(0.98) : accent
+        colorScheme == .dark ? Color(red: 0.65, green: 0.45, blue: 0.98) : accent
     }
 
     private var symbolBackgroundOpacity: Double {
@@ -660,10 +651,6 @@ private struct ManagementEmptyState: View {
                     .background {
                         Capsule()
                             .fill(capsuleFill)
-                    }
-                    .overlay {
-                        Capsule()
-                            .strokeBorder(accent.opacity(colorScheme == .dark ? 0.34 : 0.12), lineWidth: 0.9)
                     }
             }
             .buttonStyle(MistiaPressableButtonStyle(cornerRadius: 24, tint: buttonForeground))
