@@ -40,12 +40,6 @@ private enum TransactionSegment: String, CaseIterable, Hashable {
     }
 }
 
-private enum TransactionsSheet: String, Identifiable {
-    case filters
-
-    var id: String { rawValue }
-}
-
 struct TransactionsView: View {
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.modelContext) private var modelContext
@@ -58,7 +52,6 @@ struct TransactionsView: View {
     private var storedCategories: [TransactionCategory]
 
     @State private var selectedSegment: TransactionSegment? = nil
-    @State private var activeSheet: TransactionsSheet?
     @State private var editorTarget: TransactionEditorTarget?
     @State private var filterState = TransactionFilterState(timeScope: .allTime, statusScope: .all)
     @State private var searchText = ""
@@ -124,10 +117,12 @@ struct TransactionsView: View {
     private var activeFilterCount: Int {
         var count = 0
 
+        if selectedSegment != nil { count += 1 }
+        if filterState.timeScope != .allTime { count += 1 }
         if filterState.accountID != nil { count += 1 }
         if filterState.categoryID != nil { count += 1 }
         if filterState.transferSubtype != nil { count += 1 }
-        if filterState.statusScope == .draftOnly { count += 1 }
+        if filterState.statusScope != .all { count += 1 }
         if filterState.minAmountMinor != nil || filterState.maxAmountMinor != nil { count += 1 }
 
         return count
@@ -142,7 +137,6 @@ struct TransactionsView: View {
             contentBottomPadding: 150,
             pinnedHeader: {
                 unifiedFilterRow
-                    .padding(.horizontal, 18)
                     .zIndex(99)
             }
         ) {
@@ -158,22 +152,6 @@ struct TransactionsView: View {
         )
         .searchToolbarBehavior(.minimize)
         .searchPresentationToolbarBehavior(.avoidHidingContent)
-        .sheet(item: $activeSheet) { sheet in
-            switch sheet {
-            case .filters:
-                TransactionsFilterSheet(
-                    selectedKind: selectedSegment?.kind,
-                    accounts: activeAccounts,
-                    categories: storedCategories,
-                    initialState: filterState
-                ) { newState in
-                    filterState = newState
-                }
-                .presentationDetents([.medium, .large])
-                .presentationDragIndicator(.visible)
-                .presentationBackground(.clear)
-            }
-        }
         .sheet(item: $editorTarget) { target in
             TransactionEditorSheet(target: target)
                 .presentationDetents(target.quickCapture ? [.medium, .large] : [.large])
@@ -195,95 +173,158 @@ struct TransactionsView: View {
                     filterChipsHStack
                 }
             }
+            .padding(.horizontal, 18)
             .padding(.vertical, 2)
             .padding(.bottom, 10)
         }
     }
 
-    private var filterLabel: String {
-        if activeFilterCount == 0 {
-            return "Bộ lọc"
-        }
-        if activeFilterCount == 1 {
-            if let accountID = filterState.accountID,
-               let account = activeAccounts.first(where: { $0.id == accountID }) {
-                return account.name
-            }
-            if let categoryID = filterState.categoryID,
-               let category = storedCategories.first(where: { $0.id == categoryID }) {
-                return category.name
-            }
-            if filterState.transferSubtype != nil {
-                return "Loại chuyển tiền"
-            }
-            if filterState.statusScope == .draftOnly {
-                return "Bản nháp"
-            }
-            if filterState.minAmountMinor != nil || filterState.maxAmountMinor != nil {
-                return "Khoảng tiền"
-            }
-        }
-        return "Bộ lọc (\(activeFilterCount))"
-    }
-
     @ViewBuilder
-    private func filterChipButton(
-        title: String,
+    private func filterMenu<Content: View>(
         isActive: Bool,
-        trailingIcon: String? = nil,
-        action: @escaping () -> Void
+        @ViewBuilder label: () -> Content,
+        @ViewBuilder content: () -> some View
     ) -> some View {
-        let chip = TransactionToolbarChip(title: title, isActive: isActive, trailingIcon: trailingIcon)
-        let button = Button(action: action) { chip }
-            .buttonBorderShape(.capsule)
-            .tint(Color(red: 0.53, green: 0.33, blue: 0.86))
+        let menu = Menu {
+            content()
+        } label: {
+            label()
+        }
+        .buttonBorderShape(.capsule)
+        .tint(Color(red: 0.53, green: 0.33, blue: 0.86))
 
         if isActive {
-            button.buttonStyle(.glassProminent)
+            menu.buttonStyle(.glassProminent)
                 .zIndex(99)
         } else {
-            button.buttonStyle(.glass)
+            menu.buttonStyle(.glass)
                 .zIndex(0)
         }
     }
 
     private var filterChipsHStack: some View {
-        HStack(spacing: 10) {
-            filterChipButton(
-                title: filterLabel,
-                isActive: activeFilterCount > 0,
-                trailingIcon: "chevron.down"
-            ) {
-                activeSheet = .filters
+        HStack(spacing: 8) {
+            if activeFilterCount > 0 {
+                Button {
+                    withAnimation(.snappy) {
+                        selectedSegment = nil
+                        filterState = TransactionFilterState(timeScope: .allTime, statusScope: .all)
+                    }
+                } label: {
+                    TransactionToolbarChip(
+                        title: "\(activeFilterCount)",
+                        isActive: true,
+                        trailingIcon: "xmark"
+                    )
+                }
+                .buttonBorderShape(.capsule)
+                .tint(Color(red: 0.53, green: 0.33, blue: 0.86))
+                .buttonStyle(.glassProminent)
+                .zIndex(99)
             }
 
-            ForEach(TransactionSegment.allCases, id: \.self) { segment in
-                let isActive = selectedSegment == segment
-                filterChipButton(
-                    title: segment.title,
-                    isActive: isActive
-                ) {
+            filterMenu(isActive: selectedSegment != nil) {
+                TransactionToolbarChip(
+                    title: selectedSegment?.title ?? "Phân loại",
+                    isActive: selectedSegment != nil,
+                    trailingIcon: "chevron.up.chevron.down"
+                )
+            } content: {
+                Button("Tất cả") {
                     withAnimation(.snappy) {
-                        selectedSegment = isActive ? nil : segment
+                        selectedSegment = nil
+                    }
+                }
+                ForEach(TransactionSegment.allCases, id: \.self) { segment in
+                    Button(segment.title) {
+                        withAnimation(.snappy) {
+                            selectedSegment = segment
+                        }
                     }
                 }
             }
 
-            filterChipButton(
-                title: "Tháng này",
-                isActive: filterState.timeScope == .thisMonth
-            ) {
-                withAnimation(.snappy) {
-                    filterState.timeScope = filterState.timeScope == .thisMonth ? .allTime : .thisMonth
+            filterMenu(isActive: filterState.timeScope != .allTime) {
+                TransactionToolbarChip(
+                    title: filterState.timeScope == .allTime ? "Thời gian" : filterState.timeScope.title,
+                    isActive: filterState.timeScope != .allTime,
+                    trailingIcon: "chevron.up.chevron.down"
+                )
+            } content: {
+                ForEach(TransactionTimeScope.allCases, id: \.self) { scope in
+                    Button(scope.title) {
+                        withAnimation(.snappy) {
+                            filterState.timeScope = scope
+                        }
+                    }
                 }
             }
 
-            filterChipButton(
-                title: "Bản nháp",
-                isActive: filterState.statusScope == .draftOnly
-            ) {
-                withAnimation(.snappy) {
-                    filterState.statusScope = filterState.statusScope == .draftOnly ? .all : .draftOnly
+            filterMenu(isActive: filterState.statusScope != .all) {
+                TransactionToolbarChip(
+                    title: filterState.statusScope == .all ? "Trạng thái" : filterState.statusScope.title,
+                    isActive: filterState.statusScope != .all,
+                    trailingIcon: "chevron.up.chevron.down"
+                )
+            } content: {
+                ForEach(TransactionStatusScope.allCases, id: \.self) { scope in
+                    Button(scope.title) {
+                        withAnimation(.snappy) {
+                            filterState.statusScope = scope
+                        }
+                    }
+                }
+            }
+
+            filterMenu(isActive: filterState.accountID != nil) {
+                let title = activeAccounts.first { $0.id == filterState.accountID }?.name ?? "Tài khoản"
+                TransactionToolbarChip(
+                    title: title,
+                    isActive: filterState.accountID != nil,
+                    trailingIcon: "chevron.up.chevron.down"
+                )
+            } content: {
+                Button("Tất cả") {
+                    withAnimation(.snappy) {
+                        filterState.accountID = nil
+                    }
+                }
+                ForEach(activeAccounts, id: \.id) { account in
+                    Button(account.name) {
+                        withAnimation(.snappy) {
+                            filterState.accountID = account.id
+                        }
+                    }
+                }
+            }
+
+            if selectedSegment?.kind != .transfer {
+                filterMenu(isActive: filterState.categoryID != nil) {
+                    let title = storedCategories.first { $0.id == filterState.categoryID }?.name ?? "Danh mục"
+                    TransactionToolbarChip(
+                        title: title,
+                        isActive: filterState.categoryID != nil,
+                        trailingIcon: "chevron.up.chevron.down"
+                    )
+                } content: {
+                    Button("Tất cả") {
+                        withAnimation(.snappy) {
+                            filterState.categoryID = nil
+                        }
+                    }
+                    let relevantCategories = storedCategories.filter { cat in
+                        if let kind = selectedSegment?.kind {
+                            return (kind == .expense && cat.kind == .expense) || (kind == .income && cat.kind == .income)
+                        }
+                        return true
+                    }
+                    ForEach(relevantCategories, id: \.id) { category in
+                        Button(category.name) {
+                            withAnimation(.snappy) {
+                                filterState.categoryID = category.id
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -652,8 +693,8 @@ private struct TransactionToolbarChip: View {
         .foregroundStyle(.white)
         .animation(nil, value: title)
         .animation(nil, value: isActive)
-        .padding(.horizontal, 12)
-        .padding(.vertical, 6)
+        .padding(.horizontal, 6)
+        .padding(.vertical, 2)
     }
 }
 
@@ -731,310 +772,6 @@ private struct PlaceholderOrb: View {
                 .foregroundStyle(Color(red: 0.43, green: 0.23, blue: 0.76))
         }
         .frame(width: 40, height: 40)
-    }
-}
-
-private struct TransactionsFilterSheet: View {
-    @Environment(\.dismiss) private var dismiss
-
-    let selectedKind: TransactionPrimaryKind?
-    let accounts: [LedgerAccount]
-    let categories: [TransactionCategory]
-    let onApply: (TransactionFilterState) -> Void
-
-    @State private var draft: TransactionFilterState
-    @State private var minAmountText: String
-    @State private var maxAmountText: String
-
-    init(
-        selectedKind: TransactionPrimaryKind?,
-        accounts: [LedgerAccount],
-        categories: [TransactionCategory],
-        initialState: TransactionFilterState,
-        onApply: @escaping (TransactionFilterState) -> Void
-    ) {
-        self.selectedKind = selectedKind
-        self.accounts = accounts
-        self.categories = categories
-        self.onApply = onApply
-        _draft = State(initialValue: initialState)
-        _minAmountText = State(initialValue: initialState.minAmountMinor.map(String.init) ?? "")
-        _maxAmountText = State(initialValue: initialState.maxAmountMinor.map(String.init) ?? "")
-    }
-
-    private var relevantCategories: [TransactionCategory] {
-        let kind: TransactionCategoryKind?
-        switch selectedKind {
-        case .expense:
-            kind = .expense
-        case .income:
-            kind = .income
-        case .transfer, nil:
-            kind = nil
-        }
-
-        return categories
-            .filter { !$0.isArchived && (kind == nil || $0.kind == kind) }
-            .sorted {
-                if $0.sortOrder != $1.sortOrder {
-                    return $0.sortOrder < $1.sortOrder
-                }
-                return $0.createdAt < $1.createdAt
-            }
-    }
-
-    var body: some View {
-        ZStack(alignment: .bottom) {
-            Color.clear.ignoresSafeArea()
-
-            VStack(spacing: 12) {
-                Capsule()
-                    .fill(.secondary.opacity(0.35))
-                    .frame(width: 42, height: 5)
-                    .padding(.top, 8)
-
-                MistiaGlassCard(
-                    cornerRadius: 28,
-                    tint: Color.white.opacity(0.12),
-                    padding: 18
-                ) {
-                    ScrollView(showsIndicators: false) {
-                        VStack(alignment: .leading, spacing: 18) {
-                            Text("Bộ lọc giao dịch")
-                                .font(.system(size: 24, weight: .bold, design: .rounded))
-                                .foregroundStyle(.primary)
-
-                            FilterSection(title: "Thời gian") {
-                                ChoiceChipGrid(
-                                    values: TransactionTimeScope.allCases,
-                                    selection: $draft.timeScope
-                                ) { scope in
-                                    Text(scope.title)
-                                }
-                            }
-
-                            FilterSection(title: "Tài khoản") {
-                                OptionalChipGrid(
-                                    titleForNil: "Tất cả",
-                                    values: accounts,
-                                    selection: $draft.accountID
-                                ) { account in
-                                    account.id
-                                } label: { account in
-                                    Text(account.name)
-                                }
-                            }
-
-                            FilterSection(title: "Trạng thái") {
-                                ChoiceChipGrid(
-                                    values: TransactionStatusScope.allCases,
-                                    selection: $draft.statusScope
-                                ) { scope in
-                                    Text(scope.title)
-                                }
-                            }
-
-                            if shouldShowCategorySection {
-                                FilterSection(title: "Danh mục") {
-                                    OptionalChipGrid(
-                                        titleForNil: "Tất cả",
-                                        values: relevantCategories,
-                                        selection: $draft.categoryID
-                                    ) { category in
-                                        category.id
-                                    } label: { category in
-                                        Text(category.name)
-                                    }
-                                }
-                            }
-
-                            if shouldShowTransferSubtypeSection {
-                                FilterSection(title: "Loại chuyển tiền") {
-                                    OptionalChipGrid(
-                                        titleForNil: "Tất cả",
-                                        values: Array(TransactionTransferSubtype.allCases),
-                                        selection: $draft.transferSubtype
-                                    ) { subtype in
-                                        subtype
-                                    } label: { subtype in
-                                        Text(subtype.title)
-                                    }
-                                }
-                            }
-
-                            FilterSection(title: "Khoảng tiền") {
-                                VStack(spacing: 10) {
-                                    FilterAmountField(title: "Tối thiểu", text: $minAmountText)
-                                    FilterAmountField(title: "Tối đa", text: $maxAmountText)
-                                }
-                            }
-
-                            HStack(spacing: 10) {
-                                Button("Đặt lại") {
-                                    draft = TransactionFilterState()
-                                    minAmountText = ""
-                                    maxAmountText = ""
-                                }
-                                .buttonStyle(.glass)
-                                .buttonBorderShape(.capsule)
-
-                                Button("Áp dụng") {
-                                    draft.minAmountMinor = minAmountText.currencyInputToMinorUnits(currencyCode: "JPY").positiveOrNil
-                                    draft.maxAmountMinor = maxAmountText.currencyInputToMinorUnits(currencyCode: "JPY").positiveOrNil
-                                    onApply(draft)
-                                    dismiss()
-                                }
-                                .buttonStyle(.glassProminent)
-                                .buttonBorderShape(.capsule)
-                                .tint(Color(red: 0.43, green: 0.23, blue: 0.76))
-                            }
-                            .padding(.top, 4)
-                        }
-                    }
-                }
-            }
-            .padding(.horizontal, 14)
-            .padding(.bottom, 14)
-        }
-    }
-
-    private var shouldShowCategorySection: Bool {
-        selectedKind != .transfer
-    }
-
-    private var shouldShowTransferSubtypeSection: Bool {
-        selectedKind == nil || selectedKind == .transfer
-    }
-}
-
-private struct FilterSection<Content: View>: View {
-    let title: String
-    @ViewBuilder let content: Content
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Text(title)
-                .font(.system(size: 13, weight: .bold, design: .rounded))
-                .foregroundStyle(.secondary)
-                .textCase(.uppercase)
-                .tracking(0.5)
-
-            content
-        }
-    }
-}
-
-private struct ChoiceChipGrid<Value: CaseIterable & Hashable, Label: View>: View {
-    let values: Value.AllCases
-    @Binding var selection: Value
-    @ViewBuilder let label: (Value) -> Label
-
-    var body: some View {
-        FlexibleChipLayout {
-            ForEach(Array(values), id: \.self) { value in
-                Button {
-                    selection = value
-                } label: {
-                    label(value)
-                        .font(.system(size: 13.5, weight: .bold, design: .rounded))
-                        .foregroundStyle(selection == value ? .primary : .secondary)
-                        .padding(.horizontal, 14)
-                        .padding(.vertical, 10)
-                        .background {
-                            MistiaCapsuleGlassBackground(
-                                tint: selection == value ? .white.opacity(0.18) : .white.opacity(0.08),
-                                interactive: true
-                            )
-                        }
-                }
-                .buttonStyle(.plain)
-            }
-        }
-    }
-}
-
-private struct OptionalChipGrid<Value: Hashable, ID: Hashable, Label: View>: View {
-    let titleForNil: String
-    let values: [Value]
-    @Binding var selection: ID?
-    let id: (Value) -> ID
-    @ViewBuilder let label: (Value) -> Label
-
-    var body: some View {
-        FlexibleChipLayout {
-            Button {
-                selection = nil
-            } label: {
-                Text(titleForNil)
-                    .font(.system(size: 13.5, weight: .bold, design: .rounded))
-                    .foregroundStyle(selection == nil ? .primary : .secondary)
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 10)
-                    .background {
-                        MistiaCapsuleGlassBackground(
-                            tint: selection == nil ? .white.opacity(0.18) : .white.opacity(0.08),
-                            interactive: true
-                        )
-                    }
-            }
-            .buttonStyle(.plain)
-
-            ForEach(Array(values.enumerated()), id: \.offset) { _, value in
-                Button {
-                    selection = id(value)
-                } label: {
-                    label(value)
-                        .font(.system(size: 13.5, weight: .bold, design: .rounded))
-                        .foregroundStyle(selection == id(value) ? .primary : .secondary)
-                        .padding(.horizontal, 14)
-                        .padding(.vertical, 10)
-                        .background {
-                            MistiaCapsuleGlassBackground(
-                                tint: selection == id(value) ? .white.opacity(0.18) : .white.opacity(0.08),
-                                interactive: true
-                            )
-                        }
-                }
-                .buttonStyle(.plain)
-            }
-        }
-    }
-}
-
-private struct FlexibleChipLayout<Content: View>: View {
-    @ViewBuilder let content: Content
-
-    var body: some View {
-        LazyVGrid(columns: [GridItem(.adaptive(minimum: 96), spacing: 10)], alignment: .leading, spacing: 10) {
-            content
-        }
-    }
-}
-
-private struct FilterAmountField: View {
-    let title: String
-    @Binding var text: String
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Text(title)
-                .font(.system(size: 13.5, weight: .semibold, design: .rounded))
-                .foregroundStyle(.secondary)
-
-            TextField("Ví dụ 50000", text: $text)
-                .keyboardType(.numberPad)
-                .textFieldStyle(.plain)
-                .font(.system(size: 15, weight: .medium, design: .rounded))
-                .padding(.horizontal, 14)
-                .padding(.vertical, 12)
-                .background {
-                    MistiaRoundedGlassBackground(
-                        cornerRadius: 16,
-                        tint: .white.opacity(0.08),
-                        interactive: true
-                    )
-                }
-        }
     }
 }
 

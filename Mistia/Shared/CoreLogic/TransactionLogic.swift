@@ -351,18 +351,18 @@ enum TransactionLogic {
         switch scope {
         case .allTime:
             return true
-        case .today:
-            return calendar.isDate(record.occurredAt, inSameDayAs: referenceDate)
-        case .thisWeek:
-            guard let weekInterval = calendar.dateInterval(of: .weekOfYear, for: referenceDate) else {
-                return true
-            }
-            return weekInterval.contains(record.occurredAt)
         case .thisMonth:
             guard let monthInterval = calendar.dateInterval(of: .month, for: referenceDate) else {
                 return true
             }
             return monthInterval.contains(record.occurredAt)
+        case .yesterday:
+            guard let yesterdayDate = calendar.date(byAdding: .day, value: -1, to: referenceDate) else {
+                return false
+            }
+            return calendar.isDate(record.occurredAt, inSameDayAs: yesterdayDate)
+        case .today:
+            return calendar.isDate(record.occurredAt, inSameDayAs: referenceDate)
         }
     }
 

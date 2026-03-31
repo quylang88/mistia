@@ -318,7 +318,7 @@ private enum MistiaQuickCreateDestination: String, CaseIterable, Identifiable {
     case .income:
       "Ghi nhận nguồn thu để cập nhật số dư."
     case .transfer:
-      "Chuyển nội bộ hoặc theo dõi công nợ với người quen."
+      "Chuyển nội bộ hoặc theo dõi công nợ."
     case .note:
       "Chỉ nhập số tiền và loại để hoàn thiện sau."
     }
