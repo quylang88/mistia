@@ -127,26 +127,6 @@ enum ManagementPresetData {
     ]
 }
 
-extension TransactionCategoryKind {
-    var defaultIconSymbolName: String {
-        switch self {
-        case .expense:
-            "fork.knife"
-        case .income:
-            "briefcase.fill"
-        }
-    }
-
-    var defaultColorHex: String {
-        switch self {
-        case .expense:
-            "#F59B3F"
-        case .income:
-            "#2DAA9E"
-        }
-    }
-}
-
 extension LedgerAccount {
     var iconColor: Color {
         Color(hex: iconColorHex)

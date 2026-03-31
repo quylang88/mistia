@@ -1,4 +1,5 @@
 import SwiftUI
+import SwiftData
 
 enum MistiaTab: String, CaseIterable, Hashable {
   case overview
@@ -73,6 +74,7 @@ enum MistiaTab: String, CaseIterable, Hashable {
 
 struct RootTabView: View {
   @Environment(\.colorScheme) private var colorScheme
+  @Environment(\.modelContext) private var modelContext
   @AppStorage(MistiaAppStorageKey.appearanceMode) private var appearanceModeRawValue =
     MistiaAppearanceMode.automatic.rawValue
   @AppStorage(MistiaAppStorageKey.hideQuickCreate) private var hideQuickCreate = false
@@ -132,10 +134,17 @@ struct RootTabView: View {
           .presentationDetents([.medium])
           .presentationDragIndicator(.visible)
       case .quickCreate(let destination):
-        MistiaQuickCreateDetailSheet(destination: destination)
-          .presentationDetents([.medium])
+        TransactionEditorSheet(target: quickCreateTarget(for: destination)) { completion in
+          if completion == .savedDraft {
+            selectedTab = .transactions
+          }
+        }
+          .presentationDetents(destination == .note ? [.medium, .large] : [.large])
           .presentationDragIndicator(.visible)
       }
+    }
+    .task {
+      try? MistiaBootstrap.seedDefaultCategoriesIfNeeded(modelContext: modelContext)
     }
     .onChange(of: hideQuickCreate) { _, newValue in
       if newValue {
@@ -191,6 +200,19 @@ struct RootTabView: View {
       withAnimation(quickCreateMenuAnimation) {
         isQuickCreateMenuExpanded = true
       }
+    }
+  }
+
+  private func quickCreateTarget(for destination: MistiaQuickCreateDestination) -> TransactionEditorTarget {
+    switch destination {
+    case .expense:
+      TransactionEditorTarget(initialKind: .expense)
+    case .income:
+      TransactionEditorTarget(initialKind: .income)
+    case .transfer:
+      TransactionEditorTarget(initialKind: .transfer)
+    case .note:
+      TransactionEditorTarget(initialKind: .expense, quickCapture: true)
     }
   }
 
@@ -296,9 +318,9 @@ private enum MistiaQuickCreateDestination: String, CaseIterable, Identifiable {
     case .income:
       "Ghi nhận nguồn thu để cập nhật số dư."
     case .transfer:
-      "Chuyển tiền giữa ví, thẻ và tài khoản."
+      "Chuyển nội bộ hoặc theo dõi công nợ với người quen."
     case .note:
-      "Thêm ghi chú nhanh để hoàn thiện sau."
+      "Chỉ nhập số tiền và loại để hoàn thiện sau."
     }
   }
 
@@ -462,53 +484,6 @@ private struct MistiaQuickCreateMenuRow: View {
     .padding(.horizontal, 12)
     .padding(.vertical, 10)
     .contentShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
-  }
-}
-
-private struct MistiaQuickCreateDetailSheet: View {
-  let destination: MistiaQuickCreateDestination
-
-  var body: some View {
-    ZStack {
-      MistiaBackgroundView()
-
-      VStack(spacing: 18) {
-        Text(destination.title)
-          .font(.system(size: 24, weight: .bold, design: .rounded))
-
-        MistiaGlassCard(
-          cornerRadius: 28,
-          tint: destination.accent.opacity(0.16)
-        ) {
-          VStack(spacing: 14) {
-            Image(systemName: destination.systemImage)
-              .font(.system(size: 28, weight: .semibold, design: .rounded))
-              .foregroundStyle(.white)
-              .frame(width: 76, height: 76)
-              .background {
-                MistiaRoundedGlassBackground(
-                  cornerRadius: 24,
-                  tint: destination.accent.opacity(0.24)
-                )
-              }
-
-            VStack(spacing: 6) {
-              Text(destination.subtitle)
-                .multilineTextAlignment(.center)
-                .font(.system(size: 16, weight: .semibold, design: .rounded))
-                .foregroundStyle(.primary)
-
-              Text(destination.placeholderMessage)
-                .multilineTextAlignment(.center)
-                .font(.system(size: 14, weight: .medium, design: .rounded))
-                .foregroundStyle(.secondary)
-            }
-          }
-          .frame(maxWidth: .infinity)
-        }
-      }
-      .padding(.horizontal, 20)
-    }
   }
 }
 

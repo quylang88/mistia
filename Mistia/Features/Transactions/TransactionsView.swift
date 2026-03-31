@@ -1,9 +1,11 @@
+import SwiftData
 import SwiftUI
 
 private enum TransactionSegment: String, CaseIterable, Hashable {
     case all
     case expense
     case income
+    case transfer
 
     var title: String {
         switch self {
@@ -13,6 +15,8 @@ private enum TransactionSegment: String, CaseIterable, Hashable {
             "Chi tiêu"
         case .income:
             "Thu nhập"
+        case .transfer:
+            "Chuyển tiền"
         }
     }
 
@@ -24,10 +28,12 @@ private enum TransactionSegment: String, CaseIterable, Hashable {
             Color(red: 0.97, green: 0.43, blue: 0.46)
         case .income:
             .mint
+        case .transfer:
+            Color(red: 0.29, green: 0.56, blue: 0.96)
         }
     }
 
-    var kind: TransactionKind? {
+    var kind: TransactionPrimaryKind? {
         switch self {
         case .all:
             nil
@@ -35,6 +41,8 @@ private enum TransactionSegment: String, CaseIterable, Hashable {
             .expense
         case .income:
             .income
+        case .transfer:
+            .transfer
         }
     }
 }
@@ -47,100 +55,276 @@ private enum TransactionsSheet: String, Identifiable {
 
 struct TransactionsView: View {
     @Environment(\.colorScheme) private var colorScheme
-    private let dump = MockDataLoader.transactions
+    @Environment(\.modelContext) private var modelContext
+
+    @Query(sort: [SortDescriptor(\LedgerTransaction.occurredAt, order: .reverse), SortDescriptor(\LedgerTransaction.createdAt, order: .reverse)])
+    private var storedTransactions: [LedgerTransaction]
+    @Query(sort: [SortDescriptor(\LedgerAccount.sortOrder), SortDescriptor(\LedgerAccount.createdAt)])
+    private var storedAccounts: [LedgerAccount]
+    @Query(sort: [SortDescriptor(\TransactionCategory.sortOrder), SortDescriptor(\TransactionCategory.createdAt)])
+    private var storedCategories: [TransactionCategory]
 
     @State private var selectedSegment: TransactionSegment = .all
     @State private var activeSheet: TransactionsSheet?
+    @State private var editorTarget: TransactionEditorTarget?
+    @State private var filterState = TransactionFilterState()
+    @State private var searchText = ""
+    @State private var isSearchPresented = false
+    @State private var showsTimeScopeDialog = false
+    @State private var showsAccountDialog = false
 
-    private var accentPurple: Color {
-        Color(red: 0.43, green: 0.23, blue: 0.76)
+    private var activeAccounts: [LedgerAccount] {
+        storedAccounts
+            .filter { !$0.isArchived }
+            .sorted {
+                if $0.sortOrder != $1.sortOrder {
+                    return $0.sortOrder < $1.sortOrder
+                }
+                return $0.createdAt < $1.createdAt
+            }
     }
 
-    private var cardTint: Color {
-        colorScheme == .dark ? .white.opacity(0.022) : .white.opacity(0.14)
+    private var transactionsByID: [UUID: LedgerTransaction] {
+        Dictionary(uniqueKeysWithValues: storedTransactions.map { ($0.id, $0) })
     }
 
-    private var idleCapsuleTint: Color {
-        colorScheme == .dark ? .white.opacity(0.045) : .white.opacity(0.18)
+    private var snapshotRecords: [TransactionRecordSnapshot] {
+        storedTransactions.map { $0.snapshot }
     }
 
-    private var visibleSections: [TransactionSectionDump] {
-        dump.sections.compactMap { section in
-            let items = section.items.filter { item in
-                guard let kind = selectedSegment.kind else { return true }
-                return item.kind == kind
+    private var effectiveFilters: TransactionFilterState {
+        var effective = filterState
+        effective.searchText = searchText
+        return effective
+    }
+
+    private var visibleRecords: [TransactionRecordSnapshot] {
+        TransactionLogic.visibleRecords(
+            from: snapshotRecords,
+            selectedKind: selectedSegment.kind,
+            filters: effectiveFilters
+        )
+    }
+
+    private var summary: TransactionSummarySnapshot {
+        TransactionLogic.summary(for: visibleRecords)
+    }
+
+    private var sections: [TransactionSectionSnapshot] {
+        TransactionLogic.sections(from: visibleRecords)
+    }
+
+    private var openDebtPositions: [CounterpartyDebtSnapshot] {
+        let debtRecords = snapshotRecords.filter { record in
+            guard record.primaryKind == .transfer, record.transferSubtype == .debt else {
+                return false
             }
 
-            guard !items.isEmpty else { return nil }
-            return TransactionSectionDump(
-                title: section.title,
-                trailingLabel: section.trailingLabel,
-                items: items
-            )
+            if let accountID = filterState.accountID {
+                return record.sourceAccountID == accountID || record.destinationAccountID == accountID
+            }
+
+            return true
         }
+
+        return TransactionLogic.openDebtPositions(from: debtRecords)
+    }
+
+    private var selectedAccountLabel: String {
+        guard let accountID = filterState.accountID,
+              let account = activeAccounts.first(where: { $0.id == accountID })
+        else {
+            return "Tất cả tài khoản"
+        }
+
+        return account.name
+    }
+
+    private var activeFilterCount: Int {
+        var count = 0
+
+        if filterState.categoryID != nil { count += 1 }
+        if filterState.transferSubtype != nil { count += 1 }
+        if filterState.statusScope != .all { count += 1 }
+        if filterState.minAmountMinor != nil || filterState.maxAmountMinor != nil { count += 1 }
+
+        return count
     }
 
     var body: some View {
         MistiaPinnedTopBarScaffold(
             tone: .standard,
-            title: dump.headerTitle,
-            trailingSystemImage: "magnifyingglass",
-            contentSpacing: 16
+            title: "Giao dịch",
+            trailingSystemImage: nil,
+            contentSpacing: 18,
+            contentBottomPadding: 150
         ) {
             toolbarChips
-            TransactionSummaryCard(summary: dump.summary)
+            if !openDebtPositions.isEmpty {
+                outstandingDebtSection
+            }
+            TransactionLiveSummaryCard(summary: summary)
             segmentSelector
-
-            ForEach(visibleSections) { section in
-                TransactionSectionCard(section: section)
+            transactionsContent
+        }
+        .searchable(
+            text: $searchText,
+            isPresented: $isSearchPresented,
+            prompt: "Tìm tên giao dịch hoặc người liên quan"
+        )
+        .searchToolbarBehavior(.minimize)
+        .searchPresentationToolbarBehavior(.avoidHidingContent)
+        .sheet(item: $activeSheet) { sheet in
+            switch sheet {
+            case .filters:
+                TransactionsFilterSheet(
+                    selectedKind: selectedSegment.kind,
+                    accounts: activeAccounts,
+                    categories: storedCategories,
+                    initialState: filterState
+                ) { newState in
+                    filterState = newState
+                }
+                .presentationDetents([.medium, .large])
+                .presentationDragIndicator(.visible)
+                .presentationBackground(.clear)
             }
         }
-        .sheet(item: $activeSheet) { _ in
-            TransactionFilterSheetView(sheet: dump.filterSheet)
-                .presentationDetents([.height(378)])
-                .presentationDragIndicator(.hidden)
-                .presentationBackground(.clear)
+        .sheet(item: $editorTarget) { target in
+            TransactionEditorSheet(target: target)
+                .presentationDetents(target.quickCapture ? [.medium, .large] : [.large])
+                .presentationDragIndicator(.visible)
+        }
+        .confirmationDialog(
+            "Thời gian",
+            isPresented: $showsTimeScopeDialog,
+            titleVisibility: .visible
+        ) {
+            ForEach(TransactionTimeScope.allCases) { scope in
+                Button(scope.title) {
+                    filterState.timeScope = scope
+                }
+            }
+        }
+        .confirmationDialog(
+            "Tài khoản",
+            isPresented: $showsAccountDialog,
+            titleVisibility: .visible
+        ) {
+            Button("Tất cả tài khoản") {
+                filterState.accountID = nil
+            }
+
+            ForEach(activeAccounts) { account in
+                Button(account.name) {
+                    filterState.accountID = account.id
+                }
+            }
+        }
+        .task {
+            try? MistiaBootstrap.seedDefaultCategoriesIfNeeded(modelContext: modelContext)
         }
     }
 
     private var toolbarChips: some View {
         ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 10) {
-                TransactionToolbarChip(
-                    icon: "magnifyingglass",
-                    title: dump.timeframeLabel,
-                    tint: accentPurple
-                )
-
-                TransactionToolbarChip(
-                    icon: "wallet.pass",
-                    title: dump.walletLabel,
-                    tint: MistiaAccent.slate.color
-                )
-
-                Button {
-                    activeSheet = .filters
-                } label: {
-                    TransactionToolbarChip(
-                        icon: "line.3.horizontal.decrease.circle",
-                        title: "Bộ lọc",
-                        tint: accentPurple,
-                        isInteractive: true
-                    )
+            Group {
+                if #available(iOS 26, *) {
+                    GlassEffectContainer(spacing: 10) {
+                        toolbarChipRow
+                    }
+                } else {
+                    toolbarChipRow
                 }
-                .buttonStyle(.plain)
             }
             .padding(.vertical, 2)
         }
     }
 
+    private var toolbarChipRow: some View {
+        HStack(spacing: 10) {
+            Button {
+                showsTimeScopeDialog = true
+            } label: {
+                TransactionToolbarChip(
+                    icon: "calendar",
+                    title: filterState.timeScope.title,
+                    tint: .indigo,
+                    isInteractive: true
+                )
+            }
+            .buttonStyle(.plain)
+
+            Button {
+                showsAccountDialog = true
+            } label: {
+                TransactionToolbarChip(
+                    icon: "wallet.pass",
+                    title: selectedAccountLabel,
+                    tint: MistiaAccent.slate.color,
+                    isInteractive: true
+                )
+            }
+            .buttonStyle(.plain)
+
+            Button {
+                activeSheet = .filters
+            } label: {
+                TransactionToolbarChip(
+                    icon: "line.3.horizontal.decrease.circle",
+                    title: activeFilterCount == 0 ? "Bộ lọc" : "Bộ lọc (\(activeFilterCount))",
+                    tint: activeFilterCount == 0
+                        ? Color(red: 0.43, green: 0.23, blue: 0.76)
+                        : Color(red: 0.29, green: 0.56, blue: 0.96),
+                    isInteractive: true
+                )
+            }
+            .buttonStyle(.plain)
+        }
+    }
+
+    private var outstandingDebtSection: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("Công nợ đang mở")
+                .font(.system(size: 13, weight: .bold, design: .rounded))
+                .foregroundStyle(.secondary)
+                .textCase(.uppercase)
+                .tracking(0.6)
+                .padding(.horizontal, 2)
+
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 10) {
+                    ForEach(openDebtPositions) { position in
+                        OutstandingDebtChip(position: position)
+                    }
+                }
+                .padding(.vertical, 2)
+            }
+        }
+    }
+
     private var segmentSelector: some View {
-        HStack(spacing: 8) {
+        ScrollView(.horizontal, showsIndicators: false) {
+            Group {
+                if #available(iOS 26, *) {
+                    GlassEffectContainer(spacing: 10) {
+                        segmentRow
+                    }
+                } else {
+                    segmentRow
+                }
+            }
+            .padding(.vertical, 2)
+        }
+    }
+
+    private var segmentRow: some View {
+        HStack(spacing: 10) {
             ForEach(TransactionSegment.allCases, id: \.self) { segment in
                 Button {
                     selectedSegment = segment
                 } label: {
-                    HStack(spacing: 6) {
+                    HStack(spacing: 7) {
                         if segment != .all {
                             Circle()
                                 .fill(segment.tint)
@@ -148,72 +332,82 @@ struct TransactionsView: View {
                         }
 
                         Text(segment.title)
-                            .font(.system(size: 12, weight: .bold, design: .rounded))
+                            .font(.system(size: 13, weight: .bold, design: .rounded))
                     }
-                    .foregroundStyle(selectedSegment == segment ? accentPurple : .secondary)
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 8)
+                    .foregroundStyle(selectedSegment == segment ? .primary : .secondary)
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 10)
                     .background {
                         MistiaCapsuleGlassBackground(
                             tint: selectedSegment == segment
-                                ? accentPurple.opacity(colorScheme == .dark ? 0.25 : 0.14)
-                                : idleCapsuleTint,
+                                ? segment.tint.opacity(colorScheme == .dark ? 0.25 : 0.14)
+                                : (colorScheme == .dark ? .white.opacity(0.05) : .white.opacity(0.16)),
                             interactive: true
                         )
                     }
                 }
                 .buttonStyle(.plain)
             }
+        }
+    }
 
-            Spacer(minLength: 8)
-
-            Button { } label: {
-                ZStack {
-                    MistiaCircleGlassBackground(tint: .white.opacity(0.08), interactive: true)
-                    Image(systemName: "chevron.right")
-                        .font(.system(size: 12, weight: .bold))
-                        .foregroundStyle(.secondary)
+    @ViewBuilder
+    private var transactionsContent: some View {
+        if storedTransactions.isEmpty {
+            TransactionsPlaceholderCard(
+                title: "Chưa có giao dịch nào",
+                message: "Khi bạn thêm chi tiêu, thu nhập, chuyển tiền hoặc ghi nhanh từ nút plus, lịch sử sẽ xuất hiện ở đây."
+            )
+        } else if sections.isEmpty {
+            TransactionsPlaceholderCard(
+                title: "Không có kết quả phù hợp",
+                message: "Thử đổi thời gian, tài khoản, bộ lọc hoặc từ khóa tìm kiếm để xem thêm giao dịch."
+            )
+        } else {
+            ForEach(sections) { section in
+                TransactionSectionCard(
+                    section: section,
+                    transactionsByID: transactionsByID
+                ) { transaction in
+                    editorTarget = TransactionEditorTarget(transaction: transaction)
                 }
-                .frame(width: 30, height: 30)
             }
-            .buttonStyle(.plain)
         }
     }
 }
 
-private struct TransactionSummaryCard: View {
-    @Environment(\.colorScheme) private var colorScheme
-    let summary: TransactionSummaryDump
-
-    private var cardTint: Color {
-        colorScheme == .dark ? .white.opacity(0.022) : .white.opacity(0.14)
-    }
+private struct TransactionLiveSummaryCard: View {
+    let summary: TransactionSummarySnapshot
 
     var body: some View {
-        MistiaGlassCard(cornerRadius: 20, tint: cardTint, padding: 16) {
-            HStack(alignment: .top, spacing: 12) {
+        MistiaGlassCard(
+            cornerRadius: 24,
+            tint: Color.white.opacity(0.12)
+        ) {
+            HStack(alignment: .top, spacing: 14) {
                 TransactionSummaryMetric(
                     title: "Chi",
-                    value: summary.expense.mistiaCurrency,
+                    value: summary.expenseMinor.formattedCurrency(code: "JPY"),
                     tint: Color(red: 0.97, green: 0.43, blue: 0.46)
                 )
 
-                Spacer(minLength: 6)
+                Spacer(minLength: 4)
 
                 TransactionSummaryMetric(
                     title: "Thu",
-                    value: summary.income.mistiaCurrency,
+                    value: summary.incomeMinor.formattedCurrency(code: "JPY"),
                     tint: .mint
                 )
 
-                Spacer(minLength: 6)
+                Spacer(minLength: 4)
 
-                VStack(alignment: .trailing, spacing: 5) {
-                    Text("\(summary.totalTransactions)")
-                        .font(.system(size: 20, weight: .bold, design: .rounded))
+                VStack(alignment: .trailing, spacing: 6) {
+                    Text("\(summary.totalCount)")
+                        .font(.system(size: 24, weight: .bold, design: .rounded))
                         .foregroundStyle(.primary)
-                    Text("Giao dịch")
-                        .font(.system(size: 11, weight: .semibold, design: .rounded))
+
+                    Text(summary.draftCount == 0 ? "Giao dịch" : "\(summary.draftCount) nháp")
+                        .font(.system(size: 11.5, weight: .semibold, design: .rounded))
                         .foregroundStyle(.secondary)
                 }
             }
@@ -233,7 +427,7 @@ private struct TransactionSummaryMetric: View {
                 .foregroundStyle(.secondary)
 
             Text(value)
-                .font(.system(size: 19, weight: .bold, design: .rounded))
+                .font(.system(size: 18, weight: .bold, design: .rounded))
                 .foregroundStyle(tint)
                 .lineLimit(1)
                 .minimumScaleFactor(0.72)
@@ -242,11 +436,12 @@ private struct TransactionSummaryMetric: View {
 }
 
 private struct TransactionSectionCard: View {
-    @Environment(\.colorScheme) private var colorScheme
-    let section: TransactionSectionDump
+    let section: TransactionSectionSnapshot
+    let transactionsByID: [UUID: LedgerTransaction]
+    let onSelect: (LedgerTransaction) -> Void
 
     var body: some View {
-        VStack(spacing: 8) {
+        VStack(spacing: 10) {
             HStack {
                 Text(section.title)
                     .font(.system(size: 17, weight: .bold, design: .rounded))
@@ -254,28 +449,32 @@ private struct TransactionSectionCard: View {
 
                 Spacer()
 
-                Text(section.trailingLabel)
-                    .font(.system(size: 11, weight: .semibold, design: .rounded))
+                Text("\(section.rows.count) mục")
+                    .font(.system(size: 11.5, weight: .semibold, design: .rounded))
                     .foregroundStyle(.secondary)
             }
 
             MistiaGlassCard(
-                cornerRadius: 20,
-                tint: colorScheme == .dark ? .white.opacity(0.022) : .white.opacity(0.14),
+                cornerRadius: 22,
+                tint: Color.white.opacity(0.10),
                 padding: 0
             ) {
                 VStack(spacing: 0) {
-                    ForEach(Array(section.items.enumerated()), id: \.element.id) { index, item in
-                        Button { } label: {
-                            TransactionRow(item: item)
-                                .padding(.horizontal, 14)
-                                .padding(.vertical, 12)
+                    ForEach(Array(section.rows.enumerated()), id: \.element.id) { index, row in
+                        if let transaction = transactionsByID[row.id] {
+                            Button {
+                                onSelect(transaction)
+                            } label: {
+                                TransactionRow(record: row, transaction: transaction)
+                                    .padding(.horizontal, 14)
+                                    .padding(.vertical, 12)
+                            }
+                            .buttonStyle(MistiaPressableButtonStyle(cornerRadius: 18))
                         }
-                        .buttonStyle(MistiaPressableButtonStyle(cornerRadius: 16))
 
-                        if index < section.items.count - 1 {
+                        if index < section.rows.count - 1 {
                             Divider()
-                                .padding(.leading, 56)
+                                .padding(.leading, 58)
                         }
                     }
                 }
@@ -285,48 +484,193 @@ private struct TransactionSectionCard: View {
 }
 
 private struct TransactionRow: View {
-    let item: TransactionListItemDump
+    let record: TransactionRecordSnapshot
+    let transaction: LedgerTransaction
+
+    private var icon: String {
+        switch record.primaryKind {
+        case .expense, .income:
+            transaction.category?.iconSymbolName ?? record.primaryKind.systemImage
+        case .transfer:
+            switch record.transferSubtype {
+            case .internalTransfer:
+                "arrow.left.arrow.right"
+            case .debt:
+                "person.2.wave.2.fill"
+            case nil:
+                "arrow.left.arrow.right"
+            }
+        }
+    }
+
+    private var iconColor: Color {
+        switch record.primaryKind {
+        case .expense:
+            transaction.category?.iconColor ?? Color(red: 0.97, green: 0.43, blue: 0.46)
+        case .income:
+            transaction.category?.iconColor ?? .mint
+        case .transfer:
+            switch record.transferSubtype {
+            case .internalTransfer:
+                Color(red: 0.29, green: 0.56, blue: 0.96)
+            case .debt:
+                cashflowColor
+            case nil:
+                .secondary
+            }
+        }
+    }
+
+    private var title: String {
+        if let trimmed = record.title.nilIfBlank {
+            return trimmed
+        }
+
+        switch record.primaryKind {
+        case .expense:
+            return transaction.category?.name ?? "Chi tiêu cần hoàn thiện"
+        case .income:
+            return transaction.category?.name ?? "Thu nhập cần hoàn thiện"
+        case .transfer:
+            switch record.transferSubtype {
+            case .internalTransfer:
+                return "Chuyển tiền nội bộ"
+            case .debt:
+                return record.debtIntent?.title ?? "Công nợ"
+            case nil:
+                return "Chuyển tiền cần hoàn thiện"
+            }
+        }
+    }
+
+    private var subtitle: String {
+        if record.entryStatus == .draft {
+            return "Bản nháp • Chạm để hoàn thiện"
+        }
+
+        switch record.primaryKind {
+        case .expense, .income:
+            let account = transaction.sourceAccount?.name ?? "Chưa chọn tài khoản"
+            let category = transaction.category?.name ?? "Chưa chọn danh mục"
+            return "\(account) • \(category)"
+        case .transfer:
+            switch record.transferSubtype {
+            case .internalTransfer:
+                let source = transaction.sourceAccount?.name ?? "Nguồn"
+                let destination = transaction.destinationAccount?.name ?? "Đích"
+                return "\(source) → \(destination)"
+            case .debt:
+                let account = transaction.sourceAccount?.name ?? "Chưa chọn tài khoản"
+                let person = transaction.counterpartyName ?? "Không rõ tên"
+                let intent = record.debtIntent?.title ?? "Công nợ"
+                return "\(person) • \(intent) • \(account)"
+            case nil:
+                return "Chuyển tiền"
+            }
+        }
+    }
+
+    private var cashflowColor: Color {
+        let amount = TransactionLogic.cashflowAmount(for: record)
+        if amount > 0 {
+            return .mint
+        }
+        if amount < 0 {
+            return Color(red: 0.97, green: 0.43, blue: 0.46)
+        }
+        return Color(red: 0.29, green: 0.56, blue: 0.96)
+    }
+
+    private var displayAmount: String {
+        let raw = record.amountMinor.formattedCurrency(code: "JPY")
+
+        switch record.primaryKind {
+        case .expense:
+            return "-" + raw
+        case .income:
+            return "+" + raw
+        case .transfer:
+            let cashflow = TransactionLogic.cashflowAmount(for: record)
+            if cashflow > 0 {
+                return "+" + raw
+            }
+            if cashflow < 0 {
+                return "-" + raw
+            }
+            return raw
+        }
+    }
 
     var body: some View {
         HStack(spacing: 12) {
-            TransactionIconTile(item: item)
+            TransactionIconTile(icon: icon, tint: iconColor)
 
-            VStack(alignment: .leading, spacing: 5) {
-                Text(item.merchant)
-                    .font(.system(size: 16, weight: .semibold, design: .rounded))
-                    .foregroundStyle(.primary)
+            VStack(alignment: .leading, spacing: 6) {
+                HStack(spacing: 8) {
+                    Text(title)
+                        .font(.system(size: 16, weight: .semibold, design: .rounded))
+                        .foregroundStyle(.primary)
+                        .lineLimit(1)
 
-                Text(item.subtitle)
-                    .font(.system(size: 11, weight: .medium, design: .rounded))
+                    if record.entryStatus == .draft {
+                        TransactionMiniBadge(title: "Nháp", tint: Color(red: 0.43, green: 0.23, blue: 0.76))
+                    } else if record.primaryKind == .transfer, let subtype = record.transferSubtype {
+                        TransactionMiniBadge(
+                            title: subtype.title,
+                            tint: subtype == .debt
+                                ? Color(red: 0.29, green: 0.56, blue: 0.96)
+                                : Color(red: 0.36, green: 0.37, blue: 0.43)
+                        )
+                    }
+                }
+
+                Text(subtitle)
+                    .font(.system(size: 12, weight: .medium, design: .rounded))
                     .foregroundStyle(.secondary)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.72)
+                    .lineLimit(2)
             }
 
             Spacer(minLength: 8)
 
-            Text(item.displayAmount)
+            Text(displayAmount)
                 .font(.system(size: 16, weight: .bold, design: .rounded))
-                .foregroundStyle(item.amountTint)
+                .foregroundStyle(cashflowColor)
                 .lineLimit(1)
-                .minimumScaleFactor(0.7)
+                .minimumScaleFactor(0.74)
         }
     }
 }
 
 private struct TransactionIconTile: View {
-    let item: TransactionListItemDump
+    let icon: String
+    let tint: Color
 
     var body: some View {
         ZStack {
-            RoundedRectangle(cornerRadius: 10, style: .continuous)
-                .fill(item.accent.color.opacity(0.14))
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .fill(tint.opacity(0.14))
 
-            Image(systemName: item.icon)
-                .font(.system(size: 13, weight: .bold))
-                .foregroundStyle(item.accent.color)
+            Image(systemName: icon)
+                .font(.system(size: 14, weight: .bold))
+                .foregroundStyle(tint)
         }
-        .frame(width: 30, height: 30)
+        .frame(width: 34, height: 34)
+    }
+}
+
+private struct TransactionMiniBadge: View {
+    let title: String
+    let tint: Color
+
+    var body: some View {
+        Text(title)
+            .font(.system(size: 10, weight: .bold, design: .rounded))
+            .foregroundStyle(tint)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 4)
+            .background {
+                MistiaCapsuleGlassBackground(tint: tint.opacity(0.12))
+            }
     }
 }
 
@@ -337,16 +681,17 @@ private struct TransactionToolbarChip: View {
     var isInteractive: Bool = false
 
     var body: some View {
-        HStack(spacing: 6) {
+        HStack(spacing: 7) {
             Image(systemName: icon)
                 .font(.system(size: 11, weight: .bold))
 
             Text(title)
-                .font(.system(size: 12, weight: .semibold, design: .rounded))
+                .font(.system(size: 12.5, weight: .semibold, design: .rounded))
+                .lineLimit(1)
         }
         .foregroundStyle(tint)
-        .padding(.horizontal, 12)
-        .padding(.vertical, 8)
+        .padding(.horizontal, 13)
+        .padding(.vertical, 9)
         .background {
             MistiaCapsuleGlassBackground(
                 tint: tint.opacity(isInteractive ? 0.18 : 0.12),
@@ -356,13 +701,130 @@ private struct TransactionToolbarChip: View {
     }
 }
 
-private struct TransactionFilterSheetView: View {
-    @Environment(\.colorScheme) private var colorScheme
-    let sheet: TransactionFilterSheetDump
+private struct OutstandingDebtChip: View {
+    let position: CounterpartyDebtSnapshot
+
+    private var tint: Color {
+        position.isReceivable
+            ? Color(red: 0.23, green: 0.73, blue: 0.61)
+            : Color(red: 0.96, green: 0.46, blue: 0.41)
+    }
+
+    var body: some View {
+        MistiaGlassCard(cornerRadius: 22, tint: tint.opacity(0.14), padding: 14) {
+            VStack(alignment: .leading, spacing: 6) {
+                Text(position.displayName)
+                    .font(.system(size: 15, weight: .bold, design: .rounded))
+                    .foregroundStyle(.primary)
+
+                Text(position.isReceivable ? "Đang nợ bạn" : "Bạn đang nợ")
+                    .font(.system(size: 11.5, weight: .semibold, design: .rounded))
+                    .foregroundStyle(.secondary)
+
+                Text(abs(position.netMinor).formattedCurrency(code: "JPY"))
+                    .font(.system(size: 15, weight: .bold, design: .rounded))
+                    .foregroundStyle(tint)
+            }
+            .frame(width: 150, alignment: .leading)
+        }
+    }
+}
+
+private struct TransactionsPlaceholderCard: View {
+    let title: String
+    let message: String
+
+    var body: some View {
+        MistiaGlassCard(cornerRadius: 24, tint: Color.white.opacity(0.10)) {
+            VStack(spacing: 16) {
+                HStack(spacing: 10) {
+                    PlaceholderOrb(symbol: "arrow.left.arrow.right")
+                    PlaceholderOrb(symbol: "tray.full.fill")
+                    PlaceholderOrb(symbol: "square.and.pencil")
+                }
+
+                VStack(spacing: 8) {
+                    Text(title)
+                        .font(.system(size: 20, weight: .bold, design: .rounded))
+                        .foregroundStyle(.primary)
+                        .multilineTextAlignment(.center)
+
+                    Text(message)
+                        .font(.system(size: 14.5, weight: .medium, design: .rounded))
+                        .foregroundStyle(.secondary)
+                        .multilineTextAlignment(.center)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 12)
+        }
+    }
+}
+
+private struct PlaceholderOrb: View {
+    let symbol: String
+
+    var body: some View {
+        ZStack {
+            Circle()
+                .fill(Color.white.opacity(0.12))
+
+            Image(systemName: symbol)
+                .font(.system(size: 14, weight: .bold))
+                .foregroundStyle(Color(red: 0.43, green: 0.23, blue: 0.76))
+        }
+        .frame(width: 40, height: 40)
+    }
+}
+
+private struct TransactionsFilterSheet: View {
     @Environment(\.dismiss) private var dismiss
 
-    private var cardTint: Color {
-        colorScheme == .dark ? .white.opacity(0.024) : .white.opacity(0.16)
+    let selectedKind: TransactionPrimaryKind?
+    let accounts: [LedgerAccount]
+    let categories: [TransactionCategory]
+    let onApply: (TransactionFilterState) -> Void
+
+    @State private var draft: TransactionFilterState
+    @State private var minAmountText: String
+    @State private var maxAmountText: String
+
+    init(
+        selectedKind: TransactionPrimaryKind?,
+        accounts: [LedgerAccount],
+        categories: [TransactionCategory],
+        initialState: TransactionFilterState,
+        onApply: @escaping (TransactionFilterState) -> Void
+    ) {
+        self.selectedKind = selectedKind
+        self.accounts = accounts
+        self.categories = categories
+        self.onApply = onApply
+        _draft = State(initialValue: initialState)
+        _minAmountText = State(initialValue: initialState.minAmountMinor.map(String.init) ?? "")
+        _maxAmountText = State(initialValue: initialState.maxAmountMinor.map(String.init) ?? "")
+    }
+
+    private var relevantCategories: [TransactionCategory] {
+        let kind: TransactionCategoryKind?
+        switch selectedKind {
+        case .expense:
+            kind = .expense
+        case .income:
+            kind = .income
+        case .transfer, nil:
+            kind = nil
+        }
+
+        return categories
+            .filter { !$0.isArchived && (kind == nil || $0.kind == kind) }
+            .sorted {
+                if $0.sortOrder != $1.sortOrder {
+                    return $0.sortOrder < $1.sortOrder
+                }
+                return $0.createdAt < $1.createdAt
+            }
     }
 
     var body: some View {
@@ -376,116 +838,299 @@ private struct TransactionFilterSheetView: View {
                     .padding(.top, 8)
 
                 MistiaGlassCard(
-                    cornerRadius: 24,
-                    tint: cardTint,
+                    cornerRadius: 28,
+                    tint: Color.white.opacity(0.12),
                     padding: 18
                 ) {
-                    VStack(alignment: .leading, spacing: 16) {
-                        HStack(alignment: .firstTextBaseline) {
-                            Text(sheet.title)
-                                .font(.system(size: 23, weight: .bold, design: .rounded))
+                    ScrollView(showsIndicators: false) {
+                        VStack(alignment: .leading, spacing: 18) {
+                            Text("Bộ lọc giao dịch")
+                                .font(.system(size: 24, weight: .bold, design: .rounded))
                                 .foregroundStyle(.primary)
 
-                            Spacer()
+                            FilterSection(title: "Thời gian") {
+                                ChoiceChipGrid(
+                                    values: TransactionTimeScope.allCases,
+                                    selection: $draft.timeScope
+                                ) { scope in
+                                    Text(scope.title)
+                                }
+                            }
 
-                            Text(sheet.code)
-                                .font(.system(size: 12, weight: .bold, design: .rounded))
-                                .foregroundStyle(.secondary)
-                        }
+                            FilterSection(title: "Tài khoản") {
+                                OptionalChipGrid(
+                                    titleForNil: "Tất cả",
+                                    values: accounts,
+                                    selection: $draft.accountID
+                                ) { account in
+                                    account.id
+                                } label: { account in
+                                    Text(account.name)
+                                }
+                            }
 
-                        VStack(spacing: 0) {
-                            ForEach(Array(sheet.rows.enumerated()), id: \.element.id) { index, row in
-                                Button { } label: {
-                                    HStack(spacing: 12) {
-                                        Image(systemName: row.icon)
-                                            .font(.system(size: 14, weight: .semibold))
-                                            .foregroundStyle(.secondary)
-                                            .frame(width: 18)
+                            FilterSection(title: "Trạng thái") {
+                                ChoiceChipGrid(
+                                    values: TransactionStatusScope.allCases,
+                                    selection: $draft.statusScope
+                                ) { scope in
+                                    Text(scope.title)
+                                }
+                            }
 
-                                        Text(row.title)
-                                            .font(.system(size: 15, weight: .semibold, design: .rounded))
-                                            .foregroundStyle(.primary)
-
-                                        Spacer()
-
-                                        Text(row.value)
-                                            .font(.system(size: 14, weight: .semibold, design: .rounded))
-                                            .foregroundStyle(.secondary)
-
-                                        Image(systemName: "chevron.right")
-                                            .font(.system(size: 11, weight: .bold))
-                                            .foregroundStyle(.secondary)
+                            if shouldShowCategorySection {
+                                FilterSection(title: "Danh mục") {
+                                    OptionalChipGrid(
+                                        titleForNil: "Tất cả",
+                                        values: relevantCategories,
+                                        selection: $draft.categoryID
+                                    ) { category in
+                                        category.id
+                                    } label: { category in
+                                        Text(category.name)
                                     }
-                                    .padding(.vertical, 14)
-                                }
-                                .buttonStyle(MistiaPressableButtonStyle(cornerRadius: 16))
-
-                                if index < sheet.rows.count - 1 {
-                                    Divider()
-                                        .padding(.leading, 30)
                                 }
                             }
-                        }
 
-                        HStack(spacing: 10) {
-                            TransactionActionButton(
-                                title: sheet.resetLabel,
-                                tint: .white.opacity(0.06),
-                                foreground: .secondary
-                            ) {
-                                dismiss()
+                            if shouldShowTransferSubtypeSection {
+                                FilterSection(title: "Loại chuyển tiền") {
+                                    OptionalChipGrid(
+                                        titleForNil: "Tất cả",
+                                        values: Array(TransactionTransferSubtype.allCases),
+                                        selection: $draft.transferSubtype
+                                    ) { subtype in
+                                        subtype
+                                    } label: { subtype in
+                                        Text(subtype.title)
+                                    }
+                                }
                             }
 
-                            TransactionActionButton(
-                                title: sheet.applyLabel,
-                                tint: Color(red: 0.43, green: 0.23, blue: 0.76).opacity(colorScheme == .dark ? 0.30 : 0.18),
-                                foreground: Color(red: 0.43, green: 0.23, blue: 0.76)
-                            ) {
-                                dismiss()
+                            FilterSection(title: "Khoảng tiền") {
+                                VStack(spacing: 10) {
+                                    FilterAmountField(title: "Tối thiểu", text: $minAmountText)
+                                    FilterAmountField(title: "Tối đa", text: $maxAmountText)
+                                }
                             }
+
+                            HStack(spacing: 10) {
+                                Button("Đặt lại") {
+                                    draft = TransactionFilterState()
+                                    minAmountText = ""
+                                    maxAmountText = ""
+                                }
+                                .buttonStyle(.glass)
+                                .buttonBorderShape(.capsule)
+
+                                Button("Áp dụng") {
+                                    draft.minAmountMinor = minAmountText.currencyInputToMinorUnits(currencyCode: "JPY").positiveOrNil
+                                    draft.maxAmountMinor = maxAmountText.currencyInputToMinorUnits(currencyCode: "JPY").positiveOrNil
+                                    onApply(draft)
+                                    dismiss()
+                                }
+                                .buttonStyle(.glassProminent)
+                                .buttonBorderShape(.capsule)
+                                .tint(Color(red: 0.43, green: 0.23, blue: 0.76))
+                            }
+                            .padding(.top, 4)
                         }
                     }
                 }
             }
             .padding(.horizontal, 14)
-            .padding(.bottom, 16)
+            .padding(.bottom, 14)
+        }
+    }
+
+    private var shouldShowCategorySection: Bool {
+        selectedKind != .transfer
+    }
+
+    private var shouldShowTransferSubtypeSection: Bool {
+        selectedKind == nil || selectedKind == .transfer
+    }
+}
+
+private struct FilterSection<Content: View>: View {
+    let title: String
+    @ViewBuilder let content: Content
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text(title)
+                .font(.system(size: 13, weight: .bold, design: .rounded))
+                .foregroundStyle(.secondary)
+                .textCase(.uppercase)
+                .tracking(0.5)
+
+            content
         }
     }
 }
 
-private struct TransactionActionButton: View {
-    let title: String
-    let tint: Color
-    let foreground: Color
-    let action: () -> Void
+private struct ChoiceChipGrid<Value: CaseIterable & Hashable, Label: View>: View {
+    let values: Value.AllCases
+    @Binding var selection: Value
+    @ViewBuilder let label: (Value) -> Label
 
     var body: some View {
-        Button(action: action) {
+        FlexibleChipLayout {
+            ForEach(Array(values), id: \.self) { value in
+                Button {
+                    selection = value
+                } label: {
+                    label(value)
+                        .font(.system(size: 13.5, weight: .bold, design: .rounded))
+                        .foregroundStyle(selection == value ? .primary : .secondary)
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 10)
+                        .background {
+                            MistiaCapsuleGlassBackground(
+                                tint: selection == value ? .white.opacity(0.18) : .white.opacity(0.08),
+                                interactive: true
+                            )
+                        }
+                }
+                .buttonStyle(.plain)
+            }
+        }
+    }
+}
+
+private struct OptionalChipGrid<Value: Hashable, ID: Hashable, Label: View>: View {
+    let titleForNil: String
+    let values: [Value]
+    @Binding var selection: ID?
+    let id: (Value) -> ID
+    @ViewBuilder let label: (Value) -> Label
+
+    var body: some View {
+        FlexibleChipLayout {
+            Button {
+                selection = nil
+            } label: {
+                Text(titleForNil)
+                    .font(.system(size: 13.5, weight: .bold, design: .rounded))
+                    .foregroundStyle(selection == nil ? .primary : .secondary)
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 10)
+                    .background {
+                        MistiaCapsuleGlassBackground(
+                            tint: selection == nil ? .white.opacity(0.18) : .white.opacity(0.08),
+                            interactive: true
+                        )
+                    }
+            }
+            .buttonStyle(.plain)
+
+            ForEach(Array(values.enumerated()), id: \.offset) { _, value in
+                Button {
+                    selection = id(value)
+                } label: {
+                    label(value)
+                        .font(.system(size: 13.5, weight: .bold, design: .rounded))
+                        .foregroundStyle(selection == id(value) ? .primary : .secondary)
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 10)
+                        .background {
+                            MistiaCapsuleGlassBackground(
+                                tint: selection == id(value) ? .white.opacity(0.18) : .white.opacity(0.08),
+                                interactive: true
+                            )
+                        }
+                }
+                .buttonStyle(.plain)
+            }
+        }
+    }
+}
+
+private struct FlexibleChipLayout<Content: View>: View {
+    @ViewBuilder let content: Content
+
+    var body: some View {
+        LazyVGrid(columns: [GridItem(.adaptive(minimum: 96), spacing: 10)], alignment: .leading, spacing: 10) {
+            content
+        }
+    }
+}
+
+private struct FilterAmountField: View {
+    let title: String
+    @Binding var text: String
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
             Text(title)
-                .font(.system(size: 14, weight: .bold, design: .rounded))
-                .foregroundStyle(foreground)
-                .frame(maxWidth: .infinity)
+                .font(.system(size: 13.5, weight: .semibold, design: .rounded))
+                .foregroundStyle(.secondary)
+
+            TextField("Ví dụ 50000", text: $text)
+                .keyboardType(.numberPad)
+                .textFieldStyle(.plain)
+                .font(.system(size: 15, weight: .medium, design: .rounded))
+                .padding(.horizontal, 14)
                 .padding(.vertical, 12)
                 .background {
-                    MistiaCapsuleGlassBackground(tint: tint, interactive: true)
+                    MistiaRoundedGlassBackground(
+                        cornerRadius: 16,
+                        tint: .white.opacity(0.08),
+                        interactive: true
+                    )
                 }
         }
-        .buttonStyle(
-            MistiaPressableButtonStyle(
-                cornerRadius: 22,
-                tint: Color(red: 0.43, green: 0.23, blue: 0.76)
-            )
+    }
+}
+
+private extension LedgerTransaction {
+    var snapshot: TransactionRecordSnapshot {
+        TransactionRecordSnapshot(
+            id: id,
+            primaryKind: primaryKind,
+            transferSubtype: transferSubtype,
+            debtIntent: debtIntent,
+            entryStatus: entryStatus,
+            title: title,
+            note: note,
+            amountMinor: amountMinor,
+            occurredAt: occurredAt,
+            createdAt: createdAt,
+            sourceAccountID: sourceAccount?.id,
+            sourceAccountKind: sourceAccount?.kind,
+            destinationAccountID: destinationAccount?.id,
+            destinationAccountKind: destinationAccount?.kind,
+            categoryID: category?.id,
+            counterpartyName: counterpartyName,
+            normalizedCounterpartyKey: normalizedCounterpartyKey
         )
     }
 }
 
-private extension TransactionListItemDump {
-    var amountTint: Color {
-        kind == .income ? .mint : Color(red: 0.97, green: 0.43, blue: 0.46)
+private extension String {
+    var nilIfBlank: String? {
+        let trimmed = trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? nil : trimmed
     }
 
-    var displayAmount: String {
-        let prefix = kind == .income ? "+" : "-"
-        return prefix + amount.mistiaCurrency
+    func currencyInputToMinorUnits(currencyCode: String) -> Int64 {
+        let sanitized = replacingOccurrences(
+            of: "[^0-9-]",
+            with: "",
+            options: .regularExpression
+        )
+
+        guard let value = Int64(sanitized) else { return 0 }
+
+        if currencyCode.uppercased() == "JPY" {
+            return value
+        }
+
+        return value
+    }
+}
+
+private extension Int64 {
+    var positiveOrNil: Int64? {
+        self > 0 ? self : nil
     }
 }

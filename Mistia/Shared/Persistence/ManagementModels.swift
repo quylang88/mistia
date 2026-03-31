@@ -1,107 +1,6 @@
 import Foundation
 import SwiftData
 
-enum LedgerAccountKind: String, CaseIterable, Identifiable, Codable {
-    case cash
-    case payPay
-    case bank
-    case creditCard
-
-    var id: String { rawValue }
-
-    var title: String {
-        switch self {
-        case .cash:
-            "Tiền mặt"
-        case .payPay:
-            "PayPay"
-        case .bank:
-            "Ngân hàng"
-        case .creditCard:
-            "Credit card"
-        }
-    }
-
-    var defaultIconSymbolName: String {
-        switch self {
-        case .cash:
-            "banknote.fill"
-        case .payPay:
-            "wallet.pass.fill"
-        case .bank:
-            "building.columns.fill"
-        case .creditCard:
-            "creditcard.fill"
-        }
-    }
-
-    var defaultColorHex: String {
-        switch self {
-        case .cash:
-            "#2DAA9E"
-        case .payPay:
-            "#F26A5A"
-        case .bank:
-            "#5B7BFF"
-        case .creditCard:
-            "#7C85A3"
-        }
-    }
-
-    var balanceFieldTitle: String {
-        switch self {
-        case .creditCard:
-            "Dư nợ hiện tại"
-        default:
-            "Số dư ban đầu"
-        }
-    }
-}
-
-enum TransactionCategoryKind: String, CaseIterable, Identifiable, Codable {
-    case expense
-    case income
-
-    var id: String { rawValue }
-
-    var title: String {
-        switch self {
-        case .expense:
-            "Chi tiêu"
-        case .income:
-            "Thu nhập"
-        }
-    }
-}
-
-enum CreditCardNetwork: String, CaseIterable, Identifiable, Codable {
-    case visa
-    case mastercard
-    case jcb
-    case americanExpress
-    case unionPay
-    case other
-
-    var id: String { rawValue }
-
-    var title: String {
-        switch self {
-        case .visa:
-            "Visa"
-        case .mastercard:
-            "Mastercard"
-        case .jcb:
-            "JCB"
-        case .americanExpress:
-            "American Express"
-        case .unionPay:
-            "UnionPay"
-        case .other:
-            "Khác"
-        }
-    }
-}
-
 @Model
 final class LedgerAccount {
     @Attribute(.unique) var id: UUID
@@ -244,5 +143,92 @@ final class TransactionCategory {
     var kind: TransactionCategoryKind {
         get { TransactionCategoryKind(rawValue: kindRawValue) ?? .expense }
         set { kindRawValue = newValue.rawValue }
+    }
+}
+
+@Model
+final class LedgerTransaction {
+    @Attribute(.unique) var id: UUID
+    var primaryKindRawValue: String
+    var transferSubtypeRawValue: String?
+    var debtIntentRawValue: String?
+    var entryStatusRawValue: String
+    var title: String
+    var note: String?
+    var amountMinor: Int64
+    var occurredAt: Date
+    var createdAt: Date
+    var updatedAt: Date
+    var counterpartyName: String?
+    var normalizedCounterpartyKey: String?
+
+    @Relationship(deleteRule: .nullify) var sourceAccount: LedgerAccount?
+    @Relationship(deleteRule: .nullify) var destinationAccount: LedgerAccount?
+    @Relationship(deleteRule: .nullify) var category: TransactionCategory?
+
+    init(
+        id: UUID = UUID(),
+        primaryKind: TransactionPrimaryKind,
+        transferSubtype: TransactionTransferSubtype? = nil,
+        debtIntent: TransactionDebtIntent? = nil,
+        entryStatus: TransactionEntryStatus = .posted,
+        title: String = "",
+        note: String? = nil,
+        amountMinor: Int64,
+        occurredAt: Date = .now,
+        createdAt: Date = .now,
+        updatedAt: Date = .now,
+        sourceAccount: LedgerAccount? = nil,
+        destinationAccount: LedgerAccount? = nil,
+        category: TransactionCategory? = nil,
+        counterpartyName: String? = nil,
+        normalizedCounterpartyKey: String? = nil
+    ) {
+        self.id = id
+        self.primaryKindRawValue = primaryKind.rawValue
+        self.transferSubtypeRawValue = transferSubtype?.rawValue
+        self.debtIntentRawValue = debtIntent?.rawValue
+        self.entryStatusRawValue = entryStatus.rawValue
+        self.title = title
+        self.note = note
+        self.amountMinor = amountMinor
+        self.occurredAt = occurredAt
+        self.createdAt = createdAt
+        self.updatedAt = updatedAt
+        self.sourceAccount = sourceAccount
+        self.destinationAccount = destinationAccount
+        self.category = category
+        self.counterpartyName = counterpartyName
+        self.normalizedCounterpartyKey = normalizedCounterpartyKey
+    }
+
+    var primaryKind: TransactionPrimaryKind {
+        get { TransactionPrimaryKind(rawValue: primaryKindRawValue) ?? .expense }
+        set { primaryKindRawValue = newValue.rawValue }
+    }
+
+    var transferSubtype: TransactionTransferSubtype? {
+        get {
+            guard let transferSubtypeRawValue else { return nil }
+            return TransactionTransferSubtype(rawValue: transferSubtypeRawValue)
+        }
+        set {
+            transferSubtypeRawValue = newValue?.rawValue
+        }
+    }
+
+    var debtIntent: TransactionDebtIntent? {
+        get {
+            guard let debtIntentRawValue else { return nil }
+            return TransactionDebtIntent(rawValue: debtIntentRawValue)
+        }
+        set {
+            debtIntentRawValue = newValue?.rawValue
+        }
+    }
+
+    var entryStatus: TransactionEntryStatus {
+        get { TransactionEntryStatus(rawValue: entryStatusRawValue) ?? .posted }
+        set { entryStatusRawValue = newValue.rawValue }
     }
 }

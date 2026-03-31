@@ -20,7 +20,6 @@ struct ManagementView: View {
     @Environment(SessionStore.self) private var sessionStore
 
     @AppStorage(MistiaAppStorageKey.hideQuickCreate) private var hideQuickCreate = false
-    @AppStorage(MistiaAppStorageKey.didSeedManagementCategories) private var didSeedDefaultCategories = false
 
     @Query(sort: [SortDescriptor(\LedgerAccount.sortOrder), SortDescriptor(\LedgerAccount.createdAt)])
     private var storedAccounts: [LedgerAccount]
@@ -102,7 +101,14 @@ struct ManagementView: View {
             ManagementCategoryEditorSheet(target: target)
         }
         .task {
-            seedDefaultCategoriesIfNeeded()
+            do {
+                try MistiaBootstrap.seedDefaultCategoriesIfNeeded(modelContext: modelContext)
+            } catch {
+                infoAlert = ManagementInfoAlert(
+                    title: "Không thể khởi tạo danh mục",
+                    message: error.localizedDescription
+                )
+            }
         }
         .onAppear {
             hideQuickCreate = destination != nil
@@ -258,37 +264,6 @@ struct ManagementView: View {
         }
     }
 
-    private func seedDefaultCategoriesIfNeeded() {
-        guard !didSeedDefaultCategories else { return }
-
-        do {
-            let existingCount = try modelContext.fetchCount(FetchDescriptor<TransactionCategory>())
-
-            if existingCount == 0 {
-                for (index, seed) in ManagementPresetData.defaultCategorySeeds.enumerated() {
-                    let category = TransactionCategory(
-                        name: seed.name,
-                        kind: seed.kind,
-                        iconSymbolName: seed.iconSymbolName,
-                        iconColorHex: seed.iconColorHex,
-                        isSystem: true,
-                        sortOrder: index
-                    )
-                    modelContext.insert(category)
-                }
-
-                try modelContext.save()
-            }
-
-            didSeedDefaultCategories = true
-        } catch {
-            infoAlert = ManagementInfoAlert(
-                title: "Không thể khởi tạo danh mục",
-                message: error.localizedDescription
-            )
-        }
-    }
-
     private func handleDataAction(_ action: ManagementDataActionKind) {
         switch action {
         case .exportData:
@@ -316,6 +291,7 @@ struct ManagementView: View {
             let accounts = try modelContext.fetch(FetchDescriptor<LedgerAccount>())
             let categories = try modelContext.fetch(FetchDescriptor<TransactionCategory>())
             let creditProfiles = try modelContext.fetch(FetchDescriptor<CreditCardProfile>())
+            let transactions = try modelContext.fetch(FetchDescriptor<LedgerTransaction>())
 
             for account in accounts {
                 modelContext.delete(account)
@@ -327,6 +303,10 @@ struct ManagementView: View {
 
             for profile in creditProfiles {
                 modelContext.delete(profile)
+            }
+
+            for transaction in transactions {
+                modelContext.delete(transaction)
             }
 
             try modelContext.save()
