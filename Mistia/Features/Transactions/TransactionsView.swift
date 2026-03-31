@@ -137,7 +137,6 @@ struct TransactionsView: View {
             contentBottomPadding: 150,
             pinnedHeader: {
                 unifiedFilterRow
-                    .padding(.horizontal, 18)
                     .zIndex(99)
             }
         ) {
@@ -174,6 +173,7 @@ struct TransactionsView: View {
                     filterChipsHStack
                 }
             }
+            .padding(.horizontal, 18)
             .padding(.vertical, 2)
             .padding(.bottom, 10)
         }
@@ -693,8 +693,8 @@ private struct TransactionToolbarChip: View {
         .foregroundStyle(.white)
         .animation(nil, value: title)
         .animation(nil, value: isActive)
-        .padding(.horizontal, 10)
-        .padding(.vertical, 6)
+        .padding(.horizontal, 8)
+        .padding(.vertical, 4)
     }
 }
 
