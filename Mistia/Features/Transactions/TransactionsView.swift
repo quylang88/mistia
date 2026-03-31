@@ -760,6 +760,7 @@ private struct TransactionsPlaceholderCard: View {
 }
 
 private struct PlaceholderOrb: View {
+    @Environment(\.colorScheme) private var colorScheme
     let symbol: String
 
     var body: some View {
@@ -769,7 +770,7 @@ private struct PlaceholderOrb: View {
 
             Image(systemName: symbol)
                 .font(.system(size: 14, weight: .bold))
-                .foregroundStyle(Color(red: 0.43, green: 0.23, blue: 0.76))
+                .foregroundStyle(colorScheme == .dark ? Color(red: 0.65, green: 0.45, blue: 0.98) : Color(red: 0.43, green: 0.23, blue: 0.76))
         }
         .frame(width: 40, height: 40)
     }

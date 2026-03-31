@@ -173,16 +173,29 @@ struct ManagementAccountEditorSheet: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
-                    Button("Hủy") {
+                    Button {
                         dismiss()
+                    } label: {
+                        Image(systemName: "xmark")
+                            .font(.system(size: 16, weight: .semibold))
+                            .foregroundStyle(.secondary)
                     }
                 }
 
                 ToolbarItem(placement: .topBarTrailing) {
-                    Button("Lưu") {
+                    Button {
                         save()
+                    } label: {
+                        ZStack {
+                            Circle()
+                                .fill(Color(red: 0.65, green: 0.45, blue: 0.98))
+                                .frame(width: 30, height: 30)
+
+                            Image(systemName: "checkmark")
+                                .font(.system(size: 14, weight: .bold))
+                                .foregroundStyle(.white)
+                        }
                     }
-                    .fontWeight(.semibold)
                 }
             }
         }
@@ -421,16 +434,29 @@ struct ManagementCategoryEditorSheet: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
-                    Button("Hủy") {
+                    Button {
                         dismiss()
+                    } label: {
+                        Image(systemName: "xmark")
+                            .font(.system(size: 16, weight: .semibold))
+                            .foregroundStyle(.secondary)
                     }
                 }
 
                 ToolbarItem(placement: .topBarTrailing) {
-                    Button("Lưu") {
+                    Button {
                         save()
+                    } label: {
+                        ZStack {
+                            Circle()
+                                .fill(Color(red: 0.65, green: 0.45, blue: 0.98))
+                                .frame(width: 30, height: 30)
+
+                            Image(systemName: "checkmark")
+                                .font(.system(size: 14, weight: .bold))
+                                .foregroundStyle(.white)
+                        }
                     }
-                    .fontWeight(.semibold)
                 }
             }
         }
@@ -622,17 +648,30 @@ private struct ManagementIconPickerSheet: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
-                    Button("Hủy") {
+                    Button {
                         dismiss()
+                    } label: {
+                        Image(systemName: "xmark")
+                            .font(.system(size: 16, weight: .semibold))
+                            .foregroundStyle(.secondary)
                     }
                 }
 
                 ToolbarItem(placement: .topBarTrailing) {
-                    Button("Xong") {
+                    Button {
                         onSave(selectedIconSymbolName, selectedColor.hexString)
                         dismiss()
+                    } label: {
+                        ZStack {
+                            Circle()
+                                .fill(Color(red: 0.65, green: 0.45, blue: 0.98))
+                                .frame(width: 30, height: 30)
+
+                            Image(systemName: "checkmark")
+                                .font(.system(size: 14, weight: .bold))
+                                .foregroundStyle(.white)
+                        }
                     }
-                    .fontWeight(.semibold)
                 }
             }
         }
