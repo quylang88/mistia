@@ -143,7 +143,6 @@ struct TransactionsView: View {
             pinnedHeader: {
                 unifiedFilterRow
                     .padding(.horizontal, 18)
-                    .background(MistiaBackgroundView(tone: .standard))
                     .zIndex(99)
             }
         ) {

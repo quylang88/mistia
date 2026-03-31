@@ -442,22 +442,32 @@ struct MistiaPinnedTopBarScaffold<PinnedHeader: View, Content: View>: View {
         }
     }
 
+    @ViewBuilder
+    private var scrollableContent: some View {
+        ScrollView(showsIndicators: false) {
+            VStack(spacing: contentSpacing) {
+                content
+            }
+            .padding(.horizontal, 18)
+            .padding(.top, 8)
+            .padding(.bottom, contentBottomPadding)
+        }
+        .modifier(MistiaTopScrollEdgeEffect())
+        .scrollIndicators(.hidden)
+    }
+
     private var screenContent: some View {
         ZStack {
             MistiaBackgroundView(tone: tone)
 
-            ScrollView(showsIndicators: false) {
-                VStack(spacing: contentSpacing) {
-                    content
-                }
-                .padding(.horizontal, 18)
-                .padding(.top, 8)
-                .padding(.bottom, contentBottomPadding)
-            }
-            .modifier(MistiaTopScrollEdgeEffect())
-            .scrollIndicators(.hidden)
-            .safeAreaInset(edge: .top) {
-                pinnedHeader
+            if PinnedHeader.self != EmptyView.self {
+                scrollableContent
+                    .safeAreaInset(edge: .top) {
+                        pinnedHeader
+                            .background(.bar)
+                    }
+            } else {
+                scrollableContent
             }
         }
         .navigationTitle(title)
