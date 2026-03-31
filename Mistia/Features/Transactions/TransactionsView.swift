@@ -236,8 +236,10 @@ struct TransactionsView: View {
 
         if isActive {
             button.buttonStyle(.glassProminent)
+                .zIndex(1)
         } else {
             button.buttonStyle(.glass)
+                .zIndex(0)
         }
     }
 
@@ -247,7 +249,7 @@ struct TransactionsView: View {
                 title: "Tháng này",
                 isActive: filterState.timeScope == .thisMonth
             ) {
-                withAnimation {
+                withAnimation(.snappy) {
                     filterState.timeScope = filterState.timeScope == .thisMonth ? .allTime : .thisMonth
                 }
             }
@@ -256,7 +258,7 @@ struct TransactionsView: View {
                 title: "Bản nháp",
                 isActive: filterState.statusScope == .draftOnly
             ) {
-                withAnimation {
+                withAnimation(.snappy) {
                     filterState.statusScope = filterState.statusScope == .draftOnly ? .all : .draftOnly
                 }
             }
@@ -310,7 +312,7 @@ struct TransactionsView: View {
             ForEach(TransactionSegment.allCases, id: \.self) { segment in
                 let isActive = selectedSegment == segment
                 let button = Button {
-                    withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                    withAnimation(.snappy) {
                         if isActive {
                             selectedSegment = nil
                         } else {
@@ -321,16 +323,18 @@ struct TransactionsView: View {
                     Text(segment.title)
                         .font(.system(size: 13, weight: .bold, design: .rounded))
                         .foregroundStyle(.white)
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 6)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 5)
                 }
                 .buttonBorderShape(.capsule)
                 .tint(Color(red: 0.53, green: 0.33, blue: 0.86))
 
                 if isActive {
                     button.buttonStyle(.glassProminent)
+                        .zIndex(1)
                 } else {
                     button.buttonStyle(.glass)
+                        .zIndex(0)
                 }
             }
         }
@@ -668,8 +672,8 @@ private struct TransactionToolbarChip: View {
             .font(.system(size: 13, weight: .bold, design: .rounded))
             .lineLimit(1)
             .foregroundStyle(.white)
-            .padding(.horizontal, 12)
-            .padding(.vertical, 6)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 5)
     }
 }
 
