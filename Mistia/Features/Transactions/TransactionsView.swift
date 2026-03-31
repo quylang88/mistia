@@ -139,18 +139,18 @@ struct TransactionsView: View {
             title: "Giao dịch",
             trailingSystemImage: nil,
             contentSpacing: 18,
-            contentBottomPadding: 150
+            contentBottomPadding: 150,
+            pinnedHeader: {
+                unifiedFilterRow
+                    .padding(.horizontal, 18)
+                    .background(MistiaBackgroundView(tone: .standard))
+                    .zIndex(99)
+            }
         ) {
             if !openDebtPositions.isEmpty {
                 outstandingDebtSection
             }
             transactionsContent
-        }
-        .safeAreaInset(edge: .top) {
-            unifiedFilterRow
-                .padding(.horizontal, 18)
-                .background(MistiaBackgroundView(tone: .standard).ignoresSafeArea(edges: .top))
-                .zIndex(99)
         }
         .searchable(
             text: $searchText,

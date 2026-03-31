@@ -382,7 +382,7 @@ private struct MistiaHeaderCircleButton<Content: View>: View {
     }
 }
 
-struct MistiaPinnedTopBarScaffold<Content: View>: View {
+struct MistiaPinnedTopBarScaffold<PinnedHeader: View, Content: View>: View {
     let tone: MistiaBackgroundTone
     let title: String
     var embedsInNavigationStack: Bool = true
@@ -395,7 +395,40 @@ struct MistiaPinnedTopBarScaffold<Content: View>: View {
     var onTrailingTap: () -> Void = {}
     var contentSpacing: CGFloat = 18
     var contentBottomPadding: CGFloat = 150
+    @ViewBuilder let pinnedHeader: PinnedHeader
     @ViewBuilder let content: Content
+
+    init(
+        tone: MistiaBackgroundTone,
+        title: String,
+        embedsInNavigationStack: Bool = true,
+        showsLeadingAvatar: Bool = true,
+        leadingInitials: String = "QL",
+        leadingSystemImage: String? = nil,
+        trailingSystemImage: String? = "bell",
+        hidesSystemBackButton: Bool = false,
+        onLeadingTap: @escaping () -> Void = {},
+        onTrailingTap: @escaping () -> Void = {},
+        contentSpacing: CGFloat = 18,
+        contentBottomPadding: CGFloat = 150,
+        @ViewBuilder pinnedHeader: () -> PinnedHeader,
+        @ViewBuilder content: () -> Content
+    ) {
+        self.tone = tone
+        self.title = title
+        self.embedsInNavigationStack = embedsInNavigationStack
+        self.showsLeadingAvatar = showsLeadingAvatar
+        self.leadingInitials = leadingInitials
+        self.leadingSystemImage = leadingSystemImage
+        self.trailingSystemImage = trailingSystemImage
+        self.hidesSystemBackButton = hidesSystemBackButton
+        self.onLeadingTap = onLeadingTap
+        self.onTrailingTap = onTrailingTap
+        self.contentSpacing = contentSpacing
+        self.contentBottomPadding = contentBottomPadding
+        self.pinnedHeader = pinnedHeader()
+        self.content = content()
+    }
 
     var body: some View {
         Group {
@@ -423,6 +456,9 @@ struct MistiaPinnedTopBarScaffold<Content: View>: View {
             }
             .modifier(MistiaTopScrollEdgeEffect())
             .scrollIndicators(.hidden)
+            .safeAreaInset(edge: .top) {
+                pinnedHeader
+            }
         }
         .navigationTitle(title)
         .navigationBarTitleDisplayMode(.inline)
@@ -480,6 +516,41 @@ struct MistiaPinnedTopBarScaffold<Content: View>: View {
                     .foregroundStyle(.primary)
             }
         }
+    }
+}
+
+extension MistiaPinnedTopBarScaffold where PinnedHeader == EmptyView {
+    init(
+        tone: MistiaBackgroundTone,
+        title: String,
+        embedsInNavigationStack: Bool = true,
+        showsLeadingAvatar: Bool = true,
+        leadingInitials: String = "QL",
+        leadingSystemImage: String? = nil,
+        trailingSystemImage: String? = "bell",
+        hidesSystemBackButton: Bool = false,
+        onLeadingTap: @escaping () -> Void = {},
+        onTrailingTap: @escaping () -> Void = {},
+        contentSpacing: CGFloat = 18,
+        contentBottomPadding: CGFloat = 150,
+        @ViewBuilder content: () -> Content
+    ) {
+        self.init(
+            tone: tone,
+            title: title,
+            embedsInNavigationStack: embedsInNavigationStack,
+            showsLeadingAvatar: showsLeadingAvatar,
+            leadingInitials: leadingInitials,
+            leadingSystemImage: leadingSystemImage,
+            trailingSystemImage: trailingSystemImage,
+            hidesSystemBackButton: hidesSystemBackButton,
+            onLeadingTap: onLeadingTap,
+            onTrailingTap: onTrailingTap,
+            contentSpacing: contentSpacing,
+            contentBottomPadding: contentBottomPadding,
+            pinnedHeader: { EmptyView() },
+            content: content
+        )
     }
 }
 
