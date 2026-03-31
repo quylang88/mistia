@@ -57,12 +57,6 @@ struct TransactionEditorSheet: View {
 
                 ScrollView(showsIndicators: false) {
                     VStack(spacing: 16) {
-                        TransactionEditorHeaderCard(
-                            title: headerTitle,
-                            subtitle: headerSubtitle,
-                            accent: accentColor
-                        )
-
                         if target.quickCapture && target.transaction == nil {
                             quickCaptureContent
                         } else {
@@ -118,11 +112,13 @@ struct TransactionEditorSheet: View {
     }
 
     private var quickCaptureContent: some View {
-        VStack(spacing: 16) {
+        @Bindable var bindableDraft = draft
+
+        return VStack(spacing: 16) {
             TransactionEditorCard(title: "Loại giao dịch") {
                 TransactionChoiceChipRow(
                     values: TransactionPrimaryKind.allCases,
-                    selection: $draft.primaryKind
+                    selection: $bindableDraft.primaryKind
                 ) { kind in
                     Text(kind.title)
                 }
@@ -131,7 +127,7 @@ struct TransactionEditorSheet: View {
             TransactionEditorCard(title: "Số tiền") {
                 TransactionEditorTextField(
                     title: "Số tiền",
-                    text: $draft.amountText,
+                    text: $bindableDraft.amountText,
                     placeholder: "Ví dụ 120000"
                 )
                 .keyboardType(.numberPad)
@@ -146,23 +142,16 @@ struct TransactionEditorSheet: View {
     }
 
     private var fullEditorContent: some View {
-        VStack(spacing: 16) {
-            TransactionEditorCard(title: "Loại giao dịch") {
-                TransactionChoiceChipRow(
-                    values: TransactionPrimaryKind.allCases,
-                    selection: $draft.primaryKind
-                ) { kind in
-                    Text(kind.title)
-                }
-            }
+        @Bindable var bindableDraft = draft
 
+        return VStack(spacing: 16) {
             if draft.primaryKind == .transfer {
                 TransactionEditorCard(title: "Kiểu chuyển tiền") {
                     TransactionChoiceChipRow(
                         values: TransactionTransferSubtype.allCases,
                         selection: Binding(
-                            get: { draft.transferSubtype ?? .internalTransfer },
-                            set: { draft.transferSubtype = $0 }
+                            get: { bindableDraft.transferSubtype ?? .internalTransfer },
+                            set: { bindableDraft.transferSubtype = $0 }
                         )
                     ) { subtype in
                         Text(subtype.title)
@@ -175,8 +164,8 @@ struct TransactionEditorSheet: View {
                     TransactionChoiceChipRow(
                         values: TransactionDebtIntent.allCases,
                         selection: Binding(
-                            get: { draft.debtIntent ?? .lend },
-                            set: { draft.debtIntent = $0 }
+                            get: { bindableDraft.debtIntent ?? .lend },
+                            set: { bindableDraft.debtIntent = $0 }
                         )
                     ) { intent in
                         Text(intent.title)
@@ -196,26 +185,27 @@ struct TransactionEditorSheet: View {
                 if draft.primaryKind != .transfer {
                     TransactionEditorTextField(
                         title: "Tên giao dịch",
-                        text: $draft.title,
+                        text: $bindableDraft.title,
                         placeholder: draft.primaryKind == .expense ? "Ví dụ: Cà phê sáng" : "Ví dụ: Lương tháng 3"
                     )
                 } else if draft.transferSubtype == .debt {
                     TransactionEditorTextField(
                         title: "Tên giao dịch",
-                        text: $draft.title,
+                        text: $bindableDraft.title,
                         placeholder: "Để trống sẽ tự dùng loại công nợ"
                     )
                 }
 
                 TransactionEditorTextField(
                     title: "Số tiền",
-                    text: $draft.amountText,
+                    text: $bindableDraft.amountText,
                     placeholder: "Ví dụ 50000"
                 )
                 .keyboardType(.numberPad)
 
-                DatePicker("Thời gian", selection: $draft.occurredAt, displayedComponents: [.date, .hourAndMinute])
+                DatePicker("Thời gian", selection: $bindableDraft.occurredAt, displayedComponents: [.date, .hourAndMinute])
                     .datePickerStyle(.compact)
+                    .environment(\.locale, Locale(identifier: "vi_VN"))
                     .font(.system(size: 15, weight: .semibold, design: .rounded))
             }
 
@@ -289,7 +279,7 @@ struct TransactionEditorSheet: View {
 
                         TransactionEditorTextField(
                             title: "Tên người liên quan",
-                            text: $draft.counterpartyName,
+                            text: $bindableDraft.counterpartyName,
                             placeholder: "Ví dụ: Nguyễn Văn A"
                         )
                     }
@@ -297,7 +287,7 @@ struct TransactionEditorSheet: View {
             }
 
             TransactionEditorCard(title: "Ghi chú") {
-                TextField("Thêm ghi chú nếu cần", text: $draft.note, axis: .vertical)
+                TextField("Thêm ghi chú nếu cần", text: $bindableDraft.note, axis: .vertical)
                     .lineLimit(3...5)
                     .textFieldStyle(.plain)
                     .font(.system(size: 15, weight: .medium, design: .rounded))
@@ -720,9 +710,28 @@ private struct TransactionHintCard: View {
 }
 
 private struct TransactionChoiceChipRow<Value: CaseIterable & Hashable, Content: View>: View {
+    @Environment(\.colorScheme) private var colorScheme
     let values: Value.AllCases
     @Binding var selection: Value
     @ViewBuilder let label: (Value) -> Content
+
+    private func tintForValue(_ value: Value) -> Color {
+        if let kind = value as? TransactionPrimaryKind {
+            switch kind {
+            case .expense:
+                return Color(red: 0.95, green: 0.43, blue: 0.44)
+            case .income:
+                return .mint
+            case .transfer:
+                return Color(red: 0.29, green: 0.56, blue: 0.96)
+            }
+        }
+        return Color(red: 0.43, green: 0.23, blue: 0.76)
+    }
+
+    private func activeForeground(_ value: Value) -> Color {
+        colorScheme == .dark ? .white.opacity(0.97) : tintForValue(value)
+    }
 
     var body: some View {
         ScrollView(.horizontal, showsIndicators: false) {
@@ -733,14 +742,25 @@ private struct TransactionChoiceChipRow<Value: CaseIterable & Hashable, Content:
                     } label: {
                         label(value)
                             .font(.system(size: 14, weight: .bold, design: .rounded))
-                            .foregroundStyle(selection == value ? .primary : .secondary)
+                            .foregroundStyle(selection == value ? activeForeground(value) : .secondary)
                             .padding(.horizontal, 14)
                             .padding(.vertical, 10)
                             .background {
                                 MistiaCapsuleGlassBackground(
-                                    tint: selection == value ? .white.opacity(0.18) : .white.opacity(0.08),
+                                    tint: selection == value
+                                        ? (colorScheme == .dark ? tintForValue(value).opacity(0.42) : tintForValue(value).opacity(0.16))
+                                        : (colorScheme == .dark ? .white.opacity(0.045) : .white.opacity(0.18)),
                                     interactive: true
                                 )
+                            }
+                            .overlay {
+                                Capsule()
+                                    .strokeBorder(
+                                        selection == value
+                                            ? tintForValue(value).opacity(colorScheme == .dark ? 0.48 : 0.14)
+                                            : .clear,
+                                        lineWidth: 0.9
+                                    )
                             }
                     }
                     .buttonStyle(.plain)
@@ -751,18 +771,18 @@ private struct TransactionChoiceChipRow<Value: CaseIterable & Hashable, Content:
     }
 }
 
-private struct TransactionFormDraft {
-    var primaryKind: TransactionPrimaryKind
-    var transferSubtype: TransactionTransferSubtype?
-    var debtIntent: TransactionDebtIntent?
-    var title: String
-    var amountText: String
-    var note: String
-    var occurredAt: Date
-    var sourceAccountID: UUID?
-    var destinationAccountID: UUID?
-    var categoryID: UUID?
-    var counterpartyName: String
+@Observable final class TransactionFormDraft {
+    var primaryKind: TransactionPrimaryKind = .expense
+    var transferSubtype: TransactionTransferSubtype? = nil
+    var debtIntent: TransactionDebtIntent? = nil
+    var title: String = ""
+    var amountText: String = ""
+    var note: String = ""
+    var occurredAt: Date = .now
+    var sourceAccountID: UUID? = nil
+    var destinationAccountID: UUID? = nil
+    var categoryID: UUID? = nil
+    var counterpartyName: String = ""
 
     init(target: TransactionEditorTarget) {
         if let transaction = target.transaction {

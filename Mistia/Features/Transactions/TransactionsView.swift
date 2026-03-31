@@ -122,7 +122,6 @@ struct TransactionsView: View {
         if filterState.accountID != nil { count += 1 }
         if filterState.categoryID != nil { count += 1 }
         if filterState.transferSubtype != nil { count += 1 }
-        if filterState.statusScope != .all { count += 1 }
         if filterState.minAmountMinor != nil || filterState.maxAmountMinor != nil { count += 1 }
 
         return count
@@ -160,6 +159,7 @@ struct TransactionsView: View {
         .task {
             try? MistiaBootstrap.seedDefaultCategoriesIfNeeded(modelContext: modelContext)
         }
+        .environment(\.locale, Locale(identifier: "vi_VN"))
     }
 
     private var unifiedFilterRow: some View {
@@ -255,22 +255,6 @@ struct TransactionsView: View {
                     Button(scope.title) {
                         withAnimation(.snappy) {
                             filterState.timeScope = scope
-                        }
-                    }
-                }
-            }
-
-            filterMenu(isActive: filterState.statusScope != .all) {
-                TransactionToolbarChip(
-                    title: filterState.statusScope == .all ? "Trạng thái" : filterState.statusScope.title,
-                    isActive: filterState.statusScope != .all,
-                    trailingIcon: "chevron.up.chevron.down"
-                )
-            } content: {
-                ForEach(TransactionStatusScope.allCases, id: \.self) { scope in
-                    Button(scope.title) {
-                        withAnimation(.snappy) {
-                            filterState.statusScope = scope
                         }
                     }
                 }
@@ -611,9 +595,7 @@ private struct TransactionRow: View {
                         .foregroundStyle(.primary)
                         .lineLimit(1)
 
-                    if record.entryStatus == .draft {
-                        TransactionMiniBadge(title: "Nháp", tint: Color(red: 0.43, green: 0.23, blue: 0.76))
-                    } else if record.primaryKind == .transfer, let subtype = record.transferSubtype {
+                    if record.primaryKind == .transfer, let subtype = record.transferSubtype {
                         TransactionMiniBadge(
                             title: subtype.title,
                             tint: subtype == .debt
@@ -728,17 +710,42 @@ private struct OutstandingDebtChip: View {
 }
 
 private struct TransactionsPlaceholderCard: View {
+    @Environment(\.colorScheme) private var colorScheme
+
     let title: String
     let message: String
+    let symbols = ["banknote.fill", "wallet.pass.fill", "building.columns.fill", "creditcard.fill"]
+    let accent = Color(red: 0.43, green: 0.23, blue: 0.76)
+
+    private var buttonForeground: Color {
+        colorScheme == .dark ? Color(red: 0.65, green: 0.45, blue: 0.98) : accent
+    }
+
+    private var symbolBackgroundOpacity: Double {
+        colorScheme == .dark ? 0.24 : 0.10
+    }
 
     var body: some View {
         MistiaGlassCard(cornerRadius: 24, tint: Color.white.opacity(0.10)) {
             VStack(spacing: 16) {
                 HStack(spacing: 10) {
-                    PlaceholderOrb(symbol: "arrow.left.arrow.right")
-                    PlaceholderOrb(symbol: "tray.full.fill")
-                    PlaceholderOrb(symbol: "square.and.pencil")
+                    ForEach(Array(symbols.enumerated()), id: \.offset) { index, symbol in
+                        ZStack {
+                            Circle()
+                                .fill(accent.opacity(symbolBackgroundOpacity + Double(index) * 0.025))
+
+                            Image(systemName: symbol)
+                                .font(.system(size: 13, weight: .bold))
+                                .foregroundStyle(buttonForeground)
+                        }
+                        .frame(width: 34, height: 34)
+                        .overlay {
+                            Circle()
+                                .strokeBorder(.white.opacity(colorScheme == .dark ? 0.08 : 0), lineWidth: 0.8)
+                        }
+                    }
                 }
+                .frame(maxWidth: .infinity, alignment: .center)
 
                 VStack(spacing: 8) {
                     Text(title)
@@ -756,23 +763,6 @@ private struct TransactionsPlaceholderCard: View {
             .frame(maxWidth: .infinity)
             .padding(.vertical, 12)
         }
-    }
-}
-
-private struct PlaceholderOrb: View {
-    @Environment(\.colorScheme) private var colorScheme
-    let symbol: String
-
-    var body: some View {
-        ZStack {
-            Circle()
-                .fill(Color.white.opacity(0.12))
-
-            Image(systemName: symbol)
-                .font(.system(size: 14, weight: .bold))
-                .foregroundStyle(colorScheme == .dark ? Color(red: 0.65, green: 0.45, blue: 0.98) : Color(red: 0.43, green: 0.23, blue: 0.76))
-        }
-        .frame(width: 40, height: 40)
     }
 }
 
