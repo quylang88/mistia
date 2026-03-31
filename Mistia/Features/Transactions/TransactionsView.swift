@@ -141,12 +141,10 @@ struct TransactionsView: View {
             contentSpacing: 18,
             contentBottomPadding: 150
         ) {
-            toolbarChips
+            unifiedFilterRow
             if !openDebtPositions.isEmpty {
                 outstandingDebtSection
             }
-            TransactionLiveSummaryCard(summary: summary)
-            segmentSelector
             transactionsContent
         }
         .searchable(
@@ -182,15 +180,15 @@ struct TransactionsView: View {
         }
     }
 
-    private var toolbarChips: some View {
+    private var unifiedFilterRow: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             Group {
                 if #available(iOS 26, *) {
                     GlassEffectContainer(spacing: 10) {
-                        toolbarChipRow
+                        filterChipsHStack
                     }
                 } else {
-                    toolbarChipRow
+                    filterChipsHStack
                 }
             }
             .padding(.vertical, 2)
@@ -227,9 +225,10 @@ struct TransactionsView: View {
     private func filterChipButton(
         title: String,
         isActive: Bool,
+        trailingIcon: String? = nil,
         action: @escaping () -> Void
     ) -> some View {
-        let chip = TransactionToolbarChip(title: title, isActive: isActive)
+        let chip = TransactionToolbarChip(title: title, isActive: isActive, trailingIcon: trailingIcon)
         let button = Button(action: action) { chip }
             .buttonBorderShape(.capsule)
             .tint(Color(red: 0.53, green: 0.33, blue: 0.86))
@@ -243,8 +242,32 @@ struct TransactionsView: View {
         }
     }
 
-    private var toolbarChipRow: some View {
+    private var filterChipsHStack: some View {
         HStack(spacing: 10) {
+            filterChipButton(
+                title: filterLabel,
+                isActive: activeFilterCount > 0,
+                trailingIcon: "chevron.down"
+            ) {
+                activeSheet = .filters
+            }
+
+            ForEach(TransactionSegment.allCases, id: \.self) { segment in
+                let isActive = selectedSegment == segment
+                filterChipButton(
+                    title: segment.title,
+                    isActive: isActive
+                ) {
+                    withAnimation(.snappy) {
+                        if isActive {
+                            selectedSegment = nil
+                        } else {
+                            selectedSegment = segment
+                        }
+                    }
+                }
+            }
+
             filterChipButton(
                 title: "Tháng này",
                 isActive: filterState.timeScope == .thisMonth
@@ -261,13 +284,6 @@ struct TransactionsView: View {
                 withAnimation(.snappy) {
                     filterState.statusScope = filterState.statusScope == .draftOnly ? .all : .draftOnly
                 }
-            }
-
-            filterChipButton(
-                title: filterLabel,
-                isActive: activeFilterCount > 0
-            ) {
-                activeSheet = .filters
             }
         }
     }
@@ -288,54 +304,6 @@ struct TransactionsView: View {
                     }
                 }
                 .padding(.vertical, 2)
-            }
-        }
-    }
-
-    private var segmentSelector: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            Group {
-                if #available(iOS 26, *) {
-                    GlassEffectContainer(spacing: 10) {
-                        segmentRow
-                    }
-                } else {
-                    segmentRow
-                }
-            }
-            .padding(.vertical, 2)
-        }
-    }
-
-    private var segmentRow: some View {
-        HStack(spacing: 10) {
-            ForEach(TransactionSegment.allCases, id: \.self) { segment in
-                let isActive = selectedSegment == segment
-                let button = Button {
-                    withAnimation(.snappy) {
-                        if isActive {
-                            selectedSegment = nil
-                        } else {
-                            selectedSegment = segment
-                        }
-                    }
-                } label: {
-                    Text(segment.title)
-                        .font(.system(size: 13, weight: .bold, design: .rounded))
-                        .foregroundStyle(.white)
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 5)
-                }
-                .buttonBorderShape(.capsule)
-                .tint(Color(red: 0.53, green: 0.33, blue: 0.86))
-
-                if isActive {
-                    button.buttonStyle(.glassProminent)
-                        .zIndex(1)
-                } else {
-                    button.buttonStyle(.glass)
-                        .zIndex(0)
-                }
             }
         }
     }
@@ -666,14 +634,24 @@ private struct TransactionMiniBadge: View {
 private struct TransactionToolbarChip: View {
     let title: String
     let isActive: Bool
+    let trailingIcon: String?
 
     var body: some View {
-        Text(title)
-            .font(.system(size: 13, weight: .bold, design: .rounded))
-            .lineLimit(1)
-            .foregroundStyle(.white)
-            .padding(.horizontal, 10)
-            .padding(.vertical, 5)
+        HStack(spacing: 4) {
+            Text(title)
+                .font(.system(size: 13, weight: .bold, design: .rounded))
+                .lineLimit(1)
+
+            if let trailingIcon {
+                Image(systemName: trailingIcon)
+                    .font(.system(size: 10, weight: .bold, design: .rounded))
+            }
+        }
+        .foregroundStyle(.white)
+        .animation(nil, value: title)
+        .animation(nil, value: isActive)
+        .padding(.horizontal, 10)
+        .padding(.vertical, 4)
     }
 }
 
