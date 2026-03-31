@@ -256,46 +256,50 @@ struct TransactionsView: View {
         return "Bộ lọc (\(activeFilterCount))"
     }
 
+    @ViewBuilder
+    private func filterChipButton(
+        icon: String?,
+        title: String,
+        isActive: Bool,
+        action: @escaping () -> Void
+    ) -> some View {
+        let chip = TransactionToolbarChip(icon: icon, title: title, isActive: isActive)
+        let button = Button(action: action) { chip }
+            .buttonBorderShape(.capsule)
+            .tint(Color(red: 0.53, green: 0.33, blue: 0.86))
+
+        if isActive {
+            button.buttonStyle(.glassProminent)
+        } else {
+            button.buttonStyle(.glass)
+        }
+    }
+
     private var toolbarChipRow: some View {
         HStack(spacing: 10) {
-            Button {
+            filterChipButton(
+                icon: "calendar",
+                title: filterState.timeScope.title,
+                isActive: filterState.timeScope != .allTime
+            ) {
                 showsTimeScopeDialog = true
-            } label: {
-                TransactionToolbarChip(
-                    icon: "calendar",
-                    title: filterState.timeScope.title,
-                    isActive: filterState.timeScope != .allTime
-                )
             }
-            .buttonStyle(filterState.timeScope != .allTime ? .glassProminent : .glass)
-            .buttonBorderShape(.capsule)
-            .tint(Color(red: 0.53, green: 0.33, blue: 0.86))
 
-            Button {
+            filterChipButton(
+                icon: "wallet.pass",
+                title: selectedAccountLabel,
+                isActive: filterState.accountID != nil
+            ) {
                 showsAccountDialog = true
-            } label: {
-                TransactionToolbarChip(
-                    icon: "wallet.pass",
-                    title: selectedAccountLabel,
-                    isActive: filterState.accountID != nil
-                )
             }
-            .buttonStyle(filterState.accountID != nil ? .glassProminent : .glass)
-            .buttonBorderShape(.capsule)
-            .tint(Color(red: 0.53, green: 0.33, blue: 0.86))
 
-            Button {
+            filterChipButton(
+                icon: nil,
+                title: filterLabel,
+                isActive: activeFilterCount > 0
+            ) {
                 activeSheet = .filters
-            } label: {
-                TransactionToolbarChip(
-                    icon: nil,
-                    title: filterLabel,
-                    isActive: activeFilterCount > 0
-                )
             }
-            .buttonStyle(activeFilterCount > 0 ? .glassProminent : .glass)
-            .buttonBorderShape(.capsule)
-            .tint(Color(red: 0.53, green: 0.33, blue: 0.86))
         }
     }
 
@@ -337,9 +341,10 @@ struct TransactionsView: View {
     private var segmentRow: some View {
         HStack(spacing: 10) {
             ForEach(TransactionSegment.allCases, id: \.self) { segment in
-                Button {
+                let isActive = selectedSegment == segment
+                let button = Button {
                     withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
-                        if selectedSegment == segment {
+                        if isActive {
                             selectedSegment = nil
                         } else {
                             selectedSegment = segment
@@ -351,9 +356,14 @@ struct TransactionsView: View {
                         .padding(.horizontal, 14)
                         .padding(.vertical, 10)
                 }
-                .buttonStyle(selectedSegment == segment ? .glassProminent : .glass)
                 .buttonBorderShape(.capsule)
                 .tint(Color(red: 0.53, green: 0.33, blue: 0.86))
+
+                if isActive {
+                    button.buttonStyle(.glassProminent)
+                } else {
+                    button.buttonStyle(.glass)
+                }
             }
         }
     }
