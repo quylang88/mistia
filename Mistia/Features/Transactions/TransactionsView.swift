@@ -160,6 +160,7 @@ struct TransactionsView: View {
             try? MistiaBootstrap.seedDefaultCategoriesIfNeeded(modelContext: modelContext)
         }
         .environment(\.locale, Locale(identifier: "vi_VN"))
+        .environment(\.calendar, Calendar(identifier: .gregorian))
     }
 
     private var unifiedFilterRow: some View {

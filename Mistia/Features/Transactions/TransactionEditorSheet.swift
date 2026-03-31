@@ -206,6 +206,7 @@ struct TransactionEditorSheet: View {
                 DatePicker("Thời gian", selection: $bindableDraft.occurredAt, displayedComponents: [.date, .hourAndMinute])
                     .datePickerStyle(.compact)
                     .environment(\.locale, Locale(identifier: "vi_VN"))
+                    .environment(\.calendar, Calendar(identifier: .gregorian))
                     .font(.system(size: 15, weight: .semibold, design: .rounded))
             }
 
