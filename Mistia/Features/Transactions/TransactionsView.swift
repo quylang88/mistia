@@ -60,11 +60,9 @@ struct TransactionsView: View {
     @State private var selectedSegment: TransactionSegment? = nil
     @State private var activeSheet: TransactionsSheet?
     @State private var editorTarget: TransactionEditorTarget?
-    @State private var filterState = TransactionFilterState()
+    @State private var filterState = TransactionFilterState(timeScope: .allTime, statusScope: .all)
     @State private var searchText = ""
     @State private var isSearchPresented = false
-    @State private var showsTimeScopeDialog = false
-    @State private var showsAccountDialog = false
 
     private var activeAccounts: [LedgerAccount] {
         storedAccounts
@@ -123,22 +121,13 @@ struct TransactionsView: View {
         return TransactionLogic.openDebtPositions(from: debtRecords)
     }
 
-    private var selectedAccountLabel: String {
-        guard let accountID = filterState.accountID,
-              let account = activeAccounts.first(where: { $0.id == accountID })
-        else {
-            return "All"
-        }
-
-        return account.name
-    }
-
     private var activeFilterCount: Int {
         var count = 0
 
+        if filterState.accountID != nil { count += 1 }
         if filterState.categoryID != nil { count += 1 }
         if filterState.transferSubtype != nil { count += 1 }
-        if filterState.statusScope != .all { count += 1 }
+        if filterState.statusScope == .postedOnly { count += 1 }
         if filterState.minAmountMinor != nil || filterState.maxAmountMinor != nil { count += 1 }
 
         return count
@@ -188,32 +177,6 @@ struct TransactionsView: View {
                 .presentationDetents(target.quickCapture ? [.medium, .large] : [.large])
                 .presentationDragIndicator(.visible)
         }
-        .confirmationDialog(
-            "Thời gian",
-            isPresented: $showsTimeScopeDialog,
-            titleVisibility: .visible
-        ) {
-            ForEach(TransactionTimeScope.allCases) { scope in
-                Button(scope.title) {
-                    filterState.timeScope = scope
-                }
-            }
-        }
-        .confirmationDialog(
-            "Tài khoản",
-            isPresented: $showsAccountDialog,
-            titleVisibility: .visible
-        ) {
-            ForEach(activeAccounts) { account in
-                Button(account.name) {
-                    if filterState.accountID == account.id {
-                        filterState.accountID = nil
-                    } else {
-                        filterState.accountID = account.id
-                    }
-                }
-            }
-        }
         .task {
             try? MistiaBootstrap.seedDefaultCategoriesIfNeeded(modelContext: modelContext)
         }
@@ -239,6 +202,10 @@ struct TransactionsView: View {
             return "Bộ lọc"
         }
         if activeFilterCount == 1 {
+            if let accountID = filterState.accountID,
+               let account = activeAccounts.first(where: { $0.id == accountID }) {
+                return account.name
+            }
             if let categoryID = filterState.categoryID,
                let category = storedCategories.first(where: { $0.id == categoryID }) {
                 return category.name
@@ -246,8 +213,8 @@ struct TransactionsView: View {
             if filterState.transferSubtype != nil {
                 return "Loại chuyển tiền"
             }
-            if filterState.statusScope != .all {
-                return "Trạng thái"
+            if filterState.statusScope == .postedOnly {
+                return "Đã ghi nhận"
             }
             if filterState.minAmountMinor != nil || filterState.maxAmountMinor != nil {
                 return "Khoảng tiền"
@@ -258,12 +225,11 @@ struct TransactionsView: View {
 
     @ViewBuilder
     private func filterChipButton(
-        icon: String?,
         title: String,
         isActive: Bool,
         action: @escaping () -> Void
     ) -> some View {
-        let chip = TransactionToolbarChip(icon: icon, title: title, isActive: isActive)
+        let chip = TransactionToolbarChip(title: title, isActive: isActive)
         let button = Button(action: action) { chip }
             .buttonBorderShape(.capsule)
             .tint(Color(red: 0.53, green: 0.33, blue: 0.86))
@@ -278,23 +244,24 @@ struct TransactionsView: View {
     private var toolbarChipRow: some View {
         HStack(spacing: 10) {
             filterChipButton(
-                icon: "calendar",
-                title: filterState.timeScope.title,
-                isActive: filterState.timeScope != .allTime
+                title: "Tháng này",
+                isActive: filterState.timeScope == .thisMonth
             ) {
-                showsTimeScopeDialog = true
+                withAnimation {
+                    filterState.timeScope = filterState.timeScope == .thisMonth ? .allTime : .thisMonth
+                }
             }
 
             filterChipButton(
-                icon: "wallet.pass",
-                title: selectedAccountLabel,
-                isActive: filterState.accountID != nil
+                title: "Bản nháp",
+                isActive: filterState.statusScope == .draftOnly
             ) {
-                showsAccountDialog = true
+                withAnimation {
+                    filterState.statusScope = filterState.statusScope == .draftOnly ? .all : .draftOnly
+                }
             }
 
             filterChipButton(
-                icon: nil,
                 title: filterLabel,
                 isActive: activeFilterCount > 0
             ) {
@@ -353,8 +320,9 @@ struct TransactionsView: View {
                 } label: {
                     Text(segment.title)
                         .font(.system(size: 13, weight: .bold, design: .rounded))
-                        .padding(.horizontal, 14)
-                        .padding(.vertical, 10)
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 6)
                 }
                 .buttonBorderShape(.capsule)
                 .tint(Color(red: 0.53, green: 0.33, blue: 0.86))
@@ -692,23 +660,16 @@ private struct TransactionMiniBadge: View {
 }
 
 private struct TransactionToolbarChip: View {
-    let icon: String?
     let title: String
     let isActive: Bool
 
     var body: some View {
-        HStack(spacing: 7) {
-            if let icon {
-                Image(systemName: icon)
-                    .font(.system(size: 11, weight: .bold))
-            }
-
-            Text(title)
-                .font(.system(size: 13, weight: .bold, design: .rounded))
-                .lineLimit(1)
-        }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 10)
+        Text(title)
+            .font(.system(size: 13, weight: .bold, design: .rounded))
+            .lineLimit(1)
+            .foregroundStyle(.white)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 6)
     }
 }
 
