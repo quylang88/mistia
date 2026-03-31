@@ -226,23 +226,23 @@ enum TransactionEntryStatus: String, CaseIterable, Identifiable, Codable {
 }
 
 enum TransactionTimeScope: String, CaseIterable, Identifiable, Codable {
-    case today
-    case thisWeek
-    case thisMonth
     case allTime
+    case thisMonth
+    case yesterday
+    case today
 
     var id: String { rawValue }
 
     var title: String {
         switch self {
-        case .today:
-            "Hôm nay"
-        case .thisWeek:
-            "Tuần này"
-        case .thisMonth:
-            "Tháng này"
         case .allTime:
             "Tất cả"
+        case .thisMonth:
+            "Tháng này"
+        case .yesterday:
+            "Hôm qua"
+        case .today:
+            "Hôm nay"
         }
     }
 }
