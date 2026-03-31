@@ -264,10 +264,12 @@ struct TransactionsView: View {
                 TransactionToolbarChip(
                     icon: "calendar",
                     title: filterState.timeScope.title,
-                    isActive: filterState.timeScope != .all
+                    isActive: filterState.timeScope != .allTime
                 )
             }
-            .buttonStyle(.plain)
+            .buttonStyle(filterState.timeScope != .allTime ? .glassProminent : .glass)
+            .buttonBorderShape(.capsule)
+            .tint(Color(red: 0.53, green: 0.33, blue: 0.86))
 
             Button {
                 showsAccountDialog = true
@@ -278,7 +280,9 @@ struct TransactionsView: View {
                     isActive: filterState.accountID != nil
                 )
             }
-            .buttonStyle(.plain)
+            .buttonStyle(filterState.accountID != nil ? .glassProminent : .glass)
+            .buttonBorderShape(.capsule)
+            .tint(Color(red: 0.53, green: 0.33, blue: 0.86))
 
             Button {
                 activeSheet = .filters
@@ -289,7 +293,9 @@ struct TransactionsView: View {
                     isActive: activeFilterCount > 0
                 )
             }
-            .buttonStyle(.plain)
+            .buttonStyle(activeFilterCount > 0 ? .glassProminent : .glass)
+            .buttonBorderShape(.capsule)
+            .tint(Color(red: 0.53, green: 0.33, blue: 0.86))
         }
     }
 
@@ -342,16 +348,12 @@ struct TransactionsView: View {
                 } label: {
                     Text(segment.title)
                         .font(.system(size: 13, weight: .bold, design: .rounded))
-                        .foregroundStyle(selectedSegment == segment ? .white : .secondary)
                         .padding(.horizontal, 14)
                         .padding(.vertical, 10)
-                        .background {
-                            Capsule()
-                                .fill(selectedSegment == segment ? Color.purple.opacity(0.8) : Color.clear)
-                        }
-                        .background(.regularMaterial, in: Capsule())
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(selectedSegment == segment ? .glassProminent : .glass)
+                .buttonBorderShape(.capsule)
+                .tint(Color(red: 0.53, green: 0.33, blue: 0.86))
             }
         }
     }
@@ -695,14 +697,8 @@ private struct TransactionToolbarChip: View {
                 .font(.system(size: 13, weight: .bold, design: .rounded))
                 .lineLimit(1)
         }
-        .foregroundStyle(isActive ? .white : .secondary)
         .padding(.horizontal, 14)
         .padding(.vertical, 10)
-        .background {
-            Capsule()
-                .fill(isActive ? Color.purple.opacity(0.8) : Color.clear)
-        }
-        .background(.regularMaterial, in: Capsule())
     }
 }
 
