@@ -2,15 +2,12 @@ import SwiftData
 import SwiftUI
 
 private enum TransactionSegment: String, CaseIterable, Hashable {
-    case all
     case expense
     case income
     case transfer
 
     var title: String {
         switch self {
-        case .all:
-            "Tất cả"
         case .expense:
             "Chi tiêu"
         case .income:
@@ -22,8 +19,6 @@ private enum TransactionSegment: String, CaseIterable, Hashable {
 
     var tint: Color {
         switch self {
-        case .all:
-            .indigo
         case .expense:
             Color(red: 0.97, green: 0.43, blue: 0.46)
         case .income:
@@ -33,16 +28,14 @@ private enum TransactionSegment: String, CaseIterable, Hashable {
         }
     }
 
-    var kind: TransactionPrimaryKind? {
+    var kind: TransactionPrimaryKind {
         switch self {
-        case .all:
-            nil
         case .expense:
-            .expense
+            return .expense
         case .income:
-            .income
+            return .income
         case .transfer:
-            .transfer
+            return .transfer
         }
     }
 }
@@ -64,7 +57,7 @@ struct TransactionsView: View {
     @Query(sort: [SortDescriptor(\TransactionCategory.sortOrder), SortDescriptor(\TransactionCategory.createdAt)])
     private var storedCategories: [TransactionCategory]
 
-    @State private var selectedSegment: TransactionSegment = .all
+    @State private var selectedSegment: TransactionSegment? = nil
     @State private var activeSheet: TransactionsSheet?
     @State private var editorTarget: TransactionEditorTarget?
     @State private var filterState = TransactionFilterState()
@@ -101,7 +94,7 @@ struct TransactionsView: View {
     private var visibleRecords: [TransactionRecordSnapshot] {
         TransactionLogic.visibleRecords(
             from: snapshotRecords,
-            selectedKind: selectedSegment.kind,
+            selectedKind: selectedSegment?.kind,
             filters: effectiveFilters
         )
     }
@@ -134,7 +127,7 @@ struct TransactionsView: View {
         guard let accountID = filterState.accountID,
               let account = activeAccounts.first(where: { $0.id == accountID })
         else {
-            return "Tất cả tài khoản"
+            return "All"
         }
 
         return account.name
@@ -178,7 +171,7 @@ struct TransactionsView: View {
             switch sheet {
             case .filters:
                 TransactionsFilterSheet(
-                    selectedKind: selectedSegment.kind,
+                    selectedKind: selectedSegment?.kind,
                     accounts: activeAccounts,
                     categories: storedCategories,
                     initialState: filterState
@@ -211,13 +204,13 @@ struct TransactionsView: View {
             isPresented: $showsAccountDialog,
             titleVisibility: .visible
         ) {
-            Button("Tất cả tài khoản") {
-                filterState.accountID = nil
-            }
-
             ForEach(activeAccounts) { account in
                 Button(account.name) {
-                    filterState.accountID = account.id
+                    if filterState.accountID == account.id {
+                        filterState.accountID = nil
+                    } else {
+                        filterState.accountID = account.id
+                    }
                 }
             }
         }
@@ -241,6 +234,28 @@ struct TransactionsView: View {
         }
     }
 
+    private var filterLabel: String {
+        if activeFilterCount == 0 {
+            return "Bộ lọc"
+        }
+        if activeFilterCount == 1 {
+            if let categoryID = filterState.categoryID,
+               let category = storedCategories.first(where: { $0.id == categoryID }) {
+                return category.name
+            }
+            if filterState.transferSubtype != nil {
+                return "Loại chuyển tiền"
+            }
+            if filterState.statusScope != .all {
+                return "Trạng thái"
+            }
+            if filterState.minAmountMinor != nil || filterState.maxAmountMinor != nil {
+                return "Khoảng tiền"
+            }
+        }
+        return "Bộ lọc (\(activeFilterCount))"
+    }
+
     private var toolbarChipRow: some View {
         HStack(spacing: 10) {
             Button {
@@ -249,8 +264,7 @@ struct TransactionsView: View {
                 TransactionToolbarChip(
                     icon: "calendar",
                     title: filterState.timeScope.title,
-                    tint: .indigo,
-                    isInteractive: true
+                    isActive: filterState.timeScope != .all
                 )
             }
             .buttonStyle(.plain)
@@ -261,8 +275,7 @@ struct TransactionsView: View {
                 TransactionToolbarChip(
                     icon: "wallet.pass",
                     title: selectedAccountLabel,
-                    tint: MistiaAccent.slate.color,
-                    isInteractive: true
+                    isActive: filterState.accountID != nil
                 )
             }
             .buttonStyle(.plain)
@@ -271,12 +284,9 @@ struct TransactionsView: View {
                 activeSheet = .filters
             } label: {
                 TransactionToolbarChip(
-                    icon: "line.3.horizontal.decrease.circle",
-                    title: activeFilterCount == 0 ? "Bộ lọc" : "Bộ lọc (\(activeFilterCount))",
-                    tint: activeFilterCount == 0
-                        ? Color(red: 0.43, green: 0.23, blue: 0.76)
-                        : Color(red: 0.29, green: 0.56, blue: 0.96),
-                    isInteractive: true
+                    icon: nil,
+                    title: filterLabel,
+                    isActive: activeFilterCount > 0
                 )
             }
             .buttonStyle(.plain)
@@ -322,29 +332,24 @@ struct TransactionsView: View {
         HStack(spacing: 10) {
             ForEach(TransactionSegment.allCases, id: \.self) { segment in
                 Button {
-                    selectedSegment = segment
-                } label: {
-                    HStack(spacing: 7) {
-                        if segment != .all {
-                            Circle()
-                                .fill(segment.tint)
-                                .frame(width: 7, height: 7)
+                    withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                        if selectedSegment == segment {
+                            selectedSegment = nil
+                        } else {
+                            selectedSegment = segment
                         }
-
-                        Text(segment.title)
-                            .font(.system(size: 13, weight: .bold, design: .rounded))
                     }
-                    .foregroundStyle(selectedSegment == segment ? .primary : .secondary)
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 10)
-                    .background {
-                        MistiaCapsuleGlassBackground(
-                            tint: selectedSegment == segment
-                                ? segment.tint.opacity(colorScheme == .dark ? 0.25 : 0.14)
-                                : (colorScheme == .dark ? .white.opacity(0.05) : .white.opacity(0.16)),
-                            interactive: true
-                        )
-                    }
+                } label: {
+                    Text(segment.title)
+                        .font(.system(size: 13, weight: .bold, design: .rounded))
+                        .foregroundStyle(selectedSegment == segment ? .white : .secondary)
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 10)
+                        .background {
+                            Capsule()
+                                .fill(selectedSegment == segment ? Color.purple.opacity(0.8) : Color.clear)
+                        }
+                        .background(.regularMaterial, in: Capsule())
                 }
                 .buttonStyle(.plain)
             }
@@ -675,29 +680,29 @@ private struct TransactionMiniBadge: View {
 }
 
 private struct TransactionToolbarChip: View {
-    let icon: String
+    let icon: String?
     let title: String
-    let tint: Color
-    var isInteractive: Bool = false
+    let isActive: Bool
 
     var body: some View {
         HStack(spacing: 7) {
-            Image(systemName: icon)
-                .font(.system(size: 11, weight: .bold))
+            if let icon {
+                Image(systemName: icon)
+                    .font(.system(size: 11, weight: .bold))
+            }
 
             Text(title)
-                .font(.system(size: 12.5, weight: .semibold, design: .rounded))
+                .font(.system(size: 13, weight: .bold, design: .rounded))
                 .lineLimit(1)
         }
-        .foregroundStyle(tint)
-        .padding(.horizontal, 13)
-        .padding(.vertical, 9)
+        .foregroundStyle(isActive ? .white : .secondary)
+        .padding(.horizontal, 14)
+        .padding(.vertical, 10)
         .background {
-            MistiaCapsuleGlassBackground(
-                tint: tint.opacity(isInteractive ? 0.18 : 0.12),
-                interactive: isInteractive
-            )
+            Capsule()
+                .fill(isActive ? Color.purple.opacity(0.8) : Color.clear)
         }
+        .background(.regularMaterial, in: Capsule())
     }
 }
 
