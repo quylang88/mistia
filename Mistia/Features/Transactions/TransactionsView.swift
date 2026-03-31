@@ -141,11 +141,16 @@ struct TransactionsView: View {
             contentSpacing: 18,
             contentBottomPadding: 150
         ) {
-            unifiedFilterRow
             if !openDebtPositions.isEmpty {
                 outstandingDebtSection
             }
             transactionsContent
+        }
+        .safeAreaInset(edge: .top) {
+            unifiedFilterRow
+                .padding(.horizontal, 18)
+                .background(MistiaBackgroundView(tone: .standard).ignoresSafeArea(edges: .top))
+                .zIndex(99)
         }
         .searchable(
             text: $searchText,
@@ -192,6 +197,7 @@ struct TransactionsView: View {
                 }
             }
             .padding(.vertical, 2)
+            .padding(.bottom, 10)
         }
     }
 
@@ -235,7 +241,7 @@ struct TransactionsView: View {
 
         if isActive {
             button.buttonStyle(.glassProminent)
-                .zIndex(1)
+                .zIndex(99)
         } else {
             button.buttonStyle(.glass)
                 .zIndex(0)
@@ -650,8 +656,8 @@ private struct TransactionToolbarChip: View {
         .foregroundStyle(.white)
         .animation(nil, value: title)
         .animation(nil, value: isActive)
-        .padding(.horizontal, 10)
-        .padding(.vertical, 4)
+        .padding(.horizontal, 8)
+        .padding(.vertical, 2)
     }
 }
 
