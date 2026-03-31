@@ -4,7 +4,6 @@ enum MockDataLoader {
     static let dashboard: DashboardDump = load("MockDashboard")
     static let transactions: TransactionScreenDump = load("MockTransactions")
     static let planning: PlanningScreenDump = load("MockPlanning")
-    static let management: ManagementScreenDump = load("MockManagement")
 
     private static func load<T: Decodable>(_ resourceName: String) -> T {
         guard let url = Bundle.main.url(forResource: resourceName, withExtension: "json") else {

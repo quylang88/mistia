@@ -4,6 +4,7 @@ import UIKit
 enum MistiaAppStorageKey {
     static let appearanceMode = "mistia.appearance.mode"
     static let hideQuickCreate = "mistia.chrome.hideQuickCreate"
+    static let didSeedManagementCategories = "mistia.management.didSeedCategories"
 }
 
 enum MistiaAppearanceMode: String, CaseIterable, Identifiable {
