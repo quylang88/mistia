@@ -3,22 +3,22 @@ import XCTest
 
 final class TransactionLogicTests: XCTestCase {
     func testBalanceEngineHandlesAssetsAndCreditCardFlows() {
-        let cash = TransactionAccountSnapshot(
+        let cash = TransactionWalletSnapshot(
             id: UUID(),
             kind: .cash,
             openingBalanceMinor: 10_000
         )
-        let bank = TransactionAccountSnapshot(
+        let bank = TransactionWalletSnapshot(
             id: UUID(),
             kind: .bank,
             openingBalanceMinor: 20_000
         )
-        let payPay = TransactionAccountSnapshot(
+        let payPay = TransactionWalletSnapshot(
             id: UUID(),
             kind: .payPay,
             openingBalanceMinor: 1_000
         )
-        let creditCard = TransactionAccountSnapshot(
+        let creditCard = TransactionWalletSnapshot(
             id: UUID(),
             kind: .creditCard,
             openingBalanceMinor: 10_000
@@ -31,16 +31,16 @@ final class TransactionLogicTests: XCTestCase {
                 primaryKind: .expense,
                 amountMinor: 1_200,
                 occurredAt: now,
-                sourceAccountID: cash.id,
-                sourceAccountKind: .cash,
+                sourceWalletID: cash.id,
+                sourceWalletKind: .cash,
                 categoryID: foodCategory
             ),
             makeRecord(
                 primaryKind: .income,
                 amountMinor: 5_000,
                 occurredAt: now.addingTimeInterval(-60),
-                sourceAccountID: bank.id,
-                sourceAccountKind: .bank,
+                sourceWalletID: bank.id,
+                sourceWalletKind: .bank,
                 categoryID: UUID()
             ),
             makeRecord(
@@ -48,17 +48,17 @@ final class TransactionLogicTests: XCTestCase {
                 transferSubtype: .internalTransfer,
                 amountMinor: 3_000,
                 occurredAt: now.addingTimeInterval(-120),
-                sourceAccountID: bank.id,
-                sourceAccountKind: .bank,
-                destinationAccountID: payPay.id,
-                destinationAccountKind: .payPay
+                sourceWalletID: bank.id,
+                sourceWalletKind: .bank,
+                destinationWalletID: payPay.id,
+                destinationWalletKind: .payPay
             ),
             makeRecord(
                 primaryKind: .expense,
                 amountMinor: 8_000,
                 occurredAt: now.addingTimeInterval(-180),
-                sourceAccountID: creditCard.id,
-                sourceAccountKind: .creditCard,
+                sourceWalletID: creditCard.id,
+                sourceWalletKind: .creditCard,
                 categoryID: foodCategory
             ),
             makeRecord(
@@ -66,20 +66,20 @@ final class TransactionLogicTests: XCTestCase {
                 transferSubtype: .internalTransfer,
                 amountMinor: 7_000,
                 occurredAt: now.addingTimeInterval(-240),
-                sourceAccountID: bank.id,
-                sourceAccountKind: .bank,
-                destinationAccountID: creditCard.id,
-                destinationAccountKind: .creditCard
+                sourceWalletID: bank.id,
+                sourceWalletKind: .bank,
+                destinationWalletID: creditCard.id,
+                destinationWalletKind: .creditCard
             ),
             makeRecord(
                 primaryKind: .transfer,
                 transferSubtype: .internalTransfer,
                 amountMinor: 2_000,
                 occurredAt: now.addingTimeInterval(-300),
-                sourceAccountID: creditCard.id,
-                sourceAccountKind: .creditCard,
-                destinationAccountID: cash.id,
-                destinationAccountKind: .cash
+                sourceWalletID: creditCard.id,
+                sourceWalletKind: .creditCard,
+                destinationWalletID: cash.id,
+                destinationWalletKind: .cash
             )
         ]
 
@@ -90,7 +90,7 @@ final class TransactionLogicTests: XCTestCase {
     }
 
     func testDebtAggregationTracksBothDirectionsWithNormalizedNames() {
-        let accountID = UUID()
+        let walletID = UUID()
         let now = Date(timeIntervalSince1970: 1_742_646_400)
 
         let records = [
@@ -101,8 +101,8 @@ final class TransactionLogicTests: XCTestCase {
                 title: "Cho vay cafe",
                 amountMinor: 5_000,
                 occurredAt: now,
-                sourceAccountID: accountID,
-                sourceAccountKind: .cash,
+                sourceWalletID: walletID,
+                sourceWalletKind: .cash,
                 counterpartyName: "Lân"
             ),
             makeRecord(
@@ -112,8 +112,8 @@ final class TransactionLogicTests: XCTestCase {
                 title: "Thu nợ",
                 amountMinor: 1_000,
                 occurredAt: now.addingTimeInterval(-60),
-                sourceAccountID: accountID,
-                sourceAccountKind: .cash,
+                sourceWalletID: walletID,
+                sourceWalletKind: .cash,
                 counterpartyName: " lan "
             ),
             makeRecord(
@@ -123,8 +123,8 @@ final class TransactionLogicTests: XCTestCase {
                 title: "Mượn tiền",
                 amountMinor: 3_000,
                 occurredAt: now.addingTimeInterval(-120),
-                sourceAccountID: accountID,
-                sourceAccountKind: .bank,
+                sourceWalletID: walletID,
+                sourceWalletKind: .bank,
                 counterpartyName: "Minh"
             ),
             makeRecord(
@@ -134,8 +134,8 @@ final class TransactionLogicTests: XCTestCase {
                 title: "Trả nợ",
                 amountMinor: 500,
                 occurredAt: now.addingTimeInterval(-180),
-                sourceAccountID: accountID,
-                sourceAccountKind: .bank,
+                sourceWalletID: walletID,
+                sourceWalletKind: .bank,
                 counterpartyName: "minh"
             )
         ]
@@ -152,7 +152,7 @@ final class TransactionLogicTests: XCTestCase {
     }
 
     func testDraftDoesNotAffectSummaryBalanceAndDraftSectionComesFirst() {
-        let account = TransactionAccountSnapshot(
+        let wallet = TransactionWalletSnapshot(
             id: UUID(),
             kind: .cash,
             openingBalanceMinor: 1_000
@@ -163,8 +163,8 @@ final class TransactionLogicTests: XCTestCase {
             primaryKind: .income,
             amountMinor: 3_000,
             occurredAt: now,
-            sourceAccountID: account.id,
-            sourceAccountKind: .cash,
+            sourceWalletID: wallet.id,
+            sourceWalletKind: .cash,
             categoryID: UUID()
         )
         let draftExpense = makeRecord(
@@ -172,8 +172,8 @@ final class TransactionLogicTests: XCTestCase {
             entryStatus: .draft,
             amountMinor: 900,
             occurredAt: now.addingTimeInterval(60),
-            sourceAccountID: account.id,
-            sourceAccountKind: .cash,
+            sourceWalletID: wallet.id,
+            sourceWalletKind: .cash,
             categoryID: UUID()
         )
 
@@ -185,15 +185,15 @@ final class TransactionLogicTests: XCTestCase {
         XCTAssertEqual(summary.incomeMinor, 3_000)
         XCTAssertEqual(summary.totalCount, 2)
         XCTAssertEqual(summary.draftCount, 1)
-        XCTAssertEqual(TransactionLogic.effectiveBalance(for: account, records: records), 4_000)
+        XCTAssertEqual(TransactionLogic.effectiveBalance(for: wallet, records: records), 4_000)
         XCTAssertEqual(sections.first?.title, "Cần hoàn thiện")
         XCTAssertTrue(sections.first?.isDraftSection == true)
         XCTAssertEqual(sections.first?.rows.count, 1)
     }
 
-    func testExpenseFiltersCombineTypeTimeAccountCategoryAmountStatusAndSearch() {
-        let accountID = UUID()
-        let otherAccountID = UUID()
+    func testExpenseFiltersCombineTypeTimeWalletCategoryAmountStatusAndSearch() {
+        let walletID = UUID()
+        let otherWalletID = UUID()
         let categoryID = UUID()
         let otherCategoryID = UUID()
         let referenceDate = Date(timeIntervalSince1970: 1_742_646_400)
@@ -203,8 +203,8 @@ final class TransactionLogicTests: XCTestCase {
             title: "Cafe voi Anh Minh",
             amountMinor: 5_500,
             occurredAt: referenceDate.addingTimeInterval(-60),
-            sourceAccountID: accountID,
-            sourceAccountKind: .cash,
+            sourceWalletID: walletID,
+            sourceWalletKind: .cash,
             categoryID: categoryID
         )
         let wrongCategory = makeRecord(
@@ -212,8 +212,8 @@ final class TransactionLogicTests: XCTestCase {
             title: "Cafe sai danh muc",
             amountMinor: 5_500,
             occurredAt: referenceDate.addingTimeInterval(-120),
-            sourceAccountID: accountID,
-            sourceAccountKind: .cash,
+            sourceWalletID: walletID,
+            sourceWalletKind: .cash,
             categoryID: otherCategoryID
         )
         let wrongStatus = makeRecord(
@@ -222,23 +222,23 @@ final class TransactionLogicTests: XCTestCase {
             title: "Cafe draft",
             amountMinor: 5_500,
             occurredAt: referenceDate.addingTimeInterval(-180),
-            sourceAccountID: accountID,
-            sourceAccountKind: .cash,
+            sourceWalletID: walletID,
+            sourceWalletKind: .cash,
             categoryID: categoryID
         )
-        let wrongAccount = makeRecord(
+        let wrongWallet = makeRecord(
             primaryKind: .expense,
             title: "Cafe tai khoan khac",
             amountMinor: 5_500,
             occurredAt: referenceDate.addingTimeInterval(-240),
-            sourceAccountID: otherAccountID,
-            sourceAccountKind: .cash,
+            sourceWalletID: otherWalletID,
+            sourceWalletKind: .cash,
             categoryID: categoryID
         )
 
         var filters = TransactionFilterState()
         filters.timeScope = .thisMonth
-        filters.accountID = accountID
+        filters.walletID = walletID
         filters.categoryID = categoryID
         filters.statusScope = .postedOnly
         filters.minAmountMinor = 5_000
@@ -246,7 +246,7 @@ final class TransactionLogicTests: XCTestCase {
         filters.searchText = "anh minh"
 
         let visible = TransactionLogic.visibleRecords(
-            from: [matching, wrongCategory, wrongStatus, wrongAccount],
+            from: [matching, wrongCategory, wrongStatus, wrongWallet],
             selectedKind: .expense,
             filters: filters,
             referenceDate: referenceDate
@@ -256,7 +256,7 @@ final class TransactionLogicTests: XCTestCase {
     }
 
     func testTransferFiltersCombineSubtypeAmountTimeStatusAndSearch() {
-        let accountID = UUID()
+        let walletID = UUID()
         let referenceDate = Date(timeIntervalSince1970: 1_742_646_400)
 
         let matching = makeRecord(
@@ -266,8 +266,8 @@ final class TransactionLogicTests: XCTestCase {
             title: "Cho vay gap",
             amountMinor: 6_000,
             occurredAt: referenceDate.addingTimeInterval(-60),
-            sourceAccountID: accountID,
-            sourceAccountKind: .bank,
+            sourceWalletID: walletID,
+            sourceWalletKind: .bank,
             counterpartyName: "Ngoc Anh"
         )
         let wrongSubtype = makeRecord(
@@ -276,10 +276,10 @@ final class TransactionLogicTests: XCTestCase {
             title: "Transfer noi bo",
             amountMinor: 6_000,
             occurredAt: referenceDate.addingTimeInterval(-120),
-            sourceAccountID: accountID,
-            sourceAccountKind: .bank,
-            destinationAccountID: UUID(),
-            destinationAccountKind: .cash
+            sourceWalletID: walletID,
+            sourceWalletKind: .bank,
+            destinationWalletID: UUID(),
+            destinationWalletKind: .cash
         )
         let wrongAmount = makeRecord(
             primaryKind: .transfer,
@@ -288,14 +288,14 @@ final class TransactionLogicTests: XCTestCase {
             title: "Cho vay it hon",
             amountMinor: 3_000,
             occurredAt: referenceDate.addingTimeInterval(-180),
-            sourceAccountID: accountID,
-            sourceAccountKind: .bank,
+            sourceWalletID: walletID,
+            sourceWalletKind: .bank,
             counterpartyName: "Ngoc Anh"
         )
 
         var filters = TransactionFilterState()
         filters.timeScope = .thisMonth
-        filters.accountID = accountID
+        filters.walletID = walletID
         filters.transferSubtype = .debt
         filters.statusScope = .postedOnly
         filters.minAmountMinor = 5_000
@@ -320,10 +320,10 @@ final class TransactionLogicTests: XCTestCase {
         title: String = "Sample",
         amountMinor: Int64,
         occurredAt: Date,
-        sourceAccountID: UUID? = nil,
-        sourceAccountKind: LedgerAccountKind? = nil,
-        destinationAccountID: UUID? = nil,
-        destinationAccountKind: LedgerAccountKind? = nil,
+        sourceWalletID: UUID? = nil,
+        sourceWalletKind: LedgerAccountKind? = nil,
+        destinationWalletID: UUID? = nil,
+        destinationWalletKind: LedgerAccountKind? = nil,
         categoryID: UUID? = nil,
         counterpartyName: String? = nil
     ) -> TransactionRecordSnapshot {
@@ -338,10 +338,10 @@ final class TransactionLogicTests: XCTestCase {
             amountMinor: amountMinor,
             occurredAt: occurredAt,
             createdAt: occurredAt,
-            sourceAccountID: sourceAccountID,
-            sourceAccountKind: sourceAccountKind,
-            destinationAccountID: destinationAccountID,
-            destinationAccountKind: destinationAccountKind,
+            sourceWalletID: sourceWalletID,
+            sourceWalletKind: sourceWalletKind,
+            destinationWalletID: destinationWalletID,
+            destinationWalletKind: destinationWalletKind,
             categoryID: categoryID,
             counterpartyName: counterpartyName,
             normalizedCounterpartyKey: TransactionLogic.normalizeCounterpartyName(counterpartyName)

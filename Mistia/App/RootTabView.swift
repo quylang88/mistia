@@ -314,7 +314,7 @@ private enum MistiaQuickCreateDestination: String, CaseIterable, Identifiable {
   var subtitle: String {
     switch self {
     case .expense:
-      "Lưu lại khoản chi từ ví hoặc tài khoản."
+      "Lưu lại khoản chi từ ví hoặc ví."
     case .income:
       "Ghi nhận nguồn thu để cập nhật số dư."
     case .transfer:
@@ -378,7 +378,7 @@ private struct MistiaQuickCreateMenu: View {
   }
 
   private var collapsedTint: Color {
-    Color(red: 0.43, green: 0.23, blue: 0.76).opacity(colorScheme == .dark ? 0.78 : 0.64)
+    Color(red: 0.43, green: 0.23, blue: 0.76).opacity(colorScheme == .dark ? 0.18 : 0.12)
   }
 
   private var cornerRadius: CGFloat {
@@ -420,10 +420,17 @@ private struct MistiaQuickCreateMenu: View {
 
       Image(systemName: "plus")
         .font(.system(size: 20, weight: .semibold, design: .rounded))
-        .foregroundStyle(.white.opacity(0.98))
+        .foregroundStyle(Color(red: 0.65, green: 0.45, blue: 0.98))
         .opacity(isExpanded ? 0 : 1)
         .scaleEffect(isExpanded ? 0.72 : 1)
         .frame(width: Self.collapsedSize, height: Self.collapsedSize)
+        .background {
+            Circle()
+                .stroke(Color(red: 0.65, green: 0.45, blue: 0.98).opacity(0.3), lineWidth: 1)
+                .opacity(isExpanded ? 0 : 1)
+                .scaleEffect(isExpanded ? 0.72 : 1)
+                .animation(.easeInOut(duration: 0.16), value: isExpanded)
+        }
         .animation(.easeInOut(duration: 0.16), value: isExpanded)
     }
     .frame(

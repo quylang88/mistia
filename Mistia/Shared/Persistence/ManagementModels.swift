@@ -66,8 +66,8 @@ final class CreditCardProfile {
     var notes: String?
     var createdAt: Date
     var updatedAt: Date
-    var account: LedgerAccount?
-    var paymentSourceAccount: LedgerAccount?
+    var wallet: LedgerAccount?
+    var paymentSourceWallet: LedgerAccount?
 
     init(
         id: UUID = UUID(),
@@ -80,8 +80,8 @@ final class CreditCardProfile {
         notes: String? = nil,
         createdAt: Date = .now,
         updatedAt: Date = .now,
-        account: LedgerAccount? = nil,
-        paymentSourceAccount: LedgerAccount? = nil
+        wallet: LedgerAccount? = nil,
+        paymentSourceWallet: LedgerAccount? = nil
     ) {
         self.id = id
         self.issuerName = issuerName
@@ -93,8 +93,8 @@ final class CreditCardProfile {
         self.notes = notes
         self.createdAt = createdAt
         self.updatedAt = updatedAt
-        self.account = account
-        self.paymentSourceAccount = paymentSourceAccount
+        self.wallet = wallet
+        self.paymentSourceWallet = paymentSourceWallet
     }
 
     var network: CreditCardNetwork {
@@ -162,8 +162,8 @@ final class LedgerTransaction {
     var counterpartyName: String?
     var normalizedCounterpartyKey: String?
 
-    @Relationship(deleteRule: .nullify) var sourceAccount: LedgerAccount?
-    @Relationship(deleteRule: .nullify) var destinationAccount: LedgerAccount?
+    @Relationship(deleteRule: .nullify) var sourceWallet: LedgerAccount?
+    @Relationship(deleteRule: .nullify) var destinationWallet: LedgerAccount?
     @Relationship(deleteRule: .nullify) var category: TransactionCategory?
 
     init(
@@ -178,8 +178,8 @@ final class LedgerTransaction {
         occurredAt: Date = .now,
         createdAt: Date = .now,
         updatedAt: Date = .now,
-        sourceAccount: LedgerAccount? = nil,
-        destinationAccount: LedgerAccount? = nil,
+        sourceWallet: LedgerAccount? = nil,
+        destinationWallet: LedgerAccount? = nil,
         category: TransactionCategory? = nil,
         counterpartyName: String? = nil,
         normalizedCounterpartyKey: String? = nil
@@ -195,8 +195,8 @@ final class LedgerTransaction {
         self.occurredAt = occurredAt
         self.createdAt = createdAt
         self.updatedAt = updatedAt
-        self.sourceAccount = sourceAccount
-        self.destinationAccount = destinationAccount
+        self.sourceWallet = sourceWallet
+        self.destinationWallet = destinationWallet
         self.category = category
         self.counterpartyName = counterpartyName
         self.normalizedCounterpartyKey = normalizedCounterpartyKey

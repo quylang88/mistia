@@ -1,6 +1,6 @@
 import Foundation
 
-struct TransactionAccountSnapshot: Equatable, Identifiable {
+struct TransactionWalletSnapshot: Equatable, Identifiable {
     let id: UUID
     let kind: LedgerAccountKind
     let openingBalanceMinor: Int64
@@ -17,10 +17,10 @@ struct TransactionRecordSnapshot: Equatable, Identifiable {
     let amountMinor: Int64
     let occurredAt: Date
     let createdAt: Date
-    let sourceAccountID: UUID?
-    let sourceAccountKind: LedgerAccountKind?
-    let destinationAccountID: UUID?
-    let destinationAccountKind: LedgerAccountKind?
+    let sourceWalletID: UUID?
+    let sourceWalletKind: LedgerAccountKind?
+    let destinationWalletID: UUID?
+    let destinationWalletKind: LedgerAccountKind?
     let categoryID: UUID?
     let counterpartyName: String?
     let normalizedCounterpartyKey: String?
@@ -28,7 +28,7 @@ struct TransactionRecordSnapshot: Equatable, Identifiable {
 
 struct TransactionFilterState: Equatable {
     var timeScope: TransactionTimeScope = .thisMonth
-    var accountID: UUID?
+    var walletID: UUID?
     var categoryID: UUID?
     var transferSubtype: TransactionTransferSubtype?
     var statusScope: TransactionStatusScope = .all
@@ -222,13 +222,13 @@ enum TransactionLogic {
     }
 
     static func effectiveBalance(
-        for account: TransactionAccountSnapshot,
+        for wallet: TransactionWalletSnapshot,
         records: [TransactionRecordSnapshot]
     ) -> Int64 {
         records
             .filter { $0.entryStatus == .posted }
-            .reduce(account.openingBalanceMinor) { partialResult, record in
-                partialResult + balanceDelta(for: account, record: record)
+            .reduce(wallet.openingBalanceMinor) { partialResult, record in
+                partialResult + balanceDelta(for: wallet, record: record)
             }
     }
 
@@ -263,20 +263,20 @@ enum TransactionLogic {
         switch record.primaryKind {
         case .expense:
             return !record.title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-                && record.sourceAccountID != nil
+                && record.sourceWalletID != nil
                 && record.categoryID != nil
         case .income:
             return !record.title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-                && record.sourceAccountID != nil
+                && record.sourceWalletID != nil
                 && record.categoryID != nil
         case .transfer:
             switch record.transferSubtype {
             case .internalTransfer:
-                return record.sourceAccountID != nil
-                    && record.destinationAccountID != nil
-                    && record.sourceAccountID != record.destinationAccountID
+                return record.sourceWalletID != nil
+                    && record.destinationWalletID != nil
+                    && record.sourceWalletID != record.destinationWalletID
             case .debt:
-                return record.sourceAccountID != nil
+                return record.sourceWalletID != nil
                     && record.debtIntent != nil
                     && record.normalizedCounterpartyKey != nil
             case nil:
@@ -295,8 +295,8 @@ enum TransactionLogic {
             return false
         }
 
-        if let accountID = filters.accountID,
-           record.sourceAccountID != accountID && record.destinationAccountID != accountID {
+        if let walletID = filters.walletID,
+           record.sourceWalletID != walletID && record.destinationWalletID != walletID {
             return false
         }
 
@@ -367,38 +367,38 @@ enum TransactionLogic {
     }
 
     private static func balanceDelta(
-        for account: TransactionAccountSnapshot,
+        for wallet: TransactionWalletSnapshot,
         record: TransactionRecordSnapshot
     ) -> Int64 {
         switch record.primaryKind {
         case .expense:
-            guard record.sourceAccountID == account.id else { return 0 }
-            return outgoingDelta(for: account.kind, amount: record.amountMinor)
+            guard record.sourceWalletID == wallet.id else { return 0 }
+            return outgoingDelta(for: wallet.kind, amount: record.amountMinor)
         case .income:
-            guard record.sourceAccountID == account.id else { return 0 }
-            return incomingDelta(for: account.kind, amount: record.amountMinor)
+            guard record.sourceWalletID == wallet.id else { return 0 }
+            return incomingDelta(for: wallet.kind, amount: record.amountMinor)
         case .transfer:
             switch record.transferSubtype {
             case .internalTransfer:
                 var delta: Int64 = 0
 
-                if record.sourceAccountID == account.id {
-                    delta += outgoingDelta(for: account.kind, amount: record.amountMinor)
+                if record.sourceWalletID == wallet.id {
+                    delta += outgoingDelta(for: wallet.kind, amount: record.amountMinor)
                 }
 
-                if record.destinationAccountID == account.id {
-                    delta += incomingDelta(for: account.kind, amount: record.amountMinor)
+                if record.destinationWalletID == wallet.id {
+                    delta += incomingDelta(for: wallet.kind, amount: record.amountMinor)
                 }
 
                 return delta
             case .debt:
-                guard record.sourceAccountID == account.id else { return 0 }
+                guard record.sourceWalletID == wallet.id else { return 0 }
 
                 switch record.debtIntent {
                 case .lend, .repay:
-                    return outgoingDelta(for: account.kind, amount: record.amountMinor)
+                    return outgoingDelta(for: wallet.kind, amount: record.amountMinor)
                 case .collect, .borrow:
-                    return incomingDelta(for: account.kind, amount: record.amountMinor)
+                    return incomingDelta(for: wallet.kind, amount: record.amountMinor)
                 case nil:
                     return 0
                 }
