@@ -103,7 +103,7 @@ enum MistiaIconCatalog {
             "creditcard", "creditcard.and.123", "creditcard.circle.fill", "building.columns.fill", "building.columns",
             "building.2.fill", "chart.bar.fill", "chart.bar.xaxis", "chart.pie.fill", "chart.line.uptrend.xyaxis",
             "chart.xyaxis.line", "dollarsign.circle.fill", "yensign.circle.fill", "bitcoinsign.circle.fill", "percent",
-            "percent.circle.fill", "arrow.left.arrow.right.circle.fill", "plusminus.circle.fill", "receipt.fill", "doc.text.fill",
+            "chart.bar.doc.horizontal.fill", "arrow.left.arrow.right.circle.fill", "plusminus.circle.fill", "receipt.fill", "doc.text.fill",
             "tray.full.fill", "briefcase.fill", "calendar.badge.clock", "checkmark.seal.fill", "lock.shield.fill"
         ],
         .shopping: [
@@ -120,12 +120,12 @@ enum MistiaIconCatalog {
             "leaf.fill", "flame.fill", "mug.fill", "popcorn.fill", "waterbottle.fill",
             "basket.fill", "cart.fill", "bag.fill", "storefront.fill", "party.popper.fill",
             "sparkles", "heart.fill", "sun.max.fill", "moon.stars.fill", "gift.fill",
-            "star.fill", "tray.fill", "shippingbox.fill", "takeoutbag.and.cup.and.straw.circle.fill", "carrot"
+            "star.fill", "tray.fill", "shippingbox.fill", "fork.knife.circle", "carrot"
         ],
         .home: [
             "house.fill", "house", "bed.double.fill", "bed.double", "sofa.fill",
             "chair.fill", "washer.fill", "dishwasher.fill", "lamp.floor.fill", "lamp.desk.fill",
-            "fan.fill", "faucet.fill", "shower.fill", "toilet.fill", "lightbulb.fill",
+            "fan.fill", "water.waves", "shower.fill", "toilet.fill", "lightbulb.fill",
             "wifi", "tv.fill", "door.left.hand.open", "window.casement.closed", "lock.fill",
             "key.fill", "paintbrush.fill", "wrench.and.screwdriver.fill", "archivebox.fill", "shippingbox.fill",
             "stove.fill", "refrigerator.fill", "curtains.closed", "fireplace.fill", "sensor.tag.radiowaves.forward.fill"
@@ -133,10 +133,10 @@ enum MistiaIconCatalog {
         .utilities: [
             "bolt.fill", "bolt.circle.fill", "lightbulb.fill", "wifi", "antenna.radiowaves.left.and.right",
             "tv.fill", "phone.fill", "printer.fill", "drop.fill", "flame.fill",
-            "battery.100percent", "powerplug.fill", "cable.connector", "network", "router.fill",
-            "dot.radiowaves.left.and.right", "signal", "doc.text.fill", "calendar.badge.clock", "bell.fill",
+            "battery.100percent", "powerplug.fill", "cable.connector", "network", "wifi.router",
+            "dot.radiowaves.left.and.right", "cellularbars", "doc.text.fill", "calendar.badge.clock", "bell.fill",
             "exclamationmark.triangle.fill", "checkmark.circle.fill", "timer", "clock.fill", "gauge.with.dots.needle.50percent",
-            "fan.fill", "faucet.fill", "shower.fill", "creditcard.and.123", "building.columns.fill"
+            "fan.fill", "drop.circle.fill", "shower.fill", "creditcard.and.123", "building.columns.fill"
         ],
         .transport: [
             "car.fill", "car", "car.side.fill", "tram.fill", "bus.fill",
@@ -152,7 +152,7 @@ enum MistiaIconCatalog {
             "map.fill", "mappin.circle.fill", "camera.fill", "bed.double.fill", "tent.fill",
             "sun.max.fill", "moon.stars.fill", "mountain.2.fill", "binoculars.fill", "sparkles",
             "photo.fill", "building.columns.fill", "building.2.fill", "location.fill", "signpost.right.fill",
-            "figure.walk", "boat.fill", "leaf.fill", "paperplane.fill", "tram.circle.fill"
+            "figure.walk", "sailboat.fill", "leaf.fill", "paperplane.fill", "tram.circle.fill"
         ],
         .health: [
             "cross.case.fill", "heart.fill", "figure.walk", "figure.run", "pills.fill",
@@ -210,7 +210,7 @@ struct MistiaIconPickerSheet: View {
     @State private var selectedColor: Color
     @State private var selectedGroupID: MistiaIconGroupID
 
-    private let columns = Array(repeating: GridItem(.flexible(), spacing: 12), count: 5)
+    private let columns = Array(repeating: GridItem(.flexible(), spacing: 10), count: 5)
     private let accent = Color(red: 0.43, green: 0.23, blue: 0.76)
 
     init(
@@ -247,6 +247,7 @@ struct MistiaIconPickerSheet: View {
                     }
                     .frame(maxWidth: .infinity)
                     .padding(.top, 12)
+                    .padding(.horizontal, 20)
 
                     VStack(alignment: .leading, spacing: 10) {
                         Text("Màu icon")
@@ -254,51 +255,62 @@ struct MistiaIconPickerSheet: View {
 
                         ColorPicker("Chọn màu", selection: $selectedColor, supportsOpacity: false)
                     }
+                    .padding(.horizontal, 20)
 
-                    VStack(alignment: .leading, spacing: 12) {
-                        Text("Biểu tượng")
-                            .font(.headline)
-
+                    VStack(alignment: .leading, spacing: 14) {
                         ScrollView(.horizontal, showsIndicators: false) {
                             HStack(spacing: 8) {
                                 ForEach(MistiaIconCatalog.groups) { group in
                                     filterButton(for: group)
                                 }
                             }
-                            .padding(.vertical, 2)
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 4)
                         }
+                        .scrollClipDisabled()
 
                         LazyVGrid(columns: columns, spacing: 12) {
                             ForEach(selectedGroup.symbols, id: \.self) { symbol in
+                                let isSelected = selectedSymbolName == symbol
                                 Button {
                                     selectedSymbolName = symbol
                                 } label: {
                                     ZStack {
                                         RoundedRectangle(cornerRadius: 14, style: .continuous)
-                                            .fill(selectedColor.opacity(selectedSymbolName == symbol ? 0.22 : 0.08))
+                                            .fill(selectedColor.opacity(isSelected ? 0.22 : 0.08))
 
                                         Image(systemName: symbol)
                                             .font(.system(size: 18, weight: .bold))
                                             .foregroundStyle(selectedColor)
                                     }
                                     .frame(height: 54)
+                                    .scaleEffect(isSelected ? 1.08 : 1)
                                     .overlay {
                                         RoundedRectangle(cornerRadius: 14, style: .continuous)
                                             .strokeBorder(
-                                                selectedSymbolName == symbol
+                                                isSelected
                                                     ? selectedColor.opacity(0.62)
                                                     : Color.secondary.opacity(0.08),
                                                 lineWidth: 1
                                             )
                                     }
+                                    .shadow(
+                                        color: isSelected ? selectedColor.opacity(0.18) : .clear,
+                                        radius: isSelected ? 10 : 0,
+                                        y: isSelected ? 4 : 0
+                                    )
+                                    .animation(.snappy(duration: 0.18), value: isSelected)
                                 }
                                 .buttonStyle(.plain)
                                 .accessibilityLabel(symbol)
+                                .zIndex(isSelected ? 10 : 0)
                             }
                         }
+                        .padding(.horizontal, 20)
+                        .padding(.vertical, 4)
                     }
                 }
-                .padding(20)
+                .padding(.vertical, 20)
             }
             .navigationTitle(title)
             .navigationBarTitleDisplayMode(.inline)

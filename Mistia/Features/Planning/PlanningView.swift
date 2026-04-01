@@ -1284,8 +1284,8 @@ private struct PlanningMonthPickerSheet: View {
             VStack(spacing: 18) {
                 HStack(spacing: 0) {
                     Picker("Tháng", selection: $draftMonth) {
-                        ForEach(Array(calendar.standaloneMonthSymbols.enumerated()), id: \.offset) { index, monthName in
-                            Text(monthName.capitalized).tag(index + 1)
+                        ForEach(1...12, id: \.self) { month in
+                            Text("Tháng \(month)").tag(month)
                         }
                     }
                     .pickerStyle(.wheel)
@@ -1293,7 +1293,7 @@ private struct PlanningMonthPickerSheet: View {
 
                     Picker("Năm", selection: $draftYear) {
                         ForEach(yearOptions, id: \.self) { year in
-                            Text("\(year)").tag(year)
+                            Text(verbatim: "Năm \(year)").tag(year)
                         }
                     }
                     .pickerStyle(.wheel)
@@ -1344,10 +1344,7 @@ private struct PlanningMonthPickerSheet: View {
     }
 
     private var previewTitle: String {
-        guard let date = calendar.date(from: DateComponents(year: draftYear, month: draftMonth, day: 1)) else {
-            return ""
-        }
-        return date.monthDisplayText(calendar: calendar)
+        "Tháng \(draftMonth) Năm \(draftYear)"
     }
 
     private func applySelection() {
