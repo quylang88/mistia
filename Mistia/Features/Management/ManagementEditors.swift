@@ -171,6 +171,8 @@ struct ManagementWalletEditorSheet: View {
             }
             .navigationTitle(target.wallet == nil ? "Ví mới" : "Sửa ví")
             .navigationBarTitleDisplayMode(.inline)
+            .toolbarBackgroundVisibility(.visible, for: .navigationBar)
+            .toolbarBackground(.ultraThinMaterial, for: .navigationBar)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
                     Button {
@@ -430,6 +432,8 @@ struct ManagementCategoryEditorSheet: View {
             }
             .navigationTitle(target.category == nil ? "Danh mục mới" : "Sửa danh mục")
             .navigationBarTitleDisplayMode(.inline)
+            .toolbarBackgroundVisibility(.visible, for: .navigationBar)
+            .toolbarBackground(.ultraThinMaterial, for: .navigationBar)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
                     Button {
@@ -642,6 +646,8 @@ private struct ManagementIconPickerSheet: View {
             }
             .navigationTitle(title)
             .navigationBarTitleDisplayMode(.inline)
+            .toolbarBackgroundVisibility(.visible, for: .navigationBar)
+            .toolbarBackground(.ultraThinMaterial, for: .navigationBar)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
                     Button {
