@@ -188,7 +188,7 @@ struct ManagementWalletEditorSheet: View {
                     } label: {
                         Image(systemName: "checkmark")
                             .font(.system(size: 14, weight: .bold))
-                            .foregroundStyle(Color(red: 0.75, green: 0.55, blue: 1.0))
+                            .foregroundStyle(Color(red: 0.88, green: 0.78, blue: 1.0))
                             .frame(width: 30, height: 30)
                     }
                     .buttonStyle(.glassProminent)
@@ -447,7 +447,7 @@ struct ManagementCategoryEditorSheet: View {
                     } label: {
                         Image(systemName: "checkmark")
                             .font(.system(size: 14, weight: .bold))
-                            .foregroundStyle(Color(red: 0.75, green: 0.55, blue: 1.0))
+                            .foregroundStyle(Color(red: 0.88, green: 0.78, blue: 1.0))
                             .frame(width: 30, height: 30)
                     }
                     .buttonStyle(.glassProminent)
@@ -660,7 +660,7 @@ private struct ManagementIconPickerSheet: View {
                     } label: {
                         Image(systemName: "checkmark")
                             .font(.system(size: 14, weight: .bold))
-                            .foregroundStyle(Color(red: 0.75, green: 0.55, blue: 1.0))
+                            .foregroundStyle(Color(red: 0.88, green: 0.78, blue: 1.0))
                             .frame(width: 30, height: 30)
                     }
                     .buttonStyle(.glassProminent)

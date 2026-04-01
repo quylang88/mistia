@@ -439,7 +439,7 @@ private struct MistiaQuickCreateFloatingButton: View {
     Button(action: action) {
       Image(systemName: "plus")
         .font(.system(size: 20, weight: .semibold, design: .rounded))
-        .foregroundStyle(Color(red: 0.75, green: 0.55, blue: 1.0))
+        .foregroundStyle(Color(red: 0.88, green: 0.78, blue: 1.0))
         .frame(width: 44, height: 44)
     }
     .buttonStyle(.glassProminent)
