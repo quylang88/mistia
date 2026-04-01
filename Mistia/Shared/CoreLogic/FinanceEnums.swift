@@ -91,6 +91,37 @@ enum TransactionCategoryKind: String, CaseIterable, Identifiable, Codable {
     }
 }
 
+enum MistiaSystemCategoryKey: String, CaseIterable, Codable, Identifiable {
+    case billing
+    case loanRepayment = "loan_repayment"
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .billing:
+            "Hóa đơn"
+        case .loanRepayment:
+            "Trả góp / vay"
+        }
+    }
+}
+
+enum PlanningDueSourceKind: String, CaseIterable, Codable, Identifiable {
+    case creditCard
+    case recurringBill
+    case installment
+
+    var id: String { rawValue }
+}
+
+enum PlanningDueOccurrenceStatus: String, CaseIterable, Codable, Identifiable {
+    case pending
+    case paid
+
+    var id: String { rawValue }
+}
+
 enum CreditCardNetwork: String, CaseIterable, Identifiable, Codable {
     case visa
     case mastercard

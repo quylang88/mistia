@@ -558,13 +558,11 @@ struct ManagementCategoryEditorSheet: View {
 }
 
 private struct ManagementIconPickerSheet: View {
-    @Environment(\.dismiss) private var dismiss
-
     let title: String
     let onSave: (String, String) -> Void
 
-    @State private var selectedIconSymbolName: String
-    @State private var selectedColor: Color
+    let selectedIconSymbolName: String
+    let selectedColorHex: String
 
     init(
         title: String,
@@ -574,101 +572,17 @@ private struct ManagementIconPickerSheet: View {
     ) {
         self.title = title
         self.onSave = onSave
-        _selectedIconSymbolName = State(initialValue: selectedIconSymbolName)
-        _selectedColor = State(initialValue: Color(hex: selectedColorHex))
+        self.selectedIconSymbolName = selectedIconSymbolName
+        self.selectedColorHex = selectedColorHex
     }
 
-    private let columns = Array(repeating: GridItem(.flexible(), spacing: 12), count: 5)
-
     var body: some View {
-        NavigationStack {
-            ScrollView {
-                VStack(alignment: .leading, spacing: 20) {
-                    VStack(spacing: 12) {
-                        ManagementEditorIconPreview(
-                            symbolName: selectedIconSymbolName,
-                            color: selectedColor,
-                            size: 58
-                        )
-
-                        Text("Preview icon")
-                            .font(.footnote.weight(.medium))
-                            .foregroundStyle(.secondary)
-                    }
-                    .frame(maxWidth: .infinity)
-                    .padding(.top, 12)
-
-                    VStack(alignment: .leading, spacing: 10) {
-                        Text("Màu icon")
-                            .font(.headline)
-
-                        ColorPicker("Chọn màu", selection: $selectedColor, supportsOpacity: false)
-                    }
-
-                    VStack(alignment: .leading, spacing: 10) {
-                        Text("Biểu tượng gợi ý")
-                            .font(.headline)
-
-                        LazyVGrid(columns: columns, spacing: 12) {
-                            ForEach(ManagementPresetData.iconSymbols, id: \.self) { symbol in
-                                Button {
-                                    selectedIconSymbolName = symbol
-                                } label: {
-                                    ZStack {
-                                        RoundedRectangle(cornerRadius: 14, style: .continuous)
-                                            .fill(selectedColor.opacity(selectedIconSymbolName == symbol ? 0.22 : 0.08))
-
-                                        Image(systemName: symbol)
-                                            .font(.system(size: 18, weight: .bold))
-                                            .foregroundStyle(selectedColor)
-                                    }
-                                    .frame(height: 54)
-                                    .overlay {
-                                        RoundedRectangle(cornerRadius: 14, style: .continuous)
-                                            .strokeBorder(
-                                                selectedIconSymbolName == symbol
-                                                    ? selectedColor.opacity(0.62)
-                                                    : Color.secondary.opacity(0.08),
-                                                lineWidth: 1
-                                            )
-                                    }
-                                }
-                                .buttonStyle(.plain)
-                            }
-                        }
-                    }
-                }
-                .padding(20)
-            }
-            .navigationTitle(title)
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .topBarLeading) {
-                    Button {
-                        dismiss()
-                    } label: {
-                        Image(systemName: "xmark")
-                            .font(.system(size: 16, weight: .semibold))
-                            .foregroundStyle(.secondary)
-                    }
-                }
-
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button {
-                        onSave(selectedIconSymbolName, selectedColor.hexString)
-                        dismiss()
-                    } label: {
-                        Image(systemName: "checkmark")
-                            .font(.system(size: 14, weight: .bold))
-                            .foregroundStyle(Color(red: 0.88, green: 0.78, blue: 1.0))
-                            .frame(width: 30, height: 30)
-                    }
-                    .buttonStyle(.glassProminent)
-                    .buttonBorderShape(.circle)
-                    .tint(Color(red: 0.43, green: 0.23, blue: 0.76))
-                }
-            }
-        }
+        MistiaIconPickerSheet(
+            title: title,
+            selectedSymbolName: selectedIconSymbolName,
+            selectedColorHex: selectedColorHex,
+            onSave: onSave
+        )
     }
 }
 

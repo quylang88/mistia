@@ -110,6 +110,7 @@ final class TransactionCategory {
     var kindRawValue: String
     var iconSymbolName: String
     var iconColorHex: String
+    var systemKey: String?
     var isSystem: Bool
     var sortOrder: Int
     var isArchived: Bool
@@ -122,6 +123,7 @@ final class TransactionCategory {
         kind: TransactionCategoryKind,
         iconSymbolName: String,
         iconColorHex: String,
+        systemKey: String? = nil,
         isSystem: Bool = false,
         sortOrder: Int = 0,
         isArchived: Bool = false,
@@ -133,6 +135,7 @@ final class TransactionCategory {
         self.kindRawValue = kind.rawValue
         self.iconSymbolName = iconSymbolName
         self.iconColorHex = iconColorHex
+        self.systemKey = systemKey
         self.isSystem = isSystem
         self.sortOrder = sortOrder
         self.isArchived = isArchived

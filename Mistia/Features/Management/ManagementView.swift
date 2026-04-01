@@ -549,45 +549,16 @@ private struct ManagementActionRow: View {
 }
 
 private struct ManagementFooterAddButton: View {
-    @Environment(\.colorScheme) private var colorScheme
     let title: String
     let accent: Color
     let action: () -> Void
 
-    private var buttonFill: Color {
-        colorScheme == .dark ? .white.opacity(0.12) : .black.opacity(0.08)
-    }
-
-    private var buttonForeground: Color {
-        colorScheme == .dark ? Color(red: 0.65, green: 0.45, blue: 0.98) : accent
-    }
-
     var body: some View {
-        Button(action: action) {
-            HStack(spacing: 10) {
-                Image(systemName: "plus.circle.fill")
-                    .font(.system(size: 15, weight: .bold))
-                    .foregroundStyle(buttonForeground)
-
-                Text(title)
-                    .font(.system(size: 15.5, weight: .semibold, design: .rounded))
-                    .foregroundStyle(buttonForeground)
-            }
-            .frame(maxWidth: .infinity)
-            .padding(.horizontal, 14)
-            .padding(.vertical, 15)
-            .background {
-                RoundedRectangle(cornerRadius: 16, style: .continuous)
-                    .fill(buttonFill)
-            }
-        }
-        .buttonStyle(MistiaPressableButtonStyle(cornerRadius: 16, tint: buttonForeground))
+        MistiaFooterAddButton(title: title, accent: accent, action: action)
     }
 }
 
 private struct ManagementEmptyState: View {
-    @Environment(\.colorScheme) private var colorScheme
-
     let title: String
     let message: String
     let buttonTitle: String
@@ -595,68 +566,15 @@ private struct ManagementEmptyState: View {
     let symbols: [String]
     let action: () -> Void
 
-    private var capsuleFill: Color {
-        colorScheme == .dark ? .white.opacity(0.12) : .black.opacity(0.08)
-    }
-
-    private var buttonForeground: Color {
-        colorScheme == .dark ? Color(red: 0.65, green: 0.45, blue: 0.98) : accent
-    }
-
-    private var symbolBackgroundOpacity: Double {
-        colorScheme == .dark ? 0.24 : 0.10
-    }
-
     var body: some View {
-        VStack(alignment: .center, spacing: 14) {
-            HStack(spacing: 10) {
-                ForEach(Array(symbols.enumerated()), id: \.offset) { index, symbol in
-                    ZStack {
-                        Circle()
-                            .fill(accent.opacity(symbolBackgroundOpacity + Double(index) * 0.025))
-
-                        Image(systemName: symbol)
-                            .font(.system(size: 13, weight: .bold))
-                            .foregroundStyle(buttonForeground)
-                    }
-                    .frame(width: 34, height: 34)
-                    .overlay {
-                        Circle()
-                            .strokeBorder(.white.opacity(colorScheme == .dark ? 0.08 : 0), lineWidth: 0.8)
-                    }
-                }
-            }
-            .frame(maxWidth: .infinity, alignment: .center)
-
-            VStack(alignment: .center, spacing: 6) {
-                Text(title)
-                    .font(.system(size: 18, weight: .bold, design: .rounded))
-                    .foregroundStyle(.primary)
-                    .multilineTextAlignment(.center)
-
-                Text(message)
-                    .font(.system(size: 13.5, weight: .medium, design: .rounded))
-                    .foregroundStyle(.secondary)
-                    .multilineTextAlignment(.center)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-            .frame(maxWidth: .infinity, alignment: .center)
-
-            Button(action: action) {
-                Text(buttonTitle)
-                    .font(.system(size: 16, weight: .bold, design: .rounded))
-                    .foregroundStyle(buttonForeground)
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 14)
-                    .background {
-                        Capsule()
-                            .fill(capsuleFill)
-                    }
-            }
-            .buttonStyle(MistiaPressableButtonStyle(cornerRadius: 24, tint: buttonForeground))
-        }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 14)
+        MistiaEmptyStateContent(
+            title: title,
+            message: message,
+            buttonTitle: buttonTitle,
+            accent: accent,
+            symbols: symbols,
+            action: action
+        )
     }
 }
 
@@ -751,46 +669,10 @@ private struct ManagementChevron: View {
 }
 
 private struct ManagementCardBackground: View {
-    @Environment(\.colorScheme) private var colorScheme
     let tint: Color
 
     var body: some View {
-        RoundedRectangle(cornerRadius: 20, style: .continuous)
-            .fill(Color.clear)
-            .background {
-                if #available(iOS 26, *) {
-                    RoundedRectangle(cornerRadius: 20, style: .continuous)
-                        .fill(.clear)
-                        .glassEffect(
-                            Glass.regular
-                                .tint(tint)
-                                .interactive(false),
-                            in: .rect(cornerRadius: 20)
-                        )
-                } else {
-                    RoundedRectangle(cornerRadius: 20, style: .continuous)
-                        .fill(.ultraThinMaterial)
-                }
-            }
-            .overlay {
-                RoundedRectangle(cornerRadius: 20, style: .continuous)
-                    .strokeBorder(
-                        LinearGradient(
-                            colors: [
-                                .white.opacity(colorScheme == .dark ? 0.08 : 0.26),
-                                .white.opacity(colorScheme == .dark ? 0.03 : 0.08)
-                            ],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        ),
-                        lineWidth: 0.8
-                    )
-            }
-            .shadow(
-                color: .black.opacity(colorScheme == .dark ? 0.14 : 0.035),
-                radius: 10,
-                y: 4
-            )
+        MistiaBlockCardBackground(tint: tint, cornerRadius: 20)
     }
 }
 

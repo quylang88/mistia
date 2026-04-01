@@ -1,22 +1,107 @@
+import Foundation
 import SwiftData
 
 enum MistiaBootstrap {
     static func seedDefaultCategoriesIfNeeded(modelContext: ModelContext) throws {
-        let existingCount = try modelContext.fetchCount(FetchDescriptor<TransactionCategory>())
-        guard existingCount == 0 else { return }
+        let existingCategories = try modelContext.fetch(FetchDescriptor<TransactionCategory>())
+        var didMutate = false
 
-        for (index, seed) in ManagementPresetData.defaultCategorySeeds.enumerated() {
-            let category = TransactionCategory(
-                name: seed.name,
-                kind: seed.kind,
-                iconSymbolName: seed.iconSymbolName,
-                iconColorHex: seed.iconColorHex,
-                isSystem: true,
-                sortOrder: index
-            )
-            modelContext.insert(category)
+        if existingCategories.isEmpty {
+            for (index, seed) in ManagementPresetData.defaultCategorySeeds.enumerated() {
+                let category = TransactionCategory(
+                    name: seed.name,
+                    kind: seed.kind,
+                    iconSymbolName: seed.iconSymbolName,
+                    iconColorHex: seed.iconColorHex,
+                    systemKey: seed.systemKey?.rawValue,
+                    isSystem: true,
+                    sortOrder: index,
+                    isArchived: seed.startsArchived
+                )
+                modelContext.insert(category)
+            }
+            didMutate = true
+        } else {
+            for seed in ManagementPresetData.defaultCategorySeeds {
+                if let systemKey = seed.systemKey,
+                   let matchedCategory = existingCategories.first(where: {
+                       $0.systemKey == systemKey.rawValue
+                           || ($0.name.localizedCaseInsensitiveCompare(seed.name) == .orderedSame && $0.kind == seed.kind)
+                   }) {
+                    if matchedCategory.systemKey != systemKey.rawValue {
+                        matchedCategory.systemKey = systemKey.rawValue
+                        matchedCategory.isSystem = true
+                        matchedCategory.updatedAt = .now
+                        didMutate = true
+                    }
+                    continue
+                }
+
+                if existingCategories.contains(where: {
+                    $0.name.localizedCaseInsensitiveCompare(seed.name) == .orderedSame && $0.kind == seed.kind
+                }) {
+                    continue
+                }
+
+                let category = TransactionCategory(
+                    name: seed.name,
+                    kind: seed.kind,
+                    iconSymbolName: seed.iconSymbolName,
+                    iconColorHex: seed.iconColorHex,
+                    systemKey: seed.systemKey?.rawValue,
+                    isSystem: true,
+                    sortOrder: nextSortOrder(for: seed.kind, categories: existingCategories),
+                    isArchived: seed.startsArchived
+                )
+                modelContext.insert(category)
+                didMutate = true
+            }
         }
 
+        if didMutate {
+            try modelContext.save()
+        }
+    }
+
+    static func ensureSystemCategory(
+        _ systemKey: MistiaSystemCategoryKey,
+        modelContext: ModelContext
+    ) throws -> TransactionCategory {
+        try seedDefaultCategoriesIfNeeded(modelContext: modelContext)
+
+        let existingCategories = try modelContext.fetch(FetchDescriptor<TransactionCategory>())
+        if let existing = existingCategories.first(where: { $0.systemKey == systemKey.rawValue }) {
+            return existing
+        }
+
+        guard let seed = ManagementPresetData.defaultCategorySeeds.first(where: { $0.systemKey == systemKey }) else {
+            fatalError("Missing seed for system category \(systemKey.rawValue)")
+        }
+
+        let category = TransactionCategory(
+            name: seed.name,
+            kind: seed.kind,
+            iconSymbolName: seed.iconSymbolName,
+            iconColorHex: seed.iconColorHex,
+            systemKey: systemKey.rawValue,
+            isSystem: true,
+            sortOrder: 0,
+            isArchived: seed.startsArchived
+        )
+        modelContext.insert(category)
         try modelContext.save()
+        return category
+    }
+
+    private static func nextSortOrder(
+        for kind: TransactionCategoryKind,
+        categories: [TransactionCategory]
+    ) -> Int {
+        let visible = categories
+            .filter { !$0.isArchived && $0.kind == kind }
+            .map(\.sortOrder)
+            .max() ?? -1
+
+        return visible + 1
     }
 }

@@ -4,6 +4,7 @@ struct SettingsView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.colorScheme) private var colorScheme
     @AppStorage(MistiaAppStorageKey.appearanceMode) private var appearanceModeRawValue = MistiaAppearanceMode.automatic.rawValue
+    @AppStorage(MistiaAppStorageKey.currencyCode) private var currencyCode = "JPY"
 
     @State private var destination: SettingsDestination?
 
@@ -41,7 +42,7 @@ struct SettingsView: View {
                         title: "Tiền tệ",
                         icon: "yensign.circle.fill",
                         accent: .amber,
-                        value: "JPY",
+                        value: currencyCode,
                         action: .placeholder
                     )
                 ]

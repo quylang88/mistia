@@ -5,6 +5,7 @@ enum MistiaAppStorageKey {
     static let appearanceMode = "mistia.appearance.mode"
     static let hideQuickCreate = "mistia.chrome.hideQuickCreate"
     static let didSeedManagementCategories = "mistia.management.didSeedCategories"
+    static let currencyCode = "mistia.settings.currency.code"
 }
 
 enum MistiaAppearanceMode: String, CaseIterable, Identifiable {

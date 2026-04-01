@@ -1,80 +1,359 @@
+import SwiftData
 import SwiftUI
 
-private enum PlanningTopMode: String {
+private enum PlanningMode: String, CaseIterable, Identifiable {
     case budget
     case goals
-    case recurring
+    case due
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .budget:
+            "Ngân sách"
+        case .goals:
+            "Mục tiêu"
+        case .due:
+            "Đến hạn"
+        }
+    }
+
+    var icon: String {
+        switch self {
+        case .budget:
+            "banknote.fill"
+        case .goals:
+            "target"
+        case .due:
+            "calendar.badge.clock"
+        }
+    }
 }
+
+private enum PlanningDueMode: String, CaseIterable, Identifiable {
+    case creditCards
+    case bills
+    case installments
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .creditCards:
+            "Thẻ tín dụng"
+        case .bills:
+            "Hóa đơn"
+        case .installments:
+            "Trả góp / vay"
+        }
+    }
+}
+
+private let planningAccentPurple = Color(red: 0.43, green: 0.23, blue: 0.76)
 
 struct PlanningView: View {
     @Environment(\.colorScheme) private var colorScheme
-    private let dump = MockDataLoader.planning
+    @Environment(\.modelContext) private var modelContext
+    @Query(sort: [SortDescriptor(\BudgetPlan.monthAnchor, order: .reverse), SortDescriptor(\BudgetPlan.createdAt, order: .reverse)])
+    private var storedBudgets: [BudgetPlan]
+    @Query(sort: [SortDescriptor(\SavingsGoal.sortOrder), SortDescriptor(\SavingsGoal.createdAt)])
+    private var storedGoals: [SavingsGoal]
+    @Query(sort: [SortDescriptor(\RecurringBillPlan.createdAt)])
+    private var storedBills: [RecurringBillPlan]
+    @Query(sort: [SortDescriptor(\InstallmentPlan.createdAt)])
+    private var storedInstallments: [InstallmentPlan]
+    @Query(sort: [SortDescriptor(\DueOccurrenceRecord.updatedAt, order: .reverse), SortDescriptor(\DueOccurrenceRecord.createdAt, order: .reverse)])
+    private var storedOccurrences: [DueOccurrenceRecord]
+    @Query(sort: [SortDescriptor(\LedgerWallet.sortOrder), SortDescriptor(\LedgerWallet.createdAt)])
+    private var storedWallets: [LedgerWallet]
+    @Query(sort: [SortDescriptor(\TransactionCategory.sortOrder), SortDescriptor(\TransactionCategory.createdAt)])
+    private var storedCategories: [TransactionCategory]
+    @Query(sort: [SortDescriptor(\LedgerTransaction.occurredAt, order: .reverse), SortDescriptor(\LedgerTransaction.createdAt, order: .reverse)])
+    private var storedTransactions: [LedgerTransaction]
+    @AppStorage(MistiaAppStorageKey.currencyCode) private var currencyCode = "JPY"
 
-    @State private var selectedMode: PlanningTopMode = .budget
+    @State private var selectedMode: PlanningMode = .budget
+    @State private var selectedDueMode: PlanningDueMode = .creditCards
+    @State private var selectedMonth = PlanningLogic.startOfMonth(for: .now)
+    @State private var isMonthPickerPresented = false
+    @State private var budgetEditorTarget: PlanningBudgetEditorTarget?
+    @State private var goalEditorTarget: PlanningGoalEditorTarget?
+    @State private var billEditorTarget: PlanningBillEditorTarget?
+    @State private var installmentEditorTarget: PlanningInstallmentEditorTarget?
+    @State private var creditCardEditorTarget: PlanningCreditCardEditorTarget?
+
+    private let calendar = Calendar(identifier: .gregorian)
 
     private var cardTint: Color {
         colorScheme == .dark ? .white.opacity(0.022) : .white.opacity(0.14)
     }
 
+    private var transactionSnapshots: [TransactionRecordSnapshot] {
+        storedTransactions.map(\.planningRecordSnapshot)
+    }
+
+    private var occurrenceSnapshots: [PlanningDueOccurrenceSnapshot] {
+        storedOccurrences.map(\.planningSnapshot)
+    }
+
+    private var activeBudgetPlans: [BudgetPlanSnapshot] {
+        storedBudgets
+            .filter { !$0.isArchived && PlanningLogic.startOfMonth(for: $0.monthAnchor, calendar: calendar) == selectedMonth }
+            .map { $0.planningSnapshot(calendar: calendar) }
+    }
+
+    private var budgetRows: [PlanningBudgetRowSnapshot] {
+        PlanningLogic.budgetRows(
+            plans: activeBudgetPlans,
+            records: transactionSnapshots,
+            selectedMonth: selectedMonth,
+            referenceDate: .now,
+            calendar: calendar
+        )
+    }
+
+    private var budgetSummary: PlanningBudgetSummarySnapshot {
+        PlanningLogic.budgetSummary(from: budgetRows)
+    }
+
+    private var activeGoals: [SavingsGoalSnapshot] {
+        storedGoals
+            .filter { !$0.isArchived }
+            .map(\.planningSnapshot)
+    }
+
+    private var goalRows: [PlanningGoalRowSnapshot] {
+        PlanningLogic.goalRows(
+            goals: activeGoals,
+            selectedMonth: selectedMonth,
+            calendar: calendar
+        )
+    }
+
+    private var goalSummary: PlanningGoalSummarySnapshot {
+        PlanningLogic.goalSummary(from: goalRows)
+    }
+
+    private var creditCardAccounts: [PlanningCreditCardAccountSnapshot] {
+        storedWallets.compactMap { $0.planningCreditCardSnapshot(records: transactionSnapshots) }
+    }
+
+    private var creditCardDueItems: [PlanningCreditCardDueSnapshot] {
+        PlanningLogic.creditCardDueItems(
+            accounts: creditCardAccounts,
+            occurrences: occurrenceSnapshots,
+            selectedMonth: selectedMonth,
+            referenceDate: .now,
+            calendar: calendar
+        )
+    }
+
+    private var recurringBillDueItems: [PlanningRecurringDueSnapshot] {
+        PlanningLogic.recurringBillDueItems(
+            bills: storedBills
+                .filter { !$0.isArchived }
+                .map(\.planningSnapshot),
+            occurrences: occurrenceSnapshots,
+            selectedMonth: selectedMonth,
+            calendar: calendar
+        )
+    }
+
+    private var installmentDueItems: [PlanningRecurringDueSnapshot] {
+        PlanningLogic.installmentDueItems(
+            plans: storedInstallments
+                .filter { !$0.isArchived }
+                .map(\.planningSnapshot),
+            occurrences: occurrenceSnapshots,
+            selectedMonth: selectedMonth,
+            calendar: calendar
+        )
+    }
+
+    private var dueSummary: PlanningDueSummarySnapshot {
+        PlanningLogic.dueSummary(
+            creditCards: creditCardDueItems,
+            recurring: recurringBillDueItems + installmentDueItems,
+            selectedMonth: selectedMonth,
+            referenceDate: .now,
+            calendar: calendar
+        )
+    }
+
     var body: some View {
         MistiaPinnedTopBarScaffold(
             tone: .standard,
-            title: dump.headerTitle,
-            contentSpacing: 18
+            title: "Kế hoạch",
+            trailingSystemImage: "calendar",
+            onTrailingTap: { isMonthPickerPresented = true },
+            contentSpacing: 18,
+            pinnedHeader: {
+                PlanningModePicker(selection: $selectedMode)
+            }
         ) {
-            PlanningTopTabsBar(selection: $selectedMode, tabs: dump.tabs)
-
             switch selectedMode {
             case .budget:
-                budgetContent
+                BudgetTabContent(
+                    summary: budgetSummary,
+                    currencyCode: currencyCode,
+                    rows: budgetRows,
+                    referenceDate: .now,
+                    onAdd: {
+                        budgetEditorTarget = PlanningBudgetEditorTarget(
+                            budget: nil,
+                            selectedMonth: selectedMonth
+                        )
+                    },
+                    onEdit: { row in
+                        let budget = storedBudgets.first(where: { $0.id == row.id })
+                        budgetEditorTarget = PlanningBudgetEditorTarget(
+                            budget: budget,
+                            selectedMonth: selectedMonth
+                        )
+                    }
+                )
             case .goals:
-                PlanningPlaceholderCard(placeholder: dump.goalsPlaceholder)
-            case .recurring:
-                PlanningPlaceholderCard(placeholder: dump.recurringPlaceholder)
+                GoalsTabContent(
+                    summary: goalSummary,
+                    currencyCode: currencyCode,
+                    rows: goalRows,
+                    onAdd: {
+                        goalEditorTarget = PlanningGoalEditorTarget(goal: nil)
+                    },
+                    onEdit: { row in
+                        goalEditorTarget = PlanningGoalEditorTarget(
+                            goal: storedGoals.first(where: { $0.id == row.id })
+                        )
+                    }
+                )
+            case .due:
+                DueTabContent(
+                    selectedMode: $selectedDueMode,
+                    summary: dueSummary,
+                    currencyCode: currencyCode,
+                    creditCards: creditCardDueItems,
+                    bills: recurringBillDueItems,
+                    installments: installmentDueItems,
+                    referenceDate: .now,
+                    onAddCreditCard: {
+                        creditCardEditorTarget = PlanningCreditCardEditorTarget(
+                            wallet: nil,
+                            dueItem: nil,
+                            selectedMonth: selectedMonth
+                        )
+                    },
+                    onEditCreditCard: { item in
+                        creditCardEditorTarget = PlanningCreditCardEditorTarget(
+                            wallet: storedWallets.first(where: { $0.id == item.walletID }),
+                            dueItem: item,
+                            selectedMonth: selectedMonth
+                        )
+                    },
+                    onAddBill: {
+                        billEditorTarget = PlanningBillEditorTarget(
+                            plan: nil,
+                            dueItem: nil,
+                            selectedMonth: selectedMonth
+                        )
+                    },
+                    onEditBill: { item in
+                        billEditorTarget = PlanningBillEditorTarget(
+                            plan: storedBills.first(where: { $0.id == item.sourceID }),
+                            dueItem: item,
+                            selectedMonth: selectedMonth
+                        )
+                    },
+                    onAddInstallment: {
+                        installmentEditorTarget = PlanningInstallmentEditorTarget(
+                            plan: nil,
+                            dueItem: nil,
+                            selectedMonth: selectedMonth
+                        )
+                    },
+                    onEditInstallment: { item in
+                        installmentEditorTarget = PlanningInstallmentEditorTarget(
+                            plan: storedInstallments.first(where: { $0.id == item.sourceID }),
+                            dueItem: item,
+                            selectedMonth: selectedMonth
+                        )
+                    }
+                )
             }
         }
+        .sheet(item: $budgetEditorTarget) { target in
+            PlanningBudgetEditorSheet(target: target)
+        }
+        .sheet(item: $goalEditorTarget) { target in
+            PlanningGoalEditorSheet(target: target)
+        }
+        .sheet(item: $billEditorTarget) { target in
+            PlanningBillEditorSheet(target: target)
+        }
+        .sheet(item: $installmentEditorTarget) { target in
+            PlanningInstallmentEditorSheet(target: target)
+        }
+        .sheet(item: $creditCardEditorTarget) { target in
+            PlanningCreditCardEditorSheet(target: target)
+        }
+        .sheet(isPresented: $isMonthPickerPresented) {
+            PlanningMonthPickerSheet(selection: $selectedMonth, calendar: calendar)
+                .presentationDetents([.medium])
+                .presentationDragIndicator(.visible)
+        }
+        .task {
+            try? MistiaBootstrap.seedDefaultCategoriesIfNeeded(modelContext: modelContext)
+        }
+        .environment(\.locale, Locale(identifier: "vi_VN"))
+        .environment(\.calendar, calendar)
     }
+}
 
-    private var budgetContent: some View {
+private struct BudgetTabContent: View {
+    let summary: PlanningBudgetSummarySnapshot
+    let currencyCode: String
+    let rows: [PlanningBudgetRowSnapshot]
+    let referenceDate: Date
+    let onAdd: () -> Void
+    let onEdit: (PlanningBudgetRowSnapshot) -> Void
+
+    var body: some View {
         VStack(spacing: 16) {
-            PlanningSummaryCard(summary: dump.summary, tint: cardTint)
+            PlanningBudgetSummaryCard(summary: summary, currencyCode: currencyCode)
 
-            PlanningSection(title: dump.budgetSectionTitle) {
-                MistiaGlassCard(cornerRadius: 20, tint: cardTint, padding: 0) {
-                    VStack(spacing: 0) {
-                        ForEach(Array(dump.budgets.enumerated()), id: \.element.id) { index, item in
-                            Button { } label: {
-                                PlanningBudgetRow(item: item)
-                                    .padding(.horizontal, 16)
-                                    .padding(.vertical, 14)
-                            }
-                            .buttonStyle(MistiaPressableButtonStyle(cornerRadius: 16))
+            if rows.isEmpty {
+                PlanningEmptyStateCard(
+                    title: "Chưa có ngân sách nào",
+                    message: "Tạo ngân sách theo từng danh mục để theo dõi số tiền đã dùng và số ngày còn lại trong tháng.",
+                    buttonTitle: "Thêm ngân sách",
+                    accent: planningAccentPurple,
+                    symbols: ["banknote.fill", "chart.bar.fill", "bolt.fill", "plus"]
+                ) {
+                    onAdd()
+                }
+            } else {
+                PlanningListCard {
+                    ForEach(Array(rows.enumerated()), id: \.element.id) { index, row in
+                        Button {
+                            onEdit(row)
+                        } label: {
+                            PlanningBudgetRowView(row: row, referenceDate: referenceDate)
+                                .padding(.horizontal, 16)
+                                .padding(.vertical, 14)
+                        }
+                        .buttonStyle(MistiaPressableButtonStyle(cornerRadius: 18))
 
-                            if index < dump.budgets.count - 1 {
-                                Divider()
-                                    .padding(.leading, 58)
-                            }
+                        if index < rows.count - 1 {
+                            Divider()
+                                .padding(.leading, 58)
                         }
                     }
-                }
-            }
 
-            PlanningSection(title: dump.watchSectionTitle) {
-                MistiaGlassCard(cornerRadius: 20, tint: cardTint, padding: 0) {
-                    VStack(spacing: 0) {
-                        ForEach(Array(dump.watchItems.enumerated()), id: \.element.id) { index, item in
-                            Button { } label: {
-                                PlanningWatchRow(item: item)
-                                    .padding(.horizontal, 16)
-                                    .padding(.vertical, 14)
-                            }
-                            .buttonStyle(MistiaPressableButtonStyle(cornerRadius: 16))
+                    Divider()
+                        .padding(.horizontal, 14)
 
-                            if index < dump.watchItems.count - 1 {
-                                Divider()
-                                    .padding(.leading, 58)
-                            }
-                        }
+                    PlanningFooterAddButton(title: "Thêm ngân sách") {
+                        onAdd()
                     }
                 }
             }
@@ -82,252 +361,802 @@ struct PlanningView: View {
     }
 }
 
-private struct PlanningTopTabsBar: View {
-    @Environment(\.colorScheme) private var colorScheme
-    @Binding var selection: PlanningTopMode
-    let tabs: [PlanningTopTabDump]
+private struct GoalsTabContent: View {
+    let summary: PlanningGoalSummarySnapshot
+    let currencyCode: String
+    let rows: [PlanningGoalRowSnapshot]
+    let onAdd: () -> Void
+    let onEdit: (PlanningGoalRowSnapshot) -> Void
 
-    private var mistiaPurple: Color {
+    var body: some View {
+        VStack(spacing: 16) {
+            PlanningGoalSummaryCard(summary: summary, currencyCode: currencyCode)
+
+            if rows.isEmpty {
+                PlanningEmptyStateCard(
+                    title: "Chưa có mục tiêu nào",
+                    message: "Thêm quỹ khẩn cấp, du lịch hay món đồ lớn để theo dõi số tiền cần tích lũy mỗi tháng.",
+                    buttonTitle: "Thêm mục tiêu",
+                    accent: planningAccentPurple,
+                    symbols: ["target", "sparkles", "flag.fill", "plus"]
+                ) {
+                    onAdd()
+                }
+            } else {
+                PlanningListCard {
+                    ForEach(Array(rows.enumerated()), id: \.element.id) { index, row in
+                        Button {
+                            onEdit(row)
+                        } label: {
+                            PlanningGoalRowView(row: row)
+                                .padding(.horizontal, 16)
+                                .padding(.vertical, 14)
+                        }
+                        .buttonStyle(MistiaPressableButtonStyle(cornerRadius: 18))
+
+                        if index < rows.count - 1 {
+                            Divider()
+                                .padding(.leading, 58)
+                        }
+                    }
+
+                    Divider()
+                        .padding(.horizontal, 14)
+
+                    PlanningFooterAddButton(title: "Thêm mục tiêu") {
+                        onAdd()
+                    }
+                }
+            }
+        }
+    }
+}
+
+private struct DueTabContent: View {
+    @Binding var selectedMode: PlanningDueMode
+
+    let summary: PlanningDueSummarySnapshot
+    let currencyCode: String
+    let creditCards: [PlanningCreditCardDueSnapshot]
+    let bills: [PlanningRecurringDueSnapshot]
+    let installments: [PlanningRecurringDueSnapshot]
+    let referenceDate: Date
+    let onAddCreditCard: () -> Void
+    let onEditCreditCard: (PlanningCreditCardDueSnapshot) -> Void
+    let onAddBill: () -> Void
+    let onEditBill: (PlanningRecurringDueSnapshot) -> Void
+    let onAddInstallment: () -> Void
+    let onEditInstallment: (PlanningRecurringDueSnapshot) -> Void
+
+    var body: some View {
+        VStack(spacing: 16) {
+            PlanningDueSummaryCard(summary: summary, currencyCode: currencyCode)
+            PlanningDueModePicker(selection: $selectedMode)
+
+            switch selectedMode {
+            case .creditCards:
+                CreditCardsSection(
+                    items: creditCards,
+                    referenceDate: referenceDate,
+                    onAdd: onAddCreditCard,
+                    onEdit: onEditCreditCard
+                )
+            case .bills:
+                DueRowsSection(
+                    emptyTitle: "Chưa có hóa đơn nào",
+                    emptyMessage: "Thêm tiền Internet, điện nước hoặc hóa đơn định kỳ để lên lịch đến hạn.",
+                    emptySymbols: ["wifi", "bolt.fill", "phone.fill", "plus"],
+                    accent: planningAccentPurple,
+                    items: bills,
+                    addTitle: "Thêm hóa đơn",
+                    referenceDate: referenceDate,
+                    onAdd: onAddBill,
+                    onEdit: onEditBill
+                )
+            case .installments:
+                DueRowsSection(
+                    emptyTitle: "Chưa có khoản trả góp / vay",
+                    emptyMessage: "Thêm các khoản cần trả theo kỳ và tạo giao dịch khi thanh toán trước.",
+                    emptySymbols: ["creditcard.and.123", "building.columns.fill", "banknote.fill", "plus"],
+                    accent: planningAccentPurple,
+                    items: installments,
+                    addTitle: "Thêm trả góp / vay",
+                    referenceDate: referenceDate,
+                    onAdd: onAddInstallment,
+                    onEdit: onEditInstallment
+                )
+            }
+        }
+    }
+}
+
+private struct CreditCardsSection: View {
+    let items: [PlanningCreditCardDueSnapshot]
+    let referenceDate: Date
+    let onAdd: () -> Void
+    let onEdit: (PlanningCreditCardDueSnapshot) -> Void
+
+    private let columns = [GridItem(.flexible(), spacing: 10)]
+
+    var body: some View {
+        if items.isEmpty {
+            PlanningEmptyStateCard(
+                title: "Chưa có thẻ tín dụng",
+                message: "Liên kết hoặc thêm thẻ ngay tại đây để hiển thị credit card và theo dõi ngày thanh toán.",
+                buttonTitle: "Thêm credit card",
+                accent: planningAccentPurple,
+                symbols: ["creditcard.fill", "wave.3.right.circle.fill", "building.columns.fill", "plus"]
+            ) {
+                onAdd()
+            }
+        } else {
+            VStack(spacing: 10) {
+                LazyVGrid(columns: columns, spacing: 10) {
+                    ForEach(items) { item in
+                        Button {
+                            onEdit(item)
+                        } label: {
+                            PlanningCreditCardCard(item: item, referenceDate: referenceDate)
+                        }
+                        .buttonStyle(MistiaPressableButtonStyle(cornerRadius: 24))
+                    }
+                }
+
+                PlanningFooterAddButton(title: "Thêm credit card") {
+                    onAdd()
+                }
+            }
+        }
+    }
+}
+
+private struct DueRowsSection: View {
+    let emptyTitle: String
+    let emptyMessage: String
+    let emptySymbols: [String]
+    let accent: Color
+    let items: [PlanningRecurringDueSnapshot]
+    let addTitle: String
+    let referenceDate: Date
+    let onAdd: () -> Void
+    let onEdit: (PlanningRecurringDueSnapshot) -> Void
+
+    var body: some View {
+        if items.isEmpty {
+            PlanningEmptyStateCard(
+                title: emptyTitle,
+                message: emptyMessage,
+                buttonTitle: addTitle,
+                accent: accent,
+                symbols: emptySymbols
+            ) {
+                onAdd()
+            }
+        } else {
+            PlanningListCard {
+                ForEach(Array(items.enumerated()), id: \.element.id) { index, item in
+                    Button {
+                        onEdit(item)
+                    } label: {
+                        PlanningDueRow(item: item, referenceDate: referenceDate)
+                            .padding(.horizontal, 15)
+                            .padding(.vertical, 12)
+                    }
+                    .buttonStyle(MistiaPressableButtonStyle(cornerRadius: 18))
+
+                    if index < items.count - 1 {
+                        Divider()
+                            .padding(.leading, 54)
+                    }
+                }
+
+                Divider()
+                    .padding(.horizontal, 12)
+
+                PlanningFooterAddButton(title: addTitle) {
+                    onAdd()
+                }
+            }
+        }
+    }
+}
+
+private struct PlanningModePicker: View {
+    @Environment(\.colorScheme) private var colorScheme
+    @Binding var selection: PlanningMode
+
+    private var accent: Color {
         Color(red: 0.43, green: 0.23, blue: 0.76)
     }
 
     var body: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            Group {
-                if #available(iOS 26, *) {
-                    GlassEffectContainer(spacing: 10) {
-                        tabRow
-                    }
-                } else {
-                    tabRow
-                }
-            }
-            .padding(.vertical, 2)
-        }
-    }
-
-    private var tabRow: some View {
-        HStack(spacing: 10) {
-            ForEach(tabs) { tab in
+        HStack(spacing: 8) {
+            ForEach(PlanningMode.allCases) { mode in
                 Button {
-                    selection = mode(for: tab.id)
-                } label: {
-                    HStack(spacing: 7) {
-                        Image(systemName: tab.icon)
-                            .font(.system(size: 12, weight: .bold))
-
-                        Text(tab.title)
-                            .font(.system(size: 12.5, weight: .semibold, design: .rounded))
+                    withAnimation(.snappy) {
+                        selection = mode
                     }
-                    .foregroundStyle(selection == mode(for: tab.id) ? mistiaPurple : chipForeground)
-                    .padding(.horizontal, 13)
-                    .padding(.vertical, 8)
+                } label: {
+                    HStack(spacing: 8) {
+                        Image(systemName: mode.icon)
+                            .font(.system(size: 12.5, weight: .bold))
+                        Text(mode.title)
+                            .font(.system(size: 14, weight: .semibold, design: .rounded))
+                    }
+                    .foregroundStyle(selection == mode ? activeForeground : idleForeground)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 12)
                     .background {
-                        PlanningTopTabSurface(
-                            tint: selection == mode(for: tab.id) ? activeTint : idleTint
-                        )
+                        Capsule()
+                            .fill(Color.clear)
+                            .background {
+                                if #available(iOS 26, *) {
+                                    Capsule()
+                                        .fill(.clear)
+                                        .glassEffect(
+                                            Glass.regular
+                                                .tint(selection == mode ? activeTint : idleTint)
+                                                .interactive(true),
+                                            in: .capsule
+                                        )
+                                } else {
+                                    Capsule()
+                                        .fill(.regularMaterial)
+                                }
+                            }
+                            .overlay {
+                                Capsule()
+                                    .strokeBorder(.white.opacity(colorScheme == .dark ? 0.08 : 0.20), lineWidth: 0.8)
+                            }
                     }
                 }
-                .buttonStyle(MistiaPressableButtonStyle(cornerRadius: 18, tint: mistiaPurple))
+                .buttonStyle(MistiaPressableButtonStyle(cornerRadius: 24, tint: accent))
             }
         }
+        .padding(.horizontal, 18)
+        .padding(.vertical, 2)
+        .padding(.bottom, 10)
+        .background(MistiaBackgroundView(tone: .standard).opacity(0.001))
     }
 
-    private var chipForeground: Color {
-        colorScheme == .dark ? .white.opacity(0.72) : Color(red: 0.39, green: 0.42, blue: 0.5)
+    private var activeForeground: Color {
+        colorScheme == .dark ? .white.opacity(0.98) : accent
+    }
+
+    private var idleForeground: Color {
+        colorScheme == .dark ? .white.opacity(0.72) : Color.black.opacity(0.58)
     }
 
     private var activeTint: Color {
-        colorScheme == .dark ? mistiaPurple.opacity(0.28) : mistiaPurple.opacity(0.16)
+        colorScheme == .dark ? accent.opacity(0.38) : accent.opacity(0.14)
     }
 
     private var idleTint: Color {
-        colorScheme == .dark ? .white.opacity(0.06) : .white.opacity(0.22)
-    }
-
-    private func mode(for rawValue: String) -> PlanningTopMode {
-        PlanningTopMode(rawValue: rawValue) ?? .budget
+        colorScheme == .dark ? .white.opacity(0.05) : .white.opacity(0.16)
     }
 }
 
-private struct PlanningSummaryCard: View {
-    let summary: PlanningSummaryDump
-    let tint: Color
+private struct PlanningDueModePicker: View {
+    @Binding var selection: PlanningDueMode
+
+    private var accent: Color {
+        planningAccentPurple
+    }
 
     var body: some View {
-        MistiaGlassCard(cornerRadius: 20, tint: tint, padding: 18) {
-            VStack(alignment: .leading, spacing: 18) {
-                Text("Tổng ngân sách: \(summary.totalBudget.mistiaCurrency)")
-                    .font(.system(size: 22, weight: .bold, design: .rounded))
-                    .foregroundStyle(.primary)
+        HStack(spacing: 6) {
+            ForEach(PlanningDueMode.allCases) { mode in
+                pickerButton(for: mode)
+            }
+        }
+    }
 
-                HStack {
-                    Spacer()
-                    PlanningProgressRing(progress: summary.progress, label: summary.progressText)
-                    Spacer()
+    @ViewBuilder
+    private func pickerButton(for mode: PlanningDueMode) -> some View {
+        let button = Button {
+            withAnimation(.snappy) {
+                selection = mode
+            }
+        } label: {
+            Text(mode.title)
+                .font(.system(size: 12, weight: .semibold, design: .rounded))
+                .foregroundStyle(selection == mode ? .white : .primary)
+                .frame(maxWidth: .infinity)
+                .lineLimit(1)
+                .minimumScaleFactor(0.8)
+                .padding(.horizontal, 8)
+                .padding(.vertical, 8)
+        }
+        .buttonBorderShape(.capsule)
+        .tint(accent)
+
+        if selection == mode {
+            button.buttonStyle(.glassProminent)
+        } else {
+            button.buttonStyle(.glass)
+        }
+    }
+}
+
+private struct PlanningBudgetSummaryCard: View {
+    @Environment(\.colorScheme) private var colorScheme
+    let summary: PlanningBudgetSummarySnapshot
+    let currencyCode: String
+
+    private var cardTint: Color {
+        colorScheme == .dark ? .white.opacity(0.018) : .white.opacity(0.12)
+    }
+
+    var body: some View {
+        MistiaBlockCard(cornerRadius: 24, tint: cardTint, padding: 18) {
+            VStack(alignment: .leading, spacing: 18) {
+                HStack(alignment: .top, spacing: 18) {
+                    VStack(alignment: .leading, spacing: 10) {
+                        Text("Tổng ngân sách tháng")
+                            .font(.system(size: 14.5, weight: .semibold, design: .rounded))
+                            .foregroundStyle(.secondary)
+
+                        Text(summary.totalBudgetMinor.formattedCurrency(code: currencyCode))
+                            .font(.system(size: 28, weight: .bold, design: .rounded))
+                            .foregroundStyle(.primary)
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.7)
+
+                        PlanningStatusBadge(title: summary.health.title, color: summaryColor)
+                    }
+
+                    Spacer(minLength: 12)
+
+                    PlanningProgressRing(progress: summary.progressClamped, color: ringColor, text: summary.progress.percentText)
                 }
 
-                HStack {
-                    PlanningMetricBlock(
-                        title: "Đã chi:",
-                        value: summary.spent.mistiaCurrency,
-                        tint: Color(red: 0.97, green: 0.43, blue: 0.46)
+                HStack(spacing: 14) {
+                    PlanningMetricColumn(
+                        title: "Đã dùng",
+                        value: summary.spentMinor.formattedCurrency(code: currencyCode),
+                        tint: ringColor
                     )
 
-                    Spacer(minLength: 16)
+                    Divider()
+                        .frame(height: 30)
 
-                    PlanningMetricBlock(
+                    PlanningMetricColumn(
                         title: "Còn lại",
-                        value: summary.remaining.mistiaCurrency,
-                        tint: .mint
+                        value: summary.remainingMinor.formattedCurrency(code: currencyCode),
+                        tint: Color(hex: "#2DAA9E")
                     )
                 }
             }
-            .frame(maxWidth: .infinity)
         }
+    }
+
+    private var summaryColor: Color {
+        switch summary.health {
+        case .stable:
+            Color(hex: "#2DAA9E")
+        case .caution:
+            Color(hex: "#F59B3F")
+        case .exceeded:
+            Color(hex: "#F45C7E")
+        }
+    }
+
+    private var ringColor: Color {
+        if summary.progress >= 0.9 {
+            return Color(hex: "#F45C7E")
+        }
+        if summary.progress >= 0.7 {
+            return Color(hex: "#F59B3F")
+        }
+        return Color(hex: "#2DAA9E")
     }
 }
 
-private struct PlanningProgressRing: View {
+private struct PlanningGoalSummaryCard: View {
     @Environment(\.colorScheme) private var colorScheme
-    let progress: Double
-    let label: String
+    let summary: PlanningGoalSummarySnapshot
+    let currencyCode: String
+
+    private var cardTint: Color {
+        colorScheme == .dark ? .white.opacity(0.018) : .white.opacity(0.12)
+    }
 
     var body: some View {
-        ZStack {
-            Circle()
-                .stroke(colorScheme == .dark ? .white.opacity(0.10) : .black.opacity(0.07), lineWidth: 12)
+        MistiaBlockCard(cornerRadius: 24, tint: cardTint, padding: 18) {
+            VStack(alignment: .leading, spacing: 16) {
+                Text("Mục tiêu đang hoạt động")
+                    .font(.system(size: 14.5, weight: .semibold, design: .rounded))
+                    .foregroundStyle(.secondary)
 
-            Circle()
-                .trim(from: 0, to: progress)
-                .stroke(
-                    AngularGradient(
-                        colors: [
-                            Color(red: 0.54, green: 0.82, blue: 1.0),
-                            .mint,
-                            Color(red: 0.43, green: 0.23, blue: 0.76)
-                        ],
-                        center: .center
-                    ),
-                    style: StrokeStyle(lineWidth: 12, lineCap: .round)
-                )
-                .rotationEffect(.degrees(-90))
+                Text("\(summary.activeCount) mục tiêu")
+                    .font(.system(size: 28, weight: .bold, design: .rounded))
 
-            Text(label)
-                .font(.system(size: 19, weight: .bold, design: .rounded))
-                .foregroundStyle(.primary)
+                HStack(spacing: 14) {
+                    PlanningMetricColumn(
+                        title: "Đã tích lũy",
+                        value: summary.totalSavedMinor.formattedCurrency(code: currencyCode),
+                        tint: Color(hex: "#2DAA9E")
+                    )
+
+                    Divider()
+                        .frame(height: 30)
+
+                    PlanningMetricColumn(
+                        title: "Gần đạt nhất",
+                        value: summary.nearestGoalName ?? "Chưa có",
+                        tint: Color(hex: "#5B7BFF")
+                    )
+                }
+            }
         }
-        .frame(width: 128, height: 128)
     }
 }
 
-private struct PlanningMetricBlock: View {
-    let title: String
-    let value: String
-    let tint: Color
+private struct PlanningDueSummaryCard: View {
+    @Environment(\.colorScheme) private var colorScheme
+    let summary: PlanningDueSummarySnapshot
+    let currencyCode: String
+
+    private var cardTint: Color {
+        colorScheme == .dark ? .white.opacity(0.018) : .white.opacity(0.12)
+    }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 5) {
-            Text(title)
-                .font(.system(size: 14, weight: .semibold, design: .rounded))
-                .foregroundStyle(.secondary)
+        MistiaBlockCard(cornerRadius: 24, tint: cardTint, padding: 18) {
+            VStack(alignment: .leading, spacing: 18) {
+                Text("Tóm tắt đến hạn")
+                    .font(.system(size: 14.5, weight: .semibold, design: .rounded))
+                    .foregroundStyle(.secondary)
 
-            Text(value)
-                .font(.system(size: 18, weight: .bold, design: .rounded))
-                .foregroundStyle(tint)
-                .lineLimit(1)
-                .minimumScaleFactor(0.74)
+                HStack(spacing: 14) {
+                    PlanningMetricColumn(
+                        title: "Sắp đến hạn",
+                        value: "\(summary.upcomingCount)",
+                        tint: Color(hex: "#5B7BFF")
+                    )
+
+                    Divider()
+                        .frame(height: 30)
+
+                    PlanningMetricColumn(
+                        title: "Tổng cần trả",
+                        value: summary.totalDueMinor.formattedCurrency(code: currencyCode),
+                        tint: Color(hex: "#F59B3F")
+                    )
+
+                    Divider()
+                        .frame(height: 30)
+
+                    PlanningMetricColumn(
+                        title: "Quá hạn",
+                        value: "\(summary.overdueCount)",
+                        tint: Color(hex: "#F45C7E")
+                    )
+                }
+            }
         }
     }
 }
 
-private struct PlanningSection<Content: View>: View {
-    @Environment(\.colorScheme) private var colorScheme
-    let title: String
-    @ViewBuilder let content: Content
+private struct PlanningBudgetRowView: View {
+    let row: PlanningBudgetRowSnapshot
+    let referenceDate: Date
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text(title)
-                .font(.system(size: 13, weight: .bold, design: .rounded))
-                .textCase(.uppercase)
-                .tracking(0.6)
-                .foregroundStyle(colorScheme == .dark ? .white.opacity(0.66) : Color(red: 0.36, green: 0.37, blue: 0.43))
-
-            content
-        }
-    }
-}
-
-private struct PlanningBudgetRow: View {
-    let item: PlanningBudgetItemDump
-
-    var body: some View {
-        VStack(spacing: 10) {
             HStack(spacing: 12) {
-                PlanningIconTile(icon: item.icon, accent: item.accent)
+                PlanningIconTile(icon: row.iconSymbolName, color: toneColor)
 
                 VStack(alignment: .leading, spacing: 4) {
-                    Text(item.name)
+                    Text(row.name)
                         .font(.system(size: 17, weight: .semibold, design: .rounded))
-                        .foregroundStyle(.primary)
-
-                    Text("\(item.spent.mistiaCurrency) / \(item.limit.mistiaCurrency)")
+                    Text("\(row.spentMinor.formattedCurrency(code: row.currencyCode)) / \(row.limitMinor.formattedCurrency(code: row.currencyCode))")
                         .font(.system(size: 13, weight: .semibold, design: .rounded))
                         .foregroundStyle(.secondary)
                 }
 
                 Spacer(minLength: 10)
 
-                Text(item.percentText)
+                Text(row.progress.percentText)
                     .font(.system(size: 17, weight: .bold, design: .rounded))
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(toneColor)
             }
 
-            PlanningProgressBar(progress: item.progress, tint: item.accent.color)
+            PlanningProgressBar(progress: row.progressClamped, tint: toneColor)
 
             HStack {
+                PlanningStatusBadge(title: row.health.title, color: toneColor)
                 Spacer()
-                Text(item.daysRemainingText)
-                    .font(.system(size: 13, weight: .semibold, design: .rounded))
+                Text(daysText)
+                    .font(.system(size: 12.5, weight: .semibold, design: .rounded))
                     .foregroundStyle(.secondary)
+            }
+        }
+    }
+
+    private var toneColor: Color {
+        switch row.tone {
+        case .calm:
+            Color(hex: "#2DAA9E")
+        case .warning:
+            Color(hex: "#F59B3F")
+        case .critical:
+            Color(hex: "#F45C7E")
+        }
+    }
+
+    private var daysText: String {
+        row.isPastMonth ? "Tháng đã kết thúc" : "Còn \(row.daysRemaining) ngày"
+    }
+}
+
+private struct PlanningGoalRowView: View {
+    let row: PlanningGoalRowSnapshot
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(spacing: 12) {
+                PlanningIconTile(icon: row.iconSymbolName, color: Color(hex: "#2DAA9E"))
+
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(row.name)
+                        .font(.system(size: 17, weight: .semibold, design: .rounded))
+                    Text("\(row.currentSavedMinor.formattedCurrency(code: row.currencyCode)) / \(row.targetMinor.formattedCurrency(code: row.currencyCode))")
+                        .font(.system(size: 13, weight: .semibold, design: .rounded))
+                        .foregroundStyle(.secondary)
+                }
+
+                Spacer()
+            }
+
+            PlanningProgressBar(progress: row.progressClamped, tint: Color(hex: "#2DAA9E"))
+
+            HStack {
+                Text(row.targetDate.shortDisplayText)
+                    .font(.system(size: 12.5, weight: .semibold, design: .rounded))
+                    .foregroundStyle(.secondary)
+                Spacer()
+                Text("Cần thêm \(row.monthlyRequiredMinor.formattedCurrency(code: row.currencyCode))/tháng")
+                    .font(.system(size: 12.5, weight: .semibold, design: .rounded))
+                    .foregroundStyle(Color(hex: "#5B7BFF"))
+                    .multilineTextAlignment(.trailing)
             }
         }
     }
 }
 
-private struct PlanningWatchRow: View {
-    let item: PlanningWatchItemDump
+private struct PlanningDueRow: View {
+    let item: PlanningRecurringDueSnapshot
+    let referenceDate: Date
 
     var body: some View {
-        VStack(spacing: 10) {
+        VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 12) {
-                PlanningIconTile(icon: item.icon, accent: item.accent)
+                PlanningIconTile(icon: item.iconSymbolName, color: tone.color)
 
                 VStack(alignment: .leading, spacing: 4) {
                     Text(item.name)
                         .font(.system(size: 17, weight: .semibold, design: .rounded))
-                        .foregroundStyle(.primary)
-
-                    Text("\(item.spent.mistiaCurrency) / \(item.limit.mistiaCurrency)")
+                    Text(amountText)
                         .font(.system(size: 13, weight: .semibold, design: .rounded))
                         .foregroundStyle(.secondary)
                 }
 
                 Spacer(minLength: 10)
 
-                VStack(alignment: .trailing, spacing: 4) {
-                    Text(item.trailingAmount.mistiaCurrency)
-                        .font(.system(size: 18, weight: .bold, design: .rounded))
-                        .foregroundStyle(item.tone.color)
-
-                    Text(item.statusText)
-                        .font(.system(size: 12, weight: .bold, design: .rounded))
-                        .foregroundStyle(item.tone.color)
-                }
+                PlanningStatusBadge(title: statusText, color: tone.color)
             }
 
-            PlanningProgressBar(progress: item.progress, tint: item.tone.color)
+            HStack {
+                Text(item.dueDate.shortDisplayText)
+                    .font(.system(size: 12.5, weight: .semibold, design: .rounded))
+                    .foregroundStyle(.secondary)
+
+                Spacer()
+
+                Text(dueDetailText)
+                    .font(.system(size: 12.5, weight: .semibold, design: .rounded))
+                    .foregroundStyle(tone.color)
+            }
+        }
+    }
+
+    private var tone: PlanningDueRowTone {
+        item.tone(referenceDate: referenceDate)
+    }
+
+    private var amountText: String {
+        if let amount = item.amountMinor {
+            return amount.formattedCurrency(code: item.currencyCode)
+        }
+        return "Chưa nhập số tiền"
+    }
+
+    private var statusText: String {
+        switch item.status {
+        case .paid:
+            "Đã thanh toán"
+        case .pending:
+            switch item.sourceKind {
+            case .recurringBill:
+                "Hóa đơn"
+            case .installment:
+                "Trả góp / vay"
+            case .creditCard:
+                "Đến hạn"
+            }
+        }
+    }
+
+    private var dueDetailText: String {
+        if item.status == .paid {
+            return "Hoàn tất"
+        }
+
+        let dayDelta = Calendar.current.dateComponents(
+            [.day],
+            from: Calendar.current.startOfDay(for: referenceDate),
+            to: Calendar.current.startOfDay(for: item.dueDate)
+        ).day ?? 0
+
+        if dayDelta < 0 {
+            return "Quá hạn \(-dayDelta) ngày"
+        }
+        if dayDelta == 0 {
+            return "Đến hạn hôm nay"
+        }
+        return "Còn \(dayDelta) ngày"
+    }
+}
+
+private struct PlanningCreditCardCard: View {
+    let item: PlanningCreditCardDueSnapshot
+    let referenceDate: Date
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Text(item.network.title.uppercased())
+                    .font(.system(size: 11.5, weight: .bold, design: .rounded))
+                    .foregroundStyle(.white.opacity(0.9))
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 6)
+                    .background(.white.opacity(0.14), in: Capsule())
+
+                Spacer()
+
+                Text(maskedLast4)
+                    .font(.system(size: 14, weight: .semibold, design: .rounded))
+                    .foregroundStyle(.white.opacity(0.78))
+            }
+
+            Spacer(minLength: 4)
+
+            VStack(alignment: .leading, spacing: 5) {
+                Text(item.walletName)
+                    .font(.system(size: 17, weight: .bold, design: .rounded))
+                    .foregroundStyle(.white)
+
+                Text(amountText)
+                    .font(.system(size: 22, weight: .bold, design: .rounded))
+                    .foregroundStyle(.white)
+            }
+
+            HStack {
+                VStack(alignment: .leading, spacing: 3) {
+                    Text("Ngày đến hạn")
+                        .font(.system(size: 11.5, weight: .semibold, design: .rounded))
+                        .foregroundStyle(.white.opacity(0.65))
+                    Text(item.dueDate.shortDisplayText)
+                        .font(.system(size: 13.5, weight: .semibold, design: .rounded))
+                        .foregroundStyle(.white.opacity(0.92))
+                }
+
+                Spacer()
+
+                PlanningStatusBadge(title: badgeTitle, color: item.tone(referenceDate: referenceDate).color)
+            }
+        }
+        .padding(15)
+        .frame(maxWidth: .infinity, minHeight: 168, alignment: .leading)
+        .background {
+            RoundedRectangle(cornerRadius: 24, style: .continuous)
+                .fill(
+                    LinearGradient(
+                        colors: [
+                            Color(hex: "#24305F"),
+                            Color(hex: "#1C2241"),
+                            item.tone(referenceDate: referenceDate).color.opacity(0.78)
+                        ],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
+                )
+                .overlay {
+                    RoundedRectangle(cornerRadius: 24, style: .continuous)
+                        .strokeBorder(.white.opacity(0.12), lineWidth: 0.8)
+                }
+        }
+    }
+
+    private var maskedLast4: String {
+        "•••• \(item.last4)"
+    }
+
+    private var amountText: String {
+        item.amountMinor > 0 ? item.amountMinor.formattedCurrency(code: item.currencyCode) : "Không dư nợ"
+    }
+
+    private var badgeTitle: String {
+        if item.status == .paid {
+            return "Đã thanh toán"
+        }
+        if item.amountMinor <= 0 {
+            return "Ổn"
+        }
+        return "Đang nợ"
+    }
+}
+
+private struct PlanningListCard<Content: View>: View {
+    @Environment(\.colorScheme) private var colorScheme
+    @ViewBuilder let content: Content
+
+    private var cardTint: Color {
+        colorScheme == .dark ? .white.opacity(0.018) : .white.opacity(0.12)
+    }
+
+    var body: some View {
+        MistiaBlockCard(
+            cornerRadius: 22,
+            tint: cardTint,
+            padding: 0
+        ) {
+            VStack(spacing: 0) {
+                content
+            }
+        }
+    }
+}
+
+private struct PlanningFooterAddButton: View {
+    let title: String
+    let action: () -> Void
+
+    var body: some View {
+        MistiaFooterAddButton(title: title, accent: planningAccentPurple, action: action)
+            .padding(.horizontal, 14)
+            .padding(.vertical, 14)
+    }
+}
+
+private struct PlanningEmptyStateCard: View {
+    @Environment(\.colorScheme) private var colorScheme
+    let title: String
+    let message: String
+    let buttonTitle: String
+    let accent: Color
+    let symbols: [String]
+    let action: () -> Void
+
+    private var cardTint: Color {
+        colorScheme == .dark ? .white.opacity(0.018) : .white.opacity(0.12)
+    }
+
+    var body: some View {
+        MistiaBlockCard(
+            cornerRadius: 24,
+            tint: cardTint,
+            padding: 0
+        ) {
+            MistiaEmptyStateContent(
+                title: title,
+                message: message,
+                buttonTitle: buttonTitle,
+                accent: accent,
+                symbols: symbols,
+                action: action
+            )
         }
     }
 }
@@ -344,95 +1173,212 @@ private struct PlanningProgressBar: View {
                     .fill(colorScheme == .dark ? .white.opacity(0.08) : .black.opacity(0.06))
 
                 Capsule()
-                    .fill(tint.opacity(colorScheme == .dark ? 0.9 : 0.78))
-                    .frame(width: max(proxy.size.width * progress, 18))
+                    .fill(tint.opacity(colorScheme == .dark ? 0.94 : 0.82))
+                    .frame(width: max(proxy.size.width * progress, progress > 0 ? 18 : 0))
             }
         }
         .frame(height: 10)
     }
 }
 
-private struct PlanningIconTile: View {
-    let icon: String
-    let accent: MistiaAccent
+private struct PlanningProgressRing: View {
+    @Environment(\.colorScheme) private var colorScheme
+    let progress: Double
+    let color: Color
+    let text: String
 
     var body: some View {
         ZStack {
-            RoundedRectangle(cornerRadius: 10, style: .continuous)
-                .fill(accent.color.opacity(0.14))
+            Circle()
+                .stroke(colorScheme == .dark ? .white.opacity(0.10) : .black.opacity(0.06), lineWidth: 12)
 
-            Image(systemName: icon)
-                .font(.system(size: 13, weight: .bold))
-                .foregroundStyle(accent.color)
+            Circle()
+                .trim(from: 0, to: progress)
+                .stroke(
+                    AngularGradient(
+                        colors: [color.opacity(0.35), color],
+                        center: .center
+                    ),
+                    style: StrokeStyle(lineWidth: 12, lineCap: .round)
+                )
+                .rotationEffect(.degrees(-90))
+
+            Text(text)
+                .font(.system(size: 19, weight: .bold, design: .rounded))
         }
-        .frame(width: 30, height: 30)
+        .frame(width: 112, height: 112)
     }
 }
 
-private struct PlanningPlaceholderCard: View {
-    @Environment(\.colorScheme) private var colorScheme
-    let placeholder: PlanningPlaceholderDump
-
-    var body: some View {
-        MistiaGlassCard(
-            cornerRadius: 20,
-            tint: colorScheme == .dark ? .white.opacity(0.022) : .white.opacity(0.14)
-        ) {
-            VStack(spacing: 16) {
-                ZStack {
-                    MistiaCircleGlassBackground(
-                        tint: Color(red: 0.43, green: 0.23, blue: 0.76).opacity(colorScheme == .dark ? 0.20 : 0.12),
-                        interactive: false
-                    )
-
-                    Image(systemName: placeholder.icon)
-                        .font(.system(size: 24, weight: .bold))
-                        .foregroundStyle(Color(red: 0.43, green: 0.23, blue: 0.76))
-                }
-                .frame(width: 72, height: 72)
-
-                Text(placeholder.title)
-                    .font(.system(size: 24, weight: .bold, design: .rounded))
-
-                Text(placeholder.message)
-                    .multilineTextAlignment(.center)
-                    .font(.system(size: 15, weight: .medium, design: .rounded))
-                    .foregroundStyle(.secondary)
-            }
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, 14)
-        }
-    }
-}
-
-private struct PlanningTopTabSurface: View {
-    @Environment(\.colorScheme) private var colorScheme
+private struct PlanningMetricColumn: View {
+    let title: String
+    let value: String
     let tint: Color
 
     var body: some View {
-        Capsule()
-            .fill(Color.clear)
-            .background {
-                if #available(iOS 26, *) {
-                    Capsule()
-                        .fill(.clear)
-                        .glassEffect(
-                            Glass.regular
-                                .tint(tint)
-                                .interactive(true),
-                            in: .capsule
-                        )
-                } else {
-                    Capsule()
-                        .fill(.regularMaterial)
+        VStack(alignment: .leading, spacing: 5) {
+            Text(title)
+                .font(.system(size: 11.5, weight: .semibold, design: .rounded))
+                .foregroundStyle(.secondary)
+
+            Text(value)
+                .font(.system(size: 14.5, weight: .bold, design: .rounded))
+                .foregroundStyle(tint)
+                .lineLimit(2)
+                .minimumScaleFactor(0.7)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+}
+
+private struct PlanningStatusBadge: View {
+    let title: String
+    let color: Color
+
+    var body: some View {
+        Text(title)
+            .font(.system(size: 11.5, weight: .bold, design: .rounded))
+            .foregroundStyle(color)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 6)
+            .background(color.opacity(0.14), in: Capsule())
+    }
+}
+
+private struct PlanningIconTile: View {
+    let icon: String
+    let color: Color
+
+    var body: some View {
+        ZStack {
+            RoundedRectangle(cornerRadius: 11, style: .continuous)
+                .fill(color.opacity(0.14))
+
+            Image(systemName: icon)
+                .font(.system(size: 13, weight: .bold))
+                .foregroundStyle(color)
+        }
+        .frame(width: 32, height: 32)
+    }
+}
+
+private struct PlanningMonthPickerSheet: View {
+    @Environment(\.dismiss) private var dismiss
+    @Binding var selection: Date
+
+    let calendar: Calendar
+
+    @State private var draftMonth: Int
+    @State private var draftYear: Int
+
+    init(selection: Binding<Date>, calendar: Calendar) {
+        _selection = selection
+        self.calendar = calendar
+        let initialDate = selection.wrappedValue
+        _draftMonth = State(initialValue: calendar.component(.month, from: initialDate))
+        _draftYear = State(initialValue: calendar.component(.year, from: initialDate))
+    }
+
+    var body: some View {
+        NavigationStack {
+            VStack(spacing: 18) {
+                HStack(spacing: 0) {
+                    Picker("Tháng", selection: $draftMonth) {
+                        ForEach(Array(calendar.standaloneMonthSymbols.enumerated()), id: \.offset) { index, monthName in
+                            Text(monthName.capitalized).tag(index + 1)
+                        }
+                    }
+                    .pickerStyle(.wheel)
+                    .frame(maxWidth: .infinity)
+
+                    Picker("Năm", selection: $draftYear) {
+                        ForEach(yearOptions, id: \.self) { year in
+                            Text("\(year)").tag(year)
+                        }
+                    }
+                    .pickerStyle(.wheel)
+                    .frame(maxWidth: .infinity)
+                }
+                .frame(height: 220)
+
+                Text(previewTitle)
+                    .font(.system(size: 14.5, weight: .semibold, design: .rounded))
+                    .foregroundStyle(.secondary)
+            }
+            .padding(20)
+            .navigationTitle("Chọn tháng")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    Button {
+                        dismiss()
+                    } label: {
+                        Image(systemName: "xmark")
+                            .font(.system(size: 16, weight: .semibold))
+                            .foregroundStyle(.secondary)
+                    }
+                }
+
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button {
+                        applySelection()
+                    } label: {
+                        Image(systemName: "checkmark")
+                            .font(.system(size: 14, weight: .bold))
+                            .foregroundStyle(Color(red: 0.88, green: 0.78, blue: 1.0))
+                            .frame(width: 30, height: 30)
+                    }
+                    .buttonStyle(.glassProminent)
+                    .buttonBorderShape(.circle)
+                    .tint(planningAccentPurple)
                 }
             }
-            .overlay {
-                Capsule()
-                    .strokeBorder(
-                        .white.opacity(colorScheme == .dark ? 0.10 : 0.28),
-                        lineWidth: 0.8
-                    )
-            }
+        }
+    }
+
+    private var yearOptions: [Int] {
+        let currentYear = calendar.component(.year, from: .now)
+        let lowerBound = min(currentYear - 10, draftYear - 2)
+        let upperBound = max(currentYear + 10, draftYear + 10)
+        return Array(lowerBound...upperBound)
+    }
+
+    private var previewTitle: String {
+        guard let date = calendar.date(from: DateComponents(year: draftYear, month: draftMonth, day: 1)) else {
+            return ""
+        }
+        return date.monthDisplayText(calendar: calendar)
+    }
+
+    private func applySelection() {
+        guard let date = calendar.date(from: DateComponents(year: draftYear, month: draftMonth, day: 1)) else {
+            return
+        }
+
+        selection = PlanningLogic.startOfMonth(for: date, calendar: calendar)
+        dismiss()
+    }
+}
+
+private extension Date {
+    func monthDisplayText(calendar: Calendar) -> String {
+        let formatter = DateFormatter()
+        formatter.calendar = calendar
+        formatter.locale = Locale(identifier: "vi_VN")
+        formatter.dateFormat = "'Tháng' M/yyyy"
+        return formatter.string(from: self)
+    }
+
+    var shortDisplayText: String {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "vi_VN")
+        formatter.dateFormat = "dd/MM"
+        return formatter.string(from: self)
+    }
+}
+
+private extension Double {
+    var percentText: String {
+        "\(Int((self * 100).rounded()))%"
     }
 }

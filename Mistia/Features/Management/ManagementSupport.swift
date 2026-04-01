@@ -7,6 +7,24 @@ struct ManagementCategorySeed {
     let kind: TransactionCategoryKind
     let iconSymbolName: String
     let iconColorHex: String
+    let systemKey: MistiaSystemCategoryKey?
+    let startsArchived: Bool
+
+    init(
+        name: String,
+        kind: TransactionCategoryKind,
+        iconSymbolName: String,
+        iconColorHex: String,
+        systemKey: MistiaSystemCategoryKey? = nil,
+        startsArchived: Bool = false
+    ) {
+        self.name = name
+        self.kind = kind
+        self.iconSymbolName = iconSymbolName
+        self.iconColorHex = iconColorHex
+        self.systemKey = systemKey
+        self.startsArchived = startsArchived
+    }
 }
 
 struct JapaneseBankPreset: Identifiable, Hashable {
@@ -65,34 +83,6 @@ enum ManagementDataActionKind: String, Identifiable, CaseIterable {
 }
 
 enum ManagementPresetData {
-    static let iconSymbols: [String] = [
-        "banknote.fill",
-        "wallet.pass.fill",
-        "building.columns.fill",
-        "creditcard.fill",
-        "car.fill",
-        "fork.knife",
-        "bag.fill",
-        "airplane",
-        "house.fill",
-        "bolt.fill",
-        "cross.case.fill",
-        "briefcase.fill",
-        "gift.fill",
-        "heart.fill",
-        "storefront.fill",
-        "chart.line.uptrend.xyaxis",
-        "party.popper.fill",
-        "figure.walk",
-        "tram.fill",
-        "cart.fill",
-        "film.fill",
-        "book.fill",
-        "graduationcap.fill",
-        "gamecontroller.fill",
-        "sparkles"
-    ]
-
     static let japaneseBanks: [JapaneseBankPreset] = [
         JapaneseBankPreset(key: "mufg", name: "MUFG Bank"),
         JapaneseBankPreset(key: "smbc", name: "SMBC"),
@@ -114,8 +104,9 @@ enum ManagementPresetData {
         ManagementCategorySeed(name: "Mua sắm", kind: .expense, iconSymbolName: "bag.fill", iconColorHex: "#FF7E67"),
         ManagementCategorySeed(name: "Di chuyển", kind: .expense, iconSymbolName: "train.side.front.car", iconColorHex: "#2DAA9E"),
         ManagementCategorySeed(name: "Nhà ở", kind: .expense, iconSymbolName: "house.fill", iconColorHex: "#7C85A3"),
-        ManagementCategorySeed(name: "Hóa đơn", kind: .expense, iconSymbolName: "bolt.fill", iconColorHex: "#FFB13B"),
+        ManagementCategorySeed(name: "Hóa đơn", kind: .expense, iconSymbolName: "bolt.fill", iconColorHex: "#FFB13B", systemKey: .billing),
         ManagementCategorySeed(name: "Sức khỏe", kind: .expense, iconSymbolName: "cross.case.fill", iconColorHex: "#F45C7E"),
+        ManagementCategorySeed(name: "Trả góp / vay", kind: .expense, iconSymbolName: "creditcard.and.123", iconColorHex: "#7C85A3", systemKey: .loanRepayment, startsArchived: true),
         ManagementCategorySeed(name: "Lương", kind: .income, iconSymbolName: "briefcase.fill", iconColorHex: "#2DAA9E"),
         ManagementCategorySeed(name: "Thưởng", kind: .income, iconSymbolName: "gift.fill", iconColorHex: "#F59B3F"),
         ManagementCategorySeed(name: "Freelance", kind: .income, iconSymbolName: "laptopcomputer", iconColorHex: "#5B7BFF"),

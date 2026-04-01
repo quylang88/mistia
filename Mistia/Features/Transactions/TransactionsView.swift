@@ -374,12 +374,18 @@ struct TransactionsView: View {
 }
 
 private struct TransactionLiveSummaryCard: View {
+    @Environment(\.colorScheme) private var colorScheme
     let summary: TransactionSummarySnapshot
 
+    private var cardTint: Color {
+        colorScheme == .dark ? .white.opacity(0.018) : .white.opacity(0.12)
+    }
+
     var body: some View {
-        MistiaGlassCard(
+        MistiaBlockCard(
             cornerRadius: 24,
-            tint: Color.white.opacity(0.12)
+            tint: cardTint,
+            padding: 18
         ) {
             HStack(alignment: .top, spacing: 14) {
                 TransactionSummaryMetric(
@@ -433,9 +439,14 @@ private struct TransactionSummaryMetric: View {
 }
 
 private struct TransactionSectionCard: View {
+    @Environment(\.colorScheme) private var colorScheme
     let section: TransactionSectionSnapshot
     let transactionsByID: [UUID: LedgerTransaction]
     let onSelect: (LedgerTransaction) -> Void
+
+    private var cardTint: Color {
+        colorScheme == .dark ? .white.opacity(0.018) : .white.opacity(0.12)
+    }
 
     var body: some View {
         VStack(spacing: 10) {
@@ -451,9 +462,9 @@ private struct TransactionSectionCard: View {
                     .foregroundStyle(.secondary)
             }
 
-            MistiaGlassCard(
+            MistiaBlockCard(
                 cornerRadius: 22,
-                tint: Color.white.opacity(0.10),
+                tint: cardTint,
                 padding: 0
             ) {
                 VStack(spacing: 0) {
@@ -704,7 +715,7 @@ private struct OutstandingDebtChip: View {
     }
 
     var body: some View {
-        MistiaGlassCard(cornerRadius: 22, tint: tint.opacity(0.14), padding: 14) {
+        MistiaBlockCard(cornerRadius: 22, tint: tint.opacity(0.14), padding: 14) {
             VStack(alignment: .leading, spacing: 6) {
                 Text(position.displayName)
                     .font(.system(size: 15, weight: .bold, design: .rounded))
@@ -739,8 +750,12 @@ private struct TransactionsPlaceholderCard: View {
         colorScheme == .dark ? 0.24 : 0.10
     }
 
+    private var cardTint: Color {
+        colorScheme == .dark ? .white.opacity(0.018) : .white.opacity(0.12)
+    }
+
     var body: some View {
-        MistiaGlassCard(cornerRadius: 24, tint: Color.white.opacity(0.10)) {
+        MistiaBlockCard(cornerRadius: 24, tint: cardTint, padding: 14) {
             VStack(spacing: 16) {
                 HStack(spacing: 10) {
                     ForEach(Array(symbols.enumerated()), id: \.offset) { index, symbol in
