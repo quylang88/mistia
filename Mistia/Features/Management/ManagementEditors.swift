@@ -3,8 +3,8 @@ import SwiftUI
 
 struct ManagementWalletEditorTarget: Identifiable {
     let id = UUID()
-    let wallet: LedgerAccount?
-    let defaultKind: LedgerAccountKind
+    let wallet: LedgerWallet?
+    let defaultKind: LedgerWalletKind
 }
 
 struct ManagementCategoryEditorTarget: Identifiable {
@@ -16,8 +16,8 @@ struct ManagementCategoryEditorTarget: Identifiable {
 struct ManagementWalletEditorSheet: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
-    @Query(sort: [SortDescriptor(\LedgerAccount.sortOrder), SortDescriptor(\LedgerAccount.createdAt)])
-    private var storedWallets: [LedgerAccount]
+    @Query(sort: [SortDescriptor(\LedgerWallet.sortOrder), SortDescriptor(\LedgerWallet.createdAt)])
+    private var storedWallets: [LedgerWallet]
 
     let target: ManagementWalletEditorTarget
 
@@ -67,7 +67,7 @@ struct ManagementWalletEditorSheet: View {
                     TextField("Tên ví", text: $draft.name)
 
                     Picker("Loại ví", selection: $draft.kind) {
-                        ForEach(LedgerAccountKind.allCases) { kind in
+                        ForEach(LedgerWalletKind.allCases) { kind in
                             Text(kind.title).tag(kind)
                         }
                     }
@@ -249,7 +249,7 @@ struct ManagementWalletEditorSheet: View {
         }
     }
 
-    private var paymentSourceWallets: [LedgerAccount] {
+    private var paymentSourceWallets: [LedgerWallet] {
         storedWallets
             .filter { wallet in
                 !wallet.isArchived
@@ -291,7 +291,7 @@ struct ManagementWalletEditorSheet: View {
 
             updateCreditCardProfile(for: existingWallet, now: now)
         } else {
-            let newWallet = LedgerAccount(
+            let newWallet = LedgerWallet(
                 name: trimmedName,
                 kind: draft.kind,
                 iconSymbolName: draft.iconSymbolName,
@@ -315,7 +315,7 @@ struct ManagementWalletEditorSheet: View {
         }
     }
 
-    private func updateCreditCardProfile(for wallet: LedgerAccount, now: Date) {
+    private func updateCreditCardProfile(for wallet: LedgerWallet, now: Date) {
         guard draft.kind == .creditCard else {
             if let profile = wallet.creditCardProfile {
                 wallet.creditCardProfile = nil
@@ -778,7 +778,7 @@ private struct ManagementEditorIconPreview: View {
 
 private struct WalletDraft {
     var name: String
-    var kind: LedgerAccountKind
+    var kind: LedgerWalletKind
     var iconSymbolName: String
     var iconColorHex: String
     var currencyCode: String
@@ -795,7 +795,7 @@ private struct WalletDraft {
     var paymentSourceWalletID: UUID?
     var iconWasCustomized: Bool
 
-    init(wallet: LedgerAccount?, defaultKind: LedgerAccountKind) {
+    init(wallet: LedgerWallet?, defaultKind: LedgerWalletKind) {
         if let wallet {
             let profile = wallet.creditCardProfile
             let matchesDefaultIcon = wallet.iconSymbolName == wallet.kind.defaultIconSymbolName
@@ -847,7 +847,7 @@ private struct WalletDraft {
         creditLimitText.currencyInputToMinorUnits(currencyCode: currencyCode)
     }
 
-    mutating func handleKindChange(from oldValue: LedgerAccountKind, to newValue: LedgerAccountKind) {
+    mutating func handleKindChange(from oldValue: LedgerWalletKind, to newValue: LedgerWalletKind) {
         guard oldValue != newValue else { return }
 
         if !iconWasCustomized {

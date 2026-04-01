@@ -321,9 +321,9 @@ final class TransactionLogicTests: XCTestCase {
         amountMinor: Int64,
         occurredAt: Date,
         sourceWalletID: UUID? = nil,
-        sourceWalletKind: LedgerAccountKind? = nil,
+        sourceWalletKind: LedgerWalletKind? = nil,
         destinationWalletID: UUID? = nil,
-        destinationWalletKind: LedgerAccountKind? = nil,
+        destinationWalletKind: LedgerWalletKind? = nil,
         categoryID: UUID? = nil,
         counterpartyName: String? = nil
     ) -> TransactionRecordSnapshot {

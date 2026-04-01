@@ -15,12 +15,11 @@ enum MistiaDataStack {
         } catch {
             // Fallback for development: wipe and recreate
             do {
-                if let url = configuration.url {
-                    try? FileManager.default.removeItem(at: url)
-                }
+                try ModelContainer(for: schema, configurations: ModelConfiguration(isStoredInMemoryOnly: false)).mainContext.container.deleteAllData()
             } catch {}
-            let config = ModelConfiguration(schema: schema, isStoredInMemoryOnly: false)
-            return try! ModelContainer(for: schema, configurations: [config])
+            return try! ModelContainer(
+                for: schema, configurations: [configuration]
+            )
         }
     }()
 }

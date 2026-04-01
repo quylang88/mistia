@@ -127,7 +127,7 @@ enum ManagementPresetData {
     ]
 }
 
-extension LedgerAccount {
+extension LedgerWallet {
     var iconColor: Color {
         Color(hex: iconColorHex)
     }

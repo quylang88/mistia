@@ -2,7 +2,7 @@ import Foundation
 import SwiftData
 
 @Model
-final class LedgerAccount {
+final class LedgerWallet {
     @Attribute(.unique) var id: UUID
     var name: String
     var kindRawValue: String
@@ -21,7 +21,7 @@ final class LedgerAccount {
     init(
         id: UUID = UUID(),
         name: String,
-        kind: LedgerAccountKind,
+        kind: LedgerWalletKind,
         iconSymbolName: String,
         iconColorHex: String,
         currencyCode: String = "JPY",
@@ -48,8 +48,8 @@ final class LedgerAccount {
         self.updatedAt = updatedAt
     }
 
-    var kind: LedgerAccountKind {
-        get { LedgerAccountKind(rawValue: kindRawValue) ?? .cash }
+    var kind: LedgerWalletKind {
+        get { LedgerWalletKind(rawValue: kindRawValue) ?? .cash }
         set { kindRawValue = newValue.rawValue }
     }
 }
@@ -66,8 +66,8 @@ final class CreditCardProfile {
     var notes: String?
     var createdAt: Date
     var updatedAt: Date
-    var wallet: LedgerAccount?
-    var paymentSourceWallet: LedgerAccount?
+    var wallet: LedgerWallet?
+    var paymentSourceWallet: LedgerWallet?
 
     init(
         id: UUID = UUID(),
@@ -80,8 +80,8 @@ final class CreditCardProfile {
         notes: String? = nil,
         createdAt: Date = .now,
         updatedAt: Date = .now,
-        wallet: LedgerAccount? = nil,
-        paymentSourceWallet: LedgerAccount? = nil
+        wallet: LedgerWallet? = nil,
+        paymentSourceWallet: LedgerWallet? = nil
     ) {
         self.id = id
         self.issuerName = issuerName
@@ -162,8 +162,8 @@ final class LedgerTransaction {
     var counterpartyName: String?
     var normalizedCounterpartyKey: String?
 
-    @Relationship(deleteRule: .nullify) var sourceWallet: LedgerAccount?
-    @Relationship(deleteRule: .nullify) var destinationWallet: LedgerAccount?
+    @Relationship(deleteRule: .nullify) var sourceWallet: LedgerWallet?
+    @Relationship(deleteRule: .nullify) var destinationWallet: LedgerWallet?
     @Relationship(deleteRule: .nullify) var category: TransactionCategory?
 
     init(
@@ -178,8 +178,8 @@ final class LedgerTransaction {
         occurredAt: Date = .now,
         createdAt: Date = .now,
         updatedAt: Date = .now,
-        sourceWallet: LedgerAccount? = nil,
-        destinationWallet: LedgerAccount? = nil,
+        sourceWallet: LedgerWallet? = nil,
+        destinationWallet: LedgerWallet? = nil,
         category: TransactionCategory? = nil,
         counterpartyName: String? = nil,
         normalizedCounterpartyKey: String? = nil

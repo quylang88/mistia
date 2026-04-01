@@ -30,8 +30,8 @@ struct TransactionEditorSheet: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(\.colorScheme) private var colorScheme
 
-    @Query(sort: [SortDescriptor(\LedgerAccount.sortOrder), SortDescriptor(\LedgerAccount.createdAt)])
-    private var storedWallets: [LedgerAccount]
+    @Query(sort: [SortDescriptor(\LedgerWallet.sortOrder), SortDescriptor(\LedgerWallet.createdAt)])
+    private var storedWallets: [LedgerWallet]
     @Query(sort: [SortDescriptor(\TransactionCategory.sortOrder), SortDescriptor(\TransactionCategory.createdAt)])
     private var storedCategories: [TransactionCategory]
 
@@ -336,7 +336,7 @@ struct TransactionEditorSheet: View {
         }
     }
 
-    private var availableWallets: [LedgerAccount] {
+    private var availableWallets: [LedgerWallet] {
         let preferredID = target.transaction?.sourceWallet?.id ?? target.transaction?.destinationWallet?.id
 
         return storedWallets
@@ -363,11 +363,11 @@ struct TransactionEditorSheet: View {
             }
     }
 
-    private var selectedSourceWallet: LedgerAccount? {
+    private var selectedSourceWallet: LedgerWallet? {
         availableWallets.first(where: { $0.id == draft.sourceWalletID })
     }
 
-    private var selectedDestinationWallet: LedgerAccount? {
+    private var selectedDestinationWallet: LedgerWallet? {
         availableWallets.first(where: { $0.id == draft.destinationWalletID })
     }
 

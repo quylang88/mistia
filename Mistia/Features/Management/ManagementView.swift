@@ -21,8 +21,8 @@ struct ManagementView: View {
 
     @AppStorage(MistiaAppStorageKey.hideQuickCreate) private var hideQuickCreate = false
 
-    @Query(sort: [SortDescriptor(\LedgerAccount.sortOrder), SortDescriptor(\LedgerAccount.createdAt)])
-    private var storedWallets: [LedgerAccount]
+    @Query(sort: [SortDescriptor(\LedgerWallet.sortOrder), SortDescriptor(\LedgerWallet.createdAt)])
+    private var storedWallets: [LedgerWallet]
     @Query(sort: [SortDescriptor(\TransactionCategory.createdAt), SortDescriptor(\TransactionCategory.sortOrder)])
     private var storedCategories: [TransactionCategory]
 
@@ -45,7 +45,7 @@ struct ManagementView: View {
         Color(red: 0.43, green: 0.23, blue: 0.76)
     }
 
-    private var activeWallets: [LedgerAccount] {
+    private var activeWallets: [LedgerWallet] {
         storedWallets
             .filter { !$0.isArchived }
             .sorted {
@@ -288,7 +288,7 @@ struct ManagementView: View {
 
     private func deleteAllManagementData() {
         do {
-            let wallets = try modelContext.fetch(FetchDescriptor<LedgerAccount>())
+            let wallets = try modelContext.fetch(FetchDescriptor<LedgerWallet>())
             let categories = try modelContext.fetch(FetchDescriptor<TransactionCategory>())
             let creditProfiles = try modelContext.fetch(FetchDescriptor<CreditCardProfile>())
             let transactions = try modelContext.fetch(FetchDescriptor<LedgerTransaction>())
@@ -460,7 +460,7 @@ private struct ManagementSignedOutCard: View {
 }
 
 private struct ManagementWalletRow: View {
-    let wallet: LedgerAccount
+    let wallet: LedgerWallet
     let action: () -> Void
 
     var body: some View {

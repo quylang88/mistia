@@ -46,8 +46,8 @@ struct TransactionsView: View {
 
     @Query(sort: [SortDescriptor(\LedgerTransaction.occurredAt, order: .reverse), SortDescriptor(\LedgerTransaction.createdAt, order: .reverse)])
     private var storedTransactions: [LedgerTransaction]
-    @Query(sort: [SortDescriptor(\LedgerAccount.sortOrder), SortDescriptor(\LedgerAccount.createdAt)])
-    private var storedWallets: [LedgerAccount]
+    @Query(sort: [SortDescriptor(\LedgerWallet.sortOrder), SortDescriptor(\LedgerWallet.createdAt)])
+    private var storedWallets: [LedgerWallet]
     @Query(sort: [SortDescriptor(\TransactionCategory.sortOrder), SortDescriptor(\TransactionCategory.createdAt)])
     private var storedCategories: [TransactionCategory]
 
@@ -57,7 +57,7 @@ struct TransactionsView: View {
     @State private var searchText = ""
     @State private var isSearchPresented = false
 
-    private var activeWallets: [LedgerAccount] {
+    private var activeWallets: [LedgerWallet] {
         storedWallets
             .filter { !$0.isArchived }
             .sorted {
@@ -192,6 +192,7 @@ struct TransactionsView: View {
             label()
         }
         .menuIndicator(.hidden)
+        .menuOrder(.fixed)
         .buttonBorderShape(.capsule)
         .tint(Color(red: 0.53, green: 0.33, blue: 0.86))
 

@@ -2,7 +2,7 @@ import Foundation
 
 struct TransactionWalletSnapshot: Equatable, Identifiable {
     let id: UUID
-    let kind: LedgerAccountKind
+    let kind: LedgerWalletKind
     let openingBalanceMinor: Int64
 }
 
@@ -18,9 +18,9 @@ struct TransactionRecordSnapshot: Equatable, Identifiable {
     let occurredAt: Date
     let createdAt: Date
     let sourceWalletID: UUID?
-    let sourceWalletKind: LedgerAccountKind?
+    let sourceWalletKind: LedgerWalletKind?
     let destinationWalletID: UUID?
-    let destinationWalletKind: LedgerAccountKind?
+    let destinationWalletKind: LedgerWalletKind?
     let categoryID: UUID?
     let counterpartyName: String?
     let normalizedCounterpartyKey: String?
@@ -408,7 +408,7 @@ enum TransactionLogic {
         }
     }
 
-    private static func outgoingDelta(for kind: LedgerAccountKind, amount: Int64) -> Int64 {
+    private static func outgoingDelta(for kind: LedgerWalletKind, amount: Int64) -> Int64 {
         switch kind {
         case .creditCard:
             amount
@@ -417,7 +417,7 @@ enum TransactionLogic {
         }
     }
 
-    private static func incomingDelta(for kind: LedgerAccountKind, amount: Int64) -> Int64 {
+    private static func incomingDelta(for kind: LedgerWalletKind, amount: Int64) -> Int64 {
         switch kind {
         case .creditCard:
             -amount
