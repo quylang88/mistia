@@ -192,8 +192,8 @@ final class MistiaNativeTabBarController: UITabBarController, UITabBarController
     quickCreateCenterXConstraint = centerXConstraint
 
     NSLayoutConstraint.activate([
-      quickCreateController.view.widthAnchor.constraint(equalToConstant: 50),
-      quickCreateController.view.heightAnchor.constraint(equalToConstant: 50),
+      quickCreateController.view.widthAnchor.constraint(equalToConstant: 44),
+      quickCreateController.view.heightAnchor.constraint(equalToConstant: 44),
       centerXConstraint,
       quickCreateController.view.bottomAnchor.constraint(equalTo: tabBar.topAnchor, constant: -14),
     ])
@@ -300,7 +300,7 @@ final class MistiaNativeTabBarController: UITabBarController, UITabBarController
   private func notifyQuickCreateFrameChanged() {
     guard didConfigureQuickCreateButton else { return }
     view.layoutIfNeeded()
-    let buttonSize = CGSize(width: 50, height: 50)
+    let buttonSize = CGSize(width: 44, height: 44)
     let center = quickCreateController.view.center
     let frame = CGRect(
       x: center.x - (buttonSize.width / 2),
@@ -439,8 +439,8 @@ private struct MistiaQuickCreateFloatingButton: View {
     Button(action: action) {
       Image(systemName: "plus")
         .font(.system(size: 20, weight: .semibold, design: .rounded))
-        .foregroundStyle(.white)
-        .frame(width: 50, height: 50)
+        .foregroundStyle(Color(red: 0.43, green: 0.23, blue: 0.76))
+        .frame(width: 44, height: 44)
     }
     .buttonStyle(.glassProminent)
     .buttonBorderShape(.circle)

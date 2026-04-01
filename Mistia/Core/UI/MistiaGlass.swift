@@ -166,7 +166,7 @@ struct MistiaRoundedGlassBackground: View {
             .background {
                 if #available(iOS 26, *) {
                     RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                        .fill(.clear)
+                        .fill(colorScheme == .dark ? Color(white: 0.22).opacity(0.12) : .clear)
                         .glassEffect(glassStyle, in: .rect(cornerRadius: cornerRadius))
                 } else {
                     RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
@@ -215,7 +215,7 @@ struct MistiaCapsuleGlassBackground: View {
             .background {
                 if #available(iOS 26, *) {
                     Capsule()
-                        .fill(.clear)
+                        .fill(colorScheme == .dark ? Color(white: 0.22).opacity(0.12) : .clear)
                         .glassEffect(glassStyle, in: .capsule)
                 } else {
                     Capsule()
@@ -250,7 +250,7 @@ struct MistiaCircleGlassBackground: View {
             .background {
                 if #available(iOS 26, *) {
                     Circle()
-                        .fill(.clear)
+                        .fill(colorScheme == .dark ? Color(white: 0.22).opacity(0.12) : .clear)
                         .glassEffect(glassStyle, in: .circle)
                 } else {
                     Circle()
@@ -378,6 +378,7 @@ private struct MistiaHeaderCircleButton<Content: View>: View {
     @available(iOS 26.0, *)
     private var nativeGlassStyle: Glass {
         Glass.regular
+            .tint(colorScheme == .dark ? .white.opacity(0.12) : .white.opacity(0.30))
             .interactive()
     }
 }
