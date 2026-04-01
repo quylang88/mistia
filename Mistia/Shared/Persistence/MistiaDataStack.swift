@@ -16,9 +16,7 @@ enum MistiaDataStack {
         } catch {
             // Fallback for development: wipe and recreate
             do {
-                if let url = configuration.url {
-                    try? FileManager.default.removeItem(at: url)
-                }
+                try? FileManager.default.removeItem(at: configuration.url)
             } catch {}
             let config = ModelConfiguration(schema: schema, isStoredInMemoryOnly: false)
             return try! ModelContainer(for: schema, configurations: [config])
