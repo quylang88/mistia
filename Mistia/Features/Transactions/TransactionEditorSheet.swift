@@ -87,13 +87,12 @@ struct TransactionEditorSheet: View {
                     } label: {
                         Image(systemName: "checkmark")
                             .font(.system(size: 14, weight: .bold))
-                            .foregroundStyle(Color(red: 0.75, green: 0.55, blue: 1.0))
+                            .foregroundStyle(Color(red: 0.88, green: 0.78, blue: 1.0))
                             .frame(width: 30, height: 30)
-                            .background {
-                                Circle()
-                                    .fill(Color(red: 0.65, green: 0.45, blue: 0.98).opacity(0.25))
-                            }
                     }
+                    .buttonStyle(.glassProminent)
+                    .buttonBorderShape(.circle)
+                    .tint(Color(red: 0.43, green: 0.23, blue: 0.76))
                 }
             }
         }
@@ -127,7 +126,7 @@ struct TransactionEditorSheet: View {
                 TransactionEditorTextField(
                     title: "Số tiền",
                     text: $bindableDraft.amountText,
-                    placeholder: "Ví dụ 120000"
+                    placeholder: "Ví dụ 12000"
                 )
                 .keyboardType(.numberPad)
             }

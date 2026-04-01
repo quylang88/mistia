@@ -209,20 +209,20 @@ struct TransactionsView: View {
         HStack(spacing: 8) {
             if activeFilterCount > 0 {
                 filterMenu(isActive: true) {
-                    HStack(spacing: 6) {
+                    HStack(spacing: 4) {
                         Image(systemName: "line.3.horizontal.decrease")
-                            .font(.system(size: 13, weight: .bold))
+                            .font(.system(size: 12, weight: .bold, design: .rounded))
                         
                         Text("\(activeFilterCount)")
-                            .font(.system(size: 11, weight: .bold, design: .rounded))
+                            .font(.system(size: 12, weight: .bold, design: .rounded))
                             .foregroundStyle(Color(red: 0.53, green: 0.33, blue: 0.86))
-                            .padding(.horizontal, 6)
-                            .padding(.vertical, 2)
+                            .padding(.horizontal, 4)
+                            .padding(.vertical, 1)
                             .background(Circle().fill(.white))
                     }
                     .foregroundStyle(.white)
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 4)
+                    .padding(.horizontal, 4)
+                    .padding(.vertical, 1)
                 } content: {
                     Text("\(activeFilterCount) bộ lọc đang áp dụng")
                     
@@ -678,7 +678,7 @@ private struct TransactionToolbarChip: View {
     var body: some View {
         HStack(spacing: 4) {
             Text(title)
-                .font(.system(size: 13, weight: .bold, design: .rounded))
+                .font(.system(size: 12, weight: .bold, design: .rounded))
                 .lineLimit(1)
             
             if let trailingIcon {
@@ -689,8 +689,8 @@ private struct TransactionToolbarChip: View {
         .foregroundStyle(.white)
         .animation(nil, value: title)
         .animation(nil, value: isActive)
-        .padding(.horizontal, 6)
-        .padding(.vertical, 2)
+        .padding(.horizontal, 4)
+        .padding(.vertical, 1)
     }
 }
 

@@ -365,7 +365,7 @@ private enum MistiaQuickCreateDestination: String, CaseIterable, Identifiable {
 }
 
 private struct MistiaQuickCreateMenu: View {
-  static let collapsedSize: CGFloat = 50
+  static let collapsedSize: CGFloat = 44
   static let expandedHeight: CGFloat = 350
 
   @Environment(\.colorScheme) private var colorScheme
