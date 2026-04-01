@@ -186,16 +186,14 @@ struct ManagementWalletEditorSheet: View {
                     Button {
                         save()
                     } label: {
-                        ZStack {
-                            Circle()
-                                .fill(Color(red: 0.65, green: 0.45, blue: 0.98).opacity(0.18))
-                                .stroke(Color(red: 0.65, green: 0.45, blue: 0.98).opacity(0.3), lineWidth: 1)
-                                .frame(width: 30, height: 30)
-                            
-                            Image(systemName: "checkmark")
-                                .font(.system(size: 14, weight: .bold))
-                                .foregroundStyle(Color(red: 0.75, green: 0.55, blue: 1.0))
-                        }
+                        Image(systemName: "checkmark")
+                            .font(.system(size: 14, weight: .bold))
+                            .foregroundStyle(Color(red: 0.75, green: 0.55, blue: 1.0))
+                            .frame(width: 30, height: 30)
+                            .background {
+                                Circle()
+                                    .fill(Color(red: 0.65, green: 0.45, blue: 0.98).opacity(0.25))
+                            }
                     }
                 }
             }
@@ -448,16 +446,14 @@ struct ManagementCategoryEditorSheet: View {
                     Button {
                         save()
                     } label: {
-                        ZStack {
-                            Circle()
-                                .fill(Color(red: 0.65, green: 0.45, blue: 0.98).opacity(0.18))
-                                .stroke(Color(red: 0.65, green: 0.45, blue: 0.98).opacity(0.3), lineWidth: 1)
-                                .frame(width: 30, height: 30)
-                            
-                            Image(systemName: "checkmark")
-                                .font(.system(size: 14, weight: .bold))
-                                .foregroundStyle(Color(red: 0.75, green: 0.55, blue: 1.0))
-                        }
+                        Image(systemName: "checkmark")
+                            .font(.system(size: 14, weight: .bold))
+                            .foregroundStyle(Color(red: 0.75, green: 0.55, blue: 1.0))
+                            .frame(width: 30, height: 30)
+                            .background {
+                                Circle()
+                                    .fill(Color(red: 0.65, green: 0.45, blue: 0.98).opacity(0.25))
+                            }
                     }
                 }
             }
@@ -664,16 +660,14 @@ private struct ManagementIconPickerSheet: View {
                         onSave(selectedIconSymbolName, selectedColor.hexString)
                         dismiss()
                     } label: {
-                        ZStack {
-                            Circle()
-                                .fill(Color(red: 0.65, green: 0.45, blue: 0.98).opacity(0.18))
-                                .stroke(Color(red: 0.65, green: 0.45, blue: 0.98).opacity(0.3), lineWidth: 1)
-                                .frame(width: 30, height: 30)
-                            
-                            Image(systemName: "checkmark")
-                                .font(.system(size: 14, weight: .bold))
-                                .foregroundStyle(Color(red: 0.75, green: 0.55, blue: 1.0))
-                        }
+                        Image(systemName: "checkmark")
+                            .font(.system(size: 14, weight: .bold))
+                            .foregroundStyle(Color(red: 0.75, green: 0.55, blue: 1.0))
+                            .frame(width: 30, height: 30)
+                            .background {
+                                Circle()
+                                    .fill(Color(red: 0.65, green: 0.45, blue: 0.98).opacity(0.25))
+                            }
                     }
                 }
             }
