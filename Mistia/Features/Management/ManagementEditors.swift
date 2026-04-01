@@ -1,10 +1,10 @@
 import SwiftData
 import SwiftUI
 
-struct ManagementAccountEditorTarget: Identifiable {
+struct ManagementWalletEditorTarget: Identifiable {
     let id = UUID()
-    let account: LedgerAccount?
-    let defaultKind: LedgerAccountKind
+    let wallet: LedgerWallet?
+    let defaultKind: LedgerWalletKind
 }
 
 struct ManagementCategoryEditorTarget: Identifiable {
@@ -13,23 +13,23 @@ struct ManagementCategoryEditorTarget: Identifiable {
     let defaultKind: TransactionCategoryKind
 }
 
-struct ManagementAccountEditorSheet: View {
+struct ManagementWalletEditorSheet: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
-    @Query(sort: [SortDescriptor(\LedgerAccount.sortOrder), SortDescriptor(\LedgerAccount.createdAt)])
-    private var storedAccounts: [LedgerAccount]
+    @Query(sort: [SortDescriptor(\LedgerWallet.sortOrder), SortDescriptor(\LedgerWallet.createdAt)])
+    private var storedWallets: [LedgerWallet]
 
-    let target: ManagementAccountEditorTarget
+    let target: ManagementWalletEditorTarget
 
-    @State private var draft: AccountDraft
+    @State private var draft: WalletDraft
     @State private var showsIconPicker = false
     @State private var showsBankPicker = false
     @State private var showsArchiveConfirmation = false
     @State private var alertMessage: String?
 
-    init(target: ManagementAccountEditorTarget) {
+    init(target: ManagementWalletEditorTarget) {
         self.target = target
-        _draft = State(initialValue: AccountDraft(account: target.account, defaultKind: target.defaultKind))
+        _draft = State(initialValue: WalletDraft(wallet: target.wallet, defaultKind: target.defaultKind))
     }
 
     var body: some View {
@@ -64,10 +64,10 @@ struct ManagementAccountEditorSheet: View {
                 }
 
                 Section("Thông tin cơ bản") {
-                    TextField("Tên tài khoản", text: $draft.name)
+                    TextField("Tên ví", text: $draft.name)
 
-                    Picker("Loại tài khoản", selection: $draft.kind) {
-                        ForEach(LedgerAccountKind.allCases) { kind in
+                    Picker("Loại ví", selection: $draft.kind) {
+                        ForEach(LedgerWalletKind.allCases) { kind in
                             Text(kind.title).tag(kind)
                         }
                     }
@@ -146,11 +146,11 @@ struct ManagementAccountEditorSheet: View {
                             }
                         }
 
-                        Picker("Nguồn thanh toán", selection: $draft.paymentSourceAccountID) {
+                        Picker("Nguồn thanh toán", selection: $draft.paymentSourceWalletID) {
                             Text("Chọn sau").tag(Optional<UUID>.none)
 
-                            ForEach(paymentSourceAccounts) { account in
-                                Text(account.name).tag(Optional(account.id))
+                            ForEach(paymentSourceWallets) { wallet in
+                                Text(wallet.name).tag(Optional(wallet.id))
                             }
                         }
 
@@ -159,17 +159,17 @@ struct ManagementAccountEditorSheet: View {
                     }
                 }
 
-                if target.account != nil {
+                if target.wallet != nil {
                     Section {
-                        Button("Lưu trữ tài khoản", role: .destructive) {
+                        Button("Lưu trữ ví", role: .destructive) {
                             showsArchiveConfirmation = true
                         }
                     } footer: {
-                        Text("Tài khoản lưu trữ sẽ được ẩn khỏi màn hình quản lý.")
+                        Text("Ví lưu trữ sẽ được ẩn khỏi màn hình quản lý.")
                     }
                 }
             }
-            .navigationTitle(target.account == nil ? "Tài khoản mới" : "Sửa tài khoản")
+            .navigationTitle(target.wallet == nil ? "Ví mới" : "Sửa ví")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
@@ -186,22 +186,21 @@ struct ManagementAccountEditorSheet: View {
                     Button {
                         save()
                     } label: {
-                        ZStack {
-                            Circle()
-                                .fill(Color(red: 0.65, green: 0.45, blue: 0.98))
-                                .frame(width: 30, height: 30)
-                            
-                            Image(systemName: "checkmark")
-                                .font(.system(size: 14, weight: .bold))
-                                .foregroundStyle(.white)
-                        }
+                        Image(systemName: "checkmark")
+                            .font(.system(size: 14, weight: .bold))
+                            .foregroundStyle(Color(red: 0.75, green: 0.55, blue: 1.0))
+                            .frame(width: 30, height: 30)
+                            .background {
+                                Circle()
+                                    .fill(Color(red: 0.65, green: 0.45, blue: 0.98).opacity(0.25))
+                            }
                     }
                 }
             }
         }
         .sheet(isPresented: $showsIconPicker) {
             ManagementIconPickerSheet(
-                title: "Biểu tượng tài khoản",
+                title: "Biểu tượng ví",
                 selectedIconSymbolName: draft.iconSymbolName,
                 selectedColorHex: draft.iconColorHex
             ) { symbolName, colorHex in
@@ -231,12 +230,12 @@ struct ManagementAccountEditorSheet: View {
             Text(alertMessage ?? "")
         }
         .confirmationDialog(
-            "Lưu trữ tài khoản này?",
+            "Lưu trữ ví này?",
             isPresented: $showsArchiveConfirmation,
             titleVisibility: .visible
         ) {
             Button("Lưu trữ", role: .destructive) {
-                archiveAccount()
+                archiveWallet()
             }
 
             Button("Hủy", role: .cancel) { }
@@ -248,12 +247,12 @@ struct ManagementAccountEditorSheet: View {
         }
     }
 
-    private var paymentSourceAccounts: [LedgerAccount] {
-        storedAccounts
-            .filter { account in
-                !account.isArchived
-                    && account.kind != .creditCard
-                    && account.id != target.account?.id
+    private var paymentSourceWallets: [LedgerWallet] {
+        storedWallets
+            .filter { wallet in
+                !wallet.isArchived
+                    && wallet.kind != .creditCard
+                    && wallet.id != target.wallet?.id
             }
             .sorted {
                 if $0.sortOrder != $1.sortOrder {
@@ -266,31 +265,31 @@ struct ManagementAccountEditorSheet: View {
     private func save() {
         let trimmedName = draft.name.nilIfBlank
         guard let trimmedName else {
-            alertMessage = "Nhập tên tài khoản trước khi lưu."
+            alertMessage = "Nhập tên ví trước khi lưu."
             return
         }
 
         if draft.kind == .bank, draft.institutionDisplayName.nilIfBlank == nil {
-            alertMessage = "Chọn hoặc nhập tên ngân hàng cho tài khoản này."
+            alertMessage = "Chọn hoặc nhập tên ngân hàng cho ví này."
             return
         }
 
         let now = Date()
 
-        if let existingAccount = target.account {
-            existingAccount.name = trimmedName
-            existingAccount.kind = draft.kind
-            existingAccount.iconSymbolName = draft.iconSymbolName
-            existingAccount.iconColorHex = draft.iconColorHex
-            existingAccount.currencyCode = draft.currencyCode
-            existingAccount.openingBalanceMinor = draft.openingBalanceMinor
-            existingAccount.institutionDisplayName = draft.kind == .bank ? draft.institutionDisplayName.nilIfBlank : nil
-            existingAccount.institutionPresetKey = draft.kind == .bank ? draft.institutionPresetKey : nil
-            existingAccount.updatedAt = now
+        if let existingWallet = target.wallet {
+            existingWallet.name = trimmedName
+            existingWallet.kind = draft.kind
+            existingWallet.iconSymbolName = draft.iconSymbolName
+            existingWallet.iconColorHex = draft.iconColorHex
+            existingWallet.currencyCode = draft.currencyCode
+            existingWallet.openingBalanceMinor = draft.openingBalanceMinor
+            existingWallet.institutionDisplayName = draft.kind == .bank ? draft.institutionDisplayName.nilIfBlank : nil
+            existingWallet.institutionPresetKey = draft.kind == .bank ? draft.institutionPresetKey : nil
+            existingWallet.updatedAt = now
 
-            updateCreditCardProfile(for: existingAccount, now: now)
+            updateCreditCardProfile(for: existingWallet, now: now)
         } else {
-            let newAccount = LedgerAccount(
+            let newWallet = LedgerWallet(
                 name: trimmedName,
                 kind: draft.kind,
                 iconSymbolName: draft.iconSymbolName,
@@ -302,29 +301,29 @@ struct ManagementAccountEditorSheet: View {
                 sortOrder: nextSortOrder()
             )
 
-            modelContext.insert(newAccount)
-            updateCreditCardProfile(for: newAccount, now: now)
+            modelContext.insert(newWallet)
+            updateCreditCardProfile(for: newWallet, now: now)
         }
 
         do {
             try modelContext.save()
             dismiss()
         } catch {
-            alertMessage = "Không thể lưu tài khoản lúc này. \(error.localizedDescription)"
+            alertMessage = "Không thể lưu ví lúc này. \(error.localizedDescription)"
         }
     }
 
-    private func updateCreditCardProfile(for account: LedgerAccount, now: Date) {
+    private func updateCreditCardProfile(for wallet: LedgerWallet, now: Date) {
         guard draft.kind == .creditCard else {
-            if let profile = account.creditCardProfile {
-                account.creditCardProfile = nil
+            if let profile = wallet.creditCardProfile {
+                wallet.creditCardProfile = nil
                 modelContext.delete(profile)
             }
             return
         }
 
-        let profile = account.creditCardProfile ?? CreditCardProfile()
-        profile.account = account
+        let profile = wallet.creditCardProfile ?? CreditCardProfile()
+        profile.wallet = wallet
         profile.issuerName = draft.issuerName.nilIfBlank ?? ""
         profile.network = draft.network
         profile.last4 = draft.last4
@@ -332,20 +331,20 @@ struct ManagementAccountEditorSheet: View {
         profile.statementClosingDay = draft.statementClosingDay
         profile.paymentDueDay = draft.paymentDueDay
         profile.notes = draft.notes.nilIfBlank
-        profile.paymentSourceAccount = paymentSourceAccounts.first(where: { $0.id == draft.paymentSourceAccountID })
+        profile.paymentSourceWallet = paymentSourceWallets.first(where: { $0.id == draft.paymentSourceWalletID })
         profile.updatedAt = now
 
-        if account.creditCardProfile == nil {
-            account.creditCardProfile = profile
+        if wallet.creditCardProfile == nil {
+            wallet.creditCardProfile = profile
             modelContext.insert(profile)
         }
     }
 
-    private func archiveAccount() {
-        guard let account = target.account else { return }
+    private func archiveWallet() {
+        guard let wallet = target.wallet else { return }
 
-        account.isArchived = true
-        account.updatedAt = .now
+        wallet.isArchived = true
+        wallet.updatedAt = .now
 
         do {
             try modelContext.save()
@@ -356,7 +355,7 @@ struct ManagementAccountEditorSheet: View {
     }
 
     private func nextSortOrder() -> Int {
-        (storedAccounts.map(\.sortOrder).max() ?? -1) + 1
+        (storedWallets.map(\.sortOrder).max() ?? -1) + 1
     }
 }
 
@@ -447,15 +446,14 @@ struct ManagementCategoryEditorSheet: View {
                     Button {
                         save()
                     } label: {
-                        ZStack {
-                            Circle()
-                                .fill(Color(red: 0.65, green: 0.45, blue: 0.98))
-                                .frame(width: 30, height: 30)
-                            
-                            Image(systemName: "checkmark")
-                                .font(.system(size: 14, weight: .bold))
-                                .foregroundStyle(.white)
-                        }
+                        Image(systemName: "checkmark")
+                            .font(.system(size: 14, weight: .bold))
+                            .foregroundStyle(Color(red: 0.75, green: 0.55, blue: 1.0))
+                            .frame(width: 30, height: 30)
+                            .background {
+                                Circle()
+                                    .fill(Color(red: 0.65, green: 0.45, blue: 0.98).opacity(0.25))
+                            }
                     }
                 }
             }
@@ -662,15 +660,14 @@ private struct ManagementIconPickerSheet: View {
                         onSave(selectedIconSymbolName, selectedColor.hexString)
                         dismiss()
                     } label: {
-                        ZStack {
-                            Circle()
-                                .fill(Color(red: 0.65, green: 0.45, blue: 0.98))
-                                .frame(width: 30, height: 30)
-                            
-                            Image(systemName: "checkmark")
-                                .font(.system(size: 14, weight: .bold))
-                                .foregroundStyle(.white)
-                        }
+                        Image(systemName: "checkmark")
+                            .font(.system(size: 14, weight: .bold))
+                            .foregroundStyle(Color(red: 0.75, green: 0.55, blue: 1.0))
+                            .frame(width: 30, height: 30)
+                            .background {
+                                Circle()
+                                    .fill(Color(red: 0.65, green: 0.45, blue: 0.98).opacity(0.25))
+                            }
                     }
                 }
             }
@@ -773,9 +770,9 @@ private struct ManagementEditorIconPreview: View {
     }
 }
 
-private struct AccountDraft {
+private struct WalletDraft {
     var name: String
-    var kind: LedgerAccountKind
+    var kind: LedgerWalletKind
     var iconSymbolName: String
     var iconColorHex: String
     var currencyCode: String
@@ -789,23 +786,23 @@ private struct AccountDraft {
     var statementClosingDay: Int
     var paymentDueDay: Int
     var notes: String
-    var paymentSourceAccountID: UUID?
+    var paymentSourceWalletID: UUID?
     var iconWasCustomized: Bool
 
-    init(account: LedgerAccount?, defaultKind: LedgerAccountKind) {
-        if let account {
-            let profile = account.creditCardProfile
-            let matchesDefaultIcon = account.iconSymbolName == account.kind.defaultIconSymbolName
-                && account.iconColorHex.caseInsensitiveCompare(account.kind.defaultColorHex) == .orderedSame
+    init(wallet: LedgerWallet?, defaultKind: LedgerWalletKind) {
+        if let wallet {
+            let profile = wallet.creditCardProfile
+            let matchesDefaultIcon = wallet.iconSymbolName == wallet.kind.defaultIconSymbolName
+                && wallet.iconColorHex.caseInsensitiveCompare(wallet.kind.defaultColorHex) == .orderedSame
 
-            self.name = account.name
-            self.kind = account.kind
-            self.iconSymbolName = account.iconSymbolName
-            self.iconColorHex = account.iconColorHex
-            self.currencyCode = account.currencyCode
-            self.openingBalanceText = "\(account.openingBalanceMinor)"
-            self.institutionDisplayName = account.institutionDisplayName ?? ""
-            self.institutionPresetKey = account.institutionPresetKey
+            self.name = wallet.name
+            self.kind = wallet.kind
+            self.iconSymbolName = wallet.iconSymbolName
+            self.iconColorHex = wallet.iconColorHex
+            self.currencyCode = wallet.currencyCode
+            self.openingBalanceText = "\(wallet.openingBalanceMinor)"
+            self.institutionDisplayName = wallet.institutionDisplayName ?? ""
+            self.institutionPresetKey = wallet.institutionPresetKey
             self.issuerName = profile?.issuerName ?? ""
             self.network = profile?.network ?? .visa
             self.last4 = profile?.last4 ?? ""
@@ -813,7 +810,7 @@ private struct AccountDraft {
             self.statementClosingDay = profile?.statementClosingDay ?? 25
             self.paymentDueDay = profile?.paymentDueDay ?? 10
             self.notes = profile?.notes ?? ""
-            self.paymentSourceAccountID = profile?.paymentSourceAccount?.id
+            self.paymentSourceWalletID = profile?.paymentSourceWallet?.id
             self.iconWasCustomized = !matchesDefaultIcon
         } else {
             self.name = ""
@@ -831,7 +828,7 @@ private struct AccountDraft {
             self.statementClosingDay = 25
             self.paymentDueDay = 10
             self.notes = ""
-            self.paymentSourceAccountID = nil
+            self.paymentSourceWalletID = nil
             self.iconWasCustomized = false
         }
     }
@@ -844,7 +841,7 @@ private struct AccountDraft {
         creditLimitText.currencyInputToMinorUnits(currencyCode: currencyCode)
     }
 
-    mutating func handleKindChange(from oldValue: LedgerAccountKind, to newValue: LedgerAccountKind) {
+    mutating func handleKindChange(from oldValue: LedgerWalletKind, to newValue: LedgerWalletKind) {
         guard oldValue != newValue else { return }
 
         if !iconWasCustomized {
@@ -861,7 +858,7 @@ private struct AccountDraft {
             issuerName = ""
             last4 = ""
             creditLimitText = ""
-            paymentSourceAccountID = nil
+            paymentSourceWalletID = nil
             notes = ""
             network = .visa
             statementClosingDay = 25

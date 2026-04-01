@@ -21,13 +21,13 @@ struct ManagementView: View {
 
     @AppStorage(MistiaAppStorageKey.hideQuickCreate) private var hideQuickCreate = false
 
-    @Query(sort: [SortDescriptor(\LedgerAccount.sortOrder), SortDescriptor(\LedgerAccount.createdAt)])
-    private var storedAccounts: [LedgerAccount]
+    @Query(sort: [SortDescriptor(\LedgerWallet.sortOrder), SortDescriptor(\LedgerWallet.createdAt)])
+    private var storedWallets: [LedgerWallet]
     @Query(sort: [SortDescriptor(\TransactionCategory.createdAt), SortDescriptor(\TransactionCategory.sortOrder)])
     private var storedCategories: [TransactionCategory]
 
     @State private var destination: ManagementNavigationDestination?
-    @State private var accountEditorTarget: ManagementAccountEditorTarget?
+    @State private var walletEditorTarget: ManagementWalletEditorTarget?
     @State private var categoryEditorTarget: ManagementCategoryEditorTarget?
     @State private var selectedCategoryKind: TransactionCategoryKind = .expense
     @State private var infoAlert: ManagementInfoAlert?
@@ -45,8 +45,8 @@ struct ManagementView: View {
         Color(red: 0.43, green: 0.23, blue: 0.76)
     }
 
-    private var activeAccounts: [LedgerAccount] {
-        storedAccounts
+    private var activeWallets: [LedgerWallet] {
+        storedWallets
             .filter { !$0.isArchived }
             .sorted {
                 if $0.sortOrder != $1.sortOrder {
@@ -81,7 +81,7 @@ struct ManagementView: View {
                 contentSpacing: 20
             ) {
                 profileSection
-                accountsSection
+                walletsSection
                 categoriesSection
                 dataSection
             }
@@ -94,8 +94,8 @@ struct ManagementView: View {
                 }
             }
         }
-        .sheet(item: $accountEditorTarget) { target in
-            ManagementAccountEditorSheet(target: target)
+        .sheet(item: $walletEditorTarget) { target in
+            ManagementWalletEditorSheet(target: target)
         }
         .sheet(item: $categoryEditorTarget) { target in
             ManagementCategoryEditorSheet(target: target)
@@ -131,13 +131,13 @@ struct ManagementView: View {
             isPresented: $showsDeleteAllConfirmation,
             titleVisibility: .visible
         ) {
-            Button("Xóa tài khoản và danh mục", role: .destructive) {
+            Button("Xóa ví và danh mục", role: .destructive) {
                 deleteAllManagementData()
             }
 
             Button("Hủy", role: .cancel) { }
         } message: {
-            Text("Hành động này sẽ xóa tất cả tài khoản và danh mục đang lưu trên thiết bị.")
+            Text("Hành động này sẽ xóa tất cả ví và danh mục đang lưu trên thiết bị.")
         }
     }
 
@@ -153,27 +153,27 @@ struct ManagementView: View {
         }
     }
 
-    private var accountsSection: some View {
-        ManagementSection(title: "Tài khoản", titleColor: sectionLabelColor) {
+    private var walletsSection: some View {
+        ManagementSection(title: "Ví", titleColor: sectionLabelColor) {
             ManagementCard(tint: cardTint) {
-                if activeAccounts.isEmpty {
+                if activeWallets.isEmpty {
                     ManagementEmptyState(
-                        title: "Chưa có tài khoản nào",
-                        message: "Thêm ví tiền mặt, PayPay, tài khoản ngân hàng hoặc credit card để bắt đầu quản lý nguồn tiền.",
-                        buttonTitle: "Thêm tài khoản",
+                        title: "Chưa có ví nào",
+                        message: "Thêm ví tiền mặt, PayPay, ví ngân hàng hoặc credit card để bắt đầu quản lý nguồn tiền.",
+                        buttonTitle: "Thêm ví",
                         accent: accentPurple,
                         symbols: ["banknote.fill", "wallet.pass.fill", "building.columns.fill", "creditcard.fill"]
                     ) {
-                        accountEditorTarget = ManagementAccountEditorTarget(account: nil, defaultKind: .cash)
+                        walletEditorTarget = ManagementWalletEditorTarget(wallet: nil, defaultKind: .cash)
                     }
                 } else {
                     VStack(spacing: 0) {
-                        ForEach(Array(activeAccounts.enumerated()), id: \.element.id) { index, account in
-                            ManagementAccountRow(account: account) {
-                                accountEditorTarget = ManagementAccountEditorTarget(account: account, defaultKind: account.kind)
+                        ForEach(Array(activeWallets.enumerated()), id: \.element.id) { index, wallet in
+                            ManagementWalletRow(wallet: wallet) {
+                                walletEditorTarget = ManagementWalletEditorTarget(wallet: wallet, defaultKind: wallet.kind)
                             }
 
-                            if index < activeAccounts.count - 1 {
+                            if index < activeWallets.count - 1 {
                                 Divider()
                                     .padding(.leading, 52)
                             }
@@ -183,10 +183,10 @@ struct ManagementView: View {
                             .padding(.horizontal, 14)
 
                         ManagementFooterAddButton(
-                            title: "Thêm tài khoản",
+                            title: "Thêm ví",
                             accent: accentPurple
                         ) {
-                            accountEditorTarget = ManagementAccountEditorTarget(account: nil, defaultKind: .cash)
+                            walletEditorTarget = ManagementWalletEditorTarget(wallet: nil, defaultKind: .cash)
                         }
                     }
                 }
@@ -288,13 +288,13 @@ struct ManagementView: View {
 
     private func deleteAllManagementData() {
         do {
-            let accounts = try modelContext.fetch(FetchDescriptor<LedgerAccount>())
+            let wallets = try modelContext.fetch(FetchDescriptor<LedgerWallet>())
             let categories = try modelContext.fetch(FetchDescriptor<TransactionCategory>())
             let creditProfiles = try modelContext.fetch(FetchDescriptor<CreditCardProfile>())
             let transactions = try modelContext.fetch(FetchDescriptor<LedgerTransaction>())
 
-            for account in accounts {
-                modelContext.delete(account)
+            for wallet in wallets {
+                modelContext.delete(wallet)
             }
 
             for category in categories {
@@ -313,7 +313,7 @@ struct ManagementView: View {
 
             infoAlert = ManagementInfoAlert(
                 title: "Đã xóa dữ liệu",
-                message: "Tất cả tài khoản và danh mục đã được xóa khỏi thiết bị."
+                message: "Tất cả ví và danh mục đã được xóa khỏi thiết bị."
             )
         } catch {
             infoAlert = ManagementInfoAlert(
@@ -433,7 +433,7 @@ private struct ManagementSignedOutCard: View {
                             .font(.system(size: 18, weight: .bold, design: .rounded))
                             .foregroundStyle(.primary)
 
-                        Text("Lưu an toàn tài khoản, danh mục và sẵn sàng cho backup hoặc sync ở các bản sau.")
+                        Text("Lưu an toàn ví, danh mục và sẵn sàng cho backup hoặc sync ở các bản sau.")
                             .font(.system(size: 13.5, weight: .medium, design: .rounded))
                             .foregroundStyle(.secondary)
                             .fixedSize(horizontal: false, vertical: true)
@@ -459,27 +459,27 @@ private struct ManagementSignedOutCard: View {
     }
 }
 
-private struct ManagementAccountRow: View {
-    let account: LedgerAccount
+private struct ManagementWalletRow: View {
+    let wallet: LedgerWallet
     let action: () -> Void
 
     var body: some View {
         Button(action: action) {
             HStack(alignment: .top, spacing: 12) {
-                ManagementIconTile(icon: account.iconSymbolName, color: account.iconColor)
+                ManagementIconTile(icon: wallet.iconSymbolName, color: wallet.iconColor)
 
                 VStack(alignment: .leading, spacing: 3) {
-                    Text(account.name)
+                    Text(wallet.name)
                         .font(.system(size: 16, weight: .semibold, design: .rounded))
                         .foregroundStyle(.primary)
 
-                    if let subtitle = account.subtitleText {
+                    if let subtitle = wallet.subtitleText {
                         Text(subtitle)
                             .font(.system(size: 12.5, weight: .medium, design: .rounded))
                             .foregroundStyle(.secondary)
                     }
 
-                    if let footnote = account.footnoteText {
+                    if let footnote = wallet.footnoteText {
                         Text(footnote)
                             .font(.system(size: 12.5, weight: .medium, design: .rounded))
                             .foregroundStyle(.secondary)
@@ -488,7 +488,7 @@ private struct ManagementAccountRow: View {
 
                 Spacer(minLength: 8)
 
-                Text(account.formattedAmount)
+                Text(wallet.formattedAmount)
                     .font(.system(size: 15, weight: .semibold, design: .rounded))
                     .foregroundStyle(.secondary)
                     .padding(.top, 1)
@@ -827,7 +827,7 @@ private struct ManagementAuthPlaceholderView: View {
                         .font(.system(size: 22, weight: .bold, design: .rounded))
                         .multilineTextAlignment(.center)
 
-                    Text("Tab Quản lý hiện đã chạy local-first bằng SwiftData, nên bạn vẫn có thể thêm tài khoản và danh mục ngay cả khi chưa đăng nhập.")
+                    Text("Tab Quản lý hiện đã chạy local-first bằng SwiftData, nên bạn vẫn có thể thêm ví và danh mục ngay cả khi chưa đăng nhập.")
                         .font(.system(size: 14.5, weight: .medium, design: .rounded))
                         .foregroundStyle(.secondary)
                         .multilineTextAlignment(.center)

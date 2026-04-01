@@ -46,8 +46,8 @@ struct TransactionsView: View {
 
     @Query(sort: [SortDescriptor(\LedgerTransaction.occurredAt, order: .reverse), SortDescriptor(\LedgerTransaction.createdAt, order: .reverse)])
     private var storedTransactions: [LedgerTransaction]
-    @Query(sort: [SortDescriptor(\LedgerAccount.sortOrder), SortDescriptor(\LedgerAccount.createdAt)])
-    private var storedAccounts: [LedgerAccount]
+    @Query(sort: [SortDescriptor(\LedgerWallet.sortOrder), SortDescriptor(\LedgerWallet.createdAt)])
+    private var storedWallets: [LedgerWallet]
     @Query(sort: [SortDescriptor(\TransactionCategory.sortOrder), SortDescriptor(\TransactionCategory.createdAt)])
     private var storedCategories: [TransactionCategory]
 
@@ -57,8 +57,8 @@ struct TransactionsView: View {
     @State private var searchText = ""
     @State private var isSearchPresented = false
 
-    private var activeAccounts: [LedgerAccount] {
-        storedAccounts
+    private var activeWallets: [LedgerWallet] {
+        storedWallets
             .filter { !$0.isArchived }
             .sorted {
                 if $0.sortOrder != $1.sortOrder {
@@ -104,8 +104,8 @@ struct TransactionsView: View {
                 return false
             }
 
-            if let accountID = filterState.accountID {
-                return record.sourceAccountID == accountID || record.destinationAccountID == accountID
+            if let walletID = filterState.walletID {
+                return record.sourceWalletID == walletID || record.destinationWalletID == walletID
             }
 
             return true
@@ -119,7 +119,7 @@ struct TransactionsView: View {
 
         if selectedSegment != nil { count += 1 }
         if filterState.timeScope != .allTime { count += 1 }
-        if filterState.accountID != nil { count += 1 }
+        if filterState.walletID != nil { count += 1 }
         if filterState.categoryID != nil { count += 1 }
         if filterState.transferSubtype != nil { count += 1 }
         if filterState.minAmountMinor != nil || filterState.maxAmountMinor != nil { count += 1 }
@@ -191,6 +191,8 @@ struct TransactionsView: View {
         } label: {
             label()
         }
+        .menuIndicator(.hidden)
+        .menuOrder(.fixed)
         .buttonBorderShape(.capsule)
         .tint(Color(red: 0.53, green: 0.33, blue: 0.86))
 
@@ -206,22 +208,33 @@ struct TransactionsView: View {
     private var filterChipsHStack: some View {
         HStack(spacing: 8) {
             if activeFilterCount > 0 {
-                Button {
-                    withAnimation(.snappy) {
-                        selectedSegment = nil
-                        filterState = TransactionFilterState(timeScope: .allTime, statusScope: .all)
+                filterMenu(isActive: true) {
+                    HStack(spacing: 6) {
+                        Image(systemName: "line.3.horizontal.decrease")
+                            .font(.system(size: 13, weight: .bold))
+                        
+                        Text("\(activeFilterCount)")
+                            .font(.system(size: 11, weight: .bold, design: .rounded))
+                            .foregroundStyle(Color(red: 0.53, green: 0.33, blue: 0.86))
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 2)
+                            .background(Circle().fill(.white))
                     }
-                } label: {
-                    TransactionToolbarChip(
-                        title: "\(activeFilterCount)",
-                        isActive: true,
-                        trailingIcon: "xmark"
-                    )
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
+                } content: {
+                    Text("\(activeFilterCount) bộ lọc đang áp dụng")
+                    
+                    Button(role: .destructive) {
+                        withAnimation(.snappy) {
+                            selectedSegment = nil
+                            filterState = TransactionFilterState(timeScope: .allTime, statusScope: .all)
+                        }
+                    } label: {
+                        Text("Xoá tất cả bộ lọc")
+                    }
                 }
-                .buttonBorderShape(.capsule)
-                .tint(Color(red: 0.53, green: 0.33, blue: 0.86))
-                .buttonStyle(.glassProminent)
-                .zIndex(99)
             }
 
             filterMenu(isActive: selectedSegment != nil) {
@@ -261,23 +274,23 @@ struct TransactionsView: View {
                 }
             }
 
-            filterMenu(isActive: filterState.accountID != nil) {
-                let title = activeAccounts.first { $0.id == filterState.accountID }?.name ?? "Tài khoản"
+            filterMenu(isActive: filterState.walletID != nil) {
+                let title = activeWallets.first { $0.id == filterState.walletID }?.name ?? "Ví"
                 TransactionToolbarChip(
                     title: title,
-                    isActive: filterState.accountID != nil,
+                    isActive: filterState.walletID != nil,
                     trailingIcon: "chevron.up.chevron.down"
                 )
             } content: {
                 Button("Tất cả") {
                     withAnimation(.snappy) {
-                        filterState.accountID = nil
+                        filterState.walletID = nil
                     }
                 }
-                ForEach(activeAccounts, id: \.id) { account in
-                    Button(account.name) {
+                ForEach(activeWallets, id: \.id) { wallet in
+                    Button(wallet.name) {
                         withAnimation(.snappy) {
-                            filterState.accountID = account.id
+                            filterState.walletID = wallet.id
                         }
                     }
                 }
@@ -345,7 +358,7 @@ struct TransactionsView: View {
         } else if sections.isEmpty {
             TransactionsPlaceholderCard(
                 title: "Không có kết quả phù hợp",
-                message: "Thử đổi thời gian, tài khoản, bộ lọc hoặc từ khóa tìm kiếm để xem thêm giao dịch."
+                message: "Thử đổi thời gian, ví, bộ lọc hoặc từ khóa tìm kiếm để xem thêm giao dịch."
             )
         } else {
             ForEach(sections) { section in
@@ -534,20 +547,20 @@ private struct TransactionRow: View {
 
         switch record.primaryKind {
         case .expense, .income:
-            let account = transaction.sourceAccount?.name ?? "Chưa chọn tài khoản"
+            let wallet = transaction.sourceWallet?.name ?? "Chưa chọn ví"
             let category = transaction.category?.name ?? "Chưa chọn danh mục"
-            return "\(account) • \(category)"
+            return "\(wallet) • \(category)"
         case .transfer:
             switch record.transferSubtype {
             case .internalTransfer:
-                let source = transaction.sourceAccount?.name ?? "Nguồn"
-                let destination = transaction.destinationAccount?.name ?? "Đích"
+                let source = transaction.sourceWallet?.name ?? "Nguồn"
+                let destination = transaction.destinationWallet?.name ?? "Đích"
                 return "\(source) → \(destination)"
             case .debt:
-                let account = transaction.sourceAccount?.name ?? "Chưa chọn tài khoản"
+                let wallet = transaction.sourceWallet?.name ?? "Chưa chọn ví"
                 let person = transaction.counterpartyName ?? "Không rõ tên"
                 let intent = record.debtIntent?.title ?? "Công nợ"
-                return "\(person) • \(intent) • \(account)"
+                return "\(person) • \(intent) • \(wallet)"
             case nil:
                 return "Chuyển tiền"
             }
@@ -780,10 +793,10 @@ private extension LedgerTransaction {
             amountMinor: amountMinor,
             occurredAt: occurredAt,
             createdAt: createdAt,
-            sourceAccountID: sourceAccount?.id,
-            sourceAccountKind: sourceAccount?.kind,
-            destinationAccountID: destinationAccount?.id,
-            destinationAccountKind: destinationAccount?.kind,
+            sourceWalletID: sourceWallet?.id,
+            sourceWalletKind: sourceWallet?.kind,
+            destinationWalletID: destinationWallet?.id,
+            destinationWalletKind: destinationWallet?.kind,
             categoryID: category?.id,
             counterpartyName: counterpartyName,
             normalizedCounterpartyKey: normalizedCounterpartyKey

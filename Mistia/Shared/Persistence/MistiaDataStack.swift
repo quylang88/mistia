@@ -1,3 +1,4 @@
+import Foundation
 import SwiftData
 
 enum MistiaDataStack {
@@ -13,7 +14,12 @@ enum MistiaDataStack {
                 configurations: [configuration]
             )
         } catch {
-            fatalError("Unable to create SwiftData container: \(error)")
+            // Fallback for development: wipe and recreate
+            do {
+                try? FileManager.default.removeItem(at: configuration.url)
+            } catch {}
+            let config = ModelConfiguration(schema: schema, isStoredInMemoryOnly: false)
+            return try! ModelContainer(for: schema, configurations: [config])
         }
     }()
 }

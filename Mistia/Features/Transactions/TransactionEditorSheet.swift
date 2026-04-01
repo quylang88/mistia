@@ -30,8 +30,8 @@ struct TransactionEditorSheet: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(\.colorScheme) private var colorScheme
 
-    @Query(sort: [SortDescriptor(\LedgerAccount.sortOrder), SortDescriptor(\LedgerAccount.createdAt)])
-    private var storedAccounts: [LedgerAccount]
+    @Query(sort: [SortDescriptor(\LedgerWallet.sortOrder), SortDescriptor(\LedgerWallet.createdAt)])
+    private var storedWallets: [LedgerWallet]
     @Query(sort: [SortDescriptor(\TransactionCategory.sortOrder), SortDescriptor(\TransactionCategory.createdAt)])
     private var storedCategories: [TransactionCategory]
 
@@ -85,15 +85,14 @@ struct TransactionEditorSheet: View {
                     Button {
                         save()
                     } label: {
-                        ZStack {
-                            Circle()
-                                .fill(Color(red: 0.65, green: 0.45, blue: 0.98))
-                                .frame(width: 30, height: 30)
-                            
-                            Image(systemName: "checkmark")
-                                .font(.system(size: 14, weight: .bold))
-                                .foregroundStyle(.white)
-                        }
+                        Image(systemName: "checkmark")
+                            .font(.system(size: 14, weight: .bold))
+                            .foregroundStyle(Color(red: 0.75, green: 0.55, blue: 1.0))
+                            .frame(width: 30, height: 30)
+                            .background {
+                                Circle()
+                                    .fill(Color(red: 0.65, green: 0.45, blue: 0.98).opacity(0.25))
+                            }
                     }
                 }
             }
@@ -173,11 +172,11 @@ struct TransactionEditorSheet: View {
                 }
             }
 
-            if shouldShowMissingAccountsState {
+            if shouldShowMissingWalletsState {
                 TransactionHintCard(
                     icon: "wallet.pass",
                     tint: accentColor,
-                    message: "Bạn cần thêm ít nhất một tài khoản trong tab Quản lý trước khi ghi nhận giao dịch hoàn chỉnh."
+                    message: "Bạn cần thêm ít nhất một ví trong tab Quản lý trước khi ghi nhận giao dịch hoàn chỉnh."
                 )
             }
 
@@ -214,13 +213,13 @@ struct TransactionEditorSheet: View {
             case .expense, .income:
                 TransactionEditorCard(title: "Nguồn tiền") {
                     TransactionSelectionMenuRow(
-                        title: "Tài khoản",
-                        value: selectedSourceAccount?.name ?? "Chọn tài khoản",
+                        title: "Ví",
+                        value: selectedSourceWallet?.name ?? "Chọn ví",
                         systemImage: "wallet.pass"
                     ) {
-                        ForEach(availableAccounts) { account in
-                            Button(account.name) {
-                                draft.sourceAccountID = account.id
+                        ForEach(availableWallets) { wallet in
+                            Button(wallet.name) {
+                                draft.sourceWalletID = wallet.id
                             }
                         }
                     }
@@ -241,25 +240,25 @@ struct TransactionEditorSheet: View {
                 if draft.transferSubtype == .internalTransfer {
                     TransactionEditorCard(title: "Luồng chuyển") {
                         TransactionSelectionMenuRow(
-                            title: "Từ tài khoản",
-                            value: selectedSourceAccount?.name ?? "Chọn nguồn",
+                            title: "Từ ví",
+                            value: selectedSourceWallet?.name ?? "Chọn nguồn",
                             systemImage: "arrow.up.right.circle"
                         ) {
-                            ForEach(availableAccounts) { account in
-                                Button(account.name) {
-                                    draft.sourceAccountID = account.id
+                            ForEach(availableWallets) { wallet in
+                                Button(wallet.name) {
+                                    draft.sourceWalletID = wallet.id
                                 }
                             }
                         }
 
                         TransactionSelectionMenuRow(
-                            title: "Đến tài khoản",
-                            value: selectedDestinationAccount?.name ?? "Chọn đích",
+                            title: "Đến ví",
+                            value: selectedDestinationWallet?.name ?? "Chọn đích",
                             systemImage: "arrow.down.left.circle"
                         ) {
-                            ForEach(availableAccounts) { account in
-                                Button(account.name) {
-                                    draft.destinationAccountID = account.id
+                            ForEach(availableWallets) { wallet in
+                                Button(wallet.name) {
+                                    draft.destinationWalletID = wallet.id
                                 }
                             }
                         }
@@ -267,13 +266,13 @@ struct TransactionEditorSheet: View {
                 } else {
                     TransactionEditorCard(title: "Đối tượng") {
                         TransactionSelectionMenuRow(
-                            title: "Tài khoản thực hiện",
-                            value: selectedSourceAccount?.name ?? "Chọn tài khoản",
+                            title: "Ví thực hiện",
+                            value: selectedSourceWallet?.name ?? "Chọn ví",
                             systemImage: "wallet.pass"
                         ) {
-                            ForEach(availableAccounts) { account in
-                                Button(account.name) {
-                                    draft.sourceAccountID = account.id
+                            ForEach(availableWallets) { wallet in
+                                Button(wallet.name) {
+                                    draft.sourceWalletID = wallet.id
                                 }
                             }
                         }
@@ -335,10 +334,10 @@ struct TransactionEditorSheet: View {
         }
     }
 
-    private var availableAccounts: [LedgerAccount] {
-        let preferredID = target.transaction?.sourceAccount?.id ?? target.transaction?.destinationAccount?.id
+    private var availableWallets: [LedgerWallet] {
+        let preferredID = target.transaction?.sourceWallet?.id ?? target.transaction?.destinationWallet?.id
 
-        return storedAccounts
+        return storedWallets
             .filter { !$0.isArchived || $0.id == preferredID }
             .sorted {
                 if $0.sortOrder != $1.sortOrder {
@@ -362,20 +361,20 @@ struct TransactionEditorSheet: View {
             }
     }
 
-    private var selectedSourceAccount: LedgerAccount? {
-        availableAccounts.first(where: { $0.id == draft.sourceAccountID })
+    private var selectedSourceWallet: LedgerWallet? {
+        availableWallets.first(where: { $0.id == draft.sourceWalletID })
     }
 
-    private var selectedDestinationAccount: LedgerAccount? {
-        availableAccounts.first(where: { $0.id == draft.destinationAccountID })
+    private var selectedDestinationWallet: LedgerWallet? {
+        availableWallets.first(where: { $0.id == draft.destinationWalletID })
     }
 
     private var selectedCategory: TransactionCategory? {
         availableCategories.first(where: { $0.id == draft.categoryID })
     }
 
-    private var shouldShowMissingAccountsState: Bool {
-        !target.quickCapture && availableAccounts.isEmpty
+    private var shouldShowMissingWalletsState: Bool {
+        !target.quickCapture && availableWallets.isEmpty
     }
 
     private var saveButtonTitle: String {
@@ -417,8 +416,8 @@ struct TransactionEditorSheet: View {
         transaction.amountMinor = amountMinor
         transaction.occurredAt = draft.occurredAt
         transaction.updatedAt = now
-        transaction.sourceAccount = nil
-        transaction.destinationAccount = nil
+        transaction.sourceWallet = nil
+        transaction.destinationWallet = nil
         transaction.category = nil
         transaction.counterpartyName = nil
         transaction.normalizedCounterpartyKey = nil
@@ -441,8 +440,8 @@ struct TransactionEditorSheet: View {
             return
         }
 
-        guard !availableAccounts.isEmpty else {
-            alertMessage = "Bạn chưa có tài khoản nào để gắn vào giao dịch."
+        guard !availableWallets.isEmpty else {
+            alertMessage = "Bạn chưa có ví nào để gắn vào giao dịch."
             return
         }
 
@@ -462,8 +461,8 @@ struct TransactionEditorSheet: View {
 
         switch draft.primaryKind {
         case .expense, .income:
-            guard let sourceAccount = selectedSourceAccount else {
-                alertMessage = "Chọn tài khoản cho giao dịch này."
+            guard let sourceWallet = selectedSourceWallet else {
+                alertMessage = "Chọn ví cho giao dịch này."
                 return
             }
 
@@ -473,8 +472,8 @@ struct TransactionEditorSheet: View {
             }
 
             transaction.title = draft.title.nilIfBlank ?? ""
-            transaction.sourceAccount = sourceAccount
-            transaction.destinationAccount = nil
+            transaction.sourceWallet = sourceWallet
+            transaction.destinationWallet = nil
             transaction.category = category
             transaction.transferSubtype = nil
             transaction.debtIntent = nil
@@ -483,32 +482,32 @@ struct TransactionEditorSheet: View {
         case .transfer:
             switch draft.transferSubtype ?? .internalTransfer {
             case .internalTransfer:
-                guard let sourceAccount = selectedSourceAccount else {
-                    alertMessage = "Chọn tài khoản nguồn."
+                guard let sourceWallet = selectedSourceWallet else {
+                    alertMessage = "Chọn ví nguồn."
                     return
                 }
 
-                guard let destinationAccount = selectedDestinationAccount else {
-                    alertMessage = "Chọn tài khoản đích."
+                guard let destinationWallet = selectedDestinationWallet else {
+                    alertMessage = "Chọn ví đích."
                     return
                 }
 
-                guard sourceAccount.id != destinationAccount.id else {
-                    alertMessage = "Tài khoản nguồn và đích phải khác nhau."
+                guard sourceWallet.id != destinationWallet.id else {
+                    alertMessage = "Ví nguồn và đích phải khác nhau."
                     return
                 }
 
                 transaction.title = draft.title.nilIfBlank ?? "Chuyển tiền nội bộ"
-                transaction.sourceAccount = sourceAccount
-                transaction.destinationAccount = destinationAccount
+                transaction.sourceWallet = sourceWallet
+                transaction.destinationWallet = destinationWallet
                 transaction.category = nil
                 transaction.transferSubtype = .internalTransfer
                 transaction.debtIntent = nil
                 transaction.counterpartyName = nil
                 transaction.normalizedCounterpartyKey = nil
             case .debt:
-                guard let sourceAccount = selectedSourceAccount else {
-                    alertMessage = "Chọn tài khoản thực hiện giao dịch công nợ."
+                guard let sourceWallet = selectedSourceWallet else {
+                    alertMessage = "Chọn ví thực hiện giao dịch công nợ."
                     return
                 }
 
@@ -525,8 +524,8 @@ struct TransactionEditorSheet: View {
                 }
 
                 transaction.title = draft.title.nilIfBlank ?? debtIntent.title
-                transaction.sourceAccount = sourceAccount
-                transaction.destinationAccount = nil
+                transaction.sourceWallet = sourceWallet
+                transaction.destinationWallet = nil
                 transaction.category = nil
                 transaction.transferSubtype = .debt
                 transaction.debtIntent = debtIntent
@@ -780,8 +779,8 @@ private struct TransactionChoiceChipRow<Value: CaseIterable & Hashable, Content:
     var amountText: String = ""
     var note: String = ""
     var occurredAt: Date = .now
-    var sourceAccountID: UUID? = nil
-    var destinationAccountID: UUID? = nil
+    var sourceWalletID: UUID? = nil
+    var destinationWalletID: UUID? = nil
     var categoryID: UUID? = nil
     var counterpartyName: String = ""
 
@@ -794,8 +793,8 @@ private struct TransactionChoiceChipRow<Value: CaseIterable & Hashable, Content:
             self.amountText = "\(transaction.amountMinor)"
             self.note = transaction.note ?? ""
             self.occurredAt = transaction.occurredAt
-            self.sourceAccountID = transaction.sourceAccount?.id
-            self.destinationAccountID = transaction.destinationAccount?.id
+            self.sourceWalletID = transaction.sourceWallet?.id
+            self.destinationWalletID = transaction.destinationWallet?.id
             self.categoryID = transaction.category?.id
             self.counterpartyName = transaction.counterpartyName ?? ""
         } else {
@@ -806,8 +805,8 @@ private struct TransactionChoiceChipRow<Value: CaseIterable & Hashable, Content:
             self.amountText = ""
             self.note = ""
             self.occurredAt = .now
-            self.sourceAccountID = nil
-            self.destinationAccountID = nil
+            self.sourceWalletID = nil
+            self.destinationWalletID = nil
             self.categoryID = nil
             self.counterpartyName = ""
         }

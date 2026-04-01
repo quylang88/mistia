@@ -8,14 +8,14 @@ enum MistiaSchemaV1: VersionedSchema {
 
     static var models: [any PersistentModel.Type] {
         [
-            LedgerAccount.self,
+            LedgerWallet.self,
             CreditCardProfile.self,
             TransactionCategory.self
         ]
     }
 
     @Model
-    final class LedgerAccount {
+    final class LedgerWallet {
         @Attribute(.unique) var id: UUID
         var name: String
         var kindRawValue: String
@@ -74,8 +74,8 @@ enum MistiaSchemaV1: VersionedSchema {
         var notes: String?
         var createdAt: Date
         var updatedAt: Date
-        var account: LedgerAccount?
-        var paymentSourceAccount: LedgerAccount?
+        var wallet: LedgerWallet?
+        var paymentSourceWallet: LedgerWallet?
 
         init(
             id: UUID = UUID(),
@@ -88,8 +88,8 @@ enum MistiaSchemaV1: VersionedSchema {
             notes: String? = nil,
             createdAt: Date = .now,
             updatedAt: Date = .now,
-            account: LedgerAccount? = nil,
-            paymentSourceAccount: LedgerAccount? = nil
+            wallet: LedgerWallet? = nil,
+            paymentSourceWallet: LedgerWallet? = nil
         ) {
             self.id = id
             self.issuerName = issuerName
@@ -101,8 +101,8 @@ enum MistiaSchemaV1: VersionedSchema {
             self.notes = notes
             self.createdAt = createdAt
             self.updatedAt = updatedAt
-            self.account = account
-            self.paymentSourceAccount = paymentSourceAccount
+            self.wallet = wallet
+            self.paymentSourceWallet = paymentSourceWallet
         }
     }
 
@@ -152,7 +152,7 @@ enum MistiaSchemaV2: VersionedSchema {
 
     static var models: [any PersistentModel.Type] {
         [
-            LedgerAccount.self,
+            LedgerWallet.self,
             CreditCardProfile.self,
             TransactionCategory.self,
             LedgerTransaction.self

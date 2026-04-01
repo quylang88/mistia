@@ -1,6 +1,6 @@
 import Foundation
 
-enum LedgerAccountKind: String, CaseIterable, Identifiable, Codable {
+enum LedgerWalletKind: String, CaseIterable, Identifiable, Codable {
     case cash
     case payPay
     case bank
