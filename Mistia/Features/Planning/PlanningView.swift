@@ -183,7 +183,7 @@ struct PlanningView: View {
     var body: some View {
         MistiaPinnedTopBarScaffold(
             tone: .standard,
-            title: "Kế hoạch",
+            title: mistiaLocalized(vi: "Kế hoạch", en: "Planning", ja: "プラン"),
             trailingSystemImage: "calendar",
             onTrailingTap: { isMonthPickerPresented = true },
             contentSpacing: 18,
@@ -320,9 +320,13 @@ private struct BudgetTabContent: View {
 
             if rows.isEmpty {
                 PlanningEmptyStateCard(
-                    title: "Chưa có ngân sách nào",
-                    message: "Tạo ngân sách theo từng danh mục để theo dõi số tiền đã dùng và số ngày còn lại trong tháng.",
-                    buttonTitle: "Thêm ngân sách",
+                    title: mistiaLocalized(vi: "Chưa có ngân sách nào", en: "No budgets yet", ja: "予算はまだありません"),
+                    message: mistiaLocalized(
+                        vi: "Tạo ngân sách theo từng danh mục để theo dõi số tiền đã dùng và số ngày còn lại trong tháng.",
+                        en: "Create category budgets to track what you've spent and how many days are left in the month.",
+                        ja: "カテゴリごとに予算を作成すると、使った金額と月末までの残り日数を追跡できます。"
+                    ),
+                    buttonTitle: mistiaLocalized(vi: "Thêm ngân sách", en: "Add budget", ja: "予算を追加"),
                     accent: planningAccentPurple,
                     symbols: ["banknote.fill", "chart.bar.fill", "bolt.fill", "plus"]
                 ) {
@@ -349,7 +353,7 @@ private struct BudgetTabContent: View {
                     Divider()
                         .padding(.horizontal, 14)
 
-                    PlanningFooterAddButton(title: "Thêm ngân sách") {
+                    PlanningFooterAddButton(title: mistiaLocalized(vi: "Thêm ngân sách", en: "Add budget", ja: "予算を追加")) {
                         onAdd()
                     }
                 }
@@ -371,9 +375,13 @@ private struct GoalsTabContent: View {
 
             if rows.isEmpty {
                 PlanningEmptyStateCard(
-                    title: "Chưa có mục tiêu nào",
-                    message: "Thêm quỹ khẩn cấp, du lịch hay món đồ lớn để theo dõi số tiền cần tích lũy mỗi tháng.",
-                    buttonTitle: "Thêm mục tiêu",
+                    title: mistiaLocalized(vi: "Chưa có mục tiêu nào", en: "No goals yet", ja: "目標はまだありません"),
+                    message: mistiaLocalized(
+                        vi: "Thêm quỹ khẩn cấp, du lịch hay món đồ lớn để theo dõi số tiền cần tích lũy mỗi tháng.",
+                        en: "Add an emergency fund, trip, or big purchase to track how much you need to save each month.",
+                        ja: "緊急資金や旅行、大きな買い物の目標を追加して、毎月どれだけ貯める必要があるか確認できます。"
+                    ),
+                    buttonTitle: mistiaLocalized(vi: "Thêm mục tiêu", en: "Add goal", ja: "目標を追加"),
                     accent: planningAccentPurple,
                     symbols: ["target", "sparkles", "flag.fill", "plus"]
                 ) {
@@ -400,7 +408,7 @@ private struct GoalsTabContent: View {
                     Divider()
                         .padding(.horizontal, 14)
 
-                    PlanningFooterAddButton(title: "Thêm mục tiêu") {
+                    PlanningFooterAddButton(title: mistiaLocalized(vi: "Thêm mục tiêu", en: "Add goal", ja: "目標を追加")) {
                         onAdd()
                     }
                 }
@@ -440,24 +448,32 @@ private struct DueTabContent: View {
                 )
             case .bills:
                 DueRowsSection(
-                    emptyTitle: "Chưa có hóa đơn nào",
-                    emptyMessage: "Thêm tiền Internet, điện nước hoặc hóa đơn định kỳ để lên lịch đến hạn.",
+                    emptyTitle: mistiaLocalized(vi: "Chưa có hóa đơn nào", en: "No bills yet", ja: "請求はまだありません"),
+                    emptyMessage: mistiaLocalized(
+                        vi: "Thêm tiền Internet, điện nước hoặc hóa đơn định kỳ để lên lịch đến hạn.",
+                        en: "Add internet, utilities, or recurring bills to schedule upcoming due dates.",
+                        ja: "ネット料金や光熱費、定期請求を追加して支払予定を管理できます。"
+                    ),
                     emptySymbols: ["wifi", "bolt.fill", "phone.fill", "plus"],
                     accent: planningAccentPurple,
                     items: bills,
-                    addTitle: "Thêm hóa đơn",
+                    addTitle: mistiaLocalized(vi: "Thêm hóa đơn", en: "Add bill", ja: "請求を追加"),
                     referenceDate: referenceDate,
                     onAdd: onAddBill,
                     onEdit: onEditBill
                 )
             case .installments:
                 DueRowsSection(
-                    emptyTitle: "Chưa có khoản trả góp / vay",
-                    emptyMessage: "Thêm các khoản cần trả theo kỳ và tạo giao dịch khi thanh toán trước.",
+                    emptyTitle: mistiaLocalized(vi: "Chưa có khoản trả góp / vay", en: "No installments or loans yet", ja: "分割払い・借入はまだありません"),
+                    emptyMessage: mistiaLocalized(
+                        vi: "Thêm các khoản cần trả theo kỳ và tạo giao dịch khi thanh toán trước.",
+                        en: "Add installment or loan payments and create transactions when you pay early.",
+                        ja: "分割払いやローンを追加すると、繰上げ支払い時に取引も作成できます。"
+                    ),
                     emptySymbols: ["creditcard.and.123", "building.columns.fill", "banknote.fill", "plus"],
                     accent: planningAccentPurple,
                     items: installments,
-                    addTitle: "Thêm trả góp / vay",
+                    addTitle: mistiaLocalized(vi: "Thêm trả góp / vay", en: "Add installment / loan", ja: "分割払い・借入を追加"),
                     referenceDate: referenceDate,
                     onAdd: onAddInstallment,
                     onEdit: onEditInstallment
@@ -478,9 +494,13 @@ private struct CreditCardsSection: View {
     var body: some View {
         if items.isEmpty {
             PlanningEmptyStateCard(
-                title: "Chưa có thẻ tín dụng",
-                message: "Liên kết hoặc thêm thẻ ngay tại đây để hiển thị credit card và theo dõi ngày thanh toán.",
-                buttonTitle: "Thêm credit card",
+                title: mistiaLocalized(vi: "Chưa có thẻ tín dụng", en: "No credit cards yet", ja: "クレジットカードはまだありません"),
+                message: mistiaLocalized(
+                    vi: "Liên kết hoặc thêm thẻ ngay tại đây để hiển thị credit card và theo dõi ngày thanh toán.",
+                    en: "Link or add cards here to show your credit cards and track payment dates.",
+                    ja: "ここでカードを追加または連携すると、クレジットカードと支払日を管理できます。"
+                ),
+                buttonTitle: mistiaLocalized(vi: "Thêm credit card", en: "Add credit card", ja: "カードを追加"),
                 accent: planningAccentPurple,
                 symbols: ["creditcard.fill", "wave.3.right.circle.fill", "building.columns.fill", "plus"]
             ) {
@@ -499,7 +519,7 @@ private struct CreditCardsSection: View {
                     }
                 }
 
-                PlanningFooterAddButton(title: "Thêm credit card") {
+                PlanningFooterAddButton(title: mistiaLocalized(vi: "Thêm credit card", en: "Add credit card", ja: "カードを追加")) {
                     onAdd()
                 }
             }
@@ -560,6 +580,7 @@ private struct DueRowsSection: View {
 
 private struct PlanningModePicker: View {
     @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.locale) private var locale
     @Binding var selection: PlanningMode
 
     private var accent: Color {
@@ -610,6 +631,7 @@ private struct PlanningModePicker: View {
                 .buttonStyle(MistiaPressableButtonStyle(cornerRadius: 24, tint: accent))
             }
         }
+        .id(locale.identifier)
         .padding(.horizontal, 18)
         .padding(.vertical, 2)
         .padding(.bottom, 10)
@@ -670,7 +692,7 @@ private struct PlanningBudgetSummaryCard: View {
             VStack(alignment: .leading, spacing: 18) {
                 HStack(alignment: .top, spacing: 18) {
                     VStack(alignment: .leading, spacing: 10) {
-                        Text("Tổng ngân sách tháng")
+                        Text(mistiaLocalized(vi: "Tổng ngân sách tháng", en: "Monthly budget total", ja: "月間予算合計"))
                             .font(.system(size: 14.5, weight: .semibold, design: .rounded))
                             .foregroundStyle(.secondary)
 
@@ -690,7 +712,7 @@ private struct PlanningBudgetSummaryCard: View {
 
                 HStack(spacing: 14) {
                     PlanningMetricColumn(
-                        title: "Đã dùng",
+                        title: mistiaLocalized(vi: "Đã dùng", en: "Spent", ja: "使用済み"),
                         value: summary.spentMinor.formattedCurrency(code: currencyCode),
                         tint: MistiaAccent.coral.color
                     )
@@ -699,7 +721,7 @@ private struct PlanningBudgetSummaryCard: View {
                         .frame(height: 30)
 
                     PlanningMetricColumn(
-                        title: "Còn lại",
+                        title: mistiaLocalized(vi: "Còn lại", en: "Remaining", ja: "残り"),
                         value: summary.remainingMinor.formattedCurrency(code: currencyCode),
                         tint: Color(hex: "#2DAA9E")
                     )
@@ -742,16 +764,22 @@ private struct PlanningGoalSummaryCard: View {
     var body: some View {
         MistiaBlockCard(cornerRadius: 24, tint: cardTint, padding: 18) {
             VStack(alignment: .leading, spacing: 16) {
-                Text("Mục tiêu đang hoạt động")
+                Text(mistiaLocalized(vi: "Mục tiêu đang hoạt động", en: "Active goals", ja: "進行中の目標"))
                     .font(.system(size: 14.5, weight: .semibold, design: .rounded))
                     .foregroundStyle(.secondary)
 
-                Text("\(summary.activeCount) mục tiêu")
+                Text(
+                    mistiaLocalized(
+                        vi: "\(summary.activeCount) mục tiêu",
+                        en: "\(summary.activeCount) goals",
+                        ja: "\(summary.activeCount) 件の目標"
+                    )
+                )
                     .font(.system(size: 28, weight: .bold, design: .rounded))
 
                 HStack(spacing: 14) {
                     PlanningMetricColumn(
-                        title: "Đã tích lũy",
+                        title: mistiaLocalized(vi: "Đã tích lũy", en: "Saved", ja: "積み立て済み"),
                         value: summary.totalSavedMinor.formattedCurrency(code: currencyCode),
                         tint: Color(hex: "#2DAA9E")
                     )
@@ -760,8 +788,8 @@ private struct PlanningGoalSummaryCard: View {
                         .frame(height: 30)
 
                     PlanningMetricColumn(
-                        title: "Gần đạt nhất",
-                        value: summary.nearestGoalName ?? "Chưa có",
+                        title: mistiaLocalized(vi: "Gần đạt nhất", en: "Closest to goal", ja: "達成まであと少し"),
+                        value: summary.nearestGoalName ?? mistiaLocalized(vi: "Chưa có", en: "None yet", ja: "まだありません"),
                         tint: Color(hex: "#5B7BFF")
                     )
                 }
@@ -782,13 +810,13 @@ private struct PlanningDueSummaryCard: View {
     var body: some View {
         MistiaBlockCard(cornerRadius: 24, tint: cardTint, padding: 18) {
             VStack(alignment: .leading, spacing: 18) {
-                Text("Tóm tắt đến hạn")
+                Text(mistiaLocalized(vi: "Tóm tắt đến hạn", en: "Due summary", ja: "支払予定の概要"))
                     .font(.system(size: 14.5, weight: .semibold, design: .rounded))
                     .foregroundStyle(.secondary)
 
                 HStack(spacing: 14) {
                     PlanningMetricColumn(
-                        title: "Sắp đến hạn",
+                        title: mistiaLocalized(vi: "Sắp đến hạn", en: "Upcoming", ja: "まもなく期限"),
                         value: "\(summary.upcomingCount)",
                         tint: Color(hex: "#5B7BFF")
                     )
@@ -797,7 +825,7 @@ private struct PlanningDueSummaryCard: View {
                         .frame(height: 30)
 
                     PlanningMetricColumn(
-                        title: "Tổng cần trả",
+                        title: mistiaLocalized(vi: "Tổng cần trả", en: "Total due", ja: "支払合計"),
                         value: summary.totalDueMinor.formattedCurrency(code: currencyCode),
                         tint: Color(hex: "#F59B3F")
                     )
@@ -806,7 +834,7 @@ private struct PlanningDueSummaryCard: View {
                         .frame(height: 30)
 
                     PlanningMetricColumn(
-                        title: "Quá hạn",
+                        title: mistiaLocalized(vi: "Quá hạn", en: "Overdue", ja: "延滞"),
                         value: "\(summary.overdueCount)",
                         tint: Color(hex: "#F45C7E")
                     )
@@ -1044,7 +1072,7 @@ private struct PlanningCreditCardCard: View {
 
             HStack {
                 VStack(alignment: .leading, spacing: 3) {
-                    Text("Ngày đến hạn")
+                    Text(mistiaLocalized(vi: "Ngày đến hạn", en: "Due date", ja: "支払日"))
                         .font(.system(size: 11.5, weight: .semibold, design: .rounded))
                         .foregroundStyle(.white.opacity(0.65))
                     Text(item.dueDate.shortDisplayText)
@@ -1219,7 +1247,7 @@ private struct PlanningMetricColumn: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 5) {
-            Text(mistiaCatalog(title))
+            Text(title)
                 .lineLimit(2)
                 .minimumScaleFactor(0.7)
                 .font(.system(size: 11.5, weight: .semibold, design: .rounded))
@@ -1240,7 +1268,7 @@ private struct PlanningStatusBadge: View {
     let color: Color
 
     var body: some View {
-            Text(mistiaCatalog(title))
+            Text(title)
                 .font(.system(size: 11.5, weight: .bold, design: .rounded))
                 .foregroundStyle(color)
                 .padding(.horizontal, 10)
@@ -1287,7 +1315,7 @@ private struct PlanningMonthPickerSheet: View {
         NavigationStack {
             VStack(spacing: 0) {
                 HStack(spacing: 0) {
-                    Picker("Tháng", selection: $draftMonth) {
+                    Picker(mistiaLocalized(vi: "Tháng", en: "Month", ja: "月"), selection: $draftMonth) {
                         ForEach(1...12, id: \.self) { month in
                             Text(
                                 mistiaLocalized(
@@ -1302,7 +1330,7 @@ private struct PlanningMonthPickerSheet: View {
                     .pickerStyle(.wheel)
                     .frame(maxWidth: .infinity)
 
-                    Picker("Năm", selection: $draftYear) {
+                    Picker(mistiaLocalized(vi: "Năm", en: "Year", ja: "年"), selection: $draftYear) {
                         ForEach(yearOptions, id: \.self) { year in
                             Text(
                                 mistiaLocalized(
@@ -1322,7 +1350,7 @@ private struct PlanningMonthPickerSheet: View {
             .padding(.horizontal, 20)
             .padding(.top, 16)
             .padding(.bottom, 20)
-            .navigationTitle(mistiaCatalog("Chọn tháng"))
+            .navigationTitle(mistiaLocalized(vi: "Chọn tháng", en: "Choose month", ja: "月を選択"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {

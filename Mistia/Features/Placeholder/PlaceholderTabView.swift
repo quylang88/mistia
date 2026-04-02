@@ -25,7 +25,13 @@ struct PlaceholderTabView: View {
                         Text(tab.title)
                             .font(.system(size: 28, weight: .bold, design: .rounded))
 
-                        Text("Tab này đang để trống để ưu tiên hoàn thiện giao diện Tổng quan trước.")
+                        Text(
+                            mistiaLocalized(
+                                vi: "Tab này đang để trống để ưu tiên hoàn thiện giao diện Tổng quan trước.",
+                                en: "This tab is intentionally empty while we prioritize finishing the Overview screen first.",
+                                ja: "まずホーム画面の仕上げを優先しているため、このタブは現在空になっています。"
+                            )
+                        )
                             .multilineTextAlignment(.center)
                             .font(.system(size: 15, weight: .medium, design: .rounded))
                             .foregroundStyle(.secondary)

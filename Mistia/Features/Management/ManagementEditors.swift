@@ -35,7 +35,7 @@ struct ManagementWalletEditorSheet: View {
     var body: some View {
         NavigationStack {
             Form {
-                Section("Nhận diện") {
+                Section(mistiaLocalized(vi: "Nhận diện", en: "Identity", ja: "識別情報")) {
                     Button {
                         showsIconPicker = true
                     } label: {
@@ -46,9 +46,9 @@ struct ManagementWalletEditorSheet: View {
                             )
 
                             VStack(alignment: .leading, spacing: 2) {
-                                Text("Biểu tượng & màu")
+                                Text(mistiaLocalized(vi: "Biểu tượng & màu", en: "Icon & color", ja: "アイコンと色"))
                                     .foregroundStyle(.primary)
-                                Text("Chạm để tùy chỉnh icon")
+                                Text(mistiaLocalized(vi: "Chạm để tùy chỉnh icon", en: "Tap to customize the icon", ja: "タップしてアイコンを変更"))
                                     .font(.footnote)
                                     .foregroundStyle(.secondary)
                             }
@@ -63,10 +63,10 @@ struct ManagementWalletEditorSheet: View {
                     .buttonStyle(.plain)
                 }
 
-                Section("Thông tin cơ bản") {
-                    TextField("Tên ví", text: $draft.name)
+                Section(mistiaLocalized(vi: "Thông tin cơ bản", en: "Basic details", ja: "基本情報")) {
+                    TextField(mistiaLocalized(vi: "Tên ví", en: "Wallet name", ja: "ウォレット名"), text: $draft.name)
 
-                    Picker("Loại ví", selection: $draft.kind) {
+                    Picker(mistiaLocalized(vi: "Loại ví", en: "Wallet type", ja: "ウォレット種別"), selection: $draft.kind) {
                         ForEach(LedgerWalletKind.allCases) { kind in
                             Text(kind.title).tag(kind)
                         }
@@ -75,23 +75,23 @@ struct ManagementWalletEditorSheet: View {
                     TextField(draft.kind.balanceFieldTitle, text: $draft.openingBalanceText)
                         .keyboardType(.numberPad)
 
-                    LabeledContent("Tiền tệ") {
+                    LabeledContent(mistiaLocalized(vi: "Tiền tệ", en: "Currency", ja: "通貨")) {
                         Text(draft.currencyCode)
                             .foregroundStyle(.secondary)
                     }
                 }
 
                 if draft.kind == .bank {
-                    Section("Ngân hàng") {
+                    Section(mistiaLocalized(vi: "Ngân hàng", en: "Bank", ja: "銀行")) {
                         Button {
                             showsBankPicker = true
                         } label: {
                             HStack(spacing: 12) {
                                 VStack(alignment: .leading, spacing: 2) {
-                                    Text("Chọn ngân hàng phổ biến")
+                                    Text(mistiaLocalized(vi: "Chọn ngân hàng phổ biến", en: "Choose a popular bank", ja: "よく使われる銀行を選択"))
                                         .foregroundStyle(.primary)
 
-                                    Text(draft.institutionDisplayName.nilIfBlank ?? "Chưa chọn")
+                                    Text(draft.institutionDisplayName.nilIfBlank ?? mistiaLocalized(vi: "Chưa chọn", en: "Not selected", ja: "未選択"))
                                         .font(.footnote)
                                         .foregroundStyle(.secondary)
                                 }
@@ -105,7 +105,7 @@ struct ManagementWalletEditorSheet: View {
                         }
                         .buttonStyle(.plain)
 
-                        TextField("Hoặc nhập tên ngân hàng", text: $draft.institutionDisplayName)
+                        TextField(mistiaLocalized(vi: "Hoặc nhập tên ngân hàng", en: "Or enter the bank name", ja: "または銀行名を入力"), text: $draft.institutionDisplayName)
                             .onChange(of: draft.institutionDisplayName) { _, newValue in
                                 if let selectedBank = ManagementPresetData.japaneseBanks.first(where: { $0.key == draft.institutionPresetKey }),
                                    selectedBank.name != newValue {
@@ -116,60 +116,60 @@ struct ManagementWalletEditorSheet: View {
                 }
 
                 if draft.kind == .creditCard {
-                    Section("Credit card") {
-                        TextField("Tên đơn vị phát hành", text: $draft.issuerName)
+                    Section(mistiaLocalized(vi: "Credit card", en: "Credit card", ja: "クレジットカード")) {
+                        TextField(mistiaLocalized(vi: "Tên đơn vị phát hành", en: "Issuer name", ja: "発行会社名"), text: $draft.issuerName)
 
-                        Picker("Mạng thẻ", selection: $draft.network) {
+                        Picker(mistiaLocalized(vi: "Mạng thẻ", en: "Card network", ja: "カードブランド"), selection: $draft.network) {
                             ForEach(CreditCardNetwork.allCases) { network in
                                 Text(network.title).tag(network)
                             }
                         }
 
-                        TextField("4 số cuối", text: $draft.last4)
+                        TextField(mistiaLocalized(vi: "4 số cuối", en: "Last 4 digits", ja: "下4桁"), text: $draft.last4)
                             .keyboardType(.numberPad)
                             .onChange(of: draft.last4) { _, newValue in
                                 draft.last4 = String(newValue.filter(\.isNumber).prefix(4))
                             }
 
-                        TextField("Hạn mức tín dụng", text: $draft.creditLimitText)
+                        TextField(mistiaLocalized(vi: "Hạn mức tín dụng", en: "Credit limit", ja: "利用限度額"), text: $draft.creditLimitText)
                             .keyboardType(.numberPad)
 
-                        Picker("Ngày chốt sao kê", selection: $draft.statementClosingDay) {
+                        Picker(mistiaLocalized(vi: "Ngày chốt sao kê", en: "Statement closing day", ja: "締め日"), selection: $draft.statementClosingDay) {
                             ForEach(1...31, id: \.self) { day in
-                                Text("Ngày \(day)").tag(day)
+                                Text(mistiaLocalized(vi: "Ngày \(day)", en: "Day \(day)", ja: "\(day) 日")).tag(day)
                             }
                         }
 
-                        Picker("Ngày thanh toán", selection: $draft.paymentDueDay) {
+                        Picker(mistiaLocalized(vi: "Ngày thanh toán", en: "Payment day", ja: "支払日"), selection: $draft.paymentDueDay) {
                             ForEach(1...31, id: \.self) { day in
-                                Text("Ngày \(day)").tag(day)
+                                Text(mistiaLocalized(vi: "Ngày \(day)", en: "Day \(day)", ja: "\(day) 日")).tag(day)
                             }
                         }
 
-                        Picker("Nguồn thanh toán", selection: $draft.paymentSourceWalletID) {
-                            Text("Chọn sau").tag(Optional<UUID>.none)
+                        Picker(mistiaLocalized(vi: "Nguồn thanh toán", en: "Payment source", ja: "支払い元"), selection: $draft.paymentSourceWalletID) {
+                            Text(mistiaLocalized(vi: "Chọn sau", en: "Choose later", ja: "あとで選択")).tag(Optional<UUID>.none)
 
                             ForEach(paymentSourceWallets) { wallet in
                                 Text(wallet.name).tag(Optional(wallet.id))
                             }
                         }
 
-                        TextField("Ghi chú", text: $draft.notes, axis: .vertical)
+                        TextField(mistiaLocalized(vi: "Ghi chú", en: "Notes", ja: "メモ"), text: $draft.notes, axis: .vertical)
                             .lineLimit(3...5)
                     }
                 }
 
                 if target.wallet != nil {
                     Section {
-                        Button("Lưu trữ ví", role: .destructive) {
+                        Button(mistiaLocalized(vi: "Lưu trữ ví", en: "Archive wallet", ja: "ウォレットをアーカイブ"), role: .destructive) {
                             showsArchiveConfirmation = true
                         }
                     } footer: {
-                        Text("Ví lưu trữ sẽ được ẩn khỏi màn hình quản lý.")
+                        Text(mistiaLocalized(vi: "Ví lưu trữ sẽ được ẩn khỏi màn hình quản lý.", en: "Archived wallets will be hidden from the manage screen.", ja: "アーカイブしたウォレットは管理画面に表示されなくなります。"))
                     }
                 }
             }
-            .navigationTitle(mistiaCatalog(target.wallet == nil ? "Ví mới" : "Sửa ví"))
+            .navigationTitle(mistiaLocalized(vi: target.wallet == nil ? "Ví mới" : "Sửa ví", en: target.wallet == nil ? "New wallet" : "Edit wallet", ja: target.wallet == nil ? "新しいウォレット" : "ウォレットを編集"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
@@ -218,28 +218,28 @@ struct ManagementWalletEditorSheet: View {
             }
         }
         .alert(
-            "Chưa thể lưu",
+            mistiaLocalized(vi: "Chưa thể lưu", en: "Can't save yet", ja: "まだ保存できません"),
             isPresented: Binding(
                 get: { alertMessage != nil },
                 set: { if !$0 { alertMessage = nil } }
             )
         ) {
-            Button("OK", role: .cancel) { }
+            Button(mistiaLocalized(vi: "OK", en: "OK", ja: "OK"), role: .cancel) { }
         } message: {
             Text(mistiaCatalog(alertMessage ?? ""))
         }
         .confirmationDialog(
-            "Lưu trữ ví này?",
+            mistiaLocalized(vi: "Lưu trữ ví này?", en: "Archive this wallet?", ja: "このウォレットをアーカイブしますか？"),
             isPresented: $showsArchiveConfirmation,
             titleVisibility: .visible
         ) {
-            Button("Lưu trữ", role: .destructive) {
+            Button(mistiaLocalized(vi: "Lưu trữ", en: "Archive", ja: "アーカイブ"), role: .destructive) {
                 archiveWallet()
             }
 
-            Button("Hủy", role: .cancel) { }
+            Button(mistiaLocalized(vi: "Hủy", en: "Cancel", ja: "キャンセル"), role: .cancel) { }
         } message: {
-            Text("Bạn vẫn có thể khôi phục sau khi nối thêm màn hình archive.")
+            Text(mistiaLocalized(vi: "Bạn vẫn có thể khôi phục sau khi nối thêm màn hình archive.", en: "You can restore it later after the archive screen is added.", ja: "アーカイブ画面が追加された後で復元できます。"))
         }
         .onChange(of: draft.kind) { oldValue, newValue in
             draft.handleKindChange(from: oldValue, to: newValue)
@@ -264,12 +264,12 @@ struct ManagementWalletEditorSheet: View {
     private func save() {
         let trimmedName = draft.name.nilIfBlank
         guard let trimmedName else {
-            alertMessage = "Nhập tên ví trước khi lưu."
+            alertMessage = mistiaLocalized(vi: "Nhập tên ví trước khi lưu.", en: "Enter a wallet name before saving.", ja: "保存する前にウォレット名を入力してください。")
             return
         }
 
         if draft.kind == .bank, draft.institutionDisplayName.nilIfBlank == nil {
-            alertMessage = "Chọn hoặc nhập tên ngân hàng cho ví này."
+            alertMessage = mistiaLocalized(vi: "Chọn hoặc nhập tên ngân hàng cho ví này.", en: "Choose or enter a bank name for this wallet.", ja: "このウォレットの銀行名を選択または入力してください。")
             return
         }
 
@@ -308,7 +308,7 @@ struct ManagementWalletEditorSheet: View {
             try modelContext.save()
             dismiss()
         } catch {
-            alertMessage = "Không thể lưu ví lúc này. \(error.localizedDescription)"
+            alertMessage = mistiaLocalized(vi: "Không thể lưu ví lúc này.", en: "Couldn't save this wallet right now.", ja: "現在このウォレットを保存できません。") + " \(error.localizedDescription)"
         }
     }
 
@@ -349,7 +349,7 @@ struct ManagementWalletEditorSheet: View {
             try modelContext.save()
             dismiss()
         } catch {
-            alertMessage = "Không thể lưu trạng thái lưu trữ. \(error.localizedDescription)"
+            alertMessage = mistiaLocalized(vi: "Không thể lưu trạng thái lưu trữ.", en: "Couldn't save the archive state.", ja: "アーカイブ状態を保存できません。") + " \(error.localizedDescription)"
         }
     }
 
@@ -379,7 +379,7 @@ struct ManagementCategoryEditorSheet: View {
     var body: some View {
         NavigationStack {
             Form {
-                Section("Nhận diện") {
+                Section(mistiaLocalized(vi: "Nhận diện", en: "Identity", ja: "識別情報")) {
                     Button {
                         showsIconPicker = true
                     } label: {
@@ -390,9 +390,9 @@ struct ManagementCategoryEditorSheet: View {
                             )
 
                             VStack(alignment: .leading, spacing: 2) {
-                                Text("Biểu tượng & màu")
+                                Text(mistiaLocalized(vi: "Biểu tượng & màu", en: "Icon & color", ja: "アイコンと色"))
                                     .foregroundStyle(.primary)
-                                Text("Đổi icon và màu cho danh mục")
+                                Text(mistiaLocalized(vi: "Đổi icon và màu cho danh mục", en: "Change the icon and color for this category", ja: "カテゴリのアイコンと色を変更"))
                                     .font(.footnote)
                                     .foregroundStyle(.secondary)
                             }
@@ -407,11 +407,11 @@ struct ManagementCategoryEditorSheet: View {
                     .buttonStyle(.plain)
                 }
 
-                Section("Thông tin") {
-                    TextField("Tên danh mục", text: $draft.name)
+                Section(mistiaLocalized(vi: "Thông tin", en: "Details", ja: "詳細")) {
+                    TextField(mistiaLocalized(vi: "Tên danh mục", en: "Category name", ja: "カテゴリ名"), text: $draft.name)
 
                     VStack(alignment: .leading, spacing: 10) {
-                        Text("Loại danh mục")
+                        Text(mistiaLocalized(vi: "Loại danh mục", en: "Category type", ja: "カテゴリ種別"))
                             .font(.subheadline.weight(.semibold))
                             .foregroundStyle(.secondary)
 
@@ -426,15 +426,15 @@ struct ManagementCategoryEditorSheet: View {
 
                 if target.category != nil {
                     Section {
-                        Button("Lưu trữ danh mục", role: .destructive) {
+                        Button(mistiaLocalized(vi: "Lưu trữ danh mục", en: "Archive category", ja: "カテゴリをアーカイブ"), role: .destructive) {
                             showsArchiveConfirmation = true
                         }
                     } footer: {
-                        Text("Danh mục lưu trữ sẽ không còn hiện trong tab quản lý.")
+                        Text(mistiaLocalized(vi: "Danh mục lưu trữ sẽ không còn hiện trong tab quản lý.", en: "Archived categories will no longer appear in the manage tab.", ja: "アーカイブしたカテゴリは管理タブに表示されなくなります。"))
                     }
                 }
             }
-            .navigationTitle(mistiaCatalog(target.category == nil ? "Danh mục mới" : "Sửa danh mục"))
+            .navigationTitle(mistiaLocalized(vi: target.category == nil ? "Danh mục mới" : "Sửa danh mục", en: target.category == nil ? "New category" : "Edit category", ja: target.category == nil ? "新しいカテゴリ" : "カテゴリを編集"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
@@ -474,26 +474,26 @@ struct ManagementCategoryEditorSheet: View {
             }
         }
         .alert(
-            "Chưa thể lưu",
+            mistiaLocalized(vi: "Chưa thể lưu", en: "Can't save yet", ja: "まだ保存できません"),
             isPresented: Binding(
                 get: { alertMessage != nil },
                 set: { if !$0 { alertMessage = nil } }
             )
         ) {
-            Button("OK", role: .cancel) { }
+            Button(mistiaLocalized(vi: "OK", en: "OK", ja: "OK"), role: .cancel) { }
         } message: {
             Text(mistiaCatalog(alertMessage ?? ""))
         }
         .confirmationDialog(
-            "Lưu trữ danh mục này?",
+            mistiaLocalized(vi: "Lưu trữ danh mục này?", en: "Archive this category?", ja: "このカテゴリをアーカイブしますか？"),
             isPresented: $showsArchiveConfirmation,
             titleVisibility: .visible
         ) {
-            Button("Lưu trữ", role: .destructive) {
+            Button(mistiaLocalized(vi: "Lưu trữ", en: "Archive", ja: "アーカイブ"), role: .destructive) {
                 archiveCategory()
             }
 
-            Button("Hủy", role: .cancel) { }
+            Button(mistiaLocalized(vi: "Hủy", en: "Cancel", ja: "キャンセル"), role: .cancel) { }
         }
         .onChange(of: draft.kind) { oldValue, newValue in
             draft.handleKindChange(from: oldValue, to: newValue)
@@ -502,7 +502,7 @@ struct ManagementCategoryEditorSheet: View {
 
     private func save() {
         guard let trimmedName = draft.name.nilIfBlank else {
-            alertMessage = "Nhập tên danh mục trước khi lưu."
+            alertMessage = mistiaLocalized(vi: "Nhập tên danh mục trước khi lưu.", en: "Enter a category name before saving.", ja: "保存する前にカテゴリ名を入力してください。")
             return
         }
 
@@ -535,7 +535,7 @@ struct ManagementCategoryEditorSheet: View {
             try modelContext.save()
             dismiss()
         } catch {
-            alertMessage = "Không thể lưu danh mục lúc này. \(error.localizedDescription)"
+            alertMessage = mistiaLocalized(vi: "Không thể lưu danh mục lúc này.", en: "Couldn't save this category right now.", ja: "現在このカテゴリを保存できません。") + " \(error.localizedDescription)"
         }
     }
 
@@ -549,7 +549,7 @@ struct ManagementCategoryEditorSheet: View {
             try modelContext.save()
             dismiss()
         } catch {
-            alertMessage = "Không thể lưu trạng thái lưu trữ. \(error.localizedDescription)"
+            alertMessage = mistiaLocalized(vi: "Không thể lưu trạng thái lưu trữ.", en: "Couldn't save the archive state.", ja: "アーカイブ状態を保存できません。") + " \(error.localizedDescription)"
         }
     }
 
@@ -614,7 +614,7 @@ private struct ManagementBankPickerSheet: View {
     var body: some View {
         NavigationStack {
             List {
-                Section("Ngân hàng phổ biến tại Nhật") {
+                Section(mistiaLocalized(vi: "Ngân hàng phổ biến tại Nhật", en: "Popular banks in Japan", ja: "日本でよく使われる銀行")) {
                     ForEach(filteredBanks) { bank in
                         Button {
                             onSelect(bank, bank.name)
@@ -635,22 +635,22 @@ private struct ManagementBankPickerSheet: View {
                     }
                 }
 
-                Section("Không thấy trong danh sách?") {
-                    TextField("Nhập thủ công tên ngân hàng", text: $manualName)
+                Section(mistiaLocalized(vi: "Không thấy trong danh sách?", en: "Don't see it here?", ja: "一覧にありませんか？")) {
+                    TextField(mistiaLocalized(vi: "Nhập thủ công tên ngân hàng", en: "Enter bank name manually", ja: "銀行名を手入力"), text: $manualName)
 
-                    Button("Dùng tên này") {
+                    Button(mistiaLocalized(vi: "Dùng tên này", en: "Use this name", ja: "この名前を使う")) {
                         onSelect(nil, manualName.nilIfBlank ?? "")
                         dismiss()
                     }
                     .disabled(manualName.nilIfBlank == nil)
                 }
             }
-            .searchable(text: $searchText, prompt: "Tìm ngân hàng")
-            .navigationTitle(mistiaCatalog("Chọn ngân hàng"))
+            .searchable(text: $searchText, prompt: mistiaLocalized(vi: "Tìm ngân hàng", en: "Search banks", ja: "銀行を検索"))
+            .navigationTitle(mistiaLocalized(vi: "Chọn ngân hàng", en: "Choose bank", ja: "銀行を選択"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
-                    Button("Đóng") {
+                    Button(mistiaLocalized(vi: "Đóng", en: "Close", ja: "閉じる")) {
                         dismiss()
                     }
                 }

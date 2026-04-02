@@ -441,6 +441,7 @@ final class MistiaNativeTabBarController: UITabBarController, UITabBarController
   private func localizedRootView(for tab: MistiaTab) -> AnyView {
     AnyView(
       tab.nativeRootView
+        .id("mistia.root.\(tab.rawValue).\(currentAppLanguage.rawValue)")
         .environment(\.locale, currentAppLanguage.locale)
         .environment(\.calendar, currentAppLanguage.calendar)
     )

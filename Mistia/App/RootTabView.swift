@@ -10,11 +10,11 @@ enum MistiaTab: String, CaseIterable, Hashable {
   var title: String {
     switch self {
     case .overview:
-      mistiaLocalized(vi: "Tổng quan", en: "Overview", ja: "概要")
+      mistiaLocalized(vi: "Tổng quan", en: "Overview", ja: "ホーム")
     case .transactions:
       mistiaLocalized(vi: "Giao dịch", en: "Transactions", ja: "取引")
     case .planning:
-      mistiaLocalized(vi: "Kế hoạch", en: "Planning", ja: "計画")
+      mistiaLocalized(vi: "Kế hoạch", en: "Planning", ja: "プラン")
     case .settings:
       mistiaLocalized(vi: "Quản lý", en: "Manage", ja: "管理")
     }
@@ -263,7 +263,7 @@ private struct MistiaAssistantSheet: View {
       MistiaBackgroundView()
 
       VStack(spacing: 18) {
-        Text("Mistia Assistant")
+        Text(mistiaLocalized(vi: "Mistia Assistant", en: "Mistia Assistant", ja: "Mistia Assistant"))
           .font(.system(size: 24, weight: .bold, design: .rounded))
 
         MistiaGlassCard(
@@ -282,7 +282,11 @@ private struct MistiaAssistantSheet: View {
             .frame(width: 76, height: 76)
 
             Text(
-              "Tab AI assistant đang được giữ chỗ để hoàn thiện UI trước, chưa nối logic chat hoặc automation."
+              mistiaLocalized(
+                vi: "Tab AI assistant đang được giữ chỗ để hoàn thiện UI trước, chưa nối logic chat hoặc automation.",
+                en: "The AI assistant tab is a placeholder for now while we finish the UI first. Chat and automation logic are not connected yet.",
+                ja: "AI アシスタントタブは、まず UI を仕上げるためのプレースホルダーです。チャットや自動化のロジックはまだ接続されていません。"
+              )
             )
             .multilineTextAlignment(.center)
             .font(.system(size: 15, weight: .medium, design: .rounded))

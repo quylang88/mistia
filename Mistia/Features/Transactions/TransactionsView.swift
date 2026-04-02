@@ -148,7 +148,7 @@ struct TransactionsView: View {
     var body: some View {
         MistiaPinnedTopBarScaffold(
             tone: .standard,
-            title: "Giao dịch",
+            title: mistiaLocalized(vi: "Giao dịch", en: "Transactions", ja: "取引"),
             trailingSystemImage: nil,
             contentSpacing: 18,
             contentBottomPadding: 150,
@@ -165,7 +165,7 @@ struct TransactionsView: View {
         .searchable(
             text: $searchText,
             isPresented: $isSearchPresented,
-            prompt: "Tìm tên giao dịch..."
+            prompt: mistiaLocalized(vi: "Tìm tên giao dịch...", en: "Search transaction name...", ja: "取引名を検索...")
         )
         .searchToolbarBehavior(.minimize)
         .searchPresentationToolbarBehavior(.avoidHidingContent)
@@ -240,7 +240,13 @@ struct TransactionsView: View {
                     .padding(.horizontal, 4)
                     .padding(.vertical, 1)
                 } content: {
-                    Text("\(activeFilterCount) bộ lọc đang áp dụng")
+                    Text(
+                        mistiaLocalized(
+                            vi: "\(activeFilterCount) bộ lọc đang áp dụng",
+                            en: "\(activeFilterCount) active filters",
+                            ja: "\(activeFilterCount) 個のフィルタを適用中"
+                        )
+                    )
                     
                     Button(role: .destructive) {
                         withAnimation(.snappy) {
@@ -248,19 +254,19 @@ struct TransactionsView: View {
                             filterState = TransactionFilterState(timeScope: .allTime, statusScope: .all)
                         }
                     } label: {
-                        Text("Xoá tất cả bộ lọc")
+                        Text(mistiaLocalized(vi: "Xoá tất cả bộ lọc", en: "Clear all filters", ja: "すべてのフィルタを解除"))
                     }
                 }
             }
 
             filterMenu(isActive: selectedSegment != nil) {
                 TransactionToolbarChip(
-                    title: selectedSegment?.title ?? "Phân loại",
+                    title: selectedSegment?.title ?? mistiaLocalized(vi: "Phân loại", en: "Type", ja: "種類"),
                     isActive: selectedSegment != nil,
                     trailingIcon: "chevron.up.chevron.down"
                 )
             } content: {
-                Button("Tất cả") {
+                Button(mistiaLocalized(vi: "Tất cả", en: "All", ja: "すべて")) {
                     withAnimation(.snappy) {
                         selectedSegment = nil
                     }
@@ -276,7 +282,7 @@ struct TransactionsView: View {
 
             filterMenu(isActive: filterState.timeScope != .allTime) {
                 TransactionToolbarChip(
-                    title: filterState.timeScope == .allTime ? "Thời gian" : filterState.timeScope.title,
+                    title: filterState.timeScope == .allTime ? mistiaLocalized(vi: "Thời gian", en: "Time", ja: "期間") : filterState.timeScope.title,
                     isActive: filterState.timeScope != .allTime,
                     trailingIcon: "chevron.up.chevron.down"
                 )
@@ -291,14 +297,14 @@ struct TransactionsView: View {
             }
 
             filterMenu(isActive: filterState.walletID != nil) {
-                let title = activeWallets.first { $0.id == filterState.walletID }?.name ?? "Ví"
+                let title = activeWallets.first { $0.id == filterState.walletID }?.name ?? mistiaLocalized(vi: "Ví", en: "Wallet", ja: "ウォレット")
                 TransactionToolbarChip(
                     title: title,
                     isActive: filterState.walletID != nil,
                     trailingIcon: "chevron.up.chevron.down"
                 )
             } content: {
-                Button("Tất cả") {
+                Button(mistiaLocalized(vi: "Tất cả", en: "All", ja: "すべて")) {
                     withAnimation(.snappy) {
                         filterState.walletID = nil
                     }
@@ -314,14 +320,15 @@ struct TransactionsView: View {
 
             if selectedSegment?.kind != .transfer {
                 filterMenu(isActive: filterState.categoryID != nil) {
-                    let title = storedCategories.first { $0.id == filterState.categoryID }?.name ?? "Danh mục"
+                    let title = storedCategories.first { $0.id == filterState.categoryID }?.localizedDisplayName
+                        ?? mistiaLocalized(vi: "Danh mục", en: "Category", ja: "カテゴリ")
                     TransactionToolbarChip(
                         title: title,
                         isActive: filterState.categoryID != nil,
                         trailingIcon: "chevron.up.chevron.down"
                     )
                 } content: {
-                    Button("Tất cả") {
+                    Button(mistiaLocalized(vi: "Tất cả", en: "All", ja: "すべて")) {
                         withAnimation(.snappy) {
                             filterState.categoryID = nil
                         }
@@ -346,7 +353,7 @@ struct TransactionsView: View {
 
     private var outstandingDebtSection: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text("Công nợ đang mở")
+            Text(mistiaLocalized(vi: "Công nợ đang mở", en: "Open debts", ja: "未解決の貸し借り"))
                 .font(.system(size: 13, weight: .bold, design: .rounded))
                 .foregroundStyle(.secondary)
                 .textCase(.uppercase)
@@ -368,13 +375,21 @@ struct TransactionsView: View {
     private var transactionsContent: some View {
         if storedTransactions.isEmpty {
             TransactionsPlaceholderCard(
-                title: "Chưa có giao dịch nào",
-                message: "Khi bạn thêm chi tiêu, thu nhập, chuyển tiền hoặc ghi nhanh từ nút plus, lịch sử sẽ xuất hiện ở đây."
+                title: mistiaLocalized(vi: "Chưa có giao dịch nào", en: "No transactions yet", ja: "取引はまだありません"),
+                message: mistiaLocalized(
+                    vi: "Khi bạn thêm chi tiêu, thu nhập, chuyển tiền hoặc ghi nhanh từ nút plus, lịch sử sẽ xuất hiện ở đây.",
+                    en: "When you add an expense, income, transfer, or quick capture from the plus button, your history will appear here.",
+                    ja: "支出、収入、振替、またはプラスボタンからクイック記録を追加すると、ここに履歴が表示されます。"
+                )
             )
         } else if sections.isEmpty {
             TransactionsPlaceholderCard(
-                title: "Không có kết quả phù hợp",
-                message: "Thử đổi thời gian, ví, bộ lọc hoặc từ khóa tìm kiếm để xem thêm giao dịch."
+                title: mistiaLocalized(vi: "Không có kết quả phù hợp", en: "No matching results", ja: "一致する結果はありません"),
+                message: mistiaLocalized(
+                    vi: "Thử đổi thời gian, ví, bộ lọc hoặc từ khóa tìm kiếm để xem thêm giao dịch.",
+                    en: "Try adjusting the time range, wallet, filters, or search keyword to see more transactions.",
+                    ja: "期間、ウォレット、フィルタ、検索キーワードを変更すると、ほかの取引を確認できます。"
+                )
             )
         } else {
             ForEach(sections) { section in
@@ -405,7 +420,7 @@ private struct TransactionLiveSummaryCard: View {
         ) {
             HStack(alignment: .top, spacing: 14) {
                 TransactionSummaryMetric(
-                    title: "Chi",
+                    title: mistiaLocalized(vi: "Chi", en: "Expense", ja: "支出"),
                     value: summary.expenseMinor.formattedCurrency(code: "JPY"),
                     tint: Color(red: 0.97, green: 0.43, blue: 0.46)
                 )
@@ -413,7 +428,7 @@ private struct TransactionLiveSummaryCard: View {
                 Spacer(minLength: 4)
 
                 TransactionSummaryMetric(
-                    title: "Thu",
+                    title: mistiaLocalized(vi: "Thu", en: "Income", ja: "収入"),
                     value: summary.incomeMinor.formattedCurrency(code: "JPY"),
                     tint: .mint
                 )
@@ -449,7 +464,7 @@ private struct TransactionSummaryMetric: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
-            Text(mistiaCatalog(title))
+            Text(title)
                 .font(.system(size: 14, weight: .semibold, design: .rounded))
                 .foregroundStyle(.secondary)
 
@@ -702,7 +717,7 @@ private struct TransactionMiniBadge: View {
     let tint: Color
 
     var body: some View {
-        Text(mistiaCatalog(title))
+        Text(title)
             .font(.system(size: 10, weight: .bold, design: .rounded))
             .foregroundStyle(tint)
             .padding(.horizontal, 8)
@@ -735,7 +750,7 @@ private struct TransactionToolbarChip: View {
 
     var body: some View {
         HStack(spacing: 4) {
-            Text(mistiaCatalog(title))
+            Text(title)
                 .font(.system(size: 12, weight: .bold, design: .rounded))
                 .lineLimit(1)
             

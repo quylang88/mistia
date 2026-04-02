@@ -73,7 +73,7 @@ struct ManagementView: View {
         NavigationStack {
             MistiaPinnedTopBarScaffold(
                 tone: .muted,
-                title: "Quản lý",
+                title: mistiaLocalized(vi: "Quản lý", en: "Manage", ja: "管理"),
                 embedsInNavigationStack: false,
                 showsLeadingAvatar: false,
                 trailingSystemImage: "gearshape",
@@ -105,7 +105,7 @@ struct ManagementView: View {
                 try MistiaBootstrap.seedDefaultCategoriesIfNeeded(modelContext: modelContext)
             } catch {
                 infoAlert = ManagementInfoAlert(
-                    title: "Không thể khởi tạo danh mục",
+                    title: mistiaLocalized(vi: "Không thể khởi tạo danh mục", en: "Couldn't initialize categories", ja: "カテゴリを初期化できませんでした"),
                     message: error.localizedDescription
                 )
             }
@@ -123,21 +123,27 @@ struct ManagementView: View {
             Alert(
                 title: Text(mistiaCatalog(alert.title)),
                 message: Text(mistiaCatalog(alert.message)),
-                dismissButton: .default(Text("OK"))
+                dismissButton: .default(Text(mistiaLocalized(vi: "OK", en: "OK", ja: "OK")))
             )
         }
         .confirmationDialog(
-            "Xóa toàn bộ dữ liệu quản lý?",
+            mistiaLocalized(vi: "Xóa toàn bộ dữ liệu quản lý?", en: "Delete all management data?", ja: "管理データをすべて削除しますか？"),
             isPresented: $showsDeleteAllConfirmation,
             titleVisibility: .visible
         ) {
-            Button("Xóa ví và danh mục", role: .destructive) {
+            Button(mistiaLocalized(vi: "Xóa ví và danh mục", en: "Delete wallets and categories", ja: "ウォレットとカテゴリを削除"), role: .destructive) {
                 deleteAllManagementData()
             }
 
-            Button("Hủy", role: .cancel) { }
+            Button(mistiaLocalized(vi: "Hủy", en: "Cancel", ja: "キャンセル"), role: .cancel) { }
         } message: {
-            Text("Hành động này sẽ xóa tất cả ví và danh mục đang lưu trên thiết bị.")
+            Text(
+                mistiaLocalized(
+                    vi: "Hành động này sẽ xóa tất cả ví và danh mục đang lưu trên thiết bị.",
+                    en: "This will delete all wallets and categories stored on this device.",
+                    ja: "この操作により、この端末に保存されているすべてのウォレットとカテゴリが削除されます。"
+                )
+            )
         }
     }
 
@@ -154,13 +160,17 @@ struct ManagementView: View {
     }
 
     private var walletsSection: some View {
-        ManagementSection(title: "Ví", titleColor: sectionLabelColor) {
+        ManagementSection(title: mistiaLocalized(vi: "Ví", en: "Wallets", ja: "ウォレット"), titleColor: sectionLabelColor) {
             ManagementCard(tint: cardTint) {
                 if activeWallets.isEmpty {
                     ManagementEmptyState(
-                        title: "Chưa có ví nào",
-                        message: "Thêm ví tiền mặt, PayPay, ví ngân hàng hoặc credit card để bắt đầu quản lý nguồn tiền.",
-                        buttonTitle: "Thêm ví",
+                        title: mistiaLocalized(vi: "Chưa có ví nào", en: "No wallets yet", ja: "ウォレットはまだありません"),
+                        message: mistiaLocalized(
+                            vi: "Thêm ví tiền mặt, PayPay, ví ngân hàng hoặc credit card để bắt đầu quản lý nguồn tiền.",
+                            en: "Add cash, PayPay, bank, or credit card wallets to start managing your money sources.",
+                            ja: "現金、PayPay、銀行口座、クレジットカードのウォレットを追加して資金管理を始めましょう。"
+                        ),
+                        buttonTitle: mistiaLocalized(vi: "Thêm ví", en: "Add wallet", ja: "ウォレットを追加"),
                         accent: accentPurple,
                         symbols: ["banknote.fill", "wallet.pass.fill", "building.columns.fill", "creditcard.fill"]
                     ) {
@@ -183,7 +193,7 @@ struct ManagementView: View {
                             .padding(.horizontal, 14)
 
                         ManagementFooterAddButton(
-                            title: "Thêm ví",
+                            title: mistiaLocalized(vi: "Thêm ví", en: "Add wallet", ja: "ウォレットを追加"),
                             accent: accentPurple
                         ) {
                             walletEditorTarget = ManagementWalletEditorTarget(wallet: nil, defaultKind: .cash)
@@ -195,7 +205,7 @@ struct ManagementView: View {
     }
 
     private var categoriesSection: some View {
-        ManagementSection(title: "Danh mục", titleColor: sectionLabelColor) {
+        ManagementSection(title: mistiaLocalized(vi: "Danh mục", en: "Categories", ja: "カテゴリ"), titleColor: sectionLabelColor) {
             VStack(alignment: .leading, spacing: 12) {
                 ManagementCategoryKindPicker(selection: $selectedCategoryKind)
 
@@ -203,12 +213,20 @@ struct ManagementView: View {
                     if visibleCategories.isEmpty {
                         ManagementEmptyState(
                             title: selectedCategoryKind == .expense
-                                ? "Chưa có danh mục chi tiêu"
-                                : "Chưa có danh mục thu nhập",
+                                ? mistiaLocalized(vi: "Chưa có danh mục chi tiêu", en: "No expense categories yet", ja: "支出カテゴリはまだありません")
+                                : mistiaLocalized(vi: "Chưa có danh mục thu nhập", en: "No income categories yet", ja: "収入カテゴリはまだありません"),
                             message: selectedCategoryKind == .expense
-                                ? "Tạo nhóm chi tiêu riêng để giao dịch và ngân sách bám sát cách bạn quản lý hằng ngày."
-                                : "Tách riêng nguồn thu để nhìn rõ tiền lương, thưởng, freelance hay hoàn tiền.",
-                            buttonTitle: "Thêm danh mục",
+                                ? mistiaLocalized(
+                                    vi: "Tạo nhóm chi tiêu riêng để giao dịch và ngân sách bám sát cách bạn quản lý hằng ngày.",
+                                    en: "Create expense groups so your transactions and budgets match how you manage money every day.",
+                                    ja: "支出グループを作成すると、取引や予算を日々の管理方法に合わせやすくなります。"
+                                )
+                                : mistiaLocalized(
+                                    vi: "Tách riêng nguồn thu để nhìn rõ tiền lương, thưởng, freelance hay hoàn tiền.",
+                                    en: "Separate your income sources to clearly track salary, bonuses, freelance work, or refunds.",
+                                    ja: "収入源を分けておくと、給与、賞与、副業、返金などを分かりやすく把握できます。"
+                                ),
+                            buttonTitle: mistiaLocalized(vi: "Thêm danh mục", en: "Add category", ja: "カテゴリを追加"),
                             accent: accentPurple,
                             symbols: selectedCategoryKind == .expense
                                 ? ["fork.knife", "bag.fill", "airplane", "plus"]
@@ -237,7 +255,7 @@ struct ManagementView: View {
                                 .padding(.horizontal, 14)
 
                             ManagementFooterAddButton(
-                                title: "Thêm danh mục",
+                                title: mistiaLocalized(vi: "Thêm danh mục", en: "Add category", ja: "カテゴリを追加"),
                                 accent: accentPurple
                             ) {
                                 categoryEditorTarget = ManagementCategoryEditorTarget(category: nil, defaultKind: selectedCategoryKind)
@@ -252,7 +270,7 @@ struct ManagementView: View {
     }
 
     private var dataSection: some View {
-        ManagementSection(title: "Dữ liệu", titleColor: sectionLabelColor) {
+        ManagementSection(title: mistiaLocalized(vi: "Dữ liệu", en: "Data", ja: "データ"), titleColor: sectionLabelColor) {
             ManagementCard(tint: cardTint) {
                 VStack(spacing: 0) {
                     ForEach(Array(dataActions.enumerated()), id: \.element.id) { index, action in
@@ -275,17 +293,29 @@ struct ManagementView: View {
         case .exportData:
             infoAlert = ManagementInfoAlert(
                 title: action.title,
-                message: "Flow export sẽ được nối ở pha sau. Dữ liệu quản lý hiện đã được lưu local bằng SwiftData."
+                message: mistiaLocalized(
+                    vi: "Flow export sẽ được nối ở pha sau. Dữ liệu quản lý hiện đã được lưu local bằng SwiftData.",
+                    en: "The export flow will be connected later. Management data is currently stored locally with SwiftData.",
+                    ja: "書き出しフローは後続フェーズで追加されます。管理データは現在 SwiftData でローカル保存されています。"
+                )
             )
         case .importData:
             infoAlert = ManagementInfoAlert(
                 title: action.title,
-                message: "Flow import chưa được bật trong build này."
+                message: mistiaLocalized(
+                    vi: "Flow import chưa được bật trong build này.",
+                    en: "The import flow isn't enabled in this build yet.",
+                    ja: "このビルドでは取り込みフローはまだ有効になっていません。"
+                )
             )
         case .backupRestore:
             infoAlert = ManagementInfoAlert(
                 title: action.title,
-                message: "Backup & khôi phục sẽ được nối sau khi chốt chiến lược sync."
+                message: mistiaLocalized(
+                    vi: "Backup & khôi phục sẽ được nối sau khi chốt chiến lược sync.",
+                    en: "Backup and restore will be added after the sync strategy is finalized.",
+                    ja: "バックアップと復元は同期戦略の確定後に追加されます。"
+                )
             )
         case .deleteAllData:
             showsDeleteAllConfirmation = true
@@ -318,12 +348,16 @@ struct ManagementView: View {
             try modelContext.save()
 
             infoAlert = ManagementInfoAlert(
-                title: "Đã xóa dữ liệu",
-                message: "Tất cả ví và danh mục đã được xóa khỏi thiết bị."
+                title: mistiaLocalized(vi: "Đã xóa dữ liệu", en: "Data deleted", ja: "データを削除しました"),
+                message: mistiaLocalized(
+                    vi: "Tất cả ví và danh mục đã được xóa khỏi thiết bị.",
+                    en: "All wallets and categories have been removed from this device.",
+                    ja: "すべてのウォレットとカテゴリがこの端末から削除されました。"
+                )
             )
         } catch {
             infoAlert = ManagementInfoAlert(
-                title: "Không thể xóa dữ liệu",
+                title: mistiaLocalized(vi: "Không thể xóa dữ liệu", en: "Couldn't delete data", ja: "データを削除できませんでした"),
                 message: error.localizedDescription
             )
         }
@@ -337,7 +371,7 @@ private struct ManagementSection<Content: View>: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text(mistiaCatalog(title))
+            Text(title)
                 .font(.system(size: 13, weight: .bold, design: .rounded))
                 .textCase(.uppercase)
                 .tracking(0.6)
@@ -435,11 +469,17 @@ private struct ManagementSignedOutCard: View {
                     .frame(width: 54, height: 54)
 
                     VStack(alignment: .leading, spacing: 6) {
-                        Text("Đăng nhập để đồng bộ dữ liệu")
+                        Text(mistiaLocalized(vi: "Đăng nhập để đồng bộ dữ liệu", en: "Sign in to sync your data", ja: "ログインしてデータを同期"))
                             .font(.system(size: 18, weight: .bold, design: .rounded))
                             .foregroundStyle(.primary)
 
-                        Text("Lưu an toàn ví, danh mục và sẵn sàng cho backup hoặc sync ở các bản sau.")
+                        Text(
+                            mistiaLocalized(
+                                vi: "Lưu an toàn ví, danh mục và sẵn sàng cho backup hoặc sync ở các bản sau.",
+                                en: "Keep your wallets and categories safe, ready for backup or sync in future versions.",
+                                ja: "ウォレットとカテゴリを安全に保持し、今後のバックアップや同期に備えます。"
+                            )
+                        )
                             .font(.system(size: 13.5, weight: .medium, design: .rounded))
                             .foregroundStyle(.secondary)
                             .fixedSize(horizontal: false, vertical: true)
@@ -447,7 +487,7 @@ private struct ManagementSignedOutCard: View {
                 }
 
                 Button(action: action) {
-                    Text("Đăng nhập hoặc tạo tài khoản")
+                    Text(mistiaLocalized(vi: "Đăng nhập hoặc tạo tài khoản", en: "Sign in or create an account", ja: "ログインまたはアカウント作成"))
                         .font(.system(size: 15.5, weight: .bold, design: .rounded))
                         .foregroundStyle(buttonForeground)
                         .frame(maxWidth: .infinity)
@@ -683,7 +723,7 @@ private struct ManagementAuthPlaceholderView: View {
     var body: some View {
         MistiaPinnedTopBarScaffold(
             tone: .standard,
-            title: "Đăng nhập",
+            title: mistiaLocalized(vi: "Đăng nhập", en: "Sign in", ja: "ログイン"),
             embedsInNavigationStack: false,
             showsLeadingAvatar: false,
             leadingSystemImage: "chevron.left",
@@ -706,11 +746,23 @@ private struct ManagementAuthPlaceholderView: View {
                     }
                     .frame(width: 78, height: 78)
 
-                    Text("Flow đăng nhập sẽ được nối ở pha auth riêng.")
+                    Text(
+                        mistiaLocalized(
+                            vi: "Flow đăng nhập sẽ được nối ở pha auth riêng.",
+                            en: "The sign-in flow will be connected in a dedicated auth phase.",
+                            ja: "ログインフローは専用の認証フェーズで追加されます。"
+                        )
+                    )
                         .font(.system(size: 22, weight: .bold, design: .rounded))
                         .multilineTextAlignment(.center)
 
-                    Text("Tab Quản lý hiện đã chạy local-first bằng SwiftData, nên bạn vẫn có thể thêm ví và danh mục ngay cả khi chưa đăng nhập.")
+                    Text(
+                        mistiaLocalized(
+                            vi: "Tab Quản lý hiện đã chạy local-first bằng SwiftData, nên bạn vẫn có thể thêm ví và danh mục ngay cả khi chưa đăng nhập.",
+                            en: "The Manage tab already runs local-first with SwiftData, so you can still add wallets and categories even without signing in.",
+                            ja: "管理タブはすでに SwiftData によるローカルファーストで動作しているため、ログインしていなくてもウォレットやカテゴリを追加できます。"
+                        )
+                    )
                         .font(.system(size: 14.5, weight: .medium, design: .rounded))
                         .foregroundStyle(.secondary)
                         .multilineTextAlignment(.center)

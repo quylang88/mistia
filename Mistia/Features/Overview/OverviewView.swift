@@ -132,7 +132,7 @@ struct OverviewView: View {
     var body: some View {
         MistiaPinnedTopBarScaffold(
             tone: .standard,
-            title: "Tổng quan",
+            title: mistiaLocalized(vi: "Tổng quan", en: "Overview", ja: "ホーム"),
             contentSpacing: 18
         ) {
             OverviewHeroCard(
@@ -148,7 +148,7 @@ struct OverviewView: View {
             OverviewShareSheet(url: item.url)
         }
         .alert(
-            "Không thể xuất sao kê",
+            mistiaLocalized(vi: "Không thể xuất sao kê", en: "Couldn't export statement", ja: "明細を出力できませんでした"),
             isPresented: Binding(
                 get: { exportErrorMessage != nil },
                 set: { isPresented in
@@ -158,7 +158,7 @@ struct OverviewView: View {
                 }
             )
         ) {
-            Button("Đóng", role: .cancel) {
+            Button(mistiaLocalized(vi: "Đóng", en: "Close", ja: "閉じる"), role: .cancel) {
                 exportErrorMessage = nil
             }
         } message: {
@@ -221,7 +221,7 @@ private struct OverviewHeroCard: View {
             ?? OverviewWeekSpendingSnapshot(
                 weekStart: snapshot.currentWeekStart,
                 weekEnd: snapshot.currentWeekStart,
-                title: "Tuần này",
+                title: mistiaLocalized(vi: "Tuần này", en: "This week", ja: "今週"),
                 isCurrentWeek: true,
                 points: []
             )
@@ -235,7 +235,7 @@ private struct OverviewHeroCard: View {
             VStack(alignment: .leading, spacing: 18) {
                 HStack(alignment: .top, spacing: 12) {
                     VStack(alignment: .leading, spacing: 7) {
-                        Text("Tài sản khả dụng")
+                        Text(mistiaLocalized(vi: "Tài sản khả dụng", en: "Available assets", ja: "利用可能資産"))
                             .font(.system(size: 15, weight: .medium, design: .rounded))
                             .foregroundStyle(.secondary)
 
@@ -256,7 +256,7 @@ private struct OverviewHeroCard: View {
 
                 HStack(spacing: 14) {
                     SummaryMetricColumn(
-                        title: "Thu tháng này",
+                        title: mistiaLocalized(vi: "Thu tháng này", en: "Income this month", ja: "今月の収入"),
                         value: snapshot.incomeThisMonthMinor.formattedCurrency(code: snapshot.currencyCode),
                         accent: Color(hex: "#2DAA9E")
                     )
@@ -265,7 +265,7 @@ private struct OverviewHeroCard: View {
                         .frame(height: 26)
 
                     SummaryMetricColumn(
-                        title: "Chi tháng này",
+                        title: mistiaLocalized(vi: "Chi tháng này", en: "Expense this month", ja: "今月の支出"),
                         value: snapshot.expenseThisMonthMinor.formattedCurrency(code: snapshot.currencyCode),
                         accent: Color(hex: "#F45C7E")
                     )
@@ -273,7 +273,7 @@ private struct OverviewHeroCard: View {
 
                 VStack(alignment: .leading, spacing: 12) {
                     HStack {
-                        Text("Chi tiêu theo ngày")
+                        Text(mistiaLocalized(vi: "Chi tiêu theo ngày", en: "Daily spending", ja: "日別支出"))
                             .font(.system(size: 16, weight: .bold, design: .rounded))
                             .foregroundStyle(.primary)
 
@@ -313,18 +313,18 @@ private struct OverviewStatementMenuButton: View {
     var body: some View {
         Menu {
             Button(action: onExportMonthly) {
-                Label("Sao kê tổng hợp tháng", systemImage: "doc.text.image")
+                Label(mistiaLocalized(vi: "Sao kê tổng hợp tháng", en: "Monthly summary statement", ja: "月次サマリー明細"), systemImage: "doc.text.image")
             }
 
             Button(action: onExportCreditCard) {
-                Label("Sao kê thẻ tín dụng", systemImage: "creditcard.and.123")
+                Label(mistiaLocalized(vi: "Sao kê thẻ tín dụng", en: "Credit card statement", ja: "クレジットカード明細"), systemImage: "creditcard.and.123")
             }
         } label: {
             HStack(spacing: 5) {
                 Image(systemName: "doc.text.fill")
                     .font(.system(size: 11, weight: .bold, design: .rounded))
 
-                Text("Sao kê")
+                Text(mistiaLocalized(vi: "Sao kê", en: "Statement", ja: "明細"))
                     .font(.system(size: 12, weight: .bold, design: .rounded))
             }
             .foregroundStyle(Color(red: 0.88, green: 0.78, blue: 1.0))
@@ -432,9 +432,15 @@ private struct BudgetFocusSection: View {
     let rows: [OverviewBudgetAlertSnapshot]
 
     var body: some View {
-        OverviewSection(title: "Ngân sách cần chú ý") {
+        OverviewSection(title: mistiaLocalized(vi: "Ngân sách cần chú ý", en: "Budget watchlist", ja: "注意が必要な予算")) {
             if rows.isEmpty {
-                OverviewEmptySectionContent(message: "Chưa có danh mục nào vượt quá 50% ngân sách trong tháng này.")
+                OverviewEmptySectionContent(
+                    message: mistiaLocalized(
+                        vi: "Chưa có danh mục nào vượt quá 50% ngân sách trong tháng này.",
+                        en: "No categories have exceeded 50% of their budget this month.",
+                        ja: "今月の予算消化が 50% を超えたカテゴリはまだありません。"
+                    )
+                )
             } else {
                 VStack(spacing: 0) {
                     ForEach(Array(rows.enumerated()), id: \.element.id) { index, row in
@@ -498,9 +504,15 @@ private struct UpcomingBillsSection: View {
     let rows: [OverviewDueAlertSnapshot]
 
     var body: some View {
-        OverviewSection(title: "Khoản sắp đến hạn") {
+        OverviewSection(title: mistiaLocalized(vi: "Khoản sắp đến hạn", en: "Upcoming due items", ja: "まもなく期限の項目")) {
             if rows.isEmpty {
-                OverviewEmptySectionContent(message: "Không có hóa đơn, vay hoặc credit nào đến hạn trong 7 ngày tới.")
+                OverviewEmptySectionContent(
+                    message: mistiaLocalized(
+                        vi: "Không có hóa đơn, vay hoặc credit nào đến hạn trong 7 ngày tới.",
+                        en: "No bills, loans, or credit payments are due in the next 7 days.",
+                        ja: "今後 7 日以内に期限を迎える請求、ローン、カード支払いはありません。"
+                    )
+                )
             } else {
                 VStack(spacing: 0) {
                     ForEach(Array(rows.enumerated()), id: \.element.id) { index, row in
@@ -545,7 +557,7 @@ private struct DueRow: View {
                     .lineLimit(1)
                     .minimumScaleFactor(0.8)
             } else {
-                Text(mistiaCatalog("Chưa có số tiền"))
+                Text(mistiaLocalized(vi: "Chưa có số tiền", en: "No amount yet", ja: "金額未入力"))
                     .font(.system(size: 11, weight: .semibold, design: .rounded))
                     .foregroundStyle(.secondary)
             }
@@ -569,9 +581,15 @@ private struct RecentTransactionsSection: View {
     let rows: [OverviewRecentTransactionSnapshot]
 
     var body: some View {
-        OverviewSection(title: "Giao dịch gần đây") {
+        OverviewSection(title: mistiaLocalized(vi: "Giao dịch gần đây", en: "Recent transactions", ja: "最近の取引")) {
             if rows.isEmpty {
-                OverviewEmptySectionContent(message: "Chưa có giao dịch nào được ghi nhận gần đây.")
+                OverviewEmptySectionContent(
+                    message: mistiaLocalized(
+                        vi: "Chưa có giao dịch nào được ghi nhận gần đây.",
+                        en: "No transactions have been recorded recently.",
+                        ja: "最近記録された取引はまだありません。"
+                    )
+                )
             } else {
                 VStack(spacing: 0) {
                     ForEach(Array(rows.enumerated()), id: \.element.id) { index, row in
@@ -670,7 +688,7 @@ private struct OverviewSection<Content: View>: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text(mistiaCatalog(title))
+            Text(title)
                 .font(.system(size: 13, weight: .bold, design: .rounded))
                 .textCase(.uppercase)
                 .tracking(0.6)
@@ -691,7 +709,7 @@ private struct OverviewEmptySectionContent: View {
     let message: String
 
     var body: some View {
-        Text(mistiaCatalog(message))
+        Text(message)
             .font(.system(size: 13.5, weight: .medium, design: .rounded))
             .foregroundStyle(.secondary)
             .multilineTextAlignment(.center)

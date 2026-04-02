@@ -3,6 +3,7 @@ import UIKit
 
 struct MistiaNativeSegmentedControl<Option: Hashable>: View {
     @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.locale) private var locale
     @Binding var selection: Option
 
     let options: [Option]
@@ -14,6 +15,7 @@ struct MistiaNativeSegmentedControl<Option: Hashable>: View {
             selection: $selection,
             options: options,
             title: title,
+            localeIdentifier: locale.identifier,
             selectedSegmentTintColor: selectedSegmentTintColor,
             backgroundColor: backgroundColor,
             selectedTextColor: selectedTextColor,
@@ -57,6 +59,7 @@ private struct MistiaSegmentedControlRepresentable<Option: Hashable>: UIViewRepr
 
     let options: [Option]
     let title: (Option) -> String
+    let localeIdentifier: String
     let selectedSegmentTintColor: UIColor
     let backgroundColor: UIColor
     let selectedTextColor: UIColor

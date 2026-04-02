@@ -139,4 +139,28 @@ final class MistiaLocalizationTests: XCTestCase {
         XCTAssertTrue(knownNames.contains("Food & drinks"))
         XCTAssertTrue(knownNames.contains("食費"))
     }
+
+    func testCurrencyFormattingDoesNotChangeWhenAppLanguageChanges() {
+        UserDefaults.standard.set(
+            MistiaAppLanguage.vietnamese.rawValue,
+            forKey: MistiaAppLanguage.userDefaultsKey
+        )
+        let vietnameseJPY = Int64(123_456).formattedCurrency(code: "JPY")
+
+        UserDefaults.standard.set(
+            MistiaAppLanguage.english.rawValue,
+            forKey: MistiaAppLanguage.userDefaultsKey
+        )
+        let englishJPY = Int64(123_456).formattedCurrency(code: "JPY")
+
+        UserDefaults.standard.set(
+            MistiaAppLanguage.japanese.rawValue,
+            forKey: MistiaAppLanguage.userDefaultsKey
+        )
+        let japaneseJPY = Int64(123_456).formattedCurrency(code: "JPY")
+
+        XCTAssertEqual(vietnameseJPY, englishJPY)
+        XCTAssertEqual(englishJPY, japaneseJPY)
+        XCTAssertTrue(vietnameseJPY.first.map { $0 == "¥" || $0 == "￥" } ?? false)
+    }
 }

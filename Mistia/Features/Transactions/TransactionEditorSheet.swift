@@ -103,7 +103,7 @@ struct TransactionEditorSheet: View {
                 set: { if !$0 { alertMessage = nil } }
             )
         ) {
-            Button("OK", role: .cancel) { }
+            Button(mistiaLocalized(vi: "OK", en: "OK", ja: "OK"), role: .cancel) { }
         } message: {
             Text(mistiaCatalog(alertMessage ?? ""))
         }
@@ -113,7 +113,7 @@ struct TransactionEditorSheet: View {
         @Bindable var bindableDraft = draft
 
         return VStack(spacing: 16) {
-            TransactionEditorCard(title: "Loại giao dịch") {
+            TransactionEditorCard(title: mistiaLocalized(vi: "Loại giao dịch", en: "Transaction type", ja: "取引タイプ")) {
                 TransactionChoiceChipRow(
                     values: TransactionPrimaryKind.allCases,
                     selection: $bindableDraft.primaryKind
@@ -122,11 +122,11 @@ struct TransactionEditorSheet: View {
                 }
             }
 
-            TransactionEditorCard(title: "Số tiền") {
+            TransactionEditorCard(title: mistiaLocalized(vi: "Số tiền", en: "Amount", ja: "金額")) {
                 TransactionEditorTextField(
-                    title: "Số tiền",
+                    title: mistiaLocalized(vi: "Số tiền", en: "Amount", ja: "金額"),
                     text: $bindableDraft.amountText,
-                    placeholder: "Ví dụ 12000"
+                    placeholder: mistiaLocalized(vi: "Ví dụ 12000", en: "Example: 12000", ja: "例: 12000")
                 )
                 .keyboardType(.numberPad)
             }
@@ -134,7 +134,11 @@ struct TransactionEditorSheet: View {
             TransactionHintCard(
                 icon: "square.and.pencil",
                 tint: accentColor,
-                message: "Ghi nhanh chỉ lưu loại giao dịch và số tiền. Hãy hoàn thiện chi tiết ở tab Giao dịch."
+                message: mistiaLocalized(
+                    vi: "Ghi nhanh chỉ lưu loại giao dịch và số tiền. Hãy hoàn thiện chi tiết ở tab Giao dịch.",
+                    en: "Quick capture only saves the transaction type and amount. Complete the rest in the Transactions tab.",
+                    ja: "クイック記録では取引タイプと金額だけを保存します。残りの詳細は取引タブで仕上げてください。"
+                )
             )
         }
     }
@@ -144,7 +148,7 @@ struct TransactionEditorSheet: View {
 
         return VStack(spacing: 16) {
             if draft.primaryKind == .transfer {
-                TransactionEditorCard(title: "Kiểu chuyển tiền") {
+                TransactionEditorCard(title: mistiaLocalized(vi: "Kiểu chuyển tiền", en: "Transfer type", ja: "振替タイプ")) {
                     TransactionChoiceChipRow(
                         values: TransactionTransferSubtype.allCases,
                         selection: Binding(
@@ -158,7 +162,7 @@ struct TransactionEditorSheet: View {
             }
 
             if draft.primaryKind == .transfer, draft.transferSubtype == .debt {
-                TransactionEditorCard(title: "Loại công nợ") {
+                TransactionEditorCard(title: mistiaLocalized(vi: "Loại công nợ", en: "Debt type", ja: "貸し借りの種類")) {
                     TransactionChoiceChipRow(
                         values: TransactionDebtIntent.allCases,
                         selection: Binding(
@@ -175,43 +179,49 @@ struct TransactionEditorSheet: View {
                 TransactionHintCard(
                     icon: "wallet.pass",
                     tint: accentColor,
-                    message: "Bạn cần thêm ít nhất một ví trong tab Quản lý trước khi ghi nhận giao dịch hoàn chỉnh."
+                    message: mistiaLocalized(
+                        vi: "Bạn cần thêm ít nhất một ví trong tab Quản lý trước khi ghi nhận giao dịch hoàn chỉnh.",
+                        en: "You need to add at least one wallet in the Manage tab before saving a full transaction.",
+                        ja: "取引を完全に記録する前に、管理タブで少なくとも 1 つのウォレットを追加してください。"
+                    )
                 )
             }
 
-            TransactionEditorCard(title: "Thông tin chính") {
+            TransactionEditorCard(title: mistiaLocalized(vi: "Thông tin chính", en: "Main details", ja: "基本情報")) {
                 if draft.primaryKind != .transfer {
                     TransactionEditorTextField(
-                        title: "Tên giao dịch",
+                        title: mistiaLocalized(vi: "Tên giao dịch", en: "Transaction name", ja: "取引名"),
                         text: $bindableDraft.title,
-                        placeholder: draft.primaryKind == .expense ? "Ví dụ: Cà phê sáng" : "Ví dụ: Lương tháng 3"
+                        placeholder: draft.primaryKind == .expense
+                            ? mistiaLocalized(vi: "Ví dụ: Cà phê sáng", en: "Example: Morning coffee", ja: "例: 朝のコーヒー")
+                            : mistiaLocalized(vi: "Ví dụ: Lương tháng 3", en: "Example: March salary", ja: "例: 3月の給料")
                     )
                 } else if draft.transferSubtype == .debt {
                     TransactionEditorTextField(
-                        title: "Tên giao dịch",
+                        title: mistiaLocalized(vi: "Tên giao dịch", en: "Transaction name", ja: "取引名"),
                         text: $bindableDraft.title,
-                        placeholder: "Để trống sẽ tự dùng loại công nợ"
+                        placeholder: mistiaLocalized(vi: "Để trống sẽ tự dùng loại công nợ", en: "Leave blank to use the debt type", ja: "空欄の場合は貸し借りの種類が使われます")
                     )
                 }
 
                 TransactionEditorTextField(
-                    title: "Số tiền",
+                    title: mistiaLocalized(vi: "Số tiền", en: "Amount", ja: "金額"),
                     text: $bindableDraft.amountText,
-                    placeholder: "Ví dụ 50000"
+                    placeholder: mistiaLocalized(vi: "Ví dụ 50000", en: "Example: 50000", ja: "例: 50000")
                 )
                 .keyboardType(.numberPad)
 
-                DatePicker("Thời gian", selection: $bindableDraft.occurredAt, displayedComponents: [.date, .hourAndMinute])
+                DatePicker(mistiaLocalized(vi: "Thời gian", en: "Date & time", ja: "日時"), selection: $bindableDraft.occurredAt, displayedComponents: [.date, .hourAndMinute])
                     .datePickerStyle(.compact)
                     .font(.system(size: 15, weight: .semibold, design: .rounded))
             }
 
             switch draft.primaryKind {
             case .expense, .income:
-                TransactionEditorCard(title: "Nguồn tiền") {
+                TransactionEditorCard(title: mistiaLocalized(vi: "Nguồn tiền", en: "Funding source", ja: "支払い元")) {
                     TransactionSelectionMenuRow(
-                        title: "Ví",
-                        value: selectedSourceWallet?.name ?? "Chọn ví",
+                        title: mistiaLocalized(vi: "Ví", en: "Wallet", ja: "ウォレット"),
+                        value: selectedSourceWallet?.name ?? mistiaLocalized(vi: "Chọn ví", en: "Choose wallet", ja: "ウォレットを選択"),
                         systemImage: "wallet.pass"
                     ) {
                         ForEach(availableWallets) { wallet in
@@ -222,8 +232,8 @@ struct TransactionEditorSheet: View {
                     }
 
                     TransactionSelectionMenuRow(
-                        title: "Danh mục",
-                        value: selectedCategory?.localizedDisplayName ?? "Chọn danh mục",
+                        title: mistiaLocalized(vi: "Danh mục", en: "Category", ja: "カテゴリ"),
+                        value: selectedCategory?.localizedDisplayName ?? mistiaLocalized(vi: "Chọn danh mục", en: "Choose category", ja: "カテゴリを選択"),
                         systemImage: "square.grid.2x2"
                     ) {
                         ForEach(availableCategories) { category in
@@ -235,10 +245,10 @@ struct TransactionEditorSheet: View {
                 }
             case .transfer:
                 if draft.transferSubtype == .internalTransfer {
-                    TransactionEditorCard(title: "Luồng chuyển") {
+                    TransactionEditorCard(title: mistiaLocalized(vi: "Luồng chuyển", en: "Transfer flow", ja: "振替の流れ")) {
                         TransactionSelectionMenuRow(
-                            title: "Từ ví",
-                            value: selectedSourceWallet?.name ?? "Chọn nguồn",
+                            title: mistiaLocalized(vi: "Từ ví", en: "From wallet", ja: "出金元"),
+                            value: selectedSourceWallet?.name ?? mistiaLocalized(vi: "Chọn nguồn", en: "Choose source", ja: "出金元を選択"),
                             systemImage: "arrow.up.right.circle"
                         ) {
                             ForEach(availableWallets) { wallet in
@@ -249,8 +259,8 @@ struct TransactionEditorSheet: View {
                         }
 
                         TransactionSelectionMenuRow(
-                            title: "Đến ví",
-                            value: selectedDestinationWallet?.name ?? "Chọn đích",
+                            title: mistiaLocalized(vi: "Đến ví", en: "To wallet", ja: "入金先"),
+                            value: selectedDestinationWallet?.name ?? mistiaLocalized(vi: "Chọn đích", en: "Choose destination", ja: "入金先を選択"),
                             systemImage: "arrow.down.left.circle"
                         ) {
                             ForEach(availableWallets) { wallet in
@@ -261,10 +271,10 @@ struct TransactionEditorSheet: View {
                         }
                     }
                 } else {
-                    TransactionEditorCard(title: "Đối tượng") {
+                    TransactionEditorCard(title: mistiaLocalized(vi: "Đối tượng", en: "Counterparty", ja: "相手")) {
                         TransactionSelectionMenuRow(
-                            title: "Ví thực hiện",
-                            value: selectedSourceWallet?.name ?? "Chọn ví",
+                            title: mistiaLocalized(vi: "Ví thực hiện", en: "Wallet used", ja: "使用ウォレット"),
+                            value: selectedSourceWallet?.name ?? mistiaLocalized(vi: "Chọn ví", en: "Choose wallet", ja: "ウォレットを選択"),
                             systemImage: "wallet.pass"
                         ) {
                             ForEach(availableWallets) { wallet in
@@ -275,16 +285,16 @@ struct TransactionEditorSheet: View {
                         }
 
                         TransactionEditorTextField(
-                            title: "Tên người liên quan",
+                            title: mistiaLocalized(vi: "Tên người liên quan", en: "Counterparty name", ja: "相手の名前"),
                             text: $bindableDraft.counterpartyName,
-                            placeholder: "Ví dụ: Nguyễn Văn A"
+                            placeholder: mistiaLocalized(vi: "Ví dụ: Nguyễn Văn A", en: "Example: Alex Johnson", ja: "例: 山田太郎")
                         )
                     }
                 }
             }
 
-            TransactionEditorCard(title: "Ghi chú") {
-                TextField("Thêm ghi chú nếu cần", text: $bindableDraft.note, axis: .vertical)
+            TransactionEditorCard(title: mistiaLocalized(vi: "Ghi chú", en: "Notes", ja: "メモ")) {
+                TextField(mistiaLocalized(vi: "Thêm ghi chú nếu cần", en: "Add a note if needed", ja: "必要ならメモを追加"), text: $bindableDraft.note, axis: .vertical)
                     .lineLimit(3...5)
                     .textFieldStyle(.plain)
                     .font(.system(size: 15, weight: .medium, design: .rounded))
@@ -304,22 +314,30 @@ struct TransactionEditorSheet: View {
 
     private var headerTitle: String {
         if target.quickCapture && target.transaction == nil {
-            return "Lưu nhanh rồi hoàn thiện sau"
+            return mistiaLocalized(vi: "Lưu nhanh rồi hoàn thiện sau", en: "Save fast, finish later", ja: "すばやく保存して後で仕上げる")
         }
 
         if let transaction = target.transaction, transaction.entryStatus == .draft {
-            return "Hoàn thiện bản nháp"
+            return mistiaLocalized(vi: "Hoàn thiện bản nháp", en: "Complete the draft", ja: "下書きを完成させる")
         }
 
-        return "Giao dịch local-first"
+        return mistiaLocalized(vi: "Giao dịch local-first", en: "Local-first transaction", ja: "ローカルファーストの取引")
     }
 
     private var headerSubtitle: String {
         if target.quickCapture && target.transaction == nil {
-            return "Chỉ cần số tiền và loại giao dịch. Phần còn lại sẽ xuất hiện trong lịch sử để bạn bổ sung sau."
+            return mistiaLocalized(
+                vi: "Chỉ cần số tiền và loại giao dịch. Phần còn lại sẽ xuất hiện trong lịch sử để bạn bổ sung sau.",
+                en: "Just enter the amount and transaction type. The rest will appear in history for you to complete later.",
+                ja: "金額と取引タイプだけ入力してください。残りの内容は履歴に表示され、あとで追記できます。"
+            )
         }
 
-        return "Dữ liệu sẽ được lưu ngay trên thiết bị và phản ánh trực tiếp vào tab Giao dịch."
+        return mistiaLocalized(
+            vi: "Dữ liệu sẽ được lưu ngay trên thiết bị và phản ánh trực tiếp vào tab Giao dịch.",
+            en: "Data is saved directly on this device and reflected immediately in the Transactions tab.",
+            ja: "データはこの端末にすぐ保存され、取引タブへ即時反映されます。"
+        )
     }
 
     private var accentColor: Color {
@@ -378,10 +396,10 @@ struct TransactionEditorSheet: View {
 
     private var saveButtonTitle: String {
         if target.quickCapture && target.transaction == nil {
-            return "Lưu nháp"
+            return mistiaLocalized(vi: "Lưu nháp", en: "Save draft", ja: "下書きを保存")
         }
 
-        return "Lưu"
+        return mistiaLocalized(vi: "Lưu", en: "Save", ja: "保存")
     }
 
     private func save() {
@@ -394,7 +412,7 @@ struct TransactionEditorSheet: View {
 
     private func saveQuickCapture() {
         guard let amountMinor = draft.amountMinor, amountMinor > 0 else {
-            alertMessage = "Nhập số tiền lớn hơn 0 để lưu ghi nhanh."
+            alertMessage = mistiaLocalized(vi: "Nhập số tiền lớn hơn 0 để lưu ghi nhanh.", en: "Enter an amount greater than 0 to save the quick capture.", ja: "クイック記録を保存するには 0 より大きい金額を入力してください。")
             return
         }
 
@@ -430,17 +448,17 @@ struct TransactionEditorSheet: View {
 
     private func saveFullTransaction() {
         guard let amountMinor = draft.amountMinor, amountMinor > 0 else {
-            alertMessage = "Nhập số tiền lớn hơn 0."
+            alertMessage = mistiaLocalized(vi: "Nhập số tiền lớn hơn 0.", en: "Enter an amount greater than 0.", ja: "0 より大きい金額を入力してください。")
             return
         }
 
         if draft.primaryKind != .transfer, draft.title.nilIfBlank == nil {
-            alertMessage = "Nhập tên giao dịch để lưu."
+            alertMessage = mistiaLocalized(vi: "Nhập tên giao dịch để lưu.", en: "Enter a transaction name before saving.", ja: "保存する前に取引名を入力してください。")
             return
         }
 
         guard !availableWallets.isEmpty else {
-            alertMessage = "Bạn chưa có ví nào để gắn vào giao dịch."
+            alertMessage = mistiaLocalized(vi: "Bạn chưa có ví nào để gắn vào giao dịch.", en: "You don't have any wallets available for this transaction.", ja: "この取引に使えるウォレットがまだありません。")
             return
         }
 
@@ -461,12 +479,12 @@ struct TransactionEditorSheet: View {
         switch draft.primaryKind {
         case .expense, .income:
             guard let sourceWallet = selectedSourceWallet else {
-                alertMessage = "Chọn ví cho giao dịch này."
+                alertMessage = mistiaLocalized(vi: "Chọn ví cho giao dịch này.", en: "Choose a wallet for this transaction.", ja: "この取引のウォレットを選択してください。")
                 return
             }
 
             guard let category = selectedCategory else {
-                alertMessage = "Chọn danh mục cho giao dịch này."
+                alertMessage = mistiaLocalized(vi: "Chọn danh mục cho giao dịch này.", en: "Choose a category for this transaction.", ja: "この取引のカテゴリを選択してください。")
                 return
             }
 
@@ -482,21 +500,21 @@ struct TransactionEditorSheet: View {
             switch draft.transferSubtype ?? .internalTransfer {
             case .internalTransfer:
                 guard let sourceWallet = selectedSourceWallet else {
-                    alertMessage = "Chọn ví nguồn."
+                    alertMessage = mistiaLocalized(vi: "Chọn ví nguồn.", en: "Choose the source wallet.", ja: "出金元ウォレットを選択してください。")
                     return
                 }
 
                 guard let destinationWallet = selectedDestinationWallet else {
-                    alertMessage = "Chọn ví đích."
+                    alertMessage = mistiaLocalized(vi: "Chọn ví đích.", en: "Choose the destination wallet.", ja: "入金先ウォレットを選択してください。")
                     return
                 }
 
                 guard sourceWallet.id != destinationWallet.id else {
-                    alertMessage = "Ví nguồn và đích phải khác nhau."
+                    alertMessage = mistiaLocalized(vi: "Ví nguồn và đích phải khác nhau.", en: "Source and destination wallets must be different.", ja: "出金元と入金先のウォレットは別である必要があります。")
                     return
                 }
 
-                transaction.title = draft.title.nilIfBlank ?? "Chuyển tiền nội bộ"
+                transaction.title = draft.title.nilIfBlank ?? mistiaLocalized(vi: "Chuyển tiền nội bộ", en: "Internal transfer", ja: "内部振替")
                 transaction.sourceWallet = sourceWallet
                 transaction.destinationWallet = destinationWallet
                 transaction.category = nil
@@ -506,19 +524,19 @@ struct TransactionEditorSheet: View {
                 transaction.normalizedCounterpartyKey = nil
             case .debt:
                 guard let sourceWallet = selectedSourceWallet else {
-                    alertMessage = "Chọn ví thực hiện giao dịch công nợ."
+                    alertMessage = mistiaLocalized(vi: "Chọn ví thực hiện giao dịch công nợ.", en: "Choose the wallet used for this debt transaction.", ja: "この貸し借り取引で使うウォレットを選択してください。")
                     return
                 }
 
                 guard let debtIntent = draft.debtIntent else {
-                    alertMessage = "Chọn loại công nợ."
+                    alertMessage = mistiaLocalized(vi: "Chọn loại công nợ.", en: "Choose a debt type.", ja: "貸し借りの種類を選択してください。")
                     return
                 }
 
                 guard let counterpartyName = draft.counterpartyName.nilIfBlank,
                       let normalizedCounterpartyKey = TransactionLogic.normalizeCounterpartyName(counterpartyName)
                 else {
-                    alertMessage = "Nhập tên người liên quan."
+                    alertMessage = mistiaLocalized(vi: "Nhập tên người liên quan.", en: "Enter the counterparty name.", ja: "相手の名前を入力してください。")
                     return
                 }
 
@@ -546,7 +564,7 @@ struct TransactionEditorSheet: View {
             onComplete(completion)
             dismiss()
         } catch {
-            alertMessage = "Không thể lưu giao dịch lúc này. \(error.localizedDescription)"
+            alertMessage = mistiaLocalized(vi: "Không thể lưu giao dịch lúc này.", en: "Couldn't save this transaction right now.", ja: "現在この取引を保存できません。") + " \(error.localizedDescription)"
         }
     }
 }

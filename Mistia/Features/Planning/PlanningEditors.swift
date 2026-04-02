@@ -39,28 +39,28 @@ struct PlanningBudgetEditorSheet: View {
     var body: some View {
         NavigationStack {
             Form {
-                Section("Ngân sách") {
-                    Picker("Danh mục", selection: $draft.categoryID) {
-                        Text("Chọn danh mục").tag(Optional<UUID>.none)
+                Section(mistiaLocalized(vi: "Ngân sách", en: "Budget", ja: "予算")) {
+                    Picker(mistiaLocalized(vi: "Danh mục", en: "Category", ja: "カテゴリ"), selection: $draft.categoryID) {
+                        Text(mistiaLocalized(vi: "Chọn danh mục", en: "Choose category", ja: "カテゴリを選択")).tag(Optional<UUID>.none)
                         ForEach(availableCategories) { category in
                             Text(category.localizedDisplayName).tag(Optional(category.id))
                         }
                     }
 
-                    TextField("Số tiền ngân sách", text: $draft.limitText)
+                    TextField(mistiaLocalized(vi: "Số tiền ngân sách", en: "Budget amount", ja: "予算金額"), text: $draft.limitText)
                         .keyboardType(.numberPad)
 
-                    LabeledContent("Chu kỳ") {
-                        Text("Theo tháng")
+                    LabeledContent(mistiaLocalized(vi: "Chu kỳ", en: "Cycle", ja: "周期")) {
+                        Text(mistiaLocalized(vi: "Theo tháng", en: "Monthly", ja: "毎月"))
                             .foregroundStyle(.secondary)
                     }
 
-                    Toggle("Rollover", isOn: $draft.rolloverEnabled)
+                    Toggle(mistiaLocalized(vi: "Rollover", en: "Rollover", ja: "繰り越し"), isOn: $draft.rolloverEnabled)
                 }
 
                 if target.budget != nil {
                     Section {
-                        Button("Xóa ngân sách", role: .destructive) {
+                        Button(mistiaLocalized(vi: "Xóa ngân sách", en: "Delete budget", ja: "予算を削除"), role: .destructive) {
                             showsDeleteConfirmation = true
                         }
                     }
@@ -77,17 +77,17 @@ struct PlanningBudgetEditorSheet: View {
         }
         .planningAlert(message: $alertMessage)
         .confirmationDialog(
-            "Xóa ngân sách này?",
+            mistiaLocalized(vi: "Xóa ngân sách này?", en: "Delete this budget?", ja: "この予算を削除しますか？"),
             isPresented: $showsDeleteConfirmation,
             titleVisibility: .visible
         ) {
-            Button("Xóa", role: .destructive) {
+            Button(mistiaLocalized(vi: "Xóa", en: "Delete", ja: "削除"), role: .destructive) {
                 deleteBudget()
             }
 
-            Button("Hủy", role: .cancel) { }
+            Button(mistiaLocalized(vi: "Hủy", en: "Cancel", ja: "キャンセル"), role: .cancel) { }
         } message: {
-            Text("Ngân sách của danh mục này trong tháng đang xem sẽ bị xóa.")
+            Text(mistiaLocalized(vi: "Ngân sách của danh mục này trong tháng đang xem sẽ bị xóa.", en: "The budget for this category in the current month will be deleted.", ja: "現在表示中の月にあるこのカテゴリの予算が削除されます。"))
         }
     }
 
@@ -95,13 +95,13 @@ struct PlanningBudgetEditorSheet: View {
         guard let categoryID = draft.categoryID,
               let category = storedCategories.first(where: { $0.id == categoryID })
         else {
-            alertMessage = "Chọn danh mục trước khi lưu."
+            alertMessage = mistiaLocalized(vi: "Chọn danh mục trước khi lưu.", en: "Choose a category before saving.", ja: "保存する前にカテゴリを選択してください。")
             return
         }
 
         let limitMinor = draft.limitText.currencyInputToMinorUnits(currencyCode: activeCurrencyCode)
         guard limitMinor > 0 else {
-            alertMessage = "Nhập số tiền ngân sách lớn hơn 0."
+            alertMessage = mistiaLocalized(vi: "Nhập số tiền ngân sách lớn hơn 0.", en: "Enter a budget amount greater than 0.", ja: "0 より大きい予算金額を入力してください。")
             return
         }
 
@@ -114,7 +114,7 @@ struct PlanningBudgetEditorSheet: View {
         })
 
         guard !hasDuplicate else {
-            alertMessage = "Danh mục này đã có ngân sách trong tháng đang xem."
+            alertMessage = mistiaLocalized(vi: "Danh mục này đã có ngân sách trong tháng đang xem.", en: "This category already has a budget in the selected month.", ja: "このカテゴリには表示中の月ですでに予算があります。")
             return
         }
 
@@ -142,7 +142,7 @@ struct PlanningBudgetEditorSheet: View {
             try modelContext.save()
             dismiss()
         } catch {
-            alertMessage = "Không thể lưu ngân sách lúc này. \(error.localizedDescription)"
+            alertMessage = mistiaLocalized(vi: "Không thể lưu ngân sách lúc này.", en: "Couldn't save this budget right now.", ja: "現在この予算を保存できません。") + " \(error.localizedDescription)"
         }
     }
 
@@ -154,7 +154,7 @@ struct PlanningBudgetEditorSheet: View {
             try modelContext.save()
             dismiss()
         } catch {
-            alertMessage = "Không thể xóa ngân sách lúc này. \(error.localizedDescription)"
+            alertMessage = mistiaLocalized(vi: "Không thể xóa ngân sách lúc này.", en: "Couldn't delete this budget right now.", ja: "現在この予算を削除できません。") + " \(error.localizedDescription)"
         }
     }
 }
@@ -198,7 +198,7 @@ struct PlanningGoalEditorSheet: View {
     var body: some View {
         NavigationStack {
             Form {
-                Section("Nhận diện") {
+                Section(mistiaLocalized(vi: "Nhận diện", en: "Identity", ja: "識別情報")) {
                     PlanningIconPickerButton(
                         title: mistiaCatalog("Icon mục tiêu"),
                         symbolName: draft.iconSymbolName,
@@ -208,16 +208,16 @@ struct PlanningGoalEditorSheet: View {
                     }
                 }
 
-                Section("Mục tiêu") {
-                    TextField("Tên mục tiêu", text: $draft.name)
-                    TextField("Số tiền mục tiêu", text: $draft.targetText)
+                Section(mistiaLocalized(vi: "Mục tiêu", en: "Goal", ja: "目標")) {
+                    TextField(mistiaLocalized(vi: "Tên mục tiêu", en: "Goal name", ja: "目標名"), text: $draft.name)
+                    TextField(mistiaLocalized(vi: "Số tiền mục tiêu", en: "Target amount", ja: "目標金額"), text: $draft.targetText)
                         .keyboardType(.numberPad)
-                    TextField("Số tiền hiện tại", text: $draft.currentText)
+                    TextField(mistiaLocalized(vi: "Số tiền hiện tại", en: "Current amount", ja: "現在額"), text: $draft.currentText)
                         .keyboardType(.numberPad)
-                    DatePicker("Ngày mục tiêu", selection: $draft.targetDate, displayedComponents: [.date])
+                    DatePicker(mistiaLocalized(vi: "Ngày mục tiêu", en: "Target date", ja: "目標日"), selection: $draft.targetDate, displayedComponents: [.date])
 
-                    Picker("Ví liên kết", selection: $draft.linkedWalletID) {
-                        Text("Không liên kết").tag(Optional<UUID>.none)
+                    Picker(mistiaLocalized(vi: "Ví liên kết", en: "Linked wallet", ja: "連携ウォレット"), selection: $draft.linkedWalletID) {
+                        Text(mistiaLocalized(vi: "Không liên kết", en: "Not linked", ja: "未連携")).tag(Optional<UUID>.none)
                         ForEach(availableWallets) { wallet in
                             Text(wallet.name).tag(Optional(wallet.id))
                         }
@@ -226,7 +226,7 @@ struct PlanningGoalEditorSheet: View {
 
                 if target.goal != nil {
                     Section {
-                        Button("Xóa mục tiêu", role: .destructive) {
+                        Button(mistiaLocalized(vi: "Xóa mục tiêu", en: "Delete goal", ja: "目標を削除"), role: .destructive) {
                             showsDeleteConfirmation = true
                         }
                     }
@@ -253,27 +253,27 @@ struct PlanningGoalEditorSheet: View {
         }
         .planningAlert(message: $alertMessage)
         .confirmationDialog(
-            "Xóa mục tiêu này?",
+            mistiaLocalized(vi: "Xóa mục tiêu này?", en: "Delete this goal?", ja: "この目標を削除しますか？"),
             isPresented: $showsDeleteConfirmation,
             titleVisibility: .visible
         ) {
-            Button("Xóa", role: .destructive) {
+            Button(mistiaLocalized(vi: "Xóa", en: "Delete", ja: "削除"), role: .destructive) {
                 deleteGoal()
             }
 
-            Button("Hủy", role: .cancel) { }
+            Button(mistiaLocalized(vi: "Hủy", en: "Cancel", ja: "キャンセル"), role: .cancel) { }
         }
     }
 
     private func save() {
         guard let trimmedName = draft.name.nilIfBlank else {
-            alertMessage = "Nhập tên mục tiêu trước khi lưu."
+            alertMessage = mistiaLocalized(vi: "Nhập tên mục tiêu trước khi lưu.", en: "Enter a goal name before saving.", ja: "保存する前に目標名を入力してください。")
             return
         }
 
         let targetMinor = draft.targetText.currencyInputToMinorUnits(currencyCode: activeCurrencyCode)
         guard targetMinor > 0 else {
-            alertMessage = "Nhập số tiền mục tiêu lớn hơn 0."
+            alertMessage = mistiaLocalized(vi: "Nhập số tiền mục tiêu lớn hơn 0.", en: "Enter a target amount greater than 0.", ja: "0 より大きい目標金額を入力してください。")
             return
         }
 
@@ -309,7 +309,7 @@ struct PlanningGoalEditorSheet: View {
             try modelContext.save()
             dismiss()
         } catch {
-            alertMessage = "Không thể lưu mục tiêu lúc này. \(error.localizedDescription)"
+            alertMessage = mistiaLocalized(vi: "Không thể lưu mục tiêu lúc này.", en: "Couldn't save this goal right now.", ja: "現在この目標を保存できません。") + " \(error.localizedDescription)"
         }
     }
 
@@ -321,7 +321,7 @@ struct PlanningGoalEditorSheet: View {
             try modelContext.save()
             dismiss()
         } catch {
-            alertMessage = "Không thể xóa mục tiêu lúc này. \(error.localizedDescription)"
+            alertMessage = mistiaLocalized(vi: "Không thể xóa mục tiêu lúc này.", en: "Couldn't delete this goal right now.", ja: "現在この目標を削除できません。") + " \(error.localizedDescription)"
         }
     }
 
@@ -372,7 +372,7 @@ struct PlanningBillEditorSheet: View {
     var body: some View {
         NavigationStack {
             Form {
-                Section("Nhận diện") {
+                Section(mistiaLocalized(vi: "Nhận diện", en: "Identity", ja: "識別情報")) {
                     PlanningIconPickerButton(
                         title: mistiaCatalog("Icon hóa đơn"),
                         symbolName: draft.iconSymbolName,
@@ -382,18 +382,26 @@ struct PlanningBillEditorSheet: View {
                     }
                 }
 
-                Section("Hóa đơn định kỳ") {
-                    TextField("Tên hóa đơn", text: $draft.name)
-                    TextField("Số tiền (có thể để trống)", text: $draft.amountText)
+                Section(mistiaLocalized(vi: "Hóa đơn định kỳ", en: "Recurring bill", ja: "定期請求")) {
+                    TextField(mistiaLocalized(vi: "Tên hóa đơn", en: "Bill name", ja: "請求名"), text: $draft.name)
+                    TextField(mistiaLocalized(vi: "Số tiền (có thể để trống)", en: "Amount (optional)", ja: "金額（任意）"), text: $draft.amountText)
                         .keyboardType(.numberPad)
-                    Picker("Ngày đến hạn", selection: $draft.dueDay) {
+                    Picker(mistiaLocalized(vi: "Ngày đến hạn", en: "Due day", ja: "支払日"), selection: $draft.dueDay) {
                         ForEach(1...31, id: \.self) { day in
-                            Text("Ngày \(day)").tag(day)
+                            Text(mistiaLocalized(vi: "Ngày \(day)", en: "Day \(day)", ja: "\(day) 日")).tag(day)
                         }
                     }
-                    Stepper("Tần suất: \(draft.frequencyMonths) tháng", value: $draft.frequencyMonths, in: 1...12)
-                    Picker("Ví thanh toán", selection: $draft.paymentWalletID) {
-                        Text("Chọn ví").tag(Optional<UUID>.none)
+                    Stepper(
+                        mistiaLocalized(
+                            vi: "Tần suất: \(draft.frequencyMonths) tháng",
+                            en: "Frequency: every \(draft.frequencyMonths) month(s)",
+                            ja: "頻度: \(draft.frequencyMonths) か月ごと"
+                        ),
+                        value: $draft.frequencyMonths,
+                        in: 1...12
+                    )
+                    Picker(mistiaLocalized(vi: "Ví thanh toán", en: "Payment wallet", ja: "支払いウォレット"), selection: $draft.paymentWalletID) {
+                        Text(mistiaLocalized(vi: "Chọn ví", en: "Choose wallet", ja: "ウォレットを選択")).tag(Optional<UUID>.none)
                         ForEach(availableWallets) { wallet in
                             Text(wallet.name).tag(Optional(wallet.id))
                         }
@@ -402,22 +410,22 @@ struct PlanningBillEditorSheet: View {
 
                 if let dueItem = target.dueItem, dueItem.status == .pending {
                     Section {
-                        TextField("Số tiền thanh toán", text: $paymentAmountText)
+                        TextField(mistiaLocalized(vi: "Số tiền thanh toán", en: "Payment amount", ja: "支払い金額"), text: $paymentAmountText)
                             .keyboardType(.numberPad)
 
-                        Button("Thanh toán trước") {
+                        Button(mistiaLocalized(vi: "Thanh toán trước", en: "Pay early", ja: "先に支払う")) {
                             payEarly()
                         }
                     } header: {
-                        Text("Thanh toán trước")
+                        Text(mistiaLocalized(vi: "Thanh toán trước", en: "Early payment", ja: "前倒し支払い"))
                     } footer: {
-                        Text("Thanh toán ngay sẽ tạo giao dịch chi tiêu thật ở tab Giao dịch.")
+                        Text(mistiaLocalized(vi: "Thanh toán ngay sẽ tạo giao dịch chi tiêu thật ở tab Giao dịch.", en: "Paying now will create a real expense transaction in the Transactions tab.", ja: "今すぐ支払うと、取引タブに実際の支出取引が作成されます。"))
                     }
                 }
 
                 if target.plan != nil {
                     Section {
-                        Button("Xóa hóa đơn", role: .destructive) {
+                        Button(mistiaLocalized(vi: "Xóa hóa đơn", en: "Delete bill", ja: "請求を削除"), role: .destructive) {
                             showsDeleteConfirmation = true
                         }
                     }
@@ -444,26 +452,26 @@ struct PlanningBillEditorSheet: View {
         }
         .planningAlert(message: $alertMessage)
         .confirmationDialog(
-            "Xóa hóa đơn này?",
+            mistiaLocalized(vi: "Xóa hóa đơn này?", en: "Delete this bill?", ja: "この請求を削除しますか？"),
             isPresented: $showsDeleteConfirmation,
             titleVisibility: .visible
         ) {
-            Button("Xóa", role: .destructive) {
+            Button(mistiaLocalized(vi: "Xóa", en: "Delete", ja: "削除"), role: .destructive) {
                 deletePlan()
             }
 
-            Button("Hủy", role: .cancel) { }
+            Button(mistiaLocalized(vi: "Hủy", en: "Cancel", ja: "キャンセル"), role: .cancel) { }
         }
     }
 
     private func save() {
         guard let trimmedName = draft.name.nilIfBlank else {
-            alertMessage = "Nhập tên hóa đơn trước khi lưu."
+            alertMessage = mistiaLocalized(vi: "Nhập tên hóa đơn trước khi lưu.", en: "Enter a bill name before saving.", ja: "保存する前に請求名を入力してください。")
             return
         }
 
         guard let wallet = storedWallets.first(where: { $0.id == draft.paymentWalletID }) else {
-            alertMessage = "Chọn ví thanh toán cho hóa đơn."
+            alertMessage = mistiaLocalized(vi: "Chọn ví thanh toán cho hóa đơn.", en: "Choose a payment wallet for this bill.", ja: "この請求の支払いウォレットを選択してください。")
             return
         }
 
@@ -497,7 +505,7 @@ struct PlanningBillEditorSheet: View {
             try modelContext.save()
             dismiss()
         } catch {
-            alertMessage = "Không thể lưu hóa đơn lúc này. \(error.localizedDescription)"
+            alertMessage = mistiaLocalized(vi: "Không thể lưu hóa đơn lúc này.", en: "Couldn't save this bill right now.", ja: "現在この請求を保存できません。") + " \(error.localizedDescription)"
         }
     }
 
@@ -539,7 +547,7 @@ struct PlanningBillEditorSheet: View {
             try modelContext.save()
             dismiss()
         } catch {
-            alertMessage = "Không thể xóa hóa đơn lúc này. \(error.localizedDescription)"
+            alertMessage = mistiaLocalized(vi: "Không thể xóa hóa đơn lúc này.", en: "Couldn't delete this bill right now.", ja: "現在この請求を削除できません。") + " \(error.localizedDescription)"
         }
     }
 }
@@ -586,7 +594,7 @@ struct PlanningInstallmentEditorSheet: View {
     var body: some View {
         NavigationStack {
             Form {
-                Section("Nhận diện") {
+                Section(mistiaLocalized(vi: "Nhận diện", en: "Identity", ja: "識別情報")) {
                     PlanningIconPickerButton(
                         title: mistiaCatalog("Icon khoản trả góp / vay"),
                         symbolName: draft.iconSymbolName,
@@ -596,20 +604,28 @@ struct PlanningInstallmentEditorSheet: View {
                     }
                 }
 
-                Section("Khoản trả góp / vay") {
-                    TextField("Tên khoản", text: $draft.name)
-                    TextField("Số tiền mỗi kỳ", text: $draft.amountText)
+                Section(mistiaLocalized(vi: "Khoản trả góp / vay", en: "Installment / loan", ja: "分割払い・借入")) {
+                    TextField(mistiaLocalized(vi: "Tên khoản", en: "Name", ja: "名称"), text: $draft.name)
+                    TextField(mistiaLocalized(vi: "Số tiền mỗi kỳ", en: "Amount per cycle", ja: "各回の金額"), text: $draft.amountText)
                         .keyboardType(.numberPad)
-                    Picker("Ngày đến hạn", selection: $draft.dueDay) {
+                    Picker(mistiaLocalized(vi: "Ngày đến hạn", en: "Due day", ja: "支払日"), selection: $draft.dueDay) {
                         ForEach(1...31, id: \.self) { day in
-                            Text("Ngày \(day)").tag(day)
+                            Text(mistiaLocalized(vi: "Ngày \(day)", en: "Day \(day)", ja: "\(day) 日")).tag(day)
                         }
                     }
-                    Stepper("Tần suất: \(draft.frequencyMonths) tháng", value: $draft.frequencyMonths, in: 1...12)
-                    TextField("Tổng số kỳ (không bắt buộc)", text: $draft.totalCyclesText)
+                    Stepper(
+                        mistiaLocalized(
+                            vi: "Tần suất: \(draft.frequencyMonths) tháng",
+                            en: "Frequency: every \(draft.frequencyMonths) month(s)",
+                            ja: "頻度: \(draft.frequencyMonths) か月ごと"
+                        ),
+                        value: $draft.frequencyMonths,
+                        in: 1...12
+                    )
+                    TextField(mistiaLocalized(vi: "Tổng số kỳ (không bắt buộc)", en: "Total cycles (optional)", ja: "支払い回数（任意）"), text: $draft.totalCyclesText)
                         .keyboardType(.numberPad)
-                    Picker("Ví thanh toán", selection: $draft.paymentWalletID) {
-                        Text("Chọn ví").tag(Optional<UUID>.none)
+                    Picker(mistiaLocalized(vi: "Ví thanh toán", en: "Payment wallet", ja: "支払いウォレット"), selection: $draft.paymentWalletID) {
+                        Text(mistiaLocalized(vi: "Chọn ví", en: "Choose wallet", ja: "ウォレットを選択")).tag(Optional<UUID>.none)
                         ForEach(availableWallets) { wallet in
                             Text(wallet.name).tag(Optional(wallet.id))
                         }
@@ -618,22 +634,22 @@ struct PlanningInstallmentEditorSheet: View {
 
                 if let dueItem = target.dueItem, dueItem.status == .pending {
                     Section {
-                        TextField("Số tiền thanh toán", text: $paymentAmountText)
+                        TextField(mistiaLocalized(vi: "Số tiền thanh toán", en: "Payment amount", ja: "支払い金額"), text: $paymentAmountText)
                             .keyboardType(.numberPad)
 
-                        Button("Thanh toán trước") {
+                        Button(mistiaLocalized(vi: "Thanh toán trước", en: "Pay early", ja: "先に支払う")) {
                             payEarly()
                         }
                     } header: {
-                        Text("Thanh toán trước")
+                        Text(mistiaLocalized(vi: "Thanh toán trước", en: "Early payment", ja: "前倒し支払い"))
                     } footer: {
-                        Text("Khoản này sẽ được ghi nhận thành giao dịch chi tiêu thật.")
+                        Text(mistiaLocalized(vi: "Khoản này sẽ được ghi nhận thành giao dịch chi tiêu thật.", en: "This payment will be recorded as a real expense transaction.", ja: "この支払いは実際の支出取引として記録されます。"))
                     }
                 }
 
                 if target.plan != nil {
                     Section {
-                        Button("Xóa khoản này", role: .destructive) {
+                        Button(mistiaLocalized(vi: "Xóa khoản này", en: "Delete this item", ja: "この項目を削除"), role: .destructive) {
                             showsDeleteConfirmation = true
                         }
                     }
@@ -660,32 +676,32 @@ struct PlanningInstallmentEditorSheet: View {
         }
         .planningAlert(message: $alertMessage)
         .confirmationDialog(
-            "Xóa khoản này?",
+            mistiaLocalized(vi: "Xóa khoản này?", en: "Delete this item?", ja: "この項目を削除しますか？"),
             isPresented: $showsDeleteConfirmation,
             titleVisibility: .visible
         ) {
-            Button("Xóa", role: .destructive) {
+            Button(mistiaLocalized(vi: "Xóa", en: "Delete", ja: "削除"), role: .destructive) {
                 deletePlan()
             }
 
-            Button("Hủy", role: .cancel) { }
+            Button(mistiaLocalized(vi: "Hủy", en: "Cancel", ja: "キャンセル"), role: .cancel) { }
         }
     }
 
     private func save() {
         guard let trimmedName = draft.name.nilIfBlank else {
-            alertMessage = "Nhập tên khoản trước khi lưu."
+            alertMessage = mistiaLocalized(vi: "Nhập tên khoản trước khi lưu.", en: "Enter a name before saving.", ja: "保存する前に名前を入力してください。")
             return
         }
 
         let amountMinor = draft.amountText.currencyInputToMinorUnits(currencyCode: activeCurrencyCode)
         guard amountMinor > 0 else {
-            alertMessage = "Nhập số tiền mỗi kỳ lớn hơn 0."
+            alertMessage = mistiaLocalized(vi: "Nhập số tiền mỗi kỳ lớn hơn 0.", en: "Enter an amount per cycle greater than 0.", ja: "各回の金額は 0 より大きくしてください。")
             return
         }
 
         guard let wallet = storedWallets.first(where: { $0.id == draft.paymentWalletID }) else {
-            alertMessage = "Chọn ví thanh toán cho khoản này."
+            alertMessage = mistiaLocalized(vi: "Chọn ví thanh toán cho khoản này.", en: "Choose a payment wallet for this item.", ja: "この項目の支払いウォレットを選択してください。")
             return
         }
 
@@ -721,7 +737,7 @@ struct PlanningInstallmentEditorSheet: View {
             try modelContext.save()
             dismiss()
         } catch {
-            alertMessage = "Không thể lưu khoản này lúc này. \(error.localizedDescription)"
+            alertMessage = mistiaLocalized(vi: "Không thể lưu khoản này lúc này.", en: "Couldn't save this item right now.", ja: "現在この項目を保存できません。") + " \(error.localizedDescription)"
         }
     }
 
@@ -763,7 +779,7 @@ struct PlanningInstallmentEditorSheet: View {
             try modelContext.save()
             dismiss()
         } catch {
-            alertMessage = "Không thể xóa khoản này lúc này. \(error.localizedDescription)"
+            alertMessage = mistiaLocalized(vi: "Không thể xóa khoản này lúc này.", en: "Couldn't delete this item right now.", ja: "現在この項目を削除できません。") + " \(error.localizedDescription)"
         }
     }
 }
@@ -814,7 +830,7 @@ struct PlanningCreditCardEditorSheet: View {
     var body: some View {
         NavigationStack {
             Form {
-                Section("Nhận diện") {
+                Section(mistiaLocalized(vi: "Nhận diện", en: "Identity", ja: "識別情報")) {
                     PlanningIconPickerButton(
                         title: mistiaCatalog("Biểu tượng thẻ"),
                         symbolName: draft.iconSymbolName,
@@ -824,60 +840,60 @@ struct PlanningCreditCardEditorSheet: View {
                     }
                 }
 
-                Section("Thông tin thẻ") {
-                    TextField("Tên thẻ", text: $draft.name)
-                    TextField("Tên đơn vị phát hành", text: $draft.issuerName)
-                    Picker("Mạng thẻ", selection: $draft.network) {
+                Section(mistiaLocalized(vi: "Thông tin thẻ", en: "Card details", ja: "カード情報")) {
+                    TextField(mistiaLocalized(vi: "Tên thẻ", en: "Card name", ja: "カード名"), text: $draft.name)
+                    TextField(mistiaLocalized(vi: "Tên đơn vị phát hành", en: "Issuer name", ja: "発行会社名"), text: $draft.issuerName)
+                    Picker(mistiaLocalized(vi: "Mạng thẻ", en: "Card network", ja: "カードブランド"), selection: $draft.network) {
                         ForEach(CreditCardNetwork.allCases) { network in
                             Text(network.title).tag(network)
                         }
                     }
-                    TextField("4 số cuối", text: $draft.last4)
+                    TextField(mistiaLocalized(vi: "4 số cuối", en: "Last 4 digits", ja: "下4桁"), text: $draft.last4)
                         .keyboardType(.numberPad)
                         .onChange(of: draft.last4) { _, newValue in
                             draft.last4 = String(newValue.filter(\.isNumber).prefix(4))
                         }
-                    TextField("Dư nợ hiện tại", text: $draft.currentDebtText)
+                    TextField(mistiaLocalized(vi: "Dư nợ hiện tại", en: "Current balance", ja: "現在の残高"), text: $draft.currentDebtText)
                         .keyboardType(.numberPad)
-                    TextField("Hạn mức", text: $draft.creditLimitText)
+                    TextField(mistiaLocalized(vi: "Hạn mức", en: "Credit limit", ja: "利用限度額"), text: $draft.creditLimitText)
                         .keyboardType(.numberPad)
-                    Picker("Ngày đến hạn", selection: $draft.paymentDueDay) {
+                    Picker(mistiaLocalized(vi: "Ngày đến hạn", en: "Due day", ja: "支払日"), selection: $draft.paymentDueDay) {
                         ForEach(1...31, id: \.self) { day in
-                            Text("Ngày \(day)").tag(day)
+                            Text(mistiaLocalized(vi: "Ngày \(day)", en: "Day \(day)", ja: "\(day) 日")).tag(day)
                         }
                     }
-                    Picker("Ngày chốt sao kê", selection: $draft.statementClosingDay) {
+                    Picker(mistiaLocalized(vi: "Ngày chốt sao kê", en: "Statement closing day", ja: "締め日"), selection: $draft.statementClosingDay) {
                         ForEach(1...31, id: \.self) { day in
-                            Text("Ngày \(day)").tag(day)
+                            Text(mistiaLocalized(vi: "Ngày \(day)", en: "Day \(day)", ja: "\(day) 日")).tag(day)
                         }
                     }
-                    Picker("Ví thanh toán", selection: $draft.paymentSourceWalletID) {
-                        Text("Chọn ví").tag(Optional<UUID>.none)
+                    Picker(mistiaLocalized(vi: "Ví thanh toán", en: "Payment wallet", ja: "支払いウォレット"), selection: $draft.paymentSourceWalletID) {
+                        Text(mistiaLocalized(vi: "Chọn ví", en: "Choose wallet", ja: "ウォレットを選択")).tag(Optional<UUID>.none)
                         ForEach(availablePaymentWallets) { wallet in
                             Text(wallet.name).tag(Optional(wallet.id))
                         }
                     }
-                    TextField("Ghi chú", text: $draft.notes, axis: .vertical)
+                    TextField(mistiaLocalized(vi: "Ghi chú", en: "Notes", ja: "メモ"), text: $draft.notes, axis: .vertical)
                         .lineLimit(3...5)
                 }
 
                 if target.wallet != nil, let dueItem = currentDueSnapshot, dueItem.status == .pending {
                     Section {
-                        TextField("Số tiền thanh toán", text: $paymentAmountText)
+                        TextField(mistiaLocalized(vi: "Số tiền thanh toán", en: "Payment amount", ja: "支払い金額"), text: $paymentAmountText)
                             .keyboardType(.numberPad)
-                        Button("Thanh toán trước") {
+                        Button(mistiaLocalized(vi: "Thanh toán trước", en: "Pay early", ja: "先に支払う")) {
                             payEarly(with: dueItem)
                         }
                     } header: {
-                        Text("Thanh toán trước")
+                        Text(mistiaLocalized(vi: "Thanh toán trước", en: "Early payment", ja: "前倒し支払い"))
                     } footer: {
-                        Text("Khoản thanh toán sẽ được ghi nhận thành giao dịch chuyển tiền sang thẻ tín dụng.")
+                        Text(mistiaLocalized(vi: "Khoản thanh toán sẽ được ghi nhận thành giao dịch chuyển tiền sang thẻ tín dụng.", en: "This payment will be recorded as a transfer transaction to the credit card.", ja: "この支払いはクレジットカードへの振替取引として記録されます。"))
                     }
                 }
 
                 if target.wallet != nil {
                     Section {
-                        Button("Lưu trữ thẻ", role: .destructive) {
+                        Button(mistiaLocalized(vi: "Lưu trữ thẻ", en: "Archive card", ja: "カードをアーカイブ"), role: .destructive) {
                             showsArchiveConfirmation = true
                         }
                     }
@@ -904,15 +920,15 @@ struct PlanningCreditCardEditorSheet: View {
         }
         .planningAlert(message: $alertMessage)
         .confirmationDialog(
-            "Lưu trữ thẻ này?",
+            mistiaLocalized(vi: "Lưu trữ thẻ này?", en: "Archive this card?", ja: "このカードをアーカイブしますか？"),
             isPresented: $showsArchiveConfirmation,
             titleVisibility: .visible
         ) {
-            Button("Lưu trữ", role: .destructive) {
+            Button(mistiaLocalized(vi: "Lưu trữ", en: "Archive", ja: "アーカイブ"), role: .destructive) {
                 archiveWallet()
             }
 
-            Button("Hủy", role: .cancel) { }
+            Button(mistiaLocalized(vi: "Hủy", en: "Cancel", ja: "キャンセル"), role: .cancel) { }
         }
     }
 
@@ -939,7 +955,7 @@ struct PlanningCreditCardEditorSheet: View {
 
     private func save() {
         guard let trimmedName = draft.name.nilIfBlank else {
-            alertMessage = "Nhập tên thẻ trước khi lưu."
+            alertMessage = mistiaLocalized(vi: "Nhập tên thẻ trước khi lưu.", en: "Enter a card name before saving.", ja: "保存する前にカード名を入力してください。")
             return
         }
 
@@ -974,7 +990,7 @@ struct PlanningCreditCardEditorSheet: View {
             try modelContext.save()
             dismiss()
         } catch {
-            alertMessage = "Không thể lưu thẻ lúc này. \(error.localizedDescription)"
+            alertMessage = mistiaLocalized(vi: "Không thể lưu thẻ lúc này.", en: "Couldn't save this card right now.", ja: "現在このカードを保存できません。") + " \(error.localizedDescription)"
         }
     }
 
@@ -1048,7 +1064,7 @@ struct PlanningCreditCardEditorSheet: View {
             try modelContext.save()
             dismiss()
         } catch {
-            alertMessage = "Không thể lưu trạng thái lưu trữ của thẻ. \(error.localizedDescription)"
+            alertMessage = mistiaLocalized(vi: "Không thể lưu trạng thái lưu trữ của thẻ.", en: "Couldn't save the archive state for this card.", ja: "このカードのアーカイブ状態を保存できません。") + " \(error.localizedDescription)"
         }
     }
 
@@ -1276,13 +1292,13 @@ private struct PlanningCreditCardDraft {
 private extension View {
     func planningAlert(message: Binding<String?>) -> some View {
         alert(
-            "Chưa thể thực hiện",
+            mistiaLocalized(vi: "Chưa thể thực hiện", en: "Can't complete yet", ja: "まだ実行できません"),
             isPresented: Binding(
                 get: { message.wrappedValue != nil },
                 set: { if !$0 { message.wrappedValue = nil } }
             )
         ) {
-            Button("OK", role: .cancel) { }
+            Button(mistiaLocalized(vi: "OK", en: "OK", ja: "OK"), role: .cancel) { }
         } message: {
             Text(mistiaCatalog(message.wrappedValue ?? ""))
         }

@@ -37,7 +37,7 @@ nonisolated enum MistiaAppLanguage: String, CaseIterable, Identifiable, Codable 
         case .english:
             "English"
         case .japanese:
-            "Nihongo"
+            "日本語"
         }
     }
 

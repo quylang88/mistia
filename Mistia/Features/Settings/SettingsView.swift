@@ -30,21 +30,21 @@ struct SettingsView: View {
             SettingsSectionDump(
                 rows: [
                     SettingsRowDump(
-                        title: "Giao diện",
+                        title: mistiaLocalized(vi: "Giao diện", en: "Appearance", ja: "表示"),
                         icon: "moon.stars.fill",
                         accent: .indigo,
                         value: appearanceMode.title,
                         action: .openAppearance
                     ),
                     SettingsRowDump(
-                        title: "Ngôn ngữ",
+                        title: mistiaLocalized(vi: "Ngôn ngữ", en: "Language", ja: "言語"),
                         icon: "globe.asia.australia.fill",
                         accent: .sky,
                         value: appLanguage.displayName,
                         action: .openLanguage
                     ),
                     SettingsRowDump(
-                        title: "Tiền tệ",
+                        title: mistiaLocalized(vi: "Tiền tệ", en: "Currency", ja: "通貨"),
                         icon: "yensign.circle.fill",
                         accent: .amber,
                         value: currencyCode,
@@ -55,14 +55,14 @@ struct SettingsView: View {
             SettingsSectionDump(
                 rows: [
                     SettingsRowDump(
-                        title: "Thông báo",
+                        title: mistiaLocalized(vi: "Thông báo", en: "Notifications", ja: "通知"),
                         icon: "bell.badge.fill",
                         accent: .coral,
                         value: nil,
                         action: .placeholder
                     ),
                     SettingsRowDump(
-                        title: "Bảo mật",
+                        title: mistiaLocalized(vi: "Bảo mật", en: "Security", ja: "セキュリティ"),
                         icon: "lock.shield.fill",
                         accent: .mint,
                         value: nil,
@@ -73,7 +73,7 @@ struct SettingsView: View {
             SettingsSectionDump(
                 rows: [
                     SettingsRowDump(
-                        title: "Thói quen",
+                        title: mistiaLocalized(vi: "Thói quen", en: "Habits", ja: "習慣"),
                         icon: "circle.hexagongrid.fill",
                         accent: .rose,
                         value: nil,
@@ -84,7 +84,7 @@ struct SettingsView: View {
             SettingsSectionDump(
                 rows: [
                     SettingsRowDump(
-                        title: "Gửi feedback",
+                        title: mistiaLocalized(vi: "Gửi feedback", en: "Send feedback", ja: "フィードバック"),
                         icon: "bubble.left.and.bubble.right.fill",
                         accent: .indigo,
                         value: nil,
@@ -98,7 +98,7 @@ struct SettingsView: View {
     var body: some View {
         MistiaPinnedTopBarScaffold(
             tone: .standard,
-            title: "Cài đặt",
+            title: mistiaLocalized(vi: "Cài đặt", en: "Settings", ja: "設定"),
             embedsInNavigationStack: false,
             showsLeadingAvatar: false,
             leadingSystemImage: "chevron.left",
@@ -158,7 +158,7 @@ private struct AppearanceSettingsView: View {
     var body: some View {
         MistiaPinnedTopBarScaffold(
             tone: .standard,
-            title: "Giao diện",
+            title: mistiaLocalized(vi: "Giao diện", en: "Appearance", ja: "表示"),
             embedsInNavigationStack: false,
             showsLeadingAvatar: false,
             leadingSystemImage: "chevron.left",
@@ -194,7 +194,7 @@ private struct LanguageSettingsView: View {
     var body: some View {
         MistiaPinnedTopBarScaffold(
             tone: .standard,
-            title: "Ngôn ngữ",
+            title: mistiaLocalized(vi: "Ngôn ngữ", en: "Language", ja: "言語"),
             embedsInNavigationStack: false,
             showsLeadingAvatar: false,
             leadingSystemImage: "chevron.left",
@@ -251,14 +251,14 @@ private struct SettingsRowButton: View {
             HStack(spacing: 12) {
                 SettingsIconTile(icon: row.icon, accent: row.accent)
 
-                Text(mistiaCatalog(row.title))
+                Text(row.title)
                     .font(.system(size: 16.5, weight: .semibold, design: .rounded))
                     .foregroundStyle(titleColor)
 
                 Spacer(minLength: 10)
 
                 if let value = row.value {
-                    Text(mistiaCatalog(value))
+                    Text(value)
                         .font(.system(size: 15, weight: .medium, design: .rounded))
                         .foregroundStyle(valueColor)
                         .lineLimit(1)
@@ -448,7 +448,11 @@ private struct SettingsVersionFooter: View {
                 .font(.system(size: 13, weight: .bold, design: .rounded))
                 .foregroundStyle(.secondary)
 
-            Text("version 16.09 powered by Quý Lăng")
+            Text(mistiaLocalized(
+                vi: "version 16.09 powered by Quý Lăng",
+                en: "version 16.09 powered by Quy Lang",
+                ja: "version 16.09 powered by Quy Lang"
+            ))
                 .font(.system(size: 11.5, weight: .medium, design: .rounded))
                 .foregroundStyle(.tertiary)
         }
