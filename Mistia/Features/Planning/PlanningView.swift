@@ -620,19 +620,25 @@ private struct PlanningModePicker: View {
     }
 
     private var activeForeground: Color {
-        colorScheme == .dark ? .white.opacity(0.98) : accent
+        .white
     }
 
     private var idleForeground: Color {
-        colorScheme == .dark ? .white.opacity(0.72) : Color.black.opacity(0.58)
+        colorScheme == .dark
+            ? Color(red: 0.94, green: 0.94, blue: 0.97)
+            : Color.black.opacity(0.64)
     }
 
     private var activeTint: Color {
-        colorScheme == .dark ? accent.opacity(0.38) : accent.opacity(0.14)
+        colorScheme == .dark
+            ? Color(red: 0.34, green: 0.18, blue: 0.60)
+            : accent.opacity(0.90)
     }
 
     private var idleTint: Color {
-        colorScheme == .dark ? .white.opacity(0.05) : .white.opacity(0.16)
+        colorScheme == .dark
+            ? Color(red: 0.24, green: 0.24, blue: 0.27)
+            : .white.opacity(0.16)
     }
 }
 
@@ -640,41 +646,16 @@ private struct PlanningDueModePicker: View {
     @Binding var selection: PlanningDueMode
 
     private var accent: Color {
-        planningAccentPurple
+        Color(red: 0.77, green: 0.69, blue: 0.98)
     }
 
     var body: some View {
-        HStack(spacing: 6) {
-            ForEach(PlanningDueMode.allCases) { mode in
-                pickerButton(for: mode)
-            }
-        }
-    }
-
-    @ViewBuilder
-    private func pickerButton(for mode: PlanningDueMode) -> some View {
-        let button = Button {
-            withAnimation(.snappy) {
-                selection = mode
-            }
-        } label: {
-            Text(mode.title)
-                .font(.system(size: 12, weight: .semibold, design: .rounded))
-                .foregroundStyle(selection == mode ? .white : .primary)
-                .frame(maxWidth: .infinity)
-                .lineLimit(1)
-                .minimumScaleFactor(0.8)
-                .padding(.horizontal, 8)
-                .padding(.vertical, 8)
-        }
-        .buttonBorderShape(.capsule)
-        .tint(accent)
-
-        if selection == mode {
-            button.buttonStyle(.glassProminent)
-        } else {
-            button.buttonStyle(.glass)
-        }
+        MistiaNativeSegmentedControl(
+            selection: $selection,
+            options: PlanningDueMode.allCases,
+            title: \.title,
+            accent: accent
+        )
     }
 }
 
@@ -698,7 +679,7 @@ private struct PlanningBudgetSummaryCard: View {
 
                         Text(summary.totalBudgetMinor.formattedCurrency(code: currencyCode))
                             .font(.system(size: 28, weight: .bold, design: .rounded))
-                            .foregroundStyle(.primary)
+                            .foregroundStyle(MistiaAccent.coral.color)
                             .lineLimit(1)
                             .minimumScaleFactor(0.7)
 
@@ -714,7 +695,7 @@ private struct PlanningBudgetSummaryCard: View {
                     PlanningMetricColumn(
                         title: "Đã dùng",
                         value: summary.spentMinor.formattedCurrency(code: currencyCode),
-                        tint: ringColor
+                        tint: MistiaAccent.coral.color
                     )
 
                     Divider()
@@ -1281,7 +1262,7 @@ private struct PlanningMonthPickerSheet: View {
 
     var body: some View {
         NavigationStack {
-            VStack(spacing: 18) {
+            VStack(spacing: 0) {
                 HStack(spacing: 0) {
                     Picker("Tháng", selection: $draftMonth) {
                         ForEach(1...12, id: \.self) { month in
@@ -1300,12 +1281,10 @@ private struct PlanningMonthPickerSheet: View {
                     .frame(maxWidth: .infinity)
                 }
                 .frame(height: 220)
-
-                Text(previewTitle)
-                    .font(.system(size: 14.5, weight: .semibold, design: .rounded))
-                    .foregroundStyle(.secondary)
             }
-            .padding(20)
+            .padding(.horizontal, 20)
+            .padding(.top, 16)
+            .padding(.bottom, 20)
             .navigationTitle("Chọn tháng")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -1341,10 +1320,6 @@ private struct PlanningMonthPickerSheet: View {
         let lowerBound = min(currentYear - 10, draftYear - 2)
         let upperBound = max(currentYear + 10, draftYear + 10)
         return Array(lowerBound...upperBound)
-    }
-
-    private var previewTitle: String {
-        "Tháng \(draftMonth) Năm \(draftYear)"
     }
 
     private func applySelection() {

@@ -410,12 +410,18 @@ struct ManagementCategoryEditorSheet: View {
                 Section("Thông tin") {
                     TextField("Tên danh mục", text: $draft.name)
 
-                    Picker("Loại danh mục", selection: $draft.kind) {
-                        ForEach(TransactionCategoryKind.allCases) { kind in
-                            Text(kind.title).tag(kind)
-                        }
+                    VStack(alignment: .leading, spacing: 10) {
+                        Text("Loại danh mục")
+                            .font(.subheadline.weight(.semibold))
+                            .foregroundStyle(.secondary)
+
+                        MistiaNativeSegmentedControl(
+                            selection: $draft.kind,
+                            options: TransactionCategoryKind.allCases,
+                            title: \.title,
+                            accent: Color(red: 0.43, green: 0.23, blue: 0.76)
+                        )
                     }
-                    .pickerStyle(.segmented)
                 }
 
                 if target.category != nil {

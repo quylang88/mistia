@@ -579,67 +579,19 @@ private struct ManagementEmptyState: View {
 }
 
 private struct ManagementCategoryKindPicker: View {
-    @Environment(\.colorScheme) private var colorScheme
     @Binding var selection: TransactionCategoryKind
 
     private var accentPurple: Color {
-        Color(red: 0.43, green: 0.23, blue: 0.76)
-    }
-
-    private var idleCapsuleTint: Color {
-        colorScheme == .dark ? .white.opacity(0.045) : .white.opacity(0.18)
-    }
-
-    private var activeCapsuleTint: Color {
-        colorScheme == .dark ? accentPurple.opacity(0.42) : accentPurple.opacity(0.16)
-    }
-
-    private var activeForeground: Color {
-        colorScheme == .dark ? .white.opacity(0.97) : accentPurple
+        Color(red: 0.77, green: 0.69, blue: 0.98)
     }
 
     var body: some View {
-        HStack(spacing: 8) {
-            ForEach(TransactionCategoryKind.allCases) { kind in
-                Button {
-                    selection = kind
-                } label: {
-                    HStack(spacing: 7) {
-                        if selection == kind {
-                            Circle()
-                                .fill(Color.white.opacity(colorScheme == .dark ? 0.92 : 0.16))
-                                .frame(width: 6, height: 6)
-                        }
-
-                        Text(kind.title)
-                            .font(.system(size: 12.5, weight: .bold, design: .rounded))
-                    }
-                        .foregroundStyle(selection == kind ? activeForeground : .secondary)
-                        .padding(.horizontal, 14)
-                        .padding(.vertical, 9)
-                        .background {
-                            MistiaCapsuleGlassBackground(
-                                tint: selection == kind
-                                    ? activeCapsuleTint
-                                    : idleCapsuleTint,
-                                interactive: true
-                            )
-                        }
-                        .overlay {
-                            Capsule()
-                                .strokeBorder(
-                                    selection == kind
-                                        ? accentPurple.opacity(colorScheme == .dark ? 0.48 : 0.14)
-                                        : .clear,
-                                    lineWidth: 0.9
-                                )
-                        }
-                }
-                .buttonStyle(.plain)
-            }
-
-            Spacer(minLength: 8)
-        }
+        MistiaNativeSegmentedControl(
+            selection: $selection,
+            options: TransactionCategoryKind.allCases,
+            title: \.title,
+            accent: accentPurple
+        )
     }
 }
 
