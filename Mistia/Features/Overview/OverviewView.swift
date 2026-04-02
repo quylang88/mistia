@@ -193,10 +193,22 @@ struct OverviewView: View {
 
 private struct OverviewHeroCard: View {
     @Environment(\.colorScheme) private var colorScheme
+    @State private var selectedWeekStart: Date
 
     let snapshot: OverviewHeroSnapshot
     let onExportMonthly: () -> Void
     let onExportCreditCard: () -> Void
+
+    init(
+        snapshot: OverviewHeroSnapshot,
+        onExportMonthly: @escaping () -> Void,
+        onExportCreditCard: @escaping () -> Void
+    ) {
+        self.snapshot = snapshot
+        self.onExportMonthly = onExportMonthly
+        self.onExportCreditCard = onExportCreditCard
+        _selectedWeekStart = State(initialValue: snapshot.currentWeekStart)
+    }
 
     private var cardTint: Color {
         colorScheme == .dark ? .white.opacity(0.024) : .white.opacity(0.16)
@@ -206,9 +218,16 @@ private struct OverviewHeroCard: View {
         colorScheme == .dark ? .white.opacity(0.035) : .black.opacity(0.03)
     }
 
-    private var chartMax: Double {
-        let highest = Double(snapshot.chartPoints.map(\.valueMinor).max() ?? 0)
-        return max(highest * 1.2, 1)
+    private var activeWeek: OverviewWeekSpendingSnapshot {
+        snapshot.weekPages.first(where: { $0.weekStart == selectedWeekStart })
+            ?? snapshot.weekPages.last
+            ?? OverviewWeekSpendingSnapshot(
+                weekStart: snapshot.currentWeekStart,
+                weekEnd: snapshot.currentWeekStart,
+                title: "Tuần này",
+                isCurrentWeek: true,
+                points: []
+            )
     }
 
     var body: some View {
@@ -263,67 +282,30 @@ private struct OverviewHeroCard: View {
 
                         Spacer()
 
-                        Text("7 ngày gần nhất")
+                        Text(activeWeek.title)
                             .font(.system(size: 11, weight: .semibold, design: .rounded))
                             .foregroundStyle(.secondary)
                     }
 
-                    Chart(snapshot.chartPoints) { point in
-                        BarMark(
-                            x: .value("Ngày", point.label),
-                            y: .value("Giá trị", Double(point.valueMinor))
-                        )
-                        .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
-                        .foregroundStyle(chartColor(for: point.intensity).gradient)
-                        .opacity(0.92)
-                    }
-                    .chartLegend(.hidden)
-                    .chartXAxis {
-                        AxisMarks(values: snapshot.chartPoints.map(\.label)) { value in
-                            AxisValueLabel {
-                                if let label = value.as(String.self) {
-                                    Text(label)
-                                        .font(.system(size: 10, weight: .semibold, design: .rounded))
-                                }
-                            }
+                    TabView(selection: $selectedWeekStart) {
+                        ForEach(snapshot.weekPages) { week in
+                            OverviewWeekSpendingChart(
+                                week: week,
+                                insetSurface: insetSurface
+                            )
+                            .tag(week.weekStart)
                         }
                     }
-                    .chartYAxis {
-                        AxisMarks(position: .leading, values: .automatic(desiredCount: 3)) { value in
-                            AxisGridLine(stroke: StrokeStyle(lineWidth: 0.7, dash: [3, 4]))
-                                .foregroundStyle(colorScheme == .dark ? .white.opacity(0.12) : .black.opacity(0.08))
-                            AxisValueLabel {
-                                if let number = value.as(Double.self) {
-                                    Text(Int64(number.rounded()).compactAxisLabel)
-                                        .font(.system(size: 9, weight: .semibold, design: .rounded))
-                                        .foregroundStyle(.secondary)
-                                }
-                            }
-                        }
-                    }
-                    .chartYScale(domain: 0 ... chartMax)
-                    .frame(height: 122)
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 10)
-                    .background {
-                        RoundedRectangle(cornerRadius: 18, style: .continuous)
-                            .fill(insetSurface)
-                    }
+                    .tabViewStyle(.page(indexDisplayMode: .never))
+                    .frame(height: 154)
                 }
             }
         }
-    }
-
-    private func chartColor(for intensity: Double) -> Color {
-        let clamped = min(max(intensity, 0), 1)
-        let start = (red: 0.18, green: 0.67, blue: 0.62)
-        let end = (red: 0.96, green: 0.36, blue: 0.49)
-
-        return Color(
-            red: start.red + (end.red - start.red) * clamped,
-            green: start.green + (end.green - start.green) * clamped,
-            blue: start.blue + (end.blue - start.blue) * clamped
-        )
+        .onChange(of: snapshot.weekPages.map(\.weekStart)) { _, weekStarts in
+            if !weekStarts.contains(selectedWeekStart) {
+                selectedWeekStart = snapshot.currentWeekStart
+            }
+        }
     }
 }
 
@@ -357,6 +339,74 @@ private struct OverviewStatementMenuButton: View {
         .buttonBorderShape(.capsule)
         .tint(overviewAccentPurple)
         .shadow(color: .black.opacity(0.16), radius: 16, y: 8)
+    }
+}
+
+private struct OverviewWeekSpendingChart: View {
+    @Environment(\.colorScheme) private var colorScheme
+
+    let week: OverviewWeekSpendingSnapshot
+    let insetSurface: Color
+
+    private var chartMax: Double {
+        let highest = Double(week.points.map(\.valueMinor).max() ?? 0)
+        return max(highest * 1.2, 1)
+    }
+
+    var body: some View {
+        Chart(week.points) { point in
+            BarMark(
+                x: .value("Ngày", point.label),
+                y: .value("Giá trị", Double(point.valueMinor))
+            )
+            .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+            .foregroundStyle(chartColor(for: point.intensity).gradient)
+            .opacity(0.92)
+        }
+        .chartLegend(.hidden)
+        .chartXAxis {
+            AxisMarks(values: week.points.map(\.label)) { value in
+                AxisValueLabel {
+                    if let label = value.as(String.self) {
+                        Text(label)
+                            .font(.system(size: 10, weight: .semibold, design: .rounded))
+                    }
+                }
+            }
+        }
+        .chartYAxis {
+            AxisMarks(position: .leading, values: .automatic(desiredCount: 3)) { value in
+                AxisGridLine(stroke: StrokeStyle(lineWidth: 0.7, dash: [3, 4]))
+                    .foregroundStyle(colorScheme == .dark ? .white.opacity(0.12) : .black.opacity(0.08))
+                AxisValueLabel {
+                    if let number = value.as(Double.self) {
+                        Text(Int64(number.rounded()).compactAxisLabel)
+                            .font(.system(size: 9, weight: .semibold, design: .rounded))
+                            .foregroundStyle(.secondary)
+                    }
+                }
+            }
+        }
+        .chartYScale(domain: 0 ... chartMax)
+        .frame(height: 122)
+        .padding(.horizontal, 12)
+        .padding(.vertical, 10)
+        .background {
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .fill(insetSurface)
+        }
+    }
+
+    private func chartColor(for intensity: Double) -> Color {
+        let clamped = min(max(intensity, 0), 1)
+        let start = (red: 0.18, green: 0.67, blue: 0.62)
+        let end = (red: 0.96, green: 0.36, blue: 0.49)
+
+        return Color(
+            red: start.red + (end.red - start.red) * clamped,
+            green: start.green + (end.green - start.green) * clamped,
+            blue: start.blue + (end.blue - start.blue) * clamped
+        )
     }
 }
 

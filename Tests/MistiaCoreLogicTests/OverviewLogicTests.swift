@@ -66,7 +66,7 @@ final class OverviewLogicTests: XCTestCase {
         )
     }
 
-    func testSpendingChartPointsFillsSevenDaysAndMapsIntensityFromLowToHigh() {
+    func testRecentSevenDaySpendingChartPointsFillsSevenDaysAndMapsIntensityFromLowToHigh() {
         let referenceDate = makeDate(year: 2026, month: 4, day: 7, hour: 12)
         let records = [
             makeTransactionRecord(
@@ -81,7 +81,7 @@ final class OverviewLogicTests: XCTestCase {
             )
         ]
 
-        let points = OverviewLogic.spendingChartPoints(
+        let points = OverviewLogic.recentSevenDaySpendingChartPoints(
             from: records,
             referenceDate: referenceDate,
             calendar: calendar
@@ -91,6 +91,72 @@ final class OverviewLogicTests: XCTestCase {
         XCTAssertEqual(points.map(\.valueMinor), [0, 1_000, 0, 0, 0, 4_000, 0])
         XCTAssertEqual(points[0].intensity, 0)
         XCTAssertEqual(points[5].intensity, 1)
+    }
+
+    func testWeeklySpendingPagesUseMondayToSundayForCurrentWeek() throws {
+        let referenceDate = makeDate(year: 2026, month: 4, day: 9, hour: 12)
+        let records = [
+            makeTransactionRecord(
+                primaryKind: .expense,
+                amountMinor: 1_000,
+                occurredAt: makeDate(year: 2026, month: 4, day: 6, hour: 9)
+            ),
+            makeTransactionRecord(
+                primaryKind: .expense,
+                amountMinor: 2_000,
+                occurredAt: makeDate(year: 2026, month: 4, day: 8, hour: 18)
+            ),
+            makeTransactionRecord(
+                primaryKind: .expense,
+                amountMinor: 3_000,
+                occurredAt: makeDate(year: 2026, month: 4, day: 12, hour: 10)
+            )
+        ]
+
+        let pages = OverviewLogic.weeklySpendingPages(
+            from: records,
+            referenceDate: referenceDate,
+            calendar: calendar
+        )
+
+        let currentWeek = try XCTUnwrap(pages.last)
+
+        XCTAssertEqual(pages.count, 1)
+        XCTAssertEqual(currentWeek.weekStart, makeDate(year: 2026, month: 4, day: 6))
+        XCTAssertEqual(currentWeek.weekEnd, makeDate(year: 2026, month: 4, day: 12))
+        XCTAssertEqual(currentWeek.title, "Tuần này • 06/04 - 12/04")
+        XCTAssertEqual(currentWeek.points.map(\.label), ["T2", "T3", "T4", "T5", "T6", "T7", "CN"])
+        XCTAssertEqual(currentWeek.points.map(\.valueMinor), [1_000, 0, 2_000, 0, 0, 0, 3_000])
+        XCTAssertEqual(try XCTUnwrap(currentWeek.points.first).intensity, 1.0 / 3.0, accuracy: 0.0001)
+        XCTAssertEqual(try XCTUnwrap(currentWeek.points.last).intensity, 1, accuracy: 0.0001)
+    }
+
+    func testWeeklySpendingPagesIncludeEmptyWeeksUntilCurrentWeek() {
+        let referenceDate = makeDate(year: 2026, month: 4, day: 22, hour: 10)
+        let records = [
+            makeTransactionRecord(
+                primaryKind: .expense,
+                amountMinor: 2_000,
+                occurredAt: makeDate(year: 2026, month: 4, day: 6, hour: 8)
+            )
+        ]
+
+        let pages = OverviewLogic.weeklySpendingPages(
+            from: records,
+            referenceDate: referenceDate,
+            calendar: calendar
+        )
+
+        XCTAssertEqual(
+            pages.map(\.weekStart),
+            [
+                makeDate(year: 2026, month: 4, day: 6),
+                makeDate(year: 2026, month: 4, day: 13),
+                makeDate(year: 2026, month: 4, day: 20)
+            ]
+        )
+        XCTAssertEqual(pages[1].points.map(\.valueMinor), [0, 0, 0, 0, 0, 0, 0])
+        XCTAssertEqual(pages[2].title, "Tuần này • 20/04 - 26/04")
     }
 
     func testBudgetAlertsFilterOverFiftyPercentSortDescendingAndApplyThresholds() {
@@ -409,6 +475,43 @@ final class OverviewLogicTests: XCTestCase {
         XCTAssertTrue(document.html.contains("Sao ke tong hop thang"))
         XCTAssertTrue(document.html.contains("Vi tai san"))
         XCTAssertTrue(document.html.contains("Luong"))
+    }
+
+    func testMonthlyStatementKeepsRecentSevenDayChartInsteadOfWeeklyPager() {
+        let referenceDate = makeDate(year: 2026, month: 4, day: 10, hour: 12)
+        let wallet = OverviewWalletSnapshot(
+            id: UUID(),
+            name: "Tien mat",
+            kind: .cash,
+            openingBalanceMinor: 10_000,
+            currencyCode: "JPY",
+            sortOrder: 0,
+            createdAt: makeDate(year: 2026, month: 4, day: 1)
+        )
+        let records = [
+            makeTransactionRecord(
+                primaryKind: .expense,
+                amountMinor: 1_000,
+                occurredAt: makeDate(year: 2026, month: 4, day: 4, hour: 9)
+            ),
+            makeTransactionRecord(
+                primaryKind: .expense,
+                amountMinor: 3_000,
+                occurredAt: makeDate(year: 2026, month: 4, day: 9, hour: 20)
+            )
+        ]
+
+        let statement = OverviewLogic.monthlyStatement(
+            wallets: [wallet],
+            transactionRecords: records,
+            transactions: [],
+            currencyCode: "JPY",
+            referenceDate: referenceDate,
+            calendar: calendar
+        )
+
+        XCTAssertEqual(statement.chartPoints.count, 7)
+        XCTAssertEqual(statement.chartPoints.map(\.valueMinor), [1_000, 0, 0, 0, 0, 3_000, 0])
     }
 
     private func makeBudget(

@@ -78,11 +78,24 @@ nonisolated struct OverviewChartPoint: Equatable, Identifiable {
     }
 }
 
+nonisolated struct OverviewWeekSpendingSnapshot: Equatable, Identifiable {
+    let weekStart: Date
+    let weekEnd: Date
+    let title: String
+    let isCurrentWeek: Bool
+    let points: [OverviewChartPoint]
+
+    var id: String {
+        String(Int(weekStart.timeIntervalSince1970))
+    }
+}
+
 nonisolated struct OverviewHeroSnapshot: Equatable {
     let totalAssetBalanceMinor: Int64
     let incomeThisMonthMinor: Int64
     let expenseThisMonthMinor: Int64
-    let chartPoints: [OverviewChartPoint]
+    let weekPages: [OverviewWeekSpendingSnapshot]
+    let currentWeekStart: Date
     let currencyCode: String
 }
 
@@ -284,11 +297,12 @@ nonisolated enum OverviewLogic {
             ),
             incomeThisMonthMinor: incomeThisMonth,
             expenseThisMonthMinor: expenseThisMonth,
-            chartPoints: spendingChartPoints(
+            weekPages: weeklySpendingPages(
                 from: transactionRecords,
                 referenceDate: referenceDate,
                 calendar: calendar
             ),
+            currentWeekStart: startOfMondayWeek(containing: referenceDate, calendar: calendar),
             currencyCode: currencyCode
         )
     }
@@ -311,7 +325,112 @@ nonisolated enum OverviewLogic {
             }
     }
 
-    static func spendingChartPoints(
+    static func weeklySpendingPages(
+        from transactionRecords: [TransactionRecordSnapshot],
+        referenceDate: Date = .now,
+        calendar: Calendar = .current
+    ) -> [OverviewWeekSpendingSnapshot] {
+        let currentWeekStart = startOfMondayWeek(containing: referenceDate, calendar: calendar)
+        let currentWeekEnd = calendar.date(byAdding: .day, value: 6, to: currentWeekStart) ?? currentWeekStart
+
+        let earliestExpenseWeekStart = transactionRecords
+            .filter { $0.entryStatus == .posted && $0.primaryKind == .expense }
+            .map { startOfMondayWeek(containing: $0.occurredAt, calendar: calendar) }
+            .min()
+
+        let firstWeekStart = earliestExpenseWeekStart ?? currentWeekStart
+        var weekStart = firstWeekStart
+        var pages: [OverviewWeekSpendingSnapshot] = []
+
+        while weekStart <= currentWeekStart {
+            let weekInterval = weekInterval(startingAt: weekStart, calendar: calendar)
+            let weekEnd = calendar.date(byAdding: .day, value: 6, to: weekStart) ?? weekStart
+            let dailyValues: [(date: Date, valueMinor: Int64)] = (0..<7).compactMap { dayOffset in
+                guard let day = calendar.date(byAdding: .day, value: dayOffset, to: weekStart) else {
+                    return nil
+                }
+
+                let nextDay = calendar.date(byAdding: .day, value: 1, to: day) ?? day
+                let total = transactionRecords
+                    .filter { record in
+                        record.entryStatus == .posted
+                            && record.primaryKind == .expense
+                            && record.occurredAt >= day
+                            && record.occurredAt < nextDay
+                    }
+                    .reduce(into: Int64.zero) { partialResult, record in
+                        partialResult += record.amountMinor
+                    }
+
+                return (day, total)
+            }
+
+            let minimum = dailyValues.map(\.valueMinor).min() ?? 0
+            let maximum = dailyValues.map(\.valueMinor).max() ?? 0
+            let isCurrentWeek = weekStart == currentWeekStart
+
+            pages.append(
+                OverviewWeekSpendingSnapshot(
+                    weekStart: weekStart,
+                    weekEnd: weekEnd,
+                    title: weekRangeTitle(
+                        for: weekInterval,
+                        isCurrentWeek: isCurrentWeek,
+                        calendar: calendar
+                    ),
+                    isCurrentWeek: isCurrentWeek,
+                    points: dailyValues.map { item in
+                        OverviewChartPoint(
+                            date: item.date,
+                            label: weekdayLabel(for: item.date, calendar: calendar),
+                            valueMinor: item.valueMinor,
+                            intensity: normalizedIntensity(
+                                value: item.valueMinor,
+                                minimum: minimum,
+                                maximum: maximum
+                            )
+                        )
+                    }
+                )
+            )
+
+            guard let nextWeekStart = calendar.date(byAdding: .day, value: 7, to: weekStart) else {
+                break
+            }
+            weekStart = nextWeekStart
+        }
+
+        if pages.isEmpty {
+            return [
+                OverviewWeekSpendingSnapshot(
+                    weekStart: currentWeekStart,
+                    weekEnd: currentWeekEnd,
+                    title: weekRangeTitle(
+                        for: weekInterval(startingAt: currentWeekStart, calendar: calendar),
+                        isCurrentWeek: true,
+                        calendar: calendar
+                    ),
+                    isCurrentWeek: true,
+                    points: (0..<7).compactMap { dayOffset in
+                        guard let day = calendar.date(byAdding: .day, value: dayOffset, to: currentWeekStart) else {
+                            return nil
+                        }
+
+                        return OverviewChartPoint(
+                            date: day,
+                            label: weekdayLabel(for: day, calendar: calendar),
+                            valueMinor: 0,
+                            intensity: 0
+                        )
+                    }
+                )
+            ]
+        }
+
+        return pages
+    }
+
+    static func recentSevenDaySpendingChartPoints(
         from transactionRecords: [TransactionRecordSnapshot],
         referenceDate: Date = .now,
         calendar: Calendar = .current
@@ -533,7 +652,11 @@ nonisolated enum OverviewLogic {
         let monthStart = PlanningLogic.startOfMonth(for: referenceDate, calendar: calendar)
         let monthEnd = calendar.dateInterval(of: .month, for: referenceDate)?.end ?? referenceDate
         let statementPeriod = DateInterval(start: monthStart, end: min(referenceDate, monthEnd))
-        let chartPoints = spendingChartPoints(from: transactionRecords, referenceDate: referenceDate, calendar: calendar)
+        let chartPoints = recentSevenDaySpendingChartPoints(
+            from: transactionRecords,
+            referenceDate: referenceDate,
+            calendar: calendar
+        )
         let heroSnapshot = hero(
             wallets: wallets,
             transactionRecords: transactionRecords,
@@ -1008,6 +1131,35 @@ nonisolated enum OverviewLogic {
         }
 
         return Double(value - minimum) / Double(maximum - minimum)
+    }
+
+    static func startOfMondayWeek(
+        containing date: Date,
+        calendar: Calendar = .current
+    ) -> Date {
+        let startOfDay = calendar.startOfDay(for: date)
+        let weekday = calendar.component(.weekday, from: startOfDay)
+        let daysFromMonday = (weekday + 5) % 7
+        return calendar.date(byAdding: .day, value: -daysFromMonday, to: startOfDay) ?? startOfDay
+    }
+
+    static func weekInterval(
+        startingAt weekStart: Date,
+        calendar: Calendar = .current
+    ) -> DateInterval {
+        let normalizedWeekStart = calendar.startOfDay(for: weekStart)
+        let weekEnd = calendar.date(byAdding: .day, value: 7, to: normalizedWeekStart) ?? normalizedWeekStart
+        return DateInterval(start: normalizedWeekStart, end: weekEnd)
+    }
+
+    static func weekRangeTitle(
+        for interval: DateInterval,
+        isCurrentWeek: Bool,
+        calendar: Calendar = .current
+    ) -> String {
+        let weekEnd = calendar.date(byAdding: .day, value: -1, to: interval.end) ?? interval.start
+        let range = "\(shortDateString(for: interval.start)) - \(shortDateString(for: weekEnd))"
+        return isCurrentWeek ? "Tuần này • \(range)" : range
     }
 
     private static func weekdayLabel(
