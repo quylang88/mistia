@@ -652,6 +652,10 @@ private struct OverviewSection<Content: View>: View {
     let title: String
     private let content: Content
 
+    private var cardTint: Color {
+        colorScheme == .dark ? .white.opacity(0.018) : .white.opacity(0.12)
+    }
+
     init(title: String, @ViewBuilder content: () -> Content) {
         self.title = title
         self.content = content()
@@ -665,9 +669,9 @@ private struct OverviewSection<Content: View>: View {
                 .tracking(0.6)
                 .foregroundStyle(colorScheme == .dark ? .white.opacity(0.66) : Color(red: 0.36, green: 0.37, blue: 0.43))
 
-            MistiaGlassCard(
-                cornerRadius: 20,
-                tint: colorScheme == .dark ? .white.opacity(0.022) : .white.opacity(0.14),
+            MistiaBlockCard(
+                cornerRadius: 22,
+                tint: cardTint,
                 padding: 0
             ) {
                 content
