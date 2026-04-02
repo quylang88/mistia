@@ -86,7 +86,7 @@ struct MistiaFooterAddButton: View {
                     .font(.system(size: 15, weight: .bold))
                     .foregroundStyle(buttonForeground)
 
-                Text(title)
+                Text(mistiaCatalog(title))
                     .font(.system(size: 15.5, weight: .semibold, design: .rounded))
                     .foregroundStyle(buttonForeground)
             }
@@ -146,12 +146,12 @@ struct MistiaEmptyStateContent: View {
             .frame(maxWidth: .infinity, alignment: .center)
 
             VStack(alignment: .center, spacing: 6) {
-                Text(title)
+                Text(mistiaCatalog(title))
                     .font(.system(size: 18, weight: .bold, design: .rounded))
                     .foregroundStyle(.primary)
                     .multilineTextAlignment(.center)
 
-                Text(message)
+                Text(mistiaCatalog(message))
                     .font(.system(size: 13.5, weight: .medium, design: .rounded))
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)
@@ -161,7 +161,7 @@ struct MistiaEmptyStateContent: View {
 
             if let buttonTitle, let action {
                 Button(action: action) {
-                    Text(buttonTitle)
+                    Text(mistiaCatalog(buttonTitle))
                         .font(.system(size: 16, weight: .bold, design: .rounded))
                         .foregroundStyle(buttonForeground)
                         .frame(maxWidth: .infinity)

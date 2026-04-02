@@ -2,6 +2,19 @@ import XCTest
 @testable import MistiaCoreLogic
 
 final class TransactionLogicTests: XCTestCase {
+    override func setUp() {
+        super.setUp()
+        UserDefaults.standard.set(
+            MistiaAppLanguage.vietnamese.rawValue,
+            forKey: MistiaAppLanguage.userDefaultsKey
+        )
+    }
+
+    override func tearDown() {
+        UserDefaults.standard.removeObject(forKey: MistiaAppLanguage.userDefaultsKey)
+        super.tearDown()
+    }
+
     func testBalanceEngineHandlesAssetsAndCreditCardFlows() {
         let cash = TransactionWalletSnapshot(
             id: UUID(),

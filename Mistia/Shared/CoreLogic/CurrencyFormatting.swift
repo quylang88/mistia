@@ -5,7 +5,7 @@ extension Int64 {
         let uppercaseCode = code.uppercased()
         let fractionDigits = uppercaseCode == "JPY" ? 0 : 2
         let amount = decimalCurrencyAmount(fractionDigits: fractionDigits)
-        let locale = Locale(identifier: uppercaseCode == "JPY" ? "ja_JP" : "en_US_POSIX")
+        let locale = MistiaAppLanguage.current.locale
 
         return amount.formatted(
             .currency(code: uppercaseCode)
@@ -29,7 +29,7 @@ extension Int64 {
         return "\(self)"
     }
 
-    private func decimalCurrencyAmount(fractionDigits: Int) -> Decimal {
+    nonisolated private func decimalCurrencyAmount(fractionDigits: Int) -> Decimal {
         guard fractionDigits > 0 else { return Decimal(self) }
 
         var divisor = Decimal(1)

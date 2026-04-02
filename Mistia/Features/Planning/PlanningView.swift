@@ -11,11 +11,11 @@ private enum PlanningMode: String, CaseIterable, Identifiable {
     var title: String {
         switch self {
         case .budget:
-            "Ngân sách"
+            mistiaLocalized(vi: "Ngân sách", en: "Budget", ja: "予算")
         case .goals:
-            "Mục tiêu"
+            mistiaLocalized(vi: "Mục tiêu", en: "Goals", ja: "目標")
         case .due:
-            "Đến hạn"
+            mistiaLocalized(vi: "Đến hạn", en: "Due", ja: "支払予定")
         }
     }
 
@@ -41,11 +41,11 @@ private enum PlanningDueMode: String, CaseIterable, Identifiable {
     var title: String {
         switch self {
         case .creditCards:
-            "Thẻ tín dụng"
+            mistiaLocalized(vi: "Thẻ tín dụng", en: "Credit cards", ja: "クレジットカード")
         case .bills:
-            "Hóa đơn"
+            mistiaLocalized(vi: "Hóa đơn", en: "Bills", ja: "請求書")
         case .installments:
-            "Trả góp / vay"
+            mistiaLocalized(vi: "Trả góp / vay", en: "Installments / loans", ja: "分割払い・借入")
         }
     }
 }
@@ -54,6 +54,7 @@ private let planningAccentPurple = Color(red: 0.43, green: 0.23, blue: 0.76)
 
 struct PlanningView: View {
     @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.calendar) private var calendar
     @Environment(\.modelContext) private var modelContext
     @Query(sort: [SortDescriptor(\BudgetPlan.monthAnchor, order: .reverse), SortDescriptor(\BudgetPlan.createdAt, order: .reverse)])
     private var storedBudgets: [BudgetPlan]
@@ -82,8 +83,6 @@ struct PlanningView: View {
     @State private var billEditorTarget: PlanningBillEditorTarget?
     @State private var installmentEditorTarget: PlanningInstallmentEditorTarget?
     @State private var creditCardEditorTarget: PlanningCreditCardEditorTarget?
-
-    private let calendar = Calendar(identifier: .gregorian)
 
     private var cardTint: Color {
         colorScheme == .dark ? .white.opacity(0.022) : .white.opacity(0.14)
@@ -304,8 +303,6 @@ struct PlanningView: View {
         .task {
             try? MistiaBootstrap.seedDefaultCategoriesIfNeeded(modelContext: modelContext)
         }
-        .environment(\.locale, Locale(identifier: "vi_VN"))
-        .environment(\.calendar, calendar)
     }
 }
 
@@ -867,7 +864,15 @@ private struct PlanningBudgetRowView: View {
     }
 
     private var daysText: String {
-        row.isPastMonth ? "Tháng đã kết thúc" : "Còn \(row.daysRemaining) ngày"
+        if row.isPastMonth {
+            return mistiaLocalized(vi: "Tháng đã kết thúc", en: "Month ended", ja: "月が終了しました")
+        }
+
+        return mistiaLocalized(
+            vi: "Còn \(row.daysRemaining) ngày",
+            en: "\(row.daysRemaining) days left",
+            ja: "あと \(row.daysRemaining) 日"
+        )
     }
 }
 
@@ -897,7 +902,13 @@ private struct PlanningGoalRowView: View {
                     .font(.system(size: 12.5, weight: .semibold, design: .rounded))
                     .foregroundStyle(.secondary)
                 Spacer()
-                Text("Cần thêm \(row.monthlyRequiredMinor.formattedCurrency(code: row.currencyCode))/tháng")
+                Text(
+                    mistiaLocalized(
+                        vi: "Cần thêm \(row.monthlyRequiredMinor.formattedCurrency(code: row.currencyCode))/tháng",
+                        en: "Need \(row.monthlyRequiredMinor.formattedCurrency(code: row.currencyCode))/month",
+                        ja: "毎月あと \(row.monthlyRequiredMinor.formattedCurrency(code: row.currencyCode)) 必要"
+                    )
+                )
                     .font(.system(size: 12.5, weight: .semibold, design: .rounded))
                     .foregroundStyle(Color(hex: "#5B7BFF"))
                     .multilineTextAlignment(.trailing)
@@ -950,28 +961,28 @@ private struct PlanningDueRow: View {
         if let amount = item.amountMinor {
             return amount.formattedCurrency(code: item.currencyCode)
         }
-        return "Chưa nhập số tiền"
+        return mistiaLocalized(vi: "Chưa nhập số tiền", en: "No amount yet", ja: "金額未入力")
     }
 
     private var statusText: String {
         switch item.status {
         case .paid:
-            "Đã thanh toán"
+            mistiaLocalized(vi: "Đã thanh toán", en: "Paid", ja: "支払い済み")
         case .pending:
             switch item.sourceKind {
             case .recurringBill:
-                "Hóa đơn"
+                mistiaLocalized(vi: "Hóa đơn", en: "Bill", ja: "請求")
             case .installment:
-                "Trả góp / vay"
+                mistiaLocalized(vi: "Trả góp / vay", en: "Installment / loan", ja: "分割払い・借入")
             case .creditCard:
-                "Đến hạn"
+                mistiaLocalized(vi: "Đến hạn", en: "Due", ja: "支払予定")
             }
         }
     }
 
     private var dueDetailText: String {
         if item.status == .paid {
-            return "Hoàn tất"
+            return mistiaLocalized(vi: "Hoàn tất", en: "Completed", ja: "完了")
         }
 
         let dayDelta = Calendar.current.dateComponents(
@@ -981,12 +992,20 @@ private struct PlanningDueRow: View {
         ).day ?? 0
 
         if dayDelta < 0 {
-            return "Quá hạn \(-dayDelta) ngày"
+            return mistiaLocalized(
+                vi: "Quá hạn \(-dayDelta) ngày",
+                en: "Overdue by \(-dayDelta) days",
+                ja: "\(-dayDelta) 日延滞"
+            )
         }
         if dayDelta == 0 {
-            return "Đến hạn hôm nay"
+            return mistiaLocalized(vi: "Đến hạn hôm nay", en: "Due today", ja: "本日支払い")
         }
-        return "Còn \(dayDelta) ngày"
+        return mistiaLocalized(
+            vi: "Còn \(dayDelta) ngày",
+            en: "\(dayDelta) days left",
+            ja: "あと \(dayDelta) 日"
+        )
     }
 }
 
@@ -1065,17 +1084,19 @@ private struct PlanningCreditCardCard: View {
     }
 
     private var amountText: String {
-        item.amountMinor > 0 ? item.amountMinor.formattedCurrency(code: item.currencyCode) : "Không dư nợ"
+        item.amountMinor > 0
+            ? item.amountMinor.formattedCurrency(code: item.currencyCode)
+            : mistiaLocalized(vi: "Không dư nợ", en: "No debt", ja: "残高なし")
     }
 
     private var badgeTitle: String {
         if item.status == .paid {
-            return "Đã thanh toán"
+            return mistiaLocalized(vi: "Đã thanh toán", en: "Paid", ja: "支払い済み")
         }
         if item.amountMinor <= 0 {
-            return "Ổn"
+            return mistiaLocalized(vi: "Ổn", en: "Good", ja: "問題なし")
         }
-        return "Đang nợ"
+        return mistiaLocalized(vi: "Đang nợ", en: "Outstanding", ja: "未払い")
     }
 }
 
@@ -1198,7 +1219,9 @@ private struct PlanningMetricColumn: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 5) {
-            Text(title)
+            Text(mistiaCatalog(title))
+                .lineLimit(2)
+                .minimumScaleFactor(0.7)
                 .font(.system(size: 11.5, weight: .semibold, design: .rounded))
                 .foregroundStyle(.secondary)
 
@@ -1217,10 +1240,10 @@ private struct PlanningStatusBadge: View {
     let color: Color
 
     var body: some View {
-        Text(title)
-            .font(.system(size: 11.5, weight: .bold, design: .rounded))
-            .foregroundStyle(color)
-            .padding(.horizontal, 10)
+            Text(mistiaCatalog(title))
+                .font(.system(size: 11.5, weight: .bold, design: .rounded))
+                .foregroundStyle(color)
+                .padding(.horizontal, 10)
             .padding(.vertical, 6)
             .background(color.opacity(0.14), in: Capsule())
     }
@@ -1266,7 +1289,14 @@ private struct PlanningMonthPickerSheet: View {
                 HStack(spacing: 0) {
                     Picker("Tháng", selection: $draftMonth) {
                         ForEach(1...12, id: \.self) { month in
-                            Text("Tháng \(month)").tag(month)
+                            Text(
+                                mistiaLocalized(
+                                    vi: "Tháng \(month)",
+                                    en: "Month \(month)",
+                                    ja: "\(month)月"
+                                )
+                            )
+                            .tag(month)
                         }
                     }
                     .pickerStyle(.wheel)
@@ -1274,7 +1304,14 @@ private struct PlanningMonthPickerSheet: View {
 
                     Picker("Năm", selection: $draftYear) {
                         ForEach(yearOptions, id: \.self) { year in
-                            Text(verbatim: "Năm \(year)").tag(year)
+                            Text(
+                                mistiaLocalized(
+                                    vi: "Năm \(year)",
+                                    en: "Year \(year)",
+                                    ja: "\(year)年"
+                                )
+                            )
+                            .tag(year)
                         }
                     }
                     .pickerStyle(.wheel)
@@ -1285,7 +1322,7 @@ private struct PlanningMonthPickerSheet: View {
             .padding(.horizontal, 20)
             .padding(.top, 16)
             .padding(.bottom, 20)
-            .navigationTitle("Chọn tháng")
+            .navigationTitle(mistiaCatalog("Chọn tháng"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
@@ -1334,18 +1371,11 @@ private struct PlanningMonthPickerSheet: View {
 
 private extension Date {
     func monthDisplayText(calendar: Calendar) -> String {
-        let formatter = DateFormatter()
-        formatter.calendar = calendar
-        formatter.locale = Locale(identifier: "vi_VN")
-        formatter.dateFormat = "'Tháng' M/yyyy"
-        return formatter.string(from: self)
+        MistiaDateFormatting.monthYearString(for: self, calendar: calendar)
     }
 
     var shortDisplayText: String {
-        let formatter = DateFormatter()
-        formatter.locale = Locale(identifier: "vi_VN")
-        formatter.dateFormat = "dd/MM"
-        return formatter.string(from: self)
+        MistiaDateFormatting.shortDateString(for: self)
     }
 }
 

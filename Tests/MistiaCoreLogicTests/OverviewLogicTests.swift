@@ -4,6 +4,19 @@ import XCTest
 final class OverviewLogicTests: XCTestCase {
     private let calendar = Calendar(identifier: .gregorian)
 
+    override func setUp() {
+        super.setUp()
+        UserDefaults.standard.set(
+            MistiaAppLanguage.vietnamese.rawValue,
+            forKey: MistiaAppLanguage.userDefaultsKey
+        )
+    }
+
+    override func tearDown() {
+        UserDefaults.standard.removeObject(forKey: MistiaAppLanguage.userDefaultsKey)
+        super.tearDown()
+    }
+
     func testTotalAssetBalanceExcludesCreditCardWallets() {
         let cash = OverviewWalletSnapshot(
             id: UUID(),
@@ -124,7 +137,17 @@ final class OverviewLogicTests: XCTestCase {
         XCTAssertEqual(pages.count, 1)
         XCTAssertEqual(currentWeek.weekStart, makeDate(year: 2026, month: 4, day: 6))
         XCTAssertEqual(currentWeek.weekEnd, makeDate(year: 2026, month: 4, day: 12))
-        XCTAssertEqual(currentWeek.title, "Tuần này • 06/04 - 12/04")
+        XCTAssertEqual(
+            currentWeek.title,
+            OverviewLogic.weekRangeTitle(
+                for: DateInterval(
+                    start: makeDate(year: 2026, month: 4, day: 6),
+                    end: makeDate(year: 2026, month: 4, day: 13)
+                ),
+                isCurrentWeek: true,
+                calendar: calendar
+            )
+        )
         XCTAssertEqual(currentWeek.points.map(\.label), ["T2", "T3", "T4", "T5", "T6", "T7", "CN"])
         XCTAssertEqual(currentWeek.points.map(\.valueMinor), [1_000, 0, 2_000, 0, 0, 0, 3_000])
         XCTAssertEqual(try XCTUnwrap(currentWeek.points.first).intensity, 1.0 / 3.0, accuracy: 0.0001)
@@ -156,7 +179,17 @@ final class OverviewLogicTests: XCTestCase {
             ]
         )
         XCTAssertEqual(pages[1].points.map(\.valueMinor), [0, 0, 0, 0, 0, 0, 0])
-        XCTAssertEqual(pages[2].title, "Tuần này • 20/04 - 26/04")
+        XCTAssertEqual(
+            pages[2].title,
+            OverviewLogic.weekRangeTitle(
+                for: DateInterval(
+                    start: makeDate(year: 2026, month: 4, day: 20),
+                    end: makeDate(year: 2026, month: 4, day: 27)
+                ),
+                isCurrentWeek: true,
+                calendar: calendar
+            )
+        )
     }
 
     func testBudgetAlertsFilterOverFiftyPercentSortDescendingAndApplyThresholds() {
@@ -344,7 +377,11 @@ final class OverviewLogicTests: XCTestCase {
                 referenceDate: referenceDate,
                 calendar: calendar
             ),
-            "02/04"
+            MistiaDateFormatting.shortDateString(
+                for: makeDate(year: 2026, month: 4, day: 2, hour: 18, minute: 0),
+                language: .vietnamese,
+                calendar: calendar
+            )
         )
     }
 
@@ -472,8 +509,8 @@ final class OverviewLogicTests: XCTestCase {
         let document = OverviewLogic.renderMonthlyStatement(statement)
 
         XCTAssertEqual(document.filename, "mistia-sao-ke-tong-hop-2026-04.html")
-        XCTAssertTrue(document.html.contains("Sao ke tong hop thang"))
-        XCTAssertTrue(document.html.contains("Vi tai san"))
+        XCTAssertTrue(document.html.contains("Sao kê tổng hợp tháng"))
+        XCTAssertTrue(document.html.contains("Ví tài sản"))
         XCTAssertTrue(document.html.contains("Luong"))
     }
 

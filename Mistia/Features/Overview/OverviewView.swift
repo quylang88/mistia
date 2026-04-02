@@ -6,6 +6,7 @@ private let overviewAccentPurple = Color(red: 0.43, green: 0.23, blue: 0.76)
 
 struct OverviewView: View {
     @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.calendar) private var calendar
     @Environment(\.modelContext) private var modelContext
     @AppStorage(MistiaAppStorageKey.currencyCode) private var currencyCode = "JPY"
 
@@ -24,8 +25,6 @@ struct OverviewView: View {
 
     @State private var shareItem: OverviewShareItem?
     @State private var exportErrorMessage: String?
-
-    private let calendar = Calendar(identifier: .gregorian)
 
     private var currentMonth: Date {
         PlanningLogic.startOfMonth(for: .now, calendar: calendar)
@@ -163,13 +162,11 @@ struct OverviewView: View {
                 exportErrorMessage = nil
             }
         } message: {
-            Text(exportErrorMessage ?? "")
+            Text(mistiaCatalog(exportErrorMessage ?? ""))
         }
         .task {
             try? MistiaBootstrap.seedDefaultCategoriesIfNeeded(modelContext: modelContext)
         }
-        .environment(\.locale, Locale(identifier: "vi_VN"))
-        .environment(\.calendar, calendar)
     }
 
     private func exportStatement(_ kind: OverviewStatementKind) {
@@ -483,7 +480,13 @@ private struct BudgetRow: View {
                 ProgressView(value: min(max(row.progress, 0), 1))
                     .tint(row.tint.color)
 
-                Text("Còn \(row.daysRemaining) ngày")
+                Text(
+                    mistiaLocalized(
+                        vi: "Còn \(row.daysRemaining) ngày",
+                        en: "\(row.daysRemaining) days left",
+                        ja: "あと \(row.daysRemaining) 日"
+                    )
+                )
                     .font(.system(size: 11, weight: .bold, design: .rounded))
                     .foregroundStyle(row.tint.color)
             }
@@ -542,7 +545,7 @@ private struct DueRow: View {
                     .lineLimit(1)
                     .minimumScaleFactor(0.8)
             } else {
-                Text("Chưa có số tiền")
+                Text(mistiaCatalog("Chưa có số tiền"))
                     .font(.system(size: 11, weight: .semibold, design: .rounded))
                     .foregroundStyle(.secondary)
             }
@@ -551,10 +554,14 @@ private struct DueRow: View {
 
     private var detailText: String {
         if row.dayDelta == 0 {
-            return "Đến hạn hôm nay"
+            return mistiaLocalized(vi: "Đến hạn hôm nay", en: "Due today", ja: "本日支払い")
         }
 
-        return "Còn \(row.dayDelta) ngày"
+        return mistiaLocalized(
+            vi: "Còn \(row.dayDelta) ngày",
+            en: "\(row.dayDelta) days left",
+            ja: "あと \(row.dayDelta) 日"
+        )
     }
 }
 
@@ -663,7 +670,7 @@ private struct OverviewSection<Content: View>: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text(title)
+            Text(mistiaCatalog(title))
                 .font(.system(size: 13, weight: .bold, design: .rounded))
                 .textCase(.uppercase)
                 .tracking(0.6)
@@ -684,7 +691,7 @@ private struct OverviewEmptySectionContent: View {
     let message: String
 
     var body: some View {
-        Text(message)
+        Text(mistiaCatalog(message))
             .font(.system(size: 13.5, weight: .medium, design: .rounded))
             .foregroundStyle(.secondary)
             .multilineTextAlignment(.center)
@@ -713,10 +720,6 @@ private struct OverviewIcon: View {
 
 private extension Date {
     var overviewDayText: String {
-        let formatter = DateFormatter()
-        formatter.calendar = Calendar(identifier: .gregorian)
-        formatter.locale = Locale(identifier: "vi_VN")
-        formatter.dateFormat = "dd/MM"
-        return formatter.string(from: self)
+        MistiaDateFormatting.shortDateString(for: self)
     }
 }

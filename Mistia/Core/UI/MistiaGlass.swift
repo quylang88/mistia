@@ -471,7 +471,7 @@ struct MistiaPinnedTopBarScaffold<PinnedHeader: View, Content: View>: View {
                 scrollableContent
             }
         }
-        .navigationTitle(title)
+        .navigationTitle(mistiaCatalog(title))
         .navigationBarTitleDisplayMode(.inline)
         .navigationBarBackButtonHidden(hidesSystemBackButton)
         .toolbar {

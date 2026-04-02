@@ -10,13 +10,13 @@ enum MistiaTab: String, CaseIterable, Hashable {
   var title: String {
     switch self {
     case .overview:
-      "Tổng quan"
+      mistiaLocalized(vi: "Tổng quan", en: "Overview", ja: "概要")
     case .transactions:
-      "Giao dịch"
+      mistiaLocalized(vi: "Giao dịch", en: "Transactions", ja: "取引")
     case .planning:
-      "Kế hoạch"
+      mistiaLocalized(vi: "Kế hoạch", en: "Planning", ja: "計画")
     case .settings:
-      "Quản lý"
+      mistiaLocalized(vi: "Quản lý", en: "Manage", ja: "管理")
     }
   }
 
@@ -77,6 +77,7 @@ struct RootTabView: View {
   @Environment(\.modelContext) private var modelContext
   @AppStorage(MistiaAppStorageKey.appearanceMode) private var appearanceModeRawValue =
     MistiaAppearanceMode.automatic.rawValue
+  @AppStorage(MistiaAppStorageKey.appLanguage) private var appLanguageRawValue = MistiaAppLanguage.english.rawValue
   @AppStorage(MistiaAppStorageKey.hideQuickCreate) private var hideQuickCreate = false
   @State private var selectedTab: MistiaTab = .overview
   @State private var isQuickCreateMenuVisible = false
@@ -94,6 +95,7 @@ struct RootTabView: View {
         MistiaNativeTabShell(
           selectedTab: $selectedTab,
           appearanceMode: appearanceMode,
+          appLanguage: appLanguage,
           hidesQuickCreate: hideQuickCreate || isQuickCreateMenuVisible,
           onAssistantTap: {
             dismissQuickCreateMenu()
@@ -158,6 +160,10 @@ struct RootTabView: View {
 
   private var appearanceMode: MistiaAppearanceMode {
     MistiaAppearanceMode(rawValue: appearanceModeRawValue) ?? .automatic
+  }
+
+  private var appLanguage: MistiaAppLanguage {
+    MistiaAppLanguage.resolve(storedRawValue: appLanguageRawValue)
   }
 
   private func toggleQuickCreateMenu() {
@@ -301,39 +307,39 @@ private enum MistiaQuickCreateDestination: String, CaseIterable, Identifiable {
   var title: String {
     switch self {
     case .expense:
-      "Chi tiêu"
+      mistiaLocalized(vi: "Chi tiêu", en: "Expense", ja: "支出")
     case .income:
-      "Thu nhập"
+      mistiaLocalized(vi: "Thu nhập", en: "Income", ja: "収入")
     case .transfer:
-      "Chuyển tiền"
+      mistiaLocalized(vi: "Chuyển tiền", en: "Transfer", ja: "振替")
     case .note:
-      "Ghi nhanh"
+      mistiaLocalized(vi: "Ghi nhanh", en: "Quick note", ja: "クイック入力")
     }
   }
 
   var subtitle: String {
     switch self {
     case .expense:
-      "Lưu lại khoản chi tiêu từ ví cá nhân."
+      mistiaLocalized(vi: "Lưu lại khoản chi tiêu từ ví cá nhân.", en: "Save an expense from a personal wallet.", ja: "個人のウォレットから支出を記録します。")
     case .income:
-      "Ghi nhận nguồn thu để cập nhật số dư."
+      mistiaLocalized(vi: "Ghi nhận nguồn thu để cập nhật số dư.", en: "Record income to update your balance.", ja: "残高を更新するための収入を記録します。")
     case .transfer:
-      "Chuyển nội bộ hoặc theo dõi công nợ."
+      mistiaLocalized(vi: "Chuyển nội bộ hoặc theo dõi công nợ.", en: "Move money internally or track debt.", ja: "内部振替や貸し借りを記録します。")
     case .note:
-      "Chỉ nhập số tiền và loại để hoàn thiện sau."
+      mistiaLocalized(vi: "Chỉ nhập số tiền và loại để hoàn thiện sau.", en: "Capture amount and type first, then complete later.", ja: "金額と種類だけ先に入れて、あとで詳細を整えます。")
     }
   }
 
   var placeholderMessage: String {
     switch self {
     case .expense:
-      "Flow tạo khoản chi sẽ đi từ menu popout này. Hiện tại mình đã chốt interaction để bạn duyệt UI trước."
+      mistiaLocalized(vi: "Flow tạo khoản chi sẽ đi từ menu popout này. Hiện tại mình đã chốt interaction để bạn duyệt UI trước.", en: "The expense flow will connect from this popout menu. The interaction is locked in for UI review first.", ja: "支出作成フローはこのポップアウトメニューから接続されます。まずは UI レビュー用に操作感を固定しています。")
     case .income:
-      "Flow thêm thu nhập sẽ nối từ menu này. Hiện tại đang giữ chỗ bằng sheet riêng để state không phải làm lại."
+      mistiaLocalized(vi: "Flow thêm thu nhập sẽ nối từ menu này. Hiện tại đang giữ chỗ bằng sheet riêng để state không phải làm lại.", en: "The income flow will connect from this menu. A separate placeholder sheet keeps the state wiring stable for now.", ja: "収入追加フローはこのメニューから接続されます。今は状態管理を崩さないためにプレースホルダーのシートを使っています。")
     case .transfer:
-      "Flow chuyển tiền giữa các nguồn sẽ được nối tại đây sau. Menu popout mới đã tách sẵn action riêng cho màn này."
+      mistiaLocalized(vi: "Flow chuyển tiền giữa các nguồn sẽ được nối tại đây sau. Menu popout mới đã tách sẵn action riêng cho màn này.", en: "Transfers between sources will be connected here next. The new popout menu already separates the action for this screen.", ja: "資金移動フローはここに後で接続されます。この画面用のアクションは新しいポップアウトメニューですでに分かれています。")
     case .note:
-      "Ghi nhanh sẽ dùng cho những entry cần capture thật gọn. Trước mắt đây là placeholder để bạn duyệt layout và nhịp mở menu."
+      mistiaLocalized(vi: "Ghi nhanh sẽ dùng cho những entry cần capture thật gọn. Trước mắt đây là placeholder để bạn duyệt layout và nhịp mở menu.", en: "Quick capture is for ultra-light entries. For now this is a placeholder so you can review layout and menu timing.", ja: "クイック入力は最小限の記録向けです。今はレイアウトとメニューの開き方を確認するためのプレースホルダーです。")
     }
   }
 

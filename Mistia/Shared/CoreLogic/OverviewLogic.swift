@@ -612,33 +612,11 @@ nonisolated enum OverviewLogic {
         referenceDate: Date = .now,
         calendar: Calendar = .current
     ) -> String {
-        let startOfReference = calendar.startOfDay(for: referenceDate)
-        let startOfDate = calendar.startOfDay(for: date)
-        let dayDelta = calendar.dateComponents([.day], from: startOfDate, to: startOfReference).day ?? 0
-
-        if dayDelta == 0 {
-            let minutes = max(Int(referenceDate.timeIntervalSince(date) / 60), 0)
-            if minutes < 60 {
-                return "\(max(minutes, 1)) phút trước"
-            }
-
-            let hours = max(Int(referenceDate.timeIntervalSince(date) / 3_600), 0)
-            if hours < 10 {
-                return "\(max(hours, 1)) tiếng trước"
-            }
-
-            return "Hôm nay"
-        }
-
-        if dayDelta == 1 {
-            return "Hôm qua"
-        }
-
-        if dayDelta == 2 {
-            return "Hôm kia"
-        }
-
-        return shortDateString(for: date)
+        MistiaDateFormatting.relativeTimeLabel(
+            for: date,
+            referenceDate: referenceDate,
+            calendar: calendar
+        )
     }
 
     static func monthlyStatement(
@@ -823,36 +801,37 @@ nonisolated enum OverviewLogic {
     static func renderMonthlyStatement(
         _ statement: OverviewMonthlyStatementSnapshot
     ) -> OverviewStatementDocument {
+        let language = MistiaAppLanguage.current
         let filename = "mistia-sao-ke-tong-hop-\(yearMonthToken(for: statement.period.start)).html"
         let body = """
         <div class="hero">
           <div>
             <div class="eyebrow">Mistia Statement</div>
-            <h1>Sao ke tong hop thang</h1>
-            <p>Ky sao ke: \(htmlEscaped(fullDateString(for: statement.period.start))) - \(htmlEscaped(fullDateString(for: statement.period.end)))</p>
-            <p>Xuat luc \(htmlEscaped(dateTimeString(for: statement.generatedAt)))</p>
+            <h1>\(htmlEscaped(mistiaLocalized(vi: "Sao kê tổng hợp tháng", en: "Monthly summary statement", ja: "月次サマリーステートメント", language: language)))</h1>
+            <p>\(htmlEscaped(mistiaLocalized(vi: "Kỳ sao kê", en: "Statement period", ja: "対象期間", language: language))): \(htmlEscaped(fullDateString(for: statement.period.start))) - \(htmlEscaped(fullDateString(for: statement.period.end)))</p>
+            <p>\(htmlEscaped(mistiaLocalized(vi: "Xuất lúc", en: "Generated at", ja: "出力日時", language: language))) \(htmlEscaped(dateTimeString(for: statement.generatedAt)))</p>
           </div>
           <div class="hero-amount">\(htmlEscaped(statement.totalAssetBalanceMinor.formattedCurrency(code: statement.currencyCode)))</div>
         </div>
 
         <div class="grid three">
-          \(summaryCard(title: "Tong tai san kha dung", value: statement.totalAssetBalanceMinor.formattedCurrency(code: statement.currencyCode), accentClass: "green"))
-          \(summaryCard(title: "Tong thu thang nay", value: statement.totalIncomeMinor.formattedCurrency(code: statement.currencyCode), accentClass: "blue"))
-          \(summaryCard(title: "Tong chi thang nay", value: statement.totalExpenseMinor.formattedCurrency(code: statement.currencyCode), accentClass: "red"))
+          \(summaryCard(title: mistiaLocalized(vi: "Tài sản khả dụng", en: "Available assets", ja: "利用可能資産", language: language), value: statement.totalAssetBalanceMinor.formattedCurrency(code: statement.currencyCode), accentClass: "green"))
+          \(summaryCard(title: mistiaLocalized(vi: "Thu tháng này", en: "Income this month", ja: "今月の収入", language: language), value: statement.totalIncomeMinor.formattedCurrency(code: statement.currencyCode), accentClass: "blue"))
+          \(summaryCard(title: mistiaLocalized(vi: "Chi tháng này", en: "Expense this month", ja: "今月の支出", language: language), value: statement.totalExpenseMinor.formattedCurrency(code: statement.currencyCode), accentClass: "red"))
         </div>
 
         <div class="grid two">
           <section class="panel">
             <div class="panel-header">
-              <h2>Chen lech dong tien</h2>
+              <h2>\(htmlEscaped(mistiaLocalized(vi: "Chênh lệch dòng tiền", en: "Net cashflow", ja: "キャッシュフロー差額", language: language)))</h2>
               <span>\(htmlEscaped(statement.netCashflowMinor.formattedCurrency(code: statement.currencyCode)))</span>
             </div>
             \(renderChart(points: statement.chartPoints, currencyCode: statement.currencyCode))
           </section>
           <section class="panel">
             <div class="panel-header">
-              <h2>Vi tai san</h2>
-              <span>\(statement.wallets.count) vi</span>
+              <h2>\(htmlEscaped(mistiaLocalized(vi: "Ví tài sản", en: "Asset wallets", ja: "資産ウォレット", language: language)))</h2>
+              <span>\(statement.wallets.count) \(htmlEscaped(mistiaLocalized(vi: "ví", en: "wallets", ja: "件", language: language)))</span>
             </div>
             \(renderWalletTable(rows: statement.wallets))
           </section>
@@ -860,10 +839,10 @@ nonisolated enum OverviewLogic {
 
         <section class="panel">
           <div class="panel-header">
-            <h2>Giao dich thang hien tai</h2>
-            <span>\(statement.transactions.count) muc</span>
+            <h2>\(htmlEscaped(mistiaLocalized(vi: "Giao dịch tháng hiện tại", en: "Transactions this month", ja: "今月の取引", language: language)))</h2>
+            <span>\(statement.transactions.count) \(htmlEscaped(mistiaLocalized(vi: "mục", en: "items", ja: "件", language: language)))</span>
           </div>
-          \(renderTransactionTable(rows: statement.transactions, emptyMessage: "Chua co giao dich nao trong thang nay."))
+          \(renderTransactionTable(rows: statement.transactions, emptyMessage: mistiaLocalized(vi: "Chưa có giao dịch nào trong tháng này.", en: "No transactions in this month yet.", ja: "今月の取引はまだありません。", language: language)))
         </section>
         """
 
@@ -871,8 +850,8 @@ nonisolated enum OverviewLogic {
             kind: .monthlySummary,
             filename: filename,
             html: renderDocument(
-                title: "Mistia Sao ke tong hop",
-                subtitle: "Tong hop tai san, dong tien va giao dich thang hien tai",
+                title: mistiaLocalized(vi: "Mistia Sao kê tổng hợp", en: "Mistia Monthly Summary", ja: "Mistia 月次サマリー", language: language),
+                subtitle: mistiaLocalized(vi: "Tổng hợp tài sản, dòng tiền và giao dịch tháng hiện tại", en: "A summary of assets, cashflow, and transactions for the current month", ja: "今月の資産、キャッシュフロー、取引のサマリー", language: language),
                 body: body
             )
         )
@@ -881,14 +860,15 @@ nonisolated enum OverviewLogic {
     static func renderCreditCardStatement(
         _ statement: OverviewCreditCardStatementSnapshot
     ) -> OverviewStatementDocument {
+        let language = MistiaAppLanguage.current
         let filename = "mistia-sao-ke-the-tin-dung-\(yearMonthToken(for: statement.generatedAt)).html"
         let sections: String
 
         if statement.cards.isEmpty {
             sections = """
             <section class="panel empty">
-              <h2>Chua co the tin dung</h2>
-              <p>Hien tai ban chua them the nao vao Mistia nen khong co sao ke de xuat.</p>
+              <h2>\(htmlEscaped(mistiaLocalized(vi: "Chưa có thẻ tín dụng", en: "No credit cards yet", ja: "クレジットカードはまだありません", language: language)))</h2>
+              <p>\(htmlEscaped(mistiaLocalized(vi: "Hiện tại bạn chưa thêm thẻ nào vào Mistia nên không có sao kê để xuất.", en: "You have not added any cards to Mistia yet, so there is no statement to export.", ja: "Mistia にカードがまだ追加されていないため、書き出せる明細がありません。", language: language)))</p>
             </section>
             """
         } else {
@@ -899,51 +879,51 @@ nonisolated enum OverviewLogic {
                     <div>
                       <div class="eyebrow">\(htmlEscaped(card.networkTitle)) • •••• \(htmlEscaped(card.last4))</div>
                       <h2>\(htmlEscaped(card.walletName))</h2>
-                      <p>\(htmlEscaped(card.issuerName.isEmpty ? "The tin dung" : card.issuerName))</p>
+                      <p>\(htmlEscaped(card.issuerName.isEmpty ? mistiaLocalized(vi: "Thẻ tín dụng", en: "Credit card", ja: "クレジットカード", language: language) : card.issuerName))</p>
                     </div>
-                    <div class="badge">Utilization \(htmlEscaped(percentText(card.utilization)))</div>
+                    <div class="badge">\(htmlEscaped(mistiaLocalized(vi: "Tỷ lệ sử dụng", en: "Utilization", ja: "利用率", language: language))) \(htmlEscaped(percentText(card.utilization)))</div>
                   </div>
 
                   <div class="grid four">
-                    \(summaryCard(title: "Du no hien tai", value: card.currentDebtMinor.formattedCurrency(code: card.currencyCode), accentClass: "red"))
-                    \(summaryCard(title: "Han muc", value: card.creditLimitMinor.formattedCurrency(code: card.currencyCode), accentClass: "blue"))
-                    \(summaryCard(title: "Available credit", value: card.availableCreditMinor.formattedCurrency(code: card.currencyCode), accentClass: "green"))
-                    \(summaryCard(title: "Ngay thanh toan tiep theo", value: fullDateString(for: card.nextPaymentDate), accentClass: "orange"))
+                    \(summaryCard(title: mistiaLocalized(vi: "Dư nợ hiện tại", en: "Current debt", ja: "現在の利用残高", language: language), value: card.currentDebtMinor.formattedCurrency(code: card.currencyCode), accentClass: "red"))
+                    \(summaryCard(title: mistiaLocalized(vi: "Hạn mức", en: "Credit limit", ja: "利用限度額", language: language), value: card.creditLimitMinor.formattedCurrency(code: card.currencyCode), accentClass: "blue"))
+                    \(summaryCard(title: mistiaLocalized(vi: "Hạn mức còn lại", en: "Available credit", ja: "利用可能額", language: language), value: card.availableCreditMinor.formattedCurrency(code: card.currencyCode), accentClass: "green"))
+                    \(summaryCard(title: mistiaLocalized(vi: "Ngày thanh toán tiếp theo", en: "Next payment date", ja: "次回支払日", language: language), value: fullDateString(for: card.nextPaymentDate), accentClass: "orange"))
                   </div>
 
                   <div class="meta-grid">
                     <div class="meta-item">
-                      <span>Ky sao ke hien tai</span>
+                      <span>\(htmlEscaped(mistiaLocalized(vi: "Kỳ sao kê hiện tại", en: "Current cycle", ja: "現在の締め期間", language: language)))</span>
                       <strong>\(htmlEscaped(fullDateString(for: card.cycle.start))) - \(htmlEscaped(fullDateString(for: card.cycle.end.addingTimeInterval(-1))))</strong>
                     </div>
                     <div class="meta-item">
-                      <span>Ngay chot sao ke</span>
-                      <strong>\(card.statementClosingDay) hang thang</strong>
+                      <span>\(htmlEscaped(mistiaLocalized(vi: "Ngày chốt sao kê", en: "Statement closing day", ja: "締め日", language: language)))</span>
+                      <strong>\(htmlEscaped(mistiaLocalized(vi: "\(card.statementClosingDay) hằng tháng", en: "Day \(card.statementClosingDay) each month", ja: "毎月 \(card.statementClosingDay) 日", language: language)))</strong>
                     </div>
                     <div class="meta-item">
-                      <span>Ngay thanh toan</span>
-                      <strong>\(card.paymentDueDay) hang thang</strong>
+                      <span>\(htmlEscaped(mistiaLocalized(vi: "Ngày thanh toán", en: "Payment due day", ja: "支払日", language: language)))</span>
+                      <strong>\(htmlEscaped(mistiaLocalized(vi: "\(card.paymentDueDay) hằng tháng", en: "Day \(card.paymentDueDay) each month", ja: "毎月 \(card.paymentDueDay) 日", language: language)))</strong>
                     </div>
                     <div class="meta-item">
-                      <span>Vi thanh toan</span>
-                      <strong>\(htmlEscaped(card.paymentSourceWalletName ?? "Chua cai dat"))</strong>
+                      <span>\(htmlEscaped(mistiaLocalized(vi: "Ví thanh toán", en: "Payment wallet", ja: "支払い元ウォレット", language: language)))</span>
+                      <strong>\(htmlEscaped(card.paymentSourceWalletName ?? mistiaLocalized(vi: "Chưa cài đặt", en: "Not set", ja: "未設定", language: language)))</strong>
                     </div>
                   </div>
 
                   <div class="grid two">
                     <section class="subpanel">
                       <div class="panel-header">
-                        <h3>Chi tieu trong ky</h3>
-                        <span>\(card.charges.count) muc</span>
+                        <h3>\(htmlEscaped(mistiaLocalized(vi: "Chi tiêu trong kỳ", en: "Charges in cycle", ja: "期間内の利用", language: language)))</h3>
+                        <span>\(card.charges.count) \(htmlEscaped(mistiaLocalized(vi: "mục", en: "items", ja: "件", language: language)))</span>
                       </div>
-                      \(renderTransactionTable(rows: card.charges, emptyMessage: "Khong co chi tieu nao trong ky sao ke nay."))
+                      \(renderTransactionTable(rows: card.charges, emptyMessage: mistiaLocalized(vi: "Không có chi tiêu nào trong kỳ sao kê này.", en: "There are no charges in this cycle.", ja: "この締め期間の利用はありません。", language: language)))
                     </section>
                     <section class="subpanel">
                       <div class="panel-header">
-                        <h3>Thanh toan vao the</h3>
-                        <span>\(card.payments.count) muc</span>
+                        <h3>\(htmlEscaped(mistiaLocalized(vi: "Thanh toán vào thẻ", en: "Payments to card", ja: "カードへの支払い", language: language)))</h3>
+                        <span>\(card.payments.count) \(htmlEscaped(mistiaLocalized(vi: "mục", en: "items", ja: "件", language: language)))</span>
                       </div>
-                      \(renderTransactionTable(rows: card.payments, emptyMessage: "Chua co giao dich thanh toan vao the trong ky."))
+                      \(renderTransactionTable(rows: card.payments, emptyMessage: mistiaLocalized(vi: "Chưa có giao dịch thanh toán vào thẻ trong kỳ.", en: "There are no card payments in this cycle.", ja: "この期間のカード支払いはありません。", language: language)))
                     </section>
                   </div>
                 </section>
@@ -956,11 +936,11 @@ nonisolated enum OverviewLogic {
         <div class="hero">
           <div>
             <div class="eyebrow">Mistia Statement</div>
-            <h1>Sao ke the tin dung</h1>
-            <p>Ban tong hop cho cac the dang hoat dong trong Mistia.</p>
-            <p>Xuat luc \(htmlEscaped(dateTimeString(for: statement.generatedAt)))</p>
+            <h1>\(htmlEscaped(mistiaLocalized(vi: "Sao kê thẻ tín dụng", en: "Credit card statement", ja: "クレジットカード明細", language: language)))</h1>
+            <p>\(htmlEscaped(mistiaLocalized(vi: "Bản tổng hợp cho các thẻ đang hoạt động trong Mistia.", en: "A summary of active cards in Mistia.", ja: "Mistia で利用中のカードをまとめた明細です。", language: language)))</p>
+            <p>\(htmlEscaped(mistiaLocalized(vi: "Xuất lúc", en: "Generated at", ja: "出力日時", language: language))) \(htmlEscaped(dateTimeString(for: statement.generatedAt)))</p>
           </div>
-          <div class="hero-amount">\(statement.cards.count) the</div>
+          <div class="hero-amount">\(statement.cards.count) \(htmlEscaped(mistiaLocalized(vi: "thẻ", en: "cards", ja: "枚", language: language)))</div>
         </div>
         \(sections)
         """
@@ -969,8 +949,8 @@ nonisolated enum OverviewLogic {
             kind: .creditCard,
             filename: filename,
             html: renderDocument(
-                title: "Mistia Sao ke the tin dung",
-                subtitle: "Tong hop du no, han muc va giao dich trong ky sao ke hien tai",
+                title: mistiaLocalized(vi: "Mistia Sao kê thẻ tín dụng", en: "Mistia Credit Card Statement", ja: "Mistia クレジットカード明細", language: language),
+                subtitle: mistiaLocalized(vi: "Tổng hợp dư nợ, hạn mức và giao dịch trong kỳ sao kê hiện tại", en: "A summary of debt, credit limits, and transactions in the current cycle", ja: "現在の締め期間における残高、利用枠、取引のサマリー", language: language),
                 body: body
             )
         )
@@ -1036,17 +1016,17 @@ nonisolated enum OverviewLogic {
     ) -> String {
         switch transaction.primaryKind {
         case .expense:
-            return "Chi tieu"
+            return mistiaLocalized(vi: "Chi tiêu", en: "Expense", ja: "支出")
         case .income:
-            return "Thu nhap"
+            return mistiaLocalized(vi: "Thu nhập", en: "Income", ja: "収入")
         case .transfer:
             switch transaction.transferSubtype {
             case .internalTransfer:
-                return "Chuyen tien noi bo"
+                return mistiaLocalized(vi: "Chuyển tiền nội bộ", en: "Internal transfer", ja: "内部振替")
             case .debt:
-                return transaction.debtIntent?.title ?? "Cong no"
+                return transaction.debtIntent?.title ?? mistiaLocalized(vi: "Công nợ", en: "Debt", ja: "貸し借り")
             case .none:
-                return "Chuyen tien"
+                return mistiaLocalized(vi: "Chuyển tiền", en: "Transfer", ja: "振替")
             }
         }
     }
@@ -1056,10 +1036,10 @@ nonisolated enum OverviewLogic {
     ) -> String {
         switch transaction.primaryKind {
         case .expense, .income:
-            return transaction.sourceWalletName ?? "Chua chon vi"
+            return transaction.sourceWalletName ?? mistiaLocalized(vi: "Chưa chọn ví", en: "No wallet selected", ja: "ウォレット未選択")
         case .transfer:
-            let source = transaction.sourceWalletName ?? "Nguon"
-            let destination = transaction.destinationWalletName ?? "Dich"
+            let source = transaction.sourceWalletName ?? mistiaLocalized(vi: "Nguồn", en: "Source", ja: "出金元")
+            let destination = transaction.destinationWalletName ?? mistiaLocalized(vi: "Đích", en: "Destination", ja: "入金先")
             return "\(source) -> \(destination)"
         }
     }
@@ -1075,7 +1055,7 @@ nonisolated enum OverviewLogic {
             return transaction.note?.trimmingCharacters(in: .whitespacesAndNewlines).nonEmpty ?? "-"
         case .transfer:
             if transaction.transferSubtype == .debt {
-                return transaction.counterpartyName?.trimmingCharacters(in: .whitespacesAndNewlines).nonEmpty ?? "Cong no"
+                return transaction.counterpartyName?.trimmingCharacters(in: .whitespacesAndNewlines).nonEmpty ?? mistiaLocalized(vi: "Công nợ", en: "Debt", ja: "貸し借り")
             }
             return transaction.note?.trimmingCharacters(in: .whitespacesAndNewlines).nonEmpty ?? "-"
         }
@@ -1158,31 +1138,19 @@ nonisolated enum OverviewLogic {
         calendar: Calendar = .current
     ) -> String {
         let weekEnd = calendar.date(byAdding: .day, value: -1, to: interval.end) ?? interval.start
-        let range = "\(shortDateString(for: interval.start)) - \(shortDateString(for: weekEnd))"
-        return isCurrentWeek ? "Tuần này • \(range)" : range
+        return MistiaDateFormatting.weekRangeTitle(
+            start: interval.start,
+            end: weekEnd,
+            isCurrentWeek: isCurrentWeek,
+            calendar: calendar
+        )
     }
 
     private static func weekdayLabel(
         for date: Date,
         calendar: Calendar
     ) -> String {
-        let weekday = calendar.component(.weekday, from: date)
-        switch weekday {
-        case 1:
-            return "CN"
-        case 2:
-            return "T2"
-        case 3:
-            return "T3"
-        case 4:
-            return "T4"
-        case 5:
-            return "T5"
-        case 6:
-            return "T6"
-        default:
-            return "T7"
-        }
+        MistiaDateFormatting.weekdayLabel(for: date, calendar: calendar)
     }
 
     private static func yearMonthToken(for date: Date) -> String {
@@ -1212,9 +1180,10 @@ nonisolated enum OverviewLogic {
         subtitle: String,
         body: String
     ) -> String {
-        """
+        let language = MistiaAppLanguage.current
+        return """
         <!doctype html>
-        <html lang="vi">
+        <html lang="\(language.rawValue)">
         <head>
           <meta charset="utf-8" />
           <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -1466,7 +1435,7 @@ nonisolated enum OverviewLogic {
         rows: [OverviewStatementWalletRow]
     ) -> String {
         guard !rows.isEmpty else {
-            return "<div class=\"empty\"><p>Chua co vi tai san nao.</p></div>"
+            return "<div class=\"empty\"><p>\(htmlEscaped(mistiaLocalized(vi: "Chưa có ví tài sản nào.", en: "There are no asset wallets yet.", ja: "資産ウォレットはまだありません。")))</p></div>"
         }
 
         let body = rows.map { row in
@@ -1483,9 +1452,9 @@ nonisolated enum OverviewLogic {
         <table>
           <thead>
             <tr>
-              <th>Vi</th>
-              <th>So du dau ky</th>
-              <th>So du hien tai</th>
+              <th>\(htmlEscaped(mistiaLocalized(vi: "Ví", en: "Wallet", ja: "ウォレット")))</th>
+              <th>\(htmlEscaped(mistiaLocalized(vi: "Số dư đầu kỳ", en: "Opening balance", ja: "期首残高")))</th>
+              <th>\(htmlEscaped(mistiaLocalized(vi: "Số dư hiện tại", en: "Current balance", ja: "現在残高")))</th>
             </tr>
           </thead>
           <tbody>
@@ -1520,12 +1489,12 @@ nonisolated enum OverviewLogic {
         <table>
           <thead>
             <tr>
-              <th>Ngay gio</th>
-              <th>Giao dich</th>
-              <th>Loai</th>
-              <th>Tai khoan</th>
-              <th>So tien</th>
-              <th>Trang thai</th>
+              <th>\(htmlEscaped(mistiaLocalized(vi: "Ngày giờ", en: "Date & time", ja: "日時")))</th>
+              <th>\(htmlEscaped(mistiaLocalized(vi: "Giao dịch", en: "Transaction", ja: "取引")))</th>
+              <th>\(htmlEscaped(mistiaLocalized(vi: "Loại", en: "Type", ja: "種類")))</th>
+              <th>\(htmlEscaped(mistiaLocalized(vi: "Tài khoản", en: "Account", ja: "口座")))</th>
+              <th>\(htmlEscaped(mistiaLocalized(vi: "Số tiền", en: "Amount", ja: "金額")))</th>
+              <th>\(htmlEscaped(mistiaLocalized(vi: "Trạng thái", en: "Status", ja: "状態")))</th>
             </tr>
           </thead>
           <tbody>
@@ -1579,27 +1548,15 @@ nonisolated enum OverviewLogic {
     }
 
     private static func shortDateString(for date: Date) -> String {
-        let formatter = DateFormatter()
-        formatter.calendar = Calendar(identifier: .gregorian)
-        formatter.locale = Locale(identifier: "vi_VN")
-        formatter.dateFormat = "dd/MM"
-        return formatter.string(from: date)
+        MistiaDateFormatting.shortDateString(for: date)
     }
 
     private static func fullDateString(for date: Date) -> String {
-        let formatter = DateFormatter()
-        formatter.calendar = Calendar(identifier: .gregorian)
-        formatter.locale = Locale(identifier: "vi_VN")
-        formatter.dateFormat = "dd/MM/yyyy"
-        return formatter.string(from: date)
+        MistiaDateFormatting.fullDateString(for: date)
     }
 
     private static func dateTimeString(for date: Date) -> String {
-        let formatter = DateFormatter()
-        formatter.calendar = Calendar(identifier: .gregorian)
-        formatter.locale = Locale(identifier: "vi_VN")
-        formatter.dateFormat = "dd/MM/yyyy HH:mm"
-        return formatter.string(from: date)
+        MistiaDateFormatting.dateTimeString(for: date)
     }
 
     private static func htmlEscaped(_ value: String) -> String {

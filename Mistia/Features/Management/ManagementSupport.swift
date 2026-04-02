@@ -45,13 +45,13 @@ enum ManagementDataActionKind: String, Identifiable, CaseIterable {
     var title: String {
         switch self {
         case .exportData:
-            "Xuất dữ liệu"
+            mistiaLocalized(vi: "Xuất dữ liệu", en: "Export data", ja: "データを書き出す")
         case .importData:
-            "Nhập dữ liệu"
+            mistiaLocalized(vi: "Nhập dữ liệu", en: "Import data", ja: "データを取り込む")
         case .backupRestore:
-            "Backup & khôi phục"
+            mistiaLocalized(vi: "Backup & khôi phục", en: "Backup & restore", ja: "バックアップと復元")
         case .deleteAllData:
-            "Xóa tất cả dữ liệu"
+            mistiaLocalized(vi: "Xóa tất cả dữ liệu", en: "Delete all data", ja: "すべてのデータを削除")
         }
     }
 
@@ -98,25 +98,25 @@ enum ManagementPresetData {
     ]
 
     static let defaultCategorySeeds: [ManagementCategorySeed] = [
-        ManagementCategorySeed(name: "Ăn uống", kind: .expense, iconSymbolName: "fork.knife", iconColorHex: "#F59B3F"),
-        ManagementCategorySeed(name: "Đi chơi", kind: .expense, iconSymbolName: "party.popper.fill", iconColorHex: "#F26A5A"),
-        ManagementCategorySeed(name: "Du lịch", kind: .expense, iconSymbolName: "airplane", iconColorHex: "#5B7BFF"),
-        ManagementCategorySeed(name: "Mua sắm", kind: .expense, iconSymbolName: "bag.fill", iconColorHex: "#FF7E67"),
-        ManagementCategorySeed(name: "Di chuyển", kind: .expense, iconSymbolName: "train.side.front.car", iconColorHex: "#2DAA9E"),
-        ManagementCategorySeed(name: "Nhà ở", kind: .expense, iconSymbolName: "house.fill", iconColorHex: "#7C85A3"),
+        ManagementCategorySeed(name: "Ăn uống", kind: .expense, iconSymbolName: "fork.knife", iconColorHex: "#F59B3F", systemKey: .food),
+        ManagementCategorySeed(name: "Đi chơi", kind: .expense, iconSymbolName: "party.popper.fill", iconColorHex: "#F26A5A", systemKey: .entertainment),
+        ManagementCategorySeed(name: "Du lịch", kind: .expense, iconSymbolName: "airplane", iconColorHex: "#5B7BFF", systemKey: .travel),
+        ManagementCategorySeed(name: "Mua sắm", kind: .expense, iconSymbolName: "bag.fill", iconColorHex: "#FF7E67", systemKey: .shopping),
+        ManagementCategorySeed(name: "Di chuyển", kind: .expense, iconSymbolName: "train.side.front.car", iconColorHex: "#2DAA9E", systemKey: .transportation),
+        ManagementCategorySeed(name: "Nhà ở", kind: .expense, iconSymbolName: "house.fill", iconColorHex: "#7C85A3", systemKey: .housing),
         ManagementCategorySeed(name: "Hóa đơn", kind: .expense, iconSymbolName: "doc.text.fill", iconColorHex: "#FFB13B", systemKey: .billing),
-        ManagementCategorySeed(name: "Sức khỏe", kind: .expense, iconSymbolName: "cross.case.fill", iconColorHex: "#F45C7E"),
-        ManagementCategorySeed(name: "Giáo dục", kind: .expense, iconSymbolName: "book.closed.fill", iconColorHex: "#8A6BFF"),
+        ManagementCategorySeed(name: "Sức khỏe", kind: .expense, iconSymbolName: "cross.case.fill", iconColorHex: "#F45C7E", systemKey: .health),
+        ManagementCategorySeed(name: "Giáo dục", kind: .expense, iconSymbolName: "book.closed.fill", iconColorHex: "#8A6BFF", systemKey: .education),
         ManagementCategorySeed(name: "Trả góp / vay", kind: .expense, iconSymbolName: "creditcard.and.123", iconColorHex: "#7C85A3", systemKey: .loanRepayment, startsArchived: true),
-        ManagementCategorySeed(name: "Lương", kind: .income, iconSymbolName: "briefcase.fill", iconColorHex: "#2DAA9E"),
-        ManagementCategorySeed(name: "Thưởng", kind: .income, iconSymbolName: "gift.fill", iconColorHex: "#F59B3F"),
-        ManagementCategorySeed(name: "Freelance", kind: .income, iconSymbolName: "laptopcomputer", iconColorHex: "#5B7BFF"),
-        ManagementCategorySeed(name: "Đầu tư", kind: .income, iconSymbolName: "chart.line.uptrend.xyaxis", iconColorHex: "#57B7FF"),
-        ManagementCategorySeed(name: "Hoàn tiền", kind: .income, iconSymbolName: "arrow.counterclockwise.circle.fill", iconColorHex: "#7C85A3"),
-        ManagementCategorySeed(name: "Bán hàng", kind: .income, iconSymbolName: "storefront.fill", iconColorHex: "#F26A5A"),
-        ManagementCategorySeed(name: "Quà tặng", kind: .income, iconSymbolName: "heart.fill", iconColorHex: "#F45C7E"),
-        ManagementCategorySeed(name: "Phụ cấp", kind: .income, iconSymbolName: "wallet.pass.fill", iconColorHex: "#9A67FF"),
-        ManagementCategorySeed(name: "Lãi ngân hàng", kind: .income, iconSymbolName: "building.columns.fill", iconColorHex: "#5B7BFF")
+        ManagementCategorySeed(name: "Lương", kind: .income, iconSymbolName: "briefcase.fill", iconColorHex: "#2DAA9E", systemKey: .salary),
+        ManagementCategorySeed(name: "Thưởng", kind: .income, iconSymbolName: "gift.fill", iconColorHex: "#F59B3F", systemKey: .bonus),
+        ManagementCategorySeed(name: "Freelance", kind: .income, iconSymbolName: "laptopcomputer", iconColorHex: "#5B7BFF", systemKey: .freelance),
+        ManagementCategorySeed(name: "Đầu tư", kind: .income, iconSymbolName: "chart.line.uptrend.xyaxis", iconColorHex: "#57B7FF", systemKey: .investment),
+        ManagementCategorySeed(name: "Hoàn tiền", kind: .income, iconSymbolName: "arrow.counterclockwise.circle.fill", iconColorHex: "#7C85A3", systemKey: .refund),
+        ManagementCategorySeed(name: "Bán hàng", kind: .income, iconSymbolName: "storefront.fill", iconColorHex: "#F26A5A", systemKey: .sales),
+        ManagementCategorySeed(name: "Quà tặng", kind: .income, iconSymbolName: "heart.fill", iconColorHex: "#F45C7E", systemKey: .gift),
+        ManagementCategorySeed(name: "Phụ cấp", kind: .income, iconSymbolName: "wallet.pass.fill", iconColorHex: "#9A67FF", systemKey: .allowance),
+        ManagementCategorySeed(name: "Lãi ngân hàng", kind: .income, iconSymbolName: "building.columns.fill", iconColorHex: "#5B7BFF", systemKey: .bankInterest)
     ]
 }
 
@@ -147,20 +147,37 @@ extension LedgerWallet {
             case let (nil, suffix?):
                 return "•••• \(suffix)"
             default:
-                return "Thẻ tín dụng"
+                return mistiaLocalized(vi: "Thẻ tín dụng", en: "Credit card", ja: "クレジットカード")
             }
         }
     }
 
     var footnoteText: String? {
         guard kind == .creditCard, let profile = creditCardProfile else { return nil }
-        return "Chốt sao kê ngày \(profile.statementClosingDay), thanh toán ngày \(profile.paymentDueDay)"
+        return mistiaLocalized(
+            vi: "Chốt sao kê ngày \(profile.statementClosingDay), thanh toán ngày \(profile.paymentDueDay)",
+            en: "Statement closes on day \(profile.statementClosingDay), payment due on day \(profile.paymentDueDay)",
+            ja: "締め日は毎月 \(profile.statementClosingDay) 日、支払日は毎月 \(profile.paymentDueDay) 日です"
+        )
     }
 }
 
 extension TransactionCategory {
     var iconColor: Color {
         Color(hex: iconColorHex)
+    }
+
+    var mistiaSystemCategoryKey: MistiaSystemCategoryKey? {
+        guard let systemKey else { return nil }
+        return MistiaSystemCategoryKey(rawValue: systemKey)
+    }
+
+    var localizedDisplayName: String {
+        guard let mistiaSystemCategoryKey else { return name }
+        let trimmedName = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        let knownDefaultNames = Set(mistiaSystemCategoryKey.knownDefaultNames())
+        guard knownDefaultNames.contains(trimmedName) else { return name }
+        return mistiaSystemCategoryKey.localizedTitle(for: .current)
     }
 }
 

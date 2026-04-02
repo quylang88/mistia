@@ -9,11 +9,11 @@ private enum TransactionSegment: String, CaseIterable, Hashable {
     var title: String {
         switch self {
         case .expense:
-            "Chi tiêu"
+            mistiaLocalized(vi: "Chi tiêu", en: "Expense", ja: "支出")
         case .income:
-            "Thu nhập"
+            mistiaLocalized(vi: "Thu nhập", en: "Income", ja: "収入")
         case .transfer:
-            "Chuyển tiền"
+            mistiaLocalized(vi: "Chuyển tiền", en: "Transfer", ja: "振替")
         }
     }
 
@@ -177,8 +177,6 @@ struct TransactionsView: View {
         .task {
             try? MistiaBootstrap.seedDefaultCategoriesIfNeeded(modelContext: modelContext)
         }
-        .environment(\.locale, Locale(identifier: "vi_VN"))
-        .environment(\.calendar, Calendar(identifier: .gregorian))
     }
 
     private var unifiedFilterRow: some View {
@@ -335,7 +333,7 @@ struct TransactionsView: View {
                         return true
                     }
                     ForEach(relevantCategories, id: \.id) { category in
-                        Button(category.name) {
+                        Button(category.localizedDisplayName) {
                             withAnimation(.snappy) {
                                 filterState.categoryID = category.id
                             }
@@ -427,7 +425,15 @@ private struct TransactionLiveSummaryCard: View {
                         .font(.system(size: 24, weight: .bold, design: .rounded))
                         .foregroundStyle(.primary)
 
-                    Text(summary.draftCount == 0 ? "Giao dịch" : "\(summary.draftCount) nháp")
+                    Text(
+                        summary.draftCount == 0
+                            ? mistiaLocalized(vi: "Giao dịch", en: "Transactions", ja: "取引")
+                            : mistiaLocalized(
+                                vi: "\(summary.draftCount) nháp",
+                                en: "\(summary.draftCount) drafts",
+                                ja: "下書き \(summary.draftCount) 件"
+                            )
+                    )
                         .font(.system(size: 11.5, weight: .semibold, design: .rounded))
                         .foregroundStyle(.secondary)
                 }
@@ -443,7 +449,7 @@ private struct TransactionSummaryMetric: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
-            Text(title)
+            Text(mistiaCatalog(title))
                 .font(.system(size: 14, weight: .semibold, design: .rounded))
                 .foregroundStyle(.secondary)
 
@@ -475,7 +481,14 @@ private struct TransactionSectionCard: View {
 
                 Spacer()
 
-                Text("\(section.rows.count) mục")
+                Text(
+                    mistiaLocalized(
+                        vi: "\(section.rows.count) mục",
+                        en: "\(section.rows.count) items",
+                        ja: "\(section.rows.count) 件"
+                    )
+                )
+                    .lineLimit(1)
                     .font(.system(size: 11.5, weight: .semibold, design: .rounded))
                     .foregroundStyle(.secondary)
             }
@@ -554,44 +567,46 @@ private struct TransactionRow: View {
 
         switch record.primaryKind {
         case .expense:
-            return transaction.category?.name ?? "Chi tiêu cần hoàn thiện"
+            return transaction.category?.localizedDisplayName
+                ?? mistiaLocalized(vi: "Chi tiêu cần hoàn thiện", en: "Expense needs details", ja: "支出の詳細が未入力")
         case .income:
-            return transaction.category?.name ?? "Thu nhập cần hoàn thiện"
+            return transaction.category?.localizedDisplayName
+                ?? mistiaLocalized(vi: "Thu nhập cần hoàn thiện", en: "Income needs details", ja: "収入の詳細が未入力")
         case .transfer:
             switch record.transferSubtype {
             case .internalTransfer:
-                return "Chuyển tiền nội bộ"
+                return mistiaLocalized(vi: "Chuyển tiền nội bộ", en: "Internal transfer", ja: "内部振替")
             case .debt:
-                return record.debtIntent?.title ?? "Công nợ"
+                return record.debtIntent?.title ?? mistiaLocalized(vi: "Công nợ", en: "Debt", ja: "貸し借り")
             case nil:
-                return "Chuyển tiền cần hoàn thiện"
+                return mistiaLocalized(vi: "Chuyển tiền cần hoàn thiện", en: "Transfer needs details", ja: "振替の詳細が未入力")
             }
         }
     }
 
     private var subtitle: String {
         if record.entryStatus == .draft {
-            return "Bản nháp • Chạm để hoàn thiện"
+            return mistiaLocalized(vi: "Bản nháp • Chạm để hoàn thiện", en: "Draft • Tap to complete", ja: "下書き • タップして仕上げる")
         }
 
         switch record.primaryKind {
         case .expense, .income:
-            let wallet = transaction.sourceWallet?.name ?? "Chưa chọn ví"
-            let category = transaction.category?.name ?? "Chưa chọn danh mục"
+            let wallet = transaction.sourceWallet?.name ?? mistiaLocalized(vi: "Chưa chọn ví", en: "No wallet selected", ja: "ウォレット未選択")
+            let category = transaction.category?.localizedDisplayName ?? mistiaLocalized(vi: "Chưa chọn danh mục", en: "No category selected", ja: "カテゴリ未選択")
             return "\(wallet) • \(category)"
         case .transfer:
             switch record.transferSubtype {
             case .internalTransfer:
-                let source = transaction.sourceWallet?.name ?? "Nguồn"
-                let destination = transaction.destinationWallet?.name ?? "Đích"
+                let source = transaction.sourceWallet?.name ?? mistiaLocalized(vi: "Nguồn", en: "Source", ja: "出金元")
+                let destination = transaction.destinationWallet?.name ?? mistiaLocalized(vi: "Đích", en: "Destination", ja: "入金先")
                 return "\(source) → \(destination)"
             case .debt:
-                let wallet = transaction.sourceWallet?.name ?? "Chưa chọn ví"
-                let person = transaction.counterpartyName ?? "Không rõ tên"
-                let intent = record.debtIntent?.title ?? "Công nợ"
+                let wallet = transaction.sourceWallet?.name ?? mistiaLocalized(vi: "Chưa chọn ví", en: "No wallet selected", ja: "ウォレット未選択")
+                let person = transaction.counterpartyName ?? mistiaLocalized(vi: "Không rõ tên", en: "Unknown name", ja: "名前未設定")
+                let intent = record.debtIntent?.title ?? mistiaLocalized(vi: "Công nợ", en: "Debt", ja: "貸し借り")
                 return "\(person) • \(intent) • \(wallet)"
             case nil:
-                return "Chuyển tiền"
+                return mistiaLocalized(vi: "Chuyển tiền", en: "Transfer", ja: "振替")
             }
         }
     }
@@ -687,7 +702,7 @@ private struct TransactionMiniBadge: View {
     let tint: Color
 
     var body: some View {
-        Text(title)
+        Text(mistiaCatalog(title))
             .font(.system(size: 10, weight: .bold, design: .rounded))
             .foregroundStyle(tint)
             .padding(.horizontal, 8)
@@ -720,7 +735,7 @@ private struct TransactionToolbarChip: View {
 
     var body: some View {
         HStack(spacing: 4) {
-            Text(title)
+            Text(mistiaCatalog(title))
                 .font(.system(size: 12, weight: .bold, design: .rounded))
                 .lineLimit(1)
             
@@ -753,7 +768,11 @@ private struct OutstandingDebtChip: View {
                     .font(.system(size: 15, weight: .bold, design: .rounded))
                     .foregroundStyle(.primary)
 
-                Text(position.isReceivable ? "Đang nợ bạn" : "Bạn đang nợ")
+                Text(
+                    position.isReceivable
+                        ? mistiaLocalized(vi: "Đang nợ bạn", en: "They owe you", ja: "相手があなたに返す")
+                        : mistiaLocalized(vi: "Bạn đang nợ", en: "You owe", ja: "あなたが支払う")
+                )
                     .font(.system(size: 11.5, weight: .semibold, design: .rounded))
                     .foregroundStyle(.secondary)
 

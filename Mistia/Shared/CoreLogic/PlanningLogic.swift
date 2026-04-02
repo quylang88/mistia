@@ -26,11 +26,11 @@ nonisolated enum PlanningBudgetHealth: String, Equatable {
     var title: String {
         switch self {
         case .stable:
-            "Ổn định"
+            mistiaLocalized(vi: "Ổn định", en: "Stable", ja: "安定")
         case .caution:
-            "Cần chú ý"
+            mistiaLocalized(vi: "Cần chú ý", en: "Needs attention", ja: "注意")
         case .exceeded:
-            "Vượt kế hoạch"
+            mistiaLocalized(vi: "Vượt kế hoạch", en: "Exceeded", ja: "超過")
         }
     }
 }

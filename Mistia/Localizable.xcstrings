@@ -1,0 +1,762 @@
+{
+  "sourceLanguage" : "vi",
+  "strings" : {
+    "%@ / %@" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "%@ / %@" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "%@ / %@" } }
+      }
+    },
+    "%@ • %@" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "%@ • %@" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "%@ • %@" } }
+      }
+    },
+    "%lld" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "%lld" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "%lld" } }
+      }
+    },
+    "%lld bộ lọc đang áp dụng" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "%lld active filters" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "適用中のフィルター %lld 件" } }
+      }
+    },
+    "%lld mục tiêu" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "%lld goals" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "目標 %lld 件" } }
+      }
+    },
+    "4 số cuối" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Last 4 digits" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "下4桁" } }
+      }
+    },
+    "Biểu tượng & màu" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Icon & color" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "アイコンと色" } }
+      }
+    },
+    "Bạn vẫn có thể khôi phục sau khi nối thêm màn hình archive." : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "You can still restore this later once the archive screen is connected." } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "アーカイブ画面を接続した後で復元できます。" } }
+      }
+    },
+    "Chi tiêu theo ngày" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Daily spending" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "日別支出" } }
+      }
+    },
+    "Chu kỳ" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Cycle" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "周期" } }
+      }
+    },
+    "Chưa thể lưu" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Can't save yet" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "まだ保存できません" } }
+      }
+    },
+    "Chưa thể thực hiện" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Can't do this yet" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "まだ実行できません" } }
+      }
+    },
+    "Chạm để tùy chỉnh icon" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Tap to customize icon" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "タップしてアイコンをカスタマイズ" } }
+      }
+    },
+    "Chọn danh mục" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Choose category" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "カテゴリを選択" } }
+      }
+    },
+    "Chọn ngân hàng phổ biến" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Choose a common bank" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "よく使う銀行を選択" } }
+      }
+    },
+    "Chọn sau" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Choose later" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "あとで選択" } }
+      }
+    },
+    "Chọn ví" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Choose wallet" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "ウォレットを選択" } }
+      }
+    },
+    "Credit card" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Credit card" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "クレジットカード" } }
+      }
+    },
+    "Công nợ đang mở" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Open debt" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "未解決の貸し借り" } }
+      }
+    },
+    "Danh mục" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Category" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "カテゴリ" } }
+      }
+    },
+    "Danh mục lưu trữ sẽ không còn hiện trong tab quản lý." : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Archived categories will no longer appear in the management tab." } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "アーカイブしたカテゴリは管理タブに表示されなくなります。" } }
+      }
+    },
+    "Dùng tên này" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Use this name" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "この名前を使う" } }
+      }
+    },
+    "Dư nợ hiện tại" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Current debt" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "現在の残高" } }
+      }
+    },
+    "Flow đăng nhập sẽ được nối ở pha auth riêng." : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "The sign-in flow will be connected in a dedicated auth phase." } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "ログインフローは別の認証フェーズで接続されます。" } }
+      }
+    },
+    "Ghi chú" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Notes" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "メモ" } }
+      }
+    },
+    "Giá trị" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Value" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "値" } }
+      }
+    },
+    "Hoặc nhập tên ngân hàng" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Or enter bank name" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "または銀行名を入力" } }
+      }
+    },
+    "Hành động này sẽ xóa tất cả ví và danh mục đang lưu trên thiết bị." : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "This will delete all wallets and categories stored on this device." } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "この操作で端末に保存されているすべてのウォレットとカテゴリが削除されます。" } }
+      }
+    },
+    "Hóa đơn định kỳ" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Recurring bill" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "定期請求" } }
+      }
+    },
+    "Hạn mức" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Limit" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "上限" } }
+      }
+    },
+    "Hạn mức tín dụng" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Credit limit" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "利用限度額" } }
+      }
+    },
+    "Hủy" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Cancel" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "キャンセル" } }
+      }
+    },
+    "Khoản này sẽ được ghi nhận thành giao dịch chi tiêu thật." : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "This item will be recorded as a real expense transaction." } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "この項目は実際の支出取引として記録されます。" } }
+      }
+    },
+    "Khoản thanh toán sẽ được ghi nhận thành giao dịch chuyển tiền sang thẻ tín dụng." : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "The payment will be recorded as a transfer to the credit card." } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "この支払いはクレジットカードへの振替取引として記録されます。" } }
+      }
+    },
+    "Khoản trả góp / vay" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Installment / loan" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "分割払い・借入" } }
+      }
+    },
+    "Không liên kết" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Not linked" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "未連携" } }
+      }
+    },
+    "Không thấy trong danh sách?" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Don't see it in the list?" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "一覧に見つかりませんか？" } }
+      }
+    },
+    "Không thể xuất sao kê" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Can't export statement" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "明細をエクスポートできません" } }
+      }
+    },
+    "Loại danh mục" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Category type" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "カテゴリ種別" } }
+      }
+    },
+    "Loại ví" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Wallet type" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "ウォレット種別" } }
+      }
+    },
+    "Lưu an toàn ví, danh mục và sẵn sàng cho backup hoặc sync ở các bản sau." : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Safely keep wallets and categories ready for backup or sync in later versions." } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "ウォレットとカテゴリを安全に保持し、今後のバックアップや同期に備えます。" } }
+      }
+    },
+    "Lưu trữ" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Archive" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "アーカイブ" } }
+      }
+    },
+    "Lưu trữ danh mục" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Archive category" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "カテゴリをアーカイブ" } }
+      }
+    },
+    "Lưu trữ danh mục này?" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Archive this category?" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "このカテゴリをアーカイブしますか？" } }
+      }
+    },
+    "Lưu trữ thẻ" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Archive card" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "カードをアーカイブ" } }
+      }
+    },
+    "Lưu trữ thẻ này?" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Archive this card?" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "このカードをアーカイブしますか？" } }
+      }
+    },
+    "Lưu trữ ví" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Archive wallet" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "ウォレットをアーカイブ" } }
+      }
+    },
+    "Lưu trữ ví này?" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Archive this wallet?" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "このウォレットをアーカイブしますか？" } }
+      }
+    },
+    "Mistia" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Mistia" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "Mistia" } }
+      }
+    },
+    "Mistia Assistant" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Mistia Assistant" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "Mistia Assistant" } }
+      }
+    },
+    "Mạng thẻ" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Card network" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "カードブランド" } }
+      }
+    },
+    "Mục tiêu" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Goal" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "目標" } }
+      }
+    },
+    "Mục tiêu đang hoạt động" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Active goals" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "進行中の目標" } }
+      }
+    },
+    "Nguồn thanh toán" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Payment source" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "支払い元" } }
+      }
+    },
+    "Ngày" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Day" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "日" } }
+      }
+    },
+    "Ngày %lld" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Day %lld" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "%lld日" } }
+      }
+    },
+    "Ngày chốt sao kê" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Statement closing day" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "締め日" } }
+      }
+    },
+    "Ngày mục tiêu" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Target date" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "目標日" } }
+      }
+    },
+    "Ngày thanh toán" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Payment day" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "支払日" } }
+      }
+    },
+    "Ngày đến hạn" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Due day" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "支払期限日" } }
+      }
+    },
+    "Ngân hàng" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Bank" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "銀行" } }
+      }
+    },
+    "Ngân hàng phổ biến tại Nhật" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Popular banks in Japan" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "日本でよく使われる銀行" } }
+      }
+    },
+    "Ngân sách" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Budget" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "予算" } }
+      }
+    },
+    "Ngân sách của danh mục này trong tháng đang xem sẽ bị xóa." : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "This category's budget for the current month will be deleted." } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "現在表示中の月にあるこのカテゴリの予算は削除されます。" } }
+      }
+    },
+    "Nhận diện" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Identity" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "識別" } }
+      }
+    },
+    "Nhập thủ công tên ngân hàng" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Enter bank name manually" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "銀行名を手動入力" } }
+      }
+    },
+    "Năm" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Year" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "年" } }
+      }
+    },
+    "OK" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "OK" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "OK" } }
+      }
+    },
+    "Rollover" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Rollover" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "繰り越し" } }
+      }
+    },
+    "Sao kê" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Statement" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "明細" } }
+      }
+    },
+    "Sao kê thẻ tín dụng" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Credit card statement" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "カード明細" } }
+      }
+    },
+    "Sao kê tổng hợp tháng" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Monthly summary statement" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "月次サマリー明細" } }
+      }
+    },
+    "Số tiền (có thể để trống)" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Amount (optional)" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "金額（任意）" } }
+      }
+    },
+    "Số tiền hiện tại" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Current amount" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "現在金額" } }
+      }
+    },
+    "Số tiền mỗi kỳ" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Amount per cycle" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "1回あたりの金額" } }
+      }
+    },
+    "Số tiền mục tiêu" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Target amount" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "目標金額" } }
+      }
+    },
+    "Số tiền ngân sách" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Budget amount" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "予算金額" } }
+      }
+    },
+    "Số tiền thanh toán" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Payment amount" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "支払金額" } }
+      }
+    },
+    "Tab AI assistant đang được giữ chỗ để hoàn thiện UI trước, chưa nối logic chat hoặc automation." : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "The AI assistant tab is a placeholder while we finish the UI, and chat or automation logic is not connected yet." } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "AIアシスタントタブはUI仕上げのためのプレースホルダーで、チャットや自動化ロジックはまだ接続されていません。" } }
+      }
+    },
+    "Tab Quản lý hiện đã chạy local-first bằng SwiftData, nên bạn vẫn có thể thêm ví và danh mục ngay cả khi chưa đăng nhập." : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "The Management tab already runs local-first with SwiftData, so you can still add wallets and categories without signing in." } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "管理タブはすでにSwiftDataでローカルファースト動作しているため、ログインしなくてもウォレットやカテゴリを追加できます。" } }
+      }
+    },
+    "Tab này đang để trống để ưu tiên hoàn thiện giao diện Tổng quan trước." : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "This tab is still empty so we can prioritize finishing the Overview UI first." } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "まず概要画面のUIを優先して仕上げるため、このタブはまだ空です。" } }
+      }
+    },
+    "Thanh toán ngay sẽ tạo giao dịch chi tiêu thật ở tab Giao dịch." : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Paying now will create a real expense transaction in the Transactions tab." } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "今すぐ支払うと、取引タブに実際の支出取引が作成されます。" } }
+      }
+    },
+    "Thanh toán trước" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Pay early" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "前倒しで支払う" } }
+      }
+    },
+    "Theo tháng" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Monthly" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "毎月" } }
+      }
+    },
+    "Tháng" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Month" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "月" } }
+      }
+    },
+    "Thêm ghi chú nếu cần" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Add notes if needed" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "必要ならメモを追加" } }
+      }
+    },
+    "Thông tin" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Info" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "情報" } }
+      }
+    },
+    "Thông tin cơ bản" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Basic info" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "基本情報" } }
+      }
+    },
+    "Thông tin thẻ" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Card info" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "カード情報" } }
+      }
+    },
+    "Thời gian" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Time" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "時間" } }
+      }
+    },
+    "Tiền tệ" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Currency" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "通貨" } }
+      }
+    },
+    "Tài sản khả dụng" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Available assets" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "利用可能資産" } }
+      }
+    },
+    "Tên danh mục" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Category name" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "カテゴリ名" } }
+      }
+    },
+    "Tên hóa đơn" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Bill name" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "請求名" } }
+      }
+    },
+    "Tên khoản" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Item name" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "項目名" } }
+      }
+    },
+    "Tên mục tiêu" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Goal name" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "目標名" } }
+      }
+    },
+    "Tên thẻ" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Card name" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "カード名" } }
+      }
+    },
+    "Tên ví" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Wallet name" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "ウォレット名" } }
+      }
+    },
+    "Tên đơn vị phát hành" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Issuer name" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "発行会社名" } }
+      }
+    },
+    "Tìm ngân hàng" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Find bank" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "銀行を検索" } }
+      }
+    },
+    "Tìm tên giao dịch..." : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Search transaction name..." } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "取引名を検索..." } }
+      }
+    },
+    "Tóm tắt đến hạn" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Due summary" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "支払予定サマリー" } }
+      }
+    },
+    "Tất cả" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "All" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "すべて" } }
+      }
+    },
+    "Tần suất: %lld tháng" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Frequency: every %lld months" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "頻度: %lldか月ごと" } }
+      }
+    },
+    "Tổng ngân sách tháng" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Total monthly budget" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "月間予算合計" } }
+      }
+    },
+    "Tổng số kỳ (không bắt buộc)" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Total cycles (optional)" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "総回数（任意）" } }
+      }
+    },
+    "Ví liên kết" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Linked wallet" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "連携ウォレット" } }
+      }
+    },
+    "Ví lưu trữ sẽ được ẩn khỏi màn hình quản lý." : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Archived wallets will be hidden from the management screen." } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "アーカイブしたウォレットは管理画面から非表示になります。" } }
+      }
+    },
+    "Ví thanh toán" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Payment wallet" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "支払いウォレット" } }
+      }
+    },
+    "Xoá tất cả bộ lọc" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Clear all filters" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "すべてのフィルターを解除" } }
+      }
+    },
+    "Xóa" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Delete" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "削除" } }
+      }
+    },
+    "Xóa hóa đơn" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Delete bill" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "請求を削除" } }
+      }
+    },
+    "Xóa hóa đơn này?" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Delete this bill?" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "この請求を削除しますか？" } }
+      }
+    },
+    "Xóa khoản này" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Delete this item" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "この項目を削除" } }
+      }
+    },
+    "Xóa khoản này?" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Delete this item?" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "この項目を削除しますか？" } }
+      }
+    },
+    "Xóa mục tiêu" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Delete goal" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "目標を削除" } }
+      }
+    },
+    "Xóa mục tiêu này?" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Delete this goal?" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "この目標を削除しますか？" } }
+      }
+    },
+    "Xóa ngân sách" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Delete budget" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "予算を削除" } }
+      }
+    },
+    "Xóa ngân sách này?" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Delete this budget?" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "この予算を削除しますか？" } }
+      }
+    },
+    "Xóa toàn bộ dữ liệu quản lý?" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Delete all management data?" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "すべての管理データを削除しますか？" } }
+      }
+    },
+    "Xóa ví và danh mục" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Delete wallets and categories" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "ウォレットとカテゴリを削除" } }
+      }
+    },
+    "version 16.09 powered by Quý Lăng" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "version 16.09 powered by Quý Lăng" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "version 16.09 powered by Quý Lăng" } }
+      }
+    },
+    "Đóng" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Close" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "閉じる" } }
+      }
+    },
+    "Đăng nhập hoặc tạo tài khoản" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Sign in or create account" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "ログインまたはアカウント作成" } }
+      }
+    },
+    "Đăng nhập để đồng bộ dữ liệu" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Sign in to sync data" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "同期するにはログイン" } }
+      }
+    },
+    "Đổi icon và màu cho danh mục" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Change category icon and color" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "カテゴリのアイコンと色を変更" } }
+      }
+    }
+  },
+  "version" : "1.0"
+}

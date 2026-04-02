@@ -121,8 +121,8 @@ struct ManagementView: View {
         }
         .alert(item: $infoAlert) { alert in
             Alert(
-                title: Text(alert.title),
-                message: Text(alert.message),
+                title: Text(mistiaCatalog(alert.title)),
+                message: Text(mistiaCatalog(alert.message)),
                 dismissButton: .default(Text("OK"))
             )
         }
@@ -337,7 +337,7 @@ private struct ManagementSection<Content: View>: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text(title)
+            Text(mistiaCatalog(title))
                 .font(.system(size: 13, weight: .bold, design: .rounded))
                 .textCase(.uppercase)
                 .tracking(0.6)
@@ -515,7 +515,7 @@ private struct ManagementCategoryRow: View {
             HStack(spacing: 12) {
                 ManagementIconTile(icon: category.iconSymbolName, color: category.iconColor)
 
-                Text(category.name)
+                Text(category.localizedDisplayName)
                     .font(.system(size: 16, weight: .semibold, design: .rounded))
                     .foregroundStyle(.primary)
 
@@ -549,7 +549,7 @@ private struct ManagementCategoryTile: View {
             VStack(alignment: .center, spacing: 10) {
                 ManagementIconTile(icon: category.iconSymbolName, color: category.iconColor)
 
-                Text(category.name)
+                Text(category.localizedDisplayName)
                     .font(.system(size: 15, weight: .semibold, design: .rounded))
                     .foregroundStyle(.primary)
                     .lineLimit(1)

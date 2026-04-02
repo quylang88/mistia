@@ -111,7 +111,7 @@ extension LedgerTransaction {
             destinationWalletName: destinationWallet?.name,
             destinationWalletKind: destinationWallet?.kind,
             categoryID: category?.id,
-            categoryName: category?.name,
+            categoryName: category?.localizedDisplayName,
             counterpartyName: counterpartyName
         )
     }

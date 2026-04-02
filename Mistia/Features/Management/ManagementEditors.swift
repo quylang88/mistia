@@ -169,7 +169,7 @@ struct ManagementWalletEditorSheet: View {
                     }
                 }
             }
-            .navigationTitle(target.wallet == nil ? "Ví mới" : "Sửa ví")
+            .navigationTitle(mistiaCatalog(target.wallet == nil ? "Ví mới" : "Sửa ví"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
@@ -199,7 +199,7 @@ struct ManagementWalletEditorSheet: View {
         }
         .sheet(isPresented: $showsIconPicker) {
             ManagementIconPickerSheet(
-                title: "Biểu tượng ví",
+                title: mistiaCatalog("Biểu tượng ví"),
                 selectedIconSymbolName: draft.iconSymbolName,
                 selectedColorHex: draft.iconColorHex
             ) { symbolName, colorHex in
@@ -226,7 +226,7 @@ struct ManagementWalletEditorSheet: View {
         ) {
             Button("OK", role: .cancel) { }
         } message: {
-            Text(alertMessage ?? "")
+            Text(mistiaCatalog(alertMessage ?? ""))
         }
         .confirmationDialog(
             "Lưu trữ ví này?",
@@ -434,7 +434,7 @@ struct ManagementCategoryEditorSheet: View {
                     }
                 }
             }
-            .navigationTitle(target.category == nil ? "Danh mục mới" : "Sửa danh mục")
+            .navigationTitle(mistiaCatalog(target.category == nil ? "Danh mục mới" : "Sửa danh mục"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
@@ -464,7 +464,7 @@ struct ManagementCategoryEditorSheet: View {
         }
         .sheet(isPresented: $showsIconPicker) {
             ManagementIconPickerSheet(
-                title: "Biểu tượng danh mục",
+                title: mistiaCatalog("Biểu tượng danh mục"),
                 selectedIconSymbolName: draft.iconSymbolName,
                 selectedColorHex: draft.iconColorHex
             ) { symbolName, colorHex in
@@ -482,7 +482,7 @@ struct ManagementCategoryEditorSheet: View {
         ) {
             Button("OK", role: .cancel) { }
         } message: {
-            Text(alertMessage ?? "")
+            Text(mistiaCatalog(alertMessage ?? ""))
         }
         .confirmationDialog(
             "Lưu trữ danh mục này?",
@@ -646,7 +646,7 @@ private struct ManagementBankPickerSheet: View {
                 }
             }
             .searchable(text: $searchText, prompt: "Tìm ngân hàng")
-            .navigationTitle("Chọn ngân hàng")
+            .navigationTitle(mistiaCatalog("Chọn ngân hàng"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {

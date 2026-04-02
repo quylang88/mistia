@@ -43,7 +43,7 @@ struct PlanningBudgetEditorSheet: View {
                     Picker("Danh mục", selection: $draft.categoryID) {
                         Text("Chọn danh mục").tag(Optional<UUID>.none)
                         ForEach(availableCategories) { category in
-                            Text(category.name).tag(Optional(category.id))
+                            Text(category.localizedDisplayName).tag(Optional(category.id))
                         }
                     }
 
@@ -66,7 +66,7 @@ struct PlanningBudgetEditorSheet: View {
                     }
                 }
             }
-            .navigationTitle(target.budget == nil ? "Ngân sách mới" : "Sửa ngân sách")
+            .navigationTitle(mistiaCatalog(target.budget == nil ? "Ngân sách mới" : "Sửa ngân sách"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 PlanningEditorToolbar(
@@ -200,7 +200,7 @@ struct PlanningGoalEditorSheet: View {
             Form {
                 Section("Nhận diện") {
                     PlanningIconPickerButton(
-                        title: "Icon mục tiêu",
+                        title: mistiaCatalog("Icon mục tiêu"),
                         symbolName: draft.iconSymbolName,
                         colorHex: draft.iconColorHex
                     ) {
@@ -232,7 +232,7 @@ struct PlanningGoalEditorSheet: View {
                     }
                 }
             }
-            .navigationTitle(target.goal == nil ? "Mục tiêu mới" : "Sửa mục tiêu")
+            .navigationTitle(mistiaCatalog(target.goal == nil ? "Mục tiêu mới" : "Sửa mục tiêu"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 PlanningEditorToolbar(
@@ -243,7 +243,7 @@ struct PlanningGoalEditorSheet: View {
         }
         .sheet(isPresented: $showsIconPicker) {
             PlanningIconPickerSheet(
-                title: "Icon mục tiêu",
+                title: mistiaCatalog("Icon mục tiêu"),
                 selectedSymbolName: draft.iconSymbolName,
                 selectedColorHex: draft.iconColorHex
             ) { symbolName, colorHex in
@@ -374,7 +374,7 @@ struct PlanningBillEditorSheet: View {
             Form {
                 Section("Nhận diện") {
                     PlanningIconPickerButton(
-                        title: "Icon hóa đơn",
+                        title: mistiaCatalog("Icon hóa đơn"),
                         symbolName: draft.iconSymbolName,
                         colorHex: draft.iconColorHex
                     ) {
@@ -423,7 +423,7 @@ struct PlanningBillEditorSheet: View {
                     }
                 }
             }
-            .navigationTitle(target.plan == nil ? "Hóa đơn mới" : "Sửa hóa đơn")
+            .navigationTitle(mistiaCatalog(target.plan == nil ? "Hóa đơn mới" : "Sửa hóa đơn"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 PlanningEditorToolbar(
@@ -434,7 +434,7 @@ struct PlanningBillEditorSheet: View {
         }
         .sheet(isPresented: $showsIconPicker) {
             PlanningIconPickerSheet(
-                title: "Icon hóa đơn",
+                title: mistiaCatalog("Icon hóa đơn"),
                 selectedSymbolName: draft.iconSymbolName,
                 selectedColorHex: draft.iconColorHex
             ) { symbolName, colorHex in
@@ -588,7 +588,7 @@ struct PlanningInstallmentEditorSheet: View {
             Form {
                 Section("Nhận diện") {
                     PlanningIconPickerButton(
-                        title: "Icon khoản trả góp / vay",
+                        title: mistiaCatalog("Icon khoản trả góp / vay"),
                         symbolName: draft.iconSymbolName,
                         colorHex: draft.iconColorHex
                     ) {
@@ -639,7 +639,7 @@ struct PlanningInstallmentEditorSheet: View {
                     }
                 }
             }
-            .navigationTitle(target.plan == nil ? "Khoản mới" : "Sửa khoản")
+            .navigationTitle(mistiaCatalog(target.plan == nil ? "Khoản mới" : "Sửa khoản"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 PlanningEditorToolbar(
@@ -650,7 +650,7 @@ struct PlanningInstallmentEditorSheet: View {
         }
         .sheet(isPresented: $showsIconPicker) {
             PlanningIconPickerSheet(
-                title: "Icon khoản trả góp / vay",
+                title: mistiaCatalog("Icon khoản trả góp / vay"),
                 selectedSymbolName: draft.iconSymbolName,
                 selectedColorHex: draft.iconColorHex
             ) { symbolName, colorHex in
@@ -816,7 +816,7 @@ struct PlanningCreditCardEditorSheet: View {
             Form {
                 Section("Nhận diện") {
                     PlanningIconPickerButton(
-                        title: "Biểu tượng thẻ",
+                        title: mistiaCatalog("Biểu tượng thẻ"),
                         symbolName: draft.iconSymbolName,
                         colorHex: draft.iconColorHex
                     ) {
@@ -883,7 +883,7 @@ struct PlanningCreditCardEditorSheet: View {
                     }
                 }
             }
-            .navigationTitle(target.wallet == nil ? "Thẻ mới" : "Sửa thẻ")
+            .navigationTitle(mistiaCatalog(target.wallet == nil ? "Thẻ mới" : "Sửa thẻ"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 PlanningEditorToolbar(
@@ -894,7 +894,7 @@ struct PlanningCreditCardEditorSheet: View {
         }
         .sheet(isPresented: $showsIconPicker) {
             PlanningIconPickerSheet(
-                title: "Biểu tượng thẻ",
+                title: mistiaCatalog("Biểu tượng thẻ"),
                 selectedSymbolName: draft.iconSymbolName,
                 selectedColorHex: draft.iconColorHex
             ) { symbolName, colorHex in
@@ -1105,7 +1105,7 @@ private struct PlanningIconPickerButton: View {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(title)
                         .foregroundStyle(.primary)
-                    Text("Chạm để đổi icon")
+                    Text(mistiaCatalog("Chạm để đổi icon"))
                         .font(.footnote)
                         .foregroundStyle(.secondary)
                 }
@@ -1284,7 +1284,7 @@ private extension View {
         ) {
             Button("OK", role: .cancel) { }
         } message: {
-            Text(message.wrappedValue ?? "")
+            Text(mistiaCatalog(message.wrappedValue ?? ""))
         }
     }
 }

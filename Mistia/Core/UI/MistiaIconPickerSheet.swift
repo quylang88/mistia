@@ -18,27 +18,27 @@ enum MistiaIconGroupID: String, CaseIterable, Identifiable {
     var title: String {
         switch self {
         case .finance:
-            "Tài chính"
+            mistiaLocalized(vi: "Tài chính", en: "Finance", ja: "金融")
         case .shopping:
-            "Mua sắm"
+            mistiaLocalized(vi: "Mua sắm", en: "Shopping", ja: "買い物")
         case .food:
-            "Ăn uống"
+            mistiaLocalized(vi: "Ăn uống", en: "Food", ja: "食事")
         case .home:
-            "Nhà cửa"
+            mistiaLocalized(vi: "Nhà cửa", en: "Home", ja: "住まい")
         case .utilities:
-            "Hóa đơn / tiện ích"
+            mistiaLocalized(vi: "Hóa đơn / tiện ích", en: "Bills / utilities", ja: "請求・公共料金")
         case .transport:
-            "Di chuyển"
+            mistiaLocalized(vi: "Di chuyển", en: "Transport", ja: "移動")
         case .travel:
-            "Du lịch"
+            mistiaLocalized(vi: "Du lịch", en: "Travel", ja: "旅行")
         case .health:
-            "Sức khỏe"
+            mistiaLocalized(vi: "Sức khỏe", en: "Health", ja: "健康")
         case .work:
-            "Công việc / học tập"
+            mistiaLocalized(vi: "Công việc / học tập", en: "Work / study", ja: "仕事・学習")
         case .entertainment:
-            "Giải trí"
+            mistiaLocalized(vi: "Giải trí", en: "Entertainment", ja: "娯楽")
         case .personal:
-            "Mục tiêu / cá nhân"
+            mistiaLocalized(vi: "Mục tiêu / cá nhân", en: "Goals / personal", ja: "目標・個人")
         }
     }
 
@@ -241,7 +241,7 @@ struct MistiaIconPickerSheet: View {
                             size: 58
                         )
 
-                        Text("Preview icon")
+                        Text(mistiaLocalized(vi: "Xem trước icon", en: "Icon preview", ja: "アイコンプレビュー"))
                             .font(.footnote.weight(.medium))
                             .foregroundStyle(.secondary)
                     }
@@ -250,10 +250,14 @@ struct MistiaIconPickerSheet: View {
                     .padding(.horizontal, 20)
 
                     VStack(alignment: .leading, spacing: 10) {
-                        Text("Màu icon")
+                        Text(mistiaLocalized(vi: "Màu icon", en: "Icon color", ja: "アイコンの色"))
                             .font(.headline)
 
-                        ColorPicker("Chọn màu", selection: $selectedColor, supportsOpacity: false)
+                        ColorPicker(
+                            mistiaLocalized(vi: "Chọn màu", en: "Choose color", ja: "色を選択"),
+                            selection: $selectedColor,
+                            supportsOpacity: false
+                        )
                     }
                     .padding(.horizontal, 20)
 

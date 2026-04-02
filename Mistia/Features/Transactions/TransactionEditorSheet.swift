@@ -97,7 +97,7 @@ struct TransactionEditorSheet: View {
             }
         }
         .alert(
-            "Chưa thể lưu",
+            mistiaLocalized(vi: "Chưa thể lưu", en: "Can't save yet", ja: "まだ保存できません"),
             isPresented: Binding(
                 get: { alertMessage != nil },
                 set: { if !$0 { alertMessage = nil } }
@@ -105,7 +105,7 @@ struct TransactionEditorSheet: View {
         ) {
             Button("OK", role: .cancel) { }
         } message: {
-            Text(alertMessage ?? "")
+            Text(mistiaCatalog(alertMessage ?? ""))
         }
     }
 
@@ -203,8 +203,6 @@ struct TransactionEditorSheet: View {
 
                 DatePicker("Thời gian", selection: $bindableDraft.occurredAt, displayedComponents: [.date, .hourAndMinute])
                     .datePickerStyle(.compact)
-                    .environment(\.locale, Locale(identifier: "vi_VN"))
-                    .environment(\.calendar, Calendar(identifier: .gregorian))
                     .font(.system(size: 15, weight: .semibold, design: .rounded))
             }
 
@@ -225,11 +223,11 @@ struct TransactionEditorSheet: View {
 
                     TransactionSelectionMenuRow(
                         title: "Danh mục",
-                        value: selectedCategory?.name ?? "Chọn danh mục",
+                        value: selectedCategory?.localizedDisplayName ?? "Chọn danh mục",
                         systemImage: "square.grid.2x2"
                     ) {
                         ForEach(availableCategories) { category in
-                            Button(category.name) {
+                            Button(category.localizedDisplayName) {
                                 draft.categoryID = category.id
                             }
                         }
@@ -296,10 +294,12 @@ struct TransactionEditorSheet: View {
 
     private var navigationTitle: String {
         if target.transaction == nil {
-            return target.quickCapture ? "Ghi nhanh" : target.initialKind.title
+            return target.quickCapture
+                ? mistiaLocalized(vi: "Ghi nhanh", en: "Quick capture", ja: "クイック記録")
+                : target.initialKind.title
         }
 
-        return "Sửa giao dịch"
+        return mistiaLocalized(vi: "Sửa giao dịch", en: "Edit transaction", ja: "取引を編集")
     }
 
     private var headerTitle: String {

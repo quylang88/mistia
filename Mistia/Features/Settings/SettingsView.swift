@@ -4,6 +4,7 @@ struct SettingsView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.colorScheme) private var colorScheme
     @AppStorage(MistiaAppStorageKey.appearanceMode) private var appearanceModeRawValue = MistiaAppearanceMode.automatic.rawValue
+    @AppStorage(MistiaAppStorageKey.appLanguage) private var appLanguageRawValue = MistiaAppLanguage.english.rawValue
     @AppStorage(MistiaAppStorageKey.currencyCode) private var currencyCode = "JPY"
 
     @State private var destination: SettingsDestination?
@@ -18,6 +19,10 @@ struct SettingsView: View {
 
     private var appearanceMode: MistiaAppearanceMode {
         MistiaAppearanceMode(rawValue: appearanceModeRawValue) ?? .automatic
+    }
+
+    private var appLanguage: MistiaAppLanguage {
+        MistiaAppLanguage.resolve(storedRawValue: appLanguageRawValue)
     }
 
     private var sections: [SettingsSectionDump] {
@@ -35,8 +40,8 @@ struct SettingsView: View {
                         title: "Ngôn ngữ",
                         icon: "globe.asia.australia.fill",
                         accent: .sky,
-                        value: "Tiếng Việt",
-                        action: .placeholder
+                        value: appLanguage.displayName,
+                        action: .openLanguage
                     ),
                     SettingsRowDump(
                         title: "Tiền tệ",
@@ -120,6 +125,8 @@ struct SettingsView: View {
             switch route {
             case .appearance:
                 AppearanceSettingsView()
+            case .language:
+                LanguageSettingsView()
             }
         }
     }
@@ -128,6 +135,8 @@ struct SettingsView: View {
         switch row.action {
         case .openAppearance:
             destination = .appearance
+        case .openLanguage:
+            destination = .language
         case .placeholder:
             break
         }
@@ -170,6 +179,42 @@ private struct AppearanceSettingsView: View {
     }
 }
 
+private struct LanguageSettingsView: View {
+    @Environment(\.dismiss) private var dismiss
+    @AppStorage(MistiaAppStorageKey.appLanguage) private var appLanguageRawValue = MistiaAppLanguage.english.rawValue
+
+    private var accentPurple: Color {
+        Color(red: 0.43, green: 0.23, blue: 0.76)
+    }
+
+    private var selectedLanguage: MistiaAppLanguage {
+        MistiaAppLanguage.resolve(storedRawValue: appLanguageRawValue)
+    }
+
+    var body: some View {
+        MistiaPinnedTopBarScaffold(
+            tone: .standard,
+            title: "Ngôn ngữ",
+            embedsInNavigationStack: false,
+            showsLeadingAvatar: false,
+            leadingSystemImage: "chevron.left",
+            trailingSystemImage: nil,
+            hidesSystemBackButton: true,
+            onLeadingTap: { dismiss() },
+            contentSpacing: 18
+        ) {
+            LanguageSelectionCard(
+                selectedLanguage: selectedLanguage,
+                accentPurple: accentPurple
+            ) { language in
+                withAnimation(.spring(response: 0.30, dampingFraction: 0.84)) {
+                    appLanguageRawValue = language.rawValue
+                }
+            }
+        }
+    }
+}
+
 private struct SettingsCardSection: View {
     let section: SettingsSectionDump
     let tint: Color
@@ -206,14 +251,14 @@ private struct SettingsRowButton: View {
             HStack(spacing: 12) {
                 SettingsIconTile(icon: row.icon, accent: row.accent)
 
-                Text(row.title)
+                Text(mistiaCatalog(row.title))
                     .font(.system(size: 16.5, weight: .semibold, design: .rounded))
                     .foregroundStyle(titleColor)
 
                 Spacer(minLength: 10)
 
                 if let value = row.value {
-                    Text(value)
+                    Text(mistiaCatalog(value))
                         .font(.system(size: 15, weight: .medium, design: .rounded))
                         .foregroundStyle(valueColor)
                         .lineLimit(1)
@@ -275,6 +320,43 @@ private struct AppearanceModeCard: View {
     }
 }
 
+private struct LanguageSelectionCard: View {
+    @Environment(\.colorScheme) private var colorScheme
+    let selectedLanguage: MistiaAppLanguage
+    let accentPurple: Color
+    let onSelect: (MistiaAppLanguage) -> Void
+
+    private var cardTint: Color {
+        colorScheme == .dark ? .white.opacity(0.08) : .white.opacity(0.22)
+    }
+
+    var body: some View {
+        MistiaGlassCard(cornerRadius: 22, tint: cardTint, padding: 0) {
+            VStack(spacing: 0) {
+                ForEach(Array(MistiaAppLanguage.allCases.enumerated()), id: \.element.id) { index, language in
+                    Button {
+                        onSelect(language)
+                    } label: {
+                        LanguageOptionRow(
+                            language: language,
+                            isSelected: language == selectedLanguage,
+                            accentPurple: accentPurple
+                        )
+                        .padding(.horizontal, 18)
+                        .padding(.vertical, 16)
+                    }
+                    .buttonStyle(MistiaPressableButtonStyle(cornerRadius: 18, tint: accentPurple))
+
+                    if index < MistiaAppLanguage.allCases.count - 1 {
+                        Divider()
+                            .padding(.leading, 18)
+                    }
+                }
+            }
+        }
+    }
+}
+
 private struct AppearanceModeRow: View {
     let mode: MistiaAppearanceMode
     let isSelected: Bool
@@ -284,6 +366,48 @@ private struct AppearanceModeRow: View {
     var body: some View {
         HStack(spacing: 12) {
             Text(mode.title)
+                .font(.system(size: 17, weight: .semibold, design: .rounded))
+                .foregroundStyle(.primary)
+
+            Spacer(minLength: 12)
+
+            if isSelected {
+                ZStack {
+                    Circle()
+                        .fill(
+                            LinearGradient(
+                                colors: [
+                                    accentPurple.opacity(colorScheme == .dark ? 0.98 : 0.90),
+                                    Color(red: 0.62, green: 0.45, blue: 0.94).opacity(colorScheme == .dark ? 0.96 : 0.86)
+                                ],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            )
+                        )
+
+                    Circle()
+                        .strokeBorder(.white.opacity(colorScheme == .dark ? 0.24 : 0.56), lineWidth: 0.9)
+
+                    Image(systemName: "checkmark")
+                        .font(.system(size: 11, weight: .heavy))
+                        .foregroundStyle(.white.opacity(0.98))
+                }
+                .frame(width: 26, height: 26)
+                .shadow(color: accentPurple.opacity(colorScheme == .dark ? 0.30 : 0.12), radius: colorScheme == .dark ? 8 : 4, y: 1)
+            }
+        }
+    }
+}
+
+private struct LanguageOptionRow: View {
+    let language: MistiaAppLanguage
+    let isSelected: Bool
+    let accentPurple: Color
+    @Environment(\.colorScheme) private var colorScheme
+
+    var body: some View {
+        HStack(spacing: 12) {
+            Text(language.displayName)
                 .font(.system(size: 17, weight: .semibold, design: .rounded))
                 .foregroundStyle(.primary)
 
@@ -370,11 +494,13 @@ private struct SettingsRowDump: Identifiable {
 
 private enum SettingsRowAction {
     case openAppearance
+    case openLanguage
     case placeholder
 }
 
 private enum SettingsDestination: String, Identifiable {
     case appearance
+    case language
 
     var id: String { rawValue }
 }

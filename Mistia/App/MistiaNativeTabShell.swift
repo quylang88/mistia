@@ -4,6 +4,7 @@ import UIKit
 struct MistiaNativeTabShell: UIViewControllerRepresentable {
   @Binding var selectedTab: MistiaTab
   var appearanceMode: MistiaAppearanceMode
+  var appLanguage: MistiaAppLanguage
   var hidesQuickCreate: Bool
   var onAssistantTap: () -> Void
   var onQuickCreateTap: () -> Void
@@ -19,6 +20,7 @@ struct MistiaNativeTabShell: UIViewControllerRepresentable {
     controller.render(
       selectedTab: selectedTab,
       appearanceMode: appearanceMode,
+      appLanguage: appLanguage,
       hidesQuickCreate: hidesQuickCreate
     )
     return controller
@@ -30,6 +32,7 @@ struct MistiaNativeTabShell: UIViewControllerRepresentable {
     controller.render(
       selectedTab: selectedTab,
       appearanceMode: appearanceMode,
+      appLanguage: appLanguage,
       hidesQuickCreate: hidesQuickCreate
     )
   }
@@ -90,9 +93,10 @@ final class MistiaNativeTabBarController: UITabBarController, UITabBarController
   private weak var assistantTab: UISearchTab?
   private var quickCreateCenterXConstraint: NSLayoutConstraint?
   private var currentAppearanceMode: MistiaAppearanceMode = .automatic
+  private var currentAppLanguage: MistiaAppLanguage = .english
 
   private lazy var quickCreateController = UIHostingController(
-    rootView: MistiaQuickCreateFloatingButton { [weak self] in
+    rootView: MistiaQuickCreateFloatingButton(appLanguage: currentAppLanguage) { [weak self] in
       guard let self else { return }
       chromeDelegate?.nativeTabBarControllerDidTapQuickCreate(self)
     }
@@ -127,12 +131,19 @@ final class MistiaNativeTabBarController: UITabBarController, UITabBarController
     scheduleQuickCreateButtonRealignment()
   }
 
-  func render(selectedTab: MistiaTab, appearanceMode: MistiaAppearanceMode, hidesQuickCreate: Bool)
+  func render(
+    selectedTab: MistiaTab,
+    appearanceMode: MistiaAppearanceMode,
+    appLanguage: MistiaAppLanguage,
+    hidesQuickCreate: Bool
+  )
   {
     configureTabsIfNeeded()
     configureQuickCreateButtonIfNeeded()
     currentAppearanceMode = appearanceMode
+    currentAppLanguage = appLanguage
     overrideUserInterfaceStyle = appearanceMode.interfaceStyle
+    refreshLocalizedContent()
     applyChromeAppearance()
     updateQuickCreateVisibility(isHidden: hidesQuickCreate)
     syncTabSymbols(selectedTab: selectedTab)
@@ -179,10 +190,11 @@ final class MistiaNativeTabBarController: UITabBarController, UITabBarController
   private func configureQuickCreateButtonIfNeeded() {
     guard !didConfigureQuickCreateButton else { return }
     didConfigureQuickCreateButton = true
+    refreshQuickCreateRootView()
 
     addChild(quickCreateController)
     quickCreateController.view.translatesAutoresizingMaskIntoConstraints = false
-    quickCreateController.view.backgroundColor = .clear
+    quickCreateController.view.backgroundColor = UIColor.clear
     view.addSubview(quickCreateController.view)
     quickCreateController.didMove(toParent: self)
 
@@ -197,6 +209,33 @@ final class MistiaNativeTabBarController: UITabBarController, UITabBarController
       centerXConstraint,
       quickCreateController.view.bottomAnchor.constraint(equalTo: tabBar.topAnchor, constant: -14),
     ])
+  }
+
+  private func refreshLocalizedContent() {
+    refreshQuickCreateRootView()
+
+    if #available(iOS 18.0, *) {
+      for tab in MistiaTab.nativeShellTabs {
+        cachedRootTabs[tab]?.title = tab.title
+      }
+    }
+
+    for tab in MistiaTab.nativeShellTabs {
+      let controller = viewController(for: tab)
+      controller.title = tab.title
+      if let hostingController = controller as? UIHostingController<AnyView> {
+        hostingController.rootView = localizedRootView(for: tab)
+      }
+    }
+  }
+
+  private func refreshQuickCreateRootView() {
+    quickCreateController.rootView = MistiaQuickCreateFloatingButton(
+      appLanguage: currentAppLanguage
+    ) { [weak self] in
+      guard let self else { return }
+      chromeDelegate?.nativeTabBarControllerDidTapQuickCreate(self)
+    }
   }
 
   private func alignQuickCreateButtonToSearchPill() {
@@ -392,11 +431,19 @@ final class MistiaNativeTabBarController: UITabBarController, UITabBarController
       return cachedController
     }
 
-    let host = UIHostingController(rootView: tab.nativeRootView)
+    let host = UIHostingController(rootView: localizedRootView(for: tab))
     host.view.backgroundColor = .clear
     host.title = tab.title
     cachedControllers[tab] = host
     return host
+  }
+
+  private func localizedRootView(for tab: MistiaTab) -> AnyView {
+    AnyView(
+      tab.nativeRootView
+        .environment(\.locale, currentAppLanguage.locale)
+        .environment(\.calendar, currentAppLanguage.calendar)
+    )
   }
 
   @available(iOS 18.0, *)
@@ -433,6 +480,7 @@ final class MistiaNativeTabBarController: UITabBarController, UITabBarController
 }
 
 private struct MistiaQuickCreateFloatingButton: View {
+  let appLanguage: MistiaAppLanguage
   let action: () -> Void
 
   var body: some View {
@@ -446,7 +494,14 @@ private struct MistiaQuickCreateFloatingButton: View {
     .buttonBorderShape(.circle)
     .tint(Color(red: 0.43, green: 0.23, blue: 0.76))
     .shadow(color: Color.black.opacity(0.18), radius: 16, y: 8)
-    .accessibilityLabel("Tạo nhanh")
+    .accessibilityLabel(
+      mistiaLocalized(
+        vi: "Tạo nhanh",
+        en: "Quick create",
+        ja: "クイック作成",
+        language: appLanguage
+      )
+    )
   }
 }
 

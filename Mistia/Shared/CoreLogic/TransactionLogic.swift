@@ -64,7 +64,7 @@ struct CounterpartyDebtSnapshot: Equatable, Identifiable {
 nonisolated enum TransactionLogic {
     static func normalizeCounterpartyName(_ name: String?) -> String? {
         guard let normalized = name?
-            .folding(options: [.diacriticInsensitive, .caseInsensitive], locale: Locale(identifier: "vi_VN"))
+            .folding(options: [.diacriticInsensitive, .caseInsensitive], locale: MistiaAppLanguage.current.locale)
             .replacingOccurrences(of: "[^a-zA-Z0-9]+", with: " ", options: .regularExpression)
             .trimmingCharacters(in: .whitespacesAndNewlines),
             !normalized.isEmpty
@@ -129,7 +129,7 @@ nonisolated enum TransactionLogic {
             builtSections.append(
                 TransactionSectionSnapshot(
                     id: "drafts",
-                    title: "Cần hoàn thiện",
+                    title: mistiaLocalized(vi: "Cần hoàn thiện", en: "Needs completion", ja: "要確認"),
                     rows: drafts,
                     isDraftSection: true
                 )
@@ -143,22 +143,14 @@ nonisolated enum TransactionLogic {
         let groups = Dictionary(grouping: posted) { calendar.startOfDay(for: $0.occurredAt) }
         let sortedDays = groups.keys.sorted(by: >)
 
-        let formatter = DateFormatter()
-        formatter.calendar = calendar
-        formatter.locale = Locale(identifier: "vi_VN")
-        formatter.dateFormat = "dd/MM/yyyy"
+        let language = MistiaAppLanguage.current
 
         for day in sortedDays {
-            let title: String
-
-            if calendar.isDate(day, inSameDayAs: referenceDate) {
-                title = "Hôm nay"
-            } else if let yesterday = calendar.date(byAdding: .day, value: -1, to: referenceDate),
-                      calendar.isDate(day, inSameDayAs: yesterday) {
-                title = "Hôm qua"
-            } else {
-                title = formatter.string(from: day)
-            }
+            let startOfReference = calendar.startOfDay(for: referenceDate)
+            let startOfDay = calendar.startOfDay(for: day)
+            let dayDelta = calendar.dateComponents([.day], from: startOfDay, to: startOfReference).day ?? 0
+            let title = MistiaDateFormatting.relativeDayLabel(for: dayDelta, language: language)
+                ?? MistiaDateFormatting.fullDateString(for: day, language: language, calendar: calendar)
 
             builtSections.append(
                 TransactionSectionSnapshot(
@@ -209,7 +201,7 @@ nonisolated enum TransactionLogic {
                 displayName: groupedRecords
                     .compactMap(\.counterpartyName)
                     .first(where: { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty })
-                    ?? "Không rõ tên",
+                    ?? mistiaLocalized(vi: "Không rõ tên", en: "Unknown name", ja: "名前未設定"),
                 netMinor: total
             )
         }
