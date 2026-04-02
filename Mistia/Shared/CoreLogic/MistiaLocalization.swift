@@ -1,0 +1,395 @@
+import Foundation
+
+nonisolated enum MistiaAppLanguage: String, CaseIterable, Identifiable, Codable {
+    case vietnamese = "vi"
+    case english = "en"
+    case japanese = "ja"
+
+    static let userDefaultsKey = "mistia.settings.app.language"
+
+    var id: String { rawValue }
+
+    var localeIdentifier: String {
+        switch self {
+        case .vietnamese:
+            "vi_VN"
+        case .english:
+            "en_US"
+        case .japanese:
+            "ja_JP"
+        }
+    }
+
+    var locale: Locale {
+        Locale(identifier: localeIdentifier)
+    }
+
+    var calendar: Calendar {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.locale = locale
+        return calendar
+    }
+
+    var displayName: String {
+        switch self {
+        case .vietnamese:
+            "Tiếng Việt"
+        case .english:
+            "English"
+        case .japanese:
+            "日本語"
+        }
+    }
+
+    static func infer(preferredLanguages: [String] = Locale.preferredLanguages) -> Self {
+        for identifier in preferredLanguages {
+            let normalized = identifier.replacingOccurrences(of: "_", with: "-").lowercased()
+            if normalized.hasPrefix("vi") {
+                return .vietnamese
+            }
+
+            if normalized.hasPrefix("ja") {
+                return .japanese
+            }
+
+            if normalized.hasPrefix("en") {
+                return .english
+            }
+        }
+
+        return .english
+    }
+
+    static func resolve(
+        storedRawValue: String?,
+        preferredLanguages: [String] = Locale.preferredLanguages
+    ) -> Self {
+        if let storedRawValue,
+           let storedLanguage = Self(rawValue: storedRawValue) {
+            return storedLanguage
+        }
+
+        return infer(preferredLanguages: preferredLanguages)
+    }
+
+    static var current: Self {
+        resolve(storedRawValue: UserDefaults.standard.string(forKey: userDefaultsKey))
+    }
+}
+
+@inline(__always)
+nonisolated func mistiaLocalized(
+    vi: String,
+    en: String,
+    ja: String,
+    language: MistiaAppLanguage = .current
+) -> String {
+    switch language {
+    case .vietnamese:
+        vi
+    case .english:
+        en
+    case .japanese:
+        ja
+    }
+}
+
+@inline(__always)
+nonisolated func mistiaCatalog(
+    _ key: String,
+    language: MistiaAppLanguage = .current
+) -> String {
+    String(
+        localized: String.LocalizationValue(key),
+        bundle: .main,
+        locale: language.locale
+    )
+}
+
+nonisolated enum MistiaDateFormatting {
+    static func shortDateString(
+        for date: Date,
+        language: MistiaAppLanguage = .current,
+        calendar: Calendar? = nil
+    ) -> String {
+        formatter(
+            template: "ddMM",
+            language: language,
+            calendar: calendar
+        ).string(from: date)
+    }
+
+    static func fullDateString(
+        for date: Date,
+        language: MistiaAppLanguage = .current,
+        calendar: Calendar? = nil
+    ) -> String {
+        formatter(
+            template: "ddMMyyyy",
+            language: language,
+            calendar: calendar
+        ).string(from: date)
+    }
+
+    static func dateTimeString(
+        for date: Date,
+        language: MistiaAppLanguage = .current,
+        calendar: Calendar? = nil
+    ) -> String {
+        let formatter = formatter(language: language, calendar: calendar)
+        formatter.dateStyle = .medium
+        formatter.timeStyle = .short
+        return formatter.string(from: date)
+    }
+
+    static func monthYearString(
+        for date: Date,
+        language: MistiaAppLanguage = .current,
+        calendar: Calendar? = nil
+    ) -> String {
+        formatter(
+            template: "yMMMM",
+            language: language,
+            calendar: calendar
+        ).string(from: date)
+    }
+
+    static func weekRangeTitle(
+        start: Date,
+        end: Date,
+        isCurrentWeek: Bool,
+        language: MistiaAppLanguage = .current,
+        calendar: Calendar? = nil
+    ) -> String {
+        let range = "\(shortDateString(for: start, language: language, calendar: calendar)) - \(shortDateString(for: end, language: language, calendar: calendar))"
+        guard isCurrentWeek else { return range }
+        return mistiaLocalized(
+            vi: "Tuần này • \(range)",
+            en: "This week • \(range)",
+            ja: "今週 • \(range)",
+            language: language
+        )
+    }
+
+    static func weekdayLabel(
+        for date: Date,
+        calendar: Calendar,
+        language: MistiaAppLanguage = .current
+    ) -> String {
+        let weekday = calendar.component(.weekday, from: date)
+        let labels: [String]
+
+        switch language {
+        case .vietnamese:
+            labels = ["CN", "T2", "T3", "T4", "T5", "T6", "T7"]
+        case .english:
+            labels = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]
+        case .japanese:
+            labels = ["日", "月", "火", "水", "木", "金", "土"]
+        }
+
+        return labels[max(min(weekday - 1, labels.count - 1), 0)]
+    }
+
+    static func relativeDayLabel(
+        for dayDelta: Int,
+        language: MistiaAppLanguage = .current
+    ) -> String? {
+        switch dayDelta {
+        case 0:
+            return mistiaLocalized(
+                vi: "Hôm nay",
+                en: "Today",
+                ja: "今日",
+                language: language
+            )
+        case 1:
+            return mistiaLocalized(
+                vi: "Hôm qua",
+                en: "Yesterday",
+                ja: "昨日",
+                language: language
+            )
+        case 2:
+            return mistiaLocalized(
+                vi: "Hôm kia",
+                en: "2 days ago",
+                ja: "一昨日",
+                language: language
+            )
+        default:
+            return nil
+        }
+    }
+
+    static func relativeTimeLabel(
+        for date: Date,
+        referenceDate: Date = .now,
+        calendar: Calendar = .current,
+        language: MistiaAppLanguage = .current
+    ) -> String {
+        let startOfReference = calendar.startOfDay(for: referenceDate)
+        let startOfDate = calendar.startOfDay(for: date)
+        let dayDelta = calendar.dateComponents([.day], from: startOfDate, to: startOfReference).day ?? 0
+
+        if dayDelta == 0 {
+            let minutes = max(Int(referenceDate.timeIntervalSince(date) / 60), 0)
+            if minutes < 60 {
+                let safeMinutes = max(minutes, 1)
+                return mistiaLocalized(
+                    vi: "\(safeMinutes) phút trước",
+                    en: "\(safeMinutes) min ago",
+                    ja: "\(safeMinutes)分前",
+                    language: language
+                )
+            }
+
+            let hours = max(Int(referenceDate.timeIntervalSince(date) / 3_600), 0)
+            if hours < 10 {
+                let safeHours = max(hours, 1)
+                return mistiaLocalized(
+                    vi: "\(safeHours) tiếng trước",
+                    en: "\(safeHours) hr ago",
+                    ja: "\(safeHours)時間前",
+                    language: language
+                )
+            }
+        }
+
+        if let relativeLabel = relativeDayLabel(for: dayDelta, language: language) {
+            return relativeLabel
+        }
+
+        return shortDateString(for: date, language: language, calendar: calendar)
+    }
+
+    private static func formatter(
+        template: String? = nil,
+        language: MistiaAppLanguage,
+        calendar: Calendar? = nil
+    ) -> DateFormatter {
+        let formatter = DateFormatter()
+        formatter.locale = language.locale
+        formatter.calendar = calendar ?? language.calendar
+        if let template {
+            formatter.setLocalizedDateFormatFromTemplate(template)
+        }
+        return formatter
+    }
+}
+
+nonisolated enum MistiaIconColorPalette {
+    static let fallbackHex = "#8A8A8E"
+
+    static let presetHexes: [String] = [
+        "#2DAA9E",
+        "#6BCB77",
+        "#F26A5A",
+        "#FF9F1C",
+        "#FFE45E",
+        "#57B7FF",
+        "#5B7BFF",
+        "#FF6FB5",
+        "#9A67FF",
+        "#8A8A8E"
+    ]
+
+    private static let legacyDefaultHexMappings: [String: String] = [
+        "#F59B3F": "#FF9F1C",
+        "#FF7E67": "#F26A5A",
+        "#7C85A3": "#8A8A8E",
+        "#FFB13B": "#FF9F1C",
+        "#F45C7E": "#F26A5A",
+        "#8A6BFF": "#9A67FF",
+        "#5FAEFF": "#57B7FF"
+    ]
+
+    static func normalizedHex(_ hex: String) -> String {
+        let sanitized = hex
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .replacingOccurrences(of: "#", with: "")
+            .uppercased()
+
+        if sanitized.count == 8 {
+            let prefix = String(sanitized.prefix(6))
+            if isHexString(prefix) {
+                return "#\(prefix)"
+            }
+        }
+
+        if sanitized.count == 6, isHexString(sanitized) {
+            return "#\(sanitized)"
+        }
+
+        return fallbackHex
+    }
+
+    static func containsPreset(_ hex: String) -> Bool {
+        presetHexes.contains(normalizedHex(hex))
+    }
+
+    static func migratedLegacyDefaultHex(_ hex: String) -> String? {
+        legacyDefaultHexMappings[normalizedHex(hex)]
+    }
+
+    static func pickerSelectionHex(forStored hex: String) -> String {
+        migratedLegacyDefaultHex(hex) ?? normalizedHex(hex)
+    }
+
+    static func shouldShowCurrentSwatch(forStored hex: String) -> Bool {
+        let normalized = normalizedHex(hex)
+        return !containsPreset(normalized) && migratedLegacyDefaultHex(normalized) == nil
+    }
+
+    static func presetHex(forDefault hex: String) -> String {
+        let normalized = normalizedHex(hex)
+        if containsPreset(normalized) {
+            return normalized
+        }
+        return nearestPresetHex(to: normalized)
+    }
+
+    static func nearestPresetHex(to hex: String) -> String {
+        let normalized = normalizedHex(hex)
+        guard let source = rgbComponents(for: normalized) else {
+            return fallbackHex
+        }
+
+        return presetHexes.min { lhs, rhs in
+            squaredDistance(from: source, to: lhs) < squaredDistance(from: source, to: rhs)
+        } ?? fallbackHex
+    }
+
+    private static func squaredDistance(
+        from source: (red: Int, green: Int, blue: Int),
+        to targetHex: String
+    ) -> Int {
+        guard let target = rgbComponents(for: targetHex) else {
+            return .max
+        }
+
+        let redDelta = source.red - target.red
+        let greenDelta = source.green - target.green
+        let blueDelta = source.blue - target.blue
+        return redDelta * redDelta + greenDelta * greenDelta + blueDelta * blueDelta
+    }
+
+    private static func rgbComponents(for hex: String) -> (red: Int, green: Int, blue: Int)? {
+        let normalized = normalizedHex(hex)
+        let hexDigits = String(normalized.dropFirst())
+        guard hexDigits.count == 6, let value = Int(hexDigits, radix: 16) else {
+            return nil
+        }
+
+        return (
+            red: (value & 0xFF0000) >> 16,
+            green: (value & 0x00FF00) >> 8,
+            blue: value & 0x0000FF
+        )
+    }
+
+    private static func isHexString(_ value: String) -> Bool {
+        let allowedHexDigits = Set("0123456789ABCDEF")
+        return !value.isEmpty && value.allSatisfy { allowedHexDigits.contains($0) }
+    }
+}

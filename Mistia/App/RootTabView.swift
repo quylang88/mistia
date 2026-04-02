@@ -1,4 +1,5 @@
 import SwiftUI
+import SwiftData
 
 enum MistiaTab: String, CaseIterable, Hashable {
   case overview
@@ -9,13 +10,13 @@ enum MistiaTab: String, CaseIterable, Hashable {
   var title: String {
     switch self {
     case .overview:
-      "Tổng quan"
+      mistiaLocalized(vi: "Tổng quan", en: "Overview", ja: "ホーム")
     case .transactions:
-      "Giao dịch"
+      mistiaLocalized(vi: "Giao dịch", en: "Transactions", ja: "取引")
     case .planning:
-      "Kế hoạch"
+      mistiaLocalized(vi: "Kế hoạch", en: "Planning", ja: "プラン")
     case .settings:
-      "Quản lý"
+      mistiaLocalized(vi: "Quản lý", en: "Manage", ja: "管理")
     }
   }
 
@@ -73,8 +74,10 @@ enum MistiaTab: String, CaseIterable, Hashable {
 
 struct RootTabView: View {
   @Environment(\.colorScheme) private var colorScheme
+  @Environment(\.modelContext) private var modelContext
   @AppStorage(MistiaAppStorageKey.appearanceMode) private var appearanceModeRawValue =
     MistiaAppearanceMode.automatic.rawValue
+  @AppStorage(MistiaAppStorageKey.appLanguage) private var appLanguageRawValue = MistiaAppLanguage.english.rawValue
   @AppStorage(MistiaAppStorageKey.hideQuickCreate) private var hideQuickCreate = false
   @State private var selectedTab: MistiaTab = .overview
   @State private var isQuickCreateMenuVisible = false
@@ -92,6 +95,7 @@ struct RootTabView: View {
         MistiaNativeTabShell(
           selectedTab: $selectedTab,
           appearanceMode: appearanceMode,
+          appLanguage: appLanguage,
           hidesQuickCreate: hideQuickCreate || isQuickCreateMenuVisible,
           onAssistantTap: {
             dismissQuickCreateMenu()
@@ -132,10 +136,17 @@ struct RootTabView: View {
           .presentationDetents([.medium])
           .presentationDragIndicator(.visible)
       case .quickCreate(let destination):
-        MistiaQuickCreateDetailSheet(destination: destination)
-          .presentationDetents([.medium])
+        TransactionEditorSheet(target: quickCreateTarget(for: destination)) { completion in
+          if completion == .savedDraft {
+            selectedTab = .transactions
+          }
+        }
+          .presentationDetents(destination == .note ? [.medium, .large] : [.large])
           .presentationDragIndicator(.visible)
       }
+    }
+    .task {
+      try? MistiaBootstrap.seedDefaultCategoriesIfNeeded(modelContext: modelContext)
     }
     .onChange(of: hideQuickCreate) { _, newValue in
       if newValue {
@@ -149,6 +160,10 @@ struct RootTabView: View {
 
   private var appearanceMode: MistiaAppearanceMode {
     MistiaAppearanceMode(rawValue: appearanceModeRawValue) ?? .automatic
+  }
+
+  private var appLanguage: MistiaAppLanguage {
+    MistiaAppLanguage.resolve(storedRawValue: appLanguageRawValue)
   }
 
   private func toggleQuickCreateMenu() {
@@ -194,6 +209,19 @@ struct RootTabView: View {
     }
   }
 
+  private func quickCreateTarget(for destination: MistiaQuickCreateDestination) -> TransactionEditorTarget {
+    switch destination {
+    case .expense:
+      TransactionEditorTarget(initialKind: .expense)
+    case .income:
+      TransactionEditorTarget(initialKind: .income)
+    case .transfer:
+      TransactionEditorTarget(initialKind: .transfer)
+    case .note:
+      TransactionEditorTarget(initialKind: .expense, quickCapture: true)
+    }
+  }
+
   private func quickCreateMenuPosition(in proxy: GeometryProxy) -> CGPoint {
     let width =
       isQuickCreateMenuExpanded
@@ -235,7 +263,7 @@ private struct MistiaAssistantSheet: View {
       MistiaBackgroundView()
 
       VStack(spacing: 18) {
-        Text("Mistia Assistant")
+        Text(mistiaLocalized(vi: "Mistia Assistant", en: "Mistia Assistant", ja: "Mistia Assistant"))
           .font(.system(size: 24, weight: .bold, design: .rounded))
 
         MistiaGlassCard(
@@ -254,7 +282,11 @@ private struct MistiaAssistantSheet: View {
             .frame(width: 76, height: 76)
 
             Text(
-              "Tab AI assistant đang được giữ chỗ để hoàn thiện UI trước, chưa nối logic chat hoặc automation."
+              mistiaLocalized(
+                vi: "Tab AI assistant đang được giữ chỗ để hoàn thiện UI trước, chưa nối logic chat hoặc automation.",
+                en: "The AI assistant tab is a placeholder for now while we finish the UI first. Chat and automation logic are not connected yet.",
+                ja: "AI アシスタントタブは、まず UI を仕上げるためのプレースホルダーです。チャットや自動化のロジックはまだ接続されていません。"
+              )
             )
             .multilineTextAlignment(.center)
             .font(.system(size: 15, weight: .medium, design: .rounded))
@@ -279,39 +311,39 @@ private enum MistiaQuickCreateDestination: String, CaseIterable, Identifiable {
   var title: String {
     switch self {
     case .expense:
-      "Chi tiêu"
+      mistiaLocalized(vi: "Chi tiêu", en: "Expense", ja: "支出")
     case .income:
-      "Thu nhập"
+      mistiaLocalized(vi: "Thu nhập", en: "Income", ja: "収入")
     case .transfer:
-      "Chuyển tiền"
+      mistiaLocalized(vi: "Chuyển tiền", en: "Transfer", ja: "振替")
     case .note:
-      "Ghi nhanh"
+      mistiaLocalized(vi: "Ghi nhanh", en: "Quick note", ja: "クイック入力")
     }
   }
 
   var subtitle: String {
     switch self {
     case .expense:
-      "Lưu lại khoản chi từ ví hoặc tài khoản."
+      mistiaLocalized(vi: "Lưu lại khoản chi tiêu từ ví cá nhân.", en: "Save an expense from a personal wallet.", ja: "個人のウォレットから支出を記録します。")
     case .income:
-      "Ghi nhận nguồn thu để cập nhật số dư."
+      mistiaLocalized(vi: "Ghi nhận nguồn thu để cập nhật số dư.", en: "Record income to update your balance.", ja: "残高を更新するための収入を記録します。")
     case .transfer:
-      "Chuyển tiền giữa ví, thẻ và tài khoản."
+      mistiaLocalized(vi: "Chuyển nội bộ hoặc theo dõi công nợ.", en: "Move money internally or track debt.", ja: "内部振替や貸し借りを記録します。")
     case .note:
-      "Thêm ghi chú nhanh để hoàn thiện sau."
+      mistiaLocalized(vi: "Chỉ nhập số tiền và loại để hoàn thiện sau.", en: "Capture amount and type first, then complete later.", ja: "金額と種類だけ先に入れて、あとで詳細を整えます。")
     }
   }
 
   var placeholderMessage: String {
     switch self {
     case .expense:
-      "Flow tạo khoản chi sẽ đi từ menu popout này. Hiện tại mình đã chốt interaction để bạn duyệt UI trước."
+      mistiaLocalized(vi: "Flow tạo khoản chi sẽ đi từ menu popout này. Hiện tại mình đã chốt interaction để bạn duyệt UI trước.", en: "The expense flow will connect from this popout menu. The interaction is locked in for UI review first.", ja: "支出作成フローはこのポップアウトメニューから接続されます。まずは UI レビュー用に操作感を固定しています。")
     case .income:
-      "Flow thêm thu nhập sẽ nối từ menu này. Hiện tại đang giữ chỗ bằng sheet riêng để state không phải làm lại."
+      mistiaLocalized(vi: "Flow thêm thu nhập sẽ nối từ menu này. Hiện tại đang giữ chỗ bằng sheet riêng để state không phải làm lại.", en: "The income flow will connect from this menu. A separate placeholder sheet keeps the state wiring stable for now.", ja: "収入追加フローはこのメニューから接続されます。今は状態管理を崩さないためにプレースホルダーのシートを使っています。")
     case .transfer:
-      "Flow chuyển tiền giữa các nguồn sẽ được nối tại đây sau. Menu popout mới đã tách sẵn action riêng cho màn này."
+      mistiaLocalized(vi: "Flow chuyển tiền giữa các nguồn sẽ được nối tại đây sau. Menu popout mới đã tách sẵn action riêng cho màn này.", en: "Transfers between sources will be connected here next. The new popout menu already separates the action for this screen.", ja: "資金移動フローはここに後で接続されます。この画面用のアクションは新しいポップアウトメニューですでに分かれています。")
     case .note:
-      "Ghi nhanh sẽ dùng cho những entry cần capture thật gọn. Trước mắt đây là placeholder để bạn duyệt layout và nhịp mở menu."
+      mistiaLocalized(vi: "Ghi nhanh sẽ dùng cho những entry cần capture thật gọn. Trước mắt đây là placeholder để bạn duyệt layout và nhịp mở menu.", en: "Quick capture is for ultra-light entries. For now this is a placeholder so you can review layout and menu timing.", ja: "クイック入力は最小限の記録向けです。今はレイアウトとメニューの開き方を確認するためのプレースホルダーです。")
     }
   }
 
@@ -343,7 +375,7 @@ private enum MistiaQuickCreateDestination: String, CaseIterable, Identifiable {
 }
 
 private struct MistiaQuickCreateMenu: View {
-  static let collapsedSize: CGFloat = 50
+  static let collapsedSize: CGFloat = 44
   static let expandedHeight: CGFloat = 350
 
   @Environment(\.colorScheme) private var colorScheme
@@ -356,7 +388,7 @@ private struct MistiaQuickCreateMenu: View {
   }
 
   private var collapsedTint: Color {
-    Color(red: 0.43, green: 0.23, blue: 0.76).opacity(colorScheme == .dark ? 0.78 : 0.64)
+    Color(red: 0.43, green: 0.23, blue: 0.76).opacity(colorScheme == .dark ? 0.18 : 0.12)
   }
 
   private var cornerRadius: CGFloat {
@@ -398,10 +430,17 @@ private struct MistiaQuickCreateMenu: View {
 
       Image(systemName: "plus")
         .font(.system(size: 20, weight: .semibold, design: .rounded))
-        .foregroundStyle(.white.opacity(0.98))
+        .foregroundStyle(Color(red: 0.75, green: 0.55, blue: 1.0))
         .opacity(isExpanded ? 0 : 1)
         .scaleEffect(isExpanded ? 0.72 : 1)
         .frame(width: Self.collapsedSize, height: Self.collapsedSize)
+        .background {
+            Circle()
+                .fill(Color(red: 0.65, green: 0.45, blue: 0.98).opacity(0.25))
+                .opacity(isExpanded ? 0 : 1)
+                .scaleEffect(isExpanded ? 0.72 : 1)
+                .animation(.easeInOut(duration: 0.16), value: isExpanded)
+        }
         .animation(.easeInOut(duration: 0.16), value: isExpanded)
     }
     .frame(
@@ -462,53 +501,6 @@ private struct MistiaQuickCreateMenuRow: View {
     .padding(.horizontal, 12)
     .padding(.vertical, 10)
     .contentShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
-  }
-}
-
-private struct MistiaQuickCreateDetailSheet: View {
-  let destination: MistiaQuickCreateDestination
-
-  var body: some View {
-    ZStack {
-      MistiaBackgroundView()
-
-      VStack(spacing: 18) {
-        Text(destination.title)
-          .font(.system(size: 24, weight: .bold, design: .rounded))
-
-        MistiaGlassCard(
-          cornerRadius: 28,
-          tint: destination.accent.opacity(0.16)
-        ) {
-          VStack(spacing: 14) {
-            Image(systemName: destination.systemImage)
-              .font(.system(size: 28, weight: .semibold, design: .rounded))
-              .foregroundStyle(.white)
-              .frame(width: 76, height: 76)
-              .background {
-                MistiaRoundedGlassBackground(
-                  cornerRadius: 24,
-                  tint: destination.accent.opacity(0.24)
-                )
-              }
-
-            VStack(spacing: 6) {
-              Text(destination.subtitle)
-                .multilineTextAlignment(.center)
-                .font(.system(size: 16, weight: .semibold, design: .rounded))
-                .foregroundStyle(.primary)
-
-              Text(destination.placeholderMessage)
-                .multilineTextAlignment(.center)
-                .font(.system(size: 14, weight: .medium, design: .rounded))
-                .foregroundStyle(.secondary)
-            }
-          }
-          .frame(maxWidth: .infinity)
-        }
-      }
-      .padding(.horizontal, 20)
-    }
   }
 }
 

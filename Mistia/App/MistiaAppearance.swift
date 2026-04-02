@@ -4,6 +4,9 @@ import UIKit
 enum MistiaAppStorageKey {
     static let appearanceMode = "mistia.appearance.mode"
     static let hideQuickCreate = "mistia.chrome.hideQuickCreate"
+    static let didSeedManagementCategories = "mistia.management.didSeedCategories"
+    static let currencyCode = "mistia.settings.currency.code"
+    static let appLanguage = MistiaAppLanguage.userDefaultsKey
 }
 
 enum MistiaAppearanceMode: String, CaseIterable, Identifiable {
@@ -16,22 +19,22 @@ enum MistiaAppearanceMode: String, CaseIterable, Identifiable {
     var title: String {
         switch self {
         case .automatic:
-            "Tự động"
+            mistiaLocalized(vi: "Tự động", en: "Automatic", ja: "自動")
         case .dark:
-            "Tối"
+            mistiaLocalized(vi: "Tối", en: "Dark", ja: "ダーク")
         case .light:
-            "Sáng"
+            mistiaLocalized(vi: "Sáng", en: "Light", ja: "ライト")
         }
     }
 
     var subtitle: String {
         switch self {
         case .automatic:
-            "Theo giao diện hệ thống"
+            mistiaLocalized(vi: "Theo giao diện hệ thống", en: "Follow system appearance", ja: "システム設定に合わせる")
         case .dark:
-            "Luôn dùng nền tối"
+            mistiaLocalized(vi: "Luôn dùng nền tối", en: "Always use dark mode", ja: "常にダークモードを使う")
         case .light:
-            "Luôn dùng nền sáng"
+            mistiaLocalized(vi: "Luôn dùng nền sáng", en: "Always use light mode", ja: "常にライトモードを使う")
         }
     }
 

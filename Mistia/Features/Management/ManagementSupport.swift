@@ -1,0 +1,235 @@
+import Foundation
+import SwiftUI
+import UIKit
+
+struct ManagementCategorySeed {
+    let name: String
+    let kind: TransactionCategoryKind
+    let iconSymbolName: String
+    let iconColorHex: String
+    let systemKey: MistiaSystemCategoryKey?
+    let startsArchived: Bool
+
+    init(
+        name: String,
+        kind: TransactionCategoryKind,
+        iconSymbolName: String,
+        iconColorHex: String,
+        systemKey: MistiaSystemCategoryKey? = nil,
+        startsArchived: Bool = false
+    ) {
+        self.name = name
+        self.kind = kind
+        self.iconSymbolName = iconSymbolName
+        self.iconColorHex = MistiaIconColorPalette.presetHex(forDefault: iconColorHex)
+        self.systemKey = systemKey
+        self.startsArchived = startsArchived
+    }
+}
+
+struct JapaneseBankPreset: Identifiable, Hashable {
+    let key: String
+    let name: String
+
+    var id: String { key }
+}
+
+enum ManagementDataActionKind: String, Identifiable, CaseIterable {
+    case exportData
+    case importData
+    case backupRestore
+    case deleteAllData
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .exportData:
+            mistiaLocalized(vi: "Xuất dữ liệu", en: "Export data", ja: "データを書き出す")
+        case .importData:
+            mistiaLocalized(vi: "Nhập dữ liệu", en: "Import data", ja: "データを取り込む")
+        case .backupRestore:
+            mistiaLocalized(vi: "Backup & khôi phục", en: "Backup & restore", ja: "バックアップと復元")
+        case .deleteAllData:
+            mistiaLocalized(vi: "Xóa tất cả dữ liệu", en: "Delete all data", ja: "すべてのデータを削除")
+        }
+    }
+
+    var iconSymbolName: String {
+        switch self {
+        case .exportData:
+            "square.and.arrow.up.fill"
+        case .importData:
+            "square.and.arrow.down.fill"
+        case .backupRestore:
+            "externaldrive.fill.badge.icloud"
+        case .deleteAllData:
+            "trash.fill"
+        }
+    }
+
+    var tintColor: Color {
+        switch self {
+        case .exportData:
+            Color(hex: "#5B7BFF")
+        case .importData:
+            Color(hex: "#5FAEFF")
+        case .backupRestore:
+            Color(hex: "#2DAA9E")
+        case .deleteAllData:
+            Color(hex: "#F45C7E")
+        }
+    }
+}
+
+enum ManagementPresetData {
+    static let japaneseBanks: [JapaneseBankPreset] = [
+        JapaneseBankPreset(key: "mufg", name: "MUFG Bank"),
+        JapaneseBankPreset(key: "smbc", name: "SMBC"),
+        JapaneseBankPreset(key: "mizuho", name: "Mizuho Bank"),
+        JapaneseBankPreset(key: "jp_post", name: "Japan Post Bank"),
+        JapaneseBankPreset(key: "rakuten", name: "Rakuten Bank"),
+        JapaneseBankPreset(key: "paypay_bank", name: "PayPay Bank"),
+        JapaneseBankPreset(key: "sbi_shinsei", name: "SBI Shinsei Bank"),
+        JapaneseBankPreset(key: "sbi_sumishin", name: "SBI Sumishin Net Bank"),
+        JapaneseBankPreset(key: "seven_bank", name: "Seven Bank"),
+        JapaneseBankPreset(key: "resona", name: "Resona Bank"),
+        JapaneseBankPreset(key: "au_jibun", name: "au Jibun Bank")
+    ]
+
+    static let defaultCategorySeeds: [ManagementCategorySeed] = [
+        ManagementCategorySeed(name: "Ăn uống", kind: .expense, iconSymbolName: "fork.knife", iconColorHex: "#FF9F1C", systemKey: .food),
+        ManagementCategorySeed(name: "Đi chơi", kind: .expense, iconSymbolName: "party.popper.fill", iconColorHex: "#F26A5A", systemKey: .entertainment),
+        ManagementCategorySeed(name: "Du lịch", kind: .expense, iconSymbolName: "airplane", iconColorHex: "#5B7BFF", systemKey: .travel),
+        ManagementCategorySeed(name: "Mua sắm", kind: .expense, iconSymbolName: "bag.fill", iconColorHex: "#F26A5A", systemKey: .shopping),
+        ManagementCategorySeed(name: "Di chuyển", kind: .expense, iconSymbolName: "train.side.front.car", iconColorHex: "#2DAA9E", systemKey: .transportation),
+        ManagementCategorySeed(name: "Nhà ở", kind: .expense, iconSymbolName: "house.fill", iconColorHex: "#8A8A8E", systemKey: .housing),
+        ManagementCategorySeed(name: "Hóa đơn", kind: .expense, iconSymbolName: "doc.text.fill", iconColorHex: "#FF9F1C", systemKey: .billing),
+        ManagementCategorySeed(name: "Sức khỏe", kind: .expense, iconSymbolName: "cross.case.fill", iconColorHex: "#F26A5A", systemKey: .health),
+        ManagementCategorySeed(name: "Giáo dục", kind: .expense, iconSymbolName: "book.closed.fill", iconColorHex: "#9A67FF", systemKey: .education),
+        ManagementCategorySeed(name: "Trả góp / vay", kind: .expense, iconSymbolName: "creditcard.and.123", iconColorHex: "#8A8A8E", systemKey: .loanRepayment, startsArchived: true),
+        ManagementCategorySeed(name: "Lương", kind: .income, iconSymbolName: "briefcase.fill", iconColorHex: "#2DAA9E", systemKey: .salary),
+        ManagementCategorySeed(name: "Thưởng", kind: .income, iconSymbolName: "gift.fill", iconColorHex: "#FF9F1C", systemKey: .bonus),
+        ManagementCategorySeed(name: "Freelance", kind: .income, iconSymbolName: "laptopcomputer", iconColorHex: "#5B7BFF", systemKey: .freelance),
+        ManagementCategorySeed(name: "Đầu tư", kind: .income, iconSymbolName: "chart.line.uptrend.xyaxis", iconColorHex: "#57B7FF", systemKey: .investment),
+        ManagementCategorySeed(name: "Hoàn tiền", kind: .income, iconSymbolName: "arrow.counterclockwise.circle.fill", iconColorHex: "#8A8A8E", systemKey: .refund),
+        ManagementCategorySeed(name: "Bán hàng", kind: .income, iconSymbolName: "storefront.fill", iconColorHex: "#F26A5A", systemKey: .sales),
+        ManagementCategorySeed(name: "Quà tặng", kind: .income, iconSymbolName: "heart.fill", iconColorHex: "#F26A5A", systemKey: .gift),
+        ManagementCategorySeed(name: "Phụ cấp", kind: .income, iconSymbolName: "wallet.pass.fill", iconColorHex: "#9A67FF", systemKey: .allowance),
+        ManagementCategorySeed(name: "Lãi ngân hàng", kind: .income, iconSymbolName: "building.columns.fill", iconColorHex: "#5B7BFF", systemKey: .bankInterest)
+    ]
+}
+
+extension LedgerWallet {
+    var iconColor: Color {
+        Color(hex: iconColorHex)
+    }
+
+    var formattedAmount: String {
+        openingBalanceMinor.formattedCurrency(code: currencyCode)
+    }
+
+    var subtitleText: String? {
+        switch kind {
+        case .cash, .payPay:
+            return nil
+        case .bank:
+            return institutionDisplayName
+        case .creditCard:
+            let issuer = creditCardProfile?.issuerName.trimmingCharacters(in: .whitespacesAndNewlines)
+            let suffix = creditCardProfile?.last4.trimmingCharacters(in: .whitespacesAndNewlines)
+
+            switch (issuer?.isEmpty == false ? issuer : nil, suffix?.isEmpty == false ? suffix : nil) {
+            case let (issuer?, suffix?):
+                return "\(issuer) • \(suffix)"
+            case let (issuer?, nil):
+                return issuer
+            case let (nil, suffix?):
+                return "•••• \(suffix)"
+            default:
+                return mistiaLocalized(vi: "Thẻ tín dụng", en: "Credit card", ja: "クレジットカード")
+            }
+        }
+    }
+
+    var footnoteText: String? {
+        guard kind == .creditCard, let profile = creditCardProfile else { return nil }
+        return mistiaLocalized(
+            vi: "Chốt sao kê ngày \(profile.statementClosingDay), thanh toán ngày \(profile.paymentDueDay)",
+            en: "Statement closes on day \(profile.statementClosingDay), payment due on day \(profile.paymentDueDay)",
+            ja: "締め日は毎月 \(profile.statementClosingDay) 日、支払日は毎月 \(profile.paymentDueDay) 日です"
+        )
+    }
+}
+
+extension TransactionCategory {
+    var iconColor: Color {
+        Color(hex: iconColorHex)
+    }
+
+    var mistiaSystemCategoryKey: MistiaSystemCategoryKey? {
+        guard let systemKey else { return nil }
+        return MistiaSystemCategoryKey(rawValue: systemKey)
+    }
+
+    var localizedDisplayName: String {
+        guard let mistiaSystemCategoryKey else { return name }
+        let trimmedName = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        let knownDefaultNames = Set(mistiaSystemCategoryKey.knownDefaultNames())
+        guard knownDefaultNames.contains(trimmedName) else { return name }
+        return mistiaSystemCategoryKey.localizedTitle(for: .current)
+    }
+}
+
+extension Color {
+    init(hex: String) {
+        let sanitized = hex
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .replacingOccurrences(of: "#", with: "")
+
+        let value = UInt64(sanitized, radix: 16) ?? 0
+        let red: Double
+        let green: Double
+        let blue: Double
+        let alpha: Double
+
+        switch sanitized.count {
+        case 8:
+            red = Double((value & 0xFF00_0000) >> 24) / 255
+            green = Double((value & 0x00FF_0000) >> 16) / 255
+            blue = Double((value & 0x0000_FF00) >> 8) / 255
+            alpha = Double(value & 0x0000_00FF) / 255
+        default:
+            red = Double((value & 0xFF00_00) >> 16) / 255
+            green = Double((value & 0x00FF_00) >> 8) / 255
+            blue = Double(value & 0x0000_FF) / 255
+            alpha = 1
+        }
+
+        self.init(.sRGB, red: red, green: green, blue: blue, opacity: alpha)
+    }
+
+    var hexString: String {
+        UIColor(self).hexString
+    }
+}
+
+extension UIColor {
+    var hexString: String {
+        var red: CGFloat = 0
+        var green: CGFloat = 0
+        var blue: CGFloat = 0
+        var alpha: CGFloat = 0
+
+        guard getRed(&red, green: &green, blue: &blue, alpha: &alpha) else {
+            return "#8A8A8E"
+        }
+
+        return String(
+            format: "#%02X%02X%02X",
+            Int(red * 255),
+            Int(green * 255),
+            Int(blue * 255)
+        )
+    }
+}
