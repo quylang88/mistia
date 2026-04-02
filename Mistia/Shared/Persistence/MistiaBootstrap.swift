@@ -22,15 +22,49 @@ enum MistiaBootstrap {
             }
             didMutate = true
         } else {
+            if let legacyOtherIncome = existingCategories.first(where: {
+                $0.isSystem
+                    && $0.kind == .income
+                    && $0.name.localizedCaseInsensitiveCompare("Khác") == .orderedSame
+            }), !existingCategories.contains(where: {
+                $0.kind == .income
+                    && $0.name.localizedCaseInsensitiveCompare("Phụ cấp") == .orderedSame
+            }) {
+                legacyOtherIncome.name = "Phụ cấp"
+                legacyOtherIncome.iconSymbolName = "wallet.pass.fill"
+                legacyOtherIncome.iconColorHex = "#9A67FF"
+                legacyOtherIncome.updatedAt = .now
+                didMutate = true
+            }
+
             for seed in ManagementPresetData.defaultCategorySeeds {
                 if let systemKey = seed.systemKey,
                    let matchedCategory = existingCategories.first(where: {
                        $0.systemKey == systemKey.rawValue
                            || ($0.name.localizedCaseInsensitiveCompare(seed.name) == .orderedSame && $0.kind == seed.kind)
                    }) {
+                    var didMutateCategory = false
+                    if matchedCategory.name != seed.name {
+                        matchedCategory.name = seed.name
+                        didMutateCategory = true
+                    }
+                    if matchedCategory.iconSymbolName != seed.iconSymbolName {
+                        matchedCategory.iconSymbolName = seed.iconSymbolName
+                        didMutateCategory = true
+                    }
+                    if matchedCategory.iconColorHex != seed.iconColorHex {
+                        matchedCategory.iconColorHex = seed.iconColorHex
+                        didMutateCategory = true
+                    }
                     if matchedCategory.systemKey != systemKey.rawValue {
                         matchedCategory.systemKey = systemKey.rawValue
+                        didMutateCategory = true
+                    }
+                    if !matchedCategory.isSystem {
                         matchedCategory.isSystem = true
+                        didMutateCategory = true
+                    }
+                    if didMutateCategory {
                         matchedCategory.updatedAt = .now
                         didMutate = true
                     }

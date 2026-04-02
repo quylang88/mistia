@@ -104,8 +104,9 @@ enum ManagementPresetData {
         ManagementCategorySeed(name: "Mua sắm", kind: .expense, iconSymbolName: "bag.fill", iconColorHex: "#FF7E67"),
         ManagementCategorySeed(name: "Di chuyển", kind: .expense, iconSymbolName: "train.side.front.car", iconColorHex: "#2DAA9E"),
         ManagementCategorySeed(name: "Nhà ở", kind: .expense, iconSymbolName: "house.fill", iconColorHex: "#7C85A3"),
-        ManagementCategorySeed(name: "Hóa đơn", kind: .expense, iconSymbolName: "bolt.fill", iconColorHex: "#FFB13B", systemKey: .billing),
+        ManagementCategorySeed(name: "Hóa đơn", kind: .expense, iconSymbolName: "doc.text.fill", iconColorHex: "#FFB13B", systemKey: .billing),
         ManagementCategorySeed(name: "Sức khỏe", kind: .expense, iconSymbolName: "cross.case.fill", iconColorHex: "#F45C7E"),
+        ManagementCategorySeed(name: "Giáo dục", kind: .expense, iconSymbolName: "book.closed.fill", iconColorHex: "#8A6BFF"),
         ManagementCategorySeed(name: "Trả góp / vay", kind: .expense, iconSymbolName: "creditcard.and.123", iconColorHex: "#7C85A3", systemKey: .loanRepayment, startsArchived: true),
         ManagementCategorySeed(name: "Lương", kind: .income, iconSymbolName: "briefcase.fill", iconColorHex: "#2DAA9E"),
         ManagementCategorySeed(name: "Thưởng", kind: .income, iconSymbolName: "gift.fill", iconColorHex: "#F59B3F"),
@@ -114,7 +115,8 @@ enum ManagementPresetData {
         ManagementCategorySeed(name: "Hoàn tiền", kind: .income, iconSymbolName: "arrow.counterclockwise.circle.fill", iconColorHex: "#7C85A3"),
         ManagementCategorySeed(name: "Bán hàng", kind: .income, iconSymbolName: "storefront.fill", iconColorHex: "#F26A5A"),
         ManagementCategorySeed(name: "Quà tặng", kind: .income, iconSymbolName: "heart.fill", iconColorHex: "#F45C7E"),
-        ManagementCategorySeed(name: "Khác", kind: .income, iconSymbolName: "plus.circle.fill", iconColorHex: "#9A67FF")
+        ManagementCategorySeed(name: "Phụ cấp", kind: .income, iconSymbolName: "wallet.pass.fill", iconColorHex: "#9A67FF"),
+        ManagementCategorySeed(name: "Lãi ngân hàng", kind: .income, iconSymbolName: "building.columns.fill", iconColorHex: "#5B7BFF")
     ]
 }
 
