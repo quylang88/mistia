@@ -1,6 +1,6 @@
 import Foundation
 
-enum LedgerWalletKind: String, CaseIterable, Identifiable, Codable {
+nonisolated enum LedgerWalletKind: String, CaseIterable, Identifiable, Codable {
     case cash
     case payPay
     case bank
@@ -57,7 +57,7 @@ enum LedgerWalletKind: String, CaseIterable, Identifiable, Codable {
     }
 }
 
-enum TransactionCategoryKind: String, CaseIterable, Identifiable, Codable {
+nonisolated enum TransactionCategoryKind: String, CaseIterable, Identifiable, Codable {
     case expense
     case income
 
@@ -91,7 +91,7 @@ enum TransactionCategoryKind: String, CaseIterable, Identifiable, Codable {
     }
 }
 
-enum MistiaSystemCategoryKey: String, CaseIterable, Codable, Identifiable {
+nonisolated enum MistiaSystemCategoryKey: String, CaseIterable, Codable, Identifiable {
     case billing
     case loanRepayment = "loan_repayment"
 
@@ -107,7 +107,7 @@ enum MistiaSystemCategoryKey: String, CaseIterable, Codable, Identifiable {
     }
 }
 
-enum PlanningDueSourceKind: String, CaseIterable, Codable, Identifiable {
+nonisolated enum PlanningDueSourceKind: String, CaseIterable, Codable, Identifiable {
     case creditCard
     case recurringBill
     case installment
@@ -115,14 +115,14 @@ enum PlanningDueSourceKind: String, CaseIterable, Codable, Identifiable {
     var id: String { rawValue }
 }
 
-enum PlanningDueOccurrenceStatus: String, CaseIterable, Codable, Identifiable {
+nonisolated enum PlanningDueOccurrenceStatus: String, CaseIterable, Codable, Identifiable {
     case pending
     case paid
 
     var id: String { rawValue }
 }
 
-enum CreditCardNetwork: String, CaseIterable, Identifiable, Codable {
+nonisolated enum CreditCardNetwork: String, CaseIterable, Identifiable, Codable {
     case visa
     case mastercard
     case jcb
@@ -150,7 +150,7 @@ enum CreditCardNetwork: String, CaseIterable, Identifiable, Codable {
     }
 }
 
-enum TransactionPrimaryKind: String, CaseIterable, Identifiable, Codable {
+nonisolated enum TransactionPrimaryKind: String, CaseIterable, Identifiable, Codable {
     case expense
     case income
     case transfer
@@ -180,7 +180,7 @@ enum TransactionPrimaryKind: String, CaseIterable, Identifiable, Codable {
     }
 }
 
-enum TransactionTransferSubtype: String, CaseIterable, Identifiable, Codable {
+nonisolated enum TransactionTransferSubtype: String, CaseIterable, Identifiable, Codable {
     case internalTransfer
     case debt
 
@@ -205,7 +205,7 @@ enum TransactionTransferSubtype: String, CaseIterable, Identifiable, Codable {
     }
 }
 
-enum TransactionDebtIntent: String, CaseIterable, Identifiable, Codable {
+nonisolated enum TransactionDebtIntent: String, CaseIterable, Identifiable, Codable {
     case lend
     case collect
     case borrow
@@ -240,7 +240,7 @@ enum TransactionDebtIntent: String, CaseIterable, Identifiable, Codable {
     }
 }
 
-enum TransactionEntryStatus: String, CaseIterable, Identifiable, Codable {
+nonisolated enum TransactionEntryStatus: String, CaseIterable, Identifiable, Codable {
     case posted
     case draft
 
@@ -256,7 +256,7 @@ enum TransactionEntryStatus: String, CaseIterable, Identifiable, Codable {
     }
 }
 
-enum TransactionTimeScope: String, CaseIterable, Identifiable, Codable {
+nonisolated enum TransactionTimeScope: String, CaseIterable, Identifiable, Codable {
     case allTime
     case thisMonth
     case yesterday
@@ -278,7 +278,7 @@ enum TransactionTimeScope: String, CaseIterable, Identifiable, Codable {
     }
 }
 
-enum TransactionStatusScope: String, CaseIterable, Identifiable, Codable {
+nonisolated enum TransactionStatusScope: String, CaseIterable, Identifiable, Codable {
     case all
     case postedOnly
     case draftOnly

@@ -1,30 +1,202 @@
 import Charts
+import SwiftData
 import SwiftUI
 
+private let overviewAccentPurple = Color(red: 0.43, green: 0.23, blue: 0.76)
+
 struct OverviewView: View {
-    private let dump = MockDataLoader.dashboard
+    @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.modelContext) private var modelContext
+    @AppStorage(MistiaAppStorageKey.currencyCode) private var currencyCode = "JPY"
+
+    @Query(sort: [SortDescriptor(\BudgetPlan.monthAnchor, order: .reverse), SortDescriptor(\BudgetPlan.createdAt, order: .reverse)])
+    private var storedBudgets: [BudgetPlan]
+    @Query(sort: [SortDescriptor(\RecurringBillPlan.createdAt)])
+    private var storedBills: [RecurringBillPlan]
+    @Query(sort: [SortDescriptor(\InstallmentPlan.createdAt)])
+    private var storedInstallments: [InstallmentPlan]
+    @Query(sort: [SortDescriptor(\DueOccurrenceRecord.updatedAt, order: .reverse), SortDescriptor(\DueOccurrenceRecord.createdAt, order: .reverse)])
+    private var storedOccurrences: [DueOccurrenceRecord]
+    @Query(sort: [SortDescriptor(\LedgerWallet.sortOrder), SortDescriptor(\LedgerWallet.createdAt)])
+    private var storedWallets: [LedgerWallet]
+    @Query(sort: [SortDescriptor(\LedgerTransaction.occurredAt, order: .reverse), SortDescriptor(\LedgerTransaction.createdAt, order: .reverse)])
+    private var storedTransactions: [LedgerTransaction]
+
+    @State private var shareItem: OverviewShareItem?
+    @State private var exportErrorMessage: String?
+
+    private let calendar = Calendar(identifier: .gregorian)
+
+    private var currentMonth: Date {
+        PlanningLogic.startOfMonth(for: .now, calendar: calendar)
+    }
+
+    private var transactionRecords: [TransactionRecordSnapshot] {
+        storedTransactions.map(\.planningRecordSnapshot)
+    }
+
+    private var overviewTransactions: [OverviewTransactionSnapshot] {
+        storedTransactions.map(\.overviewSnapshot)
+    }
+
+    private var walletSnapshots: [OverviewWalletSnapshot] {
+        storedWallets.compactMap(\.overviewWalletSnapshot)
+    }
+
+    private var activeBudgetPlans: [BudgetPlanSnapshot] {
+        storedBudgets
+            .filter {
+                !$0.isArchived
+                    && PlanningLogic.startOfMonth(for: $0.monthAnchor, calendar: calendar) == currentMonth
+            }
+            .map { $0.planningSnapshot(calendar: calendar) }
+    }
+
+    private var occurrenceSnapshots: [PlanningDueOccurrenceSnapshot] {
+        storedOccurrences.map(\.planningSnapshot)
+    }
+
+    private var planningCreditCardAccounts: [PlanningCreditCardAccountSnapshot] {
+        storedWallets.compactMap { $0.planningCreditCardSnapshot(records: transactionRecords) }
+    }
+
+    private var statementCreditCardAccounts: [OverviewCreditCardStatementAccountSnapshot] {
+        storedWallets.compactMap { $0.overviewCreditCardStatementAccountSnapshot(records: transactionRecords) }
+    }
+
+    private var creditCardDueItems: [PlanningCreditCardDueSnapshot] {
+        PlanningLogic.creditCardDueItems(
+            accounts: planningCreditCardAccounts,
+            occurrences: occurrenceSnapshots,
+            selectedMonth: currentMonth,
+            referenceDate: .now,
+            calendar: calendar
+        )
+    }
+
+    private var recurringBillDueItems: [PlanningRecurringDueSnapshot] {
+        PlanningLogic.recurringBillDueItems(
+            bills: storedBills
+                .filter { !$0.isArchived }
+                .map(\.planningSnapshot),
+            occurrences: occurrenceSnapshots,
+            selectedMonth: currentMonth,
+            calendar: calendar
+        )
+    }
+
+    private var installmentDueItems: [PlanningRecurringDueSnapshot] {
+        PlanningLogic.installmentDueItems(
+            plans: storedInstallments
+                .filter { !$0.isArchived }
+                .map(\.planningSnapshot),
+            occurrences: occurrenceSnapshots,
+            selectedMonth: currentMonth,
+            calendar: calendar
+        )
+    }
+
+    private var dashboardSnapshot: OverviewDashboardSnapshot {
+        OverviewLogic.dashboard(
+            wallets: walletSnapshots,
+            transactionRecords: transactionRecords,
+            transactions: overviewTransactions,
+            budgets: activeBudgetPlans,
+            creditCardDues: creditCardDueItems,
+            recurringDues: recurringBillDueItems + installmentDueItems,
+            currencyCode: currencyCode,
+            referenceDate: .now,
+            calendar: calendar
+        )
+    }
+
+    private var monthlyStatement: OverviewMonthlyStatementSnapshot {
+        OverviewLogic.monthlyStatement(
+            wallets: walletSnapshots,
+            transactionRecords: transactionRecords,
+            transactions: overviewTransactions,
+            currencyCode: currencyCode,
+            referenceDate: .now,
+            calendar: calendar
+        )
+    }
+
+    private var creditCardStatement: OverviewCreditCardStatementSnapshot {
+        OverviewLogic.creditCardStatement(
+            accounts: statementCreditCardAccounts,
+            transactions: overviewTransactions,
+            referenceDate: .now,
+            calendar: calendar
+        )
+    }
 
     var body: some View {
         MistiaPinnedTopBarScaffold(
             tone: .standard,
-            title: dump.headerTitle,
+            title: "Tổng quan",
             contentSpacing: 18
         ) {
-            OverviewHeroCard(balance: dump.balance)
-            BudgetFocusSection(rows: dump.budgets)
-            UpcomingBillsSection(rows: dump.upcomingBills)
-            RecentTransactionsSection(rows: dump.recentTransactions)
+            OverviewHeroCard(
+                snapshot: dashboardSnapshot.hero,
+                onExportMonthly: { exportStatement(.monthlySummary) },
+                onExportCreditCard: { exportStatement(.creditCard) }
+            )
+            BudgetFocusSection(rows: dashboardSnapshot.budgetAlerts)
+            UpcomingBillsSection(rows: dashboardSnapshot.dueAlerts)
+            RecentTransactionsSection(rows: dashboardSnapshot.recentTransactions)
+        }
+        .sheet(item: $shareItem) { item in
+            OverviewShareSheet(url: item.url)
+        }
+        .alert(
+            "Không thể xuất sao kê",
+            isPresented: Binding(
+                get: { exportErrorMessage != nil },
+                set: { isPresented in
+                    if !isPresented {
+                        exportErrorMessage = nil
+                    }
+                }
+            )
+        ) {
+            Button("Đóng", role: .cancel) {
+                exportErrorMessage = nil
+            }
+        } message: {
+            Text(exportErrorMessage ?? "")
+        }
+        .task {
+            try? MistiaBootstrap.seedDefaultCategoriesIfNeeded(modelContext: modelContext)
+        }
+        .environment(\.locale, Locale(identifier: "vi_VN"))
+        .environment(\.calendar, calendar)
+    }
+
+    private func exportStatement(_ kind: OverviewStatementKind) {
+        do {
+            let document: OverviewStatementDocument
+
+            switch kind {
+            case .monthlySummary:
+                document = OverviewLogic.renderMonthlyStatement(monthlyStatement)
+            case .creditCard:
+                document = OverviewLogic.renderCreditCardStatement(creditCardStatement)
+            }
+
+            let url = try OverviewStatementExportSupport.write(document: document)
+            shareItem = OverviewShareItem(url: url)
+        } catch {
+            exportErrorMessage = error.localizedDescription
         }
     }
 }
 
 private struct OverviewHeroCard: View {
     @Environment(\.colorScheme) private var colorScheme
-    let balance: BalanceSectionDump
 
-    private var accentPurple: Color {
-        Color(red: 0.43, green: 0.23, blue: 0.76)
-    }
+    let snapshot: OverviewHeroSnapshot
+    let onExportMonthly: () -> Void
+    let onExportCreditCard: () -> Void
 
     private var cardTint: Color {
         colorScheme == .dark ? .white.opacity(0.024) : .white.opacity(0.16)
@@ -34,8 +206,9 @@ private struct OverviewHeroCard: View {
         colorScheme == .dark ? .white.opacity(0.035) : .black.opacity(0.03)
     }
 
-    private var chartMax: Int {
-        max((balance.chart.map(\.value).max() ?? 0) + 40_000, 200_000)
+    private var chartMax: Double {
+        let highest = Double(snapshot.chartPoints.map(\.valueMinor).max() ?? 0)
+        return max(highest * 1.2, 1)
     }
 
     var body: some View {
@@ -46,11 +219,11 @@ private struct OverviewHeroCard: View {
             VStack(alignment: .leading, spacing: 18) {
                 HStack(alignment: .top, spacing: 12) {
                     VStack(alignment: .leading, spacing: 7) {
-                        Text(balance.title)
+                        Text("Tài sản khả dụng")
                             .font(.system(size: 15, weight: .medium, design: .rounded))
                             .foregroundStyle(.secondary)
 
-                        Text(balance.totalBalance.mistiaCurrency)
+                        Text(snapshot.totalAssetBalanceMinor.formattedCurrency(code: snapshot.currencyCode))
                             .font(.system(size: 34, weight: .bold, design: .rounded))
                             .foregroundStyle(.primary)
                             .lineLimit(1)
@@ -59,14 +232,17 @@ private struct OverviewHeroCard: View {
 
                     Spacer(minLength: 8)
 
-                    MistiaChip(title: balance.filterLabel, tint: accentPurple)
+                    OverviewStatementMenuButton(
+                        onExportMonthly: onExportMonthly,
+                        onExportCreditCard: onExportCreditCard
+                    )
                 }
 
                 HStack(spacing: 14) {
                     SummaryMetricColumn(
                         title: "Thu tháng này",
-                        value: balance.incomeThisMonth.mistiaCurrency,
-                        accent: .mint
+                        value: snapshot.incomeThisMonthMinor.formattedCurrency(code: snapshot.currencyCode),
+                        accent: Color(hex: "#2DAA9E")
                     )
 
                     Divider()
@@ -74,36 +250,36 @@ private struct OverviewHeroCard: View {
 
                     SummaryMetricColumn(
                         title: "Chi tháng này",
-                        value: balance.expenseThisMonth.mistiaCurrency,
-                        accent: .coral
+                        value: snapshot.expenseThisMonthMinor.formattedCurrency(code: snapshot.currencyCode),
+                        accent: Color(hex: "#F45C7E")
                     )
                 }
 
                 VStack(alignment: .leading, spacing: 12) {
                     HStack {
-                        Text(balance.insightTitle)
+                        Text("Chi tiêu theo ngày")
                             .font(.system(size: 16, weight: .bold, design: .rounded))
                             .foregroundStyle(.primary)
 
                         Spacer()
 
-                        Text(balance.insightSubtitle)
+                        Text("7 ngày gần nhất")
                             .font(.system(size: 11, weight: .semibold, design: .rounded))
-                        .foregroundStyle(.secondary)
+                            .foregroundStyle(.secondary)
                     }
 
-                    Chart(balance.chart) { point in
+                    Chart(snapshot.chartPoints) { point in
                         BarMark(
                             x: .value("Ngày", point.label),
-                            y: .value("Giá trị", point.value)
+                            y: .value("Giá trị", Double(point.valueMinor))
                         )
                         .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
-                        .foregroundStyle(point.tone.color.gradient)
+                        .foregroundStyle(chartColor(for: point.intensity).gradient)
                         .opacity(0.92)
                     }
                     .chartLegend(.hidden)
                     .chartXAxis {
-                        AxisMarks(values: balance.chart.map(\.label)) { value in
+                        AxisMarks(values: snapshot.chartPoints.map(\.label)) { value in
                             AxisValueLabel {
                                 if let label = value.as(String.self) {
                                     Text(label)
@@ -117,8 +293,8 @@ private struct OverviewHeroCard: View {
                             AxisGridLine(stroke: StrokeStyle(lineWidth: 0.7, dash: [3, 4]))
                                 .foregroundStyle(colorScheme == .dark ? .white.opacity(0.12) : .black.opacity(0.08))
                             AxisValueLabel {
-                                if let number = value.as(Int.self) {
-                                    Text(number.mistiaAxisLabel)
+                                if let number = value.as(Double.self) {
+                                    Text(Int64(number.rounded()).compactAxisLabel)
                                         .font(.system(size: 9, weight: .semibold, design: .rounded))
                                         .foregroundStyle(.secondary)
                                 }
@@ -137,12 +313,57 @@ private struct OverviewHeroCard: View {
             }
         }
     }
+
+    private func chartColor(for intensity: Double) -> Color {
+        let clamped = min(max(intensity, 0), 1)
+        let start = (red: 0.18, green: 0.67, blue: 0.62)
+        let end = (red: 0.96, green: 0.36, blue: 0.49)
+
+        return Color(
+            red: start.red + (end.red - start.red) * clamped,
+            green: start.green + (end.green - start.green) * clamped,
+            blue: start.blue + (end.blue - start.blue) * clamped
+        )
+    }
+}
+
+private struct OverviewStatementMenuButton: View {
+    let onExportMonthly: () -> Void
+    let onExportCreditCard: () -> Void
+
+    var body: some View {
+        Menu {
+            Button(action: onExportMonthly) {
+                Label("Sao kê tổng hợp tháng", systemImage: "doc.text.image")
+            }
+
+            Button(action: onExportCreditCard) {
+                Label("Sao kê thẻ tín dụng", systemImage: "creditcard.and.123")
+            }
+        } label: {
+            HStack(spacing: 5) {
+                Image(systemName: "doc.text.fill")
+                    .font(.system(size: 11, weight: .bold, design: .rounded))
+
+                Text("Sao kê")
+                    .font(.system(size: 12, weight: .bold, design: .rounded))
+            }
+            .foregroundStyle(Color(red: 0.88, green: 0.78, blue: 1.0))
+            .padding(.horizontal, 5)
+            .padding(.vertical, 3)
+        }
+        .menuIndicator(.hidden)
+        .buttonStyle(.glassProminent)
+        .buttonBorderShape(.capsule)
+        .tint(overviewAccentPurple)
+        .shadow(color: .black.opacity(0.16), radius: 16, y: 8)
+    }
 }
 
 private struct SummaryMetricColumn: View {
     let title: String
     let value: String
-    let accent: MistiaAccent
+    let accent: Color
 
     var body: some View {
         VStack(alignment: .leading, spacing: 5) {
@@ -152,7 +373,7 @@ private struct SummaryMetricColumn: View {
 
             Text(value)
                 .font(.system(size: 14, weight: .bold, design: .rounded))
-                .foregroundStyle(accent.color)
+                .foregroundStyle(accent)
                 .lineLimit(1)
                 .minimumScaleFactor(0.7)
         }
@@ -161,22 +382,23 @@ private struct SummaryMetricColumn: View {
 }
 
 private struct BudgetFocusSection: View {
-    let rows: [BudgetRowDump]
+    let rows: [OverviewBudgetAlertSnapshot]
 
     var body: some View {
         OverviewSection(title: "Ngân sách cần chú ý") {
-            VStack(spacing: 0) {
-                ForEach(Array(rows.enumerated()), id: \.element.id) { index, row in
-                    Button { } label: {
+            if rows.isEmpty {
+                OverviewEmptySectionContent(message: "Chưa có danh mục nào vượt quá 50% ngân sách trong tháng này.")
+            } else {
+                VStack(spacing: 0) {
+                    ForEach(Array(rows.enumerated()), id: \.element.id) { index, row in
                         BudgetRow(row: row)
                             .padding(.horizontal, 14)
                             .padding(.vertical, 12)
-                    }
-                    .buttonStyle(MistiaPressableButtonStyle(cornerRadius: 16))
 
-                    if index < rows.count - 1 {
-                        Divider()
-                            .padding(.leading, 48)
+                        if index < rows.count - 1 {
+                            Divider()
+                                .padding(.leading, 48)
+                        }
                     }
                 }
             }
@@ -185,11 +407,11 @@ private struct BudgetFocusSection: View {
 }
 
 private struct BudgetRow: View {
-    let row: BudgetRowDump
+    let row: OverviewBudgetAlertSnapshot
 
     var body: some View {
         HStack(spacing: 12) {
-            OverviewIcon(icon: row.icon, accent: row.accent)
+            OverviewIcon(icon: row.iconSymbolName, tint: row.tint.color)
 
             VStack(alignment: .leading, spacing: 8) {
                 HStack(alignment: .firstTextBaseline) {
@@ -199,59 +421,44 @@ private struct BudgetRow: View {
 
                     Spacer(minLength: 8)
 
-                    Text(row.spent.mistiaCurrency)
+                    Text(row.progressPercentText)
                         .font(.system(size: 14, weight: .bold, design: .rounded))
-                        .foregroundStyle(.primary)
-
-                    Text("/ \(row.limit.mistiaCurrency)")
-                        .font(.system(size: 11, weight: .semibold, design: .rounded))
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(row.tint.color)
                 }
 
-                ProgressView(value: row.progress)
-                    .tint(row.accent.color)
+                Text("\(row.spentMinor.formattedCurrency(code: row.currencyCode)) / \(row.limitMinor.formattedCurrency(code: row.currencyCode))")
+                    .font(.system(size: 12, weight: .semibold, design: .rounded))
+                    .foregroundStyle(.secondary)
 
-                Text(row.daysRemainingText)
+                ProgressView(value: min(max(row.progress, 0), 1))
+                    .tint(row.tint.color)
+
+                Text("Còn \(row.daysRemaining) ngày")
                     .font(.system(size: 11, weight: .bold, design: .rounded))
-                    .foregroundStyle(row.accent.color)
+                    .foregroundStyle(row.tint.color)
             }
         }
     }
 }
 
 private struct UpcomingBillsSection: View {
-    let rows: [UpcomingBillDump]
+    let rows: [OverviewDueAlertSnapshot]
 
     var body: some View {
         OverviewSection(title: "Khoản sắp đến hạn") {
-            VStack(spacing: 0) {
-                ForEach(Array(rows.enumerated()), id: \.element.id) { index, row in
-                    Button { } label: {
-                        HStack(spacing: 12) {
-                            OverviewIcon(icon: row.icon, accent: row.accent)
+            if rows.isEmpty {
+                OverviewEmptySectionContent(message: "Không có hóa đơn, vay hoặc credit nào đến hạn trong 7 ngày tới.")
+            } else {
+                VStack(spacing: 0) {
+                    ForEach(Array(rows.enumerated()), id: \.element.id) { index, row in
+                        DueRow(row: row)
+                            .padding(.horizontal, 14)
+                            .padding(.vertical, 12)
 
-                            VStack(alignment: .leading, spacing: 4) {
-                                Text(row.name)
-                                    .font(.system(size: 16, weight: .semibold, design: .rounded))
-                                Text(row.dueTime)
-                                    .font(.system(size: 11, weight: .semibold, design: .rounded))
-                                    .foregroundStyle(.secondary)
-                            }
-
-                            Spacer()
-
-                            Text(row.amount.mistiaCurrency)
-                                .font(.system(size: 17, weight: .bold, design: .rounded))
-                                .foregroundStyle(.primary)
+                        if index < rows.count - 1 {
+                            Divider()
+                                .padding(.leading, 48)
                         }
-                        .padding(.horizontal, 14)
-                        .padding(.vertical, 12)
-                    }
-                    .buttonStyle(MistiaPressableButtonStyle(cornerRadius: 16))
-
-                    if index < rows.count - 1 {
-                        Divider()
-                            .padding(.leading, 48)
                     }
                 }
             }
@@ -259,50 +466,139 @@ private struct UpcomingBillsSection: View {
     }
 }
 
+private struct DueRow: View {
+    let row: OverviewDueAlertSnapshot
+
+    var body: some View {
+        HStack(spacing: 12) {
+            OverviewIcon(icon: row.iconSymbolName, tint: row.tint.color)
+
+            VStack(alignment: .leading, spacing: 4) {
+                Text(row.name)
+                    .font(.system(size: 16, weight: .semibold, design: .rounded))
+                    .foregroundStyle(.primary)
+
+                Text("\(row.dueDate.overviewDayText) • \(detailText)")
+                    .font(.system(size: 11, weight: .semibold, design: .rounded))
+                    .foregroundStyle(row.tint == .red ? row.tint.color : .secondary)
+            }
+
+            Spacer()
+
+            if let amountMinor = row.amountMinor {
+                Text(amountMinor.formattedCurrency(code: row.currencyCode))
+                    .font(.system(size: 16, weight: .bold, design: .rounded))
+                    .foregroundStyle(row.tint == .red ? row.tint.color : .primary)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
+            } else {
+                Text("Chưa có số tiền")
+                    .font(.system(size: 11, weight: .semibold, design: .rounded))
+                    .foregroundStyle(.secondary)
+            }
+        }
+    }
+
+    private var detailText: String {
+        if row.dayDelta == 0 {
+            return "Đến hạn hôm nay"
+        }
+
+        return "Còn \(row.dayDelta) ngày"
+    }
+}
+
 private struct RecentTransactionsSection: View {
-    let rows: [TransactionRowDump]
+    let rows: [OverviewRecentTransactionSnapshot]
 
     var body: some View {
         OverviewSection(title: "Giao dịch gần đây") {
-            VStack(spacing: 0) {
-                ForEach(Array(rows.enumerated()), id: \.element.id) { index, row in
-                    Button { } label: {
-                        HStack(spacing: 12) {
-                            OverviewIcon(icon: row.icon, accent: row.accent)
+            if rows.isEmpty {
+                OverviewEmptySectionContent(message: "Chưa có giao dịch nào được ghi nhận gần đây.")
+            } else {
+                VStack(spacing: 0) {
+                    ForEach(Array(rows.enumerated()), id: \.element.id) { index, row in
+                        RecentTransactionRow(row: row)
+                            .padding(.horizontal, 14)
+                            .padding(.vertical, 12)
 
-                            VStack(alignment: .leading, spacing: 4) {
-                                Text(row.merchant)
-                                    .font(.system(size: 16, weight: .semibold, design: .rounded))
-                                    .foregroundStyle(.primary)
-
-                                Text(row.timeLabel)
-                                    .font(.system(size: 11, weight: .semibold, design: .rounded))
-                                    .foregroundStyle(.secondary)
-                            }
-
-                            Spacer(minLength: 8)
-
-                            Text(row.amount.mistiaCurrency)
-                                .font(.system(size: 15, weight: .bold, design: .rounded))
-                                .foregroundStyle(row.kind == .income ? Color.mint : .primary)
+                        if index < rows.count - 1 {
+                            Divider()
+                                .padding(.leading, 48)
                         }
-                        .padding(.horizontal, 14)
-                        .padding(.vertical, 12)
-                    }
-                    .buttonStyle(MistiaPressableButtonStyle(cornerRadius: 16))
-
-                    if index < rows.count - 1 {
-                        Divider()
-                            .padding(.leading, 48)
                     }
                 }
             }
+        }
+    }
+}
+
+private struct RecentTransactionRow: View {
+    let row: OverviewRecentTransactionSnapshot
+
+    var body: some View {
+        HStack(spacing: 12) {
+            OverviewIcon(icon: iconName, tint: amountColor)
+
+            VStack(alignment: .leading, spacing: 4) {
+                Text(row.title)
+                    .font(.system(size: 16, weight: .semibold, design: .rounded))
+                    .foregroundStyle(.primary)
+
+                Text(row.timeLabel)
+                    .font(.system(size: 11, weight: .semibold, design: .rounded))
+                    .foregroundStyle(.secondary)
+            }
+
+            Spacer(minLength: 8)
+
+            Text(displayAmount)
+                .font(.system(size: 15, weight: .bold, design: .rounded))
+                .foregroundStyle(amountColor)
+                .lineLimit(1)
+                .minimumScaleFactor(0.8)
+        }
+    }
+
+    private var amountColor: Color {
+        switch row.cashflowStyle {
+        case .income:
+            Color(hex: "#2DAA9E")
+        case .expense:
+            Color(hex: "#F45C7E")
+        case .neutral:
+            Color(hex: "#5B7BFF")
+        }
+    }
+
+    private var iconName: String {
+        switch row.cashflowStyle {
+        case .income:
+            "arrow.down.left.circle.fill"
+        case .expense:
+            "arrow.up.right.circle.fill"
+        case .neutral:
+            "arrow.left.arrow.right.circle.fill"
+        }
+    }
+
+    private var displayAmount: String {
+        let raw = row.amountMinor.formattedCurrency(code: row.currencyCode)
+
+        switch row.cashflowStyle {
+        case .income:
+            return "+" + raw
+        case .expense:
+            return "-" + raw
+        case .neutral:
+            return raw
         }
     }
 }
 
 private struct OverviewSection<Content: View>: View {
     @Environment(\.colorScheme) private var colorScheme
+
     let title: String
     private let content: Content
 
@@ -313,19 +609,11 @@ private struct OverviewSection<Content: View>: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            HStack {
-                Text(title)
-                    .font(.system(size: 13, weight: .bold, design: .rounded))
-                    .textCase(.uppercase)
-                    .tracking(0.6)
-                    .foregroundStyle(colorScheme == .dark ? .white.opacity(0.66) : Color(red: 0.36, green: 0.37, blue: 0.43))
-
-                Spacer()
-
-                Text("Xem tất cả")
-                    .font(.system(size: 12, weight: .semibold, design: .rounded))
-                    .foregroundStyle(.secondary)
-            }
+            Text(title)
+                .font(.system(size: 13, weight: .bold, design: .rounded))
+                .textCase(.uppercase)
+                .tracking(0.6)
+                .foregroundStyle(colorScheme == .dark ? .white.opacity(0.66) : Color(red: 0.36, green: 0.37, blue: 0.43))
 
             MistiaGlassCard(
                 cornerRadius: 20,
@@ -338,19 +626,43 @@ private struct OverviewSection<Content: View>: View {
     }
 }
 
+private struct OverviewEmptySectionContent: View {
+    let message: String
+
+    var body: some View {
+        Text(message)
+            .font(.system(size: 13.5, weight: .medium, design: .rounded))
+            .foregroundStyle(.secondary)
+            .multilineTextAlignment(.center)
+            .frame(maxWidth: .infinity)
+            .padding(.horizontal, 16)
+            .padding(.vertical, 20)
+    }
+}
+
 private struct OverviewIcon: View {
     let icon: String
-    let accent: MistiaAccent
+    let tint: Color
 
     var body: some View {
         ZStack {
             RoundedRectangle(cornerRadius: 10, style: .continuous)
-                .fill(accent.color.opacity(0.14))
+                .fill(tint.opacity(0.14))
 
             Image(systemName: icon)
                 .font(.system(size: 13, weight: .bold))
-                .foregroundStyle(accent.color)
+                .foregroundStyle(tint)
         }
         .frame(width: 30, height: 30)
+    }
+}
+
+private extension Date {
+    var overviewDayText: String {
+        let formatter = DateFormatter()
+        formatter.calendar = Calendar(identifier: .gregorian)
+        formatter.locale = Locale(identifier: "vi_VN")
+        formatter.dateFormat = "dd/MM"
+        return formatter.string(from: self)
     }
 }

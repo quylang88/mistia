@@ -61,7 +61,7 @@ struct CounterpartyDebtSnapshot: Equatable, Identifiable {
     }
 }
 
-enum TransactionLogic {
+nonisolated enum TransactionLogic {
     static func normalizeCounterpartyName(_ name: String?) -> String? {
         guard let normalized = name?
             .folding(options: [.diacriticInsensitive, .caseInsensitive], locale: Locale(identifier: "vi_VN"))

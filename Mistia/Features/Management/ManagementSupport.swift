@@ -216,29 +216,3 @@ extension UIColor {
         )
     }
 }
-
-extension Int64 {
-    func formattedCurrency(code: String) -> String {
-        let uppercaseCode = code.uppercased()
-        let fractionDigits = uppercaseCode == "JPY" ? 0 : 2
-        let amount = decimalCurrencyAmount(fractionDigits: fractionDigits)
-        let locale = Locale(identifier: uppercaseCode == "JPY" ? "ja_JP" : "en_US_POSIX")
-
-        return amount.formatted(
-            .currency(code: uppercaseCode)
-                .precision(.fractionLength(fractionDigits))
-                .locale(locale)
-        )
-    }
-
-    private func decimalCurrencyAmount(fractionDigits: Int) -> Decimal {
-        guard fractionDigits > 0 else { return Decimal(self) }
-
-        var divisor = Decimal(1)
-        for _ in 0..<fractionDigits {
-            divisor *= 10
-        }
-
-        return Decimal(self) / divisor
-    }
-}
