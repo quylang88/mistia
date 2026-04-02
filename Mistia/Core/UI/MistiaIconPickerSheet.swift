@@ -200,6 +200,52 @@ enum MistiaIconCatalog {
     }
 }
 
+private struct MistiaIconColorPreset: Identifiable, Hashable {
+    enum Kind: Hashable {
+        case preset
+        case current
+    }
+
+    let hex: String
+    let kind: Kind
+
+    var id: String { "\(kind)-\(hex)" }
+
+    var color: Color {
+        Color(hex: hex)
+    }
+
+    var accessibilityLabel: String {
+        switch kind {
+        case .preset:
+            return mistiaLocalized(
+                vi: "Màu \(hex)",
+                en: "Color \(hex)",
+                ja: "色 \(hex)"
+            )
+        case .current:
+            return mistiaLocalized(
+                vi: "Màu hiện tại \(hex)",
+                en: "Current color \(hex)",
+                ja: "現在の色 \(hex)"
+            )
+        }
+    }
+
+    static let presetPalette: [MistiaIconColorPreset] = MistiaIconColorPalette.presetHexes.map {
+        MistiaIconColorPreset(hex: $0, kind: .preset)
+    }
+
+    static func choices(for initialHex: String) -> [MistiaIconColorPreset] {
+        let normalized = MistiaIconColorPalette.normalizedHex(initialHex)
+        guard MistiaIconColorPalette.shouldShowCurrentSwatch(forStored: initialHex) else {
+            return presetPalette
+        }
+
+        return [MistiaIconColorPreset(hex: normalized, kind: .current)] + presetPalette
+    }
+}
+
 struct MistiaIconPickerSheet: View {
     @Environment(\.dismiss) private var dismiss
 
@@ -207,10 +253,12 @@ struct MistiaIconPickerSheet: View {
     let onSave: (String, String) -> Void
 
     @State private var selectedSymbolName: String
-    @State private var selectedColor: Color
+    @State private var selectedColorHex: String
     @State private var selectedGroupID: MistiaIconGroupID
 
+    private let colorChoices: [MistiaIconColorPreset]
     private let columns = Array(repeating: GridItem(.flexible(), spacing: 10), count: 5)
+    private let colorColumns = Array(repeating: GridItem(.flexible(), spacing: 12), count: 5)
     private let accent = Color(red: 0.43, green: 0.23, blue: 0.76)
 
     init(
@@ -221,13 +269,19 @@ struct MistiaIconPickerSheet: View {
     ) {
         self.title = title
         self.onSave = onSave
+        let normalizedSelectedColorHex = MistiaIconColorPalette.pickerSelectionHex(forStored: selectedColorHex)
         _selectedSymbolName = State(initialValue: selectedSymbolName)
-        _selectedColor = State(initialValue: Color(hex: selectedColorHex))
+        _selectedColorHex = State(initialValue: normalizedSelectedColorHex)
         _selectedGroupID = State(initialValue: MistiaIconCatalog.initialGroup(for: selectedSymbolName))
+        colorChoices = MistiaIconColorPreset.choices(for: normalizedSelectedColorHex)
     }
 
     private var selectedGroup: MistiaIconGroup {
         MistiaIconCatalog.group(for: selectedGroupID)
+    }
+
+    private var selectedColor: Color {
+        Color(hex: selectedColorHex)
     }
 
     var body: some View {
@@ -250,14 +304,11 @@ struct MistiaIconPickerSheet: View {
                     .padding(.horizontal, 20)
 
                     VStack(alignment: .leading, spacing: 10) {
-                        Text(mistiaLocalized(vi: "Màu icon", en: "Icon color", ja: "アイコンの色"))
-                            .font(.headline)
-
-                        ColorPicker(
-                            mistiaLocalized(vi: "Chọn màu", en: "Choose color", ja: "色を選択"),
-                            selection: $selectedColor,
-                            supportsOpacity: false
-                        )
+                        LazyVGrid(columns: colorColumns, spacing: 12) {
+                            ForEach(colorChoices) { choice in
+                                colorButton(for: choice)
+                            }
+                        }
                     }
                     .padding(.horizontal, 20)
 
@@ -331,7 +382,7 @@ struct MistiaIconPickerSheet: View {
 
                 ToolbarItem(placement: .topBarTrailing) {
                     Button {
-                        onSave(selectedSymbolName, selectedColor.hexString)
+                        onSave(selectedSymbolName, selectedColorHex)
                         dismiss()
                     } label: {
                         Image(systemName: "checkmark")
@@ -345,6 +396,63 @@ struct MistiaIconPickerSheet: View {
                 }
             }
         }
+    }
+
+    @ViewBuilder
+    private func colorButton(for choice: MistiaIconColorPreset) -> some View {
+        let isSelected = choice.hex == selectedColorHex
+
+        Button {
+            withAnimation(.snappy(duration: 0.18)) {
+                selectedColorHex = choice.hex
+            }
+        } label: {
+            VStack(spacing: 6) {
+                ZStack {
+                    Circle()
+                        .fill(choice.color)
+                        .frame(width: 38, height: 38)
+
+                    if isSelected {
+                        Image(systemName: "checkmark")
+                            .font(.system(size: 13, weight: .bold))
+                            .foregroundStyle(.white)
+                    }
+                }
+                .background {
+                    Circle()
+                        .fill(choice.color.opacity(isSelected ? 0.18 : 0.08))
+                        .frame(width: 48, height: 48)
+                }
+                .overlay {
+                    Circle()
+                        .strokeBorder(
+                            isSelected ? choice.color.opacity(0.72) : Color.secondary.opacity(0.12),
+                            style: StrokeStyle(
+                                lineWidth: isSelected ? 2.5 : 1,
+                                dash: choice.kind == .current ? [3, 3] : []
+                            )
+                        )
+                        .frame(width: 48, height: 48)
+                }
+                .shadow(
+                    color: isSelected ? choice.color.opacity(0.24) : .clear,
+                    radius: isSelected ? 8 : 0,
+                    y: isSelected ? 4 : 0
+                )
+
+                Text(choice.kind == .current
+                    ? mistiaLocalized(vi: "Hiện tại", en: "Current", ja: "現在")
+                    : " ")
+                    .font(.system(size: 9.5, weight: .semibold, design: .rounded))
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                    .frame(maxWidth: .infinity)
+            }
+            .frame(maxWidth: .infinity)
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(choice.accessibilityLabel)
     }
 
     @ViewBuilder

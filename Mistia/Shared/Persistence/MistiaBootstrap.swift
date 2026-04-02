@@ -4,7 +4,15 @@ import SwiftData
 enum MistiaBootstrap {
     static func seedDefaultCategoriesIfNeeded(modelContext: ModelContext) throws {
         let existingCategories = try modelContext.fetch(FetchDescriptor<TransactionCategory>())
+        let existingWallets = try modelContext.fetch(FetchDescriptor<LedgerWallet>())
         var didMutate = false
+
+        if normalizeLegacyDefaultIconColors(
+            categories: existingCategories,
+            wallets: existingWallets
+        ) {
+            didMutate = true
+        }
 
         if existingCategories.isEmpty {
             for (index, seed) in ManagementPresetData.defaultCategorySeeds.enumerated() {
@@ -137,5 +145,40 @@ enum MistiaBootstrap {
             .max() ?? -1
 
         return visible + 1
+    }
+
+    private static func normalizeLegacyDefaultIconColors(
+        categories: [TransactionCategory],
+        wallets: [LedgerWallet]
+    ) -> Bool {
+        var didMutate = false
+
+        for wallet in wallets {
+            guard let migratedColorHex = wallet.kind.migratedLegacyDefaultColorHex(
+                for: wallet.iconColorHex,
+                symbolName: wallet.iconSymbolName
+            ) else {
+                continue
+            }
+
+            wallet.iconColorHex = migratedColorHex
+            wallet.updatedAt = .now
+            didMutate = true
+        }
+
+        for category in categories where !category.isSystem && category.systemKey == nil {
+            guard let migratedColorHex = category.kind.migratedLegacyDefaultColorHex(
+                for: category.iconColorHex,
+                symbolName: category.iconSymbolName
+            ) else {
+                continue
+            }
+
+            category.iconColorHex = migratedColorHex
+            category.updatedAt = .now
+            didMutate = true
+        }
+
+        return didMutate
     }
 }

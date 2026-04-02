@@ -277,3 +277,119 @@ nonisolated enum MistiaDateFormatting {
         return formatter
     }
 }
+
+nonisolated enum MistiaIconColorPalette {
+    static let fallbackHex = "#8A8A8E"
+
+    static let presetHexes: [String] = [
+        "#2DAA9E",
+        "#6BCB77",
+        "#F26A5A",
+        "#FF9F1C",
+        "#FFE45E",
+        "#57B7FF",
+        "#5B7BFF",
+        "#FF6FB5",
+        "#9A67FF",
+        "#8A8A8E"
+    ]
+
+    private static let legacyDefaultHexMappings: [String: String] = [
+        "#F59B3F": "#FF9F1C",
+        "#FF7E67": "#F26A5A",
+        "#7C85A3": "#8A8A8E",
+        "#FFB13B": "#FF9F1C",
+        "#F45C7E": "#F26A5A",
+        "#8A6BFF": "#9A67FF",
+        "#5FAEFF": "#57B7FF"
+    ]
+
+    static func normalizedHex(_ hex: String) -> String {
+        let sanitized = hex
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .replacingOccurrences(of: "#", with: "")
+            .uppercased()
+
+        if sanitized.count == 8 {
+            let prefix = String(sanitized.prefix(6))
+            if isHexString(prefix) {
+                return "#\(prefix)"
+            }
+        }
+
+        if sanitized.count == 6, isHexString(sanitized) {
+            return "#\(sanitized)"
+        }
+
+        return fallbackHex
+    }
+
+    static func containsPreset(_ hex: String) -> Bool {
+        presetHexes.contains(normalizedHex(hex))
+    }
+
+    static func migratedLegacyDefaultHex(_ hex: String) -> String? {
+        legacyDefaultHexMappings[normalizedHex(hex)]
+    }
+
+    static func pickerSelectionHex(forStored hex: String) -> String {
+        migratedLegacyDefaultHex(hex) ?? normalizedHex(hex)
+    }
+
+    static func shouldShowCurrentSwatch(forStored hex: String) -> Bool {
+        let normalized = normalizedHex(hex)
+        return !containsPreset(normalized) && migratedLegacyDefaultHex(normalized) == nil
+    }
+
+    static func presetHex(forDefault hex: String) -> String {
+        let normalized = normalizedHex(hex)
+        if containsPreset(normalized) {
+            return normalized
+        }
+        return nearestPresetHex(to: normalized)
+    }
+
+    static func nearestPresetHex(to hex: String) -> String {
+        let normalized = normalizedHex(hex)
+        guard let source = rgbComponents(for: normalized) else {
+            return fallbackHex
+        }
+
+        return presetHexes.min { lhs, rhs in
+            squaredDistance(from: source, to: lhs) < squaredDistance(from: source, to: rhs)
+        } ?? fallbackHex
+    }
+
+    private static func squaredDistance(
+        from source: (red: Int, green: Int, blue: Int),
+        to targetHex: String
+    ) -> Int {
+        guard let target = rgbComponents(for: targetHex) else {
+            return .max
+        }
+
+        let redDelta = source.red - target.red
+        let greenDelta = source.green - target.green
+        let blueDelta = source.blue - target.blue
+        return redDelta * redDelta + greenDelta * greenDelta + blueDelta * blueDelta
+    }
+
+    private static func rgbComponents(for hex: String) -> (red: Int, green: Int, blue: Int)? {
+        let normalized = normalizedHex(hex)
+        let hexDigits = String(normalized.dropFirst())
+        guard hexDigits.count == 6, let value = Int(hexDigits, radix: 16) else {
+            return nil
+        }
+
+        return (
+            red: (value & 0xFF0000) >> 16,
+            green: (value & 0x00FF00) >> 8,
+            blue: value & 0x0000FF
+        )
+    }
+
+    private static func isHexString(_ value: String) -> Bool {
+        let allowedHexDigits = Set("0123456789ABCDEF")
+        return !value.isEmpty && value.allSatisfy { allowedHexDigits.contains($0) }
+    }
+}

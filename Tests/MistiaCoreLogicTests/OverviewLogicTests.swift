@@ -562,7 +562,7 @@ final class OverviewLogicTests: XCTestCase {
             categoryID: categoryID,
             categoryName: name,
             categoryIconSymbolName: "fork.knife",
-            categoryColorHex: "#F59B3F",
+            categoryColorHex: "#FF9F1C",
             limitMinor: limitMinor,
             rolloverEnabled: false,
             currencyCode: "JPY",

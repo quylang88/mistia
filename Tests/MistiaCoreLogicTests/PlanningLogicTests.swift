@@ -17,7 +17,7 @@ final class PlanningLogicTests: XCTestCase {
                     categoryID: foodCategory,
                     categoryName: "Ăn uống",
                     categoryIconSymbolName: "fork.knife",
-                    categoryColorHex: "#F59B3F",
+                    categoryColorHex: "#FF9F1C",
                     limitMinor: 10_000,
                     rolloverEnabled: false,
                     currencyCode: "JPY",

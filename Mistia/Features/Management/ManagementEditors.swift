@@ -709,13 +709,18 @@ private struct WalletDraft {
     init(wallet: LedgerWallet?, defaultKind: LedgerWalletKind) {
         if let wallet {
             let profile = wallet.creditCardProfile
-            let matchesDefaultIcon = wallet.iconSymbolName == wallet.kind.defaultIconSymbolName
-                && wallet.iconColorHex.caseInsensitiveCompare(wallet.kind.defaultColorHex) == .orderedSame
+            let matchesDefaultIcon = wallet.kind.matchesDefaultIconAppearance(
+                symbolName: wallet.iconSymbolName,
+                colorHex: wallet.iconColorHex
+            )
 
             self.name = wallet.name
             self.kind = wallet.kind
             self.iconSymbolName = wallet.iconSymbolName
-            self.iconColorHex = wallet.iconColorHex
+            self.iconColorHex = wallet.kind.migratedLegacyDefaultColorHex(
+                for: wallet.iconColorHex,
+                symbolName: wallet.iconSymbolName
+            ) ?? MistiaIconColorPalette.normalizedHex(wallet.iconColorHex)
             self.currencyCode = wallet.currencyCode
             self.openingBalanceText = "\(wallet.openingBalanceMinor)"
             self.institutionDisplayName = wallet.institutionDisplayName ?? ""
@@ -793,13 +798,18 @@ private struct CategoryDraft {
 
     init(category: TransactionCategory?, defaultKind: TransactionCategoryKind) {
         if let category {
-            let matchesDefaultIcon = category.iconSymbolName == category.kind.defaultIconSymbolName
-                && category.iconColorHex.caseInsensitiveCompare(category.kind.defaultColorHex) == .orderedSame
+            let matchesDefaultIcon = category.kind.matchesDefaultIconAppearance(
+                symbolName: category.iconSymbolName,
+                colorHex: category.iconColorHex
+            )
 
             self.name = category.name
             self.kind = category.kind
             self.iconSymbolName = category.iconSymbolName
-            self.iconColorHex = category.iconColorHex
+            self.iconColorHex = category.kind.migratedLegacyDefaultColorHex(
+                for: category.iconColorHex,
+                symbolName: category.iconSymbolName
+            ) ?? MistiaIconColorPalette.normalizedHex(category.iconColorHex)
             self.iconWasCustomized = !matchesDefaultIcon
         } else {
             self.name = ""

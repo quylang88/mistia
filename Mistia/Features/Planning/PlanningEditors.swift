@@ -1232,7 +1232,7 @@ private struct PlanningBillDraft {
         frequencyMonths = max(plan?.frequencyMonths ?? 1, 1)
         paymentWalletID = plan?.paymentWallet?.id
         iconSymbolName = plan?.iconSymbolName ?? "bolt.fill"
-        iconColorHex = "#FFB13B"
+        iconColorHex = "#FF9F1C"
     }
 }
 
@@ -1254,7 +1254,7 @@ private struct PlanningInstallmentDraft {
         totalCyclesText = plan?.totalCycles.map(String.init) ?? ""
         paymentWalletID = plan?.paymentWallet?.id
         iconSymbolName = plan?.iconSymbolName ?? "creditcard.and.123"
-        iconColorHex = "#7C85A3"
+        iconColorHex = "#8A8A8E"
     }
 }
 
@@ -1276,7 +1276,14 @@ private struct PlanningCreditCardDraft {
         let profile = wallet?.creditCardProfile
         name = wallet?.name ?? ""
         iconSymbolName = wallet?.iconSymbolName ?? LedgerWalletKind.creditCard.defaultIconSymbolName
-        iconColorHex = wallet?.iconColorHex ?? LedgerWalletKind.creditCard.defaultColorHex
+        if let wallet {
+            iconColorHex = wallet.kind.migratedLegacyDefaultColorHex(
+                for: wallet.iconColorHex,
+                symbolName: wallet.iconSymbolName
+            ) ?? MistiaIconColorPalette.normalizedHex(wallet.iconColorHex)
+        } else {
+            iconColorHex = LedgerWalletKind.creditCard.defaultColorHex
+        }
         issuerName = profile?.issuerName ?? ""
         network = profile?.network ?? .visa
         last4 = profile?.last4 ?? ""

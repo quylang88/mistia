@@ -163,4 +163,38 @@ final class MistiaLocalizationTests: XCTestCase {
         XCTAssertEqual(englishJPY, japaneseJPY)
         XCTAssertTrue(vietnameseJPY.first.map { $0 == "¥" || $0 == "￥" } ?? false)
     }
+
+    func testLegacyDefaultIconColorsMapIntoCurrentPalette() {
+        XCTAssertEqual(MistiaIconColorPalette.migratedLegacyDefaultHex("#F59B3F"), "#FF9F1C")
+        XCTAssertEqual(MistiaIconColorPalette.migratedLegacyDefaultHex("#FF7E67"), "#F26A5A")
+        XCTAssertEqual(MistiaIconColorPalette.migratedLegacyDefaultHex("#7C85A3"), "#8A8A8E")
+        XCTAssertEqual(MistiaIconColorPalette.migratedLegacyDefaultHex("#FFB13B"), "#FF9F1C")
+        XCTAssertEqual(MistiaIconColorPalette.migratedLegacyDefaultHex("#F45C7E"), "#F26A5A")
+        XCTAssertEqual(MistiaIconColorPalette.migratedLegacyDefaultHex("#8A6BFF"), "#9A67FF")
+
+        XCTAssertEqual(MistiaIconColorPalette.presetHexes.count, 10)
+        XCTAssertFalse(MistiaIconColorPalette.presetHexes.contains("#F59B3F"))
+        XCTAssertFalse(MistiaIconColorPalette.presetHexes.contains("#7C85A3"))
+    }
+
+    func testLegacyDefaultIconAppearanceStillCountsAsDefault() {
+        XCTAssertTrue(
+            LedgerWalletKind.creditCard.matchesDefaultIconAppearance(
+                symbolName: LedgerWalletKind.creditCard.defaultIconSymbolName,
+                colorHex: "#7C85A3"
+            )
+        )
+        XCTAssertTrue(
+            TransactionCategoryKind.expense.matchesDefaultIconAppearance(
+                symbolName: TransactionCategoryKind.expense.defaultIconSymbolName,
+                colorHex: "#F59B3F"
+            )
+        )
+        XCTAssertEqual(
+            MistiaIconColorPalette.pickerSelectionHex(forStored: "#7C85A3"),
+            "#8A8A8E"
+        )
+        XCTAssertFalse(MistiaIconColorPalette.shouldShowCurrentSwatch(forStored: "#7C85A3"))
+        XCTAssertTrue(MistiaIconColorPalette.shouldShowCurrentSwatch(forStored: "#123456"))
+    }
 }
