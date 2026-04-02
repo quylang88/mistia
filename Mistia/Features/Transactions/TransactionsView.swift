@@ -127,6 +127,24 @@ struct TransactionsView: View {
         return count
     }
 
+    private var activeFilterTint: Color {
+        colorScheme == .dark
+            ? Color(red: 0.53, green: 0.33, blue: 0.86)
+            : Color(red: 0.43, green: 0.23, blue: 0.76)
+    }
+
+    private var inactiveFilterTint: Color {
+        colorScheme == .dark
+            ? .white.opacity(0.08)
+            : Color.black.opacity(0.06)
+    }
+
+    private var activeFilterBadgeTextColor: Color {
+        colorScheme == .dark
+            ? Color(red: 0.53, green: 0.33, blue: 0.86)
+            : Color(red: 0.43, green: 0.23, blue: 0.76)
+    }
+
     var body: some View {
         MistiaPinnedTopBarScaffold(
             tone: .standard,
@@ -194,7 +212,7 @@ struct TransactionsView: View {
         .menuIndicator(.hidden)
         .menuOrder(.fixed)
         .buttonBorderShape(.capsule)
-        .tint(Color(red: 0.53, green: 0.33, blue: 0.86))
+        .tint(isActive ? activeFilterTint : inactiveFilterTint)
 
         if isActive {
             menu.buttonStyle(.glassProminent)
@@ -215,7 +233,7 @@ struct TransactionsView: View {
                         
                         Text("\(activeFilterCount)")
                             .font(.system(size: 12, weight: .bold, design: .rounded))
-                            .foregroundStyle(Color(red: 0.53, green: 0.33, blue: 0.86))
+                            .foregroundStyle(activeFilterBadgeTextColor)
                             .padding(.horizontal, 4)
                             .padding(.vertical, 1)
                             .background(Circle().fill(.white))
@@ -682,9 +700,23 @@ private struct TransactionMiniBadge: View {
 
 
 private struct TransactionToolbarChip: View {
+    @Environment(\.colorScheme) private var colorScheme
+
     let title: String
     let isActive: Bool
     let trailingIcon: String?
+
+    private var foregroundColor: Color {
+        if isActive {
+            return .white
+        }
+
+        if colorScheme == .dark {
+            return Color.white.opacity(0.92)
+        }
+
+        return Color.black.opacity(0.74)
+    }
 
     var body: some View {
         HStack(spacing: 4) {
@@ -697,7 +729,7 @@ private struct TransactionToolbarChip: View {
                     .font(.system(size: 10, weight: .bold, design: .rounded))
             }
         }
-        .foregroundStyle(.white)
+        .foregroundStyle(foregroundColor)
         .animation(nil, value: title)
         .animation(nil, value: isActive)
         .padding(.horizontal, 4)

@@ -626,19 +626,19 @@ private struct PlanningModePicker: View {
     private var idleForeground: Color {
         colorScheme == .dark
             ? Color(red: 0.94, green: 0.94, blue: 0.97)
-            : Color.black.opacity(0.64)
+            : Color.black.opacity(0.76)
     }
 
     private var activeTint: Color {
         colorScheme == .dark
             ? Color(red: 0.34, green: 0.18, blue: 0.60)
-            : accent.opacity(0.90)
+            : accent.opacity(0.98)
     }
 
     private var idleTint: Color {
         colorScheme == .dark
             ? Color(red: 0.24, green: 0.24, blue: 0.27)
-            : .white.opacity(0.16)
+            : Color.black.opacity(0.06)
     }
 }
 
@@ -646,7 +646,7 @@ private struct PlanningDueModePicker: View {
     @Binding var selection: PlanningDueMode
 
     private var accent: Color {
-        Color(red: 0.77, green: 0.69, blue: 0.98)
+        Color(red: 0.43, green: 0.23, blue: 0.76)
     }
 
     var body: some View {

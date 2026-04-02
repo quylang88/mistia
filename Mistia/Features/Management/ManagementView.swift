@@ -218,16 +218,20 @@ struct ManagementView: View {
                         }
                     } else {
                         VStack(spacing: 0) {
-                            ForEach(Array(visibleCategories.enumerated()), id: \.element.id) { index, category in
-                                ManagementCategoryRow(category: category) {
-                                    categoryEditorTarget = ManagementCategoryEditorTarget(category: category, defaultKind: category.kind)
-                                }
-
-                                if index < visibleCategories.count - 1 {
-                                    Divider()
-                                        .padding(.leading, 52)
+                            LazyVGrid(
+                                columns: [
+                                    GridItem(.adaptive(minimum: 108, maximum: 148), spacing: 12)
+                                ],
+                                spacing: 12
+                            ) {
+                                ForEach(visibleCategories, id: \.id) { category in
+                                    ManagementCategoryTile(category: category) {
+                                        categoryEditorTarget = ManagementCategoryEditorTarget(category: category, defaultKind: category.kind)
+                                    }
                                 }
                             }
+                            .padding(.horizontal, 14)
+                            .padding(.vertical, 14)
 
                             Divider()
                                 .padding(.horizontal, 14)
@@ -238,6 +242,8 @@ struct ManagementView: View {
                             ) {
                                 categoryEditorTarget = ManagementCategoryEditorTarget(category: nil, defaultKind: selectedCategoryKind)
                             }
+                            .padding(.horizontal, 14)
+                            .padding(.vertical, 14)
                         }
                     }
                 }
@@ -400,7 +406,7 @@ private struct ManagementSignedOutCard: View {
     }
 
     private var badgeForeground: Color {
-        colorScheme == .dark ? .white.opacity(0.96) : accent
+        colorScheme == .dark ? Color(red: 0.90, green: 0.74, blue: 1.00) : accent
     }
 
     private var buttonFill: Color {
@@ -408,7 +414,7 @@ private struct ManagementSignedOutCard: View {
     }
 
     private var buttonForeground: Color {
-        colorScheme == .dark ? Color(red: 0.65, green: 0.45, blue: 0.98) : accent
+        colorScheme == .dark ? Color(red: 0.90, green: 0.74, blue: 1.00) : accent
     }
 
     var body: some View {
@@ -524,6 +530,49 @@ private struct ManagementCategoryRow: View {
     }
 }
 
+private struct ManagementCategoryTile: View {
+    @Environment(\.colorScheme) private var colorScheme
+
+    let category: TransactionCategory
+    let action: () -> Void
+
+    private var tileFill: Color {
+        colorScheme == .dark ? .white.opacity(0.05) : .black.opacity(0.035)
+    }
+
+    private var tileStroke: Color {
+        colorScheme == .dark ? .white.opacity(0.08) : .white.opacity(0.22)
+    }
+
+    var body: some View {
+        Button(action: action) {
+            VStack(alignment: .center, spacing: 10) {
+                ManagementIconTile(icon: category.iconSymbolName, color: category.iconColor)
+
+                Text(category.name)
+                    .font(.system(size: 15, weight: .semibold, design: .rounded))
+                    .foregroundStyle(.primary)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+                    .multilineTextAlignment(.center)
+                    .frame(maxWidth: .infinity, alignment: .center)
+            }
+            .frame(maxWidth: .infinity, minHeight: 80, alignment: .center)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 12)
+            .background {
+                RoundedRectangle(cornerRadius: 18, style: .continuous)
+                    .fill(tileFill)
+            }
+            .overlay {
+                RoundedRectangle(cornerRadius: 18, style: .continuous)
+                    .strokeBorder(tileStroke, lineWidth: 0.8)
+            }
+        }
+        .buttonStyle(MistiaPressableButtonStyle(cornerRadius: 18))
+    }
+}
+
 private struct ManagementActionRow: View {
     let action: ManagementDataActionKind
     let onTap: () -> Void
@@ -582,7 +631,7 @@ private struct ManagementCategoryKindPicker: View {
     @Binding var selection: TransactionCategoryKind
 
     private var accentPurple: Color {
-        Color(red: 0.77, green: 0.69, blue: 0.98)
+        Color(red: 0.43, green: 0.23, blue: 0.76)
     }
 
     var body: some View {

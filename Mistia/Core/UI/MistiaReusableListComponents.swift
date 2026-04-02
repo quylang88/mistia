@@ -76,7 +76,7 @@ struct MistiaFooterAddButton: View {
     }
 
     private var buttonForeground: Color {
-        colorScheme == .dark ? Color(red: 0.82, green: 0.70, blue: 1.00) : accent
+        colorScheme == .dark ? Color(red: 0.90, green: 0.74, blue: 1.00) : accent
     }
 
     var body: some View {
@@ -117,7 +117,7 @@ struct MistiaEmptyStateContent: View {
     }
 
     private var buttonForeground: Color {
-        colorScheme == .dark ? Color(red: 0.82, green: 0.70, blue: 1.00) : accent
+        colorScheme == .dark ? Color(red: 0.90, green: 0.74, blue: 1.00) : accent
     }
 
     private var symbolBackgroundOpacity: Double {

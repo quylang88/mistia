@@ -76,7 +76,7 @@ final class MistiaNativeTabBarController: UITabBarController, UITabBarController
   weak var chromeDelegate: MistiaNativeTabBarControllerDelegate?
 
   private let mistiaAccentColor = UIColor(red: 0.43, green: 0.23, blue: 0.76, alpha: 1)
-  private let mistiaDarkModeTabTintColor = UIColor(red: 0.76, green: 0.64, blue: 0.97, alpha: 1)
+  private let mistiaDarkModeTabTintColor = UIColor(red: 0.90, green: 0.74, blue: 1.00, alpha: 1)
   private let mistiaLightModeUnselectedTabTintColor = UIColor(
     red: 0.47, green: 0.48, blue: 0.54, alpha: 1)
   private let mistiaDarkModeUnselectedTabTintColor = UIColor(
