@@ -29,6 +29,7 @@ struct TransactionEditorSheet: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
     @Environment(\.colorScheme) private var colorScheme
+    @Environment(SessionStore.self) private var sessionStore
 
     @Query(sort: [SortDescriptor(\LedgerWallet.sortOrder), SortDescriptor(\LedgerWallet.createdAt)])
     private var storedWallets: [LedgerWallet]
@@ -443,7 +444,7 @@ struct TransactionEditorSheet: View {
             modelContext.insert(transaction)
         }
 
-        persist(completion: .savedDraft)
+        persist(transaction: transaction, completion: .savedDraft)
     }
 
     private func saveFullTransaction() {
@@ -555,12 +556,20 @@ struct TransactionEditorSheet: View {
             modelContext.insert(transaction)
         }
 
-        persist(completion: .savedTransaction)
+        persist(transaction: transaction, completion: .savedTransaction)
     }
 
-    private func persist(completion: TransactionEditorCompletion) {
+    private func persist(
+        transaction: LedgerTransaction,
+        completion: TransactionEditorCompletion
+    ) {
         do {
             try modelContext.save()
+            sessionStore.recordUpsert(
+                entity: .transaction,
+                recordID: transaction.id,
+                modifiedAt: transaction.updatedAt
+            )
             onComplete(completion)
             dismiss()
         } catch {

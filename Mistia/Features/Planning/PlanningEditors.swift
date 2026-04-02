@@ -4,6 +4,7 @@ import SwiftUI
 struct PlanningBudgetEditorSheet: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
+    @Environment(SessionStore.self) private var sessionStore
     @AppStorage(MistiaAppStorageKey.currencyCode) private var currencyCode = "JPY"
     @Query(sort: [SortDescriptor(\TransactionCategory.sortOrder), SortDescriptor(\TransactionCategory.createdAt)])
     private var storedCategories: [TransactionCategory]
@@ -119,12 +120,14 @@ struct PlanningBudgetEditorSheet: View {
         }
 
         let now = Date()
+        let budgetForSync: BudgetPlan
         if let budget = target.budget {
             budget.category = category
             budget.limitMinor = limitMinor
             budget.rolloverEnabled = draft.rolloverEnabled
             budget.monthAnchor = monthAnchor
             budget.updatedAt = now
+            budgetForSync = budget
         } else {
             let budget = BudgetPlan(
                 category: category,
@@ -136,10 +139,16 @@ struct PlanningBudgetEditorSheet: View {
                 updatedAt: now
             )
             modelContext.insert(budget)
+            budgetForSync = budget
         }
 
         do {
             try modelContext.save()
+            sessionStore.recordUpsert(
+                entity: .budgetPlan,
+                recordID: budgetForSync.id,
+                modifiedAt: budgetForSync.updatedAt
+            )
             dismiss()
         } catch {
             alertMessage = mistiaLocalized(vi: "Không thể lưu ngân sách lúc này.", en: "Couldn't save this budget right now.", ja: "現在この予算を保存できません。") + " \(error.localizedDescription)"
@@ -148,10 +157,16 @@ struct PlanningBudgetEditorSheet: View {
 
     private func deleteBudget() {
         guard let budget = target.budget else { return }
+        let now = Date()
         modelContext.delete(budget)
 
         do {
             try modelContext.save()
+            sessionStore.recordDelete(
+                entity: .budgetPlan,
+                recordID: budget.id,
+                modifiedAt: now
+            )
             dismiss()
         } catch {
             alertMessage = mistiaLocalized(vi: "Không thể xóa ngân sách lúc này.", en: "Couldn't delete this budget right now.", ja: "現在この予算を削除できません。") + " \(error.localizedDescription)"
@@ -162,6 +177,7 @@ struct PlanningBudgetEditorSheet: View {
 struct PlanningGoalEditorSheet: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
+    @Environment(SessionStore.self) private var sessionStore
     @AppStorage(MistiaAppStorageKey.currencyCode) private var currencyCode = "JPY"
     @Query(sort: [SortDescriptor(\LedgerWallet.sortOrder), SortDescriptor(\LedgerWallet.createdAt)])
     private var storedWallets: [LedgerWallet]
@@ -280,6 +296,7 @@ struct PlanningGoalEditorSheet: View {
         let currentMinor = draft.currentText.currencyInputToMinorUnits(currencyCode: activeCurrencyCode)
         let linkedWallet = storedWallets.first(where: { $0.id == draft.linkedWalletID })
         let now = Date()
+        let goalForSync: SavingsGoal
 
         if let goal = target.goal {
             goal.name = trimmedName
@@ -289,6 +306,7 @@ struct PlanningGoalEditorSheet: View {
             goal.targetDate = draft.targetDate
             goal.linkedWallet = linkedWallet
             goal.updatedAt = now
+            goalForSync = goal
         } else {
             let goal = SavingsGoal(
                 name: trimmedName,
@@ -303,10 +321,16 @@ struct PlanningGoalEditorSheet: View {
                 updatedAt: now
             )
             modelContext.insert(goal)
+            goalForSync = goal
         }
 
         do {
             try modelContext.save()
+            sessionStore.recordUpsert(
+                entity: .savingsGoal,
+                recordID: goalForSync.id,
+                modifiedAt: goalForSync.updatedAt
+            )
             dismiss()
         } catch {
             alertMessage = mistiaLocalized(vi: "Không thể lưu mục tiêu lúc này.", en: "Couldn't save this goal right now.", ja: "現在この目標を保存できません。") + " \(error.localizedDescription)"
@@ -315,10 +339,16 @@ struct PlanningGoalEditorSheet: View {
 
     private func deleteGoal() {
         guard let goal = target.goal else { return }
+        let now = Date()
         modelContext.delete(goal)
 
         do {
             try modelContext.save()
+            sessionStore.recordDelete(
+                entity: .savingsGoal,
+                recordID: goal.id,
+                modifiedAt: now
+            )
             dismiss()
         } catch {
             alertMessage = mistiaLocalized(vi: "Không thể xóa mục tiêu lúc này.", en: "Couldn't delete this goal right now.", ja: "現在この目標を削除できません。") + " \(error.localizedDescription)"
@@ -333,6 +363,7 @@ struct PlanningGoalEditorSheet: View {
 struct PlanningBillEditorSheet: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
+    @Environment(SessionStore.self) private var sessionStore
     @AppStorage(MistiaAppStorageKey.currencyCode) private var currencyCode = "JPY"
     @Query(sort: [SortDescriptor(\LedgerWallet.sortOrder), SortDescriptor(\LedgerWallet.createdAt)])
     private var storedWallets: [LedgerWallet]
@@ -477,6 +508,7 @@ struct PlanningBillEditorSheet: View {
 
         let amountMinor = draft.amountText.nilIfBlank?.currencyInputToMinorUnits(currencyCode: activeCurrencyCode)
         let now = Date()
+        let planForSync: RecurringBillPlan
 
         if let plan = target.plan {
             plan.name = trimmedName
@@ -486,6 +518,7 @@ struct PlanningBillEditorSheet: View {
             plan.frequencyMonths = draft.frequencyMonths
             plan.paymentWallet = wallet
             plan.updatedAt = now
+            planForSync = plan
         } else {
             let plan = RecurringBillPlan(
                 name: trimmedName,
@@ -499,10 +532,16 @@ struct PlanningBillEditorSheet: View {
                 updatedAt: now
             )
             modelContext.insert(plan)
+            planForSync = plan
         }
 
         do {
             try modelContext.save()
+            sessionStore.recordUpsert(
+                entity: .recurringBillPlan,
+                recordID: planForSync.id,
+                modifiedAt: planForSync.updatedAt
+            )
             dismiss()
         } catch {
             alertMessage = mistiaLocalized(vi: "Không thể lưu hóa đơn lúc này.", en: "Couldn't save this bill right now.", ja: "現在この請求を保存できません。") + " \(error.localizedDescription)"
@@ -517,7 +556,7 @@ struct PlanningBillEditorSheet: View {
                 for: dueItem,
                 overrideAmountMinor: paymentAmountText.nilIfBlank?.currencyInputToMinorUnits(currencyCode: activeCurrencyCode)
             )
-            _ = try PlanningPersistenceSupport.saveDuePayment(
+            let savedPayment = try PlanningPersistenceSupport.saveDuePayment(
                 draft: draft,
                 sourceKind: .recurringBill,
                 sourceID: dueItem.sourceID,
@@ -527,6 +566,16 @@ struct PlanningBillEditorSheet: View {
                 occurrences: Array(storedOccurrences),
                 modelContext: modelContext
             )
+            sessionStore.recordUpsert(
+                entity: .transaction,
+                recordID: savedPayment.transaction.id,
+                modifiedAt: savedPayment.transaction.updatedAt
+            )
+            sessionStore.recordUpsert(
+                entity: .dueOccurrenceRecord,
+                recordID: savedPayment.occurrenceID,
+                modifiedAt: savedPayment.transaction.updatedAt
+            )
             dismiss()
         } catch {
             alertMessage = error.localizedDescription
@@ -535,6 +584,17 @@ struct PlanningBillEditorSheet: View {
 
     private func deletePlan() {
         guard let plan = target.plan else { return }
+        let now = Date()
+        let occurrenceMutations = storedOccurrences
+            .filter { $0.sourceKind == .recurringBill && $0.sourceID == plan.id }
+            .map {
+                MistiaSyncMutation(
+                    entity: .dueOccurrenceRecord,
+                    recordID: $0.id,
+                    kind: .delete,
+                    modifiedAt: now
+                )
+            }
         PlanningPersistenceSupport.deleteOccurrences(
             sourceKind: .recurringBill,
             sourceID: plan.id,
@@ -545,6 +605,16 @@ struct PlanningBillEditorSheet: View {
 
         do {
             try modelContext.save()
+            sessionStore.recordMutations(
+                occurrenceMutations + [
+                    MistiaSyncMutation(
+                        entity: .recurringBillPlan,
+                        recordID: plan.id,
+                        kind: .delete,
+                        modifiedAt: now
+                    )
+                ]
+            )
             dismiss()
         } catch {
             alertMessage = mistiaLocalized(vi: "Không thể xóa hóa đơn lúc này.", en: "Couldn't delete this bill right now.", ja: "現在この請求を削除できません。") + " \(error.localizedDescription)"
@@ -555,6 +625,7 @@ struct PlanningBillEditorSheet: View {
 struct PlanningInstallmentEditorSheet: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
+    @Environment(SessionStore.self) private var sessionStore
     @AppStorage(MistiaAppStorageKey.currencyCode) private var currencyCode = "JPY"
     @Query(sort: [SortDescriptor(\LedgerWallet.sortOrder), SortDescriptor(\LedgerWallet.createdAt)])
     private var storedWallets: [LedgerWallet]
@@ -707,6 +778,7 @@ struct PlanningInstallmentEditorSheet: View {
 
         let totalCycles = draft.totalCyclesText.nilIfBlank.flatMap(Int.init)
         let now = Date()
+        let planForSync: InstallmentPlan
 
         if let plan = target.plan {
             plan.name = trimmedName
@@ -717,6 +789,7 @@ struct PlanningInstallmentEditorSheet: View {
             plan.frequencyMonths = draft.frequencyMonths
             plan.paymentWallet = wallet
             plan.updatedAt = now
+            planForSync = plan
         } else {
             let plan = InstallmentPlan(
                 name: trimmedName,
@@ -731,10 +804,16 @@ struct PlanningInstallmentEditorSheet: View {
                 updatedAt: now
             )
             modelContext.insert(plan)
+            planForSync = plan
         }
 
         do {
             try modelContext.save()
+            sessionStore.recordUpsert(
+                entity: .installmentPlan,
+                recordID: planForSync.id,
+                modifiedAt: planForSync.updatedAt
+            )
             dismiss()
         } catch {
             alertMessage = mistiaLocalized(vi: "Không thể lưu khoản này lúc này.", en: "Couldn't save this item right now.", ja: "現在この項目を保存できません。") + " \(error.localizedDescription)"
@@ -749,7 +828,7 @@ struct PlanningInstallmentEditorSheet: View {
                 for: dueItem,
                 overrideAmountMinor: paymentAmountText.nilIfBlank?.currencyInputToMinorUnits(currencyCode: activeCurrencyCode)
             )
-            _ = try PlanningPersistenceSupport.saveDuePayment(
+            let savedPayment = try PlanningPersistenceSupport.saveDuePayment(
                 draft: draft,
                 sourceKind: .installment,
                 sourceID: dueItem.sourceID,
@@ -759,6 +838,16 @@ struct PlanningInstallmentEditorSheet: View {
                 occurrences: Array(storedOccurrences),
                 modelContext: modelContext
             )
+            sessionStore.recordUpsert(
+                entity: .transaction,
+                recordID: savedPayment.transaction.id,
+                modifiedAt: savedPayment.transaction.updatedAt
+            )
+            sessionStore.recordUpsert(
+                entity: .dueOccurrenceRecord,
+                recordID: savedPayment.occurrenceID,
+                modifiedAt: savedPayment.transaction.updatedAt
+            )
             dismiss()
         } catch {
             alertMessage = error.localizedDescription
@@ -767,6 +856,17 @@ struct PlanningInstallmentEditorSheet: View {
 
     private func deletePlan() {
         guard let plan = target.plan else { return }
+        let now = Date()
+        let occurrenceMutations = storedOccurrences
+            .filter { $0.sourceKind == .installment && $0.sourceID == plan.id }
+            .map {
+                MistiaSyncMutation(
+                    entity: .dueOccurrenceRecord,
+                    recordID: $0.id,
+                    kind: .delete,
+                    modifiedAt: now
+                )
+            }
         PlanningPersistenceSupport.deleteOccurrences(
             sourceKind: .installment,
             sourceID: plan.id,
@@ -777,6 +877,16 @@ struct PlanningInstallmentEditorSheet: View {
 
         do {
             try modelContext.save()
+            sessionStore.recordMutations(
+                occurrenceMutations + [
+                    MistiaSyncMutation(
+                        entity: .installmentPlan,
+                        recordID: plan.id,
+                        kind: .delete,
+                        modifiedAt: now
+                    )
+                ]
+            )
             dismiss()
         } catch {
             alertMessage = mistiaLocalized(vi: "Không thể xóa khoản này lúc này.", en: "Couldn't delete this item right now.", ja: "現在この項目を削除できません。") + " \(error.localizedDescription)"
@@ -787,6 +897,7 @@ struct PlanningInstallmentEditorSheet: View {
 struct PlanningCreditCardEditorSheet: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
+    @Environment(SessionStore.self) private var sessionStore
     @AppStorage(MistiaAppStorageKey.currencyCode) private var currencyCode = "JPY"
     @Query(sort: [SortDescriptor(\LedgerWallet.sortOrder), SortDescriptor(\LedgerWallet.createdAt)])
     private var storedWallets: [LedgerWallet]
@@ -962,6 +1073,7 @@ struct PlanningCreditCardEditorSheet: View {
         let currentDebtMinor = draft.currentDebtText.currencyInputToMinorUnits(currencyCode: activeCurrencyCode)
         let creditLimitMinor = draft.creditLimitText.currencyInputToMinorUnits(currencyCode: activeCurrencyCode)
         let now = Date()
+        let walletForSync: LedgerWallet
 
         if let wallet = target.wallet {
             wallet.name = trimmedName
@@ -970,6 +1082,7 @@ struct PlanningCreditCardEditorSheet: View {
             wallet.openingBalanceMinor = currentDebtMinor
             wallet.updatedAt = now
             updateProfile(for: wallet, creditLimitMinor: creditLimitMinor, now: now)
+            walletForSync = wallet
         } else {
             let wallet = LedgerWallet(
                 name: trimmedName,
@@ -984,10 +1097,23 @@ struct PlanningCreditCardEditorSheet: View {
             )
             modelContext.insert(wallet)
             updateProfile(for: wallet, creditLimitMinor: creditLimitMinor, now: now)
+            walletForSync = wallet
         }
 
         do {
             try modelContext.save()
+            sessionStore.recordUpsert(
+                entity: .wallet,
+                recordID: walletForSync.id,
+                modifiedAt: walletForSync.updatedAt
+            )
+            if let profile = walletForSync.creditCardProfile {
+                sessionStore.recordUpsert(
+                    entity: .creditCardProfile,
+                    recordID: profile.id,
+                    modifiedAt: profile.updatedAt
+                )
+            }
             dismiss()
         } catch {
             alertMessage = mistiaLocalized(vi: "Không thể lưu thẻ lúc này.", en: "Couldn't save this card right now.", ja: "現在このカードを保存できません。") + " \(error.localizedDescription)"
@@ -1033,7 +1159,7 @@ struct PlanningCreditCardEditorSheet: View {
                 for: effectiveDueItem,
                 overrideAmountMinor: amountOverride
             )
-            _ = try PlanningPersistenceSupport.saveDuePayment(
+            let savedPayment = try PlanningPersistenceSupport.saveDuePayment(
                 draft: paymentDraft,
                 sourceKind: .creditCard,
                 sourceID: dueItem.walletID,
@@ -1043,6 +1169,16 @@ struct PlanningCreditCardEditorSheet: View {
                 occurrences: Array(storedOccurrences),
                 modelContext: modelContext
             )
+            sessionStore.recordUpsert(
+                entity: .transaction,
+                recordID: savedPayment.transaction.id,
+                modifiedAt: savedPayment.transaction.updatedAt
+            )
+            sessionStore.recordUpsert(
+                entity: .dueOccurrenceRecord,
+                recordID: savedPayment.occurrenceID,
+                modifiedAt: savedPayment.transaction.updatedAt
+            )
             dismiss()
         } catch {
             alertMessage = error.localizedDescription
@@ -1051,8 +1187,19 @@ struct PlanningCreditCardEditorSheet: View {
 
     private func archiveWallet() {
         guard let wallet = target.wallet else { return }
+        let now = Date()
         wallet.isArchived = true
-        wallet.updatedAt = .now
+        wallet.updatedAt = now
+        let occurrenceMutations = storedOccurrences
+            .filter { $0.sourceKind == .creditCard && $0.sourceID == wallet.id }
+            .map {
+                MistiaSyncMutation(
+                    entity: .dueOccurrenceRecord,
+                    recordID: $0.id,
+                    kind: .delete,
+                    modifiedAt: now
+                )
+            }
         PlanningPersistenceSupport.deleteOccurrences(
             sourceKind: .creditCard,
             sourceID: wallet.id,
@@ -1062,6 +1209,16 @@ struct PlanningCreditCardEditorSheet: View {
 
         do {
             try modelContext.save()
+            sessionStore.recordMutations(
+                occurrenceMutations + [
+                    MistiaSyncMutation(
+                        entity: .wallet,
+                        recordID: wallet.id,
+                        kind: .upsert,
+                        modifiedAt: wallet.updatedAt
+                    )
+                ]
+            )
             dismiss()
         } catch {
             alertMessage = mistiaLocalized(vi: "Không thể lưu trạng thái lưu trữ của thẻ.", en: "Couldn't save the archive state for this card.", ja: "このカードのアーカイブ状態を保存できません。") + " \(error.localizedDescription)"

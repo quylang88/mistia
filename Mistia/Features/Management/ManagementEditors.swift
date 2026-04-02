@@ -16,6 +16,7 @@ struct ManagementCategoryEditorTarget: Identifiable {
 struct ManagementWalletEditorSheet: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
+    @Environment(SessionStore.self) private var sessionStore
     @Query(sort: [SortDescriptor(\LedgerWallet.sortOrder), SortDescriptor(\LedgerWallet.createdAt)])
     private var storedWallets: [LedgerWallet]
 
@@ -274,6 +275,8 @@ struct ManagementWalletEditorSheet: View {
         }
 
         let now = Date()
+        let existingProfileID = target.wallet?.creditCardProfile?.id
+        let walletForSync: LedgerWallet
 
         if let existingWallet = target.wallet {
             existingWallet.name = trimmedName
@@ -287,6 +290,7 @@ struct ManagementWalletEditorSheet: View {
             existingWallet.updatedAt = now
 
             updateCreditCardProfile(for: existingWallet, now: now)
+            walletForSync = existingWallet
         } else {
             let newWallet = LedgerWallet(
                 name: trimmedName,
@@ -302,10 +306,30 @@ struct ManagementWalletEditorSheet: View {
 
             modelContext.insert(newWallet)
             updateCreditCardProfile(for: newWallet, now: now)
+            walletForSync = newWallet
         }
 
         do {
             try modelContext.save()
+            sessionStore.recordUpsert(
+                entity: .wallet,
+                recordID: walletForSync.id,
+                modifiedAt: walletForSync.updatedAt
+            )
+
+            if draft.kind == .creditCard, let profile = walletForSync.creditCardProfile {
+                sessionStore.recordUpsert(
+                    entity: .creditCardProfile,
+                    recordID: profile.id,
+                    modifiedAt: profile.updatedAt
+                )
+            } else if let existingProfileID {
+                sessionStore.recordDelete(
+                    entity: .creditCardProfile,
+                    recordID: existingProfileID,
+                    modifiedAt: now
+                )
+            }
             dismiss()
         } catch {
             alertMessage = mistiaLocalized(vi: "Không thể lưu ví lúc này.", en: "Couldn't save this wallet right now.", ja: "現在このウォレットを保存できません。") + " \(error.localizedDescription)"
@@ -347,6 +371,11 @@ struct ManagementWalletEditorSheet: View {
 
         do {
             try modelContext.save()
+            sessionStore.recordUpsert(
+                entity: .wallet,
+                recordID: wallet.id,
+                modifiedAt: wallet.updatedAt
+            )
             dismiss()
         } catch {
             alertMessage = mistiaLocalized(vi: "Không thể lưu trạng thái lưu trữ.", en: "Couldn't save the archive state.", ja: "アーカイブ状態を保存できません。") + " \(error.localizedDescription)"
@@ -361,6 +390,7 @@ struct ManagementWalletEditorSheet: View {
 struct ManagementCategoryEditorSheet: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
+    @Environment(SessionStore.self) private var sessionStore
     @Query(sort: [SortDescriptor(\TransactionCategory.createdAt), SortDescriptor(\TransactionCategory.sortOrder)])
     private var storedCategories: [TransactionCategory]
 
@@ -507,6 +537,7 @@ struct ManagementCategoryEditorSheet: View {
         }
 
         let now = Date()
+        let categoryForSync: TransactionCategory
 
         if let category = target.category {
             let previousKind = category.kind
@@ -519,6 +550,7 @@ struct ManagementCategoryEditorSheet: View {
             if previousKind != draft.kind {
                 category.sortOrder = nextSortOrder(for: draft.kind, excluding: category)
             }
+            categoryForSync = category
         } else {
             let category = TransactionCategory(
                 name: trimmedName,
@@ -529,10 +561,16 @@ struct ManagementCategoryEditorSheet: View {
                 sortOrder: nextSortOrder(for: draft.kind, excluding: nil)
             )
             modelContext.insert(category)
+            categoryForSync = category
         }
 
         do {
             try modelContext.save()
+            sessionStore.recordUpsert(
+                entity: .category,
+                recordID: categoryForSync.id,
+                modifiedAt: categoryForSync.updatedAt
+            )
             dismiss()
         } catch {
             alertMessage = mistiaLocalized(vi: "Không thể lưu danh mục lúc này.", en: "Couldn't save this category right now.", ja: "現在このカテゴリを保存できません。") + " \(error.localizedDescription)"
@@ -547,6 +585,11 @@ struct ManagementCategoryEditorSheet: View {
 
         do {
             try modelContext.save()
+            sessionStore.recordUpsert(
+                entity: .category,
+                recordID: category.id,
+                modifiedAt: category.updatedAt
+            )
             dismiss()
         } catch {
             alertMessage = mistiaLocalized(vi: "Không thể lưu trạng thái lưu trữ.", en: "Couldn't save the archive state.", ja: "アーカイブ状態を保存できません。") + " \(error.localizedDescription)"

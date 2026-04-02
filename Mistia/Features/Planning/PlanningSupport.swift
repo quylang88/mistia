@@ -70,6 +70,11 @@ enum PlanningDueRowTone {
     }
 }
 
+struct PlanningSavedDuePayment {
+    let transaction: LedgerTransaction
+    let occurrenceID: UUID
+}
+
 enum PlanningPersistenceSupport {
     static func saveDuePayment(
         draft: PlanningDuePaymentDraft,
@@ -81,7 +86,7 @@ enum PlanningPersistenceSupport {
         occurrences: [DueOccurrenceRecord],
         modelContext: ModelContext,
         calendar: Calendar = .current
-    ) throws -> LedgerTransaction {
+    ) throws -> PlanningSavedDuePayment {
         let now = Date()
         let transaction = LedgerTransaction(
             primaryKind: draft.primaryKind,
@@ -115,7 +120,7 @@ enum PlanningPersistenceSupport {
         }
 
         modelContext.insert(transaction)
-        try upsertOccurrence(
+        let occurrence = try upsertOccurrence(
             sourceKind: sourceKind,
             sourceID: sourceID,
             selectedMonth: selectedMonth,
@@ -129,9 +134,13 @@ enum PlanningPersistenceSupport {
         )
 
         try modelContext.save()
-        return transaction
+        return PlanningSavedDuePayment(
+            transaction: transaction,
+            occurrenceID: occurrence.id
+        )
     }
 
+    @discardableResult
     static func upsertOccurrence(
         sourceKind: PlanningDueSourceKind,
         sourceID: UUID,
@@ -143,7 +152,7 @@ enum PlanningPersistenceSupport {
         modelContext: ModelContext,
         paidAt: Date? = nil,
         calendar: Calendar = .current
-    ) throws {
+    ) throws -> DueOccurrenceRecord {
         let monthKey = PlanningLogic.monthKey(for: selectedMonth, calendar: calendar)
         let now = Date()
         if let existing = occurrences.first(where: {
@@ -157,6 +166,7 @@ enum PlanningPersistenceSupport {
             existing.paidAt = paidAt
             existing.linkedTransactionID = linkedTransactionID
             existing.updatedAt = now
+            return existing
         } else {
             let record = DueOccurrenceRecord(
                 sourceKind: sourceKind,
@@ -171,6 +181,7 @@ enum PlanningPersistenceSupport {
                 updatedAt: now
             )
             modelContext.insert(record)
+            return record
         }
     }
 

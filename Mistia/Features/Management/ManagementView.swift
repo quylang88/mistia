@@ -88,7 +88,7 @@ struct ManagementView: View {
             .navigationDestination(item: $destination) { route in
                 switch route {
                 case .authPlaceholder:
-                    ManagementAuthPlaceholderView()
+                    ManagementAccountView()
                 case .settings:
                     SettingsView()
                 }
@@ -131,7 +131,7 @@ struct ManagementView: View {
             isPresented: $showsDeleteAllConfirmation,
             titleVisibility: .visible
         ) {
-            Button(mistiaLocalized(vi: "Xóa ví và danh mục", en: "Delete wallets and categories", ja: "ウォレットとカテゴリを削除"), role: .destructive) {
+            Button(mistiaLocalized(vi: "Xóa toàn bộ dữ liệu", en: "Delete all data", ja: "すべてのデータを削除"), role: .destructive) {
                 deleteAllManagementData()
             }
 
@@ -139,9 +139,9 @@ struct ManagementView: View {
         } message: {
             Text(
                 mistiaLocalized(
-                    vi: "Hành động này sẽ xóa tất cả ví và danh mục đang lưu trên thiết bị.",
-                    en: "This will delete all wallets and categories stored on this device.",
-                    ja: "この操作により、この端末に保存されているすべてのウォレットとカテゴリが削除されます。"
+                    vi: "Hành động này sẽ xóa toàn bộ dữ liệu Mistia đang lưu trên thiết bị này.",
+                    en: "This will delete all Mistia data stored on this device.",
+                    ja: "この操作により、この端末に保存されている Mistia の全データが削除されます。"
                 )
             )
         }
@@ -150,7 +150,14 @@ struct ManagementView: View {
     private var profileSection: some View {
         Group {
             if let summary = sessionStore.summary {
-                ManagementProfileCard(summary: summary, tint: cardTint)
+                ManagementProfileCard(
+                    summary: summary,
+                    syncStatusTitle: sessionStore.syncStatusTitle,
+                    syncStatusDetail: sessionStore.syncStatusDetail,
+                    tint: cardTint
+                ) {
+                    destination = .authPlaceholder
+                }
             } else {
                 ManagementSignedOutCard(accent: accentPurple, tint: cardTint) {
                     destination = .authPlaceholder
@@ -324,10 +331,44 @@ struct ManagementView: View {
 
     private func deleteAllManagementData() {
         do {
+            let now = Date()
             let wallets = try modelContext.fetch(FetchDescriptor<LedgerWallet>())
             let categories = try modelContext.fetch(FetchDescriptor<TransactionCategory>())
             let creditProfiles = try modelContext.fetch(FetchDescriptor<CreditCardProfile>())
             let transactions = try modelContext.fetch(FetchDescriptor<LedgerTransaction>())
+            let budgets = try modelContext.fetch(FetchDescriptor<BudgetPlan>())
+            let goals = try modelContext.fetch(FetchDescriptor<SavingsGoal>())
+            let recurringBills = try modelContext.fetch(FetchDescriptor<RecurringBillPlan>())
+            let installments = try modelContext.fetch(FetchDescriptor<InstallmentPlan>())
+            let dueOccurrences = try modelContext.fetch(FetchDescriptor<DueOccurrenceRecord>())
+            let mutations =
+                wallets.map {
+                    MistiaSyncMutation(entity: .wallet, recordID: $0.id, kind: .delete, modifiedAt: now)
+                }
+                + categories.map {
+                    MistiaSyncMutation(entity: .category, recordID: $0.id, kind: .delete, modifiedAt: now)
+                }
+                + creditProfiles.map {
+                    MistiaSyncMutation(entity: .creditCardProfile, recordID: $0.id, kind: .delete, modifiedAt: now)
+                }
+                + transactions.map {
+                    MistiaSyncMutation(entity: .transaction, recordID: $0.id, kind: .delete, modifiedAt: now)
+                }
+                + budgets.map {
+                    MistiaSyncMutation(entity: .budgetPlan, recordID: $0.id, kind: .delete, modifiedAt: now)
+                }
+                + goals.map {
+                    MistiaSyncMutation(entity: .savingsGoal, recordID: $0.id, kind: .delete, modifiedAt: now)
+                }
+                + recurringBills.map {
+                    MistiaSyncMutation(entity: .recurringBillPlan, recordID: $0.id, kind: .delete, modifiedAt: now)
+                }
+                + installments.map {
+                    MistiaSyncMutation(entity: .installmentPlan, recordID: $0.id, kind: .delete, modifiedAt: now)
+                }
+                + dueOccurrences.map {
+                    MistiaSyncMutation(entity: .dueOccurrenceRecord, recordID: $0.id, kind: .delete, modifiedAt: now)
+                }
 
             for wallet in wallets {
                 modelContext.delete(wallet)
@@ -345,14 +386,35 @@ struct ManagementView: View {
                 modelContext.delete(transaction)
             }
 
+            for budget in budgets {
+                modelContext.delete(budget)
+            }
+
+            for goal in goals {
+                modelContext.delete(goal)
+            }
+
+            for recurringBill in recurringBills {
+                modelContext.delete(recurringBill)
+            }
+
+            for installment in installments {
+                modelContext.delete(installment)
+            }
+
+            for occurrence in dueOccurrences {
+                modelContext.delete(occurrence)
+            }
+
             try modelContext.save()
+            sessionStore.recordMutations(mutations)
 
             infoAlert = ManagementInfoAlert(
                 title: mistiaLocalized(vi: "Đã xóa dữ liệu", en: "Data deleted", ja: "データを削除しました"),
                 message: mistiaLocalized(
-                    vi: "Tất cả ví và danh mục đã được xóa khỏi thiết bị.",
-                    en: "All wallets and categories have been removed from this device.",
-                    ja: "すべてのウォレットとカテゴリがこの端末から削除されました。"
+                    vi: "Toàn bộ dữ liệu Mistia trong máy hiện tại đã được xóa.",
+                    en: "All Mistia data on this device has been deleted.",
+                    ja: "この端末の Mistia データをすべて削除しました。"
                 )
             )
         } catch {
@@ -397,28 +459,48 @@ private struct ManagementCard<Content: View>: View {
 
 private struct ManagementProfileCard: View {
     let summary: SessionSummary
+    let syncStatusTitle: String
+    let syncStatusDetail: String
     let tint: Color
+    let action: () -> Void
 
     var body: some View {
-        ManagementCard(tint: tint) {
-            HStack(spacing: 14) {
-                MistiaAvatarBadge(initials: summary.initials, size: 50, showsStatus: false)
+        Button(action: action) {
+            ManagementCard(tint: tint) {
+                HStack(spacing: 14) {
+                    MistiaAvatarBadge(initials: summary.initials, size: 50, showsStatus: false)
 
-                VStack(alignment: .leading, spacing: 5) {
-                    Text(summary.displayName)
-                        .font(.system(size: 18, weight: .semibold, design: .rounded))
-                        .foregroundStyle(.primary)
+                    VStack(alignment: .leading, spacing: 5) {
+                        Text(summary.displayName)
+                            .font(.system(size: 18, weight: .semibold, design: .rounded))
+                            .foregroundStyle(.primary)
 
-                    Text(summary.email)
-                        .font(.system(size: 13, weight: .medium, design: .rounded))
-                        .foregroundStyle(.secondary)
+                        Text(summary.email)
+                            .font(.system(size: 13, weight: .medium, design: .rounded))
+                            .foregroundStyle(.secondary)
+
+                        Text(syncStatusTitle)
+                            .font(.system(size: 12.5, weight: .semibold, design: .rounded))
+                            .foregroundStyle(Color(red: 0.43, green: 0.23, blue: 0.76))
+                            .padding(.top, 2)
+
+                        Text(syncStatusDetail)
+                            .font(.system(size: 12.5, weight: .medium, design: .rounded))
+                            .foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+
+                    Spacer()
+
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 11, weight: .bold))
+                        .foregroundStyle(.tertiary)
                 }
-
-                Spacer()
+                .padding(.horizontal, 14)
+                .padding(.vertical, 13)
             }
-            .padding(.horizontal, 14)
-            .padding(.vertical, 13)
         }
+        .buttonStyle(MistiaPressableButtonStyle(cornerRadius: 20))
     }
 }
 
@@ -714,61 +796,5 @@ private struct ManagementCardBackground: View {
 
     var body: some View {
         MistiaBlockCardBackground(tint: tint, cornerRadius: 20)
-    }
-}
-
-private struct ManagementAuthPlaceholderView: View {
-    @Environment(\.dismiss) private var dismiss
-
-    var body: some View {
-        MistiaPinnedTopBarScaffold(
-            tone: .standard,
-            title: mistiaLocalized(vi: "Đăng nhập", en: "Sign in", ja: "ログイン"),
-            embedsInNavigationStack: false,
-            showsLeadingAvatar: false,
-            leadingSystemImage: "chevron.left",
-            trailingSystemImage: nil,
-            hidesSystemBackButton: true,
-            onLeadingTap: { dismiss() },
-            contentSpacing: 18
-        ) {
-            MistiaGlassCard(
-                cornerRadius: 24,
-                tint: Color(red: 0.43, green: 0.23, blue: 0.76).opacity(0.14)
-            ) {
-                VStack(spacing: 16) {
-                    ZStack {
-                        MistiaCircleGlassBackground(tint: Color(red: 0.43, green: 0.23, blue: 0.76).opacity(0.18))
-
-                        Image(systemName: "person.crop.circle.badge.checkmark")
-                            .font(.system(size: 28, weight: .bold))
-                            .foregroundStyle(Color(red: 0.43, green: 0.23, blue: 0.76))
-                    }
-                    .frame(width: 78, height: 78)
-
-                    Text(
-                        mistiaLocalized(
-                            vi: "Flow đăng nhập sẽ được nối ở pha auth riêng.",
-                            en: "The sign-in flow will be connected in a dedicated auth phase.",
-                            ja: "ログインフローは専用の認証フェーズで追加されます。"
-                        )
-                    )
-                        .font(.system(size: 22, weight: .bold, design: .rounded))
-                        .multilineTextAlignment(.center)
-
-                    Text(
-                        mistiaLocalized(
-                            vi: "Tab Quản lý hiện đã chạy local-first bằng SwiftData, nên bạn vẫn có thể thêm ví và danh mục ngay cả khi chưa đăng nhập.",
-                            en: "The Manage tab already runs local-first with SwiftData, so you can still add wallets and categories even without signing in.",
-                            ja: "管理タブはすでに SwiftData によるローカルファーストで動作しているため、ログインしていなくてもウォレットやカテゴリを追加できます。"
-                        )
-                    )
-                        .font(.system(size: 14.5, weight: .medium, design: .rounded))
-                        .foregroundStyle(.secondary)
-                        .multilineTextAlignment(.center)
-                }
-                .frame(maxWidth: .infinity)
-            }
-        }
     }
 }
