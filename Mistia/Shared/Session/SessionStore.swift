@@ -21,6 +21,32 @@ struct SessionSummary: Equatable {
     }
 }
 
+enum SessionAuthPhase: Equatable {
+    case signIn
+    case signUp
+    case forgotPassword
+    case verifyEmailPending
+}
+
+enum SessionAuthField: Hashable {
+    case displayName
+    case email
+    case password
+    case confirmPassword
+}
+
+enum SessionAuthBannerStyle: Equatable {
+    case info
+    case success
+    case error
+}
+
+struct SessionAuthBanner: Equatable {
+    let title: String
+    let message: String
+    let style: SessionAuthBannerStyle
+}
+
 @MainActor
 @Observable
 final class SessionStore {
@@ -31,6 +57,10 @@ final class SessionStore {
     var syncStatusSystemImage: String
     var lastErrorMessage: String?
     var lastSyncAt: Date?
+    var authPhase: SessionAuthPhase = .signIn
+    var authBanner: SessionAuthBanner?
+    var authPendingEmail: String?
+    var authFieldErrors: [SessionAuthField: String] = [:]
 
     @ObservationIgnored private let authService: SupabaseAuthService
     @ObservationIgnored private let syncCoordinator: SyncCoordinator
@@ -83,6 +113,27 @@ final class SessionStore {
         currentSession != nil && isConfigured
     }
 
+    func showAuthPhase(_ phase: SessionAuthPhase) {
+        authPhase = phase
+        authBanner = nil
+        authFieldErrors = [:]
+        if phase != .verifyEmailPending {
+            authPendingEmail = nil
+        }
+    }
+
+    func setAuthFieldErrors(_ errors: [SessionAuthField: String]) {
+        authFieldErrors = errors
+    }
+
+    func clearAuthFieldError(_ field: SessionAuthField) {
+        authFieldErrors.removeValue(forKey: field)
+    }
+
+    func clearAuthBanner() {
+        authBanner = nil
+    }
+
     func bootstrapIfNeeded() async {
         guard !didBootstrap else { return }
         didBootstrap = true
@@ -128,19 +179,13 @@ final class SessionStore {
 
         isWorking = true
         lastErrorMessage = nil
+        authBanner = nil
 
         do {
             let session = try await authService.signIn(email: email, password: password)
             try await finishAuthentication(session, restoringExistingSession: false)
         } catch {
-            lastErrorMessage = error.localizedDescription
-            syncStatusTitle = mistiaLocalized(
-                vi: "Đăng nhập chưa thành công",
-                en: "Couldn't sign in",
-                ja: "ログインできませんでした"
-            )
-            syncStatusDetail = error.localizedDescription
-            syncStatusSystemImage = "exclamationmark.triangle"
+            handleSignInFailure(error, email: email)
         }
 
         isWorking = false
@@ -154,36 +199,84 @@ final class SessionStore {
 
         isWorking = true
         lastErrorMessage = nil
+        authBanner = nil
 
         do {
-            let session = try await authService.signUp(
+            let result = try await authService.signUp(
                 email: email,
                 password: password,
                 displayName: displayName
             )
-            try await finishAuthentication(session, restoringExistingSession: false)
-        } catch SupabaseServiceError.emailConfirmationRequired {
-            lastErrorMessage = nil
-            syncStatusTitle = mistiaLocalized(
-                vi: "Kiểm tra email để xác nhận",
-                en: "Check your email to confirm",
-                ja: "確認メールをチェックしてください"
-            )
-            syncStatusDetail = mistiaLocalized(
-                vi: "Supabase đã tạo tài khoản. Hãy mở email xác nhận rồi quay lại đăng nhập trong Mistia.",
-                en: "Supabase created the account. Open the confirmation email, then come back and sign in to Mistia.",
-                ja: "Supabase でアカウントを作成しました。確認メールを開いてから Mistia にログインしてください。"
-            )
-            syncStatusSystemImage = "envelope.badge"
+            switch result {
+            case .signedIn(let session):
+                try await finishAuthentication(session, restoringExistingSession: false)
+            case .emailConfirmationRequired:
+                presentEmailConfirmationState(for: email)
+            }
         } catch {
-            lastErrorMessage = error.localizedDescription
-            syncStatusTitle = mistiaLocalized(
-                vi: "Tạo tài khoản chưa thành công",
-                en: "Couldn't create the account",
-                ja: "アカウントを作成できませんでした"
+            handleSignUpFailure(error)
+        }
+
+        isWorking = false
+    }
+
+    func requestPasswordReset(email: String) async {
+        guard isConfigured else {
+            applyConfigurationMissingState()
+            return
+        }
+
+        isWorking = true
+        authBanner = nil
+
+        do {
+            try await authService.requestPasswordReset(email: email)
+            authBanner = SessionAuthBanner(
+                title: mistiaLocalized(
+                    vi: "Kiểm tra email của bạn",
+                    en: "Check your email",
+                    ja: "メールを確認してください"
+                ),
+                message: mistiaLocalized(
+                    vi: "Nếu email hợp lệ, Mistia sẽ gửi một email đặt lại mật khẩu trong giây lát.",
+                    en: "If the email is valid, Mistia will send a password reset email shortly.",
+                    ja: "有効なメールアドレスであれば、まもなくパスワード再設定メールが送信されます。"
+                ),
+                style: .success
             )
-            syncStatusDetail = error.localizedDescription
-            syncStatusSystemImage = "exclamationmark.triangle"
+        } catch {
+            handleRecoveryFailure(error, isResend: false)
+        }
+
+        isWorking = false
+    }
+
+    func resendConfirmation(email: String) async {
+        guard isConfigured else {
+            applyConfigurationMissingState()
+            return
+        }
+
+        isWorking = true
+        authBanner = nil
+
+        do {
+            try await authService.resendConfirmation(email: email)
+            authBanner = SessionAuthBanner(
+                title: mistiaLocalized(
+                    vi: "Đã gửi lại email xác nhận",
+                    en: "Confirmation email sent again",
+                    ja: "確認メールを再送しました"
+                ),
+                message: mistiaLocalized(
+                    vi: "Nếu email đang chờ xác nhận, Supabase sẽ gửi lại email mới đến hộp thư của bạn.",
+                    en: "If this account is pending confirmation, Supabase will send a fresh email to your inbox.",
+                    ja: "このアカウントが確認待ちの場合、Supabase が新しい確認メールを再送します。"
+                ),
+                style: .info
+            )
+        } catch {
+            handleRecoveryFailure(error, isResend: true)
         }
 
         isWorking = false
@@ -266,6 +359,160 @@ final class SessionStore {
         scheduleSync()
     }
 
+    private func handleSignInFailure(_ error: Error, email: String) {
+        if isEmailConfirmationError(error) {
+            presentEmailConfirmationState(for: email)
+            return
+        }
+
+        authPhase = .signIn
+
+        if isInfrastructureAuthError(error) {
+            authBanner = SessionAuthBanner(
+                title: mistiaLocalized(
+                    vi: "Chưa thể kết nối",
+                    en: "Can't connect right now",
+                    ja: "現在接続できません"
+                ),
+                message: infrastructureErrorMessage(for: error),
+                style: .error
+            )
+            return
+        }
+
+        authBanner = SessionAuthBanner(
+            title: mistiaLocalized(
+                vi: "Đăng nhập chưa thành công",
+                en: "Couldn't sign in",
+                ja: "ログインできませんでした"
+            ),
+            message: mistiaLocalized(
+                vi: "Email hoặc mật khẩu chưa đúng. Kiểm tra lại rồi thử thêm lần nữa.",
+                en: "The email or password is incorrect. Check them and try again.",
+                ja: "メールアドレスまたはパスワードが正しくありません。確認してもう一度お試しください。"
+            ),
+            style: .error
+        )
+    }
+
+    private func handleSignUpFailure(_ error: Error) {
+        authPhase = .signUp
+
+        if isInfrastructureAuthError(error) {
+            authBanner = SessionAuthBanner(
+                title: mistiaLocalized(
+                    vi: "Chưa thể tạo tài khoản",
+                    en: "Can't create the account right now",
+                    ja: "現在アカウントを作成できません"
+                ),
+                message: infrastructureErrorMessage(for: error),
+                style: .error
+            )
+            return
+        }
+
+        if isRateLimitedError(error) {
+            authBanner = SessionAuthBanner(
+                title: mistiaLocalized(
+                    vi: "Bạn thao tác hơi nhanh",
+                    en: "You're moving a bit fast",
+                    ja: "少し操作が速すぎます"
+                ),
+                message: mistiaLocalized(
+                    vi: "Supabase vừa chặn tạm thời để bảo vệ hệ thống. Chờ một chút rồi thử lại nhé.",
+                    en: "Supabase temporarily slowed things down to protect the service. Please wait a moment and try again.",
+                    ja: "サービス保護のため一時的に制限されています。少し待ってからもう一度お試しください。"
+                ),
+                style: .error
+            )
+            return
+        }
+
+        authBanner = SessionAuthBanner(
+            title: mistiaLocalized(
+                vi: "Tạo tài khoản chưa thành công",
+                en: "Couldn't create the account",
+                ja: "アカウントを作成できませんでした"
+            ),
+            message: mistiaLocalized(
+                vi: "Email này chưa sẵn sàng để tạo tài khoản mới. Thử đăng nhập hoặc dùng quên mật khẩu nhé.",
+                en: "This email isn't ready for a new account right now. Try signing in or use password recovery instead.",
+                ja: "このメールアドレスでは現在新しいアカウントを作成できません。ログインするか、パスワード再設定をお試しください。"
+            ),
+            style: .error
+        )
+    }
+
+    private func handleRecoveryFailure(_ error: Error, isResend: Bool) {
+        if isInfrastructureAuthError(error) {
+            authBanner = SessionAuthBanner(
+                title: mistiaLocalized(
+                    vi: isResend ? "Chưa thể gửi lại email" : "Chưa thể gửi email",
+                    en: isResend ? "Can't resend the email yet" : "Can't send the email yet",
+                    ja: isResend ? "メールを再送できません" : "メールを送信できません"
+                ),
+                message: infrastructureErrorMessage(for: error),
+                style: .error
+            )
+            return
+        }
+
+        if isRateLimitedError(error) {
+            authBanner = SessionAuthBanner(
+                title: mistiaLocalized(
+                    vi: "Bạn vừa yêu cầu gần đây",
+                    en: "A request was just sent",
+                    ja: "直前にリクエストされました"
+                ),
+                message: mistiaLocalized(
+                    vi: "Chờ một chút rồi thử lại để tránh gửi email quá dày.",
+                    en: "Please wait a bit before trying again to avoid sending too many emails.",
+                    ja: "メール送信が多すぎないよう、少し待ってからもう一度お試しください。"
+                ),
+                style: .info
+            )
+            return
+        }
+
+        authBanner = SessionAuthBanner(
+            title: mistiaLocalized(
+                vi: isResend ? "Email đang được xử lý" : "Yêu cầu đang được xử lý",
+                en: isResend ? "The email request is being processed" : "The request is being processed",
+                ja: isResend ? "メール再送を処理中です" : "リクエストを処理中です"
+            ),
+            message: mistiaLocalized(
+                vi: isResend
+                    ? "Nếu tài khoản đang chờ xác nhận, Supabase sẽ tiếp tục gửi email xác nhận đến đúng hộp thư."
+                    : "Nếu email hợp lệ, Supabase sẽ tiếp tục gửi email đặt lại mật khẩu đến đúng hộp thư.",
+                en: isResend
+                    ? "If the account is pending confirmation, Supabase will still deliver the confirmation email to the right inbox."
+                    : "If the email is valid, Supabase will still deliver the reset email to the right inbox.",
+                ja: isResend
+                    ? "アカウントが確認待ちであれば、Supabase が正しい受信箱へ確認メールを送信します。"
+                    : "有効なメールアドレスであれば、Supabase が正しい受信箱へ再設定メールを送信します。"
+            ),
+            style: .info
+        )
+    }
+
+    private func presentEmailConfirmationState(for email: String) {
+        authPhase = .verifyEmailPending
+        authPendingEmail = email
+        authBanner = SessionAuthBanner(
+            title: mistiaLocalized(
+                vi: "Kiểm tra email để xác nhận",
+                en: "Check your email to confirm",
+                ja: "確認メールをチェックしてください"
+            ),
+            message: mistiaLocalized(
+                vi: "Supabase đã tạo tài khoản. Mở email xác nhận rồi quay lại đăng nhập trong Mistia nhé.",
+                en: "Supabase created the account. Open the confirmation email, then come back and sign in to Mistia.",
+                ja: "Supabase でアカウントを作成しました。確認メールを開いてから Mistia にログインしてください。"
+            ),
+            style: .info
+        )
+    }
+
     private func finishAuthentication(
         _ session: SupabaseAuthSession,
         restoringExistingSession: Bool
@@ -274,6 +521,10 @@ final class SessionStore {
         currentSession = validSession
         summary = SessionSummary(user: validSession.user)
         lastErrorMessage = nil
+        authBanner = nil
+        authFieldErrors = [:]
+        authPendingEmail = nil
+        authPhase = .signIn
 
         syncStatusTitle = mistiaLocalized(
             vi: restoringExistingSession ? "Đang nạp dữ liệu cloud" : "Đang đồng bộ lần đầu",
@@ -300,6 +551,10 @@ final class SessionStore {
     }
 
     private func applyConfigurationMissingState() {
+        authPhase = .signIn
+        authBanner = nil
+        authPendingEmail = nil
+        authFieldErrors = [:]
         syncStatusTitle = mistiaLocalized(
             vi: "Chưa cấu hình Supabase",
             en: "Supabase is not configured",
@@ -314,6 +569,10 @@ final class SessionStore {
     }
 
     private func applySignedOutState() {
+        authPhase = .signIn
+        authBanner = nil
+        authPendingEmail = nil
+        authFieldErrors = [:]
         syncStatusTitle = mistiaLocalized(
             vi: "Chưa đăng nhập",
             en: "Signed out",
@@ -350,6 +609,66 @@ final class SessionStore {
         )
         syncStatusDetail = error.localizedDescription
         syncStatusSystemImage = "wifi.exclamationmark"
+    }
+
+    private func isInfrastructureAuthError(_ error: Error) -> Bool {
+        if error is URLError {
+            return true
+        }
+
+        guard let serviceError = error as? SupabaseServiceError else {
+            return false
+        }
+
+        switch serviceError {
+        case .configurationMissing, .invalidURL, .invalidResponse, .missingSession, .missingRefreshToken:
+            return true
+        case .serverMessage:
+            return false
+        }
+    }
+
+    private func isEmailConfirmationError(_ error: Error) -> Bool {
+        errorMessage(for: error).contains("email not confirmed")
+            || errorMessage(for: error).contains("confirm your email")
+    }
+
+    private func isRateLimitedError(_ error: Error) -> Bool {
+        let message = errorMessage(for: error)
+        return message.contains("rate limit") || message.contains("too many requests")
+    }
+
+    private func infrastructureErrorMessage(for error: Error) -> String {
+        if error is URLError {
+            return mistiaLocalized(
+                vi: "Mistia chưa thể kết nối đến Supabase. Kiểm tra mạng rồi thử lại nhé.",
+                en: "Mistia can't reach Supabase right now. Check your connection and try again.",
+                ja: "現在 Mistia は Supabase に接続できません。通信状況を確認してから再度お試しください。"
+            )
+        }
+
+        if let serviceError = error as? SupabaseServiceError {
+            switch serviceError {
+            case .configurationMissing:
+                return mistiaLocalized(
+                    vi: "Supabase chưa được cấu hình đầy đủ trong app này.",
+                    en: "Supabase hasn't been configured completely in this build.",
+                    ja: "このビルドでは Supabase の設定がまだ完了していません。"
+                )
+            case .invalidURL, .invalidResponse, .missingSession, .missingRefreshToken, .serverMessage:
+                break
+            }
+        }
+
+        return mistiaLocalized(
+            vi: "Hệ thống xác thực đang tạm bận. Thử lại sau ít phút nhé.",
+            en: "The authentication service is temporarily busy. Please try again in a moment.",
+            ja: "認証サービスが一時的に混み合っています。少し待ってからお試しください。"
+        )
+    }
+
+    private func errorMessage(for error: Error) -> String {
+        error.localizedDescription.lowercased()
     }
 
     private func startLiveSyncLoop() {

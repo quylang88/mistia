@@ -16,14 +16,24 @@ private enum ManagementAuthMode: String, CaseIterable, Identifiable {
     }
 }
 
+private enum ManagementAuthInput: Hashable {
+    case displayName
+    case email
+    case password
+    case confirmPassword
+}
+
 struct ManagementAccountView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(SessionStore.self) private var sessionStore
 
-    @State private var mode: ManagementAuthMode = .signIn
     @State private var displayName = ""
     @State private var email = ""
     @State private var password = ""
+    @State private var confirmPassword = ""
+    @State private var isPasswordVisible = false
+    @State private var isConfirmPasswordVisible = false
+    @FocusState private var focusedField: ManagementAuthInput?
 
     private let accent = Color(red: 0.43, green: 0.23, blue: 0.76)
 
@@ -32,7 +42,7 @@ struct ManagementAccountView: View {
             tone: .standard,
             title: sessionStore.isSignedIn
                 ? mistiaLocalized(vi: "Tài khoản & sync", en: "Account & sync", ja: "アカウントと同期")
-                : mistiaLocalized(vi: "Đăng nhập", en: "Sign in", ja: "ログイン"),
+                : authScreenTitle,
             embedsInNavigationStack: false,
             showsLeadingAvatar: false,
             leadingSystemImage: "chevron.left",
@@ -48,6 +58,23 @@ struct ManagementAccountView: View {
             } else {
                 authForm
             }
+        }
+        .onChange(of: sessionStore.authPendingEmail) { _, newValue in
+            guard let newValue, !newValue.isEmpty else { return }
+            email = newValue
+        }
+        .onChange(of: displayName) { _, _ in
+            sessionStore.clearAuthFieldError(.displayName)
+        }
+        .onChange(of: email) { _, _ in
+            sessionStore.clearAuthFieldError(.email)
+        }
+        .onChange(of: password) { _, _ in
+            sessionStore.clearAuthFieldError(.password)
+            sessionStore.clearAuthFieldError(.confirmPassword)
+        }
+        .onChange(of: confirmPassword) { _, _ in
+            sessionStore.clearAuthFieldError(.confirmPassword)
         }
     }
 
@@ -178,91 +205,29 @@ struct ManagementAccountView: View {
                         accent: accent
                     )
 
-                    Text(
-                        mistiaLocalized(
-                            vi: "Dùng cùng một tài khoản Mistia để đồng bộ ví, danh mục, giao dịch và các kế hoạch sang thiết bị khác.",
-                            en: "Use the same Mistia account to sync wallets, categories, transactions, and plans across devices.",
-                            ja: "同じ Mistia アカウントでウォレット、カテゴリ、取引、計画を別の端末へ同期できます。"
+                    Text(authIntroCopy)
+                        .font(.system(size: 15, weight: .medium, design: .rounded))
+                        .foregroundStyle(.secondary)
+
+                    if showsPrimaryModeSwitcher {
+                        MistiaNativeSegmentedControl(
+                            selection: selectedMode,
+                            options: ManagementAuthMode.allCases,
+                            title: \.title,
+                            accent: accent
                         )
-                    )
-                    .font(.system(size: 15, weight: .medium, design: .rounded))
-                    .foregroundStyle(.secondary)
-
-                    MistiaNativeSegmentedControl(
-                        selection: $mode,
-                        options: ManagementAuthMode.allCases,
-                        title: \.title,
-                        accent: accent
-                    )
-
-                    VStack(spacing: 12) {
-                        if mode == .signUp {
-                            TextField(
-                                mistiaLocalized(vi: "Tên hiển thị", en: "Display name", ja: "表示名"),
-                                text: $displayName
-                            )
-                            .textInputAutocapitalization(.words)
-                            .padding(.horizontal, 14)
-                            .padding(.vertical, 13)
-                            .background(.white.opacity(0.08), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
-                        }
-
-                        TextField(
-                            mistiaLocalized(vi: "Email", en: "Email", ja: "メールアドレス"),
-                            text: $email
-                        )
-                        .keyboardType(.emailAddress)
-                        .textInputAutocapitalization(.never)
-                        .autocorrectionDisabled()
-                        .padding(.horizontal, 14)
-                        .padding(.vertical, 13)
-                        .background(.white.opacity(0.08), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
-
-                        SecureField(
-                            mistiaLocalized(vi: "Mật khẩu", en: "Password", ja: "パスワード"),
-                            text: $password
-                        )
-                        .textInputAutocapitalization(.never)
-                        .autocorrectionDisabled()
-                        .padding(.horizontal, 14)
-                        .padding(.vertical, 13)
-                        .background(.white.opacity(0.08), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
                     }
 
-                    Button {
-                        submit()
-                    } label: {
-                        HStack(spacing: 10) {
-                            if sessionStore.isWorking {
-                                ProgressView()
-                                    .tint(.white)
-                            }
-
-                            Text(
-                                mode == .signIn
-                                    ? mistiaLocalized(vi: "Đăng nhập", en: "Sign in", ja: "ログイン")
-                                    : mistiaLocalized(vi: "Tạo tài khoản", en: "Create account", ja: "アカウント作成")
-                            )
-                            .font(.system(size: 15.5, weight: .bold, design: .rounded))
-                        }
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 14)
+                    if let banner = sessionStore.authBanner {
+                        ManagementAuthBannerCard(banner: banner)
                     }
-                    .buttonStyle(.glassProminent)
-                    .tint(accent)
-                    .disabled(sessionStore.isWorking || !canSubmit)
+
+                    authPhaseContent
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
 
-            ManagementSyncStateCard(
-                title: sessionStore.syncStatusTitle,
-                detail: sessionStore.syncStatusDetail,
-                systemImage: sessionStore.syncStatusSystemImage,
-                accent: accent
-            )
-
-            if let lastErrorMessage = sessionStore.lastErrorMessage {
+            if let lastErrorMessage = lastSignedInIssue {
                 ManagementInlineMessageCard(
                     title: mistiaLocalized(vi: "Chưa thể tiếp tục", en: "Can't continue yet", ja: "まだ続行できません"),
                     message: lastErrorMessage,
@@ -272,26 +237,482 @@ struct ManagementAccountView: View {
         }
     }
 
+    private var authScreenTitle: String {
+        switch sessionStore.authPhase {
+        case .signIn:
+            return mistiaLocalized(vi: "Đăng nhập", en: "Sign in", ja: "ログイン")
+        case .signUp:
+            return mistiaLocalized(vi: "Tạo tài khoản", en: "Create account", ja: "アカウント作成")
+        case .forgotPassword:
+            return mistiaLocalized(vi: "Quên mật khẩu", en: "Forgot password", ja: "パスワードをお忘れですか")
+        case .verifyEmailPending:
+            return mistiaLocalized(vi: "Xác nhận email", en: "Confirm your email", ja: "メール確認")
+        }
+    }
+
+    private var authIntroCopy: String {
+        switch sessionStore.authPhase {
+        case .signIn, .signUp:
+            return mistiaLocalized(
+                vi: "Dùng cùng một tài khoản Mistia để đồng bộ ví, danh mục, giao dịch và các kế hoạch sang thiết bị khác.",
+                en: "Use the same Mistia account to sync wallets, categories, transactions, and plans across devices.",
+                ja: "同じ Mistia アカウントでウォレット、カテゴリ、取引、計画を別の端末へ同期できます。"
+            )
+        case .forgotPassword:
+            return mistiaLocalized(
+                vi: "Nhập email bạn dùng với Mistia. Nếu hợp lệ, Supabase sẽ gửi email đặt lại mật khẩu.",
+                en: "Enter the email you use with Mistia. If it's valid, Supabase will send a reset email.",
+                ja: "Mistia で使っているメールアドレスを入力してください。有効であれば Supabase が再設定メールを送信します。"
+            )
+        case .verifyEmailPending:
+            return mistiaLocalized(
+                vi: "Tài khoản của bạn đang chờ xác nhận email trước khi có thể đăng nhập và bật đồng bộ.",
+                en: "Your account is waiting for email confirmation before it can sign in and start syncing.",
+                ja: "このアカウントはメール確認が完了するまでログインと同期を開始できません。"
+            )
+        }
+    }
+
+    private var showsPrimaryModeSwitcher: Bool {
+        sessionStore.authPhase == .signIn || sessionStore.authPhase == .signUp
+    }
+
+    private var selectedMode: Binding<ManagementAuthMode> {
+        Binding(
+            get: { sessionStore.authPhase == .signUp ? .signUp : .signIn },
+            set: { newValue in
+                switch newValue {
+                case .signIn:
+                    transition(to: .signIn)
+                case .signUp:
+                    transition(to: .signUp)
+                }
+            }
+        )
+    }
+
+    @ViewBuilder
+    private var authPhaseContent: some View {
+        switch sessionStore.authPhase {
+        case .signIn, .signUp:
+            primaryAuthForm
+        case .forgotPassword:
+            forgotPasswordForm
+        case .verifyEmailPending:
+            verifyEmailPendingContent
+        }
+    }
+
+    private var primaryAuthForm: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            if sessionStore.authPhase == .signUp {
+                ManagementAuthFieldContainer(errorMessage: sessionStore.authFieldErrors[.displayName]) {
+                    TextField(
+                        mistiaLocalized(vi: "Tên hiển thị", en: "Display name", ja: "表示名"),
+                        text: $displayName
+                    )
+                    .textContentType(.name)
+                    .textInputAutocapitalization(.words)
+                    .submitLabel(.next)
+                    .focused($focusedField, equals: .displayName)
+                    .onSubmit { focusedField = .email }
+                }
+            }
+
+            ManagementAuthFieldContainer(errorMessage: sessionStore.authFieldErrors[.email]) {
+                TextField(
+                    mistiaLocalized(vi: "Email", en: "Email", ja: "メールアドレス"),
+                    text: $email
+                )
+                .keyboardType(.emailAddress)
+                .textContentType(.username)
+                .textInputAutocapitalization(.never)
+                .autocorrectionDisabled()
+                .submitLabel(.next)
+                .focused($focusedField, equals: .email)
+                .onSubmit { focusedField = .password }
+            }
+
+            ManagementPasswordInputField(
+                placeholder: mistiaLocalized(vi: "Mật khẩu", en: "Password", ja: "パスワード"),
+                text: $password,
+                isVisible: $isPasswordVisible,
+                errorMessage: sessionStore.authFieldErrors[.password],
+                textContentType: sessionStore.authPhase == .signUp ? .newPassword : .password,
+                submitLabel: sessionStore.authPhase == .signUp ? .next : .go,
+                focusField: .password,
+                focusedField: $focusedField,
+                onSubmit: {
+                    if sessionStore.authPhase == .signUp {
+                        focusedField = .confirmPassword
+                    } else {
+                        submit()
+                    }
+                }
+            )
+
+            if sessionStore.authPhase == .signUp {
+                ManagementPasswordStrengthMeter(assessment: passwordAssessment)
+
+                ManagementPasswordRequirementChecklist(
+                    assessment: passwordAssessment,
+                    showsNeutralState: password.isEmpty
+                )
+
+                ManagementPasswordInputField(
+                    placeholder: mistiaLocalized(vi: "Nhập lại mật khẩu", en: "Confirm password", ja: "パスワードを再入力"),
+                    text: $confirmPassword,
+                    isVisible: $isConfirmPasswordVisible,
+                    errorMessage: sessionStore.authFieldErrors[.confirmPassword],
+                    textContentType: .newPassword,
+                    submitLabel: .done,
+                    focusField: .confirmPassword,
+                    focusedField: $focusedField,
+                    onSubmit: submit
+                )
+            } else {
+                Button {
+                    transition(to: .forgotPassword)
+                } label: {
+                    Text(mistiaLocalized(vi: "Quên mật khẩu?", en: "Forgot password?", ja: "パスワードをお忘れですか？"))
+                        .font(.system(size: 13.5, weight: .semibold, design: .rounded))
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(accent)
+            }
+
+            Button {
+                submit()
+            } label: {
+                HStack(spacing: 10) {
+                    if sessionStore.isWorking {
+                        ProgressView()
+                            .tint(.white)
+                    }
+
+                    Text(
+                        sessionStore.authPhase == .signUp
+                            ? mistiaLocalized(vi: "Tạo tài khoản", en: "Create account", ja: "アカウント作成")
+                            : mistiaLocalized(vi: "Đăng nhập", en: "Sign in", ja: "ログイン")
+                    )
+                    .font(.system(size: 15.5, weight: .bold, design: .rounded))
+                }
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 14)
+            }
+            .buttonStyle(.glassProminent)
+            .tint(accent)
+            .disabled(sessionStore.isWorking || !canSubmit)
+        }
+    }
+
+    private var forgotPasswordForm: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            ManagementAuthFieldContainer(errorMessage: sessionStore.authFieldErrors[.email]) {
+                TextField(
+                    mistiaLocalized(vi: "Email", en: "Email", ja: "メールアドレス"),
+                    text: $email
+                )
+                .keyboardType(.emailAddress)
+                .textContentType(.username)
+                .textInputAutocapitalization(.never)
+                .autocorrectionDisabled()
+                .submitLabel(.send)
+                .focused($focusedField, equals: .email)
+                .onSubmit { submit() }
+            }
+
+            Button {
+                submit()
+            } label: {
+                HStack(spacing: 10) {
+                    if sessionStore.isWorking {
+                        ProgressView()
+                            .tint(.white)
+                    }
+
+                    Text(mistiaLocalized(vi: "Gửi email đặt lại mật khẩu", en: "Send reset email", ja: "再設定メールを送信"))
+                        .font(.system(size: 15.5, weight: .bold, design: .rounded))
+                }
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 14)
+            }
+            .buttonStyle(.glassProminent)
+            .tint(accent)
+            .disabled(sessionStore.isWorking || trimmedEmail.isEmpty)
+
+            Button {
+                transition(to: .signIn)
+            } label: {
+                Text(mistiaLocalized(vi: "Quay lại đăng nhập", en: "Back to sign in", ja: "ログインへ戻る"))
+                    .font(.system(size: 14, weight: .semibold, design: .rounded))
+            }
+            .buttonStyle(.plain)
+            .foregroundStyle(accent)
+        }
+    }
+
+    private var verifyEmailPendingContent: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            if !activeEmail.isEmpty {
+                ManagementAuthEmailChip(email: maskEmail(activeEmail), accent: accent)
+            }
+
+            Button {
+                Task {
+                    await sessionStore.resendConfirmation(email: activeEmail)
+                }
+            } label: {
+                HStack(spacing: 10) {
+                    if sessionStore.isWorking {
+                        ProgressView()
+                            .tint(.white)
+                    }
+
+                    Text(mistiaLocalized(vi: "Gửi lại email xác nhận", en: "Resend confirmation email", ja: "確認メールを再送"))
+                        .font(.system(size: 15.5, weight: .bold, design: .rounded))
+                }
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 14)
+            }
+            .buttonStyle(.glassProminent)
+            .tint(accent)
+            .disabled(sessionStore.isWorking || activeEmail.isEmpty)
+
+            Button {
+                transition(to: .signIn)
+            } label: {
+                Text(mistiaLocalized(vi: "Quay lại đăng nhập", en: "Back to sign in", ja: "ログインへ戻る"))
+                    .font(.system(size: 14, weight: .semibold, design: .rounded))
+            }
+            .buttonStyle(.plain)
+            .foregroundStyle(accent)
+        }
+    }
+
+    private var passwordAssessment: PasswordStrengthAssessment {
+        PasswordStrengthAssessment(password: password)
+    }
+
+    private var trimmedEmail: String {
+        email.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private var trimmedDisplayName: String {
+        displayName.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private var activeEmail: String {
+        sessionStore.authPendingEmail ?? trimmedEmail
+    }
+
     private var canSubmit: Bool {
-        email.contains("@") && password.count >= 6 && (mode == .signIn || !displayName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+        switch sessionStore.authPhase {
+        case .signIn:
+            return !trimmedEmail.isEmpty && !password.isEmpty
+        case .signUp:
+            return !trimmedDisplayName.isEmpty && !trimmedEmail.isEmpty && !password.isEmpty && !confirmPassword.isEmpty
+        case .forgotPassword:
+            return !trimmedEmail.isEmpty
+        case .verifyEmailPending:
+            return false
+        }
+    }
+
+    private var lastSignedInIssue: String? {
+        sessionStore.isSignedIn ? sessionStore.lastErrorMessage : nil
+    }
+
+    private func transition(to phase: SessionAuthPhase) {
+        sessionStore.showAuthPhase(phase)
+
+        switch phase {
+        case .signIn:
+            clearPasswords()
+            focusedField = .email
+        case .signUp:
+            clearPasswords()
+            focusedField = .displayName
+        case .forgotPassword:
+            clearPasswords()
+            focusedField = .email
+        case .verifyEmailPending:
+            clearPasswords()
+            focusedField = nil
+        }
     }
 
     private func submit() {
-        let trimmedEmail = email.trimmingCharacters(in: .whitespacesAndNewlines)
-        let trimmedDisplayName = displayName.trimmingCharacters(in: .whitespacesAndNewlines)
+        sessionStore.clearAuthBanner()
+
+        let errors = validationErrors()
+        guard errors.isEmpty else {
+            sessionStore.setAuthFieldErrors(errors)
+            focusFirstInvalidField(using: errors)
+            return
+        }
+
+        sessionStore.setAuthFieldErrors([:])
 
         Task {
-            switch mode {
+            switch sessionStore.authPhase {
             case .signIn:
                 await sessionStore.signIn(email: trimmedEmail, password: password)
+                if sessionStore.authPhase == .verifyEmailPending {
+                    clearPasswords()
+                }
             case .signUp:
                 await sessionStore.signUp(
                     email: trimmedEmail,
                     password: password,
                     displayName: trimmedDisplayName
                 )
+                if sessionStore.authPhase == .verifyEmailPending {
+                    clearPasswords()
+                }
+            case .forgotPassword:
+                await sessionStore.requestPasswordReset(email: trimmedEmail)
+            case .verifyEmailPending:
+                break
             }
         }
+    }
+
+    private func validationErrors() -> [SessionAuthField: String] {
+        var errors: [SessionAuthField: String] = [:]
+
+        switch sessionStore.authPhase {
+        case .signIn:
+            if !isValidEmail(trimmedEmail) {
+                errors[.email] = mistiaLocalized(
+                    vi: "Email chưa đúng định dạng.",
+                    en: "The email format doesn't look right.",
+                    ja: "メールアドレスの形式が正しくありません。"
+                )
+            }
+
+            if password.isEmpty {
+                errors[.password] = mistiaLocalized(
+                    vi: "Nhập mật khẩu để tiếp tục.",
+                    en: "Enter your password to continue.",
+                    ja: "続行するにはパスワードを入力してください。"
+                )
+            }
+        case .signUp:
+            if trimmedDisplayName.isEmpty {
+                errors[.displayName] = mistiaLocalized(
+                    vi: "Tên hiển thị không được để trống.",
+                    en: "Display name can't be empty.",
+                    ja: "表示名は空にできません。"
+                )
+            }
+
+            if !isValidEmail(trimmedEmail) {
+                errors[.email] = mistiaLocalized(
+                    vi: "Email chưa đúng định dạng.",
+                    en: "The email format doesn't look right.",
+                    ja: "メールアドレスの形式が正しくありません。"
+                )
+            }
+
+            if !passwordAssessment.hasMinimumLength {
+                errors[.password] = mistiaLocalized(
+                    vi: "Mật khẩu cần ít nhất 8 ký tự.",
+                    en: "Password must be at least 8 characters.",
+                    ja: "パスワードは 8 文字以上である必要があります。"
+                )
+            } else if !passwordAssessment.hasUppercase {
+                errors[.password] = mistiaLocalized(
+                    vi: "Mật khẩu cần ít nhất 1 chữ viết hoa.",
+                    en: "Password needs at least 1 uppercase letter.",
+                    ja: "パスワードには大文字を 1 文字以上含めてください。"
+                )
+            } else if !passwordAssessment.hasLowercase {
+                errors[.password] = mistiaLocalized(
+                    vi: "Mật khẩu cần ít nhất 1 chữ viết thường.",
+                    en: "Password needs at least 1 lowercase letter.",
+                    ja: "パスワードには小文字を 1 文字以上含めてください。"
+                )
+            }
+
+            if confirmPassword.isEmpty {
+                errors[.confirmPassword] = mistiaLocalized(
+                    vi: "Nhập lại mật khẩu để xác nhận.",
+                    en: "Re-enter your password to confirm it.",
+                    ja: "確認のためパスワードを再入力してください。"
+                )
+            } else if confirmPassword != password {
+                errors[.confirmPassword] = mistiaLocalized(
+                    vi: "Mật khẩu nhập lại chưa khớp.",
+                    en: "The confirmation password doesn't match yet.",
+                    ja: "確認用パスワードがまだ一致していません。"
+                )
+            }
+        case .forgotPassword:
+            if !isValidEmail(trimmedEmail) {
+                errors[.email] = mistiaLocalized(
+                    vi: "Email chưa đúng định dạng.",
+                    en: "The email format doesn't look right.",
+                    ja: "メールアドレスの形式が正しくありません。"
+                )
+            }
+        case .verifyEmailPending:
+            break
+        }
+
+        return errors
+    }
+
+    private func focusFirstInvalidField(using errors: [SessionAuthField: String]) {
+        let order: [SessionAuthField]
+        switch sessionStore.authPhase {
+        case .signIn:
+            order = [.email, .password]
+        case .signUp:
+            order = [.displayName, .email, .password, .confirmPassword]
+        case .forgotPassword:
+            order = [.email]
+        case .verifyEmailPending:
+            order = []
+        }
+
+        guard let first = order.first(where: { errors[$0] != nil }) else {
+            return
+        }
+
+        switch first {
+        case .displayName:
+            focusedField = .displayName
+        case .email:
+            focusedField = .email
+        case .password:
+            focusedField = .password
+        case .confirmPassword:
+            focusedField = .confirmPassword
+        }
+    }
+
+    private func clearPasswords() {
+        password = ""
+        confirmPassword = ""
+        isPasswordVisible = false
+        isConfirmPasswordVisible = false
+    }
+
+    private func isValidEmail(_ value: String) -> Bool {
+        let emailPattern = #"^\S+@\S+\.\S+$"#
+        return value.range(of: emailPattern, options: .regularExpression) != nil
+    }
+
+    private func maskEmail(_ value: String) -> String {
+        let components = value.split(separator: "@", maxSplits: 1).map(String.init)
+        guard components.count == 2 else { return value }
+
+        let local = components[0]
+        let domain = components[1]
+        let visiblePrefix = String(local.prefix(2))
+        let hiddenCount = max(local.count - visiblePrefix.count, 1)
+        return "\(visiblePrefix)\(String(repeating: "•", count: hiddenCount))@\(domain)"
     }
 }
 
@@ -360,6 +781,342 @@ private struct ManagementInlineMessageCard: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
+        }
+    }
+}
+
+private struct ManagementAuthBannerCard: View {
+    let banner: SessionAuthBanner
+
+    var body: some View {
+        ManagementInlineMessageCard(
+            title: banner.title,
+            message: banner.message,
+            accent: banner.style.accent
+        )
+    }
+}
+
+private struct ManagementAuthFieldContainer<Content: View>: View {
+    let errorMessage: String?
+    let content: Content
+
+    init(
+        errorMessage: String?,
+        @ViewBuilder content: () -> Content
+    ) {
+        self.errorMessage = errorMessage
+        self.content = content()
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            content
+                .padding(.horizontal, 14)
+                .padding(.vertical, 13)
+                .background(.white.opacity(0.08), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+                .overlay {
+                    RoundedRectangle(cornerRadius: 16, style: .continuous)
+                        .stroke(
+                            errorMessage == nil
+                                ? .white.opacity(0.06)
+                                : Color.red.opacity(0.42),
+                            lineWidth: 1
+                        )
+                }
+
+            if let errorMessage {
+                Text(errorMessage)
+                    .font(.system(size: 12.5, weight: .semibold, design: .rounded))
+                    .foregroundStyle(Color.red.opacity(0.92))
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+    }
+}
+
+private struct ManagementPasswordInputField: View {
+    let placeholder: String
+    @Binding var text: String
+    @Binding var isVisible: Bool
+    let errorMessage: String?
+    let textContentType: UITextContentType?
+    let submitLabel: SubmitLabel
+    let focusField: ManagementAuthInput
+    let focusedField: FocusState<ManagementAuthInput?>.Binding
+    let onSubmit: () -> Void
+
+    var body: some View {
+        ManagementAuthFieldContainer(errorMessage: errorMessage) {
+            HStack(spacing: 12) {
+                Group {
+                    if isVisible {
+                        TextField(placeholder, text: $text)
+                    } else {
+                        SecureField(placeholder, text: $text)
+                    }
+                }
+                .privacySensitive()
+                .textContentType(textContentType)
+                .textInputAutocapitalization(.never)
+                .autocorrectionDisabled()
+                .submitLabel(submitLabel)
+                .focused(focusedField, equals: focusField)
+                .onSubmit(onSubmit)
+
+                Button {
+                    isVisible.toggle()
+                    Task { @MainActor in
+                        focusedField.wrappedValue = focusField
+                    }
+                } label: {
+                    Image(systemName: isVisible ? "eye.slash.fill" : "eye.fill")
+                        .font(.system(size: 15, weight: .bold))
+                        .foregroundStyle(.secondary)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(
+                    isVisible
+                        ? mistiaLocalized(vi: "Ẩn mật khẩu", en: "Hide password", ja: "パスワードを隠す")
+                        : mistiaLocalized(vi: "Hiện mật khẩu", en: "Show password", ja: "パスワードを表示")
+                )
+            }
+        }
+    }
+}
+
+private struct ManagementAuthEmailChip: View {
+    let email: String
+    let accent: Color
+
+    var body: some View {
+        HStack(spacing: 10) {
+            Image(systemName: "envelope.badge")
+                .font(.system(size: 13, weight: .bold))
+                .foregroundStyle(accent)
+
+            Text(email)
+                .font(.system(size: 13.5, weight: .semibold, design: .rounded))
+                .foregroundStyle(.primary)
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 12)
+        .background(.white.opacity(0.07), in: Capsule())
+    }
+}
+
+private struct ManagementPasswordStrengthMeter: View {
+    let assessment: PasswordStrengthAssessment
+
+    private let palette: [Color] = [
+        Color(red: 0.91, green: 0.29, blue: 0.32),
+        Color(red: 0.96, green: 0.55, blue: 0.24),
+        Color(red: 0.92, green: 0.75, blue: 0.24),
+        Color(red: 0.20, green: 0.77, blue: 0.65),
+        Color(red: 0.25, green: 0.76, blue: 0.34)
+    ]
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 8) {
+                ForEach(0..<5, id: \.self) { index in
+                    Capsule()
+                        .fill(index < assessment.filledSegments ? palette[index] : .white.opacity(0.08))
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 8)
+                }
+            }
+
+            if let level = assessment.level {
+                Text(level.title)
+                    .font(.system(size: 12.5, weight: .bold, design: .rounded))
+                    .foregroundStyle(level.tint)
+            }
+        }
+    }
+}
+
+private struct ManagementPasswordRequirementChecklist: View {
+    let assessment: PasswordStrengthAssessment
+    let showsNeutralState: Bool
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            ManagementPasswordRequirementRow(
+                title: mistiaLocalized(
+                    vi: "Ít nhất 8 ký tự",
+                    en: "At least 8 characters",
+                    ja: "8 文字以上"
+                ),
+                isSatisfied: assessment.hasMinimumLength,
+                showsNeutralState: showsNeutralState
+            )
+
+            ManagementPasswordRequirementRow(
+                title: mistiaLocalized(
+                    vi: "Ít nhất 1 chữ viết hoa",
+                    en: "At least 1 uppercase letter",
+                    ja: "大文字を 1 文字以上"
+                ),
+                isSatisfied: assessment.hasUppercase,
+                showsNeutralState: showsNeutralState
+            )
+
+            ManagementPasswordRequirementRow(
+                title: mistiaLocalized(
+                    vi: "Ít nhất 1 chữ viết thường",
+                    en: "At least 1 lowercase letter",
+                    ja: "小文字を 1 文字以上"
+                ),
+                isSatisfied: assessment.hasLowercase,
+                showsNeutralState: showsNeutralState
+            )
+        }
+    }
+}
+
+private struct ManagementPasswordRequirementRow: View {
+    let title: String
+    let isSatisfied: Bool
+    let showsNeutralState: Bool
+
+    var body: some View {
+        HStack(spacing: 8) {
+            Image(systemName: iconName)
+                .font(.system(size: 12, weight: .bold))
+                .foregroundStyle(iconColor)
+
+            Text(title)
+                .font(.system(size: 12.5, weight: .semibold, design: .rounded))
+                .foregroundStyle(textColor)
+        }
+    }
+
+    private var iconName: String {
+        if showsNeutralState {
+            return "circle.dashed"
+        }
+        return isSatisfied ? "checkmark.circle.fill" : "xmark.circle.fill"
+    }
+
+    private var iconColor: Color {
+        if showsNeutralState {
+            return .secondary
+        }
+        return isSatisfied ? Color(red: 0.25, green: 0.76, blue: 0.34) : Color.red.opacity(0.92)
+    }
+
+    private var textColor: Color {
+        if showsNeutralState {
+            return .secondary
+        }
+        return isSatisfied ? Color(red: 0.25, green: 0.76, blue: 0.34) : Color.red.opacity(0.92)
+    }
+}
+
+private struct PasswordStrengthAssessment {
+    let hasMinimumLength: Bool
+    let hasUppercase: Bool
+    let hasLowercase: Bool
+    let hasDigit: Bool
+    let hasSymbol: Bool
+    let level: PasswordStrengthLevel?
+
+    init(password: String) {
+        let scalars = password.unicodeScalars
+        hasMinimumLength = password.count >= 8
+        hasUppercase = scalars.contains(where: CharacterSet.uppercaseLetters.contains)
+        hasLowercase = scalars.contains(where: CharacterSet.lowercaseLetters.contains)
+        hasDigit = scalars.contains(where: CharacterSet.decimalDigits.contains)
+        hasSymbol = scalars.contains(where: { CharacterSet.alphanumerics.inverted.contains($0) })
+
+        guard !password.isEmpty else {
+            level = nil
+            return
+        }
+
+        if password.count < 4 {
+            level = .veryWeak
+        } else if password.count < 8 {
+            level = .weak
+        } else if !hasUppercase || !hasLowercase {
+            level = .weak
+        } else if hasDigit && hasSymbol {
+            level = .veryStrong
+        } else if hasDigit || hasSymbol {
+            level = .strong
+        } else {
+            level = .normal
+        }
+    }
+
+    var filledSegments: Int {
+        level?.filledSegments ?? 0
+    }
+}
+
+private enum PasswordStrengthLevel {
+    case veryWeak
+    case weak
+    case normal
+    case strong
+    case veryStrong
+
+    var filledSegments: Int {
+        switch self {
+        case .veryWeak:
+            return 1
+        case .weak:
+            return 2
+        case .normal:
+            return 3
+        case .strong:
+            return 4
+        case .veryStrong:
+            return 5
+        }
+    }
+
+    var tint: Color {
+        switch self {
+        case .veryWeak:
+            return Color(red: 0.91, green: 0.29, blue: 0.32)
+        case .weak:
+            return Color(red: 0.96, green: 0.55, blue: 0.24)
+        case .normal:
+            return Color(red: 0.92, green: 0.75, blue: 0.24)
+        case .strong:
+            return Color(red: 0.20, green: 0.77, blue: 0.65)
+        case .veryStrong:
+            return Color(red: 0.25, green: 0.76, blue: 0.34)
+        }
+    }
+
+    var title: String {
+        switch self {
+        case .veryWeak:
+            return mistiaLocalized(vi: "Rất yếu", en: "Very weak", ja: "とても弱い")
+        case .weak:
+            return mistiaLocalized(vi: "Yếu", en: "Weak", ja: "弱い")
+        case .normal:
+            return mistiaLocalized(vi: "Ổn", en: "Normal", ja: "普通")
+        case .strong:
+            return mistiaLocalized(vi: "Mạnh", en: "Strong", ja: "強い")
+        case .veryStrong:
+            return mistiaLocalized(vi: "Rất mạnh", en: "Very strong", ja: "とても強い")
+        }
+    }
+}
+
+private extension SessionAuthBannerStyle {
+    var accent: Color {
+        switch self {
+        case .info:
+            return Color(red: 0.30, green: 0.59, blue: 0.95)
+        case .success:
+            return Color(red: 0.25, green: 0.76, blue: 0.34)
+        case .error:
+            return Color(red: 0.91, green: 0.29, blue: 0.32)
         }
     }
 }

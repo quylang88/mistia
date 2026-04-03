@@ -7,7 +7,6 @@ enum SupabaseServiceError: LocalizedError {
     case serverMessage(String)
     case missingSession
     case missingRefreshToken
-    case emailConfirmationRequired
 
     var errorDescription: String? {
         switch self {
@@ -23,10 +22,13 @@ enum SupabaseServiceError: LocalizedError {
             return "No active session is available."
         case .missingRefreshToken:
             return "This session can no longer be refreshed."
-        case .emailConfirmationRequired:
-            return "Check your email to confirm the account before signing in."
         }
     }
+}
+
+enum SupabaseSignUpOutcome {
+    case signedIn(SupabaseAuthSession)
+    case emailConfirmationRequired
 }
 
 struct SupabaseAuthUser: Codable {
@@ -126,7 +128,7 @@ struct SupabaseAuthService {
         email: String,
         password: String,
         displayName: String
-    ) async throws -> SupabaseAuthSession {
+    ) async throws -> SupabaseSignUpOutcome {
         let configuration = try configuration()
         let url = configuration.authBaseURL.appending(path: "signup")
         let body = SignupBody(
@@ -142,15 +144,15 @@ struct SupabaseAuthService {
 
         if let session = response.resolvedSession() {
             try persist(session: session)
-            return session
+            return .signedIn(session)
         }
 
         if response.user != nil {
-            throw SupabaseServiceError.emailConfirmationRequired
+            return .emailConfirmationRequired
         }
 
         let signedInSession = try await signIn(email: email, password: password)
-        return signedInSession
+        return .signedIn(signedInSession)
     }
 
     func signIn(
@@ -202,6 +204,26 @@ struct SupabaseAuthService {
         }
 
         try keychain.removeData(for: "auth-session")
+    }
+
+    func requestPasswordReset(email: String) async throws {
+        let configuration = try configuration()
+        let url = configuration.authBaseURL.appending(path: "recover")
+        try await performEmptyAuthRequest(
+            url: url,
+            body: RecoveryBody(email: email),
+            apiKey: configuration.anonKey
+        )
+    }
+
+    func resendConfirmation(email: String) async throws {
+        let configuration = try configuration()
+        let url = configuration.authBaseURL.appending(path: "resend")
+        try await performEmptyAuthRequest(
+            url: url,
+            body: ResendBody(email: email, type: "signup"),
+            apiKey: configuration.anonKey
+        )
     }
 
     private func refreshSession(_ session: SupabaseAuthSession) async throws -> SupabaseAuthSession {
@@ -272,6 +294,31 @@ struct SupabaseAuthService {
 
         return try decoder.decode(Response.self, from: data)
     }
+
+    private func performEmptyAuthRequest<Body: Encodable>(
+        url: URL,
+        body: Body,
+        apiKey: String
+    ) async throws {
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.setValue(apiKey, forHTTPHeaderField: "apikey")
+        request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
+        request.httpBody = try encoder.encode(body)
+
+        let (data, response) = try await URLSession.shared.data(for: request)
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw SupabaseServiceError.invalidResponse
+        }
+
+        guard (200..<300).contains(httpResponse.statusCode) else {
+            if let error = try? decoder.decode(SupabaseServiceErrorResponse.self, from: data) {
+                throw SupabaseServiceError.serverMessage(error.errorDescription ?? error.message ?? "Supabase auth request failed.")
+            }
+            throw SupabaseServiceError.serverMessage("Supabase auth request failed with status \(httpResponse.statusCode).")
+        }
+    }
 }
 
 private struct SignupBody: Encodable {
@@ -299,4 +346,13 @@ private struct RefreshGrantBody: Encodable {
     enum CodingKeys: String, CodingKey {
         case refreshToken = "refresh_token"
     }
+}
+
+private struct RecoveryBody: Encodable {
+    let email: String
+}
+
+private struct ResendBody: Encodable {
+    let email: String
+    let type: String
 }
