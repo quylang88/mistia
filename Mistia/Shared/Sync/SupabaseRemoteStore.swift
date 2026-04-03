@@ -224,7 +224,7 @@ struct SupabaseRemoteStore {
         }
 
         guard (200..<300).contains(httpResponse.statusCode) else {
-            throw SupabaseServiceError.serverMessage("Supabase request failed with status \(httpResponse.statusCode).")
+            throw SupabaseServiceError.serverMessage("The sync request failed with status \(httpResponse.statusCode).")
         }
 
         return httpResponse
@@ -240,9 +240,9 @@ struct SupabaseRemoteStore {
 
         guard (200..<300).contains(httpResponse.statusCode) else {
             if let error = try? decoder.decode(SupabaseServiceErrorResponse.self, from: data) {
-                throw SupabaseServiceError.serverMessage(error.errorDescription ?? error.message ?? "Supabase request failed.")
+                throw SupabaseServiceError.serverMessage(error.errorDescription ?? error.message ?? "The sync request failed.")
             }
-            throw SupabaseServiceError.serverMessage("Supabase request failed with status \(httpResponse.statusCode).")
+            throw SupabaseServiceError.serverMessage("The sync request failed with status \(httpResponse.statusCode).")
         }
 
         return try decoder.decode(Response.self, from: data)

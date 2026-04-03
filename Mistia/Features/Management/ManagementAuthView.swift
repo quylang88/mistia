@@ -92,9 +92,9 @@ struct ManagementAccountView: View {
 
                 Text(
                     mistiaLocalized(
-                        vi: "Mistia đã có sẵn flow đăng nhập và đồng bộ, nhưng bạn cần điền URL cùng anon key của Supabase trước khi dùng.",
-                        en: "Mistia already has the sign-in and sync flow, but you need to fill in the Supabase URL and anon key first.",
-                        ja: "Mistia にはログインと同期の流れがありますが、使う前に Supabase の URL と anon key を設定する必要があります。"
+                        vi: "Mistia đã có sẵn flow đăng nhập và đồng bộ, nhưng bạn cần điền URL cùng public key của dịch vụ cloud trước khi dùng.",
+                        en: "Mistia already has the sign-in and sync flow, but you need to fill in the cloud service URL and public key first.",
+                        ja: "Mistia にはログインと同期の流れがありますが、使う前にクラウドサービスの URL と公開キーを設定する必要があります。"
                     )
                 )
                 .font(.system(size: 15, weight: .medium, design: .rounded))
@@ -265,9 +265,9 @@ struct ManagementAccountView: View {
             )
         case .forgotPassword:
             return mistiaLocalized(
-                vi: "Nhập email bạn dùng với Mistia. Nếu hợp lệ, Supabase sẽ gửi email đặt lại mật khẩu.",
-                en: "Enter the email you use with Mistia. If it's valid, Supabase will send a reset email.",
-                ja: "Mistia で使っているメールアドレスを入力してください。有効であれば Supabase が再設定メールを送信します。"
+                vi: "Nhập email bạn dùng với Mistia. Nếu hợp lệ, hệ thống sẽ gửi email đặt lại mật khẩu.",
+                en: "Enter the email you use with Mistia. If it's valid, the system will send a reset email.",
+                ja: "Mistia で使っているメールアドレスを入力してください。有効であればシステムが再設定メールを送信します。"
             )
         case .verifyEmailPending:
             return mistiaLocalized(

@@ -1,5 +1,6 @@
 import SwiftUI
 import SwiftData
+import GoogleSignIn
 
 @main
 struct MistiaApp: App {
@@ -29,6 +30,9 @@ struct MistiaApp: App {
                 .environment(\.calendar, appLanguage.calendar)
                 .environment(sessionStore)
                 .modelContainer(modelContainer)
+                .onOpenURL { url in
+                    GIDSignIn.sharedInstance.handle(url)
+                }
         }
     }
 

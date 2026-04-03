@@ -85,14 +85,14 @@ final class SessionStore {
 
         if MistiaSyncConfiguration.load() == nil {
             syncStatusTitle = mistiaLocalized(
-                vi: "Chưa cấu hình Supabase",
-                en: "Supabase is not configured",
-                ja: "Supabase が未設定です"
+                vi: "Chưa cấu hình dịch vụ đồng bộ",
+                en: "Cloud sync isn't configured",
+                ja: "クラウド同期が未設定です"
             )
             syncStatusDetail = mistiaLocalized(
-                vi: "Điền SUPABASE_URL và SUPABASE_ANON_KEY trong MistiaSyncConfig.plist để bật đăng nhập và đồng bộ.",
-                en: "Fill SUPABASE_URL and SUPABASE_ANON_KEY in MistiaSyncConfig.plist to enable sign-in and sync.",
-                ja: "サインインと同期を有効にするには MistiaSyncConfig.plist に SUPABASE_URL と SUPABASE_ANON_KEY を設定してください。"
+                vi: "Điền URL dịch vụ và public key trong MistiaSyncConfig.plist để bật đăng nhập và đồng bộ.",
+                en: "Fill in the service URL and public key in MistiaSyncConfig.plist to enable sign-in and sync.",
+                ja: "ログインと同期を有効にするには MistiaSyncConfig.plist にサービス URL と公開キーを設定してください。"
             )
             syncStatusSystemImage = "bolt.horizontal.circle"
         } else {
@@ -308,9 +308,9 @@ final class SessionStore {
                     ja: "確認メールを再送しました"
                 ),
                 message: mistiaLocalized(
-                    vi: "Nếu email đang chờ xác nhận, Supabase sẽ gửi lại email mới đến hộp thư của bạn.",
-                    en: "If this account is pending confirmation, Supabase will send a fresh email to your inbox.",
-                    ja: "このアカウントが確認待ちの場合、Supabase が新しい確認メールを再送します。"
+                    vi: "Nếu email đang chờ xác nhận, hệ thống sẽ gửi lại email mới đến hộp thư của bạn.",
+                    en: "If this account is pending confirmation, the system will send a fresh email to your inbox.",
+                    ja: "このアカウントが確認待ちの場合、システムが新しい確認メールを再送します。"
                 ),
                 style: .info
             )
@@ -459,8 +459,8 @@ final class SessionStore {
                     ja: "少し操作が速すぎます"
                 ),
                 message: mistiaLocalized(
-                    vi: "Supabase vừa chặn tạm thời để bảo vệ hệ thống. Chờ một chút rồi thử lại nhé.",
-                    en: "Supabase temporarily slowed things down to protect the service. Please wait a moment and try again.",
+                    vi: "Hệ thống tạm chậm lại để bảo vệ tài khoản. Chờ một chút rồi thử lại nhé.",
+                    en: "The service temporarily slowed things down to protect the account flow. Please wait a moment and try again.",
                     ja: "サービス保護のため一時的に制限されています。少し待ってからもう一度お試しください。"
                 ),
                 style: .error
@@ -503,18 +503,14 @@ final class SessionStore {
             return
         }
 
-        if isGoogleOAuthSetupError(error) {
+        if isGoogleSignInSetupError(error) {
             authBanner = SessionAuthBanner(
                 title: mistiaLocalized(
                     vi: "Google Sign-In chưa sẵn sàng",
                     en: "Google sign-in isn't ready yet",
                     ja: "Google ログインの設定がまだ完了していません"
                 ),
-                message: mistiaLocalized(
-                    vi: "Bật Google provider trong Supabase rồi thêm redirect URL của Mistia trước khi thử lại.",
-                    en: "Enable the Google provider in Supabase and add Mistia's redirect URL before trying again.",
-                    ja: "再試行する前に、Supabase で Google プロバイダを有効にして Mistia のリダイレクト URL を追加してください。"
-                ),
+                message: googleSetupErrorMessage(for: error),
                 style: .error
             )
             return
@@ -585,16 +581,16 @@ final class SessionStore {
                 en: isResend ? "The email request is being processed" : "The request is being processed",
                 ja: isResend ? "メール再送を処理中です" : "リクエストを処理中です"
             ),
-            message: mistiaLocalized(
-                vi: isResend
-                    ? "Nếu tài khoản đang chờ xác nhận, Supabase sẽ tiếp tục gửi email xác nhận đến đúng hộp thư."
-                    : "Nếu email hợp lệ, Supabase sẽ tiếp tục gửi email đặt lại mật khẩu đến đúng hộp thư.",
+                message: mistiaLocalized(
+                    vi: isResend
+                    ? "Nếu tài khoản đang chờ xác nhận, hệ thống sẽ tiếp tục gửi email xác nhận đến đúng hộp thư."
+                    : "Nếu email hợp lệ, hệ thống sẽ tiếp tục gửi email đặt lại mật khẩu đến đúng hộp thư.",
                 en: isResend
-                    ? "If the account is pending confirmation, Supabase will still deliver the confirmation email to the right inbox."
-                    : "If the email is valid, Supabase will still deliver the reset email to the right inbox.",
+                    ? "If the account is pending confirmation, the system will still deliver the confirmation email to the right inbox."
+                    : "If the email is valid, the system will still deliver the reset email to the right inbox.",
                 ja: isResend
-                    ? "アカウントが確認待ちであれば、Supabase が正しい受信箱へ確認メールを送信します。"
-                    : "有効なメールアドレスであれば、Supabase が正しい受信箱へ再設定メールを送信します。"
+                    ? "アカウントが確認待ちであれば、システムが正しい受信箱へ確認メールを送信します。"
+                    : "有効なメールアドレスであれば、システムが正しい受信箱へ再設定メールを送信します。"
             ),
             style: .info
         )
@@ -610,9 +606,9 @@ final class SessionStore {
                 ja: "確認メールをチェックしてください"
             ),
             message: mistiaLocalized(
-                vi: "Supabase đã tạo tài khoản. Mở email xác nhận rồi quay lại đăng nhập trong Mistia nhé.",
-                en: "Supabase created the account. Open the confirmation email, then come back and sign in to Mistia.",
-                ja: "Supabase でアカウントを作成しました。確認メールを開いてから Mistia にログインしてください。"
+                vi: "Tài khoản của bạn đã được tạo. Mở email xác nhận rồi quay lại đăng nhập trong Mistia nhé.",
+                en: "Your account has been created. Open the confirmation email, then come back and sign in to Mistia.",
+                ja: "アカウントが作成されました。確認メールを開いてから Mistia にログインしてください。"
             ),
             style: .info
         )
@@ -663,14 +659,14 @@ final class SessionStore {
         authFieldErrors = [:]
         activeAuthAction = nil
         syncStatusTitle = mistiaLocalized(
-            vi: "Chưa cấu hình Supabase",
-            en: "Supabase is not configured",
-            ja: "Supabase が未設定です"
+            vi: "Chưa cấu hình dịch vụ đồng bộ",
+            en: "Cloud sync isn't configured",
+            ja: "クラウド同期が未設定です"
         )
         syncStatusDetail = mistiaLocalized(
-            vi: "Điền SUPABASE_URL và SUPABASE_ANON_KEY trong MistiaSyncConfig.plist rồi build lại app.",
-            en: "Fill SUPABASE_URL and SUPABASE_ANON_KEY in MistiaSyncConfig.plist, then rebuild the app.",
-            ja: "MistiaSyncConfig.plist に SUPABASE_URL と SUPABASE_ANON_KEY を設定してから再ビルドしてください。"
+            vi: "Điền URL dịch vụ và public key trong MistiaSyncConfig.plist rồi build lại app.",
+            en: "Fill in the service URL and public key in MistiaSyncConfig.plist, then rebuild the app.",
+            ja: "MistiaSyncConfig.plist にサービス URL と公開キーを設定してから再ビルドしてください。"
         )
         syncStatusSystemImage = "wrench.and.screwdriver"
     }
@@ -729,9 +725,9 @@ final class SessionStore {
         }
 
         switch serviceError {
-        case .configurationMissing, .invalidURL, .invalidResponse, .missingSession, .missingRefreshToken, .oauthCallbackSchemeMissing, .oauthSessionStartFailed:
+        case .configurationMissing, .invalidURL, .invalidResponse, .missingSession, .missingRefreshToken, .googlePresentationContextMissing, .googleTokensMissing:
             return true
-        case .serverMessage, .oauthCancelled, .oauthCallbackMissing:
+        case .serverMessage, .oauthCancelled, .googleClientIDMissing, .googleServerClientIDMissing, .googleCallbackSchemeMissing:
             return false
         }
     }
@@ -746,20 +742,56 @@ final class SessionStore {
         return message.contains("rate limit") || message.contains("too many requests")
     }
 
-    private func isGoogleOAuthSetupError(_ error: Error) -> Bool {
+    private func isGoogleSignInSetupError(_ error: Error) -> Bool {
+        if let serviceError = error as? SupabaseServiceError {
+            switch serviceError {
+            case .googleClientIDMissing, .googleServerClientIDMissing, .googleCallbackSchemeMissing:
+                return true
+            case .configurationMissing, .invalidURL, .invalidResponse, .serverMessage, .missingSession, .missingRefreshToken, .oauthCancelled, .googlePresentationContextMissing, .googleTokensMissing:
+                break
+            }
+        }
+
         let message = errorMessage(for: error)
         return message.contains("provider is not enabled")
             || message.contains("unsupported provider")
-            || message.contains("redirect")
+            || message.contains("client id")
             || message.contains("callback")
+    }
+
+    private func googleSetupErrorMessage(for error: Error) -> String {
+        if let serviceError = error as? SupabaseServiceError {
+            switch serviceError {
+            case .googleClientIDMissing, .googleServerClientIDMissing:
+                return mistiaLocalized(
+                    vi: "Điền Google iOS client ID và Google web client ID trong MistiaInfo.plist rồi build lại app.",
+                    en: "Fill in the Google iOS client ID and Google web client ID in MistiaInfo.plist, then rebuild the app.",
+                    ja: "MistiaInfo.plist に Google iOS client ID と Google web client ID を設定してから再ビルドしてください。"
+                )
+            case .googleCallbackSchemeMissing(let expected):
+                return mistiaLocalized(
+                    vi: "Thêm URL scheme Google `\(expected)` vào MistiaInfo.plist rồi build lại app.",
+                    en: "Add the Google URL scheme `\(expected)` to MistiaInfo.plist, then rebuild the app.",
+                    ja: "Google の URL スキーム `\(expected)` を MistiaInfo.plist に追加してから再ビルドしてください。"
+                )
+            case .configurationMissing, .invalidURL, .invalidResponse, .serverMessage, .missingSession, .missingRefreshToken, .oauthCancelled, .googlePresentationContextMissing, .googleTokensMissing:
+                break
+            }
+        }
+
+        return mistiaLocalized(
+            vi: "Google Sign-In của app này còn thiếu cấu hình iOS cần thiết. Kiểm tra lại client ID và URL scheme rồi thử lại nhé.",
+            en: "This build is missing the iOS settings Google Sign-In needs. Check the client IDs and URL scheme, then try again.",
+            ja: "このビルドでは Google ログインに必要な iOS 設定が不足しています。client ID と URL スキームを確認してから再試行してください。"
+        )
     }
 
     private func infrastructureErrorMessage(for error: Error) -> String {
         if error is URLError {
             return mistiaLocalized(
-                vi: "Mistia chưa thể kết nối đến Supabase. Kiểm tra mạng rồi thử lại nhé.",
-                en: "Mistia can't reach Supabase right now. Check your connection and try again.",
-                ja: "現在 Mistia は Supabase に接続できません。通信状況を確認してから再度お試しください。"
+                vi: "Mistia chưa thể kết nối đến dịch vụ đồng bộ. Kiểm tra mạng rồi thử lại nhé.",
+                en: "Mistia can't reach the sync service right now. Check your connection and try again.",
+                ja: "現在 Mistia は同期サービスに接続できません。通信状況を確認してから再度お試しください。"
             )
         }
 
@@ -767,11 +799,11 @@ final class SessionStore {
             switch serviceError {
             case .configurationMissing:
                 return mistiaLocalized(
-                    vi: "Supabase chưa được cấu hình đầy đủ trong app này.",
-                    en: "Supabase hasn't been configured completely in this build.",
-                    ja: "このビルドでは Supabase の設定がまだ完了していません。"
+                    vi: "Dịch vụ đồng bộ chưa được cấu hình đầy đủ trong app này.",
+                    en: "The sync service hasn't been configured completely in this build.",
+                    ja: "このビルドでは同期サービスの設定がまだ完了していません。"
                 )
-            case .invalidURL, .invalidResponse, .missingSession, .missingRefreshToken, .oauthCancelled, .oauthCallbackMissing, .oauthCallbackSchemeMissing, .oauthSessionStartFailed, .serverMessage:
+            case .invalidURL, .invalidResponse, .missingSession, .missingRefreshToken, .oauthCancelled, .serverMessage, .googleClientIDMissing, .googleServerClientIDMissing, .googleCallbackSchemeMissing, .googlePresentationContextMissing, .googleTokensMissing:
                 break
             }
         }
