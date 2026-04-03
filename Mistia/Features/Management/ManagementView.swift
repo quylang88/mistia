@@ -468,7 +468,12 @@ private struct ManagementProfileCard: View {
         Button(action: action) {
             ManagementCard(tint: tint) {
                 HStack(spacing: 14) {
-                    MistiaAvatarBadge(initials: summary.initials, size: 50, showsStatus: false)
+                    MistiaAvatarBadge(
+                        initials: summary.initials,
+                        avatarURL: summary.avatarURL,
+                        size: 50,
+                        showsStatus: false
+                    )
 
                     VStack(alignment: .leading, spacing: 5) {
                         Text(summary.displayName)

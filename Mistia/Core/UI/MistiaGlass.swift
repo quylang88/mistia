@@ -64,6 +64,7 @@ struct MistiaPressableButtonStyle: ButtonStyle {
 
 struct MistiaAvatarBadge: View {
     var initials: String = "QL"
+    var avatarURL: URL?
     var size: CGFloat = 34
     var showsStatus: Bool = false
     @Environment(\.colorScheme) private var colorScheme
@@ -75,28 +76,23 @@ struct MistiaAvatarBadge: View {
     var body: some View {
         ZStack(alignment: .bottomTrailing) {
             ZStack {
-                Circle()
-                    .fill(
-                        LinearGradient(
-                            colors: [
-                                Color(red: 0.49, green: 0.34, blue: 0.95),
-                                Color(red: 0.36, green: 0.50, blue: 0.98)
-                            ],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        )
-                    )
-
-                Circle()
-                    .fill(.white.opacity(colorScheme == .dark ? 0.06 : 0.16))
-                    .padding(size * 0.08)
-                    .blur(radius: size * 0.02)
-
-                Text(initials)
-                    .font(.system(size: size * 0.34, weight: .heavy, design: .rounded))
-                    .foregroundStyle(.white)
+                if let avatarURL {
+                    AsyncImage(url: avatarURL) { phase in
+                        switch phase {
+                        case .success(let image):
+                            image
+                                .resizable()
+                                .scaledToFill()
+                        default:
+                            fallbackAvatar
+                        }
+                    }
+                } else {
+                    fallbackAvatar
+                }
             }
             .frame(width: size, height: size)
+            .clipShape(Circle())
             .overlay {
                 Circle()
                     .strokeBorder(ringColor, lineWidth: 0.9)
@@ -117,6 +113,31 @@ struct MistiaAvatarBadge: View {
             }
         }
         .frame(width: size, height: size)
+    }
+
+    private var fallbackAvatar: some View {
+        ZStack {
+            Circle()
+                .fill(
+                    LinearGradient(
+                        colors: [
+                            Color(red: 0.49, green: 0.34, blue: 0.95),
+                            Color(red: 0.36, green: 0.50, blue: 0.98)
+                        ],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
+                )
+
+            Circle()
+                .fill(.white.opacity(colorScheme == .dark ? 0.06 : 0.16))
+                .padding(size * 0.08)
+                .blur(radius: size * 0.02)
+
+            Text(initials)
+                .font(.system(size: size * 0.34, weight: .heavy, design: .rounded))
+                .foregroundStyle(.white)
+        }
     }
 }
 

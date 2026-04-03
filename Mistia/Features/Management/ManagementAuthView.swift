@@ -123,7 +123,12 @@ struct ManagementAccountView: View {
             ) {
                 VStack(alignment: .leading, spacing: 14) {
                     HStack(spacing: 12) {
-                        MistiaAvatarBadge(initials: summary.initials, size: 56, showsStatus: false)
+                        MistiaAvatarBadge(
+                            initials: summary.initials,
+                            avatarURL: summary.avatarURL,
+                            size: 56,
+                            showsStatus: false
+                        )
 
                         VStack(alignment: .leading, spacing: 4) {
                             Text(summary.displayName)
@@ -370,15 +375,6 @@ struct ManagementAccountView: View {
                     focusedField: $focusedField,
                     onSubmit: submit
                 )
-            } else {
-                Button {
-                    transition(to: .forgotPassword)
-                } label: {
-                    Text(mistiaLocalized(vi: "Quên mật khẩu?", en: "Forgot password?", ja: "パスワードをお忘れですか？"))
-                        .font(.system(size: 13.5, weight: .semibold, design: .rounded))
-                }
-                .buttonStyle(.plain)
-                .foregroundStyle(accent)
             }
 
             Button {
@@ -386,8 +382,10 @@ struct ManagementAccountView: View {
             } label: {
                 HStack(spacing: 10) {
                     if sessionStore.isWorking {
-                        ProgressView()
-                            .tint(.white)
+                        if sessionStore.activeAuthAction == .credentials {
+                            ProgressView()
+                                .tint(.white)
+                        }
                     }
 
                     Text(
@@ -403,6 +401,45 @@ struct ManagementAccountView: View {
             .buttonStyle(.glassProminent)
             .tint(accent)
             .disabled(sessionStore.isWorking || !canSubmit)
+
+            ManagementAuthDivider(
+                title: mistiaLocalized(vi: "Hoặc", en: "Or", ja: "または")
+            )
+
+            ManagementGoogleActionButton(
+                title: mistiaLocalized(
+                    vi: "Tiếp tục với Google",
+                    en: "Continue with Google",
+                    ja: "Google で続行"
+                ),
+                isWorking: sessionStore.isWorking && sessionStore.activeAuthAction == .google
+            ) {
+                Task {
+                    await sessionStore.signInWithGoogle()
+                }
+            }
+            .disabled(sessionStore.isWorking)
+
+            Text(
+                mistiaLocalized(
+                    vi: "Nếu đây là lần đầu dùng Google với Mistia, tài khoản và sync sẽ được tạo ngay sau khi xác thực xong.",
+                    en: "If this is your first time using Google with Mistia, your account and sync will be created right after authentication.",
+                    ja: "Google で初めて Mistia を使う場合は、認証完了後すぐにアカウントと同期が作成されます。"
+                )
+            )
+            .font(.system(size: 12.5, weight: .medium, design: .rounded))
+            .foregroundStyle(.secondary)
+
+            if sessionStore.authPhase != .signUp {
+                Button {
+                    transition(to: .forgotPassword)
+                } label: {
+                    Text(mistiaLocalized(vi: "Quên mật khẩu?", en: "Forgot password?", ja: "パスワードをお忘れですか？"))
+                        .font(.system(size: 13.5, weight: .semibold, design: .rounded))
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(accent)
+            }
         }
     }
 
@@ -426,13 +463,15 @@ struct ManagementAccountView: View {
                 submit()
             } label: {
                 HStack(spacing: 10) {
-                    if sessionStore.isWorking {
+                    if sessionStore.activeAuthAction == .passwordReset {
                         ProgressView()
                             .tint(.white)
                     }
 
-                    Text(mistiaLocalized(vi: "Gửi email đặt lại mật khẩu", en: "Send reset email", ja: "再設定メールを送信"))
-                        .font(.system(size: 15.5, weight: .bold, design: .rounded))
+                    Text(
+                        mistiaLocalized(vi: "Gửi email đặt lại mật khẩu", en: "Send reset email", ja: "再設定メールを送信")
+                    )
+                    .font(.system(size: 15.5, weight: .bold, design: .rounded))
                 }
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 14)
@@ -464,7 +503,7 @@ struct ManagementAccountView: View {
                 }
             } label: {
                 HStack(spacing: 10) {
-                    if sessionStore.isWorking {
+                    if sessionStore.activeAuthAction == .resendConfirmation {
                         ProgressView()
                             .tint(.white)
                     }
@@ -881,6 +920,83 @@ private struct ManagementPasswordInputField: View {
                         : mistiaLocalized(vi: "Hiện mật khẩu", en: "Show password", ja: "パスワードを表示")
                 )
             }
+        }
+    }
+}
+
+private struct ManagementAuthDivider: View {
+    let title: String
+
+    var body: some View {
+        HStack(spacing: 12) {
+            Rectangle()
+                .fill(.white.opacity(0.08))
+                .frame(height: 1)
+
+            Text(title)
+                .font(.system(size: 12.5, weight: .bold, design: .rounded))
+                .foregroundStyle(.secondary)
+
+            Rectangle()
+                .fill(.white.opacity(0.08))
+                .frame(height: 1)
+        }
+    }
+}
+
+private struct ManagementGoogleActionButton: View {
+    let title: String
+    let isWorking: Bool
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 12) {
+                if isWorking {
+                    ProgressView()
+                        .tint(.primary)
+                } else {
+                    ManagementGoogleMark()
+                }
+
+                Text(title)
+                    .font(.system(size: 15, weight: .bold, design: .rounded))
+                    .foregroundStyle(.primary)
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 14)
+            .padding(.horizontal, 14)
+            .background(.white.opacity(0.14), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+            .overlay {
+                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                    .strokeBorder(.white.opacity(0.08), lineWidth: 1)
+            }
+        }
+        .buttonStyle(.plain)
+    }
+}
+
+private struct ManagementGoogleMark: View {
+    var body: some View {
+        ZStack {
+            Circle()
+                .fill(.white)
+                .frame(width: 22, height: 22)
+
+            Text("G")
+                .font(.system(size: 12.5, weight: .black, design: .rounded))
+                .foregroundStyle(
+                    LinearGradient(
+                        colors: [
+                            Color(red: 0.91, green: 0.29, blue: 0.24),
+                            Color(red: 0.96, green: 0.74, blue: 0.18),
+                            Color(red: 0.20, green: 0.55, blue: 0.98),
+                            Color(red: 0.20, green: 0.71, blue: 0.37)
+                        ],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
+                )
         }
     }
 }

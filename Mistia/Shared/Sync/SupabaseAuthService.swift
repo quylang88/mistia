@@ -7,6 +7,10 @@ enum SupabaseServiceError: LocalizedError {
     case serverMessage(String)
     case missingSession
     case missingRefreshToken
+    case oauthCancelled
+    case oauthCallbackMissing
+    case oauthCallbackSchemeMissing
+    case oauthSessionStartFailed
 
     var errorDescription: String? {
         switch self {
@@ -22,6 +26,14 @@ enum SupabaseServiceError: LocalizedError {
             return "No active session is available."
         case .missingRefreshToken:
             return "This session can no longer be refreshed."
+        case .oauthCancelled:
+            return "The Google sign-in flow was cancelled."
+        case .oauthCallbackMissing:
+            return "The Google sign-in flow did not return a callback."
+        case .oauthCallbackSchemeMissing:
+            return "The app is missing its Google sign-in callback scheme."
+        case .oauthSessionStartFailed:
+            return "The Google sign-in browser could not be started."
         }
     }
 }
@@ -39,11 +51,17 @@ struct SupabaseAuthUser: Codable {
 
 struct SupabaseUserMetadata: Codable {
     let displayName: String?
+    let fullName: String?
     let name: String?
+    let avatarURL: String?
+    let picture: String?
 
     enum CodingKeys: String, CodingKey {
         case displayName = "display_name"
+        case fullName = "full_name"
         case name
+        case avatarURL = "avatar_url"
+        case picture
     }
 }
 
@@ -184,6 +202,21 @@ struct SupabaseAuthService {
         return session
     }
 
+    @MainActor
+    func signInWithGoogle() async throws -> SupabaseAuthSession {
+        let configuration = try configuration()
+        let callbackScheme = try oauthCallbackScheme()
+        let redirectURL = try oauthRedirectURL(scheme: callbackScheme)
+        let authorizeURL = try googleAuthorizeURL(configuration: configuration, redirectURL: redirectURL)
+        let callbackURL = try await SupabaseOAuthWebAuthenticationSession().authenticate(
+            url: authorizeURL,
+            callbackScheme: callbackScheme
+        )
+        let session = try await sessionFromOAuthCallbackURL(callbackURL, configuration: configuration)
+        try persist(session: session)
+        return session
+    }
+
     func refreshSessionIfNeeded(_ session: SupabaseAuthSession) async throws -> SupabaseAuthSession {
         guard session.isExpired else {
             return session
@@ -256,11 +289,140 @@ struct SupabaseAuthService {
         return refreshedSession
     }
 
+    private func sessionFromOAuthCallbackURL(
+        _ callbackURL: URL,
+        configuration: MistiaSyncConfiguration
+    ) async throws -> SupabaseAuthSession {
+        let parameters = oauthParameters(from: callbackURL)
+
+        if let errorDescription = parameters["error_description"] ?? parameters["error"] {
+            throw SupabaseServiceError.serverMessage(errorDescription)
+        }
+
+        guard
+            let accessToken = parameters["access_token"],
+            let refreshToken = parameters["refresh_token"]
+        else {
+            throw SupabaseServiceError.oauthCallbackMissing
+        }
+
+        let tokenType = parameters["token_type"] ?? "bearer"
+        let expiration = oauthExpiration(from: parameters)
+        let user = try await fetchCurrentUser(
+            accessToken: accessToken,
+            configuration: configuration
+        )
+
+        return SupabaseAuthSession(
+            accessToken: accessToken,
+            refreshToken: refreshToken,
+            tokenType: tokenType,
+            expiresAt: expiration,
+            user: user
+        )
+    }
+
     private func configuration() throws -> MistiaSyncConfiguration {
         guard let configuration = configurationProvider() else {
             throw SupabaseServiceError.configurationMissing
         }
         return configuration
+    }
+
+    private func oauthCallbackScheme(bundle: Bundle = .main) throws -> String {
+        guard let scheme = bundle.bundleIdentifier?.trimmingCharacters(in: .whitespacesAndNewlines), !scheme.isEmpty else {
+            throw SupabaseServiceError.oauthCallbackSchemeMissing
+        }
+
+        return scheme
+    }
+
+    private func oauthRedirectURL(scheme: String) throws -> URL {
+        guard let url = URL(string: "\(scheme)://auth/callback") else {
+            throw SupabaseServiceError.invalidURL
+        }
+
+        return url
+    }
+
+    private func googleAuthorizeURL(
+        configuration: MistiaSyncConfiguration,
+        redirectURL: URL
+    ) throws -> URL {
+        guard
+            var components = URLComponents(
+                url: configuration.authBaseURL.appending(path: "authorize"),
+                resolvingAgainstBaseURL: false
+            )
+        else {
+            throw SupabaseServiceError.invalidURL
+        }
+
+        components.queryItems = [
+            URLQueryItem(name: "provider", value: "google"),
+            URLQueryItem(name: "redirect_to", value: redirectURL.absoluteString)
+        ]
+
+        guard let url = components.url else {
+            throw SupabaseServiceError.invalidURL
+        }
+
+        return url
+    }
+
+    private func fetchCurrentUser(
+        accessToken: String,
+        configuration: MistiaSyncConfiguration
+    ) async throws -> SupabaseAuthUser {
+        let url = configuration.authBaseURL.appending(path: "user")
+        var request = URLRequest(url: url)
+        request.httpMethod = "GET"
+        request.setValue(configuration.anonKey, forHTTPHeaderField: "apikey")
+        request.setValue("Bearer \(accessToken)", forHTTPHeaderField: "Authorization")
+
+        let (data, response) = try await URLSession.shared.data(for: request)
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw SupabaseServiceError.invalidResponse
+        }
+
+        guard (200..<300).contains(httpResponse.statusCode) else {
+            if let error = try? decoder.decode(SupabaseServiceErrorResponse.self, from: data) {
+                throw SupabaseServiceError.serverMessage(error.errorDescription ?? error.message ?? "Supabase auth request failed.")
+            }
+            throw SupabaseServiceError.serverMessage("Supabase auth request failed with status \(httpResponse.statusCode).")
+        }
+
+        return try decoder.decode(SupabaseAuthUser.self, from: data)
+    }
+
+    private func oauthParameters(from url: URL) -> [String: String] {
+        var parameters: [String: String] = [:]
+        let candidates = [url.query, url.fragment]
+
+        for candidate in candidates {
+            guard let candidate, !candidate.isEmpty else { continue }
+            guard let components = URLComponents(string: "https://mistia.oauth?\(candidate)") else {
+                continue
+            }
+
+            for item in components.queryItems ?? [] {
+                parameters[item.name] = item.value
+            }
+        }
+
+        return parameters
+    }
+
+    private func oauthExpiration(from parameters: [String: String]) -> Date? {
+        if let expiresAtRaw = parameters["expires_at"], let expiresAt = TimeInterval(expiresAtRaw) {
+            return Date(timeIntervalSince1970: expiresAt)
+        }
+
+        if let expiresInRaw = parameters["expires_in"], let expiresIn = TimeInterval(expiresInRaw) {
+            return Date().addingTimeInterval(expiresIn)
+        }
+
+        return nil
     }
 
     private func persist(session: SupabaseAuthSession) throws {
@@ -355,4 +517,18 @@ private struct RecoveryBody: Encodable {
 private struct ResendBody: Encodable {
     let email: String
     let type: String
+}
+
+extension SupabaseUserMetadata {
+    var resolvedAvatarURL: URL? {
+        if let avatarURL, let url = URL(string: avatarURL) {
+            return url
+        }
+
+        if let picture, let url = URL(string: picture) {
+            return url
+        }
+
+        return nil
+    }
 }

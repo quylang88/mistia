@@ -6,6 +6,7 @@ struct SessionSummary: Equatable {
     let userID: UUID
     let displayName: String
     let email: String
+    let avatarURL: URL?
 
     var initials: String {
         let components = displayName
@@ -41,6 +42,13 @@ enum SessionAuthBannerStyle: Equatable {
     case error
 }
 
+enum SessionAuthAction: Equatable {
+    case credentials
+    case google
+    case passwordReset
+    case resendConfirmation
+}
+
 struct SessionAuthBanner: Equatable {
     let title: String
     let message: String
@@ -61,6 +69,7 @@ final class SessionStore {
     var authBanner: SessionAuthBanner?
     var authPendingEmail: String?
     var authFieldErrors: [SessionAuthField: String] = [:]
+    var activeAuthAction: SessionAuthAction?
 
     @ObservationIgnored private let authService: SupabaseAuthService
     @ObservationIgnored private let syncCoordinator: SyncCoordinator
@@ -117,6 +126,7 @@ final class SessionStore {
         authPhase = phase
         authBanner = nil
         authFieldErrors = [:]
+        activeAuthAction = nil
         if phase != .verifyEmailPending {
             authPendingEmail = nil
         }
@@ -180,6 +190,7 @@ final class SessionStore {
         isWorking = true
         lastErrorMessage = nil
         authBanner = nil
+        activeAuthAction = .credentials
 
         do {
             let session = try await authService.signIn(email: email, password: password)
@@ -188,6 +199,7 @@ final class SessionStore {
             handleSignInFailure(error, email: email)
         }
 
+        activeAuthAction = nil
         isWorking = false
     }
 
@@ -200,6 +212,7 @@ final class SessionStore {
         isWorking = true
         lastErrorMessage = nil
         authBanner = nil
+        activeAuthAction = .credentials
 
         do {
             let result = try await authService.signUp(
@@ -217,6 +230,29 @@ final class SessionStore {
             handleSignUpFailure(error)
         }
 
+        activeAuthAction = nil
+        isWorking = false
+    }
+
+    func signInWithGoogle() async {
+        guard isConfigured else {
+            applyConfigurationMissingState()
+            return
+        }
+
+        isWorking = true
+        lastErrorMessage = nil
+        authBanner = nil
+        activeAuthAction = .google
+
+        do {
+            let session = try await authService.signInWithGoogle()
+            try await finishAuthentication(session, restoringExistingSession: false)
+        } catch {
+            handleGoogleSignInFailure(error)
+        }
+
+        activeAuthAction = nil
         isWorking = false
     }
 
@@ -228,6 +264,7 @@ final class SessionStore {
 
         isWorking = true
         authBanner = nil
+        activeAuthAction = .passwordReset
 
         do {
             try await authService.requestPasswordReset(email: email)
@@ -248,6 +285,7 @@ final class SessionStore {
             handleRecoveryFailure(error, isResend: false)
         }
 
+        activeAuthAction = nil
         isWorking = false
     }
 
@@ -259,6 +297,7 @@ final class SessionStore {
 
         isWorking = true
         authBanner = nil
+        activeAuthAction = .resendConfirmation
 
         do {
             try await authService.resendConfirmation(email: email)
@@ -279,6 +318,7 @@ final class SessionStore {
             handleRecoveryFailure(error, isResend: true)
         }
 
+        activeAuthAction = nil
         isWorking = false
     }
 
@@ -443,6 +483,71 @@ final class SessionStore {
         )
     }
 
+    private func handleGoogleSignInFailure(_ error: Error) {
+        authPhase = .signIn
+
+        if let serviceError = error as? SupabaseServiceError, case .oauthCancelled = serviceError {
+            authBanner = SessionAuthBanner(
+                title: mistiaLocalized(
+                    vi: "Đã hủy đăng nhập Google",
+                    en: "Google sign-in was cancelled",
+                    ja: "Google ログインはキャンセルされました"
+                ),
+                message: mistiaLocalized(
+                    vi: "Bạn có thể thử lại bất cứ lúc nào khi sẵn sàng.",
+                    en: "You can try again any time when you're ready.",
+                    ja: "準備ができたらいつでも再試行できます。"
+                ),
+                style: .info
+            )
+            return
+        }
+
+        if isGoogleOAuthSetupError(error) {
+            authBanner = SessionAuthBanner(
+                title: mistiaLocalized(
+                    vi: "Google Sign-In chưa sẵn sàng",
+                    en: "Google sign-in isn't ready yet",
+                    ja: "Google ログインの設定がまだ完了していません"
+                ),
+                message: mistiaLocalized(
+                    vi: "Bật Google provider trong Supabase rồi thêm redirect URL của Mistia trước khi thử lại.",
+                    en: "Enable the Google provider in Supabase and add Mistia's redirect URL before trying again.",
+                    ja: "再試行する前に、Supabase で Google プロバイダを有効にして Mistia のリダイレクト URL を追加してください。"
+                ),
+                style: .error
+            )
+            return
+        }
+
+        if isInfrastructureAuthError(error) {
+            authBanner = SessionAuthBanner(
+                title: mistiaLocalized(
+                    vi: "Google chưa thể kết nối",
+                    en: "Google sign-in can't connect right now",
+                    ja: "現在 Google ログインに接続できません"
+                ),
+                message: infrastructureErrorMessage(for: error),
+                style: .error
+            )
+            return
+        }
+
+        authBanner = SessionAuthBanner(
+            title: mistiaLocalized(
+                vi: "Google đăng nhập chưa thành công",
+                en: "Google sign-in couldn't finish",
+                ja: "Google ログインを完了できませんでした"
+            ),
+            message: mistiaLocalized(
+                vi: "Flow Google vừa bị ngắt giữa chừng. Thử lại một lần nữa nhé.",
+                en: "The Google flow was interrupted before it could finish. Please try again.",
+                ja: "Google フローが完了前に中断されました。もう一度お試しください。"
+            ),
+            style: .error
+        )
+    }
+
     private func handleRecoveryFailure(_ error: Error, isResend: Bool) {
         if isInfrastructureAuthError(error) {
             authBanner = SessionAuthBanner(
@@ -525,6 +630,7 @@ final class SessionStore {
         authFieldErrors = [:]
         authPendingEmail = nil
         authPhase = .signIn
+        activeAuthAction = nil
 
         syncStatusTitle = mistiaLocalized(
             vi: restoringExistingSession ? "Đang nạp dữ liệu cloud" : "Đang đồng bộ lần đầu",
@@ -555,6 +661,7 @@ final class SessionStore {
         authBanner = nil
         authPendingEmail = nil
         authFieldErrors = [:]
+        activeAuthAction = nil
         syncStatusTitle = mistiaLocalized(
             vi: "Chưa cấu hình Supabase",
             en: "Supabase is not configured",
@@ -573,6 +680,7 @@ final class SessionStore {
         authBanner = nil
         authPendingEmail = nil
         authFieldErrors = [:]
+        activeAuthAction = nil
         syncStatusTitle = mistiaLocalized(
             vi: "Chưa đăng nhập",
             en: "Signed out",
@@ -621,9 +729,9 @@ final class SessionStore {
         }
 
         switch serviceError {
-        case .configurationMissing, .invalidURL, .invalidResponse, .missingSession, .missingRefreshToken:
+        case .configurationMissing, .invalidURL, .invalidResponse, .missingSession, .missingRefreshToken, .oauthCallbackSchemeMissing, .oauthSessionStartFailed:
             return true
-        case .serverMessage:
+        case .serverMessage, .oauthCancelled, .oauthCallbackMissing:
             return false
         }
     }
@@ -636,6 +744,14 @@ final class SessionStore {
     private func isRateLimitedError(_ error: Error) -> Bool {
         let message = errorMessage(for: error)
         return message.contains("rate limit") || message.contains("too many requests")
+    }
+
+    private func isGoogleOAuthSetupError(_ error: Error) -> Bool {
+        let message = errorMessage(for: error)
+        return message.contains("provider is not enabled")
+            || message.contains("unsupported provider")
+            || message.contains("redirect")
+            || message.contains("callback")
     }
 
     private func infrastructureErrorMessage(for error: Error) -> String {
@@ -655,7 +771,7 @@ final class SessionStore {
                     en: "Supabase hasn't been configured completely in this build.",
                     ja: "このビルドでは Supabase の設定がまだ完了していません。"
                 )
-            case .invalidURL, .invalidResponse, .missingSession, .missingRefreshToken, .serverMessage:
+            case .invalidURL, .invalidResponse, .missingSession, .missingRefreshToken, .oauthCancelled, .oauthCallbackMissing, .oauthCallbackSchemeMissing, .oauthSessionStartFailed, .serverMessage:
                 break
             }
         }
@@ -725,14 +841,17 @@ private extension SessionSummary {
     init(user: SupabaseAuthUser) {
         let resolvedEmail = user.email ?? ""
         let resolvedName = user.userMetadata?.displayName
+            ?? user.userMetadata?.fullName
             ?? user.userMetadata?.name
             ?? resolvedEmail.components(separatedBy: "@").first
             ?? "Mistia"
+        let resolvedAvatarURL = user.userMetadata?.resolvedAvatarURL
 
         self.init(
             userID: user.id,
             displayName: resolvedName,
-            email: resolvedEmail
+            email: resolvedEmail,
+            avatarURL: resolvedAvatarURL
         )
     }
 }
