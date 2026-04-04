@@ -220,17 +220,28 @@ struct ManagementAccountView: View {
         VStack(spacing: 24) {
             Spacer(minLength: 0)
 
-            if !isEmailAuthExpanded {
-                introContent
-
-                authMenuContent
-            } else {
-                VStack(alignment: .leading, spacing: 16) {
-                    if let banner = sessionStore.authBanner {
-                        ManagementAuthBannerCard(banner: banner)
+            ZStack {
+                if !isEmailAuthExpanded {
+                    VStack(spacing: 24) {
+                        introContent
+                        authMenuContent
                     }
+                    .transition(.asymmetric(
+                        insertion: .move(edge: .leading).combined(with: .opacity),
+                        removal: .move(edge: .leading).combined(with: .opacity)
+                    ))
+                } else {
+                    VStack(alignment: .leading, spacing: 16) {
+                        if let banner = sessionStore.authBanner {
+                            ManagementAuthBannerCard(banner: banner)
+                        }
 
-                    authPhaseContent
+                        authPhaseContent
+                    }
+                    .transition(.asymmetric(
+                        insertion: .move(edge: .trailing).combined(with: .opacity),
+                        removal: .move(edge: .trailing).combined(with: .opacity)
+                    ))
                 }
             }
 
@@ -297,11 +308,12 @@ struct ManagementAccountView: View {
             } label: {
                 Text(mistiaLocalized(vi: "Tiếp tục bằng Email", en: "Continue with Email", ja: "メールで続行"))
                     .font(.system(size: 15.5, weight: .bold, design: .rounded))
+                    .foregroundStyle(accent)
                     .frame(maxWidth: .infinity)
-                    .padding(.vertical, 14)
+                    .padding(.vertical, 16)
+                    .background(Color(UIColor.secondarySystemFill), in: Capsule())
             }
-            .buttonStyle(.glassProminent)
-            .tint(accent)
+            .buttonStyle(.plain)
 
             Text(
                 mistiaLocalized(
@@ -459,7 +471,7 @@ struct ManagementAccountView: View {
                     if sessionStore.isWorking {
                         if sessionStore.activeAuthAction == .credentials {
                             ProgressView()
-                                .tint(.white)
+                                .tint(colorScheme == .dark ? .black : .white)
                         }
                     }
 
@@ -469,13 +481,15 @@ struct ManagementAccountView: View {
                             : mistiaLocalized(vi: "Đăng nhập", en: "Sign in", ja: "ログイン")
                     )
                     .font(.system(size: 15.5, weight: .bold, design: .rounded))
+                    .foregroundStyle(colorScheme == .dark ? .black : .white)
                 }
                 .frame(maxWidth: .infinity)
-                .padding(.vertical, 14)
+                .padding(.vertical, 16)
+                .background(colorScheme == .dark ? .white : accent, in: Capsule())
             }
-            .buttonStyle(.glassProminent)
-            .tint(accent)
+            .buttonStyle(.plain)
             .disabled(sessionStore.isWorking || !canSubmit)
+            .opacity((sessionStore.isWorking || !canSubmit) ? 0.6 : 1.0)
 
             if sessionStore.authPhase != .signUp {
                 Button {
@@ -548,20 +562,22 @@ struct ManagementAccountView: View {
                 HStack(spacing: 10) {
                     if sessionStore.activeAuthAction == .passwordReset {
                         ProgressView()
-                            .tint(.white)
+                            .tint(colorScheme == .dark ? .black : .white)
                     }
 
                     Text(
                         mistiaLocalized(vi: "Gửi email đặt lại mật khẩu", en: "Send reset email", ja: "再設定メールを送信")
                     )
                     .font(.system(size: 15.5, weight: .bold, design: .rounded))
+                    .foregroundStyle(colorScheme == .dark ? .black : .white)
                 }
                 .frame(maxWidth: .infinity)
-                .padding(.vertical, 14)
+                .padding(.vertical, 16)
+                .background(colorScheme == .dark ? .white : accent, in: Capsule())
             }
-            .buttonStyle(.glassProminent)
-            .tint(accent)
+            .buttonStyle(.plain)
             .disabled(sessionStore.isWorking || trimmedEmail.isEmpty)
+            .opacity((sessionStore.isWorking || trimmedEmail.isEmpty) ? 0.6 : 1.0)
 
             Button {
                 transition(to: .signIn)
@@ -588,18 +604,20 @@ struct ManagementAccountView: View {
                 HStack(spacing: 10) {
                     if sessionStore.activeAuthAction == .resendConfirmation {
                         ProgressView()
-                            .tint(.white)
+                            .tint(colorScheme == .dark ? .black : .white)
                     }
 
                     Text(mistiaLocalized(vi: "Gửi lại email xác nhận", en: "Resend confirmation email", ja: "確認メールを再送"))
                         .font(.system(size: 15.5, weight: .bold, design: .rounded))
+                        .foregroundStyle(colorScheme == .dark ? .black : .white)
                 }
                 .frame(maxWidth: .infinity)
-                .padding(.vertical, 14)
+                .padding(.vertical, 16)
+                .background(colorScheme == .dark ? .white : accent, in: Capsule())
             }
-            .buttonStyle(.glassProminent)
-            .tint(accent)
+            .buttonStyle(.plain)
             .disabled(sessionStore.isWorking || activeEmail.isEmpty)
+            .opacity((sessionStore.isWorking || activeEmail.isEmpty) ? 0.6 : 1.0)
 
             Button {
                 transition(to: .signIn)
@@ -1043,19 +1061,12 @@ private struct ManagementGoogleActionButton: View {
                 }
 
                 Text(title)
-                    .font(.system(size: 15, weight: .bold, design: .rounded))
+                    .font(.system(size: 15.5, weight: .bold, design: .rounded))
                     .foregroundStyle(colorScheme == .dark ? .black : .white)
             }
             .frame(maxWidth: .infinity)
-            .padding(.vertical, 14)
-            .padding(.horizontal, 14)
-            .background(colorScheme == .dark ? .white : accent, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
-            .overlay {
-                if colorScheme == .dark {
-                    RoundedRectangle(cornerRadius: 16, style: .continuous)
-                        .strokeBorder(Color(UIColor.separator), lineWidth: 1)
-                }
-            }
+            .padding(.vertical, 16)
+            .background(colorScheme == .dark ? .white : accent, in: Capsule())
         }
         .buttonStyle(.plain)
     }
@@ -1063,26 +1074,20 @@ private struct ManagementGoogleActionButton: View {
 
 private struct ManagementGoogleMark: View {
     var body: some View {
-        ZStack {
-            Circle()
-                .fill(.white)
-                .frame(width: 22, height: 22)
-
-            Text("G")
-                .font(.system(size: 12.5, weight: .black, design: .rounded))
-                .foregroundStyle(
-                    LinearGradient(
-                        colors: [
-                            Color(red: 0.91, green: 0.29, blue: 0.24),
-                            Color(red: 0.96, green: 0.74, blue: 0.18),
-                            Color(red: 0.20, green: 0.55, blue: 0.98),
-                            Color(red: 0.20, green: 0.71, blue: 0.37)
-                        ],
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
-                    )
+        Text("G")
+            .font(.system(size: 18, weight: .black, design: .rounded))
+            .foregroundStyle(
+                LinearGradient(
+                    colors: [
+                        Color(red: 0.91, green: 0.29, blue: 0.24),
+                        Color(red: 0.96, green: 0.74, blue: 0.18),
+                        Color(red: 0.20, green: 0.55, blue: 0.98),
+                        Color(red: 0.20, green: 0.71, blue: 0.37)
+                    ],
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
                 )
-        }
+            )
     }
 }
 
