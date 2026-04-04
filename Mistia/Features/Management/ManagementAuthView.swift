@@ -33,9 +33,12 @@ struct ManagementAccountView: View {
     @State private var confirmPassword = ""
     @State private var isPasswordVisible = false
     @State private var isConfirmPasswordVisible = false
+    @State private var isEmailAuthExpanded = false
     @FocusState private var focusedField: ManagementAuthInput?
 
-    private let accent = Color(red: 0.43, green: 0.23, blue: 0.76)
+    // Sử dụng màu sắc tối giản
+    private let accent = Color.primary
+    private let secondaryBackground = Color(UIColor.secondarySystemBackground)
 
     var body: some View {
         MistiaPinnedTopBarScaffold(
@@ -198,30 +201,33 @@ struct ManagementAccountView: View {
     }
 
     private var authForm: some View {
-        VStack(spacing: 16) {
-            MistiaGlassCard(
-                cornerRadius: 24,
-                tint: accent.opacity(0.12)
-            ) {
+        VStack(spacing: 24) {
+            if !isEmailAuthExpanded {
+                introContent
+
+                authMenuContent
+            } else {
                 VStack(alignment: .leading, spacing: 16) {
-                    ManagementStatusBadge(
-                        title: mistiaLocalized(vi: "Local-first + cloud sync", en: "Local-first + cloud sync", ja: "ローカルファースト + クラウド同期"),
-                        systemImage: "icloud.and.arrow.up.fill",
-                        accent: accent
-                    )
+                    HStack {
+                        Button {
+                            withAnimation(.snappy) {
+                                isEmailAuthExpanded = false
+                                focusedField = nil
+                            }
+                        } label: {
+                            Image(systemName: "chevron.left")
+                                .font(.system(size: 16, weight: .bold))
+                                .foregroundStyle(.primary)
+                        }
 
-                    Text(authIntroCopy)
-                        .font(.system(size: 15, weight: .medium, design: .rounded))
-                        .foregroundStyle(.secondary)
+                        Text(authScreenTitle)
+                            .font(.system(size: 20, weight: .bold, design: .rounded))
+                            .foregroundStyle(.primary)
+                            .padding(.leading, 8)
 
-                    if showsPrimaryModeSwitcher {
-                        MistiaNativeSegmentedControl(
-                            selection: selectedMode,
-                            options: ManagementAuthMode.allCases,
-                            title: \.title,
-                            accent: accent
-                        )
+                        Spacer()
                     }
+                    .padding(.bottom, 8)
 
                     if let banner = sessionStore.authBanner {
                         ManagementAuthBannerCard(banner: banner)
@@ -229,7 +235,6 @@ struct ManagementAccountView: View {
 
                     authPhaseContent
                 }
-                .frame(maxWidth: .infinity, alignment: .leading)
             }
 
             if let lastErrorMessage = lastSignedInIssue {
@@ -239,6 +244,78 @@ struct ManagementAccountView: View {
                     accent: .orange
                 )
             }
+        }
+    }
+
+    private var introContent: some View {
+        VStack(spacing: 16) {
+            Image("MistiaIcon") // Assuming there's a logo, replace with actual logo if needed
+                .resizable()
+                .scaledToFit()
+                .frame(width: 64, height: 64)
+                .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+                .padding(.bottom, 8)
+
+            Text(mistiaLocalized(vi: "Chào mừng đến với Mistia", en: "Welcome to Mistia", ja: "Mistiaへようこそ"))
+                .font(.system(size: 24, weight: .bold, design: .rounded))
+                .multilineTextAlignment(.center)
+
+            Text(authIntroCopy)
+                .font(.system(size: 15, weight: .regular, design: .rounded))
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+                .padding(.horizontal, 16)
+        }
+        .padding(.vertical, 32)
+    }
+
+    private var authMenuContent: some View {
+        VStack(spacing: 16) {
+            ManagementGoogleActionButton(
+                title: mistiaLocalized(
+                    vi: "Tiếp tục với Google",
+                    en: "Continue with Google",
+                    ja: "Google で続行"
+                ),
+                isWorking: sessionStore.isWorking && sessionStore.activeAuthAction == .google
+            ) {
+                Task {
+                    await sessionStore.signInWithGoogle()
+                }
+            }
+            .disabled(sessionStore.isWorking)
+
+            ManagementAuthDivider(
+                title: mistiaLocalized(vi: "hoặc", en: "or", ja: "または")
+            )
+
+            Button {
+                withAnimation(.snappy) {
+                    isEmailAuthExpanded = true
+                    transition(to: .signIn)
+                }
+            } label: {
+                Text(mistiaLocalized(vi: "Tiếp tục bằng Email", en: "Continue with Email", ja: "メールで続行"))
+                    .font(.system(size: 15, weight: .bold, design: .rounded))
+                    .foregroundStyle(.primary)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 14)
+                    .padding(.horizontal, 14)
+                    .background(Color(UIColor.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+            }
+            .buttonStyle(.plain)
+
+            Text(
+                mistiaLocalized(
+                    vi: "Bằng việc tiếp tục, bạn đồng ý với Điều khoản Dịch vụ và Chính sách Bảo mật của chúng tôi.",
+                    en: "By continuing, you agree to our Terms of Service and Privacy Policy.",
+                    ja: "続行することで、利用規約とプライバシーポリシーに同意したことになります。"
+                )
+            )
+            .font(.system(size: 12, weight: .regular, design: .rounded))
+            .foregroundStyle(.secondary)
+            .multilineTextAlignment(.center)
+            .padding(.top, 16)
         }
     }
 
@@ -384,7 +461,7 @@ struct ManagementAccountView: View {
                     if sessionStore.isWorking {
                         if sessionStore.activeAuthAction == .credentials {
                             ProgressView()
-                                .tint(.white)
+                                .tint(Color(UIColor.systemBackground))
                         }
                     }
 
@@ -393,42 +470,16 @@ struct ManagementAccountView: View {
                             ? mistiaLocalized(vi: "Tạo tài khoản", en: "Create account", ja: "アカウント作成")
                             : mistiaLocalized(vi: "Đăng nhập", en: "Sign in", ja: "ログイン")
                     )
-                    .font(.system(size: 15.5, weight: .bold, design: .rounded))
+                    .font(.system(size: 16, weight: .bold, design: .rounded))
                 }
                 .frame(maxWidth: .infinity)
-                .padding(.vertical, 14)
+                .padding(.vertical, 16)
+                .foregroundStyle(Color(UIColor.systemBackground))
+                .background(accent, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
             }
-            .buttonStyle(.glassProminent)
-            .tint(accent)
+            .buttonStyle(.plain)
             .disabled(sessionStore.isWorking || !canSubmit)
-
-            ManagementAuthDivider(
-                title: mistiaLocalized(vi: "Hoặc", en: "Or", ja: "または")
-            )
-
-            ManagementGoogleActionButton(
-                title: mistiaLocalized(
-                    vi: "Tiếp tục với Google",
-                    en: "Continue with Google",
-                    ja: "Google で続行"
-                ),
-                isWorking: sessionStore.isWorking && sessionStore.activeAuthAction == .google
-            ) {
-                Task {
-                    await sessionStore.signInWithGoogle()
-                }
-            }
-            .disabled(sessionStore.isWorking)
-
-            Text(
-                mistiaLocalized(
-                    vi: "Nếu đây là lần đầu dùng Google với Mistia, tài khoản và sync sẽ được tạo ngay sau khi xác thực xong.",
-                    en: "If this is your first time using Google with Mistia, your account and sync will be created right after authentication.",
-                    ja: "Google で初めて Mistia を使う場合は、認証完了後すぐにアカウントと同期が作成されます。"
-                )
-            )
-            .font(.system(size: 12.5, weight: .medium, design: .rounded))
-            .foregroundStyle(.secondary)
+            .opacity((sessionStore.isWorking || !canSubmit) ? 0.6 : 1.0)
 
             if sessionStore.authPhase != .signUp {
                 Button {
@@ -439,6 +490,42 @@ struct ManagementAccountView: View {
                 }
                 .buttonStyle(.plain)
                 .foregroundStyle(accent)
+                .padding(.top, 4)
+            }
+
+            VStack(spacing: 0) {
+                Divider()
+                    .padding(.vertical, 24)
+
+                if sessionStore.authPhase == .signIn {
+                    Button {
+                        transition(to: .signUp)
+                    } label: {
+                        HStack(spacing: 4) {
+                            Text(mistiaLocalized(vi: "Chưa có tài khoản?", en: "Don't have an account?", ja: "アカウントがありませんか？"))
+                                .foregroundStyle(.secondary)
+                            Text(mistiaLocalized(vi: "Đăng ký ngay", en: "Sign up now", ja: "今すぐ登録"))
+                                .foregroundStyle(accent)
+                                .fontWeight(.bold)
+                        }
+                        .font(.system(size: 14, design: .rounded))
+                    }
+                    .buttonStyle(.plain)
+                } else if sessionStore.authPhase == .signUp {
+                    Button {
+                        transition(to: .signIn)
+                    } label: {
+                        HStack(spacing: 4) {
+                            Text(mistiaLocalized(vi: "Đã có tài khoản?", en: "Already have an account?", ja: "すでにアカウントをお持ちですか？"))
+                                .foregroundStyle(.secondary)
+                            Text(mistiaLocalized(vi: "Đăng nhập", en: "Sign in", ja: "ログイン"))
+                                .foregroundStyle(accent)
+                                .fontWeight(.bold)
+                        }
+                        .font(.system(size: 14, design: .rounded))
+                    }
+                    .buttonStyle(.plain)
+                }
             }
         }
     }
@@ -465,20 +552,22 @@ struct ManagementAccountView: View {
                 HStack(spacing: 10) {
                     if sessionStore.activeAuthAction == .passwordReset {
                         ProgressView()
-                            .tint(.white)
+                            .tint(Color(UIColor.systemBackground))
                     }
 
                     Text(
                         mistiaLocalized(vi: "Gửi email đặt lại mật khẩu", en: "Send reset email", ja: "再設定メールを送信")
                     )
-                    .font(.system(size: 15.5, weight: .bold, design: .rounded))
+                    .font(.system(size: 16, weight: .bold, design: .rounded))
                 }
                 .frame(maxWidth: .infinity)
-                .padding(.vertical, 14)
+                .padding(.vertical, 16)
+                .foregroundStyle(Color(UIColor.systemBackground))
+                .background(accent, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
             }
-            .buttonStyle(.glassProminent)
-            .tint(accent)
+            .buttonStyle(.plain)
             .disabled(sessionStore.isWorking || trimmedEmail.isEmpty)
+            .opacity((sessionStore.isWorking || trimmedEmail.isEmpty) ? 0.6 : 1.0)
 
             Button {
                 transition(to: .signIn)
@@ -505,18 +594,20 @@ struct ManagementAccountView: View {
                 HStack(spacing: 10) {
                     if sessionStore.activeAuthAction == .resendConfirmation {
                         ProgressView()
-                            .tint(.white)
+                            .tint(Color(UIColor.systemBackground))
                     }
 
                     Text(mistiaLocalized(vi: "Gửi lại email xác nhận", en: "Resend confirmation email", ja: "確認メールを再送"))
-                        .font(.system(size: 15.5, weight: .bold, design: .rounded))
+                        .font(.system(size: 16, weight: .bold, design: .rounded))
                 }
                 .frame(maxWidth: .infinity)
-                .padding(.vertical, 14)
+                .padding(.vertical, 16)
+                .foregroundStyle(Color(UIColor.systemBackground))
+                .background(accent, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
             }
-            .buttonStyle(.glassProminent)
-            .tint(accent)
+            .buttonStyle(.plain)
             .disabled(sessionStore.isWorking || activeEmail.isEmpty)
+            .opacity((sessionStore.isWorking || activeEmail.isEmpty) ? 0.6 : 1.0)
 
             Button {
                 transition(to: .signIn)
@@ -851,24 +942,22 @@ private struct ManagementAuthFieldContainer<Content: View>: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             content
-                .padding(.horizontal, 14)
-                .padding(.vertical, 13)
-                .background(.white.opacity(0.08), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+                .padding(.horizontal, 16)
+                .padding(.vertical, 14)
+                .background(Color(UIColor.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
                 .overlay {
-                    RoundedRectangle(cornerRadius: 16, style: .continuous)
-                        .stroke(
-                            errorMessage == nil
-                                ? .white.opacity(0.06)
-                                : Color.red.opacity(0.42),
-                            lineWidth: 1
-                        )
+                    if errorMessage != nil {
+                        RoundedRectangle(cornerRadius: 12, style: .continuous)
+                            .stroke(Color.red.opacity(0.8), lineWidth: 1)
+                    }
                 }
 
             if let errorMessage {
                 Text(errorMessage)
-                    .font(.system(size: 12.5, weight: .semibold, design: .rounded))
+                    .font(.system(size: 12.5, weight: .regular, design: .rounded))
                     .foregroundStyle(Color.red.opacity(0.92))
                     .fixedSize(horizontal: false, vertical: true)
+                    .padding(.horizontal, 4)
             }
         }
     }
@@ -930,15 +1019,15 @@ private struct ManagementAuthDivider: View {
     var body: some View {
         HStack(spacing: 12) {
             Rectangle()
-                .fill(.white.opacity(0.08))
+                .fill(Color(UIColor.separator))
                 .frame(height: 1)
 
             Text(title)
-                .font(.system(size: 12.5, weight: .bold, design: .rounded))
+                .font(.system(size: 12.5, weight: .regular, design: .rounded))
                 .foregroundStyle(.secondary)
 
             Rectangle()
-                .fill(.white.opacity(0.08))
+                .fill(Color(UIColor.separator))
                 .frame(height: 1)
         }
     }
@@ -966,10 +1055,10 @@ private struct ManagementGoogleActionButton: View {
             .frame(maxWidth: .infinity)
             .padding(.vertical, 14)
             .padding(.horizontal, 14)
-            .background(.white.opacity(0.14), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+            .background(Color(UIColor.systemBackground), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
             .overlay {
                 RoundedRectangle(cornerRadius: 16, style: .continuous)
-                    .strokeBorder(.white.opacity(0.08), lineWidth: 1)
+                    .strokeBorder(Color(UIColor.separator), lineWidth: 1)
             }
         }
         .buttonStyle(.plain)
