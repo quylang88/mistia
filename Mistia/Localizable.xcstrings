@@ -474,6 +474,9 @@
         }
       }
     },
+    "G" : {
+
+    },
     "Ghi chú" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -930,6 +933,9 @@
           }
         }
       }
+    },
+    "Mistia/MistiaSyncConfig.plist" : {
+
     },
     "Mục tiêu" : {
       "extractionState" : "stale",
@@ -1388,6 +1394,12 @@
           }
         }
       }
+    },
+    "SUPABASE_ANON_KEY" : {
+
+    },
+    "SUPABASE_URL" : {
+
     },
     "Tab AI assistant đang được giữ chỗ để hoàn thiện UI trước, chưa nối logic chat hoặc automation." : {
       "extractionState" : "stale",
