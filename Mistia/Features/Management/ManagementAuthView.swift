@@ -36,8 +36,15 @@ struct ManagementAccountView: View {
     @State private var isEmailAuthExpanded = false
     @FocusState private var focusedField: ManagementAuthInput?
 
-    // Sử dụng màu sắc tối giản
-    private let accent = Color.primary
+    @Environment(\.colorScheme) private var colorScheme
+
+    // Tone màu tím đặc trưng, sáng hơn trong Dark Mode
+    private var accent: Color {
+        colorScheme == .dark
+            ? Color(red: 0.65, green: 0.45, blue: 0.98)
+            : Color(red: 0.43, green: 0.23, blue: 0.76)
+    }
+
     private let secondaryBackground = Color(UIColor.secondarySystemBackground)
 
     var body: some View {
@@ -45,13 +52,22 @@ struct ManagementAccountView: View {
             tone: .standard,
             title: sessionStore.isSignedIn
                 ? mistiaLocalized(vi: "Tài khoản & sync", en: "Account & sync", ja: "アカウントと同期")
-                : authScreenTitle,
+                : (isEmailAuthExpanded ? authScreenTitle : ""),
             embedsInNavigationStack: false,
             showsLeadingAvatar: false,
             leadingSystemImage: "chevron.left",
             trailingSystemImage: nil,
             hidesSystemBackButton: true,
-            onLeadingTap: { dismiss() },
+            onLeadingTap: {
+                if isEmailAuthExpanded {
+                    withAnimation(.snappy) {
+                        isEmailAuthExpanded = false
+                        focusedField = nil
+                    }
+                } else {
+                    dismiss()
+                }
+            },
             contentSpacing: 18
         ) {
             if !sessionStore.isConfigured {
@@ -202,33 +218,14 @@ struct ManagementAccountView: View {
 
     private var authForm: some View {
         VStack(spacing: 24) {
+            Spacer(minLength: 0)
+
             if !isEmailAuthExpanded {
                 introContent
 
                 authMenuContent
             } else {
                 VStack(alignment: .leading, spacing: 16) {
-                    HStack {
-                        Button {
-                            withAnimation(.snappy) {
-                                isEmailAuthExpanded = false
-                                focusedField = nil
-                            }
-                        } label: {
-                            Image(systemName: "chevron.left")
-                                .font(.system(size: 16, weight: .bold))
-                                .foregroundStyle(.primary)
-                        }
-
-                        Text(authScreenTitle)
-                            .font(.system(size: 20, weight: .bold, design: .rounded))
-                            .foregroundStyle(.primary)
-                            .padding(.leading, 8)
-
-                        Spacer()
-                    }
-                    .padding(.bottom, 8)
-
                     if let banner = sessionStore.authBanner {
                         ManagementAuthBannerCard(banner: banner)
                     }
@@ -244,6 +241,8 @@ struct ManagementAccountView: View {
                     accent: .orange
                 )
             }
+
+            Spacer(minLength: 0)
         }
     }
 
@@ -277,7 +276,8 @@ struct ManagementAccountView: View {
                     en: "Continue with Google",
                     ja: "Google で続行"
                 ),
-                isWorking: sessionStore.isWorking && sessionStore.activeAuthAction == .google
+                isWorking: sessionStore.isWorking && sessionStore.activeAuthAction == .google,
+                accent: accent
             ) {
                 Task {
                     await sessionStore.signInWithGoogle()
@@ -296,14 +296,12 @@ struct ManagementAccountView: View {
                 }
             } label: {
                 Text(mistiaLocalized(vi: "Tiếp tục bằng Email", en: "Continue with Email", ja: "メールで続行"))
-                    .font(.system(size: 15, weight: .bold, design: .rounded))
-                    .foregroundStyle(.primary)
+                    .font(.system(size: 15.5, weight: .bold, design: .rounded))
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 14)
-                    .padding(.horizontal, 14)
-                    .background(Color(UIColor.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
             }
-            .buttonStyle(.plain)
+            .buttonStyle(.glassProminent)
+            .tint(accent)
 
             Text(
                 mistiaLocalized(
@@ -461,7 +459,7 @@ struct ManagementAccountView: View {
                     if sessionStore.isWorking {
                         if sessionStore.activeAuthAction == .credentials {
                             ProgressView()
-                                .tint(Color(UIColor.systemBackground))
+                                .tint(.white)
                         }
                     }
 
@@ -470,16 +468,14 @@ struct ManagementAccountView: View {
                             ? mistiaLocalized(vi: "Tạo tài khoản", en: "Create account", ja: "アカウント作成")
                             : mistiaLocalized(vi: "Đăng nhập", en: "Sign in", ja: "ログイン")
                     )
-                    .font(.system(size: 16, weight: .bold, design: .rounded))
+                    .font(.system(size: 15.5, weight: .bold, design: .rounded))
                 }
                 .frame(maxWidth: .infinity)
-                .padding(.vertical, 16)
-                .foregroundStyle(Color(UIColor.systemBackground))
-                .background(accent, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+                .padding(.vertical, 14)
             }
-            .buttonStyle(.plain)
+            .buttonStyle(.glassProminent)
+            .tint(accent)
             .disabled(sessionStore.isWorking || !canSubmit)
-            .opacity((sessionStore.isWorking || !canSubmit) ? 0.6 : 1.0)
 
             if sessionStore.authPhase != .signUp {
                 Button {
@@ -552,22 +548,20 @@ struct ManagementAccountView: View {
                 HStack(spacing: 10) {
                     if sessionStore.activeAuthAction == .passwordReset {
                         ProgressView()
-                            .tint(Color(UIColor.systemBackground))
+                            .tint(.white)
                     }
 
                     Text(
                         mistiaLocalized(vi: "Gửi email đặt lại mật khẩu", en: "Send reset email", ja: "再設定メールを送信")
                     )
-                    .font(.system(size: 16, weight: .bold, design: .rounded))
+                    .font(.system(size: 15.5, weight: .bold, design: .rounded))
                 }
                 .frame(maxWidth: .infinity)
-                .padding(.vertical, 16)
-                .foregroundStyle(Color(UIColor.systemBackground))
-                .background(accent, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+                .padding(.vertical, 14)
             }
-            .buttonStyle(.plain)
+            .buttonStyle(.glassProminent)
+            .tint(accent)
             .disabled(sessionStore.isWorking || trimmedEmail.isEmpty)
-            .opacity((sessionStore.isWorking || trimmedEmail.isEmpty) ? 0.6 : 1.0)
 
             Button {
                 transition(to: .signIn)
@@ -594,20 +588,18 @@ struct ManagementAccountView: View {
                 HStack(spacing: 10) {
                     if sessionStore.activeAuthAction == .resendConfirmation {
                         ProgressView()
-                            .tint(Color(UIColor.systemBackground))
+                            .tint(.white)
                     }
 
                     Text(mistiaLocalized(vi: "Gửi lại email xác nhận", en: "Resend confirmation email", ja: "確認メールを再送"))
-                        .font(.system(size: 16, weight: .bold, design: .rounded))
+                        .font(.system(size: 15.5, weight: .bold, design: .rounded))
                 }
                 .frame(maxWidth: .infinity)
-                .padding(.vertical, 16)
-                .foregroundStyle(Color(UIColor.systemBackground))
-                .background(accent, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+                .padding(.vertical, 14)
             }
-            .buttonStyle(.plain)
+            .buttonStyle(.glassProminent)
+            .tint(accent)
             .disabled(sessionStore.isWorking || activeEmail.isEmpty)
-            .opacity((sessionStore.isWorking || activeEmail.isEmpty) ? 0.6 : 1.0)
 
             Button {
                 transition(to: .signIn)
@@ -1036,6 +1028,8 @@ private struct ManagementAuthDivider: View {
 private struct ManagementGoogleActionButton: View {
     let title: String
     let isWorking: Bool
+    @Environment(\.colorScheme) private var colorScheme
+    let accent: Color
     let action: () -> Void
 
     var body: some View {
@@ -1043,22 +1037,24 @@ private struct ManagementGoogleActionButton: View {
             HStack(spacing: 12) {
                 if isWorking {
                     ProgressView()
-                        .tint(.primary)
+                        .tint(colorScheme == .dark ? .black : .white)
                 } else {
                     ManagementGoogleMark()
                 }
 
                 Text(title)
                     .font(.system(size: 15, weight: .bold, design: .rounded))
-                    .foregroundStyle(.primary)
+                    .foregroundStyle(colorScheme == .dark ? .black : .white)
             }
             .frame(maxWidth: .infinity)
             .padding(.vertical, 14)
             .padding(.horizontal, 14)
-            .background(Color(UIColor.systemBackground), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+            .background(colorScheme == .dark ? .white : accent, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
             .overlay {
-                RoundedRectangle(cornerRadius: 16, style: .continuous)
-                    .strokeBorder(Color(UIColor.separator), lineWidth: 1)
+                if colorScheme == .dark {
+                    RoundedRectangle(cornerRadius: 16, style: .continuous)
+                        .strokeBorder(Color(UIColor.separator), lineWidth: 1)
+                }
             }
         }
         .buttonStyle(.plain)
