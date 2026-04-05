@@ -21,10 +21,8 @@ struct MistiaArchiveSection: View {
                     .padding(.horizontal, 16)
                     .padding(.vertical, 14)
                     .background(
-                        colorScheme == .dark 
-                            ? Color(UIColor.secondarySystemGroupedBackground) 
-                            : .white.opacity(0.12),
-                        in: RoundedRectangle(cornerRadius: 16, style: .continuous)
+                        Color(UIColor.secondarySystemGroupedBackground),
+                        in: RoundedRectangle(cornerRadius: 24, style: .continuous)
                     )
             }
             .buttonStyle(.plain)
