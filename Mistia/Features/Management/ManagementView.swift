@@ -28,10 +28,6 @@ struct ManagementView: View {
     private var storedCategories: [TransactionCategory]
     @Query
     private var storedTransactions: [LedgerTransaction]
-    @Query
-    private var storedTransactions: [LedgerTransaction]
-    @Query
-    private var storedTransactions: [LedgerTransaction]
 
     @State private var destination: ManagementNavigationDestination?
     @State private var walletEditorTarget: ManagementWalletEditorTarget?
@@ -53,117 +49,115 @@ struct ManagementView: View {
     }
 
     private var activeWallets: [LedgerWallet] {
-        storedWallets
-            .filter { !$0.isArchived }
-            .sorted {
-                if $0.sortOrder != $1.sortOrder {
-                    return $0.sortOrder < $1.sortOrder
-                }
-                return $0.createdAt < $1.createdAt
-            }
+        storedWallets.filter { !$0.isArchived }
     }
 
     private var visibleCategories: [TransactionCategory] {
-        storedCategories
-            .filter { !$0.isArchived && $0.kind == selectedCategoryKind }
-            .sorted {
-                if $0.sortOrder != $1.sortOrder {
-                    return $0.sortOrder < $1.sortOrder
-                }
-                return $0.createdAt < $1.createdAt
-            }
+        storedCategories.filter { !$0.isArchived && $0.kind == selectedCategoryKind }
     }
 
-    private let dataActions = ManagementDataActionKind.allCases
+    private var dataActions: [ManagementDataActionKind] {
+        if ProcessInfo.processInfo.environment["XCODE_RUNNING_FOR_PREVIEWS"] == "1" {
+            return ManagementDataActionKind.allCases
+        }
+        return ManagementDataActionKind.allCases.filter { $0 != .exportData && $0 != .importData && $0 != .backupRestore }
+    }
 
     var body: some View {
         NavigationStack {
-            MistiaPinnedTopBarScaffold(
-                tone: .muted,
-                title: mistiaLocalized(vi: "Quản lý", en: "Manage", ja: "管理"),
-                embedsInNavigationStack: false,
-                showsLeadingAvatar: false,
-                trailingSystemImage: "gearshape",
-                onTrailingTap: { destination = .settings },
-                contentSpacing: 20
-            ) {
-                profileSection
-                walletsSection
-                categoriesSection
-                dataSection
+            ScrollView {
+                VStack(spacing: 24) {
+                    syncSection
+
+                    walletsSection
+
+                    categoriesSection
+
+                    dataSection
+                }
+                .padding(.horizontal, 14)
+                .padding(.top, 14)
+                .padding(.bottom, 32)
             }
-            .navigationDestination(item: $destination) { route in
-                switch route {
+            .navigationTitle(mistiaLocalized(vi: "Quản lý", en: "Manage", ja: "管理"))
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    Button {
+                        destination = .settings
+                    } label: {
+                        Image(systemName: "gearshape.fill")
+                            .font(.system(size: 15, weight: .bold))
+                            .foregroundStyle(.secondary)
+                            .frame(width: 36, height: 36)
+                            .background {
+                                Circle().fill(colorScheme == .dark ? .white.opacity(0.12) : .black.opacity(0.06))
+                            }
+                    }
+                    .buttonStyle(.plain)
+                }
+
+                ToolbarItem(placement: .topBarTrailing) {
+                    if !hideQuickCreate {
+                        Button {
+                            // TODO: Add simple quick capture
+                        } label: {
+                            Image(systemName: "plus")
+                                .font(.system(size: 16, weight: .bold))
+                                .foregroundStyle(colorScheme == .dark ? Color(red: 0.90, green: 0.74, blue: 1.00) : .white)
+                                .frame(width: 36, height: 36)
+                                .background {
+                                    Circle().fill(accentPurple)
+                                }
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+            }
+            .navigationDestination(item: $destination) { dest in
+                switch dest {
                 case .authPlaceholder:
-                    ManagementAccountView()
+                    ManagementAuthView()
                 case .settings:
                     SettingsView()
                 case .archivedItems:
                     ManagementArchivedItemsView()
                 }
             }
-        }
-        .sheet(item: $walletEditorTarget) { target in
-            ManagementWalletEditorSheet(target: target)
-        }
-        .sheet(item: $categoryEditorTarget) { target in
-            ManagementCategoryEditorSheet(target: target)
-        }
-        .task {
-            do {
-                try MistiaBootstrap.seedDefaultCategoriesIfNeeded(modelContext: modelContext)
-            } catch {
-                infoAlert = ManagementInfoAlert(
-                    title: mistiaLocalized(vi: "Không thể khởi tạo danh mục", en: "Couldn't initialize categories", ja: "カテゴリを初期化できませんでした"),
-                    message: error.localizedDescription
-                )
+            .sheet(item: $walletEditorTarget) { target in
+                ManagementWalletEditorSheet(target: target)
             }
-        }
-        .onAppear {
-            hideQuickCreate = destination != nil
-        }
-        .onChange(of: destination, initial: true) { _, newValue in
-            hideQuickCreate = newValue != nil
-        }
-        .onDisappear {
-            hideQuickCreate = false
-        }
-        .alert(item: $infoAlert) { alert in
-            Alert(
-                title: Text(mistiaCatalog(alert.title)),
-                message: Text(mistiaCatalog(alert.message)),
-                dismissButton: .default(Text(mistiaLocalized(vi: "OK", en: "OK", ja: "OK")))
-            )
-        }
-        .confirmationDialog(
-            mistiaLocalized(vi: "Xóa toàn bộ dữ liệu quản lý?", en: "Delete all management data?", ja: "管理データをすべて削除しますか？"),
-            isPresented: $showsDeleteAllConfirmation,
-            titleVisibility: .visible
-        ) {
-            Button(mistiaLocalized(vi: "Xóa toàn bộ dữ liệu", en: "Delete all data", ja: "すべてのデータを削除"), role: .destructive) {
-                deleteAllManagementData()
+            .sheet(item: $categoryEditorTarget) { target in
+                ManagementCategoryEditorSheet(target: target)
             }
-
-            Button(mistiaLocalized(vi: "Hủy", en: "Cancel", ja: "キャンセル"), role: .cancel) { }
-        } message: {
-            Text(
-                mistiaLocalized(
-                    vi: "Hành động này sẽ xóa toàn bộ dữ liệu Mistia đang lưu trên thiết bị này.",
-                    en: "This will delete all Mistia data stored on this device.",
-                    ja: "この操作により、この端末に保存されている Mistia の全データが削除されます。"
-                )
-            )
+            .alert(item: $infoAlert) { alert in
+                Alert(title: Text(alert.title), message: Text(alert.message), dismissButton: .default(Text(mistiaLocalized(vi: "Đã hiểu", en: "Got it", ja: "了解"))))
+            }
+            .confirmationDialog(
+                mistiaLocalized(vi: "Xóa tất cả dữ liệu?", en: "Delete all data?", ja: "すべてのデータを削除しますか？"),
+                isPresented: $showsDeleteAllConfirmation,
+                titleVisibility: .visible
+            ) {
+                Button(mistiaLocalized(vi: "Xóa vĩnh viễn", en: "Delete permanently", ja: "完全に削除"), role: .destructive) {
+                    deleteAllData()
+                }
+                Button(mistiaLocalized(vi: "Hủy", en: "Cancel", ja: "キャンセル"), role: .cancel) {}
+            } message: {
+                Text(mistiaLocalized(vi: "Hành động này sẽ xóa toàn bộ ví, danh mục và giao dịch khỏi thiết bị. Dữ liệu trên server (nếu có) sẽ bị xóa trong lần đồng bộ tiếp theo.", en: "This will remove all wallets, categories, and transactions from this device. Server data (if any) will be deleted on the next sync.", ja: "これにより、このデバイスからすべてのウォレット、カテゴリ、取引が削除されます。サーバー上のデータ（ある場合）は次回の同期時に削除されます。"))
+            }
         }
     }
 
-    private var profileSection: some View {
+    @ViewBuilder
+    private var syncSection: some View {
         Group {
-            if let summary = sessionStore.summary {
-                ManagementProfileCard(
-                    summary: summary,
-                    syncStatusTitle: sessionStore.syncStatusTitle,
-                    syncStatusDetail: sessionStore.syncStatusDetail,
-                    tint: cardTint
+            if sessionStore.isUserSignedIn {
+                ManagementSyncStatusCard(
+                    accent: accentPurple,
+                    tint: cardTint,
+                    status: sessionStore.syncStatus,
+                    lastSyncAt: sessionStore.lastSyncAt,
+                    pendingCount: sessionStore.pendingOutboxItemsCount
                 ) {
                     destination = .authPlaceholder
                 }
@@ -216,8 +210,6 @@ struct ManagementView: View {
                         }
                         .padding(.horizontal, 14)
                         .padding(.vertical, 14)
-                        .padding(.horizontal, 14)
-                        .padding(.vertical, 14)
                     }
                 }
             }
@@ -249,13 +241,11 @@ struct ManagementView: View {
                             buttonTitle: mistiaLocalized(vi: "Thêm danh mục", en: "Add category", ja: "カテゴリを追加"),
                             accent: accentPurple,
                             symbols: selectedCategoryKind == .expense
-                                ? ["fork.knife", "bag.fill", "airplane", "plus"]
-                                : ["briefcase.fill", "gift.fill", "chart.line.uptrend.xyaxis", "plus"]
+                                ? ["cart.fill", "fork.knife", "car.fill", "house.fill"]
+                                : ["briefcase.fill", "gift.fill", "chart.line.uptrend.xyaxis", "banknote.fill"]
                         ) {
                             categoryEditorTarget = ManagementCategoryEditorTarget(category: nil, defaultKind: selectedCategoryKind)
                         }
-                        .padding(.horizontal, 14)
-                        .padding(.vertical, 14)
                     } else {
                         VStack(spacing: 0) {
                             LazyVGrid(
@@ -268,14 +258,8 @@ struct ManagementView: View {
                                     ManagementCategoryTile(category: category) {
                                         categoryEditorTarget = ManagementCategoryEditorTarget(category: category, defaultKind: category.kind)
                                     }
-                        .padding(.horizontal, 14)
-                        .padding(.vertical, 14)
                                 }
-                        .padding(.horizontal, 14)
-                        .padding(.vertical, 14)
                             }
-                        .padding(.horizontal, 14)
-                        .padding(.vertical, 14)
                             .padding(.horizontal, 14)
                             .padding(.vertical, 14)
 
@@ -288,15 +272,9 @@ struct ManagementView: View {
                             ) {
                                 categoryEditorTarget = ManagementCategoryEditorTarget(category: nil, defaultKind: selectedCategoryKind)
                             }
-                        .padding(.horizontal, 14)
-                        .padding(.vertical, 14)
-                        .padding(.horizontal, 14)
-                        .padding(.vertical, 14)
                             .padding(.horizontal, 14)
                             .padding(.vertical, 14)
                         }
-                        .padding(.horizontal, 14)
-                        .padding(.vertical, 14)
                     }
                 }
             }
@@ -311,15 +289,11 @@ struct ManagementView: View {
                         ManagementActionRow(action: action) {
                             handleDataAction(action)
                         }
-                        .padding(.horizontal, 14)
-                        .padding(.vertical, 14)
 
                         if index < dataActions.count - 1 {
                             Divider()
                                 .padding(.leading, 56)
                         }
-                        .padding(.horizontal, 14)
-                        .padding(.vertical, 14)
                     }
                 }
             }
@@ -328,150 +302,88 @@ struct ManagementView: View {
 
     private func handleDataAction(_ action: ManagementDataActionKind) {
         switch action {
+        case .archivedItems:
+            destination = .archivedItems
         case .exportData:
             infoAlert = ManagementInfoAlert(
-                title: action.title,
-                message: mistiaLocalized(
-                    vi: "Flow export sẽ được nối ở pha sau. Dữ liệu quản lý hiện đã được lưu local bằng SwiftData.",
-                    en: "The export flow will be connected later. Management data is currently stored locally with SwiftData.",
-                    ja: "書き出しフローは後続フェーズで追加されます。管理データは現在 SwiftData でローカル保存されています。"
-                )
+                title: mistiaLocalized(vi: "Sắp ra mắt", en: "Coming soon", ja: "近日公開"),
+                message: mistiaLocalized(vi: "Tính năng xuất dữ liệu ra file CSV/JSON đang được phát triển.", en: "Exporting data to CSV/JSON is currently under development.", ja: "CSV/JSONへのデータエクスポート機能は現在開発中です。")
             )
         case .importData:
             infoAlert = ManagementInfoAlert(
-                title: action.title,
-                message: mistiaLocalized(
-                    vi: "Flow import chưa được bật trong build này.",
-                    en: "The import flow isn't enabled in this build yet.",
-                    ja: "このビルドでは取り込みフローはまだ有効になっていません。"
-                )
+                title: mistiaLocalized(vi: "Sắp ra mắt", en: "Coming soon", ja: "近日公開"),
+                message: mistiaLocalized(vi: "Tính năng nhập dữ liệu từ hệ thống khác đang được phát triển.", en: "Importing data from other systems is currently under development.", ja: "他のシステムからのデータインポート機能は現在開発中です。")
             )
         case .backupRestore:
             infoAlert = ManagementInfoAlert(
-                title: action.title,
-                message: mistiaLocalized(
-                    vi: "Backup & khôi phục sẽ được nối sau khi chốt chiến lược sync.",
-                    en: "Backup and restore will be added after the sync strategy is finalized.",
-                    ja: "バックアップと復元は同期戦略の確定後に追加されます。"
-                )
+                title: mistiaLocalized(vi: "Sắp ra mắt", en: "Coming soon", ja: "近日公開"),
+                message: mistiaLocalized(vi: "Hệ thống backup mã hóa qua iCloud đang được hoàn thiện.", en: "Encrypted iCloud backup is currently being finalized.", ja: "暗号化されたiCloudバックアップシステムは現在最終調整中です。")
             )
-        case .archivedItems:
-            destination = .archivedItems
         case .deleteAllData:
             showsDeleteAllConfirmation = true
         }
     }
 
-    private func deleteAllManagementData() {
+    private func deleteAllData() {
         do {
             let now = Date()
+
             let wallets = try modelContext.fetch(FetchDescriptor<LedgerWallet>())
             let categories = try modelContext.fetch(FetchDescriptor<TransactionCategory>())
-            let creditProfiles = try modelContext.fetch(FetchDescriptor<CreditCardProfile>())
             let transactions = try modelContext.fetch(FetchDescriptor<LedgerTransaction>())
-            let budgets = try modelContext.fetch(FetchDescriptor<BudgetPlan>())
-            let goals = try modelContext.fetch(FetchDescriptor<SavingsGoal>())
-            let recurringBills = try modelContext.fetch(FetchDescriptor<RecurringBillPlan>())
-            let installments = try modelContext.fetch(FetchDescriptor<InstallmentPlan>())
-            let dueOccurrences = try modelContext.fetch(FetchDescriptor<DueOccurrenceRecord>())
-            let mutations =
+
+            if sessionStore.isUserSignedIn {
+                let mutations: [MistiaSyncMutation] =
                 wallets.map {
                     MistiaSyncMutation(entity: .wallet, recordID: $0.id, kind: .delete, modifiedAt: now)
-                }
-                + categories.map {
+                } +
+                categories.map {
                     MistiaSyncMutation(entity: .category, recordID: $0.id, kind: .delete, modifiedAt: now)
-                }
-                + creditProfiles.map {
-                    MistiaSyncMutation(entity: .creditCardProfile, recordID: $0.id, kind: .delete, modifiedAt: now)
-                }
-                + transactions.map {
+                } +
+                transactions.map {
                     MistiaSyncMutation(entity: .transaction, recordID: $0.id, kind: .delete, modifiedAt: now)
                 }
-                + budgets.map {
-                    MistiaSyncMutation(entity: .budgetPlan, recordID: $0.id, kind: .delete, modifiedAt: now)
-                }
-                + goals.map {
-                    MistiaSyncMutation(entity: .savingsGoal, recordID: $0.id, kind: .delete, modifiedAt: now)
-                }
-                + recurringBills.map {
-                    MistiaSyncMutation(entity: .recurringBillPlan, recordID: $0.id, kind: .delete, modifiedAt: now)
-                }
-                + installments.map {
-                    MistiaSyncMutation(entity: .installmentPlan, recordID: $0.id, kind: .delete, modifiedAt: now)
-                }
-                + dueOccurrences.map {
-                    MistiaSyncMutation(entity: .dueOccurrenceRecord, recordID: $0.id, kind: .delete, modifiedAt: now)
-                }
 
-            for wallet in wallets {
-                modelContext.delete(wallet)
+                if !mutations.isEmpty {
+                    sessionStore.recordMutations(mutations)
+                }
+            }
+
+            for tx in transactions {
+                modelContext.delete(tx)
             }
 
             for category in categories {
                 modelContext.delete(category)
             }
 
-            for profile in creditProfiles {
-                modelContext.delete(profile)
-            }
-
-            for transaction in transactions {
-                modelContext.delete(transaction)
-            }
-
-            for budget in budgets {
-                modelContext.delete(budget)
-            }
-
-            for goal in goals {
-                modelContext.delete(goal)
-            }
-
-            for recurringBill in recurringBills {
-                modelContext.delete(recurringBill)
-            }
-
-            for installment in installments {
-                modelContext.delete(installment)
-            }
-
-            for occurrence in dueOccurrences {
-                modelContext.delete(occurrence)
+            for wallet in wallets {
+                modelContext.delete(wallet)
             }
 
             try modelContext.save()
-            sessionStore.recordMutations(mutations)
-
-            infoAlert = ManagementInfoAlert(
-                title: mistiaLocalized(vi: "Đã xóa dữ liệu", en: "Data deleted", ja: "データを削除しました"),
-                message: mistiaLocalized(
-                    vi: "Toàn bộ dữ liệu Mistia trong máy hiện tại đã được xóa.",
-                    en: "All Mistia data on this device has been deleted.",
-                    ja: "この端末の Mistia データをすべて削除しました。"
-                )
-            )
         } catch {
             infoAlert = ManagementInfoAlert(
-                title: mistiaLocalized(vi: "Không thể xóa dữ liệu", en: "Couldn't delete data", ja: "データを削除できませんでした"),
-                message: error.localizedDescription
+                title: mistiaLocalized(vi: "Lỗi", en: "Error", ja: "エラー"),
+                message: mistiaLocalized(vi: "Không thể xóa dữ liệu.", en: "Could not delete data.", ja: "データを削除できませんでした。") + " \(error.localizedDescription)"
             )
         }
     }
 }
 
-struct ManagementSection<Content: View>: View {
+private struct ManagementSection<Content: View>: View {
     let title: String
     let titleColor: Color
     @ViewBuilder let content: Content
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: 14) {
             Text(title)
                 .font(.system(size: 13, weight: .bold, design: .rounded))
-                .textCase(.uppercase)
-                .tracking(0.6)
                 .foregroundStyle(titleColor)
-                .padding(.horizontal, 2)
+                .textCase(.uppercase)
+                .tracking(0.5)
+                .padding(.leading, 4)
 
             content
         }
@@ -490,33 +402,81 @@ private struct ManagementCard<Content: View>: View {
     }
 }
 
-private struct ManagementProfileCard: View {
-    let summary: SessionSummary
-    let syncStatusTitle: String
-    let syncStatusDetail: String
+private struct ManagementSyncStatusCard: View {
+    let accent: Color
     let tint: Color
+    let status: MistiaSyncStatus
+    let lastSyncAt: Date?
+    let pendingCount: Int
     let action: () -> Void
 
+    @Environment(\.colorScheme) private var colorScheme
+
+    private var statusIcon: String {
+        switch status {
+        case .idle: return "checkmark.icloud.fill"
+        case .syncing: return "arrow.triangle.2.circlepath.icloud.fill"
+        case .error: return "exclamationmark.icloud.fill"
+        case .offline: return "xmark.icloud.fill"
+        }
+    }
+
+    private var statusColor: Color {
+        switch status {
+        case .idle: return .green
+        case .syncing: return accent
+        case .error: return .red
+        case .offline: return .orange
+        }
+    }
+
+    private var syncStatusTitle: String {
+        switch status {
+        case .idle:
+            if pendingCount > 0 {
+                return mistiaLocalized(vi: "Chờ đồng bộ", en: "Pending sync", ja: "同期待ち")
+            }
+            return mistiaLocalized(vi: "Đã đồng bộ", en: "Synced", ja: "同期済み")
+        case .syncing:
+            return mistiaLocalized(vi: "Đang đồng bộ...", en: "Syncing...", ja: "同期中...")
+        case .error:
+            return mistiaLocalized(vi: "Đồng bộ lỗi", en: "Sync error", ja: "同期エラー")
+        case .offline:
+            return mistiaLocalized(vi: "Đang ngoại tuyến", en: "Offline", ja: "オフライン")
+        }
+    }
+
+    private var syncStatusDetail: String {
+        if status == .syncing {
+            return mistiaLocalized(vi: "Đang cập nhật thay đổi mới nhất", en: "Updating latest changes", ja: "最新の変更を更新中")
+        } else if let lastSyncAt {
+            return mistiaLocalized(vi: "Cập nhật lần cuối: \(lastSyncAt.formatted(date: .omitted, time: .shortened))", en: "Last updated: \(lastSyncAt.formatted(date: .omitted, time: .shortened))", ja: "最終更新: \(lastSyncAt.formatted(date: .omitted, time: .shortened))")
+        } else {
+            return mistiaLocalized(vi: "Sẵn sàng đồng bộ", en: "Ready to sync", ja: "同期の準備が完了")
+        }
+    }
+
     var body: some View {
-        Button(action: action) {
-            ManagementCard(tint: tint) {
-                HStack(spacing: 14) {
-                    MistiaAvatarBadge(
-                        initials: summary.initials,
-                        avatarURL: summary.avatarURL,
-                        size: 50,
-                        showsStatus: false
-                    )
+        ManagementCard(tint: tint) {
+            Button(action: action) {
+                HStack(spacing: 16) {
+                    ZStack {
+                        Circle()
+                            .fill(statusColor.opacity(0.12))
 
-                    VStack(alignment: .leading, spacing: 5) {
-                        Text(summary.displayName)
-                            .font(.system(size: 18, weight: .semibold, design: .rounded))
-                            .foregroundStyle(.primary)
+                        Image(systemName: statusIcon)
+                            .font(.system(size: 20, weight: .semibold))
+                            .foregroundStyle(statusColor)
 
-                        Text(summary.email)
-                            .font(.system(size: 13, weight: .medium, design: .rounded))
-                            .foregroundStyle(.secondary)
+                        if status == .syncing {
+                            Circle()
+                                .stroke(statusColor.opacity(0.3), lineWidth: 2)
+                                .frame(width: 44, height: 44)
+                        }
+                    }
+                    .frame(width: 40, height: 40)
 
+                    VStack(alignment: .leading, spacing: 3) {
                         Text(syncStatusTitle)
                             .font(.system(size: 12.5, weight: .semibold, design: .rounded))
                             .foregroundStyle(Color(red: 0.43, green: 0.23, blue: 0.76))
@@ -548,15 +508,8 @@ private struct ManagementSignedOutCard: View {
     let tint: Color
     let action: () -> Void
 
-    private var badgeFill: LinearGradient {
-        LinearGradient(
-            colors: [
-                accent.opacity(colorScheme == .dark ? 0.46 : 0.18),
-                accent.opacity(colorScheme == .dark ? 0.24 : 0.08)
-            ],
-            startPoint: .topLeading,
-            endPoint: .bottomTrailing
-        )
+    private var badgeFill: Color {
+        colorScheme == .dark ? .white.opacity(0.1) : .white
     }
 
     private var badgeForeground: Color {
@@ -616,8 +569,6 @@ private struct ManagementSignedOutCard: View {
                             Capsule()
                                 .fill(buttonFill)
                         }
-                        .padding(.horizontal, 14)
-                        .padding(.vertical, 14)
                 }
                 .buttonStyle(MistiaPressableButtonStyle(cornerRadius: 22, tint: buttonForeground))
             }
@@ -642,6 +593,7 @@ private struct ManagementWalletRow: View {
             return colorScheme == .dark ? Color(red: 0.34, green: 0.82, blue: 1.0) : Color(red: 0.18, green: 0.67, blue: 0.62)
         }
     }
+
     var body: some View {
         Button(action: action) {
             HStack(alignment: .top, spacing: 12) {
