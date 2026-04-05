@@ -222,15 +222,12 @@ struct SupabaseAuthService {
             throw SupabaseServiceError.googleTokensMissing
         }
 
-        let nonce = Self.extractNonceFromIDToken(idToken)
-
         let response: SupabaseAuthResponse = try await performAuthRequest(
             url: try authTokenURL(configuration: configuration, grantType: "id_token"),
             body: OpenIDConnectGrantBody(
                 provider: "google",
                 idToken: idToken,
-                accessToken: signInResult.user.accessToken.tokenString,
-                nonce: nonce
+                accessToken: signInResult.user.accessToken.tokenString
             ),
             apiKey: configuration.anonKey
         )
@@ -432,26 +429,6 @@ struct SupabaseAuthService {
     }
 
 
-    private static func extractNonceFromIDToken(_ idToken: String) -> String? {
-        let components = idToken.components(separatedBy: ".")
-        guard components.count > 1 else { return nil }
-
-        var base64String = components[1]
-        let remainder = base64String.count % 4
-        if remainder > 0 {
-            base64String = base64String.padding(toLength: base64String.count + 4 - remainder, withPad: "=", startingAt: 0)
-        }
-        base64String = base64String.replacingOccurrences(of: "-", with: "+").replacingOccurrences(of: "_", with: "/")
-
-        guard let data = Data(base64Encoded: base64String),
-              let json = try? JSONSerialization.jsonObject(with: data, options: []),
-              let payload = json as? [String: Any] else {
-            return nil
-        }
-
-        return payload["nonce"] as? String
-    }
-
     private func performEmptyAuthRequest<Body: Encodable>(
         url: URL,
         body: Body,
@@ -519,13 +496,11 @@ private struct OpenIDConnectGrantBody: Encodable {
     let provider: String
     let idToken: String
     let accessToken: String?
-    let nonce: String?
 
     enum CodingKeys: String, CodingKey {
         case provider
         case idToken = "id_token"
         case accessToken = "access_token"
-        case nonce
     }
 }
 
