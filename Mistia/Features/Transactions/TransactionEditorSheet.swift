@@ -56,7 +56,7 @@ struct TransactionEditorSheet: View {
     var body: some View {
         NavigationStack {
             ZStack {
-                MistiaBackgroundView(tone: .standard)
+                MistiaBackgroundView(tone: .muted)
 
                 ScrollView(showsIndicators: false) {
                     VStack(spacing: 16) {

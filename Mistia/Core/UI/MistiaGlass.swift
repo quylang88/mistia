@@ -24,11 +24,11 @@ struct MistiaBackgroundView: View {
     private var backgroundColor: Color {
         switch (tone, colorScheme) {
         case (.standard, .dark):
-            Color.black
+            Color(UIColor.systemGroupedBackground)
         case (.standard, .light):
             Color(red: 0.96, green: 0.96, blue: 0.98)
         case (.muted, .dark):
-            Color.black
+            Color(UIColor.systemGroupedBackground)
         case (.muted, .light):
             Color(red: 0.97, green: 0.97, blue: 0.98)
         @unknown default:
