@@ -41,7 +41,6 @@ struct TransactionEditorSheet: View {
 
     @State private var draft: TransactionFormDraft
     @State private var alertMessage: String?
-    @State private var showsArchiveConfirmation = false
 
     init(
         target: TransactionEditorTarget,
@@ -108,18 +107,6 @@ struct TransactionEditorSheet: View {
             Button(mistiaLocalized(vi: "OK", en: "OK", ja: "OK"), role: .cancel) { }
         } message: {
             Text(mistiaCatalog(alertMessage ?? ""))
-        }
-        .confirmationDialog(
-            mistiaLocalized(vi: "Lưu trữ giao dịch này?", en: "Archive this transaction?", ja: "この取引をアーカイブしますか？"),
-            isPresented: $showsArchiveConfirmation,
-            titleVisibility: .visible
-        ) {
-            Button(mistiaLocalized(vi: "Lưu trữ", en: "Archive", ja: "アーカイブ"), role: .destructive) {
-                archiveTransaction()
-            }
-            Button(mistiaLocalized(vi: "Hủy", en: "Cancel", ja: "キャンセル"), role: .cancel) { }
-        } message: {
-            Text(mistiaLocalized(vi: "Giao dịch lưu trữ sẽ không còn hiện trong ứng dụng và sẽ bị xóa vĩnh viễn sau 30 ngày.", en: "Archived transactions will no longer appear in the app and will be permanently deleted after 30 days.", ja: "アーカイブした取引はアプリに表示されなくなり、30日後に永久に削除されます。"))
         }
     }
 
@@ -337,9 +324,10 @@ struct TransactionEditorSheet: View {
             if let transaction = target.transaction, !transaction.isArchived {
                 MistiaArchiveSection(
                     buttonTitle: mistiaLocalized(vi: "Lưu trữ giao dịch", en: "Archive transaction", ja: "取引をアーカイブ"),
-                    descriptionText: mistiaLocalized(vi: "Giao dịch lưu trữ sẽ không còn hiện trong danh sách. Mục này sẽ được tự động xóa vĩnh viễn sau 30 ngày.", en: "Archived transactions will no longer appear in the list. They will be automatically deleted permanently after 30 days.", ja: "アーカイブした取引はリストに表示されなくなります。これらは30日後に自動的に永久削除されます。")
+                    descriptionText: mistiaLocalized(vi: "Giao dịch lưu trữ sẽ không còn hiện trong danh sách. Mục này sẽ được tự động xóa vĩnh viễn sau 30 ngày.", en: "Archived transactions will no longer appear in the list. They will be automatically deleted permanently after 30 days.", ja: "アーカイブした取引はリストに表示されなくなります。これらは30日後に自動的に永久削除されます。"),
+                    popupMessage: mistiaLocalized(vi: "Giao dịch này sẽ bị lưu trữ. Các giao dịch đã lưu trữ sẽ nằm trong \"Mục đã lưu trữ\" và được giữ lại trong 30 ngày.", en: "This transaction will be archived. Archived transactions will remain in \"Archived items\" for 30 days.", ja: "この取引はアーカイブされます。アーカイブされた取引は「アーカイブ済みアイテム」に30日間保持されます。")
                 ) {
-                    showsArchiveConfirmation = true
+                    archiveTransaction()
                 }
             }
         }

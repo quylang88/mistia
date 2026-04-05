@@ -909,7 +909,6 @@ struct PlanningCreditCardEditorSheet: View {
     @State private var draft: PlanningCreditCardDraft
     @State private var paymentAmountText: String
     @State private var alertMessage: String?
-    @State private var showsArchiveConfirmation = false
     @State private var showsIconPicker = false
 
     init(target: PlanningCreditCardEditorTarget) {
@@ -1004,9 +1003,15 @@ struct PlanningCreditCardEditorSheet: View {
 
                 if target.wallet != nil {
                     Section {
-                        Button(mistiaLocalized(vi: "Lưu trữ thẻ", en: "Archive card", ja: "カードをアーカイブ"), role: .destructive) {
-                            showsArchiveConfirmation = true
+                        MistiaArchiveSection(
+                            buttonTitle: mistiaLocalized(vi: "Lưu trữ thẻ", en: "Archive card", ja: "カードをアーカイブ"),
+                            descriptionText: mistiaLocalized(vi: "Thẻ lưu trữ sẽ không còn hiện trong tab kế hoạch. Mục này sẽ được tự động xóa vĩnh viễn sau 30 ngày.", en: "Archived cards will no longer appear in the planning tab. They will be automatically deleted permanently after 30 days.", ja: "アーカイブしたカードは計画タブに表示されなくなります。これらは30日後に自動的に永久削除されます。"),
+                            popupMessage: mistiaLocalized(vi: "Thẻ này sẽ bị lưu trữ. Các thẻ đã lưu trữ sẽ nằm trong \"Mục đã lưu trữ\" và được giữ lại trong 30 ngày.", en: "This card will be archived. Archived cards will remain in \"Archived items\" for 30 days.", ja: "このカードはアーカイブされます。アーカイブされたカードは「アーカイブ済みアイテム」に30日間保持されます。")
+                        ) {
+                            archiveWallet()
                         }
+                        .listRowInsets(EdgeInsets())
+                        .listRowBackground(Color.clear)
                     }
                 }
             }
@@ -1030,17 +1035,6 @@ struct PlanningCreditCardEditorSheet: View {
             }
         }
         .planningAlert(message: $alertMessage)
-        .confirmationDialog(
-            mistiaLocalized(vi: "Lưu trữ thẻ này?", en: "Archive this card?", ja: "このカードをアーカイブしますか？"),
-            isPresented: $showsArchiveConfirmation,
-            titleVisibility: .visible
-        ) {
-            Button(mistiaLocalized(vi: "Lưu trữ", en: "Archive", ja: "アーカイブ"), role: .destructive) {
-                archiveWallet()
-            }
-
-            Button(mistiaLocalized(vi: "Hủy", en: "Cancel", ja: "キャンセル"), role: .cancel) { }
-        }
     }
 
     private var currentDueSnapshot: PlanningCreditCardDueSnapshot? {
