@@ -137,9 +137,7 @@ struct TransactionsView: View {
     }
 
     private var inactiveFilterTint: Color {
-        colorScheme == .dark
-            ? .white.opacity(0.08)
-            : Color.black.opacity(0.06)
+        Color(UIColor.secondarySystemGroupedBackground)
     }
 
     private var activeFilterBadgeTextColor: Color {
@@ -531,7 +529,8 @@ private struct TransactionSectionCard: View {
 
                         if index < section.rows.count - 1 {
                             Divider()
-                                .padding(.horizontal, 14)
+                                .padding(.leading, 52)
+                                .padding(.trailing, 0)
                         }
                     }
                 }

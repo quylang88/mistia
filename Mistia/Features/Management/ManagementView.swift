@@ -200,12 +200,14 @@ struct ManagementView: View {
 
                             if index < activeWallets.count - 1 {
                                 Divider()
-                                    .padding(.horizontal, 14)
+                                .padding(.leading, 52)
+                                .padding(.trailing, 0)
                             }
                         }
 
                         Divider()
-                            .padding(.horizontal, 14)
+                                .padding(.leading, 52)
+                                .padding(.trailing, 0)
 
                         ManagementFooterAddButton(
                             title: mistiaLocalized(vi: "Thêm ví", en: "Add wallet", ja: "ウォレットを追加"),
@@ -269,7 +271,8 @@ struct ManagementView: View {
                             .padding(.vertical, 14)
 
                             Divider()
-                                .padding(.horizontal, 14)
+                                .padding(.leading, 52)
+                                .padding(.trailing, 0)
 
                             ManagementFooterAddButton(
                                 title: mistiaLocalized(vi: "Thêm danh mục", en: "Add category", ja: "カテゴリを追加"),
@@ -297,7 +300,8 @@ struct ManagementView: View {
 
                         if index < dataActions.count - 1 {
                             Divider()
-                                .padding(.horizontal, 14)
+                                .padding(.leading, 52)
+                                .padding(.trailing, 0)
                         }
                     }
                 }

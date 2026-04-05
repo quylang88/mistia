@@ -450,7 +450,8 @@ private struct BudgetFocusSection: View {
 
                         if index < rows.count - 1 {
                             Divider()
-                                .padding(.horizontal, 14)
+                                .padding(.leading, 52)
+                                .padding(.trailing, 0)
                         }
                     }
                 }
@@ -522,7 +523,8 @@ private struct UpcomingBillsSection: View {
 
                         if index < rows.count - 1 {
                             Divider()
-                                .padding(.leading, 48)
+                                .padding(.leading, 52)
+                                .padding(.trailing, 0)
                         }
                     }
                 }
@@ -599,7 +601,8 @@ private struct RecentTransactionsSection: View {
 
                         if index < rows.count - 1 {
                             Divider()
-                                .padding(.leading, 48)
+                                .padding(.leading, 52)
+                                .padding(.trailing, 0)
                         }
                     }
                 }

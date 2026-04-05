@@ -231,7 +231,8 @@ private struct SettingsCardSection: View {
 
                     if index < section.rows.count - 1 {
                         Divider()
-                                .padding(.horizontal, 14)
+                                .padding(.leading, 52)
+                                .padding(.trailing, 0)
                     }
                 }
             }
@@ -312,7 +313,8 @@ private struct AppearanceModeCard: View {
 
                     if index < MistiaAppearanceMode.allCases.count - 1 {
                         Divider()
-                                .padding(.horizontal, 14)
+                                .padding(.leading, 52)
+                                .padding(.trailing, 0)
                     }
                 }
             }
@@ -349,7 +351,8 @@ private struct LanguageSelectionCard: View {
 
                     if index < MistiaAppLanguage.allCases.count - 1 {
                         Divider()
-                                .padding(.horizontal, 14)
+                                .padding(.leading, 52)
+                                .padding(.trailing, 0)
                     }
                 }
             }
