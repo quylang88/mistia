@@ -33,10 +33,7 @@ struct MistiaNativeSegmentedControl<Option: Hashable>: View {
     }
 
     private var backgroundColor: UIColor {
-        if colorScheme == .dark {
-            return UIColor(red: 0.24, green: 0.24, blue: 0.27, alpha: 0.98)
-        }
-        return UIColor(white: 0.92, alpha: 0.98)
+        return UIColor.secondarySystemGroupedBackground
     }
 
     private var selectedTextColor: UIColor {

@@ -346,12 +346,14 @@ private struct BudgetTabContent: View {
 
                         if index < rows.count - 1 {
                             Divider()
-                                .padding(.horizontal, 14)
+                                .padding(.leading, 52)
+                                .padding(.trailing, 0)
                         }
                     }
 
                     Divider()
-                        .padding(.horizontal, 14)
+                                .padding(.leading, 52)
+                                .padding(.trailing, 0)
 
                     PlanningFooterAddButton(title: mistiaLocalized(vi: "Thêm ngân sách", en: "Add budget", ja: "予算を追加")) {
                         onAdd()
@@ -406,7 +408,8 @@ private struct GoalsTabContent: View {
                     }
 
                     Divider()
-                        .padding(.horizontal, 14)
+                                .padding(.leading, 52)
+                                .padding(.trailing, 0)
 
                     PlanningFooterAddButton(title: mistiaLocalized(vi: "Thêm mục tiêu", en: "Add goal", ja: "目標を追加")) {
                         onAdd()
@@ -563,12 +566,14 @@ private struct DueRowsSection: View {
 
                     if index < items.count - 1 {
                         Divider()
-                            .padding(.horizontal, 14)
+                                .padding(.leading, 52)
+                                .padding(.trailing, 0)
                     }
                 }
 
                 Divider()
-                    .padding(.horizontal, 12)
+                                .padding(.leading, 52)
+                                .padding(.trailing, 0)
 
                 PlanningFooterAddButton(title: addTitle) {
                     onAdd()

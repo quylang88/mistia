@@ -450,7 +450,8 @@ private struct BudgetFocusSection: View {
 
                         if index < rows.count - 1 {
                             Divider()
-                                .padding(.horizontal, 14)
+                                .padding(.leading, 52)
+                                .padding(.trailing, 0)
                         }
                     }
                 }

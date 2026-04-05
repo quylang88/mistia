@@ -169,6 +169,6 @@ private struct ArchivedItemRow: View {
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 11)
-        .background(colorScheme == .dark ? .white.opacity(0.018) : .white.opacity(0.12), in: RoundedRectangle(cornerRadius: 16))
+        .background(colorScheme == .dark ? Color(UIColor.secondarySystemGroupedBackground) : .white.opacity(0.12), in: RoundedRectangle(cornerRadius: 16))
     }
 }

@@ -57,3 +57,6 @@ playground.xcworkspace
 
 # Project-local caches
 .modulecache/
+
+# Supabase CLI temporary files
+**/supabase/.temp
