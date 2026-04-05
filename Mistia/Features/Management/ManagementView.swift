@@ -297,7 +297,7 @@ struct ManagementView: View {
 
                         if index < dataActions.count - 1 {
                             Divider()
-                                .padding(.leading, 52)
+                                .padding(.horizontal, 14)
                         }
                     }
                 }

@@ -346,7 +346,7 @@ private struct BudgetTabContent: View {
 
                         if index < rows.count - 1 {
                             Divider()
-                                .padding(.leading, 58)
+                                .padding(.horizontal, 14)
                         }
                     }
 
@@ -563,7 +563,7 @@ private struct DueRowsSection: View {
 
                     if index < items.count - 1 {
                         Divider()
-                            .padding(.leading, 54)
+                            .padding(.horizontal, 14)
                     }
                 }
 
