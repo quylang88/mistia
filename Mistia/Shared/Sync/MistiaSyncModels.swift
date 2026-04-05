@@ -25,6 +25,7 @@ struct RemoteLedgerWallet: MistiaRemoteRow {
     let institutionPresetKey: String?
     let sortOrder: Int
     let isArchived: Bool
+    let archivedAt: Date?
     let createdAt: Date
     let updatedAt: Date
     let deletedAt: Date?
@@ -62,6 +63,7 @@ struct RemoteTransactionCategory: MistiaRemoteRow {
     let isSystem: Bool
     let sortOrder: Int
     let isArchived: Bool
+    let archivedAt: Date?
     let createdAt: Date
     let updatedAt: Date
     let deletedAt: Date?
@@ -88,6 +90,8 @@ struct RemoteLedgerTransaction: MistiaRemoteRow {
     let destinationWalletID: UUID?
     let categoryID: UUID?
     let deletedAt: Date?
+    let isArchived: Bool
+    let archivedAt: Date?
 }
 
 struct RemoteBudgetPlan: MistiaRemoteRow {

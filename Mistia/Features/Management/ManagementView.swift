@@ -4,6 +4,7 @@ import SwiftUI
 private enum ManagementNavigationDestination: String, Identifiable {
     case authPlaceholder
     case settings
+    case archivedItems
 
     var id: String { rawValue }
 }
@@ -91,6 +92,8 @@ struct ManagementView: View {
                     ManagementAccountView()
                 case .settings:
                     SettingsView()
+                case .archivedItems:
+                    ManagementArchivedItemsView()
                 }
             }
         }
@@ -324,6 +327,8 @@ struct ManagementView: View {
                     ja: "バックアップと復元は同期戦略の確定後に追加されます。"
                 )
             )
+        case .archivedItems:
+            destination = .archivedItems
         case .deleteAllData:
             showsDeleteAllConfirmation = true
         }
@@ -426,7 +431,7 @@ struct ManagementView: View {
     }
 }
 
-private struct ManagementSection<Content: View>: View {
+struct ManagementSection<Content: View>: View {
     let title: String
     let titleColor: Color
     @ViewBuilder let content: Content

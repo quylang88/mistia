@@ -110,6 +110,26 @@ struct TransactionEditorSheet: View {
         }
     }
 
+    private func archiveTransaction() {
+        guard let transaction = target.transaction else { return }
+        transaction.isArchived = true
+        transaction.archivedAt = Date()
+        transaction.updatedAt = Date()
+        
+        do {
+            try modelContext.save()
+            sessionStore.recordUpsert(
+                entity: .transaction,
+                recordID: transaction.id,
+                modifiedAt: transaction.updatedAt
+            )
+            onComplete(.savedTransaction)
+            dismiss()
+        } catch {
+            alertMessage = mistiaLocalized(vi: "Không thể lưu trạng thái lưu trữ.", en: "Couldn't save the archive state.", ja: "アーカイブ状態を保存できません。") + " \(error.localizedDescription)"
+        }
+    }
+
     private var quickCaptureContent: some View {
         @Bindable var bindableDraft = draft
 
@@ -299,6 +319,16 @@ struct TransactionEditorSheet: View {
                     .lineLimit(3...5)
                     .textFieldStyle(.plain)
                     .font(.system(size: 15, weight: .medium, design: .rounded))
+            }
+
+            if let transaction = target.transaction, !transaction.isArchived {
+                MistiaArchiveSection(
+                    buttonTitle: mistiaLocalized(vi: "Lưu trữ giao dịch", en: "Archive transaction", ja: "取引をアーカイブ"),
+                    descriptionText: mistiaLocalized(vi: "Giao dịch lưu trữ sẽ không còn hiện trong danh sách. Mục này sẽ được tự động xóa vĩnh viễn sau 30 ngày.", en: "Archived transactions will no longer appear in the list. They will be automatically deleted permanently after 30 days.", ja: "アーカイブした取引はリストに表示されなくなります。これらは30日後に自動的に永久削除されます。"),
+                    popupMessage: mistiaLocalized(vi: "Giao dịch này sẽ bị lưu trữ. Các giao dịch đã lưu trữ sẽ nằm trong \"Mục đã lưu trữ\" và được giữ lại trong 30 ngày.", en: "This transaction will be archived. Archived transactions will remain in \"Archived items\" for 30 days.", ja: "この取引はアーカイブされます。アーカイブされた取引は「アーカイブ済みアイテム」に30日間保持されます。")
+                ) {
+                    archiveTransaction()
+                }
             }
         }
     }

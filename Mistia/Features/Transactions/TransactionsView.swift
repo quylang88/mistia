@@ -44,7 +44,10 @@ struct TransactionsView: View {
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.modelContext) private var modelContext
 
-    @Query(sort: [SortDescriptor(\LedgerTransaction.occurredAt, order: .reverse), SortDescriptor(\LedgerTransaction.createdAt, order: .reverse)])
+    @Query(
+        filter: #Predicate<LedgerTransaction> { !$0.isArchived },
+        sort: [SortDescriptor(\LedgerTransaction.occurredAt, order: .reverse), SortDescriptor(\LedgerTransaction.createdAt, order: .reverse)]
+    )
     private var storedTransactions: [LedgerTransaction]
     @Query(sort: [SortDescriptor(\LedgerWallet.sortOrder), SortDescriptor(\LedgerWallet.createdAt)])
     private var storedWallets: [LedgerWallet]

@@ -113,6 +113,7 @@ enum MistiaSyncLocalStore {
                 institutionPresetKey: row.institutionPresetKey,
                 sortOrder: row.sortOrder,
                 isArchived: row.isArchived,
+                archivedAt: row.archivedAt,
                 createdAt: row.createdAt,
                 updatedAt: row.updatedAt
             )
@@ -131,6 +132,7 @@ enum MistiaSyncLocalStore {
                 isSystem: row.isSystem,
                 sortOrder: row.sortOrder,
                 isArchived: row.isArchived,
+                archivedAt: row.archivedAt,
                 createdAt: row.createdAt,
                 updatedAt: row.updatedAt
             )
@@ -176,7 +178,9 @@ enum MistiaSyncLocalStore {
                 destinationWallet: row.destinationWalletID.flatMap { walletByID[$0] },
                 category: row.categoryID.flatMap { categoryByID[$0] },
                 counterpartyName: row.counterpartyName,
-                normalizedCounterpartyKey: row.normalizedCounterpartyKey
+                normalizedCounterpartyKey: row.normalizedCounterpartyKey,
+                isArchived: row.isArchived,
+                archivedAt: row.archivedAt
             )
             context.insert(transaction)
         }
@@ -366,6 +370,7 @@ private extension RemoteLedgerWallet {
             institutionPresetKey: wallet.institutionPresetKey,
             sortOrder: wallet.sortOrder,
             isArchived: wallet.isArchived,
+            archivedAt: wallet.archivedAt,
             createdAt: wallet.createdAt,
             updatedAt: wallet.updatedAt,
             deletedAt: nil
@@ -407,6 +412,7 @@ private extension RemoteTransactionCategory {
             isSystem: category.isSystem,
             sortOrder: category.sortOrder,
             isArchived: category.isArchived,
+            archivedAt: category.archivedAt,
             createdAt: category.createdAt,
             updatedAt: category.updatedAt,
             deletedAt: nil
@@ -434,7 +440,9 @@ private extension RemoteLedgerTransaction {
             sourceWalletID: transaction.sourceWallet?.id,
             destinationWalletID: transaction.destinationWallet?.id,
             categoryID: transaction.category?.id,
-            deletedAt: nil
+            deletedAt: nil,
+            isArchived: transaction.isArchived,
+            archivedAt: transaction.archivedAt
         )
     }
 }

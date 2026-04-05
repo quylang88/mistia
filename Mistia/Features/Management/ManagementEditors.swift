@@ -25,7 +25,6 @@ struct ManagementWalletEditorSheet: View {
     @State private var draft: WalletDraft
     @State private var showsIconPicker = false
     @State private var showsBankPicker = false
-    @State private var showsArchiveConfirmation = false
     @State private var alertMessage: String?
 
     init(target: ManagementWalletEditorTarget) {
@@ -162,11 +161,15 @@ struct ManagementWalletEditorSheet: View {
 
                 if target.wallet != nil {
                     Section {
-                        Button(mistiaLocalized(vi: "Lưu trữ ví", en: "Archive wallet", ja: "ウォレットをアーカイブ"), role: .destructive) {
-                            showsArchiveConfirmation = true
+                        MistiaArchiveSection(
+                            buttonTitle: mistiaLocalized(vi: "Lưu trữ ví", en: "Archive wallet", ja: "ウォレットをアーカイブ"),
+                            descriptionText: mistiaLocalized(vi: "Ví lưu trữ sẽ không còn hiện trong tab quản lý. Mục này sẽ được tự động xóa vĩnh viễn sau 30 ngày.", en: "Archived wallets will no longer appear in the manage tab. They will be automatically deleted permanently after 30 days.", ja: "アーカイブしたウォレットは管理タブに表示されなくなります。これらは30日後に自動的に永久削除されます。"),
+                            popupMessage: mistiaLocalized(vi: "Ví này sẽ bị lưu trữ. Các ví đã lưu trữ sẽ nằm trong \"Mục đã lưu trữ\" và được giữ lại trong 30 ngày.", en: "This wallet will be archived. Archived wallets will remain in \"Archived items\" for 30 days.", ja: "このウォレットはアーカイブされます。アーカイブされたウォレットは「アーカイブ済みアイテム」に30日間保持されます。")
+                        ) {
+                            archiveWallet()
                         }
-                    } footer: {
-                        Text(mistiaLocalized(vi: "Ví lưu trữ sẽ được ẩn khỏi màn hình quản lý.", en: "Archived wallets will be hidden from the manage screen.", ja: "アーカイブしたウォレットは管理画面に表示されなくなります。"))
+                        .listRowInsets(EdgeInsets())
+                        .listRowBackground(Color.clear)
                     }
                 }
             }
@@ -228,19 +231,6 @@ struct ManagementWalletEditorSheet: View {
             Button(mistiaLocalized(vi: "OK", en: "OK", ja: "OK"), role: .cancel) { }
         } message: {
             Text(mistiaCatalog(alertMessage ?? ""))
-        }
-        .confirmationDialog(
-            mistiaLocalized(vi: "Lưu trữ ví này?", en: "Archive this wallet?", ja: "このウォレットをアーカイブしますか？"),
-            isPresented: $showsArchiveConfirmation,
-            titleVisibility: .visible
-        ) {
-            Button(mistiaLocalized(vi: "Lưu trữ", en: "Archive", ja: "アーカイブ"), role: .destructive) {
-                archiveWallet()
-            }
-
-            Button(mistiaLocalized(vi: "Hủy", en: "Cancel", ja: "キャンセル"), role: .cancel) { }
-        } message: {
-            Text(mistiaLocalized(vi: "Bạn vẫn có thể khôi phục sau khi nối thêm màn hình archive.", en: "You can restore it later after the archive screen is added.", ja: "アーカイブ画面が追加された後で復元できます。"))
         }
         .onChange(of: draft.kind) { oldValue, newValue in
             draft.handleKindChange(from: oldValue, to: newValue)
@@ -367,6 +357,7 @@ struct ManagementWalletEditorSheet: View {
         guard let wallet = target.wallet else { return }
 
         wallet.isArchived = true
+        wallet.archivedAt = .now
         wallet.updatedAt = .now
 
         do {
@@ -398,7 +389,6 @@ struct ManagementCategoryEditorSheet: View {
 
     @State private var draft: CategoryDraft
     @State private var showsIconPicker = false
-    @State private var showsArchiveConfirmation = false
     @State private var alertMessage: String?
 
     init(target: ManagementCategoryEditorTarget) {
@@ -456,11 +446,15 @@ struct ManagementCategoryEditorSheet: View {
 
                 if target.category != nil {
                     Section {
-                        Button(mistiaLocalized(vi: "Lưu trữ danh mục", en: "Archive category", ja: "カテゴリをアーカイブ"), role: .destructive) {
-                            showsArchiveConfirmation = true
+                        MistiaArchiveSection(
+                            buttonTitle: mistiaLocalized(vi: "Lưu trữ danh mục", en: "Archive category", ja: "カテゴリをアーカイブ"),
+                            descriptionText: mistiaLocalized(vi: "Danh mục lưu trữ sẽ không còn hiện trong tab quản lý. Mục này sẽ được tự động xóa vĩnh viễn sau 30 ngày.", en: "Archived categories will no longer appear in the manage tab. They will be automatically deleted permanently after 30 days.", ja: "アーカイブしたカテゴリは管理タブに表示されなくなります。これらは30日後に自動的に永久削除されます。"),
+                            popupMessage: mistiaLocalized(vi: "Danh mục này sẽ bị lưu trữ. Các danh mục đã lưu trữ sẽ nằm trong \"Mục đã lưu trữ\" và được giữ lại trong 30 ngày.", en: "This category will be archived. Archived categories will remain in \"Archived items\" for 30 days.", ja: "このカテゴリはアーカイブされます。アーカイブされたカテゴリは「アーカイブ済みアイテム」に30日間保持されます。")
+                        ) {
+                            archiveCategory()
                         }
-                    } footer: {
-                        Text(mistiaLocalized(vi: "Danh mục lưu trữ sẽ không còn hiện trong tab quản lý.", en: "Archived categories will no longer appear in the manage tab.", ja: "アーカイブしたカテゴリは管理タブに表示されなくなります。"))
+                        .listRowInsets(EdgeInsets())
+                        .listRowBackground(Color.clear)
                     }
                 }
             }
@@ -513,17 +507,6 @@ struct ManagementCategoryEditorSheet: View {
             Button(mistiaLocalized(vi: "OK", en: "OK", ja: "OK"), role: .cancel) { }
         } message: {
             Text(mistiaCatalog(alertMessage ?? ""))
-        }
-        .confirmationDialog(
-            mistiaLocalized(vi: "Lưu trữ danh mục này?", en: "Archive this category?", ja: "このカテゴリをアーカイブしますか？"),
-            isPresented: $showsArchiveConfirmation,
-            titleVisibility: .visible
-        ) {
-            Button(mistiaLocalized(vi: "Lưu trữ", en: "Archive", ja: "アーカイブ"), role: .destructive) {
-                archiveCategory()
-            }
-
-            Button(mistiaLocalized(vi: "Hủy", en: "Cancel", ja: "キャンセル"), role: .cancel) { }
         }
         .onChange(of: draft.kind) { oldValue, newValue in
             draft.handleKindChange(from: oldValue, to: newValue)
@@ -581,6 +564,7 @@ struct ManagementCategoryEditorSheet: View {
         guard let category = target.category else { return }
 
         category.isArchived = true
+        category.archivedAt = .now
         category.updatedAt = .now
 
         do {

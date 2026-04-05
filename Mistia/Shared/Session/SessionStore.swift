@@ -334,12 +334,6 @@ final class SessionStore {
         syncCoordinator.clearQueuedMutations()
 
         do {
-            try syncCoordinator.clearLocalCache()
-        } catch {
-            lastErrorMessage = error.localizedDescription
-        }
-
-        do {
             try await authService.signOut(session: activeSession)
         } catch {
             lastErrorMessage = error.localizedDescription

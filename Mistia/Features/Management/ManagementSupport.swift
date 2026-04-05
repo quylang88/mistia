@@ -35,6 +35,7 @@ struct JapaneseBankPreset: Identifiable, Hashable {
 }
 
 enum ManagementDataActionKind: String, Identifiable, CaseIterable {
+    case archivedItems
     case exportData
     case importData
     case backupRestore
@@ -44,6 +45,8 @@ enum ManagementDataActionKind: String, Identifiable, CaseIterable {
 
     var title: String {
         switch self {
+        case .archivedItems:
+            mistiaLocalized(vi: "Mục đã lưu trữ", en: "Archived items", ja: "アーカイブ済みアイテム")
         case .exportData:
             mistiaLocalized(vi: "Xuất dữ liệu", en: "Export data", ja: "データを書き出す")
         case .importData:
@@ -57,6 +60,8 @@ enum ManagementDataActionKind: String, Identifiable, CaseIterable {
 
     var iconSymbolName: String {
         switch self {
+        case .archivedItems:
+            "archivebox"
         case .exportData:
             "square.and.arrow.up.fill"
         case .importData:
@@ -70,6 +75,8 @@ enum ManagementDataActionKind: String, Identifiable, CaseIterable {
 
     var tintColor: Color {
         switch self {
+        case .archivedItems:
+            Color(hex: "#A0A0A0")
         case .exportData:
             Color(hex: "#5B7BFF")
         case .importData:
