@@ -216,6 +216,18 @@ drop trigger if exists due_occurrence_records_set_updated_at on public.due_occur
 create trigger due_occurrence_records_set_updated_at before update on public.due_occurrence_records
 for each row execute function public.set_updated_at();
 
+alter table public.ledger_wallets
+  add column if not exists is_archived boolean not null default false,
+  add column if not exists archived_at timestamptz;
+
+alter table public.transaction_categories
+  add column if not exists is_archived boolean not null default false,
+  add column if not exists archived_at timestamptz;
+
+alter table public.ledger_transactions
+  add column if not exists is_archived boolean not null default false,
+  add column if not exists archived_at timestamptz;
+
 alter table public.ledger_wallets enable row level security;
 alter table public.credit_card_profiles enable row level security;
 alter table public.transaction_categories enable row level security;
