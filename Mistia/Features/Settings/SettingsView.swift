@@ -10,7 +10,7 @@ struct SettingsView: View {
     @State private var destination: SettingsDestination?
 
     private var cardTint: Color {
-        colorScheme == .dark ? .white.opacity(0.08) : .white.opacity(0.22)
+        colorScheme == .dark ? Color(UIColor.secondarySystemGroupedBackground) : .white.opacity(0.22)
     }
 
     private var accentPurple: Color {
@@ -290,7 +290,7 @@ private struct AppearanceModeCard: View {
     let onSelect: (MistiaAppearanceMode) -> Void
 
     private var cardTint: Color {
-        colorScheme == .dark ? .white.opacity(0.08) : .white.opacity(0.22)
+        colorScheme == .dark ? Color(UIColor.secondarySystemGroupedBackground) : .white.opacity(0.22)
     }
 
     var body: some View {
@@ -327,7 +327,7 @@ private struct LanguageSelectionCard: View {
     let onSelect: (MistiaAppLanguage) -> Void
 
     private var cardTint: Color {
-        colorScheme == .dark ? .white.opacity(0.08) : .white.opacity(0.22)
+        colorScheme == .dark ? Color(UIColor.secondarySystemGroupedBackground) : .white.opacity(0.22)
     }
 
     var body: some View {
