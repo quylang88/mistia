@@ -263,7 +263,7 @@ struct ManagementWalletEditorSheet: View {
         if let trimmedName = draft.name.nilIfBlank {
             finalName = trimmedName
         } else {
-            finalName = draft.institutionDisplayName.nilIfBlank ?? draft.kind.localizedTitle
+            finalName = draft.institutionDisplayName.nilIfBlank ?? draft.kind.title
         }
         let now = Date()
         let existingProfileID = target.wallet?.creditCardProfile?.id
