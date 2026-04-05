@@ -684,7 +684,7 @@ private struct PlanningBudgetSummaryCard: View {
     let currencyCode: String
 
     private var cardTint: Color {
-        colorScheme == .dark ? .white.opacity(0.018) : .white.opacity(0.12)
+        colorScheme == .dark ? .white.opacity(0.1) : .white.opacity(0.12)
     }
 
     var body: some View {
@@ -758,7 +758,7 @@ private struct PlanningGoalSummaryCard: View {
     let currencyCode: String
 
     private var cardTint: Color {
-        colorScheme == .dark ? .white.opacity(0.018) : .white.opacity(0.12)
+        colorScheme == .dark ? .white.opacity(0.1) : .white.opacity(0.12)
     }
 
     var body: some View {
@@ -804,7 +804,7 @@ private struct PlanningDueSummaryCard: View {
     let currencyCode: String
 
     private var cardTint: Color {
-        colorScheme == .dark ? .white.opacity(0.018) : .white.opacity(0.12)
+        colorScheme == .dark ? .white.opacity(0.1) : .white.opacity(0.12)
     }
 
     var body: some View {
@@ -1133,7 +1133,7 @@ private struct PlanningListCard<Content: View>: View {
     @ViewBuilder let content: Content
 
     private var cardTint: Color {
-        colorScheme == .dark ? .white.opacity(0.018) : .white.opacity(0.12)
+        colorScheme == .dark ? .white.opacity(0.1) : .white.opacity(0.12)
     }
 
     var body: some View {
@@ -1170,7 +1170,7 @@ private struct PlanningEmptyStateCard: View {
     let action: () -> Void
 
     private var cardTint: Color {
-        colorScheme == .dark ? .white.opacity(0.018) : .white.opacity(0.12)
+        colorScheme == .dark ? .white.opacity(0.1) : .white.opacity(0.12)
     }
 
     var body: some View {

@@ -100,7 +100,7 @@ struct ManagementAccountView: View {
     private var configurationCard: some View {
         MistiaGlassCard(
             cornerRadius: 24,
-            tint: accent.opacity(0.14)
+            tint: colorScheme == .dark ? Color(UIColor.secondarySystemGroupedBackground) : accent.opacity(0.14)
         ) {
             VStack(alignment: .leading, spacing: 16) {
                 ManagementStatusBadge(
@@ -138,7 +138,7 @@ struct ManagementAccountView: View {
         VStack(spacing: 16) {
             MistiaGlassCard(
                 cornerRadius: 24,
-                tint: accent.opacity(0.12)
+                tint: colorScheme == .dark ? Color(UIColor.secondarySystemGroupedBackground) : accent.opacity(0.12)
             ) {
                 VStack(alignment: .leading, spacing: 14) {
                     HStack(spacing: 12) {
@@ -907,9 +907,10 @@ private struct ManagementInlineMessageCard: View {
     let title: String
     let message: String
     let accent: Color
+    @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
-        MistiaGlassCard(cornerRadius: 20, tint: accent.opacity(0.14)) {
+        MistiaGlassCard(cornerRadius: 20, tint: colorScheme == .dark ? Color(UIColor.secondarySystemGroupedBackground) : accent.opacity(0.14)) {
             VStack(alignment: .leading, spacing: 8) {
                 Text(title)
                     .font(.system(size: 14.5, weight: .bold, design: .rounded))

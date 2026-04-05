@@ -2,6 +2,7 @@ import SwiftUI
 
 struct PlaceholderTabView: View {
     let tab: MistiaTab
+    @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
         ZStack {
@@ -12,7 +13,7 @@ struct PlaceholderTabView: View {
 
                 Spacer()
 
-                MistiaGlassCard(cornerRadius: 30, tint: tab.accent.opacity(0.16)) {
+                MistiaGlassCard(cornerRadius: 30, tint: tab.accent.opacity(colorScheme == .dark ? 0.1 : 0.16)) {
                     VStack(spacing: 14) {
                         ZStack {
                             MistiaCircleGlassBackground(tint: tab.accent.opacity(0.2))

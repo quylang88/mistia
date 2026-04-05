@@ -208,7 +208,7 @@ private struct OverviewHeroCard: View {
     }
 
     private var cardTint: Color {
-        colorScheme == .dark ? .white.opacity(0.024) : .white.opacity(0.16)
+        colorScheme == .dark ? .white.opacity(0.1) : .white.opacity(0.16)
     }
 
     private var insetSurface: Color {
@@ -678,7 +678,7 @@ private struct OverviewSection<Content: View>: View {
     private let content: Content
 
     private var cardTint: Color {
-        colorScheme == .dark ? .white.opacity(0.018) : .white.opacity(0.12)
+        colorScheme == .dark ? .white.opacity(0.1) : .white.opacity(0.12)
     }
 
     init(title: String, @ViewBuilder content: () -> Content) {

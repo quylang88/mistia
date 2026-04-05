@@ -409,7 +409,7 @@ private struct TransactionLiveSummaryCard: View {
     let summary: TransactionSummarySnapshot
 
     private var cardTint: Color {
-        colorScheme == .dark ? .white.opacity(0.018) : .white.opacity(0.12)
+        colorScheme == .dark ? .white.opacity(0.1) : .white.opacity(0.12)
     }
 
     var body: some View {
@@ -484,7 +484,7 @@ private struct TransactionSectionCard: View {
     let onSelect: (LedgerTransaction) -> Void
 
     private var cardTint: Color {
-        colorScheme == .dark ? .white.opacity(0.018) : .white.opacity(0.12)
+        colorScheme == .dark ? .white.opacity(0.1) : .white.opacity(0.12)
     }
 
     var body: some View {
@@ -817,7 +817,7 @@ private struct TransactionsPlaceholderCard: View {
     }
 
     private var cardTint: Color {
-        colorScheme == .dark ? .white.opacity(0.018) : .white.opacity(0.12)
+        colorScheme == .dark ? .white.opacity(0.1) : .white.opacity(0.12)
     }
 
     var body: some View {

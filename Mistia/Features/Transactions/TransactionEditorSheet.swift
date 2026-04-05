@@ -582,11 +582,12 @@ private struct TransactionEditorHeaderCard: View {
     let title: String
     let subtitle: String
     let accent: Color
+    @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
         MistiaGlassCard(
             cornerRadius: 28,
-            tint: accent.opacity(0.18)
+            tint: colorScheme == .dark ? Color(UIColor.secondarySystemGroupedBackground) : accent.opacity(0.18)
         ) {
             VStack(alignment: .leading, spacing: 12) {
                 HStack(spacing: 12) {
@@ -619,11 +620,12 @@ private struct TransactionEditorHeaderCard: View {
 private struct TransactionEditorCard<Content: View>: View {
     let title: String
     @ViewBuilder let content: Content
+    @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
         MistiaGlassCard(
             cornerRadius: 24,
-            tint: Color.white.opacity(0.10)
+            tint: colorScheme == .dark ? Color(UIColor.secondarySystemGroupedBackground) : Color.white.opacity(0.10)
         ) {
             VStack(alignment: .leading, spacing: 14) {
                 Text(title)
@@ -716,9 +718,10 @@ private struct TransactionHintCard: View {
     let icon: String
     let tint: Color
     let message: String
+    @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
-        MistiaGlassCard(cornerRadius: 22, tint: tint.opacity(0.12)) {
+        MistiaGlassCard(cornerRadius: 22, tint: colorScheme == .dark ? Color(UIColor.secondarySystemGroupedBackground) : tint.opacity(0.12)) {
             HStack(alignment: .top, spacing: 12) {
                 Image(systemName: icon)
                     .font(.system(size: 17, weight: .bold))
