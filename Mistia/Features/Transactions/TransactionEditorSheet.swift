@@ -321,6 +321,12 @@ struct TransactionEditorSheet: View {
                     .lineLimit(3...5)
                     .textFieldStyle(.plain)
                     .font(.system(size: 15, weight: .medium, design: .rounded))
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 14)
+                    .background {
+                        RoundedRectangle(cornerRadius: 16, style: .continuous)
+                            .fill(Color(UIColor.tertiarySystemGroupedBackground))
+                    }
             }
 
             if let transaction = target.transaction, !transaction.isArchived {
@@ -786,9 +792,10 @@ private struct TransactionEditorCard<Content: View>: View {
     var body: some View {
         MistiaGlassCard(
             cornerRadius: 24,
-            tint: colorScheme == .dark ? Color(UIColor.secondarySystemGroupedBackground) : Color.white.opacity(0.10)
+            tint: colorScheme == .dark ? Color(UIColor.secondarySystemGroupedBackground) : Color.white.opacity(0.10),
+            padding: 18
         ) {
-            VStack(alignment: .leading, spacing: 14) {
+            VStack(alignment: .leading, spacing: 18) {
                 Text(title)
                     .font(.system(size: 13, weight: .bold, design: .rounded))
                     .foregroundStyle(.secondary)
@@ -815,14 +822,11 @@ private struct TransactionEditorTextField: View {
             TextField(placeholder, text: $text)
                 .textFieldStyle(.plain)
                 .font(.system(size: 15.5, weight: .semibold, design: .rounded))
-                .padding(.horizontal, 14)
-                .padding(.vertical, 12)
+                .padding(.horizontal, 16)
+                .padding(.vertical, 14)
                 .background {
-                    MistiaRoundedGlassBackground(
-                        cornerRadius: 16,
-                        tint: .white.opacity(0.08),
-                        interactive: true
-                    )
+                    RoundedRectangle(cornerRadius: 16, style: .continuous)
+                        .fill(Color(UIColor.tertiarySystemGroupedBackground))
                 }
         }
     }
@@ -861,14 +865,11 @@ private struct TransactionSelectionMenuRow<MenuContent: View>: View {
                     .font(.system(size: 12, weight: .bold))
                     .foregroundStyle(.tertiary)
             }
-            .padding(.horizontal, 14)
-            .padding(.vertical, 12)
+            .padding(.horizontal, 16)
+            .padding(.vertical, 14)
             .background {
-                MistiaRoundedGlassBackground(
-                    cornerRadius: 18,
-                    tint: .white.opacity(0.08),
-                    interactive: true
-                )
+                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                    .fill(Color(UIColor.tertiarySystemGroupedBackground))
             }
         }
         .buttonStyle(.plain)
@@ -882,7 +883,7 @@ private struct TransactionHintCard: View {
     @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
-        MistiaGlassCard(cornerRadius: 22, tint: colorScheme == .dark ? Color(UIColor.secondarySystemGroupedBackground) : tint.opacity(0.12)) {
+        MistiaGlassCard(cornerRadius: 24, tint: colorScheme == .dark ? Color(UIColor.secondarySystemGroupedBackground) : tint.opacity(0.12), padding: 18) {
             HStack(alignment: .top, spacing: 12) {
                 Image(systemName: icon)
                     .font(.system(size: 17, weight: .bold))

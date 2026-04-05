@@ -137,9 +137,7 @@ struct TransactionsView: View {
     }
 
     private var inactiveFilterTint: Color {
-        colorScheme == .dark
-            ? .white.opacity(0.08)
-            : Color.black.opacity(0.06)
+        Color(UIColor.secondarySystemGroupedBackground)
     }
 
     private var activeFilterBadgeTextColor: Color {

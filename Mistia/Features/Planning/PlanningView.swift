@@ -403,7 +403,8 @@ private struct GoalsTabContent: View {
 
                         if index < rows.count - 1 {
                             Divider()
-                                .padding(.leading, 58)
+                                .padding(.leading, 52)
+                                .padding(.trailing, 0)
                         }
                     }
 
@@ -610,27 +611,32 @@ private struct PlanningModePicker: View {
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 12)
                     .background {
-                        Capsule()
-                            .fill(Color.clear)
-                            .background {
-                                if #available(iOS 26, *) {
-                                    Capsule()
-                                        .fill(.clear)
-                                        .glassEffect(
-                                            Glass.regular
-                                                .tint(selection == mode ? activeTint : idleTint)
-                                                .interactive(true),
-                                            in: .capsule
-                                        )
-                                } else {
-                                    Capsule()
-                                        .fill(.regularMaterial)
+                        if selection == mode {
+                            Capsule()
+                                .fill(Color.clear)
+                                .background {
+                                    if #available(iOS 26, *) {
+                                        Capsule()
+                                            .fill(.clear)
+                                            .glassEffect(
+                                                Glass.regular
+                                                    .tint(activeTint)
+                                                    .interactive(true),
+                                                in: .capsule
+                                            )
+                                    } else {
+                                        Capsule()
+                                            .fill(.regularMaterial)
+                                    }
                                 }
-                            }
-                            .overlay {
-                                Capsule()
-                                    .strokeBorder(.white.opacity(colorScheme == .dark ? 0.08 : 0.20), lineWidth: 0.8)
-                            }
+                        } else {
+                            Capsule()
+                                .fill(Color(UIColor.secondarySystemGroupedBackground))
+                        }
+                    }
+                    .overlay {
+                        Capsule()
+                            .strokeBorder(.white.opacity(colorScheme == .dark ? 0.08 : 0.20), lineWidth: 0.8)
                     }
                 }
                 .buttonStyle(MistiaPressableButtonStyle(cornerRadius: 24, tint: accent))

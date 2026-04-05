@@ -8,36 +8,7 @@ struct MistiaBlockCardBackground: View {
 
     var body: some View {
         RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-            .fill(Color.clear)
-            .background {
-                if #available(iOS 26, *) {
-                    RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                        .fill(.clear)
-                        .glassEffect(
-                            Glass.regular
-                                .tint(tint)
-                                .interactive(false),
-                            in: .rect(cornerRadius: cornerRadius)
-                        )
-                } else {
-                    RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                        .fill(.ultraThinMaterial)
-                }
-            }
-            .overlay {
-                RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                    .strokeBorder(
-                        LinearGradient(
-                            colors: [
-                                .white.opacity(colorScheme == .dark ? 0.08 : 0.26),
-                                .white.opacity(colorScheme == .dark ? 0.03 : 0.08)
-                            ],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        ),
-                        lineWidth: 0.8
-                    )
-            }
+            .fill(Color(UIColor.secondarySystemGroupedBackground))
             .shadow(
                 color: .black.opacity(colorScheme == .dark ? 0.14 : 0.035),
                 radius: 10,
