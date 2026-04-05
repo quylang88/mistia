@@ -88,6 +88,8 @@ struct RemoteLedgerTransaction: MistiaRemoteRow {
     let destinationWalletID: UUID?
     let categoryID: UUID?
     let deletedAt: Date?
+    let isArchived: Bool
+    let archivedAt: Date?
 }
 
 struct RemoteBudgetPlan: MistiaRemoteRow {

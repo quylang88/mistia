@@ -65,6 +65,7 @@ nonisolated struct OverviewTransactionSnapshot: Equatable, Identifiable {
     let categoryID: UUID?
     let categoryName: String?
     let counterpartyName: String?
+    let isArchived: Bool
 }
 
 nonisolated struct OverviewChartPoint: Equatable, Identifiable {
@@ -587,7 +588,7 @@ nonisolated enum OverviewLogic {
         calendar: Calendar = .current
     ) -> [OverviewRecentTransactionSnapshot] {
         transactions
-            .filter { $0.entryStatus == .posted }
+            .filter { $0.entryStatus == .posted && !$0.isArchived }
             .sorted(by: transactionSort)
             .prefix(5)
             .map { transaction in
@@ -670,7 +671,7 @@ nonisolated enum OverviewLogic {
             }
 
         let transactionRows = transactions
-            .filter { $0.entryStatus == .posted && contains($0.occurredAt, in: statementPeriod) }
+            .filter { $0.entryStatus == .posted && !$0.isArchived && contains($0.occurredAt, in: statementPeriod) }
             .sorted(by: transactionSort)
             .map { makeStatementRow(from: $0, currencyCode: currencyCode) }
 
@@ -708,6 +709,7 @@ nonisolated enum OverviewLogic {
                 let charges = transactions
                     .filter {
                         $0.entryStatus == .posted
+                            && !$0.isArchived
                             && $0.primaryKind == .expense
                             && $0.sourceWalletID == account.walletID
                             && contains($0.occurredAt, in: cycle)
@@ -718,6 +720,7 @@ nonisolated enum OverviewLogic {
                 let payments = transactions
                     .filter {
                         $0.entryStatus == .posted
+                            && !$0.isArchived
                             && $0.primaryKind == .transfer
                             && $0.transferSubtype == .internalTransfer
                             && $0.destinationWalletID == account.walletID

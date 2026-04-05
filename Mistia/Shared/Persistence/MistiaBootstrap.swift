@@ -2,6 +2,29 @@ import Foundation
 import SwiftData
 
 enum MistiaBootstrap {
+    static func cleanupExpiredArchivedData(modelContext: ModelContext) throws {
+        let thresholdDate = Calendar.current.date(byAdding: .day, value: -30, to: Date()) ?? Date()
+
+        var descriptor = FetchDescriptor<LedgerTransaction>()
+        descriptor.predicate = #Predicate<LedgerTransaction> {
+            $0.isArchived == true
+        }
+
+        let archivedTransactions = try modelContext.fetch(descriptor)
+        var didDelete = false
+
+        for transaction in archivedTransactions {
+            if let archivedAt = transaction.archivedAt, archivedAt < thresholdDate {
+                modelContext.delete(transaction)
+                didDelete = true
+            }
+        }
+
+        if didDelete {
+            try modelContext.save()
+        }
+    }
+
     static func seedDefaultCategoriesIfNeeded(modelContext: ModelContext) throws {
         let existingCategories = try modelContext.fetch(FetchDescriptor<TransactionCategory>())
         let existingWallets = try modelContext.fetch(FetchDescriptor<LedgerWallet>())

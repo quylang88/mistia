@@ -164,6 +164,8 @@ final class LedgerTransaction {
     var updatedAt: Date
     var counterpartyName: String?
     var normalizedCounterpartyKey: String?
+    var isArchived: Bool
+    var archivedAt: Date?
 
     @Relationship(deleteRule: .nullify) var sourceWallet: LedgerWallet?
     @Relationship(deleteRule: .nullify) var destinationWallet: LedgerWallet?
@@ -185,7 +187,9 @@ final class LedgerTransaction {
         destinationWallet: LedgerWallet? = nil,
         category: TransactionCategory? = nil,
         counterpartyName: String? = nil,
-        normalizedCounterpartyKey: String? = nil
+        normalizedCounterpartyKey: String? = nil,
+        isArchived: Bool = false,
+        archivedAt: Date? = nil
     ) {
         self.id = id
         self.primaryKindRawValue = primaryKind.rawValue
@@ -203,6 +207,8 @@ final class LedgerTransaction {
         self.category = category
         self.counterpartyName = counterpartyName
         self.normalizedCounterpartyKey = normalizedCounterpartyKey
+        self.isArchived = isArchived
+        self.archivedAt = archivedAt
     }
 
     var primaryKind: TransactionPrimaryKind {

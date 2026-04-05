@@ -41,6 +41,7 @@ struct TransactionEditorSheet: View {
 
     @State private var draft: TransactionFormDraft
     @State private var alertMessage: String?
+    @State private var showsArchiveConfirmation = false
 
     init(
         target: TransactionEditorTarget,
@@ -83,17 +84,29 @@ struct TransactionEditorSheet: View {
                 }
 
                 ToolbarItem(placement: .topBarTrailing) {
-                    Button {
-                        save()
-                    } label: {
-                        Image(systemName: "checkmark")
-                            .font(.system(size: 14, weight: .bold))
-                            .foregroundStyle(Color(red: 0.88, green: 0.78, blue: 1.0))
-                            .frame(width: 30, height: 30)
+                    HStack(spacing: 8) {
+                        if let transaction = target.transaction, !transaction.isArchived {
+                            Button {
+                                showsArchiveConfirmation = true
+                            } label: {
+                                Image(systemName: "archivebox")
+                                    .font(.system(size: 15, weight: .semibold))
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+
+                        Button {
+                            save()
+                        } label: {
+                            Image(systemName: "checkmark")
+                                .font(.system(size: 14, weight: .bold))
+                                .foregroundStyle(Color(red: 0.88, green: 0.78, blue: 1.0))
+                                .frame(width: 30, height: 30)
+                        }
+                        .buttonStyle(.glassProminent)
+                        .buttonBorderShape(.circle)
+                        .tint(Color(red: 0.43, green: 0.23, blue: 0.76))
                     }
-                    .buttonStyle(.glassProminent)
-                    .buttonBorderShape(.circle)
-                    .tint(Color(red: 0.43, green: 0.23, blue: 0.76))
                 }
             }
         }
@@ -107,6 +120,38 @@ struct TransactionEditorSheet: View {
             Button(mistiaLocalized(vi: "OK", en: "OK", ja: "OK"), role: .cancel) { }
         } message: {
             Text(mistiaCatalog(alertMessage ?? ""))
+        }
+        .confirmationDialog(
+            mistiaLocalized(vi: "Lưu trữ giao dịch này?", en: "Archive this transaction?", ja: "この取引をアーカイブしますか？"),
+            isPresented: $showsArchiveConfirmation,
+            titleVisibility: .visible
+        ) {
+            Button(mistiaLocalized(vi: "Lưu trữ", en: "Archive", ja: "アーカイブ"), role: .destructive) {
+                archiveTransaction()
+            }
+            Button(mistiaLocalized(vi: "Hủy", en: "Cancel", ja: "キャンセル"), role: .cancel) { }
+        } message: {
+            Text(mistiaLocalized(vi: "Giao dịch lưu trữ sẽ không còn hiện trong ứng dụng và sẽ bị xóa vĩnh viễn sau 30 ngày.", en: "Archived transactions will no longer appear in the app and will be permanently deleted after 30 days.", ja: "アーカイブした取引はアプリに表示されなくなり、30日後に永久に削除されます。"))
+        }
+    }
+
+    private func archiveTransaction() {
+        guard let transaction = target.transaction else { return }
+        transaction.isArchived = true
+        transaction.archivedAt = Date()
+        transaction.updatedAt = Date()
+
+        do {
+            try modelContext.save()
+            sessionStore.recordUpsert(
+                entity: .transaction,
+                recordID: transaction.id,
+                modifiedAt: transaction.updatedAt
+            )
+            onComplete(.savedTransaction)
+            dismiss()
+        } catch {
+            alertMessage = mistiaLocalized(vi: "Không thể lưu trạng thái lưu trữ.", en: "Couldn't save the archive state.", ja: "アーカイブ状態を保存できません。") + " \(error.localizedDescription)"
         }
     }
 

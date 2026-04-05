@@ -176,7 +176,9 @@ enum MistiaSyncLocalStore {
                 destinationWallet: row.destinationWalletID.flatMap { walletByID[$0] },
                 category: row.categoryID.flatMap { categoryByID[$0] },
                 counterpartyName: row.counterpartyName,
-                normalizedCounterpartyKey: row.normalizedCounterpartyKey
+                normalizedCounterpartyKey: row.normalizedCounterpartyKey,
+                isArchived: row.isArchived,
+                archivedAt: row.archivedAt
             )
             context.insert(transaction)
         }
@@ -434,7 +436,9 @@ private extension RemoteLedgerTransaction {
             sourceWalletID: transaction.sourceWallet?.id,
             destinationWalletID: transaction.destinationWallet?.id,
             categoryID: transaction.category?.id,
-            deletedAt: nil
+            deletedAt: nil,
+            isArchived: transaction.isArchived,
+            archivedAt: transaction.archivedAt
         )
     }
 }
