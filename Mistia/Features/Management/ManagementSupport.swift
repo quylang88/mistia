@@ -138,7 +138,7 @@ extension LedgerWallet {
             if transaction.entryStatus == .posted {
                 if transaction.primaryKind == .expense && transaction.sourceWallet?.id == self.id {
                     balance -= transaction.amountMinor
-                } else if transaction.primaryKind == .income && transaction.destinationWallet?.id == self.id {
+                } else if transaction.primaryKind == .income && transaction.sourceWallet?.id == self.id {
                     balance += transaction.amountMinor
                 } else if transaction.primaryKind == .transfer {
                     if transaction.sourceWallet?.id == self.id {

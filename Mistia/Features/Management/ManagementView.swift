@@ -26,6 +26,12 @@ struct ManagementView: View {
     private var storedWallets: [LedgerWallet]
     @Query(sort: [SortDescriptor(\TransactionCategory.createdAt), SortDescriptor(\TransactionCategory.sortOrder)])
     private var storedCategories: [TransactionCategory]
+    @Query
+    private var storedTransactions: [LedgerTransaction]
+    @Query
+    private var storedTransactions: [LedgerTransaction]
+    @Query
+    private var storedTransactions: [LedgerTransaction]
 
     @State private var destination: ManagementNavigationDestination?
     @State private var walletEditorTarget: ManagementWalletEditorTarget?
@@ -189,13 +195,13 @@ struct ManagementView: View {
                 } else {
                     VStack(spacing: 0) {
                         ForEach(Array(activeWallets.enumerated()), id: \.element.id) { index, wallet in
-                            ManagementWalletRow(wallet: wallet) {
+                            ManagementWalletRow(wallet: wallet, balance: wallet.currentBalance(transactions: storedTransactions)) {
                                 walletEditorTarget = ManagementWalletEditorTarget(wallet: wallet, defaultKind: wallet.kind)
                             }
 
                             if index < activeWallets.count - 1 {
                                 Divider()
-                                    .padding(.leading, 52)
+                                    .padding(.leading, 56)
                             }
                         }
 
@@ -208,6 +214,10 @@ struct ManagementView: View {
                         ) {
                             walletEditorTarget = ManagementWalletEditorTarget(wallet: nil, defaultKind: .cash)
                         }
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 14)
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 14)
                     }
                 }
             }
@@ -244,6 +254,8 @@ struct ManagementView: View {
                         ) {
                             categoryEditorTarget = ManagementCategoryEditorTarget(category: nil, defaultKind: selectedCategoryKind)
                         }
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 14)
                     } else {
                         VStack(spacing: 0) {
                             LazyVGrid(
@@ -256,8 +268,14 @@ struct ManagementView: View {
                                     ManagementCategoryTile(category: category) {
                                         categoryEditorTarget = ManagementCategoryEditorTarget(category: category, defaultKind: category.kind)
                                     }
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 14)
                                 }
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 14)
                             }
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 14)
                             .padding(.horizontal, 14)
                             .padding(.vertical, 14)
 
@@ -270,9 +288,15 @@ struct ManagementView: View {
                             ) {
                                 categoryEditorTarget = ManagementCategoryEditorTarget(category: nil, defaultKind: selectedCategoryKind)
                             }
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 14)
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 14)
                             .padding(.horizontal, 14)
                             .padding(.vertical, 14)
                         }
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 14)
                     }
                 }
             }
@@ -287,11 +311,15 @@ struct ManagementView: View {
                         ManagementActionRow(action: action) {
                             handleDataAction(action)
                         }
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 14)
 
                         if index < dataActions.count - 1 {
                             Divider()
-                                .padding(.leading, 52)
+                                .padding(.leading, 56)
                         }
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 14)
                     }
                 }
             }
@@ -588,6 +616,8 @@ private struct ManagementSignedOutCard: View {
                             Capsule()
                                 .fill(buttonFill)
                         }
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 14)
                 }
                 .buttonStyle(MistiaPressableButtonStyle(cornerRadius: 22, tint: buttonForeground))
             }
@@ -612,7 +642,6 @@ private struct ManagementWalletRow: View {
             return colorScheme == .dark ? Color(red: 0.34, green: 0.82, blue: 1.0) : Color(red: 0.18, green: 0.67, blue: 0.62)
         }
     }
-    let wallet: LedgerWallet
     var body: some View {
         Button(action: action) {
             HStack(alignment: .top, spacing: 12) {
