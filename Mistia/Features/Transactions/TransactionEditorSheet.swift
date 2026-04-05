@@ -55,20 +55,11 @@ struct TransactionEditorSheet: View {
 
     var body: some View {
         NavigationStack {
-            ZStack {
-                MistiaBackgroundView(tone: .standard)
-
-                ScrollView(showsIndicators: false) {
-                    VStack(spacing: 16) {
-                        if target.quickCapture && target.transaction == nil {
-                            quickCaptureContent
-                        } else {
-                            fullEditorContent
-                        }
-                    }
-                    .padding(.horizontal, 18)
-                    .padding(.top, 10)
-                    .padding(.bottom, 32)
+            Form {
+                if target.quickCapture && target.transaction == nil {
+                    quickCaptureContent
+                } else {
+                    fullEditorContent
                 }
             }
             .navigationTitle(navigationTitle)
@@ -111,7 +102,6 @@ struct TransactionEditorSheet: View {
             Text(mistiaCatalog(alertMessage ?? ""))
         }
     }
-
     private func archiveTransaction() {
         guard let transaction = target.transaction else { return }
         transaction.isArchived = true
@@ -135,212 +125,175 @@ struct TransactionEditorSheet: View {
     private var quickCaptureContent: some View {
         @Bindable var bindableDraft = draft
 
-        return VStack(spacing: 16) {
-            TransactionEditorCard(title: mistiaLocalized(vi: "Loại giao dịch", en: "Transaction type", ja: "取引タイプ")) {
-                TransactionChoiceChipRow(
-                    values: TransactionPrimaryKind.allCases,
-                    selection: $bindableDraft.primaryKind
-                ) { kind in
-                    Text(kind.title)
+        return Group {
+            Section(mistiaLocalized(vi: "Loại giao dịch", en: "Transaction type", ja: "取引タイプ")) {
+                Picker(mistiaLocalized(vi: "Loại giao dịch", en: "Transaction type", ja: "取引タイプ"), selection: $bindableDraft.primaryKind) {
+                    ForEach(TransactionPrimaryKind.allCases, id: \.self) { kind in
+                        Text(kind.title).tag(kind)
+                    }
                 }
+                .pickerStyle(.segmented)
+                .listRowInsets(EdgeInsets())
+                .listRowBackground(Color.clear)
             }
 
-            TransactionEditorCard(title: mistiaLocalized(vi: "Số tiền", en: "Amount", ja: "金額")) {
-                TransactionEditorTextField(
-                    title: mistiaLocalized(vi: "Số tiền", en: "Amount", ja: "金額"),
-                    text: $bindableDraft.amountText,
-                    placeholder: mistiaLocalized(vi: "Ví dụ 12000", en: "Example: 12000", ja: "例: 12000")
-                )
-                .keyboardType(.numberPad)
+            Section(mistiaLocalized(vi: "Số tiền", en: "Amount", ja: "金額")) {
+                TextField(mistiaLocalized(vi: "Số tiền", en: "Amount", ja: "金額"), text: $bindableDraft.amountText)
+                    .keyboardType(.numberPad)
             }
 
-            TransactionHintCard(
-                icon: "square.and.pencil",
-                tint: accentColor,
-                message: mistiaLocalized(
+            Section {
+                Text(mistiaLocalized(
                     vi: "Ghi nhanh chỉ lưu loại giao dịch và số tiền. Hãy hoàn thiện chi tiết ở tab Giao dịch.",
                     en: "Quick capture only saves the transaction type and amount. Complete the rest in the Transactions tab.",
                     ja: "クイック記録では取引タイプと金額だけを保存します。残りの詳細は取引タブで仕上げてください。"
-                )
-            )
+                ))
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+            }
         }
     }
-
     private var fullEditorContent: some View {
         @Bindable var bindableDraft = draft
 
-        return VStack(spacing: 16) {
+        return Group {
             if draft.primaryKind == .transfer {
-                TransactionEditorCard(title: mistiaLocalized(vi: "Kiểu chuyển tiền", en: "Transfer type", ja: "振替タイプ")) {
-                    TransactionChoiceChipRow(
-                        values: TransactionTransferSubtype.allCases,
-                        selection: Binding(
-                            get: { bindableDraft.transferSubtype ?? .internalTransfer },
-                            set: { bindableDraft.transferSubtype = $0 }
-                        )
-                    ) { subtype in
-                        Text(subtype.title)
+                Section(mistiaLocalized(vi: "Kiểu chuyển tiền", en: "Transfer type", ja: "振替タイプ")) {
+                    Picker(mistiaLocalized(vi: "Kiểu chuyển tiền", en: "Transfer type", ja: "振替タイプ"), selection: Binding(
+                        get: { bindableDraft.transferSubtype ?? .internalTransfer },
+                        set: { bindableDraft.transferSubtype = $0 }
+                    )) {
+                        ForEach(TransactionTransferSubtype.allCases, id: \.self) { subtype in
+                            Text(subtype.title).tag(subtype)
+                        }
                     }
+                    .pickerStyle(.segmented)
+                    .listRowInsets(EdgeInsets())
+                    .listRowBackground(Color.clear)
                 }
             }
 
             if draft.primaryKind == .transfer, draft.transferSubtype == .debt {
-                TransactionEditorCard(title: mistiaLocalized(vi: "Loại công nợ", en: "Debt type", ja: "貸し借りの種類")) {
-                    TransactionChoiceChipRow(
-                        values: TransactionDebtIntent.allCases,
-                        selection: Binding(
-                            get: { bindableDraft.debtIntent ?? .lend },
-                            set: { bindableDraft.debtIntent = $0 }
-                        )
-                    ) { intent in
-                        Text(intent.title)
+                Section(mistiaLocalized(vi: "Loại công nợ", en: "Debt type", ja: "貸し借りの種類")) {
+                    Picker(mistiaLocalized(vi: "Loại công nợ", en: "Debt type", ja: "貸し借りの種類"), selection: Binding(
+                        get: { bindableDraft.debtIntent ?? .lend },
+                        set: { bindableDraft.debtIntent = $0 }
+                    )) {
+                        ForEach(TransactionDebtIntent.allCases, id: \.self) { intent in
+                            Text(intent.title).tag(intent)
+                        }
                     }
+                    .pickerStyle(.segmented)
+                    .listRowInsets(EdgeInsets())
+                    .listRowBackground(Color.clear)
                 }
             }
 
             if shouldShowMissingWalletsState {
-                TransactionHintCard(
-                    icon: "wallet.pass",
-                    tint: accentColor,
-                    message: mistiaLocalized(
+                Section {
+                    Text(mistiaLocalized(
                         vi: "Bạn cần thêm ít nhất một ví trong tab Quản lý trước khi ghi nhận giao dịch hoàn chỉnh.",
                         en: "You need to add at least one wallet in the Manage tab before saving a full transaction.",
                         ja: "取引を完全に記録する前に、管理タブで少なくとも 1 つのウォレットを追加してください。"
-                    )
-                )
+                    ))
+                    .font(.footnote)
+                    .foregroundStyle(accentColor)
+                }
             }
 
-            TransactionEditorCard(title: mistiaLocalized(vi: "Thông tin chính", en: "Main details", ja: "基本情報")) {
+            Section(mistiaLocalized(vi: "Thông tin chính", en: "Main details", ja: "基本情報")) {
                 if draft.primaryKind != .transfer {
-                    TransactionEditorTextField(
-                        title: mistiaLocalized(vi: "Tên giao dịch", en: "Transaction name", ja: "取引名"),
-                        text: $bindableDraft.title,
-                        placeholder: draft.primaryKind == .expense
+                    TextField(
+                        draft.primaryKind == .expense
                             ? mistiaLocalized(vi: "Ví dụ: Cà phê sáng", en: "Example: Morning coffee", ja: "例: 朝のコーヒー")
-                            : mistiaLocalized(vi: "Ví dụ: Lương tháng 3", en: "Example: March salary", ja: "例: 3月の給料")
+                            : mistiaLocalized(vi: "Ví dụ: Lương tháng 3", en: "Example: March salary", ja: "例: 3月の給料"),
+                        text: $bindableDraft.title
                     )
                 } else if draft.transferSubtype == .debt {
-                    TransactionEditorTextField(
-                        title: mistiaLocalized(vi: "Tên giao dịch", en: "Transaction name", ja: "取引名"),
-                        text: $bindableDraft.title,
-                        placeholder: mistiaLocalized(vi: "Để trống sẽ tự dùng loại công nợ", en: "Leave blank to use the debt type", ja: "空欄の場合は貸し借りの種類が使われます")
+                    TextField(
+                        mistiaLocalized(vi: "Để trống sẽ tự dùng loại công nợ", en: "Leave blank to use the debt type", ja: "空欄の場合は貸し借りの種類が使われます"),
+                        text: $bindableDraft.title
                     )
                 }
 
-                TransactionEditorTextField(
-                    title: mistiaLocalized(vi: "Số tiền", en: "Amount", ja: "金額"),
-                    text: $bindableDraft.amountText,
-                    placeholder: mistiaLocalized(vi: "Ví dụ 50000", en: "Example: 50000", ja: "例: 50000")
-                )
-                .keyboardType(.numberPad)
+                TextField(mistiaLocalized(vi: "Ví dụ 50000", en: "Example: 50000", ja: "例: 50000"), text: $bindableDraft.amountText)
+                    .keyboardType(.numberPad)
 
                 DatePicker(mistiaLocalized(vi: "Thời gian", en: "Date & time", ja: "日時"), selection: $bindableDraft.occurredAt, displayedComponents: [.date, .hourAndMinute])
                     .datePickerStyle(.compact)
-                    .font(.system(size: 15, weight: .semibold, design: .rounded))
             }
 
             switch draft.primaryKind {
             case .expense, .income:
-                TransactionEditorCard(title: mistiaLocalized(vi: "Nguồn tiền", en: "Funding source", ja: "支払い元")) {
-                    TransactionSelectionMenuRow(
-                        title: mistiaLocalized(vi: "Ví", en: "Wallet", ja: "ウォレット"),
-                        value: selectedSourceWallet?.name ?? mistiaLocalized(vi: "Chọn ví", en: "Choose wallet", ja: "ウォレットを選択"),
-                        systemImage: "wallet.pass"
-                    ) {
+                Section(mistiaLocalized(vi: "Nguồn tiền", en: "Funding source", ja: "支払い元")) {
+                    Picker(mistiaLocalized(vi: "Ví", en: "Wallet", ja: "ウォレット"), selection: $draft.sourceWalletID) {
+                        Text(mistiaLocalized(vi: "Chọn ví", en: "Choose wallet", ja: "ウォレットを選択")).tag(Optional<UUID>.none)
                         ForEach(availableWallets) { wallet in
-                            Button(wallet.name) {
-                                draft.sourceWalletID = wallet.id
-                            }
+                            Text(wallet.name).tag(Optional(wallet.id))
                         }
                     }
 
-                    TransactionSelectionMenuRow(
-                        title: mistiaLocalized(vi: "Danh mục", en: "Category", ja: "カテゴリ"),
-                        value: selectedCategory?.localizedDisplayName ?? mistiaLocalized(vi: "Chọn danh mục", en: "Choose category", ja: "カテゴリを選択"),
-                        systemImage: "square.grid.2x2"
-                    ) {
+                    Picker(mistiaLocalized(vi: "Danh mục", en: "Category", ja: "カテゴリ"), selection: $draft.categoryID) {
+                        Text(mistiaLocalized(vi: "Chọn danh mục", en: "Choose category", ja: "カテゴリを選択")).tag(Optional<UUID>.none)
                         ForEach(availableCategories) { category in
-                            Button(category.localizedDisplayName) {
-                                draft.categoryID = category.id
-                            }
+                            Text(category.localizedDisplayName).tag(Optional(category.id))
                         }
                     }
                 }
             case .transfer:
                 if draft.transferSubtype == .internalTransfer {
-                    TransactionEditorCard(title: mistiaLocalized(vi: "Luồng chuyển", en: "Transfer flow", ja: "振替の流れ")) {
-                        TransactionSelectionMenuRow(
-                            title: mistiaLocalized(vi: "Từ ví", en: "From wallet", ja: "出金元"),
-                            value: selectedSourceWallet?.name ?? mistiaLocalized(vi: "Chọn nguồn", en: "Choose source", ja: "出金元を選択"),
-                            systemImage: "arrow.up.right.circle"
-                        ) {
+                    Section(mistiaLocalized(vi: "Luồng chuyển", en: "Transfer flow", ja: "振替の流れ")) {
+                        Picker(mistiaLocalized(vi: "Từ ví", en: "From wallet", ja: "出金元"), selection: $draft.sourceWalletID) {
+                            Text(mistiaLocalized(vi: "Chọn nguồn", en: "Choose source", ja: "出金元を選択")).tag(Optional<UUID>.none)
                             ForEach(availableWallets) { wallet in
-                                Button(wallet.name) {
-                                    draft.sourceWalletID = wallet.id
-                                }
+                                Text(wallet.name).tag(Optional(wallet.id))
                             }
                         }
 
-                        TransactionSelectionMenuRow(
-                            title: mistiaLocalized(vi: "Đến ví", en: "To wallet", ja: "入金先"),
-                            value: selectedDestinationWallet?.name ?? mistiaLocalized(vi: "Chọn đích", en: "Choose destination", ja: "入金先を選択"),
-                            systemImage: "arrow.down.left.circle"
-                        ) {
+                        Picker(mistiaLocalized(vi: "Đến ví", en: "To wallet", ja: "入金先"), selection: $draft.destinationWalletID) {
+                            Text(mistiaLocalized(vi: "Chọn đích", en: "Choose destination", ja: "入金先を選択")).tag(Optional<UUID>.none)
                             ForEach(availableWallets) { wallet in
-                                Button(wallet.name) {
-                                    draft.destinationWalletID = wallet.id
-                                }
+                                Text(wallet.name).tag(Optional(wallet.id))
                             }
                         }
                     }
                 } else {
-                    TransactionEditorCard(title: mistiaLocalized(vi: "Đối tượng", en: "Counterparty", ja: "相手")) {
-                        TransactionSelectionMenuRow(
-                            title: mistiaLocalized(vi: "Ví thực hiện", en: "Wallet used", ja: "使用ウォレット"),
-                            value: selectedSourceWallet?.name ?? mistiaLocalized(vi: "Chọn ví", en: "Choose wallet", ja: "ウォレットを選択"),
-                            systemImage: "wallet.pass"
-                        ) {
+                    Section(mistiaLocalized(vi: "Đối tượng", en: "Counterparty", ja: "相手")) {
+                        Picker(mistiaLocalized(vi: "Ví thực hiện", en: "Wallet used", ja: "使用ウォレット"), selection: $draft.sourceWalletID) {
+                            Text(mistiaLocalized(vi: "Chọn ví", en: "Choose wallet", ja: "ウォレットを選択")).tag(Optional<UUID>.none)
                             ForEach(availableWallets) { wallet in
-                                Button(wallet.name) {
-                                    draft.sourceWalletID = wallet.id
-                                }
+                                Text(wallet.name).tag(Optional(wallet.id))
                             }
                         }
 
-                        TransactionEditorTextField(
-                            title: mistiaLocalized(vi: "Tên người liên quan", en: "Counterparty name", ja: "相手の名前"),
-                            text: $bindableDraft.counterpartyName,
-                            placeholder: mistiaLocalized(vi: "Ví dụ: Nguyễn Văn A", en: "Example: Alex Johnson", ja: "例: 山田太郎")
+                        TextField(
+                            mistiaLocalized(vi: "Ví dụ: Nguyễn Văn A", en: "Example: Alex Johnson", ja: "例: 山田太郎"),
+                            text: $bindableDraft.counterpartyName
                         )
                     }
                 }
             }
 
-            TransactionEditorCard(title: mistiaLocalized(vi: "Ghi chú", en: "Notes", ja: "メモ")) {
+            Section(mistiaLocalized(vi: "Ghi chú", en: "Notes", ja: "メモ")) {
                 TextField(mistiaLocalized(vi: "Thêm ghi chú nếu cần", en: "Add a note if needed", ja: "必要ならメモを追加"), text: $bindableDraft.note, axis: .vertical)
                     .lineLimit(3...5)
-                    .textFieldStyle(.plain)
-                    .font(.system(size: 15, weight: .medium, design: .rounded))
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 14)
-                    .background {
-                        RoundedRectangle(cornerRadius: 16, style: .continuous)
-                            .fill(Color(UIColor.tertiarySystemGroupedBackground))
-                    }
             }
 
             if let transaction = target.transaction, !transaction.isArchived {
-                MistiaArchiveSection(
-                    buttonTitle: mistiaLocalized(vi: "Lưu trữ giao dịch", en: "Archive transaction", ja: "取引をアーカイブ"),
-                    descriptionText: mistiaLocalized(vi: "Giao dịch lưu trữ sẽ không còn hiện trong danh sách. Mục này sẽ được tự động xóa vĩnh viễn sau 30 ngày.", en: "Archived transactions will no longer appear in the list. They will be automatically deleted permanently after 30 days.", ja: "アーカイブした取引はリストに表示されなくなります。これらは30日後に自動的に永久削除されます。"),
-                    popupMessage: mistiaLocalized(vi: "Giao dịch này sẽ bị lưu trữ. Các giao dịch đã lưu trữ sẽ nằm trong \"Mục đã lưu trữ\" và được giữ lại trong 30 ngày.", en: "This transaction will be archived. Archived transactions will remain in \"Archived items\" for 30 days.", ja: "この取引はアーカイブされます。アーカイブされた取引は「アーカイブ済みアイテム」に30日間保持されます。")
-                ) {
-                    archiveTransaction()
+                Section {
+                    MistiaArchiveSection(
+                        buttonTitle: mistiaLocalized(vi: "Lưu trữ giao dịch", en: "Archive transaction", ja: "取引をアーカイブ"),
+                        descriptionText: mistiaLocalized(vi: "Giao dịch lưu trữ sẽ không còn hiện trong danh sách. Mục này sẽ được tự động xóa vĩnh viễn sau 30 ngày.", en: "Archived transactions will no longer appear in the list. They will be automatically deleted permanently after 30 days.", ja: "アーカイブした取引はリストに表示されなくなります。これらは30日後に自動的に永久削除されます。"),
+                        popupMessage: mistiaLocalized(vi: "Giao dịch này sẽ bị lưu trữ. Các giao dịch đã lưu trữ sẽ nằm trong \"Mục đã lưu trữ\" và được giữ lại trong 30 ngày.", en: "This transaction will be archived. Archived transactions will remain in \"Archived items\" for 30 days.", ja: "この取引はアーカイブされます。アーカイブされた取引は「アーカイブ済みアイテム」に30日間保持されます。")
+                    ) {
+                        archiveTransaction()
+                    }
+                    .listRowInsets(EdgeInsets())
+                    .listRowBackground(Color.clear)
                 }
             }
         }
     }
-
     private var navigationTitle: String {
         if target.transaction == nil {
             return target.quickCapture
@@ -741,223 +694,6 @@ struct TransactionEditorSheet: View {
             dismiss()
         } catch {
             alertMessage = mistiaLocalized(vi: "Không thể lưu giao dịch lúc này.", en: "Couldn't save this transaction right now.", ja: "現在この取引を保存できません。") + " \(error.localizedDescription)"
-        }
-    }
-}
-
-private struct TransactionEditorHeaderCard: View {
-    let title: String
-    let subtitle: String
-    let accent: Color
-    @Environment(\.colorScheme) private var colorScheme
-
-    var body: some View {
-        MistiaGlassCard(
-            cornerRadius: 28,
-            tint: colorScheme == .dark ? Color(UIColor.secondarySystemGroupedBackground) : accent.opacity(0.18)
-        ) {
-            VStack(alignment: .leading, spacing: 12) {
-                HStack(spacing: 12) {
-                    ZStack {
-                        MistiaCircleGlassBackground(tint: accent.opacity(0.22), interactive: false)
-
-                        Image(systemName: "plus.circle.fill")
-                            .font(.system(size: 22, weight: .bold))
-                            .foregroundStyle(accent)
-                    }
-                    .frame(width: 54, height: 54)
-
-                    VStack(alignment: .leading, spacing: 5) {
-                        Text(title)
-                            .font(.system(size: 21, weight: .bold, design: .rounded))
-                            .foregroundStyle(.primary)
-
-                        Text(subtitle)
-                            .font(.system(size: 13.5, weight: .medium, design: .rounded))
-                            .foregroundStyle(.secondary)
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
-                }
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-        }
-    }
-}
-
-private struct TransactionEditorCard<Content: View>: View {
-    let title: String
-    @ViewBuilder let content: Content
-    @Environment(\.colorScheme) private var colorScheme
-
-    var body: some View {
-        MistiaGlassCard(
-            cornerRadius: 24,
-            tint: colorScheme == .dark ? Color(UIColor.secondarySystemGroupedBackground) : Color.white.opacity(0.10),
-            padding: 18
-        ) {
-            VStack(alignment: .leading, spacing: 18) {
-                Text(title)
-                    .font(.system(size: 13, weight: .bold, design: .rounded))
-                    .foregroundStyle(.secondary)
-                    .textCase(.uppercase)
-                    .tracking(0.5)
-
-                content
-            }
-        }
-    }
-}
-
-private struct TransactionEditorTextField: View {
-    let title: String
-    @Binding var text: String
-    let placeholder: String
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text(title)
-                .font(.system(size: 13.5, weight: .semibold, design: .rounded))
-                .foregroundStyle(.secondary)
-
-            TextField(placeholder, text: $text)
-                .textFieldStyle(.plain)
-                .font(.system(size: 15.5, weight: .semibold, design: .rounded))
-                .padding(.horizontal, 16)
-                .padding(.vertical, 14)
-                .background {
-                    RoundedRectangle(cornerRadius: 16, style: .continuous)
-                        .fill(Color(UIColor.tertiarySystemGroupedBackground))
-                }
-        }
-    }
-}
-
-private struct TransactionSelectionMenuRow<MenuContent: View>: View {
-    let title: String
-    let value: String
-    let systemImage: String
-    @ViewBuilder let menuContent: MenuContent
-
-    var body: some View {
-        Menu {
-            menuContent
-        } label: {
-            HStack(spacing: 12) {
-                Image(systemName: systemImage)
-                    .font(.system(size: 14, weight: .bold))
-                    .foregroundStyle(.secondary)
-                    .frame(width: 20)
-
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(title)
-                        .font(.system(size: 13.5, weight: .semibold, design: .rounded))
-                        .foregroundStyle(.secondary)
-
-                    Text(value)
-                        .font(.system(size: 15.5, weight: .bold, design: .rounded))
-                        .foregroundStyle(.primary)
-                        .multilineTextAlignment(.leading)
-                }
-
-                Spacer()
-
-                Image(systemName: "chevron.up.chevron.down")
-                    .font(.system(size: 12, weight: .bold))
-                    .foregroundStyle(.tertiary)
-            }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 14)
-            .background {
-                RoundedRectangle(cornerRadius: 16, style: .continuous)
-                    .fill(Color(UIColor.tertiarySystemGroupedBackground))
-            }
-        }
-        .buttonStyle(.plain)
-    }
-}
-
-private struct TransactionHintCard: View {
-    let icon: String
-    let tint: Color
-    let message: String
-    @Environment(\.colorScheme) private var colorScheme
-
-    var body: some View {
-        MistiaGlassCard(cornerRadius: 24, tint: colorScheme == .dark ? Color(UIColor.secondarySystemGroupedBackground) : tint.opacity(0.12), padding: 18) {
-            HStack(alignment: .top, spacing: 12) {
-                Image(systemName: icon)
-                    .font(.system(size: 17, weight: .bold))
-                    .foregroundStyle(tint)
-                    .frame(width: 26, height: 26)
-
-                Text(message)
-                    .font(.system(size: 14, weight: .medium, design: .rounded))
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-        }
-    }
-}
-
-private struct TransactionChoiceChipRow<Value: CaseIterable & Hashable, Content: View>: View {
-    @Environment(\.colorScheme) private var colorScheme
-    let values: Value.AllCases
-    @Binding var selection: Value
-    @ViewBuilder let label: (Value) -> Content
-
-    private func tintForValue(_ value: Value) -> Color {
-        if let kind = value as? TransactionPrimaryKind {
-            switch kind {
-            case .expense:
-                return Color(red: 0.95, green: 0.43, blue: 0.44)
-            case .income:
-                return .mint
-            case .transfer:
-                return Color(red: 0.29, green: 0.56, blue: 0.96)
-            }
-        }
-        return Color(red: 0.43, green: 0.23, blue: 0.76)
-    }
-
-    private func activeForeground(_ value: Value) -> Color {
-        colorScheme == .dark ? .white.opacity(0.97) : tintForValue(value)
-    }
-
-    var body: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 10) {
-                ForEach(Array(values), id: \.self) { value in
-                    Button {
-                        selection = value
-                    } label: {
-                        label(value)
-                            .font(.system(size: 14, weight: .bold, design: .rounded))
-                            .foregroundStyle(selection == value ? activeForeground(value) : .secondary)
-                            .padding(.horizontal, 14)
-                            .padding(.vertical, 10)
-                            .background {
-                                MistiaCapsuleGlassBackground(
-                                    tint: selection == value 
-                                        ? (colorScheme == .dark ? tintForValue(value).opacity(0.42) : tintForValue(value).opacity(0.16)) 
-                                        : (colorScheme == .dark ? .white.opacity(0.045) : .white.opacity(0.18)),
-                                    interactive: true
-                                )
-                            }
-                            .overlay {
-                                Capsule()
-                                    .strokeBorder(
-                                        selection == value
-                                            ? tintForValue(value).opacity(colorScheme == .dark ? 0.48 : 0.14)
-                                            : .clear,
-                                        lineWidth: 0.9
-                                    )
-                            }
-                    }
-                    .buttonStyle(.plain)
-                }
-            }
-            .padding(.vertical, 2)
         }
     }
 }
