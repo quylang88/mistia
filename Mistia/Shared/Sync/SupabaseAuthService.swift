@@ -1,4 +1,5 @@
 import Foundation
+import CryptoKit
 import GoogleSignIn
 import UIKit
 
@@ -214,6 +215,7 @@ struct SupabaseAuthService {
     func signInWithGoogle() async throws -> SupabaseAuthSession {
         let configuration = try configuration()
         let googleConfiguration = try googleConfiguration()
+
         let signInResult = try await performNativeGoogleSignIn(
             googleConfiguration: googleConfiguration
         )
@@ -429,6 +431,20 @@ struct SupabaseAuthService {
     }
 
 
+
+
+
+
+
+        guard let data = Data(base64Encoded: base64String, options: .ignoreUnknownCharacters),
+              let json = try? JSONSerialization.jsonObject(with: data, options: []),
+              let payload = json as? [String: Any] else {
+            return nil
+        }
+
+        return payload["nonce"] as? String
+    }
+
     private func performEmptyAuthRequest<Body: Encodable>(
         url: URL,
         body: Body,
@@ -496,11 +512,20 @@ private struct OpenIDConnectGrantBody: Encodable {
     let provider: String
     let idToken: String
     let accessToken: String?
+    let nonce: String?
 
     enum CodingKeys: String, CodingKey {
         case provider
         case idToken = "id_token"
         case accessToken = "access_token"
+        case nonce
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case provider
+        case idToken = "id_token"
+        case accessToken = "access_token"
+        case nonce
     }
 }
 
