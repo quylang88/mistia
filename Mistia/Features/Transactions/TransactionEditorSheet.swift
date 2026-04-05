@@ -335,16 +335,11 @@ struct TransactionEditorSheet: View {
             }
 
             if let transaction = target.transaction, !transaction.isArchived {
-                TransactionEditorCard(title: mistiaLocalized(vi: "Hành động", en: "Actions", ja: "アクション")) {
-                    Button(role: .destructive) {
-                        showsArchiveConfirmation = true
-                    } label: {
-                        Text(mistiaLocalized(vi: "Lưu trữ giao dịch", en: "Archive transaction", ja: "取引をアーカイブ"))
-                            .font(.system(size: 15, weight: .semibold, design: .rounded))
-                            .frame(maxWidth: .infinity, alignment: .center)
-                            .padding(.vertical, 8)
-                    }
-                    .buttonStyle(.plain)
+                MistiaArchiveSection(
+                    buttonTitle: mistiaLocalized(vi: "Lưu trữ giao dịch", en: "Archive transaction", ja: "取引をアーカイブ"),
+                    descriptionText: mistiaLocalized(vi: "Giao dịch lưu trữ sẽ không còn hiện trong danh sách. Mục này sẽ được tự động xóa vĩnh viễn sau 30 ngày.", en: "Archived transactions will no longer appear in the list. They will be automatically deleted permanently after 30 days.", ja: "アーカイブした取引はリストに表示されなくなります。これらは30日後に自動的に永久削除されます。")
+                ) {
+                    showsArchiveConfirmation = true
                 }
             }
         }

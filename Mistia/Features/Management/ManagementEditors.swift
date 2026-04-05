@@ -162,11 +162,14 @@ struct ManagementWalletEditorSheet: View {
 
                 if target.wallet != nil {
                     Section {
-                        Button(mistiaLocalized(vi: "Lưu trữ ví", en: "Archive wallet", ja: "ウォレットをアーカイブ"), role: .destructive) {
+                        MistiaArchiveSection(
+                            buttonTitle: mistiaLocalized(vi: "Lưu trữ ví", en: "Archive wallet", ja: "ウォレットをアーカイブ"),
+                            descriptionText: mistiaLocalized(vi: "Ví lưu trữ sẽ không còn hiện trong tab quản lý. Mục này sẽ được tự động xóa vĩnh viễn sau 30 ngày.", en: "Archived wallets will no longer appear in the manage tab. They will be automatically deleted permanently after 30 days.", ja: "アーカイブしたウォレットは管理タブに表示されなくなります。これらは30日後に自動的に永久削除されます。")
+                        ) {
                             showsArchiveConfirmation = true
                         }
-                    } footer: {
-                        Text(mistiaLocalized(vi: "Ví lưu trữ sẽ được ẩn khỏi màn hình quản lý.", en: "Archived wallets will be hidden from the manage screen.", ja: "アーカイブしたウォレットは管理画面に表示されなくなります。"))
+                        .listRowInsets(EdgeInsets())
+                        .listRowBackground(Color.clear)
                     }
                 }
             }
@@ -457,11 +460,14 @@ struct ManagementCategoryEditorSheet: View {
 
                 if target.category != nil {
                     Section {
-                        Button(mistiaLocalized(vi: "Lưu trữ danh mục", en: "Archive category", ja: "カテゴリをアーカイブ"), role: .destructive) {
+                        MistiaArchiveSection(
+                            buttonTitle: mistiaLocalized(vi: "Lưu trữ danh mục", en: "Archive category", ja: "カテゴリをアーカイブ"),
+                            descriptionText: mistiaLocalized(vi: "Danh mục lưu trữ sẽ không còn hiện trong tab quản lý. Mục này sẽ được tự động xóa vĩnh viễn sau 30 ngày.", en: "Archived categories will no longer appear in the manage tab. They will be automatically deleted permanently after 30 days.", ja: "アーカイブしたカテゴリは管理タブに表示されなくなります。これらは30日後に自動的に永久削除されます。")
+                        ) {
                             showsArchiveConfirmation = true
                         }
-                    } footer: {
-                        Text(mistiaLocalized(vi: "Danh mục lưu trữ sẽ không còn hiện trong tab quản lý.", en: "Archived categories will no longer appear in the manage tab.", ja: "アーカイブしたカテゴリは管理タブに表示されなくなります。"))
+                        .listRowInsets(EdgeInsets())
+                        .listRowBackground(Color.clear)
                     }
                 }
             }
