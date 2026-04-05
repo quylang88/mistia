@@ -26,6 +26,8 @@ struct ManagementView: View {
     private var storedWallets: [LedgerWallet]
     @Query(sort: [SortDescriptor(\TransactionCategory.createdAt), SortDescriptor(\TransactionCategory.sortOrder)])
     private var storedCategories: [TransactionCategory]
+    @Query(filter: #Predicate<LedgerTransaction> { $0.entryStatusRawValue == "posted" && !$0.isArchived })
+    private var postedTransactions: [LedgerTransaction]
 
     @State private var destination: ManagementNavigationDestination?
     @State private var walletEditorTarget: ManagementWalletEditorTarget?
@@ -189,13 +191,16 @@ struct ManagementView: View {
                 } else {
                     VStack(spacing: 0) {
                         ForEach(Array(activeWallets.enumerated()), id: \.element.id) { index, wallet in
-                            ManagementWalletRow(wallet: wallet) {
+                            ManagementWalletRow(
+                                wallet: wallet,
+                                transactions: postedTransactions
+                            ) {
                                 walletEditorTarget = ManagementWalletEditorTarget(wallet: wallet, defaultKind: wallet.kind)
                             }
 
                             if index < activeWallets.count - 1 {
                                 Divider()
-                                    .padding(.leading, 52)
+                                    .padding(.horizontal, 14)
                             }
                         }
 
@@ -208,6 +213,8 @@ struct ManagementView: View {
                         ) {
                             walletEditorTarget = ManagementWalletEditorTarget(wallet: nil, defaultKind: .cash)
                         }
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 14)
                     }
                 }
             }
@@ -290,7 +297,7 @@ struct ManagementView: View {
 
                         if index < dataActions.count - 1 {
                             Divider()
-                                .padding(.leading, 52)
+                                .padding(.horizontal, 14)
                         }
                     }
                 }
@@ -599,7 +606,47 @@ private struct ManagementSignedOutCard: View {
 
 private struct ManagementWalletRow: View {
     let wallet: LedgerWallet
+    let transactions: [LedgerTransaction]
     let action: () -> Void
+
+    private var currentBalanceMinor: Int64 {
+        let snapshot = TransactionWalletSnapshot(
+            id: wallet.id,
+            kind: wallet.kind,
+            openingBalanceMinor: wallet.openingBalanceMinor
+        )
+        
+        let snapshots = transactions.map {
+            TransactionRecordSnapshot(
+                id: $0.id,
+                primaryKind: $0.primaryKind,
+                transferSubtype: $0.transferSubtype,
+                debtIntent: $0.debtIntent,
+                entryStatus: $0.entryStatus,
+                title: $0.title,
+                note: $0.note,
+                amountMinor: $0.amountMinor,
+                occurredAt: $0.occurredAt,
+                createdAt: $0.createdAt,
+                sourceWalletID: $0.sourceWallet?.id,
+                sourceWalletKind: $0.sourceWallet?.kind,
+                destinationWalletID: $0.destinationWallet?.id,
+                destinationWalletKind: $0.destinationWallet?.kind,
+                categoryID: $0.category?.id,
+                counterpartyName: $0.counterpartyName,
+                normalizedCounterpartyKey: $0.normalizedCounterpartyKey
+            )
+        }
+        
+        return TransactionLogic.effectiveBalance(for: snapshot, records: snapshots)
+    }
+    
+    private var balanceColor: Color {
+        if currentBalanceMinor < 1000 {
+            return Color(red: 0.97, green: 0.43, blue: 0.46)
+        }
+        return .primary
+    }
 
     var body: some View {
         Button(action: action) {
@@ -626,9 +673,9 @@ private struct ManagementWalletRow: View {
 
                 Spacer(minLength: 8)
 
-                Text(wallet.formattedAmount)
-                    .font(.system(size: 15, weight: .semibold, design: .rounded))
-                    .foregroundStyle(.secondary)
+                Text(currentBalanceMinor.formattedCurrency(code: wallet.currencyCode))
+                    .font(.system(size: 16, weight: .bold, design: .rounded))
+                    .foregroundStyle(balanceColor)
                     .padding(.top, 1)
             }
             .padding(.horizontal, 14)

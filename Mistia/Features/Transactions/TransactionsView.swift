@@ -531,7 +531,7 @@ private struct TransactionSectionCard: View {
 
                         if index < section.rows.count - 1 {
                             Divider()
-                                .padding(.leading, 58)
+                                .padding(.horizontal, 14)
                         }
                     }
                 }

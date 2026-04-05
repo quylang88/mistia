@@ -35,6 +35,8 @@ struct TransactionEditorSheet: View {
     private var storedWallets: [LedgerWallet]
     @Query(sort: [SortDescriptor(\TransactionCategory.sortOrder), SortDescriptor(\TransactionCategory.createdAt)])
     private var storedCategories: [TransactionCategory]
+    @Query(filter: #Predicate<LedgerTransaction> { $0.entryStatusRawValue == "posted" && !$0.isArchived })
+    private var postedTransactions: [LedgerTransaction]
 
     let target: TransactionEditorTarget
     var onComplete: (TransactionEditorCompletion) -> Void = { _ in }
@@ -491,6 +493,135 @@ struct TransactionEditorSheet: View {
         guard !availableWallets.isEmpty else {
             alertMessage = mistiaLocalized(vi: "Bạn chưa có ví nào để gắn vào giao dịch.", en: "You don't have any wallets available for this transaction.", ja: "この取引に使えるウォレットがまだありません。")
             return
+        }
+
+        switch draft.primaryKind {
+        case .expense:
+            guard let sourceWallet = selectedSourceWallet else {
+                alertMessage = mistiaLocalized(vi: "Chọn ví cho giao dịch này.", en: "Choose a wallet for this transaction.", ja: "この取引のウォレットを選択してください。")
+                return
+            }
+
+            let snapshot = TransactionWalletSnapshot(
+                id: sourceWallet.id,
+                kind: sourceWallet.kind,
+                openingBalanceMinor: sourceWallet.openingBalanceMinor
+            )
+            
+            let snapshots = postedTransactions.filter { $0.id != target.transaction?.id }.map {
+                TransactionRecordSnapshot(
+                    id: $0.id,
+                    primaryKind: $0.primaryKind,
+                    transferSubtype: $0.transferSubtype,
+                    debtIntent: $0.debtIntent,
+                    entryStatus: $0.entryStatus,
+                    title: $0.title,
+                    note: $0.note,
+                    amountMinor: $0.amountMinor,
+                    occurredAt: $0.occurredAt,
+                    createdAt: $0.createdAt,
+                    sourceWalletID: $0.sourceWallet?.id,
+                    sourceWalletKind: $0.sourceWallet?.kind,
+                    destinationWalletID: $0.destinationWallet?.id,
+                    destinationWalletKind: $0.destinationWallet?.kind,
+                    categoryID: $0.category?.id,
+                    counterpartyName: $0.counterpartyName,
+                    normalizedCounterpartyKey: $0.normalizedCounterpartyKey
+                )
+            }
+            let currentBalance = TransactionLogic.effectiveBalance(for: snapshot, records: snapshots)
+            
+            if currentBalance - amountMinor < 0 {
+                alertMessage = mistiaLocalized(vi: "Số dư ví không đủ để thực hiện giao dịch.", en: "Insufficient wallet balance to perform the transaction.", ja: "取引を実行するためのウォレット残高が不足しています。")
+                return
+            }
+
+        case .transfer:
+            switch draft.transferSubtype ?? .internalTransfer {
+            case .internalTransfer:
+                guard let sourceWallet = selectedSourceWallet else {
+                    alertMessage = mistiaLocalized(vi: "Chọn ví nguồn.", en: "Choose the source wallet.", ja: "出金元ウォレットを選択してください。")
+                    return
+                }
+                
+                let snapshot = TransactionWalletSnapshot(
+                    id: sourceWallet.id,
+                    kind: sourceWallet.kind,
+                    openingBalanceMinor: sourceWallet.openingBalanceMinor
+                )
+                
+                let snapshots = postedTransactions.filter { $0.id != target.transaction?.id }.map {
+                    TransactionRecordSnapshot(
+                        id: $0.id,
+                        primaryKind: $0.primaryKind,
+                        transferSubtype: $0.transferSubtype,
+                        debtIntent: $0.debtIntent,
+                        entryStatus: $0.entryStatus,
+                        title: $0.title,
+                        note: $0.note,
+                        amountMinor: $0.amountMinor,
+                        occurredAt: $0.occurredAt,
+                        createdAt: $0.createdAt,
+                        sourceWalletID: $0.sourceWallet?.id,
+                        sourceWalletKind: $0.sourceWallet?.kind,
+                        destinationWalletID: $0.destinationWallet?.id,
+                        destinationWalletKind: $0.destinationWallet?.kind,
+                        categoryID: $0.category?.id,
+                        counterpartyName: $0.counterpartyName,
+                        normalizedCounterpartyKey: $0.normalizedCounterpartyKey
+                    )
+                }
+                let currentBalance = TransactionLogic.effectiveBalance(for: snapshot, records: snapshots)
+                
+                if currentBalance - amountMinor < 0 {
+                    alertMessage = mistiaLocalized(vi: "Số dư ví không đủ để thực hiện giao dịch.", en: "Insufficient wallet balance to perform the transaction.", ja: "取引を実行するためのウォレット残高が不足しています。")
+                    return
+                }
+
+            case .debt:
+                if draft.debtIntent == .lend || draft.debtIntent == .repay {
+                    guard let sourceWallet = selectedSourceWallet else {
+                        alertMessage = mistiaLocalized(vi: "Chọn ví thực hiện giao dịch công nợ.", en: "Choose the wallet used for this debt transaction.", ja: "この貸し借り取引で使うウォレットを選択してください。")
+                        return
+                    }
+
+                    let snapshot = TransactionWalletSnapshot(
+                        id: sourceWallet.id,
+                        kind: sourceWallet.kind,
+                        openingBalanceMinor: sourceWallet.openingBalanceMinor
+                    )
+                    
+                    let snapshots = postedTransactions.filter { $0.id != target.transaction?.id }.map {
+                        TransactionRecordSnapshot(
+                            id: $0.id,
+                            primaryKind: $0.primaryKind,
+                            transferSubtype: $0.transferSubtype,
+                            debtIntent: $0.debtIntent,
+                            entryStatus: $0.entryStatus,
+                            title: $0.title,
+                            note: $0.note,
+                            amountMinor: $0.amountMinor,
+                            occurredAt: $0.occurredAt,
+                            createdAt: $0.createdAt,
+                            sourceWalletID: $0.sourceWallet?.id,
+                            sourceWalletKind: $0.sourceWallet?.kind,
+                            destinationWalletID: $0.destinationWallet?.id,
+                            destinationWalletKind: $0.destinationWallet?.kind,
+                            categoryID: $0.category?.id,
+                            counterpartyName: $0.counterpartyName,
+                            normalizedCounterpartyKey: $0.normalizedCounterpartyKey
+                        )
+                    }
+                    let currentBalance = TransactionLogic.effectiveBalance(for: snapshot, records: snapshots)
+                    
+                    if currentBalance - amountMinor < 0 {
+                        alertMessage = mistiaLocalized(vi: "Số dư ví không đủ để thực hiện giao dịch.", en: "Insufficient wallet balance to perform the transaction.", ja: "取引を実行するためのウォレット残高が不足しています。")
+                        return
+                    }
+                }
+            }
+        default:
+            break
         }
 
         let transaction = target.transaction ?? LedgerTransaction(
