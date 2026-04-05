@@ -253,16 +253,26 @@ struct ManagementWalletEditorSheet: View {
     }
 
     private func save() {
-        let trimmedName = draft.name.nilIfBlank
-        guard let trimmedName else {
-            alertMessage = mistiaLocalized(vi: "Nhập tên ví trước khi lưu.", en: "Enter a wallet name before saving.", ja: "保存する前にウォレット名を入力してください。")
-            return
-        }
-
         if draft.kind == .bank, draft.institutionDisplayName.nilIfBlank == nil {
             alertMessage = mistiaLocalized(vi: "Chọn hoặc nhập tên ngân hàng cho ví này.", en: "Choose or enter a bank name for this wallet.", ja: "このウォレットの銀行名を選択または入力してください。")
             return
         }
+
+        let defaultName: String
+        switch draft.kind {
+        case .bank:
+            defaultName = draft.institutionDisplayName.trimmingCharacters(in: .whitespacesAndNewlines)
+        case .creditCard:
+            if let issuer = draft.issuerName.nilIfBlank {
+                defaultName = issuer
+            } else {
+                defaultName = draft.kind.title
+            }
+        default:
+            defaultName = draft.kind.title
+        }
+
+        let trimmedName = draft.name.nilIfBlank ?? defaultName
 
         let now = Date()
         let existingProfileID = target.wallet?.creditCardProfile?.id
