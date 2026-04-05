@@ -136,7 +136,7 @@ struct TransactionEditorSheet: View {
         @Bindable var bindableDraft = draft
 
         return VStack(spacing: 16) {
-            TransactionEditorCard(title: mistiaLocalized(vi: "Loại giao dịch", en: "Transaction type", ja: "取引タイプ")) {
+            MistiaFormSection(title: mistiaLocalized(vi: "Loại giao dịch", en: "Transaction type", ja: "取引タイプ")) {
                 TransactionChoiceChipRow(
                     values: TransactionPrimaryKind.allCases,
                     selection: $bindableDraft.primaryKind
@@ -145,7 +145,7 @@ struct TransactionEditorSheet: View {
                 }
             }
 
-            TransactionEditorCard(title: mistiaLocalized(vi: "Số tiền", en: "Amount", ja: "金額")) {
+            MistiaFormSection(title: mistiaLocalized(vi: "Số tiền", en: "Amount", ja: "金額")) {
                 TransactionEditorTextField(
                     title: mistiaLocalized(vi: "Số tiền", en: "Amount", ja: "金額"),
                     text: $bindableDraft.amountText,
@@ -171,7 +171,7 @@ struct TransactionEditorSheet: View {
 
         return VStack(spacing: 16) {
             if draft.primaryKind == .transfer {
-                TransactionEditorCard(title: mistiaLocalized(vi: "Kiểu chuyển tiền", en: "Transfer type", ja: "振替タイプ")) {
+                MistiaFormSection(title: mistiaLocalized(vi: "Kiểu chuyển tiền", en: "Transfer type", ja: "振替タイプ")) {
                     TransactionChoiceChipRow(
                         values: TransactionTransferSubtype.allCases,
                         selection: Binding(
@@ -185,7 +185,7 @@ struct TransactionEditorSheet: View {
             }
 
             if draft.primaryKind == .transfer, draft.transferSubtype == .debt {
-                TransactionEditorCard(title: mistiaLocalized(vi: "Loại công nợ", en: "Debt type", ja: "貸し借りの種類")) {
+                MistiaFormSection(title: mistiaLocalized(vi: "Loại công nợ", en: "Debt type", ja: "貸し借りの種類")) {
                     TransactionChoiceChipRow(
                         values: TransactionDebtIntent.allCases,
                         selection: Binding(
@@ -210,7 +210,7 @@ struct TransactionEditorSheet: View {
                 )
             }
 
-            TransactionEditorCard(title: mistiaLocalized(vi: "Thông tin chính", en: "Main details", ja: "基本情報")) {
+            MistiaFormSection(title: mistiaLocalized(vi: "Thông tin chính", en: "Main details", ja: "基本情報")) {
                 if draft.primaryKind != .transfer {
                     TransactionEditorTextField(
                         title: mistiaLocalized(vi: "Tên giao dịch", en: "Transaction name", ja: "取引名"),
@@ -241,7 +241,7 @@ struct TransactionEditorSheet: View {
 
             switch draft.primaryKind {
             case .expense, .income:
-                TransactionEditorCard(title: mistiaLocalized(vi: "Nguồn tiền", en: "Funding source", ja: "支払い元")) {
+                MistiaFormSection(title: mistiaLocalized(vi: "Nguồn tiền", en: "Funding source", ja: "支払い元")) {
                     TransactionSelectionMenuRow(
                         title: mistiaLocalized(vi: "Ví", en: "Wallet", ja: "ウォレット"),
                         value: selectedSourceWallet?.name ?? mistiaLocalized(vi: "Chọn ví", en: "Choose wallet", ja: "ウォレットを選択"),
@@ -268,7 +268,7 @@ struct TransactionEditorSheet: View {
                 }
             case .transfer:
                 if draft.transferSubtype == .internalTransfer {
-                    TransactionEditorCard(title: mistiaLocalized(vi: "Luồng chuyển", en: "Transfer flow", ja: "振替の流れ")) {
+                    MistiaFormSection(title: mistiaLocalized(vi: "Luồng chuyển", en: "Transfer flow", ja: "振替の流れ")) {
                         TransactionSelectionMenuRow(
                             title: mistiaLocalized(vi: "Từ ví", en: "From wallet", ja: "出金元"),
                             value: selectedSourceWallet?.name ?? mistiaLocalized(vi: "Chọn nguồn", en: "Choose source", ja: "出金元を選択"),
@@ -294,7 +294,7 @@ struct TransactionEditorSheet: View {
                         }
                     }
                 } else {
-                    TransactionEditorCard(title: mistiaLocalized(vi: "Đối tượng", en: "Counterparty", ja: "相手")) {
+                    MistiaFormSection(title: mistiaLocalized(vi: "Đối tượng", en: "Counterparty", ja: "相手")) {
                         TransactionSelectionMenuRow(
                             title: mistiaLocalized(vi: "Ví thực hiện", en: "Wallet used", ja: "使用ウォレット"),
                             value: selectedSourceWallet?.name ?? mistiaLocalized(vi: "Chọn ví", en: "Choose wallet", ja: "ウォレットを選択"),
@@ -316,7 +316,7 @@ struct TransactionEditorSheet: View {
                 }
             }
 
-            TransactionEditorCard(title: mistiaLocalized(vi: "Ghi chú", en: "Notes", ja: "メモ")) {
+            MistiaFormSection(title: mistiaLocalized(vi: "Ghi chú", en: "Notes", ja: "メモ")) {
                 TextField(mistiaLocalized(vi: "Thêm ghi chú nếu cần", en: "Add a note if needed", ja: "必要ならメモを追加"), text: $bindableDraft.note, axis: .vertical)
                     .lineLimit(3...5)
                     .textFieldStyle(.plain)
@@ -784,41 +784,13 @@ private struct TransactionEditorHeaderCard: View {
     }
 }
 
-private struct TransactionEditorCard<Content: View>: View {
-    let title: String
-    @ViewBuilder let content: Content
-    @Environment(\.colorScheme) private var colorScheme
-
-    var body: some View {
-        MistiaGlassCard(
-            cornerRadius: 24,
-            tint: colorScheme == .dark ? Color(UIColor.secondarySystemGroupedBackground) : Color.white.opacity(0.10),
-            padding: 18
-        ) {
-            VStack(alignment: .leading, spacing: 18) {
-                Text(title)
-                    .font(.system(size: 13, weight: .bold, design: .rounded))
-                    .foregroundStyle(.secondary)
-                    .textCase(.uppercase)
-                    .tracking(0.5)
-
-                content
-            }
-        }
-    }
-}
-
 private struct TransactionEditorTextField: View {
     let title: String
     @Binding var text: String
     let placeholder: String
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text(title)
-                .font(.system(size: 13.5, weight: .semibold, design: .rounded))
-                .foregroundStyle(.secondary)
-
+        MistiaFormRow(title: title) {
             TextField(placeholder, text: $text)
                 .textFieldStyle(.plain)
                 .font(.system(size: 15.5, weight: .semibold, design: .rounded))
@@ -839,40 +811,36 @@ private struct TransactionSelectionMenuRow<MenuContent: View>: View {
     @ViewBuilder let menuContent: MenuContent
 
     var body: some View {
-        Menu {
-            menuContent
-        } label: {
-            HStack(spacing: 12) {
-                Image(systemName: systemImage)
-                    .font(.system(size: 14, weight: .bold))
-                    .foregroundStyle(.secondary)
-                    .frame(width: 20)
-
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(title)
-                        .font(.system(size: 13.5, weight: .semibold, design: .rounded))
+        MistiaFormRow(title: title) {
+            Menu {
+                menuContent
+            } label: {
+                HStack(spacing: 12) {
+                    Image(systemName: systemImage)
+                        .font(.system(size: 14, weight: .bold))
                         .foregroundStyle(.secondary)
+                        .frame(width: 20)
 
                     Text(value)
                         .font(.system(size: 15.5, weight: .bold, design: .rounded))
                         .foregroundStyle(.primary)
                         .multilineTextAlignment(.leading)
+
+                    Spacer()
+
+                    Image(systemName: "chevron.up.chevron.down")
+                        .font(.system(size: 12, weight: .bold))
+                        .foregroundStyle(.tertiary)
                 }
-
-                Spacer()
-
-                Image(systemName: "chevron.up.chevron.down")
-                    .font(.system(size: 12, weight: .bold))
-                    .foregroundStyle(.tertiary)
+                .padding(.horizontal, 16)
+                .padding(.vertical, 14)
+                .background {
+                    RoundedRectangle(cornerRadius: 16, style: .continuous)
+                        .fill(Color(UIColor.tertiarySystemGroupedBackground))
+                }
             }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 14)
-            .background {
-                RoundedRectangle(cornerRadius: 16, style: .continuous)
-                    .fill(Color(UIColor.tertiarySystemGroupedBackground))
-            }
+            .buttonStyle(.plain)
         }
-        .buttonStyle(.plain)
     }
 }
 

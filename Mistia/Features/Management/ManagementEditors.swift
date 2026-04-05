@@ -34,143 +34,355 @@ struct ManagementWalletEditorSheet: View {
 
     var body: some View {
         NavigationStack {
-            Form {
-                Section(mistiaLocalized(vi: "Nhận diện", en: "Identity", ja: "識別情報")) {
-                    Button {
-                        showsIconPicker = true
-                    } label: {
-                        HStack(spacing: 12) {
-                            ManagementEditorIconPreview(
-                                symbolName: draft.iconSymbolName,
-                                color: Color(hex: draft.iconColorHex)
-                            )
+            ZStack {
+                MistiaBackgroundView(tone: .standard)
 
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text(mistiaLocalized(vi: "Biểu tượng & màu", en: "Icon & color", ja: "アイコンと色"))
-                                    .foregroundStyle(.primary)
-                                Text(mistiaLocalized(vi: "Chạm để tùy chỉnh icon", en: "Tap to customize the icon", ja: "タップしてアイコンを変更"))
-                                    .font(.footnote)
+                ScrollView(showsIndicators: false) {
+                    VStack(spacing: 16) {
+                        MistiaFormSection(title: mistiaLocalized(vi: "Nhận diện", en: "Identity", ja: "識別情報")) {
+                            Button {
+                                showsIconPicker = true
+                            } label: {
+                                HStack(spacing: 12) {
+                                    ManagementEditorIconPreview(
+                                        symbolName: draft.iconSymbolName,
+                                        color: Color(hex: draft.iconColorHex)
+                                    )
+
+                                    VStack(alignment: .leading, spacing: 2) {
+                                        Text(mistiaLocalized(vi: "Biểu tượng & màu", en: "Icon & color", ja: "アイコンと色"))
+                                            .foregroundStyle(.primary)
+                                            .font(.system(size: 15.5, weight: .bold, design: .rounded))
+                                        Text(mistiaLocalized(vi: "Chạm để tùy chỉnh icon", en: "Tap to customize the icon", ja: "タップしてアイコンを変更"))
+                                            .font(.footnote)
+                                            .foregroundStyle(.secondary)
+                                    }
+
+                                    Spacer()
+
+                                    Image(systemName: "chevron.right")
+                                        .font(.system(size: 11, weight: .bold))
+                                        .foregroundStyle(.tertiary)
+                                }
+                            }
+                            .buttonStyle(.plain)
+                        }
+
+                        MistiaFormSection(title: mistiaLocalized(vi: "Thông tin cơ bản", en: "Basic details", ja: "基本情報")) {
+                            MistiaFormRow(title: mistiaLocalized(vi: "Tên ví", en: "Wallet name", ja: "ウォレット名")) {
+                                TextField(mistiaLocalized(vi: "Tên ví", en: "Wallet name", ja: "ウォレット名"), text: $draft.name)
+                                    .textFieldStyle(.plain)
+                                    .font(.system(size: 15.5, weight: .semibold, design: .rounded))
+                                    .padding(.horizontal, 16)
+                                    .padding(.vertical, 14)
+                                    .background {
+                                        RoundedRectangle(cornerRadius: 16, style: .continuous)
+                                            .fill(Color(UIColor.tertiarySystemGroupedBackground))
+                                    }
+                            }
+
+                            MistiaFormRow(title: mistiaLocalized(vi: "Loại ví", en: "Wallet type", ja: "ウォレット種別")) {
+                                Menu {
+                                    Picker(mistiaLocalized(vi: "Loại ví", en: "Wallet type", ja: "ウォレット種別"), selection: $draft.kind) {
+                                        ForEach(LedgerWalletKind.allCases) { kind in
+                                            Text(kind.title).tag(kind)
+                                        }
+                                    }
+                                } label: {
+                                    HStack {
+                                        Text(draft.kind.title)
+                                            .font(.system(size: 15.5, weight: .bold, design: .rounded))
+                                            .foregroundStyle(.primary)
+
+                                        Spacer()
+
+                                        Image(systemName: "chevron.up.chevron.down")
+                                            .font(.system(size: 12, weight: .bold))
+                                            .foregroundStyle(.tertiary)
+                                    }
+                                    .padding(.horizontal, 16)
+                                    .padding(.vertical, 14)
+                                    .background {
+                                        RoundedRectangle(cornerRadius: 16, style: .continuous)
+                                            .fill(Color(UIColor.tertiarySystemGroupedBackground))
+                                    }
+                                }
+                                .buttonStyle(.plain)
+                            }
+
+                            MistiaFormRow(title: draft.kind.balanceFieldTitle) {
+                                TextField(draft.kind.balanceFieldTitle, text: $draft.openingBalanceText)
+                                    .keyboardType(.numberPad)
+                                    .textFieldStyle(.plain)
+                                    .font(.system(size: 15.5, weight: .semibold, design: .rounded))
+                                    .padding(.horizontal, 16)
+                                    .padding(.vertical, 14)
+                                    .background {
+                                        RoundedRectangle(cornerRadius: 16, style: .continuous)
+                                            .fill(Color(UIColor.tertiarySystemGroupedBackground))
+                                    }
+                            }
+
+                            MistiaFormRow(title: mistiaLocalized(vi: "Tiền tệ", en: "Currency", ja: "通貨")) {
+                                Text(draft.currencyCode)
+                                    .font(.system(size: 15.5, weight: .bold, design: .rounded))
                                     .foregroundStyle(.secondary)
+                                    .padding(.horizontal, 16)
+                                    .padding(.vertical, 14)
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                    .background {
+                                        RoundedRectangle(cornerRadius: 16, style: .continuous)
+                                            .fill(Color(UIColor.tertiarySystemGroupedBackground))
+                                    }
                             }
-
-                            Spacer()
-
-                            Image(systemName: "chevron.right")
-                                .font(.system(size: 11, weight: .bold))
-                                .foregroundStyle(.tertiary)
                         }
-                    }
-                    .buttonStyle(.plain)
-                }
 
-                Section(mistiaLocalized(vi: "Thông tin cơ bản", en: "Basic details", ja: "基本情報")) {
-                    TextField(mistiaLocalized(vi: "Tên ví", en: "Wallet name", ja: "ウォレット名"), text: $draft.name)
+                        if draft.kind == .bank {
+                            MistiaFormSection(title: mistiaLocalized(vi: "Ngân hàng", en: "Bank", ja: "銀行")) {
+                                Button {
+                                    showsBankPicker = true
+                                } label: {
+                                    HStack(spacing: 12) {
+                                        VStack(alignment: .leading, spacing: 4) {
+                                            Text(mistiaLocalized(vi: "Chọn ngân hàng phổ biến", en: "Choose a popular bank", ja: "よく使われる銀行を選択"))
+                                                .foregroundStyle(.secondary)
+                                                .font(.system(size: 13.5, weight: .semibold, design: .rounded))
 
-                    Picker(mistiaLocalized(vi: "Loại ví", en: "Wallet type", ja: "ウォレット種別"), selection: $draft.kind) {
-                        ForEach(LedgerWalletKind.allCases) { kind in
-                            Text(kind.title).tag(kind)
-                        }
-                    }
+                                            Text(draft.institutionDisplayName.nilIfBlank ?? mistiaLocalized(vi: "Chưa chọn", en: "Not selected", ja: "未選択"))
+                                                .font(.system(size: 15.5, weight: .bold, design: .rounded))
+                                                .foregroundStyle(.primary)
+                                        }
 
-                    TextField(draft.kind.balanceFieldTitle, text: $draft.openingBalanceText)
-                        .keyboardType(.numberPad)
+                                        Spacer()
 
-                    LabeledContent(mistiaLocalized(vi: "Tiền tệ", en: "Currency", ja: "通貨")) {
-                        Text(draft.currencyCode)
-                            .foregroundStyle(.secondary)
-                    }
-                }
-
-                if draft.kind == .bank {
-                    Section(mistiaLocalized(vi: "Ngân hàng", en: "Bank", ja: "銀行")) {
-                        Button {
-                            showsBankPicker = true
-                        } label: {
-                            HStack(spacing: 12) {
-                                VStack(alignment: .leading, spacing: 2) {
-                                    Text(mistiaLocalized(vi: "Chọn ngân hàng phổ biến", en: "Choose a popular bank", ja: "よく使われる銀行を選択"))
-                                        .foregroundStyle(.primary)
-
-                                    Text(draft.institutionDisplayName.nilIfBlank ?? mistiaLocalized(vi: "Chưa chọn", en: "Not selected", ja: "未選択"))
-                                        .font(.footnote)
-                                        .foregroundStyle(.secondary)
+                                        Image(systemName: "chevron.right")
+                                            .font(.system(size: 11, weight: .bold))
+                                            .foregroundStyle(.tertiary)
+                                    }
+                                    .padding(.horizontal, 16)
+                                    .padding(.vertical, 14)
+                                    .background {
+                                        RoundedRectangle(cornerRadius: 16, style: .continuous)
+                                            .fill(Color(UIColor.tertiarySystemGroupedBackground))
+                                    }
                                 }
+                                .buttonStyle(.plain)
 
-                                Spacer()
-
-                                Image(systemName: "chevron.right")
-                                    .font(.system(size: 11, weight: .bold))
-                                    .foregroundStyle(.tertiary)
-                            }
-                        }
-                        .buttonStyle(.plain)
-
-                        TextField(mistiaLocalized(vi: "Hoặc nhập tên ngân hàng", en: "Or enter the bank name", ja: "または銀行名を入力"), text: $draft.institutionDisplayName)
-                            .onChange(of: draft.institutionDisplayName) { _, newValue in
-                                if let selectedBank = ManagementPresetData.japaneseBanks.first(where: { $0.key == draft.institutionPresetKey }),
-                                   selectedBank.name != newValue {
-                                    draft.institutionPresetKey = nil
+                                MistiaFormRow(title: mistiaLocalized(vi: "Hoặc nhập tên ngân hàng", en: "Or enter the bank name", ja: "または銀行名を入力")) {
+                                    TextField(mistiaLocalized(vi: "Hoặc nhập tên ngân hàng", en: "Or enter the bank name", ja: "または銀行名を入力"), text: $draft.institutionDisplayName)
+                                        .onChange(of: draft.institutionDisplayName) { _, newValue in
+                                            if let selectedBank = ManagementPresetData.japaneseBanks.first(where: { $0.key == draft.institutionPresetKey }),
+                                               selectedBank.name != newValue {
+                                                draft.institutionPresetKey = nil
+                                            }
+                                        }
+                                        .textFieldStyle(.plain)
+                                        .font(.system(size: 15.5, weight: .semibold, design: .rounded))
+                                        .padding(.horizontal, 16)
+                                        .padding(.vertical, 14)
+                                        .background {
+                                            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                                                .fill(Color(UIColor.tertiarySystemGroupedBackground))
+                                        }
                                 }
                             }
+                        }
+
+                        if draft.kind == .creditCard {
+                            MistiaFormSection(title: mistiaLocalized(vi: "Credit card", en: "Credit card", ja: "クレジットカード")) {
+                                MistiaFormRow(title: mistiaLocalized(vi: "Tên đơn vị phát hành", en: "Issuer name", ja: "発行会社名")) {
+                                    TextField(mistiaLocalized(vi: "Tên đơn vị phát hành", en: "Issuer name", ja: "発行会社名"), text: $draft.issuerName)
+                                        .textFieldStyle(.plain)
+                                        .font(.system(size: 15.5, weight: .semibold, design: .rounded))
+                                        .padding(.horizontal, 16)
+                                        .padding(.vertical, 14)
+                                        .background {
+                                            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                                                .fill(Color(UIColor.tertiarySystemGroupedBackground))
+                                        }
+                                }
+
+                                MistiaFormRow(title: mistiaLocalized(vi: "Mạng thẻ", en: "Card network", ja: "カードブランド")) {
+                                    Menu {
+                                        Picker(mistiaLocalized(vi: "Mạng thẻ", en: "Card network", ja: "カードブランド"), selection: $draft.network) {
+                                            ForEach(CreditCardNetwork.allCases) { network in
+                                                Text(network.title).tag(network)
+                                            }
+                                        }
+                                    } label: {
+                                        HStack {
+                                            Text(draft.network.title)
+                                                .font(.system(size: 15.5, weight: .bold, design: .rounded))
+                                                .foregroundStyle(.primary)
+
+                                            Spacer()
+
+                                            Image(systemName: "chevron.up.chevron.down")
+                                                .font(.system(size: 12, weight: .bold))
+                                                .foregroundStyle(.tertiary)
+                                        }
+                                        .padding(.horizontal, 16)
+                                        .padding(.vertical, 14)
+                                        .background {
+                                            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                                                .fill(Color(UIColor.tertiarySystemGroupedBackground))
+                                        }
+                                    }
+                                    .buttonStyle(.plain)
+                                }
+
+                                MistiaFormRow(title: mistiaLocalized(vi: "4 số cuối", en: "Last 4 digits", ja: "下4桁")) {
+                                    TextField(mistiaLocalized(vi: "4 số cuối", en: "Last 4 digits", ja: "下4桁"), text: $draft.last4)
+                                        .keyboardType(.numberPad)
+                                        .onChange(of: draft.last4) { _, newValue in
+                                            draft.last4 = String(newValue.filter(\.isNumber).prefix(4))
+                                        }
+                                        .textFieldStyle(.plain)
+                                        .font(.system(size: 15.5, weight: .semibold, design: .rounded))
+                                        .padding(.horizontal, 16)
+                                        .padding(.vertical, 14)
+                                        .background {
+                                            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                                                .fill(Color(UIColor.tertiarySystemGroupedBackground))
+                                        }
+                                }
+
+                                MistiaFormRow(title: mistiaLocalized(vi: "Hạn mức tín dụng", en: "Credit limit", ja: "利用限度額")) {
+                                    TextField(mistiaLocalized(vi: "Hạn mức tín dụng", en: "Credit limit", ja: "利用限度額"), text: $draft.creditLimitText)
+                                        .keyboardType(.numberPad)
+                                        .textFieldStyle(.plain)
+                                        .font(.system(size: 15.5, weight: .semibold, design: .rounded))
+                                        .padding(.horizontal, 16)
+                                        .padding(.vertical, 14)
+                                        .background {
+                                            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                                                .fill(Color(UIColor.tertiarySystemGroupedBackground))
+                                        }
+                                }
+
+                                MistiaFormRow(title: mistiaLocalized(vi: "Ngày chốt sao kê", en: "Statement closing day", ja: "締め日")) {
+                                    Menu {
+                                        Picker(mistiaLocalized(vi: "Ngày chốt sao kê", en: "Statement closing day", ja: "締め日"), selection: $draft.statementClosingDay) {
+                                            ForEach(1...31, id: \.self) { day in
+                                                Text(mistiaLocalized(vi: "Ngày \(day)", en: "Day \(day)", ja: "\(day) 日")).tag(day)
+                                            }
+                                        }
+                                    } label: {
+                                        HStack {
+                                            Text(mistiaLocalized(vi: "Ngày \(draft.statementClosingDay)", en: "Day \(draft.statementClosingDay)", ja: "\(draft.statementClosingDay) 日"))
+                                                .font(.system(size: 15.5, weight: .bold, design: .rounded))
+                                                .foregroundStyle(.primary)
+
+                                            Spacer()
+
+                                            Image(systemName: "chevron.up.chevron.down")
+                                                .font(.system(size: 12, weight: .bold))
+                                                .foregroundStyle(.tertiary)
+                                        }
+                                        .padding(.horizontal, 16)
+                                        .padding(.vertical, 14)
+                                        .background {
+                                            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                                                .fill(Color(UIColor.tertiarySystemGroupedBackground))
+                                        }
+                                    }
+                                    .buttonStyle(.plain)
+                                }
+
+                                MistiaFormRow(title: mistiaLocalized(vi: "Ngày thanh toán", en: "Payment day", ja: "支払日")) {
+                                    Menu {
+                                        Picker(mistiaLocalized(vi: "Ngày thanh toán", en: "Payment day", ja: "支払日"), selection: $draft.paymentDueDay) {
+                                            ForEach(1...31, id: \.self) { day in
+                                                Text(mistiaLocalized(vi: "Ngày \(day)", en: "Day \(day)", ja: "\(day) 日")).tag(day)
+                                            }
+                                        }
+                                    } label: {
+                                        HStack {
+                                            Text(mistiaLocalized(vi: "Ngày \(draft.paymentDueDay)", en: "Day \(draft.paymentDueDay)", ja: "\(draft.paymentDueDay) 日"))
+                                                .font(.system(size: 15.5, weight: .bold, design: .rounded))
+                                                .foregroundStyle(.primary)
+
+                                            Spacer()
+
+                                            Image(systemName: "chevron.up.chevron.down")
+                                                .font(.system(size: 12, weight: .bold))
+                                                .foregroundStyle(.tertiary)
+                                        }
+                                        .padding(.horizontal, 16)
+                                        .padding(.vertical, 14)
+                                        .background {
+                                            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                                                .fill(Color(UIColor.tertiarySystemGroupedBackground))
+                                        }
+                                    }
+                                    .buttonStyle(.plain)
+                                }
+
+                                MistiaFormRow(title: mistiaLocalized(vi: "Nguồn thanh toán", en: "Payment source", ja: "支払い元")) {
+                                    Menu {
+                                        Picker(mistiaLocalized(vi: "Nguồn thanh toán", en: "Payment source", ja: "支払い元"), selection: $draft.paymentSourceWalletID) {
+                                            Text(mistiaLocalized(vi: "Chọn sau", en: "Choose later", ja: "あとで選択")).tag(Optional<UUID>.none)
+
+                                            ForEach(paymentSourceWallets) { wallet in
+                                                Text(wallet.name).tag(Optional(wallet.id))
+                                            }
+                                        }
+                                    } label: {
+                                        HStack {
+                                            if let selectedId = draft.paymentSourceWalletID, let wallet = paymentSourceWallets.first(where: { $0.id == selectedId }) {
+                                                Text(wallet.name)
+                                                    .font(.system(size: 15.5, weight: .bold, design: .rounded))
+                                                    .foregroundStyle(.primary)
+                                            } else {
+                                                Text(mistiaLocalized(vi: "Chọn sau", en: "Choose later", ja: "あとで選択"))
+                                                    .font(.system(size: 15.5, weight: .bold, design: .rounded))
+                                                    .foregroundStyle(.primary)
+                                            }
+
+                                            Spacer()
+
+                                            Image(systemName: "chevron.up.chevron.down")
+                                                .font(.system(size: 12, weight: .bold))
+                                                .foregroundStyle(.tertiary)
+                                        }
+                                        .padding(.horizontal, 16)
+                                        .padding(.vertical, 14)
+                                        .background {
+                                            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                                                .fill(Color(UIColor.tertiarySystemGroupedBackground))
+                                        }
+                                    }
+                                    .buttonStyle(.plain)
+                                }
+
+                                MistiaFormRow(title: mistiaLocalized(vi: "Ghi chú", en: "Notes", ja: "メモ")) {
+                                    TextField(mistiaLocalized(vi: "Ghi chú", en: "Notes", ja: "メモ"), text: $draft.notes, axis: .vertical)
+                                        .lineLimit(3...5)
+                                        .textFieldStyle(.plain)
+                                        .font(.system(size: 15.5, weight: .semibold, design: .rounded))
+                                        .padding(.horizontal, 16)
+                                        .padding(.vertical, 14)
+                                        .background {
+                                            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                                                .fill(Color(UIColor.tertiarySystemGroupedBackground))
+                                        }
+                                }
+                            }
+                        }
+
+                        if target.wallet != nil {
+                            MistiaArchiveSection(
+                                buttonTitle: mistiaLocalized(vi: "Lưu trữ ví", en: "Archive wallet", ja: "ウォレットをアーカイブ"),
+                                descriptionText: mistiaLocalized(vi: "Ví lưu trữ sẽ không còn hiện trong tab quản lý. Mục này sẽ được tự động xóa vĩnh viễn sau 30 ngày.", en: "Archived wallets will no longer appear in the manage tab. They will be automatically deleted permanently after 30 days.", ja: "アーカイブしたウォレットは管理タブに表示されなくなります。これらは30日後に自動的に永久削除されます。"),
+                                popupMessage: mistiaLocalized(vi: "Ví này sẽ bị lưu trữ. Các ví đã lưu trữ sẽ nằm trong \"Mục đã lưu trữ\" và được giữ lại trong 30 ngày.", en: "This wallet will be archived. Archived wallets will remain in \"Archived items\" for 30 days.", ja: "このウォレットはアーカイブされます。アーカイブされたウォレットは「アーカイブ済みアイテム」に30日間保持されます。")
+                            ) {
+                                archiveWallet()
+                            }
+                        }
                     }
-                }
-
-                if draft.kind == .creditCard {
-                    Section(mistiaLocalized(vi: "Credit card", en: "Credit card", ja: "クレジットカード")) {
-                        TextField(mistiaLocalized(vi: "Tên đơn vị phát hành", en: "Issuer name", ja: "発行会社名"), text: $draft.issuerName)
-
-                        Picker(mistiaLocalized(vi: "Mạng thẻ", en: "Card network", ja: "カードブランド"), selection: $draft.network) {
-                            ForEach(CreditCardNetwork.allCases) { network in
-                                Text(network.title).tag(network)
-                            }
-                        }
-
-                        TextField(mistiaLocalized(vi: "4 số cuối", en: "Last 4 digits", ja: "下4桁"), text: $draft.last4)
-                            .keyboardType(.numberPad)
-                            .onChange(of: draft.last4) { _, newValue in
-                                draft.last4 = String(newValue.filter(\.isNumber).prefix(4))
-                            }
-
-                        TextField(mistiaLocalized(vi: "Hạn mức tín dụng", en: "Credit limit", ja: "利用限度額"), text: $draft.creditLimitText)
-                            .keyboardType(.numberPad)
-
-                        Picker(mistiaLocalized(vi: "Ngày chốt sao kê", en: "Statement closing day", ja: "締め日"), selection: $draft.statementClosingDay) {
-                            ForEach(1...31, id: \.self) { day in
-                                Text(mistiaLocalized(vi: "Ngày \(day)", en: "Day \(day)", ja: "\(day) 日")).tag(day)
-                            }
-                        }
-
-                        Picker(mistiaLocalized(vi: "Ngày thanh toán", en: "Payment day", ja: "支払日"), selection: $draft.paymentDueDay) {
-                            ForEach(1...31, id: \.self) { day in
-                                Text(mistiaLocalized(vi: "Ngày \(day)", en: "Day \(day)", ja: "\(day) 日")).tag(day)
-                            }
-                        }
-
-                        Picker(mistiaLocalized(vi: "Nguồn thanh toán", en: "Payment source", ja: "支払い元"), selection: $draft.paymentSourceWalletID) {
-                            Text(mistiaLocalized(vi: "Chọn sau", en: "Choose later", ja: "あとで選択")).tag(Optional<UUID>.none)
-
-                            ForEach(paymentSourceWallets) { wallet in
-                                Text(wallet.name).tag(Optional(wallet.id))
-                            }
-                        }
-
-                        TextField(mistiaLocalized(vi: "Ghi chú", en: "Notes", ja: "メモ"), text: $draft.notes, axis: .vertical)
-                            .lineLimit(3...5)
-                    }
-                }
-
-                if target.wallet != nil {
-                    Section {
-                        MistiaArchiveSection(
-                            buttonTitle: mistiaLocalized(vi: "Lưu trữ ví", en: "Archive wallet", ja: "ウォレットをアーカイブ"),
-                            descriptionText: mistiaLocalized(vi: "Ví lưu trữ sẽ không còn hiện trong tab quản lý. Mục này sẽ được tự động xóa vĩnh viễn sau 30 ngày.", en: "Archived wallets will no longer appear in the manage tab. They will be automatically deleted permanently after 30 days.", ja: "アーカイブしたウォレットは管理タブに表示されなくなります。これらは30日後に自動的に永久削除されます。"),
-                            popupMessage: mistiaLocalized(vi: "Ví này sẽ bị lưu trữ. Các ví đã lưu trữ sẽ nằm trong \"Mục đã lưu trữ\" và được giữ lại trong 30 ngày.", en: "This wallet will be archived. Archived wallets will remain in \"Archived items\" for 30 days.", ja: "このウォレットはアーカイブされます。アーカイブされたウォレットは「アーカイブ済みアイテム」に30日間保持されます。")
-                        ) {
-                            archiveWallet()
-                        }
-                        .listRowInsets(EdgeInsets())
-                        .listRowBackground(Color.clear)
-                    }
+                    .padding(.horizontal, 18)
+                    .padding(.top, 10)
+                    .padding(.bottom, 32)
                 }
             }
             .navigationTitle(mistiaLocalized(vi: target.wallet == nil ? "Ví mới" : "Sửa ví", en: target.wallet == nil ? "New wallet" : "Edit wallet", ja: target.wallet == nil ? "新しいウォレット" : "ウォレットを編集"))
@@ -408,64 +620,80 @@ struct ManagementCategoryEditorSheet: View {
 
     var body: some View {
         NavigationStack {
-            Form {
-                Section(mistiaLocalized(vi: "Nhận diện", en: "Identity", ja: "識別情報")) {
-                    Button {
-                        showsIconPicker = true
-                    } label: {
-                        HStack(spacing: 12) {
-                            ManagementEditorIconPreview(
-                                symbolName: draft.iconSymbolName,
-                                color: Color(hex: draft.iconColorHex)
-                            )
+            ZStack {
+                MistiaBackgroundView(tone: .standard)
 
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text(mistiaLocalized(vi: "Biểu tượng & màu", en: "Icon & color", ja: "アイコンと色"))
-                                    .foregroundStyle(.primary)
-                                Text(mistiaLocalized(vi: "Đổi icon và màu cho danh mục", en: "Change the icon and color for this category", ja: "カテゴリのアイコンと色を変更"))
-                                    .font(.footnote)
-                                    .foregroundStyle(.secondary)
+                ScrollView(showsIndicators: false) {
+                    VStack(spacing: 16) {
+                        MistiaFormSection(title: mistiaLocalized(vi: "Nhận diện", en: "Identity", ja: "識別情報")) {
+                            Button {
+                                showsIconPicker = true
+                            } label: {
+                                HStack(spacing: 12) {
+                                    ManagementEditorIconPreview(
+                                        symbolName: draft.iconSymbolName,
+                                        color: Color(hex: draft.iconColorHex)
+                                    )
+
+                                    VStack(alignment: .leading, spacing: 2) {
+                                        Text(mistiaLocalized(vi: "Biểu tượng & màu", en: "Icon & color", ja: "アイコンと色"))
+                                            .foregroundStyle(.primary)
+                                            .font(.system(size: 15.5, weight: .bold, design: .rounded))
+                                        Text(mistiaLocalized(vi: "Đổi icon và màu cho danh mục", en: "Change the icon and color for this category", ja: "カテゴリのアイコンと色を変更"))
+                                            .font(.footnote)
+                                            .foregroundStyle(.secondary)
+                                    }
+
+                                    Spacer()
+
+                                    Image(systemName: "chevron.right")
+                                        .font(.system(size: 11, weight: .bold))
+                                        .foregroundStyle(.tertiary)
+                                }
+                            }
+                            .buttonStyle(.plain)
+                        }
+
+                        MistiaFormSection(title: mistiaLocalized(vi: "Thông tin", en: "Details", ja: "詳細")) {
+                            MistiaFormRow(title: mistiaLocalized(vi: "Tên danh mục", en: "Category name", ja: "カテゴリ名")) {
+                                TextField(mistiaLocalized(vi: "Tên danh mục", en: "Category name", ja: "カテゴリ名"), text: $draft.name)
+                                    .textFieldStyle(.plain)
+                                    .font(.system(size: 15.5, weight: .semibold, design: .rounded))
+                                    .padding(.horizontal, 16)
+                                    .padding(.vertical, 14)
+                                    .background {
+                                        RoundedRectangle(cornerRadius: 16, style: .continuous)
+                                            .fill(Color(UIColor.tertiarySystemGroupedBackground))
+                                    }
                             }
 
-                            Spacer()
+                            VStack(alignment: .leading, spacing: 10) {
+                                Text(mistiaLocalized(vi: "Loại danh mục", en: "Category type", ja: "カテゴリ種別"))
+                                    .font(.system(size: 13.5, weight: .semibold, design: .rounded))
+                                    .foregroundStyle(.secondary)
 
-                            Image(systemName: "chevron.right")
-                                .font(.system(size: 11, weight: .bold))
-                                .foregroundStyle(.tertiary)
+                                MistiaNativeSegmentedControl(
+                                    selection: $draft.kind,
+                                    options: TransactionCategoryKind.allCases,
+                                    title: \.title,
+                                    accent: Color(red: 0.43, green: 0.23, blue: 0.76)
+                                )
+                            }
+                        }
+
+                        if target.category != nil {
+                            MistiaArchiveSection(
+                                buttonTitle: mistiaLocalized(vi: "Lưu trữ danh mục", en: "Archive category", ja: "カテゴリをアーカイブ"),
+                                descriptionText: mistiaLocalized(vi: "Danh mục lưu trữ sẽ không còn hiện trong tab quản lý. Mục này sẽ được tự động xóa vĩnh viễn sau 30 ngày.", en: "Archived categories will no longer appear in the manage tab. They will be automatically deleted permanently after 30 days.", ja: "アーカイブしたカテゴリは管理タブに表示されなくなります。これらは30日後に自動的に永久削除されます。"),
+                                popupMessage: mistiaLocalized(vi: "Danh mục này sẽ bị lưu trữ. Các danh mục đã lưu trữ sẽ nằm trong \"Mục đã lưu trữ\" và được giữ lại trong 30 ngày.", en: "This category will be archived. Archived categories will remain in \"Archived items\" for 30 days.", ja: "このカテゴリはアーカイブされます。アーカイブされたカテゴリは「アーカイブ済みアイテム」に30日間保持されます。")
+                            ) {
+                                archiveCategory()
+                            }
                         }
                     }
-                    .buttonStyle(.plain)
-                }
-
-                Section(mistiaLocalized(vi: "Thông tin", en: "Details", ja: "詳細")) {
-                    TextField(mistiaLocalized(vi: "Tên danh mục", en: "Category name", ja: "カテゴリ名"), text: $draft.name)
-
-                    VStack(alignment: .leading, spacing: 10) {
-                        Text(mistiaLocalized(vi: "Loại danh mục", en: "Category type", ja: "カテゴリ種別"))
-                            .font(.subheadline.weight(.semibold))
-                            .foregroundStyle(.secondary)
-
-                        MistiaNativeSegmentedControl(
-                            selection: $draft.kind,
-                            options: TransactionCategoryKind.allCases,
-                            title: \.title,
-                            accent: Color(red: 0.43, green: 0.23, blue: 0.76)
-                        )
-                    }
-                }
-
-                if target.category != nil {
-                    Section {
-                        MistiaArchiveSection(
-                            buttonTitle: mistiaLocalized(vi: "Lưu trữ danh mục", en: "Archive category", ja: "カテゴリをアーカイブ"),
-                            descriptionText: mistiaLocalized(vi: "Danh mục lưu trữ sẽ không còn hiện trong tab quản lý. Mục này sẽ được tự động xóa vĩnh viễn sau 30 ngày.", en: "Archived categories will no longer appear in the manage tab. They will be automatically deleted permanently after 30 days.", ja: "アーカイブしたカテゴリは管理タブに表示されなくなります。これらは30日後に自動的に永久削除されます。"),
-                            popupMessage: mistiaLocalized(vi: "Danh mục này sẽ bị lưu trữ. Các danh mục đã lưu trữ sẽ nằm trong \"Mục đã lưu trữ\" và được giữ lại trong 30 ngày.", en: "This category will be archived. Archived categories will remain in \"Archived items\" for 30 days.", ja: "このカテゴリはアーカイブされます。アーカイブされたカテゴリは「アーカイブ済みアイテム」に30日間保持されます。")
-                        ) {
-                            archiveCategory()
-                        }
-                        .listRowInsets(EdgeInsets())
-                        .listRowBackground(Color.clear)
-                    }
+                    .padding(.horizontal, 18)
+                    .padding(.top, 10)
+                    .padding(.bottom, 32)
                 }
             }
             .navigationTitle(mistiaLocalized(vi: target.category == nil ? "Danh mục mới" : "Sửa danh mục", en: target.category == nil ? "New category" : "Edit category", ja: target.category == nil ? "新しいカテゴリ" : "カテゴリを編集"))

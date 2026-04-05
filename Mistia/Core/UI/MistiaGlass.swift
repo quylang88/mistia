@@ -575,6 +575,47 @@ private struct MistiaTopScrollEdgeEffect: ViewModifier {
     }
 }
 
+struct MistiaFormSection<Content: View>: View {
+    let title: String
+    @ViewBuilder let content: Content
+    @Environment(\.colorScheme) private var colorScheme
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(title)
+                .font(.system(size: 13, weight: .semibold, design: .rounded))
+                .foregroundStyle(.secondary)
+                .textCase(.uppercase)
+                .padding(.leading, 12)
+
+            MistiaGlassCard(
+                cornerRadius: 20,
+                tint: Color(UIColor.secondarySystemGroupedBackground),
+                padding: 16
+            ) {
+                VStack(alignment: .leading, spacing: 16) {
+                    content
+                }
+            }
+        }
+    }
+}
+
+struct MistiaFormRow<Content: View>: View {
+    let title: String
+    @ViewBuilder let content: Content
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text(title)
+                .font(.system(size: 13.5, weight: .semibold, design: .rounded))
+                .foregroundStyle(.secondary)
+
+            content
+        }
+    }
+}
+
 struct MistiaChip: View {
     let title: String
     var tint: Color
