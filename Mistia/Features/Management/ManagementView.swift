@@ -431,7 +431,7 @@ struct ManagementView: View {
     }
 }
 
-private struct ManagementSection<Content: View>: View {
+struct ManagementSection<Content: View>: View {
     let title: String
     let titleColor: Color
     @ViewBuilder let content: Content
