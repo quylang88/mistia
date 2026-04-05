@@ -253,23 +253,24 @@ struct ManagementWalletEditorSheet: View {
     }
 
     private func save() {
-        let trimmedName = draft.name.nilIfBlank
-        guard let trimmedName else {
-            alertMessage = mistiaLocalized(vi: "Nhập tên ví trước khi lưu.", en: "Enter a wallet name before saving.", ja: "保存する前にウォレット名を入力してください。")
-            return
-        }
 
         if draft.kind == .bank, draft.institutionDisplayName.nilIfBlank == nil {
             alertMessage = mistiaLocalized(vi: "Chọn hoặc nhập tên ngân hàng cho ví này.", en: "Choose or enter a bank name for this wallet.", ja: "このウォレットの銀行名を選択または入力してください。")
             return
         }
 
+        let finalName: String
+        if let trimmedName = draft.name.nilIfBlank {
+            finalName = trimmedName
+        } else {
+            finalName = draft.institutionDisplayName.nilIfBlank ?? draft.kind.localizedTitle
+        }
         let now = Date()
         let existingProfileID = target.wallet?.creditCardProfile?.id
         let walletForSync: LedgerWallet
 
         if let existingWallet = target.wallet {
-            existingWallet.name = trimmedName
+            existingWallet.name = finalName
             existingWallet.kind = draft.kind
             existingWallet.iconSymbolName = draft.iconSymbolName
             existingWallet.iconColorHex = draft.iconColorHex
@@ -283,7 +284,7 @@ struct ManagementWalletEditorSheet: View {
             walletForSync = existingWallet
         } else {
             let newWallet = LedgerWallet(
-                name: trimmedName,
+                name: finalName,
                 kind: draft.kind,
                 iconSymbolName: draft.iconSymbolName,
                 iconColorHex: draft.iconColorHex,

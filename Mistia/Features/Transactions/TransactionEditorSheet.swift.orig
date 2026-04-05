@@ -576,13 +576,6 @@ struct TransactionEditorSheet: View {
                     return
                 }
 
-                if (debtIntent == .lend || debtIntent == .repay) {
-                    if amountMinor > sourceWallet.currentBalance(transactions: storedTransactions) {
-                        alertMessage = mistiaLocalized(vi: "Số tiền vượt quá số dư trong ví.", en: "Amount exceeds the wallet balance.", ja: "金額がウォレットの残高を超えています。")
-                        return
-                    }
-                }
-
                 guard let counterpartyName = draft.counterpartyName.nilIfBlank,
                       let normalizedCounterpartyKey = TransactionLogic.normalizeCounterpartyName(counterpartyName)
                 else {
@@ -825,8 +818,8 @@ private struct TransactionChoiceChipRow<Value: CaseIterable & Hashable, Content:
                             .padding(.vertical, 10)
                             .background {
                                 MistiaCapsuleGlassBackground(
-                                    tint: selection == value 
-                                        ? (colorScheme == .dark ? tintForValue(value).opacity(0.42) : tintForValue(value).opacity(0.16)) 
+                                    tint: selection == value
+                                        ? (colorScheme == .dark ? tintForValue(value).opacity(0.42) : tintForValue(value).opacity(0.16))
                                         : (colorScheme == .dark ? .white.opacity(0.045) : .white.opacity(0.18)),
                                     interactive: true
                                 )

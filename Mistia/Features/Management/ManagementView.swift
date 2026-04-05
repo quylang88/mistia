@@ -598,9 +598,21 @@ private struct ManagementSignedOutCard: View {
 }
 
 private struct ManagementWalletRow: View {
+    @Environment(\.colorScheme) private var colorScheme
+
     let wallet: LedgerWallet
+    let balance: Int64
     let action: () -> Void
 
+    private var balanceColor: Color {
+        let lowThreshold: Int64 = wallet.currencyCode == "VND" ? 100_000 : 1_000
+        if balance < lowThreshold {
+            return Color(red: 0.96, green: 0.36, blue: 0.49)
+        } else {
+            return colorScheme == .dark ? Color(red: 0.34, green: 0.82, blue: 1.0) : Color(red: 0.18, green: 0.67, blue: 0.62)
+        }
+    }
+    let wallet: LedgerWallet
     var body: some View {
         Button(action: action) {
             HStack(alignment: .top, spacing: 12) {
@@ -626,9 +638,9 @@ private struct ManagementWalletRow: View {
 
                 Spacer(minLength: 8)
 
-                Text(wallet.formattedAmount)
-                    .font(.system(size: 15, weight: .semibold, design: .rounded))
-                    .foregroundStyle(.secondary)
+                Text(balance.formattedCurrency(code: wallet.currencyCode))
+                    .font(.system(size: 15.5, weight: .bold, design: .rounded))
+                    .foregroundStyle(balanceColor)
                     .padding(.top, 1)
             }
             .padding(.horizontal, 14)

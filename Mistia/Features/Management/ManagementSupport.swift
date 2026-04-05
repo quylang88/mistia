@@ -132,6 +132,26 @@ extension LedgerWallet {
         Color(hex: iconColorHex)
     }
 
+    func currentBalance(transactions: [LedgerTransaction]) -> Int64 {
+        var balance = openingBalanceMinor
+        for transaction in transactions {
+            if transaction.entryStatus == .posted {
+                if transaction.primaryKind == .expense && transaction.sourceWallet?.id == self.id {
+                    balance -= transaction.amountMinor
+                } else if transaction.primaryKind == .income && transaction.destinationWallet?.id == self.id {
+                    balance += transaction.amountMinor
+                } else if transaction.primaryKind == .transfer {
+                    if transaction.sourceWallet?.id == self.id {
+                        balance -= transaction.amountMinor
+                    } else if transaction.destinationWallet?.id == self.id {
+                        balance += transaction.amountMinor
+                    }
+                }
+            }
+        }
+        return balance
+    }
+
     var formattedAmount: String {
         openingBalanceMinor.formattedCurrency(code: currencyCode)
     }
