@@ -223,6 +223,10 @@ struct ManagementAccountView: View {
             ZStack {
                 if !isEmailAuthExpanded {
                     VStack(spacing: 24) {
+                        if let banner = sessionStore.authBanner {
+                            ManagementAuthBannerCard(banner: banner)
+                        }
+
                         introContent
                         authMenuContent
                     }

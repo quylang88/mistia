@@ -536,9 +536,9 @@ final class SessionStore {
                 ja: "Google ログインを完了できませんでした"
             ),
             message: mistiaLocalized(
-                vi: "Flow Google vừa bị ngắt giữa chừng. Thử lại một lần nữa nhé.",
-                en: "The Google flow was interrupted before it could finish. Please try again.",
-                ja: "Google フローが完了前に中断されました。もう一度お試しください。"
+                vi: "Lỗi: \(error.localizedDescription)",
+                en: "Error: \(error.localizedDescription)",
+                ja: "エラー：\(error.localizedDescription)"
             ),
             style: .error
         )

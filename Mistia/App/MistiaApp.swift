@@ -9,6 +9,8 @@ struct MistiaApp: App {
     private let modelContainer: ModelContainer
     @State private var sessionStore: SessionStore
 
+    @UIApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
+
     init() {
         let resolvedContainer = MistiaDataStack.sharedModelContainer
         modelContainer = resolvedContainer
@@ -42,5 +44,16 @@ struct MistiaApp: App {
 
     private var appLanguage: MistiaAppLanguage {
         MistiaAppLanguage.resolve(storedRawValue: appLanguageRawValue)
+    }
+}
+
+
+class AppDelegate: NSObject, UIApplicationDelegate {
+    func application(
+        _ app: UIApplication,
+        open url: URL,
+        options: [UIApplication.OpenURLOptionsKey: Any] = [:]
+    ) -> Bool {
+        return GIDSignIn.sharedInstance.handle(url)
     }
 }
