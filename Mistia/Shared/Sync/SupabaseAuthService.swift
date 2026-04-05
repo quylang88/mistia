@@ -418,10 +418,11 @@ struct SupabaseAuthService {
         }
 
         guard (200..<300).contains(httpResponse.statusCode) else {
+            let rawError = String(data: data, encoding: .utf8) ?? "Unknown payload"
             if let error = try? decoder.decode(SupabaseServiceErrorResponse.self, from: data) {
-                throw SupabaseServiceError.serverMessage(error.errorDescription ?? error.message ?? "The account request failed.")
+                throw SupabaseServiceError.serverMessage(error.errorDescription ?? error.message ?? "Failed: \(rawError)")
             }
-            throw SupabaseServiceError.serverMessage("The account request failed with status \(httpResponse.statusCode).")
+            throw SupabaseServiceError.serverMessage("Status \(httpResponse.statusCode): \(rawError)")
         }
 
         return try decoder.decode(Response.self, from: data)
@@ -445,10 +446,11 @@ struct SupabaseAuthService {
         }
 
         guard (200..<300).contains(httpResponse.statusCode) else {
+            let rawError = String(data: data, encoding: .utf8) ?? "Unknown payload"
             if let error = try? decoder.decode(SupabaseServiceErrorResponse.self, from: data) {
-                throw SupabaseServiceError.serverMessage(error.errorDescription ?? error.message ?? "The account request failed.")
+                throw SupabaseServiceError.serverMessage(error.errorDescription ?? error.message ?? "Failed: \(rawError)")
             }
-            throw SupabaseServiceError.serverMessage("The account request failed with status \(httpResponse.statusCode).")
+            throw SupabaseServiceError.serverMessage("Status \(httpResponse.statusCode): \(rawError)")
         }
     }
 }
