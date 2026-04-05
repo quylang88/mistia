@@ -1189,6 +1189,7 @@ struct PlanningCreditCardEditorSheet: View {
         guard let wallet = target.wallet else { return }
         let now = Date()
         wallet.isArchived = true
+        wallet.archivedAt = now
         wallet.updatedAt = now
         let occurrenceMutations = storedOccurrences
             .filter { $0.sourceKind == .creditCard && $0.sourceID == wallet.id }

@@ -9,7 +9,7 @@ struct ContentView: View {
                 await sessionStore.bootstrapIfNeeded()
                 do {
                     let context = MistiaDataStack.sharedModelContainer.mainContext
-                    try MistiaBootstrap.cleanupExpiredArchivedData(modelContext: context)
+                    try MistiaBootstrap.cleanupExpiredArchivedData(modelContext: context, sessionStore: sessionStore)
                 } catch {
                     print("Failed to clean up expired archived data: \(error)")
                 }

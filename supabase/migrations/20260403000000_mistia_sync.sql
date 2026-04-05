@@ -23,6 +23,7 @@ create table if not exists public.ledger_wallets (
   institution_preset_key text,
   sort_order integer not null default 0,
   is_archived boolean not null default false,
+  archived_at timestamptz,
   created_at timestamptz not null default timezone('utc'::text, now()),
   updated_at timestamptz not null default timezone('utc'::text, now()),
   deleted_at timestamptz
@@ -60,6 +61,7 @@ create table if not exists public.transaction_categories (
   is_system boolean not null default false,
   sort_order integer not null default 0,
   is_archived boolean not null default false,
+  archived_at timestamptz,
   created_at timestamptz not null default timezone('utc'::text, now()),
   updated_at timestamptz not null default timezone('utc'::text, now()),
   deleted_at timestamptz
@@ -81,6 +83,8 @@ create table if not exists public.ledger_transactions (
   source_wallet_id uuid references public.ledger_wallets(id) on delete set null,
   destination_wallet_id uuid references public.ledger_wallets(id) on delete set null,
   category_id uuid references public.transaction_categories(id) on delete set null,
+  is_archived boolean not null default false,
+  archived_at timestamptz,
   created_at timestamptz not null default timezone('utc'::text, now()),
   updated_at timestamptz not null default timezone('utc'::text, now()),
   deleted_at timestamptz

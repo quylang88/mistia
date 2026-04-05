@@ -14,6 +14,7 @@ final class LedgerWallet {
     var institutionPresetKey: String?
     var sortOrder: Int
     var isArchived: Bool
+    var archivedAt: Date?
     var createdAt: Date
     var updatedAt: Date
     var creditCardProfile: CreditCardProfile?
@@ -30,6 +31,7 @@ final class LedgerWallet {
         institutionPresetKey: String? = nil,
         sortOrder: Int = 0,
         isArchived: Bool = false,
+        archivedAt: Date? = nil,
         createdAt: Date = .now,
         updatedAt: Date = .now
     ) {
@@ -44,6 +46,7 @@ final class LedgerWallet {
         self.institutionPresetKey = institutionPresetKey
         self.sortOrder = sortOrder
         self.isArchived = isArchived
+        self.archivedAt = archivedAt
         self.createdAt = createdAt
         self.updatedAt = updatedAt
     }
@@ -114,6 +117,7 @@ final class TransactionCategory {
     var isSystem: Bool
     var sortOrder: Int
     var isArchived: Bool
+    var archivedAt: Date?
     var createdAt: Date
     var updatedAt: Date
 
@@ -127,6 +131,7 @@ final class TransactionCategory {
         isSystem: Bool = false,
         sortOrder: Int = 0,
         isArchived: Bool = false,
+        archivedAt: Date? = nil,
         createdAt: Date = .now,
         updatedAt: Date = .now
     ) {
@@ -139,6 +144,7 @@ final class TransactionCategory {
         self.isSystem = isSystem
         self.sortOrder = sortOrder
         self.isArchived = isArchived
+        self.archivedAt = archivedAt
         self.createdAt = createdAt
         self.updatedAt = updatedAt
     }

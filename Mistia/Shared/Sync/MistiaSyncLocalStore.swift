@@ -113,6 +113,7 @@ enum MistiaSyncLocalStore {
                 institutionPresetKey: row.institutionPresetKey,
                 sortOrder: row.sortOrder,
                 isArchived: row.isArchived,
+                archivedAt: row.archivedAt,
                 createdAt: row.createdAt,
                 updatedAt: row.updatedAt
             )
@@ -131,6 +132,7 @@ enum MistiaSyncLocalStore {
                 isSystem: row.isSystem,
                 sortOrder: row.sortOrder,
                 isArchived: row.isArchived,
+                archivedAt: row.archivedAt,
                 createdAt: row.createdAt,
                 updatedAt: row.updatedAt
             )
@@ -368,6 +370,7 @@ private extension RemoteLedgerWallet {
             institutionPresetKey: wallet.institutionPresetKey,
             sortOrder: wallet.sortOrder,
             isArchived: wallet.isArchived,
+            archivedAt: wallet.archivedAt,
             createdAt: wallet.createdAt,
             updatedAt: wallet.updatedAt,
             deletedAt: nil
@@ -409,6 +412,7 @@ private extension RemoteTransactionCategory {
             isSystem: category.isSystem,
             sortOrder: category.sortOrder,
             isArchived: category.isArchived,
+            archivedAt: category.archivedAt,
             createdAt: category.createdAt,
             updatedAt: category.updatedAt,
             deletedAt: nil

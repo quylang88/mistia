@@ -367,6 +367,7 @@ struct ManagementWalletEditorSheet: View {
         guard let wallet = target.wallet else { return }
 
         wallet.isArchived = true
+        wallet.archivedAt = .now
         wallet.updatedAt = .now
 
         do {
@@ -581,6 +582,7 @@ struct ManagementCategoryEditorSheet: View {
         guard let category = target.category else { return }
 
         category.isArchived = true
+        category.archivedAt = .now
         category.updatedAt = .now
 
         do {

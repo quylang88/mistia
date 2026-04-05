@@ -2,20 +2,43 @@ import Foundation
 import SwiftData
 
 enum MistiaBootstrap {
-    static func cleanupExpiredArchivedData(modelContext: ModelContext) throws {
+    static func cleanupExpiredArchivedData(
+        modelContext: ModelContext,
+        sessionStore: SessionStore
+    ) throws {
         let thresholdDate = Calendar.current.date(byAdding: .day, value: -30, to: Date()) ?? Date()
 
-        var descriptor = FetchDescriptor<LedgerTransaction>()
-        descriptor.predicate = #Predicate<LedgerTransaction> {
-            $0.isArchived == true
-        }
-
-        let archivedTransactions = try modelContext.fetch(descriptor)
         var didDelete = false
 
-        for transaction in archivedTransactions {
+        var txDescriptor = FetchDescriptor<LedgerTransaction>()
+        txDescriptor.predicate = #Predicate<LedgerTransaction> { $0.isArchived == true }
+        for transaction in try modelContext.fetch(txDescriptor) {
             if let archivedAt = transaction.archivedAt, archivedAt < thresholdDate {
+                let id = transaction.id
                 modelContext.delete(transaction)
+                sessionStore.recordDelete(entity: .transaction, recordID: id, modifiedAt: .now)
+                didDelete = true
+            }
+        }
+
+        var walletDescriptor = FetchDescriptor<LedgerWallet>()
+        walletDescriptor.predicate = #Predicate<LedgerWallet> { $0.isArchived == true }
+        for wallet in try modelContext.fetch(walletDescriptor) {
+            if let archivedAt = wallet.archivedAt, archivedAt < thresholdDate {
+                let id = wallet.id
+                modelContext.delete(wallet)
+                sessionStore.recordDelete(entity: .wallet, recordID: id, modifiedAt: .now)
+                didDelete = true
+            }
+        }
+
+        var categoryDescriptor = FetchDescriptor<TransactionCategory>()
+        categoryDescriptor.predicate = #Predicate<TransactionCategory> { $0.isArchived == true }
+        for category in try modelContext.fetch(categoryDescriptor) {
+            if let archivedAt = category.archivedAt, archivedAt < thresholdDate {
+                let id = category.id
+                modelContext.delete(category)
+                sessionStore.recordDelete(entity: .category, recordID: id, modifiedAt: .now)
                 didDelete = true
             }
         }
