@@ -28,13 +28,24 @@ struct ManagementArchivedItemsView: View {
             contentSpacing: 16
         ) {
             if archivedTransactions.isEmpty && archivedWallets.isEmpty && archivedCategories.isEmpty {
-                MistiaEmptyStateContent(
-                    title: mistiaLocalized(vi: "Trống", en: "Empty", ja: "空"),
-                    message: mistiaLocalized(vi: "Bạn chưa có mục nào được lưu trữ.", en: "You don't have any archived items.", ja: "アーカイブされたアイテムはありません。"),
-                    buttonTitle: "",
-                    accent: .secondary,
-                    symbols: ["archivebox"]
-                ) {}
+                VStack(spacing: 16) {
+                    Spacer()
+                        .frame(height: 80)
+
+                    Image(systemName: "archivebox")
+                        .font(.system(size: 64, weight: .regular))
+                        .foregroundStyle(.tertiary)
+
+                    Text(mistiaLocalized(vi: "Không có mục lưu trữ", en: "No archived items", ja: "アーカイブなし"))
+                        .font(.system(size: 20, weight: .bold, design: .rounded))
+                        .foregroundStyle(.primary)
+
+                    Text(mistiaLocalized(vi: "Bạn chưa có mục nào được lưu trữ. Các mục được lưu trữ sẽ tự động xoá sau 30 ngày.", en: "You don't have any archived items yet. Archived items are automatically deleted after 30 days.", ja: "アーカイブされたアイテムはまだありません。アーカイブされたアイテムは30日後に自動的に削除されます。"))
+                        .font(.system(size: 15, weight: .regular, design: .rounded))
+                        .foregroundStyle(.secondary)
+                        .multilineTextAlignment(.center)
+                        .padding(.horizontal, 32)
+                }
             } else {
                 if !archivedTransactions.isEmpty {
                     ManagementSection(title: mistiaLocalized(vi: "Giao dịch", en: "Transactions", ja: "取引"), titleColor: sectionLabelColor) {

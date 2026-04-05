@@ -84,29 +84,17 @@ struct TransactionEditorSheet: View {
                 }
 
                 ToolbarItem(placement: .topBarTrailing) {
-                    HStack(spacing: 8) {
-                        if let transaction = target.transaction, !transaction.isArchived {
-                            Button {
-                                showsArchiveConfirmation = true
-                            } label: {
-                                Image(systemName: "archivebox")
-                                    .font(.system(size: 15, weight: .semibold))
-                                    .foregroundStyle(.secondary)
-                            }
-                        }
-
-                        Button {
-                            save()
-                        } label: {
-                            Image(systemName: "checkmark")
-                                .font(.system(size: 14, weight: .bold))
-                                .foregroundStyle(Color(red: 0.88, green: 0.78, blue: 1.0))
-                                .frame(width: 30, height: 30)
-                        }
-                        .buttonStyle(.glassProminent)
-                        .buttonBorderShape(.circle)
-                        .tint(Color(red: 0.43, green: 0.23, blue: 0.76))
+                    Button {
+                        save()
+                    } label: {
+                        Image(systemName: "checkmark")
+                            .font(.system(size: 14, weight: .bold))
+                            .foregroundStyle(Color(red: 0.88, green: 0.78, blue: 1.0))
+                            .frame(width: 30, height: 30)
                     }
+                    .buttonStyle(.glassProminent)
+                    .buttonBorderShape(.circle)
+                    .tint(Color(red: 0.43, green: 0.23, blue: 0.76))
                 }
             }
         }
@@ -344,6 +332,20 @@ struct TransactionEditorSheet: View {
                     .lineLimit(3...5)
                     .textFieldStyle(.plain)
                     .font(.system(size: 15, weight: .medium, design: .rounded))
+            }
+
+            if let transaction = target.transaction, !transaction.isArchived {
+                TransactionEditorCard(title: mistiaLocalized(vi: "Hành động", en: "Actions", ja: "アクション")) {
+                    Button(role: .destructive) {
+                        showsArchiveConfirmation = true
+                    } label: {
+                        Text(mistiaLocalized(vi: "Lưu trữ giao dịch", en: "Archive transaction", ja: "取引をアーカイブ"))
+                            .font(.system(size: 15, weight: .semibold, design: .rounded))
+                            .frame(maxWidth: .infinity, alignment: .center)
+                            .padding(.vertical, 8)
+                    }
+                    .buttonStyle(.plain)
+                }
             }
         }
     }
