@@ -185,7 +185,16 @@ final class SessionStore {
         } catch {
             lastErrorMessage = error.localizedDescription
             if summary == nil {
-                applySignedOutState()
+                applySignedOutState(preservingBanner: true)
+                authBanner = SessionAuthBanner(
+                    title: mistiaLocalized(
+                        vi: "Chưa thể khôi phục tài khoản",
+                        en: "Couldn't restore account",
+                        ja: "アカウントを復元できませんでした"
+                    ),
+                    message: friendlyErrorMessage(for: error),
+                    style: .error
+                )
             }
         }
     }
@@ -538,11 +547,7 @@ final class SessionStore {
                 en: "Google sign-in couldn't finish",
                 ja: "Google ログインを完了できませんでした"
             ),
-            message: mistiaLocalized(
-                vi: "Flow Google vừa bị ngắt giữa chừng. Thử lại một lần nữa nhé.",
-                en: "The Google flow was interrupted before it could finish. Please try again.",
-                ja: "Google フローが完了前に中断されました。もう一度お試しください。"
-            ),
+            message: friendlyErrorMessage(for: error),
             style: .error
         )
     }
@@ -658,7 +663,7 @@ final class SessionStore {
             lastErrorMessage = error.localizedDescription
             summary = nil
             currentSession = nil
-            applySignedOutState()
+            applySignedOutState(preservingBanner: true)
 
             authBanner = SessionAuthBanner(
                 title: mistiaLocalized(
@@ -695,11 +700,13 @@ final class SessionStore {
         syncStatusSystemImage = "wrench.and.screwdriver"
     }
 
-    private func applySignedOutState() {
+    private func applySignedOutState(preservingBanner: Bool = false) {
         summary = nil
         currentSession = nil
         authPhase = .signIn
-        authBanner = nil
+        if !preservingBanner {
+            authBanner = nil
+        }
         authPendingEmail = nil
         authFieldErrors = [:]
         activeAuthAction = nil
@@ -864,7 +871,7 @@ final class SessionStore {
             return mistiaLocalized(
                 vi: "Không có kết nối mạng. Kiểm tra wifi hoặc 4G rồi thử lại nhé.",
                 en: "No internet connection. Check your Wi-Fi or cellular data and try again.",
-                ja: "ネットワーク接続がありません。Wi-Fi またはデータ通信を確認してもう một lầnお試しください。"
+                ja: "ネットワーク接続がありません。Wi-Fi またはデータ通信を確認してもう一度お試しください。"
             )
         }
 
