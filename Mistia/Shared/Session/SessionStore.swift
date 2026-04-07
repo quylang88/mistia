@@ -153,6 +153,9 @@ final class SessionStore {
             return
         }
 
+        // Nếu đã có session do thao tác đăng nhập thủ công chạy trước, bỏ qua bootstrap
+        guard summary == nil else { return }
+
         syncStatusTitle = mistiaLocalized(
             vi: "Đang khôi phục phiên",
             en: "Restoring session",
@@ -167,17 +170,23 @@ final class SessionStore {
 
         do {
             guard let restoredSession = try await authService.restoreSession() else {
-                applySignedOutState()
+                if summary == nil {
+                    applySignedOutState()
+                }
                 return
             }
 
-            try await finishAuthentication(
-                restoredSession,
-                restoringExistingSession: true
-            )
+            if summary == nil {
+                try await finishAuthentication(
+                    restoredSession,
+                    restoringExistingSession: true
+                )
+            }
         } catch {
             lastErrorMessage = error.localizedDescription
-            applySignedOutState()
+            if summary == nil {
+                applySignedOutState()
+            }
         }
     }
 
@@ -612,41 +621,50 @@ final class SessionStore {
         _ session: SupabaseAuthSession,
         restoringExistingSession: Bool
     ) async throws {
-        let validSession = try await authService.refreshSessionIfNeeded(session)
-        currentSession = validSession
-        summary = SessionSummary(user: validSession.user)
-        lastErrorMessage = nil
-        authBanner = nil
-        authFieldErrors = [:]
-        authPendingEmail = nil
-        authPhase = .signIn
-        activeAuthAction = nil
+        do {
+            let validSession = try await authService.refreshSessionIfNeeded(session)
+            currentSession = validSession
+            summary = SessionSummary(user: validSession.user)
+            lastErrorMessage = nil
+            authBanner = nil
+            authFieldErrors = [:]
+            authPendingEmail = nil
+            authPhase = .signIn
+            activeAuthAction = nil
 
-        syncStatusTitle = mistiaLocalized(
-            vi: restoringExistingSession ? "Đang nạp dữ liệu cloud" : "Đang đồng bộ lần đầu",
-            en: restoringExistingSession ? "Loading cloud data" : "Running initial sync",
-            ja: restoringExistingSession ? "クラウドデータを読み込み中" : "初回同期を実行中"
-        )
-        syncStatusDetail = mistiaLocalized(
-            vi: "Mistia đang chuẩn bị dữ liệu local-first cho tài khoản này.",
-            en: "Mistia is preparing the local-first cache for this account.",
-            ja: "このアカウント向けにローカルファーストのキャッシュを準備しています。"
-        )
-        syncStatusSystemImage = "arrow.triangle.2.circlepath"
+            syncStatusTitle = mistiaLocalized(
+                vi: restoringExistingSession ? "Đang nạp dữ liệu cloud" : "Đang đồng bộ lần đầu",
+                en: restoringExistingSession ? "Loading cloud data" : "Running initial sync",
+                ja: restoringExistingSession ? "クラウドデータを読み込み中" : "初回同期を実行中"
+            )
+            syncStatusDetail = mistiaLocalized(
+                vi: "Mistia đang chuẩn bị dữ liệu local-first cho tài khoản này.",
+                en: "Mistia is preparing the local-first cache for this account.",
+                ja: "このアカウント向けにローカルファーストのキャッシュを準備しています。"
+            )
+            syncStatusSystemImage = "arrow.triangle.2.circlepath"
 
-        let result = try await syncCoordinator.performInitialSync(session: validSession)
-        lastSyncAt = .now
-        syncStatusTitle = mistiaLocalized(
-            vi: "Đồng bộ đang hoạt động",
-            en: "Sync is active",
-            ja: "同期が有効です"
-        )
-        syncStatusDetail = result.statusMessage
-        syncStatusSystemImage = "checkmark.icloud"
-        startLiveSyncLoop()
+            let result = try await syncCoordinator.performInitialSync(session: validSession)
+            lastSyncAt = .now
+            syncStatusTitle = mistiaLocalized(
+                vi: "Đồng bộ đang hoạt động",
+                en: "Sync is active",
+                ja: "同期が有効です"
+            )
+            syncStatusDetail = result.statusMessage
+            syncStatusSystemImage = "checkmark.icloud"
+            startLiveSyncLoop()
+        } catch {
+            summary = nil
+            currentSession = nil
+            applySignedOutState()
+            throw error
+        }
     }
 
     private func applyConfigurationMissingState() {
+        summary = nil
+        currentSession = nil
         authPhase = .signIn
         authBanner = nil
         authPendingEmail = nil
@@ -666,6 +684,8 @@ final class SessionStore {
     }
 
     private func applySignedOutState() {
+        summary = nil
+        currentSession = nil
         authPhase = .signIn
         authBanner = nil
         authPendingEmail = nil
