@@ -476,6 +476,9 @@ struct MistiaPinnedTopBarScaffold<PinnedHeader: View, Content: View>: View {
             trailingToolbarContent
         }
         .toolbarBackgroundVisibility(.automatic, for: .navigationBar)
+        .background {
+            MistiaInteractivePopGestureHelper()
+        }
     }
 
     @ToolbarContentBuilder
@@ -588,5 +591,32 @@ struct MistiaChip: View {
             .background {
                 MistiaCapsuleGlassBackground(tint: tint.opacity(0.18))
             }
+    }
+}
+
+private struct MistiaInteractivePopGestureHelper: UIViewControllerRepresentable {
+    func makeUIViewController(context: Context) -> UIViewController {
+        let controller = UIViewController()
+        DispatchQueue.main.async {
+            if let navigationController = controller.navigationController {
+                context.coordinator.navigationController = navigationController
+                navigationController.interactivePopGestureRecognizer?.delegate = context.coordinator
+            }
+        }
+        return controller
+    }
+
+    func updateUIViewController(_ uiViewController: UIViewController, context: Context) {}
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator()
+    }
+
+    class Coordinator: NSObject, UIGestureRecognizerDelegate {
+        weak var navigationController: UINavigationController?
+
+        func gestureRecognizerShouldBegin(_ gestureRecognizer: UIGestureRecognizer) -> Bool {
+            return (navigationController?.viewControllers.count ?? 0) > 1
+        }
     }
 }
