@@ -70,6 +70,13 @@ struct ManagementAccountView: View {
             },
             contentSpacing: 18
         ) {
+            if !sessionStore.isSignedIn {
+                if let banner = sessionStore.authBanner {
+                    ManagementAuthBannerCard(banner: banner)
+                        .padding(.bottom, 6)
+                }
+            }
+
             if !sessionStore.isConfigured {
                 configurationCard
             } else if let summary = sessionStore.summary {
@@ -232,10 +239,6 @@ struct ManagementAccountView: View {
                     ))
                 } else {
                     VStack(alignment: .leading, spacing: 16) {
-                        if let banner = sessionStore.authBanner {
-                            ManagementAuthBannerCard(banner: banner)
-                        }
-
                         authPhaseContent
                     }
                     .transition(.asymmetric(

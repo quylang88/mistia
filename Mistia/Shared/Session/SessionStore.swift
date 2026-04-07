@@ -628,15 +628,8 @@ final class SessionStore {
     ) async throws {
         do {
             let validSession = try await authService.refreshSessionIfNeeded(session)
-            currentSession = validSession
-            summary = SessionSummary(user: validSession.user)
-            lastErrorMessage = nil
-            authBanner = nil
-            authFieldErrors = [:]
-            authPendingEmail = nil
-            authPhase = .signIn
-            activeAuthAction = nil
 
+            // Cập nhật trạng thái đang xử lý để UI hiển thị feedback
             syncStatusTitle = mistiaLocalized(
                 vi: restoringExistingSession ? "Đang nạp dữ liệu cloud" : "Đang đồng bộ lần đầu",
                 en: restoringExistingSession ? "Loading cloud data" : "Running initial sync",
@@ -649,7 +642,19 @@ final class SessionStore {
             )
             syncStatusSystemImage = "arrow.triangle.2.circlepath"
 
+            // THỰC HIỆN ĐỒNG BỘ TRƯỚC KHI XÁC NHẬN ĐĂNG NHẬP
             let result = try await syncCoordinator.performInitialSync(session: validSession)
+
+            // Chỉ khi đồng bộ thành công mới chính thức thiết lập session
+            currentSession = validSession
+            summary = SessionSummary(user: validSession.user)
+            lastErrorMessage = nil
+            authBanner = nil
+            authFieldErrors = [:]
+            authPendingEmail = nil
+            authPhase = .signIn
+            activeAuthAction = nil
+
             lastSyncAt = .now
             syncStatusTitle = mistiaLocalized(
                 vi: "Đồng bộ đang hoạt động",
@@ -859,6 +864,14 @@ final class SessionStore {
             )
         }
 
+        if message.contains("403") || message.contains("forbidden") || message.contains("policy") {
+            return mistiaLocalized(
+                vi: "Bị từ chối truy cập (Lỗi 403). Kiểm tra lại quyền hạn (RLS) trên database Supabase nhé.",
+                en: "Access denied (Error 403). Please check your database Row Level Security (RLS) policies.",
+                ja: "アクセスが拒否されました (Error 403)。Supabase のデータベース権限 (RLS) を確認してください。"
+            )
+        }
+
         if message.contains("401") || message.contains("unauthorized") || message.contains("jwt") {
             return mistiaLocalized(
                 vi: "Phiên đăng nhập hết hạn hoặc không hợp lệ. Thử đăng nhập lại nhé.",
@@ -867,11 +880,19 @@ final class SessionStore {
             )
         }
 
+        if message.contains("400") || message.contains("bad request") {
+            return mistiaLocalized(
+                vi: "Yêu cầu không hợp lệ (Lỗi 400). Kiểm tra lại cấu hình Client ID và URL Scheme của Google nhé.",
+                en: "Bad request (Error 400). Please check your Google Client ID and URL Scheme configuration.",
+                ja: "不正なリクエストです (Error 400)。Google の Client ID と URL スキームの設定を確認してください。"
+            )
+        }
+
         if message.contains("connection") || message.contains("offline") {
             return mistiaLocalized(
                 vi: "Không có kết nối mạng. Kiểm tra wifi hoặc 4G rồi thử lại nhé.",
                 en: "No internet connection. Check your Wi-Fi or cellular data and try again.",
-                ja: "ネットワーク接続がありません。Wi-Fi またはデータ通信を確認してもう一度お試しください。"
+                ja: "ネットワーク接続がありません. Wi-Fi またはデータ通信を確認してもう一度お試しください。"
             )
         }
 
