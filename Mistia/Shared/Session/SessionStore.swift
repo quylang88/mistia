@@ -655,9 +655,21 @@ final class SessionStore {
             syncStatusSystemImage = "checkmark.icloud"
             startLiveSyncLoop()
         } catch {
+            lastErrorMessage = error.localizedDescription
             summary = nil
             currentSession = nil
             applySignedOutState()
+
+            authBanner = SessionAuthBanner(
+                title: mistiaLocalized(
+                    vi: "Không thể hoàn tất đăng nhập",
+                    en: "Couldn't finish sign-in",
+                    ja: "ログインを完了できませんでした"
+                ),
+                message: friendlyErrorMessage(for: error),
+                style: .error
+            )
+
             throw error
         }
     }
@@ -827,6 +839,36 @@ final class SessionStore {
             en: "The authentication service is temporarily busy. Please try again in a moment.",
             ja: "認証サービスが一時的に混み合っています。少し待ってからお試しください。"
         )
+    }
+
+    private func friendlyErrorMessage(for error: Error) -> String {
+        let message = error.localizedDescription.lowercased()
+
+        if message.contains("404") || message.contains("not found") {
+            return mistiaLocalized(
+                vi: "Máy chủ chưa sẵn sàng (Lỗi 404). Có thể bạn chưa chạy database migrations trên Supabase.",
+                en: "Server not ready (Error 404). You might need to run database migrations on Supabase.",
+                ja: "サーバーの準備ができていません (Error 404)。Supabase でデータベースのマイグレーションを実行する必要があるかもしれません。"
+            )
+        }
+
+        if message.contains("401") || message.contains("unauthorized") || message.contains("jwt") {
+            return mistiaLocalized(
+                vi: "Phiên đăng nhập hết hạn hoặc không hợp lệ. Thử đăng nhập lại nhé.",
+                en: "Session expired or invalid. Please try signing in again.",
+                ja: "セッションの期限が切れたか無効です。もう一度ログインをお試しください。"
+            )
+        }
+
+        if message.contains("connection") || message.contains("offline") {
+            return mistiaLocalized(
+                vi: "Không có kết nối mạng. Kiểm tra wifi hoặc 4G rồi thử lại nhé.",
+                en: "No internet connection. Check your Wi-Fi or cellular data and try again.",
+                ja: "ネットワーク接続がありません。Wi-Fi またはデータ通信を確認してもう một lầnお試しください。"
+            )
+        }
+
+        return error.localizedDescription
     }
 
     private func errorMessage(for error: Error) -> String {
