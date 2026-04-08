@@ -6,6 +6,8 @@ enum MistiaBootstrap {
         modelContext: ModelContext,
         sessionStore: SessionStore
     ) throws {
+        guard sessionStore.canManageSync else { return }
+
         let thresholdDate = Calendar.current.date(byAdding: .day, value: -30, to: Date()) ?? Date()
         
         var didDelete = false
@@ -14,10 +16,18 @@ enum MistiaBootstrap {
         txDescriptor.predicate = #Predicate<LedgerTransaction> { $0.isArchived == true }
         for transaction in try modelContext.fetch(txDescriptor) {
             if let archivedAt = transaction.archivedAt, archivedAt < thresholdDate {
-                let id = transaction.id
-                modelContext.delete(transaction)
-                sessionStore.recordDelete(entity: .transaction, recordID: id, modifiedAt: .now)
-                didDelete = true
+                if transaction.deletedAt == nil {
+                    transaction.markDeleted(at: .now)
+                    sessionStore.recordDelete(
+                        entity: .transaction,
+                        recordID: transaction.id,
+                        modifiedAt: transaction.updatedAt
+                    )
+                    didDelete = true
+                } else if sessionStore.canHardPurge(entity: .transaction, recordID: transaction.id) {
+                    modelContext.delete(transaction)
+                    didDelete = true
+                }
             }
         }
         
@@ -25,10 +35,18 @@ enum MistiaBootstrap {
         walletDescriptor.predicate = #Predicate<LedgerWallet> { $0.isArchived == true }
         for wallet in try modelContext.fetch(walletDescriptor) {
             if let archivedAt = wallet.archivedAt, archivedAt < thresholdDate {
-                let id = wallet.id
-                modelContext.delete(wallet)
-                sessionStore.recordDelete(entity: .wallet, recordID: id, modifiedAt: .now)
-                didDelete = true
+                if wallet.deletedAt == nil {
+                    wallet.markDeleted(at: .now)
+                    sessionStore.recordDelete(
+                        entity: .wallet,
+                        recordID: wallet.id,
+                        modifiedAt: wallet.updatedAt
+                    )
+                    didDelete = true
+                } else if sessionStore.canHardPurge(entity: .wallet, recordID: wallet.id) {
+                    modelContext.delete(wallet)
+                    didDelete = true
+                }
             }
         }
         
@@ -36,10 +54,18 @@ enum MistiaBootstrap {
         categoryDescriptor.predicate = #Predicate<TransactionCategory> { $0.isArchived == true }
         for category in try modelContext.fetch(categoryDescriptor) {
             if let archivedAt = category.archivedAt, archivedAt < thresholdDate {
-                let id = category.id
-                modelContext.delete(category)
-                sessionStore.recordDelete(entity: .category, recordID: id, modifiedAt: .now)
-                didDelete = true
+                if category.deletedAt == nil {
+                    category.markDeleted(at: .now)
+                    sessionStore.recordDelete(
+                        entity: .category,
+                        recordID: category.id,
+                        modifiedAt: category.updatedAt
+                    )
+                    didDelete = true
+                } else if sessionStore.canHardPurge(entity: .category, recordID: category.id) {
+                    modelContext.delete(category)
+                    didDelete = true
+                }
             }
         }
         
@@ -50,7 +76,9 @@ enum MistiaBootstrap {
 
     static func seedDefaultCategoriesIfNeeded(modelContext: ModelContext) throws {
         let existingCategories = try modelContext.fetch(FetchDescriptor<TransactionCategory>())
+            .filter { $0.deletedAt == nil }
         let existingWallets = try modelContext.fetch(FetchDescriptor<LedgerWallet>())
+            .filter { $0.deletedAt == nil }
         var didMutate = false
 
         if normalizeLegacyDefaultIconColors(
@@ -89,6 +117,7 @@ enum MistiaBootstrap {
         try seedDefaultCategoriesIfNeeded(modelContext: modelContext)
 
         let existingCategories = try modelContext.fetch(FetchDescriptor<TransactionCategory>())
+            .filter { $0.deletedAt == nil }
         if let existing = existingCategories.first(where: { $0.systemKey == systemKey.rawValue }) {
             return existing
         }

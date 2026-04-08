@@ -24,6 +24,24 @@ struct MistiaSyncMutation: Codable, Hashable, Identifiable {
     let recordID: UUID
     let kind: MistiaSyncMutationKind
     let modifiedAt: Date
+    let baseVersion: Int64
+    let deviceID: UUID
+
+    init(
+        entity: MistiaSyncEntity,
+        recordID: UUID,
+        kind: MistiaSyncMutationKind,
+        modifiedAt: Date,
+        baseVersion: Int64 = 0,
+        deviceID: UUID = MistiaSyncDeviceIdentity.current()
+    ) {
+        self.entity = entity
+        self.recordID = recordID
+        self.kind = kind
+        self.modifiedAt = modifiedAt
+        self.baseVersion = baseVersion
+        self.deviceID = deviceID
+    }
 
     var id: String {
         "\(entity.rawValue):\(recordID.uuidString)"
@@ -74,6 +92,10 @@ final class MistiaSyncOutbox {
 
     func clear() {
         defaults.removeObject(forKey: key)
+    }
+
+    func contains(entity: MistiaSyncEntity, recordID: UUID) -> Bool {
+        load().contains { $0.entity == entity && $0.recordID == recordID }
     }
 
     private func load() -> [MistiaSyncMutation] {

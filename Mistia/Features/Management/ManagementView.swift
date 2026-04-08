@@ -22,11 +22,13 @@ struct ManagementView: View {
 
     @AppStorage(MistiaAppStorageKey.hideQuickCreate) private var hideQuickCreate = false
 
-    @Query(sort: [SortDescriptor(\LedgerWallet.sortOrder), SortDescriptor(\LedgerWallet.createdAt)])
+    @Query(filter: #Predicate<LedgerWallet> { $0.deletedAt == nil })
     private var storedWallets: [LedgerWallet]
-    @Query(sort: [SortDescriptor(\TransactionCategory.createdAt), SortDescriptor(\TransactionCategory.sortOrder)])
+    @Query(filter: #Predicate<TransactionCategory> { $0.deletedAt == nil })
     private var storedCategories: [TransactionCategory]
-    @Query(filter: #Predicate<LedgerTransaction> { $0.entryStatusRawValue == "posted" && !$0.isArchived })
+    @Query(filter: #Predicate<LedgerTransaction> {
+        $0.entryStatusRawValue == "posted" && !$0.isArchived && $0.deletedAt == nil
+    })
     private var postedTransactions: [LedgerTransaction]
 
     @State private var destination: ManagementNavigationDestination?
@@ -350,14 +352,23 @@ struct ManagementView: View {
         do {
             let now = Date()
             let wallets = try modelContext.fetch(FetchDescriptor<LedgerWallet>())
+                .filter { $0.deletedAt == nil }
             let categories = try modelContext.fetch(FetchDescriptor<TransactionCategory>())
+                .filter { $0.deletedAt == nil }
             let creditProfiles = try modelContext.fetch(FetchDescriptor<CreditCardProfile>())
+                .filter { $0.deletedAt == nil }
             let transactions = try modelContext.fetch(FetchDescriptor<LedgerTransaction>())
+                .filter { $0.deletedAt == nil }
             let budgets = try modelContext.fetch(FetchDescriptor<BudgetPlan>())
+                .filter { $0.deletedAt == nil }
             let goals = try modelContext.fetch(FetchDescriptor<SavingsGoal>())
+                .filter { $0.deletedAt == nil }
             let recurringBills = try modelContext.fetch(FetchDescriptor<RecurringBillPlan>())
+                .filter { $0.deletedAt == nil }
             let installments = try modelContext.fetch(FetchDescriptor<InstallmentPlan>())
+                .filter { $0.deletedAt == nil }
             let dueOccurrences = try modelContext.fetch(FetchDescriptor<DueOccurrenceRecord>())
+                .filter { $0.deletedAt == nil }
             let mutations =
                 wallets.map {
                     MistiaSyncMutation(entity: .wallet, recordID: $0.id, kind: .delete, modifiedAt: now)
@@ -388,39 +399,39 @@ struct ManagementView: View {
                 }
 
             for wallet in wallets {
-                modelContext.delete(wallet)
+                wallet.markDeleted(at: now)
             }
 
             for category in categories {
-                modelContext.delete(category)
+                category.markDeleted(at: now)
             }
 
             for profile in creditProfiles {
-                modelContext.delete(profile)
+                profile.markDeleted(at: now)
             }
 
             for transaction in transactions {
-                modelContext.delete(transaction)
+                transaction.markDeleted(at: now)
             }
 
             for budget in budgets {
-                modelContext.delete(budget)
+                budget.markDeleted(at: now)
             }
 
             for goal in goals {
-                modelContext.delete(goal)
+                goal.markDeleted(at: now)
             }
 
             for recurringBill in recurringBills {
-                modelContext.delete(recurringBill)
+                recurringBill.markDeleted(at: now)
             }
 
             for installment in installments {
-                modelContext.delete(installment)
+                installment.markDeleted(at: now)
             }
 
             for occurrence in dueOccurrences {
-                modelContext.delete(occurrence)
+                occurrence.markDeleted(at: now)
             }
 
             try modelContext.save()

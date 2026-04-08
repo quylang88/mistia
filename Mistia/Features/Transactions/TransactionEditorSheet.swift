@@ -31,11 +31,13 @@ struct TransactionEditorSheet: View {
     @Environment(\.colorScheme) private var colorScheme
     @Environment(SessionStore.self) private var sessionStore
 
-    @Query(sort: [SortDescriptor(\LedgerWallet.sortOrder), SortDescriptor(\LedgerWallet.createdAt)])
+    @Query
     private var storedWallets: [LedgerWallet]
-    @Query(sort: [SortDescriptor(\TransactionCategory.sortOrder), SortDescriptor(\TransactionCategory.createdAt)])
+    @Query
     private var storedCategories: [TransactionCategory]
-    @Query(filter: #Predicate<LedgerTransaction> { $0.entryStatusRawValue == "posted" && !$0.isArchived })
+    @Query(filter: #Predicate<LedgerTransaction> {
+        $0.entryStatusRawValue == "posted" && !$0.isArchived && $0.deletedAt == nil
+    })
     private var postedTransactions: [LedgerTransaction]
 
     let target: TransactionEditorTarget
@@ -347,7 +349,7 @@ struct TransactionEditorSheet: View {
         let preferredID = target.transaction?.sourceWallet?.id ?? target.transaction?.destinationWallet?.id
 
         return storedWallets
-            .filter { !$0.isArchived || $0.id == preferredID }
+            .filter { ($0.deletedAt == nil && !$0.isArchived) || $0.id == preferredID }
             .sorted {
                 if $0.sortOrder != $1.sortOrder {
                     return $0.sortOrder < $1.sortOrder
@@ -361,7 +363,10 @@ struct TransactionEditorSheet: View {
         let preferredID = target.transaction?.category?.id
 
         return storedCategories
-            .filter { ($0.kind == desiredKind) && (!$0.isArchived || $0.id == preferredID) }
+            .filter {
+                ($0.kind == desiredKind)
+                    && (($0.deletedAt == nil && !$0.isArchived) || $0.id == preferredID)
+            }
             .sorted {
                 if $0.sortOrder != $1.sortOrder {
                     return $0.sortOrder < $1.sortOrder

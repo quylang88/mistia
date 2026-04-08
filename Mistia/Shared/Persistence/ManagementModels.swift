@@ -17,6 +17,8 @@ final class LedgerWallet {
     var archivedAt: Date?
     var createdAt: Date
     var updatedAt: Date
+    var deletedAt: Date?
+    var remoteVersion: Int64
     var creditCardProfile: CreditCardProfile?
 
     init(
@@ -33,7 +35,9 @@ final class LedgerWallet {
         isArchived: Bool = false,
         archivedAt: Date? = nil,
         createdAt: Date = .now,
-        updatedAt: Date = .now
+        updatedAt: Date = .now,
+        deletedAt: Date? = nil,
+        remoteVersion: Int64 = 0
     ) {
         self.id = id
         self.name = name
@@ -49,6 +53,8 @@ final class LedgerWallet {
         self.archivedAt = archivedAt
         self.createdAt = createdAt
         self.updatedAt = updatedAt
+        self.deletedAt = deletedAt
+        self.remoteVersion = remoteVersion
     }
 
     var kind: LedgerWalletKind {
@@ -69,6 +75,8 @@ final class CreditCardProfile {
     var notes: String?
     var createdAt: Date
     var updatedAt: Date
+    var deletedAt: Date?
+    var remoteVersion: Int64
     var wallet: LedgerWallet?
     var paymentSourceWallet: LedgerWallet?
 
@@ -83,6 +91,8 @@ final class CreditCardProfile {
         notes: String? = nil,
         createdAt: Date = .now,
         updatedAt: Date = .now,
+        deletedAt: Date? = nil,
+        remoteVersion: Int64 = 0,
         wallet: LedgerWallet? = nil,
         paymentSourceWallet: LedgerWallet? = nil
     ) {
@@ -96,6 +106,8 @@ final class CreditCardProfile {
         self.notes = notes
         self.createdAt = createdAt
         self.updatedAt = updatedAt
+        self.deletedAt = deletedAt
+        self.remoteVersion = remoteVersion
         self.wallet = wallet
         self.paymentSourceWallet = paymentSourceWallet
     }
@@ -120,6 +132,8 @@ final class TransactionCategory {
     var archivedAt: Date?
     var createdAt: Date
     var updatedAt: Date
+    var deletedAt: Date?
+    var remoteVersion: Int64
 
     init(
         id: UUID = UUID(),
@@ -133,7 +147,9 @@ final class TransactionCategory {
         isArchived: Bool = false,
         archivedAt: Date? = nil,
         createdAt: Date = .now,
-        updatedAt: Date = .now
+        updatedAt: Date = .now,
+        deletedAt: Date? = nil,
+        remoteVersion: Int64 = 0
     ) {
         self.id = id
         self.name = name
@@ -147,6 +163,8 @@ final class TransactionCategory {
         self.archivedAt = archivedAt
         self.createdAt = createdAt
         self.updatedAt = updatedAt
+        self.deletedAt = deletedAt
+        self.remoteVersion = remoteVersion
     }
 
     var kind: TransactionCategoryKind {
@@ -168,6 +186,8 @@ final class LedgerTransaction {
     var occurredAt: Date
     var createdAt: Date
     var updatedAt: Date
+    var deletedAt: Date?
+    var remoteVersion: Int64
     var counterpartyName: String?
     var normalizedCounterpartyKey: String?
     var isArchived: Bool
@@ -189,6 +209,8 @@ final class LedgerTransaction {
         occurredAt: Date = .now,
         createdAt: Date = .now,
         updatedAt: Date = .now,
+        deletedAt: Date? = nil,
+        remoteVersion: Int64 = 0,
         sourceWallet: LedgerWallet? = nil,
         destinationWallet: LedgerWallet? = nil,
         category: TransactionCategory? = nil,
@@ -208,6 +230,8 @@ final class LedgerTransaction {
         self.occurredAt = occurredAt
         self.createdAt = createdAt
         self.updatedAt = updatedAt
+        self.deletedAt = deletedAt
+        self.remoteVersion = remoteVersion
         self.sourceWallet = sourceWallet
         self.destinationWallet = destinationWallet
         self.category = category

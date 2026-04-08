@@ -3,7 +3,7 @@ import SwiftData
 
 enum MistiaDataStack {
     static let sharedModelContainer: ModelContainer = {
-        let schema = Schema(versionedSchema: MistiaSchemaV3.self)
+        let schema = Schema(versionedSchema: MistiaSchemaV4.self)
 
         let configuration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: false)
 

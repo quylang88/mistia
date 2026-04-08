@@ -605,6 +605,7 @@ final class OverviewLogicTests: XCTestCase {
         title: String,
         amountMinor: Int64,
         occurredAt: Date,
+        isArchived: Bool = false,
         sourceWalletID: UUID? = nil,
         sourceWalletName: String? = nil,
         sourceWalletKind: LedgerWalletKind? = nil,
@@ -631,7 +632,8 @@ final class OverviewLogicTests: XCTestCase {
             destinationWalletKind: destinationWalletKind,
             categoryID: nil,
             categoryName: nil,
-            counterpartyName: nil
+            counterpartyName: nil,
+            isArchived: isArchived
         )
     }
 

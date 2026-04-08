@@ -25,7 +25,9 @@ create table if not exists public.ledger_wallets (
   is_archived boolean not null default false,
   created_at timestamptz not null default timezone('utc'::text, now()),
   updated_at timestamptz not null default timezone('utc'::text, now()),
-  deleted_at timestamptz
+  deleted_at timestamptz,
+  sync_version bigint not null default 1,
+  last_modified_by_device_id uuid
 );
 
 create table if not exists public.credit_card_profiles (
@@ -42,7 +44,9 @@ create table if not exists public.credit_card_profiles (
   payment_source_wallet_id uuid references public.ledger_wallets(id) on delete set null,
   created_at timestamptz not null default timezone('utc'::text, now()),
   updated_at timestamptz not null default timezone('utc'::text, now()),
-  deleted_at timestamptz
+  deleted_at timestamptz,
+  sync_version bigint not null default 1,
+  last_modified_by_device_id uuid
 );
 
 create unique index if not exists credit_card_profiles_wallet_id_unique
@@ -62,7 +66,9 @@ create table if not exists public.transaction_categories (
   is_archived boolean not null default false,
   created_at timestamptz not null default timezone('utc'::text, now()),
   updated_at timestamptz not null default timezone('utc'::text, now()),
-  deleted_at timestamptz
+  deleted_at timestamptz,
+  sync_version bigint not null default 1,
+  last_modified_by_device_id uuid
 );
 
 create table if not exists public.ledger_transactions (
@@ -83,7 +89,9 @@ create table if not exists public.ledger_transactions (
   category_id uuid references public.transaction_categories(id) on delete set null,
   created_at timestamptz not null default timezone('utc'::text, now()),
   updated_at timestamptz not null default timezone('utc'::text, now()),
-  deleted_at timestamptz
+  deleted_at timestamptz,
+  sync_version bigint not null default 1,
+  last_modified_by_device_id uuid
 );
 
 create table if not exists public.budget_plans (
@@ -97,7 +105,9 @@ create table if not exists public.budget_plans (
   is_archived boolean not null default false,
   created_at timestamptz not null default timezone('utc'::text, now()),
   updated_at timestamptz not null default timezone('utc'::text, now()),
-  deleted_at timestamptz
+  deleted_at timestamptz,
+  sync_version bigint not null default 1,
+  last_modified_by_device_id uuid
 );
 
 create table if not exists public.savings_goals (
@@ -114,7 +124,9 @@ create table if not exists public.savings_goals (
   is_archived boolean not null default false,
   created_at timestamptz not null default timezone('utc'::text, now()),
   updated_at timestamptz not null default timezone('utc'::text, now()),
-  deleted_at timestamptz
+  deleted_at timestamptz,
+  sync_version bigint not null default 1,
+  last_modified_by_device_id uuid
 );
 
 create table if not exists public.recurring_bill_plans (
@@ -130,7 +142,9 @@ create table if not exists public.recurring_bill_plans (
   is_archived boolean not null default false,
   created_at timestamptz not null default timezone('utc'::text, now()),
   updated_at timestamptz not null default timezone('utc'::text, now()),
-  deleted_at timestamptz
+  deleted_at timestamptz,
+  sync_version bigint not null default 1,
+  last_modified_by_device_id uuid
 );
 
 create table if not exists public.installment_plans (
@@ -147,7 +161,9 @@ create table if not exists public.installment_plans (
   is_archived boolean not null default false,
   created_at timestamptz not null default timezone('utc'::text, now()),
   updated_at timestamptz not null default timezone('utc'::text, now()),
-  deleted_at timestamptz
+  deleted_at timestamptz,
+  sync_version bigint not null default 1,
+  last_modified_by_device_id uuid
 );
 
 create table if not exists public.due_occurrence_records (
@@ -163,7 +179,9 @@ create table if not exists public.due_occurrence_records (
   linked_transaction_id uuid,
   created_at timestamptz not null default timezone('utc'::text, now()),
   updated_at timestamptz not null default timezone('utc'::text, now()),
-  deleted_at timestamptz
+  deleted_at timestamptz,
+  sync_version bigint not null default 1,
+  last_modified_by_device_id uuid
 );
 
 create index if not exists ledger_wallets_user_id_idx on public.ledger_wallets(user_id, updated_at desc);

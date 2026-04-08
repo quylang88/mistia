@@ -191,9 +191,12 @@ enum PlanningPersistenceSupport {
         occurrences: [DueOccurrenceRecord],
         modelContext: ModelContext
     ) {
+        let now = Date()
         occurrences
             .filter { $0.sourceKind == sourceKind && $0.sourceID == sourceID }
-            .forEach(modelContext.delete)
+            .forEach { occurrence in
+                occurrence.markDeleted(at: now)
+            }
     }
 }
 

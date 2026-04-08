@@ -45,15 +45,9 @@ struct TransactionsView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(SessionStore.self) private var sessionStore
 
-    @Query(
-        filter: #Predicate<LedgerTransaction> { !$0.isArchived },
-        sort: [SortDescriptor(\LedgerTransaction.occurredAt, order: .reverse), SortDescriptor(\LedgerTransaction.createdAt, order: .reverse)]
-    )
-    private var storedTransactions: [LedgerTransaction]
-    @Query(sort: [SortDescriptor(\LedgerWallet.sortOrder), SortDescriptor(\LedgerWallet.createdAt)])
-    private var storedWallets: [LedgerWallet]
-    @Query(sort: [SortDescriptor(\TransactionCategory.sortOrder), SortDescriptor(\TransactionCategory.createdAt)])
-    private var storedCategories: [TransactionCategory]
+    @Query private var storedTransactions: [LedgerTransaction]
+    @Query private var storedWallets: [LedgerWallet]
+    @Query private var storedCategories: [TransactionCategory]
 
     @State private var selectedSegment: TransactionSegment? = nil
     @State private var editorTarget: TransactionEditorTarget?
@@ -61,9 +55,31 @@ struct TransactionsView: View {
     @State private var searchText = ""
     @State private var isSearchPresented = false
 
+    private var activeTransactions: [LedgerTransaction] {
+        storedTransactions
+            .filter { $0.deletedAt == nil && !$0.isArchived }
+            .sorted {
+                if $0.occurredAt != $1.occurredAt {
+                    return $0.occurredAt > $1.occurredAt
+                }
+                return $0.createdAt > $1.createdAt
+            }
+    }
+
     private var activeWallets: [LedgerWallet] {
         storedWallets
-            .filter { !$0.isArchived }
+            .filter { $0.deletedAt == nil && !$0.isArchived }
+            .sorted {
+                if $0.sortOrder != $1.sortOrder {
+                    return $0.sortOrder < $1.sortOrder
+                }
+                return $0.createdAt < $1.createdAt
+            }
+    }
+
+    private var activeCategories: [TransactionCategory] {
+        storedCategories
+            .filter { $0.deletedAt == nil && !$0.isArchived }
             .sorted {
                 if $0.sortOrder != $1.sortOrder {
                     return $0.sortOrder < $1.sortOrder
@@ -73,11 +89,11 @@ struct TransactionsView: View {
     }
 
     private var transactionsByID: [UUID: LedgerTransaction] {
-        Dictionary(uniqueKeysWithValues: storedTransactions.map { ($0.id, $0) })
+        Dictionary(uniqueKeysWithValues: activeTransactions.map { ($0.id, $0) })
     }
 
     private var snapshotRecords: [TransactionRecordSnapshot] {
-        storedTransactions.map { $0.snapshot }
+        activeTransactions.map { $0.snapshot }
     }
 
     private var effectiveFilters: TransactionFilterState {
@@ -324,7 +340,7 @@ struct TransactionsView: View {
 
             if selectedSegment?.kind != .transfer {
                 filterMenu(isActive: filterState.categoryID != nil) {
-                    let title = storedCategories.first { $0.id == filterState.categoryID }?.localizedDisplayName
+                    let title = activeCategories.first { $0.id == filterState.categoryID }?.localizedDisplayName
                         ?? mistiaLocalized(vi: "Danh mục", en: "Category", ja: "カテゴリ")
                     TransactionToolbarChip(
                         title: title,
@@ -337,7 +353,7 @@ struct TransactionsView: View {
                             filterState.categoryID = nil
                         }
                     }
-                    let relevantCategories = storedCategories.filter { cat in
+                    let relevantCategories = activeCategories.filter { cat in
                         if let kind = selectedSegment?.kind {
                             return (kind == .expense && cat.kind == .expense) || (kind == .income && cat.kind == .income)
                         }
@@ -377,7 +393,7 @@ struct TransactionsView: View {
 
     @ViewBuilder
     private var transactionsContent: some View {
-        if storedTransactions.isEmpty {
+        if activeTransactions.isEmpty {
             TransactionsPlaceholderCard(
                 title: mistiaLocalized(vi: "Chưa có giao dịch nào", en: "No transactions yet", ja: "取引はまだありません"),
                 message: mistiaLocalized(

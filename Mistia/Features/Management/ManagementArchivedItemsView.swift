@@ -7,13 +7,13 @@ struct ManagementArchivedItemsView: View {
     @Environment(\.colorScheme) private var colorScheme
     @Environment(SessionStore.self) private var sessionStore
 
-    @Query(filter: #Predicate<LedgerTransaction> { $0.isArchived == true })
+    @Query(filter: #Predicate<LedgerTransaction> { $0.isArchived == true && $0.deletedAt == nil })
     private var archivedTransactions: [LedgerTransaction]
 
-    @Query(filter: #Predicate<LedgerWallet> { $0.isArchived == true })
+    @Query(filter: #Predicate<LedgerWallet> { $0.isArchived == true && $0.deletedAt == nil })
     private var archivedWallets: [LedgerWallet]
 
-    @Query(filter: #Predicate<TransactionCategory> { $0.isArchived == true })
+    @Query(filter: #Predicate<TransactionCategory> { $0.isArchived == true && $0.deletedAt == nil })
     private var archivedCategories: [TransactionCategory]
 
     var body: some View {
@@ -56,9 +56,8 @@ struct ManagementArchivedItemsView: View {
                                 transaction.updatedAt = .now
                                 saveAndSync(entity: .transaction, id: transaction.id, updatedAt: transaction.updatedAt)
                             }, onDelete: {
-                                let id = transaction.id
-                                modelContext.delete(transaction)
-                                saveAndSyncDelete(entity: .transaction, id: id)
+                                transaction.markDeleted(at: .now)
+                                saveAndSyncDelete(entity: .transaction, id: transaction.id, updatedAt: transaction.updatedAt)
                             })
                         }
                     }
@@ -69,12 +68,12 @@ struct ManagementArchivedItemsView: View {
                         ForEach(archivedWallets) { wallet in
                             ArchivedItemRow(title: wallet.name, subtitle: wallet.kind.title, icon: wallet.iconSymbolName, onRestore: {
                                 wallet.isArchived = false
+                                wallet.archivedAt = nil
                                 wallet.updatedAt = .now
                                 saveAndSync(entity: .wallet, id: wallet.id, updatedAt: wallet.updatedAt)
                             }, onDelete: {
-                                let id = wallet.id
-                                modelContext.delete(wallet)
-                                saveAndSyncDelete(entity: .wallet, id: id)
+                                wallet.markDeleted(at: .now)
+                                saveAndSyncDelete(entity: .wallet, id: wallet.id, updatedAt: wallet.updatedAt)
                             })
                         }
                     }
@@ -85,12 +84,12 @@ struct ManagementArchivedItemsView: View {
                         ForEach(archivedCategories) { category in
                             ArchivedItemRow(title: category.name, subtitle: category.kind.title, icon: category.iconSymbolName, onRestore: {
                                 category.isArchived = false
+                                category.archivedAt = nil
                                 category.updatedAt = .now
                                 saveAndSync(entity: .category, id: category.id, updatedAt: category.updatedAt)
                             }, onDelete: {
-                                let id = category.id
-                                modelContext.delete(category)
-                                saveAndSyncDelete(entity: .category, id: id)
+                                category.markDeleted(at: .now)
+                                saveAndSyncDelete(entity: .category, id: category.id, updatedAt: category.updatedAt)
                             })
                         }
                     }
@@ -112,10 +111,10 @@ struct ManagementArchivedItemsView: View {
         }
     }
 
-    private func saveAndSyncDelete(entity: MistiaSyncEntity, id: UUID) {
+    private func saveAndSyncDelete(entity: MistiaSyncEntity, id: UUID, updatedAt: Date) {
         do {
             try modelContext.save()
-            sessionStore.recordDelete(entity: entity, recordID: id, modifiedAt: .now)
+            sessionStore.recordDelete(entity: entity, recordID: id, modifiedAt: updatedAt)
         } catch {
             print("Failed to save and sync delete: \(error)")
         }

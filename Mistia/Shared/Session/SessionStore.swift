@@ -65,6 +65,8 @@ final class SessionStore {
     var syncStatusSystemImage: String
     var lastErrorMessage: String?
     var lastSyncAt: Date?
+    var initialSyncPreview: MistiaInitialSyncPreview?
+    var possibleDuplicateCount = 0
     var authPhase: SessionAuthPhase = .signIn
     var authBanner: SessionAuthBanner?
     var authPendingEmail: String?
@@ -78,6 +80,7 @@ final class SessionStore {
     @ObservationIgnored private var liveSyncTask: Task<Void, Never>?
     @ObservationIgnored private var isSyncInFlight = false
     @ObservationIgnored private var requiresInitialSync = false
+    @ObservationIgnored private var pendingInitialSyncChoice: MistiaInitialSyncChoice?
 
     init(modelContainer: ModelContainer) {
         authService = SupabaseAuthService()
@@ -349,6 +352,9 @@ final class SessionStore {
         summary = nil
         lastSyncAt = nil
         lastErrorMessage = nil
+        initialSyncPreview = nil
+        possibleDuplicateCount = 0
+        pendingInitialSyncChoice = nil
         syncCoordinator.clearQueuedMutations()
 
         do {
@@ -366,19 +372,82 @@ final class SessionStore {
         await drainSyncQueue()
     }
 
+    func startInitialSync(with choice: MistiaInitialSyncChoice) async {
+        guard currentSession != nil, !isSyncInFlight else { return }
+        pendingInitialSyncChoice = choice
+        initialSyncPreview = nil
+        await drainSyncQueue()
+    }
+
+    func resolveSyncConflict(
+        id: UUID,
+        resolution: MistiaSyncConflictResolution
+    ) async {
+        guard let session = currentSession, !isSyncInFlight else { return }
+
+        isSyncInFlight = true
+        defer { isSyncInFlight = false }
+
+        do {
+            let validSession = try await authService.refreshSessionIfNeeded(session)
+            currentSession = validSession
+            applySyncingState()
+            try await syncCoordinator.resolveConflict(
+                id: id,
+                resolution: resolution,
+                session: validSession
+            )
+            lastSyncAt = .now
+            lastErrorMessage = nil
+            syncStatusTitle = mistiaLocalized(
+                vi: "Conflict đã được xử lý",
+                en: "Conflict resolved",
+                ja: "競合を解決しました"
+            )
+            syncStatusDetail = mistiaLocalized(
+                vi: "Mistia đã cập nhật lại bản ghi theo lựa chọn của bạn.",
+                en: "Mistia updated the record with your selected resolution.",
+                ja: "選択した内容でレコードを更新しました。"
+            )
+            syncStatusSystemImage = "checkmark.icloud"
+        } catch {
+            applySyncErrorState(error)
+        }
+    }
+
+    func canHardPurge(
+        entity: MistiaSyncEntity,
+        recordID: UUID
+    ) -> Bool {
+        let hasQueuedMutation = syncCoordinator.hasQueuedMutation(entity: entity, recordID: recordID)
+        let hasConflict = (try? MistiaSyncLocalStore.hasConflict(
+            entity: entity,
+            recordID: recordID,
+            in: MistiaDataStack.sharedModelContainer
+        )) ?? false
+        return !hasQueuedMutation && !hasConflict
+    }
+
     func recordUpsert(
         entity: MistiaSyncEntity,
         recordID: UUID,
         modifiedAt: Date
     ) {
         guard currentSession != nil else { return }
+        let baseVersion = (try? MistiaSyncLocalStore.currentRemoteVersion(
+            for: entity,
+            recordID: recordID,
+            from: MistiaDataStack.sharedModelContainer
+        )) ?? 0
 
         syncCoordinator.queue(
             MistiaSyncMutation(
                 entity: entity,
                 recordID: recordID,
                 kind: .upsert,
-                modifiedAt: modifiedAt
+                modifiedAt: modifiedAt,
+                baseVersion: baseVersion,
+                deviceID: MistiaSyncDeviceIdentity.current()
             )
         )
     }
@@ -389,21 +458,43 @@ final class SessionStore {
         modifiedAt: Date
     ) {
         guard currentSession != nil else { return }
+        let baseVersion = (try? MistiaSyncLocalStore.currentRemoteVersion(
+            for: entity,
+            recordID: recordID,
+            from: MistiaDataStack.sharedModelContainer
+        )) ?? 0
 
         syncCoordinator.queue(
             MistiaSyncMutation(
                 entity: entity,
                 recordID: recordID,
                 kind: .delete,
-                modifiedAt: modifiedAt
+                modifiedAt: modifiedAt,
+                baseVersion: baseVersion,
+                deviceID: MistiaSyncDeviceIdentity.current()
             )
         )
     }
 
     func recordMutations(_ mutations: [MistiaSyncMutation]) {
         guard currentSession != nil else { return }
+        let normalized = mutations.map { mutation in
+            let baseVersion = (try? MistiaSyncLocalStore.currentRemoteVersion(
+                for: mutation.entity,
+                recordID: mutation.recordID,
+                from: MistiaDataStack.sharedModelContainer
+            )) ?? mutation.baseVersion
+            return MistiaSyncMutation(
+                entity: mutation.entity,
+                recordID: mutation.recordID,
+                kind: mutation.kind,
+                modifiedAt: mutation.modifiedAt,
+                baseVersion: baseVersion,
+                deviceID: MistiaSyncDeviceIdentity.current()
+            )
+        }
 
-        syncCoordinator.queue(mutations)
+        syncCoordinator.queue(normalized)
     }
 
     private func handleSignInFailure(_ error: Error, email: String) {
@@ -633,6 +724,8 @@ final class SessionStore {
             authPhase = .signIn
             activeAuthAction = nil
             requiresInitialSync = true
+            initialSyncPreview = nil
+            pendingInitialSyncChoice = nil
 
             syncStatusTitle = mistiaLocalized(
                 vi: "Đã đăng nhập",
@@ -676,6 +769,8 @@ final class SessionStore {
         summary = nil
         currentSession = nil
         requiresInitialSync = false
+        initialSyncPreview = nil
+        pendingInitialSyncChoice = nil
         authPhase = .signIn
         authBanner = nil
         authPendingEmail = nil
@@ -698,6 +793,8 @@ final class SessionStore {
         summary = nil
         currentSession = nil
         requiresInitialSync = false
+        initialSyncPreview = nil
+        pendingInitialSyncChoice = nil
         authPhase = .signIn
         if !preservingBanner {
             authBanner = nil
@@ -1032,19 +1129,55 @@ final class SessionStore {
             let result: MistiaSyncResult
 
             if requiresInitialSync {
+                let preview = try await syncCoordinator.previewInitialSync(session: validSession)
+
+                if preview.requiresChoice, pendingInitialSyncChoice == nil {
+                    initialSyncPreview = preview
+                    syncStatusTitle = mistiaLocalized(
+                        vi: "Cần chọn cách đồng bộ lần đầu",
+                        en: "Choose how to run the first sync",
+                        ja: "初回同期の方法を選んでください"
+                    )
+                    syncStatusDetail = mistiaLocalized(
+                        vi: "Cloud và máy này đều đã có dữ liệu. Chọn cách hợp nhất an toàn trước khi tiếp tục.",
+                        en: "Both this device and the cloud already have data. Choose the safest way to continue.",
+                        ja: "この端末とクラウドの両方にデータがあります。続行方法を選択してください。"
+                    )
+                    syncStatusSystemImage = "arrow.triangle.branch"
+                    return
+                }
+
                 syncStatusTitle = mistiaLocalized(
                     vi: "Đang đồng bộ lần đầu",
                     en: "Running initial sync",
                     ja: "初回同期を実行中"
                 )
                 syncStatusDetail = mistiaLocalized(
-                    vi: "Mistia sẽ lấy dữ liệu local hiện có và đồng bộ với Supabase khi bạn chủ động bắt đầu.",
-                    en: "Mistia will take your existing local data and sync it with Supabase when you start it.",
-                    ja: "Mistia は現在のローカルデータを使って、開始時に Supabase と同期します。"
+                    vi: "Mistia đang kiểm tra local và cloud rồi áp dụng chiến lược đồng bộ an toàn.",
+                    en: "Mistia is comparing local and cloud data, then applying the safest sync strategy.",
+                    ja: "ローカルとクラウドを比較して、安全な同期方法を適用しています。"
                 )
                 syncStatusSystemImage = "arrow.triangle.2.circlepath"
-                result = try await syncCoordinator.performInitialSync(session: validSession)
+
+                let initialChoice: MistiaInitialSyncChoice
+                switch preview.mode {
+                case .idle:
+                    initialChoice = .mergeSafely
+                case .uploadLocal:
+                    initialChoice = .useDevice
+                case .downloadCloud:
+                    initialChoice = .useCloud
+                case .choose:
+                    initialChoice = pendingInitialSyncChoice ?? .mergeSafely
+                }
+
+                result = try await syncCoordinator.performInitialSync(
+                    session: validSession,
+                    choice: initialChoice
+                )
                 requiresInitialSync = false
+                initialSyncPreview = nil
+                pendingInitialSyncChoice = nil
             } else {
                 applySyncingState()
                 result = try await syncCoordinator.sync(session: validSession)
@@ -1052,12 +1185,23 @@ final class SessionStore {
 
             lastSyncAt = .now
             lastErrorMessage = nil
+            possibleDuplicateCount = ((try? MistiaSyncLocalStore.possibleDuplicateTransactions(
+                in: MistiaDataStack.sharedModelContainer
+            ).count) ?? 0)
             syncStatusTitle = mistiaLocalized(
                 vi: "Đồng bộ đã hoàn tất",
                 en: "Sync completed",
                 ja: "同期が完了しました"
             )
-            syncStatusDetail = result.statusMessage
+            if possibleDuplicateCount > 0 {
+                syncStatusDetail = result.statusMessage + " " + mistiaLocalized(
+                    vi: "Mistia thấy \(possibleDuplicateCount) giao dịch có thể bị trùng và đang giữ an toàn cả hai bản ghi.",
+                    en: "Mistia found \(possibleDuplicateCount) possible duplicate transactions and kept both records safely.",
+                    ja: "重複の可能性がある取引を \(possibleDuplicateCount) 件検出したため、両方のレコードを安全に保持しています。"
+                )
+            } else {
+                syncStatusDetail = result.statusMessage
+            }
             syncStatusSystemImage = "checkmark.icloud"
         } catch {
             applySyncErrorState(error)

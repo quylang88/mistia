@@ -17,7 +17,7 @@ struct ManagementWalletEditorSheet: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
     @Environment(SessionStore.self) private var sessionStore
-    @Query(sort: [SortDescriptor(\LedgerWallet.sortOrder), SortDescriptor(\LedgerWallet.createdAt)])
+    @Query
     private var storedWallets: [LedgerWallet]
 
     let target: ManagementWalletEditorTarget
@@ -240,7 +240,8 @@ struct ManagementWalletEditorSheet: View {
     private var paymentSourceWallets: [LedgerWallet] {
         storedWallets
             .filter { wallet in
-                !wallet.isArchived
+                wallet.deletedAt == nil
+                    && !wallet.isArchived
                     && wallet.kind != .creditCard
                     && wallet.id != target.wallet?.id
             }
@@ -340,7 +341,9 @@ struct ManagementWalletEditorSheet: View {
         guard draft.kind == .creditCard else {
             if let profile = wallet.creditCardProfile {
                 wallet.creditCardProfile = nil
-                modelContext.delete(profile)
+                profile.wallet = nil
+                profile.paymentSourceWallet = nil
+                profile.markDeleted(at: now)
             }
             return
         }
@@ -384,7 +387,10 @@ struct ManagementWalletEditorSheet: View {
     }
 
     private func nextSortOrder() -> Int {
-        (storedWallets.map(\.sortOrder).max() ?? -1) + 1
+        (storedWallets
+            .filter { $0.deletedAt == nil }
+            .map(\.sortOrder)
+            .max() ?? -1) + 1
     }
 }
 
@@ -392,7 +398,7 @@ struct ManagementCategoryEditorSheet: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
     @Environment(SessionStore.self) private var sessionStore
-    @Query(sort: [SortDescriptor(\TransactionCategory.createdAt), SortDescriptor(\TransactionCategory.sortOrder)])
+    @Query
     private var storedCategories: [TransactionCategory]
 
     let target: ManagementCategoryEditorTarget
@@ -592,7 +598,12 @@ struct ManagementCategoryEditorSheet: View {
 
     private func nextSortOrder(for kind: TransactionCategoryKind, excluding category: TransactionCategory?) -> Int {
         let maxSort = storedCategories
-            .filter { !$0.isArchived && $0.kind == kind && $0.id != category?.id }
+            .filter {
+                $0.deletedAt == nil
+                    && !$0.isArchived
+                    && $0.kind == kind
+                    && $0.id != category?.id
+            }
             .map(\.sortOrder)
             .max() ?? -1
 

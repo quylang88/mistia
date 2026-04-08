@@ -11,17 +11,17 @@ struct OverviewView: View {
     @Environment(SessionStore.self) private var sessionStore
     @AppStorage(MistiaAppStorageKey.currencyCode) private var currencyCode = "JPY"
 
-    @Query(sort: [SortDescriptor(\BudgetPlan.monthAnchor, order: .reverse), SortDescriptor(\BudgetPlan.createdAt, order: .reverse)])
+    @Query(filter: #Predicate<BudgetPlan> { $0.deletedAt == nil })
     private var storedBudgets: [BudgetPlan]
-    @Query(sort: [SortDescriptor(\RecurringBillPlan.createdAt)])
+    @Query(filter: #Predicate<RecurringBillPlan> { $0.deletedAt == nil })
     private var storedBills: [RecurringBillPlan]
-    @Query(sort: [SortDescriptor(\InstallmentPlan.createdAt)])
+    @Query(filter: #Predicate<InstallmentPlan> { $0.deletedAt == nil })
     private var storedInstallments: [InstallmentPlan]
-    @Query(sort: [SortDescriptor(\DueOccurrenceRecord.updatedAt, order: .reverse), SortDescriptor(\DueOccurrenceRecord.createdAt, order: .reverse)])
+    @Query(filter: #Predicate<DueOccurrenceRecord> { $0.deletedAt == nil })
     private var storedOccurrences: [DueOccurrenceRecord]
-    @Query(sort: [SortDescriptor(\LedgerWallet.sortOrder), SortDescriptor(\LedgerWallet.createdAt)])
+    @Query(filter: #Predicate<LedgerWallet> { $0.deletedAt == nil })
     private var storedWallets: [LedgerWallet]
-    @Query(sort: [SortDescriptor(\LedgerTransaction.occurredAt, order: .reverse), SortDescriptor(\LedgerTransaction.createdAt, order: .reverse)])
+    @Query(filter: #Predicate<LedgerTransaction> { $0.deletedAt == nil })
     private var storedTransactions: [LedgerTransaction]
 
     @State private var shareItem: OverviewShareItem?

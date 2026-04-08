@@ -1,6 +1,36 @@
 import Foundation
 
-struct SupabaseRemoteStore {
+protocol MistiaRemoteStore {
+    func fetchSnapshot(session: SupabaseAuthSession) async throws -> MistiaRemoteSnapshot
+    func fetchRecord(
+        entity: MistiaSyncEntity,
+        recordID: UUID,
+        session: SupabaseAuthSession
+    ) async throws -> MistiaSyncUploadRecord?
+    func create(
+        _ record: MistiaSyncUploadRecord,
+        session: SupabaseAuthSession
+    ) async throws -> MistiaSyncUploadRecord
+    func conditionalUpdate(
+        _ record: MistiaSyncUploadRecord,
+        expectedVersion: Int64,
+        session: SupabaseAuthSession
+    ) async throws -> MistiaSyncUploadRecord?
+    func conditionalDelete(
+        entity: MistiaSyncEntity,
+        recordID: UUID,
+        expectedVersion: Int64,
+        modifiedAt: Date,
+        deviceID: UUID,
+        session: SupabaseAuthSession
+    ) async throws -> MistiaSyncUploadRecord?
+    func forceUpsert(
+        _ record: MistiaSyncUploadRecord,
+        session: SupabaseAuthSession
+    ) async throws -> MistiaSyncUploadRecord
+}
+
+struct SupabaseRemoteStore: MistiaRemoteStore {
     private let configurationProvider: () -> MistiaSyncConfiguration?
     private let decoder = JSONDecoder.mistiaRemoteAPIDecoder
     private let encoder = JSONEncoder.mistiaRemoteAPIEncoder
@@ -20,7 +50,7 @@ struct SupabaseRemoteStore {
         let installmentPlans: [RemoteInstallmentPlan] = try await fetchRows(entity: .installmentPlan, session: session)
         let dueOccurrences: [RemoteDueOccurrenceRecord] = try await fetchRows(entity: .dueOccurrenceRecord, session: session)
 
-        return try await MistiaRemoteSnapshot(
+        return MistiaRemoteSnapshot(
             wallets: wallets,
             creditCardProfiles: profiles,
             categories: categories,
@@ -33,83 +63,104 @@ struct SupabaseRemoteStore {
         )
     }
 
-    func fetchVersion(
-        for entity: MistiaSyncEntity,
-        recordID: UUID,
-        session: SupabaseAuthSession
-    ) async throws -> RemoteRowVersion? {
-        let configuration = try configuration()
-        guard var components = URLComponents(
-            url: configuration.restBaseURL.appending(path: entity.tableName),
-            resolvingAgainstBaseURL: false
-        ) else {
-            throw SupabaseServiceError.invalidURL
-        }
-
-        components.queryItems = [
-            URLQueryItem(name: "select", value: "id,updated_at,deleted_at"),
-            URLQueryItem(name: "id", value: "eq.\(recordID.uuidString.lowercased())"),
-            URLQueryItem(name: "user_id", value: "eq.\(session.user.id.uuidString.lowercased())"),
-            URLQueryItem(name: "limit", value: "1")
-        ]
-
-        guard let url = components.url else {
-            throw SupabaseServiceError.invalidURL
-        }
-
-        let rows: [RemoteRowVersion] = try await performRequest(
-            request: authorizedRequest(url: url, session: session)
-        )
-        return rows.first
-    }
-
-    func upsert(
-        _ record: MistiaSyncUploadRecord,
-        session: SupabaseAuthSession
-    ) async throws {
-        switch record {
-        case .wallet(let row):
-            try await upsertRows([row], entity: .wallet, session: session)
-        case .creditCardProfile(let row):
-            try await upsertRows([row], entity: .creditCardProfile, session: session)
-        case .category(let row):
-            try await upsertRows([row], entity: .category, session: session)
-        case .transaction(let row):
-            try await upsertRows([row], entity: .transaction, session: session)
-        case .budgetPlan(let row):
-            try await upsertRows([row], entity: .budgetPlan, session: session)
-        case .savingsGoal(let row):
-            try await upsertRows([row], entity: .savingsGoal, session: session)
-        case .recurringBillPlan(let row):
-            try await upsertRows([row], entity: .recurringBillPlan, session: session)
-        case .installmentPlan(let row):
-            try await upsertRows([row], entity: .installmentPlan, session: session)
-        case .dueOccurrence(let row):
-            try await upsertRows([row], entity: .dueOccurrenceRecord, session: session)
-        }
-    }
-
-    func uploadSeed(
-        snapshot: MistiaRemoteSnapshot,
-        session: SupabaseAuthSession
-    ) async throws {
-        try await upsertRows(snapshot.wallets, entity: .wallet, session: session)
-        try await upsertRows(snapshot.categories, entity: .category, session: session)
-        try await upsertRows(snapshot.creditCardProfiles, entity: .creditCardProfile, session: session)
-        try await upsertRows(snapshot.transactions, entity: .transaction, session: session)
-        try await upsertRows(snapshot.budgetPlans, entity: .budgetPlan, session: session)
-        try await upsertRows(snapshot.savingsGoals, entity: .savingsGoal, session: session)
-        try await upsertRows(snapshot.recurringBillPlans, entity: .recurringBillPlan, session: session)
-        try await upsertRows(snapshot.installmentPlans, entity: .installmentPlan, session: session)
-        try await upsertRows(snapshot.dueOccurrences, entity: .dueOccurrenceRecord, session: session)
-    }
-
-    func softDelete(
+    func fetchRecord(
         entity: MistiaSyncEntity,
         recordID: UUID,
-        modifiedAt: Date,
         session: SupabaseAuthSession
-    ) async throws {
+    ) async throws -> MistiaSyncUploadRecord? {
+        switch entity {
+        case .wallet:
+            return try await fetchSingleRow(entity: entity, recordID: recordID, session: session).map(MistiaSyncUploadRecord.wallet)
+        case .creditCardProfile:
+            return try await fetchSingleRow(entity: entity, recordID: recordID, session: session).map(MistiaSyncUploadRecord.creditCardProfile)
+        case .category:
+            return try await fetchSingleRow(entity: entity, recordID: recordID, session: session).map(MistiaSyncUploadRecord.category)
+        case .transaction:
+            return try await fetchSingleRow(entity: entity, recordID: recordID, session: session).map(MistiaSyncUploadRecord.transaction)
+        case .budgetPlan:
+            return try await fetchSingleRow(entity: entity, recordID: recordID, session: session).map(MistiaSyncUploadRecord.budgetPlan)
+        case .savingsGoal:
+            return try await fetchSingleRow(entity: entity, recordID: recordID, session: session).map(MistiaSyncUploadRecord.savingsGoal)
+        case .recurringBillPlan:
+            return try await fetchSingleRow(entity: entity, recordID: recordID, session: session).map(MistiaSyncUploadRecord.recurringBillPlan)
+        case .installmentPlan:
+            return try await fetchSingleRow(entity: entity, recordID: recordID, session: session).map(MistiaSyncUploadRecord.installmentPlan)
+        case .dueOccurrenceRecord:
+            return try await fetchSingleRow(entity: entity, recordID: recordID, session: session).map(MistiaSyncUploadRecord.dueOccurrence)
+        }
+    }
+
+    func create(
+        _ record: MistiaSyncUploadRecord,
+        session: SupabaseAuthSession
+    ) async throws -> MistiaSyncUploadRecord {
+        let prepared = record.preparedForCreate(
+            deviceID: record.lastModifiedByDeviceID ?? MistiaSyncDeviceIdentity.current()
+        )
+
+        switch prepared {
+        case .wallet(let row):
+            return .wallet(try await createRow(row, entity: .wallet, session: session))
+        case .creditCardProfile(let row):
+            return .creditCardProfile(try await createRow(row, entity: .creditCardProfile, session: session))
+        case .category(let row):
+            return .category(try await createRow(row, entity: .category, session: session))
+        case .transaction(let row):
+            return .transaction(try await createRow(row, entity: .transaction, session: session))
+        case .budgetPlan(let row):
+            return .budgetPlan(try await createRow(row, entity: .budgetPlan, session: session))
+        case .savingsGoal(let row):
+            return .savingsGoal(try await createRow(row, entity: .savingsGoal, session: session))
+        case .recurringBillPlan(let row):
+            return .recurringBillPlan(try await createRow(row, entity: .recurringBillPlan, session: session))
+        case .installmentPlan(let row):
+            return .installmentPlan(try await createRow(row, entity: .installmentPlan, session: session))
+        case .dueOccurrence(let row):
+            return .dueOccurrence(try await createRow(row, entity: .dueOccurrenceRecord, session: session))
+        }
+    }
+
+    func conditionalUpdate(
+        _ record: MistiaSyncUploadRecord,
+        expectedVersion: Int64,
+        session: SupabaseAuthSession
+    ) async throws -> MistiaSyncUploadRecord? {
+        let nextVersion = expectedVersion + 1
+        let prepared = record.preparedForMutation(
+            nextVersion: nextVersion,
+            deviceID: record.lastModifiedByDeviceID ?? MistiaSyncDeviceIdentity.current()
+        )
+
+        switch prepared {
+        case .wallet(let row):
+            return try await updateRow(row, entity: .wallet, expectedVersion: expectedVersion, session: session).map(MistiaSyncUploadRecord.wallet)
+        case .creditCardProfile(let row):
+            return try await updateRow(row, entity: .creditCardProfile, expectedVersion: expectedVersion, session: session).map(MistiaSyncUploadRecord.creditCardProfile)
+        case .category(let row):
+            return try await updateRow(row, entity: .category, expectedVersion: expectedVersion, session: session).map(MistiaSyncUploadRecord.category)
+        case .transaction(let row):
+            return try await updateRow(row, entity: .transaction, expectedVersion: expectedVersion, session: session).map(MistiaSyncUploadRecord.transaction)
+        case .budgetPlan(let row):
+            return try await updateRow(row, entity: .budgetPlan, expectedVersion: expectedVersion, session: session).map(MistiaSyncUploadRecord.budgetPlan)
+        case .savingsGoal(let row):
+            return try await updateRow(row, entity: .savingsGoal, expectedVersion: expectedVersion, session: session).map(MistiaSyncUploadRecord.savingsGoal)
+        case .recurringBillPlan(let row):
+            return try await updateRow(row, entity: .recurringBillPlan, expectedVersion: expectedVersion, session: session).map(MistiaSyncUploadRecord.recurringBillPlan)
+        case .installmentPlan(let row):
+            return try await updateRow(row, entity: .installmentPlan, expectedVersion: expectedVersion, session: session).map(MistiaSyncUploadRecord.installmentPlan)
+        case .dueOccurrence(let row):
+            return try await updateRow(row, entity: .dueOccurrenceRecord, expectedVersion: expectedVersion, session: session).map(MistiaSyncUploadRecord.dueOccurrence)
+        }
+    }
+
+    func conditionalDelete(
+        entity: MistiaSyncEntity,
+        recordID: UUID,
+        expectedVersion: Int64,
+        modifiedAt: Date,
+        deviceID: UUID,
+        session: SupabaseAuthSession
+    ) async throws -> MistiaSyncUploadRecord? {
         let configuration = try configuration()
         guard var components = URLComponents(
             url: configuration.restBaseURL.appending(path: entity.tableName),
@@ -120,7 +171,8 @@ struct SupabaseRemoteStore {
 
         components.queryItems = [
             URLQueryItem(name: "id", value: "eq.\(recordID.uuidString.lowercased())"),
-            URLQueryItem(name: "user_id", value: "eq.\(session.user.id.uuidString.lowercased())")
+            URLQueryItem(name: "user_id", value: "eq.\(session.user.id.uuidString.lowercased())"),
+            URLQueryItem(name: "sync_version", value: "eq.\(expectedVersion)")
         ]
 
         guard let url = components.url else {
@@ -129,15 +181,71 @@ struct SupabaseRemoteStore {
 
         let payload = DeletePatch(
             updatedAt: modifiedAt,
-            deletedAt: modifiedAt
+            deletedAt: modifiedAt,
+            syncVersion: expectedVersion + 1,
+            lastModifiedByDeviceID: deviceID
         )
 
         var request = authorizedRequest(url: url, session: session)
         request.httpMethod = "PATCH"
-        request.setValue("return=minimal", forHTTPHeaderField: "Prefer")
+        request.setValue("return=representation", forHTTPHeaderField: "Prefer")
         request.httpBody = try encoder.encode(payload)
 
-        _ = try await performEmptyRequest(request: request)
+        switch entity {
+        case .wallet:
+            let rows: [RemoteLedgerWallet] = try await performRequest(request: request)
+            return rows.first.map(MistiaSyncUploadRecord.wallet)
+        case .creditCardProfile:
+            let rows: [RemoteCreditCardProfile] = try await performRequest(request: request)
+            return rows.first.map(MistiaSyncUploadRecord.creditCardProfile)
+        case .category:
+            let rows: [RemoteTransactionCategory] = try await performRequest(request: request)
+            return rows.first.map(MistiaSyncUploadRecord.category)
+        case .transaction:
+            let rows: [RemoteLedgerTransaction] = try await performRequest(request: request)
+            return rows.first.map(MistiaSyncUploadRecord.transaction)
+        case .budgetPlan:
+            let rows: [RemoteBudgetPlan] = try await performRequest(request: request)
+            return rows.first.map(MistiaSyncUploadRecord.budgetPlan)
+        case .savingsGoal:
+            let rows: [RemoteSavingsGoal] = try await performRequest(request: request)
+            return rows.first.map(MistiaSyncUploadRecord.savingsGoal)
+        case .recurringBillPlan:
+            let rows: [RemoteRecurringBillPlan] = try await performRequest(request: request)
+            return rows.first.map(MistiaSyncUploadRecord.recurringBillPlan)
+        case .installmentPlan:
+            let rows: [RemoteInstallmentPlan] = try await performRequest(request: request)
+            return rows.first.map(MistiaSyncUploadRecord.installmentPlan)
+        case .dueOccurrenceRecord:
+            let rows: [RemoteDueOccurrenceRecord] = try await performRequest(request: request)
+            return rows.first.map(MistiaSyncUploadRecord.dueOccurrence)
+        }
+    }
+
+    func forceUpsert(
+        _ record: MistiaSyncUploadRecord,
+        session: SupabaseAuthSession
+    ) async throws -> MistiaSyncUploadRecord {
+        switch record {
+        case .wallet(let row):
+            return .wallet(try await upsertRow(row, entity: .wallet, session: session))
+        case .creditCardProfile(let row):
+            return .creditCardProfile(try await upsertRow(row, entity: .creditCardProfile, session: session))
+        case .category(let row):
+            return .category(try await upsertRow(row, entity: .category, session: session))
+        case .transaction(let row):
+            return .transaction(try await upsertRow(row, entity: .transaction, session: session))
+        case .budgetPlan(let row):
+            return .budgetPlan(try await upsertRow(row, entity: .budgetPlan, session: session))
+        case .savingsGoal(let row):
+            return .savingsGoal(try await upsertRow(row, entity: .savingsGoal, session: session))
+        case .recurringBillPlan(let row):
+            return .recurringBillPlan(try await upsertRow(row, entity: .recurringBillPlan, session: session))
+        case .installmentPlan(let row):
+            return .installmentPlan(try await upsertRow(row, entity: .installmentPlan, session: session))
+        case .dueOccurrence(let row):
+            return .dueOccurrence(try await upsertRow(row, entity: .dueOccurrenceRecord, session: session))
+        }
     }
 
     private func fetchRows<Row: MistiaRemoteRow>(
@@ -173,13 +281,92 @@ struct SupabaseRemoteStore {
         }
     }
 
-    private func upsertRows<Row: MistiaRemoteRow>(
-        _ rows: [Row],
+    private func fetchSingleRow<Row: MistiaRemoteRow>(
+        entity: MistiaSyncEntity,
+        recordID: UUID,
+        session: SupabaseAuthSession
+    ) async throws -> Row? {
+        let configuration = try configuration()
+        guard var components = URLComponents(
+            url: configuration.restBaseURL.appending(path: entity.tableName),
+            resolvingAgainstBaseURL: false
+        ) else {
+            throw SupabaseServiceError.invalidURL
+        }
+
+        components.queryItems = [
+            URLQueryItem(name: "select", value: "*"),
+            URLQueryItem(name: "id", value: "eq.\(recordID.uuidString.lowercased())"),
+            URLQueryItem(name: "user_id", value: "eq.\(session.user.id.uuidString.lowercased())"),
+            URLQueryItem(name: "limit", value: "1")
+        ]
+
+        guard let url = components.url else {
+            throw SupabaseServiceError.invalidURL
+        }
+
+        let rows: [Row] = try await performRequest(request: authorizedRequest(url: url, session: session))
+        return rows.first
+    }
+
+    private func createRow<Row: MistiaRemoteRow>(
+        _ row: Row,
         entity: MistiaSyncEntity,
         session: SupabaseAuthSession
-    ) async throws {
-        guard !rows.isEmpty else { return }
+    ) async throws -> Row {
+        let configuration = try configuration()
+        let url = configuration.restBaseURL.appending(path: entity.tableName)
 
+        var request = authorizedRequest(url: url, session: session)
+        request.httpMethod = "POST"
+        request.setValue("return=representation", forHTTPHeaderField: "Prefer")
+        request.httpBody = try encoder.encode([row])
+
+        let rows: [Row] = try await performRequest(request: request)
+        guard let created = rows.first else {
+            throw SupabaseServiceError.invalidResponse
+        }
+        return created
+    }
+
+    private func updateRow<Row: MistiaRemoteRow>(
+        _ row: Row,
+        entity: MistiaSyncEntity,
+        expectedVersion: Int64,
+        session: SupabaseAuthSession
+    ) async throws -> Row? {
+        let configuration = try configuration()
+        guard var components = URLComponents(
+            url: configuration.restBaseURL.appending(path: entity.tableName),
+            resolvingAgainstBaseURL: false
+        ) else {
+            throw SupabaseServiceError.invalidURL
+        }
+
+        components.queryItems = [
+            URLQueryItem(name: "id", value: "eq.\(row.id.uuidString.lowercased())"),
+            URLQueryItem(name: "user_id", value: "eq.\(session.user.id.uuidString.lowercased())"),
+            URLQueryItem(name: "sync_version", value: "eq.\(expectedVersion)")
+        ]
+
+        guard let url = components.url else {
+            throw SupabaseServiceError.invalidURL
+        }
+
+        var request = authorizedRequest(url: url, session: session)
+        request.httpMethod = "PATCH"
+        request.setValue("return=representation", forHTTPHeaderField: "Prefer")
+        request.httpBody = try encoder.encode(row)
+
+        let rows: [Row] = try await performRequest(request: request)
+        return rows.first
+    }
+
+    private func upsertRow<Row: MistiaRemoteRow>(
+        _ row: Row,
+        entity: MistiaSyncEntity,
+        session: SupabaseAuthSession
+    ) async throws -> Row {
         let configuration = try configuration()
         guard var components = URLComponents(
             url: configuration.restBaseURL.appending(path: entity.tableName),
@@ -198,10 +385,14 @@ struct SupabaseRemoteStore {
 
         var request = authorizedRequest(url: url, session: session)
         request.httpMethod = "POST"
-        request.setValue("resolution=merge-duplicates,return=minimal", forHTTPHeaderField: "Prefer")
-        request.httpBody = try encoder.encode(rows)
+        request.setValue("resolution=merge-duplicates,return=representation", forHTTPHeaderField: "Prefer")
+        request.httpBody = try encoder.encode([row])
 
-        _ = try await performEmptyRequest(request: request)
+        let rows: [Row] = try await performRequest(request: request)
+        guard let upserted = rows.first else {
+            throw SupabaseServiceError.invalidResponse
+        }
+        return upserted
     }
 
     private func configuration() throws -> MistiaSyncConfiguration {
@@ -224,25 +415,6 @@ struct SupabaseRemoteStore {
         return request
     }
 
-    private func performEmptyRequest(
-        request: URLRequest
-    ) async throws -> HTTPURLResponse {
-        let (data, response) = try await URLSession.shared.data(for: request)
-        guard let httpResponse = response as? HTTPURLResponse else {
-            throw SupabaseServiceError.invalidResponse
-        }
-
-        guard (200..<300).contains(httpResponse.statusCode) else {
-            throw syncRequestErrorMessage(
-                request: request,
-                statusCode: httpResponse.statusCode,
-                data: data
-            )
-        }
-
-        return httpResponse
-    }
-
     private func performRequest<Response: Decodable>(
         request: URLRequest
     ) async throws -> Response {
@@ -258,7 +430,6 @@ struct SupabaseRemoteStore {
                 data: data
             )
         }
-
         return try decoder.decode(Response.self, from: data)
     }
 
@@ -308,4 +479,6 @@ struct SupabaseRemoteStore {
 private struct DeletePatch: Encodable {
     let updatedAt: Date
     let deletedAt: Date
+    let syncVersion: Int64
+    let lastModifiedByDeviceID: UUID
 }

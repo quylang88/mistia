@@ -6,9 +6,9 @@ struct PlanningBudgetEditorSheet: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(SessionStore.self) private var sessionStore
     @AppStorage(MistiaAppStorageKey.currencyCode) private var currencyCode = "JPY"
-    @Query(sort: [SortDescriptor(\TransactionCategory.sortOrder), SortDescriptor(\TransactionCategory.createdAt)])
+    @Query(filter: #Predicate<TransactionCategory> { $0.deletedAt == nil })
     private var storedCategories: [TransactionCategory]
-    @Query(sort: [SortDescriptor(\BudgetPlan.monthAnchor), SortDescriptor(\BudgetPlan.createdAt)])
+    @Query(filter: #Predicate<BudgetPlan> { $0.deletedAt == nil })
     private var storedBudgets: [BudgetPlan]
 
     let target: PlanningBudgetEditorTarget
@@ -158,7 +158,7 @@ struct PlanningBudgetEditorSheet: View {
     private func deleteBudget() {
         guard let budget = target.budget else { return }
         let now = Date()
-        modelContext.delete(budget)
+        budget.markDeleted(at: now)
 
         do {
             try modelContext.save()
@@ -179,9 +179,9 @@ struct PlanningGoalEditorSheet: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(SessionStore.self) private var sessionStore
     @AppStorage(MistiaAppStorageKey.currencyCode) private var currencyCode = "JPY"
-    @Query(sort: [SortDescriptor(\LedgerWallet.sortOrder), SortDescriptor(\LedgerWallet.createdAt)])
+    @Query(filter: #Predicate<LedgerWallet> { $0.deletedAt == nil })
     private var storedWallets: [LedgerWallet]
-    @Query(sort: [SortDescriptor(\SavingsGoal.sortOrder), SortDescriptor(\SavingsGoal.createdAt)])
+    @Query(filter: #Predicate<SavingsGoal> { $0.deletedAt == nil })
     private var storedGoals: [SavingsGoal]
 
     let target: PlanningGoalEditorTarget
@@ -340,7 +340,7 @@ struct PlanningGoalEditorSheet: View {
     private func deleteGoal() {
         guard let goal = target.goal else { return }
         let now = Date()
-        modelContext.delete(goal)
+        goal.markDeleted(at: now)
 
         do {
             try modelContext.save()
@@ -365,9 +365,9 @@ struct PlanningBillEditorSheet: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(SessionStore.self) private var sessionStore
     @AppStorage(MistiaAppStorageKey.currencyCode) private var currencyCode = "JPY"
-    @Query(sort: [SortDescriptor(\LedgerWallet.sortOrder), SortDescriptor(\LedgerWallet.createdAt)])
+    @Query(filter: #Predicate<LedgerWallet> { $0.deletedAt == nil })
     private var storedWallets: [LedgerWallet]
-    @Query(sort: [SortDescriptor(\DueOccurrenceRecord.updatedAt, order: .reverse), SortDescriptor(\DueOccurrenceRecord.createdAt, order: .reverse)])
+    @Query(filter: #Predicate<DueOccurrenceRecord> { $0.deletedAt == nil })
     private var storedOccurrences: [DueOccurrenceRecord]
 
     let target: PlanningBillEditorTarget
@@ -601,7 +601,7 @@ struct PlanningBillEditorSheet: View {
             occurrences: Array(storedOccurrences),
             modelContext: modelContext
         )
-        modelContext.delete(plan)
+        plan.markDeleted(at: now)
 
         do {
             try modelContext.save()
@@ -627,9 +627,9 @@ struct PlanningInstallmentEditorSheet: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(SessionStore.self) private var sessionStore
     @AppStorage(MistiaAppStorageKey.currencyCode) private var currencyCode = "JPY"
-    @Query(sort: [SortDescriptor(\LedgerWallet.sortOrder), SortDescriptor(\LedgerWallet.createdAt)])
+    @Query(filter: #Predicate<LedgerWallet> { $0.deletedAt == nil })
     private var storedWallets: [LedgerWallet]
-    @Query(sort: [SortDescriptor(\DueOccurrenceRecord.updatedAt, order: .reverse), SortDescriptor(\DueOccurrenceRecord.createdAt, order: .reverse)])
+    @Query(filter: #Predicate<DueOccurrenceRecord> { $0.deletedAt == nil })
     private var storedOccurrences: [DueOccurrenceRecord]
 
     let target: PlanningInstallmentEditorTarget
@@ -873,7 +873,7 @@ struct PlanningInstallmentEditorSheet: View {
             occurrences: Array(storedOccurrences),
             modelContext: modelContext
         )
-        modelContext.delete(plan)
+        plan.markDeleted(at: now)
 
         do {
             try modelContext.save()
@@ -899,9 +899,9 @@ struct PlanningCreditCardEditorSheet: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(SessionStore.self) private var sessionStore
     @AppStorage(MistiaAppStorageKey.currencyCode) private var currencyCode = "JPY"
-    @Query(sort: [SortDescriptor(\LedgerWallet.sortOrder), SortDescriptor(\LedgerWallet.createdAt)])
+    @Query(filter: #Predicate<LedgerWallet> { $0.deletedAt == nil })
     private var storedWallets: [LedgerWallet]
-    @Query(sort: [SortDescriptor(\DueOccurrenceRecord.updatedAt, order: .reverse), SortDescriptor(\DueOccurrenceRecord.createdAt, order: .reverse)])
+    @Query(filter: #Predicate<DueOccurrenceRecord> { $0.deletedAt == nil })
     private var storedOccurrences: [DueOccurrenceRecord]
 
     let target: PlanningCreditCardEditorTarget

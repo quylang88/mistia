@@ -1,3 +1,4 @@
+import SwiftData
 import SwiftUI
 
 private enum ManagementAuthMode: String, CaseIterable, Identifiable {
@@ -26,6 +27,8 @@ private enum ManagementAuthInput: Hashable {
 struct ManagementAccountView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(SessionStore.self) private var sessionStore
+    @Query
+    private var storedConflicts: [SyncConflict]
 
     @State private var displayName = ""
     @State private var email = ""
@@ -46,6 +49,10 @@ struct ManagementAccountView: View {
     }
 
     private let secondaryBackground = Color(UIColor.secondarySystemBackground)
+
+    private var activeConflicts: [SyncConflict] {
+        storedConflicts
+    }
 
     var body: some View {
         MistiaPinnedTopBarScaffold(
@@ -111,6 +118,28 @@ struct ManagementAccountView: View {
             DispatchQueue.main.async {
                 sessionStore.clearAuthFieldError(.confirmPassword)
             }
+        }
+        .sheet(
+            item: Binding(
+                get: { sessionStore.initialSyncPreview },
+                set: { preview in
+                    if preview == nil {
+                        sessionStore.initialSyncPreview = nil
+                    }
+                }
+            )
+        ) { preview in
+            ManagementInitialSyncChoiceSheet(
+                preview: preview,
+                accent: accent
+            ) { choice in
+                Task {
+                    await sessionStore.startInitialSync(with: choice)
+                }
+            }
+            .interactiveDismissDisabled(preview.requiresChoice)
+            .presentationDetents([.medium])
+            .presentationDragIndicator(.visible)
         }
     }
 
@@ -193,6 +222,41 @@ struct ManagementAccountView: View {
                     message: lastErrorMessage,
                     accent: .orange
                 )
+            }
+
+            if sessionStore.possibleDuplicateCount > 0 {
+                ManagementInlineMessageCard(
+                    title: mistiaLocalized(
+                        vi: "Có giao dịch có thể bị trùng",
+                        en: "Possible duplicates detected",
+                        ja: "重複の可能性がある取引があります"
+                    ),
+                    message: mistiaLocalized(
+                        vi: "Mistia đang giữ an toàn cả hai bản ghi. Hiện có \(sessionStore.possibleDuplicateCount) giao dịch cần bạn rà lại sau sync.",
+                        en: "Mistia kept both records safely. There are currently \(sessionStore.possibleDuplicateCount) transactions to review after sync.",
+                        ja: "両方のレコードを安全に保持しています。同期後に確認が必要な取引が \(sessionStore.possibleDuplicateCount) 件あります。"
+                    ),
+                    accent: .orange
+                )
+            }
+
+            if !activeConflicts.isEmpty {
+                VStack(spacing: 12) {
+                    ForEach(activeConflicts) { conflict in
+                        ManagementSyncConflictCard(
+                            conflict: conflict,
+                            accent: accent,
+                            isDisabled: !sessionStore.canManageSync
+                        ) { resolution in
+                            Task {
+                                await sessionStore.resolveSyncConflict(
+                                    id: conflict.id,
+                                    resolution: resolution
+                                )
+                            }
+                        }
+                    }
+                }
             }
 
             HStack(spacing: 12) {
@@ -927,6 +991,171 @@ private struct ManagementSyncStateCard: View {
         .padding(.horizontal, 14)
         .padding(.vertical, 13)
         .background(.white.opacity(0.06), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+    }
+}
+
+private struct ManagementInitialSyncChoiceSheet: View {
+    let preview: MistiaInitialSyncPreview
+    let accent: Color
+    let onSelect: (MistiaInitialSyncChoice) -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 18) {
+            Text(
+                mistiaLocalized(
+                    vi: "Chọn cách đồng bộ lần đầu",
+                    en: "Choose the first sync strategy",
+                    ja: "初回同期の方法を選択"
+                )
+            )
+            .font(.system(size: 22, weight: .bold, design: .rounded))
+
+            Text(
+                mistiaLocalized(
+                    vi: "Máy này đang có \(preview.localActiveCount) bản ghi và cloud đang có \(preview.remoteActiveCount) bản ghi. Mistia sẽ ưu tiên an toàn dữ liệu trước.",
+                    en: "This device has \(preview.localActiveCount) records and the cloud has \(preview.remoteActiveCount) records. Mistia will prioritize data safety first.",
+                    ja: "この端末には \(preview.localActiveCount) 件、クラウドには \(preview.remoteActiveCount) 件のレコードがあります。Mistia はまずデータの安全性を優先します。"
+                )
+            )
+            .font(.system(size: 14.5, weight: .medium, design: .rounded))
+            .foregroundStyle(.secondary)
+
+            VStack(spacing: 10) {
+                ManagementInitialSyncChoiceButton(
+                    title: mistiaLocalized(vi: "Gộp an toàn", en: "Merge safely", ja: "安全にマージ"),
+                    detail: mistiaLocalized(
+                        vi: "Giữ cả hai phía, gộp theo ID, không tự động nhập nhằng giao dịch giống nhau.",
+                        en: "Keep both sides, merge by record ID, and avoid risky automatic transaction dedupe.",
+                        ja: "両側のデータを保持し、レコード ID で統合しつつ危険な自動重複排除は行いません。"
+                    ),
+                    accent: accent,
+                    isRecommended: true
+                ) {
+                    onSelect(.mergeSafely)
+                }
+
+                ManagementInitialSyncChoiceButton(
+                    title: mistiaLocalized(vi: "Dùng dữ liệu trên máy này", en: "Use this device", ja: "この端末を使う"),
+                    detail: mistiaLocalized(
+                        vi: "Đẩy local lên cloud và tombstone các bản chỉ có trên cloud.",
+                        en: "Upload local data to the cloud and tombstone cloud-only records.",
+                        ja: "ローカルデータをクラウドへアップロードし、クラウドにしかないレコードは tombstone 化します。"
+                    ),
+                    accent: accent,
+                    isRecommended: false
+                ) {
+                    onSelect(.useDevice)
+                }
+
+                ManagementInitialSyncChoiceButton(
+                    title: mistiaLocalized(vi: "Dùng dữ liệu trên cloud", en: "Use cloud", ja: "クラウドを使う"),
+                    detail: mistiaLocalized(
+                        vi: "Xóa snapshot local hiện tại rồi kéo toàn bộ cloud về máy.",
+                        en: "Replace the current local snapshot with the full cloud state.",
+                        ja: "現在のローカルスナップショットを置き換えて、クラウド全体を取得します。"
+                    ),
+                    accent: .secondary,
+                    isRecommended: false
+                ) {
+                    onSelect(.useCloud)
+                }
+            }
+        }
+        .padding(24)
+    }
+}
+
+private struct ManagementInitialSyncChoiceButton: View {
+    let title: String
+    let detail: String
+    let accent: Color
+    let isRecommended: Bool
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            VStack(alignment: .leading, spacing: 6) {
+                HStack(spacing: 8) {
+                    Text(title)
+                        .font(.system(size: 15.5, weight: .bold, design: .rounded))
+                        .foregroundStyle(.primary)
+
+                    if isRecommended {
+                        Text(mistiaLocalized(vi: "Khuyên dùng", en: "Recommended", ja: "おすすめ"))
+                            .font(.system(size: 11.5, weight: .bold, design: .rounded))
+                            .foregroundStyle(accent)
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 4)
+                            .background(accent.opacity(0.12), in: Capsule())
+                    }
+                }
+
+                Text(detail)
+                    .font(.system(size: 13.5, weight: .medium, design: .rounded))
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(14)
+            .background(.white.opacity(0.06), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+        }
+        .buttonStyle(.plain)
+    }
+}
+
+private struct ManagementSyncConflictCard: View {
+    let conflict: SyncConflict
+    let accent: Color
+    let isDisabled: Bool
+    let onResolve: (MistiaSyncConflictResolution) -> Void
+
+    var body: some View {
+        MistiaGlassCard(cornerRadius: 20, tint: accent.opacity(0.10)) {
+            VStack(alignment: .leading, spacing: 12) {
+                Text(conflict.conflictKind.localizedTitle)
+                    .font(.system(size: 15, weight: .bold, design: .rounded))
+                    .foregroundStyle(.primary)
+
+                Text(conflict.entity.displayTitle)
+                    .font(.system(size: 13, weight: .semibold, design: .rounded))
+                    .foregroundStyle(accent)
+
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(mistiaLocalized(vi: "Máy này", en: "This device", ja: "この端末"))
+                        .font(.system(size: 12.5, weight: .bold, design: .rounded))
+                        .foregroundStyle(.secondary)
+                    Text(conflict.localPreviewTitle)
+                        .font(.system(size: 13.5, weight: .medium, design: .rounded))
+                        .foregroundStyle(.primary)
+                }
+
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(mistiaLocalized(vi: "Cloud", en: "Cloud", ja: "クラウド"))
+                        .font(.system(size: 12.5, weight: .bold, design: .rounded))
+                        .foregroundStyle(.secondary)
+                    Text(conflict.remotePreviewTitle)
+                        .font(.system(size: 13.5, weight: .medium, design: .rounded))
+                        .foregroundStyle(.primary)
+                }
+
+                HStack(spacing: 10) {
+                    Button(conflict.conflictKind.localActionTitle) {
+                        onResolve(.useLocal)
+                    }
+                    .buttonStyle(.glassProminent)
+                    .tint(accent)
+                    .disabled(isDisabled)
+
+                    Button(conflict.conflictKind.remoteActionTitle) {
+                        onResolve(.useRemote)
+                    }
+                    .buttonStyle(.glass)
+                    .tint(.secondary)
+                    .disabled(isDisabled)
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
     }
 }
 

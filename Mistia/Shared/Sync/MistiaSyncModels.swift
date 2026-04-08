@@ -8,27 +8,31 @@ protocol MistiaRemoteRow: Codable {
     var createdAt: Date { get }
     var updatedAt: Date { get }
     var deletedAt: Date? { get }
+    var syncVersion: Int64 { get set }
+    var lastModifiedByDeviceID: UUID? { get set }
 }
 
 struct RemoteLedgerWallet: MistiaRemoteRow {
     static let entity: MistiaSyncEntity = .wallet
 
-    let userID: UUID
-    let id: UUID
-    let name: String
-    let kindRawValue: String
-    let iconSymbolName: String
-    let iconColorHex: String
-    let currencyCode: String
-    let openingBalanceMinor: Int64
-    let institutionDisplayName: String?
-    let institutionPresetKey: String?
-    let sortOrder: Int
-    let isArchived: Bool
-    let archivedAt: Date?
-    let createdAt: Date
-    let updatedAt: Date
-    let deletedAt: Date?
+    var userID: UUID
+    var id: UUID
+    var name: String
+    var kindRawValue: String
+    var iconSymbolName: String
+    var iconColorHex: String
+    var currencyCode: String
+    var openingBalanceMinor: Int64
+    var institutionDisplayName: String?
+    var institutionPresetKey: String?
+    var sortOrder: Int
+    var isArchived: Bool
+    var archivedAt: Date?
+    var createdAt: Date
+    var updatedAt: Date
+    var deletedAt: Date?
+    var syncVersion: Int64
+    var lastModifiedByDeviceID: UUID?
 
     enum CodingKeys: String, CodingKey {
         case userID = "user_id"
@@ -47,26 +51,30 @@ struct RemoteLedgerWallet: MistiaRemoteRow {
         case createdAt = "created_at"
         case updatedAt = "updated_at"
         case deletedAt = "deleted_at"
+        case syncVersion = "sync_version"
+        case lastModifiedByDeviceID = "last_modified_by_device_id"
     }
 }
 
 struct RemoteCreditCardProfile: MistiaRemoteRow {
     static let entity: MistiaSyncEntity = .creditCardProfile
 
-    let userID: UUID
-    let id: UUID
-    let issuerName: String
-    let networkRawValue: String
-    let last4: String
-    let creditLimitMinor: Int64
-    let statementClosingDay: Int
-    let paymentDueDay: Int
-    let notes: String?
-    let walletID: UUID?
-    let paymentSourceWalletID: UUID?
-    let createdAt: Date
-    let updatedAt: Date
-    let deletedAt: Date?
+    var userID: UUID
+    var id: UUID
+    var issuerName: String
+    var networkRawValue: String
+    var last4: String
+    var creditLimitMinor: Int64
+    var statementClosingDay: Int
+    var paymentDueDay: Int
+    var notes: String?
+    var walletID: UUID?
+    var paymentSourceWalletID: UUID?
+    var createdAt: Date
+    var updatedAt: Date
+    var deletedAt: Date?
+    var syncVersion: Int64
+    var lastModifiedByDeviceID: UUID?
 
     enum CodingKeys: String, CodingKey {
         case userID = "user_id"
@@ -83,26 +91,30 @@ struct RemoteCreditCardProfile: MistiaRemoteRow {
         case createdAt = "created_at"
         case updatedAt = "updated_at"
         case deletedAt = "deleted_at"
+        case syncVersion = "sync_version"
+        case lastModifiedByDeviceID = "last_modified_by_device_id"
     }
 }
 
 struct RemoteTransactionCategory: MistiaRemoteRow {
     static let entity: MistiaSyncEntity = .category
 
-    let userID: UUID
-    let id: UUID
-    let name: String
-    let kindRawValue: String
-    let iconSymbolName: String
-    let iconColorHex: String
-    let systemKey: String?
-    let isSystem: Bool
-    let sortOrder: Int
-    let isArchived: Bool
-    let archivedAt: Date?
-    let createdAt: Date
-    let updatedAt: Date
-    let deletedAt: Date?
+    var userID: UUID
+    var id: UUID
+    var name: String
+    var kindRawValue: String
+    var iconSymbolName: String
+    var iconColorHex: String
+    var systemKey: String?
+    var isSystem: Bool
+    var sortOrder: Int
+    var isArchived: Bool
+    var archivedAt: Date?
+    var createdAt: Date
+    var updatedAt: Date
+    var deletedAt: Date?
+    var syncVersion: Int64
+    var lastModifiedByDeviceID: UUID?
 
     enum CodingKeys: String, CodingKey {
         case userID = "user_id"
@@ -119,32 +131,36 @@ struct RemoteTransactionCategory: MistiaRemoteRow {
         case createdAt = "created_at"
         case updatedAt = "updated_at"
         case deletedAt = "deleted_at"
+        case syncVersion = "sync_version"
+        case lastModifiedByDeviceID = "last_modified_by_device_id"
     }
 }
 
 struct RemoteLedgerTransaction: MistiaRemoteRow {
     static let entity: MistiaSyncEntity = .transaction
 
-    let userID: UUID
-    let id: UUID
-    let primaryKindRawValue: String
-    let transferSubtypeRawValue: String?
-    let debtIntentRawValue: String?
-    let entryStatusRawValue: String
-    let title: String
-    let note: String?
-    let amountMinor: Int64
-    let occurredAt: Date
-    let createdAt: Date
-    let updatedAt: Date
-    let counterpartyName: String?
-    let normalizedCounterpartyKey: String?
-    let sourceWalletID: UUID?
-    let destinationWalletID: UUID?
-    let categoryID: UUID?
-    let deletedAt: Date?
-    let isArchived: Bool
-    let archivedAt: Date?
+    var userID: UUID
+    var id: UUID
+    var primaryKindRawValue: String
+    var transferSubtypeRawValue: String?
+    var debtIntentRawValue: String?
+    var entryStatusRawValue: String
+    var title: String
+    var note: String?
+    var amountMinor: Int64
+    var occurredAt: Date
+    var createdAt: Date
+    var updatedAt: Date
+    var counterpartyName: String?
+    var normalizedCounterpartyKey: String?
+    var sourceWalletID: UUID?
+    var destinationWalletID: UUID?
+    var categoryID: UUID?
+    var deletedAt: Date?
+    var isArchived: Bool
+    var archivedAt: Date?
+    var syncVersion: Int64
+    var lastModifiedByDeviceID: UUID?
 
     enum CodingKeys: String, CodingKey {
         case userID = "user_id"
@@ -167,23 +183,27 @@ struct RemoteLedgerTransaction: MistiaRemoteRow {
         case deletedAt = "deleted_at"
         case isArchived = "is_archived"
         case archivedAt = "archived_at"
+        case syncVersion = "sync_version"
+        case lastModifiedByDeviceID = "last_modified_by_device_id"
     }
 }
 
 struct RemoteBudgetPlan: MistiaRemoteRow {
     static let entity: MistiaSyncEntity = .budgetPlan
 
-    let userID: UUID
-    let id: UUID
-    let categoryID: UUID?
-    let monthAnchor: Date
-    let limitMinor: Int64
-    let rolloverEnabled: Bool
-    let currencyCode: String
-    let isArchived: Bool
-    let createdAt: Date
-    let updatedAt: Date
-    let deletedAt: Date?
+    var userID: UUID
+    var id: UUID
+    var categoryID: UUID?
+    var monthAnchor: Date
+    var limitMinor: Int64
+    var rolloverEnabled: Bool
+    var currencyCode: String
+    var isArchived: Bool
+    var createdAt: Date
+    var updatedAt: Date
+    var deletedAt: Date?
+    var syncVersion: Int64
+    var lastModifiedByDeviceID: UUID?
 
     enum CodingKeys: String, CodingKey {
         case userID = "user_id"
@@ -197,26 +217,30 @@ struct RemoteBudgetPlan: MistiaRemoteRow {
         case createdAt = "created_at"
         case updatedAt = "updated_at"
         case deletedAt = "deleted_at"
+        case syncVersion = "sync_version"
+        case lastModifiedByDeviceID = "last_modified_by_device_id"
     }
 }
 
 struct RemoteSavingsGoal: MistiaRemoteRow {
     static let entity: MistiaSyncEntity = .savingsGoal
 
-    let userID: UUID
-    let id: UUID
-    let name: String
-    let iconSymbolName: String
-    let targetMinor: Int64
-    let currentSavedMinor: Int64
-    let targetDate: Date
-    let linkedWalletID: UUID?
-    let currencyCode: String
-    let sortOrder: Int
-    let isArchived: Bool
-    let createdAt: Date
-    let updatedAt: Date
-    let deletedAt: Date?
+    var userID: UUID
+    var id: UUID
+    var name: String
+    var iconSymbolName: String
+    var targetMinor: Int64
+    var currentSavedMinor: Int64
+    var targetDate: Date
+    var linkedWalletID: UUID?
+    var currencyCode: String
+    var sortOrder: Int
+    var isArchived: Bool
+    var createdAt: Date
+    var updatedAt: Date
+    var deletedAt: Date?
+    var syncVersion: Int64
+    var lastModifiedByDeviceID: UUID?
 
     enum CodingKeys: String, CodingKey {
         case userID = "user_id"
@@ -233,25 +257,29 @@ struct RemoteSavingsGoal: MistiaRemoteRow {
         case createdAt = "created_at"
         case updatedAt = "updated_at"
         case deletedAt = "deleted_at"
+        case syncVersion = "sync_version"
+        case lastModifiedByDeviceID = "last_modified_by_device_id"
     }
 }
 
 struct RemoteRecurringBillPlan: MistiaRemoteRow {
     static let entity: MistiaSyncEntity = .recurringBillPlan
 
-    let userID: UUID
-    let id: UUID
-    let name: String
-    let iconSymbolName: String
-    let amountMinor: Int64?
-    let dueDay: Int
-    let frequencyMonths: Int
-    let paymentWalletID: UUID?
-    let currencyCode: String
-    let isArchived: Bool
-    let createdAt: Date
-    let updatedAt: Date
-    let deletedAt: Date?
+    var userID: UUID
+    var id: UUID
+    var name: String
+    var iconSymbolName: String
+    var amountMinor: Int64?
+    var dueDay: Int
+    var frequencyMonths: Int
+    var paymentWalletID: UUID?
+    var currencyCode: String
+    var isArchived: Bool
+    var createdAt: Date
+    var updatedAt: Date
+    var deletedAt: Date?
+    var syncVersion: Int64
+    var lastModifiedByDeviceID: UUID?
 
     enum CodingKeys: String, CodingKey {
         case userID = "user_id"
@@ -267,26 +295,30 @@ struct RemoteRecurringBillPlan: MistiaRemoteRow {
         case createdAt = "created_at"
         case updatedAt = "updated_at"
         case deletedAt = "deleted_at"
+        case syncVersion = "sync_version"
+        case lastModifiedByDeviceID = "last_modified_by_device_id"
     }
 }
 
 struct RemoteInstallmentPlan: MistiaRemoteRow {
     static let entity: MistiaSyncEntity = .installmentPlan
 
-    let userID: UUID
-    let id: UUID
-    let name: String
-    let iconSymbolName: String
-    let amountPerCycleMinor: Int64
-    let dueDay: Int
-    let totalCycles: Int?
-    let frequencyMonths: Int
-    let paymentWalletID: UUID?
-    let currencyCode: String
-    let isArchived: Bool
-    let createdAt: Date
-    let updatedAt: Date
-    let deletedAt: Date?
+    var userID: UUID
+    var id: UUID
+    var name: String
+    var iconSymbolName: String
+    var amountPerCycleMinor: Int64
+    var dueDay: Int
+    var totalCycles: Int?
+    var frequencyMonths: Int
+    var paymentWalletID: UUID?
+    var currencyCode: String
+    var isArchived: Bool
+    var createdAt: Date
+    var updatedAt: Date
+    var deletedAt: Date?
+    var syncVersion: Int64
+    var lastModifiedByDeviceID: UUID?
 
     enum CodingKeys: String, CodingKey {
         case userID = "user_id"
@@ -303,25 +335,29 @@ struct RemoteInstallmentPlan: MistiaRemoteRow {
         case createdAt = "created_at"
         case updatedAt = "updated_at"
         case deletedAt = "deleted_at"
+        case syncVersion = "sync_version"
+        case lastModifiedByDeviceID = "last_modified_by_device_id"
     }
 }
 
 struct RemoteDueOccurrenceRecord: MistiaRemoteRow {
     static let entity: MistiaSyncEntity = .dueOccurrenceRecord
 
-    let userID: UUID
-    let id: UUID
-    let sourceKindRawValue: String
-    let sourceID: UUID
-    let selectedMonthKey: String
-    let scheduledDate: Date
-    let amountMinorSnapshot: Int64?
-    let statusRawValue: String
-    let paidAt: Date?
-    let linkedTransactionID: UUID?
-    let createdAt: Date
-    let updatedAt: Date
-    let deletedAt: Date?
+    var userID: UUID
+    var id: UUID
+    var sourceKindRawValue: String
+    var sourceID: UUID
+    var selectedMonthKey: String
+    var scheduledDate: Date
+    var amountMinorSnapshot: Int64?
+    var statusRawValue: String
+    var paidAt: Date?
+    var linkedTransactionID: UUID?
+    var createdAt: Date
+    var updatedAt: Date
+    var deletedAt: Date?
+    var syncVersion: Int64
+    var lastModifiedByDeviceID: UUID?
 
     enum CodingKeys: String, CodingKey {
         case userID = "user_id"
@@ -337,6 +373,8 @@ struct RemoteDueOccurrenceRecord: MistiaRemoteRow {
         case createdAt = "created_at"
         case updatedAt = "updated_at"
         case deletedAt = "deleted_at"
+        case syncVersion = "sync_version"
+        case lastModifiedByDeviceID = "last_modified_by_device_id"
     }
 }
 
@@ -344,11 +382,15 @@ struct RemoteRowVersion: Codable {
     let id: UUID
     let updatedAt: Date
     let deletedAt: Date?
+    let syncVersion: Int64
+    let lastModifiedByDeviceID: UUID?
 
     enum CodingKeys: String, CodingKey {
         case id
         case updatedAt = "updated_at"
         case deletedAt = "deleted_at"
+        case syncVersion = "sync_version"
+        case lastModifiedByDeviceID = "last_modified_by_device_id"
     }
 }
 
@@ -494,6 +536,29 @@ enum MistiaSyncUploadRecord {
         }
     }
 
+    var id: UUID {
+        switch self {
+        case .wallet(let row):
+            row.id
+        case .creditCardProfile(let row):
+            row.id
+        case .category(let row):
+            row.id
+        case .transaction(let row):
+            row.id
+        case .budgetPlan(let row):
+            row.id
+        case .savingsGoal(let row):
+            row.id
+        case .recurringBillPlan(let row):
+            row.id
+        case .installmentPlan(let row):
+            row.id
+        case .dueOccurrence(let row):
+            row.id
+        }
+    }
+
     var updatedAt: Date {
         switch self {
         case .wallet(let row):
@@ -514,6 +579,437 @@ enum MistiaSyncUploadRecord {
             row.updatedAt
         case .dueOccurrence(let row):
             row.updatedAt
+        }
+    }
+
+    var deletedAt: Date? {
+        switch self {
+        case .wallet(let row):
+            row.deletedAt
+        case .creditCardProfile(let row):
+            row.deletedAt
+        case .category(let row):
+            row.deletedAt
+        case .transaction(let row):
+            row.deletedAt
+        case .budgetPlan(let row):
+            row.deletedAt
+        case .savingsGoal(let row):
+            row.deletedAt
+        case .recurringBillPlan(let row):
+            row.deletedAt
+        case .installmentPlan(let row):
+            row.deletedAt
+        case .dueOccurrence(let row):
+            row.deletedAt
+        }
+    }
+
+    var syncVersion: Int64 {
+        switch self {
+        case .wallet(let row):
+            row.syncVersion
+        case .creditCardProfile(let row):
+            row.syncVersion
+        case .category(let row):
+            row.syncVersion
+        case .transaction(let row):
+            row.syncVersion
+        case .budgetPlan(let row):
+            row.syncVersion
+        case .savingsGoal(let row):
+            row.syncVersion
+        case .recurringBillPlan(let row):
+            row.syncVersion
+        case .installmentPlan(let row):
+            row.syncVersion
+        case .dueOccurrence(let row):
+            row.syncVersion
+        }
+    }
+
+    var lastModifiedByDeviceID: UUID? {
+        switch self {
+        case .wallet(let row):
+            row.lastModifiedByDeviceID
+        case .creditCardProfile(let row):
+            row.lastModifiedByDeviceID
+        case .category(let row):
+            row.lastModifiedByDeviceID
+        case .transaction(let row):
+            row.lastModifiedByDeviceID
+        case .budgetPlan(let row):
+            row.lastModifiedByDeviceID
+        case .savingsGoal(let row):
+            row.lastModifiedByDeviceID
+        case .recurringBillPlan(let row):
+            row.lastModifiedByDeviceID
+        case .installmentPlan(let row):
+            row.lastModifiedByDeviceID
+        case .dueOccurrence(let row):
+            row.lastModifiedByDeviceID
+        }
+    }
+
+    var payloadFingerprint: String {
+        switch self {
+        case .wallet(let row):
+            return [
+                entity.rawValue,
+                row.name,
+                row.kindRawValue,
+                row.iconSymbolName,
+                row.iconColorHex,
+                row.currencyCode,
+                "\(row.openingBalanceMinor)",
+                row.institutionDisplayName ?? "",
+                row.institutionPresetKey ?? "",
+                "\(row.sortOrder)",
+                row.isArchived ? "1" : "0",
+                Self.dateString(row.archivedAt),
+                Self.dateString(row.deletedAt)
+            ].joined(separator: "|")
+        case .creditCardProfile(let row):
+            return [
+                entity.rawValue,
+                row.issuerName,
+                row.networkRawValue,
+                row.last4,
+                "\(row.creditLimitMinor)",
+                "\(row.statementClosingDay)",
+                "\(row.paymentDueDay)",
+                row.notes ?? "",
+                row.walletID?.uuidString.lowercased() ?? "",
+                row.paymentSourceWalletID?.uuidString.lowercased() ?? "",
+                Self.dateString(row.deletedAt)
+            ].joined(separator: "|")
+        case .category(let row):
+            return [
+                entity.rawValue,
+                row.name,
+                row.kindRawValue,
+                row.iconSymbolName,
+                row.iconColorHex,
+                row.systemKey ?? "",
+                row.isSystem ? "1" : "0",
+                "\(row.sortOrder)",
+                row.isArchived ? "1" : "0",
+                Self.dateString(row.archivedAt),
+                Self.dateString(row.deletedAt)
+            ].joined(separator: "|")
+        case .transaction(let row):
+            return [
+                entity.rawValue,
+                row.primaryKindRawValue,
+                row.transferSubtypeRawValue ?? "",
+                row.debtIntentRawValue ?? "",
+                row.entryStatusRawValue,
+                row.title,
+                row.note ?? "",
+                "\(row.amountMinor)",
+                Self.dateString(row.occurredAt),
+                row.counterpartyName ?? "",
+                row.normalizedCounterpartyKey ?? "",
+                row.sourceWalletID?.uuidString.lowercased() ?? "",
+                row.destinationWalletID?.uuidString.lowercased() ?? "",
+                row.categoryID?.uuidString.lowercased() ?? "",
+                row.isArchived ? "1" : "0",
+                Self.dateString(row.archivedAt),
+                Self.dateString(row.deletedAt)
+            ].joined(separator: "|")
+        case .budgetPlan(let row):
+            return [
+                entity.rawValue,
+                row.categoryID?.uuidString.lowercased() ?? "",
+                Self.dateString(row.monthAnchor),
+                "\(row.limitMinor)",
+                row.rolloverEnabled ? "1" : "0",
+                row.currencyCode,
+                row.isArchived ? "1" : "0",
+                Self.dateString(row.deletedAt)
+            ].joined(separator: "|")
+        case .savingsGoal(let row):
+            return [
+                entity.rawValue,
+                row.name,
+                row.iconSymbolName,
+                "\(row.targetMinor)",
+                "\(row.currentSavedMinor)",
+                Self.dateString(row.targetDate),
+                row.linkedWalletID?.uuidString.lowercased() ?? "",
+                row.currencyCode,
+                "\(row.sortOrder)",
+                row.isArchived ? "1" : "0",
+                Self.dateString(row.deletedAt)
+            ].joined(separator: "|")
+        case .recurringBillPlan(let row):
+            return [
+                entity.rawValue,
+                row.name,
+                row.iconSymbolName,
+                row.amountMinor.map(String.init) ?? "",
+                "\(row.dueDay)",
+                "\(row.frequencyMonths)",
+                row.paymentWalletID?.uuidString.lowercased() ?? "",
+                row.currencyCode,
+                row.isArchived ? "1" : "0",
+                Self.dateString(row.deletedAt)
+            ].joined(separator: "|")
+        case .installmentPlan(let row):
+            return [
+                entity.rawValue,
+                row.name,
+                row.iconSymbolName,
+                "\(row.amountPerCycleMinor)",
+                "\(row.dueDay)",
+                row.totalCycles.map(String.init) ?? "",
+                "\(row.frequencyMonths)",
+                row.paymentWalletID?.uuidString.lowercased() ?? "",
+                row.currencyCode,
+                row.isArchived ? "1" : "0",
+                Self.dateString(row.deletedAt)
+            ].joined(separator: "|")
+        case .dueOccurrence(let row):
+            return [
+                entity.rawValue,
+                row.sourceKindRawValue,
+                row.sourceID.uuidString.lowercased(),
+                row.selectedMonthKey,
+                Self.dateString(row.scheduledDate),
+                row.amountMinorSnapshot.map(String.init) ?? "",
+                row.statusRawValue,
+                Self.dateString(row.paidAt),
+                row.linkedTransactionID?.uuidString.lowercased() ?? "",
+                Self.dateString(row.deletedAt)
+            ].joined(separator: "|")
+        }
+    }
+
+    var previewTitle: String {
+        switch self {
+        case .wallet(let row):
+            return row.name
+        case .creditCardProfile(let row):
+            return row.issuerName.isEmpty ? row.last4 : row.issuerName
+        case .category(let row):
+            return row.name
+        case .transaction(let row):
+            if row.title.isEmpty {
+                return mistiaLocalized(
+                    vi: "Giao dịch không tên",
+                    en: "Unnamed transaction",
+                    ja: "無名取引"
+                )
+            }
+            return row.title
+        case .budgetPlan:
+            return mistiaLocalized(vi: "Ngân sách", en: "Budget plan", ja: "予算")
+        case .savingsGoal(let row):
+            return row.name
+        case .recurringBillPlan(let row):
+            return row.name
+        case .installmentPlan(let row):
+            return row.name
+        case .dueOccurrence:
+            return mistiaLocalized(vi: "Kỳ đến hạn", en: "Due occurrence", ja: "支払予定")
+        }
+    }
+
+    func preparedForCreate(deviceID: UUID) -> MistiaSyncUploadRecord {
+        preparedForMutation(nextVersion: 1, deviceID: deviceID)
+    }
+
+    func preparedForMutation(nextVersion: Int64, deviceID: UUID) -> MistiaSyncUploadRecord {
+        switch self {
+        case .wallet(var row):
+            row.syncVersion = nextVersion
+            row.lastModifiedByDeviceID = deviceID
+            return .wallet(row)
+        case .creditCardProfile(var row):
+            row.syncVersion = nextVersion
+            row.lastModifiedByDeviceID = deviceID
+            return .creditCardProfile(row)
+        case .category(var row):
+            row.syncVersion = nextVersion
+            row.lastModifiedByDeviceID = deviceID
+            return .category(row)
+        case .transaction(var row):
+            row.syncVersion = nextVersion
+            row.lastModifiedByDeviceID = deviceID
+            return .transaction(row)
+        case .budgetPlan(var row):
+            row.syncVersion = nextVersion
+            row.lastModifiedByDeviceID = deviceID
+            return .budgetPlan(row)
+        case .savingsGoal(var row):
+            row.syncVersion = nextVersion
+            row.lastModifiedByDeviceID = deviceID
+            return .savingsGoal(row)
+        case .recurringBillPlan(var row):
+            row.syncVersion = nextVersion
+            row.lastModifiedByDeviceID = deviceID
+            return .recurringBillPlan(row)
+        case .installmentPlan(var row):
+            row.syncVersion = nextVersion
+            row.lastModifiedByDeviceID = deviceID
+            return .installmentPlan(row)
+        case .dueOccurrence(var row):
+            row.syncVersion = nextVersion
+            row.lastModifiedByDeviceID = deviceID
+            return .dueOccurrence(row)
+        }
+    }
+
+    func asJSONString() throws -> String {
+        let encoder = JSONEncoder.mistiaSyncEncoder
+        let data: Data
+        switch self {
+        case .wallet(let row):
+            data = try encoder.encode(row)
+        case .creditCardProfile(let row):
+            data = try encoder.encode(row)
+        case .category(let row):
+            data = try encoder.encode(row)
+        case .transaction(let row):
+            data = try encoder.encode(row)
+        case .budgetPlan(let row):
+            data = try encoder.encode(row)
+        case .savingsGoal(let row):
+            data = try encoder.encode(row)
+        case .recurringBillPlan(let row):
+            data = try encoder.encode(row)
+        case .installmentPlan(let row):
+            data = try encoder.encode(row)
+        case .dueOccurrence(let row):
+            data = try encoder.encode(row)
+        }
+
+        guard let json = String(data: data, encoding: .utf8) else {
+            throw SupabaseServiceError.invalidResponse
+        }
+        return json
+    }
+
+    static func decode(entity: MistiaSyncEntity, jsonString: String) throws -> MistiaSyncUploadRecord {
+        let decoder = JSONDecoder.mistiaSyncDecoder
+        guard let data = jsonString.data(using: .utf8) else {
+            throw SupabaseServiceError.invalidResponse
+        }
+
+        switch entity {
+        case .wallet:
+            return .wallet(try decoder.decode(RemoteLedgerWallet.self, from: data))
+        case .creditCardProfile:
+            return .creditCardProfile(try decoder.decode(RemoteCreditCardProfile.self, from: data))
+        case .category:
+            return .category(try decoder.decode(RemoteTransactionCategory.self, from: data))
+        case .transaction:
+            return .transaction(try decoder.decode(RemoteLedgerTransaction.self, from: data))
+        case .budgetPlan:
+            return .budgetPlan(try decoder.decode(RemoteBudgetPlan.self, from: data))
+        case .savingsGoal:
+            return .savingsGoal(try decoder.decode(RemoteSavingsGoal.self, from: data))
+        case .recurringBillPlan:
+            return .recurringBillPlan(try decoder.decode(RemoteRecurringBillPlan.self, from: data))
+        case .installmentPlan:
+            return .installmentPlan(try decoder.decode(RemoteInstallmentPlan.self, from: data))
+        case .dueOccurrenceRecord:
+            return .dueOccurrence(try decoder.decode(RemoteDueOccurrenceRecord.self, from: data))
+        }
+    }
+
+    private static func dateString(_ date: Date?) -> String {
+        guard let date else { return "" }
+        return ISO8601DateFormatter.mistiaSyncWithFractionalSeconds.string(from: date)
+    }
+}
+
+extension MistiaSyncEntity {
+    var displayTitle: String {
+        switch self {
+        case .wallet:
+            return mistiaLocalized(vi: "Ví", en: "Wallet", ja: "ウォレット")
+        case .creditCardProfile:
+            return mistiaLocalized(vi: "Thẻ tín dụng", en: "Credit card", ja: "クレジットカード")
+        case .category:
+            return mistiaLocalized(vi: "Danh mục", en: "Category", ja: "カテゴリ")
+        case .transaction:
+            return mistiaLocalized(vi: "Giao dịch", en: "Transaction", ja: "取引")
+        case .budgetPlan:
+            return mistiaLocalized(vi: "Ngân sách", en: "Budget", ja: "予算")
+        case .savingsGoal:
+            return mistiaLocalized(vi: "Mục tiêu", en: "Goal", ja: "目標")
+        case .recurringBillPlan:
+            return mistiaLocalized(vi: "Hóa đơn", en: "Bill", ja: "請求書")
+        case .installmentPlan:
+            return mistiaLocalized(vi: "Trả góp", en: "Installment", ja: "分割払い")
+        case .dueOccurrenceRecord:
+            return mistiaLocalized(vi: "Kỳ đến hạn", en: "Due occurrence", ja: "支払予定")
+        }
+    }
+}
+
+extension MistiaSyncConflictKind {
+    var localizedTitle: String {
+        switch self {
+        case .createCreate:
+            return mistiaLocalized(
+                vi: "Trùng tạo dữ liệu",
+                en: "Duplicate create",
+                ja: "重複作成"
+            )
+        case .editEdit:
+            return mistiaLocalized(
+                vi: "Hai thiết bị cùng sửa",
+                en: "Edited on two devices",
+                ja: "2 台で同時編集"
+            )
+        case .editDelete:
+            return mistiaLocalized(
+                vi: "Máy này sửa, cloud đã xóa",
+                en: "Edited here, deleted in cloud",
+                ja: "この端末で編集、クラウドでは削除"
+            )
+        case .deleteEdit:
+            return mistiaLocalized(
+                vi: "Máy này xóa, cloud đã sửa",
+                en: "Deleted here, edited in cloud",
+                ja: "この端末で削除、クラウドでは編集"
+            )
+        }
+    }
+
+    var localActionTitle: String {
+        switch self {
+        case .editDelete:
+            return mistiaLocalized(
+                vi: "Khôi phục bản trên máy",
+                en: "Restore record",
+                ja: "この端末の内容を復元"
+            )
+        default:
+            return mistiaLocalized(
+                vi: "Dùng bản trên máy này",
+                en: "Use this device's version",
+                ja: "この端末の内容を使う"
+            )
+        }
+    }
+
+    var remoteActionTitle: String {
+        switch self {
+        case .deleteEdit:
+            return mistiaLocalized(
+                vi: "Giữ đã xóa",
+                en: "Keep deleted",
+                ja: "削除を維持"
+            )
+        default:
+            return mistiaLocalized(
+                vi: "Dùng bản trên cloud",
+                en: "Use cloud version",
+                ja: "クラウドの内容を使う"
+            )
         }
     }
 }

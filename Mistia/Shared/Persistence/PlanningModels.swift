@@ -12,6 +12,8 @@ final class BudgetPlan {
     var isArchived: Bool
     var createdAt: Date
     var updatedAt: Date
+    var deletedAt: Date?
+    var remoteVersion: Int64
 
     init(
         id: UUID = UUID(),
@@ -22,7 +24,9 @@ final class BudgetPlan {
         currencyCode: String = "JPY",
         isArchived: Bool = false,
         createdAt: Date = .now,
-        updatedAt: Date = .now
+        updatedAt: Date = .now,
+        deletedAt: Date? = nil,
+        remoteVersion: Int64 = 0
     ) {
         self.id = id
         self.category = category
@@ -33,6 +37,8 @@ final class BudgetPlan {
         self.isArchived = isArchived
         self.createdAt = createdAt
         self.updatedAt = updatedAt
+        self.deletedAt = deletedAt
+        self.remoteVersion = remoteVersion
     }
 }
 
@@ -50,6 +56,8 @@ final class SavingsGoal {
     var isArchived: Bool
     var createdAt: Date
     var updatedAt: Date
+    var deletedAt: Date?
+    var remoteVersion: Int64
 
     init(
         id: UUID = UUID(),
@@ -63,7 +71,9 @@ final class SavingsGoal {
         sortOrder: Int = 0,
         isArchived: Bool = false,
         createdAt: Date = .now,
-        updatedAt: Date = .now
+        updatedAt: Date = .now,
+        deletedAt: Date? = nil,
+        remoteVersion: Int64 = 0
     ) {
         self.id = id
         self.name = name
@@ -77,6 +87,8 @@ final class SavingsGoal {
         self.isArchived = isArchived
         self.createdAt = createdAt
         self.updatedAt = updatedAt
+        self.deletedAt = deletedAt
+        self.remoteVersion = remoteVersion
     }
 }
 
@@ -93,6 +105,8 @@ final class RecurringBillPlan {
     var isArchived: Bool
     var createdAt: Date
     var updatedAt: Date
+    var deletedAt: Date?
+    var remoteVersion: Int64
 
     init(
         id: UUID = UUID(),
@@ -105,7 +119,9 @@ final class RecurringBillPlan {
         currencyCode: String = "JPY",
         isArchived: Bool = false,
         createdAt: Date = .now,
-        updatedAt: Date = .now
+        updatedAt: Date = .now,
+        deletedAt: Date? = nil,
+        remoteVersion: Int64 = 0
     ) {
         self.id = id
         self.name = name
@@ -118,6 +134,8 @@ final class RecurringBillPlan {
         self.isArchived = isArchived
         self.createdAt = createdAt
         self.updatedAt = updatedAt
+        self.deletedAt = deletedAt
+        self.remoteVersion = remoteVersion
     }
 }
 
@@ -135,6 +153,8 @@ final class InstallmentPlan {
     var isArchived: Bool
     var createdAt: Date
     var updatedAt: Date
+    var deletedAt: Date?
+    var remoteVersion: Int64
 
     init(
         id: UUID = UUID(),
@@ -148,7 +168,9 @@ final class InstallmentPlan {
         currencyCode: String = "JPY",
         isArchived: Bool = false,
         createdAt: Date = .now,
-        updatedAt: Date = .now
+        updatedAt: Date = .now,
+        deletedAt: Date? = nil,
+        remoteVersion: Int64 = 0
     ) {
         self.id = id
         self.name = name
@@ -162,6 +184,8 @@ final class InstallmentPlan {
         self.isArchived = isArchived
         self.createdAt = createdAt
         self.updatedAt = updatedAt
+        self.deletedAt = deletedAt
+        self.remoteVersion = remoteVersion
     }
 }
 
@@ -178,6 +202,8 @@ final class DueOccurrenceRecord {
     var linkedTransactionID: UUID?
     var createdAt: Date
     var updatedAt: Date
+    var deletedAt: Date?
+    var remoteVersion: Int64
 
     init(
         id: UUID = UUID(),
@@ -190,7 +216,9 @@ final class DueOccurrenceRecord {
         paidAt: Date? = nil,
         linkedTransactionID: UUID? = nil,
         createdAt: Date = .now,
-        updatedAt: Date = .now
+        updatedAt: Date = .now,
+        deletedAt: Date? = nil,
+        remoteVersion: Int64 = 0
     ) {
         self.id = id
         self.sourceKindRawValue = sourceKind.rawValue
@@ -203,6 +231,8 @@ final class DueOccurrenceRecord {
         self.linkedTransactionID = linkedTransactionID
         self.createdAt = createdAt
         self.updatedAt = updatedAt
+        self.deletedAt = deletedAt
+        self.remoteVersion = remoteVersion
     }
 
     var sourceKind: PlanningDueSourceKind {
