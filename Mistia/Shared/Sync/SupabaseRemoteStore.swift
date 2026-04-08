@@ -2,23 +2,23 @@ import Foundation
 
 struct SupabaseRemoteStore {
     private let configurationProvider: () -> MistiaSyncConfiguration?
-    private let decoder = JSONDecoder.mistiaSyncDecoder
-    private let encoder = JSONEncoder.mistiaSyncEncoder
+    private let decoder = JSONDecoder.mistiaRemoteAPIDecoder
+    private let encoder = JSONEncoder.mistiaRemoteAPIEncoder
 
     init(configurationProvider: @escaping () -> MistiaSyncConfiguration? = { MistiaSyncConfiguration.load() }) {
         self.configurationProvider = configurationProvider
     }
 
     func fetchSnapshot(session: SupabaseAuthSession) async throws -> MistiaRemoteSnapshot {
-        async let wallets: [RemoteLedgerWallet] = fetchRows(entity: .wallet, session: session)
-        async let profiles: [RemoteCreditCardProfile] = fetchRows(entity: .creditCardProfile, session: session)
-        async let categories: [RemoteTransactionCategory] = fetchRows(entity: .category, session: session)
-        async let transactions: [RemoteLedgerTransaction] = fetchRows(entity: .transaction, session: session)
-        async let budgetPlans: [RemoteBudgetPlan] = fetchRows(entity: .budgetPlan, session: session)
-        async let savingsGoals: [RemoteSavingsGoal] = fetchRows(entity: .savingsGoal, session: session)
-        async let recurringBillPlans: [RemoteRecurringBillPlan] = fetchRows(entity: .recurringBillPlan, session: session)
-        async let installmentPlans: [RemoteInstallmentPlan] = fetchRows(entity: .installmentPlan, session: session)
-        async let dueOccurrences: [RemoteDueOccurrenceRecord] = fetchRows(entity: .dueOccurrenceRecord, session: session)
+        let wallets: [RemoteLedgerWallet] = try await fetchRows(entity: .wallet, session: session)
+        let profiles: [RemoteCreditCardProfile] = try await fetchRows(entity: .creditCardProfile, session: session)
+        let categories: [RemoteTransactionCategory] = try await fetchRows(entity: .category, session: session)
+        let transactions: [RemoteLedgerTransaction] = try await fetchRows(entity: .transaction, session: session)
+        let budgetPlans: [RemoteBudgetPlan] = try await fetchRows(entity: .budgetPlan, session: session)
+        let savingsGoals: [RemoteSavingsGoal] = try await fetchRows(entity: .savingsGoal, session: session)
+        let recurringBillPlans: [RemoteRecurringBillPlan] = try await fetchRows(entity: .recurringBillPlan, session: session)
+        let installmentPlans: [RemoteInstallmentPlan] = try await fetchRows(entity: .installmentPlan, session: session)
+        let dueOccurrences: [RemoteDueOccurrenceRecord] = try await fetchRows(entity: .dueOccurrenceRecord, session: session)
 
         return try await MistiaRemoteSnapshot(
             wallets: wallets,
@@ -162,7 +162,15 @@ struct SupabaseRemoteStore {
             throw SupabaseServiceError.invalidURL
         }
 
-        return try await performRequest(request: authorizedRequest(url: url, session: session))
+        do {
+            return try await performRequest(request: authorizedRequest(url: url, session: session))
+        } catch let error as DecodingError {
+            throw SupabaseServiceError.serverMessage(
+                "[GET \(entity.tableName)] Failed to decode remote data: \(describeDecodingError(error))"
+            )
+        } catch {
+            throw error
+        }
     }
 
     private func upsertRows<Row: MistiaRemoteRow>(
@@ -209,6 +217,7 @@ struct SupabaseRemoteStore {
     ) -> URLRequest {
         let apiKey = configurationProvider()?.anonKey ?? ""
         var request = URLRequest(url: url)
+        request.setValue("application/json", forHTTPHeaderField: "Accept")
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.setValue(apiKey, forHTTPHeaderField: "apikey")
         request.setValue("Bearer \(session.accessToken)", forHTTPHeaderField: "Authorization")
@@ -218,13 +227,17 @@ struct SupabaseRemoteStore {
     private func performEmptyRequest(
         request: URLRequest
     ) async throws -> HTTPURLResponse {
-        let (_, response) = try await URLSession.shared.data(for: request)
+        let (data, response) = try await URLSession.shared.data(for: request)
         guard let httpResponse = response as? HTTPURLResponse else {
             throw SupabaseServiceError.invalidResponse
         }
 
         guard (200..<300).contains(httpResponse.statusCode) else {
-            throw SupabaseServiceError.serverMessage("The sync request failed with status \(httpResponse.statusCode).")
+            throw syncRequestErrorMessage(
+                request: request,
+                statusCode: httpResponse.statusCode,
+                data: data
+            )
         }
 
         return httpResponse
@@ -239,13 +252,56 @@ struct SupabaseRemoteStore {
         }
 
         guard (200..<300).contains(httpResponse.statusCode) else {
-            if let error = try? decoder.decode(SupabaseServiceErrorResponse.self, from: data) {
-                throw SupabaseServiceError.serverMessage(error.errorDescription ?? error.message ?? "The sync request failed.")
-            }
-            throw SupabaseServiceError.serverMessage("The sync request failed with status \(httpResponse.statusCode).")
+            throw syncRequestErrorMessage(
+                request: request,
+                statusCode: httpResponse.statusCode,
+                data: data
+            )
         }
 
         return try decoder.decode(Response.self, from: data)
+    }
+
+    private func syncRequestErrorMessage(
+        request: URLRequest,
+        statusCode: Int,
+        data: Data
+    ) -> SupabaseServiceError {
+        let operation = request.httpMethod ?? "REQUEST"
+        let tableName = request.url?.lastPathComponent ?? "unknown-table"
+
+        let responseMessage: String? = {
+            if let error = try? decoder.decode(SupabaseServiceErrorResponse.self, from: data) {
+                return error.errorDescription ?? error.message
+            }
+
+            let rawBody = String(data: data, encoding: .utf8)?
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+            return rawBody?.isEmpty == false ? rawBody : nil
+        }()
+
+        let message = responseMessage ?? "The sync request failed."
+        return .serverMessage("[\(operation) \(tableName)] HTTP \(statusCode): \(message)")
+    }
+
+    private func describeDecodingError(_ error: DecodingError) -> String {
+        switch error {
+        case .typeMismatch(_, let context):
+            return "type mismatch at \(codingPathDescription(context.codingPath)): \(context.debugDescription)"
+        case .valueNotFound(_, let context):
+            return "missing value at \(codingPathDescription(context.codingPath)): \(context.debugDescription)"
+        case .keyNotFound(let key, let context):
+            return "missing key '\(key.stringValue)' at \(codingPathDescription(context.codingPath)): \(context.debugDescription)"
+        case .dataCorrupted(let context):
+            return "invalid data at \(codingPathDescription(context.codingPath)): \(context.debugDescription)"
+        @unknown default:
+            return "unknown decoding failure"
+        }
+    }
+
+    private func codingPathDescription(_ codingPath: [CodingKey]) -> String {
+        let path = codingPath.map(\.stringValue).joined(separator: ".")
+        return path.isEmpty ? "root" : path
     }
 }
 

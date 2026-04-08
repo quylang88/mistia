@@ -56,6 +56,7 @@ struct PlanningView: View {
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.calendar) private var calendar
     @Environment(\.modelContext) private var modelContext
+    @Environment(SessionStore.self) private var sessionStore
     @Query(sort: [SortDescriptor(\BudgetPlan.monthAnchor, order: .reverse), SortDescriptor(\BudgetPlan.createdAt, order: .reverse)])
     private var storedBudgets: [BudgetPlan]
     @Query(sort: [SortDescriptor(\SavingsGoal.sortOrder), SortDescriptor(\SavingsGoal.createdAt)])
@@ -184,6 +185,8 @@ struct PlanningView: View {
         MistiaPinnedTopBarScaffold(
             tone: .standard,
             title: mistiaLocalized(vi: "Kế hoạch", en: "Planning", ja: "プラン"),
+            leadingInitials: sessionStore.summary?.initials ?? "MI",
+            leadingAvatarURL: sessionStore.summary?.avatarURL,
             trailingSystemImage: "calendar",
             onTrailingTap: { isMonthPickerPresented = true },
             contentSpacing: 18,

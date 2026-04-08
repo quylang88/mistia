@@ -8,6 +8,7 @@ struct OverviewView: View {
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.calendar) private var calendar
     @Environment(\.modelContext) private var modelContext
+    @Environment(SessionStore.self) private var sessionStore
     @AppStorage(MistiaAppStorageKey.currencyCode) private var currencyCode = "JPY"
 
     @Query(sort: [SortDescriptor(\BudgetPlan.monthAnchor, order: .reverse), SortDescriptor(\BudgetPlan.createdAt, order: .reverse)])
@@ -133,6 +134,8 @@ struct OverviewView: View {
         MistiaPinnedTopBarScaffold(
             tone: .standard,
             title: mistiaLocalized(vi: "Tổng quan", en: "Overview", ja: "ホーム"),
+            leadingInitials: sessionStore.summary?.initials ?? "MI",
+            leadingAvatarURL: sessionStore.summary?.avatarURL,
             contentSpacing: 18
         ) {
             OverviewHeroCard(

@@ -70,6 +70,13 @@ struct ManagementAccountView: View {
             },
             contentSpacing: 18
         ) {
+            if !sessionStore.isSignedIn {
+                if let banner = sessionStore.authBanner {
+                    ManagementAuthBannerCard(banner: banner)
+                        .padding(.bottom, 6)
+                }
+            }
+
             if !sessionStore.isConfigured {
                 configurationCard
             } else if let summary = sessionStore.summary {
@@ -80,20 +87,30 @@ struct ManagementAccountView: View {
         }
         .onChange(of: sessionStore.authPendingEmail) { _, newValue in
             guard let newValue, !newValue.isEmpty else { return }
-            email = newValue
+            DispatchQueue.main.async {
+                email = newValue
+            }
         }
         .onChange(of: displayName) { _, _ in
-            sessionStore.clearAuthFieldError(.displayName)
+            DispatchQueue.main.async {
+                sessionStore.clearAuthFieldError(.displayName)
+            }
         }
         .onChange(of: email) { _, _ in
-            sessionStore.clearAuthFieldError(.email)
+            DispatchQueue.main.async {
+                sessionStore.clearAuthFieldError(.email)
+            }
         }
         .onChange(of: password) { _, _ in
-            sessionStore.clearAuthFieldError(.password)
-            sessionStore.clearAuthFieldError(.confirmPassword)
+            DispatchQueue.main.async {
+                sessionStore.clearAuthFieldError(.password)
+                sessionStore.clearAuthFieldError(.confirmPassword)
+            }
         }
         .onChange(of: confirmPassword) { _, _ in
-            sessionStore.clearAuthFieldError(.confirmPassword)
+            DispatchQueue.main.async {
+                sessionStore.clearAuthFieldError(.confirmPassword)
+            }
         }
     }
 
@@ -232,10 +249,6 @@ struct ManagementAccountView: View {
                     ))
                 } else {
                     VStack(alignment: .leading, spacing: 16) {
-                        if let banner = sessionStore.authBanner {
-                            ManagementAuthBannerCard(banner: banner)
-                        }
-
                         authPhaseContent
                     }
                     .transition(.asymmetric(
@@ -259,12 +272,26 @@ struct ManagementAccountView: View {
     
     private var introContent: some View {
         VStack(spacing: 16) {
-            Image("MistiaIcon") // Assuming there's a logo, replace with actual logo if needed
-                .resizable()
-                .scaledToFit()
-                .frame(width: 64, height: 64)
-                .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
-                .padding(.bottom, 8)
+            ZStack {
+                RoundedRectangle(cornerRadius: 18, style: .continuous)
+                    .fill(
+                        LinearGradient(
+                            colors: [
+                                accent.opacity(0.95),
+                                accent.opacity(0.65)
+                            ],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        )
+                    )
+
+                Image(systemName: "cloud.fill")
+                    .font(.system(size: 28, weight: .bold))
+                    .foregroundStyle(.white)
+            }
+            .frame(width: 64, height: 64)
+            .shadow(color: accent.opacity(0.18), radius: 16, y: 8)
+            .padding(.bottom, 8)
             
             Text(mistiaLocalized(vi: "Chào mừng đến với Mistia", en: "Welcome to Mistia", ja: "Mistiaへようこそ"))
                 .font(.system(size: 24, weight: .bold, design: .rounded))

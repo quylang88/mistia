@@ -80,7 +80,18 @@ final class SyncCoordinator {
     }
 
     func performInitialSync(session: SupabaseAuthSession) async throws -> MistiaSyncResult {
+        let localSnapshot = try MistiaSyncLocalStore.exportSnapshot(
+            for: session.user.id,
+            from: modelContainer
+        )
         let remoteSnapshot = try await remoteStore.fetchSnapshot(session: session)
+
+        if localSnapshot.activeRowCount > 0 {
+            try await remoteStore.uploadSeed(snapshot: localSnapshot, session: session)
+            lastSnapshotFingerprint = localSnapshot.fingerprint
+            return .seeded(localSnapshot.activeRowCount)
+        }
+
         if remoteSnapshot.hasRemoteData {
             outbox.clear()
             try MistiaSyncLocalStore.replaceLocalData(with: remoteSnapshot, in: modelContainer)
@@ -88,19 +99,8 @@ final class SyncCoordinator {
             return .pulled(remoteSnapshot.activeRowCount)
         }
 
-        let localSnapshot = try MistiaSyncLocalStore.exportSnapshot(
-            for: session.user.id,
-            from: modelContainer
-        )
-
-        guard localSnapshot.activeRowCount > 0 else {
-            lastSnapshotFingerprint = remoteSnapshot.fingerprint
-            return .idle
-        }
-
-        try await remoteStore.uploadSeed(snapshot: localSnapshot, session: session)
-        lastSnapshotFingerprint = localSnapshot.fingerprint
-        return .seeded(localSnapshot.activeRowCount)
+        lastSnapshotFingerprint = remoteSnapshot.fingerprint
+        return .idle
     }
 
     func sync(session: SupabaseAuthSession) async throws -> MistiaSyncResult {

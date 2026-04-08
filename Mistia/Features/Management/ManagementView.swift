@@ -78,7 +78,8 @@ struct ManagementView: View {
                 tone: .muted,
                 title: mistiaLocalized(vi: "Quản lý", en: "Manage", ja: "管理"),
                 embedsInNavigationStack: false,
-                showsLeadingAvatar: false,
+                leadingInitials: sessionStore.summary?.initials ?? "MI",
+                leadingAvatarURL: sessionStore.summary?.avatarURL,
                 trailingSystemImage: "gearshape",
                 onTrailingTap: { destination = .settings },
                 contentSpacing: 20

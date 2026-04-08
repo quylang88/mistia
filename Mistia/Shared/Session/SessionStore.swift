@@ -77,7 +77,7 @@ final class SessionStore {
     @ObservationIgnored private var didBootstrap = false
     @ObservationIgnored private var liveSyncTask: Task<Void, Never>?
     @ObservationIgnored private var isSyncInFlight = false
-    @ObservationIgnored private var needsAnotherSync = false
+    @ObservationIgnored private var requiresInitialSync = false
 
     init(modelContainer: ModelContainer) {
         authService = SupabaseAuthService()
@@ -153,6 +153,9 @@ final class SessionStore {
             return
         }
 
+        // Nếu đã có session do thao tác đăng nhập thủ công chạy trước, bỏ qua bootstrap
+        guard summary == nil else { return }
+
         syncStatusTitle = mistiaLocalized(
             vi: "Đang khôi phục phiên",
             en: "Restoring session",
@@ -167,17 +170,32 @@ final class SessionStore {
 
         do {
             guard let restoredSession = try await authService.restoreSession() else {
-                applySignedOutState()
+                if summary == nil {
+                    applySignedOutState()
+                }
                 return
             }
 
-            try await finishAuthentication(
-                restoredSession,
-                restoringExistingSession: true
-            )
+            if summary == nil {
+                try await finishAuthentication(
+                    restoredSession,
+                    restoringExistingSession: true
+                )
+            }
         } catch {
-            lastErrorMessage = error.localizedDescription
-            applySignedOutState()
+            lastErrorMessage = friendlyErrorMessage(for: error)
+            if summary == nil {
+                applySignedOutState(preservingBanner: true)
+                authBanner = SessionAuthBanner(
+                    title: mistiaLocalized(
+                        vi: "Chưa thể khôi phục tài khoản",
+                        en: "Couldn't restore account",
+                        ja: "アカウントを復元できませんでした"
+                    ),
+                    message: friendlyErrorMessage(for: error),
+                    style: .error
+                )
+            }
         }
     }
 
@@ -336,7 +354,7 @@ final class SessionStore {
         do {
             try await authService.signOut(session: activeSession)
         } catch {
-            lastErrorMessage = error.localizedDescription
+            lastErrorMessage = friendlyErrorMessage(for: error)
         }
 
         isWorking = false
@@ -344,9 +362,7 @@ final class SessionStore {
     }
 
     func syncNow() async {
-        guard currentSession != nil else { return }
-        needsAnotherSync = true
-        guard !isSyncInFlight else { return }
+        guard currentSession != nil, !isSyncInFlight else { return }
         await drainSyncQueue()
     }
 
@@ -365,7 +381,6 @@ final class SessionStore {
                 modifiedAt: modifiedAt
             )
         )
-        scheduleSync()
     }
 
     func recordDelete(
@@ -383,14 +398,12 @@ final class SessionStore {
                 modifiedAt: modifiedAt
             )
         )
-        scheduleSync()
     }
 
     func recordMutations(_ mutations: [MistiaSyncMutation]) {
         guard currentSession != nil else { return }
 
         syncCoordinator.queue(mutations)
-        scheduleSync()
     }
 
     private func handleSignInFailure(_ error: Error, email: String) {
@@ -529,11 +542,7 @@ final class SessionStore {
                 en: "Google sign-in couldn't finish",
                 ja: "Google ログインを完了できませんでした"
             ),
-            message: mistiaLocalized(
-                vi: "Flow Google vừa bị ngắt giữa chừng. Thử lại một lần nữa nhé.",
-                en: "The Google flow was interrupted before it could finish. Please try again.",
-                ja: "Google フローが完了前に中断されました。もう一度お試しください。"
-            ),
+            message: friendlyErrorMessage(for: error),
             style: .error
         )
     }
@@ -612,41 +621,61 @@ final class SessionStore {
         _ session: SupabaseAuthSession,
         restoringExistingSession: Bool
     ) async throws {
-        let validSession = try await authService.refreshSessionIfNeeded(session)
-        currentSession = validSession
-        summary = SessionSummary(user: validSession.user)
-        lastErrorMessage = nil
-        authBanner = nil
-        authFieldErrors = [:]
-        authPendingEmail = nil
-        authPhase = .signIn
-        activeAuthAction = nil
+        do {
+            let validSession = try await authService.refreshSessionIfNeeded(session)
 
-        syncStatusTitle = mistiaLocalized(
-            vi: restoringExistingSession ? "Đang nạp dữ liệu cloud" : "Đang đồng bộ lần đầu",
-            en: restoringExistingSession ? "Loading cloud data" : "Running initial sync",
-            ja: restoringExistingSession ? "クラウドデータを読み込み中" : "初回同期を実行中"
-        )
-        syncStatusDetail = mistiaLocalized(
-            vi: "Mistia đang chuẩn bị dữ liệu local-first cho tài khoản này.",
-            en: "Mistia is preparing the local-first cache for this account.",
-            ja: "このアカウント向けにローカルファーストのキャッシュを準備しています。"
-        )
-        syncStatusSystemImage = "arrow.triangle.2.circlepath"
+            currentSession = validSession
+            summary = SessionSummary(user: validSession.user)
+            lastErrorMessage = nil
+            authBanner = nil
+            authFieldErrors = [:]
+            authPendingEmail = nil
+            authPhase = .signIn
+            activeAuthAction = nil
+            requiresInitialSync = true
 
-        let result = try await syncCoordinator.performInitialSync(session: validSession)
-        lastSyncAt = .now
-        syncStatusTitle = mistiaLocalized(
-            vi: "Đồng bộ đang hoạt động",
-            en: "Sync is active",
-            ja: "同期が有効です"
-        )
-        syncStatusDetail = result.statusMessage
-        syncStatusSystemImage = "checkmark.icloud"
-        startLiveSyncLoop()
+            syncStatusTitle = mistiaLocalized(
+                vi: "Đã đăng nhập",
+                en: "Signed in",
+                ja: "ログイン済み"
+            )
+            syncStatusDetail = mistiaLocalized(
+                vi: restoringExistingSession
+                    ? "Phiên đã được khôi phục. Nhấn Sync ngay khi bạn muốn đồng bộ với cloud."
+                    : "Đăng nhập thành công. Nhấn Sync ngay để bắt đầu đồng bộ dữ liệu.",
+                en: restoringExistingSession
+                    ? "Your session has been restored. Tap Sync now when you want to sync with the cloud."
+                    : "Sign-in succeeded. Tap Sync now to start syncing your data.",
+                ja: restoringExistingSession
+                    ? "セッションを復元しました。クラウドと同期するには「今すぐ同期」を押してください。"
+                    : "ログインに成功しました。データ同期を始めるには「今すぐ同期」を押してください。"
+            )
+            syncStatusSystemImage = "checkmark.circle"
+        } catch {
+            requiresInitialSync = false
+            lastErrorMessage = friendlyErrorMessage(for: error)
+            summary = nil
+            currentSession = nil
+            applySignedOutState(preservingBanner: true)
+
+            authBanner = SessionAuthBanner(
+                title: mistiaLocalized(
+                    vi: "Không thể hoàn tất đăng nhập",
+                    en: "Couldn't finish sign-in",
+                    ja: "ログインを完了できませんでした"
+                ),
+                message: friendlyErrorMessage(for: error),
+                style: .error
+            )
+
+            throw error
+        }
     }
 
     private func applyConfigurationMissingState() {
+        summary = nil
+        currentSession = nil
+        requiresInitialSync = false
         authPhase = .signIn
         authBanner = nil
         authPendingEmail = nil
@@ -665,9 +694,14 @@ final class SessionStore {
         syncStatusSystemImage = "wrench.and.screwdriver"
     }
 
-    private func applySignedOutState() {
+    private func applySignedOutState(preservingBanner: Bool = false) {
+        summary = nil
+        currentSession = nil
+        requiresInitialSync = false
         authPhase = .signIn
-        authBanner = nil
+        if !preservingBanner {
+            authBanner = nil
+        }
         authPendingEmail = nil
         authFieldErrors = [:]
         activeAuthAction = nil
@@ -699,14 +733,10 @@ final class SessionStore {
     }
 
     private func applySyncErrorState(_ error: Error) {
-        lastErrorMessage = error.localizedDescription
-        syncStatusTitle = mistiaLocalized(
-            vi: "Đồng bộ đang chờ mạng",
-            en: "Sync is waiting for the network",
-            ja: "同期はネットワーク待ちです"
-        )
-        syncStatusDetail = error.localizedDescription
-        syncStatusSystemImage = "wifi.exclamationmark"
+        lastErrorMessage = friendlyErrorMessage(for: error)
+        syncStatusTitle = syncErrorTitle(for: error)
+        syncStatusDetail = friendlyErrorMessage(for: error)
+        syncStatusSystemImage = syncErrorSystemImage(for: error)
     }
 
     private func isInfrastructureAuthError(_ error: Error) -> Bool {
@@ -809,6 +839,168 @@ final class SessionStore {
         )
     }
 
+    private func friendlyErrorMessage(for error: Error) -> String {
+        if let serviceError = error as? SupabaseServiceError {
+            switch serviceError {
+            case .serverMessage(let message):
+                return message
+            case .configurationMissing, .invalidURL, .invalidResponse, .missingSession, .missingRefreshToken, .oauthCancelled, .googleClientIDMissing, .googleServerClientIDMissing, .googleCallbackSchemeMissing, .googlePresentationContextMissing, .googleTokensMissing:
+                break
+            }
+        }
+
+        if let decodingError = error as? DecodingError {
+            return localizedDecodingErrorMessage(decodingError)
+        }
+
+        let message = error.localizedDescription.lowercased()
+
+        if message.contains("404") || message.contains("not found") {
+            return mistiaLocalized(
+                vi: "Máy chủ chưa sẵn sàng (Lỗi 404). Có thể bạn chưa chạy database migrations trên Supabase.",
+                en: "Server not ready (Error 404). You might need to run database migrations on Supabase.",
+                ja: "サーバーの準備ができていません (Error 404)。Supabase でデータベースのマイグレーションを実行する必要があるかもしれません。"
+            )
+        }
+
+        if message.contains("403") || message.contains("forbidden") || message.contains("policy") {
+            return mistiaLocalized(
+                vi: "Bị từ chối truy cập (Lỗi 403). Kiểm tra lại quyền hạn (RLS) trên database Supabase nhé.",
+                en: "Access denied (Error 403). Please check your database Row Level Security (RLS) policies.",
+                ja: "アクセスが拒否されました (Error 403)。Supabase のデータベース権限 (RLS) を確認してください。"
+            )
+        }
+
+        if message.contains("401") || message.contains("unauthorized") || message.contains("jwt") {
+            return mistiaLocalized(
+                vi: "Phiên đăng nhập hết hạn hoặc không hợp lệ. Thử đăng nhập lại nhé.",
+                en: "Session expired or invalid. Please try signing in again.",
+                ja: "セッションの期限が切れたか無効です。もう一度ログインをお試しください。"
+            )
+        }
+
+        if message.contains("400") || message.contains("bad request") {
+            return mistiaLocalized(
+                vi: "Yêu cầu không hợp lệ (Lỗi 400). Kiểm tra lại cấu hình Client ID và URL Scheme của Google nhé.",
+                en: "Bad request (Error 400). Please check your Google Client ID and URL Scheme configuration.",
+                ja: "不正なリクエストです (Error 400)。Google の Client ID と URL スキームの設定を確認してください。"
+            )
+        }
+
+        if message.contains("connection") || message.contains("offline") {
+            return mistiaLocalized(
+                vi: "Không có kết nối mạng. Kiểm tra wifi hoặc 4G rồi thử lại nhé.",
+                en: "No internet connection. Check your Wi-Fi or cellular data and try again.",
+                ja: "ネットワーク接続がありません. Wi-Fi またはデータ通信を確認してもう一度お試しください。"
+            )
+        }
+
+        if message.contains("data couldn") || message.contains("missing") || message.contains("no data") {
+            return mistiaLocalized(
+                vi: "Không đọc được dữ liệu sync trả về. Khả năng response từ Supabase đang thiếu dữ liệu hoặc sai định dạng.",
+                en: "The sync response couldn't be read. Supabase may be returning missing or malformed data.",
+                ja: "同期レスポンスを読み取れませんでした。Supabase が不足または不正な形式のデータを返している可能性があります。"
+            )
+        }
+
+        return error.localizedDescription
+    }
+
+    private func localizedDecodingErrorMessage(_ error: DecodingError) -> String {
+        switch error {
+        case .keyNotFound(let key, _):
+            return mistiaLocalized(
+                vi: "Supabase đang trả về dữ liệu thiếu trường `\(key.stringValue)`. Có thể schema cloud chưa khớp với app hiện tại.",
+                en: "Supabase is returning data without the `\(key.stringValue)` field. The cloud schema may be out of sync with this app build.",
+                ja: "Supabase が `\(key.stringValue)` フィールドのないデータを返しています。クラウドスキーマがこのアプリのビルドと一致していない可能性があります。"
+            )
+        case .typeMismatch(_, _), .valueNotFound(_, _), .dataCorrupted(_):
+            return mistiaLocalized(
+                vi: "Dữ liệu đồng bộ từ Supabase không đúng định dạng app đang cần. Kiểm tra lại schema bảng hoặc dữ liệu cũ trên cloud.",
+                en: "The sync data from Supabase doesn't match the format this app expects. Check the table schema or older cloud data.",
+                ja: "Supabase からの同期データが、このアプリが想定する形式と一致しません。テーブルスキーマまたは既存のクラウドデータを確認してください。"
+            )
+        @unknown default:
+            return mistiaLocalized(
+                vi: "Không đọc được dữ liệu đồng bộ từ Supabase. Kiểm tra lại schema và dữ liệu cloud nhé.",
+                en: "The sync data from Supabase couldn't be read. Please check the cloud schema and data.",
+                ja: "Supabase からの同期データを読み取れませんでした。クラウドのスキーマとデータを確認してください。"
+            )
+        }
+    }
+
+    private func syncErrorTitle(for error: Error) -> String {
+        if error is URLError {
+            return mistiaLocalized(
+                vi: "Đồng bộ đang chờ mạng",
+                en: "Sync is waiting for the network",
+                ja: "同期はネットワーク待ちです"
+            )
+        }
+
+        let message = errorMessage(for: error)
+
+        if message.contains("failed to decode remote data") {
+            return mistiaLocalized(
+                vi: "Dữ liệu cloud hiện có không khớp format app đang cần.",
+                en: "The existing cloud data doesn't match the format this app expects.",
+                ja: "既存のクラウドデータが、このアプリの想定フォーマットと一致していません。"
+            )
+        }
+
+        if message.contains("403") || message.contains("forbidden") || message.contains("policy") {
+            return mistiaLocalized(
+                vi: "Đồng bộ bị từ chối",
+                en: "Sync access denied",
+                ja: "同期アクセスが拒否されました"
+            )
+        }
+
+        if message.contains("404") || message.contains("not found") || message.contains("relation") {
+            return mistiaLocalized(
+                vi: "Thiếu bảng đồng bộ",
+                en: "Sync tables missing",
+                ja: "同期テーブルが見つかりません"
+            )
+        }
+
+        if message.contains("401") || message.contains("unauthorized") || message.contains("jwt") {
+            return mistiaLocalized(
+                vi: "Phiên sync không hợp lệ",
+                en: "Sync session invalid",
+                ja: "同期セッションが無効です"
+            )
+        }
+
+        return mistiaLocalized(
+            vi: "Đồng bộ cần kiểm tra cấu hình",
+            en: "Sync needs configuration checks",
+            ja: "同期設定の確認が必要です"
+        )
+    }
+
+    private func syncErrorSystemImage(for error: Error) -> String {
+        if error is URLError {
+            return "wifi.exclamationmark"
+        }
+
+        let message = errorMessage(for: error)
+
+        if message.contains("403") || message.contains("forbidden") || message.contains("policy") {
+            return "lock.slash"
+        }
+
+        if message.contains("404") || message.contains("not found") || message.contains("relation") {
+            return "externaldrive.badge.exclamationmark"
+        }
+
+        if message.contains("401") || message.contains("unauthorized") || message.contains("jwt") {
+            return "key.slash"
+        }
+
+        return "exclamationmark.icloud"
+    }
+
     private func errorMessage(for error: Error) -> String {
         error.localizedDescription.lowercased()
     }
@@ -829,37 +1021,47 @@ final class SessionStore {
         liveSyncTask = nil
     }
 
-    private func scheduleSync() {
-        Task { [weak self] in
-            await self?.syncNow()
-        }
-    }
-
     private func drainSyncQueue() async {
         isSyncInFlight = true
-        while needsAnotherSync {
-            needsAnotherSync = false
-            applySyncingState()
+        defer { isSyncInFlight = false }
 
-            do {
-                guard let activeSession = currentSession else { break }
-                let validSession = try await authService.refreshSessionIfNeeded(activeSession)
-                currentSession = validSession
-                let result = try await syncCoordinator.sync(session: validSession)
-                lastSyncAt = .now
-                lastErrorMessage = nil
+        do {
+            guard let activeSession = currentSession else { return }
+            let validSession = try await authService.refreshSessionIfNeeded(activeSession)
+            currentSession = validSession
+            let result: MistiaSyncResult
+
+            if requiresInitialSync {
                 syncStatusTitle = mistiaLocalized(
-                    vi: "Đồng bộ đang hoạt động",
-                    en: "Sync is active",
-                    ja: "同期が有効です"
+                    vi: "Đang đồng bộ lần đầu",
+                    en: "Running initial sync",
+                    ja: "初回同期を実行中"
                 )
-                syncStatusDetail = result.statusMessage
-                syncStatusSystemImage = "checkmark.icloud"
-            } catch {
-                applySyncErrorState(error)
+                syncStatusDetail = mistiaLocalized(
+                    vi: "Mistia sẽ lấy dữ liệu local hiện có và đồng bộ với Supabase khi bạn chủ động bắt đầu.",
+                    en: "Mistia will take your existing local data and sync it with Supabase when you start it.",
+                    ja: "Mistia は現在のローカルデータを使って、開始時に Supabase と同期します。"
+                )
+                syncStatusSystemImage = "arrow.triangle.2.circlepath"
+                result = try await syncCoordinator.performInitialSync(session: validSession)
+                requiresInitialSync = false
+            } else {
+                applySyncingState()
+                result = try await syncCoordinator.sync(session: validSession)
             }
+
+            lastSyncAt = .now
+            lastErrorMessage = nil
+            syncStatusTitle = mistiaLocalized(
+                vi: "Đồng bộ đã hoàn tất",
+                en: "Sync completed",
+                ja: "同期が完了しました"
+            )
+            syncStatusDetail = result.statusMessage
+            syncStatusSystemImage = "checkmark.icloud"
+        } catch {
+            applySyncErrorState(error)
         }
-        isSyncInFlight = false
     }
 }
 

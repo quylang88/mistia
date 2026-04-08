@@ -29,6 +29,25 @@ struct RemoteLedgerWallet: MistiaRemoteRow {
     let createdAt: Date
     let updatedAt: Date
     let deletedAt: Date?
+
+    enum CodingKeys: String, CodingKey {
+        case userID = "user_id"
+        case id
+        case name
+        case kindRawValue = "kind_raw_value"
+        case iconSymbolName = "icon_symbol_name"
+        case iconColorHex = "icon_color_hex"
+        case currencyCode = "currency_code"
+        case openingBalanceMinor = "opening_balance_minor"
+        case institutionDisplayName = "institution_display_name"
+        case institutionPresetKey = "institution_preset_key"
+        case sortOrder = "sort_order"
+        case isArchived = "is_archived"
+        case archivedAt = "archived_at"
+        case createdAt = "created_at"
+        case updatedAt = "updated_at"
+        case deletedAt = "deleted_at"
+    }
 }
 
 struct RemoteCreditCardProfile: MistiaRemoteRow {
@@ -48,6 +67,23 @@ struct RemoteCreditCardProfile: MistiaRemoteRow {
     let createdAt: Date
     let updatedAt: Date
     let deletedAt: Date?
+
+    enum CodingKeys: String, CodingKey {
+        case userID = "user_id"
+        case id
+        case issuerName = "issuer_name"
+        case networkRawValue = "network_raw_value"
+        case last4
+        case creditLimitMinor = "credit_limit_minor"
+        case statementClosingDay = "statement_closing_day"
+        case paymentDueDay = "payment_due_day"
+        case notes
+        case walletID = "wallet_id"
+        case paymentSourceWalletID = "payment_source_wallet_id"
+        case createdAt = "created_at"
+        case updatedAt = "updated_at"
+        case deletedAt = "deleted_at"
+    }
 }
 
 struct RemoteTransactionCategory: MistiaRemoteRow {
@@ -67,6 +103,23 @@ struct RemoteTransactionCategory: MistiaRemoteRow {
     let createdAt: Date
     let updatedAt: Date
     let deletedAt: Date?
+
+    enum CodingKeys: String, CodingKey {
+        case userID = "user_id"
+        case id
+        case name
+        case kindRawValue = "kind_raw_value"
+        case iconSymbolName = "icon_symbol_name"
+        case iconColorHex = "icon_color_hex"
+        case systemKey = "system_key"
+        case isSystem = "is_system"
+        case sortOrder = "sort_order"
+        case isArchived = "is_archived"
+        case archivedAt = "archived_at"
+        case createdAt = "created_at"
+        case updatedAt = "updated_at"
+        case deletedAt = "deleted_at"
+    }
 }
 
 struct RemoteLedgerTransaction: MistiaRemoteRow {
@@ -92,6 +145,29 @@ struct RemoteLedgerTransaction: MistiaRemoteRow {
     let deletedAt: Date?
     let isArchived: Bool
     let archivedAt: Date?
+
+    enum CodingKeys: String, CodingKey {
+        case userID = "user_id"
+        case id
+        case primaryKindRawValue = "primary_kind_raw_value"
+        case transferSubtypeRawValue = "transfer_subtype_raw_value"
+        case debtIntentRawValue = "debt_intent_raw_value"
+        case entryStatusRawValue = "entry_status_raw_value"
+        case title
+        case note
+        case amountMinor = "amount_minor"
+        case occurredAt = "occurred_at"
+        case createdAt = "created_at"
+        case updatedAt = "updated_at"
+        case counterpartyName = "counterparty_name"
+        case normalizedCounterpartyKey = "normalized_counterparty_key"
+        case sourceWalletID = "source_wallet_id"
+        case destinationWalletID = "destination_wallet_id"
+        case categoryID = "category_id"
+        case deletedAt = "deleted_at"
+        case isArchived = "is_archived"
+        case archivedAt = "archived_at"
+    }
 }
 
 struct RemoteBudgetPlan: MistiaRemoteRow {
@@ -108,6 +184,20 @@ struct RemoteBudgetPlan: MistiaRemoteRow {
     let createdAt: Date
     let updatedAt: Date
     let deletedAt: Date?
+
+    enum CodingKeys: String, CodingKey {
+        case userID = "user_id"
+        case id
+        case categoryID = "category_id"
+        case monthAnchor = "month_anchor"
+        case limitMinor = "limit_minor"
+        case rolloverEnabled = "rollover_enabled"
+        case currencyCode = "currency_code"
+        case isArchived = "is_archived"
+        case createdAt = "created_at"
+        case updatedAt = "updated_at"
+        case deletedAt = "deleted_at"
+    }
 }
 
 struct RemoteSavingsGoal: MistiaRemoteRow {
@@ -127,6 +217,23 @@ struct RemoteSavingsGoal: MistiaRemoteRow {
     let createdAt: Date
     let updatedAt: Date
     let deletedAt: Date?
+
+    enum CodingKeys: String, CodingKey {
+        case userID = "user_id"
+        case id
+        case name
+        case iconSymbolName = "icon_symbol_name"
+        case targetMinor = "target_minor"
+        case currentSavedMinor = "current_saved_minor"
+        case targetDate = "target_date"
+        case linkedWalletID = "linked_wallet_id"
+        case currencyCode = "currency_code"
+        case sortOrder = "sort_order"
+        case isArchived = "is_archived"
+        case createdAt = "created_at"
+        case updatedAt = "updated_at"
+        case deletedAt = "deleted_at"
+    }
 }
 
 struct RemoteRecurringBillPlan: MistiaRemoteRow {
@@ -145,6 +252,22 @@ struct RemoteRecurringBillPlan: MistiaRemoteRow {
     let createdAt: Date
     let updatedAt: Date
     let deletedAt: Date?
+
+    enum CodingKeys: String, CodingKey {
+        case userID = "user_id"
+        case id
+        case name
+        case iconSymbolName = "icon_symbol_name"
+        case amountMinor = "amount_minor"
+        case dueDay = "due_day"
+        case frequencyMonths = "frequency_months"
+        case paymentWalletID = "payment_wallet_id"
+        case currencyCode = "currency_code"
+        case isArchived = "is_archived"
+        case createdAt = "created_at"
+        case updatedAt = "updated_at"
+        case deletedAt = "deleted_at"
+    }
 }
 
 struct RemoteInstallmentPlan: MistiaRemoteRow {
@@ -164,6 +287,23 @@ struct RemoteInstallmentPlan: MistiaRemoteRow {
     let createdAt: Date
     let updatedAt: Date
     let deletedAt: Date?
+
+    enum CodingKeys: String, CodingKey {
+        case userID = "user_id"
+        case id
+        case name
+        case iconSymbolName = "icon_symbol_name"
+        case amountPerCycleMinor = "amount_per_cycle_minor"
+        case dueDay = "due_day"
+        case totalCycles = "total_cycles"
+        case frequencyMonths = "frequency_months"
+        case paymentWalletID = "payment_wallet_id"
+        case currencyCode = "currency_code"
+        case isArchived = "is_archived"
+        case createdAt = "created_at"
+        case updatedAt = "updated_at"
+        case deletedAt = "deleted_at"
+    }
 }
 
 struct RemoteDueOccurrenceRecord: MistiaRemoteRow {
@@ -182,12 +322,34 @@ struct RemoteDueOccurrenceRecord: MistiaRemoteRow {
     let createdAt: Date
     let updatedAt: Date
     let deletedAt: Date?
+
+    enum CodingKeys: String, CodingKey {
+        case userID = "user_id"
+        case id
+        case sourceKindRawValue = "source_kind_raw_value"
+        case sourceID = "source_id"
+        case selectedMonthKey = "selected_month_key"
+        case scheduledDate = "scheduled_date"
+        case amountMinorSnapshot = "amount_minor_snapshot"
+        case statusRawValue = "status_raw_value"
+        case paidAt = "paid_at"
+        case linkedTransactionID = "linked_transaction_id"
+        case createdAt = "created_at"
+        case updatedAt = "updated_at"
+        case deletedAt = "deleted_at"
+    }
 }
 
 struct RemoteRowVersion: Codable {
     let id: UUID
     let updatedAt: Date
     let deletedAt: Date?
+
+    enum CodingKeys: String, CodingKey {
+        case id
+        case updatedAt = "updated_at"
+        case deletedAt = "deleted_at"
+    }
 }
 
 struct MistiaRemoteSnapshot: Codable {
@@ -374,12 +536,39 @@ extension JSONDecoder {
         }
         return decoder
     }
+
+    static var mistiaRemoteAPIDecoder: JSONDecoder {
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .custom { decoder in
+            let container = try decoder.singleValueContainer()
+            let value = try container.decode(String.self)
+            if let date = ISO8601DateFormatter.mistiaSyncWithFractionalSeconds.date(from: value)
+                ?? ISO8601DateFormatter.mistiaSyncWithoutFractionalSeconds.date(from: value) {
+                return date
+            }
+            throw DecodingError.dataCorruptedError(
+                in: container,
+                debugDescription: "Invalid ISO8601 date: \(value)"
+            )
+        }
+        return decoder
+    }
 }
 
 extension JSONEncoder {
     static var mistiaSyncEncoder: JSONEncoder {
         let encoder = JSONEncoder()
         encoder.keyEncodingStrategy = .convertToSnakeCase
+        encoder.outputFormatting = [.sortedKeys]
+        encoder.dateEncodingStrategy = .custom { date, encoder in
+            var container = encoder.singleValueContainer()
+            try container.encode(ISO8601DateFormatter.mistiaSyncWithFractionalSeconds.string(from: date))
+        }
+        return encoder
+    }
+
+    static var mistiaRemoteAPIEncoder: JSONEncoder {
+        let encoder = JSONEncoder()
         encoder.outputFormatting = [.sortedKeys]
         encoder.dateEncodingStrategy = .custom { date, encoder in
             var container = encoder.singleValueContainer()

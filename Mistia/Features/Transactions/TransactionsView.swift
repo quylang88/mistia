@@ -43,6 +43,7 @@ private enum TransactionSegment: String, CaseIterable, Hashable {
 struct TransactionsView: View {
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.modelContext) private var modelContext
+    @Environment(SessionStore.self) private var sessionStore
 
     @Query(
         filter: #Predicate<LedgerTransaction> { !$0.isArchived },
@@ -150,6 +151,8 @@ struct TransactionsView: View {
         MistiaPinnedTopBarScaffold(
             tone: .standard,
             title: mistiaLocalized(vi: "Giao dịch", en: "Transactions", ja: "取引"),
+            leadingInitials: sessionStore.summary?.initials ?? "MI",
+            leadingAvatarURL: sessionStore.summary?.avatarURL,
             trailingSystemImage: nil,
             contentSpacing: 18,
             contentBottomPadding: 150,

@@ -1,3 +1,4 @@
+import CryptoKit
 import Foundation
 import GoogleSignIn
 import UIKit
@@ -214,8 +215,13 @@ struct SupabaseAuthService {
     func signInWithGoogle() async throws -> SupabaseAuthSession {
         let configuration = try configuration()
         let googleConfiguration = try googleConfiguration()
+        
+        let rawNonce = generateRandomNonce()
+        let hashedNonce = sha256(rawNonce)
+        
         let signInResult = try await performNativeGoogleSignIn(
-            googleConfiguration: googleConfiguration
+            googleConfiguration: googleConfiguration,
+            nonce: hashedNonce
         )
 
         guard let idToken = signInResult.user.idToken?.tokenString else {
@@ -227,7 +233,8 @@ struct SupabaseAuthService {
             body: OpenIDConnectGrantBody(
                 provider: "google",
                 idToken: idToken,
-                accessToken: signInResult.user.accessToken.tokenString
+                accessToken: signInResult.user.accessToken.tokenString,
+                nonce: rawNonce
             ),
             apiKey: configuration.anonKey
         )
@@ -236,8 +243,9 @@ struct SupabaseAuthService {
             throw SupabaseServiceError.invalidResponse
         }
 
-        try persist(session: session)
-        return session
+        let enrichedSession = session.enriched(with: signInResult.user)
+        try persist(session: enrichedSession)
+        return enrichedSession
     }
 
     func refreshSessionIfNeeded(_ session: SupabaseAuthSession) async throws -> SupabaseAuthSession {
@@ -350,7 +358,8 @@ struct SupabaseAuthService {
 
     @MainActor
     private func performNativeGoogleSignIn(
-        googleConfiguration: MistiaGoogleSignInConfiguration
+        googleConfiguration: MistiaGoogleSignInConfiguration,
+        nonce: String?
     ) async throws -> GIDSignInResult {
         let presentingViewController = try googlePresentingViewController()
         GIDSignIn.sharedInstance.configuration = GIDConfiguration(
@@ -359,7 +368,12 @@ struct SupabaseAuthService {
         )
 
         return try await withCheckedThrowingContinuation { continuation in
-            GIDSignIn.sharedInstance.signIn(withPresenting: presentingViewController) { signInResult, error in
+            GIDSignIn.sharedInstance.signIn(
+                withPresenting: presentingViewController,
+                hint: nil,
+                additionalScopes: nil,
+                nonce: nonce
+            ) { signInResult, error in
                 if let error = error as NSError? {
                     if error.domain == kGIDSignInErrorDomain, error.code == GIDSignInError.canceled.rawValue {
                         continuation.resume(throwing: SupabaseServiceError.oauthCancelled)
@@ -377,6 +391,40 @@ struct SupabaseAuthService {
                 continuation.resume(returning: signInResult)
             }
         }
+    }
+
+    @MainActor
+    private func generateRandomNonce() -> String {
+        precondition(12 > 0)
+        let charset: [Character] =
+            Array("0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz")
+        var result = ""
+        var remainingLength = 32
+
+        while remainingLength > 0 {
+            let randoms: [UInt8] = (0..<16).map { _ in UInt8.random(in: 0...255) }
+
+            randoms.forEach { random in
+                if remainingLength == 0 { return }
+
+                if random < charset.count {
+                    result.append(charset[Int(random)])
+                    remainingLength -= 1
+                }
+            }
+        }
+
+        return result
+    }
+
+    private func sha256(_ input: String) -> String {
+        let inputData = Data(input.utf8)
+        let hashedData = SHA256.hash(data: inputData)
+        let hashString = hashedData.compactMap {
+            String(format: "%02x", $0)
+        }.joined()
+
+        return hashString
     }
 
     @MainActor
@@ -493,11 +541,13 @@ private struct OpenIDConnectGrantBody: Encodable {
     let provider: String
     let idToken: String
     let accessToken: String?
+    let nonce: String?
 
     enum CodingKeys: String, CodingKey {
         case provider
         case idToken = "id_token"
         case accessToken = "access_token"
+        case nonce
     }
 }
 
@@ -511,6 +561,57 @@ extension SupabaseUserMetadata {
             return url
         }
 
+        return nil
+    }
+}
+
+private extension SupabaseAuthSession {
+    func enriched(with googleUser: GIDGoogleUser) -> SupabaseAuthSession {
+        let profile = googleUser.profile
+        let resolvedName = firstNonEmptyValue(
+            profile?.name,
+            user.userMetadata?.displayName,
+            user.userMetadata?.fullName,
+            user.userMetadata?.name
+        )
+
+        let resolvedAvatarURL = firstNonEmptyValue(
+            profile?.imageURL(withDimension: 256)?.absoluteString,
+            user.userMetadata?.avatarURL,
+            user.userMetadata?.picture
+        )
+
+        let metadata = SupabaseUserMetadata(
+            displayName: user.userMetadata?.displayName ?? resolvedName,
+            fullName: user.userMetadata?.fullName ?? resolvedName,
+            name: user.userMetadata?.name ?? resolvedName,
+            avatarURL: user.userMetadata?.avatarURL ?? resolvedAvatarURL,
+            picture: user.userMetadata?.picture ?? resolvedAvatarURL
+        )
+
+        let enrichedUser = SupabaseAuthUser(
+            id: user.id,
+            email: user.email ?? profile?.email,
+            userMetadata: metadata
+        )
+
+        return SupabaseAuthSession(
+            accessToken: accessToken,
+            refreshToken: refreshToken,
+            tokenType: tokenType,
+            expiresAt: expiresAt,
+            user: enrichedUser
+        )
+    }
+
+    private func firstNonEmptyValue(_ values: String?...) -> String? {
+        for value in values {
+            guard let value else { continue }
+            let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+            if !trimmed.isEmpty {
+                return trimmed
+            }
+        }
         return nil
     }
 }

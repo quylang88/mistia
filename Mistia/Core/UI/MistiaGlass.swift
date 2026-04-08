@@ -276,6 +276,7 @@ struct MistiaTopBar: View {
     let title: String
     var showsLeadingAvatar: Bool = true
     var leadingInitials: String = "QL"
+    var leadingAvatarURL: URL? = nil
     var leadingSystemImage: String? = nil
     var trailingSystemImage: String? = "bell"
     var onLeadingTap: () -> Void = {}
@@ -308,7 +309,7 @@ struct MistiaTopBar: View {
             }
         } else if showsLeadingAvatar {
             MistiaHeaderCircleButton(action: onLeadingTap) {
-                MistiaAvatarBadge(initials: leadingInitials, size: 28)
+                MistiaAvatarBadge(initials: leadingInitials, avatarURL: leadingAvatarURL, size: 28)
             }
         } else {
             Color.clear
@@ -385,6 +386,7 @@ struct MistiaPinnedTopBarScaffold<PinnedHeader: View, Content: View>: View {
     var embedsInNavigationStack: Bool = true
     var showsLeadingAvatar: Bool = true
     var leadingInitials: String = "QL"
+    var leadingAvatarURL: URL? = nil
     var leadingSystemImage: String? = nil
     var trailingSystemImage: String? = "bell"
     var hidesSystemBackButton: Bool = false
@@ -401,6 +403,7 @@ struct MistiaPinnedTopBarScaffold<PinnedHeader: View, Content: View>: View {
         embedsInNavigationStack: Bool = true,
         showsLeadingAvatar: Bool = true,
         leadingInitials: String = "QL",
+        leadingAvatarURL: URL? = nil,
         leadingSystemImage: String? = nil,
         trailingSystemImage: String? = "bell",
         hidesSystemBackButton: Bool = false,
@@ -416,6 +419,7 @@ struct MistiaPinnedTopBarScaffold<PinnedHeader: View, Content: View>: View {
         self.embedsInNavigationStack = embedsInNavigationStack
         self.showsLeadingAvatar = showsLeadingAvatar
         self.leadingInitials = leadingInitials
+        self.leadingAvatarURL = leadingAvatarURL
         self.leadingSystemImage = leadingSystemImage
         self.trailingSystemImage = trailingSystemImage
         self.hidesSystemBackButton = hidesSystemBackButton
@@ -512,7 +516,7 @@ struct MistiaPinnedTopBarScaffold<PinnedHeader: View, Content: View>: View {
             }
         } else if showsLeadingAvatar {
             MistiaHeaderCircleButton(action: onLeadingTap) {
-                MistiaAvatarBadge(initials: leadingInitials, size: 28)
+                MistiaAvatarBadge(initials: leadingInitials, avatarURL: leadingAvatarURL, size: 28)
             }
         }
     }
@@ -537,6 +541,7 @@ extension MistiaPinnedTopBarScaffold where PinnedHeader == EmptyView {
         embedsInNavigationStack: Bool = true,
         showsLeadingAvatar: Bool = true,
         leadingInitials: String = "QL",
+        leadingAvatarURL: URL? = nil,
         leadingSystemImage: String? = nil,
         trailingSystemImage: String? = "bell",
         hidesSystemBackButton: Bool = false,
@@ -552,6 +557,7 @@ extension MistiaPinnedTopBarScaffold where PinnedHeader == EmptyView {
             embedsInNavigationStack: embedsInNavigationStack,
             showsLeadingAvatar: showsLeadingAvatar,
             leadingInitials: leadingInitials,
+            leadingAvatarURL: leadingAvatarURL,
             leadingSystemImage: leadingSystemImage,
             trailingSystemImage: trailingSystemImage,
             hidesSystemBackButton: hidesSystemBackButton,
