@@ -13,7 +13,7 @@ enum MistiaDataStack {
     }
 
     static let sharedLaunchState: LaunchState = {
-        let schema = Schema(versionedSchema: MistiaSchemaV5.self)
+        let schema = Schema(versionedSchema: MistiaSchemaV6.self)
         let configuration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: false)
 
         do {

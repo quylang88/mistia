@@ -2034,24 +2034,28 @@ private struct ManagementEditProfileView: View {
         birthday: Date? = nil,
         avatarJPEGData: Data? = nil
     ) {
-        do {
-            try sessionStore.updateProfile(
-                displayName: displayName ?? draftDisplayName,
-                birthday: hasBirthday ? (birthday ?? self.birthday) : birthday,
-                avatarJPEGData: avatarJPEGData
-            )
+        profileErrorMessage = nil
 
-            if let refreshedSummary = sessionStore.summary {
-                draftDisplayName = refreshedSummary.displayName
-                draftAvatarURL = refreshedSummary.avatarURL
-            }
+        Task {
+            do {
+                try await sessionStore.updateProfile(
+                    displayName: displayName ?? draftDisplayName,
+                    birthday: hasBirthday ? (birthday ?? self.birthday) : birthday,
+                    avatarJPEGData: avatarJPEGData
+                )
 
-            if let birthday {
-                self.birthday = birthday
-                hasBirthday = true
+                if let refreshedSummary = sessionStore.summary {
+                    draftDisplayName = refreshedSummary.displayName
+                    draftAvatarURL = refreshedSummary.avatarURL
+                }
+
+                if let birthday {
+                    self.birthday = birthday
+                    hasBirthday = true
+                }
+            } catch {
+                profileErrorMessage = error.localizedDescription
             }
-        } catch {
-            profileErrorMessage = error.localizedDescription
         }
     }
 

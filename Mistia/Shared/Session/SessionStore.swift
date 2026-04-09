@@ -22,12 +22,6 @@ struct SessionSummary: Equatable {
     }
 }
 
-private struct SessionProfileOverride: Codable {
-    var displayName: String?
-    var avatarFileName: String?
-    var birthday: Date?
-}
-
 enum SessionAuthPhase: Equatable {
     case signIn
     case signUp
@@ -81,6 +75,7 @@ final class SessionStore {
     var activeAuthAction: SessionAuthAction?
 
     @ObservationIgnored private let authService: SupabaseAuthService
+    @ObservationIgnored private let userProfileStore: SupabaseUserProfileStore
     @ObservationIgnored private let modelContainer: ModelContainer
     @ObservationIgnored private let syncCoordinator: SyncCoordinator
     @ObservationIgnored private let userDefaults: UserDefaults
@@ -98,6 +93,7 @@ final class SessionStore {
         self.modelContainer = modelContainer
         self.userDefaults = userDefaults
         authService = SupabaseAuthService()
+        userProfileStore = SupabaseUserProfileStore()
         syncCoordinator = SyncCoordinator(modelContainer: modelContainer)
         isAutoSyncEnabled = userDefaults.bool(forKey: MistiaAppStorageKey.syncAutoEnabled)
 
@@ -141,27 +137,50 @@ final class SessionStore {
     }
 
     func storedBirthday(for userID: UUID) -> Date? {
-        loadProfileOverride(for: userID)?.birthday
+        storedProfile(for: userID)?.birthday
     }
 
     func updateProfile(
         displayName: String,
         birthday: Date?,
         avatarJPEGData: Data? = nil
-    ) throws {
-        guard let currentSummary = summary else { return }
+    ) async throws {
+        guard let activeSession = currentSession else { return }
 
-        var override = loadProfileOverride(for: currentSummary.userID) ?? SessionProfileOverride()
+        let validSession = try await authService.refreshSessionIfNeeded(activeSession)
+        currentSession = validSession
+
+        let baseSummary = SessionSummary(user: validSession.user)
         let trimmedName = displayName.trimmingCharacters(in: .whitespacesAndNewlines)
-        override.displayName = trimmedName.isEmpty ? currentSummary.displayName : trimmedName
-        override.birthday = birthday
+        let resolvedDisplayName = trimmedName.isEmpty ? baseSummary.displayName : trimmedName
+        let profile = try ensureStoredProfileExists(
+            for: baseSummary,
+            preferredDisplayName: resolvedDisplayName
+        )
+        let existingRemoteProfile = try await userProfileStore.fetchProfile(session: validSession)
+        var remoteAvatarURL = existingRemoteProfile?.avatarURL ?? baseSummary.avatarURL
 
         if let avatarJPEGData {
-            override.avatarFileName = try saveAvatarImageData(avatarJPEGData, for: currentSummary.userID)
+            profile.avatarFileName = try saveAvatarImageData(avatarJPEGData, for: baseSummary.userID)
+            remoteAvatarURL = try await userProfileStore.uploadAvatarImageData(
+                avatarJPEGData,
+                session: validSession
+            )
         }
 
-        saveProfileOverride(override, for: currentSummary.userID)
-        summary = applyProfileOverride(override, to: currentSummary)
+        let remoteProfile = try await userProfileStore.upsertProfile(
+            displayName: resolvedDisplayName,
+            avatarURL: remoteAvatarURL,
+            birthday: birthday,
+            session: validSession
+        )
+        syncStoredProfile(profile, with: remoteProfile, email: baseSummary.email)
+        try modelContainer.mainContext.save()
+        summary = applyStoredProfile(
+            profile,
+            to: baseSummary,
+            remoteAvatarURL: remoteProfile.avatarURL
+        )
     }
 
     func setAutoSyncEnabled(_ isEnabled: Bool) {
@@ -816,8 +835,17 @@ final class SessionStore {
 
             currentSession = validSession
             let baseSummary = SessionSummary(user: validSession.user)
-            let profileOverride = loadProfileOverride(for: validSession.user.id)
-            summary = applyProfileOverride(profileOverride, to: baseSummary)
+            let storedProfile = try ensureStoredProfileExists(for: baseSummary)
+            let remoteProfile = try await syncProfileWithRemote(
+                session: validSession,
+                baseSummary: baseSummary,
+                storedProfile: storedProfile
+            )
+            summary = applyStoredProfile(
+                storedProfile,
+                to: baseSummary,
+                remoteAvatarURL: remoteProfile.avatarURL
+            )
             lastErrorMessage = nil
             authBanner = nil
             authFieldErrors = [:]
@@ -1364,38 +1392,175 @@ private extension SessionSummary {
 }
 
 private extension SessionStore {
+    func storedProfile(for userID: UUID) -> UserAccountProfile? {
+        let descriptor = FetchDescriptor<UserAccountProfile>(
+            predicate: #Predicate { profile in
+                profile.userID == userID
+            }
+        )
+        return try? modelContainer.mainContext.fetch(descriptor).first
+    }
+
+    func ensureStoredProfileExists(
+        for summary: SessionSummary,
+        preferredDisplayName: String? = nil
+    ) throws -> UserAccountProfile {
+        if let storedProfile = storedProfile(for: summary.userID) {
+            let resolvedDisplayName = preferredDisplayName?.trimmingCharacters(in: .whitespacesAndNewlines)
+            if storedProfile.email != summary.email {
+                storedProfile.email = summary.email
+            }
+            if let resolvedDisplayName, !resolvedDisplayName.isEmpty, storedProfile.displayName != resolvedDisplayName {
+                storedProfile.displayName = resolvedDisplayName
+            }
+            try modelContainer.mainContext.save()
+            return storedProfile
+        }
+
+        let migratedProfile = migrateLegacyProfileOverrideIfNeeded(for: summary.userID)
+        let newProfile = UserAccountProfile(
+            userID: summary.userID,
+            email: summary.email,
+            displayName: preferredDisplayName?.isEmpty == false ? preferredDisplayName! : (migratedProfile?.displayName ?? summary.displayName),
+            avatarFileName: migratedProfile?.avatarFileName,
+            birthday: migratedProfile?.birthday
+        )
+        modelContainer.mainContext.insert(newProfile)
+        try modelContainer.mainContext.save()
+        return newProfile
+    }
+
+    func applyStoredProfile(
+        _ profile: UserAccountProfile?,
+        to summary: SessionSummary,
+        remoteAvatarURL: URL? = nil
+    ) -> SessionSummary {
+        let resolvedDisplayName = {
+            guard let storedName = profile?.displayName.trimmingCharacters(in: .whitespacesAndNewlines),
+                  !storedName.isEmpty else {
+                return summary.displayName
+            }
+            return storedName
+        }()
+        let resolvedEmail = profile?.email.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false
+            ? profile!.email
+            : summary.email
+        let resolvedAvatarURL = profile?.avatarFileName.flatMap(cachedProfileAvatarURL(forFileName:))
+            ?? remoteAvatarURL
+            ?? summary.avatarURL
+        return SessionSummary(
+            userID: summary.userID,
+            displayName: resolvedDisplayName,
+            email: resolvedEmail,
+            avatarURL: resolvedAvatarURL
+        )
+    }
+
+    func syncProfileWithRemote(
+        session: SupabaseAuthSession,
+        baseSummary: SessionSummary,
+        storedProfile: UserAccountProfile
+    ) async throws -> RemoteUserProfile {
+        let existingRemoteProfile = try await userProfileStore.fetchProfile(session: session)
+        let localDisplayName = normalizedStoredDisplayName(
+            storedProfile.displayName,
+            fallback: baseSummary.displayName
+        )
+
+        let baseAvatarURL = baseSummary.avatarURL
+        let remoteMirrorsBaseAvatar = existingRemoteProfile?.avatarURL?.absoluteString == baseAvatarURL?.absoluteString
+        let shouldUploadLocalAvatar = (existingRemoteProfile?.avatarURL == nil || remoteMirrorsBaseAvatar)
+            && storedProfile.avatarFileName != nil
+
+        var resolvedRemoteAvatarURL = existingRemoteProfile?.avatarURL ?? baseAvatarURL
+        if shouldUploadLocalAvatar,
+           let avatarFileName = storedProfile.avatarFileName,
+           let avatarData = try? loadAvatarImageData(forFileName: avatarFileName) {
+            resolvedRemoteAvatarURL = try await userProfileStore.uploadAvatarImageData(
+                avatarData,
+                session: session
+            )
+        }
+
+        let resolvedRemoteDisplayName: String = {
+            guard let existingRemoteProfile else { return localDisplayName }
+            let remoteDisplayName = existingRemoteProfile.displayName.trimmingCharacters(in: .whitespacesAndNewlines)
+            let baseDisplayName = baseSummary.displayName.trimmingCharacters(in: .whitespacesAndNewlines)
+
+            if remoteDisplayName.isEmpty {
+                return localDisplayName
+            }
+
+            if remoteDisplayName == baseDisplayName && localDisplayName != baseDisplayName {
+                return localDisplayName
+            }
+
+            return existingRemoteProfile.displayName
+        }()
+
+        let resolvedRemoteBirthday = existingRemoteProfile?.birthday ?? storedProfile.birthday
+
+        let needsRemoteUpsert = {
+            guard let existingRemoteProfile else { return true }
+
+            let avatarMatches = existingRemoteProfile.avatarURL?.absoluteString == resolvedRemoteAvatarURL?.absoluteString
+            return existingRemoteProfile.displayName != resolvedRemoteDisplayName
+                || existingRemoteProfile.birthday != resolvedRemoteBirthday
+                || !avatarMatches
+        }()
+
+        let remoteProfile = if needsRemoteUpsert {
+            try await userProfileStore.upsertProfile(
+                displayName: resolvedRemoteDisplayName,
+                avatarURL: resolvedRemoteAvatarURL,
+                birthday: resolvedRemoteBirthday,
+                session: session
+            )
+        } else {
+            existingRemoteProfile!
+        }
+
+        syncStoredProfile(storedProfile, with: remoteProfile, email: baseSummary.email)
+        try modelContainer.mainContext.save()
+        return remoteProfile
+    }
+
+    func syncStoredProfile(
+        _ storedProfile: UserAccountProfile,
+        with remoteProfile: RemoteUserProfile,
+        email: String
+    ) {
+        storedProfile.email = email
+        storedProfile.displayName = normalizedStoredDisplayName(
+            remoteProfile.displayName,
+            fallback: email.components(separatedBy: "@").first ?? "Mistia"
+        )
+        storedProfile.birthday = remoteProfile.birthday
+        storedProfile.createdAt = remoteProfile.createdAt
+        storedProfile.updatedAt = remoteProfile.updatedAt
+    }
+
+    func normalizedStoredDisplayName(
+        _ displayName: String,
+        fallback: String
+    ) -> String {
+        let trimmed = displayName.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? fallback : trimmed
+    }
+
     func profileOverrideKey(for userID: UUID) -> String {
         "\(MistiaAppStorageKey.sessionProfileOverridePrefix).\(userID.uuidString.lowercased())"
     }
 
-    func loadProfileOverride(for userID: UUID) -> SessionProfileOverride? {
-        guard let data = userDefaults.data(forKey: profileOverrideKey(for: userID)) else {
+    func migrateLegacyProfileOverrideIfNeeded(for userID: UUID) -> LegacySessionProfileOverride? {
+        let key = profileOverrideKey(for: userID)
+        guard let data = userDefaults.data(forKey: key),
+              let legacyProfile = try? JSONDecoder().decode(LegacySessionProfileOverride.self, from: data) else {
             return nil
         }
 
-        return try? JSONDecoder().decode(SessionProfileOverride.self, from: data)
-    }
-
-    func saveProfileOverride(_ override: SessionProfileOverride, for userID: UUID) {
-        guard let data = try? JSONEncoder().encode(override) else { return }
-        userDefaults.set(data, forKey: profileOverrideKey(for: userID))
-    }
-
-    func applyProfileOverride(_ override: SessionProfileOverride?, to summary: SessionSummary) -> SessionSummary {
-        let resolvedDisplayName = {
-            guard let overrideName = override?.displayName?.trimmingCharacters(in: .whitespacesAndNewlines),
-                  !overrideName.isEmpty else {
-                return summary.displayName
-            }
-            return overrideName
-        }()
-        let resolvedAvatarURL = override?.avatarFileName.flatMap(profileAvatarURL(forFileName:)) ?? summary.avatarURL
-        return SessionSummary(
-            userID: summary.userID,
-            displayName: resolvedDisplayName,
-            email: summary.email,
-            avatarURL: resolvedAvatarURL
-        )
+        userDefaults.removeObject(forKey: key)
+        return legacyProfile
     }
 
     func saveAvatarImageData(_ data: Data, for userID: UUID) throws -> String {
@@ -1404,6 +1569,10 @@ private extension SessionStore {
         let fileURL = directoryURL.appendingPathComponent(fileName)
         try data.write(to: fileURL, options: .atomic)
         return fileName
+    }
+
+    func loadAvatarImageData(forFileName fileName: String) throws -> Data {
+        try Data(contentsOf: profileAvatarURL(forFileName: fileName))
     }
 
     func profileAvatarDirectoryURL() throws -> URL {
@@ -1422,4 +1591,18 @@ private extension SessionStore {
         let baseURL = (try? profileAvatarDirectoryURL()) ?? FileManager.default.temporaryDirectory
         return baseURL.appendingPathComponent(fileName)
     }
+
+    func cachedProfileAvatarURL(forFileName fileName: String) -> URL? {
+        let fileURL = profileAvatarURL(forFileName: fileName)
+        guard FileManager.default.fileExists(atPath: fileURL.path) else {
+            return nil
+        }
+        return fileURL
+    }
+}
+
+private struct LegacySessionProfileOverride: Codable {
+    var displayName: String?
+    var avatarFileName: String?
+    var birthday: Date?
 }

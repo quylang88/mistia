@@ -1,0 +1,31 @@
+import Foundation
+import SwiftData
+
+@Model
+final class UserAccountProfile {
+    @Attribute(.unique) var userID: UUID
+    var email: String
+    var displayName: String
+    var avatarFileName: String?
+    var birthday: Date?
+    var createdAt: Date
+    var updatedAt: Date
+
+    init(
+        userID: UUID,
+        email: String,
+        displayName: String,
+        avatarFileName: String? = nil,
+        birthday: Date? = nil,
+        createdAt: Date = .now,
+        updatedAt: Date = .now
+    ) {
+        self.userID = userID
+        self.email = email
+        self.displayName = displayName
+        self.avatarFileName = avatarFileName
+        self.birthday = birthday
+        self.createdAt = createdAt
+        self.updatedAt = updatedAt
+    }
+}
