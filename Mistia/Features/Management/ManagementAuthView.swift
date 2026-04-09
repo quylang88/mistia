@@ -24,6 +24,31 @@ private enum ManagementAuthInput: Hashable {
     case confirmPassword
 }
 
+private enum ManagementProfileDestination: String, Identifiable {
+    case settings
+    case syncSettings
+    case family
+    case dataManagement
+    case backupRestore
+    case signedInDevices
+    case editProfile
+
+    var id: String { rawValue }
+}
+
+private enum ManagementProfileDestructiveAction: String, Identifiable {
+    case signOut
+    case deleteAccount
+
+    var id: String { rawValue }
+}
+
+private enum ManagementSyncSettingsDestination: String, Identifiable {
+    case dataManagement
+
+    var id: String { rawValue }
+}
+
 struct ManagementAccountView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(SessionStore.self) private var sessionStore
@@ -37,6 +62,8 @@ struct ManagementAccountView: View {
     @State private var isPasswordVisible = false
     @State private var isConfirmPasswordVisible = false
     @State private var isEmailAuthExpanded = false
+    @State private var destination: ManagementProfileDestination?
+    @State private var destructiveAction: ManagementProfileDestructiveAction?
     @FocusState private var focusedField: ManagementAuthInput?
     
     @Environment(\.colorScheme) private var colorScheme
@@ -58,12 +85,12 @@ struct ManagementAccountView: View {
         MistiaPinnedTopBarScaffold(
             tone: .standard,
             title: sessionStore.isSignedIn
-                ? mistiaLocalized(vi: "Tài khoản & sync", en: "Account & sync", ja: "アカウントと同期")
-                : (isEmailAuthExpanded ? authScreenTitle : ""),
+                ? mistiaLocalized(vi: "Hồ sơ", en: "Profile", ja: "プロフィール")
+                : (isEmailAuthExpanded ? authScreenTitle : mistiaLocalized(vi: "Hồ sơ", en: "Profile", ja: "プロフィール")),
             embedsInNavigationStack: false,
             showsLeadingAvatar: false,
             leadingSystemImage: "chevron.left",
-            trailingSystemImage: nil,
+            trailingSystemImage: "gearshape",
             hidesSystemBackButton: true,
             onLeadingTap: {
                 if isEmailAuthExpanded {
@@ -74,6 +101,9 @@ struct ManagementAccountView: View {
                 } else {
                     dismiss()
                 }
+            },
+            onTrailingTap: {
+                destination = .settings
             },
             contentSpacing: 18
         ) {
@@ -90,6 +120,60 @@ struct ManagementAccountView: View {
                 signedInContent(summary: summary)
             } else {
                 authForm
+            }
+        }
+        .navigationDestination(item: $destination) { route in
+            switch route {
+            case .settings:
+                SettingsView()
+            case .syncSettings:
+                ManagementSyncSettingsView(accent: accent)
+            case .family:
+                ManagementProfilePlaceholderView(
+                    title: mistiaLocalized(vi: "Gia đình", en: "Family", ja: "家族"),
+                    systemImage: "person.3.fill",
+                    accent: accent,
+                    message: mistiaLocalized(
+                        vi: "Màn hình Gia đình sẽ được thiết kế riêng ở bước sau. Hiện tại đây là điểm vào để giữ đúng luồng profile mới.",
+                        en: "The Family screen will get its own design in a later pass. For now, this keeps the new profile flow wired correctly.",
+                        ja: "家族画面は次の段階で個別にデザインします。今は新しいプロフィール導線を保つための入口です。"
+                    )
+                )
+            case .dataManagement:
+                ManagementDataConflictsView(accent: accent)
+            case .backupRestore:
+                ManagementProfilePlaceholderView(
+                    title: mistiaLocalized(vi: "Sao lưu / Khôi phục", en: "Backup / Restore", ja: "バックアップ / 復元"),
+                    systemImage: "externaldrive.fill.badge.icloud",
+                    accent: accent,
+                    message: mistiaLocalized(
+                        vi: "UI entry cho sao lưu và khôi phục đã sẵn sàng. Logic chi tiết sẽ được nối ở bước sau.",
+                        en: "The UI entry for backup and restore is ready. Detailed logic can be connected later.",
+                        ja: "バックアップと復元の UI 導線は準備できています。詳細ロジックは次の段階で接続できます。"
+                    )
+                )
+            case .signedInDevices:
+                ManagementProfilePlaceholderView(
+                    title: mistiaLocalized(vi: "Thiết bị đã đăng nhập", en: "Signed-in devices", ja: "サインイン済みデバイス"),
+                    systemImage: "desktopcomputer",
+                    accent: accent,
+                    message: mistiaLocalized(
+                        vi: "Màn này sẽ hiển thị các thiết bị đã đăng nhập vào tài khoản Mistia của bạn.",
+                        en: "This screen will list devices currently signed in to your Mistia account.",
+                        ja: "この画面では Mistia アカウントにログインしている端末を表示します。"
+                    )
+                )
+            case .editProfile:
+                ManagementProfilePlaceholderView(
+                    title: mistiaLocalized(vi: "Sửa hồ sơ", en: "Edit profile", ja: "プロフィールを編集"),
+                    systemImage: "square.and.pencil",
+                    accent: accent,
+                    message: mistiaLocalized(
+                        vi: "Điểm vào chỉnh sửa hồ sơ đã được đặt sẵn trong header. Form chi tiết sẽ được thiết kế sau.",
+                        en: "The profile edit entry is now in place in the header. The detailed form can be designed next.",
+                        ja: "プロフィール編集の入口をヘッダーに追加しました。詳細フォームは次の段階で設計できます。"
+                    )
+                )
             }
         }
         .onChange(of: sessionStore.authPendingEmail) { _, newValue in
@@ -124,22 +208,69 @@ struct ManagementAccountView: View {
                 get: { sessionStore.initialSyncPreview },
                 set: { preview in
                     if preview == nil {
-                        sessionStore.initialSyncPreview = nil
+                        sessionStore.cancelInitialSyncSelection()
+                    } else {
+                        sessionStore.initialSyncPreview = preview
                     }
                 }
             )
         ) { preview in
             ManagementInitialSyncChoiceSheet(
                 preview: preview,
-                accent: accent
+                accent: accent,
+                onCancel: {
+                    sessionStore.cancelInitialSyncSelection()
+                }
             ) { choice in
                 Task {
                     await sessionStore.startInitialSync(with: choice)
                 }
             }
-            .interactiveDismissDisabled(preview.requiresChoice)
             .presentationDetents([.medium])
             .presentationDragIndicator(.visible)
+        }
+        .confirmationDialog(
+            destructiveActionConfirmationTitle,
+            isPresented: Binding(
+                get: { destructiveAction != nil },
+                set: { isPresented in
+                    if !isPresented {
+                        destructiveAction = nil
+                    }
+                }
+            ),
+            titleVisibility: .visible
+        ) {
+            switch destructiveAction {
+            case .signOut:
+                Button(
+                    mistiaLocalized(vi: "Đăng xuất", en: "Sign out", ja: "ログアウト"),
+                    role: .destructive
+                ) {
+                    destructiveAction = nil
+                    Task {
+                        await sessionStore.signOut()
+                    }
+                }
+            case .deleteAccount:
+                Button(
+                    mistiaLocalized(vi: "Xóa tài khoản", en: "Delete account", ja: "アカウントを削除"),
+                    role: .destructive
+                ) {
+                    destructiveAction = nil
+                    Task {
+                        await sessionStore.deleteAccountKeepingLocalData()
+                    }
+                }
+            case .none:
+                EmptyView()
+            }
+
+            Button(mistiaLocalized(vi: "Hủy", en: "Cancel", ja: "キャンセル"), role: .cancel) {
+                destructiveAction = nil
+            }
+        } message: {
+            Text(destructiveActionConfirmationMessage)
         }
     }
 
@@ -181,39 +312,44 @@ struct ManagementAccountView: View {
     }
 
     private func signedInContent(summary: SessionSummary) -> some View {
-        VStack(spacing: 16) {
-            MistiaGlassCard(
-                cornerRadius: 24,
-                tint: colorScheme == .dark ? Color(UIColor.secondarySystemGroupedBackground) : accent.opacity(0.12)
-            ) {
-                VStack(alignment: .leading, spacing: 14) {
-                    HStack(spacing: 12) {
-                        MistiaAvatarBadge(
-                            initials: summary.initials,
-                            avatarURL: summary.avatarURL,
-                            size: 56,
-                            showsStatus: false
-                        )
+        VStack(spacing: 18) {
+            profileHeaderCard(summary: summary)
 
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text(summary.displayName)
-                                .font(.system(size: 20, weight: .bold, design: .rounded))
-                                .foregroundStyle(.primary)
-
-                            Text(summary.email)
-                                .font(.system(size: 13.5, weight: .medium, design: .rounded))
-                                .foregroundStyle(.secondary)
-                        }
+            ManagementProfileListCard(tint: secondaryBackground) {
+                VStack(spacing: 0) {
+                    ManagementProfileNavigationRow(
+                        title: mistiaLocalized(vi: "Đồng bộ dữ liệu", en: "Sync settings", ja: "同期設定"),
+                        icon: "arrow.triangle.2.circlepath.icloud",
+                        accent: .sky,
+                        subtitle: nil,
+                        value: syncSettingsValue,
+                        badge: dataManagementBadgeText
+                    ) {
+                        destination = .syncSettings
                     }
 
-                    ManagementSyncStateCard(
-                        title: sessionStore.syncStatusTitle,
-                        detail: sessionStore.syncStatusDetail,
-                        systemImage: sessionStore.syncStatusSystemImage,
-                        accent: accent
-                    )
+                    ManagementProfileRowDivider()
+
+                    ManagementProfileNavigationRow(
+                        title: mistiaLocalized(vi: "Sao lưu / Khôi phục", en: "Backup / Restore", ja: "バックアップ / 復元"),
+                        icon: "externaldrive.fill.badge.icloud",
+                        accent: .mint,
+                        subtitle: nil
+                    ) {
+                        destination = .backupRestore
+                    }
+
+                    ManagementProfileRowDivider()
+
+                    ManagementProfileNavigationRow(
+                        title: mistiaLocalized(vi: "Thiết bị đã đăng nhập", en: "Signed-in devices", ja: "サインイン済みデバイス"),
+                        icon: "desktopcomputer",
+                        accent: .teal,
+                        subtitle: nil
+                    ) {
+                        destination = .signedInDevices
+                    }
                 }
-                .frame(maxWidth: .infinity, alignment: .leading)
             }
 
             if let lastErrorMessage = sessionStore.lastErrorMessage {
@@ -224,76 +360,153 @@ struct ManagementAccountView: View {
                 )
             }
 
-            if sessionStore.possibleDuplicateCount > 0 {
-                ManagementInlineMessageCard(
-                    title: mistiaLocalized(
-                        vi: "Có giao dịch có thể bị trùng",
-                        en: "Possible duplicates detected",
-                        ja: "重複の可能性がある取引があります"
-                    ),
-                    message: mistiaLocalized(
-                        vi: "Mistia đang giữ an toàn cả hai bản ghi. Hiện có \(sessionStore.possibleDuplicateCount) giao dịch cần bạn rà lại sau sync.",
-                        en: "Mistia kept both records safely. There are currently \(sessionStore.possibleDuplicateCount) transactions to review after sync.",
-                        ja: "両方のレコードを安全に保持しています。同期後に確認が必要な取引が \(sessionStore.possibleDuplicateCount) 件あります。"
-                    ),
-                    accent: .orange
+            ManagementProfileListCard(tint: secondaryBackground) {
+                ManagementProfileNavigationRow(
+                    title: mistiaLocalized(vi: "Gia đình", en: "Family", ja: "家族"),
+                    icon: "person.3.fill",
+                    accent: .rose,
+                    subtitle: nil,
+                    value: mistiaLocalized(vi: "Chưa có", en: "None", ja: "未設定")
+                ) {
+                    destination = .family
+                }
+            }
+
+            ManagementProfileCenteredDestructiveButton(
+                title: mistiaLocalized(vi: "Đăng xuất", en: "Sign out", ja: "ログアウト"),
+                isDisabled: sessionStore.isWorking
+            ) {
+                destructiveAction = .signOut
+            }
+
+            ManagementProfileCenteredDestructiveButton(
+                title: mistiaLocalized(vi: "Xóa tài khoản", en: "Delete account", ja: "アカウントを削除"),
+                isDisabled: sessionStore.isWorking
+            ) {
+                destructiveAction = .deleteAccount
+            }
+        }
+    }
+
+    private func profileHeaderCard(summary: SessionSummary) -> some View {
+        VStack(spacing: 12) {
+            ZStack(alignment: .bottomTrailing) {
+                MistiaAvatarBadge(
+                    initials: summary.initials,
+                    avatarURL: summary.avatarURL,
+                    size: 88,
+                    showsStatus: false
                 )
-            }
 
-            if !activeConflicts.isEmpty {
-                VStack(spacing: 12) {
-                    ForEach(activeConflicts) { conflict in
-                        ManagementSyncConflictCard(
-                            conflict: conflict,
-                            accent: accent,
-                            isDisabled: !sessionStore.canManageSync
-                        ) { resolution in
-                            Task {
-                                await sessionStore.resolveSyncConflict(
-                                    id: conflict.id,
-                                    resolution: resolution
-                                )
-                            }
-                        }
-                    }
-                }
-            }
-
-            HStack(spacing: 12) {
                 Button {
-                    Task {
-                        await sessionStore.syncNow()
-                    }
+                    destination = .editProfile
                 } label: {
-                    Label(
-                        mistiaLocalized(vi: "Sync ngay", en: "Sync now", ja: "今すぐ同期"),
-                        systemImage: "arrow.triangle.2.circlepath"
-                    )
-                    .font(.system(size: 15, weight: .bold, design: .rounded))
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 14)
+                    Image(systemName: "square.and.pencil")
+                        .font(.system(size: 12.5, weight: .bold))
+                        .foregroundStyle(.white)
+                        .frame(width: 28, height: 28)
+                        .background(accent, in: Circle())
+                        .overlay {
+                            Circle()
+                                .stroke(Color(UIColor.systemBackground), lineWidth: 2)
+                        }
                 }
-                .buttonStyle(.glassProminent)
-                .tint(accent)
-                .disabled(!sessionStore.canManageSync || sessionStore.isWorking)
-
-                Button(role: .destructive) {
-                    Task {
-                        await sessionStore.signOut()
-                    }
-                } label: {
-                    Label(
-                        mistiaLocalized(vi: "Đăng xuất", en: "Sign out", ja: "ログアウト"),
-                        systemImage: "rectangle.portrait.and.arrow.right"
-                    )
-                    .font(.system(size: 15, weight: .bold, design: .rounded))
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 14)
-                }
-                .buttonStyle(.glass)
-                .tint(.red)
-                .disabled(sessionStore.isWorking)
+                .buttonStyle(.plain)
+                .accessibilityLabel(mistiaLocalized(vi: "Sửa hồ sơ", en: "Edit profile", ja: "プロフィールを編集"))
+                .offset(x: 2, y: 2)
             }
+
+            Text(summary.displayName)
+                .font(.system(size: 26, weight: .bold, design: .rounded))
+                .foregroundStyle(.primary)
+                .multilineTextAlignment(.center)
+                .lineLimit(2)
+
+            Text(summary.email)
+                .font(.system(size: 15, weight: .medium, design: .rounded))
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+                .lineLimit(2)
+
+            ManagementProfileSyncBadge(
+                title: lastSyncBadgeTitle,
+                accent: sessionStore.lastSyncAt == nil ? .slate : .mint
+            )
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.top, 6)
+        .padding(.bottom, 4)
+    }
+
+    private var lastSyncBadgeTitle: String {
+        guard let lastSyncAt = sessionStore.lastSyncAt else {
+            return mistiaLocalized(
+                vi: "Chưa đồng bộ",
+                en: "Sync is off",
+                ja: "同期はオフです"
+            )
+        }
+
+        return mistiaLocalized(
+            vi: "Đã đồng bộ lúc \(MistiaDateFormatting.dateTimeString(for: lastSyncAt))",
+            en: "Synced at \(MistiaDateFormatting.dateTimeString(for: lastSyncAt, language: .english))",
+            ja: "\(MistiaDateFormatting.dateTimeString(for: lastSyncAt, language: .japanese)) に同期済み"
+        )
+    }
+
+    private var dataManagementBadgeText: String? {
+        let issueCount = activeConflicts.count + sessionStore.possibleDuplicateCount
+        guard issueCount > 0 else { return nil }
+        return "\(issueCount)"
+    }
+
+    private var syncSettingsValue: String {
+        if sessionStore.isAutoSyncEnabled {
+            return mistiaLocalized(vi: "Tự động", en: "Auto", ja: "自動")
+        }
+
+        if sessionStore.canManageSync {
+            return mistiaLocalized(vi: "Thủ công", en: "Manual", ja: "手動")
+        }
+
+        return mistiaLocalized(vi: "Tắt", en: "Off", ja: "オフ")
+    }
+
+    private var destructiveActionConfirmationTitle: String {
+        switch destructiveAction {
+        case .signOut:
+            return mistiaLocalized(
+                vi: "Đăng xuất khỏi thiết bị này?",
+                en: "Sign out of this device?",
+                ja: "この端末からログアウトしますか？"
+            )
+        case .deleteAccount:
+            return mistiaLocalized(
+                vi: "Xóa tài khoản này?",
+                en: "Delete this account?",
+                ja: "このアカウントを削除しますか？"
+            )
+        case .none:
+            return ""
+        }
+    }
+
+    private var destructiveActionConfirmationMessage: String {
+        switch destructiveAction {
+        case .signOut:
+            return mistiaLocalized(
+                vi: "Bạn sẽ bị đăng xuất khỏi Mistia trên thiết bị này. Dữ liệu local hiện có vẫn được giữ lại.",
+                en: "You will be signed out of Mistia on this device. Existing local data will stay on the device.",
+                ja: "この端末で Mistia からログアウトします。既存のローカルデータは保持されます。"
+            )
+        case .deleteAccount:
+            return mistiaLocalized(
+                vi: "Tài khoản và dữ liệu đồng bộ trên cloud sẽ bị xóa vĩnh viễn. Dữ liệu local trên máy này vẫn được giữ lại.",
+                en: "Your cloud account and synced server data will be permanently deleted. Local data on this device will remain.",
+                ja: "クラウドアカウントと同期済みサーバーデータは完全に削除されます。この端末のローカルデータは保持されます。"
+            )
+        case .none:
+            return ""
         }
     }
 
@@ -947,6 +1160,373 @@ struct ManagementAccountView: View {
     }
 }
 
+private struct ManagementProfileSectionLabel: View {
+    let title: String
+    @Environment(\.colorScheme) private var colorScheme
+
+    var body: some View {
+        Text(title)
+            .font(.system(size: 13, weight: .bold, design: .rounded))
+            .foregroundStyle(colorScheme == .dark ? .white.opacity(0.64) : Color.black.opacity(0.46))
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, 4)
+    }
+}
+
+private struct ManagementProfileListCard<Content: View>: View {
+    let tint: Color
+    let content: Content
+
+    init(
+        tint: Color,
+        @ViewBuilder content: () -> Content
+    ) {
+        self.tint = tint
+        self.content = content()
+    }
+
+    var body: some View {
+        MistiaGlassCard(cornerRadius: 22, tint: tint, padding: 0) {
+            content
+        }
+    }
+}
+
+private struct ManagementProfileSyncBadge: View {
+    let title: String
+    let accent: MistiaAccent
+
+    var body: some View {
+        HStack(spacing: 6) {
+            Image(systemName: "clock.arrow.trianglehead.counterclockwise.rotate.90")
+                .font(.system(size: 11, weight: .bold))
+
+            Text(title)
+                .font(.system(size: 12, weight: .semibold, design: .rounded))
+                .lineLimit(2)
+        }
+        .foregroundStyle(accent.color)
+        .padding(.horizontal, 10)
+        .padding(.vertical, 7)
+        .background(accent.color.opacity(0.12), in: Capsule())
+    }
+}
+
+private struct ManagementProfileRowDivider: View {
+    var body: some View {
+        Divider()
+            .padding(.leading, 56)
+    }
+}
+
+private struct ManagementProfileInfoRow: View {
+    let title: String
+    let icon: String
+    let accent: MistiaAccent
+    let value: String
+    let subtitle: String?
+
+    var body: some View {
+        HStack(alignment: subtitle == nil ? .center : .top, spacing: 12) {
+            ManagementProfileIconTile(icon: icon, accent: accent)
+
+            VStack(alignment: .leading, spacing: 4) {
+                Text(title)
+                    .font(.system(size: 16.5, weight: .semibold, design: .rounded))
+                    .foregroundStyle(.primary)
+
+                if let subtitle {
+                    Text(subtitle)
+                        .font(.system(size: 13.5, weight: .medium, design: .rounded))
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+
+            Spacer(minLength: 12)
+
+            Text(value)
+                .font(.system(size: 14.5, weight: .semibold, design: .rounded))
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.trailing)
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 15)
+    }
+}
+
+private struct ManagementProfileActionRow: View {
+    let title: String
+    let icon: String
+    let accent: MistiaAccent
+    let subtitle: String?
+    let isDisabled: Bool
+    let showsProgress: Bool
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            HStack(alignment: .top, spacing: 12) {
+                ManagementProfileIconTile(icon: icon, accent: accent)
+
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(title)
+                        .font(.system(size: 16.5, weight: .semibold, design: .rounded))
+                        .foregroundStyle(.primary)
+
+                    if let subtitle {
+                        Text(subtitle)
+                            .font(.system(size: 13.5, weight: .medium, design: .rounded))
+                            .foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+
+                Spacer(minLength: 12)
+
+                if showsProgress {
+                    ProgressView()
+                } else {
+                    Image(systemName: "arrow.clockwise")
+                        .font(.system(size: 14, weight: .bold))
+                        .foregroundStyle(accent.color)
+                }
+            }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 15)
+        }
+        .buttonStyle(MistiaPressableButtonStyle(cornerRadius: 18, tint: accent.color))
+        .disabled(isDisabled)
+        .opacity(isDisabled ? 0.55 : 1)
+    }
+}
+
+private struct ManagementProfileToggleRow: View {
+    let title: String
+    let icon: String
+    let accent: MistiaAccent
+    let subtitle: String?
+    let isOn: Binding<Bool>
+    let isDisabled: Bool
+
+    var body: some View {
+        HStack(alignment: subtitle == nil ? .center : .top, spacing: 12) {
+            ManagementProfileIconTile(icon: icon, accent: accent)
+
+            VStack(alignment: .leading, spacing: 4) {
+                Text(title)
+                    .font(.system(size: 16.5, weight: .semibold, design: .rounded))
+                    .foregroundStyle(.primary)
+
+                if let subtitle {
+                    Text(subtitle)
+                        .font(.system(size: 13.5, weight: .medium, design: .rounded))
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+
+            Spacer(minLength: 12)
+
+            Toggle("", isOn: isOn)
+                .labelsHidden()
+                .tint(accent.color)
+                .disabled(isDisabled)
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 15)
+        .opacity(isDisabled ? 0.55 : 1)
+    }
+}
+
+private struct ManagementProfileNavigationRow: View {
+    let title: String
+    let icon: String
+    let accent: MistiaAccent
+    let subtitle: String?
+    var value: String? = nil
+    var badge: String? = nil
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            HStack(alignment: subtitle == nil ? .center : .top, spacing: 12) {
+                ManagementProfileIconTile(icon: icon, accent: accent)
+
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(title)
+                        .font(.system(size: 16.5, weight: .semibold, design: .rounded))
+                        .foregroundStyle(.primary)
+
+                    if let subtitle {
+                        Text(subtitle)
+                            .font(.system(size: 13.5, weight: .medium, design: .rounded))
+                            .foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+
+                Spacer(minLength: 12)
+
+                HStack(spacing: 8) {
+                    if let badge {
+                        Text(badge)
+                            .font(.system(size: 12.5, weight: .bold, design: .rounded))
+                            .foregroundStyle(.white)
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 4)
+                            .background(accent.color, in: Capsule())
+                    }
+
+                    if let value {
+                        Text(value)
+                            .font(.system(size: 14.5, weight: .medium, design: .rounded))
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                    }
+
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 11, weight: .bold))
+                        .foregroundStyle(.tertiary)
+                }
+            }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 15)
+        }
+        .buttonStyle(MistiaPressableButtonStyle(cornerRadius: 18, tint: accent.color))
+    }
+}
+
+private struct ManagementProfileDestructiveRow: View {
+    let title: String
+    let icon: String
+    let accent: MistiaAccent
+    let subtitle: String
+    let isDisabled: Bool
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            HStack(alignment: .top, spacing: 12) {
+                ManagementProfileIconTile(icon: icon, accent: accent)
+
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(title)
+                        .font(.system(size: 16.5, weight: .semibold, design: .rounded))
+                        .foregroundStyle(accent.color)
+
+                    Text(subtitle)
+                        .font(.system(size: 13.5, weight: .medium, design: .rounded))
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+
+                Spacer(minLength: 12)
+            }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 15)
+        }
+        .buttonStyle(MistiaPressableButtonStyle(cornerRadius: 18, tint: accent.color))
+        .disabled(isDisabled)
+        .opacity(isDisabled ? 0.55 : 1)
+    }
+}
+
+private struct ManagementSettingsFootnote: View {
+    let text: String
+    @Environment(\.colorScheme) private var colorScheme
+
+    var body: some View {
+        Text(text)
+            .font(.system(size: 13, weight: .medium, design: .rounded))
+            .foregroundStyle(colorScheme == .dark ? .white.opacity(0.56) : Color.black.opacity(0.44))
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, 6)
+    }
+}
+
+private struct ManagementProfileCenteredDestructiveButton: View {
+    let title: String
+    let isDisabled: Bool
+    let action: () -> Void
+
+    @Environment(\.colorScheme) private var colorScheme
+
+    private var backgroundColor: Color {
+        colorScheme == .dark
+            ? Color(UIColor.secondarySystemBackground)
+            : Color(UIColor.systemBackground)
+    }
+
+    var body: some View {
+        Button(action: action) {
+            Text(title)
+                .font(.system(size: 17, weight: .semibold, design: .rounded))
+                .foregroundStyle(.red)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 17)
+                .background(backgroundColor, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+        }
+        .buttonStyle(.plain)
+        .disabled(isDisabled)
+        .opacity(isDisabled ? 0.55 : 1)
+    }
+}
+
+private struct ManagementProfilePrimaryActionButton: View {
+    let title: String
+    let accent: Color
+    let isDisabled: Bool
+    let showsProgress: Bool
+    let action: () -> Void
+
+    @Environment(\.colorScheme) private var colorScheme
+
+    private var backgroundColor: Color {
+        colorScheme == .dark
+            ? Color(UIColor.secondarySystemBackground)
+            : Color(UIColor.systemBackground)
+    }
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 10) {
+                if showsProgress {
+                    ProgressView()
+                        .tint(accent)
+                }
+
+                Text(title)
+                    .font(.system(size: 17, weight: .semibold, design: .rounded))
+                    .foregroundStyle(accent)
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 17)
+            .background(backgroundColor, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+        }
+        .buttonStyle(.plain)
+        .disabled(isDisabled)
+        .opacity(isDisabled ? 0.55 : 1)
+    }
+}
+
+private struct ManagementProfileIconTile: View {
+    let icon: String
+    let accent: MistiaAccent
+
+    var body: some View {
+        ZStack {
+            RoundedRectangle(cornerRadius: 11, style: .continuous)
+                .fill(accent.color.opacity(0.15))
+
+            Image(systemName: icon)
+                .font(.system(size: 14, weight: .bold))
+                .foregroundStyle(accent.color)
+        }
+        .frame(width: 32, height: 32)
+    }
+}
+
 private struct ManagementStatusBadge: View {
     let title: String
     let systemImage: String
@@ -964,39 +1544,10 @@ private struct ManagementStatusBadge: View {
     }
 }
 
-private struct ManagementSyncStateCard: View {
-    let title: String
-    let detail: String
-    let systemImage: String
-    let accent: Color
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack(spacing: 10) {
-                Image(systemName: systemImage)
-                    .font(.system(size: 14, weight: .bold))
-                    .foregroundStyle(accent)
-
-                Text(title)
-                    .font(.system(size: 14.5, weight: .bold, design: .rounded))
-                    .foregroundStyle(.primary)
-            }
-
-            Text(detail)
-                .font(.system(size: 13.5, weight: .medium, design: .rounded))
-                .foregroundStyle(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.horizontal, 14)
-        .padding(.vertical, 13)
-        .background(.white.opacity(0.06), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
-    }
-}
-
 private struct ManagementInitialSyncChoiceSheet: View {
     let preview: MistiaInitialSyncPreview
     let accent: Color
+    let onCancel: () -> Void
     let onSelect: (MistiaInitialSyncChoice) -> Void
 
     var body: some View {
@@ -1060,6 +1611,15 @@ private struct ManagementInitialSyncChoiceSheet: View {
                     onSelect(.useCloud)
                 }
             }
+
+            Button(
+                mistiaLocalized(vi: "Hủy", en: "Cancel", ja: "キャンセル"),
+                role: .cancel,
+                action: onCancel
+            )
+            .font(.system(size: 16, weight: .bold, design: .rounded))
+            .frame(maxWidth: .infinity, alignment: .center)
+            .padding(.top, 2)
         }
         .padding(24)
     }
@@ -1155,6 +1715,269 @@ private struct ManagementSyncConflictCard: View {
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
+        }
+    }
+}
+
+private struct ManagementDataConflictsView: View {
+    @Environment(\.dismiss) private var dismiss
+    @Environment(SessionStore.self) private var sessionStore
+    @Query private var storedConflicts: [SyncConflict]
+
+    let accent: Color
+
+    private var activeConflicts: [SyncConflict] {
+        storedConflicts
+    }
+
+    var body: some View {
+        MistiaPinnedTopBarScaffold(
+            tone: .standard,
+            title: mistiaLocalized(vi: "Quản lý dữ liệu", en: "Data management", ja: "データ管理"),
+            embedsInNavigationStack: false,
+            showsLeadingAvatar: false,
+            leadingSystemImage: "chevron.left",
+            trailingSystemImage: nil,
+            hidesSystemBackButton: true,
+            onLeadingTap: { dismiss() },
+            contentSpacing: 18
+        ) {
+            if sessionStore.possibleDuplicateCount > 0 {
+                ManagementInlineMessageCard(
+                    title: mistiaLocalized(
+                        vi: "Có giao dịch có thể bị trùng",
+                        en: "Possible duplicates detected",
+                        ja: "重複の可能性がある取引があります"
+                    ),
+                    message: mistiaLocalized(
+                        vi: "Mistia đang giữ an toàn cả hai bản ghi. Hiện có \(sessionStore.possibleDuplicateCount) giao dịch cần bạn rà lại sau sync.",
+                        en: "Mistia kept both records safely. There are currently \(sessionStore.possibleDuplicateCount) transactions to review after sync.",
+                        ja: "両方のレコードを安全に保持しています。同期後に確認が必要な取引が \(sessionStore.possibleDuplicateCount) 件あります。"
+                    ),
+                    accent: .orange
+                )
+            }
+
+            if activeConflicts.isEmpty {
+                ManagementProfilePlaceholderCard(
+                    title: mistiaLocalized(vi: "Chưa có conflict", en: "No conflicts yet", ja: "競合はまだありません"),
+                    message: mistiaLocalized(
+                        vi: "Khi đồng bộ phát sinh conflict hoặc dữ liệu cần rà lại, bạn sẽ quản lý tại đây.",
+                        en: "When sync conflicts or review-needed data appear, you will manage them here.",
+                        ja: "同期競合や確認が必要なデータが発生したら、ここで管理できます。"
+                    ),
+                    systemImage: "checkmark.shield.fill",
+                    accent: accent
+                )
+            } else {
+                VStack(spacing: 12) {
+                    ForEach(activeConflicts) { conflict in
+                        ManagementSyncConflictCard(
+                            conflict: conflict,
+                            accent: accent,
+                            isDisabled: !sessionStore.canManageSync
+                        ) { resolution in
+                            Task {
+                                await sessionStore.resolveSyncConflict(
+                                    id: conflict.id,
+                                    resolution: resolution
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+private struct ManagementProfilePlaceholderView: View {
+    @Environment(\.dismiss) private var dismiss
+
+    let title: String
+    let systemImage: String
+    let accent: Color
+    let message: String
+
+    var body: some View {
+        MistiaPinnedTopBarScaffold(
+            tone: .standard,
+            title: title,
+            embedsInNavigationStack: false,
+            showsLeadingAvatar: false,
+            leadingSystemImage: "chevron.left",
+            trailingSystemImage: nil,
+            hidesSystemBackButton: true,
+            onLeadingTap: { dismiss() },
+            contentSpacing: 18
+        ) {
+            ManagementProfilePlaceholderCard(
+                title: title,
+                message: message,
+                systemImage: systemImage,
+                accent: accent
+            )
+        }
+    }
+}
+
+private struct ManagementProfilePlaceholderCard: View {
+    let title: String
+    let message: String
+    let systemImage: String
+    let accent: Color
+    @Environment(\.colorScheme) private var colorScheme
+
+    var body: some View {
+        MistiaGlassCard(
+            cornerRadius: 24,
+            tint: colorScheme == .dark ? Color(UIColor.secondarySystemGroupedBackground) : accent.opacity(0.12)
+        ) {
+            VStack(alignment: .leading, spacing: 16) {
+                ZStack {
+                    RoundedRectangle(cornerRadius: 16, style: .continuous)
+                        .fill(accent.opacity(0.14))
+
+                    Image(systemName: systemImage)
+                        .font(.system(size: 24, weight: .bold))
+                        .foregroundStyle(accent)
+                }
+                .frame(width: 56, height: 56)
+
+                Text(title)
+                    .font(.system(size: 20, weight: .bold, design: .rounded))
+                    .foregroundStyle(.primary)
+
+                Text(message)
+                    .font(.system(size: 14.5, weight: .medium, design: .rounded))
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+    }
+}
+
+private struct ManagementSyncSettingsView: View {
+    @Environment(\.dismiss) private var dismiss
+    @Environment(\.colorScheme) private var colorScheme
+    @Environment(SessionStore.self) private var sessionStore
+    @Query private var storedConflicts: [SyncConflict]
+
+    @State private var destination: ManagementSyncSettingsDestination?
+
+    let accent: Color
+
+    private var cardTint: Color {
+        colorScheme == .dark ? Color(UIColor.secondarySystemGroupedBackground) : .white.opacity(0.22)
+    }
+
+    private var lastSyncValue: String {
+        guard let lastSyncAt = sessionStore.lastSyncAt else {
+            return mistiaLocalized(vi: "Chưa có", en: "None yet", ja: "まだありません")
+        }
+
+        return MistiaDateFormatting.dateTimeString(for: lastSyncAt)
+    }
+
+    private var dataManagementSummary: String {
+        let issueCount = storedConflicts.count + sessionStore.possibleDuplicateCount
+        if issueCount > 0 {
+            return mistiaLocalized(
+                vi: "Hiện có \(issueCount) mục cần bạn rà lại sau đồng bộ, bao gồm conflict và dữ liệu nghi trùng.",
+                en: "There are \(issueCount) items to review after syncing, including conflicts and possible duplicates.",
+                ja: "同期後に確認が必要な項目が \(issueCount) 件あり、競合や重複候補をここで確認できます。"
+            )
+        }
+
+        return mistiaLocalized(
+            vi: "Xem conflict, dữ liệu cần rà lại và các quyết định đồng bộ đã phát sinh.",
+            en: "Review conflicts, records that need attention, and sync decisions that were raised.",
+            ja: "競合や確認が必要なデータ、同期時に発生した判断項目を確認します。"
+        )
+    }
+
+    private var autoSyncFootnote: String {
+        mistiaLocalized(
+            vi: "Khi bật, Mistia sẽ tự kiểm tra thay đổi và đồng bộ định kỳ trong lúc bạn đang đăng nhập.",
+            en: "When enabled, Mistia periodically checks for changes and syncs automatically while you're signed in.",
+            ja: "有効にすると、サインイン中に変更を定期確認し、自動で同期します。"
+        )
+    }
+
+    var body: some View {
+        MistiaPinnedTopBarScaffold(
+            tone: .standard,
+            title: mistiaLocalized(vi: "Cài đặt đồng bộ", en: "Sync settings", ja: "同期設定"),
+            embedsInNavigationStack: false,
+            showsLeadingAvatar: false,
+            leadingSystemImage: "chevron.left",
+            trailingSystemImage: nil,
+            hidesSystemBackButton: true,
+            onLeadingTap: { dismiss() },
+            contentSpacing: 18
+        ) {
+            ManagementProfileListCard(tint: cardTint) {
+                VStack(spacing: 0) {
+                    ManagementProfileInfoRow(
+                        title: mistiaLocalized(vi: "Lần đồng bộ gần nhất", en: "Last sync", ja: "前回の同期"),
+                        icon: "clock.arrow.trianglehead.counterclockwise.rotate.90",
+                        accent: .slate,
+                        value: lastSyncValue,
+                        subtitle: nil
+                    )
+
+                    ManagementProfileRowDivider()
+
+                    ManagementProfileNavigationRow(
+                        title: mistiaLocalized(vi: "Quản lý dữ liệu đồng bộ", en: "Manage synced data", ja: "同期データを管理"),
+                        icon: "externaldrive.badge.person.crop",
+                        accent: .amber,
+                        subtitle: nil,
+                        badge: {
+                            let issueCount = storedConflicts.count + sessionStore.possibleDuplicateCount
+                            return issueCount > 0 ? "\(issueCount)" : nil
+                        }()
+                    ) {
+                        destination = .dataManagement
+                    }
+                }
+            }
+
+            ManagementSettingsFootnote(text: dataManagementSummary)
+
+            ManagementProfileListCard(tint: cardTint) {
+                ManagementProfileToggleRow(
+                    title: mistiaLocalized(vi: "Tự động đồng bộ", en: "Auto sync", ja: "自動同期"),
+                    icon: "arrow.triangle.2.circlepath.icloud",
+                    accent: .mint,
+                    subtitle: nil,
+                    isOn: Binding(
+                        get: { sessionStore.isAutoSyncEnabled },
+                        set: { sessionStore.setAutoSyncEnabled($0) }
+                    ),
+                    isDisabled: !sessionStore.canManageSync
+                )
+            }
+
+            ManagementSettingsFootnote(text: autoSyncFootnote)
+
+            ManagementProfilePrimaryActionButton(
+                title: mistiaLocalized(vi: "Đồng bộ ngay", en: "Sync now", ja: "今すぐ同期"),
+                accent: accent,
+                isDisabled: !sessionStore.canManageSync || sessionStore.isWorking,
+                showsProgress: sessionStore.isWorking && sessionStore.canManageSync
+            ) {
+                Task {
+                    await sessionStore.syncNow()
+                }
+            }
+        }
+        .navigationDestination(item: $destination) { route in
+            switch route {
+            case .dataManagement:
+                ManagementDataConflictsView(accent: accent)
+            }
         }
     }
 }

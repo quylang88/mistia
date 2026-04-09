@@ -267,8 +267,33 @@ struct SupabaseAuthService {
             _ = try? await URLSession.shared.data(for: request)
         }
 
-        GIDSignIn.sharedInstance.signOut()
-        try keychain.removeData(for: "auth-session")
+        try clearPersistedSession()
+    }
+
+    func deleteAccount(session: SupabaseAuthSession) async throws {
+        let configuration = try configuration()
+        let url = configuration.functionsBaseURL.appending(path: "delete-account")
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.setValue(configuration.anonKey, forHTTPHeaderField: "apikey")
+        request.setValue("Bearer \(session.accessToken)", forHTTPHeaderField: "Authorization")
+
+        let (data, response) = try await URLSession.shared.data(for: request)
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw SupabaseServiceError.invalidResponse
+        }
+
+        guard (200..<300).contains(httpResponse.statusCode) else {
+            if let error = try? decoder.decode(SupabaseServiceErrorResponse.self, from: data) {
+                throw SupabaseServiceError.serverMessage(
+                    error.errorDescription ?? error.message ?? "The account deletion request failed."
+                )
+            }
+            throw SupabaseServiceError.serverMessage("The account deletion request failed with status \(httpResponse.statusCode).")
+        }
+
+        try clearPersistedSession()
     }
 
     func requestPasswordReset(email: String) async throws {
@@ -446,6 +471,11 @@ struct SupabaseAuthService {
     private func persist(session: SupabaseAuthSession) throws {
         let data = try encoder.encode(session)
         try keychain.set(data, for: "auth-session")
+    }
+
+    private func clearPersistedSession() throws {
+        GIDSignIn.sharedInstance.signOut()
+        try keychain.removeData(for: "auth-session")
     }
 
     private func performAuthRequest<Body: Encodable, Response: Decodable>(

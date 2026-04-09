@@ -7,6 +7,7 @@ enum MistiaAppStorageKey {
     static let didSeedManagementCategories = "mistia.management.didSeedCategories"
     static let currencyCode = "mistia.settings.currency.code"
     static let appLanguage = MistiaAppLanguage.userDefaultsKey
+    static let syncAutoEnabled = "mistia.sync.auto.enabled"
 }
 
 enum MistiaAppearanceMode: String, CaseIterable, Identifiable {

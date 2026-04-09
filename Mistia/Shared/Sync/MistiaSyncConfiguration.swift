@@ -12,6 +12,10 @@ struct MistiaSyncConfiguration: Equatable {
         projectURL.appending(path: "rest/v1")
     }
 
+    var functionsBaseURL: URL {
+        projectURL.appending(path: "functions/v1")
+    }
+
     static func load(
         bundle: Bundle = .main,
         processInfo: ProcessInfo = .processInfo

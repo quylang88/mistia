@@ -67,6 +67,7 @@ final class SessionStore {
     var lastSyncAt: Date?
     var initialSyncPreview: MistiaInitialSyncPreview?
     var possibleDuplicateCount = 0
+    var isAutoSyncEnabled: Bool
     var authPhase: SessionAuthPhase = .signIn
     var authBanner: SessionAuthBanner?
     var authPendingEmail: String?
@@ -76,6 +77,7 @@ final class SessionStore {
     @ObservationIgnored private let authService: SupabaseAuthService
     @ObservationIgnored private let modelContainer: ModelContainer
     @ObservationIgnored private let syncCoordinator: SyncCoordinator
+    @ObservationIgnored private let userDefaults: UserDefaults
     @ObservationIgnored private var currentSession: SupabaseAuthSession?
     @ObservationIgnored private var didBootstrap = false
     @ObservationIgnored private var liveSyncTask: Task<Void, Never>?
@@ -83,10 +85,15 @@ final class SessionStore {
     @ObservationIgnored private var requiresInitialSync = false
     @ObservationIgnored private var pendingInitialSyncChoice: MistiaInitialSyncChoice?
 
-    init(modelContainer: ModelContainer) {
+    init(
+        modelContainer: ModelContainer,
+        userDefaults: UserDefaults = .standard
+    ) {
         self.modelContainer = modelContainer
+        self.userDefaults = userDefaults
         authService = SupabaseAuthService()
         syncCoordinator = SyncCoordinator(modelContainer: modelContainer)
+        isAutoSyncEnabled = userDefaults.bool(forKey: MistiaAppStorageKey.syncAutoEnabled)
 
         if MistiaSyncConfiguration.load() == nil {
             syncStatusTitle = mistiaLocalized(
@@ -125,6 +132,13 @@ final class SessionStore {
 
     var canManageSync: Bool {
         currentSession != nil && isConfigured
+    }
+
+    func setAutoSyncEnabled(_ isEnabled: Bool) {
+        guard isAutoSyncEnabled != isEnabled else { return }
+        isAutoSyncEnabled = isEnabled
+        userDefaults.set(isEnabled, forKey: MistiaAppStorageKey.syncAutoEnabled)
+        updateAutoSyncLoopState()
     }
 
     func showAuthPhase(_ phase: SessionAuthPhase) {
@@ -350,14 +364,7 @@ final class SessionStore {
         isWorking = true
         let activeSession = currentSession
 
-        currentSession = nil
-        summary = nil
-        lastSyncAt = nil
-        lastErrorMessage = nil
-        initialSyncPreview = nil
-        possibleDuplicateCount = 0
-        pendingInitialSyncChoice = nil
-        syncCoordinator.clearQueuedMutations()
+        clearSessionRuntimeState()
 
         do {
             try await authService.signOut(session: activeSession)
@@ -367,6 +374,43 @@ final class SessionStore {
 
         isWorking = false
         applySignedOutState()
+    }
+
+    func deleteAccountKeepingLocalData() async {
+        guard let activeSession = currentSession else { return }
+
+        stopLiveSyncLoop()
+        isWorking = true
+        lastErrorMessage = nil
+
+        do {
+            try await authService.deleteAccount(session: activeSession)
+            do {
+                try MistiaSyncLocalStore.detachFromCloud(in: modelContainer)
+            } catch {
+                lastErrorMessage = friendlyErrorMessage(for: error)
+            }
+            clearSessionRuntimeState()
+            applySignedOutState(preservingBanner: true)
+            authBanner = SessionAuthBanner(
+                title: mistiaLocalized(
+                    vi: "Đã xóa tài khoản cloud",
+                    en: "Cloud account deleted",
+                    ja: "クラウドアカウントを削除しました"
+                ),
+                message: mistiaLocalized(
+                    vi: "Tài khoản và dữ liệu trên cloud đã được xóa. Dữ liệu local trên máy này vẫn được giữ lại.",
+                    en: "Your cloud account and server data were deleted. Local data on this device has been kept.",
+                    ja: "クラウドアカウントとサーバーデータを削除しました。この端末のローカルデータは保持されています。"
+                ),
+                style: .success
+            )
+        } catch {
+            lastErrorMessage = friendlyErrorMessage(for: error)
+            updateAutoSyncLoopState()
+        }
+
+        isWorking = false
     }
 
     func syncNow() async {
@@ -379,6 +423,28 @@ final class SessionStore {
         pendingInitialSyncChoice = choice
         initialSyncPreview = nil
         await drainSyncQueue()
+    }
+
+    func cancelInitialSyncSelection() {
+        guard requiresInitialSync else {
+            initialSyncPreview = nil
+            return
+        }
+
+        initialSyncPreview = nil
+        pendingInitialSyncChoice = nil
+        syncStatusTitle = mistiaLocalized(
+            vi: "Đã tạm hoãn đồng bộ lần đầu",
+            en: "Initial sync postponed",
+            ja: "初回同期を保留しました"
+        )
+        syncStatusDetail = mistiaLocalized(
+            vi: "Nhấn Đồng bộ ngay khi bạn sẵn sàng chọn cách đồng bộ dữ liệu với cloud.",
+            en: "Tap Sync now when you're ready to choose how to sync with the cloud.",
+            ja: "クラウドとの同期方法を選ぶ準備ができたら「今すぐ同期」を押してください。"
+        )
+        syncStatusSystemImage = "pause.circle"
+        updateAutoSyncLoopState()
     }
 
     func resolveSyncConflict(
@@ -747,6 +813,7 @@ final class SessionStore {
                     : "ログインに成功しました。データ同期を始めるには「今すぐ同期」を押してください。"
             )
             syncStatusSystemImage = "checkmark.circle"
+            updateAutoSyncLoopState()
         } catch {
             requiresInitialSync = false
             lastErrorMessage = friendlyErrorMessage(for: error)
@@ -769,6 +836,7 @@ final class SessionStore {
     }
 
     private func applyConfigurationMissingState() {
+        stopLiveSyncLoop()
         summary = nil
         currentSession = nil
         requiresInitialSync = false
@@ -793,6 +861,7 @@ final class SessionStore {
     }
 
     private func applySignedOutState(preservingBanner: Bool = false) {
+        stopLiveSyncLoop()
         summary = nil
         currentSession = nil
         requiresInitialSync = false
@@ -1121,6 +1190,15 @@ final class SessionStore {
         liveSyncTask = nil
     }
 
+    private func updateAutoSyncLoopState() {
+        guard isAutoSyncEnabled, canManageSync, !requiresInitialSync else {
+            stopLiveSyncLoop()
+            return
+        }
+
+        startLiveSyncLoop()
+    }
+
     private func drainSyncQueue() async {
         isSyncInFlight = true
         defer { isSyncInFlight = false }
@@ -1181,6 +1259,7 @@ final class SessionStore {
                 requiresInitialSync = false
                 initialSyncPreview = nil
                 pendingInitialSyncChoice = nil
+                updateAutoSyncLoopState()
             } else {
                 applySyncingState()
                 result = try await syncCoordinator.sync(session: validSession)
@@ -1207,8 +1286,10 @@ final class SessionStore {
                 syncStatusDetail = result.statusMessage
             }
             syncStatusSystemImage = "checkmark.icloud"
+            updateAutoSyncLoopState()
         } catch {
             applySyncErrorState(error)
+            updateAutoSyncLoopState()
         }
     }
 
@@ -1217,6 +1298,17 @@ final class SessionStore {
             modelContext: modelContainer.mainContext,
             sessionStore: self
         )
+    }
+
+    private func clearSessionRuntimeState() {
+        currentSession = nil
+        summary = nil
+        lastSyncAt = nil
+        lastErrorMessage = nil
+        initialSyncPreview = nil
+        possibleDuplicateCount = 0
+        pendingInitialSyncChoice = nil
+        syncCoordinator.clearQueuedMutations()
     }
 }
 

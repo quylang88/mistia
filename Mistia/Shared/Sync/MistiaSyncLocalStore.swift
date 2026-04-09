@@ -119,6 +119,23 @@ enum MistiaSyncLocalStore {
         }
     }
 
+    static func detachFromCloud(in container: ModelContainer) throws {
+        let context = ModelContext(container)
+
+        try fetchWallets(context).forEach { $0.remoteVersion = 0 }
+        try fetchCreditCardProfiles(context).forEach { $0.remoteVersion = 0 }
+        try fetchCategories(context).forEach { $0.remoteVersion = 0 }
+        try fetchTransactions(context).forEach { $0.remoteVersion = 0 }
+        try fetchBudgetPlans(context).forEach { $0.remoteVersion = 0 }
+        try fetchSavingsGoals(context).forEach { $0.remoteVersion = 0 }
+        try fetchRecurringBillPlans(context).forEach { $0.remoteVersion = 0 }
+        try fetchInstallmentPlans(context).forEach { $0.remoteVersion = 0 }
+        try fetchDueOccurrences(context).forEach { $0.remoteVersion = 0 }
+
+        try fetchConflicts(context).forEach { context.delete($0) }
+        try context.save()
+    }
+
     static func applySnapshotIncrementally(
         _ snapshot: MistiaRemoteSnapshot,
         shouldPruneMissing: Bool,
