@@ -35,6 +35,7 @@ struct ManagementView: View {
     @State private var walletEditorTarget: ManagementWalletEditorTarget?
     @State private var categoryEditorTarget: ManagementCategoryEditorTarget?
     @State private var selectedCategoryKind: TransactionCategoryKind = .expense
+    @State private var expandedCategoryParentIDs: Set<UUID> = []
     @State private var infoAlert: ManagementInfoAlert?
     @State private var showsDeleteAllConfirmation = false
 
@@ -61,15 +62,13 @@ struct ManagementView: View {
             }
     }
 
-    private var visibleCategories: [TransactionCategory] {
-        storedCategories
-            .filter { !$0.isArchived && $0.kind == selectedCategoryKind }
-            .sorted {
-                if $0.sortOrder != $1.sortOrder {
-                    return $0.sortOrder < $1.sortOrder
-                }
-                return $0.createdAt < $1.createdAt
-            }
+    private var visibleCategorySections: [TransactionCategoryGroupSection] {
+        MistiaCategoryHierarchy.groupedSections(
+            from: storedCategories,
+            kind: selectedCategoryKind,
+            includeArchived: false,
+            includeEmptyParents: true
+        )
     }
 
     private let dataActions = ManagementDataActionKind.allCases
@@ -110,7 +109,10 @@ struct ManagementView: View {
         }
         .task {
             do {
-                try MistiaBootstrap.seedDefaultCategoriesIfNeeded(modelContext: modelContext)
+                try MistiaBootstrap.seedDefaultCategoriesIfNeeded(
+                    modelContext: modelContext,
+                    sessionStore: sessionStore
+                )
             } catch {
                 infoAlert = ManagementInfoAlert(
                     title: mistiaLocalized(vi: "Không thể khởi tạo danh mục", en: "Couldn't initialize categories", ja: "カテゴリを初期化できませんでした"),
@@ -232,7 +234,7 @@ struct ManagementView: View {
                 ManagementCategoryKindPicker(selection: $selectedCategoryKind)
 
                 ManagementCard(tint: cardTint) {
-                    if visibleCategories.isEmpty {
+                    if visibleCategorySections.isEmpty {
                         ManagementEmptyState(
                             title: selectedCategoryKind == .expense
                                 ? mistiaLocalized(vi: "Chưa có danh mục chi tiêu", en: "No expense categories yet", ja: "支出カテゴリはまだありません")
@@ -254,34 +256,73 @@ struct ManagementView: View {
                                 ? ["fork.knife", "bag.fill", "airplane", "plus"]
                                 : ["briefcase.fill", "gift.fill", "chart.line.uptrend.xyaxis", "plus"]
                         ) {
-                            categoryEditorTarget = ManagementCategoryEditorTarget(category: nil, defaultKind: selectedCategoryKind)
+                            categoryEditorTarget = ManagementCategoryEditorTarget(
+                                category: nil,
+                                defaultKind: selectedCategoryKind,
+                                preferredParentCategoryID: nil
+                            )
                         }
                     } else {
                         VStack(spacing: 0) {
-                            LazyVGrid(
-                                columns: [
-                                    GridItem(.adaptive(minimum: 108, maximum: 148), spacing: 12)
-                                ],
-                                spacing: 12
-                            ) {
-                                ForEach(visibleCategories, id: \.id) { category in
-                                    ManagementCategoryTile(category: category) {
-                                        categoryEditorTarget = ManagementCategoryEditorTarget(category: category, defaultKind: category.kind)
+                            ForEach(Array(visibleCategorySections.enumerated()), id: \.element.id) { index, section in
+                                ManagementCategoryParentCard(
+                                    parent: section.parent,
+                                    children: section.children,
+                                    isExpanded: Binding(
+                                        get: { expandedCategoryParentIDs.contains(section.parent.id) },
+                                        set: { isExpanded in
+                                            if isExpanded {
+                                                expandedCategoryParentIDs.insert(section.parent.id)
+                                            } else {
+                                                expandedCategoryParentIDs.remove(section.parent.id)
+                                            }
+                                        }
+                                    ),
+                                    onEditParent: {
+                                        categoryEditorTarget = ManagementCategoryEditorTarget(
+                                            category: section.parent,
+                                            defaultKind: section.parent.kind,
+                                            preferredParentCategoryID: nil
+                                        )
+                                    },
+                                    onEditChild: { category in
+                                        categoryEditorTarget = ManagementCategoryEditorTarget(
+                                            category: category,
+                                            defaultKind: category.kind,
+                                            preferredParentCategoryID: category.parentCategory?.id
+                                        )
+                                    },
+                                    onAddChild: {
+                                        categoryEditorTarget = ManagementCategoryEditorTarget(
+                                            category: nil,
+                                            defaultKind: section.parent.kind,
+                                            preferredParentCategoryID: section.parent.id
+                                        )
                                     }
+                                )
+                                .padding(.horizontal, 14)
+                                .padding(.vertical, 14)
+
+                                if index < visibleCategorySections.count - 1 {
+                                    Divider()
+                                        .padding(.leading, 52)
+                                        .padding(.trailing, 0)
                                 }
                             }
-                            .padding(.horizontal, 14)
-                            .padding(.vertical, 14)
 
                             Divider()
                                 .padding(.leading, 52)
                                 .padding(.trailing, 0)
 
                             ManagementFooterAddButton(
-                                title: mistiaLocalized(vi: "Thêm danh mục", en: "Add category", ja: "カテゴリを追加"),
+                                title: mistiaLocalized(vi: "Thêm danh mục cha", en: "Add parent category", ja: "親カテゴリを追加"),
                                 accent: accentPurple
                             ) {
-                                categoryEditorTarget = ManagementCategoryEditorTarget(category: nil, defaultKind: selectedCategoryKind)
+                                categoryEditorTarget = ManagementCategoryEditorTarget(
+                                    category: nil,
+                                    defaultKind: selectedCategoryKind,
+                                    preferredParentCategoryID: nil
+                                )
                             }
                             .padding(.horizontal, 14)
                             .padding(.vertical, 14)
@@ -722,6 +763,96 @@ private struct ManagementCategoryRow: View {
             .padding(.vertical, 11)
         }
         .buttonStyle(MistiaPressableButtonStyle(cornerRadius: 16))
+    }
+}
+
+private struct ManagementCategoryParentCard: View {
+    let parent: TransactionCategory
+    let children: [TransactionCategory]
+    @Binding var isExpanded: Bool
+    let onEditParent: () -> Void
+    let onEditChild: (TransactionCategory) -> Void
+    let onAddChild: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(spacing: 12) {
+                Button {
+                    withAnimation(.snappy) {
+                        isExpanded.toggle()
+                    }
+                } label: {
+                    HStack(spacing: 12) {
+                        ManagementIconTile(icon: parent.iconSymbolName, color: parent.iconColor)
+
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(parent.localizedDisplayName)
+                                .font(.system(size: 16, weight: .semibold, design: .rounded))
+                                .foregroundStyle(.primary)
+                            Text(
+                                mistiaLocalized(
+                                    vi: "\(children.count) danh mục con",
+                                    en: "\(children.count) child categories",
+                                    ja: "子カテゴリ \(children.count) 件"
+                                )
+                            )
+                                .font(.system(size: 12.5, weight: .medium, design: .rounded))
+                                .foregroundStyle(.secondary)
+                        }
+
+                        Spacer()
+
+                        Image(systemName: isExpanded ? "chevron.up" : "chevron.down")
+                            .font(.system(size: 11, weight: .bold))
+                            .foregroundStyle(.tertiary)
+                    }
+                }
+                .buttonStyle(MistiaPressableButtonStyle(cornerRadius: 18))
+
+                Button(action: onEditParent) {
+                    Image(systemName: "slider.horizontal.3")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(.secondary)
+                        .frame(width: 30, height: 30)
+                }
+                .buttonStyle(.plain)
+            }
+
+            if isExpanded {
+                VStack(spacing: 10) {
+                    if children.isEmpty {
+                        Text(
+                            mistiaLocalized(
+                                vi: "Chưa có danh mục con nào trong nhánh này.",
+                                en: "There are no child categories in this branch yet.",
+                                ja: "この枝にはまだ子カテゴリがありません。"
+                            )
+                        )
+                            .font(.system(size: 13, weight: .medium, design: .rounded))
+                            .foregroundStyle(.secondary)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    } else {
+                        ForEach(Array(children.enumerated()), id: \.element.id) { index, child in
+                            ManagementCategoryRow(category: child) {
+                                onEditChild(child)
+                            }
+
+                            if index < children.count - 1 {
+                                Divider()
+                                    .padding(.leading, 48)
+                            }
+                        }
+                    }
+
+                    ManagementFooterAddButton(
+                        title: mistiaLocalized(vi: "Thêm danh mục con", en: "Add child category", ja: "子カテゴリを追加"),
+                        accent: Color(red: 0.43, green: 0.23, blue: 0.76)
+                    ) {
+                        onAddChild()
+                    }
+                }
+            }
+        }
     }
 }
 

@@ -155,6 +155,10 @@ enum MistiaSyncLocalStore {
             upsertCategory(row, context: context, categoryByID: &categoryByID)
         }
 
+        for row in snapshot.categories {
+            applyCategoryHierarchy(row, categoryByID: categoryByID)
+        }
+
         for row in snapshot.creditCardProfiles {
             upsertCreditProfile(
                 row,
@@ -272,6 +276,7 @@ enum MistiaSyncLocalStore {
             upsertCreditProfile(row, context: context, walletByID: walletByID, profileByID: &profileByID)
         case .category(let row):
             upsertCategory(row, context: context, categoryByID: &categoryByID)
+            applyCategoryHierarchy(row, categoryByID: categoryByID)
         case .transaction(let row):
             var transactionByID = Dictionary(uniqueKeysWithValues: try fetchTransactions(context).map { ($0.id, $0) })
             upsertTransaction(
@@ -539,6 +544,7 @@ enum MistiaSyncLocalStore {
             kind: TransactionCategoryKind(rawValue: row.kindRawValue) ?? .expense,
             iconSymbolName: row.iconSymbolName,
             iconColorHex: row.iconColorHex,
+            hierarchyRole: row.hierarchyRoleRawValue.flatMap(TransactionCategoryHierarchyRole.init(rawValue:)),
             systemKey: row.systemKey,
             isSystem: row.isSystem,
             sortOrder: row.sortOrder,
@@ -559,6 +565,7 @@ enum MistiaSyncLocalStore {
         category.kind = TransactionCategoryKind(rawValue: row.kindRawValue) ?? .expense
         category.iconSymbolName = row.iconSymbolName
         category.iconColorHex = row.iconColorHex
+        category.hierarchyRoleRawValue = row.hierarchyRoleRawValue
         category.systemKey = row.systemKey
         category.isSystem = row.isSystem
         category.sortOrder = row.sortOrder
@@ -568,6 +575,14 @@ enum MistiaSyncLocalStore {
         category.updatedAt = row.updatedAt
         category.deletedAt = row.deletedAt
         category.remoteVersion = row.syncVersion
+    }
+
+    private static func applyCategoryHierarchy(
+        _ row: RemoteTransactionCategory,
+        categoryByID: [UUID: TransactionCategory]
+    ) {
+        guard let category = categoryByID[row.id] else { return }
+        category.parentCategory = row.parentCategoryID.flatMap { categoryByID[$0] }
     }
 
     private static func upsertCreditProfile(
@@ -970,6 +985,8 @@ private extension RemoteTransactionCategory {
             kindRawValue: category.kindRawValue,
             iconSymbolName: category.iconSymbolName,
             iconColorHex: category.iconColorHex,
+            parentCategoryID: category.parentCategory?.id,
+            hierarchyRoleRawValue: category.hierarchyRoleRawValue,
             systemKey: category.systemKey,
             isSystem: category.isSystem,
             sortOrder: category.sortOrder,

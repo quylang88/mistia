@@ -11,6 +11,7 @@ struct ManagementCategoryEditorTarget: Identifiable {
     let id = UUID()
     let category: TransactionCategory?
     let defaultKind: TransactionCategoryKind
+    let preferredParentCategoryID: UUID?
 }
 
 struct ManagementWalletEditorSheet: View {
@@ -405,11 +406,33 @@ struct ManagementCategoryEditorSheet: View {
 
     @State private var draft: CategoryDraft
     @State private var showsIconPicker = false
+    @State private var showsParentPicker = false
     @State private var alertMessage: String?
 
     init(target: ManagementCategoryEditorTarget) {
         self.target = target
-        _draft = State(initialValue: CategoryDraft(category: target.category, defaultKind: target.defaultKind))
+        _draft = State(initialValue: CategoryDraft(
+            category: target.category,
+            defaultKind: target.defaultKind,
+            preferredParentCategoryID: target.preferredParentCategoryID
+        ))
+    }
+
+    private var availableParentCategories: [TransactionCategory] {
+        MistiaCategoryHierarchy.parentCategories(
+            from: storedCategories,
+            kind: draft.kind,
+            includeArchived: false
+        )
+        .filter { $0.id != target.category?.id }
+    }
+
+    private var selectedParentCategory: TransactionCategory? {
+        availableParentCategories.first(where: { $0.id == draft.parentCategoryID })
+    }
+
+    private var canEditHierarchyRole: Bool {
+        target.category == nil
     }
 
     var body: some View {
@@ -457,6 +480,47 @@ struct ManagementCategoryEditorSheet: View {
                             title: \.title,
                             accent: Color(red: 0.43, green: 0.23, blue: 0.76)
                         )
+                    }
+
+                    VStack(alignment: .leading, spacing: 10) {
+                        Text(mistiaLocalized(vi: "Cấu trúc", en: "Structure", ja: "構造"))
+                            .font(.subheadline.weight(.semibold))
+                            .foregroundStyle(.secondary)
+
+                        MistiaNativeSegmentedControl(
+                            selection: $draft.hierarchyRole,
+                            options: TransactionCategoryHierarchyRole.allCases,
+                            title: \.title,
+                            accent: Color(red: 0.43, green: 0.23, blue: 0.76)
+                        )
+                        .disabled(!canEditHierarchyRole)
+                        .opacity(canEditHierarchyRole ? 1 : 0.68)
+                    }
+
+                    if draft.hierarchyRole == .child {
+                        Button {
+                            showsParentPicker = true
+                        } label: {
+                            HStack {
+                                VStack(alignment: .leading, spacing: 3) {
+                                    Text(mistiaLocalized(vi: "Danh mục cha", en: "Parent category", ja: "親カテゴリ"))
+                                        .foregroundStyle(.primary)
+                                    Text(
+                                        selectedParentCategory?.localizedDisplayName
+                                            ?? mistiaLocalized(vi: "Chọn danh mục cha", en: "Choose parent category", ja: "親カテゴリを選択")
+                                    )
+                                        .font(.footnote)
+                                        .foregroundStyle(selectedParentCategory == nil ? .tertiary : .secondary)
+                                }
+
+                                Spacer()
+
+                                Image(systemName: "chevron.right")
+                                    .font(.system(size: 11, weight: .bold))
+                                    .foregroundStyle(.tertiary)
+                            }
+                        }
+                        .buttonStyle(.plain)
                     }
                 }
 
@@ -513,6 +577,14 @@ struct ManagementCategoryEditorSheet: View {
                 draft.iconWasCustomized = true
             }
         }
+        .sheet(isPresented: $showsParentPicker) {
+            ManagementParentCategoryPickerSheet(
+                selectedParentCategoryID: draft.parentCategoryID,
+                parents: availableParentCategories
+            ) { category in
+                draft.parentCategoryID = category.id
+            }
+        }
         .alert(
             mistiaLocalized(vi: "Chưa thể lưu", en: "Can't save yet", ja: "まだ保存できません"),
             isPresented: Binding(
@@ -526,6 +598,14 @@ struct ManagementCategoryEditorSheet: View {
         }
         .onChange(of: draft.kind) { oldValue, newValue in
             draft.handleKindChange(from: oldValue, to: newValue)
+            if selectedParentCategory?.kind != newValue {
+                draft.parentCategoryID = nil
+            }
+        }
+        .onChange(of: draft.hierarchyRole) { _, newValue in
+            if newValue == .parent {
+                draft.parentCategoryID = nil
+            }
         }
     }
 
@@ -535,19 +615,37 @@ struct ManagementCategoryEditorSheet: View {
             return
         }
 
+        if draft.hierarchyRole == .child && selectedParentCategory == nil {
+            alertMessage = mistiaLocalized(
+                vi: "Chọn danh mục cha cho danh mục con này.",
+                en: "Choose a parent category for this child category.",
+                ja: "この子カテゴリの親カテゴリを選択してください。"
+            )
+            return
+        }
+
         let now = Date()
+        let selectedParentCategory = draft.hierarchyRole == .child ? selectedParentCategory : nil
         let categoryForSync: TransactionCategory
 
         if let category = target.category {
             let previousKind = category.kind
+            let previousParentID = category.parentCategory?.id
+            let previousRole = category.hierarchyRole
             category.name = trimmedName
             category.kind = draft.kind
             category.iconSymbolName = draft.iconSymbolName
             category.iconColorHex = draft.iconColorHex
+            category.parentCategory = selectedParentCategory
+            category.hierarchyRole = draft.hierarchyRole
             category.updatedAt = now
 
-            if previousKind != draft.kind {
-                category.sortOrder = nextSortOrder(for: draft.kind, excluding: category)
+            if previousKind != draft.kind || previousParentID != selectedParentCategory?.id || previousRole != draft.hierarchyRole {
+                category.sortOrder = nextSortOrder(
+                    for: draft.kind,
+                    parentID: selectedParentCategory?.id,
+                    excluding: category
+                )
             }
             categoryForSync = category
         } else {
@@ -556,8 +654,14 @@ struct ManagementCategoryEditorSheet: View {
                 kind: draft.kind,
                 iconSymbolName: draft.iconSymbolName,
                 iconColorHex: draft.iconColorHex,
+                parentCategory: selectedParentCategory,
+                hierarchyRole: draft.hierarchyRole,
                 isSystem: false,
-                sortOrder: nextSortOrder(for: draft.kind, excluding: nil)
+                sortOrder: nextSortOrder(
+                    for: draft.kind,
+                    parentID: selectedParentCategory?.id,
+                    excluding: nil
+                )
             )
             modelContext.insert(category)
             categoryForSync = category
@@ -579,6 +683,20 @@ struct ManagementCategoryEditorSheet: View {
     private func archiveCategory() {
         guard let category = target.category else { return }
 
+        let hasActiveChildren = storedCategories.contains { candidate in
+            candidate.deletedAt == nil
+                && !candidate.isArchived
+                && candidate.parentCategory?.id == category.id
+        }
+        if category.isParentCategory && hasActiveChildren {
+            alertMessage = mistiaLocalized(
+                vi: "Danh mục cha này vẫn còn danh mục con đang hoạt động. Hãy lưu trữ hoặc chuyển các danh mục con trước.",
+                en: "This parent category still has active child categories. Archive or move those child categories first.",
+                ja: "この親カテゴリにはまだ有効な子カテゴリがあります。先に子カテゴリを整理してください。"
+            )
+            return
+        }
+
         category.isArchived = true
         category.archivedAt = .now
         category.updatedAt = .now
@@ -596,12 +714,17 @@ struct ManagementCategoryEditorSheet: View {
         }
     }
 
-    private func nextSortOrder(for kind: TransactionCategoryKind, excluding category: TransactionCategory?) -> Int {
+    private func nextSortOrder(
+        for kind: TransactionCategoryKind,
+        parentID: UUID?,
+        excluding category: TransactionCategory?
+    ) -> Int {
         let maxSort = storedCategories
             .filter {
                 $0.deletedAt == nil
                     && !$0.isArchived
                     && $0.kind == kind
+                    && $0.parentCategory?.id == parentID
                     && $0.id != category?.id
             }
             .map(\.sortOrder)
@@ -713,6 +836,54 @@ private struct ManagementBankPickerSheet: View {
 
         return ManagementPresetData.japaneseBanks.filter { bank in
             bank.name.localizedLowercase.contains(searchTerm)
+        }
+    }
+}
+
+private struct ManagementParentCategoryPickerSheet: View {
+    @Environment(\.dismiss) private var dismiss
+
+    let selectedParentCategoryID: UUID?
+    let parents: [TransactionCategory]
+    let onSelect: (TransactionCategory) -> Void
+
+    var body: some View {
+        NavigationStack {
+            List {
+                ForEach(parents) { category in
+                    Button {
+                        onSelect(category)
+                        dismiss()
+                    } label: {
+                        HStack(spacing: 12) {
+                            ManagementEditorIconPreview(
+                                symbolName: category.iconSymbolName,
+                                color: category.iconColor,
+                                size: 34
+                            )
+
+                            Text(category.localizedDisplayName)
+                                .foregroundStyle(.primary)
+
+                            Spacer()
+
+                            if category.id == selectedParentCategoryID {
+                                Image(systemName: "checkmark")
+                                    .foregroundStyle(.tint)
+                            }
+                        }
+                    }
+                }
+            }
+            .navigationTitle(mistiaLocalized(vi: "Danh mục cha", en: "Parent category", ja: "親カテゴリ"))
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    Button(mistiaLocalized(vi: "Đóng", en: "Close", ja: "閉じる")) {
+                        dismiss()
+                    }
+                }
+            }
         }
     }
 }
@@ -840,11 +1011,17 @@ private struct WalletDraft {
 private struct CategoryDraft {
     var name: String
     var kind: TransactionCategoryKind
+    var hierarchyRole: TransactionCategoryHierarchyRole
+    var parentCategoryID: UUID?
     var iconSymbolName: String
     var iconColorHex: String
     var iconWasCustomized: Bool
 
-    init(category: TransactionCategory?, defaultKind: TransactionCategoryKind) {
+    init(
+        category: TransactionCategory?,
+        defaultKind: TransactionCategoryKind,
+        preferredParentCategoryID: UUID?
+    ) {
         if let category {
             let matchesDefaultIcon = category.kind.matchesDefaultIconAppearance(
                 symbolName: category.iconSymbolName,
@@ -853,6 +1030,8 @@ private struct CategoryDraft {
 
             self.name = category.name
             self.kind = category.kind
+            self.hierarchyRole = category.hierarchyRole
+            self.parentCategoryID = category.parentCategory?.id
             self.iconSymbolName = category.iconSymbolName
             self.iconColorHex = category.kind.migratedLegacyDefaultColorHex(
                 for: category.iconColorHex,
@@ -862,6 +1041,8 @@ private struct CategoryDraft {
         } else {
             self.name = ""
             self.kind = defaultKind
+            self.hierarchyRole = preferredParentCategoryID == nil ? .parent : .child
+            self.parentCategoryID = preferredParentCategoryID
             self.iconSymbolName = defaultKind.defaultIconSymbolName
             self.iconColorHex = defaultKind.defaultColorHex
             self.iconWasCustomized = false

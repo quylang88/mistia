@@ -2,22 +2,46 @@ import Foundation
 import SwiftData
 
 enum MistiaDataStack {
-    static let sharedModelContainer: ModelContainer = {
-        let schema = Schema(versionedSchema: MistiaSchemaV4.self)
+    struct LaunchIssue: Error {
+        let storeURL: URL?
+        let underlyingErrorDescription: String
+    }
 
+    struct LaunchState {
+        let modelContainer: ModelContainer
+        let issue: LaunchIssue?
+    }
+
+    static let sharedLaunchState: LaunchState = {
+        let schema = Schema(versionedSchema: MistiaSchemaV5.self)
         let configuration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: false)
 
         do {
-            return try ModelContainer(
-                for: schema,
-                migrationPlan: MistiaMigrationPlan.self,
-                configurations: [configuration]
+            return LaunchState(
+                modelContainer: try ModelContainer(
+                    for: schema,
+                    migrationPlan: MistiaMigrationPlan.self,
+                    configurations: [configuration]
+                ),
+                issue: nil
             )
         } catch {
-            // Fallback for development: wipe and recreate
-            try? FileManager.default.removeItem(at: configuration.url)
-            let config = ModelConfiguration(schema: schema, isStoredInMemoryOnly: false)
-            return try! ModelContainer(for: schema, configurations: [config])
+            let fallbackConfiguration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)
+            let fallbackContainer = try! ModelContainer(
+                for: schema,
+                configurations: [fallbackConfiguration]
+            )
+
+            return LaunchState(
+                modelContainer: fallbackContainer,
+                issue: LaunchIssue(
+                    storeURL: configuration.url,
+                    underlyingErrorDescription: String(describing: error)
+                )
+            )
         }
     }()
+
+    static let sharedModelContainer: ModelContainer = sharedLaunchState.modelContainer
+    static let launchIssue: LaunchIssue? = sharedLaunchState.issue
 }

@@ -125,6 +125,9 @@ final class TransactionCategory {
     var kindRawValue: String
     var iconSymbolName: String
     var iconColorHex: String
+    var parentCategory: TransactionCategory?
+    @Relationship(deleteRule: .nullify, inverse: \TransactionCategory.parentCategory) var childCategories: [TransactionCategory] = []
+    var hierarchyRoleRawValue: String?
     var systemKey: String?
     var isSystem: Bool
     var sortOrder: Int
@@ -141,6 +144,8 @@ final class TransactionCategory {
         kind: TransactionCategoryKind,
         iconSymbolName: String,
         iconColorHex: String,
+        parentCategory: TransactionCategory? = nil,
+        hierarchyRole: TransactionCategoryHierarchyRole? = nil,
         systemKey: String? = nil,
         isSystem: Bool = false,
         sortOrder: Int = 0,
@@ -156,6 +161,8 @@ final class TransactionCategory {
         self.kindRawValue = kind.rawValue
         self.iconSymbolName = iconSymbolName
         self.iconColorHex = iconColorHex
+        self.parentCategory = parentCategory
+        self.hierarchyRoleRawValue = hierarchyRole?.rawValue
         self.systemKey = systemKey
         self.isSystem = isSystem
         self.sortOrder = sortOrder
@@ -170,6 +177,19 @@ final class TransactionCategory {
     var kind: TransactionCategoryKind {
         get { TransactionCategoryKind(rawValue: kindRawValue) ?? .expense }
         set { kindRawValue = newValue.rawValue }
+    }
+
+    var hierarchyRole: TransactionCategoryHierarchyRole {
+        get {
+            if let hierarchyRoleRawValue,
+               let storedRole = TransactionCategoryHierarchyRole(rawValue: hierarchyRoleRawValue) {
+                return storedRole
+            }
+            return parentCategory == nil ? .parent : .child
+        }
+        set {
+            hierarchyRoleRawValue = newValue.rawValue
+        }
     }
 }
 

@@ -77,15 +77,41 @@ struct TransactionsView: View {
             }
     }
 
+    private var activeCategorySections: [TransactionCategoryGroupSection] {
+        switch selectedSegment?.kind {
+        case .expense:
+            return MistiaCategoryHierarchy.groupedSections(
+                from: storedCategories,
+                kind: .expense,
+                includeArchived: false,
+                includeEmptyParents: false
+            )
+        case .income:
+            return MistiaCategoryHierarchy.groupedSections(
+                from: storedCategories,
+                kind: .income,
+                includeArchived: false,
+                includeEmptyParents: false
+            )
+        case .transfer:
+            return []
+        case nil:
+            return MistiaCategoryHierarchy.groupedSections(
+                from: storedCategories,
+                kind: .expense,
+                includeArchived: false,
+                includeEmptyParents: false
+            ) + MistiaCategoryHierarchy.groupedSections(
+                from: storedCategories,
+                kind: .income,
+                includeArchived: false,
+                includeEmptyParents: false
+            )
+        }
+    }
+
     private var activeCategories: [TransactionCategory] {
-        storedCategories
-            .filter { $0.deletedAt == nil && !$0.isArchived }
-            .sorted {
-                if $0.sortOrder != $1.sortOrder {
-                    return $0.sortOrder < $1.sortOrder
-                }
-                return $0.createdAt < $1.createdAt
-            }
+        activeCategorySections.flatMap(\.children)
     }
 
     private var transactionsByID: [UUID: LedgerTransaction] {
@@ -195,7 +221,10 @@ struct TransactionsView: View {
                 .presentationDragIndicator(.visible)
         }
         .task {
-            try? MistiaBootstrap.seedDefaultCategoriesIfNeeded(modelContext: modelContext)
+            try? MistiaBootstrap.seedDefaultCategoriesIfNeeded(
+                modelContext: modelContext,
+                sessionStore: sessionStore
+            )
         }
     }
 
@@ -353,16 +382,14 @@ struct TransactionsView: View {
                             filterState.categoryID = nil
                         }
                     }
-                    let relevantCategories = activeCategories.filter { cat in
-                        if let kind = selectedSegment?.kind {
-                            return (kind == .expense && cat.kind == .expense) || (kind == .income && cat.kind == .income)
-                        }
-                        return true
-                    }
-                    ForEach(relevantCategories, id: \.id) { category in
-                        Button(category.localizedDisplayName) {
-                            withAnimation(.snappy) {
-                                filterState.categoryID = category.id
+                    ForEach(activeCategorySections) { section in
+                        Section(section.parent.localizedDisplayName) {
+                            ForEach(section.children, id: \.id) { category in
+                                Button(category.localizedDisplayName) {
+                                    withAnimation(.snappy) {
+                                        filterState.categoryID = category.id
+                                    }
+                                }
                             }
                         }
                     }

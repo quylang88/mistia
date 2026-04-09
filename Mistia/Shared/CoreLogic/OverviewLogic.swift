@@ -480,7 +480,7 @@ nonisolated enum OverviewLogic {
         calendar: Calendar = .current
     ) -> [OverviewBudgetAlertSnapshot] {
         let selectedMonth = PlanningLogic.startOfMonth(for: referenceDate, calendar: calendar)
-        let rows = PlanningLogic.budgetRows(
+        let rows = PlanningLogic.budgetBranchRows(
             plans: budgets.filter { !$0.categoryName.isEmpty && $0.monthAnchor == selectedMonth },
             records: transactionRecords,
             selectedMonth: selectedMonth,

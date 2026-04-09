@@ -135,6 +135,22 @@ nonisolated enum TransactionCategoryKind: String, CaseIterable, Identifiable, Co
     }
 }
 
+nonisolated enum TransactionCategoryHierarchyRole: String, CaseIterable, Identifiable, Codable {
+    case parent
+    case child
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .parent:
+            mistiaLocalized(vi: "Danh mục cha", en: "Parent category", ja: "親カテゴリ")
+        case .child:
+            mistiaLocalized(vi: "Danh mục con", en: "Child category", ja: "子カテゴリ")
+        }
+    }
+}
+
 nonisolated enum MistiaSystemCategoryKey: String, CaseIterable, Codable, Identifiable {
     case food
     case entertainment
@@ -298,6 +314,179 @@ nonisolated enum MistiaSystemCategoryKey: String, CaseIterable, Codable, Identif
             case .bankInterest:
                 mistiaLocalized(vi: legacyVietnameseName, en: "Bank interest", ja: "銀行利息", language: language)
             }
+        }
+    }
+}
+
+nonisolated enum MistiaSystemCategoryParentKey: String, CaseIterable, Codable, Identifiable {
+    case livingExpense = "parent_expense_living"
+    case mobilityTravel = "parent_expense_mobility_travel"
+    case personalLifestyle = "parent_expense_personal_lifestyle"
+    case financialObligations = "parent_expense_financial_obligations"
+    case uncategorizedExpense = "parent_expense_uncategorized"
+    case workIncome = "parent_income_work"
+    case investmentReturn = "parent_income_investment_return"
+    case salesOther = "parent_income_sales_other"
+    case uncategorizedIncome = "parent_income_uncategorized"
+
+    var id: String { rawValue }
+
+    var kind: TransactionCategoryKind {
+        switch self {
+        case .livingExpense, .mobilityTravel, .personalLifestyle, .financialObligations, .uncategorizedExpense:
+            .expense
+        case .workIncome, .investmentReturn, .salesOther, .uncategorizedIncome:
+            .income
+        }
+    }
+
+    var title: String {
+        switch self {
+        case .livingExpense:
+            mistiaLocalized(vi: "Sinh hoạt", en: "Living", ja: "生活")
+        case .mobilityTravel:
+            mistiaLocalized(vi: "Di chuyển & chuyến đi", en: "Mobility & travel", ja: "移動・旅行")
+        case .personalLifestyle:
+            mistiaLocalized(vi: "Cá nhân & phong cách sống", en: "Personal & lifestyle", ja: "個人・ライフスタイル")
+        case .financialObligations:
+            mistiaLocalized(vi: "Nghĩa vụ tài chính", en: "Financial obligations", ja: "支払い・債務")
+        case .uncategorizedExpense:
+            mistiaLocalized(vi: "Chưa phân loại chi", en: "Uncategorized expense", ja: "未分類の支出")
+        case .workIncome:
+            mistiaLocalized(vi: "Thu nhập công việc", en: "Work income", ja: "仕事の収入")
+        case .investmentReturn:
+            mistiaLocalized(vi: "Đầu tư & hoàn lại", en: "Investment & returns", ja: "投資・還元")
+        case .salesOther:
+            mistiaLocalized(vi: "Bán hàng & khác", en: "Sales & other", ja: "売上・その他")
+        case .uncategorizedIncome:
+            mistiaLocalized(vi: "Chưa phân loại thu", en: "Uncategorized income", ja: "未分類の収入")
+        }
+    }
+
+    var legacyVietnameseName: String {
+        switch self {
+        case .livingExpense:
+            "Sinh hoạt"
+        case .mobilityTravel:
+            "Di chuyển & chuyến đi"
+        case .personalLifestyle:
+            "Cá nhân & phong cách sống"
+        case .financialObligations:
+            "Nghĩa vụ tài chính"
+        case .uncategorizedExpense:
+            "Chưa phân loại chi"
+        case .workIncome:
+            "Thu nhập công việc"
+        case .investmentReturn:
+            "Đầu tư & hoàn lại"
+        case .salesOther:
+            "Bán hàng & khác"
+        case .uncategorizedIncome:
+            "Chưa phân loại thu"
+        }
+    }
+
+    func knownDefaultNames() -> [String] {
+        [
+            legacyVietnameseName,
+            title,
+            localizedTitle(for: .english),
+            localizedTitle(for: .japanese)
+        ]
+    }
+
+    func localizedTitle(for language: MistiaAppLanguage) -> String {
+        switch language {
+        case .vietnamese:
+            mistiaLocalized(vi: legacyVietnameseName, en: "", ja: "", language: language)
+        case .english:
+            switch self {
+            case .livingExpense:
+                "Living"
+            case .mobilityTravel:
+                "Mobility & travel"
+            case .personalLifestyle:
+                "Personal & lifestyle"
+            case .financialObligations:
+                "Financial obligations"
+            case .uncategorizedExpense:
+                "Uncategorized expense"
+            case .workIncome:
+                "Work income"
+            case .investmentReturn:
+                "Investment & returns"
+            case .salesOther:
+                "Sales & other"
+            case .uncategorizedIncome:
+                "Uncategorized income"
+            }
+        case .japanese:
+            switch self {
+            case .livingExpense:
+                "生活"
+            case .mobilityTravel:
+                "移動・旅行"
+            case .personalLifestyle:
+                "個人・ライフスタイル"
+            case .financialObligations:
+                "支払い・債務"
+            case .uncategorizedExpense:
+                "未分類の支出"
+            case .workIncome:
+                "仕事の収入"
+            case .investmentReturn:
+                "投資・還元"
+            case .salesOther:
+                "売上・その他"
+            case .uncategorizedIncome:
+                "未分類の収入"
+            }
+        }
+    }
+
+    var iconSymbolName: String {
+        switch self {
+        case .livingExpense:
+            "house.fill"
+        case .mobilityTravel:
+            "airplane"
+        case .personalLifestyle:
+            "sparkles"
+        case .financialObligations:
+            "creditcard.and.123"
+        case .uncategorizedExpense:
+            "questionmark.circle.fill"
+        case .workIncome:
+            "briefcase.fill"
+        case .investmentReturn:
+            "chart.line.uptrend.xyaxis"
+        case .salesOther:
+            "storefront.fill"
+        case .uncategorizedIncome:
+            "questionmark.circle.fill"
+        }
+    }
+
+    var iconColorHex: String {
+        switch self {
+        case .livingExpense:
+            "#FF9F1C"
+        case .mobilityTravel:
+            "#5B7BFF"
+        case .personalLifestyle:
+            "#F26A5A"
+        case .financialObligations:
+            "#8A8A8E"
+        case .uncategorizedExpense:
+            "#A0A0A0"
+        case .workIncome:
+            "#2DAA9E"
+        case .investmentReturn:
+            "#5B7BFF"
+        case .salesOther:
+            "#F26A5A"
+        case .uncategorizedIncome:
+            "#A0A0A0"
         }
     }
 }

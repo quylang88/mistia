@@ -168,7 +168,10 @@ struct OverviewView: View {
             Text(mistiaCatalog(exportErrorMessage ?? ""))
         }
         .task {
-            try? MistiaBootstrap.seedDefaultCategoriesIfNeeded(modelContext: modelContext)
+            try? MistiaBootstrap.seedDefaultCategoriesIfNeeded(
+                modelContext: modelContext,
+                sessionStore: sessionStore
+            )
         }
     }
 

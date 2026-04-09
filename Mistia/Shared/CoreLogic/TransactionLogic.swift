@@ -22,8 +22,49 @@ struct TransactionRecordSnapshot: Equatable, Identifiable {
     let destinationWalletID: UUID?
     let destinationWalletKind: LedgerWalletKind?
     let categoryID: UUID?
+    let categoryParentID: UUID?
     let counterpartyName: String?
     let normalizedCounterpartyKey: String?
+
+    init(
+        id: UUID,
+        primaryKind: TransactionPrimaryKind,
+        transferSubtype: TransactionTransferSubtype?,
+        debtIntent: TransactionDebtIntent?,
+        entryStatus: TransactionEntryStatus,
+        title: String,
+        note: String?,
+        amountMinor: Int64,
+        occurredAt: Date,
+        createdAt: Date,
+        sourceWalletID: UUID?,
+        sourceWalletKind: LedgerWalletKind?,
+        destinationWalletID: UUID?,
+        destinationWalletKind: LedgerWalletKind?,
+        categoryID: UUID?,
+        categoryParentID: UUID? = nil,
+        counterpartyName: String?,
+        normalizedCounterpartyKey: String?
+    ) {
+        self.id = id
+        self.primaryKind = primaryKind
+        self.transferSubtype = transferSubtype
+        self.debtIntent = debtIntent
+        self.entryStatus = entryStatus
+        self.title = title
+        self.note = note
+        self.amountMinor = amountMinor
+        self.occurredAt = occurredAt
+        self.createdAt = createdAt
+        self.sourceWalletID = sourceWalletID
+        self.sourceWalletKind = sourceWalletKind
+        self.destinationWalletID = destinationWalletID
+        self.destinationWalletKind = destinationWalletKind
+        self.categoryID = categoryID
+        self.categoryParentID = categoryParentID
+        self.counterpartyName = counterpartyName
+        self.normalizedCounterpartyKey = normalizedCounterpartyKey
+    }
 }
 
 struct TransactionFilterState: Equatable {

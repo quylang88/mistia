@@ -103,8 +103,8 @@ struct PlanningView: View {
             .map { $0.planningSnapshot(calendar: calendar) }
     }
 
-    private var budgetRows: [PlanningBudgetRowSnapshot] {
-        PlanningLogic.budgetRows(
+    private var budgetRows: [PlanningBudgetBranchRowSnapshot] {
+        PlanningLogic.budgetBranchRows(
             plans: activeBudgetPlans,
             records: transactionSnapshots,
             selectedMonth: selectedMonth,
@@ -204,14 +204,32 @@ struct PlanningView: View {
                     onAdd: {
                         budgetEditorTarget = PlanningBudgetEditorTarget(
                             budget: nil,
-                            selectedMonth: selectedMonth
+                            selectedMonth: selectedMonth,
+                            preferredParentCategoryID: nil
                         )
                     },
-                    onEdit: { row in
+                    onAddChild: { row in
+                        budgetEditorTarget = PlanningBudgetEditorTarget(
+                            budget: nil,
+                            selectedMonth: selectedMonth,
+                            preferredParentCategoryID: row.parentCategoryID
+                        )
+                    },
+                    onEditParent: { row in
+                        guard let budgetID = row.parentBudgetID else { return }
+                        let budget = storedBudgets.first(where: { $0.id == budgetID })
+                        budgetEditorTarget = PlanningBudgetEditorTarget(
+                            budget: budget,
+                            selectedMonth: selectedMonth,
+                            preferredParentCategoryID: row.parentCategoryID
+                        )
+                    },
+                    onEditChild: { row in
                         let budget = storedBudgets.first(where: { $0.id == row.id })
                         budgetEditorTarget = PlanningBudgetEditorTarget(
                             budget: budget,
-                            selectedMonth: selectedMonth
+                            selectedMonth: selectedMonth,
+                            preferredParentCategoryID: nil
                         )
                     }
                 )
@@ -304,7 +322,10 @@ struct PlanningView: View {
                 .presentationDragIndicator(.visible)
         }
         .task {
-            try? MistiaBootstrap.seedDefaultCategoriesIfNeeded(modelContext: modelContext)
+            try? MistiaBootstrap.seedDefaultCategoriesIfNeeded(
+                modelContext: modelContext,
+                sessionStore: sessionStore
+            )
         }
     }
 }
@@ -312,10 +333,14 @@ struct PlanningView: View {
 private struct BudgetTabContent: View {
     let summary: PlanningBudgetSummarySnapshot
     let currencyCode: String
-    let rows: [PlanningBudgetRowSnapshot]
+    let rows: [PlanningBudgetBranchRowSnapshot]
     let referenceDate: Date
     let onAdd: () -> Void
-    let onEdit: (PlanningBudgetRowSnapshot) -> Void
+    let onAddChild: (PlanningBudgetBranchRowSnapshot) -> Void
+    let onEditParent: (PlanningBudgetBranchRowSnapshot) -> Void
+    let onEditChild: (PlanningBudgetRowSnapshot) -> Void
+
+    @State private var expandedBranchIDs: Set<UUID> = []
 
     var body: some View {
         VStack(spacing: 16) {
@@ -338,14 +363,25 @@ private struct BudgetTabContent: View {
             } else {
                 PlanningListCard {
                     ForEach(Array(rows.enumerated()), id: \.element.id) { index, row in
-                        Button {
-                            onEdit(row)
-                        } label: {
-                            PlanningBudgetRowView(row: row, referenceDate: referenceDate)
-                                .padding(.horizontal, 16)
-                                .padding(.vertical, 14)
-                        }
-                        .buttonStyle(MistiaPressableButtonStyle(cornerRadius: 18))
+                        PlanningBudgetBranchCard(
+                            row: row,
+                            referenceDate: referenceDate,
+                            isExpanded: Binding(
+                                get: { expandedBranchIDs.contains(row.id) },
+                                set: { isExpanded in
+                                    if isExpanded {
+                                        expandedBranchIDs.insert(row.id)
+                                    } else {
+                                        expandedBranchIDs.remove(row.id)
+                                    }
+                                }
+                            ),
+                            onEditParent: { onEditParent(row) },
+                            onAddChild: { onAddChild(row) },
+                            onEditChild: onEditChild
+                        )
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 14)
 
                         if index < rows.count - 1 {
                             Divider()
@@ -855,6 +891,150 @@ private struct PlanningDueSummaryCard: View {
                 }
             }
         }
+    }
+}
+
+private struct PlanningBudgetBranchCard: View {
+    let row: PlanningBudgetBranchRowSnapshot
+    let referenceDate: Date
+    @Binding var isExpanded: Bool
+    let onEditParent: () -> Void
+    let onAddChild: () -> Void
+    let onEditChild: (PlanningBudgetRowSnapshot) -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Button {
+                handlePrimaryAction()
+            } label: {
+                VStack(alignment: .leading, spacing: 10) {
+                    HStack(spacing: 12) {
+                        PlanningIconTile(icon: row.iconSymbolName, color: toneColor)
+
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(row.name)
+                                .font(.system(size: 17, weight: .semibold, design: .rounded))
+                            Text("\(row.spentMinor.formattedCurrency(code: row.currencyCode)) / \(row.limitMinor.formattedCurrency(code: row.currencyCode))")
+                                .font(.system(size: 13, weight: .semibold, design: .rounded))
+                                .foregroundStyle(.secondary)
+                        }
+
+                        Spacer(minLength: 10)
+
+                        VStack(alignment: .trailing, spacing: 6) {
+                            Text(row.progress.percentText)
+                                .font(.system(size: 17, weight: .bold, design: .rounded))
+                                .foregroundStyle(toneColor)
+
+                            if row.mode == .child {
+                                Image(systemName: isExpanded ? "chevron.up" : "chevron.down")
+                                    .font(.system(size: 11, weight: .bold))
+                                    .foregroundStyle(.tertiary)
+                            }
+                        }
+                    }
+
+                    PlanningProgressBar(progress: row.progressClamped, tint: toneColor)
+
+                    HStack {
+                        PlanningStatusBadge(title: statusText, color: toneColor)
+                        Spacer()
+                        Text(daysText)
+                            .font(.system(size: 12.5, weight: .semibold, design: .rounded))
+                            .foregroundStyle(.secondary)
+                    }
+                }
+            }
+            .buttonStyle(MistiaPressableButtonStyle(cornerRadius: 18))
+
+            if row.mode == .child && isExpanded {
+                VStack(alignment: .leading, spacing: 10) {
+                    Text(
+                        mistiaLocalized(
+                            vi: "Ngân sách con",
+                            en: "Child budgets",
+                            ja: "子カテゴリ予算"
+                        )
+                    )
+                        .font(.system(size: 13, weight: .bold, design: .rounded))
+                        .foregroundStyle(.secondary)
+
+                    ForEach(Array(row.childRows.enumerated()), id: \.element.id) { index, childRow in
+                        Button {
+                            onEditChild(childRow)
+                        } label: {
+                            PlanningBudgetRowView(row: childRow, referenceDate: referenceDate)
+                                .padding(.horizontal, 14)
+                                .padding(.vertical, 12)
+                                .background {
+                                    RoundedRectangle(cornerRadius: 18, style: .continuous)
+                                        .fill(Color.primary.opacity(0.04))
+                                }
+                        }
+                        .buttonStyle(MistiaPressableButtonStyle(cornerRadius: 18))
+
+                        if index < row.childRows.count - 1 {
+                            Divider()
+                                .padding(.leading, 48)
+                        }
+                    }
+
+                    PlanningFooterAddButton(
+                        title: mistiaLocalized(vi: "Thêm ngân sách con", en: "Add child budget", ja: "子予算を追加")
+                    ) {
+                        onAddChild()
+                    }
+                }
+                .padding(.top, 2)
+            }
+        }
+    }
+
+    private func handlePrimaryAction() {
+        switch row.mode {
+        case .parent:
+            onEditParent()
+        case .child:
+            withAnimation(.snappy) {
+                isExpanded.toggle()
+            }
+        }
+    }
+
+    private var toneColor: Color {
+        switch row.tone {
+        case .calm:
+            Color(hex: "#2DAA9E")
+        case .warning:
+            Color(hex: "#F59B3F")
+        case .critical:
+            Color(hex: "#F45C7E")
+        }
+    }
+
+    private var statusText: String {
+        switch row.mode {
+        case .parent:
+            return mistiaLocalized(vi: "Ngân sách cha", en: "Parent budget", ja: "親予算")
+        case .child:
+            return mistiaLocalized(
+                vi: "\(row.childRows.count) ngân sách con",
+                en: "\(row.childRows.count) child budgets",
+                ja: "子予算 \(row.childRows.count) 件"
+            )
+        }
+    }
+
+    private var daysText: String {
+        if row.isPastMonth {
+            return mistiaLocalized(vi: "Tháng đã kết thúc", en: "Month ended", ja: "月が終了しました")
+        }
+
+        return mistiaLocalized(
+            vi: "Còn \(row.daysRemaining) ngày",
+            en: "\(row.daysRemaining) days left",
+            ja: "あと \(row.daysRemaining) 日"
+        )
     }
 }
 

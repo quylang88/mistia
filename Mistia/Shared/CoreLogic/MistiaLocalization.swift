@@ -6,6 +6,7 @@ nonisolated enum MistiaAppLanguage: String, CaseIterable, Identifiable, Codable 
     case japanese = "ja"
 
     static let userDefaultsKey = "mistia.settings.app.language"
+    static let backupUserDefaultsKey = "mistia.settings.app.language.backup"
 
     var id: String { rawValue }
 
@@ -72,8 +73,44 @@ nonisolated enum MistiaAppLanguage: String, CaseIterable, Identifiable, Codable 
         return infer(preferredLanguages: preferredLanguages)
     }
 
+    static func persist(_ language: Self, defaults: UserDefaults = .standard) {
+        defaults.set(language.rawValue, forKey: userDefaultsKey)
+        defaults.set(language.rawValue, forKey: backupUserDefaultsKey)
+    }
+
+    @discardableResult
+    static func bootstrapStoredPreference(
+        defaults: UserDefaults = .standard,
+        preferredLanguages: [String] = Locale.preferredLanguages
+    ) -> Self {
+        if let storedRawValue = defaults.string(forKey: userDefaultsKey),
+           let storedLanguage = Self(rawValue: storedRawValue) {
+            defaults.set(storedLanguage.rawValue, forKey: backupUserDefaultsKey)
+            return storedLanguage
+        }
+
+        if let backupRawValue = defaults.string(forKey: backupUserDefaultsKey),
+           let backupLanguage = Self(rawValue: backupRawValue) {
+            defaults.set(backupLanguage.rawValue, forKey: userDefaultsKey)
+            return backupLanguage
+        }
+
+        let inferredLanguage = infer(preferredLanguages: preferredLanguages)
+        persist(inferredLanguage, defaults: defaults)
+        return inferredLanguage
+    }
+
     static var current: Self {
-        resolve(storedRawValue: UserDefaults.standard.string(forKey: userDefaultsKey))
+        let defaults = UserDefaults.standard
+        if let storedRawValue = defaults.string(forKey: userDefaultsKey) {
+            return resolve(storedRawValue: storedRawValue)
+        }
+
+        if let backupRawValue = defaults.string(forKey: backupUserDefaultsKey) {
+            return resolve(storedRawValue: backupRawValue)
+        }
+
+        return infer()
     }
 }
 

@@ -6,14 +6,12 @@ final class OverviewLogicTests: XCTestCase {
 
     override func setUp() {
         super.setUp()
-        UserDefaults.standard.set(
-            MistiaAppLanguage.vietnamese.rawValue,
-            forKey: MistiaAppLanguage.userDefaultsKey
-        )
+        MistiaAppLanguage.persist(.vietnamese)
     }
 
     override func tearDown() {
         UserDefaults.standard.removeObject(forKey: MistiaAppLanguage.userDefaultsKey)
+        UserDefaults.standard.removeObject(forKey: MistiaAppLanguage.backupUserDefaultsKey)
         super.tearDown()
     }
 
@@ -245,6 +243,80 @@ final class OverviewLogicTests: XCTestCase {
         XCTAssertEqual(alerts[0].tint, .red)
         XCTAssertEqual(alerts[1].tint, .orange)
         XCTAssertEqual(alerts[2].tint, .orange)
+    }
+
+    func testBudgetAlertsRollUpChildBudgetsByParentBranch() {
+        let selectedMonth = makeDate(year: 2026, month: 4, day: 1)
+        let referenceDate = makeDate(year: 2026, month: 4, day: 24)
+        let livingParent = UUID()
+        let travelParent = UUID()
+        let foodCategory = UUID()
+        let housingCategory = UUID()
+        let trainCategory = UUID()
+
+        let alerts = OverviewLogic.budgetAlerts(
+            budgets: [
+                makeBudget(
+                    categoryID: foodCategory,
+                    name: "Ăn uống",
+                    limitMinor: 10_000,
+                    monthAnchor: selectedMonth,
+                    categoryParentID: livingParent,
+                    categoryParentName: "Sinh hoạt",
+                    categoryParentIconSymbolName: "house.fill",
+                    categoryParentColorHex: "#5A6C7D"
+                ),
+                makeBudget(
+                    categoryID: housingCategory,
+                    name: "Nhà ở",
+                    limitMinor: 10_000,
+                    monthAnchor: selectedMonth,
+                    categoryParentID: livingParent,
+                    categoryParentName: "Sinh hoạt",
+                    categoryParentIconSymbolName: "house.fill",
+                    categoryParentColorHex: "#5A6C7D"
+                ),
+                makeBudget(
+                    categoryID: travelParent,
+                    name: "Di chuyển & chuyến đi",
+                    limitMinor: 10_000,
+                    monthAnchor: selectedMonth,
+                    categoryIsParent: true
+                )
+            ],
+            transactionRecords: [
+                makeTransactionRecord(
+                    primaryKind: .expense,
+                    amountMinor: 7_000,
+                    occurredAt: makeDate(year: 2026, month: 4, day: 4),
+                    categoryID: foodCategory,
+                    categoryParentID: livingParent
+                ),
+                makeTransactionRecord(
+                    primaryKind: .expense,
+                    amountMinor: 6_000,
+                    occurredAt: makeDate(year: 2026, month: 4, day: 6),
+                    categoryID: housingCategory,
+                    categoryParentID: livingParent
+                ),
+                makeTransactionRecord(
+                    primaryKind: .expense,
+                    amountMinor: 8_000,
+                    occurredAt: makeDate(year: 2026, month: 4, day: 8),
+                    categoryID: trainCategory,
+                    categoryParentID: travelParent
+                )
+            ],
+            referenceDate: referenceDate,
+            calendar: calendar
+        )
+
+        XCTAssertEqual(alerts.count, 2)
+        XCTAssertEqual(alerts.map(\.name), ["Di chuyển & chuyến đi", "Sinh hoạt"])
+        XCTAssertEqual(alerts[0].spentMinor, 8_000)
+        XCTAssertEqual(alerts[0].limitMinor, 10_000)
+        XCTAssertEqual(alerts[1].spentMinor, 13_000)
+        XCTAssertEqual(alerts[1].limitMinor, 20_000)
     }
 
     func testDueAlertsMergeSourcesLimitToThreeAndFlagThreeDaysOrLessRed() {
@@ -555,7 +627,12 @@ final class OverviewLogicTests: XCTestCase {
         categoryID: UUID,
         name: String,
         limitMinor: Int64,
-        monthAnchor: Date
+        monthAnchor: Date,
+        categoryParentID: UUID? = nil,
+        categoryParentName: String? = nil,
+        categoryParentIconSymbolName: String? = nil,
+        categoryParentColorHex: String? = nil,
+        categoryIsParent: Bool = false
     ) -> BudgetPlanSnapshot {
         BudgetPlanSnapshot(
             id: UUID(),
@@ -566,7 +643,12 @@ final class OverviewLogicTests: XCTestCase {
             limitMinor: limitMinor,
             rolloverEnabled: false,
             currencyCode: "JPY",
-            monthAnchor: monthAnchor
+            monthAnchor: monthAnchor,
+            categoryParentID: categoryParentID,
+            categoryParentName: categoryParentName,
+            categoryParentIconSymbolName: categoryParentIconSymbolName,
+            categoryParentColorHex: categoryParentColorHex,
+            categoryIsParent: categoryIsParent
         )
     }
 
@@ -576,7 +658,8 @@ final class OverviewLogicTests: XCTestCase {
         occurredAt: Date,
         sourceWalletID: UUID? = UUID(),
         sourceWalletKind: LedgerWalletKind? = .cash,
-        categoryID: UUID? = nil
+        categoryID: UUID? = nil,
+        categoryParentID: UUID? = nil
     ) -> TransactionRecordSnapshot {
         TransactionRecordSnapshot(
             id: UUID(),
@@ -594,6 +677,7 @@ final class OverviewLogicTests: XCTestCase {
             destinationWalletID: nil,
             destinationWalletKind: nil,
             categoryID: categoryID,
+            categoryParentID: categoryParentID,
             counterpartyName: nil,
             normalizedCounterpartyKey: nil
         )

@@ -6,10 +6,63 @@ nonisolated struct BudgetPlanSnapshot: Equatable, Identifiable {
     let categoryName: String
     let categoryIconSymbolName: String
     let categoryColorHex: String
+    let categoryParentID: UUID?
+    let categoryParentName: String?
+    let categoryParentIconSymbolName: String?
+    let categoryParentColorHex: String?
+    let categoryIsParent: Bool
     let limitMinor: Int64
     let rolloverEnabled: Bool
     let currencyCode: String
     let monthAnchor: Date
+
+    init(
+        id: UUID,
+        categoryID: UUID?,
+        categoryName: String,
+        categoryIconSymbolName: String,
+        categoryColorHex: String,
+        limitMinor: Int64,
+        rolloverEnabled: Bool,
+        currencyCode: String,
+        monthAnchor: Date,
+        categoryParentID: UUID? = nil,
+        categoryParentName: String? = nil,
+        categoryParentIconSymbolName: String? = nil,
+        categoryParentColorHex: String? = nil,
+        categoryIsParent: Bool = false
+    ) {
+        self.id = id
+        self.categoryID = categoryID
+        self.categoryName = categoryName
+        self.categoryIconSymbolName = categoryIconSymbolName
+        self.categoryColorHex = categoryColorHex
+        self.categoryParentID = categoryParentID
+        self.categoryParentName = categoryParentName
+        self.categoryParentIconSymbolName = categoryParentIconSymbolName
+        self.categoryParentColorHex = categoryParentColorHex
+        self.categoryIsParent = categoryIsParent
+        self.limitMinor = limitMinor
+        self.rolloverEnabled = rolloverEnabled
+        self.currencyCode = currencyCode
+        self.monthAnchor = monthAnchor
+    }
+
+    var branchCategoryID: UUID? {
+        categoryIsParent ? categoryID : (categoryParentID ?? categoryID)
+    }
+
+    var branchCategoryName: String {
+        categoryIsParent ? categoryName : (categoryParentName ?? categoryName)
+    }
+
+    var branchIconSymbolName: String {
+        categoryIsParent ? categoryIconSymbolName : (categoryParentIconSymbolName ?? categoryIconSymbolName)
+    }
+
+    var branchColorHex: String {
+        categoryIsParent ? categoryColorHex : (categoryParentColorHex ?? categoryColorHex)
+    }
 }
 
 nonisolated enum PlanningBudgetTone: String, Equatable {
@@ -78,6 +131,44 @@ nonisolated struct PlanningBudgetSummarySnapshot: Equatable {
 
     var progressClamped: Double {
         min(max(progress, 0), 1)
+    }
+}
+
+nonisolated enum PlanningBudgetBranchMode: Equatable {
+    case parent
+    case child
+}
+
+nonisolated struct PlanningBudgetBranchRowSnapshot: Equatable, Identifiable {
+    let id: UUID
+    let parentCategoryID: UUID?
+    let name: String
+    let iconSymbolName: String
+    let colorHex: String
+    let spentMinor: Int64
+    let limitMinor: Int64
+    let currencyCode: String
+    let daysRemaining: Int
+    let isPastMonth: Bool
+    let mode: PlanningBudgetBranchMode
+    let parentBudgetID: UUID?
+    let childRows: [PlanningBudgetRowSnapshot]
+
+    var progress: Double {
+        guard limitMinor > 0 else { return 0 }
+        return Double(spentMinor) / Double(limitMinor)
+    }
+
+    var progressClamped: Double {
+        min(max(progress, 0), 1)
+    }
+
+    var health: PlanningBudgetHealth {
+        PlanningLogic.health(forProgress: progress)
+    }
+
+    var tone: PlanningBudgetTone {
+        PlanningLogic.tone(forProgress: progress)
     }
 }
 
@@ -300,6 +391,143 @@ nonisolated enum PlanningLogic {
     }
 
     static func budgetSummary(from rows: [PlanningBudgetRowSnapshot]) -> PlanningBudgetSummarySnapshot {
+        let totalBudget = rows.reduce(into: Int64.zero) { partial, row in
+            partial += row.limitMinor
+        }
+        let spent = rows.reduce(into: Int64.zero) { partial, row in
+            partial += row.spentMinor
+        }
+        let remaining = max(totalBudget - spent, 0)
+
+        return PlanningBudgetSummarySnapshot(
+            totalBudgetMinor: totalBudget,
+            spentMinor: spent,
+            remainingMinor: remaining,
+            health: health(forProgress: totalBudget > 0 ? Double(spent) / Double(totalBudget) : 0)
+        )
+    }
+
+    static func budgetBranchRows(
+        plans: [BudgetPlanSnapshot],
+        records: [TransactionRecordSnapshot],
+        selectedMonth: Date,
+        referenceDate: Date = .now,
+        calendar: Calendar = .current
+    ) -> [PlanningBudgetBranchRowSnapshot] {
+        let monthInterval = calendar.dateInterval(of: .month, for: selectedMonth)
+        let expenseRecordsInMonth = records.filter { record in
+            guard record.entryStatus == .posted,
+                  record.primaryKind == .expense,
+                  let monthInterval
+            else {
+                return false
+            }
+
+            return monthInterval.contains(record.occurredAt)
+        }
+        let spentByCategory = Dictionary(grouping: expenseRecordsInMonth, by: \.categoryID)
+        let spentByBranch = Dictionary(grouping: expenseRecordsInMonth) { record in
+            record.categoryParentID ?? record.categoryID
+        }
+
+        let remainingDays = daysRemainingInMonth(for: selectedMonth, referenceDate: referenceDate, calendar: calendar)
+        let isPastMonth = isPastMonth(selectedMonth, referenceDate: referenceDate, calendar: calendar)
+
+        return Dictionary(grouping: plans) { $0.branchCategoryID }
+            .compactMap { branchID, branchPlans in
+                guard let branchID else { return nil }
+
+                let parentPlan = branchPlans.first(where: { $0.categoryIsParent })
+                let childPlans = branchPlans.filter { !$0.categoryIsParent }
+                let branchTemplate = parentPlan ?? childPlans.first
+                guard let branchTemplate else { return nil }
+
+                if childPlans.isEmpty {
+                    guard let parentPlan else { return nil }
+                    let spent = spentByBranch[branchID]?
+                        .reduce(into: Int64.zero) { partial, record in
+                            partial += record.amountMinor
+                        } ?? 0
+
+                    return PlanningBudgetBranchRowSnapshot(
+                        id: branchID,
+                        parentCategoryID: branchTemplate.branchCategoryID,
+                        name: parentPlan.branchCategoryName,
+                        iconSymbolName: parentPlan.branchIconSymbolName,
+                        colorHex: parentPlan.branchColorHex,
+                        spentMinor: spent,
+                        limitMinor: parentPlan.limitMinor,
+                        currencyCode: parentPlan.currencyCode,
+                        daysRemaining: remainingDays,
+                        isPastMonth: isPastMonth,
+                        mode: .parent,
+                        parentBudgetID: parentPlan.id,
+                        childRows: []
+                    )
+                }
+
+                let childRows = childPlans
+                    .map { plan in
+                        let spent = spentByCategory[plan.categoryID]?
+                            .reduce(into: Int64.zero) { partial, record in
+                                partial += record.amountMinor
+                            } ?? 0
+
+                        return PlanningBudgetRowSnapshot(
+                            id: plan.id,
+                            categoryID: plan.categoryID,
+                            name: plan.categoryName,
+                            iconSymbolName: plan.categoryIconSymbolName,
+                            colorHex: plan.categoryColorHex,
+                            spentMinor: spent,
+                            limitMinor: plan.limitMinor,
+                            currencyCode: plan.currencyCode,
+                            daysRemaining: remainingDays,
+                            isPastMonth: isPastMonth
+                        )
+                    }
+                    .sorted { lhs, rhs in
+                        if lhs.progress != rhs.progress {
+                            return lhs.progress > rhs.progress
+                        }
+                        return lhs.name.localizedCaseInsensitiveCompare(rhs.name) == .orderedAscending
+                    }
+
+                let spent = childRows.reduce(into: Int64.zero) { partial, row in
+                    partial += row.spentMinor
+                }
+                let limit = childRows.reduce(into: Int64.zero) { partial, row in
+                    partial += row.limitMinor
+                }
+
+                return PlanningBudgetBranchRowSnapshot(
+                    id: branchID,
+                    parentCategoryID: branchTemplate.branchCategoryID,
+                    name: branchTemplate.branchCategoryName,
+                    iconSymbolName: branchTemplate.branchIconSymbolName,
+                    colorHex: branchTemplate.branchColorHex,
+                    spentMinor: spent,
+                    limitMinor: limit,
+                    currencyCode: branchTemplate.currencyCode,
+                    daysRemaining: remainingDays,
+                    isPastMonth: isPastMonth,
+                    mode: .child,
+                    parentBudgetID: nil,
+                    childRows: childRows
+                )
+            }
+            .sorted { lhs, rhs in
+                if lhs.progress != rhs.progress {
+                    return lhs.progress > rhs.progress
+                }
+                if lhs.daysRemaining != rhs.daysRemaining {
+                    return lhs.daysRemaining < rhs.daysRemaining
+                }
+                return lhs.name.localizedCaseInsensitiveCompare(rhs.name) == .orderedAscending
+            }
+    }
+
+    static func budgetSummary(from rows: [PlanningBudgetBranchRowSnapshot]) -> PlanningBudgetSummarySnapshot {
         let totalBudget = rows.reduce(into: Int64.zero) { partial, row in
             partial += row.limitMinor
         }

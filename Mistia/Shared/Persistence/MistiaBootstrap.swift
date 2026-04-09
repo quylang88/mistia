@@ -74,12 +74,16 @@ enum MistiaBootstrap {
         }
     }
 
-    static func seedDefaultCategoriesIfNeeded(modelContext: ModelContext) throws {
-        let existingCategories = try modelContext.fetch(FetchDescriptor<TransactionCategory>())
+    static func seedDefaultCategoriesIfNeeded(
+        modelContext: ModelContext,
+        sessionStore: SessionStore? = nil
+    ) throws {
+        var existingCategories = try modelContext.fetch(FetchDescriptor<TransactionCategory>())
             .filter { $0.deletedAt == nil }
         let existingWallets = try modelContext.fetch(FetchDescriptor<LedgerWallet>())
             .filter { $0.deletedAt == nil }
         var didMutate = false
+        var categoriesNeedingSync: [TransactionCategory] = []
 
         if normalizeLegacyDefaultIconColors(
             categories: existingCategories,
@@ -88,25 +92,38 @@ enum MistiaBootstrap {
             didMutate = true
         }
 
-        if existingCategories.isEmpty {
-            for (index, seed) in ManagementPresetData.defaultCategorySeeds.enumerated() {
-                let category = TransactionCategory(
-                    name: seed.name,
-                    kind: seed.kind,
-                    iconSymbolName: seed.iconSymbolName,
-                    iconColorHex: seed.iconColorHex,
-                    systemKey: seed.systemKey?.rawValue,
-                    isSystem: true,
-                    sortOrder: index,
-                    isArchived: seed.startsArchived
-                )
-                modelContext.insert(category)
-            }
+        let (parentByKey, didSeedParents) = ensureDefaultParentCategories(
+            modelContext: modelContext,
+            categories: &existingCategories,
+            categoriesNeedingSync: &categoriesNeedingSync
+        )
+        if didSeedParents {
             didMutate = true
+        }
+        let didSeedLeaves = ensureDefaultLeafCategories(
+            modelContext: modelContext,
+            categories: &existingCategories,
+            parentByKey: parentByKey,
+            categoriesNeedingSync: &categoriesNeedingSync
+        )
+        if didSeedLeaves {
+            didMutate = true
+        }
+
+        let normalizedCategoryIDs = normalizeCategoryHierarchy(
+            categories: existingCategories,
+            parentByKey: parentByKey
+        )
+        if !normalizedCategoryIDs.isEmpty {
+            didMutate = true
+            categoriesNeedingSync.append(contentsOf: existingCategories.filter { normalizedCategoryIDs.contains($0.id) })
         }
 
         if didMutate {
             try modelContext.save()
+            if let sessionStore {
+                queueCategoryUpserts(categoriesNeedingSync, sessionStore: sessionStore)
+            }
         }
     }
 
@@ -125,15 +142,22 @@ enum MistiaBootstrap {
         guard let seed = ManagementPresetData.defaultCategorySeeds.first(where: { $0.systemKey == systemKey }) else {
             fatalError("Missing seed for system category \(systemKey.rawValue)")
         }
+        let parentCategory = try parentCategory(for: systemKey, modelContext: modelContext)
 
         let category = TransactionCategory(
             name: seed.name,
             kind: seed.kind,
             iconSymbolName: seed.iconSymbolName,
             iconColorHex: seed.iconColorHex,
+            parentCategory: parentCategory,
+            hierarchyRole: .child,
             systemKey: systemKey.rawValue,
             isSystem: true,
-            sortOrder: 0,
+            sortOrder: nextChildSortOrder(
+                for: seed.kind,
+                parentID: parentCategory?.id,
+                categories: existingCategories
+            ),
             isArchived: seed.startsArchived
         )
         modelContext.insert(category)
@@ -141,16 +165,203 @@ enum MistiaBootstrap {
         return category
     }
 
-    private static func nextSortOrder(
+    private static func ensureDefaultParentCategories(
+        modelContext: ModelContext,
+        categories: inout [TransactionCategory],
+        categoriesNeedingSync: inout [TransactionCategory]
+    ) -> ([MistiaSystemCategoryParentKey: TransactionCategory], Bool) {
+        var parentByKey: [MistiaSystemCategoryParentKey: TransactionCategory] = [:]
+        var didMutate = false
+
+        for seed in ManagementPresetData.defaultCategoryParentSeeds {
+            if let existing = categories.first(where: { $0.systemKey == seed.systemKey.rawValue }) {
+                if existing.hierarchyRole != .parent || existing.parentCategory != nil {
+                    existing.hierarchyRole = .parent
+                    existing.parentCategory = nil
+                    existing.updatedAt = .now
+                    categoriesNeedingSync.append(existing)
+                    didMutate = true
+                }
+                parentByKey[seed.systemKey] = existing
+                continue
+            }
+
+            let category = TransactionCategory(
+                name: seed.name,
+                kind: seed.kind,
+                iconSymbolName: seed.iconSymbolName,
+                iconColorHex: seed.iconColorHex,
+                hierarchyRole: .parent,
+                systemKey: seed.systemKey.rawValue,
+                isSystem: true,
+                sortOrder: nextParentSortOrder(for: seed.kind, categories: categories)
+            )
+            modelContext.insert(category)
+            categories.append(category)
+            categoriesNeedingSync.append(category)
+            parentByKey[seed.systemKey] = category
+            didMutate = true
+        }
+
+        return (parentByKey, didMutate)
+    }
+
+    private static func ensureDefaultLeafCategories(
+        modelContext: ModelContext,
+        categories: inout [TransactionCategory],
+        parentByKey: [MistiaSystemCategoryParentKey: TransactionCategory],
+        categoriesNeedingSync: inout [TransactionCategory]
+    ) -> Bool {
+        var didMutate = false
+
+        for seed in ManagementPresetData.defaultCategorySeeds {
+            guard let systemKey = seed.systemKey else { continue }
+            guard categories.first(where: { $0.systemKey == systemKey.rawValue }) == nil else { continue }
+            let parentCategory = parentByKey[MistiaCategoryHierarchy.defaultParentKey(for: systemKey)]
+
+            let category = TransactionCategory(
+                name: seed.name,
+                kind: seed.kind,
+                iconSymbolName: seed.iconSymbolName,
+                iconColorHex: seed.iconColorHex,
+                parentCategory: parentCategory,
+                hierarchyRole: .child,
+                systemKey: systemKey.rawValue,
+                isSystem: true,
+                sortOrder: nextChildSortOrder(
+                    for: seed.kind,
+                    parentID: parentCategory?.id,
+                    categories: categories
+                ),
+                isArchived: seed.startsArchived
+            )
+            modelContext.insert(category)
+            categories.append(category)
+            categoriesNeedingSync.append(category)
+            didMutate = true
+        }
+
+        return didMutate
+    }
+
+    private static func normalizeCategoryHierarchy(
+        categories: [TransactionCategory],
+        parentByKey: [MistiaSystemCategoryParentKey: TransactionCategory]
+    ) -> Set<UUID> {
+        var mutatedCategoryIDs: Set<UUID> = []
+        let now = Date()
+
+        for category in categories {
+            guard category.deletedAt == nil else { continue }
+
+            let desiredRole: TransactionCategoryHierarchyRole
+            let desiredParent: TransactionCategory?
+
+            if category.mistiaSystemCategoryParentKey != nil {
+                desiredRole = .parent
+                desiredParent = nil
+            } else if let storedRole = category.hierarchyRoleRawValue.flatMap(TransactionCategoryHierarchyRole.init(rawValue:)) {
+                desiredRole = storedRole
+                if storedRole == .parent {
+                    desiredParent = nil
+                } else {
+                    desiredParent = resolvedParent(for: category, parentByKey: parentByKey)
+                }
+            } else if let leafKey = category.mistiaSystemCategoryKey {
+                desiredRole = .child
+                desiredParent = parentByKey[MistiaCategoryHierarchy.defaultParentKey(for: leafKey)]
+            } else {
+                desiredRole = .child
+                desiredParent = resolvedParent(for: category, parentByKey: parentByKey)
+            }
+
+            let normalizedParent = desiredRole == .parent ? nil : desiredParent
+            let needsRoleUpdate = category.hierarchyRoleRawValue != desiredRole.rawValue
+            let needsParentUpdate = category.parentCategory?.id != normalizedParent?.id
+
+            guard needsRoleUpdate || needsParentUpdate else { continue }
+
+            category.hierarchyRole = desiredRole
+            category.parentCategory = normalizedParent
+            category.updatedAt = now
+            mutatedCategoryIDs.insert(category.id)
+        }
+
+        return mutatedCategoryIDs
+    }
+
+    private static func resolvedParent(
+        for category: TransactionCategory,
+        parentByKey: [MistiaSystemCategoryParentKey: TransactionCategory]
+    ) -> TransactionCategory? {
+        if let currentParent = category.parentCategory,
+           currentParent.deletedAt == nil,
+           currentParent.parentCategory == nil,
+           currentParent.kind == category.kind,
+           currentParent.id != category.id {
+            return currentParent
+        }
+
+        if let leafKey = category.mistiaSystemCategoryKey {
+            return parentByKey[MistiaCategoryHierarchy.defaultParentKey(for: leafKey)]
+        }
+
+        return parentByKey[MistiaCategoryHierarchy.uncategorizedParentKey(for: category.kind)]
+    }
+
+    private static func parentCategory(
+        for systemKey: MistiaSystemCategoryKey,
+        modelContext: ModelContext
+    ) throws -> TransactionCategory? {
+        let existingCategories = try modelContext.fetch(FetchDescriptor<TransactionCategory>())
+            .filter { $0.deletedAt == nil }
+        let parentKey = MistiaCategoryHierarchy.defaultParentKey(for: systemKey)
+        return existingCategories.first(where: { $0.systemKey == parentKey.rawValue })
+    }
+
+    private static func nextParentSortOrder(
         for kind: TransactionCategoryKind,
         categories: [TransactionCategory]
     ) -> Int {
         let visible = categories
-            .filter { !$0.isArchived && $0.kind == kind }
+            .filter { !$0.isArchived && $0.kind == kind && $0.parentCategory == nil }
             .map(\.sortOrder)
             .max() ?? -1
 
         return visible + 1
+    }
+
+    private static func nextChildSortOrder(
+        for kind: TransactionCategoryKind,
+        parentID: UUID?,
+        categories: [TransactionCategory]
+    ) -> Int {
+        let visible = categories
+            .filter {
+                !$0.isArchived
+                    && $0.kind == kind
+                    && $0.parentCategory?.id == parentID
+            }
+            .map(\.sortOrder)
+            .max() ?? -1
+
+        return visible + 1
+    }
+
+    private static func queueCategoryUpserts(
+        _ categories: [TransactionCategory],
+        sessionStore: SessionStore
+    ) {
+        guard sessionStore.canManageSync else { return }
+
+        let uniqueCategories = Dictionary(uniqueKeysWithValues: categories.map { ($0.id, $0) }).values
+        for category in uniqueCategories {
+            sessionStore.recordUpsert(
+                entity: .category,
+                recordID: category.id,
+                modifiedAt: category.updatedAt
+            )
+        }
     }
 
     private static func normalizeLegacyDefaultIconColors(

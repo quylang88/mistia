@@ -27,6 +27,14 @@ struct ManagementCategorySeed {
     }
 }
 
+struct ManagementCategoryParentSeed {
+    let name: String
+    let kind: TransactionCategoryKind
+    let iconSymbolName: String
+    let iconColorHex: String
+    let systemKey: MistiaSystemCategoryParentKey
+}
+
 struct JapaneseBankPreset: Identifiable, Hashable {
     let key: String
     let name: String
@@ -104,6 +112,17 @@ enum ManagementPresetData {
         JapaneseBankPreset(key: "au_jibun", name: "au Jibun Bank")
     ]
 
+    static let defaultCategoryParentSeeds: [ManagementCategoryParentSeed] =
+        MistiaSystemCategoryParentKey.allCases.map { systemKey in
+            ManagementCategoryParentSeed(
+                name: systemKey.legacyVietnameseName,
+                kind: systemKey.kind,
+                iconSymbolName: systemKey.iconSymbolName,
+                iconColorHex: MistiaIconColorPalette.presetHex(forDefault: systemKey.iconColorHex),
+                systemKey: systemKey
+            )
+        }
+
     static let defaultCategorySeeds: [ManagementCategorySeed] = [
         ManagementCategorySeed(name: "Ăn uống", kind: .expense, iconSymbolName: "fork.knife", iconColorHex: "#FF9F1C", systemKey: .food),
         ManagementCategorySeed(name: "Đi chơi", kind: .expense, iconSymbolName: "party.popper.fill", iconColorHex: "#F26A5A", systemKey: .entertainment),
@@ -174,12 +193,25 @@ extension TransactionCategory {
         Color(hex: iconColorHex)
     }
 
+    var mistiaSystemCategoryParentKey: MistiaSystemCategoryParentKey? {
+        guard let systemKey else { return nil }
+        return MistiaSystemCategoryParentKey(rawValue: systemKey)
+    }
+
     var mistiaSystemCategoryKey: MistiaSystemCategoryKey? {
         guard let systemKey else { return nil }
         return MistiaSystemCategoryKey(rawValue: systemKey)
     }
 
     var localizedDisplayName: String {
+        if let mistiaSystemCategoryParentKey {
+            let trimmedName = name.trimmingCharacters(in: .whitespacesAndNewlines)
+            let knownDefaultNames = Set(mistiaSystemCategoryParentKey.knownDefaultNames())
+            if knownDefaultNames.contains(trimmedName) {
+                return mistiaSystemCategoryParentKey.localizedTitle(for: .current)
+            }
+        }
+
         guard let mistiaSystemCategoryKey else { return name }
         let trimmedName = name.trimmingCharacters(in: .whitespacesAndNewlines)
         let knownDefaultNames = Set(mistiaSystemCategoryKey.knownDefaultNames())

@@ -105,6 +105,8 @@ struct RemoteTransactionCategory: MistiaRemoteRow {
     var kindRawValue: String
     var iconSymbolName: String
     var iconColorHex: String
+    var parentCategoryID: UUID?
+    var hierarchyRoleRawValue: String?
     var systemKey: String?
     var isSystem: Bool
     var sortOrder: Int
@@ -123,6 +125,8 @@ struct RemoteTransactionCategory: MistiaRemoteRow {
         case kindRawValue = "kind_raw_value"
         case iconSymbolName = "icon_symbol_name"
         case iconColorHex = "icon_color_hex"
+        case parentCategoryID = "parent_category_id"
+        case hierarchyRoleRawValue = "hierarchy_role_raw_value"
         case systemKey = "system_key"
         case isSystem = "is_system"
         case sortOrder = "sort_order"
@@ -690,6 +694,8 @@ enum MistiaSyncUploadRecord {
                 row.kindRawValue,
                 row.iconSymbolName,
                 row.iconColorHex,
+                row.parentCategoryID?.uuidString.lowercased() ?? "",
+                row.hierarchyRoleRawValue ?? "",
                 row.systemKey ?? "",
                 row.isSystem ? "1" : "0",
                 "\(row.sortOrder)",

@@ -75,9 +75,10 @@ enum MistiaTab: String, CaseIterable, Hashable {
 struct RootTabView: View {
   @Environment(\.colorScheme) private var colorScheme
   @Environment(\.modelContext) private var modelContext
+  @Environment(SessionStore.self) private var sessionStore
   @AppStorage(MistiaAppStorageKey.appearanceMode) private var appearanceModeRawValue =
     MistiaAppearanceMode.automatic.rawValue
-  @AppStorage(MistiaAppStorageKey.appLanguage) private var appLanguageRawValue = MistiaAppLanguage.english.rawValue
+  @AppStorage(MistiaAppStorageKey.appLanguage) private var appLanguageRawValue = ""
   @AppStorage(MistiaAppStorageKey.hideQuickCreate) private var hideQuickCreate = false
   @State private var selectedTab: MistiaTab = .overview
   @State private var isQuickCreateMenuVisible = false
@@ -146,7 +147,10 @@ struct RootTabView: View {
       }
     }
     .task {
-      try? MistiaBootstrap.seedDefaultCategoriesIfNeeded(modelContext: modelContext)
+      try? MistiaBootstrap.seedDefaultCategoriesIfNeeded(
+        modelContext: modelContext,
+        sessionStore: sessionStore
+      )
     }
     .onChange(of: hideQuickCreate) { _, newValue in
       if newValue {

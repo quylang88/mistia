@@ -5,6 +5,7 @@ struct PlanningBudgetEditorTarget: Identifiable {
     let id = UUID()
     let budget: BudgetPlan?
     let selectedMonth: Date
+    let preferredParentCategoryID: UUID?
 }
 
 struct PlanningGoalEditorTarget: Identifiable {
@@ -211,7 +212,12 @@ extension BudgetPlan {
             limitMinor: limitMinor,
             rolloverEnabled: rolloverEnabled,
             currencyCode: currencyCode,
-            monthAnchor: PlanningLogic.startOfMonth(for: monthAnchor, calendar: calendar)
+            monthAnchor: PlanningLogic.startOfMonth(for: monthAnchor, calendar: calendar),
+            categoryParentID: category?.parentCategory?.id,
+            categoryParentName: category?.parentCategory?.localizedDisplayName,
+            categoryParentIconSymbolName: category?.parentCategory?.iconSymbolName,
+            categoryParentColorHex: category?.parentCategory?.iconColorHex,
+            categoryIsParent: category?.isParentCategory ?? false
         )
     }
 }
@@ -298,6 +304,7 @@ extension LedgerTransaction {
             destinationWalletID: destinationWallet?.id,
             destinationWalletKind: destinationWallet?.kind,
             categoryID: category?.id,
+            categoryParentID: category?.parentCategory?.id,
             counterpartyName: counterpartyName,
             normalizedCounterpartyKey: normalizedCounterpartyKey
         )

@@ -4,7 +4,7 @@ struct SettingsView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.colorScheme) private var colorScheme
     @AppStorage(MistiaAppStorageKey.appearanceMode) private var appearanceModeRawValue = MistiaAppearanceMode.automatic.rawValue
-    @AppStorage(MistiaAppStorageKey.appLanguage) private var appLanguageRawValue = MistiaAppLanguage.english.rawValue
+    @AppStorage(MistiaAppStorageKey.appLanguage) private var appLanguageRawValue = ""
     @AppStorage(MistiaAppStorageKey.currencyCode) private var currencyCode = "JPY"
 
     @State private var destination: SettingsDestination?
@@ -181,7 +181,7 @@ private struct AppearanceSettingsView: View {
 
 private struct LanguageSettingsView: View {
     @Environment(\.dismiss) private var dismiss
-    @AppStorage(MistiaAppStorageKey.appLanguage) private var appLanguageRawValue = MistiaAppLanguage.english.rawValue
+    @AppStorage(MistiaAppStorageKey.appLanguage) private var appLanguageRawValue = ""
 
     private var accentPurple: Color {
         Color(red: 0.43, green: 0.23, blue: 0.76)
@@ -208,6 +208,7 @@ private struct LanguageSettingsView: View {
                 accentPurple: accentPurple
             ) { language in
                 withAnimation(.spring(response: 0.30, dampingFraction: 0.84)) {
+                    MistiaAppLanguage.persist(language)
                     appLanguageRawValue = language.rawValue
                 }
             }

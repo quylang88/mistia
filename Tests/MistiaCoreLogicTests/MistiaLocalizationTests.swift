@@ -12,14 +12,12 @@ final class MistiaLocalizationTests: XCTestCase {
 
     override func setUp() {
         super.setUp()
-        UserDefaults.standard.set(
-            MistiaAppLanguage.vietnamese.rawValue,
-            forKey: MistiaAppLanguage.userDefaultsKey
-        )
+        MistiaAppLanguage.persist(.vietnamese)
     }
 
     override func tearDown() {
         UserDefaults.standard.removeObject(forKey: MistiaAppLanguage.userDefaultsKey)
+        UserDefaults.standard.removeObject(forKey: MistiaAppLanguage.backupUserDefaultsKey)
         super.tearDown()
     }
 
@@ -141,27 +139,36 @@ final class MistiaLocalizationTests: XCTestCase {
     }
 
     func testCurrencyFormattingDoesNotChangeWhenAppLanguageChanges() {
-        UserDefaults.standard.set(
-            MistiaAppLanguage.vietnamese.rawValue,
-            forKey: MistiaAppLanguage.userDefaultsKey
-        )
+        MistiaAppLanguage.persist(.vietnamese)
         let vietnameseJPY = Int64(123_456).formattedCurrency(code: "JPY")
 
-        UserDefaults.standard.set(
-            MistiaAppLanguage.english.rawValue,
-            forKey: MistiaAppLanguage.userDefaultsKey
-        )
+        MistiaAppLanguage.persist(.english)
         let englishJPY = Int64(123_456).formattedCurrency(code: "JPY")
 
-        UserDefaults.standard.set(
-            MistiaAppLanguage.japanese.rawValue,
-            forKey: MistiaAppLanguage.userDefaultsKey
-        )
+        MistiaAppLanguage.persist(.japanese)
         let japaneseJPY = Int64(123_456).formattedCurrency(code: "JPY")
 
         XCTAssertEqual(vietnameseJPY, englishJPY)
         XCTAssertEqual(englishJPY, japaneseJPY)
         XCTAssertTrue(vietnameseJPY.first.map { $0 == "¥" || $0 == "￥" } ?? false)
+    }
+
+    func testBootstrapStoredPreferenceRestoresBackupBeforeInferringSystemLanguage() {
+        UserDefaults.standard.removeObject(forKey: MistiaAppLanguage.userDefaultsKey)
+        UserDefaults.standard.set(
+            MistiaAppLanguage.japanese.rawValue,
+            forKey: MistiaAppLanguage.backupUserDefaultsKey
+        )
+
+        let restored = MistiaAppLanguage.bootstrapStoredPreference(
+            preferredLanguages: ["vi-VN", "en-US"]
+        )
+
+        XCTAssertEqual(restored, .japanese)
+        XCTAssertEqual(
+            UserDefaults.standard.string(forKey: MistiaAppLanguage.userDefaultsKey),
+            MistiaAppLanguage.japanese.rawValue
+        )
     }
 
     func testLegacyDefaultIconColorsMapIntoCurrentPalette() {

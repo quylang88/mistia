@@ -14,6 +14,15 @@ struct ContentView: View {
     @MainActor
     private func runStartupTasks() async {
         await Task.yield()
+        do {
+            let context = MistiaDataStack.sharedModelContainer.mainContext
+            try MistiaBootstrap.seedDefaultCategoriesIfNeeded(
+                modelContext: context,
+                sessionStore: sessionStore
+            )
+        } catch {
+            print("Failed to seed category hierarchy: \(error)")
+        }
         await sessionStore.bootstrapIfNeeded()
 
         do {

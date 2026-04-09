@@ -107,6 +107,100 @@ final class PlanningLogicTests: XCTestCase {
         XCTAssertEqual(summary.nearestGoalName, "Quỹ khẩn cấp")
     }
 
+    func testBudgetBranchRowsRollUpChildBudgetsAndKeepParentModeSeparate() {
+        let selectedMonth = makeDate(year: 2026, month: 4, day: 1)
+        let referenceDate = makeDate(year: 2026, month: 4, day: 10)
+        let livingParent = UUID()
+        let travelParent = UUID()
+        let foodCategory = UUID()
+        let housingCategory = UUID()
+        let trainCategory = UUID()
+
+        let rows = PlanningLogic.budgetBranchRows(
+            plans: [
+                makeBudget(
+                    categoryID: foodCategory,
+                    categoryName: "Ăn uống",
+                    limitMinor: 10_000,
+                    monthAnchor: selectedMonth,
+                    categoryParentID: livingParent,
+                    categoryParentName: "Sinh hoạt",
+                    categoryParentIconSymbolName: "house.fill",
+                    categoryParentColorHex: "#5A6C7D"
+                ),
+                makeBudget(
+                    categoryID: housingCategory,
+                    categoryName: "Nhà ở",
+                    limitMinor: 20_000,
+                    monthAnchor: selectedMonth,
+                    categoryParentID: livingParent,
+                    categoryParentName: "Sinh hoạt",
+                    categoryParentIconSymbolName: "house.fill",
+                    categoryParentColorHex: "#5A6C7D"
+                ),
+                makeBudget(
+                    categoryID: travelParent,
+                    categoryName: "Di chuyển & chuyến đi",
+                    limitMinor: 15_000,
+                    monthAnchor: selectedMonth,
+                    categoryIsParent: true
+                )
+            ],
+            records: [
+                makeRecord(
+                    primaryKind: .expense,
+                    amountMinor: 6_000,
+                    occurredAt: makeDate(year: 2026, month: 4, day: 5),
+                    categoryID: foodCategory,
+                    categoryParentID: livingParent
+                ),
+                makeRecord(
+                    primaryKind: .expense,
+                    amountMinor: 7_000,
+                    occurredAt: makeDate(year: 2026, month: 4, day: 7),
+                    categoryID: housingCategory,
+                    categoryParentID: livingParent
+                ),
+                makeRecord(
+                    primaryKind: .expense,
+                    amountMinor: 3_000,
+                    occurredAt: makeDate(year: 2026, month: 4, day: 8),
+                    categoryID: trainCategory,
+                    categoryParentID: travelParent
+                )
+            ],
+            selectedMonth: selectedMonth,
+            referenceDate: referenceDate,
+            calendar: calendar
+        )
+
+        XCTAssertEqual(rows.count, 2)
+        XCTAssertEqual(rows.map(\.name), ["Sinh hoạt", "Di chuyển & chuyến đi"])
+
+        guard let livingRow = rows.first(where: { $0.parentCategoryID == livingParent }) else {
+            XCTFail("Expected a living branch row")
+            return
+        }
+        XCTAssertEqual(livingRow.mode, .child)
+        XCTAssertEqual(livingRow.spentMinor, 13_000)
+        XCTAssertEqual(livingRow.limitMinor, 30_000)
+        XCTAssertEqual(livingRow.childRows.map(\.name), ["Ăn uống", "Nhà ở"])
+
+        guard let travelRow = rows.first(where: { $0.parentCategoryID == travelParent }) else {
+            XCTFail("Expected a travel branch row")
+            return
+        }
+        XCTAssertEqual(travelRow.mode, .parent)
+        XCTAssertEqual(travelRow.spentMinor, 3_000)
+        XCTAssertEqual(travelRow.limitMinor, 15_000)
+        XCTAssertEqual(travelRow.childRows.count, 0)
+
+        let summary = PlanningLogic.budgetSummary(from: rows)
+        XCTAssertEqual(summary.totalBudgetMinor, 45_000)
+        XCTAssertEqual(summary.spentMinor, 16_000)
+        XCTAssertEqual(summary.remainingMinor, 29_000)
+    }
+
     func testDueSummaryUsesSevenDayWindowForCurrentMonthAndAllPendingForOtherMonths() {
         let currentMonth = makeDate(year: 2026, month: 4, day: 1)
         let referenceDate = makeDate(year: 2026, month: 4, day: 10)
@@ -286,7 +380,8 @@ final class PlanningLogicTests: XCTestCase {
         primaryKind: TransactionPrimaryKind,
         amountMinor: Int64,
         occurredAt: Date,
-        categoryID: UUID?
+        categoryID: UUID?,
+        categoryParentID: UUID? = nil
     ) -> TransactionRecordSnapshot {
         TransactionRecordSnapshot(
             id: UUID(),
@@ -304,8 +399,38 @@ final class PlanningLogicTests: XCTestCase {
             destinationWalletID: nil,
             destinationWalletKind: nil,
             categoryID: categoryID,
+            categoryParentID: categoryParentID,
             counterpartyName: nil,
             normalizedCounterpartyKey: nil
+        )
+    }
+
+    private func makeBudget(
+        categoryID: UUID,
+        categoryName: String,
+        limitMinor: Int64,
+        monthAnchor: Date,
+        categoryParentID: UUID? = nil,
+        categoryParentName: String? = nil,
+        categoryParentIconSymbolName: String? = nil,
+        categoryParentColorHex: String? = nil,
+        categoryIsParent: Bool = false
+    ) -> BudgetPlanSnapshot {
+        BudgetPlanSnapshot(
+            id: UUID(),
+            categoryID: categoryID,
+            categoryName: categoryName,
+            categoryIconSymbolName: "fork.knife",
+            categoryColorHex: "#FF9F1C",
+            limitMinor: limitMinor,
+            rolloverEnabled: false,
+            currencyCode: "JPY",
+            monthAnchor: monthAnchor,
+            categoryParentID: categoryParentID,
+            categoryParentName: categoryParentName,
+            categoryParentIconSymbolName: categoryParentIconSymbolName,
+            categoryParentColorHex: categoryParentColorHex,
+            categoryIsParent: categoryIsParent
         )
     }
 

@@ -4,14 +4,12 @@ import XCTest
 final class TransactionLogicTests: XCTestCase {
     override func setUp() {
         super.setUp()
-        UserDefaults.standard.set(
-            MistiaAppLanguage.vietnamese.rawValue,
-            forKey: MistiaAppLanguage.userDefaultsKey
-        )
+        MistiaAppLanguage.persist(.vietnamese)
     }
 
     override func tearDown() {
         UserDefaults.standard.removeObject(forKey: MistiaAppLanguage.userDefaultsKey)
+        UserDefaults.standard.removeObject(forKey: MistiaAppLanguage.backupUserDefaultsKey)
         super.tearDown()
     }
 

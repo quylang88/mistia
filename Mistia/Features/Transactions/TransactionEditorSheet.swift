@@ -45,6 +45,7 @@ struct TransactionEditorSheet: View {
 
     @State private var draft: TransactionFormDraft
     @State private var alertMessage: String?
+    @State private var showsCategoryPicker = false
 
     init(
         target: TransactionEditorTarget,
@@ -102,6 +103,14 @@ struct TransactionEditorSheet: View {
             Button(mistiaLocalized(vi: "OK", en: "OK", ja: "OK"), role: .cancel) { }
         } message: {
             Text(mistiaCatalog(alertMessage ?? ""))
+        }
+        .sheet(isPresented: $showsCategoryPicker) {
+            TransactionCategoryPickerSheet(
+                selectedCategoryID: draft.categoryID,
+                sections: categorySections
+            ) { category in
+                draft.categoryID = category.id
+            }
         }
     }
     private func archiveTransaction() {
@@ -235,12 +244,21 @@ struct TransactionEditorSheet: View {
                         }
                     }
 
-                    Picker(mistiaLocalized(vi: "Danh mục", en: "Category", ja: "カテゴリ"), selection: $draft.categoryID) {
-                        Text(mistiaLocalized(vi: "Chọn danh mục", en: "Choose category", ja: "カテゴリを選択")).tag(Optional<UUID>.none)
-                        ForEach(availableCategories) { category in
-                            Text(category.localizedDisplayName).tag(Optional(category.id))
+                    Button {
+                        showsCategoryPicker = true
+                    } label: {
+                        HStack {
+                            Text(mistiaLocalized(vi: "Danh mục", en: "Category", ja: "カテゴリ"))
+                                .foregroundStyle(.primary)
+                            Spacer()
+                            Text(selectedCategoryLabel)
+                                .foregroundStyle(selectedCategory == nil ? .tertiary : .secondary)
+                            Image(systemName: "chevron.right")
+                                .font(.system(size: 11, weight: .bold))
+                                .foregroundStyle(.tertiary)
                         }
                     }
+                    .buttonStyle(.plain)
                 }
             case .transfer:
                 if draft.transferSubtype == .internalTransfer {
@@ -365,6 +383,7 @@ struct TransactionEditorSheet: View {
         return storedCategories
             .filter {
                 ($0.kind == desiredKind)
+                    && $0.isChildCategory
                     && (($0.deletedAt == nil && !$0.isArchived) || $0.id == preferredID)
             }
             .sorted {
@@ -373,6 +392,23 @@ struct TransactionEditorSheet: View {
                 }
                 return $0.createdAt < $1.createdAt
             }
+    }
+
+    private var categorySections: [TransactionCategoryGroupSection] {
+        let desiredKind: TransactionCategoryKind = draft.primaryKind == .income ? .income : .expense
+        let preferredID = target.transaction?.category?.id
+        let relevantCategories = storedCategories.filter { category in
+            category.kind == desiredKind
+                && category.deletedAt == nil
+                && (!category.isArchived || category.id == preferredID || category.parentCategory?.id == target.transaction?.category?.parentCategory?.id)
+        }
+
+        return MistiaCategoryHierarchy.groupedSections(
+            from: relevantCategories,
+            kind: desiredKind,
+            includeArchived: true,
+            includeEmptyParents: false
+        )
     }
 
     private var selectedSourceWallet: LedgerWallet? {
@@ -385,6 +421,15 @@ struct TransactionEditorSheet: View {
 
     private var selectedCategory: TransactionCategory? {
         availableCategories.first(where: { $0.id == draft.categoryID })
+    }
+
+    private var selectedCategoryLabel: String {
+        guard let selectedCategory else {
+            return mistiaLocalized(vi: "Chọn danh mục", en: "Choose category", ja: "カテゴリを選択")
+        }
+
+        let parentName = selectedCategory.parentCategory?.localizedDisplayName ?? selectedCategory.branchDisplayName
+        return "\(parentName) / \(selectedCategory.localizedDisplayName)"
     }
 
     private var shouldShowMissingWalletsState: Bool {
@@ -614,6 +659,15 @@ struct TransactionEditorSheet: View {
                 return
             }
 
+            guard category.isChildCategory else {
+                alertMessage = mistiaLocalized(
+                    vi: "Chi tiêu và thu nhập phải dùng danh mục con.",
+                    en: "Expenses and income must use a child category.",
+                    ja: "支出と収入は子カテゴリを使う必要があります。"
+                )
+                return
+            }
+
             transaction.title = draft.title.nilIfBlank ?? ""
             transaction.sourceWallet = sourceWallet
             transaction.destinationWallet = nil
@@ -699,6 +753,61 @@ struct TransactionEditorSheet: View {
             dismiss()
         } catch {
             alertMessage = mistiaLocalized(vi: "Không thể lưu giao dịch lúc này.", en: "Couldn't save this transaction right now.", ja: "現在この取引を保存できません。") + " \(error.localizedDescription)"
+        }
+    }
+}
+
+private struct TransactionCategoryPickerSheet: View {
+    @Environment(\.dismiss) private var dismiss
+
+    let selectedCategoryID: UUID?
+    let sections: [TransactionCategoryGroupSection]
+    let onSelect: (TransactionCategory) -> Void
+
+    var body: some View {
+        NavigationStack {
+            List {
+                ForEach(sections) { section in
+                    Section(section.parent.localizedDisplayName) {
+                        ForEach(section.children) { child in
+                            Button {
+                                onSelect(child)
+                                dismiss()
+                            } label: {
+                                HStack(spacing: 12) {
+                                    Image(systemName: "arrow.turn.down.right")
+                                        .font(.system(size: 12, weight: .semibold))
+                                        .foregroundStyle(.tertiary)
+
+                                    VStack(alignment: .leading, spacing: 3) {
+                                        Text(child.localizedDisplayName)
+                                            .foregroundStyle(.primary)
+                                        Text(section.parent.localizedDisplayName)
+                                            .font(.footnote)
+                                            .foregroundStyle(.secondary)
+                                    }
+
+                                    Spacer()
+
+                                    if child.id == selectedCategoryID {
+                                        Image(systemName: "checkmark")
+                                            .foregroundStyle(.tint)
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            .navigationTitle(mistiaLocalized(vi: "Chọn danh mục", en: "Choose category", ja: "カテゴリを選択"))
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    Button(mistiaLocalized(vi: "Đóng", en: "Close", ja: "閉じる")) {
+                        dismiss()
+                    }
+                }
+            }
         }
     }
 }

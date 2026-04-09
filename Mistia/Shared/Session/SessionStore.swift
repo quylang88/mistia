@@ -74,6 +74,7 @@ final class SessionStore {
     var activeAuthAction: SessionAuthAction?
 
     @ObservationIgnored private let authService: SupabaseAuthService
+    @ObservationIgnored private let modelContainer: ModelContainer
     @ObservationIgnored private let syncCoordinator: SyncCoordinator
     @ObservationIgnored private var currentSession: SupabaseAuthSession?
     @ObservationIgnored private var didBootstrap = false
@@ -83,6 +84,7 @@ final class SessionStore {
     @ObservationIgnored private var pendingInitialSyncChoice: MistiaInitialSyncChoice?
 
     init(modelContainer: ModelContainer) {
+        self.modelContainer = modelContainer
         authService = SupabaseAuthService()
         syncCoordinator = SyncCoordinator(modelContainer: modelContainer)
 
@@ -397,6 +399,7 @@ final class SessionStore {
                 resolution: resolution,
                 session: validSession
             )
+            try normalizeCategoryHierarchyIfNeeded()
             lastSyncAt = .now
             lastErrorMessage = nil
             syncStatusTitle = mistiaLocalized(
@@ -1183,6 +1186,7 @@ final class SessionStore {
                 result = try await syncCoordinator.sync(session: validSession)
             }
 
+            try normalizeCategoryHierarchyIfNeeded()
             lastSyncAt = .now
             lastErrorMessage = nil
             possibleDuplicateCount = ((try? MistiaSyncLocalStore.possibleDuplicateTransactions(
@@ -1206,6 +1210,13 @@ final class SessionStore {
         } catch {
             applySyncErrorState(error)
         }
+    }
+
+    private func normalizeCategoryHierarchyIfNeeded() throws {
+        try MistiaBootstrap.seedDefaultCategoriesIfNeeded(
+            modelContext: modelContainer.mainContext,
+            sessionStore: self
+        )
     }
 }
 

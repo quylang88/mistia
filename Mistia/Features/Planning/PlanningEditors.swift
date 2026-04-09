@@ -16,21 +16,46 @@ struct PlanningBudgetEditorSheet: View {
     @State private var draft: PlanningBudgetDraft
     @State private var alertMessage: String?
     @State private var showsDeleteConfirmation = false
+    @State private var showsCategoryPicker = false
 
     init(target: PlanningBudgetEditorTarget) {
         self.target = target
         _draft = State(initialValue: PlanningBudgetDraft(budget: target.budget))
     }
 
+    private var categorySections: [TransactionCategoryGroupSection] {
+        let preferredCategoryID = target.budget?.category?.id
+        let preferredParentID = target.budget?.category?.parentCategory?.id
+        let relevantCategories = storedCategories.filter { category in
+            category.kind == .expense
+                && category.deletedAt == nil
+                && (!category.isArchived || category.id == preferredCategoryID || category.id == preferredParentID)
+        }
+
+        let sections = MistiaCategoryHierarchy.groupedSections(
+            from: relevantCategories,
+            kind: .expense,
+            includeArchived: true,
+            includeEmptyParents: true
+        )
+
+        guard let preferredParentCategoryID = target.preferredParentCategoryID else {
+            return sections
+        }
+
+        return sections.sorted { lhs, rhs in
+            if lhs.parent.id == preferredParentCategoryID { return true }
+            if rhs.parent.id == preferredParentCategoryID { return false }
+            return MistiaCategoryHierarchy.categorySort(lhs: lhs.parent, rhs: rhs.parent)
+        }
+    }
+
     private var availableCategories: [TransactionCategory] {
-        storedCategories
-            .filter { $0.kind == .expense && !$0.isArchived }
-            .sorted {
-                if $0.sortOrder != $1.sortOrder {
-                    return $0.sortOrder < $1.sortOrder
-                }
-                return $0.createdAt < $1.createdAt
-            }
+        categorySections.flatMap { [$0.parent] + $0.children }
+    }
+
+    private var selectedCategory: TransactionCategory? {
+        availableCategories.first(where: { $0.id == draft.categoryID })
     }
 
     private var activeCurrencyCode: String {
@@ -41,12 +66,21 @@ struct PlanningBudgetEditorSheet: View {
         NavigationStack {
             Form {
                 Section(mistiaLocalized(vi: "Ngân sách", en: "Budget", ja: "予算")) {
-                    Picker(mistiaLocalized(vi: "Danh mục", en: "Category", ja: "カテゴリ"), selection: $draft.categoryID) {
-                        Text(mistiaLocalized(vi: "Chọn danh mục", en: "Choose category", ja: "カテゴリを選択")).tag(Optional<UUID>.none)
-                        ForEach(availableCategories) { category in
-                            Text(category.localizedDisplayName).tag(Optional(category.id))
+                    Button {
+                        showsCategoryPicker = true
+                    } label: {
+                        HStack {
+                            Text(mistiaLocalized(vi: "Danh mục", en: "Category", ja: "カテゴリ"))
+                                .foregroundStyle(.primary)
+                            Spacer()
+                            Text(selectedCategoryLabel)
+                                .foregroundStyle(selectedCategory == nil ? .tertiary : .secondary)
+                            Image(systemName: "chevron.right")
+                                .font(.system(size: 11, weight: .bold))
+                                .foregroundStyle(.tertiary)
                         }
                     }
+                    .buttonStyle(.plain)
 
                     TextField(mistiaLocalized(vi: "Số tiền ngân sách", en: "Budget amount", ja: "予算金額"), text: $draft.limitText)
                         .keyboardType(.numberPad)
@@ -77,6 +111,14 @@ struct PlanningBudgetEditorSheet: View {
             }
         }
         .planningAlert(message: $alertMessage)
+        .sheet(isPresented: $showsCategoryPicker) {
+            PlanningBudgetCategoryPickerSheet(
+                selectedCategoryID: draft.categoryID,
+                sections: categorySections
+            ) { category in
+                draft.categoryID = category.id
+            }
+        }
         .confirmationDialog(
             mistiaLocalized(vi: "Xóa ngân sách này?", en: "Delete this budget?", ja: "この予算を削除しますか？"),
             isPresented: $showsDeleteConfirmation,
@@ -93,8 +135,7 @@ struct PlanningBudgetEditorSheet: View {
     }
 
     private func save() {
-        guard let categoryID = draft.categoryID,
-              let category = storedCategories.first(where: { $0.id == categoryID })
+        guard let category = selectedCategory
         else {
             alertMessage = mistiaLocalized(vi: "Chọn danh mục trước khi lưu.", en: "Choose a category before saving.", ja: "保存する前にカテゴリを選択してください。")
             return
@@ -111,11 +152,38 @@ struct PlanningBudgetEditorSheet: View {
             guard !budget.isArchived else { return false }
             guard budget.id != target.budget?.id else { return false }
             guard PlanningLogic.startOfMonth(for: budget.monthAnchor) == monthAnchor else { return false }
-            return budget.category?.id == categoryID
+            return budget.category?.id == category.id
         })
 
         guard !hasDuplicate else {
             alertMessage = mistiaLocalized(vi: "Danh mục này đã có ngân sách trong tháng đang xem.", en: "This category already has a budget in the selected month.", ja: "このカテゴリには表示中の月ですでに予算があります。")
+            return
+        }
+
+        let branchBudgets = storedBudgets.filter { budget in
+            guard budget.deletedAt == nil, !budget.isArchived else { return false }
+            guard budget.id != target.budget?.id else { return false }
+            guard PlanningLogic.startOfMonth(for: budget.monthAnchor) == monthAnchor else { return false }
+            return budget.category?.branchCategoryID == category.branchCategoryID
+        }
+        let hasParentBudget = branchBudgets.contains { $0.category?.isParentCategory == true }
+        let hasChildBudget = branchBudgets.contains { $0.category?.isChildCategory == true }
+
+        if category.isParentCategory && hasChildBudget {
+            alertMessage = mistiaLocalized(
+                vi: "Nhánh này đã có ngân sách con trong tháng đang xem. Xóa hoặc chỉnh các ngân sách con trước khi tạo ngân sách cha.",
+                en: "This branch already has child budgets in the selected month. Remove or edit those child budgets before creating a parent budget.",
+                ja: "この月の同じ枝にはすでに子予算があります。親予算を作る前に子予算を調整してください。"
+            )
+            return
+        }
+
+        if category.isChildCategory && hasParentBudget {
+            alertMessage = mistiaLocalized(
+                vi: "Nhánh này đã có ngân sách cha trong tháng đang xem. Xóa hoặc chỉnh ngân sách cha trước khi tạo ngân sách con.",
+                en: "This branch already has a parent budget in the selected month. Remove or edit that parent budget before creating a child budget.",
+                ja: "この月の同じ枝にはすでに親予算があります。子予算を作る前に親予算を調整してください。"
+            )
             return
         }
 
@@ -170,6 +238,87 @@ struct PlanningBudgetEditorSheet: View {
             dismiss()
         } catch {
             alertMessage = mistiaLocalized(vi: "Không thể xóa ngân sách lúc này.", en: "Couldn't delete this budget right now.", ja: "現在この予算を削除できません。") + " \(error.localizedDescription)"
+        }
+    }
+
+    private var selectedCategoryLabel: String {
+        guard let selectedCategory else {
+            return mistiaLocalized(vi: "Chọn danh mục", en: "Choose category", ja: "カテゴリを選択")
+        }
+
+        if selectedCategory.isParentCategory {
+            return selectedCategory.localizedDisplayName
+        }
+
+        let parentName = selectedCategory.parentCategory?.localizedDisplayName ?? selectedCategory.branchDisplayName
+        return "\(parentName) / \(selectedCategory.localizedDisplayName)"
+    }
+}
+
+private struct PlanningBudgetCategoryPickerSheet: View {
+    @Environment(\.dismiss) private var dismiss
+
+    let selectedCategoryID: UUID?
+    let sections: [TransactionCategoryGroupSection]
+    let onSelect: (TransactionCategory) -> Void
+
+    var body: some View {
+        NavigationStack {
+            List {
+                ForEach(sections) { section in
+                    Section(section.parent.localizedDisplayName) {
+                        categoryButton(for: section.parent, isParent: true)
+
+                        ForEach(section.children) { child in
+                            categoryButton(for: child, isParent: false)
+                        }
+                    }
+                }
+            }
+            .navigationTitle(mistiaLocalized(vi: "Chọn danh mục", en: "Choose category", ja: "カテゴリを選択"))
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    Button(mistiaLocalized(vi: "Đóng", en: "Close", ja: "閉じる")) {
+                        dismiss()
+                    }
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func categoryButton(for category: TransactionCategory, isParent: Bool) -> some View {
+        Button {
+            onSelect(category)
+            dismiss()
+        } label: {
+            HStack(spacing: 12) {
+                if !isParent {
+                    Image(systemName: "arrow.turn.down.right")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(.tertiary)
+                }
+
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(category.localizedDisplayName)
+                        .foregroundStyle(.primary)
+                    Text(
+                        isParent
+                            ? mistiaLocalized(vi: "Ngân sách cha", en: "Parent budget", ja: "親予算")
+                            : mistiaLocalized(vi: "Ngân sách con", en: "Child budget", ja: "子予算")
+                    )
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                }
+
+                Spacer()
+
+                if category.id == selectedCategoryID {
+                    Image(systemName: "checkmark")
+                        .foregroundStyle(.tint)
+                }
+            }
         }
     }
 }
