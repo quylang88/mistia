@@ -227,6 +227,7 @@ nonisolated struct PlanningBillSnapshot: Equatable, Identifiable {
     let id: UUID
     let name: String
     let iconSymbolName: String
+    let categorySystemKey: MistiaSystemCategoryKey?
     let amountMinor: Int64?
     let dueDay: Int
     let frequencyMonths: Int
@@ -279,6 +280,7 @@ nonisolated struct PlanningRecurringDueSnapshot: Equatable, Identifiable {
     let sourceID: UUID
     let name: String
     let iconSymbolName: String
+    let categorySystemKey: MistiaSystemCategoryKey?
     let amountMinor: Int64?
     let dueDate: Date
     let frequencyMonths: Int
@@ -675,6 +677,7 @@ nonisolated enum PlanningLogic {
                     sourceID: bill.id,
                     name: bill.name,
                     iconSymbolName: bill.iconSymbolName,
+                    categorySystemKey: bill.categorySystemKey,
                     amountMinor: occurrence?.amountMinorSnapshot ?? bill.amountMinor,
                     dueDate: scheduledDate(dueDay: bill.dueDay, selectedMonth: selectedMonth, calendar: calendar),
                     frequencyMonths: bill.frequencyMonths,
@@ -723,6 +726,7 @@ nonisolated enum PlanningLogic {
                     sourceID: plan.id,
                     name: plan.name,
                     iconSymbolName: plan.iconSymbolName,
+                    categorySystemKey: .loanRepayment,
                     amountMinor: occurrence?.amountMinorSnapshot ?? plan.amountPerCycleMinor,
                     dueDate: scheduledDate(dueDay: plan.dueDay, selectedMonth: selectedMonth, calendar: calendar),
                     frequencyMonths: plan.frequencyMonths,
@@ -812,7 +816,15 @@ nonisolated enum PlanningLogic {
             throw PlanningDuePaymentError.missingAmount
         }
 
-        let systemKey: MistiaSystemCategoryKey = recurringItem.sourceKind == .recurringBill ? .billing : .loanRepayment
+        let systemKey: MistiaSystemCategoryKey
+        switch recurringItem.sourceKind {
+        case .recurringBill:
+            systemKey = recurringItem.categorySystemKey ?? .billing
+        case .installment:
+            systemKey = .loanRepayment
+        case .creditCard:
+            systemKey = .billing
+        }
 
         return PlanningDuePaymentDraft(
             primaryKind: .expense,

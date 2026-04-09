@@ -1,5 +1,54 @@
 import Foundation
 
+nonisolated enum MistiaFinanceIconGroup: String, CaseIterable, Identifiable, Codable {
+    case wallet
+    case food
+    case home
+    case family
+    case mobility
+    case personal
+    case health
+    case leisure
+    case work
+    case finance
+    case income
+    case planning
+    case generic
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .wallet:
+            mistiaLocalized(vi: "Ví", en: "Wallets", ja: "ウォレット")
+        case .food:
+            mistiaLocalized(vi: "Ăn uống", en: "Food", ja: "食事")
+        case .home:
+            mistiaLocalized(vi: "Nhà ở", en: "Home", ja: "住まい")
+        case .family:
+            mistiaLocalized(vi: "Gia đình", en: "Family", ja: "家族")
+        case .mobility:
+            mistiaLocalized(vi: "Đi lại", en: "Mobility", ja: "移動")
+        case .personal:
+            mistiaLocalized(vi: "Cá nhân", en: "Personal", ja: "個人")
+        case .health:
+            mistiaLocalized(vi: "Sức khỏe", en: "Health", ja: "健康")
+        case .leisure:
+            mistiaLocalized(vi: "Giải trí", en: "Leisure", ja: "娯楽")
+        case .work:
+            mistiaLocalized(vi: "Công việc", en: "Work", ja: "仕事")
+        case .finance:
+            mistiaLocalized(vi: "Tài chính", en: "Finance", ja: "金融")
+        case .income:
+            mistiaLocalized(vi: "Thu nhập", en: "Income", ja: "収入")
+        case .planning:
+            mistiaLocalized(vi: "Kế hoạch", en: "Planning", ja: "計画")
+        case .generic:
+            mistiaLocalized(vi: "Khác", en: "Other", ja: "その他")
+        }
+    }
+}
+
 nonisolated enum LedgerWalletKind: String, CaseIterable, Identifiable, Codable {
     case cash
     case payPay
@@ -24,13 +73,13 @@ nonisolated enum LedgerWalletKind: String, CaseIterable, Identifiable, Codable {
     var defaultIconSymbolName: String {
         switch self {
         case .cash:
-            "banknote.fill"
+            "mistia.wallet.cash"
         case .payPay:
-            "wallet.pass.fill"
+            "mistia.wallet.paypay"
         case .bank:
-            "building.columns.fill"
+            "mistia.wallet.bank"
         case .creditCard:
-            "creditcard.fill"
+            "mistia.wallet.credit_card"
         }
     }
 
@@ -43,30 +92,62 @@ nonisolated enum LedgerWalletKind: String, CaseIterable, Identifiable, Codable {
         case .bank:
             "#5B7BFF"
         case .creditCard:
-            "#8A8A8E"
+            "#7C85A3"
+        }
+    }
+
+    var legacyDefaultIconSymbolNames: [String] {
+        switch self {
+        case .cash:
+            ["banknote.fill"]
+        case .payPay:
+            ["wallet.pass.fill"]
+        case .bank:
+            ["building.columns.fill"]
+        case .creditCard:
+            ["creditcard.fill"]
         }
     }
 
     var legacyDefaultColorHexes: [String] {
         switch self {
         case .creditCard:
-            ["#7C85A3"]
+            ["#8A8A8E", "#7C85A3"]
         default:
             []
         }
     }
 
+    var fallbackSystemName: String {
+        switch self {
+        case .cash:
+            "banknote.fill"
+        case .payPay:
+            "qrcode"
+        case .bank:
+            "building.columns.fill"
+        case .creditCard:
+            "creditcard.fill"
+        }
+    }
+
     func matchesDefaultIconAppearance(symbolName: String, colorHex: String) -> Bool {
-        guard symbolName == defaultIconSymbolName else { return false }
+        if symbolName == defaultIconSymbolName {
+            return true
+        }
+
+        guard legacyDefaultIconSymbolNames.contains(symbolName) else { return false }
         let normalizedColorHex = MistiaIconColorPalette.normalizedHex(colorHex)
         return normalizedColorHex == defaultColorHex || legacyDefaultColorHexes.contains(normalizedColorHex)
     }
 
     func migratedLegacyDefaultColorHex(for colorHex: String, symbolName: String) -> String? {
-        guard symbolName == defaultIconSymbolName else { return nil }
+        guard legacyDefaultIconSymbolNames.contains(symbolName) else { return nil }
         let normalizedColorHex = MistiaIconColorPalette.normalizedHex(colorHex)
-        guard legacyDefaultColorHexes.contains(normalizedColorHex) else { return nil }
-        return MistiaIconColorPalette.presetHex(forDefault: normalizedColorHex)
+        guard normalizedColorHex == defaultColorHex || legacyDefaultColorHexes.contains(normalizedColorHex) else {
+            return nil
+        }
+        return MistiaIconColorPalette.presetHex(forDefault: defaultColorHex)
     }
 
     var balanceFieldTitle: String {
@@ -97,41 +178,56 @@ nonisolated enum TransactionCategoryKind: String, CaseIterable, Identifiable, Co
     var defaultIconSymbolName: String {
         switch self {
         case .expense:
-            "fork.knife"
+            "mistia.flow.expense"
         case .income:
-            "briefcase.fill"
+            "mistia.flow.income"
         }
     }
 
     var defaultColorHex: String {
         switch self {
         case .expense:
-            "#FF9F1C"
+            "#FF7A59"
         case .income:
             "#2DAA9E"
+        }
+    }
+
+    var legacyDefaultIconSymbolNames: [String] {
+        switch self {
+        case .expense:
+            ["fork.knife"]
+        case .income:
+            ["briefcase.fill"]
         }
     }
 
     var legacyDefaultColorHexes: [String] {
         switch self {
         case .expense:
-            ["#F59B3F"]
+            ["#FF9F1C", "#F59B3F"]
         case .income:
             []
         }
     }
 
     func matchesDefaultIconAppearance(symbolName: String, colorHex: String) -> Bool {
-        guard symbolName == defaultIconSymbolName else { return false }
+        if symbolName == defaultIconSymbolName {
+            return true
+        }
+
+        guard legacyDefaultIconSymbolNames.contains(symbolName) else { return false }
         let normalizedColorHex = MistiaIconColorPalette.normalizedHex(colorHex)
         return normalizedColorHex == defaultColorHex || legacyDefaultColorHexes.contains(normalizedColorHex)
     }
 
     func migratedLegacyDefaultColorHex(for colorHex: String, symbolName: String) -> String? {
-        guard symbolName == defaultIconSymbolName else { return nil }
+        guard legacyDefaultIconSymbolNames.contains(symbolName) else { return nil }
         let normalizedColorHex = MistiaIconColorPalette.normalizedHex(colorHex)
-        guard legacyDefaultColorHexes.contains(normalizedColorHex) else { return nil }
-        return MistiaIconColorPalette.presetHex(forDefault: normalizedColorHex)
+        guard normalizedColorHex == defaultColorHex || legacyDefaultColorHexes.contains(normalizedColorHex) else {
+            return nil
+        }
+        return MistiaIconColorPalette.presetHex(forDefault: defaultColorHex)
     }
 }
 
@@ -151,342 +247,384 @@ nonisolated enum TransactionCategoryHierarchyRole: String, CaseIterable, Identif
     }
 }
 
+nonisolated enum MistiaSystemCategoryParentKey: String, CaseIterable, Codable, Identifiable {
+    case livingExpense = "parent_expense_living"
+    case mobilityTravel = "parent_expense_mobility_travel"
+    case personalLifestyle = "parent_expense_personal_lifestyle"
+    case expenseFood = "parent_expense_food"
+    case expenseHomeBills = "parent_expense_home_bills"
+    case expenseFamilyChildren = "parent_expense_family_children"
+    case expenseTransportVehicle = "parent_expense_transport_vehicle"
+    case expensePersonalShopping = "parent_expense_personal_shopping"
+    case expenseHealth = "parent_expense_health"
+    case expenseEntertainmentSocial = "parent_expense_entertainment_social"
+    case expenseWorkStudy = "parent_expense_work_study"
+    case expenseFinancialObligations = "parent_expense_financial_obligations"
+    case expenseOther = "parent_expense_uncategorized"
+    case incomeSalaryWork = "parent_income_work"
+    case incomeBusiness = "parent_income_sales_other"
+    case incomeInvestmentFinance = "parent_income_investment_return"
+    case incomeRefundAdjustment = "parent_income_refund_adjustment"
+    case incomeSupportGift = "parent_income_support_gift"
+    case incomeOther = "parent_income_uncategorized"
+
+    private struct Meta {
+        let kind: TransactionCategoryKind
+        let title: String
+        let iconToken: String
+        let fallbackSystemName: String
+        let iconColorHex: String
+        let group: MistiaFinanceIconGroup
+        let activeDefault: Bool
+        let aliases: [String]
+    }
+
+    private static let metadata: [Self: Meta] = [
+        .livingExpense: .init(kind: .expense, title: "Sinh hoạt", iconToken: "mistia.category.parent.legacy.living", fallbackSystemName: "house.fill", iconColorHex: "#FF9F1C", group: .home, activeDefault: false, aliases: []),
+        .mobilityTravel: .init(kind: .expense, title: "Di chuyển & chuyến đi", iconToken: "mistia.category.parent.legacy.mobility_travel", fallbackSystemName: "airplane", iconColorHex: "#5B7BFF", group: .mobility, activeDefault: false, aliases: []),
+        .personalLifestyle: .init(kind: .expense, title: "Cá nhân & phong cách sống", iconToken: "mistia.category.parent.legacy.personal_lifestyle", fallbackSystemName: "sparkles", iconColorHex: "#F26A5A", group: .personal, activeDefault: false, aliases: []),
+        .expenseFood: .init(kind: .expense, title: "Ăn uống", iconToken: "mistia.category.parent.expense.food", fallbackSystemName: "fork.knife", iconColorHex: "#FF8A4C", group: .food, activeDefault: true, aliases: []),
+        .expenseHomeBills: .init(kind: .expense, title: "Nhà ở & hóa đơn", iconToken: "mistia.category.parent.expense.home_bills", fallbackSystemName: "house.fill", iconColorHex: "#5B7BFF", group: .home, activeDefault: true, aliases: []),
+        .expenseFamilyChildren: .init(kind: .expense, title: "Gia đình & con cái", iconToken: "mistia.category.parent.expense.family_children", fallbackSystemName: "person.2.fill", iconColorHex: "#FF6D8A", group: .family, activeDefault: true, aliases: []),
+        .expenseTransportVehicle: .init(kind: .expense, title: "Đi lại & xe cộ", iconToken: "mistia.category.parent.expense.transport_vehicle", fallbackSystemName: "car.fill", iconColorHex: "#2DAA9E", group: .mobility, activeDefault: true, aliases: []),
+        .expensePersonalShopping: .init(kind: .expense, title: "Mua sắm cá nhân", iconToken: "mistia.category.parent.expense.personal_shopping", fallbackSystemName: "bag.fill", iconColorHex: "#A76BFF", group: .personal, activeDefault: true, aliases: []),
+        .expenseHealth: .init(kind: .expense, title: "Sức khỏe", iconToken: "mistia.category.parent.expense.health", fallbackSystemName: "cross.case.fill", iconColorHex: "#F45C7E", group: .health, activeDefault: true, aliases: []),
+        .expenseEntertainmentSocial: .init(kind: .expense, title: "Giải trí & xã hội", iconToken: "mistia.category.parent.expense.entertainment_social", fallbackSystemName: "party.popper.fill", iconColorHex: "#F59B3F", group: .leisure, activeDefault: true, aliases: []),
+        .expenseWorkStudy: .init(kind: .expense, title: "Công việc & học tập", iconToken: "mistia.category.parent.expense.work_study", fallbackSystemName: "briefcase.fill", iconColorHex: "#4C8DFF", group: .work, activeDefault: true, aliases: []),
+        .expenseFinancialObligations: .init(kind: .expense, title: "Tài chính & nghĩa vụ", iconToken: "mistia.category.parent.expense.financial_obligations", fallbackSystemName: "creditcard.and.123", iconColorHex: "#7C85A3", group: .finance, activeDefault: true, aliases: ["Nghĩa vụ tài chính"]),
+        .expenseOther: .init(kind: .expense, title: "Chi khác", iconToken: "mistia.category.parent.expense.other", fallbackSystemName: "tray.full.fill", iconColorHex: "#8A8A8E", group: .generic, activeDefault: true, aliases: ["Chưa phân loại chi"]),
+        .incomeSalaryWork: .init(kind: .income, title: "Lương & công việc", iconToken: "mistia.category.parent.income.salary_work", fallbackSystemName: "briefcase.fill", iconColorHex: "#2DAA9E", group: .income, activeDefault: true, aliases: ["Thu nhập công việc"]),
+        .incomeBusiness: .init(kind: .income, title: "Kinh doanh", iconToken: "mistia.category.parent.income.business", fallbackSystemName: "storefront.fill", iconColorHex: "#F26A5A", group: .income, activeDefault: true, aliases: ["Bán hàng & khác"]),
+        .incomeInvestmentFinance: .init(kind: .income, title: "Đầu tư & tài chính", iconToken: "mistia.category.parent.income.investment_finance", fallbackSystemName: "chart.line.uptrend.xyaxis", iconColorHex: "#5B7BFF", group: .finance, activeDefault: true, aliases: ["Đầu tư & hoàn lại"]),
+        .incomeRefundAdjustment: .init(kind: .income, title: "Hoàn lại & điều chỉnh", iconToken: "mistia.category.parent.income.refund_adjustment", fallbackSystemName: "arrow.counterclockwise.circle.fill", iconColorHex: "#57B7FF", group: .income, activeDefault: true, aliases: []),
+        .incomeSupportGift: .init(kind: .income, title: "Hỗ trợ & quà tặng", iconToken: "mistia.category.parent.income.support_gift", fallbackSystemName: "heart.fill", iconColorHex: "#FF6D8A", group: .income, activeDefault: true, aliases: []),
+        .incomeOther: .init(kind: .income, title: "Thu khác", iconToken: "mistia.category.parent.income.other", fallbackSystemName: "plusminus.circle.fill", iconColorHex: "#8A8A8E", group: .generic, activeDefault: true, aliases: ["Chưa phân loại thu"])
+    ]
+
+    static let activeDefaults: [Self] = [
+        .expenseFood,
+        .expenseHomeBills,
+        .expenseFamilyChildren,
+        .expenseTransportVehicle,
+        .expensePersonalShopping,
+        .expenseHealth,
+        .expenseEntertainmentSocial,
+        .expenseWorkStudy,
+        .expenseFinancialObligations,
+        .expenseOther,
+        .incomeSalaryWork,
+        .incomeBusiness,
+        .incomeInvestmentFinance,
+        .incomeRefundAdjustment,
+        .incomeSupportGift,
+        .incomeOther
+    ]
+
+    private var meta: Meta {
+        Self.metadata[self] ?? .init(kind: .expense, title: rawValue, iconToken: rawValue, fallbackSystemName: "questionmark.circle.fill", iconColorHex: "#8A8A8E", group: .generic, activeDefault: false, aliases: [])
+    }
+
+    var id: String { rawValue }
+    var kind: TransactionCategoryKind { meta.kind }
+    var title: String { localizedTitle(for: .current) }
+    var legacyVietnameseName: String { meta.title }
+    var fallbackSystemName: String { meta.fallbackSystemName }
+    var iconSymbolName: String { meta.iconToken }
+    var iconColorHex: String { meta.iconColorHex }
+    var pickerGroup: MistiaFinanceIconGroup { meta.group }
+    var isActiveDefault: Bool { meta.activeDefault }
+
+    func knownDefaultNames() -> [String] {
+        Array(Set([meta.title] + meta.aliases))
+    }
+
+    func localizedTitle(for language: MistiaAppLanguage) -> String {
+        mistiaLocalized(vi: meta.title, en: meta.title, ja: meta.title, language: language)
+    }
+}
+
 nonisolated enum MistiaSystemCategoryKey: String, CaseIterable, Codable, Identifiable {
     case food
     case entertainment
-    case travel
     case shopping
     case transportation
     case housing
     case billing
     case health
     case education
+    case investment
+    case grocery
+    case dineOut = "dine_out"
+    case cafeTea = "cafe_tea"
+    case foodDelivery = "food_delivery"
+    case snacks
+    case rent
+    case electricity
+    case water
+    case internet
+    case phone
+    case gas
+    case condoFee = "condo_fee"
+    case homeRepair = "home_repair"
+    case furnitureAppliance = "furniture_appliance"
+    case diapersMilk = "diapers_milk"
+    case childSupplies = "child_supplies"
+    case childTuition = "child_tuition"
+    case schoolBooksSupplies = "school_books_supplies"
+    case childcare
+    case childMedical = "child_medical"
+    case familyOther = "family_other"
+    case fuel
+    case parking
+    case grabTaxi = "grab_taxi"
+    case publicTransport = "public_transport"
+    case vehicleMaintenance = "vehicle_maintenance"
+    case vehicleRepair = "vehicle_repair"
+    case carWash = "car_wash"
+    case tolls
+    case vehicleInsurance = "vehicle_insurance"
+    case vehicleRegistration = "vehicle_registration"
+    case clothes
+    case footwear
+    case cosmeticsSkincare = "cosmetics_skincare"
+    case personalCare = "personal_care"
+    case accessories
+    case personalSupplies = "personal_supplies"
+    case medicalCheckup = "medical_checkup"
+    case medicine
+    case labTests = "lab_tests"
+    case dental
+    case hospital
+    case fitnessGym = "fitness_gym"
+    case supplements
+    case moviesLeisure = "movies_leisure"
+    case travel
+    case gamesApps = "games_apps"
+    case booksMusic = "books_music"
+    case partiesGatherings = "parties_gatherings"
+    case giftsCeremonies = "gifts_ceremonies"
+    case charity
+    case subscriptions
+    case workTools = "work_tools"
+    case workSoftwareSubscriptions = "work_software_subscriptions"
+    case clientEntertainment = "client_entertainment"
+    case businessTravel = "business_travel"
+    case courses
+    case professionalBooks = "professional_books"
+    case examsCertificates = "exams_certificates"
+    case insurance
+    case taxesFees = "taxes_fees"
+    case bankingFees = "banking_fees"
+    case loanInterest = "loan_interest"
     case loanRepayment = "loan_repayment"
+    case otherObligations = "other_obligations"
+    case otherExpense = "other_expense"
     case salary
     case bonus
-    case freelance
-    case investment
-    case refund
-    case sales
-    case gift
     case allowance
+    case commission
+    case freelance
+    case sales
+    case serviceRevenue = "service_revenue"
+    case businessProfit = "business_profit"
+    case otherBusinessIncome = "other_business_income"
     case bankInterest = "bank_interest"
+    case dividends
+    case investmentGain = "investment_gain"
+    case loanInterestReceived = "loan_interest_received"
+    case refund
+    case cashback
+    case reimbursement
+    case expenseRecovery = "expense_recovery"
+    case gift
+    case supportReceived = "support_received"
+    case subsidy
+    case familySupport = "family_support"
+    case otherIncome = "other_income"
+
+    private struct Meta {
+        let title: String
+        let englishTitle: String?
+        let japaneseTitle: String?
+        let parentKey: MistiaSystemCategoryParentKey?
+        let iconToken: String
+        let fallbackSystemName: String
+        let iconColorHex: String
+        let group: MistiaFinanceIconGroup
+        let activeDefault: Bool
+        let aliases: [String]
+
+        init(
+            title: String,
+            englishTitle: String? = nil,
+            japaneseTitle: String? = nil,
+            parentKey: MistiaSystemCategoryParentKey?,
+            iconToken: String,
+            fallbackSystemName: String,
+            iconColorHex: String,
+            group: MistiaFinanceIconGroup,
+            activeDefault: Bool,
+            aliases: [String]
+        ) {
+            self.title = title
+            self.englishTitle = englishTitle
+            self.japaneseTitle = japaneseTitle
+            self.parentKey = parentKey
+            self.iconToken = iconToken
+            self.fallbackSystemName = fallbackSystemName
+            self.iconColorHex = iconColorHex
+            self.group = group
+            self.activeDefault = activeDefault
+            self.aliases = aliases
+        }
+    }
+
+    private static let metadata: [Self: Meta] = [
+        .food: .init(title: "Ăn uống", englishTitle: "Food & drinks", japaneseTitle: "食費", parentKey: .livingExpense, iconToken: "mistia.category.legacy.food", fallbackSystemName: "fork.knife", iconColorHex: "#FF9F1C", group: .food, activeDefault: false, aliases: []),
+        .entertainment: .init(title: "Đi chơi", parentKey: .personalLifestyle, iconToken: "mistia.category.legacy.entertainment", fallbackSystemName: "party.popper.fill", iconColorHex: "#F26A5A", group: .leisure, activeDefault: false, aliases: []),
+        .shopping: .init(title: "Mua sắm", parentKey: .personalLifestyle, iconToken: "mistia.category.legacy.shopping", fallbackSystemName: "bag.fill", iconColorHex: "#F26A5A", group: .personal, activeDefault: false, aliases: []),
+        .transportation: .init(title: "Di chuyển", parentKey: .mobilityTravel, iconToken: "mistia.category.legacy.transportation", fallbackSystemName: "train.side.front.car", iconColorHex: "#2DAA9E", group: .mobility, activeDefault: false, aliases: []),
+        .housing: .init(title: "Nhà ở", parentKey: .livingExpense, iconToken: "mistia.category.legacy.housing", fallbackSystemName: "house.fill", iconColorHex: "#8A8A8E", group: .home, activeDefault: false, aliases: []),
+        .billing: .init(title: "Hóa đơn", parentKey: .livingExpense, iconToken: "mistia.category.legacy.billing", fallbackSystemName: "doc.text.fill", iconColorHex: "#FF9F1C", group: .home, activeDefault: false, aliases: []),
+        .health: .init(title: "Sức khỏe", parentKey: .personalLifestyle, iconToken: "mistia.category.legacy.health", fallbackSystemName: "cross.case.fill", iconColorHex: "#F26A5A", group: .health, activeDefault: false, aliases: []),
+        .education: .init(title: "Giáo dục", parentKey: .personalLifestyle, iconToken: "mistia.category.legacy.education", fallbackSystemName: "book.closed.fill", iconColorHex: "#9A67FF", group: .work, activeDefault: false, aliases: []),
+        .investment: .init(title: "Đầu tư", parentKey: .incomeInvestmentFinance, iconToken: "mistia.category.legacy.investment", fallbackSystemName: "chart.line.uptrend.xyaxis", iconColorHex: "#57B7FF", group: .finance, activeDefault: false, aliases: []),
+        .grocery: .init(title: "Đi chợ / thực phẩm", parentKey: .expenseFood, iconToken: "mistia.category.expense.food.grocery", fallbackSystemName: "basket.fill", iconColorHex: "#FF8A4C", group: .food, activeDefault: true, aliases: []),
+        .dineOut: .init(title: "Ăn ngoài", parentKey: .expenseFood, iconToken: "mistia.category.expense.food.dine_out", fallbackSystemName: "fork.knife.circle.fill", iconColorHex: "#FF8A4C", group: .food, activeDefault: true, aliases: []),
+        .cafeTea: .init(title: "Cafe / trà sữa", parentKey: .expenseFood, iconToken: "mistia.category.expense.food.cafe_tea", fallbackSystemName: "cup.and.saucer.fill", iconColorHex: "#C46A6A", group: .food, activeDefault: true, aliases: []),
+        .foodDelivery: .init(title: "Đặt đồ ăn", parentKey: .expenseFood, iconToken: "mistia.category.expense.food.delivery", fallbackSystemName: "takeoutbag.and.cup.and.straw.fill", iconColorHex: "#FF7A59", group: .food, activeDefault: true, aliases: []),
+        .snacks: .init(title: "Ăn vặt / bánh kẹo", parentKey: .expenseFood, iconToken: "mistia.category.expense.food.snacks", fallbackSystemName: "birthday.cake.fill", iconColorHex: "#FFB347", group: .food, activeDefault: true, aliases: []),
+        .rent: .init(title: "Tiền nhà / thuê nhà", parentKey: .expenseHomeBills, iconToken: "mistia.category.expense.home_bills.rent", fallbackSystemName: "house.fill", iconColorHex: "#5B7BFF", group: .home, activeDefault: true, aliases: []),
+        .electricity: .init(title: "Điện", parentKey: .expenseHomeBills, iconToken: "mistia.category.expense.home_bills.electricity", fallbackSystemName: "bolt.fill", iconColorHex: "#FFB347", group: .home, activeDefault: true, aliases: []),
+        .water: .init(title: "Nước", parentKey: .expenseHomeBills, iconToken: "mistia.category.expense.home_bills.water", fallbackSystemName: "drop.fill", iconColorHex: "#57B7FF", group: .home, activeDefault: true, aliases: []),
+        .internet: .init(title: "Internet", parentKey: .expenseHomeBills, iconToken: "mistia.category.expense.home_bills.internet", fallbackSystemName: "wifi", iconColorHex: "#5B7BFF", group: .home, activeDefault: true, aliases: []),
+        .phone: .init(title: "Điện thoại", parentKey: .expenseHomeBills, iconToken: "mistia.category.expense.home_bills.phone", fallbackSystemName: "phone.fill", iconColorHex: "#2DAA9E", group: .home, activeDefault: true, aliases: []),
+        .gas: .init(title: "Gas", parentKey: .expenseHomeBills, iconToken: "mistia.category.expense.home_bills.gas", fallbackSystemName: "flame.fill", iconColorHex: "#F59B3F", group: .home, activeDefault: true, aliases: []),
+        .condoFee: .init(title: "Phí chung cư / dịch vụ", parentKey: .expenseHomeBills, iconToken: "mistia.category.expense.home_bills.condo_fee", fallbackSystemName: "building.2.fill", iconColorHex: "#7C85A3", group: .home, activeDefault: true, aliases: []),
+        .homeRepair: .init(title: "Sửa chữa / bảo trì nhà", parentKey: .expenseHomeBills, iconToken: "mistia.category.expense.home_bills.home_repair", fallbackSystemName: "wrench.and.screwdriver.fill", iconColorHex: "#7C85A3", group: .home, activeDefault: true, aliases: []),
+        .furnitureAppliance: .init(title: "Nội thất / đồ gia dụng", parentKey: .expenseHomeBills, iconToken: "mistia.category.expense.home_bills.furniture_appliance", fallbackSystemName: "chair.fill", iconColorHex: "#A76BFF", group: .home, activeDefault: true, aliases: []),
+        .diapersMilk: .init(title: "Bỉm / sữa", parentKey: .expenseFamilyChildren, iconToken: "mistia.category.expense.family_children.diapers_milk", fallbackSystemName: "drop.fill", iconColorHex: "#FF9AB5", group: .family, activeDefault: true, aliases: []),
+        .childSupplies: .init(title: "Đồ dùng cho con", parentKey: .expenseFamilyChildren, iconToken: "mistia.category.expense.family_children.child_supplies", fallbackSystemName: "shippingbox.fill", iconColorHex: "#FF6D8A", group: .family, activeDefault: true, aliases: []),
+        .childTuition: .init(title: "Học phí cho con", parentKey: .expenseFamilyChildren, iconToken: "mistia.category.expense.family_children.child_tuition", fallbackSystemName: "graduationcap.fill", iconColorHex: "#4C8DFF", group: .family, activeDefault: true, aliases: []),
+        .schoolBooksSupplies: .init(title: "Sách / dụng cụ học tập", parentKey: .expenseFamilyChildren, iconToken: "mistia.category.expense.family_children.school_books_supplies", fallbackSystemName: "book.closed.fill", iconColorHex: "#A76BFF", group: .family, activeDefault: true, aliases: []),
+        .childcare: .init(title: "Giữ trẻ / trông trẻ", parentKey: .expenseFamilyChildren, iconToken: "mistia.category.expense.family_children.childcare", fallbackSystemName: "person.2.fill", iconColorHex: "#FF8A4C", group: .family, activeDefault: true, aliases: []),
+        .childMedical: .init(title: "Khám bệnh cho con", parentKey: .expenseFamilyChildren, iconToken: "mistia.category.expense.family_children.child_medical", fallbackSystemName: "stethoscope", iconColorHex: "#F45C7E", group: .family, activeDefault: true, aliases: []),
+        .familyOther: .init(title: "Chi gia đình khác", parentKey: .expenseFamilyChildren, iconToken: "mistia.category.expense.family_children.family_other", fallbackSystemName: "heart.text.square.fill", iconColorHex: "#FF6D8A", group: .family, activeDefault: true, aliases: []),
+        .fuel: .init(title: "Xăng xe", parentKey: .expenseTransportVehicle, iconToken: "mistia.category.expense.transport_vehicle.fuel", fallbackSystemName: "fuelpump.fill", iconColorHex: "#2DAA9E", group: .mobility, activeDefault: true, aliases: []),
+        .parking: .init(title: "Gửi xe", parentKey: .expenseTransportVehicle, iconToken: "mistia.category.expense.transport_vehicle.parking", fallbackSystemName: "parkingsign.circle.fill", iconColorHex: "#4C8DFF", group: .mobility, activeDefault: true, aliases: []),
+        .grabTaxi: .init(title: "Grab / taxi", parentKey: .expenseTransportVehicle, iconToken: "mistia.category.expense.transport_vehicle.grab_taxi", fallbackSystemName: "car.fill", iconColorHex: "#2DAA9E", group: .mobility, activeDefault: true, aliases: []),
+        .publicTransport: .init(title: "Xe buýt / tàu / vé xe", parentKey: .expenseTransportVehicle, iconToken: "mistia.category.expense.transport_vehicle.public_transport", fallbackSystemName: "tram.fill", iconColorHex: "#5B7BFF", group: .mobility, activeDefault: true, aliases: []),
+        .vehicleMaintenance: .init(title: "Bảo dưỡng xe", parentKey: .expenseTransportVehicle, iconToken: "mistia.category.expense.transport_vehicle.maintenance", fallbackSystemName: "wrench.and.screwdriver.fill", iconColorHex: "#7C85A3", group: .mobility, activeDefault: true, aliases: []),
+        .vehicleRepair: .init(title: "Sửa xe", parentKey: .expenseTransportVehicle, iconToken: "mistia.category.expense.transport_vehicle.repair", fallbackSystemName: "gearshape.2.fill", iconColorHex: "#7C85A3", group: .mobility, activeDefault: true, aliases: []),
+        .carWash: .init(title: "Rửa xe", parentKey: .expenseTransportVehicle, iconToken: "mistia.category.expense.transport_vehicle.car_wash", fallbackSystemName: "drop.circle.fill", iconColorHex: "#57B7FF", group: .mobility, activeDefault: true, aliases: []),
+        .tolls: .init(title: "Phí cầu đường", parentKey: .expenseTransportVehicle, iconToken: "mistia.category.expense.transport_vehicle.tolls", fallbackSystemName: "road.lanes", iconColorHex: "#F59B3F", group: .mobility, activeDefault: true, aliases: []),
+        .vehicleInsurance: .init(title: "Bảo hiểm xe", parentKey: .expenseTransportVehicle, iconToken: "mistia.category.expense.transport_vehicle.insurance", fallbackSystemName: "car.rear.waves.up.fill", iconColorHex: "#7C85A3", group: .mobility, activeDefault: true, aliases: []),
+        .vehicleRegistration: .init(title: "Đăng kiểm / giấy tờ xe", parentKey: .expenseTransportVehicle, iconToken: "mistia.category.expense.transport_vehicle.registration", fallbackSystemName: "doc.text.fill", iconColorHex: "#5B7BFF", group: .mobility, activeDefault: true, aliases: []),
+        .clothes: .init(title: "Quần áo", parentKey: .expensePersonalShopping, iconToken: "mistia.category.expense.personal_shopping.clothes", fallbackSystemName: "tshirt.fill", iconColorHex: "#A76BFF", group: .personal, activeDefault: true, aliases: []),
+        .footwear: .init(title: "Giày dép", parentKey: .expensePersonalShopping, iconToken: "mistia.category.expense.personal_shopping.footwear", fallbackSystemName: "shoeprints.fill", iconColorHex: "#FF8A4C", group: .personal, activeDefault: true, aliases: []),
+        .cosmeticsSkincare: .init(title: "Mỹ phẩm / skincare", parentKey: .expensePersonalShopping, iconToken: "mistia.category.expense.personal_shopping.cosmetics_skincare", fallbackSystemName: "sparkles", iconColorHex: "#FF6D8A", group: .personal, activeDefault: true, aliases: []),
+        .personalCare: .init(title: "Chăm sóc cá nhân", parentKey: .expensePersonalShopping, iconToken: "mistia.category.expense.personal_shopping.personal_care", fallbackSystemName: "hands.sparkles.fill", iconColorHex: "#2DAA9E", group: .personal, activeDefault: true, aliases: []),
+        .accessories: .init(title: "Phụ kiện", parentKey: .expensePersonalShopping, iconToken: "mistia.category.expense.personal_shopping.accessories", fallbackSystemName: "watch.analog", iconColorHex: "#F59B3F", group: .personal, activeDefault: true, aliases: []),
+        .personalSupplies: .init(title: "Đồ dùng cá nhân", parentKey: .expensePersonalShopping, iconToken: "mistia.category.expense.personal_shopping.personal_supplies", fallbackSystemName: "shippingbox.fill", iconColorHex: "#7C85A3", group: .personal, activeDefault: true, aliases: []),
+        .medicalCheckup: .init(title: "Khám bệnh", parentKey: .expenseHealth, iconToken: "mistia.category.expense.health.checkup", fallbackSystemName: "stethoscope", iconColorHex: "#F45C7E", group: .health, activeDefault: true, aliases: []),
+        .medicine: .init(title: "Thuốc", parentKey: .expenseHealth, iconToken: "mistia.category.expense.health.medicine", fallbackSystemName: "pills.fill", iconColorHex: "#57B7FF", group: .health, activeDefault: true, aliases: []),
+        .labTests: .init(title: "Xét nghiệm", parentKey: .expenseHealth, iconToken: "mistia.category.expense.health.lab_tests", fallbackSystemName: "cross.vial.fill", iconColorHex: "#2DAA9E", group: .health, activeDefault: true, aliases: []),
+        .dental: .init(title: "Nha khoa", parentKey: .expenseHealth, iconToken: "mistia.category.expense.health.dental", fallbackSystemName: "cross.case.fill", iconColorHex: "#F59B3F", group: .health, activeDefault: true, aliases: []),
+        .hospital: .init(title: "Bệnh viện", parentKey: .expenseHealth, iconToken: "mistia.category.expense.health.hospital", fallbackSystemName: "cross.case.fill", iconColorHex: "#F45C7E", group: .health, activeDefault: true, aliases: []),
+        .fitnessGym: .init(title: "Thể thao / gym", parentKey: .expenseHealth, iconToken: "mistia.category.expense.health.fitness_gym", fallbackSystemName: "figure.run", iconColorHex: "#2DAA9E", group: .health, activeDefault: true, aliases: []),
+        .supplements: .init(title: "Thực phẩm hỗ trợ", parentKey: .expenseHealth, iconToken: "mistia.category.expense.health.supplements", fallbackSystemName: "leaf.fill", iconColorHex: "#2DAA9E", group: .health, activeDefault: true, aliases: []),
+        .moviesLeisure: .init(title: "Xem phim / đi chơi", parentKey: .expenseEntertainmentSocial, iconToken: "mistia.category.expense.entertainment_social.movies_leisure", fallbackSystemName: "film.fill", iconColorHex: "#F59B3F", group: .leisure, activeDefault: true, aliases: []),
+        .travel: .init(title: "Du lịch", parentKey: .expenseEntertainmentSocial, iconToken: "mistia.category.expense.entertainment_social.travel", fallbackSystemName: "airplane", iconColorHex: "#5B7BFF", group: .leisure, activeDefault: true, aliases: []),
+        .gamesApps: .init(title: "Game / app", parentKey: .expenseEntertainmentSocial, iconToken: "mistia.category.expense.entertainment_social.games_apps", fallbackSystemName: "gamecontroller.fill", iconColorHex: "#A76BFF", group: .leisure, activeDefault: true, aliases: []),
+        .booksMusic: .init(title: "Sách / truyện / nhạc", parentKey: .expenseEntertainmentSocial, iconToken: "mistia.category.expense.entertainment_social.books_music", fallbackSystemName: "music.note.list", iconColorHex: "#57B7FF", group: .leisure, activeDefault: true, aliases: []),
+        .partiesGatherings: .init(title: "Tiệc tùng / liên hoan", parentKey: .expenseEntertainmentSocial, iconToken: "mistia.category.expense.entertainment_social.parties_gatherings", fallbackSystemName: "party.popper.fill", iconColorHex: "#FF7A59", group: .leisure, activeDefault: true, aliases: []),
+        .giftsCeremonies: .init(title: "Hiếu hỉ / quà tặng", parentKey: .expenseEntertainmentSocial, iconToken: "mistia.category.expense.entertainment_social.gifts_ceremonies", fallbackSystemName: "gift.fill", iconColorHex: "#FF6D8A", group: .leisure, activeDefault: true, aliases: []),
+        .charity: .init(title: "Từ thiện", parentKey: .expenseEntertainmentSocial, iconToken: "mistia.category.expense.entertainment_social.charity", fallbackSystemName: "heart.fill", iconColorHex: "#2DAA9E", group: .leisure, activeDefault: true, aliases: []),
+        .subscriptions: .init(title: "Subscription (Netflix, Spotify, iCloud...)", parentKey: .expenseEntertainmentSocial, iconToken: "mistia.category.expense.entertainment_social.subscriptions", fallbackSystemName: "play.tv.fill", iconColorHex: "#5B7BFF", group: .leisure, activeDefault: true, aliases: ["Subscription"]),
+        .workTools: .init(title: "Dụng cụ làm việc", parentKey: .expenseWorkStudy, iconToken: "mistia.category.expense.work_study.tools", fallbackSystemName: "wrench.and.screwdriver.fill", iconColorHex: "#4C8DFF", group: .work, activeDefault: true, aliases: []),
+        .workSoftwareSubscriptions: .init(title: "Phần mềm / subscription công việc", parentKey: .expenseWorkStudy, iconToken: "mistia.category.expense.work_study.software", fallbackSystemName: "laptopcomputer", iconColorHex: "#5B7BFF", group: .work, activeDefault: true, aliases: []),
+        .clientEntertainment: .init(title: "Tiếp khách / gặp đối tác", parentKey: .expenseWorkStudy, iconToken: "mistia.category.expense.work_study.client_entertainment", fallbackSystemName: "person.2.fill", iconColorHex: "#FF8A4C", group: .work, activeDefault: true, aliases: []),
+        .businessTravel: .init(title: "Di chuyển công việc", parentKey: .expenseWorkStudy, iconToken: "mistia.category.expense.work_study.business_travel", fallbackSystemName: "car.fill", iconColorHex: "#2DAA9E", group: .work, activeDefault: true, aliases: []),
+        .courses: .init(title: "Khóa học", parentKey: .expenseWorkStudy, iconToken: "mistia.category.expense.work_study.courses", fallbackSystemName: "graduationcap.fill", iconColorHex: "#A76BFF", group: .work, activeDefault: true, aliases: []),
+        .professionalBooks: .init(title: "Sách chuyên môn", parentKey: .expenseWorkStudy, iconToken: "mistia.category.expense.work_study.professional_books", fallbackSystemName: "books.vertical.fill", iconColorHex: "#4C8DFF", group: .work, activeDefault: true, aliases: []),
+        .examsCertificates: .init(title: "Thi cử / chứng chỉ", parentKey: .expenseWorkStudy, iconToken: "mistia.category.expense.work_study.exams_certificates", fallbackSystemName: "rosette", iconColorHex: "#F59B3F", group: .work, activeDefault: true, aliases: []),
+        .insurance: .init(title: "Bảo hiểm", parentKey: .expenseFinancialObligations, iconToken: "mistia.category.expense.financial_obligations.insurance", fallbackSystemName: "lock.shield.fill", iconColorHex: "#7C85A3", group: .finance, activeDefault: true, aliases: []),
+        .taxesFees: .init(title: "Thuế / phí", parentKey: .expenseFinancialObligations, iconToken: "mistia.category.expense.financial_obligations.taxes_fees", fallbackSystemName: "receipt.fill", iconColorHex: "#F59B3F", group: .finance, activeDefault: true, aliases: []),
+        .bankingFees: .init(title: "Phí ngân hàng", parentKey: .expenseFinancialObligations, iconToken: "mistia.category.expense.financial_obligations.banking_fees", fallbackSystemName: "building.columns.fill", iconColorHex: "#5B7BFF", group: .finance, activeDefault: true, aliases: []),
+        .loanInterest: .init(title: "Lãi vay", parentKey: .expenseFinancialObligations, iconToken: "mistia.category.expense.financial_obligations.loan_interest", fallbackSystemName: "percent", iconColorHex: "#F45C7E", group: .finance, activeDefault: true, aliases: []),
+        .loanRepayment: .init(title: "Trả góp", parentKey: .expenseFinancialObligations, iconToken: "mistia.category.expense.financial_obligations.loan_repayment", fallbackSystemName: "creditcard.and.123", iconColorHex: "#7C85A3", group: .finance, activeDefault: true, aliases: ["Trả góp / vay"]),
+        .otherObligations: .init(title: "Nghĩa vụ khác", parentKey: .expenseFinancialObligations, iconToken: "mistia.category.expense.financial_obligations.other_obligations", fallbackSystemName: "tray.full.fill", iconColorHex: "#8A8A8E", group: .finance, activeDefault: true, aliases: []),
+        .otherExpense: .init(title: "Chi khác", parentKey: .expenseOther, iconToken: "mistia.category.expense.other.expense", fallbackSystemName: "tray.full.fill", iconColorHex: "#8A8A8E", group: .generic, activeDefault: true, aliases: []),
+        .salary: .init(title: "Lương", parentKey: .incomeSalaryWork, iconToken: "mistia.category.income.salary_work.salary", fallbackSystemName: "banknote.fill", iconColorHex: "#2DAA9E", group: .income, activeDefault: true, aliases: []),
+        .bonus: .init(title: "Thưởng", parentKey: .incomeSalaryWork, iconToken: "mistia.category.income.salary_work.bonus", fallbackSystemName: "gift.fill", iconColorHex: "#FFB347", group: .income, activeDefault: true, aliases: []),
+        .allowance: .init(title: "Phụ cấp", parentKey: .incomeSalaryWork, iconToken: "mistia.category.income.salary_work.allowance", fallbackSystemName: "wallet.pass.fill", iconColorHex: "#A76BFF", group: .income, activeDefault: true, aliases: []),
+        .commission: .init(title: "Hoa hồng", parentKey: .incomeSalaryWork, iconToken: "mistia.category.income.salary_work.commission", fallbackSystemName: "percent", iconColorHex: "#FF7A59", group: .income, activeDefault: true, aliases: []),
+        .freelance: .init(title: "Làm thêm / freelance", parentKey: .incomeSalaryWork, iconToken: "mistia.category.income.salary_work.freelance", fallbackSystemName: "laptopcomputer", iconColorHex: "#4C8DFF", group: .income, activeDefault: true, aliases: ["Freelance"]),
+        .sales: .init(title: "Bán hàng", parentKey: .incomeBusiness, iconToken: "mistia.category.income.business.sales", fallbackSystemName: "storefront.fill", iconColorHex: "#F26A5A", group: .income, activeDefault: true, aliases: []),
+        .serviceRevenue: .init(title: "Doanh thu dịch vụ", parentKey: .incomeBusiness, iconToken: "mistia.category.income.business.service_revenue", fallbackSystemName: "sparkles", iconColorHex: "#57B7FF", group: .income, activeDefault: true, aliases: []),
+        .businessProfit: .init(title: "Lợi nhuận kinh doanh", parentKey: .incomeBusiness, iconToken: "mistia.category.income.business.business_profit", fallbackSystemName: "chart.bar.fill", iconColorHex: "#2DAA9E", group: .income, activeDefault: true, aliases: []),
+        .otherBusinessIncome: .init(title: "Thu kinh doanh khác", parentKey: .incomeBusiness, iconToken: "mistia.category.income.business.other_business_income", fallbackSystemName: "tray.full.fill", iconColorHex: "#8A8A8E", group: .income, activeDefault: true, aliases: []),
+        .bankInterest: .init(title: "Lãi ngân hàng", parentKey: .incomeInvestmentFinance, iconToken: "mistia.category.income.investment_finance.bank_interest", fallbackSystemName: "building.columns.fill", iconColorHex: "#5B7BFF", group: .finance, activeDefault: true, aliases: []),
+        .dividends: .init(title: "Cổ tức", parentKey: .incomeInvestmentFinance, iconToken: "mistia.category.income.investment_finance.dividends", fallbackSystemName: "chart.pie.fill", iconColorHex: "#A76BFF", group: .finance, activeDefault: true, aliases: []),
+        .investmentGain: .init(title: "Lãi đầu tư", parentKey: .incomeInvestmentFinance, iconToken: "mistia.category.income.investment_finance.investment_gain", fallbackSystemName: "chart.line.uptrend.xyaxis", iconColorHex: "#2DAA9E", group: .finance, activeDefault: true, aliases: []),
+        .loanInterestReceived: .init(title: "Cho vay được trả lãi", parentKey: .incomeInvestmentFinance, iconToken: "mistia.category.income.investment_finance.loan_interest_received", fallbackSystemName: "hand.thumbsup.fill", iconColorHex: "#57B7FF", group: .finance, activeDefault: true, aliases: []),
+        .refund: .init(title: "Hoàn tiền", parentKey: .incomeRefundAdjustment, iconToken: "mistia.category.income.refund_adjustment.refund", fallbackSystemName: "arrow.counterclockwise.circle.fill", iconColorHex: "#57B7FF", group: .income, activeDefault: true, aliases: []),
+        .cashback: .init(title: "Cashback", parentKey: .incomeRefundAdjustment, iconToken: "mistia.category.income.refund_adjustment.cashback", fallbackSystemName: "creditcard.and.123", iconColorHex: "#FFB347", group: .income, activeDefault: true, aliases: []),
+        .reimbursement: .init(title: "Hoàn ứng", parentKey: .incomeRefundAdjustment, iconToken: "mistia.category.income.refund_adjustment.reimbursement", fallbackSystemName: "arrow.uturn.backward.circle.fill", iconColorHex: "#4C8DFF", group: .income, activeDefault: true, aliases: []),
+        .expenseRecovery: .init(title: "Thu hồi khoản đã chi hộ", parentKey: .incomeRefundAdjustment, iconToken: "mistia.category.income.refund_adjustment.expense_recovery", fallbackSystemName: "person.2.wave.2.fill", iconColorHex: "#2DAA9E", group: .income, activeDefault: true, aliases: []),
+        .gift: .init(title: "Được tặng", parentKey: .incomeSupportGift, iconToken: "mistia.category.income.support_gift.gift", fallbackSystemName: "gift.fill", iconColorHex: "#FF6D8A", group: .income, activeDefault: true, aliases: ["Quà tặng"]),
+        .supportReceived: .init(title: "Được hỗ trợ", parentKey: .incomeSupportGift, iconToken: "mistia.category.income.support_gift.support_received", fallbackSystemName: "heart.fill", iconColorHex: "#F26A5A", group: .income, activeDefault: true, aliases: []),
+        .subsidy: .init(title: "Trợ cấp", parentKey: .incomeSupportGift, iconToken: "mistia.category.income.support_gift.subsidy", fallbackSystemName: "hands.sparkles.fill", iconColorHex: "#2DAA9E", group: .income, activeDefault: true, aliases: []),
+        .familySupport: .init(title: "Thu khác từ gia đình", parentKey: .incomeSupportGift, iconToken: "mistia.category.income.support_gift.family_support", fallbackSystemName: "person.2.fill", iconColorHex: "#A76BFF", group: .income, activeDefault: true, aliases: []),
+        .otherIncome: .init(title: "Thu khác", parentKey: .incomeOther, iconToken: "mistia.category.income.other.income", fallbackSystemName: "plusminus.circle.fill", iconColorHex: "#8A8A8E", group: .generic, activeDefault: true, aliases: [])
+    ]
+
+    static let activeDefaults: [Self] = [
+        .grocery, .dineOut, .cafeTea, .foodDelivery, .snacks,
+        .rent, .electricity, .water, .internet, .phone, .gas, .condoFee, .homeRepair, .furnitureAppliance,
+        .diapersMilk, .childSupplies, .childTuition, .schoolBooksSupplies, .childcare, .childMedical, .familyOther,
+        .fuel, .parking, .grabTaxi, .publicTransport, .vehicleMaintenance, .vehicleRepair, .carWash, .tolls, .vehicleInsurance, .vehicleRegistration,
+        .clothes, .footwear, .cosmeticsSkincare, .personalCare, .accessories, .personalSupplies,
+        .medicalCheckup, .medicine, .labTests, .dental, .hospital, .fitnessGym, .supplements,
+        .moviesLeisure, .travel, .gamesApps, .booksMusic, .partiesGatherings, .giftsCeremonies, .charity, .subscriptions,
+        .workTools, .workSoftwareSubscriptions, .clientEntertainment, .businessTravel, .courses, .professionalBooks, .examsCertificates,
+        .insurance, .taxesFees, .bankingFees, .loanInterest, .loanRepayment, .otherObligations,
+        .otherExpense,
+        .salary, .bonus, .allowance, .commission, .freelance,
+        .sales, .serviceRevenue, .businessProfit, .otherBusinessIncome,
+        .bankInterest, .dividends, .investmentGain, .loanInterestReceived,
+        .refund, .cashback, .reimbursement, .expenseRecovery,
+        .gift, .supportReceived, .subsidy, .familySupport,
+        .otherIncome
+    ]
+
+    private var meta: Meta {
+        Self.metadata[self] ?? .init(title: rawValue, parentKey: nil, iconToken: rawValue, fallbackSystemName: "questionmark.circle.fill", iconColorHex: "#8A8A8E", group: .generic, activeDefault: false, aliases: [])
+    }
 
     var id: String { rawValue }
-
-    var title: String {
-        switch self {
-        case .food:
-            mistiaLocalized(vi: "Ăn uống", en: "Food & drinks", ja: "食費")
-        case .entertainment:
-            mistiaLocalized(vi: "Đi chơi", en: "Entertainment", ja: "娯楽")
-        case .travel:
-            mistiaLocalized(vi: "Du lịch", en: "Travel", ja: "旅行")
-        case .shopping:
-            mistiaLocalized(vi: "Mua sắm", en: "Shopping", ja: "買い物")
-        case .transportation:
-            mistiaLocalized(vi: "Di chuyển", en: "Transport", ja: "交通")
-        case .housing:
-            mistiaLocalized(vi: "Nhà ở", en: "Housing", ja: "住居")
-        case .billing:
-            mistiaLocalized(vi: "Hóa đơn", en: "Bills", ja: "請求書")
-        case .health:
-            mistiaLocalized(vi: "Sức khỏe", en: "Health", ja: "健康")
-        case .education:
-            mistiaLocalized(vi: "Giáo dục", en: "Education", ja: "教育")
-        case .loanRepayment:
-            mistiaLocalized(vi: "Trả góp / vay", en: "Installments / loans", ja: "分割払い・借入")
-        case .salary:
-            mistiaLocalized(vi: "Lương", en: "Salary", ja: "給与")
-        case .bonus:
-            mistiaLocalized(vi: "Thưởng", en: "Bonus", ja: "ボーナス")
-        case .freelance:
-            mistiaLocalized(vi: "Freelance", en: "Freelance", ja: "フリーランス")
-        case .investment:
-            mistiaLocalized(vi: "Đầu tư", en: "Investment", ja: "投資")
-        case .refund:
-            mistiaLocalized(vi: "Hoàn tiền", en: "Refund", ja: "返金")
-        case .sales:
-            mistiaLocalized(vi: "Bán hàng", en: "Sales", ja: "売上")
-        case .gift:
-            mistiaLocalized(vi: "Quà tặng", en: "Gift", ja: "ギフト")
-        case .allowance:
-            mistiaLocalized(vi: "Phụ cấp", en: "Allowance", ja: "手当")
-        case .bankInterest:
-            mistiaLocalized(vi: "Lãi ngân hàng", en: "Bank interest", ja: "銀行利息")
-        }
-    }
-
-    var legacyVietnameseName: String {
-        switch self {
-        case .food:
-            "Ăn uống"
-        case .entertainment:
-            "Đi chơi"
-        case .travel:
-            "Du lịch"
-        case .shopping:
-            "Mua sắm"
-        case .transportation:
-            "Di chuyển"
-        case .housing:
-            "Nhà ở"
-        case .billing:
-            "Hóa đơn"
-        case .health:
-            "Sức khỏe"
-        case .education:
-            "Giáo dục"
-        case .loanRepayment:
-            "Trả góp / vay"
-        case .salary:
-            "Lương"
-        case .bonus:
-            "Thưởng"
-        case .freelance:
-            "Freelance"
-        case .investment:
-            "Đầu tư"
-        case .refund:
-            "Hoàn tiền"
-        case .sales:
-            "Bán hàng"
-        case .gift:
-            "Quà tặng"
-        case .allowance:
-            "Phụ cấp"
-        case .bankInterest:
-            "Lãi ngân hàng"
-        }
-    }
+    var title: String { localizedTitle(for: .current) }
+    var legacyVietnameseName: String { meta.title }
+    var parentKey: MistiaSystemCategoryParentKey? { meta.parentKey }
+    var fallbackSystemName: String { meta.fallbackSystemName }
+    var iconSymbolName: String { meta.iconToken }
+    var iconColorHex: String { meta.iconColorHex }
+    var pickerGroup: MistiaFinanceIconGroup { meta.group }
+    var isActiveDefault: Bool { meta.activeDefault }
+    var kind: TransactionCategoryKind { meta.parentKey?.kind ?? .expense }
 
     func knownDefaultNames() -> [String] {
-        [
-            legacyVietnameseName,
-            title,
-            localizedTitle(for: .english),
-            localizedTitle(for: .japanese)
-        ]
+        Array(Set([meta.title, meta.englishTitle, meta.japaneseTitle].compactMap { $0 } + meta.aliases))
     }
 
     func localizedTitle(for language: MistiaAppLanguage) -> String {
         switch language {
         case .vietnamese:
-            mistiaLocalized(vi: legacyVietnameseName, en: "", ja: "", language: language)
-        case .english, .japanese:
-            switch self {
-            case .food:
-                mistiaLocalized(vi: legacyVietnameseName, en: "Food & drinks", ja: "食費", language: language)
-            case .entertainment:
-                mistiaLocalized(vi: legacyVietnameseName, en: "Entertainment", ja: "娯楽", language: language)
-            case .travel:
-                mistiaLocalized(vi: legacyVietnameseName, en: "Travel", ja: "旅行", language: language)
-            case .shopping:
-                mistiaLocalized(vi: legacyVietnameseName, en: "Shopping", ja: "買い物", language: language)
-            case .transportation:
-                mistiaLocalized(vi: legacyVietnameseName, en: "Transport", ja: "交通", language: language)
-            case .housing:
-                mistiaLocalized(vi: legacyVietnameseName, en: "Housing", ja: "住居", language: language)
-            case .billing:
-                mistiaLocalized(vi: legacyVietnameseName, en: "Bills", ja: "請求書", language: language)
-            case .health:
-                mistiaLocalized(vi: legacyVietnameseName, en: "Health", ja: "健康", language: language)
-            case .education:
-                mistiaLocalized(vi: legacyVietnameseName, en: "Education", ja: "教育", language: language)
-            case .loanRepayment:
-                mistiaLocalized(vi: legacyVietnameseName, en: "Installments / loans", ja: "分割払い・借入", language: language)
-            case .salary:
-                mistiaLocalized(vi: legacyVietnameseName, en: "Salary", ja: "給与", language: language)
-            case .bonus:
-                mistiaLocalized(vi: legacyVietnameseName, en: "Bonus", ja: "ボーナス", language: language)
-            case .freelance:
-                mistiaLocalized(vi: legacyVietnameseName, en: "Freelance", ja: "フリーランス", language: language)
-            case .investment:
-                mistiaLocalized(vi: legacyVietnameseName, en: "Investment", ja: "投資", language: language)
-            case .refund:
-                mistiaLocalized(vi: legacyVietnameseName, en: "Refund", ja: "返金", language: language)
-            case .sales:
-                mistiaLocalized(vi: legacyVietnameseName, en: "Sales", ja: "売上", language: language)
-            case .gift:
-                mistiaLocalized(vi: legacyVietnameseName, en: "Gift", ja: "ギフト", language: language)
-            case .allowance:
-                mistiaLocalized(vi: legacyVietnameseName, en: "Allowance", ja: "手当", language: language)
-            case .bankInterest:
-                mistiaLocalized(vi: legacyVietnameseName, en: "Bank interest", ja: "銀行利息", language: language)
-            }
-        }
-    }
-}
-
-nonisolated enum MistiaSystemCategoryParentKey: String, CaseIterable, Codable, Identifiable {
-    case livingExpense = "parent_expense_living"
-    case mobilityTravel = "parent_expense_mobility_travel"
-    case personalLifestyle = "parent_expense_personal_lifestyle"
-    case financialObligations = "parent_expense_financial_obligations"
-    case uncategorizedExpense = "parent_expense_uncategorized"
-    case workIncome = "parent_income_work"
-    case investmentReturn = "parent_income_investment_return"
-    case salesOther = "parent_income_sales_other"
-    case uncategorizedIncome = "parent_income_uncategorized"
-
-    var id: String { rawValue }
-
-    var kind: TransactionCategoryKind {
-        switch self {
-        case .livingExpense, .mobilityTravel, .personalLifestyle, .financialObligations, .uncategorizedExpense:
-            .expense
-        case .workIncome, .investmentReturn, .salesOther, .uncategorizedIncome:
-            .income
-        }
-    }
-
-    var title: String {
-        switch self {
-        case .livingExpense:
-            mistiaLocalized(vi: "Sinh hoạt", en: "Living", ja: "生活")
-        case .mobilityTravel:
-            mistiaLocalized(vi: "Di chuyển & chuyến đi", en: "Mobility & travel", ja: "移動・旅行")
-        case .personalLifestyle:
-            mistiaLocalized(vi: "Cá nhân & phong cách sống", en: "Personal & lifestyle", ja: "個人・ライフスタイル")
-        case .financialObligations:
-            mistiaLocalized(vi: "Nghĩa vụ tài chính", en: "Financial obligations", ja: "支払い・債務")
-        case .uncategorizedExpense:
-            mistiaLocalized(vi: "Chưa phân loại chi", en: "Uncategorized expense", ja: "未分類の支出")
-        case .workIncome:
-            mistiaLocalized(vi: "Thu nhập công việc", en: "Work income", ja: "仕事の収入")
-        case .investmentReturn:
-            mistiaLocalized(vi: "Đầu tư & hoàn lại", en: "Investment & returns", ja: "投資・還元")
-        case .salesOther:
-            mistiaLocalized(vi: "Bán hàng & khác", en: "Sales & other", ja: "売上・その他")
-        case .uncategorizedIncome:
-            mistiaLocalized(vi: "Chưa phân loại thu", en: "Uncategorized income", ja: "未分類の収入")
-        }
-    }
-
-    var legacyVietnameseName: String {
-        switch self {
-        case .livingExpense:
-            "Sinh hoạt"
-        case .mobilityTravel:
-            "Di chuyển & chuyến đi"
-        case .personalLifestyle:
-            "Cá nhân & phong cách sống"
-        case .financialObligations:
-            "Nghĩa vụ tài chính"
-        case .uncategorizedExpense:
-            "Chưa phân loại chi"
-        case .workIncome:
-            "Thu nhập công việc"
-        case .investmentReturn:
-            "Đầu tư & hoàn lại"
-        case .salesOther:
-            "Bán hàng & khác"
-        case .uncategorizedIncome:
-            "Chưa phân loại thu"
-        }
-    }
-
-    func knownDefaultNames() -> [String] {
-        [
-            legacyVietnameseName,
-            title,
-            localizedTitle(for: .english),
-            localizedTitle(for: .japanese)
-        ]
-    }
-
-    func localizedTitle(for language: MistiaAppLanguage) -> String {
-        switch language {
-        case .vietnamese:
-            mistiaLocalized(vi: legacyVietnameseName, en: "", ja: "", language: language)
+            return meta.title
         case .english:
-            switch self {
-            case .livingExpense:
-                "Living"
-            case .mobilityTravel:
-                "Mobility & travel"
-            case .personalLifestyle:
-                "Personal & lifestyle"
-            case .financialObligations:
-                "Financial obligations"
-            case .uncategorizedExpense:
-                "Uncategorized expense"
-            case .workIncome:
-                "Work income"
-            case .investmentReturn:
-                "Investment & returns"
-            case .salesOther:
-                "Sales & other"
-            case .uncategorizedIncome:
-                "Uncategorized income"
-            }
+            return meta.englishTitle ?? meta.title
         case .japanese:
-            switch self {
-            case .livingExpense:
-                "生活"
-            case .mobilityTravel:
-                "移動・旅行"
-            case .personalLifestyle:
-                "個人・ライフスタイル"
-            case .financialObligations:
-                "支払い・債務"
-            case .uncategorizedExpense:
-                "未分類の支出"
-            case .workIncome:
-                "仕事の収入"
-            case .investmentReturn:
-                "投資・還元"
-            case .salesOther:
-                "売上・その他"
-            case .uncategorizedIncome:
-                "未分類の収入"
-            }
-        }
-    }
-
-    var iconSymbolName: String {
-        switch self {
-        case .livingExpense:
-            "house.fill"
-        case .mobilityTravel:
-            "airplane"
-        case .personalLifestyle:
-            "sparkles"
-        case .financialObligations:
-            "creditcard.and.123"
-        case .uncategorizedExpense:
-            "questionmark.circle.fill"
-        case .workIncome:
-            "briefcase.fill"
-        case .investmentReturn:
-            "chart.line.uptrend.xyaxis"
-        case .salesOther:
-            "storefront.fill"
-        case .uncategorizedIncome:
-            "questionmark.circle.fill"
-        }
-    }
-
-    var iconColorHex: String {
-        switch self {
-        case .livingExpense:
-            "#FF9F1C"
-        case .mobilityTravel:
-            "#5B7BFF"
-        case .personalLifestyle:
-            "#F26A5A"
-        case .financialObligations:
-            "#8A8A8E"
-        case .uncategorizedExpense:
-            "#A0A0A0"
-        case .workIncome:
-            "#2DAA9E"
-        case .investmentReturn:
-            "#5B7BFF"
-        case .salesOther:
-            "#F26A5A"
-        case .uncategorizedIncome:
-            "#A0A0A0"
+            return meta.japaneseTitle ?? meta.title
         }
     }
 }
@@ -529,7 +667,7 @@ nonisolated enum CreditCardNetwork: String, CaseIterable, Identifiable, Codable 
         case .unionPay:
             "UnionPay"
         case .other:
-            mistiaLocalized(vi: "Khác", en: "Other", ja: "その他")
+            mistiaLocalized(vi: "Khác", en: "Other", ja: "Other")
         }
     }
 }
@@ -562,6 +700,17 @@ nonisolated enum TransactionPrimaryKind: String, CaseIterable, Identifiable, Cod
             "arrow.left.arrow.right"
         }
     }
+
+    var financeIconToken: String {
+        switch self {
+        case .expense:
+            "mistia.flow.expense"
+        case .income:
+            "mistia.flow.income"
+        case .transfer:
+            "mistia.flow.transfer"
+        }
+    }
 }
 
 nonisolated enum TransactionTransferSubtype: String, CaseIterable, Identifiable, Codable {
@@ -585,6 +734,15 @@ nonisolated enum TransactionTransferSubtype: String, CaseIterable, Identifiable,
             "arrow.left.arrow.right.circle"
         case .debt:
             "person.2.wave.2.fill"
+        }
+    }
+
+    var financeIconToken: String {
+        switch self {
+        case .internalTransfer:
+            "mistia.flow.transfer.internal"
+        case .debt:
+            "mistia.flow.transfer.debt"
         }
     }
 }
@@ -620,6 +778,19 @@ nonisolated enum TransactionDebtIntent: String, CaseIterable, Identifiable, Coda
             "tray.and.arrow.down.fill"
         case .repay:
             "tray.and.arrow.up.fill"
+        }
+    }
+
+    var financeIconToken: String {
+        switch self {
+        case .lend:
+            "mistia.debt.lend"
+        case .collect:
+            "mistia.debt.collect"
+        case .borrow:
+            "mistia.debt.borrow"
+        case .repay:
+            "mistia.debt.repay"
         }
     }
 }

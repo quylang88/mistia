@@ -216,18 +216,18 @@ struct TransactionEditorSheet: View {
                 if draft.primaryKind != .transfer {
                     TextField(
                         draft.primaryKind == .expense
-                            ? mistiaLocalized(vi: "Ví dụ: Cà phê sáng", en: "Example: Morning coffee", ja: "例: 朝のコーヒー")
-                            : mistiaLocalized(vi: "Ví dụ: Lương tháng 3", en: "Example: March salary", ja: "例: 3月の給料"),
+                            ? mistiaLocalized(vi: "Tên khoản chi", en: "Expense name", ja: "支出名")
+                            : mistiaLocalized(vi: "Tên khoản thu", en: "Income name", ja: "収入名"),
                         text: $bindableDraft.title
                     )
                 } else if draft.transferSubtype == .debt {
                     TextField(
-                        mistiaLocalized(vi: "Để trống sẽ tự dùng loại công nợ", en: "Leave blank to use the debt type", ja: "空欄の場合は貸し借りの種類が使われます"),
+                        mistiaLocalized(vi: "Tên giao dịch (không bắt buộc)", en: "Transaction name (optional)", ja: "取引名（任意）"),
                         text: $bindableDraft.title
                     )
                 }
 
-                TextField(mistiaLocalized(vi: "Ví dụ 50000", en: "Example: 50000", ja: "例: 50000"), text: $bindableDraft.amountText)
+                TextField(mistiaLocalized(vi: "Số tiền", en: "Amount", ja: "金額"), text: $bindableDraft.amountText)
                     .keyboardType(.numberPad)
 
                 DatePicker(mistiaLocalized(vi: "Thời gian", en: "Date & time", ja: "日時"), selection: $bindableDraft.occurredAt, displayedComponents: [.date, .hourAndMinute])
@@ -287,7 +287,7 @@ struct TransactionEditorSheet: View {
                         }
 
                         TextField(
-                            mistiaLocalized(vi: "Ví dụ: Nguyễn Văn A", en: "Example: Alex Johnson", ja: "例: 山田太郎"),
+                            mistiaLocalized(vi: "Tên người liên quan", en: "Counterparty name", ja: "相手の名前"),
                             text: $bindableDraft.counterpartyName
                         )
                     }

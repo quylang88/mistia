@@ -131,15 +131,7 @@ private struct ArchivedItemRow: View {
 
     var body: some View {
         HStack(spacing: 12) {
-            ZStack {
-                RoundedRectangle(cornerRadius: 10, style: .continuous)
-                    .fill(Color.gray.opacity(0.14))
-
-                Image(systemName: icon)
-                    .font(.system(size: 13, weight: .bold))
-                    .foregroundStyle(.gray)
-            }
-            .frame(width: 30, height: 30)
+            MistiaFinanceIconView(icon: icon, fallbackColor: .gray, size: 30)
 
             VStack(alignment: .leading, spacing: 3) {
                 Text(title)

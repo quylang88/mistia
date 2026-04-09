@@ -226,7 +226,8 @@ final class PlanningLogicTests: XCTestCase {
                 sourceKind: .recurringBill,
                 sourceID: UUID(),
                 name: "Điện",
-                iconSymbolName: "bolt.fill",
+                iconSymbolName: MistiaSystemCategoryKey.electricity.iconSymbolName,
+                categorySystemKey: .electricity,
                 amountMinor: 3_000,
                 dueDate: makeDate(year: 2026, month: 4, day: 8),
                 frequencyMonths: 1,
@@ -241,7 +242,8 @@ final class PlanningLogicTests: XCTestCase {
                 sourceKind: .installment,
                 sourceID: UUID(),
                 name: "iPhone",
-                iconSymbolName: "iphone",
+                iconSymbolName: "mistia.plan.installment",
+                categorySystemKey: .loanRepayment,
                 amountMinor: 5_000,
                 dueDate: makeDate(year: 2026, month: 4, day: 25),
                 frequencyMonths: 1,
@@ -342,7 +344,8 @@ final class PlanningLogicTests: XCTestCase {
                 sourceKind: .recurringBill,
                 sourceID: UUID(),
                 name: "Internet",
-                iconSymbolName: "wifi",
+                iconSymbolName: MistiaSystemCategoryKey.internet.iconSymbolName,
+                categorySystemKey: .internet,
                 amountMinor: 2_000,
                 dueDate: makeDate(year: 2026, month: 4, day: 18),
                 frequencyMonths: 1,
@@ -354,7 +357,7 @@ final class PlanningLogicTests: XCTestCase {
             )
         )
         XCTAssertEqual(billDraft.primaryKind, .expense)
-        XCTAssertEqual(billDraft.categorySystemKey, .billing)
+        XCTAssertEqual(billDraft.categorySystemKey, .internet)
 
         let installmentDraft = try PlanningLogic.makePaymentDraft(
             for: PlanningRecurringDueSnapshot(
@@ -362,7 +365,8 @@ final class PlanningLogicTests: XCTestCase {
                 sourceKind: .installment,
                 sourceID: UUID(),
                 name: "Laptop",
-                iconSymbolName: "laptopcomputer",
+                iconSymbolName: "mistia.plan.installment",
+                categorySystemKey: .loanRepayment,
                 amountMinor: 6_000,
                 dueDate: makeDate(year: 2026, month: 4, day: 22),
                 frequencyMonths: 1,

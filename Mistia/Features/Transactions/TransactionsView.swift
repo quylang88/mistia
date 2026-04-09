@@ -592,15 +592,15 @@ private struct TransactionRow: View {
     private var icon: String {
         switch record.primaryKind {
         case .expense, .income:
-            transaction.category?.iconSymbolName ?? record.primaryKind.systemImage
+            transaction.category?.iconSymbolName ?? record.primaryKind.financeIconToken
         case .transfer:
             switch record.transferSubtype {
             case .internalTransfer:
-                "arrow.left.arrow.right"
+                TransactionTransferSubtype.internalTransfer.financeIconToken
             case .debt:
-                "person.2.wave.2.fill"
+                TransactionTransferSubtype.debt.financeIconToken
             case nil:
-                "arrow.left.arrow.right"
+                record.primaryKind.financeIconToken
             }
         }
     }
@@ -748,15 +748,7 @@ private struct TransactionIconTile: View {
     let tint: Color
 
     var body: some View {
-        ZStack {
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .fill(tint.opacity(0.14))
-
-            Image(systemName: icon)
-                .font(.system(size: 14, weight: .bold))
-                .foregroundStyle(tint)
-        }
-        .frame(width: 34, height: 34)
+        MistiaFinanceIconView(icon: icon, fallbackColor: tint, size: 34)
     }
 }
 

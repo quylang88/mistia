@@ -20,17 +20,32 @@ enum MistiaSyncLocalStore {
         from container: ModelContainer
     ) throws -> MistiaRemoteSnapshot {
         let context = ModelContext(container)
+        let wallets = try fetchWallets(context)
+        let creditCardProfiles = try fetchCreditCardProfiles(context)
+        let categories = try fetchCategories(context)
+        let transactions = try fetchTransactions(context)
+        let budgetPlans = try fetchBudgetPlans(context)
+        let savingsGoals = try fetchSavingsGoals(context)
+        let recurringBillPlans = try fetchRecurringBillPlans(context)
+        let installmentPlans = try fetchInstallmentPlans(context)
+        let dueOccurrences = try fetchDueOccurrences(context)
 
         return MistiaRemoteSnapshot(
-            wallets: try fetchWallets(context).map { RemoteLedgerWallet(local: $0, userID: userID) },
-            creditCardProfiles: try fetchCreditCardProfiles(context).map { RemoteCreditCardProfile(local: $0, userID: userID) },
-            categories: try fetchCategories(context).map { RemoteTransactionCategory(local: $0, userID: userID) },
-            transactions: try fetchTransactions(context).map { RemoteLedgerTransaction(local: $0, userID: userID) },
-            budgetPlans: try fetchBudgetPlans(context).map { RemoteBudgetPlan(local: $0, userID: userID) },
-            savingsGoals: try fetchSavingsGoals(context).map { RemoteSavingsGoal(local: $0, userID: userID) },
-            recurringBillPlans: try fetchRecurringBillPlans(context).map { RemoteRecurringBillPlan(local: $0, userID: userID) },
-            installmentPlans: try fetchInstallmentPlans(context).map { RemoteInstallmentPlan(local: $0, userID: userID) },
-            dueOccurrences: try fetchDueOccurrences(context).map { RemoteDueOccurrenceRecord(local: $0, userID: userID) }
+            wallets: wallets.map { RemoteLedgerWallet(local: $0, userID: userID) },
+            creditCardProfiles: creditCardProfiles.map { RemoteCreditCardProfile(local: $0, userID: userID) },
+            categories: categories.map { RemoteTransactionCategory(local: $0, userID: userID) },
+            transactions: transactions.map { RemoteLedgerTransaction(local: $0, userID: userID) },
+            budgetPlans: budgetPlans.map { RemoteBudgetPlan(local: $0, userID: userID) },
+            savingsGoals: savingsGoals.map { RemoteSavingsGoal(local: $0, userID: userID) },
+            recurringBillPlans: recurringBillPlans.map {
+                RemoteRecurringBillPlan(
+                    local: $0,
+                    userID: userID,
+                    categoryID: recurringBillCategoryID(for: $0, categories: categories)
+                )
+            },
+            installmentPlans: installmentPlans.map { RemoteInstallmentPlan(local: $0, userID: userID) },
+            dueOccurrences: dueOccurrences.map { RemoteDueOccurrenceRecord(local: $0, userID: userID) }
         )
     }
 
@@ -76,7 +91,14 @@ enum MistiaSyncLocalStore {
             guard let plan = try fetchRecurringBillPlans(context).first(where: { $0.id == mutation.recordID }) else {
                 return nil
             }
-            return .recurringBillPlan(RemoteRecurringBillPlan(local: plan, userID: userID))
+            let categories = try fetchCategories(context)
+            return .recurringBillPlan(
+                RemoteRecurringBillPlan(
+                    local: plan,
+                    userID: userID,
+                    categoryID: recurringBillCategoryID(for: plan, categories: categories)
+                )
+            )
         case .installmentPlan:
             guard let plan = try fetchInstallmentPlans(context).first(where: { $0.id == mutation.recordID }) else {
                 return nil
@@ -204,7 +226,13 @@ enum MistiaSyncLocalStore {
         }
 
         for row in snapshot.recurringBillPlans {
-            upsertRecurringBill(row, context: context, walletByID: walletByID, recurringByID: &recurringByID)
+            upsertRecurringBill(
+                row,
+                context: context,
+                walletByID: walletByID,
+                categoryByID: categoryByID,
+                recurringByID: &recurringByID
+            )
         }
 
         for row in snapshot.installmentPlans {
@@ -311,7 +339,13 @@ enum MistiaSyncLocalStore {
             upsertGoal(row, context: context, walletByID: walletByID, goalByID: &goalByID)
         case .recurringBillPlan(let row):
             var recurringByID = Dictionary(uniqueKeysWithValues: try fetchRecurringBillPlans(context).map { ($0.id, $0) })
-            upsertRecurringBill(row, context: context, walletByID: walletByID, recurringByID: &recurringByID)
+            upsertRecurringBill(
+                row,
+                context: context,
+                walletByID: walletByID,
+                categoryByID: categoryByID,
+                recurringByID: &recurringByID
+            )
         case .installmentPlan(let row):
             var installmentByID = Dictionary(uniqueKeysWithValues: try fetchInstallmentPlans(context).map { ($0.id, $0) })
             upsertInstallment(row, context: context, walletByID: walletByID, installmentByID: &installmentByID)
@@ -784,12 +818,15 @@ enum MistiaSyncLocalStore {
         _ row: RemoteRecurringBillPlan,
         context: ModelContext,
         walletByID: [UUID: LedgerWallet],
+        categoryByID: [UUID: TransactionCategory],
         recurringByID: inout [UUID: RecurringBillPlan]
     ) {
+        let resolvedCategory = row.categoryID.flatMap { categoryByID[$0] }
+        let normalizedIconSymbolName = resolvedCategory?.iconSymbolName ?? row.iconSymbolName
         let plan = recurringByID[row.id] ?? RecurringBillPlan(
             id: row.id,
             name: row.name,
-            iconSymbolName: row.iconSymbolName,
+            iconSymbolName: normalizedIconSymbolName,
             amountMinor: row.amountMinor,
             dueDay: row.dueDay,
             frequencyMonths: row.frequencyMonths,
@@ -808,7 +845,7 @@ enum MistiaSyncLocalStore {
         }
 
         plan.name = row.name
-        plan.iconSymbolName = row.iconSymbolName
+        plan.iconSymbolName = normalizedIconSymbolName
         plan.amountMinor = row.amountMinor
         plan.dueDay = row.dueDay
         plan.frequencyMonths = row.frequencyMonths
@@ -930,6 +967,19 @@ enum MistiaSyncLocalStore {
 
     private static func fetchRecurringBillPlans(_ context: ModelContext) throws -> [RecurringBillPlan] {
         try context.fetch(FetchDescriptor<RecurringBillPlan>())
+    }
+
+    private static func recurringBillCategoryID(
+        for plan: RecurringBillPlan,
+        categories: [TransactionCategory]
+    ) -> UUID? {
+        guard let systemKey = MistiaFinanceIconRegistry.categoryKey(for: plan.iconSymbolName) else {
+            return nil
+        }
+
+        return categories.first(where: {
+            $0.deletedAt == nil && $0.systemKey == systemKey.rawValue
+        })?.id
     }
 
     private static func fetchInstallmentPlans(_ context: ModelContext) throws -> [InstallmentPlan] {
@@ -1091,12 +1141,13 @@ private extension RemoteSavingsGoal {
 }
 
 private extension RemoteRecurringBillPlan {
-    init(local plan: RecurringBillPlan, userID: UUID) {
+    init(local plan: RecurringBillPlan, userID: UUID, categoryID: UUID?) {
         self.init(
             userID: userID,
             id: plan.id,
             name: plan.name,
             iconSymbolName: plan.iconSymbolName,
+            categoryID: categoryID,
             amountMinor: plan.amountMinor,
             dueDay: plan.dueDay,
             frequencyMonths: plan.frequencyMonths,

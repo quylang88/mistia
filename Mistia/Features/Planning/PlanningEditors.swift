@@ -323,6 +323,63 @@ private struct PlanningBudgetCategoryPickerSheet: View {
     }
 }
 
+private struct PlanningBillCategoryPickerSheet: View {
+    @Environment(\.dismiss) private var dismiss
+
+    let selectedCategoryID: UUID?
+    let sections: [TransactionCategoryGroupSection]
+    let onSelect: (TransactionCategory) -> Void
+
+    var body: some View {
+        NavigationStack {
+            List {
+                ForEach(sections) { section in
+                    Section(section.parent.localizedDisplayName) {
+                        ForEach(section.children) { child in
+                            Button {
+                                onSelect(child)
+                                dismiss()
+                            } label: {
+                                HStack(spacing: 12) {
+                                    PlanningEditorIconPreview(
+                                        symbolName: child.iconSymbolName,
+                                        color: child.iconColor,
+                                        size: 34
+                                    )
+
+                                    VStack(alignment: .leading, spacing: 3) {
+                                        Text(child.localizedDisplayName)
+                                            .foregroundStyle(.primary)
+                                        Text(section.parent.localizedDisplayName)
+                                            .font(.footnote)
+                                            .foregroundStyle(.secondary)
+                                    }
+
+                                    Spacer()
+
+                                    if child.id == selectedCategoryID {
+                                        Image(systemName: "checkmark")
+                                            .foregroundStyle(.tint)
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            .navigationTitle(mistiaLocalized(vi: "Chọn danh mục", en: "Choose category", ja: "カテゴリを選択"))
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    Button(mistiaLocalized(vi: "Đóng", en: "Close", ja: "閉じる")) {
+                        dismiss()
+                    }
+                }
+            }
+        }
+    }
+}
+
 struct PlanningGoalEditorSheet: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
@@ -409,6 +466,7 @@ struct PlanningGoalEditorSheet: View {
         .sheet(isPresented: $showsIconPicker) {
             PlanningIconPickerSheet(
                 title: mistiaCatalog("Icon mục tiêu"),
+                options: MistiaFinanceIconRegistry.goalOptions,
                 selectedSymbolName: draft.iconSymbolName,
                 selectedColorHex: draft.iconColorHex
             ) { symbolName, colorHex in
@@ -514,6 +572,8 @@ struct PlanningBillEditorSheet: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(SessionStore.self) private var sessionStore
     @AppStorage(MistiaAppStorageKey.currencyCode) private var currencyCode = "JPY"
+    @Query(filter: #Predicate<TransactionCategory> { $0.deletedAt == nil })
+    private var storedCategories: [TransactionCategory]
     @Query(filter: #Predicate<LedgerWallet> { $0.deletedAt == nil })
     private var storedWallets: [LedgerWallet]
     @Query(filter: #Predicate<DueOccurrenceRecord> { $0.deletedAt == nil })
@@ -525,7 +585,7 @@ struct PlanningBillEditorSheet: View {
     @State private var paymentAmountText: String
     @State private var alertMessage: String?
     @State private var showsDeleteConfirmation = false
-    @State private var showsIconPicker = false
+    @State private var showsCategoryPicker = false
 
     init(target: PlanningBillEditorTarget) {
         self.target = target
@@ -549,20 +609,66 @@ struct PlanningBillEditorSheet: View {
         target.plan?.currencyCode ?? target.dueItem?.currencyCode ?? currencyCode
     }
 
+    private var categorySections: [TransactionCategoryGroupSection] {
+        let preferredID = selectedCategory?.id
+        let preferredParentID = selectedCategory?.parentCategory?.id
+        let relevantCategories = storedCategories.filter { category in
+            category.kind == .expense
+                && category.deletedAt == nil
+                && category.isChildCategory
+                && (!category.isArchived || category.id == preferredID || category.parentCategory?.id == preferredParentID)
+        }
+
+        return MistiaCategoryHierarchy.groupedSections(
+            from: relevantCategories,
+            kind: .expense,
+            includeArchived: true,
+            includeEmptyParents: false
+        )
+    }
+
+    private var selectedCategory: TransactionCategory? {
+        if let categoryID = draft.categoryID {
+            return storedCategories.first(where: { $0.id == categoryID })
+        }
+
+        return storedCategories.first { category in
+            category.kind == .expense
+                && category.isChildCategory
+                && category.iconSymbolName == draft.iconSymbolName
+        }
+    }
+
     var body: some View {
         NavigationStack {
             Form {
-                Section(mistiaLocalized(vi: "Nhận diện", en: "Identity", ja: "識別情報")) {
-                    PlanningIconPickerButton(
-                        title: mistiaCatalog("Icon hóa đơn"),
-                        symbolName: draft.iconSymbolName,
-                        colorHex: draft.iconColorHex
-                    ) {
-                        showsIconPicker = true
-                    }
-                }
-
                 Section(mistiaLocalized(vi: "Hóa đơn định kỳ", en: "Recurring bill", ja: "定期請求")) {
+                    Button {
+                        showsCategoryPicker = true
+                    } label: {
+                        HStack(spacing: 12) {
+                            PlanningEditorIconPreview(
+                                symbolName: selectedCategory?.iconSymbolName ?? draft.iconSymbolName,
+                                color: Color(hex: selectedCategory?.iconColorHex ?? draft.iconColorHex)
+                            )
+
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(mistiaLocalized(vi: "Danh mục thanh toán", en: "Payment category", ja: "支払いカテゴリ"))
+                                    .foregroundStyle(.primary)
+                                Text(selectedCategoryLabel)
+                                    .font(.footnote)
+                                    .foregroundStyle(selectedCategory == nil ? .tertiary : .secondary)
+                            }
+
+                            Spacer()
+
+                            Image(systemName: "chevron.right")
+                                .font(.system(size: 11, weight: .bold))
+                                .foregroundStyle(.tertiary)
+                        }
+                    }
+                    .buttonStyle(.plain)
+
                     TextField(mistiaLocalized(vi: "Tên hóa đơn", en: "Bill name", ja: "請求名"), text: $draft.name)
                     TextField(mistiaLocalized(vi: "Số tiền (có thể để trống)", en: "Amount (optional)", ja: "金額（任意）"), text: $draft.amountText)
                         .keyboardType(.numberPad)
@@ -620,14 +726,14 @@ struct PlanningBillEditorSheet: View {
                 )
             }
         }
-        .sheet(isPresented: $showsIconPicker) {
-            PlanningIconPickerSheet(
-                title: mistiaCatalog("Icon hóa đơn"),
-                selectedSymbolName: draft.iconSymbolName,
-                selectedColorHex: draft.iconColorHex
-            ) { symbolName, colorHex in
-                draft.iconSymbolName = symbolName
-                draft.iconColorHex = colorHex
+        .sheet(isPresented: $showsCategoryPicker) {
+            PlanningBillCategoryPickerSheet(
+                selectedCategoryID: selectedCategory?.id,
+                sections: categorySections
+            ) { category in
+                draft.categoryID = category.id
+                draft.iconSymbolName = category.iconSymbolName
+                draft.iconColorHex = category.iconColorHex
             }
         }
         .planningAlert(message: $alertMessage)
@@ -650,6 +756,11 @@ struct PlanningBillEditorSheet: View {
             return
         }
 
+        guard let selectedCategory else {
+            alertMessage = mistiaLocalized(vi: "Chọn danh mục con cho hóa đơn này.", en: "Choose an expense child category for this bill.", ja: "この請求に使う支出カテゴリを選択してください。")
+            return
+        }
+
         guard let wallet = storedWallets.first(where: { $0.id == draft.paymentWalletID }) else {
             alertMessage = mistiaLocalized(vi: "Chọn ví thanh toán cho hóa đơn.", en: "Choose a payment wallet for this bill.", ja: "この請求の支払いウォレットを選択してください。")
             return
@@ -661,7 +772,7 @@ struct PlanningBillEditorSheet: View {
 
         if let plan = target.plan {
             plan.name = trimmedName
-            plan.iconSymbolName = draft.iconSymbolName
+            plan.iconSymbolName = selectedCategory.iconSymbolName
             plan.amountMinor = amountMinor
             plan.dueDay = draft.dueDay
             plan.frequencyMonths = draft.frequencyMonths
@@ -671,7 +782,7 @@ struct PlanningBillEditorSheet: View {
         } else {
             let plan = RecurringBillPlan(
                 name: trimmedName,
-                iconSymbolName: draft.iconSymbolName,
+                iconSymbolName: selectedCategory.iconSymbolName,
                 amountMinor: amountMinor,
                 dueDay: draft.dueDay,
                 frequencyMonths: draft.frequencyMonths,
@@ -768,6 +879,15 @@ struct PlanningBillEditorSheet: View {
         } catch {
             alertMessage = mistiaLocalized(vi: "Không thể xóa hóa đơn lúc này.", en: "Couldn't delete this bill right now.", ja: "現在この請求を削除できません。") + " \(error.localizedDescription)"
         }
+    }
+
+    private var selectedCategoryLabel: String {
+        guard let selectedCategory else {
+            return mistiaLocalized(vi: "Chọn danh mục con", en: "Choose child category", ja: "子カテゴリを選択")
+        }
+
+        let parentName = selectedCategory.parentCategory?.localizedDisplayName ?? selectedCategory.branchDisplayName
+        return "\(parentName) / \(selectedCategory.localizedDisplayName)"
     }
 }
 
@@ -887,6 +1007,7 @@ struct PlanningInstallmentEditorSheet: View {
         .sheet(isPresented: $showsIconPicker) {
             PlanningIconPickerSheet(
                 title: mistiaCatalog("Icon khoản trả góp / vay"),
+                options: MistiaFinanceIconRegistry.installmentOptions,
                 selectedSymbolName: draft.iconSymbolName,
                 selectedColorHex: draft.iconColorHex
             ) { symbolName, colorHex in
@@ -1176,6 +1297,7 @@ struct PlanningCreditCardEditorSheet: View {
         .sheet(isPresented: $showsIconPicker) {
             PlanningIconPickerSheet(
                 title: mistiaCatalog("Biểu tượng thẻ"),
+                options: MistiaFinanceIconRegistry.creditCardOptions,
                 selectedSymbolName: draft.iconSymbolName,
                 selectedColorHex: draft.iconColorHex
             ) { symbolName, colorHex in
@@ -1440,6 +1562,7 @@ private struct PlanningIconPickerButton: View {
 
 private struct PlanningIconPickerSheet: View {
     let title: String
+    let options: [MistiaFinancePickerOption]
     let onSave: (String, String) -> Void
 
     let selectedSymbolName: String
@@ -1447,21 +1570,23 @@ private struct PlanningIconPickerSheet: View {
 
     init(
         title: String,
+        options: [MistiaFinancePickerOption],
         selectedSymbolName: String,
         selectedColorHex: String,
         onSave: @escaping (String, String) -> Void
     ) {
         self.title = title
+        self.options = options
         self.onSave = onSave
         self.selectedSymbolName = selectedSymbolName
         self.selectedColorHex = selectedColorHex
     }
 
     var body: some View {
-        MistiaIconPickerSheet(
+        MistiaFinanceIconPickerSheet(
             title: title,
-            selectedSymbolName: selectedSymbolName,
-            selectedColorHex: selectedColorHex,
+            options: options,
+            selectedToken: selectedSymbolName,
             onSave: onSave
         )
     }
@@ -1473,15 +1598,7 @@ private struct PlanningEditorIconPreview: View {
     var size: CGFloat = 42
 
     var body: some View {
-        ZStack {
-            RoundedRectangle(cornerRadius: size * 0.32, style: .continuous)
-                .fill(color.opacity(0.16))
-
-            Image(systemName: symbolName)
-                .font(.system(size: size * 0.38, weight: .bold))
-                .foregroundStyle(color)
-        }
-        .frame(width: size, height: size)
+        MistiaFinanceIconView(icon: symbolName, fallbackColor: color, size: size)
     }
 }
 
@@ -1511,8 +1628,8 @@ private struct PlanningGoalDraft {
         targetText = goal.map { String($0.targetMinor) } ?? ""
         currentText = goal.map { String($0.currentSavedMinor) } ?? ""
         targetDate = goal?.targetDate ?? .now
-        iconSymbolName = goal?.iconSymbolName ?? "target"
-        iconColorHex = "#5B7BFF"
+        iconSymbolName = goal?.iconSymbolName ?? "mistia.goal.savings"
+        iconColorHex = MistiaFinanceIconRegistry.defaultColorHex(for: iconSymbolName)
         linkedWalletID = goal?.linkedWallet?.id
     }
 }
@@ -1523,6 +1640,7 @@ private struct PlanningBillDraft {
     var dueDay: Int
     var frequencyMonths: Int
     var paymentWalletID: UUID?
+    var categoryID: UUID?
     var iconSymbolName: String
     var iconColorHex: String
 
@@ -1532,8 +1650,9 @@ private struct PlanningBillDraft {
         dueDay = plan?.dueDay ?? 10
         frequencyMonths = max(plan?.frequencyMonths ?? 1, 1)
         paymentWalletID = plan?.paymentWallet?.id
-        iconSymbolName = plan?.iconSymbolName ?? "bolt.fill"
-        iconColorHex = "#FF9F1C"
+        categoryID = nil
+        iconSymbolName = plan?.iconSymbolName ?? "mistia.plan.bill"
+        iconColorHex = MistiaFinanceIconRegistry.defaultColorHex(for: iconSymbolName)
     }
 }
 
@@ -1554,8 +1673,8 @@ private struct PlanningInstallmentDraft {
         frequencyMonths = max(plan?.frequencyMonths ?? 1, 1)
         totalCyclesText = plan?.totalCycles.map(String.init) ?? ""
         paymentWalletID = plan?.paymentWallet?.id
-        iconSymbolName = plan?.iconSymbolName ?? "creditcard.and.123"
-        iconColorHex = "#8A8A8E"
+        iconSymbolName = plan?.iconSymbolName ?? "mistia.plan.installment"
+        iconColorHex = MistiaFinanceIconRegistry.defaultColorHex(for: iconSymbolName)
     }
 }
 

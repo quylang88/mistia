@@ -6,7 +6,9 @@ struct ManagementCategorySeed {
     let name: String
     let kind: TransactionCategoryKind
     let iconSymbolName: String
+    let fallbackSystemName: String
     let iconColorHex: String
+    let pickerGroup: MistiaFinanceIconGroup
     let systemKey: MistiaSystemCategoryKey?
     let startsArchived: Bool
 
@@ -14,14 +16,18 @@ struct ManagementCategorySeed {
         name: String,
         kind: TransactionCategoryKind,
         iconSymbolName: String,
+        fallbackSystemName: String,
         iconColorHex: String,
+        pickerGroup: MistiaFinanceIconGroup,
         systemKey: MistiaSystemCategoryKey? = nil,
         startsArchived: Bool = false
     ) {
         self.name = name
         self.kind = kind
         self.iconSymbolName = iconSymbolName
+        self.fallbackSystemName = fallbackSystemName
         self.iconColorHex = MistiaIconColorPalette.presetHex(forDefault: iconColorHex)
+        self.pickerGroup = pickerGroup
         self.systemKey = systemKey
         self.startsArchived = startsArchived
     }
@@ -31,7 +37,9 @@ struct ManagementCategoryParentSeed {
     let name: String
     let kind: TransactionCategoryKind
     let iconSymbolName: String
+    let fallbackSystemName: String
     let iconColorHex: String
+    let pickerGroup: MistiaFinanceIconGroup
     let systemKey: MistiaSystemCategoryParentKey
 }
 
@@ -113,37 +121,30 @@ enum ManagementPresetData {
     ]
 
     static let defaultCategoryParentSeeds: [ManagementCategoryParentSeed] =
-        MistiaSystemCategoryParentKey.allCases.map { systemKey in
+        MistiaSystemCategoryParentKey.activeDefaults.map { systemKey in
             ManagementCategoryParentSeed(
-                name: systemKey.legacyVietnameseName,
+                name: systemKey.title,
                 kind: systemKey.kind,
                 iconSymbolName: systemKey.iconSymbolName,
+                fallbackSystemName: systemKey.fallbackSystemName,
                 iconColorHex: MistiaIconColorPalette.presetHex(forDefault: systemKey.iconColorHex),
+                pickerGroup: systemKey.pickerGroup,
                 systemKey: systemKey
             )
         }
 
-    static let defaultCategorySeeds: [ManagementCategorySeed] = [
-        ManagementCategorySeed(name: "Ăn uống", kind: .expense, iconSymbolName: "fork.knife", iconColorHex: "#FF9F1C", systemKey: .food),
-        ManagementCategorySeed(name: "Đi chơi", kind: .expense, iconSymbolName: "party.popper.fill", iconColorHex: "#F26A5A", systemKey: .entertainment),
-        ManagementCategorySeed(name: "Du lịch", kind: .expense, iconSymbolName: "airplane", iconColorHex: "#5B7BFF", systemKey: .travel),
-        ManagementCategorySeed(name: "Mua sắm", kind: .expense, iconSymbolName: "bag.fill", iconColorHex: "#F26A5A", systemKey: .shopping),
-        ManagementCategorySeed(name: "Di chuyển", kind: .expense, iconSymbolName: "train.side.front.car", iconColorHex: "#2DAA9E", systemKey: .transportation),
-        ManagementCategorySeed(name: "Nhà ở", kind: .expense, iconSymbolName: "house.fill", iconColorHex: "#8A8A8E", systemKey: .housing),
-        ManagementCategorySeed(name: "Hóa đơn", kind: .expense, iconSymbolName: "doc.text.fill", iconColorHex: "#FF9F1C", systemKey: .billing),
-        ManagementCategorySeed(name: "Sức khỏe", kind: .expense, iconSymbolName: "cross.case.fill", iconColorHex: "#F26A5A", systemKey: .health),
-        ManagementCategorySeed(name: "Giáo dục", kind: .expense, iconSymbolName: "book.closed.fill", iconColorHex: "#9A67FF", systemKey: .education),
-        ManagementCategorySeed(name: "Trả góp / vay", kind: .expense, iconSymbolName: "creditcard.and.123", iconColorHex: "#8A8A8E", systemKey: .loanRepayment, startsArchived: true),
-        ManagementCategorySeed(name: "Lương", kind: .income, iconSymbolName: "briefcase.fill", iconColorHex: "#2DAA9E", systemKey: .salary),
-        ManagementCategorySeed(name: "Thưởng", kind: .income, iconSymbolName: "gift.fill", iconColorHex: "#FF9F1C", systemKey: .bonus),
-        ManagementCategorySeed(name: "Freelance", kind: .income, iconSymbolName: "laptopcomputer", iconColorHex: "#5B7BFF", systemKey: .freelance),
-        ManagementCategorySeed(name: "Đầu tư", kind: .income, iconSymbolName: "chart.line.uptrend.xyaxis", iconColorHex: "#57B7FF", systemKey: .investment),
-        ManagementCategorySeed(name: "Hoàn tiền", kind: .income, iconSymbolName: "arrow.counterclockwise.circle.fill", iconColorHex: "#8A8A8E", systemKey: .refund),
-        ManagementCategorySeed(name: "Bán hàng", kind: .income, iconSymbolName: "storefront.fill", iconColorHex: "#F26A5A", systemKey: .sales),
-        ManagementCategorySeed(name: "Quà tặng", kind: .income, iconSymbolName: "heart.fill", iconColorHex: "#F26A5A", systemKey: .gift),
-        ManagementCategorySeed(name: "Phụ cấp", kind: .income, iconSymbolName: "wallet.pass.fill", iconColorHex: "#9A67FF", systemKey: .allowance),
-        ManagementCategorySeed(name: "Lãi ngân hàng", kind: .income, iconSymbolName: "building.columns.fill", iconColorHex: "#5B7BFF", systemKey: .bankInterest)
-    ]
+    static let defaultCategorySeeds: [ManagementCategorySeed] =
+        MistiaSystemCategoryKey.activeDefaults.map { systemKey in
+            ManagementCategorySeed(
+                name: systemKey.title,
+                kind: systemKey.kind,
+                iconSymbolName: systemKey.iconSymbolName,
+                fallbackSystemName: systemKey.fallbackSystemName,
+                iconColorHex: systemKey.iconColorHex,
+                pickerGroup: systemKey.pickerGroup,
+                systemKey: systemKey
+            )
+        }
 }
 
 extension LedgerWallet {

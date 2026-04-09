@@ -529,7 +529,7 @@ nonisolated enum OverviewLogic {
                 DueCandidate(
                     id: "credit-\($0.walletID.uuidString)",
                     name: $0.walletName,
-                    iconSymbolName: "creditcard.fill",
+                    iconSymbolName: LedgerWalletKind.creditCard.defaultIconSymbolName,
                     amountMinor: $0.amountMinor,
                     dueDate: $0.dueDate,
                     currencyCode: $0.currencyCode

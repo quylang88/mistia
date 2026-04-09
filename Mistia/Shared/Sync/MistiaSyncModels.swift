@@ -273,6 +273,7 @@ struct RemoteRecurringBillPlan: MistiaRemoteRow {
     var id: UUID
     var name: String
     var iconSymbolName: String
+    var categoryID: UUID?
     var amountMinor: Int64?
     var dueDay: Int
     var frequencyMonths: Int
@@ -290,6 +291,7 @@ struct RemoteRecurringBillPlan: MistiaRemoteRow {
         case id
         case name
         case iconSymbolName = "icon_symbol_name"
+        case categoryID = "category_id"
         case amountMinor = "amount_minor"
         case dueDay = "due_day"
         case frequencyMonths = "frequency_months"
@@ -753,6 +755,7 @@ enum MistiaSyncUploadRecord {
                 entity.rawValue,
                 row.name,
                 row.iconSymbolName,
+                row.categoryID?.uuidString.lowercased() ?? "",
                 row.amountMinor.map(String.init) ?? "",
                 "\(row.dueDay)",
                 "\(row.frequencyMonths)",

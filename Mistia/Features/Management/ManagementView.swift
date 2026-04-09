@@ -975,15 +975,7 @@ private struct ManagementIconTile: View {
     let color: Color
 
     var body: some View {
-        ZStack {
-            RoundedRectangle(cornerRadius: 10, style: .continuous)
-                .fill(color.opacity(0.14))
-
-            Image(systemName: icon)
-                .font(.system(size: 13, weight: .bold))
-                .foregroundStyle(color)
-        }
-        .frame(width: 30, height: 30)
+        MistiaFinanceIconView(icon: icon, fallbackColor: color, size: 30)
     }
 }
 

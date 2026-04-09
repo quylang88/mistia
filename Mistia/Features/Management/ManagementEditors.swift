@@ -47,9 +47,9 @@ struct ManagementWalletEditorSheet: View {
                             )
 
                             VStack(alignment: .leading, spacing: 2) {
-                                Text(mistiaLocalized(vi: "Biểu tượng & màu", en: "Icon & color", ja: "アイコンと色"))
+                                Text(mistiaLocalized(vi: "Biểu tượng", en: "Icon", ja: "アイコン"))
                                     .foregroundStyle(.primary)
-                                Text(mistiaLocalized(vi: "Chạm để tùy chỉnh icon", en: "Tap to customize the icon", ja: "タップしてアイコンを変更"))
+                                Text(mistiaLocalized(vi: "Chạm để đổi icon ví", en: "Tap to change the wallet icon", ja: "ウォレットアイコンを変更"))
                                     .font(.footnote)
                                     .foregroundStyle(.secondary)
                             }
@@ -205,6 +205,7 @@ struct ManagementWalletEditorSheet: View {
         .sheet(isPresented: $showsIconPicker) {
             ManagementIconPickerSheet(
                 title: mistiaCatalog("Biểu tượng ví"),
+                options: draft.kind == .creditCard ? MistiaFinanceIconRegistry.creditCardOptions : MistiaFinanceIconRegistry.walletOptions,
                 selectedIconSymbolName: draft.iconSymbolName,
                 selectedColorHex: draft.iconColorHex
             ) { symbolName, colorHex in
@@ -449,9 +450,9 @@ struct ManagementCategoryEditorSheet: View {
                             )
 
                             VStack(alignment: .leading, spacing: 2) {
-                                Text(mistiaLocalized(vi: "Biểu tượng & màu", en: "Icon & color", ja: "アイコンと色"))
+                                Text(mistiaLocalized(vi: "Biểu tượng", en: "Icon", ja: "アイコン"))
                                     .foregroundStyle(.primary)
-                                Text(mistiaLocalized(vi: "Đổi icon và màu cho danh mục", en: "Change the icon and color for this category", ja: "カテゴリのアイコンと色を変更"))
+                                Text(mistiaLocalized(vi: "Chọn icon tài chính đồng bộ cho danh mục", en: "Choose a coordinated finance icon for this category", ja: "カテゴリに統一感のある金融アイコンを選択"))
                                     .font(.footnote)
                                     .foregroundStyle(.secondary)
                             }
@@ -569,6 +570,7 @@ struct ManagementCategoryEditorSheet: View {
         .sheet(isPresented: $showsIconPicker) {
             ManagementIconPickerSheet(
                 title: mistiaCatalog("Biểu tượng danh mục"),
+                options: MistiaFinanceIconRegistry.activeCategoryOptions(for: draft.kind),
                 selectedIconSymbolName: draft.iconSymbolName,
                 selectedColorHex: draft.iconColorHex
             ) { symbolName, colorHex in
@@ -736,6 +738,7 @@ struct ManagementCategoryEditorSheet: View {
 
 private struct ManagementIconPickerSheet: View {
     let title: String
+    let options: [MistiaFinancePickerOption]
     let onSave: (String, String) -> Void
 
     let selectedIconSymbolName: String
@@ -743,21 +746,23 @@ private struct ManagementIconPickerSheet: View {
 
     init(
         title: String,
+        options: [MistiaFinancePickerOption],
         selectedIconSymbolName: String,
         selectedColorHex: String,
         onSave: @escaping (String, String) -> Void
     ) {
         self.title = title
+        self.options = options
         self.onSave = onSave
         self.selectedIconSymbolName = selectedIconSymbolName
         self.selectedColorHex = selectedColorHex
     }
 
     var body: some View {
-        MistiaIconPickerSheet(
+        MistiaFinanceIconPickerSheet(
             title: title,
-            selectedSymbolName: selectedIconSymbolName,
-            selectedColorHex: selectedColorHex,
+            options: options,
+            selectedToken: selectedIconSymbolName,
             onSave: onSave
         )
     }
@@ -894,15 +899,7 @@ private struct ManagementEditorIconPreview: View {
     var size: CGFloat = 42
 
     var body: some View {
-        ZStack {
-            RoundedRectangle(cornerRadius: size * 0.32, style: .continuous)
-                .fill(color.opacity(0.16))
-
-            Image(systemName: symbolName)
-                .font(.system(size: size * 0.38, weight: .bold))
-                .foregroundStyle(color)
-        }
-        .frame(width: size, height: size)
+        MistiaFinanceIconView(icon: symbolName, fallbackColor: color, size: size)
     }
 }
 

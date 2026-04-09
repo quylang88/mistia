@@ -9,30 +9,15 @@ struct TransactionCategoryGroupSection: Identifiable {
 
 enum MistiaCategoryHierarchy {
     static func defaultParentKey(for systemKey: MistiaSystemCategoryKey) -> MistiaSystemCategoryParentKey {
-        switch systemKey {
-        case .food, .housing, .billing:
-            .livingExpense
-        case .transportation, .travel:
-            .mobilityTravel
-        case .shopping, .entertainment, .health, .education:
-            .personalLifestyle
-        case .loanRepayment:
-            .financialObligations
-        case .salary, .bonus, .freelance, .allowance:
-            .workIncome
-        case .investment, .refund, .bankInterest:
-            .investmentReturn
-        case .sales, .gift:
-            .salesOther
-        }
+        systemKey.parentKey ?? uncategorizedParentKey(for: systemKey.kind)
     }
 
     static func uncategorizedParentKey(for kind: TransactionCategoryKind) -> MistiaSystemCategoryParentKey {
         switch kind {
         case .expense:
-            .uncategorizedExpense
+            .expenseOther
         case .income:
-            .uncategorizedIncome
+            .incomeOther
         }
     }
 
@@ -48,7 +33,12 @@ enum MistiaCategoryHierarchy {
                     && $0.kind == kind
                     && $0.isParentCategory
             }
-            .sorted(by: categorySort)
+            .sorted { lhs, rhs in
+                if lhs.sortOrder != rhs.sortOrder {
+                    return lhs.sortOrder < rhs.sortOrder
+                }
+                return lhs.createdAt < rhs.createdAt
+            }
     }
 
     static func childCategories(
@@ -63,7 +53,12 @@ enum MistiaCategoryHierarchy {
                     && $0.kind == kind
                     && $0.isChildCategory
             }
-            .sorted(by: categorySort)
+            .sorted { lhs, rhs in
+                if lhs.sortOrder != rhs.sortOrder {
+                    return lhs.sortOrder < rhs.sortOrder
+                }
+                return lhs.createdAt < rhs.createdAt
+            }
     }
 
     static func groupedSections(
@@ -84,7 +79,12 @@ enum MistiaCategoryHierarchy {
         )) { $0.parentCategory?.id }
 
         return parents.compactMap { parent in
-            let children = childrenByParentID[parent.id]?.sorted(by: categorySort) ?? []
+            let children = childrenByParentID[parent.id]?.sorted { lhs, rhs in
+                if lhs.sortOrder != rhs.sortOrder {
+                    return lhs.sortOrder < rhs.sortOrder
+                }
+                return lhs.createdAt < rhs.createdAt
+            } ?? []
             if !includeEmptyParents && children.isEmpty {
                 return nil
             }

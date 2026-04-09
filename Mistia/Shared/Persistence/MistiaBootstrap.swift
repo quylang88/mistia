@@ -82,12 +82,27 @@ enum MistiaBootstrap {
             .filter { $0.deletedAt == nil }
         let existingWallets = try modelContext.fetch(FetchDescriptor<LedgerWallet>())
             .filter { $0.deletedAt == nil }
+        let existingGoals = try modelContext.fetch(FetchDescriptor<SavingsGoal>())
+            .filter { $0.deletedAt == nil }
+        let existingRecurringBills = try modelContext.fetch(FetchDescriptor<RecurringBillPlan>())
+            .filter { $0.deletedAt == nil }
+        let existingInstallments = try modelContext.fetch(FetchDescriptor<InstallmentPlan>())
+            .filter { $0.deletedAt == nil }
         var didMutate = false
         var categoriesNeedingSync: [TransactionCategory] = []
+        var goalsNeedingSync: [SavingsGoal] = []
+        var recurringBillsNeedingSync: [RecurringBillPlan] = []
+        var installmentsNeedingSync: [InstallmentPlan] = []
 
         if normalizeLegacyDefaultIconColors(
             categories: existingCategories,
-            wallets: existingWallets
+            wallets: existingWallets,
+            goals: existingGoals,
+            recurringBills: existingRecurringBills,
+            installments: existingInstallments,
+            goalsNeedingSync: &goalsNeedingSync,
+            recurringBillsNeedingSync: &recurringBillsNeedingSync,
+            installmentsNeedingSync: &installmentsNeedingSync
         ) {
             didMutate = true
         }
@@ -123,6 +138,9 @@ enum MistiaBootstrap {
             try modelContext.save()
             if let sessionStore {
                 queueCategoryUpserts(categoriesNeedingSync, sessionStore: sessionStore)
+                queuePlanningUpserts(goalsNeedingSync, entity: .savingsGoal, sessionStore: sessionStore)
+                queuePlanningUpserts(recurringBillsNeedingSync, entity: .recurringBillPlan, sessionStore: sessionStore)
+                queuePlanningUpserts(installmentsNeedingSync, entity: .installmentPlan, sessionStore: sessionStore)
             }
         }
     }
@@ -139,26 +157,24 @@ enum MistiaBootstrap {
             return existing
         }
 
-        guard let seed = ManagementPresetData.defaultCategorySeeds.first(where: { $0.systemKey == systemKey }) else {
-            fatalError("Missing seed for system category \(systemKey.rawValue)")
-        }
+        let seed = ManagementPresetData.defaultCategorySeeds.first(where: { $0.systemKey == systemKey })
         let parentCategory = try parentCategory(for: systemKey, modelContext: modelContext)
 
         let category = TransactionCategory(
-            name: seed.name,
-            kind: seed.kind,
-            iconSymbolName: seed.iconSymbolName,
-            iconColorHex: seed.iconColorHex,
+            name: seed?.name ?? systemKey.title,
+            kind: seed?.kind ?? systemKey.kind,
+            iconSymbolName: seed?.iconSymbolName ?? systemKey.iconSymbolName,
+            iconColorHex: seed?.iconColorHex ?? systemKey.iconColorHex,
             parentCategory: parentCategory,
             hierarchyRole: .child,
             systemKey: systemKey.rawValue,
             isSystem: true,
             sortOrder: nextChildSortOrder(
-                for: seed.kind,
+                for: seed?.kind ?? systemKey.kind,
                 parentID: parentCategory?.id,
                 categories: existingCategories
             ),
-            isArchived: seed.startsArchived
+            isArchived: seed?.startsArchived ?? !systemKey.isActiveDefault
         )
         modelContext.insert(category)
         try modelContext.save()
@@ -173,14 +189,12 @@ enum MistiaBootstrap {
         var parentByKey: [MistiaSystemCategoryParentKey: TransactionCategory] = [:]
         var didMutate = false
 
-        for seed in ManagementPresetData.defaultCategoryParentSeeds {
+        for (index, seed) in ManagementPresetData.defaultCategoryParentSeeds.enumerated() {
             if let existing = categories.first(where: { $0.systemKey == seed.systemKey.rawValue }) {
-                if existing.hierarchyRole != .parent || existing.parentCategory != nil {
-                    existing.hierarchyRole = .parent
-                    existing.parentCategory = nil
-                    existing.updatedAt = .now
+                let didUpdateExisting = normalizeParentCategory(existing, with: seed, sortOrder: index)
+                didMutate = didUpdateExisting || didMutate
+                if didUpdateExisting {
                     categoriesNeedingSync.append(existing)
-                    didMutate = true
                 }
                 parentByKey[seed.systemKey] = existing
                 continue
@@ -194,7 +208,7 @@ enum MistiaBootstrap {
                 hierarchyRole: .parent,
                 systemKey: seed.systemKey.rawValue,
                 isSystem: true,
-                sortOrder: nextParentSortOrder(for: seed.kind, categories: categories)
+                sortOrder: index
             )
             modelContext.insert(category)
             categories.append(category)
@@ -214,10 +228,34 @@ enum MistiaBootstrap {
     ) -> Bool {
         var didMutate = false
 
+        let childSortOrders = Dictionary(
+            grouping: ManagementPresetData.defaultCategorySeeds,
+            by: { (seed: ManagementCategorySeed) -> MistiaSystemCategoryParentKey? in
+                guard let systemKey = seed.systemKey else { return nil }
+                return systemKey.parentKey ?? MistiaCategoryHierarchy.uncategorizedParentKey(for: systemKey.kind)
+            }
+        )
+
         for seed in ManagementPresetData.defaultCategorySeeds {
             guard let systemKey = seed.systemKey else { continue }
-            guard categories.first(where: { $0.systemKey == systemKey.rawValue }) == nil else { continue }
             let parentCategory = parentByKey[MistiaCategoryHierarchy.defaultParentKey(for: systemKey)]
+            let parentKey = parentCategory?.mistiaSystemCategoryParentKey
+            let siblingSeeds = parentKey.flatMap { childSortOrders[$0] } ?? []
+            let sortOrder = siblingSeeds.firstIndex(where: { $0.systemKey == systemKey }) ?? 0
+
+            if let existing = categories.first(where: { $0.systemKey == systemKey.rawValue }) {
+                let didUpdateExisting = normalizeLeafCategory(
+                    existing,
+                    with: seed,
+                    parentCategory: parentCategory,
+                    sortOrder: sortOrder
+                )
+                didMutate = didUpdateExisting || didMutate
+                if didUpdateExisting {
+                    categoriesNeedingSync.append(existing)
+                }
+                continue
+            }
 
             let category = TransactionCategory(
                 name: seed.name,
@@ -228,11 +266,7 @@ enum MistiaBootstrap {
                 hierarchyRole: .child,
                 systemKey: systemKey.rawValue,
                 isSystem: true,
-                sortOrder: nextChildSortOrder(
-                    for: seed.kind,
-                    parentID: parentCategory?.id,
-                    categories: categories
-                ),
+                sortOrder: sortOrder,
                 isArchived: seed.startsArchived
             )
             modelContext.insert(category)
@@ -240,6 +274,11 @@ enum MistiaBootstrap {
             categoriesNeedingSync.append(category)
             didMutate = true
         }
+
+        didMutate = archiveInactiveSystemCategories(
+            categories: categories,
+            categoriesNeedingSync: &categoriesNeedingSync
+        ) || didMutate
 
         return didMutate
     }
@@ -319,6 +358,136 @@ enum MistiaBootstrap {
         return existingCategories.first(where: { $0.systemKey == parentKey.rawValue })
     }
 
+    private static func normalizeParentCategory(
+        _ category: TransactionCategory,
+        with seed: ManagementCategoryParentSeed,
+        sortOrder: Int
+    ) -> Bool {
+        var didMutate = false
+        let now = Date()
+
+        if category.name != seed.name {
+            category.name = seed.name
+            didMutate = true
+        }
+        if category.kind != seed.kind {
+            category.kind = seed.kind
+            didMutate = true
+        }
+        if category.iconSymbolName != seed.iconSymbolName {
+            category.iconSymbolName = seed.iconSymbolName
+            didMutate = true
+        }
+        if MistiaIconColorPalette.normalizedHex(category.iconColorHex) != seed.iconColorHex {
+            category.iconColorHex = seed.iconColorHex
+            didMutate = true
+        }
+        if category.hierarchyRole != .parent {
+            category.hierarchyRole = .parent
+            didMutate = true
+        }
+        if category.parentCategory != nil {
+            category.parentCategory = nil
+            didMutate = true
+        }
+        if category.sortOrder != sortOrder {
+            category.sortOrder = sortOrder
+            didMutate = true
+        }
+        if category.isArchived {
+            category.isArchived = false
+            category.archivedAt = nil
+            didMutate = true
+        }
+        if !category.isSystem {
+            category.isSystem = true
+            didMutate = true
+        }
+
+        if didMutate {
+            category.updatedAt = now
+        }
+        return didMutate
+    }
+
+    private static func normalizeLeafCategory(
+        _ category: TransactionCategory,
+        with seed: ManagementCategorySeed,
+        parentCategory: TransactionCategory?,
+        sortOrder: Int
+    ) -> Bool {
+        var didMutate = false
+        let now = Date()
+
+        if category.name != seed.name {
+            category.name = seed.name
+            didMutate = true
+        }
+        if category.kind != seed.kind {
+            category.kind = seed.kind
+            didMutate = true
+        }
+        if category.iconSymbolName != seed.iconSymbolName {
+            category.iconSymbolName = seed.iconSymbolName
+            didMutate = true
+        }
+        if MistiaIconColorPalette.normalizedHex(category.iconColorHex) != seed.iconColorHex {
+            category.iconColorHex = seed.iconColorHex
+            didMutate = true
+        }
+        if category.parentCategory?.id != parentCategory?.id {
+            category.parentCategory = parentCategory
+            didMutate = true
+        }
+        if category.hierarchyRole != .child {
+            category.hierarchyRole = .child
+            didMutate = true
+        }
+        if category.sortOrder != sortOrder {
+            category.sortOrder = sortOrder
+            didMutate = true
+        }
+        if category.isArchived != seed.startsArchived {
+            category.isArchived = seed.startsArchived
+            category.archivedAt = seed.startsArchived ? (category.archivedAt ?? now) : nil
+            didMutate = true
+        }
+        if !category.isSystem {
+            category.isSystem = true
+            didMutate = true
+        }
+
+        if didMutate {
+            category.updatedAt = now
+        }
+        return didMutate
+    }
+
+    private static func archiveInactiveSystemCategories(
+        categories: [TransactionCategory],
+        categoriesNeedingSync: inout [TransactionCategory]
+    ) -> Bool {
+        let activeParentKeys = Set(ManagementPresetData.defaultCategoryParentSeeds.map(\.systemKey.rawValue))
+        let activeLeafKeys = Set(ManagementPresetData.defaultCategorySeeds.compactMap(\.systemKey?.rawValue))
+        let activeKeys = activeParentKeys.union(activeLeafKeys)
+        let now = Date()
+        var didMutate = false
+
+        for category in categories {
+            guard category.deletedAt == nil, category.isSystem, let systemKey = category.systemKey else { continue }
+            guard !activeKeys.contains(systemKey) else { continue }
+            guard !category.isArchived else { continue }
+
+            category.isArchived = true
+            category.archivedAt = category.archivedAt ?? now
+            category.updatedAt = now
+            categoriesNeedingSync.append(category)
+            didMutate = true
+        }
+
+        return didMutate
+    }
+
     private static func nextParentSortOrder(
         for kind: TransactionCategoryKind,
         categories: [TransactionCategory]
@@ -364,13 +533,60 @@ enum MistiaBootstrap {
         }
     }
 
+    private static func queuePlanningUpserts<Record: PersistentModel>(
+        _ records: [Record],
+        entity: MistiaSyncEntity,
+        sessionStore: SessionStore
+    ) where Record: AnyObject {
+        guard sessionStore.canManageSync else { return }
+
+        let uniqueRecords = Dictionary(uniqueKeysWithValues: records.compactMap { record in
+            switch record {
+            case let goal as SavingsGoal:
+                (goal.id, goal.updatedAt)
+            case let recurringBill as RecurringBillPlan:
+                (recurringBill.id, recurringBill.updatedAt)
+            case let installment as InstallmentPlan:
+                (installment.id, installment.updatedAt)
+            default:
+                nil
+            }
+        })
+
+        for (recordID, updatedAt) in uniqueRecords {
+            sessionStore.recordUpsert(
+                entity: entity,
+                recordID: recordID,
+                modifiedAt: updatedAt
+            )
+        }
+    }
+
     private static func normalizeLegacyDefaultIconColors(
         categories: [TransactionCategory],
-        wallets: [LedgerWallet]
+        wallets: [LedgerWallet],
+        goals: [SavingsGoal],
+        recurringBills: [RecurringBillPlan],
+        installments: [InstallmentPlan],
+        goalsNeedingSync: inout [SavingsGoal],
+        recurringBillsNeedingSync: inout [RecurringBillPlan],
+        installmentsNeedingSync: inout [InstallmentPlan]
     ) -> Bool {
         var didMutate = false
 
         for wallet in wallets {
+            if wallet.kind.legacyDefaultIconSymbolNames.contains(wallet.iconSymbolName),
+               wallet.kind.matchesDefaultIconAppearance(
+                    symbolName: wallet.iconSymbolName,
+                    colorHex: wallet.iconColorHex
+               ) {
+                wallet.iconSymbolName = wallet.kind.defaultIconSymbolName
+                wallet.iconColorHex = MistiaIconColorPalette.presetHex(forDefault: wallet.kind.defaultColorHex)
+                wallet.updatedAt = .now
+                didMutate = true
+                continue
+            }
+
             guard let migratedColorHex = wallet.kind.migratedLegacyDefaultColorHex(
                 for: wallet.iconColorHex,
                 symbolName: wallet.iconSymbolName
@@ -384,6 +600,18 @@ enum MistiaBootstrap {
         }
 
         for category in categories where !category.isSystem && category.systemKey == nil {
+            if category.kind.legacyDefaultIconSymbolNames.contains(category.iconSymbolName),
+               category.kind.matchesDefaultIconAppearance(
+                    symbolName: category.iconSymbolName,
+                    colorHex: category.iconColorHex
+               ) {
+                category.iconSymbolName = category.kind.defaultIconSymbolName
+                category.iconColorHex = MistiaIconColorPalette.presetHex(forDefault: category.kind.defaultColorHex)
+                category.updatedAt = .now
+                didMutate = true
+                continue
+            }
+
             guard let migratedColorHex = category.kind.migratedLegacyDefaultColorHex(
                 for: category.iconColorHex,
                 symbolName: category.iconSymbolName
@@ -393,6 +621,33 @@ enum MistiaBootstrap {
 
             category.iconColorHex = migratedColorHex
             category.updatedAt = .now
+            didMutate = true
+        }
+
+        for goal in goals {
+            guard goal.iconSymbolName == "target" else { continue }
+
+            goal.iconSymbolName = "mistia.goal.savings"
+            goal.updatedAt = .now
+            goalsNeedingSync.append(goal)
+            didMutate = true
+        }
+
+        for recurringBill in recurringBills {
+            guard recurringBill.iconSymbolName == "calendar.badge.clock" else { continue }
+
+            recurringBill.iconSymbolName = "mistia.plan.bill"
+            recurringBill.updatedAt = .now
+            recurringBillsNeedingSync.append(recurringBill)
+            didMutate = true
+        }
+
+        for installment in installments {
+            guard installment.iconSymbolName == "creditcard.and.123" else { continue }
+
+            installment.iconSymbolName = "mistia.plan.installment"
+            installment.updatedAt = .now
+            installmentsNeedingSync.append(installment)
             didMutate = true
         }
 

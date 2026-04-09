@@ -244,6 +244,7 @@ extension RecurringBillPlan {
             id: id,
             name: name,
             iconSymbolName: iconSymbolName,
+            categorySystemKey: MistiaFinanceIconRegistry.categoryKey(for: iconSymbolName),
             amountMinor: amountMinor,
             dueDay: dueDay,
             frequencyMonths: frequencyMonths,

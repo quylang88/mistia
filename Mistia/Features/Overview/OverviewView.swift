@@ -656,11 +656,11 @@ private struct RecentTransactionRow: View {
     private var iconName: String {
         switch row.cashflowStyle {
         case .income:
-            "arrow.down.left.circle.fill"
+            TransactionPrimaryKind.income.financeIconToken
         case .expense:
-            "arrow.up.right.circle.fill"
+            TransactionPrimaryKind.expense.financeIconToken
         case .neutral:
-            "arrow.left.arrow.right.circle.fill"
+            TransactionPrimaryKind.transfer.financeIconToken
         }
     }
 
@@ -731,15 +731,7 @@ private struct OverviewIcon: View {
     let tint: Color
 
     var body: some View {
-        ZStack {
-            RoundedRectangle(cornerRadius: 10, style: .continuous)
-                .fill(tint.opacity(0.14))
-
-            Image(systemName: icon)
-                .font(.system(size: 13, weight: .bold))
-                .foregroundStyle(tint)
-        }
-        .frame(width: 30, height: 30)
+        MistiaFinanceIconView(icon: icon, fallbackColor: tint, size: 30)
     }
 }
 
