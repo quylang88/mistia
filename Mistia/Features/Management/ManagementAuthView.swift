@@ -1,5 +1,6 @@
 import SwiftData
 import SwiftUI
+import UIKit
 
 private enum ManagementAuthMode: String, CaseIterable, Identifiable {
     case signIn
@@ -45,6 +46,35 @@ private enum ManagementProfileDestructiveAction: String, Identifiable {
 
 private enum ManagementSyncSettingsDestination: String, Identifiable {
     case dataManagement
+
+    var id: String { rawValue }
+}
+
+private enum ManagementEditProfileSheet: String, Identifiable {
+    case name
+    case birthday
+
+    var id: String { rawValue }
+}
+
+private enum ManagementProfileAvatarSource: String, Identifiable {
+    case camera
+    case photoLibrary
+
+    var id: String { rawValue }
+
+    var uiImagePickerSourceType: UIImagePickerController.SourceType {
+        switch self {
+        case .camera:
+            .camera
+        case .photoLibrary:
+            .photoLibrary
+        }
+    }
+}
+
+private enum ManagementEditProfileDestination: String, Identifiable {
+    case personalInfo
 
     var id: String { rawValue }
 }
@@ -164,16 +194,20 @@ struct ManagementAccountView: View {
                     )
                 )
             case .editProfile:
-                ManagementProfilePlaceholderView(
-                    title: mistiaLocalized(vi: "Sửa hồ sơ", en: "Edit profile", ja: "プロフィールを編集"),
-                    systemImage: "square.and.pencil",
-                    accent: accent,
-                    message: mistiaLocalized(
-                        vi: "Điểm vào chỉnh sửa hồ sơ đã được đặt sẵn trong header. Form chi tiết sẽ được thiết kế sau.",
-                        en: "The profile edit entry is now in place in the header. The detailed form can be designed next.",
-                        ja: "プロフィール編集の入口をヘッダーに追加しました。詳細フォームは次の段階で設計できます。"
+                if let summary = sessionStore.summary {
+                    ManagementEditProfileView(summary: summary, accent: accent)
+                } else {
+                    ManagementProfilePlaceholderView(
+                        title: mistiaLocalized(vi: "Sửa hồ sơ", en: "Edit profile", ja: "プロフィールを編集"),
+                        systemImage: "square.and.pencil",
+                        accent: accent,
+                        message: mistiaLocalized(
+                            vi: "Hồ sơ hiện chưa sẵn sàng để chỉnh sửa vì phiên đăng nhập chưa được khôi phục.",
+                            en: "The profile isn't ready to edit yet because the signed-in session hasn't been restored.",
+                            ja: "ログイン状態の復元がまだ完了していないため、プロフィールを編集できません。"
+                        )
                     )
-                )
+                }
             }
         }
         .onChange(of: sessionStore.authPendingEmail) { _, newValue in
@@ -1788,6 +1822,727 @@ private struct ManagementDataConflictsView: View {
                 }
             }
         }
+    }
+}
+
+private struct ManagementEditProfileView: View {
+    @Environment(\.dismiss) private var dismiss
+    @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.calendar) private var calendar
+    @Environment(SessionStore.self) private var sessionStore
+
+    let summary: SessionSummary
+    let accent: Color
+
+    @State private var activeSheet: ManagementEditProfileSheet?
+    @State private var destination: ManagementEditProfileDestination?
+    @State private var draftDisplayName: String
+    @State private var birthday: Date
+    @State private var hasBirthday: Bool
+    @State private var draftAvatarURL: URL?
+    @State private var avatarSource: ManagementProfileAvatarSource?
+    @State private var showsAvatarSourceDialog = false
+    @State private var profileErrorMessage: String?
+
+    init(summary: SessionSummary, accent: Color) {
+        self.summary = summary
+        self.accent = accent
+        _draftDisplayName = State(initialValue: summary.displayName)
+        _birthday = State(initialValue: Calendar.current.date(byAdding: .year, value: -18, to: .now) ?? .now)
+        _hasBirthday = State(initialValue: false)
+        _draftAvatarURL = State(initialValue: summary.avatarURL)
+    }
+
+    private var cardTint: Color {
+        colorScheme == .dark ? Color(UIColor.secondarySystemGroupedBackground) : .white.opacity(0.22)
+    }
+
+    private var birthdayLabel: String {
+        guard hasBirthday else {
+            return mistiaLocalized(vi: "Thêm", en: "Add", ja: "追加")
+        }
+
+        return MistiaDateFormatting.fullDateString(
+            for: birthday,
+            language: MistiaAppLanguage.current,
+            calendar: calendar
+        )
+    }
+
+    private var privacyButtonTitle: String {
+        mistiaLocalized(
+            vi: "Tìm hiểu cách Mistia sử dụng thông tin cá nhân",
+            en: "Learn how Mistia uses personal information",
+            ja: "Mistia の個人情報の利用方法を確認する"
+        )
+    }
+
+    var body: some View {
+        MistiaPinnedTopBarScaffold(
+            tone: .standard,
+            title: mistiaLocalized(vi: "Sửa hồ sơ", en: "Edit profile", ja: "プロフィールを編集"),
+            embedsInNavigationStack: false,
+            showsLeadingAvatar: false,
+            leadingSystemImage: "chevron.left",
+            trailingSystemImage: nil,
+            hidesSystemBackButton: true,
+            onLeadingTap: { dismiss() },
+            contentSpacing: 22
+        ) {
+            VStack(spacing: 18) {
+                VStack(spacing: 14) {
+                    ManagementEditableAvatarBadge(
+                        initials: currentInitials,
+                        avatarURL: draftAvatarURL,
+                        size: 116
+                    )
+
+                    Button {
+                        showsAvatarSourceDialog = true
+                    } label: {
+                        Text(mistiaLocalized(vi: "Đổi ảnh", en: "Change Photo", ja: "写真を変更"))
+                            .font(.system(size: 13.5, weight: .bold, design: .rounded))
+                            .foregroundStyle(accent)
+                            .padding(.horizontal, 14)
+                            .padding(.vertical, 8)
+                            .background(accent.opacity(0.16), in: Capsule())
+                    }
+                    .buttonStyle(.plain)
+                }
+                .frame(maxWidth: .infinity)
+                .padding(.top, 8)
+                .padding(.bottom, 4)
+
+                ManagementProfileListCard(tint: cardTint) {
+                    VStack(spacing: 0) {
+                        ManagementEditProfileNavigationRow(
+                            title: mistiaLocalized(vi: "Họ và tên", en: "Full name", ja: "氏名"),
+                            value: draftDisplayName
+                        ) {
+                            activeSheet = .name
+                        }
+
+                        ManagementEditProfileRowDivider()
+
+                        ManagementEditProfileInfoRow(
+                            title: mistiaLocalized(vi: "Email", en: "Email", ja: "メール"),
+                            value: summary.email
+                        )
+
+                        ManagementEditProfileRowDivider()
+
+                        ManagementEditProfileNavigationRow(
+                            title: mistiaLocalized(vi: "Ngày sinh", en: "Birthday", ja: "生年月日"),
+                            value: birthdayLabel
+                        ) {
+                            activeSheet = .birthday
+                        }
+                    }
+                }
+
+                Button {
+                    destination = .personalInfo
+                } label: {
+                    Text(privacyButtonTitle)
+                        .font(.system(size: 15, weight: .semibold, design: .rounded))
+                        .foregroundStyle(accent)
+                        .multilineTextAlignment(.center)
+                        .frame(maxWidth: .infinity)
+                        .padding(.horizontal, 18)
+                        .padding(.vertical, 6)
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .navigationDestination(item: $destination) { route in
+            switch route {
+            case .personalInfo:
+                ManagementProfilePersonalInfoView(accent: accent)
+            }
+        }
+        .sheet(item: $activeSheet) { sheet in
+            switch sheet {
+            case .name:
+                ManagementEditProfileNameEditorView(
+                    accent: accent,
+                    displayName: $draftDisplayName
+                ) { updatedDisplayName in
+                    persistProfileChanges(displayName: updatedDisplayName)
+                }
+            case .birthday:
+                ManagementEditProfileBirthdayEditorView(
+                    accent: accent,
+                    birthday: $birthday,
+                    hasBirthday: $hasBirthday
+                ) { updatedBirthday in
+                    persistProfileChanges(birthday: updatedBirthday)
+                }
+            }
+        }
+        .sheet(item: $avatarSource) { source in
+            ManagementProfileImagePicker(sourceType: source.uiImagePickerSourceType) { image in
+                handlePickedAvatar(image)
+            }
+        }
+        .confirmationDialog(
+            mistiaLocalized(vi: "Đổi ảnh đại diện", en: "Change profile photo", ja: "プロフィール写真を変更"),
+            isPresented: $showsAvatarSourceDialog,
+            titleVisibility: .visible
+        ) {
+            if UIImagePickerController.isSourceTypeAvailable(.camera) {
+                Button(mistiaLocalized(vi: "Chụp ảnh", en: "Take Photo", ja: "写真を撮る")) {
+                    avatarSource = .camera
+                }
+            }
+
+            Button(mistiaLocalized(vi: "Chọn từ thư viện", en: "Choose from Library", ja: "ライブラリから選択")) {
+                avatarSource = .photoLibrary
+            }
+
+            Button(mistiaLocalized(vi: "Hủy", en: "Cancel", ja: "キャンセル"), role: .cancel) { }
+        }
+        .alert(
+            mistiaLocalized(vi: "Chưa thể cập nhật hồ sơ", en: "Couldn't update profile", ja: "プロフィールを更新できませんでした"),
+            isPresented: Binding(
+                get: { profileErrorMessage != nil },
+                set: { if !$0 { profileErrorMessage = nil } }
+            )
+        ) {
+            Button("OK", role: .cancel) { }
+        } message: {
+            Text(profileErrorMessage ?? "")
+        }
+        .task {
+            draftAvatarURL = sessionStore.summary?.avatarURL ?? summary.avatarURL
+            if let storedBirthday = sessionStore.storedBirthday(for: summary.userID) {
+                birthday = storedBirthday
+                hasBirthday = true
+            }
+        }
+    }
+
+    private var currentInitials: String {
+        let components = draftDisplayName
+            .split(separator: " ")
+            .prefix(2)
+            .map { String($0.prefix(1)).uppercased() }
+        return components.isEmpty ? summary.initials : components.joined()
+    }
+
+    private func persistProfileChanges(
+        displayName: String? = nil,
+        birthday: Date? = nil,
+        avatarJPEGData: Data? = nil
+    ) {
+        do {
+            try sessionStore.updateProfile(
+                displayName: displayName ?? draftDisplayName,
+                birthday: hasBirthday ? (birthday ?? self.birthday) : birthday,
+                avatarJPEGData: avatarJPEGData
+            )
+
+            if let refreshedSummary = sessionStore.summary {
+                draftDisplayName = refreshedSummary.displayName
+                draftAvatarURL = refreshedSummary.avatarURL
+            }
+
+            if let birthday {
+                self.birthday = birthday
+                hasBirthday = true
+            }
+        } catch {
+            profileErrorMessage = error.localizedDescription
+        }
+    }
+
+    private func handlePickedAvatar(_ image: UIImage) {
+        guard let avatarJPEGData = image.jpegData(compressionQuality: 0.9) else {
+            profileErrorMessage = mistiaLocalized(
+                vi: "Không xử lý được ảnh đã chọn.",
+                en: "Couldn't process the selected image.",
+                ja: "選択した画像を処理できませんでした。"
+            )
+            return
+        }
+
+        persistProfileChanges(avatarJPEGData: avatarJPEGData)
+    }
+}
+
+private struct ManagementEditProfileNavigationRow: View {
+    let title: String
+    let value: String
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 12) {
+                Text(title)
+                    .font(.system(size: 16.5, weight: .medium, design: .rounded))
+                    .foregroundStyle(.primary)
+
+                Spacer(minLength: 12)
+
+                Text(value)
+                    .font(.system(size: 16, weight: .medium, design: .rounded))
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.trailing)
+                    .lineLimit(2)
+
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 11, weight: .bold))
+                    .foregroundStyle(.tertiary)
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 18)
+        }
+        .buttonStyle(MistiaPressableButtonStyle(cornerRadius: 18))
+    }
+}
+
+private struct ManagementEditProfileInfoRow: View {
+    let title: String
+    let value: String
+
+    var body: some View {
+        HStack(spacing: 12) {
+            Text(title)
+                .font(.system(size: 16.5, weight: .medium, design: .rounded))
+                .foregroundStyle(.primary)
+
+            Spacer(minLength: 12)
+
+            Text(value)
+                .font(.system(size: 16, weight: .medium, design: .rounded))
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.trailing)
+                .lineLimit(2)
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 18)
+    }
+}
+
+private struct ManagementEditProfileRowDivider: View {
+    var body: some View {
+        Divider()
+            .padding(.leading, 16)
+    }
+}
+
+private struct ManagementEditProfileModalScaffold<Content: View>: View {
+    @Environment(\.dismiss) private var dismiss
+
+    let title: String
+    let accent: Color
+    let onSave: () -> Void
+    let content: Content
+
+    private var modalBackground: Color {
+        Color(UIColor.systemGroupedBackground)
+    }
+
+    private var toolbarConfirmTint: Color {
+        Color(red: 0.43, green: 0.23, blue: 0.76)
+    }
+
+    private var toolbarConfirmForeground: Color {
+        Color(red: 0.88, green: 0.78, blue: 1.0)
+    }
+
+    init(
+        title: String,
+        accent: Color,
+        onSave: @escaping () -> Void,
+        @ViewBuilder content: () -> Content
+    ) {
+        self.title = title
+        self.accent = accent
+        self.onSave = onSave
+        self.content = content()
+    }
+
+    var body: some View {
+        NavigationStack {
+            ZStack {
+                modalBackground
+                    .ignoresSafeArea()
+
+                ScrollView(showsIndicators: false) {
+                    VStack(spacing: 18) {
+                        content
+                    }
+                    .padding(.horizontal, 18)
+                    .padding(.top, 8)
+                    .padding(.bottom, 40)
+                }
+                .scrollIndicators(.hidden)
+            }
+            .navigationTitle(title)
+            .navigationBarTitleDisplayMode(.inline)
+            .navigationBarBackButtonHidden(true)
+            .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    Button {
+                        dismiss()
+                    } label: {
+                        Image(systemName: "xmark")
+                            .font(.system(size: 16, weight: .semibold))
+                            .foregroundStyle(.secondary)
+                    }
+                }
+
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button {
+                        onSave()
+                        dismiss()
+                    } label: {
+                        Image(systemName: "checkmark")
+                            .font(.system(size: 14, weight: .bold))
+                            .foregroundStyle(toolbarConfirmForeground)
+                            .frame(width: 30, height: 30)
+                    }
+                    .buttonStyle(.glassProminent)
+                    .buttonBorderShape(.circle)
+                    .tint(toolbarConfirmTint)
+                }
+            }
+        }
+    }
+}
+
+private struct ManagementEditProfileNameEditorView: View {
+    @Environment(\.colorScheme) private var colorScheme
+
+    let accent: Color
+    @Binding var displayName: String
+    let onSave: (String) -> Void
+
+    @State private var familyName: String
+    @State private var givenName: String
+
+    init(accent: Color, displayName: Binding<String>, onSave: @escaping (String) -> Void) {
+        self.accent = accent
+        _displayName = displayName
+        self.onSave = onSave
+
+        let parts = Self.split(displayName.wrappedValue)
+        _familyName = State(initialValue: parts.familyName)
+        _givenName = State(initialValue: parts.givenName)
+    }
+
+    private var cardTint: Color {
+        colorScheme == .dark ? Color(UIColor.secondarySystemGroupedBackground) : .white.opacity(0.22)
+    }
+
+    var body: some View {
+        ManagementEditProfileModalScaffold(
+            title: mistiaLocalized(vi: "Họ và tên", en: "Full name", ja: "氏名"),
+            accent: accent
+        ) {
+            displayName = [
+                familyName.trimmingCharacters(in: .whitespacesAndNewlines),
+                givenName.trimmingCharacters(in: .whitespacesAndNewlines)
+            ]
+                .filter { !$0.isEmpty }
+                .joined(separator: " ")
+            onSave(displayName)
+        } content: {
+            ManagementProfileListCard(tint: cardTint) {
+                VStack(spacing: 0) {
+                    ManagementEditProfileTextFieldRow(
+                        title: mistiaLocalized(vi: "Họ", en: "Last name", ja: "姓"),
+                        text: $familyName
+                    )
+
+                    ManagementEditProfileRowDivider()
+
+                    ManagementEditProfileTextFieldRow(
+                        title: mistiaLocalized(vi: "Tên", en: "First name", ja: "名"),
+                        text: $givenName
+                    )
+                }
+            }
+        }
+    }
+
+    private static func split(_ displayName: String) -> (familyName: String, givenName: String) {
+        let components = displayName
+            .split(separator: " ")
+            .map(String.init)
+            .filter { !$0.isEmpty }
+
+        guard let last = components.last else {
+            return ("", "")
+        }
+
+        let family = components.dropLast().joined(separator: " ")
+        return (family, last)
+    }
+}
+
+private struct ManagementEditProfileTextFieldRow: View {
+    let title: String
+    @Binding var text: String
+
+    var body: some View {
+        HStack(spacing: 14) {
+            Text(title)
+                .font(.system(size: 16.5, weight: .medium, design: .rounded))
+                .foregroundStyle(.primary)
+                .frame(width: 60, alignment: .leading)
+
+            TextField("", text: $text)
+                .font(.system(size: 16.5, weight: .medium, design: .rounded))
+                .textInputAutocapitalization(.words)
+                .autocorrectionDisabled()
+                .foregroundStyle(.primary)
+                .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 18)
+    }
+}
+
+private struct ManagementEditProfileBirthdayEditorView: View {
+    @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.locale) private var locale
+    @Environment(\.calendar) private var calendar
+
+    let accent: Color
+    @Binding var birthday: Date
+    @Binding var hasBirthday: Bool
+    let onSave: (Date) -> Void
+
+    @State private var draftBirthday: Date
+
+    init(
+        accent: Color,
+        birthday: Binding<Date>,
+        hasBirthday: Binding<Bool>,
+        onSave: @escaping (Date) -> Void
+    ) {
+        self.accent = accent
+        _birthday = birthday
+        _hasBirthday = hasBirthday
+        self.onSave = onSave
+        _draftBirthday = State(initialValue: birthday.wrappedValue)
+    }
+
+    private var cardTint: Color {
+        colorScheme == .dark ? Color(UIColor.secondarySystemGroupedBackground) : .white.opacity(0.22)
+    }
+
+    var body: some View {
+        ManagementEditProfileModalScaffold(
+            title: mistiaLocalized(vi: "Ngày sinh", en: "Birthday", ja: "生年月日"),
+            accent: accent
+        ) {
+            birthday = draftBirthday
+            hasBirthday = true
+            onSave(draftBirthday)
+        } content: {
+            VStack(spacing: 18) {
+                ManagementProfileListCard(tint: cardTint) {
+                    ManagementEditProfileInfoRow(
+                        title: mistiaLocalized(vi: "Ngày sinh", en: "Birthday", ja: "生年月日"),
+                        value: MistiaDateFormatting.fullDateString(
+                            for: draftBirthday,
+                            language: MistiaAppLanguage.current,
+                            calendar: calendar
+                        )
+                    )
+                }
+
+                MistiaGlassCard(cornerRadius: 24, tint: cardTint) {
+                    DatePicker(
+                        "",
+                        selection: $draftBirthday,
+                        in: ...Date(),
+                        displayedComponents: .date
+                    )
+                    .datePickerStyle(.graphical)
+                    .labelsHidden()
+                    .tint(accent)
+                    .environment(\.locale, locale)
+                    .environment(\.calendar, calendar)
+                }
+            }
+        }
+    }
+}
+
+private struct ManagementEditableAvatarBadge: View {
+    let initials: String
+    let avatarURL: URL?
+    let size: CGFloat
+
+    var body: some View {
+        Group {
+            if let avatarURL {
+                AsyncImage(url: avatarURL) { phase in
+                    switch phase {
+                    case let .success(image):
+                        image
+                            .resizable()
+                            .scaledToFill()
+                    default:
+                        fallbackView
+                    }
+                }
+            } else {
+                fallbackView
+            }
+        }
+        .frame(width: size, height: size)
+        .clipShape(Circle())
+        .overlay(Circle().stroke(.white.opacity(0.16), lineWidth: 1))
+    }
+
+    private var fallbackView: some View {
+        ZStack {
+            Circle()
+                .fill(
+                    LinearGradient(
+                        colors: [
+                            Color(red: 0.47, green: 0.26, blue: 0.82),
+                            Color(red: 0.74, green: 0.58, blue: 1.0)
+                        ],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
+                )
+
+            Text(initials)
+                .font(.system(size: size * 0.3, weight: .bold, design: .rounded))
+                .foregroundStyle(.white)
+        }
+    }
+}
+
+private struct ManagementProfileImagePicker: UIViewControllerRepresentable {
+    let sourceType: UIImagePickerController.SourceType
+    let onImagePicked: (UIImage) -> Void
+
+    @Environment(\.dismiss) private var dismiss
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator(dismiss: dismiss, onImagePicked: onImagePicked)
+    }
+
+    func makeUIViewController(context: Context) -> UIImagePickerController {
+        let picker = UIImagePickerController()
+        picker.sourceType = sourceType
+        picker.mediaTypes = ["public.image"]
+        picker.allowsEditing = true
+        picker.delegate = context.coordinator
+        return picker
+    }
+
+    func updateUIViewController(_ uiViewController: UIImagePickerController, context: Context) { }
+
+    final class Coordinator: NSObject, UINavigationControllerDelegate, UIImagePickerControllerDelegate {
+        private let dismiss: DismissAction
+        private let onImagePicked: (UIImage) -> Void
+
+        init(dismiss: DismissAction, onImagePicked: @escaping (UIImage) -> Void) {
+            self.dismiss = dismiss
+            self.onImagePicked = onImagePicked
+        }
+
+        func imagePickerControllerDidCancel(_ picker: UIImagePickerController) {
+            dismiss()
+        }
+
+        func imagePickerController(
+            _ picker: UIImagePickerController,
+            didFinishPickingMediaWithInfo info: [UIImagePickerController.InfoKey: Any]
+        ) {
+            let image = (info[.editedImage] ?? info[.originalImage]) as? UIImage
+            dismiss()
+            if let image {
+                onImagePicked(image)
+            }
+        }
+    }
+}
+
+private struct ManagementProfilePersonalInfoView: View {
+    @Environment(\.dismiss) private var dismiss
+    @Environment(\.colorScheme) private var colorScheme
+
+    let accent: Color
+
+    private var cardTint: Color {
+        colorScheme == .dark ? Color(UIColor.secondarySystemGroupedBackground) : .white.opacity(0.22)
+    }
+
+    var body: some View {
+        MistiaPinnedTopBarScaffold(
+            tone: .standard,
+            title: mistiaLocalized(vi: "Thông tin cá nhân", en: "Personal information", ja: "個人情報"),
+            embedsInNavigationStack: false,
+            showsLeadingAvatar: false,
+            leadingSystemImage: "chevron.left",
+            trailingSystemImage: nil,
+            hidesSystemBackButton: true,
+            onLeadingTap: { dismiss() },
+            contentSpacing: 18
+        ) {
+            MistiaGlassCard(cornerRadius: 24, tint: cardTint) {
+                VStack(alignment: .leading, spacing: 18) {
+                    ManagementProfilePersonalInfoItem(
+                        title: mistiaLocalized(vi: "Tên và ảnh đại diện", en: "Name and profile photo", ja: "名前とプロフィール写真"),
+                        message: mistiaLocalized(
+                            vi: "Mistia dùng tên và ảnh đại diện để hiển thị hồ sơ của bạn trên thiết bị đã đăng nhập và trong các vùng liên quan đến tài khoản.",
+                            en: "Mistia uses your name and profile photo to present your account consistently across signed-in devices and account-related surfaces.",
+                            ja: "Mistia は、サインイン済みデバイスやアカウント関連画面でプロフィールを一貫して表示するために、名前とプロフィール写真を使用します。"
+                        )
+                    )
+
+                    ManagementProfilePersonalInfoItem(
+                        title: mistiaLocalized(vi: "Ngày sinh", en: "Birthday", ja: "生年月日"),
+                        message: mistiaLocalized(
+                            vi: "Ngày sinh giúp cá nhân hóa trải nghiệm trong tương lai, ví dụ các nhắc nhở hoặc thiết lập phù hợp với độ tuổi. Bạn có thể cập nhật lại bất kỳ lúc nào.",
+                            en: "Your birthday can help personalize future experiences such as reminders or age-appropriate settings. You can update it anytime.",
+                            ja: "生年月日は、将来のリマインダーや年齢に応じた設定などを個人化するために利用される場合があります。いつでも変更できます。"
+                        )
+                    )
+
+                    ManagementProfilePersonalInfoItem(
+                        title: mistiaLocalized(vi: "Quyền kiểm soát dữ liệu", en: "Data controls", ja: "データ管理"),
+                        message: mistiaLocalized(
+                            vi: "Bạn luôn có thể đăng xuất, tắt đồng bộ, hoặc xóa tài khoản cloud trong phần Hồ sơ. Dữ liệu local trên thiết bị vẫn được kiểm soát riêng theo các lựa chọn đó.",
+                            en: "You can always sign out, disable sync, or delete your cloud account from Profile. Local data on your device remains under the control of those choices.",
+                            ja: "プロフィール画面から、ログアウト、同期の無効化、クラウドアカウントの削除をいつでも行えます。ローカルデータはその選択に応じて管理されます。"
+                        )
+                    )
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+            }
+        }
+    }
+}
+
+private struct ManagementProfilePersonalInfoItem: View {
+    let title: String
+    let message: String
+
+    var bodyView: some View {
+        VStack(alignment: .leading, spacing: 7) {
+            Text(title)
+                .font(.system(size: 15.5, weight: .bold, design: .rounded))
+                .foregroundStyle(.primary)
+
+            Text(message)
+                .font(.system(size: 14, weight: .medium, design: .rounded))
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+    }
+
+    var body: some View {
+        bodyView
     }
 }
 

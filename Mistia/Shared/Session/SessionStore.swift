@@ -22,6 +22,12 @@ struct SessionSummary: Equatable {
     }
 }
 
+private struct SessionProfileOverride: Codable {
+    var displayName: String?
+    var avatarFileName: String?
+    var birthday: Date?
+}
+
 enum SessionAuthPhase: Equatable {
     case signIn
     case signUp
@@ -132,6 +138,30 @@ final class SessionStore {
 
     var canManageSync: Bool {
         currentSession != nil && isConfigured
+    }
+
+    func storedBirthday(for userID: UUID) -> Date? {
+        loadProfileOverride(for: userID)?.birthday
+    }
+
+    func updateProfile(
+        displayName: String,
+        birthday: Date?,
+        avatarJPEGData: Data? = nil
+    ) throws {
+        guard let currentSummary = summary else { return }
+
+        var override = loadProfileOverride(for: currentSummary.userID) ?? SessionProfileOverride()
+        let trimmedName = displayName.trimmingCharacters(in: .whitespacesAndNewlines)
+        override.displayName = trimmedName.isEmpty ? currentSummary.displayName : trimmedName
+        override.birthday = birthday
+
+        if let avatarJPEGData {
+            override.avatarFileName = try saveAvatarImageData(avatarJPEGData, for: currentSummary.userID)
+        }
+
+        saveProfileOverride(override, for: currentSummary.userID)
+        summary = applyProfileOverride(override, to: currentSummary)
     }
 
     func setAutoSyncEnabled(_ isEnabled: Bool) {
@@ -785,7 +815,9 @@ final class SessionStore {
             let validSession = try await authService.refreshSessionIfNeeded(session)
 
             currentSession = validSession
-            summary = SessionSummary(user: validSession.user)
+            let baseSummary = SessionSummary(user: validSession.user)
+            let profileOverride = loadProfileOverride(for: validSession.user.id)
+            summary = applyProfileOverride(profileOverride, to: baseSummary)
             lastErrorMessage = nil
             authBanner = nil
             authFieldErrors = [:]
@@ -1328,5 +1360,66 @@ private extension SessionSummary {
             email: resolvedEmail,
             avatarURL: resolvedAvatarURL
         )
+    }
+}
+
+private extension SessionStore {
+    func profileOverrideKey(for userID: UUID) -> String {
+        "\(MistiaAppStorageKey.sessionProfileOverridePrefix).\(userID.uuidString.lowercased())"
+    }
+
+    func loadProfileOverride(for userID: UUID) -> SessionProfileOverride? {
+        guard let data = userDefaults.data(forKey: profileOverrideKey(for: userID)) else {
+            return nil
+        }
+
+        return try? JSONDecoder().decode(SessionProfileOverride.self, from: data)
+    }
+
+    func saveProfileOverride(_ override: SessionProfileOverride, for userID: UUID) {
+        guard let data = try? JSONEncoder().encode(override) else { return }
+        userDefaults.set(data, forKey: profileOverrideKey(for: userID))
+    }
+
+    func applyProfileOverride(_ override: SessionProfileOverride?, to summary: SessionSummary) -> SessionSummary {
+        let resolvedDisplayName = {
+            guard let overrideName = override?.displayName?.trimmingCharacters(in: .whitespacesAndNewlines),
+                  !overrideName.isEmpty else {
+                return summary.displayName
+            }
+            return overrideName
+        }()
+        let resolvedAvatarURL = override?.avatarFileName.flatMap(profileAvatarURL(forFileName:)) ?? summary.avatarURL
+        return SessionSummary(
+            userID: summary.userID,
+            displayName: resolvedDisplayName,
+            email: summary.email,
+            avatarURL: resolvedAvatarURL
+        )
+    }
+
+    func saveAvatarImageData(_ data: Data, for userID: UUID) throws -> String {
+        let directoryURL = try profileAvatarDirectoryURL()
+        let fileName = "\(userID.uuidString.lowercased()).jpg"
+        let fileURL = directoryURL.appendingPathComponent(fileName)
+        try data.write(to: fileURL, options: .atomic)
+        return fileName
+    }
+
+    func profileAvatarDirectoryURL() throws -> URL {
+        let baseURL = try FileManager.default.url(
+            for: .applicationSupportDirectory,
+            in: .userDomainMask,
+            appropriateFor: nil,
+            create: true
+        )
+        let directoryURL = baseURL.appendingPathComponent("ProfileAvatars", isDirectory: true)
+        try FileManager.default.createDirectory(at: directoryURL, withIntermediateDirectories: true)
+        return directoryURL
+    }
+
+    func profileAvatarURL(forFileName fileName: String) -> URL {
+        let baseURL = (try? profileAvatarDirectoryURL()) ?? FileManager.default.temporaryDirectory
+        return baseURL.appendingPathComponent(fileName)
     }
 }
