@@ -838,12 +838,14 @@ private extension LedgerWalletKind {
         switch self {
         case .cash:
             .cash
-        case .payPay:
+        case .payPay, .eWallet, .prepaid:
             .ewallet
         case .bank:
             .bank
         case .creditCard:
             .creditCard
+        case .investment, .crypto, .other:
+            .other
         }
     }
 }

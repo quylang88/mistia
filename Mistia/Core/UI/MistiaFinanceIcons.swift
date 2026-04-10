@@ -89,6 +89,11 @@ enum MistiaFinanceIconRegistry {
         option(token: LedgerWalletKind.payPay.defaultIconSymbolName, title: LedgerWalletKind.payPay.title, group: .wallet),
         option(token: LedgerWalletKind.bank.defaultIconSymbolName, title: LedgerWalletKind.bank.title, group: .wallet),
         option(token: LedgerWalletKind.creditCard.defaultIconSymbolName, title: LedgerWalletKind.creditCard.title, group: .wallet),
+        option(token: LedgerWalletKind.eWallet.defaultIconSymbolName, title: LedgerWalletKind.eWallet.title, group: .wallet),
+        option(token: LedgerWalletKind.prepaid.defaultIconSymbolName, title: LedgerWalletKind.prepaid.title, group: .wallet),
+        option(token: LedgerWalletKind.investment.defaultIconSymbolName, title: LedgerWalletKind.investment.title, group: .wallet),
+        option(token: LedgerWalletKind.crypto.defaultIconSymbolName, title: LedgerWalletKind.crypto.title, group: .wallet),
+        option(token: LedgerWalletKind.other.defaultIconSymbolName, title: LedgerWalletKind.other.title, group: .wallet),
         option(token: "mistia.wallet.savings", title: mistiaLocalized(vi: "Ví tiết kiệm", en: "Savings wallet", ja: "Savings wallet"), group: .wallet),
         option(token: "mistia.wallet.travel", title: mistiaLocalized(vi: "Ví du lịch", en: "Travel wallet", ja: "Travel wallet"), group: .wallet),
         option(token: "mistia.wallet.family", title: mistiaLocalized(vi: "Ví gia đình", en: "Family wallet", ja: "Family wallet"), group: .wallet),
@@ -147,7 +152,12 @@ enum MistiaFinanceIconRegistry {
         "mistia.wallet.family": descriptor(token: "mistia.wallet.family", fallbackSystemName: "person.2.fill", baseHex: "#FF6D8A", group: .wallet, badgeSystemName: "heart.fill"),
         "mistia.wallet.emergency": descriptor(token: "mistia.wallet.emergency", fallbackSystemName: "cross.case.fill", baseHex: "#F45C7E", group: .wallet, badgeSystemName: "shield.fill"),
         "mistia.wallet.credit_card_premium": descriptor(token: "mistia.wallet.credit_card_premium", fallbackSystemName: "creditcard.fill", baseHex: "#A76BFF", group: .wallet, badgeSystemName: "crown.fill"),
-        "mistia.wallet.credit_card_rewards": descriptor(token: "mistia.wallet.credit_card_rewards", fallbackSystemName: "creditcard.fill", baseHex: "#FFB347", group: .wallet, badgeSystemName: "gift.fill")
+        "mistia.wallet.credit_card_rewards": descriptor(token: "mistia.wallet.credit_card_rewards", fallbackSystemName: "creditcard.fill", baseHex: "#FFB347", group: .wallet, badgeSystemName: "gift.fill"),
+        "mistia.wallet.e_wallet": descriptor(token: "mistia.wallet.e_wallet", fallbackSystemName: "qrcode", baseHex: "#F26A5A", group: .wallet, badgeSystemName: "barcode.viewfinder"),
+        "mistia.wallet.prepaid": descriptor(token: "mistia.wallet.prepaid", fallbackSystemName: "creditcard.fill", baseHex: "#FFB347", group: .wallet, badgeSystemName: "creditcard.and.123"),
+        "mistia.wallet.investment": descriptor(token: "mistia.wallet.investment", fallbackSystemName: "chart.line.uptrend.xyaxis", baseHex: "#9A67FF", group: .wallet, badgeSystemName: "chart.pie.fill"),
+        "mistia.wallet.crypto": descriptor(token: "mistia.wallet.crypto", fallbackSystemName: "bitcoinsign.circle.fill", baseHex: "#F59B3F", group: .wallet, badgeSystemName: "shield.fill"),
+        "mistia.wallet.other": descriptor(token: "mistia.wallet.other", fallbackSystemName: "wallet.pass.fill", baseHex: "#8A8A8E", group: .wallet, badgeSystemName: "questionmark")
     ]
 
     private static let fluentAssetNamesByToken: [String: String] = {
@@ -331,6 +341,7 @@ enum MistiaFinanceIconRegistry {
         ])
 
         assign("ic_fluent_apps_list_detail_24_color", [
+            "mistia.wallet.other",
             "mistia.category.expense.family_children.family_other",
             "mistia.category.expense.entertainment_social.subscriptions",
             "mistia.category.parent.expense.other",
@@ -436,6 +447,7 @@ enum MistiaFinanceIconRegistry {
             "mistia.category.parent.expense.financial_obligations",
             "mistia.category.expense.financial_obligations.loan_repayment",
             "mistia.wallet.credit_card",
+            "mistia.wallet.prepaid",
             "mistia.plan.card_bill"
         ])
 
@@ -494,11 +506,14 @@ enum MistiaFinanceIconRegistry {
 
         assign("ic_fluent_vault_24_color", [
             "mistia.plan.loan",
-            "mistia.wallet.emergency"
+            "mistia.wallet.emergency",
+            "mistia.wallet.investment",
+            "mistia.wallet.crypto"
         ])
 
         assign("ic_fluent_scan_type_24_color", [
-            "mistia.wallet.paypay"
+            "mistia.wallet.paypay",
+            "mistia.wallet.e_wallet"
         ])
 
         assign("ic_fluent_arrow_square_down_24_color", [

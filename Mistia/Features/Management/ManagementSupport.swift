@@ -158,7 +158,7 @@ extension LedgerWallet {
 
     var subtitleText: String? {
         switch kind {
-        case .cash, .payPay:
+        case .cash, .payPay, .eWallet, .prepaid, .investment, .crypto, .other:
             return nil
         case .bank:
             return institutionDisplayName

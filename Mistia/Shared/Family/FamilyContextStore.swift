@@ -155,6 +155,7 @@ final class FamilyContextStore {
         guard let session = refreshedSession ?? nil else { return }
 
         isLoading = true
+        lastErrorMessage = nil
         defer { isLoading = false }
 
         do {

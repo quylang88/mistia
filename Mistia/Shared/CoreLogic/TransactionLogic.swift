@@ -445,7 +445,7 @@ nonisolated enum TransactionLogic {
         switch kind {
         case .creditCard:
             amount
-        case .cash, .payPay, .bank:
+        case .cash, .payPay, .bank, .eWallet, .prepaid, .investment, .crypto, .other:
             -amount
         }
     }
@@ -454,7 +454,7 @@ nonisolated enum TransactionLogic {
         switch kind {
         case .creditCard:
             -amount
-        case .cash, .payPay, .bank:
+        case .cash, .payPay, .bank, .eWallet, .prepaid, .investment, .crypto, .other:
             amount
         }
     }

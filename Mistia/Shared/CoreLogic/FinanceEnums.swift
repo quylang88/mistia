@@ -54,6 +54,11 @@ nonisolated enum LedgerWalletKind: String, CaseIterable, Identifiable, Codable {
     case payPay
     case bank
     case creditCard
+    case eWallet
+    case prepaid
+    case investment
+    case crypto
+    case other
 
     var id: String { rawValue }
 
@@ -67,6 +72,16 @@ nonisolated enum LedgerWalletKind: String, CaseIterable, Identifiable, Codable {
             mistiaLocalized(vi: "Ngân hàng", en: "Bank", ja: "銀行")
         case .creditCard:
             mistiaLocalized(vi: "Credit card", en: "Credit card", ja: "クレジットカード")
+        case .eWallet:
+            mistiaLocalized(vi: "Ví điện tử / Barcode", en: "E-Wallet / Barcode", ja: "電子マネー / バーコード決済")
+        case .prepaid:
+            mistiaLocalized(vi: "Thẻ trả trước / IC", en: "Prepaid / IC Card", ja: "プリペイド / ICカード")
+        case .investment:
+            mistiaLocalized(vi: "Đầu tư / Chứng khoán", en: "Investment / Stocks", ja: "投資 / 証券")
+        case .crypto:
+            mistiaLocalized(vi: "Tiền ảo / Crypto", en: "Crypto / Digital Assets", ja: "仮想通貨 / クリプト")
+        case .other:
+            mistiaLocalized(vi: "Loại ví khác", en: "Other wallet", ja: "その他のウォレット")
         }
     }
 
@@ -80,6 +95,16 @@ nonisolated enum LedgerWalletKind: String, CaseIterable, Identifiable, Codable {
             "mistia.wallet.bank"
         case .creditCard:
             "mistia.wallet.credit_card"
+        case .eWallet:
+            "mistia.wallet.e_wallet"
+        case .prepaid:
+            "mistia.wallet.prepaid"
+        case .investment:
+            "mistia.wallet.investment"
+        case .crypto:
+            "mistia.wallet.crypto"
+        case .other:
+            "mistia.wallet.other"
         }
     }
 
@@ -93,6 +118,16 @@ nonisolated enum LedgerWalletKind: String, CaseIterable, Identifiable, Codable {
             "#5B7BFF"
         case .creditCard:
             "#7C85A3"
+        case .eWallet:
+            "#F26A5A"
+        case .prepaid:
+            "#FFB347"
+        case .investment:
+            "#9A67FF"
+        case .crypto:
+            "#F59B3F"
+        case .other:
+            "#8A8A8E"
         }
     }
 
@@ -106,6 +141,16 @@ nonisolated enum LedgerWalletKind: String, CaseIterable, Identifiable, Codable {
             ["building.columns.fill"]
         case .creditCard:
             ["creditcard.fill"]
+        case .eWallet:
+            ["qrcode", "barcode.viewfinder"]
+        case .prepaid:
+            ["creditcard.fill", "creditcard.and.123"]
+        case .investment:
+            ["chart.line.uptrend.xyaxis", "chart.pie.fill"]
+        case .crypto:
+            ["bitcoinsign.circle.fill", "bitcoinsign.square.fill"]
+        case .other:
+            ["wallet.pass.fill", "tray.full.fill"]
         }
     }
 
@@ -128,6 +173,16 @@ nonisolated enum LedgerWalletKind: String, CaseIterable, Identifiable, Codable {
             "building.columns.fill"
         case .creditCard:
             "creditcard.fill"
+        case .eWallet:
+            "qrcode"
+        case .prepaid:
+            "creditcard.fill"
+        case .investment:
+            "chart.line.uptrend.xyaxis"
+        case .crypto:
+            "bitcoinsign.circle.fill"
+        case .other:
+            "wallet.pass.fill"
         }
     }
 
