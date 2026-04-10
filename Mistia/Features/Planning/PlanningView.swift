@@ -282,6 +282,7 @@ struct PlanningView: View {
             trailingSystemImage: "calendar",
             onTrailingTap: { isMonthPickerPresented = true },
             contentSpacing: 18,
+            titleDisplayMode: .large,
             pinnedHeader: {
                 VStack(alignment: .leading, spacing: 8) {
                     FamilyContextChipBar()

@@ -2164,10 +2164,11 @@ private struct ManagementEditProfileModalScaffold<Content: View>: View {
                 modalBackground
                     .ignoresSafeArea()
 
-                ScrollView(showsIndicators: false) {
+                ScrollView(.vertical, showsIndicators: false) {
                     VStack(spacing: 18) {
                         content
                     }
+                    .frame(maxWidth: .infinity)
                     .padding(.horizontal, 18)
                     .padding(.top, 8)
                     .padding(.bottom, 40)

@@ -394,6 +394,7 @@ struct MistiaPinnedTopBarScaffold<PinnedHeader: View, Content: View>: View {
     var onTrailingTap: () -> Void = {}
     var contentSpacing: CGFloat = 18
     var contentBottomPadding: CGFloat = 150
+    var titleDisplayMode: NavigationBarItem.TitleDisplayMode = .inline
     @ViewBuilder let pinnedHeader: PinnedHeader
     @ViewBuilder let content: Content
 
@@ -411,6 +412,7 @@ struct MistiaPinnedTopBarScaffold<PinnedHeader: View, Content: View>: View {
         onTrailingTap: @escaping () -> Void = {},
         contentSpacing: CGFloat = 18,
         contentBottomPadding: CGFloat = 150,
+        titleDisplayMode: NavigationBarItem.TitleDisplayMode = .inline,
         @ViewBuilder pinnedHeader: () -> PinnedHeader,
         @ViewBuilder content: () -> Content
     ) {
@@ -427,6 +429,7 @@ struct MistiaPinnedTopBarScaffold<PinnedHeader: View, Content: View>: View {
         self.onTrailingTap = onTrailingTap
         self.contentSpacing = contentSpacing
         self.contentBottomPadding = contentBottomPadding
+        self.titleDisplayMode = titleDisplayMode
         self.pinnedHeader = pinnedHeader()
         self.content = content()
     }
@@ -445,10 +448,11 @@ struct MistiaPinnedTopBarScaffold<PinnedHeader: View, Content: View>: View {
 
     @ViewBuilder
     private var scrollableContent: some View {
-        ScrollView(showsIndicators: false) {
+        ScrollView(.vertical, showsIndicators: false) {
             VStack(spacing: contentSpacing) {
                 content
             }
+            .frame(maxWidth: .infinity)
             .padding(.horizontal, 18)
             .padding(.top, 8)
             .padding(.bottom, contentBottomPadding)
@@ -473,7 +477,7 @@ struct MistiaPinnedTopBarScaffold<PinnedHeader: View, Content: View>: View {
             }
         }
         .navigationTitle(title)
-        .navigationBarTitleDisplayMode(.inline)
+        .navigationBarTitleDisplayMode(titleDisplayMode)
         .navigationBarBackButtonHidden(hidesSystemBackButton)
         .toolbar {
             leadingToolbarContent
@@ -549,6 +553,7 @@ extension MistiaPinnedTopBarScaffold where PinnedHeader == EmptyView {
         onTrailingTap: @escaping () -> Void = {},
         contentSpacing: CGFloat = 18,
         contentBottomPadding: CGFloat = 150,
+        titleDisplayMode: NavigationBarItem.TitleDisplayMode = .inline,
         @ViewBuilder content: () -> Content
     ) {
         self.init(
@@ -565,6 +570,7 @@ extension MistiaPinnedTopBarScaffold where PinnedHeader == EmptyView {
             onTrailingTap: onTrailingTap,
             contentSpacing: contentSpacing,
             contentBottomPadding: contentBottomPadding,
+            titleDisplayMode: titleDisplayMode,
             pinnedHeader: { EmptyView() },
             content: content
         )

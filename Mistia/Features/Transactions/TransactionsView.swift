@@ -230,6 +230,7 @@ struct TransactionsView: View {
             trailingSystemImage: nil,
             contentSpacing: 18,
             contentBottomPadding: 150,
+            titleDisplayMode: .large,
             pinnedHeader: {
                 VStack(alignment: .leading, spacing: 8) {
                     FamilyContextChipBar()

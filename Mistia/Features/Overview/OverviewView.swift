@@ -198,7 +198,8 @@ struct OverviewView: View {
             title: mistiaLocalized(vi: "Tổng quan", en: "Overview", ja: "ホーム"),
             leadingInitials: sessionStore.summary?.initials ?? "MI",
             leadingAvatarURL: sessionStore.summary?.avatarURL,
-            contentSpacing: 18
+            contentSpacing: 18,
+            titleDisplayMode: .large
         ) {
             FamilyContextChipBar()
             OverviewHeroCard(

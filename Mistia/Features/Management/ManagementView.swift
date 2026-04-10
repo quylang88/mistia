@@ -115,7 +115,8 @@ struct ManagementView: View {
                 showsLeadingAvatar: false,
                 trailingSystemImage: "gearshape",
                 onTrailingTap: { destination = .settings },
-                contentSpacing: 20
+                contentSpacing: 20,
+                titleDisplayMode: .large
             ) {
                 FamilyContextChipBar()
                 profileSection

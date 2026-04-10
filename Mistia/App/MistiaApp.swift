@@ -74,7 +74,7 @@ private struct MistiaProtectedLaunchView: View {
             )
             .ignoresSafeArea()
 
-            ScrollView {
+            ScrollView(.vertical) {
                 VStack(alignment: .leading, spacing: 18) {
                     Text(mistiaLocalized(
                         vi: "Mistia đang bảo vệ dữ liệu của bạn",
@@ -145,6 +145,7 @@ private struct MistiaProtectedLaunchView: View {
                 }
                 .padding(24)
                 .frame(maxWidth: 720, alignment: .leading)
+                .frame(maxWidth: .infinity)
             }
         }
     }
