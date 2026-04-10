@@ -182,6 +182,7 @@ struct MistiaCategoryPickerSheet: View {
 
     @State private var mode: MistiaCategoryPickerMode = .recent
     @State private var searchText = ""
+    @State private var expandedSectionIDs: Set<UUID> = []
     @FocusState private var isSearchFieldFocused: Bool
 
     init(
@@ -272,6 +273,11 @@ struct MistiaCategoryPickerSheet: View {
                     }
                 }
             }
+            .onChange(of: mode) { _, newMode in
+                if newMode == .all {
+                    isSearchFieldFocused = false
+                }
+            }
             .background(Color(UIColor.systemGroupedBackground))
             .navigationTitle(title)
             .navigationBarTitleDisplayMode(.inline)
@@ -357,29 +363,110 @@ struct MistiaCategoryPickerSheet: View {
     }
 
     private var allSectionsContent: some View {
-        ForEach(filteredAllSections) { section in
-            VStack(alignment: .leading, spacing: 10) {
-                Text(section.parent.localizedDisplayName)
-                    .font(.system(size: 13, weight: .bold, design: .rounded))
-                    .foregroundStyle(.secondary)
+        VStack(spacing: 0) {
+            ForEach(Array(filteredAllSections.enumerated()), id: \.element.id) { index, section in
+                VStack(spacing: 0) {
+                    Button {
+                        withAnimation(.snappy) {
+                            if expandedSectionIDs.contains(section.id) {
+                                expandedSectionIDs.remove(section.id)
+                            } else {
+                                expandedSectionIDs.insert(section.id)
+                            }
+                        }
+                    } label: {
+                        HStack(spacing: 12) {
+                            MistiaFinanceIconView(
+                                icon: section.parent.iconSymbolName,
+                                fallbackColor: section.parent.iconColor,
+                                size: 34
+                            )
 
-                VStack(spacing: 8) {
-                    if allowsParentSelectionInAll, section.includesParent {
-                        rowButton(
-                            category: section.parent,
-                            subtitle: allModeSubtitle(section.parent)
-                        )
-                    }
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text(section.parent.localizedDisplayName)
+                                    .font(.system(size: 16, weight: .semibold, design: .rounded))
+                                    .foregroundStyle(.primary)
 
-                    ForEach(section.children) { category in
-                        rowButton(
-                            category: category,
-                            subtitle: allModeSubtitle(category)
-                        )
+                                Text(
+                                    mistiaLocalized(
+                                        vi: "\(section.children.count) danh mục con",
+                                        en: "\(section.children.count) child categories",
+                                        ja: "子カテゴリ \(section.children.count) 件"
+                                    )
+                                )
+                                    .font(.system(size: 12.5, weight: .medium, design: .rounded))
+                                    .foregroundStyle(.secondary)
+                            }
+                            
+                            Spacer()
+                            
+                            Image(systemName: expandedSectionIDs.contains(section.id) ? "chevron.up" : "chevron.down")
+                                .font(.system(size: 11, weight: .bold))
+                                .foregroundStyle(.tertiary)
+                        }
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 12)
+                        .contentShape(Rectangle())
                     }
+                    .buttonStyle(.plain)
+
+                    if expandedSectionIDs.contains(section.id) {
+                        VStack(spacing: 0) {
+                            if section.children.isEmpty && (!allowsParentSelectionInAll || !section.includesParent) {
+                                Text(
+                                    mistiaLocalized(
+                                        vi: "Chưa có danh mục con.",
+                                        en: "No child categories.",
+                                        ja: "子カテゴリがありません。"
+                                    )
+                                )
+                                    .font(.system(size: 13, weight: .medium, design: .rounded))
+                                    .foregroundStyle(.secondary)
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                    .padding(.horizontal, 14)
+                                    .padding(.vertical, 12)
+                            } else {
+                                if allowsParentSelectionInAll, section.includesParent {
+                                    rowButton(
+                                        category: section.parent,
+                                        subtitle: allModeSubtitle(section.parent),
+                                        showsBackground: false
+                                    )
+                                    
+                                    if !section.children.isEmpty {
+                                        Divider().padding(.leading, 52)
+                                    }
+                                }
+
+                                ForEach(Array(section.children.enumerated()), id: \.element.id) { childIndex, category in
+                                    rowButton(
+                                        category: category,
+                                        subtitle: allModeSubtitle(category),
+                                        showsBackground: false,
+                                        indentation: 38
+                                    )
+                                    
+                                    if childIndex < section.children.count - 1 {
+                                        Divider().padding(.leading, 52 + 38)
+                                    }
+                                }
+                            }
+                        }
+                        .background(Color.primary.opacity(0.015)) // Subtle grouping
+                        .transition(.move(edge: .top).combined(with: .opacity))
+                    }
+                }
+                
+                if index < filteredAllSections.count - 1 {
+                    Divider().padding(.leading, 52)
                 }
             }
         }
+        .background {
+            RoundedRectangle(cornerRadius: 20, style: .continuous)
+                .fill(Color(UIColor.secondarySystemBackground))
+        }
+        .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
     }
 
     private func quickSection(
@@ -403,45 +490,65 @@ struct MistiaCategoryPickerSheet: View {
         }
     }
 
-    private func rowButton(category: TransactionCategory, subtitle: String?) -> some View {
-        Button {
-            onSelect(category)
-            dismiss()
-        } label: {
-            HStack(spacing: 12) {
-                MistiaFinanceIconView(
-                    icon: category.iconSymbolName,
-                    fallbackColor: category.iconColor,
-                    size: 34
-                )
-
-                VStack(alignment: .leading, spacing: 3) {
-                    Text(category.localizedDisplayName)
-                        .foregroundStyle(.primary)
-
-                    if let subtitle, !subtitle.isEmpty {
-                        Text(subtitle)
-                            .font(.footnote)
-                            .foregroundStyle(.secondary)
-                    }
+    private func rowButton(category: TransactionCategory, subtitle: String?, showsBackground: Bool = true, indentation: CGFloat = 0) -> some View {
+        Group {
+            if showsBackground {
+                Button {
+                    onSelect(category)
+                    dismiss()
+                } label: {
+                    rowButtonContent(category: category, subtitle: subtitle, showsBackground: showsBackground, indentation: indentation)
                 }
+                .buttonStyle(MistiaPressableButtonStyle(cornerRadius: 16, tint: accent))
+            } else {
+                Button {
+                    onSelect(category)
+                    dismiss()
+                } label: {
+                    rowButtonContent(category: category, subtitle: subtitle, showsBackground: showsBackground, indentation: indentation)
+                }
+                .buttonStyle(.plain)
+            }
+        }
+    }
 
-                Spacer(minLength: 8)
+    private func rowButtonContent(category: TransactionCategory, subtitle: String?, showsBackground: Bool, indentation: CGFloat) -> some View {
+        HStack(spacing: 12) {
+            MistiaFinanceIconView(
+                icon: category.iconSymbolName,
+                fallbackColor: category.iconColor,
+                size: 34
+            )
 
-                if category.id == selectedCategoryID {
-                    Image(systemName: "checkmark")
-                        .font(.system(size: 13, weight: .bold))
-                        .foregroundStyle(.tint)
+            VStack(alignment: .leading, spacing: 3) {
+                Text(category.localizedDisplayName)
+                    .foregroundStyle(.primary)
+
+                if let subtitle, !subtitle.isEmpty {
+                    Text(subtitle)
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
                 }
             }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 10)
-            .background {
+
+            Spacer(minLength: 8)
+
+            if category.id == selectedCategoryID {
+                Image(systemName: "checkmark")
+                    .font(.system(size: 13, weight: .bold))
+                    .foregroundStyle(.tint)
+            }
+        }
+        .padding(.leading, 12 + indentation)
+        .padding(.trailing, 12)
+        .padding(.vertical, 10)
+        .background {
+            if showsBackground {
                 RoundedRectangle(cornerRadius: 16, style: .continuous)
                     .fill(Color(UIColor.secondarySystemBackground))
             }
         }
-        .buttonStyle(MistiaPressableButtonStyle(cornerRadius: 16, tint: accent))
+        .contentShape(Rectangle())
     }
 
     private var filteredAllSections: [FilteredSection] {

@@ -528,17 +528,64 @@ enum MistiaFinanceIconRegistry {
             "mistia.debt.repay"
         ])
 
-        // Final semantic overrides to reduce obvious icon collisions across categories.
         assign("ic_fluent_building_store_24_color", [
             "mistia.category.expense.food.grocery"
+        ])
+
+        assign("ic_fluent_food_24_color", [
+            "mistia.category.expense.food.dine_out"
         ])
 
         assign("ic_fluent_chat_24_color", [
             "mistia.category.expense.food.cafe_tea"
         ])
 
+        assign("ic_fluent_scan_type_24_color", [
+            "mistia.category.expense.food.daily_supplies"
+        ])
+
+        assign("ic_fluent_send_24_color", [
+            "mistia.category.expense.food.delivery"
+        ])
+
+        assign("ic_fluent_people_chat_24_color", [
+            "mistia.category.expense.food.business_meals"
+        ])
+        
+        assign("ic_fluent_lightbulb_24_color", [
+            "mistia.category.expense.food.small_appliances"
+        ])
+
         assign("ic_fluent_reward_24_color", [
             "mistia.category.expense.food.snacks"
+        ])
+
+        assign("ic_fluent_arrow_square_down_24_color", [
+            "mistia.category.expense.cost_of_goods.import_goods"
+        ])
+
+        assign("ic_fluent_location_ripple_24_color", [
+            "mistia.category.expense.cost_of_goods.goods_sourcing"
+        ])
+
+        assign("ic_fluent_fast_forward_circle_24_color", [
+            "mistia.category.expense.cost_of_goods.shipping_fee"
+        ])
+
+        assign("ic_fluent_ribbon_24_color", [
+            "mistia.category.expense.cost_of_goods.packaging"
+        ])
+
+        assign("ic_fluent_globe_24_color", [
+            "mistia.category.expense.cost_of_goods.platform_fee"
+        ])
+
+        assign("ic_fluent_megaphone_loud_24_color", [
+            "mistia.category.expense.cost_of_goods.marketing_ads"
+        ])
+
+        assign("ic_fluent_receipt_24_color", [
+            "mistia.category.expense.cost_of_goods.other_sales_cost"
         ])
 
         assign("ic_fluent_book_contacts_24_color", [

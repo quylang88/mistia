@@ -252,6 +252,7 @@ nonisolated enum MistiaSystemCategoryParentKey: String, CaseIterable, Codable, I
     case mobilityTravel = "parent_expense_mobility_travel"
     case personalLifestyle = "parent_expense_personal_lifestyle"
     case expenseFood = "parent_expense_food"
+    case expenseCostOfGoods = "parent_expense_cost_of_goods"
     case expenseHomeBills = "parent_expense_home_bills"
     case expenseFamilyChildren = "parent_expense_family_children"
     case expenseTransportVehicle = "parent_expense_transport_vehicle"
@@ -286,7 +287,8 @@ nonisolated enum MistiaSystemCategoryParentKey: String, CaseIterable, Codable, I
         .livingExpense: .init(kind: .expense, title: "Sinh hoạt", iconToken: "mistia.category.parent.legacy.living", fallbackSystemName: "house.fill", iconColorHex: "#FF9F1C", group: .home, activeDefault: false, aliases: []),
         .mobilityTravel: .init(kind: .expense, title: "Di chuyển & chuyến đi", iconToken: "mistia.category.parent.legacy.mobility_travel", fallbackSystemName: "airplane", iconColorHex: "#5B7BFF", group: .mobility, activeDefault: false, aliases: []),
         .personalLifestyle: .init(kind: .expense, title: "Cá nhân & phong cách sống", iconToken: "mistia.category.parent.legacy.personal_lifestyle", fallbackSystemName: "sparkles", iconColorHex: "#F26A5A", group: .personal, activeDefault: false, aliases: []),
-        .expenseFood: .init(kind: .expense, title: "Ăn uống", iconToken: "mistia.category.parent.expense.food", fallbackSystemName: "fork.knife", iconColorHex: "#FF8A4C", group: .food, activeDefault: true, aliases: []),
+        .expenseFood: .init(kind: .expense, title: "Sinh hoạt", iconToken: "mistia.category.parent.expense.food", fallbackSystemName: "cart.fill", iconColorHex: "#FF8A4C", group: .food, activeDefault: true, aliases: []),
+        .expenseCostOfGoods: .init(kind: .expense, title: "Tiền hàng", iconToken: "mistia.category.parent.expense.cost_of_goods", fallbackSystemName: "shippingbox.fill", iconColorHex: "#4C8DFF", group: .work, activeDefault: true, aliases: []),
         .expenseHomeBills: .init(kind: .expense, title: "Nhà ở & hóa đơn", iconToken: "mistia.category.parent.expense.home_bills", fallbackSystemName: "house.fill", iconColorHex: "#5B7BFF", group: .home, activeDefault: true, aliases: []),
         .expenseFamilyChildren: .init(kind: .expense, title: "Con cái", iconToken: "mistia.category.parent.expense.family_children", fallbackSystemName: "person.2.fill", iconColorHex: "#FF6D8A", group: .family, activeDefault: true, aliases: ["Gia đình & con cái"]),
         .expenseTransportVehicle: .init(kind: .expense, title: "Đi lại & xe cộ", iconToken: "mistia.category.parent.expense.transport_vehicle", fallbackSystemName: "car.fill", iconColorHex: "#2DAA9E", group: .mobility, activeDefault: true, aliases: []),
@@ -309,6 +311,7 @@ nonisolated enum MistiaSystemCategoryParentKey: String, CaseIterable, Codable, I
 
     static let activeDefaults: [Self] = [
         .expenseFood,
+        .expenseCostOfGoods,
         .expenseHomeBills,
         .expenseFamilyChildren,
         .expenseTransportVehicle,
@@ -371,10 +374,20 @@ nonisolated enum MistiaSystemCategoryKey: String, CaseIterable, Codable, Identif
     case education
     case investment
     case grocery
+    case dailySupplies = "daily_supplies"
     case dineOut = "dine_out"
+    case businessMeals = "business_meals"
     case cafeTea = "cafe_tea"
     case foodDelivery = "food_delivery"
     case snacks
+    case smallAppliances = "small_appliances"
+    case importGoods = "import_goods"
+    case goodsSourcing = "goods_sourcing"
+    case shippingFee = "shipping_fee"
+    case packaging
+    case platformFee = "platform_fee"
+    case marketingAds = "marketing_ads"
+    case otherSalesCost = "other_sales_cost"
     case rent
     case electricity
     case water
@@ -536,10 +549,20 @@ nonisolated enum MistiaSystemCategoryKey: String, CaseIterable, Codable, Identif
         .education: .init(title: "Giáo dục", parentKey: .personalLifestyle, iconToken: "mistia.category.legacy.education", fallbackSystemName: "book.closed.fill", iconColorHex: "#9A67FF", group: .work, activeDefault: false, aliases: []),
         .investment: .init(title: "Đầu tư", parentKey: .incomeInvestmentFinance, iconToken: "mistia.category.legacy.investment", fallbackSystemName: "chart.line.uptrend.xyaxis", iconColorHex: "#57B7FF", group: .finance, activeDefault: false, aliases: []),
         .grocery: .init(title: "Đi chợ", parentKey: .expenseFood, iconToken: "mistia.category.expense.food.grocery", fallbackSystemName: "basket.fill", iconColorHex: "#FF8A4C", group: .food, activeDefault: true, aliases: ["Đi chợ / thực phẩm"]),
+        .dailySupplies: .init(title: "Đồ tiêu dùng", parentKey: .expenseFood, iconToken: "mistia.category.expense.food.daily_supplies", fallbackSystemName: "bag.fill", iconColorHex: "#A76BFF", group: .food, activeDefault: true, aliases: []),
         .dineOut: .init(title: "Ăn ngoài", parentKey: .expenseFood, iconToken: "mistia.category.expense.food.dine_out", fallbackSystemName: "fork.knife.circle.fill", iconColorHex: "#FF8A4C", group: .food, activeDefault: true, aliases: []),
+        .businessMeals: .init(title: "Ăn uống công việc", parentKey: .expenseFood, iconToken: "mistia.category.expense.food.business_meals", fallbackSystemName: "briefcase.fill", iconColorHex: "#2DAA9E", group: .food, activeDefault: true, aliases: []),
         .cafeTea: .init(title: "Cafe / trà sữa", parentKey: .expenseFood, iconToken: "mistia.category.expense.food.cafe_tea", fallbackSystemName: "cup.and.saucer.fill", iconColorHex: "#C46A6A", group: .food, activeDefault: true, aliases: []),
         .foodDelivery: .init(title: "Đặt đồ ăn", parentKey: .expenseFood, iconToken: "mistia.category.expense.food.delivery", fallbackSystemName: "takeoutbag.and.cup.and.straw.fill", iconColorHex: "#FF7A59", group: .food, activeDefault: true, aliases: []),
         .snacks: .init(title: "Ăn vặt / bánh kẹo", parentKey: .expenseFood, iconToken: "mistia.category.expense.food.snacks", fallbackSystemName: "birthday.cake.fill", iconColorHex: "#FFB347", group: .food, activeDefault: true, aliases: []),
+        .smallAppliances: .init(title: "Đồ gia dụng nhỏ", parentKey: .expenseFood, iconToken: "mistia.category.expense.food.small_appliances", fallbackSystemName: "desktopcomputer", iconColorHex: "#7C85A3", group: .food, activeDefault: true, aliases: []),
+        .importGoods: .init(title: "Nhập hàng", parentKey: .expenseCostOfGoods, iconToken: "mistia.category.expense.cost_of_goods.import_goods", fallbackSystemName: "box.truck.fill", iconColorHex: "#5B7BFF", group: .work, activeDefault: true, aliases: []),
+        .goodsSourcing: .init(title: "Chi phí lấy hàng", parentKey: .expenseCostOfGoods, iconToken: "mistia.category.expense.cost_of_goods.goods_sourcing", fallbackSystemName: "cart.fill", iconColorHex: "#F59B3F", group: .work, activeDefault: true, aliases: []),
+        .shippingFee: .init(title: "Phí vận chuyển hàng", parentKey: .expenseCostOfGoods, iconToken: "mistia.category.expense.cost_of_goods.shipping_fee", fallbackSystemName: "car.fill", iconColorHex: "#2DAA9E", group: .work, activeDefault: true, aliases: []),
+        .packaging: .init(title: "Đóng gói / bao bì", parentKey: .expenseCostOfGoods, iconToken: "mistia.category.expense.cost_of_goods.packaging", fallbackSystemName: "shippingbox.fill", iconColorHex: "#FFB347", group: .work, activeDefault: true, aliases: []),
+        .platformFee: .init(title: "Chi phí sàn", parentKey: .expenseCostOfGoods, iconToken: "mistia.category.expense.cost_of_goods.platform_fee", fallbackSystemName: "building.2.fill", iconColorHex: "#4C8DFF", group: .work, activeDefault: true, aliases: []),
+        .marketingAds: .init(title: "Marketing / quảng cáo", parentKey: .expenseCostOfGoods, iconToken: "mistia.category.expense.cost_of_goods.marketing_ads", fallbackSystemName: "megaphone.fill", iconColorHex: "#FF6D8A", group: .work, activeDefault: true, aliases: []),
+        .otherSalesCost: .init(title: "Chi phí bán hàng khác", parentKey: .expenseCostOfGoods, iconToken: "mistia.category.expense.cost_of_goods.other_sales_cost", fallbackSystemName: "creditcard.fill", iconColorHex: "#8A8A8E", group: .work, activeDefault: true, aliases: []),
         .rent: .init(title: "Tiền nhà", parentKey: .expenseHomeBills, iconToken: "mistia.category.expense.home_bills.rent", fallbackSystemName: "house.fill", iconColorHex: "#5B7BFF", group: .home, activeDefault: true, aliases: ["Tiền nhà / thuê nhà"]),
         .electricity: .init(title: "Điện", parentKey: .expenseHomeBills, iconToken: "mistia.category.expense.home_bills.electricity", fallbackSystemName: "bolt.fill", iconColorHex: "#FFB347", group: .home, activeDefault: true, aliases: []),
         .water: .init(title: "Nước", parentKey: .expenseHomeBills, iconToken: "mistia.category.expense.home_bills.water", fallbackSystemName: "drop.fill", iconColorHex: "#57B7FF", group: .home, activeDefault: true, aliases: []),
@@ -626,10 +649,10 @@ nonisolated enum MistiaSystemCategoryKey: String, CaseIterable, Codable, Identif
         .commission: .init(title: "Hoa hồng", parentKey: .incomeSalaryWork, iconToken: "mistia.category.income.salary_work.commission", fallbackSystemName: "percent", iconColorHex: "#FF7A59", group: .income, activeDefault: true, aliases: []),
         .freelance: .init(title: "Làm thêm / freelance", parentKey: .incomeSalaryWork, iconToken: "mistia.category.income.salary_work.freelance", fallbackSystemName: "laptopcomputer", iconColorHex: "#4C8DFF", group: .income, activeDefault: true, aliases: ["Freelance"]),
         .overtime: .init(title: "OT / tăng ca", parentKey: .incomeSalaryWork, iconToken: "mistia.category.income.salary_work.overtime", fallbackSystemName: "clock.fill", iconColorHex: "#F59B3F", group: .income, activeDefault: true, aliases: []),
-        .sales: .init(title: "Bán hàng", parentKey: .incomeBusiness, iconToken: "mistia.category.income.business.sales", fallbackSystemName: "storefront.fill", iconColorHex: "#F26A5A", group: .income, activeDefault: true, aliases: []),
-        .serviceRevenue: .init(title: "Doanh thu dịch vụ", parentKey: .incomeBusiness, iconToken: "mistia.category.income.business.service_revenue", fallbackSystemName: "sparkles", iconColorHex: "#57B7FF", group: .income, activeDefault: true, aliases: []),
+        .sales: .init(title: "Doanh thu bán hàng", parentKey: .incomeBusiness, iconToken: "mistia.category.income.business.sales", fallbackSystemName: "storefront.fill", iconColorHex: "#F26A5A", group: .income, activeDefault: true, aliases: []),
+        .serviceRevenue: .init(title: "Thu dịch vụ", parentKey: .incomeBusiness, iconToken: "mistia.category.income.business.service_revenue", fallbackSystemName: "sparkles", iconColorHex: "#57B7FF", group: .income, activeDefault: true, aliases: []),
         .businessProfit: .init(title: "Lợi nhuận kinh doanh", parentKey: .incomeBusiness, iconToken: "mistia.category.income.business.business_profit", fallbackSystemName: "chart.bar.fill", iconColorHex: "#2DAA9E", group: .income, activeDefault: true, aliases: []),
-        .onlineCollaboratorIncome: .init(title: "Thu từ online / cộng tác", parentKey: .incomeBusiness, iconToken: "mistia.category.income.business.online_collaborator_income", fallbackSystemName: "person.2.fill", iconColorHex: "#5B7BFF", group: .income, activeDefault: true, aliases: []),
+        .onlineCollaboratorIncome: .init(title: "Thu từ online", parentKey: .incomeBusiness, iconToken: "mistia.category.income.business.online_collaborator_income", fallbackSystemName: "person.2.fill", iconColorHex: "#5B7BFF", group: .income, activeDefault: true, aliases: []),
         .otherBusinessIncome: .init(title: "Thu kinh doanh khác", parentKey: .incomeBusiness, iconToken: "mistia.category.income.business.other_business_income", fallbackSystemName: "tray.full.fill", iconColorHex: "#8A8A8E", group: .income, activeDefault: true, aliases: []),
         .bankInterest: .init(title: "Lãi ngân hàng", parentKey: .incomeInvestmentFinance, iconToken: "mistia.category.income.investment_finance.bank_interest", fallbackSystemName: "building.columns.fill", iconColorHex: "#5B7BFF", group: .finance, activeDefault: true, aliases: []),
         .dividends: .init(title: "Cổ tức", parentKey: .incomeInvestmentFinance, iconToken: "mistia.category.income.investment_finance.dividends", fallbackSystemName: "chart.pie.fill", iconColorHex: "#A76BFF", group: .finance, activeDefault: true, aliases: []),
@@ -655,7 +678,8 @@ nonisolated enum MistiaSystemCategoryKey: String, CaseIterable, Codable, Identif
     ]
 
     static let activeDefaults: [Self] = [
-        .grocery, .dineOut, .cafeTea, .foodDelivery, .snacks,
+        .grocery, .dailySupplies, .dineOut, .businessMeals, .cafeTea, .foodDelivery, .snacks, .smallAppliances,
+        .importGoods, .goodsSourcing, .shippingFee, .packaging, .platformFee, .marketingAds, .otherSalesCost,
         .rent, .mortgageInstallment, .electricity, .water, .internet, .phone, .gas, .condoFee, .homeRepair, .furnitureAppliance,
         .diapersMilk, .babyFood, .childSupplies, .childToys, .schoolBooksSupplies, .childTuition, .childExtracurricular, .childMedical, .childMedicine, .babyGear, .childcare, .familyOther,
         .fuel, .parking, .grabTaxi, .publicTransport, .vehicleMaintenance, .vehicleRepair, .carWash, .tolls, .vehicleInsurance, .vehicleRegistration,

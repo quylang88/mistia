@@ -191,6 +191,13 @@ enum MistiaBootstrap {
 
         for (index, seed) in ManagementPresetData.defaultCategoryParentSeeds.enumerated() {
             if let existing = categories.first(where: { $0.systemKey == seed.systemKey.rawValue }) {
+                // One-time migration for renamed categories
+                if existing.systemKey == MistiaSystemCategoryParentKey.expenseFood.rawValue && existing.name == "Ăn uống" {
+                    existing.name = "Sinh hoạt"
+                    existing.iconSymbolName = MistiaSystemCategoryParentKey.expenseFood.iconSymbolName
+                    existing.iconColorHex = MistiaSystemCategoryParentKey.expenseFood.iconColorHex
+                }
+                
                 let didUpdateExisting = normalizeParentCategory(existing, with: seed, sortOrder: index)
                 didMutate = didUpdateExisting || didMutate
                 if didUpdateExisting {
@@ -244,6 +251,15 @@ enum MistiaBootstrap {
             let sortOrder = siblingSeeds.firstIndex(where: { $0.systemKey == systemKey }) ?? 0
 
             if let existing = categories.first(where: { $0.systemKey == systemKey.rawValue }) {
+                // One-time migration for renamed child categories
+                if existing.systemKey == MistiaSystemCategoryKey.sales.rawValue && existing.name == "Bán hàng" {
+                    existing.name = "Doanh thu bán hàng"
+                } else if existing.systemKey == MistiaSystemCategoryKey.serviceRevenue.rawValue && existing.name == "Doanh thu dịch vụ" {
+                    existing.name = "Thu dịch vụ"
+                } else if existing.systemKey == MistiaSystemCategoryKey.onlineCollaboratorIncome.rawValue && existing.name == "Thu từ online / cộng tác" {
+                    existing.name = "Thu từ online"
+                }
+
                 let didUpdateExisting = normalizeLeafCategory(
                     existing,
                     with: seed,
@@ -370,22 +386,8 @@ enum MistiaBootstrap {
         var didMutate = false
         let now = Date()
 
-        if category.name != seed.name {
-            category.name = seed.name
-            didMutate = true
-        }
-        if category.kind != seed.kind {
-            category.kind = seed.kind
-            didMutate = true
-        }
-        if category.iconSymbolName != seed.iconSymbolName {
-            category.iconSymbolName = seed.iconSymbolName
-            didMutate = true
-        }
-        if MistiaIconColorPalette.normalizedHex(category.iconColorHex) != seed.iconColorHex {
-            category.iconColorHex = seed.iconColorHex
-            didMutate = true
-        }
+        // Removed forced overrides for name, kind, iconSymbolName, and iconColorHex
+        // to allow users to customize system parent categories freely.
         if category.hierarchyRole != .parent {
             category.hierarchyRole = .parent
             didMutate = true
@@ -402,11 +404,7 @@ enum MistiaBootstrap {
             category.sortOrder = sortOrder
             didMutate = true
         }
-        if category.isArchived {
-            category.isArchived = false
-            category.archivedAt = nil
-            didMutate = true
-        }
+        // Removed forced overrides for isArchived to allow user archival state to persist.
         if !category.isSystem {
             category.isSystem = true
             didMutate = true
@@ -427,22 +425,8 @@ enum MistiaBootstrap {
         var didMutate = false
         let now = Date()
 
-        if category.name != seed.name {
-            category.name = seed.name
-            didMutate = true
-        }
-        if category.kind != seed.kind {
-            category.kind = seed.kind
-            didMutate = true
-        }
-        if category.iconSymbolName != seed.iconSymbolName {
-            category.iconSymbolName = seed.iconSymbolName
-            didMutate = true
-        }
-        if MistiaIconColorPalette.normalizedHex(category.iconColorHex) != seed.iconColorHex {
-            category.iconColorHex = seed.iconColorHex
-            didMutate = true
-        }
+        // Removed forced overrides for name, iconSymbolName, and iconColorHex
+        // to allow users to customize system child categories freely.
         if category.parentCategory?.id != parentCategory?.id {
             category.parentCategory = parentCategory
             didMutate = true
@@ -455,11 +439,7 @@ enum MistiaBootstrap {
             category.sortOrder = sortOrder
             didMutate = true
         }
-        if category.isArchived != seed.startsArchived {
-            category.isArchived = seed.startsArchived
-            category.archivedAt = seed.startsArchived ? (category.archivedAt ?? now) : nil
-            didMutate = true
-        }
+        // Removed forced overrides for isArchived to allow user archival state to persist.
         if !category.isSystem {
             category.isSystem = true
             didMutate = true
