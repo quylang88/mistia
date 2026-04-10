@@ -601,21 +601,31 @@ struct MistiaChip: View {
 }
 
 private struct MistiaInteractivePopGestureHelper: UIViewControllerRepresentable {
-    func makeUIViewController(context: Context) -> UIViewController {
-        let controller = UIViewController()
-        DispatchQueue.main.async {
-            if let navigationController = controller.navigationController {
-                context.coordinator.navigationController = navigationController
-                navigationController.interactivePopGestureRecognizer?.delegate = context.coordinator
-            }
-        }
+    func makeUIViewController(context: Context) -> PopGestureViewController {
+        let controller = PopGestureViewController()
+        controller.coordinator = context.coordinator
         return controller
     }
 
-    func updateUIViewController(_ uiViewController: UIViewController, context: Context) {}
+    func updateUIViewController(_ uiViewController: PopGestureViewController, context: Context) {
+        uiViewController.coordinator = context.coordinator
+    }
 
     func makeCoordinator() -> Coordinator {
         Coordinator()
+    }
+
+    class PopGestureViewController: UIViewController {
+        var coordinator: Coordinator?
+
+        override func viewDidAppear(_ animated: Bool) {
+            super.viewDidAppear(animated)
+            if let navigationController = navigationController {
+                // Assert control over the shared navigation controller's delegate
+                navigationController.interactivePopGestureRecognizer?.delegate = coordinator
+                coordinator?.navigationController = navigationController
+            }
+        }
     }
 
     class Coordinator: NSObject, UIGestureRecognizerDelegate {
