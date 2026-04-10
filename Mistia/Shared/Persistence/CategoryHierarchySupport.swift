@@ -85,7 +85,9 @@ enum MistiaCategoryHierarchy {
                 }
                 return lhs.createdAt < rhs.createdAt
             } ?? []
-            if !includeEmptyParents && children.isEmpty {
+            let parentSystemKey = parent.systemKey.flatMap(MistiaSystemCategoryParentKey.init(rawValue:))
+            let hidesWhenEmpty = parentSystemKey?.showsOnlyWhenHasChildren == true
+            if children.isEmpty && (!includeEmptyParents || hidesWhenEmpty) {
                 return nil
             }
             return TransactionCategoryGroupSection(parent: parent, children: children)

@@ -292,6 +292,9 @@ struct ManagementView: View {
                                             preferredParentCategoryID: category.parentCategory?.id
                                         )
                                     },
+                                    onToggleFavorite: { category in
+                                        toggleFavorite(for: category)
+                                    },
                                     onAddChild: {
                                         categoryEditorTarget = ManagementCategoryEditorTarget(
                                             category: nil,
@@ -489,6 +492,28 @@ struct ManagementView: View {
         } catch {
             infoAlert = ManagementInfoAlert(
                 title: mistiaLocalized(vi: "Không thể xóa dữ liệu", en: "Couldn't delete data", ja: "データを削除できませんでした"),
+                message: error.localizedDescription
+            )
+        }
+    }
+
+    private func toggleFavorite(for category: TransactionCategory) {
+        guard category.isChildCategory else { return }
+
+        category.isFavorite.toggle()
+        category.updatedAt = .now
+
+        do {
+            try modelContext.save()
+            sessionStore.recordUpsert(
+                entity: .category,
+                recordID: category.id,
+                modifiedAt: category.updatedAt
+            )
+        } catch {
+            modelContext.rollback()
+            infoAlert = ManagementInfoAlert(
+                title: mistiaLocalized(vi: "Không thể cập nhật yêu thích", en: "Couldn't update favorite", ja: "お気に入りを更新できませんでした"),
                 message: error.localizedDescription
             )
         }
@@ -745,24 +770,43 @@ private struct ManagementWalletRow: View {
 private struct ManagementCategoryRow: View {
     let category: TransactionCategory
     let action: () -> Void
+    let onToggleFavorite: (() -> Void)?
 
     var body: some View {
-        Button(action: action) {
-            HStack(spacing: 12) {
-                ManagementIconTile(icon: category.iconSymbolName, color: category.iconColor)
+        HStack(spacing: 10) {
+            Button(action: action) {
+                HStack(spacing: 12) {
+                    ManagementIconTile(icon: category.iconSymbolName, color: category.iconColor)
 
-                Text(category.localizedDisplayName)
-                    .font(.system(size: 16, weight: .semibold, design: .rounded))
-                    .foregroundStyle(.primary)
+                    Text(category.localizedDisplayName)
+                        .font(.system(size: 16, weight: .semibold, design: .rounded))
+                        .foregroundStyle(.primary)
 
-                Spacer()
+                    Spacer()
 
-                ManagementChevron()
+                    ManagementChevron()
+                }
+                .padding(.horizontal, 14)
+                .padding(.vertical, 11)
             }
-            .padding(.horizontal, 14)
-            .padding(.vertical, 11)
+            .buttonStyle(MistiaPressableButtonStyle(cornerRadius: 16))
+
+            if let onToggleFavorite, category.isChildCategory {
+                Button(action: onToggleFavorite) {
+                    Image(systemName: category.isFavorite ? "star.fill" : "star")
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundStyle(category.isFavorite ? Color.yellow : Color.secondary.opacity(0.45))
+                        .frame(width: 34, height: 34)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(
+                    category.isFavorite
+                        ? mistiaLocalized(vi: "Bỏ yêu thích", en: "Remove favorite", ja: "お気に入り解除")
+                        : mistiaLocalized(vi: "Đánh dấu yêu thích", en: "Mark as favorite", ja: "お気に入りに追加")
+                )
+            }
         }
-        .buttonStyle(MistiaPressableButtonStyle(cornerRadius: 16))
     }
 }
 
@@ -772,6 +816,7 @@ private struct ManagementCategoryParentCard: View {
     @Binding var isExpanded: Bool
     let onEditParent: () -> Void
     let onEditChild: (TransactionCategory) -> Void
+    let onToggleFavorite: (TransactionCategory) -> Void
     let onAddChild: () -> Void
 
     var body: some View {
@@ -833,9 +878,15 @@ private struct ManagementCategoryParentCard: View {
                             .frame(maxWidth: .infinity, alignment: .leading)
                     } else {
                         ForEach(Array(children.enumerated()), id: \.element.id) { index, child in
-                            ManagementCategoryRow(category: child) {
-                                onEditChild(child)
-                            }
+                            ManagementCategoryRow(
+                                category: child,
+                                action: {
+                                    onEditChild(child)
+                                },
+                                onToggleFavorite: {
+                                    onToggleFavorite(child)
+                                }
+                            )
 
                             if index < children.count - 1 {
                                 Divider()

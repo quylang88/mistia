@@ -125,6 +125,7 @@ final class TransactionCategory {
     var kindRawValue: String
     var iconSymbolName: String
     var iconColorHex: String
+    var favoriteRawValue: Bool?
     var parentCategory: TransactionCategory?
     @Relationship(deleteRule: .nullify, inverse: \TransactionCategory.parentCategory) var childCategories: [TransactionCategory] = []
     var hierarchyRoleRawValue: String?
@@ -144,6 +145,7 @@ final class TransactionCategory {
         kind: TransactionCategoryKind,
         iconSymbolName: String,
         iconColorHex: String,
+        isFavorite: Bool = false,
         parentCategory: TransactionCategory? = nil,
         hierarchyRole: TransactionCategoryHierarchyRole? = nil,
         systemKey: String? = nil,
@@ -161,6 +163,7 @@ final class TransactionCategory {
         self.kindRawValue = kind.rawValue
         self.iconSymbolName = iconSymbolName
         self.iconColorHex = iconColorHex
+        self.favoriteRawValue = isFavorite
         self.parentCategory = parentCategory
         self.hierarchyRoleRawValue = hierarchyRole?.rawValue
         self.systemKey = systemKey
@@ -177,6 +180,11 @@ final class TransactionCategory {
     var kind: TransactionCategoryKind {
         get { TransactionCategoryKind(rawValue: kindRawValue) ?? .expense }
         set { kindRawValue = newValue.rawValue }
+    }
+
+    var isFavorite: Bool {
+        get { favoriteRawValue ?? false }
+        set { favoriteRawValue = newValue }
     }
 
     var hierarchyRole: TransactionCategoryHierarchyRole {

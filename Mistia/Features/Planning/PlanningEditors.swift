@@ -10,6 +10,10 @@ struct PlanningBudgetEditorSheet: View {
     private var storedCategories: [TransactionCategory]
     @Query(filter: #Predicate<BudgetPlan> { $0.deletedAt == nil })
     private var storedBudgets: [BudgetPlan]
+    @Query(filter: #Predicate<LedgerTransaction> {
+        $0.entryStatusRawValue == "posted" && !$0.isArchived && $0.deletedAt == nil
+    })
+    private var postedTransactions: [LedgerTransaction]
 
     let target: PlanningBudgetEditorTarget
 
@@ -52,6 +56,21 @@ struct PlanningBudgetEditorSheet: View {
 
     private var availableCategories: [TransactionCategory] {
         categorySections.flatMap { [$0.parent] + $0.children }
+    }
+
+    private var favoriteBudgetCategories: [TransactionCategory] {
+        MistiaCategoryPickerSupport.favoriteCategories(
+            from: storedCategories,
+            kind: .expense
+        )
+    }
+
+    private var recentBudgetCategories: [TransactionCategory] {
+        MistiaCategoryPickerSupport.recentCategories(
+            from: postedTransactions,
+            categories: storedCategories,
+            kind: .expense
+        )
     }
 
     private var selectedCategory: TransactionCategory? {
@@ -112,9 +131,21 @@ struct PlanningBudgetEditorSheet: View {
         }
         .planningAlert(message: $alertMessage)
         .sheet(isPresented: $showsCategoryPicker) {
-            PlanningBudgetCategoryPickerSheet(
+            MistiaCategoryPickerSheet(
+                title: mistiaLocalized(vi: "Chọn danh mục", en: "Choose category", ja: "カテゴリを選択"),
                 selectedCategoryID: draft.categoryID,
-                sections: categorySections
+                sections: categorySections,
+                recentCategories: recentBudgetCategories,
+                favoriteCategories: favoriteBudgetCategories,
+                allowsParentSelectionInAll: true,
+                allModeSubtitle: { category in
+                    category.isParentCategory
+                        ? mistiaLocalized(vi: "Ngân sách cha", en: "Parent budget", ja: "親予算")
+                        : mistiaLocalized(vi: "Ngân sách con", en: "Child budget", ja: "子予算")
+                },
+                quickModeSubtitle: { category in
+                    category.parentCategory?.localizedDisplayName
+                }
             ) { category in
                 draft.categoryID = category.id
             }
@@ -255,127 +286,50 @@ struct PlanningBudgetEditorSheet: View {
     }
 }
 
-private struct PlanningBudgetCategoryPickerSheet: View {
-    @Environment(\.dismiss) private var dismiss
-
-    let selectedCategoryID: UUID?
-    let sections: [TransactionCategoryGroupSection]
-    let onSelect: (TransactionCategory) -> Void
-
-    var body: some View {
-        NavigationStack {
-            List {
-                ForEach(sections) { section in
-                    Section(section.parent.localizedDisplayName) {
-                        categoryButton(for: section.parent, isParent: true)
-
-                        ForEach(section.children) { child in
-                            categoryButton(for: child, isParent: false)
-                        }
-                    }
-                }
-            }
-            .navigationTitle(mistiaLocalized(vi: "Chọn danh mục", en: "Choose category", ja: "カテゴリを選択"))
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .topBarLeading) {
-                    Button(mistiaLocalized(vi: "Đóng", en: "Close", ja: "閉じる")) {
-                        dismiss()
-                    }
-                }
-            }
-        }
-    }
-
-    @ViewBuilder
-    private func categoryButton(for category: TransactionCategory, isParent: Bool) -> some View {
-        Button {
-            onSelect(category)
-            dismiss()
-        } label: {
-            HStack(spacing: 12) {
-                if !isParent {
-                    Image(systemName: "arrow.turn.down.right")
-                        .font(.system(size: 12, weight: .semibold))
-                        .foregroundStyle(.tertiary)
-                }
-
-                VStack(alignment: .leading, spacing: 3) {
-                    Text(category.localizedDisplayName)
-                        .foregroundStyle(.primary)
-                    Text(
-                        isParent
-                            ? mistiaLocalized(vi: "Ngân sách cha", en: "Parent budget", ja: "親予算")
-                            : mistiaLocalized(vi: "Ngân sách con", en: "Child budget", ja: "子予算")
-                    )
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
-                }
-
-                Spacer()
-
-                if category.id == selectedCategoryID {
-                    Image(systemName: "checkmark")
-                        .foregroundStyle(.tint)
-                }
-            }
-        }
-    }
-}
-
 private struct PlanningBillCategoryPickerSheet: View {
-    @Environment(\.dismiss) private var dismiss
-
     let selectedCategoryID: UUID?
-    let sections: [TransactionCategoryGroupSection]
+    let categories: [TransactionCategory]
     let onSelect: (TransactionCategory) -> Void
 
+    private var pickerCategories: [TransactionCategory] {
+        var quickPickCategories = MistiaCategoryPickerSupport.billQuickPickCategories(from: categories)
+
+        if let selectedCategoryID,
+           let selectedCategory = categories.first(where: { $0.id == selectedCategoryID }),
+           quickPickCategories.contains(where: { $0.id == selectedCategory.id }) == false {
+            quickPickCategories.insert(selectedCategory, at: 0)
+        }
+
+        return quickPickCategories
+    }
+
+    private var pickerOptions: [MistiaFinancePickerOption] {
+        pickerCategories.map { category in
+            MistiaFinancePickerOption(
+                token: category.iconSymbolName,
+                title: category.localizedDisplayName,
+                group: .planning,
+                defaultColorHex: category.iconColorHex
+            )
+        }
+    }
+
+    private var selectedToken: String {
+        pickerCategories.first(where: { $0.id == selectedCategoryID })?.iconSymbolName
+            ?? pickerOptions.first?.token
+            ?? "mistia.plan.bill"
+    }
+
     var body: some View {
-        NavigationStack {
-            List {
-                ForEach(sections) { section in
-                    Section(section.parent.localizedDisplayName) {
-                        ForEach(section.children) { child in
-                            Button {
-                                onSelect(child)
-                                dismiss()
-                            } label: {
-                                HStack(spacing: 12) {
-                                    PlanningEditorIconPreview(
-                                        symbolName: child.iconSymbolName,
-                                        color: child.iconColor,
-                                        size: 34
-                                    )
-
-                                    VStack(alignment: .leading, spacing: 3) {
-                                        Text(child.localizedDisplayName)
-                                            .foregroundStyle(.primary)
-                                        Text(section.parent.localizedDisplayName)
-                                            .font(.footnote)
-                                            .foregroundStyle(.secondary)
-                                    }
-
-                                    Spacer()
-
-                                    if child.id == selectedCategoryID {
-                                        Image(systemName: "checkmark")
-                                            .foregroundStyle(.tint)
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
+        MistiaFinanceIconPickerSheet(
+            title: mistiaLocalized(vi: "Danh mục thanh toán", en: "Payment category", ja: "支払いカテゴリ"),
+            options: pickerOptions,
+            selectedToken: selectedToken
+        ) { token, _ in
+            guard let category = pickerCategories.first(where: { $0.iconSymbolName == token }) else {
+                return
             }
-            .navigationTitle(mistiaLocalized(vi: "Chọn danh mục", en: "Choose category", ja: "カテゴリを選択"))
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .topBarLeading) {
-                    Button(mistiaLocalized(vi: "Đóng", en: "Close", ja: "閉じる")) {
-                        dismiss()
-                    }
-                }
-            }
+            onSelect(category)
         }
     }
 }
@@ -609,27 +563,13 @@ struct PlanningBillEditorSheet: View {
         target.plan?.currencyCode ?? target.dueItem?.currencyCode ?? currencyCode
     }
 
-    private var categorySections: [TransactionCategoryGroupSection] {
-        let preferredID = selectedCategory?.id
-        let preferredParentID = selectedCategory?.parentCategory?.id
-        let relevantCategories = storedCategories.filter { category in
-            category.kind == .expense
-                && category.deletedAt == nil
-                && category.isChildCategory
-                && (!category.isArchived || category.id == preferredID || category.parentCategory?.id == preferredParentID)
-        }
-
-        return MistiaCategoryHierarchy.groupedSections(
-            from: relevantCategories,
-            kind: .expense,
-            includeArchived: true,
-            includeEmptyParents: false
-        )
-    }
-
     private var selectedCategory: TransactionCategory? {
         if let categoryID = draft.categoryID {
             return storedCategories.first(where: { $0.id == categoryID })
+        }
+
+        if let planCategoryID = target.plan?.category?.id {
+            return storedCategories.first(where: { $0.id == planCategoryID })
         }
 
         return storedCategories.first { category in
@@ -729,7 +669,7 @@ struct PlanningBillEditorSheet: View {
         .sheet(isPresented: $showsCategoryPicker) {
             PlanningBillCategoryPickerSheet(
                 selectedCategoryID: selectedCategory?.id,
-                sections: categorySections
+                categories: storedCategories
             ) { category in
                 draft.categoryID = category.id
                 draft.iconSymbolName = category.iconSymbolName
@@ -773,6 +713,7 @@ struct PlanningBillEditorSheet: View {
         if let plan = target.plan {
             plan.name = trimmedName
             plan.iconSymbolName = selectedCategory.iconSymbolName
+            plan.category = selectedCategory
             plan.amountMinor = amountMinor
             plan.dueDay = draft.dueDay
             plan.frequencyMonths = draft.frequencyMonths
@@ -783,6 +724,7 @@ struct PlanningBillEditorSheet: View {
             let plan = RecurringBillPlan(
                 name: trimmedName,
                 iconSymbolName: selectedCategory.iconSymbolName,
+                category: selectedCategory,
                 amountMinor: amountMinor,
                 dueDay: draft.dueDay,
                 frequencyMonths: draft.frequencyMonths,
@@ -1650,8 +1592,8 @@ private struct PlanningBillDraft {
         dueDay = plan?.dueDay ?? 10
         frequencyMonths = max(plan?.frequencyMonths ?? 1, 1)
         paymentWalletID = plan?.paymentWallet?.id
-        categoryID = nil
-        iconSymbolName = plan?.iconSymbolName ?? "mistia.plan.bill"
+        categoryID = plan?.category?.id
+        iconSymbolName = plan?.category?.iconSymbolName ?? plan?.iconSymbolName ?? "mistia.plan.bill"
         iconColorHex = MistiaFinanceIconRegistry.defaultColorHex(for: iconSymbolName)
     }
 }

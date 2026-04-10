@@ -522,6 +522,11 @@ struct ManagementCategoryEditorSheet: View {
                             }
                         }
                         .buttonStyle(.plain)
+
+                        Toggle(
+                            mistiaLocalized(vi: "Yêu thích", en: "Favorite", ja: "お気に入り"),
+                            isOn: $draft.isFavorite
+                        )
                     }
                 }
 
@@ -607,6 +612,7 @@ struct ManagementCategoryEditorSheet: View {
         .onChange(of: draft.hierarchyRole) { _, newValue in
             if newValue == .parent {
                 draft.parentCategoryID = nil
+                draft.isFavorite = false
             }
         }
     }
@@ -640,6 +646,7 @@ struct ManagementCategoryEditorSheet: View {
             category.iconColorHex = draft.iconColorHex
             category.parentCategory = selectedParentCategory
             category.hierarchyRole = draft.hierarchyRole
+            category.isFavorite = draft.hierarchyRole == .child ? draft.isFavorite : false
             category.updatedAt = now
 
             if previousKind != draft.kind || previousParentID != selectedParentCategory?.id || previousRole != draft.hierarchyRole {
@@ -656,6 +663,7 @@ struct ManagementCategoryEditorSheet: View {
                 kind: draft.kind,
                 iconSymbolName: draft.iconSymbolName,
                 iconColorHex: draft.iconColorHex,
+                isFavorite: draft.hierarchyRole == .child ? draft.isFavorite : false,
                 parentCategory: selectedParentCategory,
                 hierarchyRole: draft.hierarchyRole,
                 isSystem: false,
@@ -1010,6 +1018,7 @@ private struct CategoryDraft {
     var kind: TransactionCategoryKind
     var hierarchyRole: TransactionCategoryHierarchyRole
     var parentCategoryID: UUID?
+    var isFavorite: Bool
     var iconSymbolName: String
     var iconColorHex: String
     var iconWasCustomized: Bool
@@ -1029,6 +1038,7 @@ private struct CategoryDraft {
             self.kind = category.kind
             self.hierarchyRole = category.hierarchyRole
             self.parentCategoryID = category.parentCategory?.id
+            self.isFavorite = category.isFavorite
             self.iconSymbolName = category.iconSymbolName
             self.iconColorHex = category.kind.migratedLegacyDefaultColorHex(
                 for: category.iconColorHex,
@@ -1040,6 +1050,7 @@ private struct CategoryDraft {
             self.kind = defaultKind
             self.hierarchyRole = preferredParentCategoryID == nil ? .parent : .child
             self.parentCategoryID = preferredParentCategoryID
+            self.isFavorite = false
             self.iconSymbolName = defaultKind.defaultIconSymbolName
             self.iconColorHex = defaultKind.defaultColorHex
             self.iconWasCustomized = false

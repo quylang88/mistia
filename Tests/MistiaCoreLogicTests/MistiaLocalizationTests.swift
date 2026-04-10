@@ -204,4 +204,19 @@ final class MistiaLocalizationTests: XCTestCase {
         XCTAssertFalse(MistiaIconColorPalette.shouldShowCurrentSwatch(forStored: "#7C85A3"))
         XCTAssertTrue(MistiaIconColorPalette.shouldShowCurrentSwatch(forStored: "#123456"))
     }
+
+    func testRecurringBillQuickPickDefaultsStayUniqueAndBillRelevant() {
+        let quickPickKeys = MistiaSystemCategoryKey.recurringBillQuickPickDefaults
+
+        XCTAssertEqual(quickPickKeys.count, Set(quickPickKeys).count)
+        XCTAssertTrue(quickPickKeys.contains(.rent))
+        XCTAssertTrue(quickPickKeys.contains(.mortgageInstallment))
+        XCTAssertTrue(quickPickKeys.contains(.electricity))
+        XCTAssertTrue(quickPickKeys.contains(.water))
+        XCTAssertTrue(quickPickKeys.contains(.internet))
+        XCTAssertTrue(quickPickKeys.contains(.phone))
+        XCTAssertTrue(quickPickKeys.contains(.gas))
+        XCTAssertTrue(quickPickKeys.contains(.loanRepayment))
+        XCTAssertFalse(quickPickKeys.contains(.otherExpense))
+    }
 }

@@ -105,9 +105,19 @@ struct TransactionEditorSheet: View {
             Text(mistiaCatalog(alertMessage ?? ""))
         }
         .sheet(isPresented: $showsCategoryPicker) {
-            TransactionCategoryPickerSheet(
+            MistiaCategoryPickerSheet(
+                title: mistiaLocalized(vi: "Chọn danh mục", en: "Choose category", ja: "カテゴリを選択"),
                 selectedCategoryID: draft.categoryID,
-                sections: categorySections
+                sections: categorySections,
+                recentCategories: recentCategories,
+                favoriteCategories: favoriteCategories,
+                allowsParentSelectionInAll: false,
+                allModeSubtitle: { category in
+                    category.parentCategory?.localizedDisplayName
+                },
+                quickModeSubtitle: { category in
+                    category.parentCategory?.localizedDisplayName
+                }
             ) { category in
                 draft.categoryID = category.id
             }
@@ -408,6 +418,23 @@ struct TransactionEditorSheet: View {
             kind: desiredKind,
             includeArchived: true,
             includeEmptyParents: false
+        )
+    }
+
+    private var favoriteCategories: [TransactionCategory] {
+        let desiredKind: TransactionCategoryKind = draft.primaryKind == .income ? .income : .expense
+        return MistiaCategoryPickerSupport.favoriteCategories(
+            from: storedCategories,
+            kind: desiredKind
+        )
+    }
+
+    private var recentCategories: [TransactionCategory] {
+        let desiredKind: TransactionCategoryKind = draft.primaryKind == .income ? .income : .expense
+        return MistiaCategoryPickerSupport.recentCategories(
+            from: postedTransactions,
+            categories: storedCategories,
+            kind: desiredKind
         )
     }
 
@@ -753,61 +780,6 @@ struct TransactionEditorSheet: View {
             dismiss()
         } catch {
             alertMessage = mistiaLocalized(vi: "Không thể lưu giao dịch lúc này.", en: "Couldn't save this transaction right now.", ja: "現在この取引を保存できません。") + " \(error.localizedDescription)"
-        }
-    }
-}
-
-private struct TransactionCategoryPickerSheet: View {
-    @Environment(\.dismiss) private var dismiss
-
-    let selectedCategoryID: UUID?
-    let sections: [TransactionCategoryGroupSection]
-    let onSelect: (TransactionCategory) -> Void
-
-    var body: some View {
-        NavigationStack {
-            List {
-                ForEach(sections) { section in
-                    Section(section.parent.localizedDisplayName) {
-                        ForEach(section.children) { child in
-                            Button {
-                                onSelect(child)
-                                dismiss()
-                            } label: {
-                                HStack(spacing: 12) {
-                                    Image(systemName: "arrow.turn.down.right")
-                                        .font(.system(size: 12, weight: .semibold))
-                                        .foregroundStyle(.tertiary)
-
-                                    VStack(alignment: .leading, spacing: 3) {
-                                        Text(child.localizedDisplayName)
-                                            .foregroundStyle(.primary)
-                                        Text(section.parent.localizedDisplayName)
-                                            .font(.footnote)
-                                            .foregroundStyle(.secondary)
-                                    }
-
-                                    Spacer()
-
-                                    if child.id == selectedCategoryID {
-                                        Image(systemName: "checkmark")
-                                            .foregroundStyle(.tint)
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-            .navigationTitle(mistiaLocalized(vi: "Chọn danh mục", en: "Choose category", ja: "カテゴリを選択"))
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .topBarLeading) {
-                    Button(mistiaLocalized(vi: "Đóng", en: "Close", ja: "閉じる")) {
-                        dismiss()
-                    }
-                }
-            }
         }
     }
 }

@@ -317,11 +317,15 @@ enum MistiaBootstrap {
             let normalizedParent = desiredRole == .parent ? nil : desiredParent
             let needsRoleUpdate = category.hierarchyRoleRawValue != desiredRole.rawValue
             let needsParentUpdate = category.parentCategory?.id != normalizedParent?.id
+            let needsFavoriteReset = desiredRole == .parent && category.isFavorite
 
-            guard needsRoleUpdate || needsParentUpdate else { continue }
+            guard needsRoleUpdate || needsParentUpdate || needsFavoriteReset else { continue }
 
             category.hierarchyRole = desiredRole
             category.parentCategory = normalizedParent
+            if desiredRole == .parent {
+                category.isFavorite = false
+            }
             category.updatedAt = now
             mutatedCategoryIDs.insert(category.id)
         }
@@ -388,6 +392,10 @@ enum MistiaBootstrap {
         }
         if category.parentCategory != nil {
             category.parentCategory = nil
+            didMutate = true
+        }
+        if category.isFavorite {
+            category.isFavorite = false
             didMutate = true
         }
         if category.sortOrder != sortOrder {

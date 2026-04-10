@@ -164,7 +164,6 @@ enum MistiaFinanceIconRegistry {
             "mistia.category.expense.food.grocery",
             "mistia.category.expense.food.dine_out",
             "mistia.category.expense.food.cafe_tea",
-            "mistia.category.expense.food.delivery",
             "mistia.category.expense.food.snacks"
         ])
 
@@ -173,13 +172,16 @@ enum MistiaFinanceIconRegistry {
             "mistia.category.expense.home_bills.rent"
         ])
 
+        assign("ic_fluent_vault_24_color", [
+            "mistia.category.expense.home_bills.mortgage_installment"
+        ])
+
         assign("ic_fluent_lightbulb_24_color", [
             "mistia.category.expense.home_bills.electricity"
         ])
 
         assign("ic_fluent_cloud_24_color", [
-            "mistia.category.expense.home_bills.water",
-            "mistia.category.expense.transport_vehicle.car_wash"
+            "mistia.category.expense.home_bills.water"
         ])
 
         assign("ic_fluent_wifi_24_color", [
@@ -195,37 +197,51 @@ enum MistiaFinanceIconRegistry {
         ])
 
         assign("ic_fluent_building_multiple_24_color", [
-            "mistia.category.expense.home_bills.condo_fee"
+            "mistia.category.expense.home_bills.condo_fee",
+            "mistia.category.expense.transport_vehicle.parking"
         ])
 
         assign("ic_fluent_wrench_screwdriver_24_color", [
             "mistia.category.expense.home_bills.home_repair",
-            "mistia.category.expense.transport_vehicle.maintenance",
-            "mistia.category.expense.transport_vehicle.repair",
-            "mistia.category.expense.work_study.tools"
+            "mistia.category.expense.transport_vehicle.repair"
         ])
 
         assign("ic_fluent_home_24_color", [
             "mistia.category.expense.home_bills.furniture_appliance",
+            "mistia.category.expense.family_children.baby_gear",
+            "mistia.category.income.liquidation.liquidate_household",
             "mistia.goal.home"
         ])
 
         assign("ic_fluent_people_home_24_color", [
             "mistia.category.parent.expense.family_children",
-            "mistia.category.expense.family_children.diapers_milk",
-            "mistia.category.expense.family_children.family_other",
-            "mistia.category.income.support_gift.family_support",
+            "mistia.category.expense.family_relations.parents_support",
+            "mistia.category.income.support_gift.child_allowance",
             "mistia.goal.family",
             "mistia.wallet.family"
         ])
 
         assign("ic_fluent_people_team_24_color", [
+            "mistia.category.parent.expense.family_relations",
             "mistia.category.expense.family_children.child_supplies",
-            "mistia.category.expense.family_children.childcare"
+            "mistia.category.expense.family_children.childcare",
+            "mistia.category.expense.entertainment_social.parties_gatherings",
+            "mistia.category.income.support_gift.subsidy"
+        ])
+
+        assign("ic_fluent_food_24_color", [
+            "mistia.category.expense.family_children.baby_food"
+        ])
+
+        assign("ic_fluent_gift_24_color", [
+            "mistia.category.expense.family_children.child_toys",
+            "mistia.category.expense.entertainment_social.gifts_ceremonies",
+            "mistia.category.income.support_gift.gift"
         ])
 
         assign("ic_fluent_book_open_24_color", [
             "mistia.category.expense.family_children.child_tuition",
+            "mistia.category.income.support_gift.support_received",
             "mistia.goal.education"
         ])
 
@@ -233,18 +249,23 @@ enum MistiaFinanceIconRegistry {
             "mistia.category.expense.family_children.school_books_supplies"
         ])
 
+        assign("ic_fluent_sport_24_color", [
+            "mistia.category.expense.family_children.child_extracurricular"
+        ])
+
         assign("ic_fluent_patient_24_color", [
             "mistia.category.expense.family_children.child_medical",
             "mistia.category.parent.expense.health",
             "mistia.category.expense.health.checkup",
             "mistia.category.expense.health.dental",
-            "mistia.category.expense.health.hospital"
+            "mistia.category.expense.health.hospital",
+            "mistia.category.expense.pet_care.pet_medical"
         ])
 
         assign("ic_fluent_molecule_24_color", [
             "mistia.category.expense.health.medicine",
             "mistia.category.expense.health.lab_tests",
-            "mistia.category.expense.health.supplements"
+            "mistia.category.expense.family_children.child_medicine"
         ])
 
         assign("ic_fluent_sport_24_color", [
@@ -254,8 +275,6 @@ enum MistiaFinanceIconRegistry {
         assign("ic_fluent_location_ripple_24_color", [
             "mistia.category.parent.expense.transport_vehicle",
             "mistia.category.expense.transport_vehicle.fuel",
-            "mistia.category.expense.transport_vehicle.parking",
-            "mistia.category.expense.transport_vehicle.grab_taxi",
             "mistia.category.expense.transport_vehicle.public_transport",
             "mistia.category.expense.work_study.business_travel",
             "mistia.goal.vehicle"
@@ -263,13 +282,14 @@ enum MistiaFinanceIconRegistry {
 
         assign("ic_fluent_receipt_24_color", [
             "mistia.category.expense.transport_vehicle.tolls",
-            "mistia.category.expense.financial_obligations.loan_interest",
-            "mistia.category.income.refund_adjustment.reimbursement"
+            "mistia.category.income.refund_adjustment.reimbursement",
+            "mistia.category.expense.financial_obligations.fines_fees"
         ])
 
         assign("ic_fluent_shield_checkmark_24_color", [
             "mistia.category.expense.transport_vehicle.insurance",
-            "mistia.category.income.support_gift.subsidy"
+            "mistia.category.expense.health.insurance",
+            "mistia.category.income.refund_adjustment.insurance_payout"
         ])
 
         assign("ic_fluent_document_text_24_color", [
@@ -279,13 +299,13 @@ enum MistiaFinanceIconRegistry {
         assign("ic_fluent_gift_card_24_color", [
             "mistia.category.parent.expense.personal_shopping",
             "mistia.category.expense.personal_shopping.personal_supplies",
-            "mistia.category.income.salary_work.allowance"
+            "mistia.category.income.salary_work.allowance",
+            "mistia.category.expense.pet_care.pet_supplies"
         ])
 
         assign("ic_fluent_premium_24_color", [
             "mistia.category.expense.personal_shopping.clothes",
             "mistia.category.expense.personal_shopping.footwear",
-            "mistia.category.expense.personal_shopping.accessories",
             "mistia.wallet.credit_card_premium"
         ])
 
@@ -295,7 +315,8 @@ enum MistiaFinanceIconRegistry {
 
         assign("ic_fluent_person_heart_24_color", [
             "mistia.category.expense.personal_shopping.personal_care",
-            "mistia.category.income.support_gift.support_received"
+            "mistia.category.expense.family_relations.gifts",
+            "mistia.category.income.support_gift.maternity_allowance"
         ])
 
         assign("ic_fluent_apps_24_color", [
@@ -304,13 +325,22 @@ enum MistiaFinanceIconRegistry {
             "mistia.category.expense.entertainment_social.games_apps"
         ])
 
+        assign("ic_fluent_paint_brush_24_color", [
+            "mistia.category.expense.entertainment_social.hobbies",
+            "mistia.category.expense.pet_care.pet_grooming"
+        ])
+
         assign("ic_fluent_apps_list_detail_24_color", [
+            "mistia.category.expense.family_children.family_other",
             "mistia.category.expense.entertainment_social.subscriptions",
             "mistia.category.parent.expense.other",
             "mistia.category.expense.other.expense",
             "mistia.category.income.business.other_business_income",
+            "mistia.category.income.investment_finance.other_financial_income",
             "mistia.category.parent.income.other",
-            "mistia.category.income.other.income"
+            "mistia.category.income.other.income",
+            "mistia.category.income.liquidation.other_liquidation_income",
+            "mistia.category.expense.pet_care.pet_other"
         ])
 
         assign("ic_fluent_beach_24_color", [
@@ -324,14 +354,16 @@ enum MistiaFinanceIconRegistry {
         ])
 
         assign("ic_fluent_gift_24_color", [
-            "mistia.category.expense.entertainment_social.parties_gatherings",
+            "mistia.category.expense.family_children.child_toys",
             "mistia.category.expense.entertainment_social.gifts_ceremonies",
-            "mistia.category.parent.income.support_gift",
             "mistia.category.income.support_gift.gift"
         ])
 
         assign("ic_fluent_heart_24_color", [
-            "mistia.category.expense.entertainment_social.charity"
+            "mistia.category.expense.entertainment_social.charity",
+            "mistia.category.expense.family_children.diapers_milk",
+            "mistia.category.parent.expense.pet_care",
+            "mistia.category.parent.income.support_gift"
         ])
 
         assign("ic_fluent_briefcase_24_color", [
@@ -340,6 +372,7 @@ enum MistiaFinanceIconRegistry {
         ])
 
         assign("ic_fluent_toolbox_24_color", [
+            "mistia.category.expense.transport_vehicle.maintenance",
             "mistia.category.expense.work_study.tools"
         ])
 
@@ -350,7 +383,15 @@ enum MistiaFinanceIconRegistry {
 
         assign("ic_fluent_people_chat_24_color", [
             "mistia.category.expense.work_study.client_entertainment",
-            "mistia.category.income.business.service_revenue"
+            "mistia.category.income.business.service_revenue",
+            "mistia.category.expense.entertainment_social.coffee_friends"
+        ])
+
+        assign("ic_fluent_people_sync_24_color", [
+            "mistia.category.expense.family_relations.family_support",
+            "mistia.category.income.support_gift.family_support",
+            "mistia.category.income.refund_adjustment.people_repayment",
+            "mistia.flow.transfer.debt"
         ])
 
         assign("ic_fluent_book_open_lightbulb_24_color", [
@@ -366,7 +407,6 @@ enum MistiaFinanceIconRegistry {
         ])
 
         assign("ic_fluent_data_pie_24_color", [
-            "mistia.category.parent.expense.financial_obligations",
             "mistia.category.parent.income.investment_finance",
             "mistia.category.income.investment_finance.dividends"
         ])
@@ -393,6 +433,7 @@ enum MistiaFinanceIconRegistry {
         ])
 
         assign("ic_fluent_contact_card_24_color", [
+            "mistia.category.parent.expense.financial_obligations",
             "mistia.category.expense.financial_obligations.loan_repayment",
             "mistia.wallet.credit_card",
             "mistia.plan.card_bill"
@@ -406,6 +447,7 @@ enum MistiaFinanceIconRegistry {
             "mistia.flow.income",
             "mistia.wallet.cash",
             "mistia.category.income.salary_work.salary",
+            "mistia.category.income.salary_work.side_salary",
             "mistia.category.income.investment_finance.loan_interest_received"
         ])
 
@@ -418,19 +460,21 @@ enum MistiaFinanceIconRegistry {
             "mistia.category.income.business.sales"
         ])
 
+        assign("ic_fluent_phone_laptop_24_color", [
+            "mistia.category.income.business.online_collaborator_income"
+        ])
+
         assign("ic_fluent_arrow_clockwise_dashes_24_color", [
             "mistia.category.parent.income.refund_adjustment",
-            "mistia.category.income.refund_adjustment.refund"
+            "mistia.category.income.refund_adjustment.refund",
+            "mistia.category.expense.transport_vehicle.car_wash"
         ])
 
         assign("ic_fluent_reward_24_color", [
+            "mistia.category.expense.personal_shopping.accessories",
+            "mistia.category.expense.health.supplements",
             "mistia.category.income.refund_adjustment.cashback",
             "mistia.wallet.credit_card_rewards"
-        ])
-
-        assign("ic_fluent_people_sync_24_color", [
-            "mistia.category.income.refund_adjustment.expense_recovery",
-            "mistia.flow.transfer.debt"
         ])
 
         assign("ic_fluent_savings_24_color", [
@@ -439,6 +483,7 @@ enum MistiaFinanceIconRegistry {
         ])
 
         assign("ic_fluent_calendar_clock_24_color", [
+            "mistia.category.income.salary_work.overtime",
             "mistia.plan.bill",
             "mistia.plan.payment"
         ])
@@ -463,19 +508,281 @@ enum MistiaFinanceIconRegistry {
 
         assign("ic_fluent_arrow_sync_24_color", [
             "mistia.flow.transfer",
-            "mistia.flow.transfer.internal"
+            "mistia.flow.transfer.internal",
+            "mistia.category.expense.transport_vehicle.grab_taxi",
+            "mistia.category.income.refund_adjustment.expense_recovery"
         ])
 
         assign("ic_fluent_send_24_color", [
+            "mistia.category.expense.food.delivery",
             "mistia.debt.lend"
         ])
 
         assign("ic_fluent_arrow_square_24_color", [
-            "mistia.debt.borrow"
+            "mistia.debt.borrow",
+            "mistia.category.parent.income.liquidation",
+            "mistia.category.income.liquidation.sell_used_items"
         ])
 
         assign("ic_fluent_checkmark_circle_24_color", [
             "mistia.debt.repay"
+        ])
+
+        // Final semantic overrides to reduce obvious icon collisions across categories.
+        assign("ic_fluent_building_store_24_color", [
+            "mistia.category.expense.food.grocery"
+        ])
+
+        assign("ic_fluent_chat_24_color", [
+            "mistia.category.expense.food.cafe_tea"
+        ])
+
+        assign("ic_fluent_reward_24_color", [
+            "mistia.category.expense.food.snacks"
+        ])
+
+        assign("ic_fluent_book_contacts_24_color", [
+            "mistia.category.expense.family_relations.parents_support"
+        ])
+
+        assign("ic_fluent_building_people_24_color", [
+            "mistia.category.expense.family_children.child_tuition",
+            "mistia.category.expense.health.hospital",
+            "mistia.category.income.support_gift.subsidy"
+        ])
+
+        assign("ic_fluent_calendar_checkmark_24_color", [
+            "mistia.category.expense.family_children.childcare",
+            "mistia.category.expense.health.checkup"
+        ])
+
+        assign("ic_fluent_board_24_color", [
+            "mistia.category.expense.family_children.child_toys"
+        ])
+
+        assign("ic_fluent_book_star_24_color", [
+            "mistia.category.expense.family_children.school_books_supplies"
+        ])
+
+        assign("ic_fluent_flag_24_color", [
+            "mistia.category.expense.family_children.child_extracurricular"
+        ])
+
+        assign("ic_fluent_gauge_24_color", [
+            "mistia.category.expense.transport_vehicle.fuel"
+        ])
+
+        assign("ic_fluent_building_government_search_24_color", [
+            "mistia.category.expense.transport_vehicle.registration"
+        ])
+
+        assign("ic_fluent_clipboard_task_24_color", [
+            "mistia.category.expense.health.lab_tests"
+        ])
+
+        assign("ic_fluent_clipboard_text_edit_24_color", [
+            "mistia.category.expense.health.dental"
+        ])
+
+        assign("ic_fluent_globe_shield_24_color", [
+            "mistia.category.expense.health.insurance"
+        ])
+
+        assign("ic_fluent_animal_paw_print_24_color", [
+            "mistia.category.parent.expense.pet_care"
+        ])
+
+        assign("ic_fluent_food_24_color", [
+            "mistia.category.expense.pet_care.pet_food"
+        ])
+
+        assign("ic_fluent_gift_card_24_color", [
+            "mistia.category.expense.family_relations.gifts"
+        ])
+
+        assign("ic_fluent_chat_multiple_24_color", [
+            "mistia.category.expense.entertainment_social.parties_gatherings"
+        ])
+
+        assign("ic_fluent_camera_24_color", [
+            "mistia.category.expense.entertainment_social.movies_leisure"
+        ])
+
+        assign("ic_fluent_library_24_color", [
+            "mistia.category.expense.entertainment_social.books_music"
+        ])
+
+        assign("ic_fluent_bookmark_24_color", [
+            "mistia.category.expense.entertainment_social.subscriptions"
+        ])
+
+        assign("ic_fluent_comment_multiple_24_color", [
+            "mistia.category.expense.entertainment_social.coffee_friends"
+        ])
+
+        assign("ic_fluent_document_edit_24_color", [
+            "mistia.category.expense.financial_obligations.fines_fees"
+        ])
+
+        assign("ic_fluent_document_folder_24_color", [
+            "mistia.category.expense.financial_obligations.other_obligations"
+        ])
+
+        assign("ic_fluent_vault_24_color", [
+            "mistia.category.expense.financial_obligations.loan_repayment"
+        ])
+
+        assign("ic_fluent_chart_multiple_24_color", [
+            "mistia.category.income.salary_work.commission",
+            "mistia.category.parent.income.investment_finance"
+        ])
+
+        assign("ic_fluent_clock_alarm_24_color", [
+            "mistia.category.income.salary_work.overtime"
+        ])
+
+        assign("ic_fluent_data_area_24_color", [
+            "mistia.category.income.business.business_profit"
+        ])
+
+        assign("ic_fluent_link_multiple_24_color", [
+            "mistia.category.income.business.online_collaborator_income"
+        ])
+
+        assign("ic_fluent_data_line_24_color", [
+            "mistia.category.income.investment_finance.investment_gain"
+        ])
+
+        assign("ic_fluent_data_scatter_24_color", [
+            "mistia.category.income.investment_finance.other_financial_income"
+        ])
+
+        assign("ic_fluent_document_add_24_color", [
+            "mistia.category.income.refund_adjustment.reimbursement"
+        ])
+
+        assign("ic_fluent_food_carrot_24_filled", [
+            "mistia.category.expense.food.grocery"
+        ])
+
+        assign("ic_fluent_drink_to_go_24_filled", [
+            "mistia.category.expense.food.cafe_tea"
+        ])
+
+        assign("ic_fluent_drink_coffee_24_filled", [
+            "mistia.category.expense.entertainment_social.coffee_friends"
+        ])
+
+        assign("ic_fluent_drop_24_filled", [
+            "mistia.category.expense.home_bills.water"
+        ])
+
+        assign("ic_fluent_clock_bill_24_filled", [
+            "mistia.category.expense.home_bills.condo_fee"
+        ])
+
+        assign("ic_fluent_vehicle_motorcycle_24_filled", [
+            "mistia.category.expense.transport_vehicle.fuel"
+        ])
+
+        assign("ic_fluent_vehicle_car_parking_24_filled", [
+            "mistia.category.expense.transport_vehicle.parking"
+        ])
+
+        assign("ic_fluent_vehicle_cab_24_filled", [
+            "mistia.category.expense.transport_vehicle.grab_taxi"
+        ])
+
+        assign("ic_fluent_vehicle_subway_24_filled", [
+            "mistia.category.expense.transport_vehicle.public_transport"
+        ])
+
+        assign("ic_fluent_vehicle_car_collision_24_filled", [
+            "mistia.category.expense.transport_vehicle.repair"
+        ])
+
+        assign("ic_fluent_broom_24_filled", [
+            "mistia.category.expense.transport_vehicle.car_wash"
+        ])
+
+        assign("ic_fluent_clothes_hanger_24_filled", [
+            "mistia.category.parent.expense.personal_shopping",
+            "mistia.category.expense.personal_shopping.clothes"
+        ])
+
+        assign("ic_fluent_cart_24_filled", [
+            "mistia.category.expense.personal_shopping.personal_supplies"
+        ])
+
+        assign("ic_fluent_document_heart_pulse_24_filled", [
+            "mistia.category.expense.health.insurance"
+        ])
+
+        assign("ic_fluent_filmstrip_play_24_filled", [
+            "mistia.category.expense.entertainment_social.movies_leisure"
+        ])
+
+        assign("ic_fluent_games_24_filled", [
+            "mistia.category.expense.entertainment_social.games_apps"
+        ])
+
+        assign("ic_fluent_headphones_sound_wave_24_filled", [
+            "mistia.category.expense.entertainment_social.books_music"
+        ])
+
+        assign("ic_fluent_calendar_play_24_filled", [
+            "mistia.category.expense.entertainment_social.subscriptions"
+        ])
+
+        assign("ic_fluent_gift_open_24_filled", [
+            "mistia.category.expense.family_relations.gifts",
+            "mistia.category.income.support_gift.gift"
+        ])
+
+        assign("ic_fluent_clipboard_heart_24_filled", [
+            "mistia.category.expense.entertainment_social.charity"
+        ])
+
+        assign("ic_fluent_animal_paw_print_24_color", [
+            "mistia.category.parent.expense.pet_care"
+        ])
+
+        assign("ic_fluent_animal_paw_print_24_color", [
+            "mistia.category.expense.pet_care.pet_other"
+        ])
+
+        assign("ic_fluent_animal_dog_24_filled", [
+            "mistia.category.expense.pet_care.pet_food"
+        ])
+
+        assign("ic_fluent_animal_cat_24_filled", [
+            "mistia.category.expense.pet_care.pet_supplies"
+        ])
+
+        assign("ic_fluent_building_bank_24_filled", [
+            "mistia.category.income.investment_finance.bank_interest",
+            "mistia.wallet.bank"
+        ])
+
+        assign("ic_fluent_building_bank_toolbox_24_filled", [
+            "mistia.category.expense.financial_obligations.banking_fees"
+        ])
+
+        assign("ic_fluent_credit_card_clock_24_filled", [
+            "mistia.category.expense.financial_obligations.loan_repayment",
+            "mistia.plan.card_bill"
+        ])
+
+        assign("ic_fluent_card_ui_24_filled", [
+            "mistia.wallet.credit_card"
+        ])
+
+        assign("ic_fluent_card_ui_portrait_flip_24_filled", [
+            "mistia.wallet.credit_card_premium"
+        ])
+
+        assign("ic_fluent_gift_card_money_24_filled", [
+            "mistia.wallet.credit_card_rewards"
         ])
 
         return mapping
@@ -523,6 +830,10 @@ enum MistiaFinanceIconRegistry {
         case .generic:
             return "ic_fluent_apps_list_detail_24_color"
         }
+    }
+
+    static func assetUsesTemplate(_ assetName: String) -> Bool {
+        assetName.hasSuffix("_filled") || assetName.hasSuffix("_regular")
     }
 
     private static func badge(for group: MistiaFinanceIconGroup) -> String? {
@@ -625,12 +936,22 @@ struct MistiaFinanceIconView: View {
     @ViewBuilder
     private func financeTile(descriptor: MistiaFinanceIconDescriptor) -> some View {
         if let assetName = descriptor.assetName {
-            Image(assetName)
-                .resizable()
-                .renderingMode(.original)
-                .scaledToFit()
-                .frame(width: size * 0.86, height: size * 0.86)
-                .frame(width: size, height: size)
+            if MistiaFinanceIconRegistry.assetUsesTemplate(assetName) {
+                Image(assetName)
+                    .resizable()
+                    .renderingMode(.template)
+                    .scaledToFit()
+                    .frame(width: size * 0.86, height: size * 0.86)
+                    .foregroundStyle(Color(hex: descriptor.primaryHex))
+                    .frame(width: size, height: size)
+            } else {
+                Image(assetName)
+                    .resizable()
+                    .renderingMode(.original)
+                    .scaledToFit()
+                    .frame(width: size * 0.86, height: size * 0.86)
+                    .frame(width: size, height: size)
+            }
         } else {
             let cornerRadius = size * 0.32
             let primary = Color(hex: descriptor.primaryHex)

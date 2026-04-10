@@ -240,11 +240,15 @@ extension SavingsGoal {
 
 extension RecurringBillPlan {
     var planningSnapshot: PlanningBillSnapshot {
-        PlanningBillSnapshot(
+        let resolvedCategorySystemKey =
+            category?.mistiaSystemCategoryKey
+            ?? MistiaFinanceIconRegistry.categoryKey(for: iconSymbolName)
+
+        return PlanningBillSnapshot(
             id: id,
             name: name,
             iconSymbolName: iconSymbolName,
-            categorySystemKey: MistiaFinanceIconRegistry.categoryKey(for: iconSymbolName),
+            categorySystemKey: resolvedCategorySystemKey,
             amountMinor: amountMinor,
             dueDay: dueDay,
             frequencyMonths: frequencyMonths,

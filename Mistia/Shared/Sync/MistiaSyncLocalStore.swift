@@ -595,6 +595,7 @@ enum MistiaSyncLocalStore {
             kind: TransactionCategoryKind(rawValue: row.kindRawValue) ?? .expense,
             iconSymbolName: row.iconSymbolName,
             iconColorHex: row.iconColorHex,
+            isFavorite: row.isFavorite,
             hierarchyRole: row.hierarchyRoleRawValue.flatMap(TransactionCategoryHierarchyRole.init(rawValue:)),
             systemKey: row.systemKey,
             isSystem: row.isSystem,
@@ -616,6 +617,7 @@ enum MistiaSyncLocalStore {
         category.kind = TransactionCategoryKind(rawValue: row.kindRawValue) ?? .expense
         category.iconSymbolName = row.iconSymbolName
         category.iconColorHex = row.iconColorHex
+        category.isFavorite = row.isFavorite
         category.hierarchyRoleRawValue = row.hierarchyRoleRawValue
         category.systemKey = row.systemKey
         category.isSystem = row.isSystem
@@ -827,6 +829,7 @@ enum MistiaSyncLocalStore {
             id: row.id,
             name: row.name,
             iconSymbolName: normalizedIconSymbolName,
+            category: resolvedCategory,
             amountMinor: row.amountMinor,
             dueDay: row.dueDay,
             frequencyMonths: row.frequencyMonths,
@@ -846,6 +849,7 @@ enum MistiaSyncLocalStore {
 
         plan.name = row.name
         plan.iconSymbolName = normalizedIconSymbolName
+        plan.category = resolvedCategory
         plan.amountMinor = row.amountMinor
         plan.dueDay = row.dueDay
         plan.frequencyMonths = row.frequencyMonths
@@ -973,6 +977,10 @@ enum MistiaSyncLocalStore {
         for plan: RecurringBillPlan,
         categories: [TransactionCategory]
     ) -> UUID? {
+        if let categoryID = plan.category?.id {
+            return categoryID
+        }
+
         guard let systemKey = MistiaFinanceIconRegistry.categoryKey(for: plan.iconSymbolName) else {
             return nil
         }
@@ -1045,26 +1053,25 @@ private extension RemoteCreditCardProfile {
 
 private extension RemoteTransactionCategory {
     init(local category: TransactionCategory, userID: UUID) {
-        self.init(
-            userID: userID,
-            id: category.id,
-            name: category.name,
-            kindRawValue: category.kindRawValue,
-            iconSymbolName: category.iconSymbolName,
-            iconColorHex: category.iconColorHex,
-            parentCategoryID: category.parentCategory?.id,
-            hierarchyRoleRawValue: category.hierarchyRoleRawValue,
-            systemKey: category.systemKey,
-            isSystem: category.isSystem,
-            sortOrder: category.sortOrder,
-            isArchived: category.isArchived,
-            archivedAt: category.archivedAt,
-            createdAt: category.createdAt,
-            updatedAt: category.updatedAt,
-            deletedAt: category.deletedAt,
-            syncVersion: max(category.remoteVersion, 1),
-            lastModifiedByDeviceID: nil
-        )
+        self.userID = userID
+        self.id = category.id
+        self.name = category.name
+        self.kindRawValue = category.kindRawValue
+        self.iconSymbolName = category.iconSymbolName
+        self.iconColorHex = category.iconColorHex
+        self.isFavorite = category.isFavorite
+        self.parentCategoryID = category.parentCategory?.id
+        self.hierarchyRoleRawValue = category.hierarchyRoleRawValue
+        self.systemKey = category.systemKey
+        self.isSystem = category.isSystem
+        self.sortOrder = category.sortOrder
+        self.isArchived = category.isArchived
+        self.archivedAt = category.archivedAt
+        self.createdAt = category.createdAt
+        self.updatedAt = category.updatedAt
+        self.deletedAt = category.deletedAt
+        self.syncVersion = max(category.remoteVersion, 1)
+        self.lastModifiedByDeviceID = nil
     }
 }
 

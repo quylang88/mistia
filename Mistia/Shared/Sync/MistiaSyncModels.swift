@@ -105,6 +105,7 @@ struct RemoteTransactionCategory: MistiaRemoteRow {
     var kindRawValue: String
     var iconSymbolName: String
     var iconColorHex: String
+    var isFavorite: Bool
     var parentCategoryID: UUID?
     var hierarchyRoleRawValue: String?
     var systemKey: String?
@@ -125,6 +126,7 @@ struct RemoteTransactionCategory: MistiaRemoteRow {
         case kindRawValue = "kind_raw_value"
         case iconSymbolName = "icon_symbol_name"
         case iconColorHex = "icon_color_hex"
+        case isFavorite = "is_favorite"
         case parentCategoryID = "parent_category_id"
         case hierarchyRoleRawValue = "hierarchy_role_raw_value"
         case systemKey = "system_key"
@@ -137,6 +139,29 @@ struct RemoteTransactionCategory: MistiaRemoteRow {
         case deletedAt = "deleted_at"
         case syncVersion = "sync_version"
         case lastModifiedByDeviceID = "last_modified_by_device_id"
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        userID = try container.decode(UUID.self, forKey: .userID)
+        id = try container.decode(UUID.self, forKey: .id)
+        name = try container.decode(String.self, forKey: .name)
+        kindRawValue = try container.decode(String.self, forKey: .kindRawValue)
+        iconSymbolName = try container.decode(String.self, forKey: .iconSymbolName)
+        iconColorHex = try container.decode(String.self, forKey: .iconColorHex)
+        isFavorite = try container.decodeIfPresent(Bool.self, forKey: .isFavorite) ?? false
+        parentCategoryID = try container.decodeIfPresent(UUID.self, forKey: .parentCategoryID)
+        hierarchyRoleRawValue = try container.decodeIfPresent(String.self, forKey: .hierarchyRoleRawValue)
+        systemKey = try container.decodeIfPresent(String.self, forKey: .systemKey)
+        isSystem = try container.decode(Bool.self, forKey: .isSystem)
+        sortOrder = try container.decode(Int.self, forKey: .sortOrder)
+        isArchived = try container.decode(Bool.self, forKey: .isArchived)
+        archivedAt = try container.decodeIfPresent(Date.self, forKey: .archivedAt)
+        createdAt = try container.decode(Date.self, forKey: .createdAt)
+        updatedAt = try container.decode(Date.self, forKey: .updatedAt)
+        deletedAt = try container.decodeIfPresent(Date.self, forKey: .deletedAt)
+        syncVersion = try container.decode(Int64.self, forKey: .syncVersion)
+        lastModifiedByDeviceID = try container.decodeIfPresent(UUID.self, forKey: .lastModifiedByDeviceID)
     }
 }
 

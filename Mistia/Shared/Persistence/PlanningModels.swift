@@ -97,6 +97,7 @@ final class RecurringBillPlan {
     @Attribute(.unique) var id: UUID
     var name: String
     var iconSymbolName: String
+    @Relationship(deleteRule: .nullify) var category: TransactionCategory?
     var amountMinor: Int64?
     var dueDay: Int
     var frequencyMonths: Int
@@ -112,6 +113,7 @@ final class RecurringBillPlan {
         id: UUID = UUID(),
         name: String,
         iconSymbolName: String,
+        category: TransactionCategory? = nil,
         amountMinor: Int64? = nil,
         dueDay: Int,
         frequencyMonths: Int = 1,
@@ -126,6 +128,7 @@ final class RecurringBillPlan {
         self.id = id
         self.name = name
         self.iconSymbolName = iconSymbolName
+        self.category = category
         self.amountMinor = amountMinor
         self.dueDay = dueDay
         self.frequencyMonths = frequencyMonths
