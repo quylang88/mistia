@@ -44,6 +44,7 @@ struct MistiaApp: App {
                     sessionStore.setSubjectUserIDProvider { [weak store] in
                         store?.selectedSubjectUserID
                     }
+                    await familyContextStore.bootstrapIfNeeded(sessionStore: sessionStore)
                 }
         }
     }

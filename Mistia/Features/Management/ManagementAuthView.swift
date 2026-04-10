@@ -82,6 +82,7 @@ private enum ManagementEditProfileDestination: String, Identifiable {
 struct ManagementAccountView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(SessionStore.self) private var sessionStore
+    @Environment(FamilyContextStore.self) private var familyContextStore
     @Query
     private var storedConflicts: [SyncConflict]
 
@@ -159,16 +160,7 @@ struct ManagementAccountView: View {
             case .syncSettings:
                 ManagementSyncSettingsView(accent: accent)
             case .family:
-                ManagementProfilePlaceholderView(
-                    title: mistiaLocalized(vi: "Gia đình", en: "Family", ja: "家族"),
-                    systemImage: "person.3.fill",
-                    accent: accent,
-                    message: mistiaLocalized(
-                        vi: "Màn hình Gia đình sẽ được thiết kế riêng ở bước sau. Hiện tại đây là điểm vào để giữ đúng luồng profile mới.",
-                        en: "The Family screen will get its own design in a later pass. For now, this keeps the new profile flow wired correctly.",
-                        ja: "家族画面は次の段階で個別にデザインします。今は新しいプロフィール導線を保つための入口です。"
-                    )
-                )
+                FamilyManagementView()
             case .dataManagement:
                 ManagementDataConflictsView(accent: accent)
             case .backupRestore:
@@ -400,7 +392,7 @@ struct ManagementAccountView: View {
                     icon: "person.3.fill",
                     accent: .rose,
                     subtitle: nil,
-                    value: mistiaLocalized(vi: "Chưa có", en: "None", ja: "未設定")
+                    value: familyContextStore.family?.name ?? mistiaLocalized(vi: "Chưa có", en: "None", ja: "未設定")
                 ) {
                     destination = .family
                 }

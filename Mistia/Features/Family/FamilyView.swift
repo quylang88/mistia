@@ -26,7 +26,7 @@ struct FamilyManagementView: View {
     @State private var activeSheet: FamilySheet?
 
     private var cardTint: Color {
-        colorScheme == .dark ? Color(UIColor.secondarySystemGroupedBackground) : .white.opacity(0.18)
+        colorScheme == .dark ? Color(UIColor.secondarySystemGroupedBackground) : .white.opacity(0.22)
     }
 
     var body: some View {
@@ -47,11 +47,7 @@ struct FamilyManagementView: View {
             contentSpacing: 18
         ) {
             if let lastErrorMessage = familyContextStore.lastErrorMessage {
-                ManagementInlineMessageCard(
-                    title: mistiaLocalized(vi: "Gia đình cần kiểm tra", en: "Family needs attention", ja: "家族設定の確認が必要です"),
-                    message: lastErrorMessage,
-                    accent: .orange
-                )
+                FamilyAlertBanner(message: lastErrorMessage)
             }
 
             if familyContextStore.family == nil {
@@ -83,47 +79,74 @@ struct FamilyManagementView: View {
         }
     }
 
+    // MARK: - Empty State
+
     private var emptyStateContent: some View {
         VStack(spacing: 18) {
-            MistiaGlassCard(cornerRadius: 24, tint: cardTint) {
-                VStack(alignment: .leading, spacing: 14) {
-                    ManagementStatusBadge(
-                        title: mistiaLocalized(vi: "Chưa có gia đình", en: "No family yet", ja: "家族はまだありません"),
-                        systemImage: "person.3.fill",
-                        accent: .rose
-                    )
-
-                    Text(
-                        mistiaLocalized(
-                            vi: "Mỗi người vẫn giữ dữ liệu tài chính riêng của mình. Gia đình chỉ thêm lớp tổng hợp, quyền xem và quyền chỉnh sửa.",
-                            en: "Everyone keeps their own financial data. Family adds a shared layer for aggregates, visibility, and editing rights.",
-                            ja: "各メンバーは自分の財務データを保持したまま、家族では集計・閲覧・編集権限を重ねます。"
+            // Hero illustration card
+            VStack(spacing: 16) {
+                ZStack {
+                    Circle()
+                        .fill(
+                            LinearGradient(
+                                colors: [
+                                    Color.orange.opacity(0.18),
+                                    Color.red.opacity(0.10)
+                                ],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            )
                         )
-                    )
-                    .font(.system(size: 15, weight: .medium, design: .rounded))
-                    .foregroundStyle(.secondary)
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
-            }
+                        .frame(width: 72, height: 72)
 
-            MistiaGlassCard(cornerRadius: 24, tint: cardTint, padding: 0) {
+                    Image(systemName: "person.3.fill")
+                        .font(.system(size: 28, weight: .semibold))
+                        .foregroundStyle(
+                            LinearGradient(
+                                colors: [.orange, .red.opacity(0.8)],
+                                startPoint: .leading,
+                                endPoint: .trailing
+                            )
+                        )
+                }
+                .padding(.top, 8)
+
+                Text(mistiaLocalized(vi: "Chưa có gia đình", en: "No family yet", ja: "家族はまだありません"))
+                    .font(.system(size: 22, weight: .bold, design: .rounded))
+
+                Text(
+                    mistiaLocalized(
+                        vi: "Mỗi người vẫn giữ dữ liệu tài chính riêng của mình. Gia đình chỉ thêm lớp tổng hợp, quyền xem và quyền chỉnh sửa.",
+                        en: "Everyone keeps their own financial data. Family adds a shared layer for aggregates, visibility, and editing rights.",
+                        ja: "各メンバーは自分の財務データを保持したまま、家族では集計・閲覧・編集権限を重ねます。"
+                    )
+                )
+                .font(.system(size: 15, weight: .medium, design: .rounded))
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+                .padding(.horizontal, 4)
+            }
+            .padding(.vertical, 12)
+
+            // Action card — Apple grouped style
+            MistiaGlassCard(cornerRadius: 14, tint: cardTint, padding: 0) {
                 VStack(spacing: 0) {
-                    FamilyActionRow(
+                    FamilySettingsRow(
                         title: mistiaLocalized(vi: "Tạo gia đình", en: "Create family", ja: "家族を作成"),
                         subtitle: mistiaLocalized(vi: "Bạn trở thành owner và mời thêm thành viên sau.", en: "You become the owner and invite others later.", ja: "作成者が owner になり、あとでメンバーを招待できます。"),
                         icon: "plus.circle.fill",
-                        accent: .mint
+                        iconColor: .mint
                     ) {
                         activeSheet = .create
                     }
 
-                    ManagementProfileRowDivider()
+                    FamilyRowDivider()
 
-                    FamilyActionRow(
+                    FamilySettingsRow(
                         title: mistiaLocalized(vi: "Nhập mã mời", en: "Join with code", ja: "招待コードで参加"),
                         subtitle: mistiaLocalized(vi: "Dùng mã hoặc link mời từ owner của gia đình.", en: "Use the invite code or link shared by the family owner.", ja: "owner が共有した招待コードまたはリンクを使います。"),
                         icon: "number.circle.fill",
-                        accent: .sky
+                        iconColor: .cyan
                     ) {
                         activeSheet = .join
                     }
@@ -132,44 +155,49 @@ struct FamilyManagementView: View {
         }
     }
 
+    // MARK: - Hub Content (has family)
+
     private var familyHubContent: some View {
         VStack(spacing: 18) {
-            FamilySummaryCard(
+            // Apple-style family header card
+            FamilyAppleHeaderCard(
                 family: familyContextStore.family,
                 currentMembership: familyContextStore.currentMembership,
-                members: familyContextStore.members
+                members: familyContextStore.members,
+                tint: cardTint
             )
 
-            MistiaGlassCard(cornerRadius: 24, tint: cardTint, padding: 0) {
+            // Actions card — Apple grouped style
+            MistiaGlassCard(cornerRadius: 14, tint: cardTint, padding: 0) {
                 VStack(spacing: 0) {
-                    FamilyActionRow(
+                    FamilySettingsRow(
                         title: mistiaLocalized(vi: "Tổng quan gia đình", en: "Family overview", ja: "家族の概要"),
                         subtitle: mistiaLocalized(vi: "Tài sản, công nợ, sắp đến hạn và top chi tiêu của cả nhà.", en: "Assets, debts, upcoming due items, and top spending across the household.", ja: "家計全体の資産・負債・支払予定・支出の要点を確認します。"),
                         icon: "chart.bar.xaxis",
-                        accent: .indigo
+                        iconColor: .indigo
                     ) {
                         destination = .overview
                     }
 
-                    ManagementProfileRowDivider()
+                    FamilyRowDivider()
 
-                    FamilyActionRow(
+                    FamilySettingsRow(
                         title: mistiaLocalized(vi: "Thành viên", en: "Members", ja: "メンバー"),
                         subtitle: mistiaLocalized(vi: "Xem role, quyền và chọn view as member.", en: "Review roles, permissions, and switch into view-as member.", ja: "役割と権限を確認し、view-as member に切り替えます。"),
                         icon: "person.2.fill",
-                        accent: .rose
+                        iconColor: Color(red: 0.96, green: 0.36, blue: 0.56)
                     ) {
                         destination = .members
                     }
 
                     if familyContextStore.canInviteMembers {
-                        ManagementProfileRowDivider()
+                        FamilyRowDivider()
 
-                        FamilyActionRow(
+                        FamilySettingsRow(
                             title: mistiaLocalized(vi: "Mời thành viên", en: "Invite member", ja: "メンバーを招待"),
                             subtitle: mistiaLocalized(vi: "Tạo mã mời mặc định 7 ngày và share ngay.", en: "Create a 7-day invite code and share it immediately.", ja: "7 日間有効な招待コードを作成してすぐ共有します。"),
                             icon: "person.badge.plus.fill",
-                            accent: .mint
+                            iconColor: .mint
                         ) {
                             activeSheet = .invite
                         }
@@ -180,92 +208,154 @@ struct FamilyManagementView: View {
     }
 }
 
-private struct FamilySummaryCard: View {
+// MARK: - Apple-style Family Header Card
+
+private struct FamilyAppleHeaderCard: View {
     let family: FamilyGroupRecord?
     let currentMembership: FamilyMembershipRecord?
     let members: [FamilyMember]
+    let tint: Color
+
+    @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
-        MistiaGlassCard(cornerRadius: 24, tint: Color.white.opacity(0.16)) {
-            VStack(alignment: .leading, spacing: 16) {
-                HStack(alignment: .top) {
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text(family?.name ?? "Mistia Family")
-                            .font(.system(size: 26, weight: .bold, design: .rounded))
-                            .foregroundStyle(.primary)
-
-                        if let currentMembership {
-                            FamilyRoleBadge(role: currentMembership.role)
-                        }
-                    }
-
-                    Spacer(minLength: 12)
-
-                    HStack(spacing: -8) {
-                        ForEach(Array(members.prefix(4).enumerated()), id: \.element.membershipID) { _, member in
-                            MistiaAvatarBadge(
-                                initials: String(member.displayName.prefix(2)).uppercased(),
-                                avatarURL: member.avatarURL,
-                                size: 34,
-                                showsStatus: false
+        MistiaGlassCard(cornerRadius: 14, tint: tint) {
+            VStack(spacing: 16) {
+                // Avatar stack — Apple Family style, centered
+                HStack(spacing: -10) {
+                    ForEach(Array(members.prefix(5).enumerated()), id: \.element.membershipID) { index, member in
+                        MistiaAvatarBadge(
+                            initials: String(member.displayName.prefix(2)).uppercased(),
+                            avatarURL: member.avatarURL,
+                            size: 52,
+                            showsStatus: false
+                        )
+                        .overlay {
+                            Circle().stroke(
+                                colorScheme == .dark ? Color(UIColor.secondarySystemGroupedBackground) : .white,
+                                lineWidth: 3
                             )
-                            .overlay {
-                                Circle().stroke(Color.white.opacity(0.85), lineWidth: 2)
-                            }
                         }
+                        .zIndex(Double(members.count - index))
+                    }
+                }
+                .padding(.top, 4)
+
+                // Family name
+                VStack(spacing: 6) {
+                    Text(family?.name ?? "Mistia Family")
+                        .font(.system(size: 22, weight: .bold, design: .rounded))
+                        .foregroundStyle(.primary)
+                        .multilineTextAlignment(.center)
+
+                    if let currentMembership {
+                        FamilyRoleBadge(role: currentMembership.role)
                     }
                 }
 
+                // Member count
                 Text(
                     mistiaLocalized(
-                        vi: "\(members.count) thành viên, dữ liệu cá nhân vẫn tách riêng nhưng tổng quan được gom theo gia đình.",
-                        en: "\(members.count) members. Personal data stays separate while household summaries roll up together.",
-                        ja: "\(members.count) 人のメンバー。個人データは分離したまま、家族の概要をまとめて表示します。"
+                        vi: "\(members.count) thành viên",
+                        en: "\(members.count) members",
+                        ja: "\(members.count) 人のメンバー"
                     )
                 )
                 .font(.system(size: 14, weight: .medium, design: .rounded))
                 .foregroundStyle(.secondary)
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 4)
+        }
+    }
+}
+
+// MARK: - Settings-style Row
+
+private struct FamilySettingsRow: View {
+    let title: String
+    let subtitle: String
+    let icon: String
+    let iconColor: Color
+    let action: () -> Void
+
+    @Environment(\.colorScheme) private var colorScheme
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 14) {
+                // Apple-style icon tile
+                ZStack {
+                    RoundedRectangle(cornerRadius: 8, style: .continuous)
+                        .fill(iconColor.gradient)
+                    Image(systemName: icon)
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundStyle(.white)
+                }
+                .frame(width: 30, height: 30)
+
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(title)
+                        .font(.system(size: 16.5, weight: .regular, design: .rounded))
+                        .foregroundStyle(.primary)
+
+                    Text(subtitle)
+                        .font(.system(size: 13, weight: .regular, design: .rounded))
+                        .foregroundStyle(.secondary)
+                        .multilineTextAlignment(.leading)
+                        .lineLimit(2)
+                }
+
+                Spacer(minLength: 8)
+
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(.tertiary)
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 12)
+        }
+        .buttonStyle(MistiaPressableButtonStyle(cornerRadius: 14))
+    }
+}
+
+// MARK: - Alert Banner
+
+private struct FamilyAlertBanner: View {
+    let message: String
+
+    var body: some View {
+        MistiaGlassCard(cornerRadius: 14, tint: Color.orange.opacity(0.12)) {
+            HStack(spacing: 12) {
+                Image(systemName: "exclamationmark.circle.fill")
+                    .font(.system(size: 18))
+                    .foregroundStyle(.orange)
+
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(mistiaLocalized(vi: "Gia đình cần kiểm tra", en: "Family needs attention", ja: "家族設定の確認が必要です"))
+                        .font(.system(size: 15, weight: .semibold, design: .rounded))
+
+                    Text(message)
+                        .font(.system(size: 13.5, weight: .medium, design: .rounded))
+                        .foregroundStyle(.secondary)
+                }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
         }
     }
 }
 
-private struct FamilyActionRow: View {
-    let title: String
-    let subtitle: String
-    let icon: String
-    let accent: Color
-    let action: () -> Void
+// MARK: - Row Divider
 
+private struct FamilyRowDivider: View {
     var body: some View {
-        Button(action: action) {
-            HStack(spacing: 14) {
-                SettingsIconTile(icon: icon, accent: accent.mistiaAccentToken)
-
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(title)
-                        .font(.system(size: 16.5, weight: .semibold, design: .rounded))
-                        .foregroundStyle(.primary)
-
-                    Text(subtitle)
-                        .font(.system(size: 13.5, weight: .medium, design: .rounded))
-                        .foregroundStyle(.secondary)
-                        .multilineTextAlignment(.leading)
-                }
-
-                Spacer(minLength: 12)
-
-                Image(systemName: "chevron.right")
-                    .font(.system(size: 12, weight: .bold))
-                    .foregroundStyle(.tertiary)
-            }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 16)
-        }
-        .buttonStyle(.plain)
+        Divider()
+            .padding(.leading, 60)
+            .padding(.trailing, 0)
     }
 }
+
+// MARK: - Role Badge
 
 private struct FamilyRoleBadge: View {
     let role: FamilyRole
@@ -274,6 +364,8 @@ private struct FamilyRoleBadge: View {
         MistiaChip(title: role.title, tint: role.tint)
     }
 }
+
+// MARK: - Family Overview Screen
 
 struct FamilyOverviewScreen: View {
     @Environment(\.calendar) private var calendar
@@ -346,18 +438,18 @@ struct FamilyOverviewScreen: View {
         ) {
             FamilyStatCard(
                 title: mistiaLocalized(vi: "Tổng tài sản", en: "Total assets", ja: "総資産"),
-                value: CurrencyFormatter.formatMinorUnits(summary.totalAssetsMinor, currencyCode: "JPY")
+                value: summary.totalAssetsMinor.formattedCurrency(code: "JPY")
             )
             FamilyStatCard(
                 title: mistiaLocalized(vi: "Tổng công nợ", en: "Total debts", ja: "総負債"),
-                value: CurrencyFormatter.formatMinorUnits(summary.totalDebtMinor, currencyCode: "JPY")
+                value: summary.totalDebtMinor.formattedCurrency(code: "JPY")
             )
             FamilyStatCard(
                 title: mistiaLocalized(vi: "Có thể chi", en: "Available to spend", ja: "使える金額"),
-                value: CurrencyFormatter.formatMinorUnits(summary.spendableMinor, currencyCode: "JPY")
+                value: summary.spendableMinor.formattedCurrency(code: "JPY")
             )
 
-            MistiaGlassCard(cornerRadius: 24, tint: Color.white.opacity(0.16)) {
+            MistiaGlassCard(cornerRadius: 14, tint: Color(UIColor.secondarySystemGroupedBackground)) {
                 VStack(alignment: .leading, spacing: 14) {
                     Text(mistiaLocalized(vi: "Top chi tháng này", en: "Top spending this month", ja: "今月の主な支出"))
                         .font(.system(size: 16, weight: .bold, design: .rounded))
@@ -367,7 +459,7 @@ struct FamilyOverviewScreen: View {
                             Text(item.key)
                                 .foregroundStyle(.primary)
                             Spacer()
-                            Text(CurrencyFormatter.formatMinorUnits(item.value, currencyCode: "JPY"))
+                            Text(item.value.formattedCurrency(code: "JPY"))
                                 .foregroundStyle(.secondary)
                         }
                         .font(.system(size: 14.5, weight: .medium, design: .rounded))
@@ -379,12 +471,14 @@ struct FamilyOverviewScreen: View {
     }
 }
 
+// MARK: - Stat Card
+
 private struct FamilyStatCard: View {
     let title: String
     let value: String
 
     var body: some View {
-        MistiaGlassCard(cornerRadius: 22, tint: Color.white.opacity(0.16)) {
+        MistiaGlassCard(cornerRadius: 14, tint: Color(UIColor.secondarySystemGroupedBackground)) {
             VStack(alignment: .leading, spacing: 8) {
                 Text(title)
                     .font(.system(size: 14, weight: .medium, design: .rounded))
@@ -397,6 +491,8 @@ private struct FamilyStatCard: View {
         }
     }
 }
+
+// MARK: - Members Screen
 
 struct FamilyMembersScreen: View {
     @Environment(FamilyContextStore.self) private var familyContextStore
@@ -411,7 +507,7 @@ struct FamilyMembersScreen: View {
                 NavigationLink {
                     FamilyMemberProfileScreen(member: member)
                 } label: {
-                    MistiaGlassCard(cornerRadius: 22, tint: Color.white.opacity(0.16)) {
+                    MistiaGlassCard(cornerRadius: 14, tint: Color(UIColor.secondarySystemGroupedBackground)) {
                         HStack(spacing: 14) {
                             MistiaAvatarBadge(
                                 initials: String(member.displayName.prefix(2)).uppercased(),
@@ -432,7 +528,7 @@ struct FamilyMembersScreen: View {
                             Spacer()
 
                             Image(systemName: "chevron.right")
-                                .font(.system(size: 12, weight: .bold))
+                                .font(.system(size: 12, weight: .semibold))
                                 .foregroundStyle(.tertiary)
                         }
                     }
@@ -442,6 +538,8 @@ struct FamilyMembersScreen: View {
         }
     }
 }
+
+// MARK: - Member Profile Screen
 
 private struct FamilyMemberProfileScreen: View {
     @Environment(SessionStore.self) private var sessionStore
@@ -457,7 +555,7 @@ private struct FamilyMemberProfileScreen: View {
             title: member.displayName,
             contentSpacing: 18
         ) {
-            MistiaGlassCard(cornerRadius: 24, tint: Color.white.opacity(0.16)) {
+            MistiaGlassCard(cornerRadius: 14, tint: Color(UIColor.secondarySystemGroupedBackground)) {
                 VStack(alignment: .leading, spacing: 14) {
                     HStack(spacing: 14) {
                         MistiaAvatarBadge(
@@ -499,6 +597,8 @@ private struct FamilyMemberProfileScreen: View {
     }
 }
 
+// MARK: - Create Sheet
+
 private struct FamilyCreateSheet: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(SessionStore.self) private var sessionStore
@@ -535,6 +635,8 @@ private struct FamilyCreateSheet: View {
         }
     }
 }
+
+// MARK: - Join Sheet
 
 private struct FamilyJoinSheet: View {
     @Environment(\.dismiss) private var dismiss
@@ -574,6 +676,8 @@ private struct FamilyJoinSheet: View {
         }
     }
 }
+
+// MARK: - Invite Sheet
 
 private struct FamilyInviteSheet: View {
     @Environment(\.dismiss) private var dismiss
@@ -626,6 +730,8 @@ private struct FamilyInviteSheet: View {
         }
     }
 }
+
+// MARK: - Permissions Sheet
 
 private struct FamilyPermissionsSheet: View {
     @Environment(\.dismiss) private var dismiss
@@ -695,6 +801,8 @@ private struct FamilyPermissionsSheet: View {
     }
 }
 
+// MARK: - Role Extensions
+
 private extension FamilyRole {
     var title: String {
         switch self {
@@ -712,26 +820,28 @@ private extension FamilyRole {
     var tint: Color {
         switch self {
         case .owner:
-            .amber.color
+            .orange
         case .viewer:
-            .sky.color
+            .cyan
         case .editor:
-            .mint.color
+            .mint
         case .kid:
-            .rose.color
+            .red
         }
     }
 }
+
+// MARK: - Wallet/Transaction Kind Extensions
 
 private extension LedgerWalletKind {
     var familyAggregateKind: FamilyAggregateWalletSnapshot.Kind {
         switch self {
         case .cash:
             .cash
-        case .bankAccount:
-            .bank
-        case .eWallet:
+        case .payPay:
             .ewallet
+        case .bank:
+            .bank
         case .creditCard:
             .creditCard
         }
@@ -748,20 +858,5 @@ private extension TransactionPrimaryKind {
         case .transfer:
             .transfer
         }
-    }
-}
-
-private extension Color {
-    var mistiaAccentToken: MistiaAccent {
-        if self == .mint {
-            return .mint
-        }
-        if self == .rose {
-            return .rose
-        }
-        if self == .sky {
-            return .sky
-        }
-        return .indigo
     }
 }

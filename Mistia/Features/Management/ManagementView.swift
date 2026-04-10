@@ -5,6 +5,7 @@ private enum ManagementNavigationDestination: String, Identifiable {
     case authPlaceholder
     case settings
     case archivedItems
+    case family
 
     var id: String { rawValue }
 }
@@ -111,8 +112,7 @@ struct ManagementView: View {
                 tone: .muted,
                 title: mistiaLocalized(vi: "Quản lý", en: "Manage", ja: "管理"),
                 embedsInNavigationStack: false,
-                leadingInitials: sessionStore.summary?.initials ?? "MI",
-                leadingAvatarURL: sessionStore.summary?.avatarURL,
+                showsLeadingAvatar: false,
                 trailingSystemImage: "gearshape",
                 onTrailingTap: { destination = .settings },
                 contentSpacing: 20
@@ -135,6 +135,8 @@ struct ManagementView: View {
                     SettingsView()
                 case .archivedItems:
                     ManagementArchivedItemsView()
+                case .family:
+                    FamilyManagementView()
                 }
             }
         }
@@ -195,7 +197,7 @@ struct ManagementView: View {
     }
 
     private var profileSection: some View {
-        Group {
+        VStack(spacing: 12) {
             if let summary = sessionStore.summary {
                 ManagementProfileCard(
                     summary: summary,
@@ -204,6 +206,45 @@ struct ManagementView: View {
                     tint: cardTint
                 ) {
                     destination = .authPlaceholder
+                }
+
+                ManagementCard(tint: cardTint) {
+                    Button(action: { destination = .family }) {
+                        HStack(spacing: 14) {
+                            ZStack {
+                                Circle()
+                                    .fill(Color.orange.opacity(0.2))
+                                
+                                Image(systemName: "person.3.fill")
+                                    .font(.system(size: 16, weight: .semibold))
+                                    .foregroundStyle(.orange)
+                            }
+                            .frame(width: 44, height: 44)
+
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text(mistiaLocalized(vi: "Gia đình", en: "Family", ja: "家族"))
+                                    .font(.system(size: 16.5, weight: .semibold, design: .rounded))
+                                    .foregroundStyle(.primary)
+
+                                Text(mistiaLocalized(
+                                    vi: "Quản lý gia đình, thành viên và quyền xem dữ liệu",
+                                    en: "Manage family, members, and view permissions",
+                                    ja: "家族、メンバー、およびビュー権限を管理します"
+                                ))
+                                    .font(.system(size: 13.5, weight: .medium, design: .rounded))
+                                    .foregroundStyle(.secondary)
+                            }
+
+                            Spacer(minLength: 12)
+
+                            Image(systemName: "chevron.right")
+                                .font(.system(size: 12, weight: .bold))
+                                .foregroundStyle(.tertiary)
+                        }
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 16)
+                    }
+                    .buttonStyle(.plain)
                 }
             } else {
                 ManagementSignedOutCard(accent: accentPurple, tint: cardTint) {
