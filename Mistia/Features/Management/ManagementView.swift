@@ -19,6 +19,7 @@ struct ManagementView: View {
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.modelContext) private var modelContext
     @Environment(SessionStore.self) private var sessionStore
+    @Environment(FamilyContextStore.self) private var familyContextStore
 
     @AppStorage(MistiaAppStorageKey.hideQuickCreate) private var hideQuickCreate = false
 
@@ -30,6 +31,7 @@ struct ManagementView: View {
         $0.entryStatusRawValue == "posted" && !$0.isArchived && $0.deletedAt == nil
     })
     private var postedTransactions: [LedgerTransaction]
+    @Query private var ownershipScopes: [OwnedRecordScope]
 
     @State private var destination: ManagementNavigationDestination?
     @State private var walletEditorTarget: ManagementWalletEditorTarget?
@@ -52,7 +54,7 @@ struct ManagementView: View {
     }
 
     private var activeWallets: [LedgerWallet] {
-        storedWallets
+        visibleWallets
             .filter { !$0.isArchived }
             .sorted {
                 if $0.sortOrder != $1.sortOrder {
@@ -64,10 +66,40 @@ struct ManagementView: View {
 
     private var visibleCategorySections: [TransactionCategoryGroupSection] {
         MistiaCategoryHierarchy.groupedSections(
-            from: storedCategories,
+            from: visibleCategories,
             kind: selectedCategoryKind,
             includeArchived: false,
             includeEmptyParents: true
+        )
+    }
+
+    private var visibleWallets: [LedgerWallet] {
+        FamilyScopedData.visible(
+            storedWallets,
+            entity: .wallet,
+            scopes: ownershipScopes,
+            familyContextStore: familyContextStore,
+            sessionStore: sessionStore
+        )
+    }
+
+    private var visibleCategories: [TransactionCategory] {
+        FamilyScopedData.visible(
+            storedCategories,
+            entity: .category,
+            scopes: ownershipScopes,
+            familyContextStore: familyContextStore,
+            sessionStore: sessionStore
+        )
+    }
+
+    private var visiblePostedTransactions: [LedgerTransaction] {
+        FamilyScopedData.visible(
+            postedTransactions,
+            entity: .transaction,
+            scopes: ownershipScopes,
+            familyContextStore: familyContextStore,
+            sessionStore: sessionStore
         )
     }
 
@@ -85,10 +117,15 @@ struct ManagementView: View {
                 onTrailingTap: { destination = .settings },
                 contentSpacing: 20
             ) {
+                FamilyContextChipBar()
                 profileSection
                 walletsSection
+                    .disabled(familyContextStore.isViewingMemberContext && !familyContextStore.canEditSelectedSubject)
                 categoriesSection
-                dataSection
+                    .disabled(familyContextStore.isViewingMemberContext && !familyContextStore.canEditSelectedSubject)
+                if !familyContextStore.isViewingMemberContext {
+                    dataSection
+                }
             }
             .navigationDestination(item: $destination) { route in
                 switch route {
@@ -198,7 +235,7 @@ struct ManagementView: View {
                         ForEach(Array(activeWallets.enumerated()), id: \.element.id) { index, wallet in
                             ManagementWalletRow(
                                 wallet: wallet,
-                                transactions: postedTransactions
+                                transactions: visiblePostedTransactions
                             ) {
                                 walletEditorTarget = ManagementWalletEditorTarget(wallet: wallet, defaultKind: wallet.kind)
                             }
@@ -413,34 +450,44 @@ struct ManagementView: View {
                 .filter { $0.deletedAt == nil }
             let dueOccurrences = try modelContext.fetch(FetchDescriptor<DueOccurrenceRecord>())
                 .filter { $0.deletedAt == nil }
+            let fallbackSubjectUserID = sessionStore.signedInUserID ?? MistiaSyncDeviceIdentity.current()
+            let walletMutations: [MistiaSyncMutation] = wallets.map {
+                MistiaSyncMutation(entity: .wallet, recordID: $0.id, subjectUserID: fallbackSubjectUserID, kind: .delete, modifiedAt: now)
+            }
+            let categoryMutations: [MistiaSyncMutation] = categories.map {
+                MistiaSyncMutation(entity: .category, recordID: $0.id, subjectUserID: fallbackSubjectUserID, kind: .delete, modifiedAt: now)
+            }
+            let profileMutations: [MistiaSyncMutation] = creditProfiles.map {
+                MistiaSyncMutation(entity: .creditCardProfile, recordID: $0.id, subjectUserID: fallbackSubjectUserID, kind: .delete, modifiedAt: now)
+            }
+            let transactionMutations: [MistiaSyncMutation] = transactions.map {
+                MistiaSyncMutation(entity: .transaction, recordID: $0.id, subjectUserID: fallbackSubjectUserID, kind: .delete, modifiedAt: now)
+            }
+            let budgetMutations: [MistiaSyncMutation] = budgets.map {
+                MistiaSyncMutation(entity: .budgetPlan, recordID: $0.id, subjectUserID: fallbackSubjectUserID, kind: .delete, modifiedAt: now)
+            }
+            let goalMutations: [MistiaSyncMutation] = goals.map {
+                MistiaSyncMutation(entity: .savingsGoal, recordID: $0.id, subjectUserID: fallbackSubjectUserID, kind: .delete, modifiedAt: now)
+            }
+            let recurringMutations: [MistiaSyncMutation] = recurringBills.map {
+                MistiaSyncMutation(entity: .recurringBillPlan, recordID: $0.id, subjectUserID: fallbackSubjectUserID, kind: .delete, modifiedAt: now)
+            }
+            let installmentMutations: [MistiaSyncMutation] = installments.map {
+                MistiaSyncMutation(entity: .installmentPlan, recordID: $0.id, subjectUserID: fallbackSubjectUserID, kind: .delete, modifiedAt: now)
+            }
+            let occurrenceMutations: [MistiaSyncMutation] = dueOccurrences.map {
+                MistiaSyncMutation(entity: .dueOccurrenceRecord, recordID: $0.id, subjectUserID: fallbackSubjectUserID, kind: .delete, modifiedAt: now)
+            }
             let mutations =
-                wallets.map {
-                    MistiaSyncMutation(entity: .wallet, recordID: $0.id, kind: .delete, modifiedAt: now)
-                }
-                + categories.map {
-                    MistiaSyncMutation(entity: .category, recordID: $0.id, kind: .delete, modifiedAt: now)
-                }
-                + creditProfiles.map {
-                    MistiaSyncMutation(entity: .creditCardProfile, recordID: $0.id, kind: .delete, modifiedAt: now)
-                }
-                + transactions.map {
-                    MistiaSyncMutation(entity: .transaction, recordID: $0.id, kind: .delete, modifiedAt: now)
-                }
-                + budgets.map {
-                    MistiaSyncMutation(entity: .budgetPlan, recordID: $0.id, kind: .delete, modifiedAt: now)
-                }
-                + goals.map {
-                    MistiaSyncMutation(entity: .savingsGoal, recordID: $0.id, kind: .delete, modifiedAt: now)
-                }
-                + recurringBills.map {
-                    MistiaSyncMutation(entity: .recurringBillPlan, recordID: $0.id, kind: .delete, modifiedAt: now)
-                }
-                + installments.map {
-                    MistiaSyncMutation(entity: .installmentPlan, recordID: $0.id, kind: .delete, modifiedAt: now)
-                }
-                + dueOccurrences.map {
-                    MistiaSyncMutation(entity: .dueOccurrenceRecord, recordID: $0.id, kind: .delete, modifiedAt: now)
-                }
+                walletMutations
+                + categoryMutations
+                + profileMutations
+                + transactionMutations
+                + budgetMutations
+                + goalMutations
+                + recurringMutations
+                + installmentMutations
+                + occurrenceMutations
 
             for wallet in wallets {
                 wallet.markDeleted(at: now)

@@ -5,20 +5,24 @@ protocol MistiaRemoteStore {
     func fetchRecord(
         entity: MistiaSyncEntity,
         recordID: UUID,
+        subjectUserID: UUID,
         session: SupabaseAuthSession
     ) async throws -> MistiaSyncUploadRecord?
     func create(
         _ record: MistiaSyncUploadRecord,
+        subjectUserID: UUID,
         session: SupabaseAuthSession
     ) async throws -> MistiaSyncUploadRecord
     func conditionalUpdate(
         _ record: MistiaSyncUploadRecord,
         expectedVersion: Int64,
+        subjectUserID: UUID,
         session: SupabaseAuthSession
     ) async throws -> MistiaSyncUploadRecord?
     func conditionalDelete(
         entity: MistiaSyncEntity,
         recordID: UUID,
+        subjectUserID: UUID,
         expectedVersion: Int64,
         modifiedAt: Date,
         deviceID: UUID,
@@ -26,6 +30,7 @@ protocol MistiaRemoteStore {
     ) async throws -> MistiaSyncUploadRecord?
     func forceUpsert(
         _ record: MistiaSyncUploadRecord,
+        subjectUserID: UUID,
         session: SupabaseAuthSession
     ) async throws -> MistiaSyncUploadRecord
 }
@@ -66,32 +71,34 @@ struct SupabaseRemoteStore: MistiaRemoteStore {
     func fetchRecord(
         entity: MistiaSyncEntity,
         recordID: UUID,
+        subjectUserID: UUID,
         session: SupabaseAuthSession
     ) async throws -> MistiaSyncUploadRecord? {
         switch entity {
         case .wallet:
-            return try await fetchSingleRow(entity: entity, recordID: recordID, session: session).map(MistiaSyncUploadRecord.wallet)
+            return try await fetchSingleRow(entity: entity, recordID: recordID, subjectUserID: subjectUserID, session: session).map(MistiaSyncUploadRecord.wallet)
         case .creditCardProfile:
-            return try await fetchSingleRow(entity: entity, recordID: recordID, session: session).map(MistiaSyncUploadRecord.creditCardProfile)
+            return try await fetchSingleRow(entity: entity, recordID: recordID, subjectUserID: subjectUserID, session: session).map(MistiaSyncUploadRecord.creditCardProfile)
         case .category:
-            return try await fetchSingleRow(entity: entity, recordID: recordID, session: session).map(MistiaSyncUploadRecord.category)
+            return try await fetchSingleRow(entity: entity, recordID: recordID, subjectUserID: subjectUserID, session: session).map(MistiaSyncUploadRecord.category)
         case .transaction:
-            return try await fetchSingleRow(entity: entity, recordID: recordID, session: session).map(MistiaSyncUploadRecord.transaction)
+            return try await fetchSingleRow(entity: entity, recordID: recordID, subjectUserID: subjectUserID, session: session).map(MistiaSyncUploadRecord.transaction)
         case .budgetPlan:
-            return try await fetchSingleRow(entity: entity, recordID: recordID, session: session).map(MistiaSyncUploadRecord.budgetPlan)
+            return try await fetchSingleRow(entity: entity, recordID: recordID, subjectUserID: subjectUserID, session: session).map(MistiaSyncUploadRecord.budgetPlan)
         case .savingsGoal:
-            return try await fetchSingleRow(entity: entity, recordID: recordID, session: session).map(MistiaSyncUploadRecord.savingsGoal)
+            return try await fetchSingleRow(entity: entity, recordID: recordID, subjectUserID: subjectUserID, session: session).map(MistiaSyncUploadRecord.savingsGoal)
         case .recurringBillPlan:
-            return try await fetchSingleRow(entity: entity, recordID: recordID, session: session).map(MistiaSyncUploadRecord.recurringBillPlan)
+            return try await fetchSingleRow(entity: entity, recordID: recordID, subjectUserID: subjectUserID, session: session).map(MistiaSyncUploadRecord.recurringBillPlan)
         case .installmentPlan:
-            return try await fetchSingleRow(entity: entity, recordID: recordID, session: session).map(MistiaSyncUploadRecord.installmentPlan)
+            return try await fetchSingleRow(entity: entity, recordID: recordID, subjectUserID: subjectUserID, session: session).map(MistiaSyncUploadRecord.installmentPlan)
         case .dueOccurrenceRecord:
-            return try await fetchSingleRow(entity: entity, recordID: recordID, session: session).map(MistiaSyncUploadRecord.dueOccurrence)
+            return try await fetchSingleRow(entity: entity, recordID: recordID, subjectUserID: subjectUserID, session: session).map(MistiaSyncUploadRecord.dueOccurrence)
         }
     }
 
     func create(
         _ record: MistiaSyncUploadRecord,
+        subjectUserID: UUID,
         session: SupabaseAuthSession
     ) async throws -> MistiaSyncUploadRecord {
         let prepared = record.preparedForCreate(
@@ -100,29 +107,30 @@ struct SupabaseRemoteStore: MistiaRemoteStore {
 
         switch prepared {
         case .wallet(let row):
-            return .wallet(try await createRow(row, entity: .wallet, session: session))
+            return .wallet(try await createRow(row, entity: .wallet, subjectUserID: subjectUserID, session: session))
         case .creditCardProfile(let row):
-            return .creditCardProfile(try await createRow(row, entity: .creditCardProfile, session: session))
+            return .creditCardProfile(try await createRow(row, entity: .creditCardProfile, subjectUserID: subjectUserID, session: session))
         case .category(let row):
-            return .category(try await createRow(row, entity: .category, session: session))
+            return .category(try await createRow(row, entity: .category, subjectUserID: subjectUserID, session: session))
         case .transaction(let row):
-            return .transaction(try await createRow(row, entity: .transaction, session: session))
+            return .transaction(try await createRow(row, entity: .transaction, subjectUserID: subjectUserID, session: session))
         case .budgetPlan(let row):
-            return .budgetPlan(try await createRow(row, entity: .budgetPlan, session: session))
+            return .budgetPlan(try await createRow(row, entity: .budgetPlan, subjectUserID: subjectUserID, session: session))
         case .savingsGoal(let row):
-            return .savingsGoal(try await createRow(row, entity: .savingsGoal, session: session))
+            return .savingsGoal(try await createRow(row, entity: .savingsGoal, subjectUserID: subjectUserID, session: session))
         case .recurringBillPlan(let row):
-            return .recurringBillPlan(try await createRow(row, entity: .recurringBillPlan, session: session))
+            return .recurringBillPlan(try await createRow(row, entity: .recurringBillPlan, subjectUserID: subjectUserID, session: session))
         case .installmentPlan(let row):
-            return .installmentPlan(try await createRow(row, entity: .installmentPlan, session: session))
+            return .installmentPlan(try await createRow(row, entity: .installmentPlan, subjectUserID: subjectUserID, session: session))
         case .dueOccurrence(let row):
-            return .dueOccurrence(try await createRow(row, entity: .dueOccurrenceRecord, session: session))
+            return .dueOccurrence(try await createRow(row, entity: .dueOccurrenceRecord, subjectUserID: subjectUserID, session: session))
         }
     }
 
     func conditionalUpdate(
         _ record: MistiaSyncUploadRecord,
         expectedVersion: Int64,
+        subjectUserID: UUID,
         session: SupabaseAuthSession
     ) async throws -> MistiaSyncUploadRecord? {
         let nextVersion = expectedVersion + 1
@@ -133,29 +141,30 @@ struct SupabaseRemoteStore: MistiaRemoteStore {
 
         switch prepared {
         case .wallet(let row):
-            return try await updateRow(row, entity: .wallet, expectedVersion: expectedVersion, session: session).map(MistiaSyncUploadRecord.wallet)
+            return try await updateRow(row, entity: .wallet, expectedVersion: expectedVersion, subjectUserID: subjectUserID, session: session).map(MistiaSyncUploadRecord.wallet)
         case .creditCardProfile(let row):
-            return try await updateRow(row, entity: .creditCardProfile, expectedVersion: expectedVersion, session: session).map(MistiaSyncUploadRecord.creditCardProfile)
+            return try await updateRow(row, entity: .creditCardProfile, expectedVersion: expectedVersion, subjectUserID: subjectUserID, session: session).map(MistiaSyncUploadRecord.creditCardProfile)
         case .category(let row):
-            return try await updateRow(row, entity: .category, expectedVersion: expectedVersion, session: session).map(MistiaSyncUploadRecord.category)
+            return try await updateRow(row, entity: .category, expectedVersion: expectedVersion, subjectUserID: subjectUserID, session: session).map(MistiaSyncUploadRecord.category)
         case .transaction(let row):
-            return try await updateRow(row, entity: .transaction, expectedVersion: expectedVersion, session: session).map(MistiaSyncUploadRecord.transaction)
+            return try await updateRow(row, entity: .transaction, expectedVersion: expectedVersion, subjectUserID: subjectUserID, session: session).map(MistiaSyncUploadRecord.transaction)
         case .budgetPlan(let row):
-            return try await updateRow(row, entity: .budgetPlan, expectedVersion: expectedVersion, session: session).map(MistiaSyncUploadRecord.budgetPlan)
+            return try await updateRow(row, entity: .budgetPlan, expectedVersion: expectedVersion, subjectUserID: subjectUserID, session: session).map(MistiaSyncUploadRecord.budgetPlan)
         case .savingsGoal(let row):
-            return try await updateRow(row, entity: .savingsGoal, expectedVersion: expectedVersion, session: session).map(MistiaSyncUploadRecord.savingsGoal)
+            return try await updateRow(row, entity: .savingsGoal, expectedVersion: expectedVersion, subjectUserID: subjectUserID, session: session).map(MistiaSyncUploadRecord.savingsGoal)
         case .recurringBillPlan(let row):
-            return try await updateRow(row, entity: .recurringBillPlan, expectedVersion: expectedVersion, session: session).map(MistiaSyncUploadRecord.recurringBillPlan)
+            return try await updateRow(row, entity: .recurringBillPlan, expectedVersion: expectedVersion, subjectUserID: subjectUserID, session: session).map(MistiaSyncUploadRecord.recurringBillPlan)
         case .installmentPlan(let row):
-            return try await updateRow(row, entity: .installmentPlan, expectedVersion: expectedVersion, session: session).map(MistiaSyncUploadRecord.installmentPlan)
+            return try await updateRow(row, entity: .installmentPlan, expectedVersion: expectedVersion, subjectUserID: subjectUserID, session: session).map(MistiaSyncUploadRecord.installmentPlan)
         case .dueOccurrence(let row):
-            return try await updateRow(row, entity: .dueOccurrenceRecord, expectedVersion: expectedVersion, session: session).map(MistiaSyncUploadRecord.dueOccurrence)
+            return try await updateRow(row, entity: .dueOccurrenceRecord, expectedVersion: expectedVersion, subjectUserID: subjectUserID, session: session).map(MistiaSyncUploadRecord.dueOccurrence)
         }
     }
 
     func conditionalDelete(
         entity: MistiaSyncEntity,
         recordID: UUID,
+        subjectUserID: UUID,
         expectedVersion: Int64,
         modifiedAt: Date,
         deviceID: UUID,
@@ -171,7 +180,7 @@ struct SupabaseRemoteStore: MistiaRemoteStore {
 
         components.queryItems = [
             URLQueryItem(name: "id", value: "eq.\(recordID.uuidString.lowercased())"),
-            URLQueryItem(name: "user_id", value: "eq.\(session.user.id.uuidString.lowercased())"),
+            URLQueryItem(name: "user_id", value: "eq.\(subjectUserID.uuidString.lowercased())"),
             URLQueryItem(name: "sync_version", value: "eq.\(expectedVersion)")
         ]
 
@@ -224,27 +233,28 @@ struct SupabaseRemoteStore: MistiaRemoteStore {
 
     func forceUpsert(
         _ record: MistiaSyncUploadRecord,
+        subjectUserID: UUID,
         session: SupabaseAuthSession
     ) async throws -> MistiaSyncUploadRecord {
         switch record {
         case .wallet(let row):
-            return .wallet(try await upsertRow(row, entity: .wallet, session: session))
+            return .wallet(try await upsertRow(row, entity: .wallet, subjectUserID: subjectUserID, session: session))
         case .creditCardProfile(let row):
-            return .creditCardProfile(try await upsertRow(row, entity: .creditCardProfile, session: session))
+            return .creditCardProfile(try await upsertRow(row, entity: .creditCardProfile, subjectUserID: subjectUserID, session: session))
         case .category(let row):
-            return .category(try await upsertRow(row, entity: .category, session: session))
+            return .category(try await upsertRow(row, entity: .category, subjectUserID: subjectUserID, session: session))
         case .transaction(let row):
-            return .transaction(try await upsertRow(row, entity: .transaction, session: session))
+            return .transaction(try await upsertRow(row, entity: .transaction, subjectUserID: subjectUserID, session: session))
         case .budgetPlan(let row):
-            return .budgetPlan(try await upsertRow(row, entity: .budgetPlan, session: session))
+            return .budgetPlan(try await upsertRow(row, entity: .budgetPlan, subjectUserID: subjectUserID, session: session))
         case .savingsGoal(let row):
-            return .savingsGoal(try await upsertRow(row, entity: .savingsGoal, session: session))
+            return .savingsGoal(try await upsertRow(row, entity: .savingsGoal, subjectUserID: subjectUserID, session: session))
         case .recurringBillPlan(let row):
-            return .recurringBillPlan(try await upsertRow(row, entity: .recurringBillPlan, session: session))
+            return .recurringBillPlan(try await upsertRow(row, entity: .recurringBillPlan, subjectUserID: subjectUserID, session: session))
         case .installmentPlan(let row):
-            return .installmentPlan(try await upsertRow(row, entity: .installmentPlan, session: session))
+            return .installmentPlan(try await upsertRow(row, entity: .installmentPlan, subjectUserID: subjectUserID, session: session))
         case .dueOccurrence(let row):
-            return .dueOccurrence(try await upsertRow(row, entity: .dueOccurrenceRecord, session: session))
+            return .dueOccurrence(try await upsertRow(row, entity: .dueOccurrenceRecord, subjectUserID: subjectUserID, session: session))
         }
     }
 
@@ -284,6 +294,7 @@ struct SupabaseRemoteStore: MistiaRemoteStore {
     private func fetchSingleRow<Row: MistiaRemoteRow>(
         entity: MistiaSyncEntity,
         recordID: UUID,
+        subjectUserID: UUID,
         session: SupabaseAuthSession
     ) async throws -> Row? {
         let configuration = try configuration()
@@ -297,7 +308,7 @@ struct SupabaseRemoteStore: MistiaRemoteStore {
         components.queryItems = [
             URLQueryItem(name: "select", value: "*"),
             URLQueryItem(name: "id", value: "eq.\(recordID.uuidString.lowercased())"),
-            URLQueryItem(name: "user_id", value: "eq.\(session.user.id.uuidString.lowercased())"),
+            URLQueryItem(name: "user_id", value: "eq.\(subjectUserID.uuidString.lowercased())"),
             URLQueryItem(name: "limit", value: "1")
         ]
 
@@ -312,10 +323,24 @@ struct SupabaseRemoteStore: MistiaRemoteStore {
     private func createRow<Row: MistiaRemoteRow>(
         _ row: Row,
         entity: MistiaSyncEntity,
+        subjectUserID: UUID,
         session: SupabaseAuthSession
     ) async throws -> Row {
         let configuration = try configuration()
-        let url = configuration.restBaseURL.appending(path: entity.tableName)
+        guard var components = URLComponents(
+            url: configuration.restBaseURL.appending(path: entity.tableName),
+            resolvingAgainstBaseURL: false
+        ) else {
+            throw SupabaseServiceError.invalidURL
+        }
+
+        components.queryItems = [
+            URLQueryItem(name: "user_id", value: "eq.\(subjectUserID.uuidString.lowercased())")
+        ]
+
+        guard let url = components.url else {
+            throw SupabaseServiceError.invalidURL
+        }
 
         var request = authorizedRequest(url: url, session: session)
         request.httpMethod = "POST"
@@ -333,6 +358,7 @@ struct SupabaseRemoteStore: MistiaRemoteStore {
         _ row: Row,
         entity: MistiaSyncEntity,
         expectedVersion: Int64,
+        subjectUserID: UUID,
         session: SupabaseAuthSession
     ) async throws -> Row? {
         let configuration = try configuration()
@@ -345,7 +371,7 @@ struct SupabaseRemoteStore: MistiaRemoteStore {
 
         components.queryItems = [
             URLQueryItem(name: "id", value: "eq.\(row.id.uuidString.lowercased())"),
-            URLQueryItem(name: "user_id", value: "eq.\(session.user.id.uuidString.lowercased())"),
+            URLQueryItem(name: "user_id", value: "eq.\(subjectUserID.uuidString.lowercased())"),
             URLQueryItem(name: "sync_version", value: "eq.\(expectedVersion)")
         ]
 
@@ -365,6 +391,7 @@ struct SupabaseRemoteStore: MistiaRemoteStore {
     private func upsertRow<Row: MistiaRemoteRow>(
         _ row: Row,
         entity: MistiaSyncEntity,
+        subjectUserID: UUID,
         session: SupabaseAuthSession
     ) async throws -> Row {
         let configuration = try configuration()
@@ -376,7 +403,8 @@ struct SupabaseRemoteStore: MistiaRemoteStore {
         }
 
         components.queryItems = [
-            URLQueryItem(name: "on_conflict", value: "id")
+            URLQueryItem(name: "on_conflict", value: "id"),
+            URLQueryItem(name: "user_id", value: "eq.\(subjectUserID.uuidString.lowercased())")
         ]
 
         guard let url = components.url else {

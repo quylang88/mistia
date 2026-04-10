@@ -3,11 +3,15 @@ import SwiftData
 
 struct ContentView: View {
     @Environment(SessionStore.self) private var sessionStore
+    @Environment(FamilyContextStore.self) private var familyContextStore
 
     var body: some View {
         RootTabView()
             .task {
                 await runStartupTasks()
+            }
+            .task(id: sessionStore.summary?.userID) {
+                await familyContextStore.refresh(sessionStore: sessionStore)
             }
     }
 
@@ -24,6 +28,7 @@ struct ContentView: View {
             print("Failed to seed category hierarchy: \(error)")
         }
         await sessionStore.bootstrapIfNeeded()
+        await familyContextStore.bootstrapIfNeeded(sessionStore: sessionStore)
 
         do {
             let context = MistiaDataStack.sharedModelContainer.mainContext

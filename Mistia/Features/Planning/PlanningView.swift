@@ -57,6 +57,7 @@ struct PlanningView: View {
     @Environment(\.calendar) private var calendar
     @Environment(\.modelContext) private var modelContext
     @Environment(SessionStore.self) private var sessionStore
+    @Environment(FamilyContextStore.self) private var familyContextStore
     @Query(filter: #Predicate<BudgetPlan> { $0.deletedAt == nil })
     private var storedBudgets: [BudgetPlan]
     @Query(filter: #Predicate<SavingsGoal> { $0.deletedAt == nil })
@@ -73,6 +74,7 @@ struct PlanningView: View {
     private var storedCategories: [TransactionCategory]
     @Query(filter: #Predicate<LedgerTransaction> { $0.deletedAt == nil })
     private var storedTransactions: [LedgerTransaction]
+    @Query private var ownershipScopes: [OwnedRecordScope]
     @AppStorage(MistiaAppStorageKey.currencyCode) private var currencyCode = "JPY"
 
     @State private var selectedMode: PlanningMode = .budget
@@ -90,15 +92,15 @@ struct PlanningView: View {
     }
 
     private var transactionSnapshots: [TransactionRecordSnapshot] {
-        storedTransactions.map(\.planningRecordSnapshot)
+        visibleTransactions.map(\.planningRecordSnapshot)
     }
 
     private var occurrenceSnapshots: [PlanningDueOccurrenceSnapshot] {
-        storedOccurrences.map(\.planningSnapshot)
+        visibleOccurrences.map(\.planningSnapshot)
     }
 
     private var activeBudgetPlans: [BudgetPlanSnapshot] {
-        storedBudgets
+        visibleBudgets
             .filter { !$0.isArchived && PlanningLogic.startOfMonth(for: $0.monthAnchor, calendar: calendar) == selectedMonth }
             .map { $0.planningSnapshot(calendar: calendar) }
     }
@@ -118,7 +120,7 @@ struct PlanningView: View {
     }
 
     private var activeGoals: [SavingsGoalSnapshot] {
-        storedGoals
+        visibleGoals
             .filter { !$0.isArchived }
             .map(\.planningSnapshot)
     }
@@ -136,7 +138,7 @@ struct PlanningView: View {
     }
 
     private var creditCardAccounts: [PlanningCreditCardAccountSnapshot] {
-        storedWallets.compactMap { $0.planningCreditCardSnapshot(records: transactionSnapshots) }
+        visibleWallets.compactMap { $0.planningCreditCardSnapshot(records: transactionSnapshots) }
     }
 
     private var creditCardDueItems: [PlanningCreditCardDueSnapshot] {
@@ -152,6 +154,7 @@ struct PlanningView: View {
     private var recurringBillDueItems: [PlanningRecurringDueSnapshot] {
         PlanningLogic.recurringBillDueItems(
             bills: storedBills
+                .filter { visibleBillIDs.contains($0.id) }
                 .filter { !$0.isArchived }
                 .map(\.planningSnapshot),
             occurrences: occurrenceSnapshots,
@@ -163,11 +166,100 @@ struct PlanningView: View {
     private var installmentDueItems: [PlanningRecurringDueSnapshot] {
         PlanningLogic.installmentDueItems(
             plans: storedInstallments
+                .filter { visibleInstallmentIDs.contains($0.id) }
                 .filter { !$0.isArchived }
                 .map(\.planningSnapshot),
             occurrences: occurrenceSnapshots,
             selectedMonth: selectedMonth,
             calendar: calendar
+        )
+    }
+
+    private var visibleBudgets: [BudgetPlan] {
+        FamilyScopedData.visible(
+            storedBudgets,
+            entity: .budgetPlan,
+            scopes: ownershipScopes,
+            familyContextStore: familyContextStore,
+            sessionStore: sessionStore
+        )
+    }
+
+    private var visibleGoals: [SavingsGoal] {
+        FamilyScopedData.visible(
+            storedGoals,
+            entity: .savingsGoal,
+            scopes: ownershipScopes,
+            familyContextStore: familyContextStore,
+            sessionStore: sessionStore
+        )
+    }
+
+    private var visibleBills: [RecurringBillPlan] {
+        FamilyScopedData.visible(
+            storedBills,
+            entity: .recurringBillPlan,
+            scopes: ownershipScopes,
+            familyContextStore: familyContextStore,
+            sessionStore: sessionStore
+        )
+    }
+
+    private var visibleBillIDs: Set<UUID> {
+        Set(visibleBills.map(\.id))
+    }
+
+    private var visibleInstallments: [InstallmentPlan] {
+        FamilyScopedData.visible(
+            storedInstallments,
+            entity: .installmentPlan,
+            scopes: ownershipScopes,
+            familyContextStore: familyContextStore,
+            sessionStore: sessionStore
+        )
+    }
+
+    private var visibleInstallmentIDs: Set<UUID> {
+        Set(visibleInstallments.map(\.id))
+    }
+
+    private var visibleOccurrences: [DueOccurrenceRecord] {
+        FamilyScopedData.visible(
+            storedOccurrences,
+            entity: .dueOccurrenceRecord,
+            scopes: ownershipScopes,
+            familyContextStore: familyContextStore,
+            sessionStore: sessionStore
+        )
+    }
+
+    private var visibleWallets: [LedgerWallet] {
+        FamilyScopedData.visible(
+            storedWallets,
+            entity: .wallet,
+            scopes: ownershipScopes,
+            familyContextStore: familyContextStore,
+            sessionStore: sessionStore
+        )
+    }
+
+    private var visibleCategories: [TransactionCategory] {
+        FamilyScopedData.visible(
+            storedCategories,
+            entity: .category,
+            scopes: ownershipScopes,
+            familyContextStore: familyContextStore,
+            sessionStore: sessionStore
+        )
+    }
+
+    private var visibleTransactions: [LedgerTransaction] {
+        FamilyScopedData.visible(
+            storedTransactions,
+            entity: .transaction,
+            scopes: ownershipScopes,
+            familyContextStore: familyContextStore,
+            sessionStore: sessionStore
         )
     }
 
@@ -191,7 +283,11 @@ struct PlanningView: View {
             onTrailingTap: { isMonthPickerPresented = true },
             contentSpacing: 18,
             pinnedHeader: {
-                PlanningModePicker(selection: $selectedMode)
+                VStack(alignment: .leading, spacing: 8) {
+                    FamilyContextChipBar()
+                        .padding(.horizontal, 18)
+                    PlanningModePicker(selection: $selectedMode)
+                }
             }
         ) {
             switch selectedMode {

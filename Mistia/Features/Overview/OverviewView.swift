@@ -9,6 +9,7 @@ struct OverviewView: View {
     @Environment(\.calendar) private var calendar
     @Environment(\.modelContext) private var modelContext
     @Environment(SessionStore.self) private var sessionStore
+    @Environment(FamilyContextStore.self) private var familyContextStore
     @AppStorage(MistiaAppStorageKey.currencyCode) private var currencyCode = "JPY"
 
     @Query(filter: #Predicate<BudgetPlan> { $0.deletedAt == nil })
@@ -23,6 +24,7 @@ struct OverviewView: View {
     private var storedWallets: [LedgerWallet]
     @Query(filter: #Predicate<LedgerTransaction> { $0.deletedAt == nil })
     private var storedTransactions: [LedgerTransaction]
+    @Query private var ownershipScopes: [OwnedRecordScope]
 
     @State private var shareItem: OverviewShareItem?
     @State private var exportErrorMessage: String?
@@ -32,19 +34,19 @@ struct OverviewView: View {
     }
 
     private var transactionRecords: [TransactionRecordSnapshot] {
-        storedTransactions.map(\.planningRecordSnapshot)
+        visibleTransactions.map(\.planningRecordSnapshot)
     }
 
     private var overviewTransactions: [OverviewTransactionSnapshot] {
-        storedTransactions.map(\.overviewSnapshot)
+        visibleTransactions.map(\.overviewSnapshot)
     }
 
     private var walletSnapshots: [OverviewWalletSnapshot] {
-        storedWallets.compactMap(\.overviewWalletSnapshot)
+        visibleWallets.compactMap(\.overviewWalletSnapshot)
     }
 
     private var activeBudgetPlans: [BudgetPlanSnapshot] {
-        storedBudgets
+        visibleBudgets
             .filter {
                 !$0.isArchived
                     && PlanningLogic.startOfMonth(for: $0.monthAnchor, calendar: calendar) == currentMonth
@@ -53,7 +55,7 @@ struct OverviewView: View {
     }
 
     private var occurrenceSnapshots: [PlanningDueOccurrenceSnapshot] {
-        storedOccurrences.map(\.planningSnapshot)
+        visibleOccurrences.map(\.planningSnapshot)
     }
 
     private var planningCreditCardAccounts: [PlanningCreditCardAccountSnapshot] {
@@ -76,7 +78,7 @@ struct OverviewView: View {
 
     private var recurringBillDueItems: [PlanningRecurringDueSnapshot] {
         PlanningLogic.recurringBillDueItems(
-            bills: storedBills
+            bills: visibleBills
                 .filter { !$0.isArchived }
                 .map(\.planningSnapshot),
             occurrences: occurrenceSnapshots,
@@ -87,12 +89,72 @@ struct OverviewView: View {
 
     private var installmentDueItems: [PlanningRecurringDueSnapshot] {
         PlanningLogic.installmentDueItems(
-            plans: storedInstallments
+            plans: visibleInstallments
                 .filter { !$0.isArchived }
                 .map(\.planningSnapshot),
             occurrences: occurrenceSnapshots,
             selectedMonth: currentMonth,
             calendar: calendar
+        )
+    }
+
+    private var visibleWallets: [LedgerWallet] {
+        FamilyScopedData.visible(
+            storedWallets,
+            entity: .wallet,
+            scopes: ownershipScopes,
+            familyContextStore: familyContextStore,
+            sessionStore: sessionStore
+        )
+    }
+
+    private var visibleTransactions: [LedgerTransaction] {
+        FamilyScopedData.visible(
+            storedTransactions,
+            entity: .transaction,
+            scopes: ownershipScopes,
+            familyContextStore: familyContextStore,
+            sessionStore: sessionStore
+        )
+    }
+
+    private var visibleBudgets: [BudgetPlan] {
+        FamilyScopedData.visible(
+            storedBudgets,
+            entity: .budgetPlan,
+            scopes: ownershipScopes,
+            familyContextStore: familyContextStore,
+            sessionStore: sessionStore
+        )
+    }
+
+    private var visibleBills: [RecurringBillPlan] {
+        FamilyScopedData.visible(
+            storedBills,
+            entity: .recurringBillPlan,
+            scopes: ownershipScopes,
+            familyContextStore: familyContextStore,
+            sessionStore: sessionStore
+        )
+    }
+
+    private var visibleInstallments: [InstallmentPlan] {
+        FamilyScopedData.visible(
+            storedInstallments,
+            entity: .installmentPlan,
+            scopes: ownershipScopes,
+            familyContextStore: familyContextStore,
+            sessionStore: sessionStore
+        )
+    }
+
+    private var visibleOccurrences: [DueOccurrenceRecord] {
+        FamilyScopedData.visible(
+            storedOccurrences,
+            entity: .dueOccurrenceRecord,
+            scopes: ownershipScopes,
+            familyContextStore: familyContextStore,
+            sessionStore: sessionStore
         )
     }
 
@@ -138,6 +200,7 @@ struct OverviewView: View {
             leadingAvatarURL: sessionStore.summary?.avatarURL,
             contentSpacing: 18
         ) {
+            FamilyContextChipBar()
             OverviewHeroCard(
                 snapshot: dashboardSnapshot.hero,
                 onExportMonthly: { exportStatement(.monthlySummary) },

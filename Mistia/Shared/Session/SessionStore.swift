@@ -85,6 +85,7 @@ final class SessionStore {
     @ObservationIgnored private var isSyncInFlight = false
     @ObservationIgnored private var requiresInitialSync = false
     @ObservationIgnored private var pendingInitialSyncChoice: MistiaInitialSyncChoice?
+    @ObservationIgnored private var subjectUserIDProvider: (() -> UUID?)?
 
     init(
         modelContainer: ModelContainer,
@@ -130,6 +131,10 @@ final class SessionStore {
 
     var isSignedIn: Bool {
         summary != nil
+    }
+
+    var signedInUserID: UUID? {
+        summary?.userID
     }
 
     var canManageSync: Bool {
@@ -188,6 +193,10 @@ final class SessionStore {
         isAutoSyncEnabled = isEnabled
         userDefaults.set(isEnabled, forKey: MistiaAppStorageKey.syncAutoEnabled)
         updateAutoSyncLoopState()
+    }
+
+    func setSubjectUserIDProvider(_ provider: (() -> UUID?)?) {
+        subjectUserIDProvider = provider
     }
 
     func showAuthPhase(_ phase: SessionAuthPhase) {
@@ -496,6 +505,13 @@ final class SessionStore {
         updateAutoSyncLoopState()
     }
 
+    func refreshedSession() async throws -> SupabaseAuthSession? {
+        guard let currentSession else { return nil }
+        let validSession = try await authService.refreshSessionIfNeeded(currentSession)
+        self.currentSession = validSession
+        return validSession
+    }
+
     func resolveSyncConflict(
         id: UUID,
         resolution: MistiaSyncConflictResolution
@@ -552,16 +568,28 @@ final class SessionStore {
         modifiedAt: Date
     ) {
         guard currentSession != nil else { return }
+        guard let subjectUserID = resolvedSubjectUserID(entity: entity, recordID: recordID) else {
+            return
+        }
         let baseVersion = (try? MistiaSyncLocalStore.currentRemoteVersion(
             for: entity,
             recordID: recordID,
             from: MistiaDataStack.sharedModelContainer
         )) ?? 0
 
+        try? MistiaRecordOwnershipStore.upsert(
+            entity: entity,
+            recordID: recordID,
+            ownerUserID: subjectUserID,
+            updatedAt: modifiedAt,
+            in: MistiaDataStack.sharedModelContainer
+        )
+
         syncCoordinator.queue(
             MistiaSyncMutation(
                 entity: entity,
                 recordID: recordID,
+                subjectUserID: subjectUserID,
                 kind: .upsert,
                 modifiedAt: modifiedAt,
                 baseVersion: baseVersion,
@@ -576,6 +604,9 @@ final class SessionStore {
         modifiedAt: Date
     ) {
         guard currentSession != nil else { return }
+        guard let subjectUserID = resolvedSubjectUserID(entity: entity, recordID: recordID) else {
+            return
+        }
         let baseVersion = (try? MistiaSyncLocalStore.currentRemoteVersion(
             for: entity,
             recordID: recordID,
@@ -586,6 +617,7 @@ final class SessionStore {
             MistiaSyncMutation(
                 entity: entity,
                 recordID: recordID,
+                subjectUserID: subjectUserID,
                 kind: .delete,
                 modifiedAt: modifiedAt,
                 baseVersion: baseVersion,
@@ -596,15 +628,30 @@ final class SessionStore {
 
     func recordMutations(_ mutations: [MistiaSyncMutation]) {
         guard currentSession != nil else { return }
-        let normalized = mutations.map { mutation in
+        let normalized: [MistiaSyncMutation] = mutations.compactMap { mutation in
+            guard let subjectUserID = resolvedSubjectUserID(
+                entity: mutation.entity,
+                recordID: mutation.recordID,
+                fallbackSubjectUserID: mutation.subjectUserID
+            ) else {
+                return nil
+            }
             let baseVersion = (try? MistiaSyncLocalStore.currentRemoteVersion(
                 for: mutation.entity,
                 recordID: mutation.recordID,
                 from: MistiaDataStack.sharedModelContainer
             )) ?? mutation.baseVersion
+            try? MistiaRecordOwnershipStore.upsert(
+                entity: mutation.entity,
+                recordID: mutation.recordID,
+                ownerUserID: subjectUserID,
+                updatedAt: mutation.modifiedAt,
+                in: MistiaDataStack.sharedModelContainer
+            )
             return MistiaSyncMutation(
                 entity: mutation.entity,
                 recordID: mutation.recordID,
+                subjectUserID: subjectUserID,
                 kind: mutation.kind,
                 modifiedAt: mutation.modifiedAt,
                 baseVersion: baseVersion,
@@ -836,6 +883,10 @@ final class SessionStore {
             currentSession = validSession
             let baseSummary = SessionSummary(user: validSession.user)
             let storedProfile = try ensureStoredProfileExists(for: baseSummary)
+            try MistiaRecordOwnershipStore.ensureMissingOwnershipClaims(
+                for: baseSummary.userID,
+                in: modelContainer
+            )
             let remoteProfile = try await syncProfileWithRemote(
                 session: validSession,
                 baseSummary: baseSummary,
@@ -1232,6 +1283,30 @@ final class SessionStore {
 
     private func errorMessage(for error: Error) -> String {
         error.localizedDescription.lowercased()
+    }
+
+    private func resolvedSubjectUserID(
+        entity: MistiaSyncEntity,
+        recordID: UUID,
+        fallbackSubjectUserID: UUID? = nil
+    ) -> UUID? {
+        if let ownerUserID = try? MistiaRecordOwnershipStore.ownerUserID(
+            entity: entity,
+            recordID: recordID,
+            in: MistiaDataStack.sharedModelContainer
+        ) {
+            return ownerUserID
+        }
+
+        if let fallbackSubjectUserID {
+            return fallbackSubjectUserID
+        }
+
+        if let provided = subjectUserIDProvider?() {
+            return provided
+        }
+
+        return currentSession?.user.id
     }
 
     private func startLiveSyncLoop() {

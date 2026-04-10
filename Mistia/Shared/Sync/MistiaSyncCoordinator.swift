@@ -224,6 +224,7 @@ final class SyncCoordinator {
                 MistiaSyncMutation(
                     entity: conflict.entity,
                     recordID: conflict.recordID,
+                    subjectUserID: localRecord.userID,
                     kind: localRecord.deletedAt == nil ? .upsert : .delete,
                     modifiedAt: localRecord.updatedAt,
                     baseVersion: conflict.remoteVersion,
@@ -241,7 +242,6 @@ final class SyncCoordinator {
     ) async throws -> Bool {
         guard let localRecord = try MistiaSyncLocalStore.exportRecord(
             for: mutation,
-            userID: session.user.id,
             from: modelContainer
         ) else {
             outbox.remove(mutation)
@@ -251,6 +251,7 @@ final class SyncCoordinator {
         let remoteRecord = try await remoteStore.fetchRecord(
             entity: mutation.entity,
             recordID: mutation.recordID,
+            subjectUserID: mutation.subjectUserID,
             session: session
         )
 
@@ -278,6 +279,7 @@ final class SyncCoordinator {
 
             let created = try await remoteStore.create(
                 localRecord.preparedForCreate(deviceID: deviceID),
+                subjectUserID: mutation.subjectUserID,
                 session: session
             )
             try MistiaSyncLocalStore.applyRemoteRecord(created, in: modelContainer)
@@ -334,6 +336,7 @@ final class SyncCoordinator {
         if let updated = try await remoteStore.conditionalUpdate(
             localRecord.preparedForMutation(nextVersion: mutation.baseVersion + 1, deviceID: deviceID),
             expectedVersion: mutation.baseVersion,
+            subjectUserID: mutation.subjectUserID,
             session: session
         ) {
             try MistiaSyncLocalStore.applyRemoteRecord(updated, in: modelContainer)
@@ -344,6 +347,7 @@ final class SyncCoordinator {
         let latestRemote = try await remoteStore.fetchRecord(
             entity: mutation.entity,
             recordID: mutation.recordID,
+            subjectUserID: mutation.subjectUserID,
             session: session
         ) ?? synthesizedDeletedRecord(from: localRecord, remoteVersion: mutation.baseVersion + 1)
 
@@ -366,7 +370,6 @@ final class SyncCoordinator {
     ) async throws -> Bool {
         guard let localRecord = try MistiaSyncLocalStore.exportRecord(
             for: mutation,
-            userID: session.user.id,
             from: modelContainer
         ) else {
             outbox.remove(mutation)
@@ -376,6 +379,7 @@ final class SyncCoordinator {
         let remoteRecord = try await remoteStore.fetchRecord(
             entity: mutation.entity,
             recordID: mutation.recordID,
+            subjectUserID: mutation.subjectUserID,
             session: session
         )
 
@@ -407,6 +411,7 @@ final class SyncCoordinator {
         if let deletedRecord = try await remoteStore.conditionalDelete(
             entity: mutation.entity,
             recordID: mutation.recordID,
+            subjectUserID: mutation.subjectUserID,
             expectedVersion: mutation.baseVersion,
             modifiedAt: mutation.modifiedAt,
             deviceID: deviceID,
@@ -420,6 +425,7 @@ final class SyncCoordinator {
         let latestRemote = try await remoteStore.fetchRecord(
             entity: mutation.entity,
             recordID: mutation.recordID,
+            subjectUserID: mutation.subjectUserID,
             session: session
         ) ?? synthesizedDeletedRecord(from: localRecord, remoteVersion: mutation.baseVersion + 1)
 
@@ -455,6 +461,7 @@ final class SyncCoordinator {
                 guard localRecord.deletedAt == nil else { continue }
                 _ = try await remoteStore.create(
                     localRecord.preparedForCreate(deviceID: deviceID),
+                    subjectUserID: localRecord.userID,
                     session: session
                 )
                 continue
@@ -504,13 +511,18 @@ final class SyncCoordinator {
                 nextVersion: max(remoteVersion + 1, 1),
                 deviceID: deviceID
             )
-            _ = try await remoteStore.forceUpsert(prepared, session: session)
+            _ = try await remoteStore.forceUpsert(
+                prepared,
+                subjectUserID: localRecord.userID,
+                session: session
+            )
         }
 
         for remoteRecord in remoteSnapshot.allRecords where localByKey[remoteRecord.storageKey] == nil {
             _ = try await remoteStore.conditionalDelete(
                 entity: remoteRecord.entity,
                 recordID: remoteRecord.id,
+                subjectUserID: remoteRecord.userID,
                 expectedVersion: remoteRecord.syncVersion,
                 modifiedAt: Date(),
                 deviceID: deviceID,
@@ -529,6 +541,7 @@ final class SyncCoordinator {
             guard localRecord.deletedAt == nil else { continue }
             _ = try await remoteStore.create(
                 localRecord.preparedForCreate(deviceID: deviceID),
+                subjectUserID: localRecord.userID,
                 session: session
             )
         }
@@ -537,7 +550,7 @@ final class SyncCoordinator {
     private func applySnapshot(_ snapshot: MistiaRemoteSnapshot) throws {
         try MistiaSyncLocalStore.applySnapshotIncrementally(
             snapshot,
-            shouldPruneMissing: true,
+            shouldPruneMissing: false,
             protectedRecordIDs: queuedMutationIDs(),
             in: modelContainer
         )

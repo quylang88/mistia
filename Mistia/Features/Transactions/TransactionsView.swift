@@ -44,10 +44,12 @@ struct TransactionsView: View {
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.modelContext) private var modelContext
     @Environment(SessionStore.self) private var sessionStore
+    @Environment(FamilyContextStore.self) private var familyContextStore
 
     @Query private var storedTransactions: [LedgerTransaction]
     @Query private var storedWallets: [LedgerWallet]
     @Query private var storedCategories: [TransactionCategory]
+    @Query private var ownershipScopes: [OwnedRecordScope]
 
     @State private var selectedSegment: TransactionSegment? = nil
     @State private var editorTarget: TransactionEditorTarget?
@@ -56,7 +58,7 @@ struct TransactionsView: View {
     @State private var isSearchPresented = false
 
     private var activeTransactions: [LedgerTransaction] {
-        storedTransactions
+        visibleTransactions
             .filter { $0.deletedAt == nil && !$0.isArchived }
             .sorted {
                 if $0.occurredAt != $1.occurredAt {
@@ -67,7 +69,7 @@ struct TransactionsView: View {
     }
 
     private var activeWallets: [LedgerWallet] {
-        storedWallets
+        visibleWallets
             .filter { $0.deletedAt == nil && !$0.isArchived }
             .sorted {
                 if $0.sortOrder != $1.sortOrder {
@@ -81,14 +83,14 @@ struct TransactionsView: View {
         switch selectedSegment?.kind {
         case .expense:
             return MistiaCategoryHierarchy.groupedSections(
-                from: storedCategories,
+                from: visibleCategories,
                 kind: .expense,
                 includeArchived: false,
                 includeEmptyParents: false
             )
         case .income:
             return MistiaCategoryHierarchy.groupedSections(
-                from: storedCategories,
+                from: visibleCategories,
                 kind: .income,
                 includeArchived: false,
                 includeEmptyParents: false
@@ -97,12 +99,12 @@ struct TransactionsView: View {
             return []
         case nil:
             return MistiaCategoryHierarchy.groupedSections(
-                from: storedCategories,
+                from: visibleCategories,
                 kind: .expense,
                 includeArchived: false,
                 includeEmptyParents: false
             ) + MistiaCategoryHierarchy.groupedSections(
-                from: storedCategories,
+                from: visibleCategories,
                 kind: .income,
                 includeArchived: false,
                 includeEmptyParents: false
@@ -112,6 +114,36 @@ struct TransactionsView: View {
 
     private var activeCategories: [TransactionCategory] {
         activeCategorySections.flatMap(\.children)
+    }
+
+    private var visibleTransactions: [LedgerTransaction] {
+        FamilyScopedData.visible(
+            storedTransactions,
+            entity: .transaction,
+            scopes: ownershipScopes,
+            familyContextStore: familyContextStore,
+            sessionStore: sessionStore
+        )
+    }
+
+    private var visibleWallets: [LedgerWallet] {
+        FamilyScopedData.visible(
+            storedWallets,
+            entity: .wallet,
+            scopes: ownershipScopes,
+            familyContextStore: familyContextStore,
+            sessionStore: sessionStore
+        )
+    }
+
+    private var visibleCategories: [TransactionCategory] {
+        FamilyScopedData.visible(
+            storedCategories,
+            entity: .category,
+            scopes: ownershipScopes,
+            familyContextStore: familyContextStore,
+            sessionStore: sessionStore
+        )
     }
 
     private var transactionsByID: [UUID: LedgerTransaction] {
@@ -199,7 +231,11 @@ struct TransactionsView: View {
             contentSpacing: 18,
             contentBottomPadding: 150,
             pinnedHeader: {
-                unifiedFilterRow
+                VStack(alignment: .leading, spacing: 8) {
+                    FamilyContextChipBar()
+                        .padding(.horizontal, 18)
+                    unifiedFilterRow
+                }
                     .zIndex(99)
             }
         ) {

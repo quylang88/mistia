@@ -22,6 +22,7 @@ enum MistiaSyncMutationKind: String, Codable, Hashable {
 struct MistiaSyncMutation: Codable, Hashable, Identifiable {
     let entity: MistiaSyncEntity
     let recordID: UUID
+    let subjectUserID: UUID
     let kind: MistiaSyncMutationKind
     let modifiedAt: Date
     let baseVersion: Int64
@@ -30,6 +31,7 @@ struct MistiaSyncMutation: Codable, Hashable, Identifiable {
     init(
         entity: MistiaSyncEntity,
         recordID: UUID,
+        subjectUserID: UUID,
         kind: MistiaSyncMutationKind,
         modifiedAt: Date,
         baseVersion: Int64 = 0,
@@ -37,6 +39,7 @@ struct MistiaSyncMutation: Codable, Hashable, Identifiable {
     ) {
         self.entity = entity
         self.recordID = recordID
+        self.subjectUserID = subjectUserID
         self.kind = kind
         self.modifiedAt = modifiedAt
         self.baseVersion = baseVersion

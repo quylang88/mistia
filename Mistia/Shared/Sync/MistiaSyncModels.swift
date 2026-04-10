@@ -613,6 +613,29 @@ enum MistiaSyncUploadRecord {
         }
     }
 
+    var userID: UUID {
+        switch self {
+        case .wallet(let row):
+            row.userID
+        case .creditCardProfile(let row):
+            row.userID
+        case .category(let row):
+            row.userID
+        case .transaction(let row):
+            row.userID
+        case .budgetPlan(let row):
+            row.userID
+        case .savingsGoal(let row):
+            row.userID
+        case .recurringBillPlan(let row):
+            row.userID
+        case .installmentPlan(let row):
+            row.userID
+        case .dueOccurrence(let row):
+            row.userID
+        }
+    }
+
     var deletedAt: Date? {
         switch self {
         case .wallet(let row):

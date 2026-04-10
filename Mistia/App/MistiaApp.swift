@@ -9,6 +9,7 @@ struct MistiaApp: App {
     private let modelContainer: ModelContainer
     private let launchIssue: MistiaDataStack.LaunchIssue?
     @State private var sessionStore: SessionStore
+    @State private var familyContextStore: FamilyContextStore
 
     init() {
         MistiaAppLanguage.bootstrapStoredPreference()
@@ -16,6 +17,8 @@ struct MistiaApp: App {
         modelContainer = launchState.modelContainer
         launchIssue = launchState.issue
         _sessionStore = State(initialValue: SessionStore(modelContainer: launchState.modelContainer))
+        let familyStore = FamilyContextStore(modelContainer: launchState.modelContainer)
+        _familyContextStore = State(initialValue: familyStore)
     }
 
     var body: some Scene {
@@ -31,9 +34,16 @@ struct MistiaApp: App {
                 .environment(\.locale, appLanguage.locale)
                 .environment(\.calendar, appLanguage.calendar)
                 .environment(sessionStore)
+                .environment(familyContextStore)
                 .modelContainer(modelContainer)
                 .onOpenURL { url in
                     GIDSignIn.sharedInstance.handle(url)
+                }
+                .task {
+                    let store = familyContextStore
+                    sessionStore.setSubjectUserIDProvider { [weak store] in
+                        store?.selectedSubjectUserID
+                    }
                 }
         }
     }

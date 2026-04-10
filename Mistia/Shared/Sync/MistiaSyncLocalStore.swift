@@ -20,15 +20,34 @@ enum MistiaSyncLocalStore {
         from container: ModelContainer
     ) throws -> MistiaRemoteSnapshot {
         let context = ModelContext(container)
+        let ownershipScopes = try context.fetch(FetchDescriptor<OwnedRecordScope>())
+        let walletOwnerMap = MistiaRecordOwnershipStore.ownerMap(from: ownershipScopes, entity: .wallet)
+        let profileOwnerMap = MistiaRecordOwnershipStore.ownerMap(from: ownershipScopes, entity: .creditCardProfile)
+        let categoryOwnerMap = MistiaRecordOwnershipStore.ownerMap(from: ownershipScopes, entity: .category)
+        let transactionOwnerMap = MistiaRecordOwnershipStore.ownerMap(from: ownershipScopes, entity: .transaction)
+        let budgetOwnerMap = MistiaRecordOwnershipStore.ownerMap(from: ownershipScopes, entity: .budgetPlan)
+        let goalOwnerMap = MistiaRecordOwnershipStore.ownerMap(from: ownershipScopes, entity: .savingsGoal)
+        let recurringOwnerMap = MistiaRecordOwnershipStore.ownerMap(from: ownershipScopes, entity: .recurringBillPlan)
+        let installmentOwnerMap = MistiaRecordOwnershipStore.ownerMap(from: ownershipScopes, entity: .installmentPlan)
+        let occurrenceOwnerMap = MistiaRecordOwnershipStore.ownerMap(from: ownershipScopes, entity: .dueOccurrenceRecord)
         let wallets = try fetchWallets(context)
+            .filter { walletOwnerMap[$0.id] == nil || walletOwnerMap[$0.id] == userID }
         let creditCardProfiles = try fetchCreditCardProfiles(context)
+            .filter { profileOwnerMap[$0.id] == nil || profileOwnerMap[$0.id] == userID }
         let categories = try fetchCategories(context)
+            .filter { categoryOwnerMap[$0.id] == nil || categoryOwnerMap[$0.id] == userID }
         let transactions = try fetchTransactions(context)
+            .filter { transactionOwnerMap[$0.id] == nil || transactionOwnerMap[$0.id] == userID }
         let budgetPlans = try fetchBudgetPlans(context)
+            .filter { budgetOwnerMap[$0.id] == nil || budgetOwnerMap[$0.id] == userID }
         let savingsGoals = try fetchSavingsGoals(context)
+            .filter { goalOwnerMap[$0.id] == nil || goalOwnerMap[$0.id] == userID }
         let recurringBillPlans = try fetchRecurringBillPlans(context)
+            .filter { recurringOwnerMap[$0.id] == nil || recurringOwnerMap[$0.id] == userID }
         let installmentPlans = try fetchInstallmentPlans(context)
+            .filter { installmentOwnerMap[$0.id] == nil || installmentOwnerMap[$0.id] == userID }
         let dueOccurrences = try fetchDueOccurrences(context)
+            .filter { occurrenceOwnerMap[$0.id] == nil || occurrenceOwnerMap[$0.id] == userID }
 
         return MistiaRemoteSnapshot(
             wallets: wallets.map { RemoteLedgerWallet(local: $0, userID: userID) },
@@ -51,42 +70,42 @@ enum MistiaSyncLocalStore {
 
     static func exportRecord(
         for mutation: MistiaSyncMutation,
-        userID: UUID,
         from container: ModelContainer
     ) throws -> MistiaSyncUploadRecord? {
         let context = ModelContext(container)
+        let subjectUserID = mutation.subjectUserID
 
         switch mutation.entity {
         case .wallet:
             guard let wallet = try fetchWallets(context).first(where: { $0.id == mutation.recordID }) else {
                 return nil
             }
-            return .wallet(RemoteLedgerWallet(local: wallet, userID: userID))
+            return .wallet(RemoteLedgerWallet(local: wallet, userID: subjectUserID))
         case .creditCardProfile:
             guard let profile = try fetchCreditCardProfiles(context).first(where: { $0.id == mutation.recordID }) else {
                 return nil
             }
-            return .creditCardProfile(RemoteCreditCardProfile(local: profile, userID: userID))
+            return .creditCardProfile(RemoteCreditCardProfile(local: profile, userID: subjectUserID))
         case .category:
             guard let category = try fetchCategories(context).first(where: { $0.id == mutation.recordID }) else {
                 return nil
             }
-            return .category(RemoteTransactionCategory(local: category, userID: userID))
+            return .category(RemoteTransactionCategory(local: category, userID: subjectUserID))
         case .transaction:
             guard let transaction = try fetchTransactions(context).first(where: { $0.id == mutation.recordID }) else {
                 return nil
             }
-            return .transaction(RemoteLedgerTransaction(local: transaction, userID: userID))
+            return .transaction(RemoteLedgerTransaction(local: transaction, userID: subjectUserID))
         case .budgetPlan:
             guard let plan = try fetchBudgetPlans(context).first(where: { $0.id == mutation.recordID }) else {
                 return nil
             }
-            return .budgetPlan(RemoteBudgetPlan(local: plan, userID: userID))
+            return .budgetPlan(RemoteBudgetPlan(local: plan, userID: subjectUserID))
         case .savingsGoal:
             guard let goal = try fetchSavingsGoals(context).first(where: { $0.id == mutation.recordID }) else {
                 return nil
             }
-            return .savingsGoal(RemoteSavingsGoal(local: goal, userID: userID))
+            return .savingsGoal(RemoteSavingsGoal(local: goal, userID: subjectUserID))
         case .recurringBillPlan:
             guard let plan = try fetchRecurringBillPlans(context).first(where: { $0.id == mutation.recordID }) else {
                 return nil
@@ -95,7 +114,7 @@ enum MistiaSyncLocalStore {
             return .recurringBillPlan(
                 RemoteRecurringBillPlan(
                     local: plan,
-                    userID: userID,
+                    userID: subjectUserID,
                     categoryID: recurringBillCategoryID(for: plan, categories: categories)
                 )
             )
@@ -103,12 +122,12 @@ enum MistiaSyncLocalStore {
             guard let plan = try fetchInstallmentPlans(context).first(where: { $0.id == mutation.recordID }) else {
                 return nil
             }
-            return .installmentPlan(RemoteInstallmentPlan(local: plan, userID: userID))
+            return .installmentPlan(RemoteInstallmentPlan(local: plan, userID: subjectUserID))
         case .dueOccurrenceRecord:
             guard let record = try fetchDueOccurrences(context).first(where: { $0.id == mutation.recordID }) else {
                 return nil
             }
-            return .dueOccurrence(RemoteDueOccurrenceRecord(local: record, userID: userID))
+            return .dueOccurrence(RemoteDueOccurrenceRecord(local: record, userID: subjectUserID))
         }
     }
 
@@ -175,7 +194,6 @@ enum MistiaSyncLocalStore {
         let recurringBillPlans = try fetchRecurringBillPlans(context)
         let installmentPlans = try fetchInstallmentPlans(context)
         let dueOccurrences = try fetchDueOccurrences(context)
-
         var walletByID = Dictionary(uniqueKeysWithValues: wallets.map { ($0.id, $0) })
         var categoryByID = Dictionary(uniqueKeysWithValues: categories.map { ($0.id, $0) })
         var profileByID = Dictionary(uniqueKeysWithValues: creditProfiles.map { ($0.id, $0) })
@@ -187,11 +205,11 @@ enum MistiaSyncLocalStore {
         var occurrenceByID = Dictionary(uniqueKeysWithValues: dueOccurrences.map { ($0.id, $0) })
 
         for row in snapshot.wallets {
-            upsertWallet(row, context: context, walletByID: &walletByID)
+            try upsertWallet(row, context: context, walletByID: &walletByID)
         }
 
         for row in snapshot.categories {
-            upsertCategory(row, context: context, categoryByID: &categoryByID)
+            try upsertCategory(row, context: context, categoryByID: &categoryByID)
         }
 
         for row in snapshot.categories {
@@ -199,7 +217,7 @@ enum MistiaSyncLocalStore {
         }
 
         for row in snapshot.creditCardProfiles {
-            upsertCreditProfile(
+            try upsertCreditProfile(
                 row,
                 context: context,
                 walletByID: walletByID,
@@ -208,7 +226,7 @@ enum MistiaSyncLocalStore {
         }
 
         for row in snapshot.transactions {
-            upsertTransaction(
+            try upsertTransaction(
                 row,
                 context: context,
                 walletByID: walletByID,
@@ -218,15 +236,15 @@ enum MistiaSyncLocalStore {
         }
 
         for row in snapshot.budgetPlans {
-            upsertBudget(row, context: context, categoryByID: categoryByID, budgetByID: &budgetByID)
+            try upsertBudget(row, context: context, categoryByID: categoryByID, budgetByID: &budgetByID)
         }
 
         for row in snapshot.savingsGoals {
-            upsertGoal(row, context: context, walletByID: walletByID, goalByID: &goalByID)
+            try upsertGoal(row, context: context, walletByID: walletByID, goalByID: &goalByID)
         }
 
         for row in snapshot.recurringBillPlans {
-            upsertRecurringBill(
+            try upsertRecurringBill(
                 row,
                 context: context,
                 walletByID: walletByID,
@@ -236,11 +254,11 @@ enum MistiaSyncLocalStore {
         }
 
         for row in snapshot.installmentPlans {
-            upsertInstallment(row, context: context, walletByID: walletByID, installmentByID: &installmentByID)
+            try upsertInstallment(row, context: context, walletByID: walletByID, installmentByID: &installmentByID)
         }
 
         for row in snapshot.dueOccurrences {
-            upsertDueOccurrence(row, context: context, occurrenceByID: &occurrenceByID)
+            try upsertDueOccurrence(row, context: context, occurrenceByID: &occurrenceByID)
         }
 
         if shouldPruneMissing {
@@ -315,16 +333,16 @@ enum MistiaSyncLocalStore {
 
         switch record {
         case .wallet(let row):
-            upsertWallet(row, context: context, walletByID: &walletByID)
+            try upsertWallet(row, context: context, walletByID: &walletByID)
         case .creditCardProfile(let row):
             var profileByID = Dictionary(uniqueKeysWithValues: try fetchCreditCardProfiles(context).map { ($0.id, $0) })
-            upsertCreditProfile(row, context: context, walletByID: walletByID, profileByID: &profileByID)
+            try upsertCreditProfile(row, context: context, walletByID: walletByID, profileByID: &profileByID)
         case .category(let row):
-            upsertCategory(row, context: context, categoryByID: &categoryByID)
+            try upsertCategory(row, context: context, categoryByID: &categoryByID)
             applyCategoryHierarchy(row, categoryByID: categoryByID)
         case .transaction(let row):
             var transactionByID = Dictionary(uniqueKeysWithValues: try fetchTransactions(context).map { ($0.id, $0) })
-            upsertTransaction(
+            try upsertTransaction(
                 row,
                 context: context,
                 walletByID: walletByID,
@@ -333,13 +351,13 @@ enum MistiaSyncLocalStore {
             )
         case .budgetPlan(let row):
             var budgetByID = Dictionary(uniqueKeysWithValues: try fetchBudgetPlans(context).map { ($0.id, $0) })
-            upsertBudget(row, context: context, categoryByID: categoryByID, budgetByID: &budgetByID)
+            try upsertBudget(row, context: context, categoryByID: categoryByID, budgetByID: &budgetByID)
         case .savingsGoal(let row):
             var goalByID = Dictionary(uniqueKeysWithValues: try fetchSavingsGoals(context).map { ($0.id, $0) })
-            upsertGoal(row, context: context, walletByID: walletByID, goalByID: &goalByID)
+            try upsertGoal(row, context: context, walletByID: walletByID, goalByID: &goalByID)
         case .recurringBillPlan(let row):
             var recurringByID = Dictionary(uniqueKeysWithValues: try fetchRecurringBillPlans(context).map { ($0.id, $0) })
-            upsertRecurringBill(
+            try upsertRecurringBill(
                 row,
                 context: context,
                 walletByID: walletByID,
@@ -348,10 +366,10 @@ enum MistiaSyncLocalStore {
             )
         case .installmentPlan(let row):
             var installmentByID = Dictionary(uniqueKeysWithValues: try fetchInstallmentPlans(context).map { ($0.id, $0) })
-            upsertInstallment(row, context: context, walletByID: walletByID, installmentByID: &installmentByID)
+            try upsertInstallment(row, context: context, walletByID: walletByID, installmentByID: &installmentByID)
         case .dueOccurrence(let row):
             var occurrenceByID = Dictionary(uniqueKeysWithValues: try fetchDueOccurrences(context).map { ($0.id, $0) })
-            upsertDueOccurrence(row, context: context, occurrenceByID: &occurrenceByID)
+            try upsertDueOccurrence(row, context: context, occurrenceByID: &occurrenceByID)
         }
 
         try context.save()
@@ -485,6 +503,10 @@ enum MistiaSyncLocalStore {
             context.delete(record)
         }
 
+        for scope in try context.fetch(FetchDescriptor<OwnedRecordScope>()) {
+            context.delete(scope)
+        }
+
         for record in try fetchDueOccurrences(context) {
             context.delete(record)
         }
@@ -542,7 +564,7 @@ enum MistiaSyncLocalStore {
         _ row: RemoteLedgerWallet,
         context: ModelContext,
         walletByID: inout [UUID: LedgerWallet]
-    ) {
+    ) throws {
         let wallet = walletByID[row.id] ?? LedgerWallet(
             id: row.id,
             name: row.name,
@@ -582,13 +604,20 @@ enum MistiaSyncLocalStore {
         wallet.updatedAt = row.updatedAt
         wallet.deletedAt = row.deletedAt
         wallet.remoteVersion = row.syncVersion
+        try MistiaRecordOwnershipStore.upsert(
+            entity: .wallet,
+            recordID: row.id,
+            ownerUserID: row.userID,
+            updatedAt: row.updatedAt,
+            context: context
+        )
     }
 
     private static func upsertCategory(
         _ row: RemoteTransactionCategory,
         context: ModelContext,
         categoryByID: inout [UUID: TransactionCategory]
-    ) {
+    ) throws {
         let category = categoryByID[row.id] ?? TransactionCategory(
             id: row.id,
             name: row.name,
@@ -628,6 +657,13 @@ enum MistiaSyncLocalStore {
         category.updatedAt = row.updatedAt
         category.deletedAt = row.deletedAt
         category.remoteVersion = row.syncVersion
+        try MistiaRecordOwnershipStore.upsert(
+            entity: .category,
+            recordID: row.id,
+            ownerUserID: row.userID,
+            updatedAt: row.updatedAt,
+            context: context
+        )
     }
 
     private static func applyCategoryHierarchy(
@@ -643,7 +679,7 @@ enum MistiaSyncLocalStore {
         context: ModelContext,
         walletByID: [UUID: LedgerWallet],
         profileByID: inout [UUID: CreditCardProfile]
-    ) {
+    ) throws {
         let profile = profileByID[row.id] ?? CreditCardProfile(
             id: row.id,
             issuerName: row.issuerName,
@@ -678,6 +714,13 @@ enum MistiaSyncLocalStore {
         profile.wallet = row.walletID.flatMap { walletByID[$0] }
         profile.paymentSourceWallet = row.paymentSourceWalletID.flatMap { walletByID[$0] }
         profile.wallet?.creditCardProfile = profile
+        try MistiaRecordOwnershipStore.upsert(
+            entity: .creditCardProfile,
+            recordID: row.id,
+            ownerUserID: row.userID,
+            updatedAt: row.updatedAt,
+            context: context
+        )
     }
 
     private static func upsertTransaction(
@@ -686,7 +729,7 @@ enum MistiaSyncLocalStore {
         walletByID: [UUID: LedgerWallet],
         categoryByID: [UUID: TransactionCategory],
         transactionByID: inout [UUID: LedgerTransaction]
-    ) {
+    ) throws {
         let transaction = transactionByID[row.id] ?? LedgerTransaction(
             id: row.id,
             primaryKind: TransactionPrimaryKind(rawValue: row.primaryKindRawValue) ?? .expense,
@@ -734,6 +777,13 @@ enum MistiaSyncLocalStore {
         transaction.category = row.categoryID.flatMap { categoryByID[$0] }
         transaction.isArchived = row.isArchived
         transaction.archivedAt = row.archivedAt
+        try MistiaRecordOwnershipStore.upsert(
+            entity: .transaction,
+            recordID: row.id,
+            ownerUserID: row.userID,
+            updatedAt: row.updatedAt,
+            context: context
+        )
     }
 
     private static func upsertBudget(
@@ -741,7 +791,7 @@ enum MistiaSyncLocalStore {
         context: ModelContext,
         categoryByID: [UUID: TransactionCategory],
         budgetByID: inout [UUID: BudgetPlan]
-    ) {
+    ) throws {
         let budget = budgetByID[row.id] ?? BudgetPlan(
             id: row.id,
             category: row.categoryID.flatMap { categoryByID[$0] },
@@ -771,6 +821,13 @@ enum MistiaSyncLocalStore {
         budget.updatedAt = row.updatedAt
         budget.deletedAt = row.deletedAt
         budget.remoteVersion = row.syncVersion
+        try MistiaRecordOwnershipStore.upsert(
+            entity: .budgetPlan,
+            recordID: row.id,
+            ownerUserID: row.userID,
+            updatedAt: row.updatedAt,
+            context: context
+        )
     }
 
     private static func upsertGoal(
@@ -778,7 +835,7 @@ enum MistiaSyncLocalStore {
         context: ModelContext,
         walletByID: [UUID: LedgerWallet],
         goalByID: inout [UUID: SavingsGoal]
-    ) {
+    ) throws {
         let goal = goalByID[row.id] ?? SavingsGoal(
             id: row.id,
             name: row.name,
@@ -814,6 +871,13 @@ enum MistiaSyncLocalStore {
         goal.updatedAt = row.updatedAt
         goal.deletedAt = row.deletedAt
         goal.remoteVersion = row.syncVersion
+        try MistiaRecordOwnershipStore.upsert(
+            entity: .savingsGoal,
+            recordID: row.id,
+            ownerUserID: row.userID,
+            updatedAt: row.updatedAt,
+            context: context
+        )
     }
 
     private static func upsertRecurringBill(
@@ -822,7 +886,7 @@ enum MistiaSyncLocalStore {
         walletByID: [UUID: LedgerWallet],
         categoryByID: [UUID: TransactionCategory],
         recurringByID: inout [UUID: RecurringBillPlan]
-    ) {
+    ) throws {
         let resolvedCategory = row.categoryID.flatMap { categoryByID[$0] }
         let normalizedIconSymbolName = resolvedCategory?.iconSymbolName ?? row.iconSymbolName
         let plan = recurringByID[row.id] ?? RecurringBillPlan(
@@ -860,6 +924,13 @@ enum MistiaSyncLocalStore {
         plan.updatedAt = row.updatedAt
         plan.deletedAt = row.deletedAt
         plan.remoteVersion = row.syncVersion
+        try MistiaRecordOwnershipStore.upsert(
+            entity: .recurringBillPlan,
+            recordID: row.id,
+            ownerUserID: row.userID,
+            updatedAt: row.updatedAt,
+            context: context
+        )
     }
 
     private static func upsertInstallment(
@@ -867,7 +938,7 @@ enum MistiaSyncLocalStore {
         context: ModelContext,
         walletByID: [UUID: LedgerWallet],
         installmentByID: inout [UUID: InstallmentPlan]
-    ) {
+    ) throws {
         let plan = installmentByID[row.id] ?? InstallmentPlan(
             id: row.id,
             name: row.name,
@@ -903,13 +974,20 @@ enum MistiaSyncLocalStore {
         plan.updatedAt = row.updatedAt
         plan.deletedAt = row.deletedAt
         plan.remoteVersion = row.syncVersion
+        try MistiaRecordOwnershipStore.upsert(
+            entity: .installmentPlan,
+            recordID: row.id,
+            ownerUserID: row.userID,
+            updatedAt: row.updatedAt,
+            context: context
+        )
     }
 
     private static func upsertDueOccurrence(
         _ row: RemoteDueOccurrenceRecord,
         context: ModelContext,
         occurrenceByID: inout [UUID: DueOccurrenceRecord]
-    ) {
+    ) throws {
         let record = occurrenceByID[row.id] ?? DueOccurrenceRecord(
             id: row.id,
             sourceKind: PlanningDueSourceKind(rawValue: row.sourceKindRawValue) ?? .creditCard,
@@ -943,6 +1021,13 @@ enum MistiaSyncLocalStore {
         record.updatedAt = row.updatedAt
         record.deletedAt = row.deletedAt
         record.remoteVersion = row.syncVersion
+        try MistiaRecordOwnershipStore.upsert(
+            entity: .dueOccurrenceRecord,
+            recordID: row.id,
+            ownerUserID: row.userID,
+            updatedAt: row.updatedAt,
+            context: context
+        )
     }
 
     private static func fetchWallets(_ context: ModelContext) throws -> [LedgerWallet] {

@@ -787,12 +787,14 @@ struct PlanningBillEditorSheet: View {
     private func deletePlan() {
         guard let plan = target.plan else { return }
         let now = Date()
+        let fallbackSubjectUserID = sessionStore.signedInUserID ?? MistiaSyncDeviceIdentity.current()
         let occurrenceMutations = storedOccurrences
             .filter { $0.sourceKind == .recurringBill && $0.sourceID == plan.id }
             .map {
                 MistiaSyncMutation(
                     entity: .dueOccurrenceRecord,
                     recordID: $0.id,
+                    subjectUserID: fallbackSubjectUserID,
                     kind: .delete,
                     modifiedAt: now
                 )
@@ -812,6 +814,7 @@ struct PlanningBillEditorSheet: View {
                     MistiaSyncMutation(
                         entity: .recurringBillPlan,
                         recordID: plan.id,
+                        subjectUserID: fallbackSubjectUserID,
                         kind: .delete,
                         modifiedAt: now
                     )
@@ -1069,12 +1072,14 @@ struct PlanningInstallmentEditorSheet: View {
     private func deletePlan() {
         guard let plan = target.plan else { return }
         let now = Date()
+        let fallbackSubjectUserID = sessionStore.signedInUserID ?? MistiaSyncDeviceIdentity.current()
         let occurrenceMutations = storedOccurrences
             .filter { $0.sourceKind == .installment && $0.sourceID == plan.id }
             .map {
                 MistiaSyncMutation(
                     entity: .dueOccurrenceRecord,
                     recordID: $0.id,
+                    subjectUserID: fallbackSubjectUserID,
                     kind: .delete,
                     modifiedAt: now
                 )
@@ -1094,6 +1099,7 @@ struct PlanningInstallmentEditorSheet: View {
                     MistiaSyncMutation(
                         entity: .installmentPlan,
                         recordID: plan.id,
+                        subjectUserID: fallbackSubjectUserID,
                         kind: .delete,
                         modifiedAt: now
                     )
@@ -1395,6 +1401,7 @@ struct PlanningCreditCardEditorSheet: View {
     private func archiveWallet() {
         guard let wallet = target.wallet else { return }
         let now = Date()
+        let fallbackSubjectUserID = sessionStore.signedInUserID ?? MistiaSyncDeviceIdentity.current()
         wallet.isArchived = true
         wallet.archivedAt = now
         wallet.updatedAt = now
@@ -1404,6 +1411,7 @@ struct PlanningCreditCardEditorSheet: View {
                 MistiaSyncMutation(
                     entity: .dueOccurrenceRecord,
                     recordID: $0.id,
+                    subjectUserID: fallbackSubjectUserID,
                     kind: .delete,
                     modifiedAt: now
                 )
@@ -1422,6 +1430,7 @@ struct PlanningCreditCardEditorSheet: View {
                     MistiaSyncMutation(
                         entity: .wallet,
                         recordID: wallet.id,
+                        subjectUserID: fallbackSubjectUserID,
                         kind: .upsert,
                         modifiedAt: wallet.updatedAt
                     )
