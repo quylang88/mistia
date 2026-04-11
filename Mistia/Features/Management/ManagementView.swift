@@ -823,7 +823,7 @@ private struct ManagementWalletRow: View {
     
     private var balanceColor: Color {
         if currentBalanceMinor < 1000 {
-            return Color(red: 0.97, green: 0.43, blue: 0.46)
+            return MistiaAccent.expense.color
         }
         return .primary
     }

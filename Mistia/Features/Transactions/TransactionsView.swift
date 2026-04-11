@@ -18,7 +18,7 @@ private enum TransactionSegment: String, CaseIterable, Hashable {
     }
 
     var tint: Color {
-        Color(red: 0.43, green: 0.23, blue: 0.76)
+        MistiaAccent.purple.color
     }
 
     var kind: TransactionPrimaryKind {
@@ -201,7 +201,7 @@ struct TransactionsView: View {
     private var activeFilterTint: Color {
         colorScheme == .dark
             ? Color(red: 0.53, green: 0.33, blue: 0.86)
-            : Color(red: 0.43, green: 0.23, blue: 0.76)
+            : MistiaAccent.purple.color
     }
 
     private var inactiveFilterTint: Color {
@@ -211,7 +211,7 @@ struct TransactionsView: View {
     private var activeFilterBadgeTextColor: Color {
         colorScheme == .dark
             ? Color(red: 0.53, green: 0.33, blue: 0.86)
-            : Color(red: 0.43, green: 0.23, blue: 0.76)
+            : MistiaAccent.purple.color
     }
 
     var body: some View {
@@ -508,7 +508,7 @@ private struct TransactionLiveSummaryCard: View {
                 TransactionSummaryMetric(
                     title: mistiaLocalized(vi: "Chi", en: "Expense", ja: "支出"),
                     value: summary.expenseMinor.formattedCurrency(code: "JPY"),
-                    tint: Color(red: 0.43, green: 0.23, blue: 0.76)
+                    tint: MistiaAccent.expense.color
                 )
 
                 Spacer(minLength: 4)
@@ -516,7 +516,7 @@ private struct TransactionLiveSummaryCard: View {
                 TransactionSummaryMetric(
                     title: mistiaLocalized(vi: "Thu", en: "Income", ja: "収入"),
                     value: summary.incomeMinor.formattedCurrency(code: "JPY"),
-                    tint: Color(red: 0.43, green: 0.23, blue: 0.76)
+                    tint: MistiaAccent.income.color
                 )
 
                 Spacer(minLength: 4)
@@ -648,7 +648,7 @@ private struct TransactionRow: View {
     }
 
     private var iconColor: Color {
-        Color(red: 0.43, green: 0.23, blue: 0.76)
+        MistiaAccent.purple.color
     }
 
     private var title: String {
@@ -705,11 +705,11 @@ private struct TransactionRow: View {
     private var cashflowColor: Color {
         switch record.primaryKind {
         case .expense:
-            return Color(red: 0.96, green: 0.36, blue: 0.49)  // Đỏ hồng
+            return MistiaAccent.expense.color
         case .income:
-            return Color(red: 0.18, green: 0.67, blue: 0.62)  // Xanh lục
+            return MistiaAccent.income.color
         case .transfer:
-            return colorScheme == .dark ? .white : Color(red: 0.60, green: 0.60, blue: 0.60)  // Trắng/xám
+            return colorScheme == .dark ? .white : MistiaAccent.transfer.color
         }
     }
 
@@ -840,8 +840,8 @@ private struct OutstandingDebtChip: View {
 
     private var tint: Color {
         position.isReceivable
-            ? Color(red: 0.23, green: 0.73, blue: 0.61)
-            : Color(red: 0.96, green: 0.46, blue: 0.41)
+            ? MistiaAccent.income.color
+            : MistiaAccent.expense.color
     }
 
     var body: some View {
@@ -874,10 +874,10 @@ private struct TransactionsPlaceholderCard: View {
     let title: String
     let message: String
     let symbols = ["banknote.fill", "wallet.pass.fill", "building.columns.fill", "creditcard.fill"]
-    let accent = Color(red: 0.43, green: 0.23, blue: 0.76)
+    let accent = MistiaAccent.purple.color
 
     private var buttonForeground: Color {
-        colorScheme == .dark ? Color(red: 0.65, green: 0.45, blue: 0.98) : accent
+        colorScheme == .dark ? MistiaAccent.lightPurple.color : accent
     }
 
     private var symbolBackgroundOpacity: Double {
