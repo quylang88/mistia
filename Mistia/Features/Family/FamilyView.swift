@@ -3,7 +3,6 @@ import SwiftUI
 
 private enum FamilyDestination: String, Identifiable {
     case overview
-    case members
 
     var id: String { rawValue }
 }
@@ -12,6 +11,7 @@ private enum FamilySheet: String, Identifiable {
     case create
     case join
     case invite
+    case privacy
 
     var id: String { rawValue }
 }
@@ -32,7 +32,7 @@ struct FamilyManagementView: View {
     var body: some View {
         MistiaPinnedTopBarScaffold(
             tone: .standard,
-            title: mistiaLocalized(vi: "Gia đình", en: "Family", ja: "家族"),
+            title: "",
             embedsInNavigationStack: false,
             showsLeadingAvatar: false,
             leadingSystemImage: "chevron.left",
@@ -42,11 +42,13 @@ struct FamilyManagementView: View {
             onTrailingTap: {
                 activeSheet = .invite
             },
-            contentSpacing: 18
+            contentSpacing: 22
         ) {
             if let lastErrorMessage = familyContextStore.lastErrorMessage {
                 FamilyAlertBanner(message: lastErrorMessage)
             }
+
+            familyHeaderSection
 
             if familyContextStore.family == nil {
                 emptyStateContent
@@ -58,8 +60,6 @@ struct FamilyManagementView: View {
             switch route {
             case .overview:
                 FamilyOverviewScreen()
-            case .members:
-                FamilyMembersScreen()
             }
         }
         .sheet(item: $activeSheet) { sheet in
@@ -70,6 +70,8 @@ struct FamilyManagementView: View {
                 FamilyJoinSheet()
             case .invite:
                 FamilyInviteSheet()
+            case .privacy:
+                MistiaPrivacySheet()
             }
         }
         .task {
@@ -138,65 +140,162 @@ struct FamilyManagementView: View {
         }
     }
 
+    // MARK: - Header Section
+
+    private var familyHeaderSection: some View {
+        VStack(spacing: 12) {
+            if familyContextStore.family != nil && !familyContextStore.members.isEmpty {
+                // Avatars for family
+                HStack(spacing: -14) {
+                    ForEach(Array(familyContextStore.members.prefix(5).enumerated()), id: \.element.membershipID) { index, member in
+                        MistiaAvatarBadge(
+                            initials: String(member.displayName.prefix(2)).uppercased(),
+                            avatarURL: member.avatarURL,
+                            size: 64,
+                            showsStatus: false
+                        )
+                        .overlay {
+                            Circle().stroke(
+                                colorScheme == .dark ? Color.black : .white,
+                                lineWidth: 3
+                            )
+                        }
+                        .zIndex(Double(familyContextStore.members.count - index))
+                    }
+                }
+                
+                VStack(spacing: 4) {
+                    Text(familyContextStore.family?.name ?? "Mistia Family")
+                        .font(.system(size: 22, weight: .bold, design: .rounded))
+                        .foregroundStyle(.primary)
+                }
+            } else {
+                // Single avatar for individual
+                MistiaAvatarBadge(
+                    initials: sessionStore.summary?.initials ?? "M",
+                    avatarURL: sessionStore.summary?.avatarURL,
+                    size: 64,
+                    showsStatus: false
+                )
+
+                Text(mistiaLocalized(vi: "Gia đình", en: "Family", ja: "家族"))
+                    .font(.system(size: 22, weight: .bold, design: .rounded))
+                    .foregroundStyle(.primary)
+            }
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.top, 10)
+        .padding(.bottom, 10)
+    }
+
     // MARK: - Hub Content (has family)
 
     private var familyHubContent: some View {
-        VStack(spacing: 18) {
-            // Thành viên block
-            VStack(alignment: .leading, spacing: 8) {
-                Text(mistiaLocalized(vi: "Thành viên", en: "Members", ja: "メンバー"))
-                    .font(.system(size: 13, weight: .bold, design: .rounded))
-                    .textCase(.uppercase)
-                    .tracking(0.6)
-                    .foregroundStyle(.secondary)
-                    .padding(.horizontal, 2)
-
-                MistiaGlassCard(cornerRadius: 14, tint: cardTint, padding: 0) {
+        VStack(spacing: 12) {
+            // Member List Card
+            MistiaGlassCard(cornerRadius: 18, tint: cardTint, padding: 0) {
                     VStack(spacing: 0) {
-                        FamilySettingsRow(
-                            title: mistiaLocalized(vi: "Danh sách thành viên", en: "Member list", ja: "メンバーリスト"),
-                            subtitle: mistiaLocalized(vi: "Xem role, quyền và chọn view as member.", en: "Review roles, permissions, and switch into view-as member.", ja: "役割と権限を確認し、view-as member に切り替えます。"),
-                            icon: "person.2.fill",
-                            iconColor: Color(red: 0.96, green: 0.36, blue: 0.56)
-                        ) {
-                            destination = .members
+                        ForEach(Array(familyContextStore.members.enumerated()), id: \.element.membershipID) { index, member in
+                            NavigationLink {
+                                FamilyMemberProfileScreen(member: member)
+                            } label: {
+                                HStack(spacing: 14) {
+                                    MistiaAvatarBadge(
+                                        initials: String(member.displayName.prefix(2)).uppercased(),
+                                        avatarURL: member.avatarURL,
+                                        size: 40,
+                                        showsStatus: false
+                                    )
+
+                                    VStack(alignment: .leading, spacing: 2) {
+                                        Text(member.displayName)
+                                            .font(.system(size: 16, weight: .semibold, design: .rounded))
+                                            .foregroundStyle(.primary)
+                                        
+                                        HStack(spacing: 4) {
+                                            Text(member.role.title)
+                                                .font(.system(size: 13, weight: .medium, design: .rounded))
+                                                .foregroundStyle(.secondary)
+                                            
+                                            if member.userID == sessionStore.signedInUserID {
+                                                Text(mistiaLocalized(vi: "(Bạn)", en: "(You)", ja: "(自分)"))
+                                                    .font(.system(size: 13, weight: .medium, design: .rounded))
+                                                    .foregroundStyle(.secondary)
+                                            }
+                                        }
+                                    }
+
+                                    Spacer()
+
+                                    Image(systemName: "chevron.right")
+                                        .font(.system(size: 12, weight: .semibold))
+                                        .foregroundStyle(.tertiary)
+                                }
+                                .padding(.horizontal, 16)
+                                .padding(.vertical, 12)
+                            }
+                            .buttonStyle(.plain)
+
+                            if index < familyContextStore.members.count - 1 {
+                                Divider()
+                                    .padding(.leading, 70)
+                            }
                         }
                     }
                 }
 
+            // Member description
+            VStack(alignment: .leading, spacing: 4) {
                 Text(mistiaLocalized(
-                    vi: "Mọi thành viên trong gia đình đều có quyền xem và quản lý chung dữ liệu tài chính của cả nhà một cách minh bạch.",
-                    en: "All family members have the right to transparently view and manage the household's financial data together.",
-                    ja: "家族全員が、家計の財務データを透明性を持って共に閲覧・管理する権利を持っています。"
+                    vi: "Bạn có thể kiểm tra những gì các thành viên trong gia đình có thể truy cập hoặc chia sẻ, đồng thời quản lý cài đặt tài khoản của trẻ em và các kiểm soát của phụ huynh.",
+                    en: "You can check what family members can access or share, while managing child account settings and parental controls.",
+                    ja: "ファミリーメンバーがアクセスまたは共有できるもの確認でき、お子様のアカウント設定と保護者による制限を管理できます。"
                 ))
                 .font(.system(size: 13, weight: .medium, design: .rounded))
                 .foregroundStyle(.secondary)
-                .padding(.horizontal, 4)
-                .padding(.top, 2)
+                .padding(.horizontal, 2)
             }
+            .cardDescriptionStyle()
 
-            // Tổng quan block
-            VStack(alignment: .leading, spacing: 8) {
-                Text(mistiaLocalized(vi: "Tổng quan", en: "Overview", ja: "概要"))
-                    .font(.system(size: 13, weight: .bold, design: .rounded))
-                    .textCase(.uppercase)
-                    .tracking(0.6)
-                    .foregroundStyle(.secondary)
-                    .padding(.horizontal, 2)
-
-                MistiaGlassCard(cornerRadius: 14, tint: cardTint, padding: 0) {
-                    VStack(spacing: 0) {
-                        FamilySettingsRow(
-                            title: mistiaLocalized(vi: "Tổng quan gia đình", en: "Family overview", ja: "家族の概要"),
-                            subtitle: mistiaLocalized(vi: "Tài sản, công nợ, sắp đến hạn và top chi tiêu của cả nhà.", en: "Assets, debts, upcoming due items, and top spending across the household.", ja: "家計全体の資産・負債・支払予定・支出の要点を確認します。"),
-                            icon: "chart.bar.xaxis",
-                            iconColor: .indigo
-                        ) {
-                            destination = .overview
-                        }
-                    }
+            // Overview Block
+            MistiaGlassCard(cornerRadius: 18, tint: cardTint, padding: 0) {
+                FamilySettingsRow(
+                    title: mistiaLocalized(vi: "Tổng quan gia đình", en: "Family overview", ja: "家族の概要"),
+                    subtitle: mistiaLocalized(vi: "Tài sản, công nợ, sắp đến hạn và top chi tiêu của cả nhà.", en: "Assets, debts, upcoming due items, and top spending across the household.", ja: "家計全体の資産・負債・支払予定・支出の要点を確認します。"),
+                    icon: "chart.bar.xaxis",
+                    iconColor: .indigo
+                ) {
+                    destination = .overview
                 }
             }
+
+            // Privacy Link
+            VStack(alignment: .leading, spacing: 6) {
+                Text(mistiaLocalized(
+                    vi: "Mistia sẽ sử dụng dữ liệu để đồng bộ và hiển thị thông tin gia đình của bạn một cách an toàn.",
+                    en: "Mistia will use data to securely sync and display your family information.",
+                    ja: "Mistiaはデータを安全に同期し、家族情報を表示するために使用します。"
+                ))
+                .font(.system(size: 13, weight: .medium, design: .rounded))
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.leading)
+                .padding(.horizontal, 4)
+
+                Button {
+                    activeSheet = .privacy
+                } label: {
+                    Text(mistiaLocalized(
+                        vi: "Xác nhận sử dụng dữ liệu & thông tin cá nhân",
+                        en: "Confirm data & personal information usage",
+                        ja: "データおよび個人情報の使用を確認する"
+                    ))
+                    .font(.system(size: 13, weight: .bold, design: .rounded))
+                    .foregroundStyle(MistiaAccent.purple.color)
+                }
+                .buttonStyle(.plain)
+                .padding(.horizontal, 4)
+            }
+            .cardDescriptionStyle()
         }
     }
 }
@@ -800,13 +899,13 @@ private extension FamilyRole {
     var title: String {
         switch self {
         case .owner:
-            mistiaLocalized(vi: "Owner", en: "Owner", ja: "Owner")
+            mistiaLocalized(vi: "Chủ sở hữu", en: "Owner", ja: "Owner")
         case .viewer:
-            mistiaLocalized(vi: "Viewer", en: "Viewer", ja: "Viewer")
+            mistiaLocalized(vi: "Thành viên", en: "Viewer", ja: "Viewer")
         case .editor:
-            mistiaLocalized(vi: "Editor", en: "Editor", ja: "Editor")
+            mistiaLocalized(vi: "Quản trị viên", en: "Editor", ja: "Editor")
         case .kid:
-            mistiaLocalized(vi: "Kid", en: "Kid", ja: "Kid")
+            mistiaLocalized(vi: "Trẻ con", en: "Kid", ja: "Kid")
         }
     }
 

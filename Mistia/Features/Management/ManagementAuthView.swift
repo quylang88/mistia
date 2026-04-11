@@ -2696,7 +2696,13 @@ private struct ManagementSyncSettingsView: View {
                 }
             }
 
-            ManagementSettingsFootnote(text: dataManagementSummary)
+            VStack(alignment: .leading, spacing: 4) {
+                Text(dataManagementSummary)
+                    .font(.system(size: 13, weight: .medium, design: .rounded))
+                    .foregroundStyle(.secondary)
+                    .padding(.horizontal, 2)
+            }
+            .cardDescriptionStyle()
 
             ManagementProfileListCard(tint: cardTint) {
                 ManagementProfileToggleRow(
@@ -2712,7 +2718,13 @@ private struct ManagementSyncSettingsView: View {
                 )
             }
 
-            ManagementSettingsFootnote(text: autoSyncFootnote)
+            VStack(alignment: .leading, spacing: 4) {
+                Text(autoSyncFootnote)
+                    .font(.system(size: 13, weight: .medium, design: .rounded))
+                    .foregroundStyle(.secondary)
+                    .padding(.horizontal, 2)
+            }
+            .cardDescriptionStyle()
 
             ManagementProfilePrimaryActionButton(
                 title: mistiaLocalized(vi: "Đồng bộ ngay", en: "Sync now", ja: "今すぐ同期"),

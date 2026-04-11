@@ -108,13 +108,36 @@ struct SettingsView: View {
             contentSpacing: 18
         ) {
             VStack(spacing: 18) {
-                ForEach(sections) { section in
-                    SettingsCardSection(
-                        section: section,
-                        tint: cardTint,
-                        accentPurple: accentPurple,
-                        onTap: handleTap
-                    )
+                // First section - Customization
+                SettingsCardSection(
+                    section: sections[0],
+                    tint: cardTint,
+                    accentPurple: accentPurple,
+                    onTap: handleTap
+                )
+                
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(mistiaLocalized(
+                        vi: "Tùy chỉnh giao diện, ngôn ngữ và tiền tệ sẽ áp dụng cho toàn bộ ứng dụng Mistia.",
+                        en: "Customizing appearance, language, and currency will apply throughout the Mistia app.",
+                        ja: "表示、言語、通貨をカスタマイズするとMistia全体に適用されます。"
+                    ))
+                    .font(.system(size: 13, weight: .medium, design: .rounded))
+                    .foregroundStyle(.secondary)
+                    .padding(.horizontal, 2)
+                }
+                .cardDescriptionStyle()
+                
+                // Remaining sections
+                ForEach(Array(sections.enumerated()), id: \.element.id) { index, section in
+                    if index > 0 {
+                        SettingsCardSection(
+                            section: section,
+                            tint: cardTint,
+                            accentPurple: accentPurple,
+                            onTap: handleTap
+                        )
+                    }
                 }
             }
 
