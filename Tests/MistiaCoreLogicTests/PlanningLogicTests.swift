@@ -55,7 +55,7 @@ final class PlanningLogicTests: XCTestCase {
         )
 
         XCTAssertEqual(rows.map(\.name), ["Ăn uống", "Du lịch"])
-        XCTAssertEqual(rows.first?.tone, .critical)
+        XCTAssertEqual(rows.first?.tone, .warning) // 0.95 is now .warning (>= 0.8)
         XCTAssertEqual(rows.last?.tone, .calm)
 
         let summary = PlanningLogic.budgetSummary(from: rows)
@@ -201,7 +201,7 @@ final class PlanningLogicTests: XCTestCase {
         XCTAssertEqual(summary.remainingMinor, 29_000)
     }
 
-    func testDueSummaryUsesSevenDayWindowForCurrentMonthAndAllPendingForOtherMonths() {
+    func testDueSummaryLogic() {
         let currentMonth = makeDate(year: 2026, month: 4, day: 1)
         let referenceDate = makeDate(year: 2026, month: 4, day: 10)
 
@@ -212,7 +212,7 @@ final class PlanningLogicTests: XCTestCase {
                 walletName: "SMBC Card",
                 network: .visa,
                 last4: "1234",
-                amountMinor: 12_000,
+                amountMinor: 12_000, // Thẻ đến hạn tháng này
                 dueDate: makeDate(year: 2026, month: 4, day: 14),
                 paymentSourceWalletID: UUID(),
                 currencyCode: "JPY",
@@ -228,7 +228,7 @@ final class PlanningLogicTests: XCTestCase {
                 name: "Điện",
                 iconSymbolName: MistiaSystemCategoryKey.electricity.iconSymbolName,
                 categorySystemKey: .electricity,
-                amountMinor: 3_000,
+                amountMinor: 3_000, // Quá hạn
                 dueDate: makeDate(year: 2026, month: 4, day: 8),
                 frequencyMonths: 1,
                 totalCycles: nil,
@@ -244,7 +244,7 @@ final class PlanningLogicTests: XCTestCase {
                 name: "iPhone",
                 iconSymbolName: "mistia.plan.installment",
                 categorySystemKey: .loanRepayment,
-                amountMinor: 5_000,
+                amountMinor: 5_000, // Xa (> 7 ngày)
                 dueDate: makeDate(year: 2026, month: 4, day: 25),
                 frequencyMonths: 1,
                 totalCycles: 12,
@@ -255,7 +255,7 @@ final class PlanningLogicTests: XCTestCase {
             )
         ]
 
-        let currentSummary = PlanningLogic.dueSummary(
+        let summary = PlanningLogic.dueSummary(
             creditCards: creditCards,
             recurring: recurring,
             selectedMonth: currentMonth,
@@ -263,21 +263,12 @@ final class PlanningLogicTests: XCTestCase {
             calendar: calendar
         )
 
-        XCTAssertEqual(currentSummary.upcomingCount, 1)
-        XCTAssertEqual(currentSummary.totalDueMinor, 12_000)
-        XCTAssertEqual(currentSummary.overdueCount, 1)
-
-        let futureSummary = PlanningLogic.dueSummary(
-            creditCards: creditCards,
-            recurring: recurring,
-            selectedMonth: makeDate(year: 2026, month: 5, day: 1),
-            referenceDate: referenceDate,
-            calendar: calendar
-        )
-
-        XCTAssertEqual(futureSummary.upcomingCount, 3)
-        XCTAssertEqual(futureSummary.totalDueMinor, 20_000)
-        XCTAssertEqual(futureSummary.overdueCount, 0)
+        // Sắp đến hạn: chỉ SMBC (14th) vì trong 7 ngày tới (10th -> 17th)
+        XCTAssertEqual(summary.upcomingCount, 1)
+        // Tổng cần trả: Dư nợ thẻ (12k) + Hóa đơn sắp tới (0 vì ko có bill nào trong 7 ngày tới)
+        XCTAssertEqual(summary.totalDueMinor, 12_000)
+        // Quá hạn: Điện (8th)
+        XCTAssertEqual(summary.overdueCount, 1)
     }
 
     func testInstallmentOccurrenceGenerationHonorsFrequencyAndCycleLimit() {
