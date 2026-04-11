@@ -218,7 +218,7 @@ struct TransactionEditorSheet: View {
                         ja: "取引を完全に記録する前に、管理タブで少なくとも 1 つのウォレットを追加してください。"
                     ))
                     .font(.footnote)
-                    .foregroundStyle(accentColor)
+                    .foregroundStyle(.secondary)
                 }
             }
 

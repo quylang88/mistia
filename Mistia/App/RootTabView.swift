@@ -144,7 +144,7 @@ struct RootTabView: View {
       case .assistant:
         MistiaAssistantSheet()
           .presentationDetents([.medium])
-          .presentationDragIndicator(.visible)
+          .presentationDragIndicator(.hidden)
       case .quickCreate(let destination):
         TransactionEditorSheet(target: quickCreateTarget(for: destination)) { completion in
           if completion == .savedDraft {
@@ -152,7 +152,7 @@ struct RootTabView: View {
           }
         }
           .presentationDetents(destination == .note ? [.medium, .large] : [.large])
-          .presentationDragIndicator(.visible)
+          .presentationDragIndicator(.hidden)
       }
     }
     .task {
@@ -247,7 +247,7 @@ struct RootTabView: View {
     let x = isQuickCreateMenuExpanded ? proxy.size.width / 2 : (quickCreateAnchorFrame.maxX - (width / 2))
     
     let safeAreaOffset = proxy.safeAreaInsets.top
-    let y = quickCreateAnchorFrame.maxY - (height / 2) - safeAreaOffset - 10 // Spacing of 10pt above tab bar
+    let y = quickCreateAnchorFrame.maxY - (height / 2) - safeAreaOffset - 2 // Moved closer to tab bar
 
     return CGPoint(x: x, y: y)
   }
@@ -377,7 +377,7 @@ private enum MistiaQuickCreateDestination: String, CaseIterable, Identifiable {
 
 private struct MistiaQuickCreateMenu: View {
   static let collapsedSize: CGFloat = 44
-  static let expandedHeight: CGFloat = 265 // Compact, aligned height
+  static let expandedHeight: CGFloat = 260 // Matched to menuHeight
 
   @Environment(\.colorScheme) private var colorScheme
   let isExpanded: Bool
@@ -392,36 +392,70 @@ private struct MistiaQuickCreateMenu: View {
   }
 
   private var cornerRadius: CGFloat {
-    isExpanded ? 24 : 22
+    isExpanded ? 30 : 22
   }
 
   private var menuHeight: CGFloat {
-    isExpanded ? Self.expandedHeight : Self.collapsedSize
+    isExpanded ? 260 : Self.collapsedSize // Slightly more compact
+  }
+
+  private var appPurple: Color {
+    Color(red: 0.43, green: 0.23, blue: 0.76)
+  }
+
+  private var lightPurpleAccent: Color {
+    Color(red: 0.88, green: 0.78, blue: 1.0) // Matched to "sao kê" button foreground
   }
 
   var body: some View {
     ZStack(alignment: .bottomTrailing) {
       if isExpanded {
         VStack(spacing: 0) {
-          ForEach(Array(MistiaQuickCreateDestination.allCases.enumerated()), id: \.element.id) { index, destination in
-            Button {
-              onSelect(destination)
-            } label: {
-              MistiaQuickCreateMenuRow(destination: destination)
-                .frame(maxWidth: .infinity, alignment: .leading)
-            }
-            .buttonStyle(PlainButtonStyle())
-            .padding(.horizontal, 6)
-
-            if index < MistiaQuickCreateDestination.allCases.count - 1 {
-              Divider()
-                .background(Color.primary.opacity(0.08))
-                .padding(.leading, 62)
-                .padding(.trailing, 16)
+          // Top section: Expense, Income, Transfer
+          VStack(spacing: 0) {
+            ForEach([MistiaQuickCreateDestination.expense, .income, .transfer]) { destination in
+              Button {
+                onSelect(destination)
+              } label: {
+                MistiaQuickCreateMenuRow(destination: destination)
+                  .frame(maxWidth: .infinity, alignment: .leading)
+              }
+              .buttonStyle(PlainButtonStyle())
+              
+              if destination != .transfer {
+                Divider()
+                  .background(Color.white.opacity(0.06))
+                  .padding(.leading, 68)
+                  .padding(.trailing, 20)
+              }
             }
           }
+          .padding(.top, 8) 
+          
+          Spacer(minLength: 2) // Even smaller gap
+
+          // Bottom prominent button: Quick Note (Ghi nhanh)
+          Button {
+            onSelect(.note)
+          } label: {
+            HStack(spacing: 8) {
+              Image(systemName: MistiaQuickCreateDestination.note.systemImage)
+                .font(.system(size: 14, weight: .bold))
+              
+              Text(MistiaQuickCreateDestination.note.title.uppercased())
+                .font(.system(size: 14, weight: .bold, design: .rounded))
+                .kerning(0.8)
+            }
+            .foregroundStyle(lightPurpleAccent)
+            .frame(maxWidth: .infinity) // Make it full-width
+            .padding(.vertical, 6)
+          }
+          .buttonStyle(.glassProminent)
+          .buttonBorderShape(.capsule)
+          .tint(appPurple)
+          .padding(.horizontal, 20)
+          .padding(.bottom, 16)
         }
-        .padding(.vertical, 8)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
       }
 
@@ -447,10 +481,10 @@ private struct MistiaQuickCreateMenu: View {
       if isExpanded {
         ZStack {
           RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-            .fill(.ultraThinMaterial)
+            .fill(Color(white: 0.12)) // Dark background like the image
           
           RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-            .stroke(.white.opacity(colorScheme == .dark ? 0.08 : 0.12), lineWidth: 0.5)
+            .stroke(.white.opacity(0.08), lineWidth: 1)
         }
       } else {
         MistiaRoundedGlassBackground(
@@ -501,34 +535,30 @@ private struct MistiaQuickCreateMenuRow: View {
   var body: some View {
     HStack(alignment: .center, spacing: 14) {
       ZStack {
-        RoundedRectangle(cornerRadius: 11, style: .continuous)
-          .fill(iconBackgroundColor)
+        RoundedRectangle(cornerRadius: 12, style: .continuous)
+          .fill(Color(red: 0.43, green: 0.23, blue: 0.76).opacity(0.24)) // Brightened background
         
         Image(systemName: destination.systemImage)
-            .font(.system(size: 18, weight: .semibold, design: .rounded))
-          .foregroundStyle(destination.accent)
+          .font(.system(size: 17, weight: .bold, design: .rounded))
+          .foregroundStyle(Color(red: 0.88, green: 0.78, blue: 1.0)) // Matched to light purple accent
       }
-      .frame(width: 38, height: 38)
+      .frame(width: 42, height: 42)
 
-      VStack(alignment: .leading, spacing: 2) {
+      VStack(alignment: .leading, spacing: 1) {
         Text(destination.title)
-          .font(.system(size: 16, weight: .bold, design: .rounded))
-          .foregroundStyle(.primary)
+          .font(.system(size: 17, weight: .bold, design: .rounded))
+          .foregroundStyle(.white)
 
         Text(destination.subtitle)
-          .font(.system(size: 12.5, weight: .medium, design: .rounded))
-          .foregroundStyle(.secondary)
+          .font(.system(size: 12, weight: .medium, design: .rounded))
+          .foregroundStyle(.white.opacity(0.6))
           .lineLimit(1)
       }
 
-      Spacer(minLength: 8)
-      
-      Image(systemName: "chevron.right")
-        .font(.system(size: 11, weight: .bold))
-        .foregroundStyle(.tertiary)
+      Spacer()
     }
-    .padding(.horizontal, 14)
-    .frame(height: 56)
+    .padding(.horizontal, 20)
+    .frame(height: 60) // Reduced height for rows
     .contentShape(Rectangle())
   }
 }
