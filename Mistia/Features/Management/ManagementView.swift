@@ -215,7 +215,7 @@ struct ManagementView: View {
 
                                 VStack(alignment: .leading, spacing: 5) {
                                     Text(summary.displayName)
-                                        .font(.system(size: 18, weight: .semibold, design: .rounded))
+                                        .font(.system(size: 20, weight: .bold, design: .rounded))
                                         .foregroundStyle(.primary)
 
                                     Text(summary.email)

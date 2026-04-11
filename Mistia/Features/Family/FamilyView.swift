@@ -166,12 +166,8 @@ struct FamilyManagementView: View {
 
                 VStack(spacing: 4) {
                     Text(familyContextStore.family?.name ?? "Mistia Family")
-                        .font(.system(size: 20, weight: .bold, design: .rounded))
+                        .font(.system(size: 22, weight: .bold, design: .rounded))
                         .foregroundStyle(.primary)
-
-                    Text(mistiaLocalized(vi: "Gia đình", en: "Family", ja: "家族"))
-                        .font(.system(size: 14, weight: .medium, design: .rounded))
-                        .foregroundStyle(.secondary)
                 }
             } else {
                 // Single avatar for individual
@@ -183,7 +179,7 @@ struct FamilyManagementView: View {
                 )
 
                 Text(mistiaLocalized(vi: "Gia đình", en: "Family", ja: "家族"))
-                    .font(.system(size: 20, weight: .bold, design: .rounded))
+                    .font(.system(size: 22, weight: .bold, design: .rounded))
                     .foregroundStyle(.primary)
             }
         }
@@ -197,14 +193,7 @@ struct FamilyManagementView: View {
     private var familyHubContent: some View {
         VStack(spacing: 24) {
             // Member List Card
-            VStack(alignment: .leading, spacing: 8) {
-                Text(mistiaLocalized(vi: "Thành viên", en: "Members", ja: "メンバー"))
-                    .font(.system(size: 13, weight: .bold, design: .rounded))
-                    .textCase(.uppercase)
-                    .tracking(0.6)
-                    .foregroundStyle(.secondary)
-                    .padding(.horizontal, 2)
-
+            VStack(alignment: .leading, spacing: 12) {
                 MistiaGlassCard(cornerRadius: 18, tint: cardTint, padding: 0) {
                     VStack(spacing: 0) {
                         ForEach(Array(familyContextStore.members.enumerated()), id: \.element.membershipID) { index, member in
@@ -220,21 +209,21 @@ struct FamilyManagementView: View {
                                     )
 
                                     VStack(alignment: .leading, spacing: 2) {
+                                        Text(member.displayName)
+                                            .font(.system(size: 16, weight: .semibold, design: .rounded))
+                                            .foregroundStyle(.primary)
+
                                         HStack(spacing: 4) {
-                                            Text(member.displayName)
-                                                .font(.system(size: 16, weight: .semibold, design: .rounded))
-                                                .foregroundStyle(.primary)
+                                            Text(member.role.title)
+                                                .font(.system(size: 13, weight: .medium, design: .rounded))
+                                                .foregroundStyle(.secondary)
 
                                             if member.userID == sessionStore.signedInUserID {
                                                 Text(mistiaLocalized(vi: "(Bạn)", en: "(You)", ja: "(自分)"))
-                                                    .font(.system(size: 14, weight: .medium, design: .rounded))
+                                                    .font(.system(size: 13, weight: .medium, design: .rounded))
                                                     .foregroundStyle(.secondary)
                                             }
                                         }
-
-                                        Text(member.role.title)
-                                            .font(.system(size: 13, weight: .medium, design: .rounded))
-                                            .foregroundStyle(.secondary)
                                     }
 
                                     Spacer()
@@ -280,7 +269,7 @@ struct FamilyManagementView: View {
             }
 
             // Privacy Link
-            VStack(spacing: 8) {
+            VStack(alignment: .leading, spacing: 12) {
                 Text(mistiaLocalized(
                     vi: "Mistia sẽ sử dụng dữ liệu để đồng bộ và hiển thị thông tin gia đình của bạn một cách an toàn.",
                     en: "Mistia will use data to securely sync and display your family information.",
@@ -288,8 +277,8 @@ struct FamilyManagementView: View {
                 ))
                 .font(.system(size: 13, weight: .medium, design: .rounded))
                 .foregroundStyle(.secondary)
-                .multilineTextAlignment(.center)
-                .padding(.horizontal, 10)
+                .multilineTextAlignment(.leading)
+                .padding(.horizontal, 4)
 
                 Button {
                     activeSheet = .privacy
@@ -303,6 +292,7 @@ struct FamilyManagementView: View {
                     .foregroundStyle(MistiaAccent.purple.color)
                 }
                 .buttonStyle(.plain)
+                .padding(.horizontal, 4)
             }
             .padding(.top, 8)
             .padding(.bottom, 20)

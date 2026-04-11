@@ -66,13 +66,18 @@ struct MistiaPrivacySheet: View {
             }
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .topBarTrailing) {
+                ToolbarItem(placement: .topBarLeading) {
                     Button {
                         dismiss()
                     } label: {
-                        Image(systemName: "xmark.circle.fill")
-                            .font(.system(size: 24))
+                        Image(systemName: "xmark")
+                            .font(.system(size: 15, weight: .bold))
                             .foregroundStyle(.secondary)
+                            .padding(8)
+                            .background {
+                                Circle()
+                                    .fill(.secondary.opacity(0.12))
+                            }
                     }
                     .buttonStyle(.plain)
                 }
