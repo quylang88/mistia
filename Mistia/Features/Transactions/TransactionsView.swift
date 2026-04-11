@@ -106,7 +106,7 @@ struct TransactionsView: View {
     }
 
     private var activeCategories: [TransactionCategory] {
-        activeCategorySections.flatMap(\.children)
+        activeCategorySections.map(\.parent) + activeCategorySections.flatMap(\.children)
     }
 
     private var visibleTransactions: [LedgerTransaction] {
@@ -413,14 +413,23 @@ struct TransactionsView: View {
                         }
                     }
                     ForEach(activeCategorySections) { section in
-                        Section(section.parent.localizedDisplayName) {
-                            ForEach(section.children, id: \.id) { category in
-                                Button(category.localizedDisplayName) {
+                        Menu {
+                            Section() {
+                                Button(mistiaLocalized(vi: "Tất cả", en: "All", ja: "すべて")) {
                                     withAnimation(.snappy) {
-                                        filterState.categoryID = category.id
+                                        filterState.categoryID = section.parent.id
+                                    }
+                                }
+                                ForEach(section.children) { category in
+                                    Button(category.localizedDisplayName) {
+                                        withAnimation(.snappy) {
+                                            filterState.categoryID = category.id
+                                        }
                                     }
                                 }
                             }
+                        } label: {
+                            Text(section.parent.localizedDisplayName)
                         }
                     }
                 }
@@ -928,6 +937,7 @@ private extension LedgerTransaction {
             destinationWalletID: destinationWallet?.id,
             destinationWalletKind: destinationWallet?.kind,
             categoryID: category?.id,
+            categoryParentID: category?.parentCategory?.id,
             counterpartyName: counterpartyName,
             normalizedCounterpartyKey: normalizedCounterpartyKey
         )

@@ -333,7 +333,7 @@ nonisolated enum TransactionLogic {
             return false
         }
 
-        if let categoryID = filters.categoryID, record.categoryID != categoryID {
+        if let categoryID = filters.categoryID, record.categoryID != categoryID && record.categoryParentID != categoryID {
             return false
         }
 
