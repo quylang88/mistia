@@ -390,7 +390,7 @@ struct ManagementAccountView: View {
                 ManagementProfileNavigationRow(
                     title: mistiaLocalized(vi: "Gia đình", en: "Family", ja: "家族"),
                     icon: "person.3.fill",
-                    accent: .rose,
+                    accent: .purple,
                     subtitle: nil,
                     value: familyContextStore.family?.name ?? mistiaLocalized(vi: "Chưa có", en: "None", ja: "未設定")
                 ) {

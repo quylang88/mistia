@@ -10,6 +10,7 @@ enum MistiaAccent: String, Codable {
     case rose
     case slate
     case sky
+    case purple
 
     var color: Color {
         switch self {
@@ -31,6 +32,8 @@ enum MistiaAccent: String, Codable {
             Color(red: 0.55, green: 0.58, blue: 0.67)
         case .sky:
             Color(red: 0.39, green: 0.68, blue: 1.0)
+        case .purple:
+            Color(red: 0.43, green: 0.23, blue: 0.76)
         }
     }
 }

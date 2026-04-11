@@ -51,7 +51,7 @@ struct ManagementView: View {
     }
 
     private var accentPurple: Color {
-        Color(red: 0.43, green: 0.23, blue: 0.76)
+        MistiaAccent.purple.color
     }
 
     private var activeWallets: [LedgerWallet] {
@@ -200,52 +200,112 @@ struct ManagementView: View {
     private var profileSection: some View {
         VStack(spacing: 12) {
             if let summary = sessionStore.summary {
-                ManagementProfileCard(
-                    summary: summary,
-                    syncStatusTitle: sessionStore.syncStatusTitle,
-                    syncStatusDetail: sessionStore.syncStatusDetail,
-                    tint: cardTint
-                ) {
-                    destination = .authPlaceholder
-                }
-
                 ManagementCard(tint: cardTint) {
-                    Button(action: { destination = .family }) {
-                        HStack(spacing: 14) {
-                            ZStack {
-                                Circle()
-                                    .fill(Color.orange.opacity(0.2))
-                                
-                                Image(systemName: "person.3.fill")
-                                    .font(.system(size: 16, weight: .semibold))
-                                    .foregroundStyle(.orange)
+                    VStack(spacing: 0) {
+                        Button {
+                            destination = .authPlaceholder
+                        } label: {
+                            HStack(spacing: 14) {
+                                MistiaAvatarBadge(
+                                    initials: summary.initials,
+                                    avatarURL: summary.avatarURL,
+                                    size: 50,
+                                    showsStatus: false
+                                )
+
+                                VStack(alignment: .leading, spacing: 5) {
+                                    Text(summary.displayName)
+                                        .font(.system(size: 18, weight: .semibold, design: .rounded))
+                                        .foregroundStyle(.primary)
+
+                                    Text(summary.email)
+                                        .font(.system(size: 13, weight: .medium, design: .rounded))
+                                        .foregroundStyle(.secondary)
+
+                                    Text(sessionStore.syncStatusTitle)
+                                        .font(.system(size: 12.5, weight: .semibold, design: .rounded))
+                                        .foregroundStyle(MistiaAccent.purple.color)
+                                        .padding(.top, 2)
+
+                                    Text(sessionStore.syncStatusDetail)
+                                        .font(.system(size: 12.5, weight: .medium, design: .rounded))
+                                        .foregroundStyle(.secondary)
+                                        .fixedSize(horizontal: false, vertical: true)
+                                }
+
+                                Spacer()
+
+                                Image(systemName: "chevron.right")
+                                    .font(.system(size: 11, weight: .bold))
+                                    .foregroundStyle(.tertiary)
                             }
-                            .frame(width: 44, height: 44)
-
-                            VStack(alignment: .leading, spacing: 4) {
-                                Text(mistiaLocalized(vi: "Gia đình", en: "Family", ja: "家族"))
-                                    .font(.system(size: 16.5, weight: .semibold, design: .rounded))
-                                    .foregroundStyle(.primary)
-
-                                Text(mistiaLocalized(
-                                    vi: "Quản lý gia đình, thành viên và quyền xem dữ liệu",
-                                    en: "Manage family, members, and view permissions",
-                                    ja: "家族、メンバー、およびビュー権限を管理します"
-                                ))
-                                    .font(.system(size: 13.5, weight: .medium, design: .rounded))
-                                    .foregroundStyle(.secondary)
-                            }
-
-                            Spacer(minLength: 12)
-
-                            Image(systemName: "chevron.right")
-                                .font(.system(size: 12, weight: .bold))
-                                .foregroundStyle(.tertiary)
+                            .padding(.horizontal, 14)
+                            .padding(.vertical, 13)
                         }
-                        .padding(.horizontal, 16)
-                        .padding(.vertical, 16)
+                        .buttonStyle(MistiaPressableButtonStyle(cornerRadius: 20))
+
+                        Divider()
+                            .padding(.leading, 52)
+                            .padding(.trailing, 0)
+
+                        Button(action: { destination = .family }) {
+                            HStack(spacing: 14) {
+                                if familyContextStore.family != nil && !familyContextStore.members.isEmpty {
+                                    HStack(spacing: -12) {
+                                        ForEach(Array(familyContextStore.members.prefix(3).enumerated()), id: \.element.membershipID) { index, member in
+                                            MistiaAvatarBadge(
+                                                initials: String(member.displayName.prefix(2)).uppercased(),
+                                                avatarURL: member.avatarURL,
+                                                size: 34,
+                                                showsStatus: false
+                                            )
+                                            .overlay {
+                                                Circle().stroke(
+                                                    colorScheme == .dark ? Color(UIColor.secondarySystemGroupedBackground) : .white,
+                                                    lineWidth: 2
+                                                )
+                                            }
+                                            .zIndex(Double(familyContextStore.members.count - index))
+                                        }
+                                    }
+                                    .frame(width: 44, height: 44, alignment: .leading)
+                                } else {
+                                    ZStack {
+                                        Circle()
+                                            .fill(MistiaAccent.purple.color.opacity(0.18))
+
+                                        Image(systemName: "person.3.fill")
+                                            .font(.system(size: 16, weight: .semibold))
+                                            .foregroundStyle(MistiaAccent.purple.color)
+                                    }
+                                    .frame(width: 44, height: 44)
+                                }
+
+                                VStack(alignment: .leading, spacing: 4) {
+                                    Text(mistiaLocalized(vi: "Gia đình", en: "Family", ja: "家族"))
+                                        .font(.system(size: 16.5, weight: .semibold, design: .rounded))
+                                        .foregroundStyle(.primary)
+
+                                    Text(mistiaLocalized(
+                                        vi: "Quản lý gia đình, thành viên và quyền xem dữ liệu",
+                                        en: "Manage family, members, and view permissions",
+                                        ja: "家族、メンバー、およびビュー権限を管理します"
+                                    ))
+                                        .font(.system(size: 13.5, weight: .medium, design: .rounded))
+                                        .foregroundStyle(.secondary)
+                                }
+
+                                Spacer(minLength: 12)
+
+                                Image(systemName: "chevron.right")
+                                    .font(.system(size: 12, weight: .bold))
+                                    .foregroundStyle(.tertiary)
+                            }
+                            .padding(.horizontal, 16)
+                            .padding(.vertical, 16)
+                        }
+                        .buttonStyle(MistiaPressableButtonStyle(cornerRadius: 20))
                     }
-                    .buttonStyle(.plain)
                 }
             } else {
                 ManagementSignedOutCard(accent: accentPurple, tint: cardTint) {
@@ -640,57 +700,6 @@ private struct ManagementCard<Content: View>: View {
     }
 }
 
-private struct ManagementProfileCard: View {
-    let summary: SessionSummary
-    let syncStatusTitle: String
-    let syncStatusDetail: String
-    let tint: Color
-    let action: () -> Void
-
-    var body: some View {
-        Button(action: action) {
-            ManagementCard(tint: tint) {
-                HStack(spacing: 14) {
-                    MistiaAvatarBadge(
-                        initials: summary.initials,
-                        avatarURL: summary.avatarURL,
-                        size: 50,
-                        showsStatus: false
-                    )
-
-                    VStack(alignment: .leading, spacing: 5) {
-                        Text(summary.displayName)
-                            .font(.system(size: 18, weight: .semibold, design: .rounded))
-                            .foregroundStyle(.primary)
-
-                        Text(summary.email)
-                            .font(.system(size: 13, weight: .medium, design: .rounded))
-                            .foregroundStyle(.secondary)
-
-                        Text(syncStatusTitle)
-                            .font(.system(size: 12.5, weight: .semibold, design: .rounded))
-                            .foregroundStyle(Color(red: 0.43, green: 0.23, blue: 0.76))
-                            .padding(.top, 2)
-
-                        Text(syncStatusDetail)
-                            .font(.system(size: 12.5, weight: .medium, design: .rounded))
-                            .foregroundStyle(.secondary)
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
-
-                    Spacer()
-
-                    Image(systemName: "chevron.right")
-                        .font(.system(size: 11, weight: .bold))
-                        .foregroundStyle(.tertiary)
-                }
-                .padding(.horizontal, 14)
-                .padding(.vertical, 13)
-            }
-        }
-        .buttonStyle(MistiaPressableButtonStyle(cornerRadius: 20))
-    }
-}
 
 private struct ManagementSignedOutCard: View {
     @Environment(\.colorScheme) private var colorScheme
@@ -986,7 +995,7 @@ private struct ManagementCategoryParentCard: View {
 
                     ManagementFooterAddButton(
                         title: mistiaLocalized(vi: "Thêm danh mục con", en: "Add child category", ja: "子カテゴリを追加"),
-                        accent: Color(red: 0.43, green: 0.23, blue: 0.76)
+                        accent: MistiaAccent.purple.color
                     ) {
                         onAddChild()
                     }
@@ -1097,7 +1106,7 @@ private struct ManagementCategoryKindPicker: View {
     @Binding var selection: TransactionCategoryKind
 
     private var accentPurple: Color {
-        Color(red: 0.43, green: 0.23, blue: 0.76)
+        MistiaAccent.purple.color
     }
 
     var body: some View {
