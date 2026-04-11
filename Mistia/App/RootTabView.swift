@@ -86,6 +86,8 @@ struct RootTabView: View {
   @State private var activeSheet: RootSheet?
   @State private var quickCreateButtonFrame: CGRect = .zero
   @State private var quickCreateAnchorFrame: CGRect = .zero
+  @State private var quickCreateDragOffset: CGFloat = 0
+  @State private var isDraggingQuickCreate = false
 
   private let quickCreateMenuAnimation = Animation.spring(response: 0.34, dampingFraction: 0.84)
   private let quickCreateMenuDuration = 0.28
@@ -121,12 +123,19 @@ struct RootTabView: View {
 
           MistiaQuickCreateMenu(
             isExpanded: isQuickCreateMenuExpanded,
-            expandedWidth: max(
-              quickCreateAnchorFrame.maxX - 12, MistiaQuickCreateMenu.collapsedSize)
+            width: proxy.size.width - 40, // Match tab bar margins (20pt each side)
+            dragOffset: $quickCreateDragOffset,
+            isDragging: $isDraggingQuickCreate,
+            onDismiss: dismissQuickCreateMenu
           ) { destination in
             presentQuickCreateSheet(for: destination)
           }
           .position(quickCreateMenuPosition(in: proxy))
+          .offset(y: quickCreateDragOffset)
+          .scaleEffect(isQuickCreateMenuExpanded ? 1 : 0.9, anchor: .bottomTrailing)
+          .opacity(isQuickCreateMenuExpanded ? 1 : 0)
+          .offset(y: isQuickCreateMenuExpanded ? 0 : 10)
+          .animation(quickCreateMenuAnimation, value: isQuickCreateMenuExpanded)
         }
       }
     }
@@ -227,23 +236,20 @@ struct RootTabView: View {
   }
 
   private func quickCreateMenuPosition(in proxy: GeometryProxy) -> CGPoint {
-    let width =
-      isQuickCreateMenuExpanded
-      ? max(quickCreateAnchorFrame.maxX - 12, MistiaQuickCreateMenu.collapsedSize)
+    let width = isQuickCreateMenuExpanded
+      ? proxy.size.width - 40 // Match tab bar margins
       : MistiaQuickCreateMenu.collapsedSize
-    let height =
-      isQuickCreateMenuExpanded
+    let height = isQuickCreateMenuExpanded
       ? MistiaQuickCreateMenu.expandedHeight
       : MistiaQuickCreateMenu.collapsedSize
 
-    let x = quickCreateAnchorFrame.maxX - (width / 2)
+    // Anchored to the center but width matches tab bar area
+    let x = isQuickCreateMenuExpanded ? proxy.size.width / 2 : (quickCreateAnchorFrame.maxX - (width / 2))
+    
     let safeAreaOffset = proxy.safeAreaInsets.top
-    let y = quickCreateAnchorFrame.maxY - (height / 2) - safeAreaOffset
+    let y = quickCreateAnchorFrame.maxY - (height / 2) - safeAreaOffset - 10 // Spacing of 10pt above tab bar
 
-    return CGPoint(
-      x: min(max(x, width / 2), proxy.size.width - (width / 2)),
-      y: min(max(y, height / 2), proxy.size.height - (height / 2))
-    )
+    return CGPoint(x: x, y: y)
   }
 }
 
@@ -365,38 +371,28 @@ private enum MistiaQuickCreateDestination: String, CaseIterable, Identifiable {
   }
 
   var accent: Color {
-    switch self {
-    case .expense:
-      Color(red: 0.94, green: 0.47, blue: 0.40)
-    case .income:
-      Color(red: 0.25, green: 0.79, blue: 0.61)
-    case .transfer:
-      Color(red: 0.31, green: 0.62, blue: 0.98)
-    case .note:
-      Color(red: 0.43, green: 0.23, blue: 0.76)
-    }
+    Color(red: 0.43, green: 0.23, blue: 0.76)
   }
 }
 
 private struct MistiaQuickCreateMenu: View {
   static let collapsedSize: CGFloat = 44
-  static let expandedHeight: CGFloat = 350
+  static let expandedHeight: CGFloat = 265 // Compact, aligned height
 
   @Environment(\.colorScheme) private var colorScheme
   let isExpanded: Bool
-  let expandedWidth: CGFloat
+  let width: CGFloat
+  @Binding var dragOffset: CGFloat
+  @Binding var isDragging: Bool
+  let onDismiss: () -> Void
   let onSelect: (MistiaQuickCreateDestination) -> Void
-
-  private var expandedTint: Color {
-    colorScheme == .dark ? .white.opacity(0.04) : .white.opacity(0.58)
-  }
 
   private var collapsedTint: Color {
     Color(red: 0.43, green: 0.23, blue: 0.76).opacity(colorScheme == .dark ? 0.18 : 0.12)
   }
 
   private var cornerRadius: CGFloat {
-    isExpanded ? 34 : 25
+    isExpanded ? 24 : 22
   }
 
   private var menuHeight: CGFloat {
@@ -407,29 +403,26 @@ private struct MistiaQuickCreateMenu: View {
     ZStack(alignment: .bottomTrailing) {
       if isExpanded {
         VStack(spacing: 0) {
-          ForEach(Array(MistiaQuickCreateDestination.allCases.enumerated()), id: \.element.id) {
-            index, destination in
+          ForEach(Array(MistiaQuickCreateDestination.allCases.enumerated()), id: \.element.id) { index, destination in
             Button {
               onSelect(destination)
             } label: {
               MistiaQuickCreateMenuRow(destination: destination)
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.horizontal, 6)
-                .padding(.vertical, 6)
             }
-            .buttonStyle(MistiaPressableButtonStyle(cornerRadius: 24, tint: destination.accent))
+            .buttonStyle(PlainButtonStyle())
+            .padding(.horizontal, 6)
 
             if index < MistiaQuickCreateDestination.allCases.count - 1 {
               Divider()
-                .padding(.leading, 84)
-                .padding(.trailing, 10)
+                .background(Color.primary.opacity(0.08))
+                .padding(.leading, 62)
+                .padding(.trailing, 16)
             }
           }
         }
-        .padding(4)
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
-        .opacity(isExpanded ? 1 : 0)
-        .scaleEffect(isExpanded ? 1 : 0.96, anchor: .bottomTrailing)
+        .padding(.vertical, 8)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
       }
 
       Image(systemName: "plus")
@@ -439,29 +432,60 @@ private struct MistiaQuickCreateMenu: View {
         .scaleEffect(isExpanded ? 0.72 : 1)
         .frame(width: Self.collapsedSize, height: Self.collapsedSize)
         .background {
-            Circle()
-                .fill(Color(red: 0.65, green: 0.45, blue: 0.98).opacity(0.25))
-                .opacity(isExpanded ? 0 : 1)
-                .scaleEffect(isExpanded ? 0.72 : 1)
-                .animation(.easeInOut(duration: 0.16), value: isExpanded)
+          Circle()
+            .fill(Color(red: 0.65, green: 0.45, blue: 0.98).opacity(0.25))
+            .opacity(isExpanded ? 0 : 1)
+            .scaleEffect(isExpanded ? 0.72 : 1)
         }
-        .animation(.easeInOut(duration: 0.16), value: isExpanded)
     }
     .frame(
-      width: isExpanded ? max(expandedWidth, Self.collapsedSize) : Self.collapsedSize,
+      width: isExpanded ? width : Self.collapsedSize,
       height: menuHeight,
       alignment: .bottomTrailing
     )
     .background {
-      MistiaRoundedGlassBackground(
-        cornerRadius: cornerRadius,
-        tint: isExpanded ? expandedTint : collapsedTint,
-        interactive: true
-      )
+      if isExpanded {
+        ZStack {
+          RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+            .fill(.ultraThinMaterial)
+          
+          RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+            .stroke(.white.opacity(colorScheme == .dark ? 0.08 : 0.12), lineWidth: 0.5)
+        }
+      } else {
+        MistiaRoundedGlassBackground(
+          cornerRadius: cornerRadius,
+          tint: collapsedTint,
+          interactive: true
+        )
+      }
     }
     .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
-    .shadow(color: .black.opacity(colorScheme == .dark ? 0.26 : 0.10), radius: 22, y: 14)
+    .shadow(color: .black.opacity(colorScheme == .dark ? 0.22 : 0.08), radius: isDragging ? 30 : 22, y: isDragging ? 20 : 12)
+    .scaleEffect(isDragging ? 1.02 : 1.0)
+    .animation(.spring(response: 0.3, dampingFraction: 0.7), value: isDragging)
     .allowsHitTesting(isExpanded)
+    .gesture(
+      DragGesture(minimumDistance: 0)
+        .onChanged { value in
+          if !isDragging && value.translation.height != 0 {
+            UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+            isDragging = true
+          }
+          dragOffset = value.translation.height
+        }
+        .onEnded { value in
+          let velocity = value.predictedEndLocation.y - value.location.y
+          if value.translation.height > 100 || velocity > 500 {
+            onDismiss()
+          }
+          
+          withAnimation(.spring(response: 0.35, dampingFraction: 0.82)) {
+            dragOffset = 0
+            isDragging = false
+          }
+        }
+    )
     .accessibilityElement(children: .contain)
   }
 }
@@ -470,41 +494,42 @@ private struct MistiaQuickCreateMenuRow: View {
   @Environment(\.colorScheme) private var colorScheme
   let destination: MistiaQuickCreateDestination
 
-  private var iconTint: Color {
-    colorScheme == .dark ? destination.accent.opacity(0.24) : destination.accent.opacity(0.18)
+  private var iconBackgroundColor: Color {
+    destination.accent.opacity(colorScheme == .dark ? 0.18 : 0.12)
   }
 
   var body: some View {
-    HStack(alignment: .top, spacing: 14) {
-      Image(systemName: destination.systemImage)
-        .font(.system(size: 22, weight: .medium, design: .rounded))
-        .foregroundStyle(.white.opacity(0.98))
-        .frame(width: 54, height: 54)
-        .background {
-          MistiaRoundedGlassBackground(
-            cornerRadius: 18,
-            tint: iconTint,
-            interactive: true
-          )
-        }
+    HStack(alignment: .center, spacing: 14) {
+      ZStack {
+        RoundedRectangle(cornerRadius: 11, style: .continuous)
+          .fill(iconBackgroundColor)
+        
+        Image(systemName: destination.systemImage)
+            .font(.system(size: 18, weight: .semibold, design: .rounded))
+          .foregroundStyle(destination.accent)
+      }
+      .frame(width: 38, height: 38)
 
-      VStack(alignment: .leading, spacing: 5) {
+      VStack(alignment: .leading, spacing: 2) {
         Text(destination.title)
-          .font(.system(size: 18, weight: .bold, design: .rounded))
+          .font(.system(size: 16, weight: .bold, design: .rounded))
           .foregroundStyle(.primary)
 
         Text(destination.subtitle)
-          .font(.system(size: 13.5, weight: .medium, design: .rounded))
+          .font(.system(size: 12.5, weight: .medium, design: .rounded))
           .foregroundStyle(.secondary)
-          .multilineTextAlignment(.leading)
-          .lineLimit(2)
+          .lineLimit(1)
       }
 
       Spacer(minLength: 8)
+      
+      Image(systemName: "chevron.right")
+        .font(.system(size: 11, weight: .bold))
+        .foregroundStyle(.tertiary)
     }
-    .padding(.horizontal, 12)
-    .padding(.vertical, 10)
-    .contentShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
+    .padding(.horizontal, 14)
+    .frame(height: 56)
+    .contentShape(Rectangle())
   }
 }
 

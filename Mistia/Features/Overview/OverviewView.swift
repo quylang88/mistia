@@ -707,14 +707,7 @@ private struct RecentTransactionRow: View {
     }
 
     private var amountColor: Color {
-        switch row.cashflowStyle {
-        case .income:
-            Color(hex: "#2DAA9E")
-        case .expense:
-            Color(hex: "#F45C7E")
-        case .neutral:
-            Color(hex: "#5B7BFF")
-        }
+        Color(red: 0.43, green: 0.23, blue: 0.76)
     }
 
     private var iconName: String {

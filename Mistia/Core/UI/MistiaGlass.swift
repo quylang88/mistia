@@ -143,10 +143,10 @@ struct MistiaAvatarBadge: View {
 
 struct MistiaGlassCard<Content: View>: View {
     let cornerRadius: CGFloat
-    var tint: Color = .white.opacity(0.08)
-    var interactive: Bool = false
-    var padding: CGFloat = 18
-    private let content: Content
+    let tint: Color
+    let interactive: Bool
+    let padding: CGFloat
+    let content: Content
 
     init(
         cornerRadius: CGFloat,
@@ -183,12 +183,7 @@ struct MistiaRoundedGlassBackground: View {
 
     var body: some View {
         RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-            .fill(Color(UIColor.secondarySystemGroupedBackground))
-            .shadow(
-                color: .black.opacity(colorScheme == .dark ? 0.12 : 0.03),
-                radius: 10,
-                y: 4
-            )
+            .fill(Color(uiColor: .secondarySystemGroupedBackground))
     }
 
     @available(iOS 26, *)
@@ -208,22 +203,7 @@ struct MistiaCapsuleGlassBackground: View {
 
     var body: some View {
         Capsule()
-            .fill(Color.clear)
-            .background {
-                if #available(iOS 26, *) {
-                    Capsule()
-                        .fill(.clear)
-                        .glassEffect(glassStyle, in: .capsule)
-                } else {
-                    Capsule()
-                        .fill(.regularMaterial)
-                }
-            }
-            .overlay {
-                Capsule()
-                    .strokeBorder(.white.opacity(colorScheme == .dark ? 0.08 : 0.2), lineWidth: 0.7)
-            }
-            .shadow(color: .black.opacity(colorScheme == .dark ? 0.10 : 0.03), radius: 8, y: 3)
+            .fill(Color(uiColor: .secondarySystemGroupedBackground))
     }
 
     @available(iOS 26, *)
@@ -243,22 +223,7 @@ struct MistiaCircleGlassBackground: View {
 
     var body: some View {
         Circle()
-            .fill(Color.clear)
-            .background {
-                if #available(iOS 26, *) {
-                    Circle()
-                        .fill(.clear)
-                        .glassEffect(glassStyle, in: .circle)
-                } else {
-                    Circle()
-                        .fill(.regularMaterial)
-                }
-            }
-            .overlay {
-                Circle()
-                    .strokeBorder(.white.opacity(colorScheme == .dark ? 0.10 : 0.22), lineWidth: 0.75)
-            }
-            .shadow(color: .black.opacity(colorScheme == .dark ? 0.12 : 0.04), radius: 8, y: 4)
+            .fill(Color(uiColor: .secondarySystemGroupedBackground))
     }
 
     @available(iOS 26, *)

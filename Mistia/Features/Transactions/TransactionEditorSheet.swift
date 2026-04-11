@@ -363,14 +363,7 @@ struct TransactionEditorSheet: View {
     }
 
     private var accentColor: Color {
-        switch draft.primaryKind {
-        case .expense:
-            Color(red: 0.95, green: 0.43, blue: 0.44)
-        case .income:
-            .mint
-        case .transfer:
-            Color(red: 0.29, green: 0.56, blue: 0.96)
-        }
+        Color(red: 0.43, green: 0.23, blue: 0.76)
     }
 
     private var availableWallets: [LedgerWallet] {

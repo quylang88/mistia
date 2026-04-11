@@ -7,13 +7,10 @@ struct MistiaBlockCardBackground: View {
     var cornerRadius: CGFloat = 20
 
     var body: some View {
-        RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-            .fill(Color(UIColor.secondarySystemGroupedBackground))
-            .shadow(
-                color: .black.opacity(colorScheme == .dark ? 0.14 : 0.035),
-                radius: 10,
-                y: 4
-            )
+        MistiaRoundedGlassBackground(
+            cornerRadius: cornerRadius,
+            tint: tint
+        )
     }
 }
 

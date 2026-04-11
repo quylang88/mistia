@@ -485,7 +485,12 @@ private struct MistiaQuickCreateFloatingButton: View {
   let action: () -> Void
 
   var body: some View {
-    Button(action: action) {
+    Button {
+        let generator = UIImpactFeedbackGenerator(style: .light)
+        generator.prepare()
+        generator.impactOccurred()
+        action()
+    } label: {
       Image(systemName: "plus")
         .font(.system(size: 20, weight: .semibold, design: .rounded))
         .foregroundStyle(Color(red: 0.88, green: 0.78, blue: 1.0))

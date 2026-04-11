@@ -18,14 +18,7 @@ private enum TransactionSegment: String, CaseIterable, Hashable {
     }
 
     var tint: Color {
-        switch self {
-        case .expense:
-            Color(red: 0.97, green: 0.43, blue: 0.46)
-        case .income:
-            .mint
-        case .transfer:
-            Color(red: 0.29, green: 0.56, blue: 0.96)
-        }
+        Color(red: 0.43, green: 0.23, blue: 0.76)
     }
 
     var kind: TransactionPrimaryKind {
@@ -506,7 +499,7 @@ private struct TransactionLiveSummaryCard: View {
                 TransactionSummaryMetric(
                     title: mistiaLocalized(vi: "Chi", en: "Expense", ja: "支出"),
                     value: summary.expenseMinor.formattedCurrency(code: "JPY"),
-                    tint: Color(red: 0.97, green: 0.43, blue: 0.46)
+                    tint: Color(red: 0.43, green: 0.23, blue: 0.76)
                 )
 
                 Spacer(minLength: 4)
@@ -514,7 +507,7 @@ private struct TransactionLiveSummaryCard: View {
                 TransactionSummaryMetric(
                     title: mistiaLocalized(vi: "Thu", en: "Income", ja: "収入"),
                     value: summary.incomeMinor.formattedCurrency(code: "JPY"),
-                    tint: .mint
+                    tint: Color(red: 0.43, green: 0.23, blue: 0.76)
                 )
 
                 Spacer(minLength: 4)
@@ -643,21 +636,7 @@ private struct TransactionRow: View {
     }
 
     private var iconColor: Color {
-        switch record.primaryKind {
-        case .expense:
-            transaction.category?.iconColor ?? Color(red: 0.97, green: 0.43, blue: 0.46)
-        case .income:
-            transaction.category?.iconColor ?? .mint
-        case .transfer:
-            switch record.transferSubtype {
-            case .internalTransfer:
-                Color(red: 0.29, green: 0.56, blue: 0.96)
-            case .debt:
-                cashflowColor
-            case nil:
-                .secondary
-            }
-        }
+        Color(red: 0.43, green: 0.23, blue: 0.76)
     }
 
     private var title: String {
@@ -712,14 +691,7 @@ private struct TransactionRow: View {
     }
 
     private var cashflowColor: Color {
-        let amount = TransactionLogic.cashflowAmount(for: record)
-        if amount > 0 {
-            return .mint
-        }
-        if amount < 0 {
-            return Color(red: 0.97, green: 0.43, blue: 0.46)
-        }
-        return Color(red: 0.29, green: 0.56, blue: 0.96)
+        Color(red: 0.43, green: 0.23, blue: 0.76)
     }
 
     private var displayAmount: String {
