@@ -102,8 +102,8 @@ struct ManagementAccountView: View {
     // Tone màu tím đặc trưng, sáng hơn trong Dark Mode
     private var accent: Color {
         colorScheme == .dark 
-            ? Color(red: 0.65, green: 0.45, blue: 0.98) 
-            : Color(red: 0.43, green: 0.23, blue: 0.76)
+            ? MistiaAccent.lightPurple.color 
+            : MistiaAccent.purple.color
     }
 
     private let secondaryBackground = Color(UIColor.secondarySystemBackground)
@@ -390,7 +390,7 @@ struct ManagementAccountView: View {
                 ManagementProfileNavigationRow(
                     title: mistiaLocalized(vi: "Gia đình", en: "Family", ja: "家族"),
                     icon: "person.3.fill",
-                    accent: .rose,
+                    accent: .purple,
                     subtitle: nil,
                     value: familyContextStore.family?.name ?? mistiaLocalized(vi: "Chưa có", en: "None", ja: "未設定")
                 ) {
@@ -1488,7 +1488,7 @@ private struct ManagementProfileCenteredDestructiveButton: View {
         Button(action: action) {
             Text(title)
                 .font(.system(size: 17, weight: .semibold, design: .rounded))
-                .foregroundStyle(.red)
+                .foregroundStyle(MistiaAccent.expense.color)
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 17)
                 .background(backgroundColor, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
@@ -3041,14 +3041,14 @@ private struct ManagementPasswordRequirementRow: View {
         if showsNeutralState {
             return .secondary
         }
-        return isSatisfied ? Color(red: 0.25, green: 0.76, blue: 0.34) : Color.red.opacity(0.92)
+        return isSatisfied ? MistiaAccent.income.color : Color.red.opacity(0.92)
     }
 
     private var textColor: Color {
         if showsNeutralState {
             return .secondary
         }
-        return isSatisfied ? Color(red: 0.25, green: 0.76, blue: 0.34) : Color.red.opacity(0.92)
+        return isSatisfied ? MistiaAccent.income.color : Color.red.opacity(0.92)
     }
 }
 
@@ -3126,7 +3126,7 @@ private enum PasswordStrengthLevel {
         case .strong:
             return Color(red: 0.20, green: 0.77, blue: 0.65)
         case .veryStrong:
-            return Color(red: 0.25, green: 0.76, blue: 0.34)
+            return MistiaAccent.income.color
         }
     }
 
@@ -3152,7 +3152,7 @@ private extension SessionAuthBannerStyle {
         case .info:
             return Color(red: 0.30, green: 0.59, blue: 0.95)
         case .success:
-            return Color(red: 0.25, green: 0.76, blue: 0.34)
+            return MistiaAccent.income.color
         case .error:
             return Color(red: 0.91, green: 0.29, blue: 0.32)
         }

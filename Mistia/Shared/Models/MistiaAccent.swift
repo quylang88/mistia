@@ -10,6 +10,11 @@ enum MistiaAccent: String, Codable {
     case rose
     case slate
     case sky
+    case purple
+    case expense // Màu rose đỏ của số tiền chi tiêu
+    case income // Màu xanh của số tiền thu nhập
+    case transfer // Màu trắng xám của số tiền chuyển tiền
+    case lightPurple // Màu tím sáng (light purple) cho text hoặc background phụ
 
     var color: Color {
         switch self {
@@ -31,6 +36,21 @@ enum MistiaAccent: String, Codable {
             Color(red: 0.55, green: 0.58, blue: 0.67)
         case .sky:
             Color(red: 0.39, green: 0.68, blue: 1.0)
+        case .purple:
+            // Màu tím chính của app (Plus button, sao kê, ghi nhanh...)
+            Color(red: 0.43, green: 0.23, blue: 0.76)
+        case .expense:
+            // Màu rose đỏ cho chi tiêu
+            Color(red: 0.97, green: 0.43, blue: 0.46)
+        case .income:
+            // Màu xanh cho thu nhập
+            Color(red: 0.25, green: 0.76, blue: 0.34)
+        case .transfer:
+            // Màu xám cho chuyển khoản
+            Color(red: 0.55, green: 0.58, blue: 0.67)
+        case .lightPurple:
+            // Màu tím nhạt cho text thêm hoặc dark mode highlight
+            Color(red: 0.65, green: 0.45, blue: 0.98)
         }
     }
 }
