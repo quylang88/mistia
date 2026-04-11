@@ -147,6 +147,20 @@ final class FamilyContextStore {
         }
     }
 
+    func deleteFamily(sessionStore: SessionStore) async {
+        guard let familyID = family?.id else { return }
+        let refreshedSession = try? await sessionStore.refreshedSession()
+        guard let session = refreshedSession ?? nil else { return }
+
+        do {
+            try await service.deleteFamily(familyID: familyID, session: session)
+            activeContext = .personalSelf
+            await refresh(sessionStore: sessionStore)
+        } catch {
+            lastErrorMessage = error.localizedDescription
+        }
+    }
+
     func createFamily(
         name: String,
         sessionStore: SessionStore

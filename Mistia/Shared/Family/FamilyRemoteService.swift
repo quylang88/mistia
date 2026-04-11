@@ -304,6 +304,19 @@ struct FamilyRemoteService {
         ) as [FamilyMembershipRecord]
     }
 
+    func deleteFamily(
+        familyID: UUID,
+        session: SupabaseAuthSession
+    ) async throws {
+        _ = try await deleteRows(
+            path: "families",
+            filters: [
+                URLQueryItem(name: "id", value: "eq.\(familyID.uuidString.lowercased())")
+            ],
+            session: session
+        ) as [FamilyGroupRecord]
+    }
+
     func fetchAccessibleFinanceSnapshot(
         userIDs: [UUID],
         session: SupabaseAuthSession
