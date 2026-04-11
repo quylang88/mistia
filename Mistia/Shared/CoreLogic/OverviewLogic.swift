@@ -64,6 +64,7 @@ nonisolated struct OverviewTransactionSnapshot: Equatable, Identifiable {
     let destinationWalletKind: LedgerWalletKind?
     let categoryID: UUID?
     let categoryName: String?
+    let categoryIconSymbolName: String?  // Icon of transaction category
     let counterpartyName: String?
     let isArchived: Bool
 }
@@ -135,6 +136,7 @@ nonisolated struct OverviewRecentTransactionSnapshot: Equatable, Identifiable {
     let occurredAt: Date
     let timeLabel: String
     let cashflowStyle: OverviewCashflowStyle
+    let categoryIconSymbolName: String  // Icon of transaction category
 }
 
 nonisolated struct OverviewDashboardSnapshot: Equatable {
@@ -603,7 +605,10 @@ nonisolated enum OverviewLogic {
                         referenceDate: referenceDate,
                         calendar: calendar
                     ),
-                    cashflowStyle: cashflowStyle(for: transaction)
+                    cashflowStyle: cashflowStyle(for: transaction),
+                    categoryIconSymbolName: transaction.categoryID != nil 
+                        ? categoryIconToken(for: transaction)
+                        : transactionKindIconToken(for: transaction)
                 )
             }
     }
@@ -993,6 +998,26 @@ nonisolated enum OverviewLogic {
             case .internalTransfer, .none:
                 return .neutral
             }
+        }
+    }
+
+    private static func categoryIconToken(
+        for transaction: OverviewTransactionSnapshot
+    ) -> String {
+        // Return category icon if available, otherwise use transaction kind icon
+        transaction.categoryIconSymbolName ?? transactionKindIconToken(for: transaction)
+    }
+
+    private static func transactionKindIconToken(
+        for transaction: OverviewTransactionSnapshot
+    ) -> String {
+        switch transaction.primaryKind {
+        case .expense:
+            TransactionPrimaryKind.expense.financeIconToken
+        case .income:
+            TransactionPrimaryKind.income.financeIconToken
+        case .transfer:
+            TransactionPrimaryKind.transfer.financeIconToken
         }
     }
 

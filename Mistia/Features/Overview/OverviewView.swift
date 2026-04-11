@@ -207,8 +207,12 @@ struct OverviewView: View {
                 onExportMonthly: { exportStatement(.monthlySummary) },
                 onExportCreditCard: { exportStatement(.creditCard) }
             )
-            BudgetFocusSection(rows: dashboardSnapshot.budgetAlerts)
-            UpcomingBillsSection(rows: dashboardSnapshot.dueAlerts)
+            if !dashboardSnapshot.budgetAlerts.isEmpty {
+                BudgetFocusSection(rows: dashboardSnapshot.budgetAlerts)
+            }
+            if !dashboardSnapshot.dueAlerts.isEmpty {
+                UpcomingBillsSection(rows: dashboardSnapshot.dueAlerts)
+            }
             RecentTransactionsSection(rows: dashboardSnapshot.recentTransactions)
         }
         .sheet(item: $shareItem) { item in
@@ -411,6 +415,8 @@ private struct OverviewStatementMenuButton: View {
 
 private struct OverviewWeekSpendingChart: View {
     @Environment(\.colorScheme) private var colorScheme
+    @State private var selectedPointIndex: Int?
+    @State private var showDetailSheet = false
 
     let week: OverviewWeekSpendingSnapshot
     let insetSurface: Color
@@ -421,46 +427,139 @@ private struct OverviewWeekSpendingChart: View {
     }
 
     var body: some View {
-        Chart(week.points) { point in
-            BarMark(
-                x: .value("Ngày", point.label),
-                y: .value("Giá trị", Double(point.valueMinor))
-            )
-            .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
-            .foregroundStyle(chartColor(for: point.intensity).gradient)
-            .opacity(0.92)
-        }
-        .chartLegend(.hidden)
-        .chartXAxis {
-            AxisMarks(values: week.points.map(\.label)) { value in
-                AxisValueLabel {
-                    if let label = value.as(String.self) {
-                        Text(label)
-                            .font(.system(size: 10, weight: .semibold, design: .rounded))
+        ZStack {
+            // Chart with gestures
+            Chart(week.points) { point in
+                BarMark(
+                    x: .value("Ngày", point.label),
+                    y: .value("Giá trị", Double(point.valueMinor))
+                )
+                .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+                .foregroundStyle(chartColor(for: point.intensity).gradient)
+                .opacity(0.92)
+            }
+            .chartLegend(.hidden)
+            .chartXAxis {
+                AxisMarks(values: week.points.map(\.label)) { value in
+                    AxisValueLabel {
+                        if let label = value.as(String.self) {
+                            Text(label)
+                                .font(.system(size: 10, weight: .semibold, design: .rounded))
+                        }
                     }
                 }
             }
-        }
-        .chartYAxis {
-            AxisMarks(position: .leading, values: .automatic(desiredCount: 3)) { value in
-                AxisGridLine(stroke: StrokeStyle(lineWidth: 0.7, dash: [3, 4]))
-                    .foregroundStyle(colorScheme == .dark ? .white.opacity(0.12) : .black.opacity(0.08))
-                AxisValueLabel {
-                    if let number = value.as(Double.self) {
-                        Text(Int64(number.rounded()).compactAxisLabel)
-                            .font(.system(size: 9, weight: .semibold, design: .rounded))
-                            .foregroundStyle(.secondary)
+            .chartYAxis {
+                AxisMarks(position: .leading, values: .automatic(desiredCount: 3)) { value in
+                    AxisGridLine(stroke: StrokeStyle(lineWidth: 0.7, dash: [3, 4]))
+                        .foregroundStyle(colorScheme == .dark ? .white.opacity(0.12) : .black.opacity(0.08))
+                    AxisValueLabel {
+                        if let number = value.as(Double.self) {
+                            Text(Int64(number.rounded()).compactAxisLabel)
+                                .font(.system(size: 9, weight: .semibold, design: .rounded))
+                                .foregroundStyle(.secondary)
+                        }
                     }
                 }
             }
-        }
-        .chartYScale(domain: 0 ... chartMax)
-        .frame(height: 122)
+            .chartYScale(domain: 0 ... chartMax)
+            .overlay(
+                GeometryReader { geo in
+                    let width = geo.size.width
+                    let height = geo.size.height
+                    let columnWidth = width / CGFloat(week.points.count)
+
+                    ZStack(alignment: .topLeading) {
+                        // Gesture rectangles
+                        ForEach(Array(week.points.enumerated()), id: \.offset) { index, _ in
+                            ZStack {
+                                Rectangle()
+                                    .fill(Color.clear)
+                                    .contentShape(Rectangle())
+                                
+                                // Tooltip for this column
+                                if selectedPointIndex == index, !showDetailSheet {
+                                    VStack(spacing: 8) {
+                                        Text(week.points[index].label)
+                                            .font(.system(size: 12, weight: .semibold, design: .rounded))
+                                            .foregroundStyle(.secondary)
+
+                                        Text(week.points[index].valueMinor.formattedCurrency(code: "JPY"))
+                                            .font(.system(size: 16, weight: .bold, design: .rounded))
+                                            .foregroundStyle(.primary)
+                                    }
+                                    .padding(12)
+                                    .background(Color(UIColor.systemBackground))
+                                    .cornerRadius(8)
+                                    .shadow(radius: 4)
+                                    .offset(y: -50)
+                                    .frame(maxWidth: .infinity, alignment: .center)
+                                }
+                            }
+                            .frame(width: columnWidth, height: height)
+                            .offset(x: CGFloat(index) * columnWidth)
+                            .onTapGesture {
+                                withAnimation(.snappy) {
+                                    selectedPointIndex = index
+                                }
+                            }
+                            .onLongPressGesture(minimumDuration: 0.3) {
+                                UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+                                withAnimation(.snappy) {
+                                    selectedPointIndex = index
+                                }
+                                showDetailSheet = true
+                            }
+                        }
+                    }
+                }
+            )            }        .frame(height: 122)
         .padding(.horizontal, 12)
         .padding(.vertical, 10)
         .background {
             RoundedRectangle(cornerRadius: 18, style: .continuous)
                 .fill(insetSurface)
+        }
+        .sheet(isPresented: $showDetailSheet) {
+            if let index = selectedPointIndex, index < week.points.count {
+                VStack(alignment: .leading, spacing: 16) {
+                    HStack {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(mistiaLocalized(vi: "Giao dịch ngày", en: "Transactions on", ja: "取引日"))
+                                .font(.system(size: 12, weight: .semibold, design: .rounded))
+                                .foregroundStyle(.secondary)
+
+                            Text(week.points[index].label)
+                                .font(.system(size: 18, weight: .bold, design: .rounded))
+                                .foregroundStyle(.primary)
+                        }
+
+                        Spacer()
+
+                        Text(week.points[index].valueMinor.formattedCurrency(code: "JPY"))
+                            .font(.system(size: 16, weight: .bold, design: .rounded))
+                            .foregroundStyle(Color(red: 0.96, green: 0.36, blue: 0.49))
+                    }
+                    .padding(.horizontal, 16)
+                    .padding(.top, 16)
+
+                    Divider()
+                        .padding(.horizontal, 16)
+
+                    VStack(spacing: 12) {
+                        Text(mistiaLocalized(vi: "Danh sách giao dịch sẽ được hiển thị tại đây", en: "Transaction list will be displayed here", ja: "取引リストがここに表示されます"))
+                            .font(.system(size: 14, weight: .semibold, design: .rounded))
+                            .foregroundStyle(.secondary)
+                            .frame(maxWidth: .infinity, alignment: .center)
+                            .padding(.vertical, 32)
+                    }
+
+                    Spacer()
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .presentationDetents([.medium, .large])
+                .presentationDragIndicator(.visible)
+            }
         }
     }
 
@@ -680,6 +779,8 @@ private struct RecentTransactionsSection: View {
 }
 
 private struct RecentTransactionRow: View {
+    @Environment(\.colorScheme) private var colorScheme: ColorScheme
+    
     let row: OverviewRecentTransactionSnapshot
 
     var body: some View {
@@ -707,18 +808,18 @@ private struct RecentTransactionRow: View {
     }
 
     private var amountColor: Color {
-        Color(red: 0.43, green: 0.23, blue: 0.76)
+        switch row.cashflowStyle {
+        case .income:
+            Color(red: 0.18, green: 0.67, blue: 0.62)  // Xanh lục
+        case .expense:
+            Color(red: 0.96, green: 0.36, blue: 0.49)  // Đỏ hồng
+        case .neutral:
+            colorScheme == .dark ? .white : Color(red: 0.60, green: 0.60, blue: 0.60)  // Trắng/xám
+        }
     }
 
     private var iconName: String {
-        switch row.cashflowStyle {
-        case .income:
-            TransactionPrimaryKind.income.financeIconToken
-        case .expense:
-            TransactionPrimaryKind.expense.financeIconToken
-        case .neutral:
-            TransactionPrimaryKind.transfer.financeIconToken
-        }
+        row.categoryIconSymbolName
     }
 
     private var displayAmount: String {

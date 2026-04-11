@@ -625,6 +625,9 @@ private struct TransactionSectionCard: View {
 }
 
 private struct TransactionRow: View {
+    @Environment(\.colorScheme) private var 
+    colorScheme: ColorScheme
+
     let record: TransactionRecordSnapshot
     let transaction: LedgerTransaction
 
@@ -700,7 +703,14 @@ private struct TransactionRow: View {
     }
 
     private var cashflowColor: Color {
-        Color(red: 0.43, green: 0.23, blue: 0.76)
+        switch record.primaryKind {
+        case .expense:
+            return Color(red: 0.96, green: 0.36, blue: 0.49)  // Đỏ hồng
+        case .income:
+            return Color(red: 0.18, green: 0.67, blue: 0.62)  // Xanh lục
+        case .transfer:
+            return colorScheme == .dark ? .white : Color(red: 0.60, green: 0.60, blue: 0.60)  // Trắng/xám
+        }
     }
 
     private var displayAmount: String {
