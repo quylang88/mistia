@@ -193,7 +193,30 @@ struct FamilyManagementView: View {
     private var familyHubContent: some View {
         VStack(spacing: 24) {
             // Member List Card
-            VStack(alignment: .leading, spacing: 12) {
+            VStack(alignment: .leading, spacing: 10) {
+                VStack(alignment: .leading, spacing: 6) {
+                    Text(mistiaLocalized(
+                        vi: "Gia đình",
+                        en: "Family",
+                        ja: "家族"
+                    ))
+                    .font(.system(size: 13, weight: .bold, design: .rounded))
+                    .textCase(.uppercase)
+                    .tracking(0.6)
+                    .foregroundStyle(.secondary)
+                    .padding(.horizontal, 2)
+
+                    Text(mistiaLocalized(
+                        vi: "Thành viên gia đình có thể truy cập và chia sẻ tài sản, công nợ, giao dịch và ngân sách để cùng nhau quản lý hiệu quả.",
+                        en: "Family members can access and share assets, debts, transactions, and budgets to manage effectively together.",
+                        ja: "ファミリーメンバーは資産、負債、取引、予算にアクセスして共有し、効果的に共に管理することができます。"
+                    ))
+                    .font(.system(size: 13, weight: .medium, design: .rounded))
+                    .foregroundStyle(.secondary)
+                    .padding(.horizontal, 2)
+                }
+                .padding(.bottom, 2)
+
                 MistiaGlassCard(cornerRadius: 18, tint: cardTint, padding: 0) {
                     VStack(spacing: 0) {
                         ForEach(Array(familyContextStore.members.enumerated()), id: \.element.membershipID) { index, member in
@@ -245,15 +268,6 @@ struct FamilyManagementView: View {
                     }
                 }
 
-                Text(mistiaLocalized(
-                    vi: "Mọi thành viên trong gia đình đều có quyền xem và quản lý chung dữ liệu tài chính của cả nhà một cách minh bạch.",
-                    en: "All family members have the right to transparently view and manage the household's financial data together.",
-                    ja: "家族全員が、家計の財務データを透明性を持って共に閲覧・管理する権利を持っています。"
-                ))
-                .font(.system(size: 13, weight: .medium, design: .rounded))
-                .foregroundStyle(.secondary)
-                .padding(.horizontal, 4)
-                .padding(.top, 2)
             }
 
             // Overview Block

@@ -71,12 +71,13 @@ struct MistiaPrivacySheet: View {
                         dismiss()
                     } label: {
                         Image(systemName: "xmark")
-                            .font(.system(size: 15, weight: .bold))
+                            .font(.system(size: 11, weight: .bold))
                             .foregroundStyle(.secondary)
-                            .padding(8)
-                            .background {
+                            .padding(7)
+                            .background(.ultraThinMaterial, in: Circle())
+                            .overlay {
                                 Circle()
-                                    .fill(.secondary.opacity(0.12))
+                                    .strokeBorder(.white.opacity(0.1), lineWidth: 0.5)
                             }
                     }
                     .buttonStyle(.plain)
