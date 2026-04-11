@@ -854,7 +854,7 @@ private struct PlanningBudgetSummaryCard: View {
 
                     Spacer(minLength: 12)
 
-                    PlanningProgressRing(progress: summary.progressClamped, color: ringColor, text: summary.progress.percentText)
+                PlanningProgressRing(progress: summary.progress, text: summary.progress.percentText)
                 }
 
                 HStack(spacing: 14) {
@@ -888,15 +888,6 @@ private struct PlanningBudgetSummaryCard: View {
         }
     }
 
-    private var ringColor: Color {
-        if summary.progress >= 0.9 {
-            return Color(hex: "#F45C7E")
-        }
-        if summary.progress >= 0.7 {
-            return Color(hex: "#F59B3F")
-        }
-        return Color(hex: "#2DAA9E")
-    }
 }
 
 private struct PlanningGoalSummaryCard: View {
@@ -957,7 +948,7 @@ private struct PlanningDueSummaryCard: View {
     var body: some View {
         MistiaBlockCard(cornerRadius: 24, tint: cardTint, padding: 18) {
             VStack(alignment: .leading, spacing: 18) {
-                Text(mistiaLocalized(vi: "Tóm tắt đến hạn", en: "Due summary", ja: "支払予定の概要"))
+                Text(mistiaLocalized(vi: "Tóm tắt", en: "Summary", ja: "概要"))
                     .font(.system(size: 14.5, weight: .semibold, design: .rounded))
                     .foregroundStyle(.secondary)
 
@@ -1505,29 +1496,63 @@ private struct PlanningProgressBar: View {
 private struct PlanningProgressRing: View {
     @Environment(\.colorScheme) private var colorScheme
     let progress: Double
-    let color: Color
     let text: String
+
+    private let lineWidth: CGFloat = 12
 
     var body: some View {
         ZStack {
             Circle()
-                .stroke(colorScheme == .dark ? .white.opacity(0.10) : .black.opacity(0.06), lineWidth: 12)
+                .stroke(colorScheme == .dark ? .white.opacity(0.10) : .black.opacity(0.06), lineWidth: lineWidth)
 
-            Circle()
-                .trim(from: 0, to: progress)
-                .stroke(
-                    AngularGradient(
-                        colors: [color.opacity(0.35), color],
-                        center: .center
-                    ),
-                    style: StrokeStyle(lineWidth: 12, lineCap: .round)
-                )
-                .rotationEffect(.degrees(-90))
+            if progress > 0 {
+                let fullCircles = Int(progress)
+                let remainder = progress.truncatingRemainder(dividingBy: 1.0)
+
+                // Các vòng tròn đầy 100%
+                ForEach(0..<fullCircles, id: \.self) { i in
+                    Circle()
+                        .trim(from: 0, to: 1.0)
+                        .stroke(
+                            ringColor(for: Double(i + 1)),
+                            style: StrokeStyle(lineWidth: lineWidth, lineCap: .round)
+                        )
+                        .rotationEffect(.degrees(-90))
+                        .shadow(color: i >= 1 ? ringColor(for: Double(i + 1)).opacity(0.5) : .clear, radius: 4)
+                }
+
+                // Vòng tròn lẻ cuối cùng
+                Circle()
+                    .trim(from: 0, to: remainder == 0 && fullCircles > 0 ? 0 : remainder)
+                    .stroke(
+                        ringColor(for: progress),
+                        style: StrokeStyle(lineWidth: lineWidth, lineCap: .round)
+                    )
+                    .rotationEffect(.degrees(-90))
+                    .shadow(color: progress > 1.0 ? ringColor(for: progress).opacity(0.3) : .clear, radius: 3)
+            }
 
             Text(text)
                 .font(.system(size: 19, weight: .bold, design: .rounded))
+                .foregroundStyle(ringColor(for: progress))
         }
         .frame(width: 112, height: 112)
+    }
+
+    private func ringColor(for val: Double) -> Color {
+        if val >= 1.0 {
+            // Đỏ rực / Hồng Neon cho > 100%
+            return Color(hex: "#FF2D55")
+        } else if val >= 0.8 {
+            // Cam đào cho 80-100%
+            return Color(hex: "#FF9500")
+        } else if val >= 0.6 {
+            // Vàng chanh cho 60-80%
+            return Color(hex: "#FFD60A")
+        } else {
+            // Xanh lá cho < 60%
+            return Color(hex: "#34C759")
+        }
     }
 }
 

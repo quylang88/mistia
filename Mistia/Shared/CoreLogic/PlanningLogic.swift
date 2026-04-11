@@ -315,11 +315,11 @@ nonisolated enum PlanningDuePaymentError: Error, Equatable {
 
 nonisolated enum PlanningLogic {
     static func health(forProgress progress: Double) -> PlanningBudgetHealth {
-        if progress > 1 {
+        if progress >= 1.0 {
             return .exceeded
         }
 
-        if progress >= 0.7 {
+        if progress >= 0.6 {
             return .caution
         }
 
@@ -327,11 +327,11 @@ nonisolated enum PlanningLogic {
     }
 
     static func tone(forProgress progress: Double) -> PlanningBudgetTone {
-        if progress >= 0.9 {
+        if progress >= 1.0 {
             return .critical
         }
 
-        if progress >= 0.7 {
+        if progress >= 0.8 {
             return .warning
         }
 
@@ -747,35 +747,38 @@ nonisolated enum PlanningLogic {
         referenceDate: Date = .now,
         calendar: Calendar = .current
     ) -> PlanningDueSummarySnapshot {
+        let startOfToday = calendar.startOfDay(for: referenceDate)
+        let windowEnd = calendar.date(byAdding: .day, value: 7, to: startOfToday) ?? startOfToday
+
         let pendingCards = creditCards.filter { $0.status == .pending }
         let pendingRecurring = recurring.filter { $0.status == .pending }
-        let pendingCombined = pendingCards.map {
-            PendingDueSnapshot(date: $0.dueDate, amountMinor: $0.amountMinor)
-        } + pendingRecurring.map {
-            PendingDueSnapshot(date: $0.dueDate, amountMinor: $0.amountMinor)
-        }
 
-        if isSameMonth(selectedMonth, other: referenceDate, calendar: calendar) {
-            let start = calendar.startOfDay(for: referenceDate)
-            let windowEnd = calendar.date(byAdding: .day, value: 7, to: start) ?? start
-            let overdue = pendingCombined.filter { $0.date < start }
-            let upcoming = pendingCombined.filter { $0.date >= start && $0.date <= windowEnd }
+        // Sắp đến hạn: Trong vòng 7 ngày tới
+        let upcomingCards = pendingCards.filter { $0.dueDate >= startOfToday && $0.dueDate <= windowEnd }
+        let upcomingRecurring = pendingRecurring.filter { $0.dueDate >= startOfToday && $0.dueDate <= windowEnd }
+        let upcomingCount = upcomingCards.count + upcomingRecurring.count
 
-            return PlanningDueSummarySnapshot(
-                upcomingCount: upcoming.count,
-                totalDueMinor: upcoming.reduce(into: Int64.zero) { partial, snapshot in
-                    partial += snapshot.amountMinor ?? 0
-                },
-                overdueCount: overdue.count
-            )
+        // Tổng cần trả: Dư nợ thẻ trong tháng + Hóa đơn trong 7 ngày tới
+        let totalDueCards = pendingCards.reduce(into: Int64.zero) { $0 += $1.amountMinor }
+        let totalDueRecurringUpcoming = upcomingRecurring.reduce(into: Int64.zero) { $0 += $1.amountMinor ?? 0 }
+        let totalDueMinor = totalDueCards + totalDueRecurringUpcoming
+
+        // Quá hạn
+        let overdueCount: Int
+        if isPastMonth(selectedMonth, referenceDate: referenceDate, calendar: calendar) {
+            overdueCount = pendingCards.count + pendingRecurring.count
+        } else if isSameMonth(selectedMonth, other: referenceDate, calendar: calendar) {
+            let overdueCards = pendingCards.filter { $0.dueDate < startOfToday }
+            let overdueRecurring = pendingRecurring.filter { $0.dueDate < startOfToday }
+            overdueCount = overdueCards.count + overdueRecurring.count
+        } else {
+            overdueCount = 0
         }
 
         return PlanningDueSummarySnapshot(
-            upcomingCount: pendingCombined.count,
-            totalDueMinor: pendingCombined.reduce(into: Int64.zero) { partial, snapshot in
-                partial += snapshot.amountMinor ?? 0
-            },
-            overdueCount: 0
+            upcomingCount: upcomingCount,
+            totalDueMinor: totalDueMinor,
+            overdueCount: overdueCount
         )
     }
 
