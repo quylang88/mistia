@@ -205,7 +205,7 @@ struct ManagementView: View {
                         Button {
                             destination = .authPlaceholder
                         } label: {
-                            HStack(spacing: 14) {
+                            HStack(spacing: 20) {
                                 MistiaAvatarBadge(
                                     initials: summary.initials,
                                     avatarURL: summary.avatarURL,
@@ -221,16 +221,6 @@ struct ManagementView: View {
                                     Text(summary.email)
                                         .font(.system(size: 13, weight: .medium, design: .rounded))
                                         .foregroundStyle(.secondary)
-
-                                    Text(sessionStore.syncStatusTitle)
-                                        .font(.system(size: 12.5, weight: .semibold, design: .rounded))
-                                        .foregroundStyle(MistiaAccent.purple.color)
-                                        .padding(.top, 2)
-
-                                    Text(sessionStore.syncStatusDetail)
-                                        .font(.system(size: 12.5, weight: .medium, design: .rounded))
-                                        .foregroundStyle(.secondary)
-                                        .fixedSize(horizontal: false, vertical: true)
                                 }
 
                                 Spacer()
@@ -249,7 +239,7 @@ struct ManagementView: View {
                             .padding(.trailing, 0)
 
                         Button(action: { destination = .family }) {
-                            HStack(spacing: 14) {
+                            HStack(spacing: 20) {
                                 if familyContextStore.family != nil && !familyContextStore.members.isEmpty {
                                     HStack(spacing: -12) {
                                         ForEach(Array(familyContextStore.members.prefix(3).enumerated()), id: \.element.membershipID) { index, member in
@@ -281,19 +271,9 @@ struct ManagementView: View {
                                     .frame(width: 44, height: 44)
                                 }
 
-                                VStack(alignment: .leading, spacing: 4) {
-                                    Text(mistiaLocalized(vi: "Gia đình", en: "Family", ja: "家族"))
-                                        .font(.system(size: 16.5, weight: .semibold, design: .rounded))
-                                        .foregroundStyle(.primary)
-
-                                    Text(mistiaLocalized(
-                                        vi: "Quản lý gia đình, thành viên và quyền xem dữ liệu",
-                                        en: "Manage family, members, and view permissions",
-                                        ja: "家族、メンバー、およびビュー権限を管理します"
-                                    ))
-                                        .font(.system(size: 13.5, weight: .medium, design: .rounded))
-                                        .foregroundStyle(.secondary)
-                                }
+                                Text(mistiaLocalized(vi: "Gia đình", en: "Family", ja: "家族"))
+                                    .font(.system(size: 16.5, weight: .semibold, design: .rounded))
+                                    .foregroundStyle(.primary)
 
                                 Spacer(minLength: 12)
 
