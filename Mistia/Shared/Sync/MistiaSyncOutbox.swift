@@ -12,6 +12,20 @@ enum MistiaSyncEntity: String, CaseIterable, Codable, Hashable {
     case dueOccurrenceRecord = "due_occurrence_records"
 
     var tableName: String { rawValue }
+
+    var pushPriority: Int {
+        switch self {
+        case .category: 10
+        case .wallet: 20
+        case .creditCardProfile: 30
+        case .transaction: 40
+        case .budgetPlan: 50
+        case .savingsGoal: 60
+        case .recurringBillPlan: 70
+        case .installmentPlan: 80
+        case .dueOccurrenceRecord: 90
+        }
+    }
 }
 
 enum MistiaSyncMutationKind: String, Codable, Hashable {

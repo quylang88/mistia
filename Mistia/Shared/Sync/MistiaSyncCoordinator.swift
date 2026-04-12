@@ -105,7 +105,7 @@ final class SyncCoordinator {
         }
 
         if remoteCount == 0 {
-            return MistiaInitialSyncPreview(mode: .uploadLocal, localActiveCount: localCount, remoteActiveCount: remoteCount)
+            return MistiaInitialSyncPreview(mode: .choose, localActiveCount: localCount, remoteActiveCount: remoteCount)
         }
 
         if localCount == 0 {
@@ -173,7 +173,25 @@ final class SyncCoordinator {
     func sync(session: SupabaseAuthSession) async throws -> MistiaSyncResult {
         var pushedMutations = false
 
-        for mutation in outbox.allMutations {
+        let sortedMutations = outbox.allMutations.sorted { a, b in
+            if a.entity.pushPriority != b.entity.pushPriority {
+                return a.entity.pushPriority < b.entity.pushPriority
+            }
+
+            if a.entity == .category && b.entity == .category {
+                let aRecord = try? MistiaSyncLocalStore.exportRecord(for: a, from: modelContainer)
+                let bRecord = try? MistiaSyncLocalStore.exportRecord(for: b, from: modelContainer)
+                let aParent = aRecord?.parentID
+                let bParent = bRecord?.parentID
+
+                if aParent == nil && bParent != nil { return true }
+                if aParent != nil && bParent == nil { return false }
+            }
+
+            return a.modifiedAt < b.modifiedAt
+        }
+
+        for mutation in sortedMutations {
             switch mutation.kind {
             case .upsert:
                 if try await processUpsertMutation(mutation, session: session) {
@@ -455,7 +473,7 @@ final class SyncCoordinator {
     ) async throws {
         let remoteByID = remoteSnapshot.recordsByKey
 
-        for localRecord in localSnapshot.allRecords {
+        for localRecord in hierarchicalSorted(localSnapshot.allRecords) {
             let key = localRecord.storageKey
             guard let remoteRecord = remoteByID[key] else {
                 guard localRecord.deletedAt == nil else { continue }
@@ -505,7 +523,7 @@ final class SyncCoordinator {
         let remoteByKey = remoteSnapshot.recordsByKey
         let localByKey = localSnapshot.recordsByKey
 
-        for localRecord in localSnapshot.allRecords where localRecord.deletedAt == nil {
+        for localRecord in hierarchicalSorted(localSnapshot.allRecords) where localRecord.deletedAt == nil {
             let remoteVersion = remoteByKey[localRecord.storageKey]?.syncVersion ?? 0
             let prepared = localRecord.preparedForMutation(
                 nextVersion: max(remoteVersion + 1, 1),
@@ -537,8 +555,9 @@ final class SyncCoordinator {
         session: SupabaseAuthSession
     ) async throws {
         let remoteKeys = Set(remoteSnapshot.allRecords.map(\.storageKey))
-        for localRecord in localSnapshot.allRecords where !remoteKeys.contains(localRecord.storageKey) {
-            guard localRecord.deletedAt == nil else { continue }
+        let localOnly = localSnapshot.allRecords.filter { !remoteKeys.contains($0.storageKey) && $0.deletedAt == nil }
+
+        for localRecord in hierarchicalSorted(localOnly) {
             _ = try await remoteStore.create(
                 localRecord.preparedForCreate(deviceID: deviceID),
                 subjectUserID: localRecord.userID,
@@ -577,6 +596,24 @@ final class SyncCoordinator {
             in: modelContainer
         )
         try MistiaSyncLocalStore.applyRemoteRecord(remoteRecord, in: modelContainer)
+    }
+
+    private func hierarchicalSorted(_ records: [MistiaSyncUploadRecord]) -> [MistiaSyncUploadRecord] {
+        records.sorted { a, b in
+            if a.entity.pushPriority != b.entity.pushPriority {
+                return a.entity.pushPriority < b.entity.pushPriority
+            }
+
+            if a.entity == .category && b.entity == .category {
+                let aParent = a.parentID
+                let bParent = b.parentID
+
+                if aParent == nil && bParent != nil { return true }
+                if aParent != nil && bParent == nil { return false }
+            }
+
+            return false
+        }
     }
 
     private func synthesizedDeletedRecord(

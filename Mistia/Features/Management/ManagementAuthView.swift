@@ -1595,7 +1595,13 @@ private struct ManagementInitialSyncChoiceSheet: View {
             .font(.system(size: 22, weight: .bold, design: .rounded))
 
             Text(
-                mistiaLocalized(
+                preview.remoteActiveCount == 0
+                ? mistiaLocalized(
+                    vi: "Cloud hiện chưa có dữ liệu nào (ngoại trừ hồ sơ của bạn). Máy này đang có \(preview.localActiveCount) bản ghi. Hãy chọn cách bạn muốn bắt đầu.",
+                    en: "The cloud has no data yet (except your profile). This device has \(preview.localActiveCount) records. Choose how you want to start.",
+                    ja: "クラウドにはまだデータがありません（プロフィールを除く）。この端末には \(preview.localActiveCount) 件のレコードがあります。開始方法を選択してください。"
+                )
+                : mistiaLocalized(
                     vi: "Máy này đang có \(preview.localActiveCount) bản ghi và cloud đang có \(preview.remoteActiveCount) bản ghi. Mistia sẽ ưu tiên an toàn dữ liệu trước.",
                     en: "This device has \(preview.localActiveCount) records and the cloud has \(preview.remoteActiveCount) records. Mistia will prioritize data safety first.",
                     ja: "この端末には \(preview.localActiveCount) 件、クラウドには \(preview.remoteActiveCount) 件のレコードがあります。Mistia はまずデータの安全性を優先します。"

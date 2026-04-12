@@ -1345,6 +1345,7 @@ final class SessionStore {
             let result: MistiaSyncResult
 
             if requiresInitialSync {
+                try await Task.sleep(for: .seconds(1.5))
                 let preview = try await syncCoordinator.previewInitialSync(session: validSession)
 
                 if preview.requiresChoice, pendingInitialSyncChoice == nil {
