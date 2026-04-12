@@ -1510,8 +1510,15 @@ private struct ManagementProfilePrimaryActionButton: View {
 
     private var backgroundColor: Color {
         colorScheme == .dark
-            ? Color(UIColor.secondarySystemBackground)
+            ? .white
             : Color(UIColor.systemBackground)
+    }
+
+    private var foregroundColor: Color {
+        if colorScheme == .dark {
+            return MistiaAccent.lightPurple.color
+        }
+        return accent
     }
 
     var body: some View {
@@ -1519,16 +1526,16 @@ private struct ManagementProfilePrimaryActionButton: View {
             HStack(spacing: 10) {
                 if showsProgress {
                     ProgressView()
-                        .tint(accent)
+                        .tint(foregroundColor)
+                } else {
+                    Text(title)
+                        .font(.system(size: 17, weight: .semibold, design: .rounded))
+                        .foregroundStyle(foregroundColor)
                 }
-
-                Text(title)
-                    .font(.system(size: 17, weight: .semibold, design: .rounded))
-                    .foregroundStyle(accent)
             }
             .frame(maxWidth: .infinity)
             .padding(.vertical, 17)
-            .background(backgroundColor, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+            .background(backgroundColor, in: Capsule())
         }
         .buttonStyle(.plain)
         .disabled(isDisabled)

@@ -12,7 +12,10 @@ final class FamilyContextStore {
     var invites: [FamilyInviteRecord] = []
     var lastErrorMessage: String?
     var isLoading = false
+    var isSwitchingContext = false
     var didBootstrap = false
+
+    var onTabSwitchRequested: ((String) -> Void)?
 
     @ObservationIgnored private let service: FamilyRemoteService
     @ObservationIgnored private let modelContainer: ModelContainer
@@ -285,10 +288,18 @@ final class FamilyContextStore {
         activeContext = FamilyContext(scope: .familyHome(familyID: familyID))
     }
 
-    func viewMember(_ member: FamilyMember) {
+    func viewMember(_ member: FamilyMember) async {
         let capabilities = capabilities(for: member)
         guard capabilities.canViewTarget else { return }
+
+        isSwitchingContext = true
+        // Simulate network/processing delay as requested
+        try? await Task.sleep(for: .milliseconds(600))
+
         activeContext = FamilyContext(scope: .member(userID: member.userID))
+        isSwitchingContext = false
+
+        onTabSwitchRequested?("overview")
     }
 
     func returnToSelf() {

@@ -160,6 +160,12 @@ struct RootTabView: View {
         modelContext: modelContext,
         sessionStore: sessionStore
       )
+
+      familyContextStore.onTabSwitchRequested = { tabID in
+        if let tab = MistiaTab(rawValue: tabID) {
+          selectedTab = tab
+        }
+      }
     }
     .onChange(of: hideQuickCreate) { _, newValue in
       if newValue {
