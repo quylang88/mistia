@@ -51,6 +51,7 @@ final class SyncCoordinator {
     private let outbox: MistiaSyncOutbox
     private let deviceID: UUID
 
+    var onProgressUpdate: ((Double) -> Void)?
     private var lastSnapshotFingerprint: String?
 
     init(
@@ -119,32 +120,41 @@ final class SyncCoordinator {
         session: SupabaseAuthSession,
         choice: MistiaInitialSyncChoice
     ) async throws -> MistiaSyncResult {
+        onProgressUpdate?(0.05)
         let localSnapshot = try MistiaSyncLocalStore.exportSnapshot(
             for: session.user.id,
             from: modelContainer
         )
+        onProgressUpdate?(0.1)
         let remoteSnapshot = try await remoteStore.fetchSnapshot(session: session)
+        onProgressUpdate?(0.2)
 
         let localCount = localSnapshot.activeRowCount
         let remoteCount = remoteSnapshot.activeRowCount
 
         if localCount == 0 && remoteCount == 0 {
             lastSnapshotFingerprint = remoteSnapshot.fingerprint
+            onProgressUpdate?(1.0)
             return .idle
         }
 
         if remoteCount == 0 {
-            try await uploadLocalOnlyRows(localSnapshot: localSnapshot, remoteSnapshot: remoteSnapshot, session: session)
+            try await uploadLocalOnlyRows(localSnapshot: localSnapshot, remoteSnapshot: remoteSnapshot, session: session, progressStart: 0.2, progressEnd: 0.8)
             let mergedSnapshot = try await remoteStore.fetchSnapshot(session: session)
+            onProgressUpdate?(0.9)
             try applySnapshot(mergedSnapshot)
+            onProgressUpdate?(1.0)
             return .seeded(mergedSnapshot.activeRowCount)
         }
 
         if localCount == 0 || choice == .useCloud {
             outbox.clear()
             try clearLocalCache()
+            onProgressUpdate?(0.3)
             let freshSnapshot = try await remoteStore.fetchSnapshot(session: session)
+            onProgressUpdate?(0.6)
             try applySnapshot(freshSnapshot)
+            onProgressUpdate?(1.0)
             return .pulled(freshSnapshot.activeRowCount)
         }
 
@@ -153,27 +163,38 @@ final class SyncCoordinator {
             try await mergeInitialSnapshots(
                 localSnapshot: localSnapshot,
                 remoteSnapshot: remoteSnapshot,
-                session: session
+                session: session,
+                progressStart: 0.2,
+                progressEnd: 0.8
             )
         case .useDevice:
             try await makeLocalAuthoritative(
                 localSnapshot: localSnapshot,
                 remoteSnapshot: remoteSnapshot,
-                session: session
+                session: session,
+                progressStart: 0.2,
+                progressEnd: 0.8
             )
         case .useCloud:
             break
         }
 
+        onProgressUpdate?(0.85)
         let mergedSnapshot = try await remoteStore.fetchSnapshot(session: session)
+        onProgressUpdate?(0.9)
         try applySnapshot(mergedSnapshot)
+        onProgressUpdate?(1.0)
         return .synced(mergedSnapshot.activeRowCount)
     }
 
     func sync(session: SupabaseAuthSession) async throws -> MistiaSyncResult {
+        onProgressUpdate?(0.05)
         var pushedMutations = false
 
-        let sortedMutations = outbox.allMutations.sorted { a, b in
+        let mutations = outbox.allMutations
+        let mutationCount = mutations.count
+
+        let sortedMutations = mutations.sorted { a, b in
             if a.entity.pushPriority != b.entity.pushPriority {
                 return a.entity.pushPriority < b.entity.pushPriority
             }
@@ -191,7 +212,10 @@ final class SyncCoordinator {
             return a.modifiedAt < b.modifiedAt
         }
 
-        for mutation in sortedMutations {
+        for (index, mutation) in sortedMutations.enumerated() {
+            let progress = 0.05 + (Double(index) / Double(max(1, mutationCount))) * 0.45
+            onProgressUpdate?(progress)
+
             switch mutation.kind {
             case .upsert:
                 if try await processUpsertMutation(mutation, session: session) {
@@ -204,9 +228,12 @@ final class SyncCoordinator {
             }
         }
 
+        onProgressUpdate?(0.55)
         let snapshot = try await remoteStore.fetchSnapshot(session: session)
+        onProgressUpdate?(0.75)
         let previousFingerprint = lastSnapshotFingerprint
         try applySnapshot(snapshot)
+        onProgressUpdate?(1.0)
 
         if snapshot.fingerprint != previousFingerprint {
             return pushedMutations ? .synced(snapshot.activeRowCount) : .pulled(snapshot.activeRowCount)
@@ -469,11 +496,18 @@ final class SyncCoordinator {
     private func mergeInitialSnapshots(
         localSnapshot: MistiaRemoteSnapshot,
         remoteSnapshot: MistiaRemoteSnapshot,
-        session: SupabaseAuthSession
+        session: SupabaseAuthSession,
+        progressStart: Double,
+        progressEnd: Double
     ) async throws {
         let remoteByID = remoteSnapshot.recordsByKey
+        let localRecords = hierarchicalSorted(localSnapshot.allRecords)
+        let total = localRecords.count
 
-        for localRecord in hierarchicalSorted(localSnapshot.allRecords) {
+        for (index, localRecord) in localRecords.enumerated() {
+            let progress = progressStart + (Double(index) / Double(max(1, total))) * (progressEnd - progressStart)
+            onProgressUpdate?(progress)
+
             let key = localRecord.storageKey
             guard let remoteRecord = remoteByID[key] else {
                 guard localRecord.deletedAt == nil else { continue }
@@ -518,12 +552,19 @@ final class SyncCoordinator {
     private func makeLocalAuthoritative(
         localSnapshot: MistiaRemoteSnapshot,
         remoteSnapshot: MistiaRemoteSnapshot,
-        session: SupabaseAuthSession
+        session: SupabaseAuthSession,
+        progressStart: Double,
+        progressEnd: Double
     ) async throws {
         let remoteByKey = remoteSnapshot.recordsByKey
         let localByKey = localSnapshot.recordsByKey
+        let localRecords = hierarchicalSorted(localSnapshot.allRecords).filter { $0.deletedAt == nil }
+        let total = localRecords.count
 
-        for localRecord in hierarchicalSorted(localSnapshot.allRecords) where localRecord.deletedAt == nil {
+        for (index, localRecord) in localRecords.enumerated() {
+            let progress = progressStart + (Double(index) / Double(max(1, total))) * (progressEnd - progressStart) * 0.8
+            onProgressUpdate?(progress)
+
             let remoteVersion = remoteByKey[localRecord.storageKey]?.syncVersion ?? 0
             let prepared = localRecord.preparedForMutation(
                 nextVersion: max(remoteVersion + 1, 1),
@@ -552,12 +593,18 @@ final class SyncCoordinator {
     private func uploadLocalOnlyRows(
         localSnapshot: MistiaRemoteSnapshot,
         remoteSnapshot: MistiaRemoteSnapshot,
-        session: SupabaseAuthSession
+        session: SupabaseAuthSession,
+        progressStart: Double,
+        progressEnd: Double
     ) async throws {
         let remoteKeys = Set(remoteSnapshot.allRecords.map(\.storageKey))
-        let localOnly = localSnapshot.allRecords.filter { !remoteKeys.contains($0.storageKey) && $0.deletedAt == nil }
+        let localOnly = hierarchicalSorted(localSnapshot.allRecords.filter { !remoteKeys.contains($0.storageKey) && $0.deletedAt == nil })
+        let total = localOnly.count
 
-        for localRecord in hierarchicalSorted(localOnly) {
+        for (index, localRecord) in localOnly.enumerated() {
+            let progress = progressStart + (Double(index) / Double(max(1, total))) * (progressEnd - progressStart)
+            onProgressUpdate?(progress)
+
             _ = try await remoteStore.create(
                 localRecord.preparedForCreate(deviceID: deviceID),
                 subjectUserID: localRecord.userID,

@@ -60,6 +60,8 @@ struct SessionAuthBanner: Equatable {
 final class SessionStore {
     var summary: SessionSummary?
     var isWorking = false
+    var syncProgress: Double?
+    var syncTimeRemaining: TimeInterval?
     var syncStatusTitle: String
     var syncStatusDetail: String
     var syncStatusSystemImage: String
@@ -83,6 +85,7 @@ final class SessionStore {
     @ObservationIgnored private var didBootstrap = false
     @ObservationIgnored private var liveSyncTask: Task<Void, Never>?
     @ObservationIgnored private var isSyncInFlight = false
+    @ObservationIgnored private var syncStartTime: Date?
     @ObservationIgnored private var requiresInitialSync = false
     @ObservationIgnored private var pendingInitialSyncChoice: MistiaInitialSyncChoice?
     @ObservationIgnored private var subjectUserIDProvider: (() -> UUID?)?
@@ -97,6 +100,21 @@ final class SessionStore {
         userProfileStore = SupabaseUserProfileStore()
         syncCoordinator = SyncCoordinator(modelContainer: modelContainer)
         isAutoSyncEnabled = userDefaults.bool(forKey: MistiaAppStorageKey.syncAutoEnabled)
+
+        syncCoordinator.onProgressUpdate = { [weak self] progress in
+            Task { @MainActor in
+                guard let self else { return }
+                self.syncProgress = progress
+
+                if let startTime = self.syncStartTime, progress > 0.05 {
+                    let elapsed = Date().timeIntervalSince(startTime)
+                    let totalEstimated = elapsed / progress
+                    self.syncTimeRemaining = max(0, totalEstimated - elapsed)
+                } else {
+                    self.syncTimeRemaining = nil
+                }
+            }
+        }
 
         if MistiaSyncConfiguration.load() == nil {
             syncStatusTitle = mistiaLocalized(
@@ -486,6 +504,11 @@ final class SessionStore {
     }
 
     func cancelInitialSyncSelection() {
+        if pendingInitialSyncChoice != nil {
+            initialSyncPreview = nil
+            return
+        }
+
         guard requiresInitialSync else {
             initialSyncPreview = nil
             return
@@ -1338,7 +1361,15 @@ final class SessionStore {
 
     private func drainSyncQueue() async {
         isSyncInFlight = true
-        defer { isSyncInFlight = false }
+        syncStartTime = Date()
+        syncProgress = 0.0
+        syncTimeRemaining = nil
+        defer {
+            isSyncInFlight = false
+            syncProgress = nil
+            syncTimeRemaining = nil
+            syncStartTime = nil
+        }
 
         do {
             guard let activeSession = currentSession else { return }
