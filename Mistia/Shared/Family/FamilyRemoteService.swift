@@ -214,9 +214,7 @@ struct FamilyRemoteService {
         code: String,
         session: SupabaseAuthSession
     ) async throws -> FamilyInvitePreview? {
-        guard let invite = try await fetchInvite(code: code, session: session) else {
-            return nil
-        }
+        let invite = try await fetchInvite(code: code, session: session)
         let family = try await fetchFamily(id: invite.familyID, session: session)
         return FamilyInvitePreview(invite: invite, family: family)
     }
@@ -225,8 +223,13 @@ struct FamilyRemoteService {
         code: String,
         session: SupabaseAuthSession
     ) async throws -> FamilyStateSnapshot {
-        guard let preview = try await previewInvite(code: code, session: session) else {
-            throw SupabaseServiceError.serverMessage("Invite code is invalid or expired.")
+        let preview = try await previewInvite(code: code, session: session)
+        guard let preview else {
+            throw SupabaseServiceError.serverMessage(mistiaLocalized(
+                vi: "Mã mời không tồn tại hoặc đã bị xóa.",
+                en: "Invite code does not exist or has been deleted.",
+                ja: "招待コードが存在しないか、削除されました。"
+            ))
         }
 
         let policy = FamilyPermissionPolicy.preset(for: preview.invite.defaultRole)
@@ -475,23 +478,42 @@ struct FamilyRemoteService {
     private func fetchInvite(
         code: String,
         session: SupabaseAuthSession
-    ) async throws -> FamilyInviteRecord? {
+    ) async throws -> FamilyInviteRecord {
         let normalizedCode = code.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
         let rows: [FamilyInviteRecord] = try await fetchRows(
             path: "family_invites",
             filters: [
                 URLQueryItem(name: "select", value: "*"),
                 URLQueryItem(name: "code", value: "eq.\(normalizedCode)"),
-                URLQueryItem(name: "deleted_at", value: "is.null"),
-                URLQueryItem(name: "accepted_at", value: "is.null"),
-                URLQueryItem(name: "revoked_at", value: "is.null"),
                 URLQueryItem(name: "limit", value: "1")
             ],
             session: session
         )
-        guard let invite = rows.first, invite.expiresAt >= .now else {
-            return nil
+
+        guard let invite = rows.first, invite.deletedAt == nil else {
+            throw SupabaseServiceError.serverMessage(mistiaLocalized(
+                vi: "Mã mời không tồn tại hoặc đã bị xóa.",
+                en: "Invite code does not exist or has been deleted.",
+                ja: "招待コードが存在しないか、削除されました。"
+            ))
         }
+
+        if invite.acceptedAt != nil || invite.revokedAt != nil {
+            throw SupabaseServiceError.serverMessage(mistiaLocalized(
+                vi: "Mã mời này không còn hiệu lực.",
+                en: "This invite code is no longer valid.",
+                ja: "この招待コードはもう有効ではありません。"
+            ))
+        }
+
+        if invite.expiresAt < .now {
+            throw SupabaseServiceError.serverMessage(mistiaLocalized(
+                vi: "Mã mời đã hết hạn.",
+                en: "Invite code has expired.",
+                ja: "招待コードの期限が切れました。"
+            ))
+        }
+
         return invite
     }
 
