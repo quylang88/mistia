@@ -120,6 +120,7 @@ struct PlanningBudgetEditorSheet: View {
                     }
                 }
             }
+            .dismissKeyboardOnTap()
             .navigationTitle(mistiaCatalog(target.budget == nil ? "Ngân sách mới" : "Sửa ngân sách"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -408,6 +409,7 @@ struct PlanningGoalEditorSheet: View {
                     }
                 }
             }
+            .dismissKeyboardOnTap()
             .navigationTitle(mistiaCatalog(target.goal == nil ? "Mục tiêu mới" : "Sửa mục tiêu"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -657,6 +659,7 @@ struct PlanningBillEditorSheet: View {
                     }
                 }
             }
+            .dismissKeyboardOnTap()
             .navigationTitle(mistiaCatalog(target.plan == nil ? "Hóa đơn mới" : "Sửa hóa đơn"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -940,6 +943,7 @@ struct PlanningInstallmentEditorSheet: View {
                     }
                 }
             }
+            .dismissKeyboardOnTap()
             .navigationTitle(mistiaCatalog(target.plan == nil ? "Khoản mới" : "Sửa khoản"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -1233,6 +1237,7 @@ struct PlanningCreditCardEditorSheet: View {
                     }
                 }
             }
+            .dismissKeyboardOnTap()
             .navigationTitle(mistiaCatalog(target.wallet == nil ? "Thẻ mới" : "Sửa thẻ"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {

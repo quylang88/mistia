@@ -2698,8 +2698,7 @@ private struct ManagementSyncSettingsView: View {
 
             VStack(alignment: .leading, spacing: 4) {
                 Text(dataManagementSummary)
-                    .font(.system(size: 13, weight: .medium, design: .rounded))
-                    .foregroundStyle(.secondary)
+                    .descriptionTextStyle()
                     .padding(.horizontal, 2)
             }
             .cardDescriptionStyle()
@@ -2720,8 +2719,7 @@ private struct ManagementSyncSettingsView: View {
 
             VStack(alignment: .leading, spacing: 4) {
                 Text(autoSyncFootnote)
-                    .font(.system(size: 13, weight: .medium, design: .rounded))
-                    .foregroundStyle(.secondary)
+                    .descriptionTextStyle()
                     .padding(.horizontal, 2)
             }
             .cardDescriptionStyle()

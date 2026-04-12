@@ -234,7 +234,7 @@ struct FamilyManagementView: View {
                                 .padding(.horizontal, 16)
                                 .padding(.vertical, 12)
                             }
-                            .buttonStyle(.plain)
+                            .buttonStyle(MistiaPressableButtonStyle(cornerRadius: 18))
 
                             if index < familyContextStore.members.count - 1 {
                                 Divider()
@@ -251,8 +251,7 @@ struct FamilyManagementView: View {
                     en: "You can check what family members can access or share, while managing child account settings and parental controls.",
                     ja: "ファミリーメンバーがアクセスまたは共有できるもの確認でき、お子様のアカウント設定と保護者による制限を管理できます。"
                 ))
-                .font(.system(size: 13, weight: .medium, design: .rounded))
-                .foregroundStyle(.secondary)
+                .descriptionTextStyle()
                 .padding(.horizontal, 2)
             }
             .cardDescriptionStyle()
@@ -625,7 +624,7 @@ struct FamilyMembersScreen: View {
                         }
                     }
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(MistiaPressableButtonStyle(cornerRadius: 14))
             }
         }
     }
@@ -704,15 +703,11 @@ private struct FamilyMemberProfileScreen: View {
                                     .foregroundStyle(.primary)
 
                                     Spacer()
-
-                                    Image(systemName: "chevron.right")
-                                        .font(.system(size: 12, weight: .semibold))
-                                        .foregroundStyle(.tertiary)
                                 }
                                 .padding(.horizontal, 16)
                                 .padding(.vertical, 16)
                             }
-                            .buttonStyle(.plain)
+                            .buttonStyle(MistiaPressableButtonStyle(cornerRadius: 18))
                         }
 
                         Text(mistiaLocalized(
@@ -720,11 +715,9 @@ private struct FamilyMemberProfileScreen: View {
                             en: "View transactions, wallets, and budgets shared by \(member.displayName).",
                             ja: "\(member.displayName)が共有した履歴やウォレットを確認します。"
                         ))
-                        .font(.system(size: 13, weight: .medium, design: .rounded))
-                        .foregroundStyle(.secondary)
-                        .padding(.horizontal, 4)
-                        .cardDescriptionStyle()
+                        .descriptionTextStyle()
                     }
+                    .cardDescriptionStyle()
                 }
 
                 // Roles & Permissions Card
@@ -753,7 +746,7 @@ private struct FamilyMemberProfileScreen: View {
                                 .padding(.horizontal, 16)
                                 .padding(.vertical, 16)
                             }
-                            .buttonStyle(.plain)
+                            .buttonStyle(MistiaPressableButtonStyle(cornerRadius: 18))
                         }
 
                         Text(mistiaLocalized(
@@ -761,11 +754,9 @@ private struct FamilyMemberProfileScreen: View {
                             en: "Configure viewing or editing permissions for this member.",
                             ja: "このメンバーの閲覧・編集権限を設定します。"
                         ))
-                        .font(.system(size: 13, weight: .medium, design: .rounded))
-                        .foregroundStyle(.secondary)
-                        .padding(.horizontal, 4)
-                        .cardDescriptionStyle()
+                        .descriptionTextStyle()
                     }
+                    .cardDescriptionStyle()
                 }
             }
 
@@ -806,15 +797,11 @@ private struct FamilyMemberProfileScreen: View {
                                 .foregroundStyle(.red)
 
                                 Spacer()
-
-                                Image(systemName: "chevron.right")
-                                    .font(.system(size: 12, weight: .semibold))
-                                    .foregroundStyle(.tertiary)
                             }
                             .padding(.horizontal, 16)
                             .padding(.vertical, 16)
                         }
-                        .buttonStyle(.plain)
+                        .buttonStyle(MistiaPressableButtonStyle(cornerRadius: 18))
                     }
 
                     Text(
@@ -838,11 +825,9 @@ private struct FamilyMemberProfileScreen: View {
                                )
                                : "")
                     )
-                    .font(.system(size: 13, weight: .medium, design: .rounded))
-                    .foregroundStyle(.secondary)
-                    .padding(.horizontal, 4)
-                    .cardDescriptionStyle()
+                    .descriptionTextStyle()
                 }
+                .cardDescriptionStyle()
             }
         }
         .sheet(isPresented: $showsPermissionsSheet) {
@@ -867,6 +852,7 @@ private struct FamilyCreateSheet: View {
                     TextField(mistiaLocalized(vi: "Tên gia đình", en: "Family name", ja: "家族名"), text: $familyName)
                 }
             }
+            .dismissKeyboardOnTap()
             .navigationTitle(mistiaLocalized(vi: "Tạo gia đình", en: "Create family", ja: "家族を作成"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -908,6 +894,7 @@ private struct FamilyJoinSheet: View {
                         .autocorrectionDisabled()
                 }
             }
+            .dismissKeyboardOnTap()
             .navigationTitle(mistiaLocalized(vi: "Tham gia gia đình", en: "Join family", ja: "家族に参加"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -961,6 +948,7 @@ private struct FamilyInviteSheet: View {
                     }
                 }
             }
+            .dismissKeyboardOnTap()
             .navigationTitle(mistiaLocalized(vi: "Mời thành viên", en: "Invite member", ja: "メンバーを招待"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -1025,6 +1013,7 @@ private struct FamilyPermissionsSheet: View {
                     Toggle(mistiaLocalized(vi: "Sửa kid", en: "Edit kids", ja: "kid を編集"), isOn: $policy.canEditKids)
                 }
             }
+            .dismissKeyboardOnTap()
             .navigationTitle(mistiaLocalized(vi: "Role & quyền", en: "Role & permissions", ja: "役割と権限"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {

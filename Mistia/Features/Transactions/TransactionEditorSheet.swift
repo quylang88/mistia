@@ -65,6 +65,7 @@ struct TransactionEditorSheet: View {
                     fullEditorContent
                 }
             }
+            .dismissKeyboardOnTap()
             .navigationTitle(navigationTitle)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {

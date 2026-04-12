@@ -122,8 +122,7 @@ struct SettingsView: View {
                         en: "Customizing appearance, language, and currency will apply throughout the Mistia app.",
                         ja: "表示、言語、通貨をカスタマイズするとMistia全体に適用されます。"
                     ))
-                    .font(.system(size: 13, weight: .medium, design: .rounded))
-                    .foregroundStyle(.secondary)
+                    .descriptionTextStyle()
                     .padding(.horizontal, 2)
                 }
                 .cardDescriptionStyle()

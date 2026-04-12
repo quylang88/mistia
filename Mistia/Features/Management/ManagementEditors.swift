@@ -174,6 +174,7 @@ struct ManagementWalletEditorSheet: View {
                     }
                 }
             }
+            .dismissKeyboardOnTap()
             .navigationTitle(mistiaLocalized(vi: target.wallet == nil ? "Ví mới" : "Sửa ví", en: target.wallet == nil ? "New wallet" : "Edit wallet", ja: target.wallet == nil ? "新しいウォレット" : "ウォレットを編集"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -544,6 +545,7 @@ struct ManagementCategoryEditorSheet: View {
                     }
                 }
             }
+            .dismissKeyboardOnTap()
             .navigationTitle(mistiaLocalized(vi: target.category == nil ? "Danh mục mới" : "Sửa danh mục", en: target.category == nil ? "New category" : "Edit category", ja: target.category == nil ? "新しいカテゴリ" : "カテゴリを編集"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
