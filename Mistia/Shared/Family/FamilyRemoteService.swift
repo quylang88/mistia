@@ -4,6 +4,7 @@ struct FamilyGroupRecord: Codable, Identifiable, Equatable {
     let id: UUID
     var name: String
     let ownerUserID: UUID
+    let deletedAt: Date?
     let createdAt: Date
     let updatedAt: Date
 
@@ -11,6 +12,7 @@ struct FamilyGroupRecord: Codable, Identifiable, Equatable {
         case id
         case name
         case ownerUserID = "owner_user_id"
+        case deletedAt = "deleted_at"
         case createdAt = "created_at"
         case updatedAt = "updated_at"
     }
@@ -28,6 +30,7 @@ struct FamilyMembershipRecord: Codable, Identifiable, Equatable {
     var canViewDebts: Bool
     var canViewKids: Bool
     var canEditKids: Bool
+    let deletedAt: Date?
     let createdAt: Date
     let updatedAt: Date
 
@@ -43,6 +46,7 @@ struct FamilyMembershipRecord: Codable, Identifiable, Equatable {
         case canViewDebts = "can_view_debts"
         case canViewKids = "can_view_kids"
         case canEditKids = "can_edit_kids"
+        case deletedAt = "deleted_at"
         case createdAt = "created_at"
         case updatedAt = "updated_at"
     }
@@ -74,6 +78,7 @@ struct FamilyInviteRecord: Codable, Identifiable, Equatable {
     let acceptedAt: Date?
     let acceptedByUserID: UUID?
     let revokedAt: Date?
+    let deletedAt: Date?
     let createdAt: Date
     let updatedAt: Date
 
@@ -87,6 +92,7 @@ struct FamilyInviteRecord: Codable, Identifiable, Equatable {
         case acceptedAt = "accepted_at"
         case acceptedByUserID = "accepted_by_user_id"
         case revokedAt = "revoked_at"
+        case deletedAt = "deleted_at"
         case createdAt = "created_at"
         case updatedAt = "updated_at"
     }
@@ -208,9 +214,7 @@ struct FamilyRemoteService {
         code: String,
         session: SupabaseAuthSession
     ) async throws -> FamilyInvitePreview? {
-        guard let invite = try await fetchInvite(code: code, session: session) else {
-            return nil
-        }
+        let invite = try await fetchInvite(code: code, session: session)
         let family = try await fetchFamily(id: invite.familyID, session: session)
         return FamilyInvitePreview(invite: invite, family: family)
     }
@@ -219,8 +223,13 @@ struct FamilyRemoteService {
         code: String,
         session: SupabaseAuthSession
     ) async throws -> FamilyStateSnapshot {
-        guard let preview = try await previewInvite(code: code, session: session) else {
-            throw SupabaseServiceError.serverMessage("Invite code is invalid or expired.")
+        let preview = try await previewInvite(code: code, session: session)
+        guard let preview else {
+            throw SupabaseServiceError.serverMessage(mistiaLocalized(
+                vi: "Mã mời không tồn tại hoặc đã bị xóa.",
+                en: "Invite code does not exist or has been deleted.",
+                ja: "招待コードが存在しないか、削除されました。"
+            ))
         }
 
         let policy = FamilyPermissionPolicy.preset(for: preview.invite.defaultRole)
@@ -295,13 +304,52 @@ struct FamilyRemoteService {
         membershipID: UUID,
         session: SupabaseAuthSession
     ) async throws {
-        _ = try await deleteRows(
+        let payload = ["deleted_at": ISO8601DateFormatter.mistiaRemoteAPI.string(from: .now)]
+        _ = try await patchRows(
             path: "family_memberships",
             filters: [
                 URLQueryItem(name: "id", value: "eq.\(membershipID.uuidString.lowercased())")
             ],
+            body: payload,
             session: session
         ) as [FamilyMembershipRecord]
+    }
+
+    func deleteFamily(
+        familyID: UUID,
+        session: SupabaseAuthSession
+    ) async throws {
+        let now = ISO8601DateFormatter.mistiaRemoteAPI.string(from: .now)
+        
+        // 1. Soft delete family
+        _ = try await patchRows(
+            path: "families",
+            filters: [
+                URLQueryItem(name: "id", value: "eq.\(familyID.uuidString.lowercased())")
+            ],
+            body: ["deleted_at": now],
+            session: session
+        ) as [FamilyGroupRecord]
+        
+        // 2. Soft delete all memberships in family
+        _ = try await patchRows(
+            path: "family_memberships",
+            filters: [
+                URLQueryItem(name: "family_id", value: "eq.\(familyID.uuidString.lowercased())")
+            ],
+            body: ["deleted_at": now],
+            session: session
+        ) as [FamilyMembershipRecord]
+        
+        // 3. Soft delete all invites in family
+        _ = try await patchRows(
+            path: "family_invites",
+            filters: [
+                URLQueryItem(name: "family_id", value: "eq.\(familyID.uuidString.lowercased())")
+            ],
+            body: ["deleted_at": now],
+            session: session
+        ) as [FamilyInviteRecord]
     }
 
     func fetchAccessibleFinanceSnapshot(
@@ -351,6 +399,7 @@ struct FamilyRemoteService {
             filters: [
                 URLQueryItem(name: "select", value: "*"),
                 URLQueryItem(name: "user_id", value: "eq.\(session.user.id.uuidString.lowercased())"),
+                URLQueryItem(name: "deleted_at", value: "is.null"),
                 URLQueryItem(name: "limit", value: "1")
             ],
             session: session
@@ -367,6 +416,7 @@ struct FamilyRemoteService {
             filters: [
                 URLQueryItem(name: "select", value: "*"),
                 URLQueryItem(name: "id", value: "eq.\(id.uuidString.lowercased())"),
+                URLQueryItem(name: "deleted_at", value: "is.null"),
                 URLQueryItem(name: "limit", value: "1")
             ],
             session: session
@@ -386,6 +436,7 @@ struct FamilyRemoteService {
             filters: [
                 URLQueryItem(name: "select", value: "*"),
                 URLQueryItem(name: "family_id", value: "eq.\(familyID.uuidString.lowercased())"),
+                URLQueryItem(name: "deleted_at", value: "is.null"),
                 URLQueryItem(name: "order", value: "created_at.asc")
             ],
             session: session
@@ -415,6 +466,7 @@ struct FamilyRemoteService {
             filters: [
                 URLQueryItem(name: "select", value: "*"),
                 URLQueryItem(name: "family_id", value: "eq.\(familyID.uuidString.lowercased())"),
+                URLQueryItem(name: "deleted_at", value: "is.null"),
                 URLQueryItem(name: "accepted_at", value: "is.null"),
                 URLQueryItem(name: "revoked_at", value: "is.null"),
                 URLQueryItem(name: "order", value: "created_at.desc")
@@ -426,22 +478,42 @@ struct FamilyRemoteService {
     private func fetchInvite(
         code: String,
         session: SupabaseAuthSession
-    ) async throws -> FamilyInviteRecord? {
+    ) async throws -> FamilyInviteRecord {
         let normalizedCode = code.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
         let rows: [FamilyInviteRecord] = try await fetchRows(
             path: "family_invites",
             filters: [
                 URLQueryItem(name: "select", value: "*"),
                 URLQueryItem(name: "code", value: "eq.\(normalizedCode)"),
-                URLQueryItem(name: "accepted_at", value: "is.null"),
-                URLQueryItem(name: "revoked_at", value: "is.null"),
                 URLQueryItem(name: "limit", value: "1")
             ],
             session: session
         )
-        guard let invite = rows.first, invite.expiresAt >= .now else {
-            return nil
+
+        guard let invite = rows.first, invite.deletedAt == nil else {
+            throw SupabaseServiceError.serverMessage(mistiaLocalized(
+                vi: "Mã mời không tồn tại hoặc đã bị xóa.",
+                en: "Invite code does not exist or has been deleted.",
+                ja: "招待コードが存在しないか、削除されました。"
+            ))
         }
+
+        if invite.acceptedAt != nil || invite.revokedAt != nil {
+            throw SupabaseServiceError.serverMessage(mistiaLocalized(
+                vi: "Mã mời này không còn hiệu lực.",
+                en: "This invite code is no longer valid.",
+                ja: "この招待コードはもう有効ではありません。"
+            ))
+        }
+
+        if invite.expiresAt < .now {
+            throw SupabaseServiceError.serverMessage(mistiaLocalized(
+                vi: "Mã mời đã hết hạn.",
+                en: "Invite code has expired.",
+                ja: "招待コードの期限が切れました。"
+            ))
+        }
+
         return invite
     }
 

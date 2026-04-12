@@ -147,6 +147,20 @@ final class FamilyContextStore {
         }
     }
 
+    func deleteFamily(sessionStore: SessionStore) async {
+        guard let familyID = family?.id else { return }
+        let refreshedSession = try? await sessionStore.refreshedSession()
+        guard let session = refreshedSession ?? nil else { return }
+
+        do {
+            try await service.deleteFamily(familyID: familyID, session: session)
+            activeContext = .personalSelf
+            await refresh(sessionStore: sessionStore)
+        } catch {
+            lastErrorMessage = error.localizedDescription
+        }
+    }
+
     func createFamily(
         name: String,
         sessionStore: SessionStore
@@ -212,7 +226,7 @@ final class FamilyContextStore {
             let invite = try await service.createInvite(
                 familyID: familyID,
                 defaultRole: defaultRole,
-                expiresAt: Calendar.current.date(byAdding: .day, value: 7, to: .now) ?? .now,
+                expiresAt: Calendar.current.date(byAdding: .minute, value: 10, to: .now) ?? .now,
                 session: session
             )
             invites.insert(invite, at: 0)

@@ -634,6 +634,7 @@ struct FamilyMembersScreen: View {
 // MARK: - Member Profile Screen
 
 private struct FamilyMemberProfileScreen: View {
+    @Environment(\.dismiss) private var dismiss
     @Environment(SessionStore.self) private var sessionStore
     @Environment(FamilyContextStore.self) private var familyContextStore
 
@@ -641,46 +642,207 @@ private struct FamilyMemberProfileScreen: View {
 
     @State private var showsPermissionsSheet = false
 
+    private var isMe: Bool {
+        member.userID == sessionStore.signedInUserID
+    }
+
+    private var isOwner: Bool {
+        familyContextStore.currentRole == .owner
+    }
+
     var body: some View {
         MistiaPinnedTopBarScaffold(
             tone: .standard,
-            title: member.displayName,
-            contentSpacing: 18
+            title: "",
+            leadingSystemImage: "chevron.left",
+            hidesSystemBackButton: true,
+            onLeadingTap: { dismiss() },
+            contentSpacing: 22
         ) {
-            MistiaGlassCard(cornerRadius: 14, tint: Color(UIColor.secondarySystemGroupedBackground)) {
-                VStack(alignment: .leading, spacing: 14) {
-                    HStack(spacing: 14) {
-                        MistiaAvatarBadge(
-                            initials: String(member.displayName.prefix(2)).uppercased(),
-                            avatarURL: member.avatarURL,
-                            size: 56,
-                            showsStatus: false
-                        )
+            // Profile Header
+            VStack(spacing: 12) {
+                MistiaAvatarBadge(
+                    initials: String(member.displayName.prefix(2)).uppercased(),
+                    avatarURL: member.avatarURL,
+                    size: 80,
+                    showsStatus: false
+                )
 
-                        VStack(alignment: .leading, spacing: 6) {
-                            Text(member.displayName)
-                                .font(.system(size: 22, weight: .bold, design: .rounded))
-                            FamilyRoleBadge(role: member.role)
-                        }
-                    }
+                VStack(spacing: 4) {
+                    Text(member.displayName)
+                        .font(.system(size: 24, weight: .bold, design: .rounded))
+                        .foregroundStyle(.primary)
 
-                    let capabilities = familyContextStore.capabilities(for: member)
-                    if capabilities.canViewTarget {
-                        Button(mistiaLocalized(vi: "Xem dữ liệu trong app", en: "View data in app", ja: "アプリでデータを見る")) {
-                            familyContextStore.viewMember(member)
-                        }
-                        .buttonStyle(.glassProminent)
-                        .tint(Color(red: 0.43, green: 0.23, blue: 0.76))
-                    }
+                    FamilyRoleBadge(role: member.role)
+                }
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.top, 10)
+            .padding(.bottom, 10)
 
-                    if familyContextStore.canInviteMembers && member.role != .owner {
-                        Button(mistiaLocalized(vi: "Chỉnh role & quyền", en: "Edit role & permissions", ja: "役割と権限を編集")) {
-                            showsPermissionsSheet = true
+            if !isMe {
+                // View Data Card
+                let capabilities = familyContextStore.capabilities(for: member)
+                if capabilities.canViewTarget {
+                    VStack(alignment: .leading, spacing: 0) {
+                        MistiaGlassCard(cornerRadius: 18, tint: Color(UIColor.secondarySystemGroupedBackground), padding: 0) {
+                            Button {
+                                familyContextStore.viewMember(member)
+                            } label: {
+                                HStack(spacing: 14) {
+                                    Image(systemName: "eye.fill")
+                                        .font(.system(size: 16, weight: .semibold))
+                                        .foregroundStyle(MistiaAccent.purple.color)
+                                        .frame(width: 32)
+
+                                    Text(mistiaLocalized(
+                                        vi: "Xem dữ liệu của \(member.displayName)",
+                                        en: "View \(member.displayName)'s data",
+                                        ja: "\(member.displayName)のデータを見る"
+                                    ))
+                                    .font(.system(size: 17, weight: .semibold, design: .rounded))
+                                    .foregroundStyle(.primary)
+
+                                    Spacer()
+
+                                    Image(systemName: "chevron.right")
+                                        .font(.system(size: 12, weight: .semibold))
+                                        .foregroundStyle(.tertiary)
+                                }
+                                .padding(.horizontal, 16)
+                                .padding(.vertical, 16)
+                            }
+                            .buttonStyle(.plain)
                         }
-                        .buttonStyle(.glass)
+
+                        Text(mistiaLocalized(
+                            vi: "Xem các giao dịch, ví và ngân sách mà \(member.displayName) đã chia sẻ với gia đình.",
+                            en: "View transactions, wallets, and budgets shared by \(member.displayName).",
+                            ja: "\(member.displayName)が共有した履歴やウォレットを確認します。"
+                        ))
+                        .font(.system(size: 13, weight: .medium, design: .rounded))
+                        .foregroundStyle(.secondary)
+                        .padding(.horizontal, 4)
+                        .cardDescriptionStyle()
                     }
                 }
-                .frame(maxWidth: .infinity, alignment: .leading)
+
+                // Roles & Permissions Card
+                if isOwner && member.role != .owner {
+                    VStack(alignment: .leading, spacing: 0) {
+                        MistiaGlassCard(cornerRadius: 18, tint: Color(UIColor.secondarySystemGroupedBackground), padding: 0) {
+                            Button {
+                                showsPermissionsSheet = true
+                            } label: {
+                                HStack(spacing: 14) {
+                                    Image(systemName: "person.badge.key.fill")
+                                        .font(.system(size: 16, weight: .semibold))
+                                        .foregroundStyle(.orange)
+                                        .frame(width: 32)
+
+                                    Text(mistiaLocalized(vi: "Role & Quyền hạn", en: "Role & Permissions", ja: "役割と権限"))
+                                        .font(.system(size: 17, weight: .semibold, design: .rounded))
+                                        .foregroundStyle(.primary)
+
+                                    Spacer()
+
+                                    Image(systemName: "chevron.right")
+                                        .font(.system(size: 12, weight: .semibold))
+                                        .foregroundStyle(.tertiary)
+                                }
+                                .padding(.horizontal, 16)
+                                .padding(.vertical, 16)
+                            }
+                            .buttonStyle(.plain)
+                        }
+
+                        Text(mistiaLocalized(
+                            vi: "Thiết lập quyền xem hoặc chỉnh sửa dữ liệu cho thành viên này trong gia đình.",
+                            en: "Configure viewing or editing permissions for this member.",
+                            ja: "このメンバーの閲覧・編集権限を設定します。"
+                        ))
+                        .font(.system(size: 13, weight: .medium, design: .rounded))
+                        .foregroundStyle(.secondary)
+                        .padding(.horizontal, 4)
+                        .cardDescriptionStyle()
+                    }
+                }
+            }
+
+            // Destructive Actions
+            if isMe || isOwner {
+                VStack(alignment: .leading, spacing: 0) {
+                    MistiaGlassCard(cornerRadius: 18, tint: Color(UIColor.secondarySystemGroupedBackground), padding: 0) {
+                        Button {
+                            Task {
+                                if isMe {
+                                    if isOwner {
+                                        await familyContextStore.deleteFamily(sessionStore: sessionStore)
+                                    } else {
+                                        await familyContextStore.removeMember(member, sessionStore: sessionStore)
+                                    }
+                                } else if isOwner {
+                                    await familyContextStore.removeMember(member, sessionStore: sessionStore)
+                                }
+                                dismiss()
+                            }
+                        } label: {
+                            HStack(spacing: 14) {
+                                Image(systemName: isMe && isOwner ? "trash.fill" : "person.badge.minus.fill")
+                                    .font(.system(size: 16, weight: .semibold))
+                                    .foregroundStyle(.red)
+                                    .frame(width: 32)
+
+                                Text(
+                                    isMe
+                                        ? (isOwner
+                                           ? mistiaLocalized(vi: "Xóa gia đình", en: "Delete family", ja: "家族を削除")
+                                           : mistiaLocalized(vi: "Rời khỏi gia đình", en: "Leave family", ja: "家族を退会"))
+                                        : (isOwner
+                                           ? mistiaLocalized(vi: "Xóa \(member.displayName) khỏi gia đình", en: "Remove \(member.displayName)", ja: "\(member.displayName)を削除")
+                                           : "")
+                                )
+                                .font(.system(size: 17, weight: .semibold, design: .rounded))
+                                .foregroundStyle(.red)
+
+                                Spacer()
+
+                                Image(systemName: "chevron.right")
+                                    .font(.system(size: 12, weight: .semibold))
+                                    .foregroundStyle(.tertiary)
+                            }
+                            .padding(.horizontal, 16)
+                            .padding(.vertical, 16)
+                        }
+                        .buttonStyle(.plain)
+                    }
+
+                    Text(
+                        isMe
+                            ? (isOwner
+                               ? mistiaLocalized(
+                                    vi: "Tất cả dữ liệu chia sẻ và kết nối gia đình sẽ bị xóa vĩnh viễn. Hành động này không thể hoàn tác.",
+                                    en: "All shared data and family connections will be permanently deleted. This cannot be undone.",
+                                    ja: "共有データと家族のつながりはすべて完全に削除されます。この操作は取り消せません。"
+                               )
+                               : mistiaLocalized(
+                                    vi: "Bạn sẽ không còn quyền truy cập vào dữ liệu chung của gia đình này nữa.",
+                                    en: "You will no longer have access to this family's shared data.",
+                                    ja: "この家族の共有データにアクセスできなくなります。"
+                               ))
+                            : (isOwner
+                               ? mistiaLocalized(
+                                    vi: "Thành viên này sẽ bị xóa khỏi gia đình và không còn quyền truy cập dữ liệu chung.",
+                                    en: "This member will be removed and lose access to shared data.",
+                                    ja: "このメンバーは家族から削除され、共有データにアクセスできなくなります。"
+                               )
+                               : "")
+                    )
+                    .font(.system(size: 13, weight: .medium, design: .rounded))
+                    .foregroundStyle(.secondary)
+                    .padding(.horizontal, 4)
+                    .cardDescriptionStyle()
+                }
             }
         }
         .sheet(isPresented: $showsPermissionsSheet) {
