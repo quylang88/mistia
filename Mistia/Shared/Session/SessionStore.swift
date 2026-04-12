@@ -62,9 +62,9 @@ final class SessionStore {
     var isWorking = false
     var syncProgress: Double?
     var syncTimeRemaining: TimeInterval?
-    var syncStatusTitle: String
-    var syncStatusDetail: String
-    var syncStatusSystemImage: String
+    var syncStatusTitle: String = ""
+    var syncStatusDetail: String = ""
+    var syncStatusSystemImage: String = ""
     var lastErrorMessage: String?
     var lastSyncAt: Date?
     var initialSyncPreview: MistiaInitialSyncPreview?
@@ -101,21 +101,6 @@ final class SessionStore {
         syncCoordinator = SyncCoordinator(modelContainer: modelContainer)
         isAutoSyncEnabled = userDefaults.bool(forKey: MistiaAppStorageKey.syncAutoEnabled)
 
-        syncCoordinator.onProgressUpdate = { [weak self] progress in
-            Task { @MainActor in
-                guard let self else { return }
-                self.syncProgress = progress
-
-                if let startTime = self.syncStartTime, progress > 0.05 {
-                    let elapsed = Date().timeIntervalSince(startTime)
-                    let totalEstimated = elapsed / progress
-                    self.syncTimeRemaining = max(0, totalEstimated - elapsed)
-                } else {
-                    self.syncTimeRemaining = nil
-                }
-            }
-        }
-
         if MistiaSyncConfiguration.load() == nil {
             syncStatusTitle = mistiaLocalized(
                 vi: "Chưa cấu hình dịch vụ đồng bộ",
@@ -140,6 +125,21 @@ final class SessionStore {
                 ja: "ログインすると Mistia のデータを端末間で同期できます。"
             )
             syncStatusSystemImage = "person.crop.circle.badge.plus"
+        }
+
+        syncCoordinator.onProgressUpdate = { [weak self] progress in
+            Task { @MainActor in
+                guard let self else { return }
+                self.syncProgress = progress
+
+                if let startTime = self.syncStartTime, progress > 0.05 {
+                    let elapsed = Date().timeIntervalSince(startTime)
+                    let totalEstimated = elapsed / progress
+                    self.syncTimeRemaining = max(0, totalEstimated - elapsed)
+                } else {
+                    self.syncTimeRemaining = nil
+                }
+            }
         }
     }
 
