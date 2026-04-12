@@ -21,22 +21,50 @@ enum FamilyScopedData {
 
 struct FamilyContextChipBar: View {
     @Environment(FamilyContextStore.self) private var familyContextStore
+    @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
-        if let title = familyContextStore.contextChipTitle {
-            HStack(spacing: 10) {
-                MistiaChip(
-                    title: title,
-                    tint: Color(red: 0.43, green: 0.23, blue: 0.76)
-                )
-
-                Button(mistiaLocalized(vi: "Quay lại tôi", en: "Back to me", ja: "自分に戻る")) {
+        if let viewedMember = familyContextStore.viewedMember {
+            Button {
+                withAnimation(.snappy) {
                     familyContextStore.returnToSelf()
                 }
-                .font(.system(size: 13, weight: .semibold, design: .rounded))
-                .foregroundStyle(Color(red: 0.43, green: 0.23, blue: 0.76))
+            } label: {
+                HStack(spacing: 8) {
+                    MistiaAvatarBadge(
+                        initials: String(viewedMember.displayName.prefix(2)).uppercased(),
+                        avatarURL: viewedMember.avatarURL,
+                        size: 20,
+                        showsStatus: false
+                    )
+
+                    Text(mistiaLocalized(
+                        vi: "Đang xem: \(viewedMember.displayName)",
+                        en: "Viewing: \(viewedMember.displayName)",
+                        ja: "表示中: \(viewedMember.displayName)"
+                    ))
+                    .font(.system(size: 12, weight: .bold, design: .rounded))
+                    
+                    Image(systemName: "xmark.circle.fill")
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundStyle(.secondary)
+                }
+                .padding(.leading, 6)
+                .padding(.trailing, 10)
+                .padding(.vertical, 6)
+                .background {
+                    Capsule()
+                        .fill(Color(red: 0.43, green: 0.23, blue: 0.76).opacity(colorScheme == .dark ? 0.24 : 0.12))
+                }
+                .overlay {
+                    Capsule()
+                        .strokeBorder(Color(red: 0.43, green: 0.23, blue: 0.76).opacity(0.2), lineWidth: 1)
+                }
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
+            .buttonStyle(.plain)
+            .foregroundStyle(Color(red: 0.43, green: 0.23, blue: 0.76))
+            .transition(.asymmetric(insertion: .scale.combined(with: .opacity), removal: .opacity))
+            .padding(.bottom, 4)
         }
     }
 }
