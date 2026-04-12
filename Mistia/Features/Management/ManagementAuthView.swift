@@ -1520,23 +1520,24 @@ private struct ManagementProfilePrimaryActionButton: View {
 
     var body: some View {
         Button(action: action) {
-            HStack(spacing: 10) {
+            ZStack {
                 if showsProgress {
                     ProgressView()
                         .tint(foregroundColor)
-                } else {
-                    Text(title)
-                        .font(.system(size: 17, weight: .semibold, design: .rounded))
-                        .foregroundStyle(foregroundColor)
                 }
+
+                Text(title)
+                    .font(.system(size: 17, weight: .semibold, design: .rounded))
+                    .foregroundStyle(foregroundColor)
+                    .opacity(showsProgress ? 0 : 1)
             }
             .frame(maxWidth: .infinity)
             .padding(.vertical, 17)
             .background(backgroundColor, in: Capsule())
         }
         .buttonStyle(.plain)
-        .disabled(isDisabled)
-        .opacity(isDisabled ? 0.55 : 1)
+        .disabled(isDisabled || showsProgress)
+        .opacity((isDisabled || showsProgress) ? 0.6 : 1)
     }
 }
 
