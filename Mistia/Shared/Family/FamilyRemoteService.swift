@@ -4,6 +4,7 @@ struct FamilyGroupRecord: Codable, Identifiable, Equatable {
     let id: UUID
     var name: String
     let ownerUserID: UUID
+    let deletedAt: Date?
     let createdAt: Date
     let updatedAt: Date
 
@@ -11,6 +12,7 @@ struct FamilyGroupRecord: Codable, Identifiable, Equatable {
         case id
         case name
         case ownerUserID = "owner_user_id"
+        case deletedAt = "deleted_at"
         case createdAt = "created_at"
         case updatedAt = "updated_at"
     }
@@ -28,6 +30,7 @@ struct FamilyMembershipRecord: Codable, Identifiable, Equatable {
     var canViewDebts: Bool
     var canViewKids: Bool
     var canEditKids: Bool
+    let deletedAt: Date?
     let createdAt: Date
     let updatedAt: Date
 
@@ -43,6 +46,7 @@ struct FamilyMembershipRecord: Codable, Identifiable, Equatable {
         case canViewDebts = "can_view_debts"
         case canViewKids = "can_view_kids"
         case canEditKids = "can_edit_kids"
+        case deletedAt = "deleted_at"
         case createdAt = "created_at"
         case updatedAt = "updated_at"
     }
@@ -74,6 +78,7 @@ struct FamilyInviteRecord: Codable, Identifiable, Equatable {
     let acceptedAt: Date?
     let acceptedByUserID: UUID?
     let revokedAt: Date?
+    let deletedAt: Date?
     let createdAt: Date
     let updatedAt: Date
 
@@ -87,6 +92,7 @@ struct FamilyInviteRecord: Codable, Identifiable, Equatable {
         case acceptedAt = "accepted_at"
         case acceptedByUserID = "accepted_by_user_id"
         case revokedAt = "revoked_at"
+        case deletedAt = "deleted_at"
         case createdAt = "created_at"
         case updatedAt = "updated_at"
     }
@@ -295,11 +301,13 @@ struct FamilyRemoteService {
         membershipID: UUID,
         session: SupabaseAuthSession
     ) async throws {
-        _ = try await deleteRows(
+        let payload = ["deleted_at": ISO8601DateFormatter.mistiaRemoteAPI.string(from: .now)]
+        _ = try await patchRows(
             path: "family_memberships",
             filters: [
                 URLQueryItem(name: "id", value: "eq.\(membershipID.uuidString.lowercased())")
             ],
+            body: payload,
             session: session
         ) as [FamilyMembershipRecord]
     }
@@ -308,13 +316,37 @@ struct FamilyRemoteService {
         familyID: UUID,
         session: SupabaseAuthSession
     ) async throws {
-        _ = try await deleteRows(
+        let now = ISO8601DateFormatter.mistiaRemoteAPI.string(from: .now)
+
+        // 1. Soft delete family
+        _ = try await patchRows(
             path: "families",
             filters: [
                 URLQueryItem(name: "id", value: "eq.\(familyID.uuidString.lowercased())")
             ],
+            body: ["deleted_at": now],
             session: session
         ) as [FamilyGroupRecord]
+
+        // 2. Soft delete all memberships in family
+        _ = try await patchRows(
+            path: "family_memberships",
+            filters: [
+                URLQueryItem(name: "family_id", value: "eq.\(familyID.uuidString.lowercased())")
+            ],
+            body: ["deleted_at": now],
+            session: session
+        ) as [FamilyMembershipRecord]
+
+        // 3. Soft delete all invites in family
+        _ = try await patchRows(
+            path: "family_invites",
+            filters: [
+                URLQueryItem(name: "family_id", value: "eq.\(familyID.uuidString.lowercased())")
+            ],
+            body: ["deleted_at": now],
+            session: session
+        ) as [FamilyInviteRecord]
     }
 
     func fetchAccessibleFinanceSnapshot(
@@ -364,6 +396,7 @@ struct FamilyRemoteService {
             filters: [
                 URLQueryItem(name: "select", value: "*"),
                 URLQueryItem(name: "user_id", value: "eq.\(session.user.id.uuidString.lowercased())"),
+                URLQueryItem(name: "deleted_at", value: "is.null"),
                 URLQueryItem(name: "limit", value: "1")
             ],
             session: session
@@ -380,6 +413,7 @@ struct FamilyRemoteService {
             filters: [
                 URLQueryItem(name: "select", value: "*"),
                 URLQueryItem(name: "id", value: "eq.\(id.uuidString.lowercased())"),
+                URLQueryItem(name: "deleted_at", value: "is.null"),
                 URLQueryItem(name: "limit", value: "1")
             ],
             session: session
@@ -399,6 +433,7 @@ struct FamilyRemoteService {
             filters: [
                 URLQueryItem(name: "select", value: "*"),
                 URLQueryItem(name: "family_id", value: "eq.\(familyID.uuidString.lowercased())"),
+                URLQueryItem(name: "deleted_at", value: "is.null"),
                 URLQueryItem(name: "order", value: "created_at.asc")
             ],
             session: session
@@ -428,6 +463,7 @@ struct FamilyRemoteService {
             filters: [
                 URLQueryItem(name: "select", value: "*"),
                 URLQueryItem(name: "family_id", value: "eq.\(familyID.uuidString.lowercased())"),
+                URLQueryItem(name: "deleted_at", value: "is.null"),
                 URLQueryItem(name: "accepted_at", value: "is.null"),
                 URLQueryItem(name: "revoked_at", value: "is.null"),
                 URLQueryItem(name: "order", value: "created_at.desc")
@@ -446,6 +482,7 @@ struct FamilyRemoteService {
             filters: [
                 URLQueryItem(name: "select", value: "*"),
                 URLQueryItem(name: "code", value: "eq.\(normalizedCode)"),
+                URLQueryItem(name: "deleted_at", value: "is.null"),
                 URLQueryItem(name: "accepted_at", value: "is.null"),
                 URLQueryItem(name: "revoked_at", value: "is.null"),
                 URLQueryItem(name: "limit", value: "1")

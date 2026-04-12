@@ -1143,4 +1143,6 @@ extension ISO8601DateFormatter {
         formatter.formatOptions = [.withInternetDateTime]
         return formatter
     }()
+
+    static let mistiaRemoteAPI: ISO8601DateFormatter = mistiaSyncWithFractionalSeconds
 }

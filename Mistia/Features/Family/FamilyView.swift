@@ -799,7 +799,7 @@ private struct FamilyMemberProfileScreen: View {
                                            ? mistiaLocalized(vi: "Xóa gia đình", en: "Delete family", ja: "家族を削除")
                                            : mistiaLocalized(vi: "Rời khỏi gia đình", en: "Leave family", ja: "家族を退会"))
                                         : (isOwner
-                                           ? mistiaLocalized(vi: "Xóa \(member.displayName) khỏi gia đình", en: "Remove \(member.displayName)", ja: "\(member.displayName) को हटाएँ")
+                                           ? mistiaLocalized(vi: "Xóa \(member.displayName) khỏi gia đình", en: "Remove \(member.displayName)", ja: "\(member.displayName)を削除")
                                            : "")
                                 )
                                 .font(.system(size: 17, weight: .semibold, design: .rounded))
