@@ -473,7 +473,9 @@ final class SessionStore {
 
     func syncNow() async {
         guard currentSession != nil, !isSyncInFlight else { return }
+        isWorking = true
         await drainSyncQueue()
+        isWorking = false
     }
 
     func startInitialSync(with choice: MistiaInitialSyncChoice) async {
