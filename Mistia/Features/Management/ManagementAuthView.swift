@@ -1509,27 +1509,24 @@ private struct ManagementProfilePrimaryActionButton: View {
     @Environment(\.colorScheme) private var colorScheme
 
     private var backgroundColor: Color {
-        colorScheme == .dark
-            ? .white
-            : Color(UIColor.systemBackground)
+        colorScheme == .dark ? .white : MistiaAccent.purple.color
     }
 
     private var foregroundColor: Color {
-        MistiaAccent.purple.color
+        colorScheme == .dark ? .black : .white
     }
 
     var body: some View {
         Button(action: action) {
-            ZStack {
+            HStack(spacing: 10) {
                 if showsProgress {
                     ProgressView()
                         .tint(foregroundColor)
                 }
 
                 Text(title)
-                    .font(.system(size: 17, weight: .semibold, design: .rounded))
+                    .font(.system(size: 17, weight: .bold, design: .rounded))
                     .foregroundStyle(foregroundColor)
-                    .opacity(showsProgress ? 0 : 1)
             }
             .frame(maxWidth: .infinity)
             .padding(.vertical, 17)
