@@ -1834,6 +1834,7 @@ private struct ManagementEditProfileView: View {
     @State private var draftAvatarURL: URL?
     @State private var avatarSource: ManagementProfileAvatarSource?
     @State private var showsAvatarSourceDialog = false
+    @State private var showsPrivacySheet = false
     @State private var profileErrorMessage: String?
 
     init(summary: SessionSummary, accent: Color) {
@@ -1933,7 +1934,7 @@ private struct ManagementEditProfileView: View {
                 }
 
                 Button {
-                    destination = .personalInfo
+                    showsPrivacySheet = true
                 } label: {
                     Text(privacyButtonTitle)
                         .font(.system(size: 15, weight: .semibold, design: .rounded))
@@ -1949,7 +1950,7 @@ private struct ManagementEditProfileView: View {
         .navigationDestination(item: $destination) { route in
             switch route {
             case .personalInfo:
-                ManagementProfilePersonalInfoView(accent: accent)
+                EmptyView()
             }
         }
         .sheet(item: $activeSheet) { sheet in
@@ -2003,6 +2004,9 @@ private struct ManagementEditProfileView: View {
             Button("OK", role: .cancel) { }
         } message: {
             Text(profileErrorMessage ?? "")
+        }
+        .sheet(isPresented: $showsPrivacySheet) {
+            MistiaPrivacySheet()
         }
         .task {
             draftAvatarURL = sessionStore.summary?.avatarURL ?? summary.avatarURL

@@ -29,6 +29,12 @@ struct FamilyManagementView: View {
         colorScheme == .dark ? Color(UIColor.secondarySystemGroupedBackground) : .white.opacity(0.22)
     }
 
+    private var accent: Color {
+        colorScheme == .dark
+            ? MistiaAccent.lightPurple.color
+            : MistiaAccent.purple.color
+    }
+
     var body: some View {
         MistiaPinnedTopBarScaffold(
             tone: .standard,
@@ -289,7 +295,7 @@ struct FamilyManagementView: View {
                         ja: "データおよび個人情報の使用を確認する"
                     ))
                     .font(.system(size: 13, weight: .bold, design: .rounded))
-                    .foregroundStyle(MistiaAccent.purple.color)
+                    .foregroundStyle(accent)
                 }
                 .buttonStyle(.plain)
                 .padding(.horizontal, 4)
