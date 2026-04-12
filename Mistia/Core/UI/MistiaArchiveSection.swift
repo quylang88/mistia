@@ -25,7 +25,7 @@ struct MistiaArchiveSection: View {
                         in: RoundedRectangle(cornerRadius: 24, style: .continuous)
                     )
             }
-            .buttonStyle(.plain)
+            .buttonStyle(MistiaPressableButtonStyle(cornerRadius: 20))
             .confirmationDialog(
                 "",
                 isPresented: $showsConfirmation,

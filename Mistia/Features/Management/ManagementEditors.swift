@@ -61,7 +61,7 @@ struct ManagementWalletEditorSheet: View {
                                 .foregroundStyle(.tertiary)
                         }
                     }
-                    .buttonStyle(.plain)
+                    .buttonStyle(MistiaPressableButtonStyle(cornerRadius: 20))
                 }
 
                 Section(mistiaLocalized(vi: "Thông tin cơ bản", en: "Basic details", ja: "基本情報")) {
@@ -104,7 +104,7 @@ struct ManagementWalletEditorSheet: View {
                                     .foregroundStyle(.tertiary)
                             }
                         }
-                        .buttonStyle(.plain)
+                        .buttonStyle(MistiaPressableButtonStyle(cornerRadius: 20))
 
                         TextField(mistiaLocalized(vi: "Hoặc nhập tên ngân hàng", en: "Or enter the bank name", ja: "または銀行名を入力"), text: $draft.institutionDisplayName)
                             .onChange(of: draft.institutionDisplayName) { _, newValue in
@@ -465,7 +465,7 @@ struct ManagementCategoryEditorSheet: View {
                                 .foregroundStyle(.tertiary)
                         }
                     }
-                    .buttonStyle(.plain)
+                    .buttonStyle(MistiaPressableButtonStyle(cornerRadius: 20))
                 }
 
                 Section(mistiaLocalized(vi: "Thông tin", en: "Details", ja: "詳細")) {
@@ -522,7 +522,7 @@ struct ManagementCategoryEditorSheet: View {
                                     .foregroundStyle(.tertiary)
                             }
                         }
-                        .buttonStyle(.plain)
+                        .buttonStyle(MistiaPressableButtonStyle(cornerRadius: 20))
 
                         Toggle(
                             mistiaLocalized(vi: "Yêu thích", en: "Favorite", ja: "お気に入り"),

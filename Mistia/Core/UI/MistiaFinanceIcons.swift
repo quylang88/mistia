@@ -1112,7 +1112,7 @@ struct MistiaFinanceIconPickerSheet: View {
                                                 .strokeBorder(draftToken == option.token ? Color.accentColor.opacity(0.65) : Color.clear, lineWidth: 1.2)
                                         )
                                     }
-                                    .buttonStyle(.plain)
+                                    .buttonStyle(MistiaPressableButtonStyle(cornerRadius: 20))
                                 }
                             }
                         }

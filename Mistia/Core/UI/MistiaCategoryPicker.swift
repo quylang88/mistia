@@ -317,7 +317,7 @@ struct MistiaCategoryPickerSheet: View {
                         Image(systemName: "xmark.circle.fill")
                             .foregroundStyle(.tertiary)
                     }
-                    .buttonStyle(.plain)
+                    .buttonStyle(MistiaPressableButtonStyle(cornerRadius: 20))
                 }
             }
             .padding(.horizontal, 14)
@@ -351,7 +351,7 @@ struct MistiaCategoryPickerSheet: View {
                                     )
                             }
                     }
-                    .buttonStyle(.plain)
+                    .buttonStyle(MistiaPressableButtonStyle(cornerRadius: 20))
                     .accessibilityLabel(candidate.title)
                 }
             }
@@ -408,7 +408,7 @@ struct MistiaCategoryPickerSheet: View {
                         .padding(.vertical, 12)
                         .contentShape(Rectangle())
                     }
-                    .buttonStyle(.plain)
+                    .buttonStyle(MistiaPressableButtonStyle(cornerRadius: 20))
 
                     if expandedSectionIDs.contains(section.id) {
                         VStack(spacing: 0) {
@@ -507,7 +507,7 @@ struct MistiaCategoryPickerSheet: View {
                 } label: {
                     rowButtonContent(category: category, subtitle: subtitle, showsBackground: showsBackground, indentation: indentation)
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(MistiaPressableButtonStyle(cornerRadius: 16, tint: accent))
             }
         }
     }

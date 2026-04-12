@@ -705,6 +705,13 @@ enum MistiaSyncUploadRecord {
         }
     }
 
+    var parentID: UUID? {
+        if case .category(let row) = self {
+            return row.parentCategoryID
+        }
+        return nil
+    }
+
     var payloadFingerprint: String {
         switch self {
         case .wallet(let row):

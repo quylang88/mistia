@@ -253,7 +253,7 @@ struct ManagementAccountView: View {
                 }
             }
             .presentationDetents([.medium])
-            .presentationDragIndicator(.visible)
+            .presentationDragIndicator(.hidden)
         }
         .confirmationDialog(
             destructiveActionConfirmationTitle,
@@ -1488,7 +1488,7 @@ private struct ManagementProfileCenteredDestructiveButton: View {
         Button(action: action) {
             Text(title)
                 .font(.system(size: 17, weight: .semibold, design: .rounded))
-                .foregroundStyle(MistiaAccent.expense.color)
+                .foregroundStyle(.red)
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 17)
                 .background(backgroundColor, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
@@ -1509,16 +1509,11 @@ private struct ManagementProfilePrimaryActionButton: View {
     @Environment(\.colorScheme) private var colorScheme
 
     private var backgroundColor: Color {
-        colorScheme == .dark
-            ? .white
-            : Color(UIColor.systemBackground)
+        colorScheme == .dark ? .white : MistiaAccent.purple.color
     }
 
     private var foregroundColor: Color {
-        if colorScheme == .dark {
-            return MistiaAccent.lightPurple.color
-        }
-        return accent
+        colorScheme == .dark ? .black : .white
     }
 
     var body: some View {
@@ -1527,19 +1522,19 @@ private struct ManagementProfilePrimaryActionButton: View {
                 if showsProgress {
                     ProgressView()
                         .tint(foregroundColor)
-                } else {
-                    Text(title)
-                        .font(.system(size: 17, weight: .semibold, design: .rounded))
-                        .foregroundStyle(foregroundColor)
                 }
+
+                Text(title)
+                    .font(.system(size: 17, weight: .bold, design: .rounded))
+                    .foregroundStyle(foregroundColor)
             }
             .frame(maxWidth: .infinity)
             .padding(.vertical, 17)
             .background(backgroundColor, in: Capsule())
         }
         .buttonStyle(.plain)
-        .disabled(isDisabled)
-        .opacity(isDisabled ? 0.55 : 1)
+        .disabled(isDisabled || showsProgress)
+        .opacity((isDisabled || showsProgress) ? 0.6 : 1)
     }
 }
 
@@ -1584,77 +1579,96 @@ private struct ManagementInitialSyncChoiceSheet: View {
     let onSelect: (MistiaInitialSyncChoice) -> Void
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 18) {
-            Text(
-                mistiaLocalized(
-                    vi: "Chọn cách đồng bộ lần đầu",
-                    en: "Choose the first sync strategy",
-                    ja: "初回同期の方法を選択"
-                )
-            )
-            .font(.system(size: 22, weight: .bold, design: .rounded))
+        NavigationStack {
+            ZStack {
+                Color(UIColor.systemGroupedBackground)
+                    .ignoresSafeArea()
 
-            Text(
-                mistiaLocalized(
-                    vi: "Máy này đang có \(preview.localActiveCount) bản ghi và cloud đang có \(preview.remoteActiveCount) bản ghi. Mistia sẽ ưu tiên an toàn dữ liệu trước.",
-                    en: "This device has \(preview.localActiveCount) records and the cloud has \(preview.remoteActiveCount) records. Mistia will prioritize data safety first.",
-                    ja: "この端末には \(preview.localActiveCount) 件、クラウドには \(preview.remoteActiveCount) 件のレコードがあります。Mistia はまずデータの安全性を優先します。"
-                )
-            )
-            .font(.system(size: 14.5, weight: .medium, design: .rounded))
-            .foregroundStyle(.secondary)
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 22) {
+                        Text(
+                            preview.remoteActiveCount == 0
+                            ? mistiaLocalized(
+                                vi: "Cloud hiện chưa có dữ liệu nào (ngoại trừ hồ sơ của bạn). Máy này đang có \(preview.localActiveCount) bản ghi. Hãy chọn cách bạn muốn bắt đầu.",
+                                en: "The cloud has no data yet (except your profile). This device has \(preview.localActiveCount) records. Choose how you want to start.",
+                                ja: "クラウドにはまだデータがありません（プロフィールを除く）。この端末には \(preview.localActiveCount) 件のレコードがあります。開始方法を選択してください。"
+                            )
+                            : mistiaLocalized(
+                                vi: "Máy này đang có \(preview.localActiveCount) bản ghi và cloud đang có \(preview.remoteActiveCount) bản ghi. Mistia sẽ ưu tiên an toàn dữ liệu trước.",
+                                en: "This device has \(preview.localActiveCount) records and the cloud has \(preview.remoteActiveCount) records. Mistia will prioritize data safety first.",
+                                ja: "この端末には \(preview.localActiveCount) 件、クラウドには \(preview.remoteActiveCount) 件のレコードがあります。Mistia はまずデータの安全性を優先します。"
+                            )
+                        )
+                        .font(.system(size: 15, weight: .medium, design: .rounded))
+                        .foregroundStyle(.secondary)
+                        .padding(.horizontal, 4)
 
-            VStack(spacing: 10) {
-                ManagementInitialSyncChoiceButton(
-                    title: mistiaLocalized(vi: "Gộp an toàn", en: "Merge safely", ja: "安全にマージ"),
-                    detail: mistiaLocalized(
-                        vi: "Giữ cả hai phía, gộp theo ID, không tự động nhập nhằng giao dịch giống nhau.",
-                        en: "Keep both sides, merge by record ID, and avoid risky automatic transaction dedupe.",
-                        ja: "両側のデータを保持し、レコード ID で統合しつつ危険な自動重複排除は行いません。"
-                    ),
-                    accent: accent,
-                    isRecommended: true
-                ) {
-                    onSelect(.mergeSafely)
-                }
+                        VStack(spacing: 12) {
+                            ManagementInitialSyncChoiceButton(
+                                title: mistiaLocalized(vi: "Gộp an toàn", en: "Merge safely", ja: "安全にマージ"),
+                                detail: mistiaLocalized(
+                                    vi: "Giữ cả hai phía, gộp theo ID, không tự động nhập nhằng giao dịch giống nhau.",
+                                    en: "Keep both sides, merge by record ID, and avoid risky automatic transaction dedupe.",
+                                    ja: "両側のデータを保持し、レコード ID で統合しつつ危険な自動重複排除は行いません。"
+                                ),
+                                accent: accent,
+                                isRecommended: true
+                            ) {
+                                onSelect(.mergeSafely)
+                            }
 
-                ManagementInitialSyncChoiceButton(
-                    title: mistiaLocalized(vi: "Dùng dữ liệu trên máy này", en: "Use this device", ja: "この端末を使う"),
-                    detail: mistiaLocalized(
-                        vi: "Đẩy local lên cloud và tombstone các bản chỉ có trên cloud.",
-                        en: "Upload local data to the cloud and tombstone cloud-only records.",
-                        ja: "ローカルデータをクラウドへアップロードし、クラウドにしかないレコードは tombstone 化します。"
-                    ),
-                    accent: accent,
-                    isRecommended: false
-                ) {
-                    onSelect(.useDevice)
-                }
+                            ManagementInitialSyncChoiceButton(
+                                title: mistiaLocalized(vi: "Dùng dữ liệu trên máy này", en: "Use this device", ja: "この端末を使う"),
+                                detail: mistiaLocalized(
+                                    vi: "Đẩy local lên cloud và tombstone các bản chỉ có trên cloud.",
+                                    en: "Upload local data to the cloud and tombstone cloud-only records.",
+                                    ja: "ローカルデータをクラウドへアップロードし、クラウドにしかないレコードは tombstone 化します。"
+                                ),
+                                accent: accent,
+                                isRecommended: false
+                            ) {
+                                onSelect(.useDevice)
+                            }
 
-                ManagementInitialSyncChoiceButton(
-                    title: mistiaLocalized(vi: "Dùng dữ liệu trên cloud", en: "Use cloud", ja: "クラウドを使う"),
-                    detail: mistiaLocalized(
-                        vi: "Xóa snapshot local hiện tại rồi kéo toàn bộ cloud về máy.",
-                        en: "Replace the current local snapshot with the full cloud state.",
-                        ja: "現在のローカルスナップショットを置き換えて、クラウド全体を取得します。"
-                    ),
-                    accent: .secondary,
-                    isRecommended: false
-                ) {
-                    onSelect(.useCloud)
+                            ManagementInitialSyncChoiceButton(
+                                title: mistiaLocalized(vi: "Dùng dữ liệu trên cloud", en: "Use cloud", ja: "クラウドを使う"),
+                                detail: mistiaLocalized(
+                                    vi: "Xóa snapshot local hiện tại rồi kéo toàn bộ cloud về máy.",
+                                    en: "Replace the current local snapshot with the full cloud state.",
+                                    ja: "現在のローカルスナップショットを置き換えて、クラウド全体を取得します。"
+                                ),
+                                accent: .secondary,
+                                isRecommended: false
+                            ) {
+                                onSelect(.useCloud)
+                            }
+                        }
+                    }
+                    .padding(.horizontal, 18)
+                    .padding(.top, 10)
+                    .padding(.bottom, 30)
                 }
             }
-
-            Button(
-                mistiaLocalized(vi: "Hủy", en: "Cancel", ja: "キャンセル"),
-                role: .cancel,
-                action: onCancel
+            .navigationTitle(
+                mistiaLocalized(
+                    vi: "Đồng bộ lần đầu",
+                    en: "First sync",
+                    ja: "初回同期"
+                )
             )
-            .font(.system(size: 16, weight: .bold, design: .rounded))
-            .frame(maxWidth: .infinity, alignment: .center)
-            .padding(.top, 2)
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    Button {
+                        onCancel()
+                    } label: {
+                        Image(systemName: "xmark")
+                            .font(.system(size: 16, weight: .semibold))
+                            .foregroundStyle(.secondary)
+                    }
+                }
+            }
         }
-        .padding(24)
     }
 }
 
@@ -1689,10 +1703,10 @@ private struct ManagementInitialSyncChoiceButton: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(14)
-            .background(.white.opacity(0.06), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+            .padding(16)
+            .background(Color(UIColor.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 20, style: .continuous))
         }
-        .buttonStyle(.plain)
+        .buttonStyle(MistiaPressableButtonStyle(cornerRadius: 20))
     }
 }
 

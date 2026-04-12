@@ -356,7 +356,7 @@ struct MistiaIconPickerSheet: View {
                                     )
                                     .animation(.snappy(duration: 0.18), value: isSelected)
                                 }
-                                .buttonStyle(.plain)
+                                .buttonStyle(MistiaPressableButtonStyle(cornerRadius: 20))
                                 .accessibilityLabel(symbol)
                                 .zIndex(isSelected ? 10 : 0)
                             }
@@ -451,7 +451,7 @@ struct MistiaIconPickerSheet: View {
             }
             .frame(maxWidth: .infinity)
         }
-        .buttonStyle(.plain)
+        .buttonStyle(MistiaPressableButtonStyle(cornerRadius: 20))
         .accessibilityLabel(choice.accessibilityLabel)
     }
 

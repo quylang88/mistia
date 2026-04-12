@@ -99,7 +99,7 @@ struct PlanningBudgetEditorSheet: View {
                                 .foregroundStyle(.tertiary)
                         }
                     }
-                    .buttonStyle(.plain)
+                    .buttonStyle(MistiaPressableButtonStyle(cornerRadius: 20))
 
                     TextField(mistiaLocalized(vi: "Số tiền ngân sách", en: "Budget amount", ja: "予算金額"), text: $draft.limitText)
                         .keyboardType(.numberPad)
@@ -609,7 +609,7 @@ struct PlanningBillEditorSheet: View {
                                 .foregroundStyle(.tertiary)
                         }
                     }
-                    .buttonStyle(.plain)
+                    .buttonStyle(MistiaPressableButtonStyle(cornerRadius: 20))
 
                     TextField(mistiaLocalized(vi: "Tên hóa đơn", en: "Bill name", ja: "請求名"), text: $draft.name)
                     TextField(mistiaLocalized(vi: "Số tiền (có thể để trống)", en: "Amount (optional)", ja: "金額（任意）"), text: $draft.amountText)
@@ -1512,7 +1512,7 @@ private struct PlanningIconPickerButton: View {
                     .foregroundStyle(.tertiary)
             }
         }
-        .buttonStyle(.plain)
+        .buttonStyle(MistiaPressableButtonStyle(cornerRadius: 20))
     }
 }
 

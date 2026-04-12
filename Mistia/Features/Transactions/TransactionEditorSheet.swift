@@ -269,7 +269,7 @@ struct TransactionEditorSheet: View {
                                 .foregroundStyle(.tertiary)
                         }
                     }
-                    .buttonStyle(.plain)
+                    .buttonStyle(MistiaPressableButtonStyle(cornerRadius: 20))
                 }
             case .transfer:
                 if draft.transferSubtype == .internalTransfer {
