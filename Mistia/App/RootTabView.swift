@@ -76,6 +76,7 @@ struct RootTabView: View {
   @Environment(\.colorScheme) private var colorScheme
   @Environment(\.modelContext) private var modelContext
   @Environment(SessionStore.self) private var sessionStore
+  @Environment(FamilyContextStore.self) private var familyContextStore
   @AppStorage(MistiaAppStorageKey.appearanceMode) private var appearanceModeRawValue =
     MistiaAppearanceMode.automatic.rawValue
   @AppStorage(MistiaAppStorageKey.appLanguage) private var appLanguageRawValue = ""
@@ -138,42 +139,42 @@ struct RootTabView: View {
           .animation(quickCreateMenuAnimation, value: isQuickCreateMenuExpanded)
         }
       }
-    }
-    .sheet(item: $activeSheet) { sheet in
-      switch sheet {
-      case .assistant:
-        MistiaAssistantSheet()
-          .presentationDetents([.medium])
-          .presentationDragIndicator(.hidden)
-      case .quickCreate(let destination):
-        TransactionEditorSheet(target: quickCreateTarget(for: destination)) { completion in
-          if completion == .savedDraft {
-            selectedTab = .transactions
+      .sheet(item: $activeSheet) { sheet in
+        switch sheet {
+        case .assistant:
+          MistiaAssistantSheet()
+            .presentationDetents([.medium])
+            .presentationDragIndicator(.hidden)
+        case .quickCreate(let destination):
+          TransactionEditorSheet(target: quickCreateTarget(for: destination)) { completion in
+            if completion == .savedDraft {
+              self.selectedTab = .transactions
+            }
+          }
+            .presentationDetents(destination == .note ? [.medium, .large] : [.large])
+            .presentationDragIndicator(.hidden)
+        }
+      }
+      .task {
+        try? MistiaBootstrap.seedDefaultCategoriesIfNeeded(
+          modelContext: self.modelContext,
+          sessionStore: self.sessionStore
+        )
+
+        self.familyContextStore.onTabSwitchRequested = { (tabID: String) in
+          if let tab = MistiaTab(rawValue: tabID) {
+            self.selectedTab = tab
           }
         }
-          .presentationDetents(destination == .note ? [.medium, .large] : [.large])
-          .presentationDragIndicator(.hidden)
       }
-    }
-    .task {
-      try? MistiaBootstrap.seedDefaultCategoriesIfNeeded(
-        modelContext: modelContext,
-        sessionStore: sessionStore
-      )
-
-      familyContextStore.onTabSwitchRequested = { tabID in
-        if let tab = MistiaTab(rawValue: tabID) {
-          selectedTab = tab
+      .onChange(of: hideQuickCreate) { _, newValue in
+        if newValue {
+          dismissQuickCreateMenu()
         }
       }
-    }
-    .onChange(of: hideQuickCreate) { _, newValue in
-      if newValue {
+      .onChange(of: selectedTab) { _, _ in
         dismissQuickCreateMenu()
       }
-    }
-    .onChange(of: selectedTab) { _, _ in
-      dismissQuickCreateMenu()
     }
   }
 
