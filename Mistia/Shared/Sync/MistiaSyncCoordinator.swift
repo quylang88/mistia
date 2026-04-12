@@ -38,7 +38,7 @@ enum MistiaSyncResult {
             return mistiaLocalized(
                 vi: "Đã đẩy thay đổi local lên cloud.",
                 en: "Uploaded local changes to the cloud.",
-                ja: "ローカル変更をクラウドへアップロードしました。"
+                ja: "ローカル変更 कोクラウドへアップロードしました。"
             )
         }
     }
