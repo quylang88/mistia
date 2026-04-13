@@ -68,7 +68,6 @@ final class SessionStore {
     var syncStatusSystemImage: String
     var lastErrorMessage: String?
     var lastSyncAt: Date?
-    var lastSyncStatus: String?
     var initialSyncPreview: MistiaInitialSyncPreview?
     var possibleDuplicateCount = 0
     var isAutoSyncEnabled: Bool
@@ -925,14 +924,13 @@ final class SessionStore {
                 remoteAvatarURL: remoteProfile.avatarURL
             )
             lastSyncAt = storedProfile.lastSyncAt
-            lastSyncStatus = storedProfile.lastSyncStatus
             lastErrorMessage = nil
             authBanner = nil
             authFieldErrors = [:]
             authPendingEmail = nil
             authPhase = .signIn
             activeAuthAction = nil
-            requiresInitialSync = true
+            requiresInitialSync = storedProfile.lastSyncAt == nil
             initialSyncPreview = nil
             pendingInitialSyncChoice = nil
 
@@ -1444,7 +1442,6 @@ final class SessionStore {
 
             try normalizeCategoryHierarchyIfNeeded()
             lastSyncAt = .now
-            lastSyncStatus = syncStatusDetail
             lastErrorMessage = nil
             possibleDuplicateCount = ((try? MistiaSyncLocalStore.possibleDuplicateTransactions(
                 in: MistiaDataStack.sharedModelContainer
@@ -1467,13 +1464,14 @@ final class SessionStore {
 
             if let userID = summary?.userID, let profile = storedProfile(for: userID) {
                 profile.lastSyncAt = .now
-                profile.lastSyncStatus = syncStatusDetail
                 try? modelContainer.mainContext.save()
             }
 
+            try? await Task.sleep(for: .seconds(0.5))
             updateAutoSyncLoopState()
         } catch {
             applySyncErrorState(error)
+            try? await Task.sleep(for: .seconds(0.5))
             updateAutoSyncLoopState()
         }
     }
