@@ -1509,32 +1509,41 @@ private struct ManagementProfilePrimaryActionButton: View {
     @Environment(\.colorScheme) private var colorScheme
 
     private var backgroundColor: Color {
-        colorScheme == .dark ? .white : MistiaAccent.purple.color
+        showsProgress ? Color(UIColor.systemGray4) : MistiaAccent.purple.color
     }
 
     private var foregroundColor: Color {
-        colorScheme == .dark ? .black : .white
+        .white
     }
 
     var body: some View {
         Button(action: action) {
-            HStack(spacing: 10) {
-                if showsProgress {
-                    ProgressView()
-                        .tint(foregroundColor)
-                }
-
+            ZStack {
                 Text(title)
                     .font(.system(size: 17, weight: .bold, design: .rounded))
                     .foregroundStyle(foregroundColor)
+                    .frame(maxWidth: .infinity)
+
+                if showsProgress {
+                    HStack {
+                        Spacer()
+                        ProgressView()
+                            .tint(foregroundColor)
+                            .padding(.trailing, 20)
+                    }
+                }
             }
-            .frame(maxWidth: .infinity)
             .padding(.vertical, 17)
             .background(backgroundColor, in: Capsule())
+            .overlay {
+                Capsule()
+                    .strokeBorder(Color.white.opacity(0.12), lineWidth: 1)
+            }
         }
         .buttonStyle(.plain)
         .disabled(isDisabled || showsProgress)
-        .opacity((isDisabled || showsProgress) ? 0.6 : 1)
+        .scaleEffect((isDisabled || showsProgress) ? 0.98 : 1.0)
+        .animation(.snappy, value: showsProgress)
     }
 }
 
@@ -2657,6 +2666,14 @@ private struct ManagementSyncSettingsView: View {
         return MistiaDateFormatting.dateTimeString(for: lastSyncAt)
     }
 
+    private var syncExplanatoryText: String {
+        mistiaLocalized(
+            vi: "Mistia đang thực hiện đồng bộ dữ liệu của bạn với hệ thống đám mây để đảm bảo mọi thay đổi được lưu trữ an toàn. Quá trình này giúp bạn có thể truy cập dữ liệu mới nhất trên tất cả các thiết bị của mình.",
+            en: "Mistia is syncing your data with the cloud to ensure all changes are stored safely. This process allows you to access the latest data across all your devices.",
+            ja: "Mistia はデータをクラウドと同期して, すべての変更が安全に保存されるようにしています。このプロセスにより, すべてのデバイスで最新のデータにアクセスできるようになります。"
+        )
+    }
+
     private var dataManagementSummary: String {
         let issueCount = storedConflicts.count + sessionStore.possibleDuplicateCount
         if issueCount > 0 {
@@ -2766,38 +2783,63 @@ private struct ManagementSyncSettingsView: View {
             }
             .cardDescriptionStyle()
 
-            if let progress = sessionStore.syncProgress {
-                VStack(spacing: 12) {
-                    ProgressView(value: progress, total: 1.0)
-                        .tint(accent)
-                        .scaleEffect(x: 1, y: 1.5, anchor: .center)
-                        .clipShape(Capsule())
+            if !sessionStore.isCheckingData, let progress = sessionStore.syncProgress {
+                VStack(alignment: .leading, spacing: 14) {
+                    HStack(spacing: 16) {
+                        Image("AppIcon")
+                            .resizable()
+                            .frame(width: 38, height: 38)
+                            .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
 
-                    HStack {
-                        Text("\(Int(progress * 100))%")
-                            .font(.system(size: 13, weight: .bold, design: .rounded))
-                            .foregroundStyle(accent)
+                        VStack(spacing: 8) {
+                            ProgressView(value: progress, total: 1.0)
+                                .tint(accent)
+                                .scaleEffect(x: 1, y: 0.8)
+                                .clipShape(Capsule())
 
-                        Spacer()
+                            HStack {
+                                Text("\(Int(progress * 100))%")
+                                    .font(.system(size: 12, weight: .bold, design: .rounded))
+                                    .foregroundStyle(accent)
 
-                        if let remaining = sessionStore.syncTimeRemaining, remaining > 0 {
-                            Text(timeRemainingLabel(remaining))
-                                .font(.system(size: 13, weight: .medium, design: .rounded))
-                                .foregroundStyle(.secondary)
+                                Spacer()
+
+                                if let remaining = sessionStore.syncTimeRemaining, remaining > 0 {
+                                    Text(timeRemainingLabel(remaining))
+                                        .font(.system(size: 12, weight: .medium, design: .rounded))
+                                        .foregroundStyle(.secondary)
+                                }
+                            }
                         }
                     }
+
+                    Text(syncExplanatoryText)
+                        .font(.system(size: 13, weight: .medium, design: .rounded))
+                        .foregroundStyle(.secondary)
+                        .lineSpacing(3)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
                 .padding(.horizontal, 4)
                 .padding(.vertical, 8)
             } else {
-                ManagementProfilePrimaryActionButton(
-                    title: mistiaLocalized(vi: "Đồng bộ ngay", en: "Sync now", ja: "今すぐ同期"),
-                    accent: accent,
-                    isDisabled: !sessionStore.canManageSync || sessionStore.isWorking,
-                    showsProgress: sessionStore.isWorking && sessionStore.canManageSync
-                ) {
-                    Task {
-                        await sessionStore.syncNow()
+                VStack(spacing: 12) {
+                    ManagementProfilePrimaryActionButton(
+                        title: mistiaLocalized(vi: "Đồng bộ ngay", en: "Sync now", ja: "今すぐ同期"),
+                        accent: accent,
+                        isDisabled: !sessionStore.canManageSync || sessionStore.isWorking,
+                        showsProgress: sessionStore.isWorking && sessionStore.canManageSync
+                    ) {
+                        Task {
+                            await sessionStore.syncNow()
+                        }
+                    }
+
+                    if let lastStatus = sessionStore.lastSyncStatus, !sessionStore.isWorking {
+                        Text(lastStatus)
+                            .font(.system(size: 13, weight: .medium, design: .rounded))
+                            .foregroundStyle(.secondary)
+                            .multilineTextAlignment(.center)
+                            .padding(.horizontal, 8)
                     }
                 }
             }

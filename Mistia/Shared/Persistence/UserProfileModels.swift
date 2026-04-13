@@ -8,6 +8,8 @@ final class UserAccountProfile {
     var displayName: String
     var avatarFileName: String?
     var birthday: Date?
+    var lastSyncAt: Date?
+    var lastSyncStatus: String?
     var createdAt: Date
     var updatedAt: Date
 
@@ -17,6 +19,8 @@ final class UserAccountProfile {
         displayName: String,
         avatarFileName: String? = nil,
         birthday: Date? = nil,
+        lastSyncAt: Date? = nil,
+        lastSyncStatus: String? = nil,
         createdAt: Date = .now,
         updatedAt: Date = .now
     ) {
@@ -25,6 +29,8 @@ final class UserAccountProfile {
         self.displayName = displayName
         self.avatarFileName = avatarFileName
         self.birthday = birthday
+        self.lastSyncAt = lastSyncAt
+        self.lastSyncStatus = lastSyncStatus
         self.createdAt = createdAt
         self.updatedAt = updatedAt
     }
