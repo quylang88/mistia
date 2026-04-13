@@ -2864,15 +2864,15 @@ private struct ManagementSyncSettingsView: View {
                     ManagementProfilePrimaryActionButton(
                         title: mistiaLocalized(vi: "Đồng bộ ngay", en: "Sync now", ja: "今すぐ同期"),
                         accent: accent,
-                        isDisabled: !sessionStore.canManageSync || sessionStore.isWorking,
-                        showsProgress: sessionStore.isWorking && sessionStore.canManageSync
+                        isDisabled: !sessionStore.canManageSync || sessionStore.isManualSyncInProgress,
+                        showsProgress: sessionStore.isManualSyncInProgress && sessionStore.canManageSync
                     ) {
                         Task {
-                            await sessionStore.syncNow()
+                            await sessionStore.syncNow(isManual: true)
                         }
                     }
 
-                    if !lastSyncValue.isEmpty, !sessionStore.isWorking {
+                    if !lastSyncValue.isEmpty, !sessionStore.isManualSyncInProgress {
                         Text(lastSyncValue)
                             .descriptionTextStyle()
                             .multilineTextAlignment(.center)

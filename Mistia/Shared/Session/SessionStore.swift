@@ -58,8 +58,12 @@ struct SessionAuthBanner: Equatable {
 @MainActor
 @Observable
 final class SessionStore {
+    // MARK: - Auto-sync Configuration
+    private static let AUTOMATIC_SYNC_INTERVAL: TimeInterval = 1800 // 30 minutes in seconds
+
     var summary: SessionSummary?
     var isWorking = false
+    var isManualSyncInProgress = false
     var syncProgress: Double?
     var syncTimeRemaining: TimeInterval?
     var isCheckingData = false
@@ -86,6 +90,8 @@ final class SessionStore {
     @ObservationIgnored private var didBootstrap = false
     @ObservationIgnored private var liveSyncTask: Task<Void, Never>?
     @ObservationIgnored private var isSyncInFlight = false
+    @ObservationIgnored private var autoSyncPaused = false
+    @ObservationIgnored private var shouldShowSyncProgress = false
     @ObservationIgnored private var syncStartTime: Date?
     @ObservationIgnored private var requiresInitialSync = false
     @ObservationIgnored private var pendingInitialSyncChoice: MistiaInitialSyncChoice?
@@ -130,7 +136,7 @@ final class SessionStore {
 
         syncCoordinator.onProgressUpdate = { [weak self] progress in
             Task { @MainActor in
-                guard let self else { return }
+                guard let self, self.shouldShowSyncProgress else { return }
                 self.syncProgress = progress
                 
                 if let startTime = self.syncStartTime, progress > 0.05 {
@@ -490,11 +496,22 @@ final class SessionStore {
         isWorking = false
     }
 
-    func syncNow() async {
+    func syncNow(isManual: Bool = false) async {
         guard currentSession != nil, !isSyncInFlight else { return }
-        isWorking = true
-        await drainSyncQueue()
-        isWorking = false
+        
+        // For manual sync, pause auto-sync loop and show progress
+        if isManual {
+            pauseAutoSyncLoop()
+            isManualSyncInProgress = true
+        }
+        
+        await drainSyncQueue(showProgress: isManual)
+        
+        // For manual sync, resume auto-sync loop
+        if isManual {
+            isManualSyncInProgress = false
+            resumeAutoSyncLoop()
+        }
     }
 
     func startInitialSync(with choice: MistiaInitialSyncChoice) async {
@@ -1340,9 +1357,11 @@ final class SessionStore {
         stopLiveSyncLoop()
         liveSyncTask = Task { [weak self] in
             while let self, !Task.isCancelled {
-                try? await Task.sleep(for: .seconds(4))
+                try? await Task.sleep(for: .seconds(Self.AUTOMATIC_SYNC_INTERVAL))
                 guard !Task.isCancelled else { return }
-                await self.syncNow()
+                if !self.autoSyncPaused {
+                    await self.syncNow(isManual: false)
+                }
             }
         }
     }
@@ -1350,6 +1369,14 @@ final class SessionStore {
     private func stopLiveSyncLoop() {
         liveSyncTask?.cancel()
         liveSyncTask = nil
+    }
+
+    private func pauseAutoSyncLoop() {
+        autoSyncPaused = true
+    }
+
+    private func resumeAutoSyncLoop() {
+        autoSyncPaused = false
     }
 
     private func updateAutoSyncLoopState() {
@@ -1361,18 +1388,26 @@ final class SessionStore {
         startLiveSyncLoop()
     }
 
-    private func drainSyncQueue() async {
+    private func drainSyncQueue(showProgress: Bool = true) async {
         isSyncInFlight = true
-        isCheckingData = true
-        syncStartTime = Date()
-        syncProgress = 0.0
-        syncTimeRemaining = nil
-        defer { 
-            isSyncInFlight = false
-            isCheckingData = false
-            syncProgress = nil
+        
+        if showProgress {
+            shouldShowSyncProgress = true
+            isCheckingData = true
+            syncStartTime = Date()
+            syncProgress = 0.0
             syncTimeRemaining = nil
-            syncStartTime = nil
+        }
+        
+        defer {
+            isSyncInFlight = false
+            if showProgress {
+                shouldShowSyncProgress = false
+                isCheckingData = false
+                syncProgress = nil
+                syncTimeRemaining = nil
+                syncStartTime = nil
+            }
         }
 
         do {
@@ -1382,37 +1417,45 @@ final class SessionStore {
             let result: MistiaSyncResult
 
             if requiresInitialSync {
-                try await Task.sleep(for: .seconds(1.5))
+                if showProgress {
+                    try await Task.sleep(for: .seconds(1.5))
+                }
                 let preview = try await syncCoordinator.previewInitialSync(session: validSession)
-                isCheckingData = false
+                if showProgress {
+                    isCheckingData = false
+                }
 
                 if preview.requiresChoice, pendingInitialSyncChoice == nil {
                     initialSyncPreview = preview
-                    syncStatusTitle = mistiaLocalized(
-                        vi: "Cần chọn cách đồng bộ lần đầu",
-                        en: "Choose how to run the first sync",
-                        ja: "初回同期の方法を選んでください"
-                    )
-                    syncStatusDetail = mistiaLocalized(
-                        vi: "Cloud và máy này đều đã có dữ liệu. Chọn cách hợp nhất an toàn trước khi tiếp tục.",
-                        en: "Both this device and the cloud already have data. Choose the safest way to continue.",
-                        ja: "この端末とクラウドの両方にデータがあります。続行方法を選択してください。"
-                    )
-                    syncStatusSystemImage = "arrow.triangle.branch"
+                    if showProgress {
+                        syncStatusTitle = mistiaLocalized(
+                            vi: "Cần chọn cách đồng bộ lần đầu",
+                            en: "Choose how to run the first sync",
+                            ja: "初回同期の方法を選んでください"
+                        )
+                        syncStatusDetail = mistiaLocalized(
+                            vi: "Cloud và máy này đều đã có dữ liệu. Chọn cách hợp nhất an toàn trước khi tiếp tục.",
+                            en: "Both this device and the cloud already have data. Choose the safest way to continue.",
+                            ja: "この端末とクラウドの両方にデータがあります。続行方法を選択してください。"
+                        )
+                        syncStatusSystemImage = "arrow.triangle.branch"
+                    }
                     return
                 }
 
-                syncStatusTitle = mistiaLocalized(
-                    vi: "Đang đồng bộ lần đầu",
-                    en: "Running initial sync",
-                    ja: "初回同期を実行中"
-                )
-                syncStatusDetail = mistiaLocalized(
-                    vi: "Mistia đang kiểm tra local và cloud rồi áp dụng chiến lược đồng bộ an toàn.",
-                    en: "Mistia is comparing local and cloud data, then applying the safest sync strategy.",
-                    ja: "ローカルとクラウドを比較して、安全な同期方法を適用しています。"
-                )
-                syncStatusSystemImage = "arrow.triangle.2.circlepath"
+                if showProgress {
+                    syncStatusTitle = mistiaLocalized(
+                        vi: "Đang đồng bộ lần đầu",
+                        en: "Running initial sync",
+                        ja: "初回同期を実行中"
+                    )
+                    syncStatusDetail = mistiaLocalized(
+                        vi: "Mistia đang kiểm tra local và cloud rồi áp dụng chiến lược đồng bộ an toàn.",
+                        en: "Mistia is comparing local and cloud data, then applying the safest sync strategy.",
+                        ja: "ローカルとクラウドを比較して、安全な同期方法を適用しています。"
+                    )
+                    syncStatusSystemImage = "arrow.triangle.2.circlepath"
+                }
 
                 let initialChoice: MistiaInitialSyncChoice
                 switch preview.mode {
@@ -1435,8 +1478,10 @@ final class SessionStore {
                 pendingInitialSyncChoice = nil
                 updateAutoSyncLoopState()
             } else {
-                applySyncingState()
-                isCheckingData = false
+                if showProgress {
+                    applySyncingState()
+                    isCheckingData = false
+                }
                 result = try await syncCoordinator.sync(session: validSession)
             }
 
@@ -1446,32 +1491,41 @@ final class SessionStore {
             possibleDuplicateCount = ((try? MistiaSyncLocalStore.possibleDuplicateTransactions(
                 in: MistiaDataStack.sharedModelContainer
             ).count) ?? 0)
-            syncStatusTitle = mistiaLocalized(
-                vi: "Đồng bộ đã hoàn tất",
-                en: "Sync completed",
-                ja: "同期が完了しました"
-            )
-            if possibleDuplicateCount > 0 {
-                syncStatusDetail = result.statusMessage + " " + mistiaLocalized(
-                    vi: "Mistia thấy \(possibleDuplicateCount) giao dịch có thể bị trùng và đang giữ an toàn cả hai bản ghi.",
-                    en: "Mistia found \(possibleDuplicateCount) possible duplicate transactions and kept both records safely.",
-                    ja: "重複の可能性がある取引を \(possibleDuplicateCount) 件検出したため, 両方のレコードを安全に保持しています。"
+            
+            if showProgress {
+                syncStatusTitle = mistiaLocalized(
+                    vi: "Đồng bộ đã hoàn tất",
+                    en: "Sync completed",
+                    ja: "同期が完了しました"
                 )
-            } else {
-                syncStatusDetail = result.statusMessage
+                if possibleDuplicateCount > 0 {
+                    syncStatusDetail = result.statusMessage + " " + mistiaLocalized(
+                        vi: "Mistia thấy \(possibleDuplicateCount) giao dịch có thể bị trùng và đang giữ an toàn cả hai bản ghi.",
+                        en: "Mistia found \(possibleDuplicateCount) possible duplicate transactions and kept both records safely.",
+                        ja: "重複の可能性がある取引を \(possibleDuplicateCount) 件検出したため, 両方のレコードを安全に保持しています。"
+                    )
+                } else {
+                    syncStatusDetail = result.statusMessage
+                }
+                syncStatusSystemImage = "checkmark.icloud"
             }
-            syncStatusSystemImage = "checkmark.icloud"
 
             if let userID = summary?.userID, let profile = storedProfile(for: userID) {
                 profile.lastSyncAt = .now
                 try? modelContainer.mainContext.save()
             }
 
-            try? await Task.sleep(for: .seconds(0.5))
+            if showProgress {
+                try? await Task.sleep(for: .seconds(0.5))
+            }
             updateAutoSyncLoopState()
         } catch {
-            applySyncErrorState(error)
-            try? await Task.sleep(for: .seconds(0.5))
+            if showProgress {
+                applySyncErrorState(error)
+            }
+            if showProgress {
+                try? await Task.sleep(for: .seconds(0.5))
+            }
             updateAutoSyncLoopState()
         }
     }
