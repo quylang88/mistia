@@ -2872,14 +2872,6 @@ private struct ManagementSyncSettingsView: View {
                         }
                     }
 
-                    if let lastStatus = sessionStore.lastSyncStatus, !sessionStore.isWorking {
-                        Text(lastStatus)
-                            .font(.system(size: 13, weight: .medium, design: .rounded))
-                            .foregroundStyle(.secondary)
-                            .multilineTextAlignment(.center)
-                            .padding(.horizontal, 8)
-                    }
-
                     if !lastSyncValue.isEmpty, !sessionStore.isWorking {
                         Text(lastSyncValue)
                             .descriptionTextStyle()
