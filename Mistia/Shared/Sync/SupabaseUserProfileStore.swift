@@ -5,6 +5,8 @@ struct RemoteUserProfile: Decodable {
     let displayName: String
     let avatarURL: URL?
     let birthday: Date?
+    let lastSyncAt: Date?
+    let lastSyncStatus: String?
     let createdAt: Date
     let updatedAt: Date
 
@@ -13,6 +15,8 @@ struct RemoteUserProfile: Decodable {
         case displayName = "display_name"
         case avatarURL = "avatar_url"
         case birthday
+        case lastSyncAt = "last_sync_at"
+        case lastSyncStatus = "last_sync_status"
         case createdAt = "created_at"
         case updatedAt = "updated_at"
     }
@@ -36,6 +40,8 @@ struct RemoteUserProfile: Decodable {
             birthday = nil
         }
 
+        lastSyncAt = try container.decodeIfPresent(Date.self, forKey: .lastSyncAt)
+        lastSyncStatus = try container.decodeIfPresent(String.self, forKey: .lastSyncStatus)
         createdAt = try container.decode(Date.self, forKey: .createdAt)
         updatedAt = try container.decode(Date.self, forKey: .updatedAt)
     }
@@ -88,6 +94,8 @@ struct SupabaseUserProfileStore {
         displayName: String,
         avatarURL: URL?,
         birthday: Date?,
+        lastSyncAt: Date? = nil,
+        lastSyncStatus: String? = nil,
         session: SupabaseAuthSession
     ) async throws -> RemoteUserProfile {
         let configuration = try configuration()
@@ -110,7 +118,9 @@ struct SupabaseUserProfileStore {
             userID: session.user.id,
             displayName: normalizeDisplayName(displayName, fallbackEmail: session.user.email),
             avatarURL: avatarURL,
-            birthday: birthday
+            birthday: birthday,
+            lastSyncAt: lastSyncAt,
+            lastSyncStatus: lastSyncStatus
         )
 
         var request = authorizedJSONRequest(url: url, session: session)
@@ -261,24 +271,32 @@ private struct UserProfileUpsertPayload: Encodable {
     let displayName: String
     let avatarURL: String?
     let birthday: String?
+    let lastSyncAt: Date?
+    let lastSyncStatus: String?
 
     enum CodingKeys: String, CodingKey {
         case userID = "user_id"
         case displayName = "display_name"
         case avatarURL = "avatar_url"
         case birthday
+        case lastSyncAt = "last_sync_at"
+        case lastSyncStatus = "last_sync_status"
     }
 
     init(
         userID: UUID,
         displayName: String,
         avatarURL: URL?,
-        birthday: Date?
+        birthday: Date?,
+        lastSyncAt: Date? = nil,
+        lastSyncStatus: String? = nil
     ) {
         self.userID = userID
         self.displayName = displayName
         self.avatarURL = avatarURL?.absoluteString
         self.birthday = birthday.map(Self.birthdayFormatter.string(from:))
+        self.lastSyncAt = lastSyncAt
+        self.lastSyncStatus = lastSyncStatus
     }
 
     private static let birthdayFormatter: DateFormatter = {

@@ -197,6 +197,8 @@ final class SessionStore {
             displayName: resolvedDisplayName,
             avatarURL: remoteAvatarURL,
             birthday: birthday,
+            lastSyncAt: profile.lastSyncAt,
+            lastSyncStatus: profile.lastSyncStatus,
             session: validSession
         )
         syncStoredProfile(profile, with: remoteProfile, email: baseSummary.email)
@@ -1465,10 +1467,20 @@ final class SessionStore {
             }
             syncStatusSystemImage = "checkmark.icloud"
 
-            if let userID = summary?.userID, let profile = storedProfile(for: userID) {
+            if let userID = summary?.userID, let profile = storedProfile(for: userID), let session = currentSession {
                 profile.lastSyncAt = .now
                 profile.lastSyncStatus = syncStatusDetail
                 try? modelContainer.mainContext.save()
+
+                // Persist sync status to remote cloud profile as well
+                _ = try? await userProfileStore.upsertProfile(
+                    displayName: profile.displayName,
+                    avatarURL: summary?.avatarURL,
+                    birthday: profile.birthday,
+                    lastSyncAt: profile.lastSyncAt,
+                    lastSyncStatus: profile.lastSyncStatus,
+                    session: session
+                )
             }
 
             updateAutoSyncLoopState()
@@ -1661,6 +1673,20 @@ private extension SessionStore {
             fallback: email.components(separatedBy: "@").first ?? "Mistia"
         )
         storedProfile.birthday = remoteProfile.birthday
+
+        // Only override local sync history if remote has a newer one
+        if let remoteSyncAt = remoteProfile.lastSyncAt {
+            if let localSyncAt = storedProfile.lastSyncAt {
+                if remoteSyncAt > localSyncAt {
+                    storedProfile.lastSyncAt = remoteSyncAt
+                    storedProfile.lastSyncStatus = remoteProfile.lastSyncStatus
+                }
+            } else {
+                storedProfile.lastSyncAt = remoteSyncAt
+                storedProfile.lastSyncStatus = remoteProfile.lastSyncStatus
+            }
+        }
+
         storedProfile.createdAt = remoteProfile.createdAt
         storedProfile.updatedAt = remoteProfile.updatedAt
     }
