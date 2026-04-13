@@ -18,6 +18,76 @@ private enum ManagementAuthMode: String, CaseIterable, Identifiable {
     }
 }
 
+private struct ManagementAutoSyncDetailView: View {
+    @Environment(\.dismiss) private var dismiss
+    @Environment(\.colorScheme) private var colorScheme
+    @Environment(SessionStore.self) private var sessionStore
+
+    let accent: Color
+
+    private var cardTint: Color {
+        colorScheme == .dark ? Color(UIColor.secondarySystemGroupedBackground) : .white.opacity(0.22)
+    }
+
+    private var autoSyncDescription: String {
+        if sessionStore.isAutoSyncEnabled {
+            return mistiaLocalized(
+                vi: "Mistia đang tự động kiểm tra và đồng bộ dữ liệu. Để đạt hiệu quả tốt nhất, hãy đảm bảo iPhone của bạn được kết nối Wi-Fi và cắm sạc khi có thể. Hệ thống sẽ ưu tiên chạy ngầm khi bạn không sử dụng ứng dụng.",
+                en: "Mistia is automatically checking and syncing data. For best performance, ensure your iPhone is connected to Wi-Fi and charging when possible. The system prioritizes background sync when you're not using the app.",
+                ja: "Mistia はデータを自動的に確認して同期しています。最高のパフォーマンスを得るために、可能であれば iPhone を Wi-Fi に接続し、充電状態にしてください。アプリを使用していない間のバックグラウンド同期が優先されます。"
+            )
+        } else {
+            return mistiaLocalized(
+                vi: "Tự động đồng bộ đang tắt. Dữ liệu của bạn sẽ chỉ được cập nhật khi bạn nhấn nút 'Đồng bộ ngay' một cách thủ công. Bật tính năng này để đảm bảo dữ liệu luôn được cập nhật mới nhất trên mọi thiết bị.",
+                en: "Auto sync is off. Your data will only update when you manually tap the 'Sync now' button. Enable this feature to keep your data up to date across all your devices automatically.",
+                ja: "自動同期はオフです。データは「今すぐ同期」ボタンを手動で押したときにのみ更新されます。すべてのデバイスでデータを最新の状態に保つには、この機能を有効にしてください。"
+            )
+        }
+    }
+
+    var body: some View {
+        MistiaPinnedTopBarScaffold(
+            tone: .standard,
+            title: mistiaLocalized(vi: "Tự động đồng bộ", en: "Auto sync", ja: "自動同期"),
+            embedsInNavigationStack: false,
+            showsLeadingAvatar: false,
+            leadingSystemImage: "chevron.left",
+            trailingSystemImage: nil,
+            hidesSystemBackButton: true,
+            onLeadingTap: { dismiss() },
+            contentSpacing: 18
+        ) {
+            ManagementProfileListCard(tint: cardTint) {
+                HStack(spacing: 12) {
+                    Text(mistiaLocalized(vi: "Tự động đồng bộ", en: "Auto sync", ja: "自動同期"))
+                        .font(.system(size: 16.5, weight: .semibold, design: .rounded))
+                        .foregroundStyle(.primary)
+
+                    Spacer()
+
+                    Toggle("", isOn: Binding(
+                        get: { sessionStore.isAutoSyncEnabled },
+                        set: { sessionStore.setAutoSyncEnabled($0) }
+                    ))
+                    .labelsHidden()
+                    .tint(accent)
+                    .disabled(!sessionStore.canManageSync)
+                }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 15)
+            }
+
+            VStack(alignment: .leading, spacing: 4) {
+                Text(autoSyncDescription)
+                    .descriptionTextStyle()
+                    .lineSpacing(3)
+                    .padding(.horizontal, 2)
+            }
+            .cardDescriptionStyle()
+        }
+    }
+}
+
 private enum ManagementAuthInput: Hashable {
     case displayName
     case email
@@ -46,6 +116,7 @@ private enum ManagementProfileDestructiveAction: String, Identifiable {
 
 private enum ManagementSyncSettingsDestination: String, Identifiable {
     case dataManagement
+    case autoSync
 
     var id: String { rawValue }
 }
@@ -2651,6 +2722,7 @@ private struct ManagementSyncSettingsView: View {
     @Query private var storedConflicts: [SyncConflict]
 
     @State private var destination: ManagementSyncSettingsDestination?
+    @State private var showsNoConflictsAlert = false
 
     let accent: Color
 
@@ -2660,10 +2732,14 @@ private struct ManagementSyncSettingsView: View {
 
     private var lastSyncValue: String {
         guard let lastSyncAt = sessionStore.lastSyncAt else {
-            return mistiaLocalized(vi: "Chưa có", en: "None yet", ja: "まだありません")
+            return ""
         }
 
-        return MistiaDateFormatting.dateTimeString(for: lastSyncAt)
+        return mistiaLocalized(
+            vi: "Đã đồng bộ lúc \(MistiaDateFormatting.dateTimeString(for: lastSyncAt))",
+            en: "Synced at \(MistiaDateFormatting.dateTimeString(for: lastSyncAt, language: .english))",
+            ja: "\(MistiaDateFormatting.dateTimeString(for: lastSyncAt, language: .japanese)) に同期済み"
+        )
     }
 
     private var syncExplanatoryText: String {
@@ -2674,29 +2750,12 @@ private struct ManagementSyncSettingsView: View {
         )
     }
 
-    private var dataManagementSummary: String {
-        let issueCount = storedConflicts.count + sessionStore.possibleDuplicateCount
-        if issueCount > 0 {
-            return mistiaLocalized(
-                vi: "Hiện có \(issueCount) mục cần bạn rà lại sau đồng bộ, bao gồm conflict và dữ liệu nghi trùng.",
-                en: "There are \(issueCount) items to review after syncing, including conflicts and possible duplicates.",
-                ja: "同期後に確認が必要な項目が \(issueCount) 件あり、競合や重複候補をここで確認できます。"
-            )
+    private var autoSyncValue: String {
+        if sessionStore.isAutoSyncEnabled {
+            return mistiaLocalized(vi: "Bật", en: "On", ja: "オン")
+        } else {
+            return mistiaLocalized(vi: "Tắt", en: "Off", ja: "オフ")
         }
-
-        return mistiaLocalized(
-            vi: "Xem conflict, dữ liệu cần rà lại và các quyết định đồng bộ đã phát sinh.",
-            en: "Review conflicts, records that need attention, and sync decisions that were raised.",
-            ja: "競合や確認が必要なデータ、同期時に発生した判断項目を確認します。"
-        )
-    }
-
-    private var autoSyncFootnote: String {
-        mistiaLocalized(
-            vi: "Khi bật, Mistia sẽ tự kiểm tra thay đổi và đồng bộ định kỳ trong lúc bạn đang đăng nhập.",
-            en: "When enabled, Mistia periodically checks for changes and syncs automatically while you're signed in.",
-            ja: "有効にすると、サインイン中に変更を定期確認し、自動で同期します。"
-        )
     }
 
     private func timeRemainingLabel(_ seconds: TimeInterval) -> String {
@@ -2730,16 +2789,6 @@ private struct ManagementSyncSettingsView: View {
         ) {
             ManagementProfileListCard(tint: cardTint) {
                 VStack(spacing: 0) {
-                    ManagementProfileInfoRow(
-                        title: mistiaLocalized(vi: "Lần đồng bộ gần nhất", en: "Last sync", ja: "前回の同期"),
-                        icon: "clock.arrow.trianglehead.counterclockwise.rotate.90",
-                        accent: .slate,
-                        value: lastSyncValue,
-                        subtitle: nil
-                    )
-
-                    ManagementProfileRowDivider()
-
                     ManagementProfileNavigationRow(
                         title: mistiaLocalized(vi: "Quản lý dữ liệu đồng bộ", en: "Manage synced data", ja: "同期データを管理"),
                         icon: "externaldrive.badge.person.crop",
@@ -2750,43 +2799,32 @@ private struct ManagementSyncSettingsView: View {
                             return issueCount > 0 ? "\(issueCount)" : nil
                         }()
                     ) {
-                        destination = .dataManagement
+                        let issueCount = storedConflicts.count + sessionStore.possibleDuplicateCount
+                        if issueCount > 0 {
+                            destination = .dataManagement
+                        } else {
+                            showsNoConflictsAlert = true
+                        }
+                    }
+
+                    ManagementProfileRowDivider()
+
+                    ManagementProfileNavigationRow(
+                        title: mistiaLocalized(vi: "Tự động đồng bộ", en: "Auto sync", ja: "自動同期"),
+                        icon: "arrow.triangle.2.circlepath.icloud",
+                        accent: .mint,
+                        subtitle: nil,
+                        value: autoSyncValue
+                    ) {
+                        destination = .autoSync
                     }
                 }
             }
 
-            VStack(alignment: .leading, spacing: 4) {
-                Text(dataManagementSummary)
-                    .descriptionTextStyle()
-                    .padding(.horizontal, 2)
-            }
-            .cardDescriptionStyle()
-
-            ManagementProfileListCard(tint: cardTint) {
-                ManagementProfileToggleRow(
-                    title: mistiaLocalized(vi: "Tự động đồng bộ", en: "Auto sync", ja: "自動同期"),
-                    icon: "arrow.triangle.2.circlepath.icloud",
-                    accent: .mint,
-                    subtitle: nil,
-                    isOn: Binding(
-                        get: { sessionStore.isAutoSyncEnabled },
-                        set: { sessionStore.setAutoSyncEnabled($0) }
-                    ),
-                    isDisabled: !sessionStore.canManageSync
-                )
-            }
-
-            VStack(alignment: .leading, spacing: 4) {
-                Text(autoSyncFootnote)
-                    .descriptionTextStyle()
-                    .padding(.horizontal, 2)
-            }
-            .cardDescriptionStyle()
-
             if !sessionStore.isCheckingData, let progress = sessionStore.syncProgress {
                 VStack(alignment: .leading, spacing: 14) {
                     HStack(spacing: 16) {
-                        Image("AppIcon")
+                        Image("AppIconAsset")
                             .resizable()
                             .frame(width: 38, height: 38)
                             .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
@@ -2841,6 +2879,14 @@ private struct ManagementSyncSettingsView: View {
                             .multilineTextAlignment(.center)
                             .padding(.horizontal, 8)
                     }
+
+                    if !lastSyncValue.isEmpty, !sessionStore.isWorking {
+                        Text(lastSyncValue)
+                            .descriptionTextStyle()
+                            .multilineTextAlignment(.center)
+                            .frame(maxWidth: .infinity)
+                            .padding(.top, 4)
+                    }
                 }
             }
         }
@@ -2848,7 +2894,27 @@ private struct ManagementSyncSettingsView: View {
             switch route {
             case .dataManagement:
                 ManagementDataConflictsView(accent: accent)
+            case .autoSync:
+                ManagementAutoSyncDetailView(accent: accent)
             }
+        }
+        .alert(
+            mistiaLocalized(
+                vi: "Dữ liệu đã tối ưu",
+                en: "Data is optimized",
+                ja: "データは最適化されています"
+            ),
+            isPresented: $showsNoConflictsAlert
+        ) {
+            Button("OK", role: .cancel) { }
+        } message: {
+            Text(
+                mistiaLocalized(
+                    vi: "Hiện tại dữ liệu của bạn đã được đồng bộ hoàn toàn, không có bất đồng bộ nào cần xử lý.",
+                    en: "Your data is currently fully synced, no conflicts need attention.",
+                    ja: "現在、データは完全に同期されており、解決が必要な競合はありません。"
+                )
+            )
         }
     }
 }

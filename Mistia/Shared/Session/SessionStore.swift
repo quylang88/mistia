@@ -932,7 +932,7 @@ final class SessionStore {
             authPendingEmail = nil
             authPhase = .signIn
             activeAuthAction = nil
-            requiresInitialSync = true
+            requiresInitialSync = storedProfile.lastSyncAt == nil
             initialSyncPreview = nil
             pendingInitialSyncChoice = nil
 
@@ -1471,9 +1471,11 @@ final class SessionStore {
                 try? modelContainer.mainContext.save()
             }
 
+            try? await Task.sleep(for: .seconds(0.5))
             updateAutoSyncLoopState()
         } catch {
             applySyncErrorState(error)
+            try? await Task.sleep(for: .seconds(0.5))
             updateAutoSyncLoopState()
         }
     }
