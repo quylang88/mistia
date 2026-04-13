@@ -2682,6 +2682,23 @@ private struct ManagementSyncSettingsView: View {
         )
     }
 
+    private func timeRemainingLabel(_ seconds: TimeInterval) -> String {
+        if seconds < 60 {
+            return mistiaLocalized(
+                vi: "Còn khoảng \(Int(seconds)) giây",
+                en: "About \(Int(seconds)) seconds left",
+                ja: "残り約 \(Int(seconds)) 秒"
+            )
+        } else {
+            let minutes = Int(seconds / 60)
+            return mistiaLocalized(
+                vi: "Còn khoảng \(minutes) phút",
+                en: "About \(minutes) minutes left",
+                ja: "残り約 \(minutes) 分"
+            )
+        }
+    }
+
     var body: some View {
         MistiaPinnedTopBarScaffold(
             tone: .standard,
@@ -2749,14 +2766,39 @@ private struct ManagementSyncSettingsView: View {
             }
             .cardDescriptionStyle()
 
-            ManagementProfilePrimaryActionButton(
-                title: mistiaLocalized(vi: "Đồng bộ ngay", en: "Sync now", ja: "今すぐ同期"),
-                accent: accent,
-                isDisabled: !sessionStore.canManageSync || sessionStore.isWorking,
-                showsProgress: sessionStore.isWorking && sessionStore.canManageSync
-            ) {
-                Task {
-                    await sessionStore.syncNow()
+            if let progress = sessionStore.syncProgress {
+                VStack(spacing: 12) {
+                    ProgressView(value: progress, total: 1.0)
+                        .tint(accent)
+                        .scaleEffect(x: 1, y: 1.5, anchor: .center)
+                        .clipShape(Capsule())
+
+                    HStack {
+                        Text("\(Int(progress * 100))%")
+                            .font(.system(size: 13, weight: .bold, design: .rounded))
+                            .foregroundStyle(accent)
+
+                        Spacer()
+
+                        if let remaining = sessionStore.syncTimeRemaining, remaining > 0 {
+                            Text(timeRemainingLabel(remaining))
+                                .font(.system(size: 13, weight: .medium, design: .rounded))
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                }
+                .padding(.horizontal, 4)
+                .padding(.vertical, 8)
+            } else {
+                ManagementProfilePrimaryActionButton(
+                    title: mistiaLocalized(vi: "Đồng bộ ngay", en: "Sync now", ja: "今すぐ同期"),
+                    accent: accent,
+                    isDisabled: !sessionStore.canManageSync || sessionStore.isWorking,
+                    showsProgress: sessionStore.isWorking && sessionStore.canManageSync
+                ) {
+                    Task {
+                        await sessionStore.syncNow()
+                    }
                 }
             }
         }
