@@ -62,11 +62,13 @@ final class SessionStore {
     var isWorking = false
     var syncProgress: Double?
     var syncTimeRemaining: TimeInterval?
+    var isCheckingData = false
     var syncStatusTitle: String
     var syncStatusDetail: String
     var syncStatusSystemImage: String
     var lastErrorMessage: String?
     var lastSyncAt: Date?
+    var lastSyncStatus: String?
     var initialSyncPreview: MistiaInitialSyncPreview?
     var possibleDuplicateCount = 0
     var isAutoSyncEnabled: Bool
@@ -922,6 +924,8 @@ final class SessionStore {
                 to: baseSummary,
                 remoteAvatarURL: remoteProfile.avatarURL
             )
+            lastSyncAt = storedProfile.lastSyncAt
+            lastSyncStatus = storedProfile.lastSyncStatus
             lastErrorMessage = nil
             authBanner = nil
             authFieldErrors = [:]
@@ -1361,11 +1365,13 @@ final class SessionStore {
 
     private func drainSyncQueue() async {
         isSyncInFlight = true
+        isCheckingData = true
         syncStartTime = Date()
         syncProgress = 0.0
         syncTimeRemaining = nil
         defer { 
             isSyncInFlight = false
+            isCheckingData = false
             syncProgress = nil
             syncTimeRemaining = nil
             syncStartTime = nil
@@ -1380,6 +1386,7 @@ final class SessionStore {
             if requiresInitialSync {
                 try await Task.sleep(for: .seconds(1.5))
                 let preview = try await syncCoordinator.previewInitialSync(session: validSession)
+                isCheckingData = false
 
                 if preview.requiresChoice, pendingInitialSyncChoice == nil {
                     initialSyncPreview = preview
@@ -1431,11 +1438,13 @@ final class SessionStore {
                 updateAutoSyncLoopState()
             } else {
                 applySyncingState()
+                isCheckingData = false
                 result = try await syncCoordinator.sync(session: validSession)
             }
 
             try normalizeCategoryHierarchyIfNeeded()
             lastSyncAt = .now
+            lastSyncStatus = syncStatusDetail
             lastErrorMessage = nil
             possibleDuplicateCount = ((try? MistiaSyncLocalStore.possibleDuplicateTransactions(
                 in: MistiaDataStack.sharedModelContainer
@@ -1449,12 +1458,19 @@ final class SessionStore {
                 syncStatusDetail = result.statusMessage + " " + mistiaLocalized(
                     vi: "Mistia thấy \(possibleDuplicateCount) giao dịch có thể bị trùng và đang giữ an toàn cả hai bản ghi.",
                     en: "Mistia found \(possibleDuplicateCount) possible duplicate transactions and kept both records safely.",
-                    ja: "重複の可能性がある取引を \(possibleDuplicateCount) 件検出したため、両方のレコードを安全に保持しています。"
+                    ja: "重複の可能性がある取引を \(possibleDuplicateCount) 件検出したため, 両方のレコードを安全に保持しています。"
                 )
             } else {
                 syncStatusDetail = result.statusMessage
             }
             syncStatusSystemImage = "checkmark.icloud"
+
+            if let userID = summary?.userID, let profile = storedProfile(for: userID) {
+                profile.lastSyncAt = .now
+                profile.lastSyncStatus = syncStatusDetail
+                try? modelContainer.mainContext.save()
+            }
+
             updateAutoSyncLoopState()
         } catch {
             applySyncErrorState(error)
