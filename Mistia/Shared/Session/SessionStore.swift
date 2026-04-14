@@ -1496,8 +1496,8 @@ final class SessionStore {
             let validSession = try await authService.refreshSessionIfNeeded(activeSession)
             currentSession = validSession
 
-            let result = try await syncCoordinator.sync(session: validSession)
             try normalizeCategoryHierarchyIfNeeded()
+            let result = try await syncCoordinator.sync(session: validSession)
             lastSyncAt = .now
             lastErrorMessage = nil
             possibleDuplicateCount = ((try? MistiaSyncLocalStore.possibleDuplicateTransactions(
@@ -1573,6 +1573,8 @@ final class SessionStore {
             guard let activeSession = currentSession else { return }
             let validSession = try await authService.refreshSessionIfNeeded(activeSession)
             currentSession = validSession
+
+            try normalizeCategoryHierarchyIfNeeded()
             let result: MistiaSyncResult
 
             if requiresInitialSync {

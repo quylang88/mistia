@@ -107,6 +107,10 @@ final class MistiaSyncOutbox {
         save(load().filter { $0.id != mutation.id })
     }
 
+    func remove(entity: MistiaSyncEntity, recordID: UUID) {
+        save(load().filter { !($0.entity == entity && $0.recordID == recordID) })
+    }
+
     func clear() {
         defaults.removeObject(forKey: key)
     }

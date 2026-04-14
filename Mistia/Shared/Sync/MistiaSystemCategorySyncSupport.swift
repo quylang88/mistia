@@ -16,13 +16,13 @@ struct MistiaSystemCategoryRepairResult {
 }
 
 enum MistiaSystemCategorySyncSupport {
-    static func normalizeLocalCategories(
+    static func reconcileDuplicateSystemCategories(
         modelContext: ModelContext
     ) throws -> MistiaSystemCategoryRepairResult {
         var result = MistiaSystemCategoryRepairResult()
         let now = Date()
 
-        var categories = try modelContext.fetch(FetchDescriptor<TransactionCategory>())
+        let categories = try modelContext.fetch(FetchDescriptor<TransactionCategory>())
         let transactions = try modelContext.fetch(FetchDescriptor<LedgerTransaction>())
         let budgets = try modelContext.fetch(FetchDescriptor<BudgetPlan>())
         let recurringBills = try modelContext.fetch(FetchDescriptor<RecurringBillPlan>())
@@ -88,37 +88,59 @@ enum MistiaSystemCategorySyncSupport {
             }
         }
 
-        categories = try modelContext.fetch(FetchDescriptor<TransactionCategory>())
+        if didMutate {
+            try modelContext.save()
+        }
+
+        return result
+    }
+
+    static func refreshCategorySyncEligibility(
+        modelContext: ModelContext,
+        repairResult: inout MistiaSystemCategoryRepairResult
+    ) throws {
+        let categories = try modelContext.fetch(FetchDescriptor<TransactionCategory>())
+        let transactions = try modelContext.fetch(FetchDescriptor<LedgerTransaction>())
+        let budgets = try modelContext.fetch(FetchDescriptor<BudgetPlan>())
+        let recurringBills = try modelContext.fetch(FetchDescriptor<RecurringBillPlan>())
+        let conflicts = try modelContext.fetch(FetchDescriptor<SyncConflict>())
+        let outbox = MistiaSyncOutbox()
+        var didMutate = false
+
         let activeCategories = categories.filter { $0.deletedAt == nil }
-        let referencedCategoryIDs = collectReferencedCategoryIDs(
+        let categoriesByID = Dictionary(uniqueKeysWithValues: categories.map { ($0.id, $0) })
+        let baseReferencedCategoryIDs = collectReferencedCategoryIDs(
             transactions: transactions,
             budgets: budgets,
             recurringBills: recurringBills
         )
-        let queuedCategoryIDs = Set(
-            outbox.allMutations
-                .filter { $0.entity == .category }
-                .map(\.recordID)
+        let referencedCategoryIDs = expandedCategoryDependencyIDs(
+            baseCategoryIDs: baseReferencedCategoryIDs,
+            categoriesByID: categoriesByID
         )
         let conflictCategoryIDs = Set(
             conflicts
                 .filter { $0.entity == .category }
                 .map(\.recordID)
         )
+
         for category in activeCategories {
             let previousValue = category.cloudSyncEnabled
             let isReferenced = referencedCategoryIDs.contains(category.id)
-            let isQueued = queuedCategoryIDs.contains(category.id)
             let isConflicted = conflictCategoryIDs.contains(category.id)
             let isCustomized = isCustomizedSystemCategory(category)
 
-            let nextValue = isReferenced || isQueued || isConflicted || isCustomized
+            let nextValue = isReferenced || isConflicted || isCustomized
 
             if previousValue != nextValue {
                 category.cloudSyncEnabled = nextValue
                 didMutate = true
                 if nextValue {
-                    result.categoryIDsNeedingSync.insert(category.id)
+                    repairResult.categoryIDsNeedingSync.insert(category.id)
+                } else {
+                    // When disabling sync for a category, we must also remove any pending
+                    // mutations for it from the outbox to prevent it from being pushed.
+                    outbox.remove(entity: .category, recordID: category.id)
                 }
             }
         }
@@ -126,8 +148,6 @@ enum MistiaSystemCategorySyncSupport {
         if didMutate {
             try modelContext.save()
         }
-
-        return result
     }
 
     static func promoteCategoriesRequiredForSync(
@@ -540,22 +560,46 @@ enum MistiaSystemCategorySyncSupport {
             return false
         }
 
-        let normalizedName = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        let normalizedName = name.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
         let normalizedRole = hierarchyRoleRawValue.flatMap(TransactionCategoryHierarchyRole.init(rawValue:))
             ?? descriptor.hierarchyRole
 
-        guard descriptor.knownNames.contains(normalizedName) else { return false }
-        guard iconSymbolName == descriptor.iconSymbolName else { return false }
-        guard MistiaIconColorPalette.normalizedHex(iconColorHex) == descriptor.iconColorHex else { return false }
+        // We check against all known localized names and aliases to avoid marking default categories as customized
+        let knownNames = descriptor.knownNames.map { $0.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() }
+        guard knownNames.contains(normalizedName) else { return false }
+
+        if iconSymbolName != descriptor.iconSymbolName {
+            if let fallback = descriptor.fallbackIconSymbolName {
+                guard iconSymbolName == fallback else { return false }
+            } else {
+                return false
+            }
+        }
+
+        // We normalize the stored color to its nearest preset and compare with the default preset for this category
+        let normalizedStoredHex = MistiaIconColorPalette.normalizedHex(iconColorHex)
+        let presetStoredHex = MistiaIconColorPalette.presetHex(forDefault: normalizedStoredHex)
+        guard presetStoredHex == descriptor.iconColorHex else { return false }
+
         guard !isFavorite else { return false }
         guard normalizedRole == descriptor.hierarchyRole else { return false }
-        guard sortOrder == descriptor.sortOrder ?? sortOrder else { return false }
-        guard isArchived == descriptor.startsArchived else { return false }
+
+        // We no longer strictly check 'isArchived' because some categories start archived
+        // by default and users shouldn't be forced to sync them just because they stay archived.
+        // Also, archiving/unarchiving doesn't necessarily mean it's "customized" in a way that requires sync
+        // unless it's also used in transactions.
 
         switch descriptor.hierarchyRole {
         case .parent:
             return parentSystemKey == nil
         case .child:
+            // For children, we are lenient: if it has no parent but should have one, it might be a
+            // transient state during bootstrap, so we don't necessarily mark it customized
+            // if everything else is default. However, to be safe and avoid syncing 100+ categories,
+            // we should ensure parents are correctly linked before this check.
+            guard let parentSystemKey else {
+                return descriptor.defaultParentSystemKey == nil
+            }
             return parentSystemKey == descriptor.defaultParentSystemKey
         }
     }
