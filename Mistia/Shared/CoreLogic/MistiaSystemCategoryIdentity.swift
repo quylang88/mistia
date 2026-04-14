@@ -5,6 +5,7 @@ struct MistiaSystemCategoryDescriptor: Equatable {
     let rawSystemKey: String
     let kind: TransactionCategoryKind
     let iconSymbolName: String
+    let fallbackIconSymbolName: String?
     let iconColorHex: String
     let hierarchyRole: TransactionCategoryHierarchyRole
     let knownNames: [String]
@@ -36,6 +37,7 @@ nonisolated enum MistiaSystemCategoryIdentity {
                 rawSystemKey: rawSystemKey,
                 kind: parentKey.kind,
                 iconSymbolName: parentKey.iconSymbolName,
+                fallbackIconSymbolName: parentKey.fallbackSystemName,
                 iconColorHex: MistiaIconColorPalette.presetHex(forDefault: parentKey.iconColorHex),
                 hierarchyRole: .parent,
                 knownNames: parentKey.knownDefaultNames(),
@@ -53,6 +55,7 @@ nonisolated enum MistiaSystemCategoryIdentity {
             rawSystemKey: rawSystemKey,
             kind: systemKey.kind,
             iconSymbolName: systemKey.iconSymbolName,
+            fallbackIconSymbolName: systemKey.fallbackSystemName,
             iconColorHex: MistiaIconColorPalette.presetHex(forDefault: systemKey.iconColorHex),
             hierarchyRole: .child,
             knownNames: systemKey.knownDefaultNames(),

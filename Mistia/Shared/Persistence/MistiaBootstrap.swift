@@ -78,7 +78,7 @@ enum MistiaBootstrap {
         modelContext: ModelContext,
         sessionStore: SessionStore? = nil
     ) throws {
-        let repairResult = try MistiaSystemCategorySyncSupport.normalizeLocalSystemCategories(
+        var repairResult = try MistiaSystemCategorySyncSupport.reconcileDuplicateSystemCategories(
             modelContext: modelContext
         )
         var existingCategories = try modelContext.fetch(FetchDescriptor<TransactionCategory>())
@@ -137,13 +137,23 @@ enum MistiaBootstrap {
             categoriesNeedingSync.append(contentsOf: existingCategories.filter { normalizedCategoryIDs.contains($0.id) })
         }
 
+        try MistiaSystemCategorySyncSupport.refreshCategorySyncEligibility(
+            modelContext: modelContext,
+            repairResult: &repairResult
+        )
+
         if didMutate {
             try modelContext.save()
         }
 
         if let sessionStore {
-            let repairedCategories = existingCategories.filter { repairResult.categoryIDsNeedingSync.contains($0.id) }
-            queueCategoryUpserts(repairedCategories + categoriesNeedingSync, sessionStore: sessionStore)
+            let syncEligibleIDs = Set(existingCategories.filter { $0.cloudSyncEnabled }.map(\.id))
+            let repairedCategories = existingCategories.filter { 
+                repairResult.categoryIDsNeedingSync.contains($0.id) && $0.cloudSyncEnabled 
+            }
+            let validCategoriesNeedingSync = categoriesNeedingSync.filter { syncEligibleIDs.contains($0.id) }
+            
+            queueCategoryUpserts(repairedCategories + validCategoriesNeedingSync, sessionStore: sessionStore)
             queueRepairRecordUpserts(
                 recordIDs: repairResult.transactionIDsNeedingSync,
                 entity: .transaction,
