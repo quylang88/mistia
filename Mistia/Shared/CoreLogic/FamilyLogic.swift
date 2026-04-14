@@ -239,7 +239,6 @@ enum FamilyLogic {
             // For a simple trend based on current data without full history,
             // we'd need all transactions to roll back.
             // For now, let's calculate the "Net worth" at each day by rolling back from current.
-            let nextDay = calendar.date(byAdding: .day, value: 1, to: date) ?? date
             let transactionsAfterDate = transactions.filter {
                 (visibleMemberIDs?.contains($0.ownerUserID) ?? true) && $0.occurredAt >= date
             }
