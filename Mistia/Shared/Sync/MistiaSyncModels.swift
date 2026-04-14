@@ -883,6 +883,42 @@ enum MistiaSyncUploadRecord {
         preparedForMutation(nextVersion: 1, deviceID: deviceID)
     }
 
+    func remappingCategoryReferences(_ mappings: [UUID: UUID]) -> MistiaSyncUploadRecord {
+        guard !mappings.isEmpty else { return self }
+
+        switch self {
+        case .wallet, .creditCardProfile, .savingsGoal, .installmentPlan, .dueOccurrence:
+            return self
+        case .category(var row):
+            if let replacementID = mappings[row.id] {
+                row.id = replacementID
+            }
+            if let parentCategoryID = row.parentCategoryID,
+               let replacementParentID = mappings[parentCategoryID] {
+                row.parentCategoryID = replacementParentID
+            }
+            return .category(row)
+        case .transaction(var row):
+            if let categoryID = row.categoryID,
+               let replacementCategoryID = mappings[categoryID] {
+                row.categoryID = replacementCategoryID
+            }
+            return .transaction(row)
+        case .budgetPlan(var row):
+            if let categoryID = row.categoryID,
+               let replacementCategoryID = mappings[categoryID] {
+                row.categoryID = replacementCategoryID
+            }
+            return .budgetPlan(row)
+        case .recurringBillPlan(var row):
+            if let categoryID = row.categoryID,
+               let replacementCategoryID = mappings[categoryID] {
+                row.categoryID = replacementCategoryID
+            }
+            return .recurringBillPlan(row)
+        }
+    }
+
     func preparedForMutation(nextVersion: Int64, deviceID: UUID) -> MistiaSyncUploadRecord {
         switch self {
         case .wallet(var row):

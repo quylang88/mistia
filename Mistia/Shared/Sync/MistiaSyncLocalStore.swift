@@ -30,12 +30,13 @@ enum MistiaSyncLocalStore {
         let recurringOwnerMap = MistiaRecordOwnershipStore.ownerMap(from: ownershipScopes, entity: .recurringBillPlan)
         let installmentOwnerMap = MistiaRecordOwnershipStore.ownerMap(from: ownershipScopes, entity: .installmentPlan)
         let occurrenceOwnerMap = MistiaRecordOwnershipStore.ownerMap(from: ownershipScopes, entity: .dueOccurrenceRecord)
+        let allCategories = try fetchCategories(context)
+            .filter { categoryOwnerMap[$0.id] == nil || categoryOwnerMap[$0.id] == userID }
         let wallets = try fetchWallets(context)
             .filter { walletOwnerMap[$0.id] == nil || walletOwnerMap[$0.id] == userID }
         let creditCardProfiles = try fetchCreditCardProfiles(context)
             .filter { profileOwnerMap[$0.id] == nil || profileOwnerMap[$0.id] == userID }
-        let categories = try fetchCategories(context)
-            .filter { categoryOwnerMap[$0.id] == nil || categoryOwnerMap[$0.id] == userID }
+        let categories = allCategories.filter(MistiaSystemCategorySyncSupport.shouldExportCategory)
         let transactions = try fetchTransactions(context)
             .filter { transactionOwnerMap[$0.id] == nil || transactionOwnerMap[$0.id] == userID }
         let budgetPlans = try fetchBudgetPlans(context)
@@ -60,7 +61,7 @@ enum MistiaSyncLocalStore {
                 RemoteRecurringBillPlan(
                     local: $0,
                     userID: userID,
-                    categoryID: recurringBillCategoryID(for: $0, categories: categories)
+                    categoryID: recurringBillCategoryID(for: $0, categories: allCategories)
                 )
             },
             installmentPlans: installmentPlans.map { RemoteInstallmentPlan(local: $0, userID: userID) },
@@ -88,6 +89,9 @@ enum MistiaSyncLocalStore {
             return .creditCardProfile(RemoteCreditCardProfile(local: profile, userID: subjectUserID))
         case .category:
             guard let category = try fetchCategories(context).first(where: { $0.id == mutation.recordID }) else {
+                return nil
+            }
+            guard MistiaSystemCategorySyncSupport.shouldExportCategory(category) else {
                 return nil
             }
             return .category(RemoteTransactionCategory(local: category, userID: subjectUserID))
@@ -628,6 +632,7 @@ enum MistiaSyncLocalStore {
             hierarchyRole: row.hierarchyRoleRawValue.flatMap(TransactionCategoryHierarchyRole.init(rawValue:)),
             systemKey: row.systemKey,
             isSystem: row.isSystem,
+            cloudSyncEnabled: true,
             sortOrder: row.sortOrder,
             isArchived: row.isArchived,
             archivedAt: row.archivedAt,
@@ -650,6 +655,7 @@ enum MistiaSyncLocalStore {
         category.hierarchyRoleRawValue = row.hierarchyRoleRawValue
         category.systemKey = row.systemKey
         category.isSystem = row.isSystem
+        category.cloudSyncEnabled = true
         category.sortOrder = row.sortOrder
         category.isArchived = row.isArchived
         category.archivedAt = row.archivedAt

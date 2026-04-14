@@ -719,6 +719,7 @@ final class OverviewLogicTests: XCTestCase {
             destinationWalletKind: destinationWalletKind,
             categoryID: nil,
             categoryName: nil,
+            categoryIconSymbolName: nil,
             counterpartyName: nil,
             isArchived: isArchived
         )

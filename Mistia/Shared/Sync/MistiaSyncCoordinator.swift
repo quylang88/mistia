@@ -96,7 +96,7 @@ final class SyncCoordinator {
             for: session.user.id,
             from: modelContainer
         )
-        let remoteSnapshot = try await remoteStore.fetchSnapshot(session: session)
+        let remoteSnapshot = try await fetchReconciledSnapshot(session: session)
 
         let localCount = localSnapshot.activeRowCount
         let remoteCount = remoteSnapshot.activeRowCount
@@ -126,7 +126,7 @@ final class SyncCoordinator {
             from: modelContainer
         )
         onProgressUpdate?(0.1)
-        let remoteSnapshot = try await remoteStore.fetchSnapshot(session: session)
+        let remoteSnapshot = try await fetchReconciledSnapshot(session: session)
         onProgressUpdate?(0.2)
 
         let localCount = localSnapshot.activeRowCount
@@ -140,7 +140,7 @@ final class SyncCoordinator {
 
         if remoteCount == 0 {
             try await uploadLocalOnlyRows(localSnapshot: localSnapshot, remoteSnapshot: remoteSnapshot, session: session, progressStart: 0.2, progressEnd: 0.8)
-            let mergedSnapshot = try await remoteStore.fetchSnapshot(session: session)
+            let mergedSnapshot = try await fetchReconciledSnapshot(session: session)
             onProgressUpdate?(0.9)
             try applySnapshot(mergedSnapshot)
             onProgressUpdate?(1.0)
@@ -151,7 +151,7 @@ final class SyncCoordinator {
             outbox.clear()
             try clearLocalCache()
             onProgressUpdate?(0.3)
-            let freshSnapshot = try await remoteStore.fetchSnapshot(session: session)
+            let freshSnapshot = try await fetchReconciledSnapshot(session: session)
             onProgressUpdate?(0.6)
             try applySnapshot(freshSnapshot)
             onProgressUpdate?(1.0)
@@ -180,7 +180,7 @@ final class SyncCoordinator {
         }
 
         onProgressUpdate?(0.85)
-        let mergedSnapshot = try await remoteStore.fetchSnapshot(session: session)
+        let mergedSnapshot = try await fetchReconciledSnapshot(session: session)
         onProgressUpdate?(0.9)
         try applySnapshot(mergedSnapshot)
         onProgressUpdate?(1.0)
@@ -229,7 +229,7 @@ final class SyncCoordinator {
         }
 
         onProgressUpdate?(0.55)
-        let snapshot = try await remoteStore.fetchSnapshot(session: session)
+        let snapshot = try await fetchReconciledSnapshot(session: session)
         onProgressUpdate?(0.75)
         let previousFingerprint = lastSnapshotFingerprint
         try applySnapshot(snapshot)
@@ -611,6 +611,264 @@ final class SyncCoordinator {
                 session: session
             )
         }
+    }
+
+    private func fetchReconciledSnapshot(
+        session: SupabaseAuthSession
+    ) async throws -> MistiaRemoteSnapshot {
+        let snapshot = try await remoteStore.fetchSnapshot(session: session)
+        return try await reconcileLegacySystemCategoryRows(in: snapshot, session: session)
+    }
+
+    private func reconcileLegacySystemCategoryRows(
+        in snapshot: MistiaRemoteSnapshot,
+        session: SupabaseAuthSession
+    ) async throws -> MistiaRemoteSnapshot {
+        let activeSystemCategories = snapshot.categories.filter {
+            $0.deletedAt == nil && $0.isSystem && $0.systemKey != nil
+        }
+        guard !activeSystemCategories.isEmpty else { return snapshot }
+
+        let categoryByID = Dictionary(uniqueKeysWithValues: snapshot.categories.map { ($0.id, $0) })
+        let referencedCategoryIDs = referencedCategoryIDs(in: snapshot)
+        let groupedBySystemKey = Dictionary(grouping: activeSystemCategories) { $0.systemKey ?? "" }
+
+        var winnersBySystemKey: [String: RemoteTransactionCategory] = [:]
+        var parentSystemKeyBySystemKey: [String: String?] = [:]
+        var directlyKeptSystemKeys: Set<String> = []
+
+        for (systemKey, rows) in groupedBySystemKey where !systemKey.isEmpty {
+            let winner = preferredRemoteSystemCategory(
+                in: rows,
+                referencedCategoryIDs: referencedCategoryIDs,
+                categoryByID: categoryByID
+            )
+            winnersBySystemKey[systemKey] = winner
+
+            let parentSystemKey = winner.parentCategoryID.flatMap { categoryByID[$0]?.systemKey }
+            parentSystemKeyBySystemKey[systemKey] = parentSystemKey
+
+            let hasReferencedRow = rows.contains { referencedCategoryIDs.contains($0.id) }
+            let hasCustomizedRow = rows.contains {
+                MistiaSystemCategorySyncSupport.isCustomizedRemoteSystemCategory(
+                    $0,
+                    parentSystemKey: $0.parentCategoryID.flatMap { categoryByID[$0]?.systemKey }
+                )
+            }
+
+            if hasReferencedRow || hasCustomizedRow {
+                directlyKeptSystemKeys.insert(systemKey)
+            }
+        }
+
+        var keptSystemKeys = directlyKeptSystemKeys
+        var didExpand = true
+        while didExpand {
+            didExpand = false
+            for systemKey in Array(keptSystemKeys) {
+                if let parentSystemKey = parentSystemKeyBySystemKey[systemKey] ?? nil,
+                   !keptSystemKeys.contains(parentSystemKey) {
+                    keptSystemKeys.insert(parentSystemKey)
+                    didExpand = true
+                }
+            }
+        }
+
+        var categoryRemappings: [UUID: UUID] = [:]
+        var categoryDeletes: [RemoteTransactionCategory] = []
+        var categoryUpserts: [MistiaSyncUploadRecord] = []
+
+        for (systemKey, rows) in groupedBySystemKey where !systemKey.isEmpty {
+            if keptSystemKeys.contains(systemKey), let winner = winnersBySystemKey[systemKey] {
+                let parentSystemKey = parentSystemKeyBySystemKey[systemKey] ?? nil
+                let canonicalID = MistiaSystemCategoryIdentity.canonicalID(for: systemKey)
+                let nextVersion = max(rows.map(\.syncVersion).max() ?? 0, winner.syncVersion) + 1
+                let canonicalRow = MistiaSystemCategorySyncSupport
+                    .canonicalizedSystemCategoryRow(winner, parentSystemKey: parentSystemKey)
+
+                if winner.id != canonicalID
+                    || winner.parentCategoryID != canonicalRow.parentCategoryID
+                    || rows.count > 1 {
+                    categoryUpserts.append(
+                        .category(canonicalRow).preparedForMutation(
+                            nextVersion: max(nextVersion, 1),
+                            deviceID: deviceID
+                        )
+                    )
+                }
+
+                for row in rows where row.id != canonicalID {
+                    categoryRemappings[row.id] = canonicalID
+                    categoryDeletes.append(row)
+                }
+            } else {
+                categoryDeletes.append(contentsOf: rows)
+            }
+        }
+
+        let dependentUpserts = remoteCategoryDependencyUpserts(
+            from: snapshot,
+            categoryRemappings: categoryRemappings
+        )
+        let pendingUpserts = hierarchicalSorted(categoryUpserts + dependentUpserts)
+
+        let needsRemoteWrite = !pendingUpserts.isEmpty || !categoryDeletes.isEmpty
+        guard needsRemoteWrite else { return snapshot }
+
+        for record in pendingUpserts {
+            _ = try await remoteStore.forceUpsert(
+                record,
+                subjectUserID: record.userID,
+                session: session
+            )
+        }
+
+        for row in categoryDeletes {
+            _ = try await remoteStore.conditionalDelete(
+                entity: .category,
+                recordID: row.id,
+                subjectUserID: row.userID,
+                expectedVersion: row.syncVersion,
+                modifiedAt: max(Date(), row.updatedAt),
+                deviceID: deviceID,
+                session: session
+            )
+        }
+
+        return try await remoteStore.fetchSnapshot(session: session)
+    }
+
+    private func referencedCategoryIDs(
+        in snapshot: MistiaRemoteSnapshot
+    ) -> Set<UUID> {
+        var ids: Set<UUID> = []
+
+        for row in snapshot.transactions where row.deletedAt == nil {
+            if let categoryID = row.categoryID {
+                ids.insert(categoryID)
+            }
+        }
+
+        for row in snapshot.budgetPlans where row.deletedAt == nil {
+            if let categoryID = row.categoryID {
+                ids.insert(categoryID)
+            }
+        }
+
+        for row in snapshot.recurringBillPlans where row.deletedAt == nil {
+            if let categoryID = row.categoryID {
+                ids.insert(categoryID)
+            }
+        }
+
+        return ids
+    }
+
+    private func preferredRemoteSystemCategory(
+        in rows: [RemoteTransactionCategory],
+        referencedCategoryIDs: Set<UUID>,
+        categoryByID: [UUID: RemoteTransactionCategory]
+    ) -> RemoteTransactionCategory {
+        rows.max { lhs, rhs in
+            remoteSystemCategoryPriority(
+                lhs,
+                referencedCategoryIDs: referencedCategoryIDs,
+                categoryByID: categoryByID
+            ) < remoteSystemCategoryPriority(
+                rhs,
+                referencedCategoryIDs: referencedCategoryIDs,
+                categoryByID: categoryByID
+            )
+        } ?? rows[0]
+    }
+
+    private func remoteSystemCategoryPriority(
+        _ row: RemoteTransactionCategory,
+        referencedCategoryIDs: Set<UUID>,
+        categoryByID: [UUID: RemoteTransactionCategory]
+    ) -> Int {
+        var score = 0
+
+        if let systemKey = row.systemKey,
+           row.id == MistiaSystemCategoryIdentity.canonicalID(for: systemKey) {
+            score += 8
+        }
+        if referencedCategoryIDs.contains(row.id) {
+            score += 16
+        }
+        if MistiaSystemCategorySyncSupport.isCustomizedRemoteSystemCategory(
+            row,
+            parentSystemKey: row.parentCategoryID.flatMap { categoryByID[$0]?.systemKey }
+        ) {
+            score += 32
+        }
+        score += Int(min(row.syncVersion, 1_000))
+        score += Int(row.updatedAt.timeIntervalSince1970 / 1_000_000)
+
+        return score
+    }
+
+    private func remoteCategoryDependencyUpserts(
+        from snapshot: MistiaRemoteSnapshot,
+        categoryRemappings: [UUID: UUID]
+    ) -> [MistiaSyncUploadRecord] {
+        guard !categoryRemappings.isEmpty else { return [] }
+
+        var upserts: [MistiaSyncUploadRecord] = []
+
+        for row in snapshot.categories where row.deletedAt == nil && !row.isSystem {
+            let original = MistiaSyncUploadRecord.category(row)
+            let remapped = original.remappingCategoryReferences(categoryRemappings)
+            if remapped.payloadFingerprint != original.payloadFingerprint {
+                upserts.append(
+                    remapped.preparedForMutation(
+                        nextVersion: row.syncVersion + 1,
+                        deviceID: deviceID
+                    )
+                )
+            }
+        }
+
+        for row in snapshot.transactions where row.deletedAt == nil {
+            let original = MistiaSyncUploadRecord.transaction(row)
+            let remapped = original.remappingCategoryReferences(categoryRemappings)
+            if remapped.payloadFingerprint != original.payloadFingerprint {
+                upserts.append(
+                    remapped.preparedForMutation(
+                        nextVersion: row.syncVersion + 1,
+                        deviceID: deviceID
+                    )
+                )
+            }
+        }
+
+        for row in snapshot.budgetPlans where row.deletedAt == nil {
+            let original = MistiaSyncUploadRecord.budgetPlan(row)
+            let remapped = original.remappingCategoryReferences(categoryRemappings)
+            if remapped.payloadFingerprint != original.payloadFingerprint {
+                upserts.append(
+                    remapped.preparedForMutation(
+                        nextVersion: row.syncVersion + 1,
+                        deviceID: deviceID
+                    )
+                )
+            }
+        }
+
+        for row in snapshot.recurringBillPlans where row.deletedAt == nil {
+            let original = MistiaSyncUploadRecord.recurringBillPlan(row)
+            let remapped = original.remappingCategoryReferences(categoryRemappings)
+            if remapped.payloadFingerprint != original.payloadFingerprint {
+                upserts.append(
+                    remapped.preparedForMutation(
+                        nextVersion: row.syncVersion + 1,
+                        deviceID: deviceID
+                    )
+                )
+            }
+        }
+
+        return upserts
     }
 
     private func applySnapshot(_ snapshot: MistiaRemoteSnapshot) throws {

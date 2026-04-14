@@ -115,6 +115,36 @@ final class MistiaSyncOutbox {
         load().contains { $0.entity == entity && $0.recordID == recordID }
     }
 
+    func rewriteRecordIDs(entity: MistiaSyncEntity, mappings: [UUID: UUID]) {
+        guard !mappings.isEmpty else { return }
+
+        var rewrittenByID: [String: MistiaSyncMutation] = [:]
+        for mutation in load() {
+            guard mutation.entity == entity, let replacementID = mappings[mutation.recordID] else {
+                rewrittenByID[mutation.id] = mutation
+                continue
+            }
+
+            let rewritten = MistiaSyncMutation(
+                entity: mutation.entity,
+                recordID: replacementID,
+                subjectUserID: mutation.subjectUserID,
+                kind: mutation.kind,
+                modifiedAt: mutation.modifiedAt,
+                baseVersion: mutation.baseVersion,
+                deviceID: mutation.deviceID
+            )
+
+            if let existing = rewrittenByID[rewritten.id] {
+                rewrittenByID[rewritten.id] = preferredMutation(existing, rewritten)
+            } else {
+                rewrittenByID[rewritten.id] = rewritten
+            }
+        }
+
+        save(rewrittenByID.values.sorted { $0.modifiedAt < $1.modifiedAt })
+    }
+
     private func load() -> [MistiaSyncMutation] {
         guard let data = defaults.data(forKey: key) else {
             return []
@@ -132,5 +162,20 @@ final class MistiaSyncOutbox {
         if let data = try? encoder.encode(mutations) {
             defaults.set(data, forKey: key)
         }
+    }
+
+    private func preferredMutation(
+        _ lhs: MistiaSyncMutation,
+        _ rhs: MistiaSyncMutation
+    ) -> MistiaSyncMutation {
+        if lhs.modifiedAt != rhs.modifiedAt {
+            return lhs.modifiedAt > rhs.modifiedAt ? lhs : rhs
+        }
+
+        if lhs.kind != rhs.kind {
+            return rhs.kind == .delete ? rhs : lhs
+        }
+
+        return lhs.baseVersion >= rhs.baseVersion ? lhs : rhs
     }
 }

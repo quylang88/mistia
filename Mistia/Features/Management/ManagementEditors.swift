@@ -669,6 +669,7 @@ struct ManagementCategoryEditorSheet: View {
                 parentCategory: selectedParentCategory,
                 hierarchyRole: draft.hierarchyRole,
                 isSystem: false,
+                cloudSyncEnabled: true,
                 sortOrder: nextSortOrder(
                     for: draft.kind,
                     parentID: selectedParentCategory?.id,

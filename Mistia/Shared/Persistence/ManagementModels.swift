@@ -131,6 +131,7 @@ final class TransactionCategory {
     var hierarchyRoleRawValue: String?
     var systemKey: String?
     var isSystem: Bool
+    var cloudSyncEnabled: Bool
     var sortOrder: Int
     var isArchived: Bool
     var archivedAt: Date?
@@ -150,6 +151,7 @@ final class TransactionCategory {
         hierarchyRole: TransactionCategoryHierarchyRole? = nil,
         systemKey: String? = nil,
         isSystem: Bool = false,
+        cloudSyncEnabled: Bool = false,
         sortOrder: Int = 0,
         isArchived: Bool = false,
         archivedAt: Date? = nil,
@@ -168,6 +170,7 @@ final class TransactionCategory {
         self.hierarchyRoleRawValue = hierarchyRole?.rawValue
         self.systemKey = systemKey
         self.isSystem = isSystem
+        self.cloudSyncEnabled = cloudSyncEnabled
         self.sortOrder = sortOrder
         self.isArchived = isArchived
         self.archivedAt = archivedAt

@@ -55,6 +55,13 @@ struct SessionAuthBanner: Equatable {
     let style: SessionAuthBannerStyle
 }
 
+private enum SessionSyncTrigger {
+    case manual
+    case automaticLoop
+    case foregroundCatchUp
+    case backgroundRefresh
+}
+
 @MainActor
 @Observable
 final class SessionStore {
@@ -148,6 +155,8 @@ final class SessionStore {
                 }
             }
         }
+
+        MistiaSyncBackgroundScheduler.shared.registerIfNeeded(sessionStore: self)
     }
 
     var isConfigured: Bool {
@@ -164,6 +173,15 @@ final class SessionStore {
 
     var canManageSync: Bool {
         currentSession != nil && isConfigured
+    }
+
+    var isReadyForAutomaticSync: Bool {
+        isAutoSyncEnabled && canManageSync && !requiresInitialSync
+    }
+
+    var nextAutomaticSyncDate: Date? {
+        guard isReadyForAutomaticSync else { return nil }
+        return (lastSyncAt ?? .now).addingTimeInterval(Self.AUTOMATIC_SYNC_INTERVAL)
     }
 
     func storedBirthday(for userID: UUID) -> Date? {
@@ -222,6 +240,24 @@ final class SessionStore {
 
     func setSubjectUserIDProvider(_ provider: (() -> UUID?)?) {
         subjectUserIDProvider = provider
+    }
+
+    func handleSceneDidBecomeActive() {
+        updateAutoSyncLoopState()
+
+        guard shouldRunForegroundCatchUp() else { return }
+        Task {
+            _ = await runMergeSync(trigger: .foregroundCatchUp, showProgress: false)
+        }
+    }
+
+    func handleSceneDidEnterBackground() {
+        updateAutoSyncLoopState()
+    }
+
+    func handleBackgroundRefresh() async -> Bool {
+        guard isReadyForAutomaticSync, !isSyncInFlight else { return false }
+        return await runMergeSync(trigger: .backgroundRefresh, showProgress: false)
     }
 
     func showAuthPhase(_ phase: SessionAuthPhase) {
@@ -498,16 +534,21 @@ final class SessionStore {
 
     func syncNow(isManual: Bool = false) async {
         guard currentSession != nil, !isSyncInFlight else { return }
-        
-        // For manual sync, pause auto-sync loop and show progress
+
         if isManual {
             pauseAutoSyncLoop()
             isManualSyncInProgress = true
         }
-        
-        await drainSyncQueue(showProgress: isManual)
-        
-        // For manual sync, resume auto-sync loop
+
+        if requiresInitialSync {
+            await runInitialSyncFlow(showProgress: isManual)
+        } else {
+            _ = await runMergeSync(
+                trigger: isManual ? .manual : .automaticLoop,
+                showProgress: isManual
+            )
+        }
+
         if isManual {
             isManualSyncInProgress = false
             resumeAutoSyncLoop()
@@ -518,7 +559,7 @@ final class SessionStore {
         guard currentSession != nil, !isSyncInFlight else { return }
         pendingInitialSyncChoice = choice
         initialSyncPreview = nil
-        await drainSyncQueue()
+        await runInitialSyncFlow()
     }
 
     func cancelInitialSyncSelection() {
@@ -587,8 +628,10 @@ final class SessionStore {
                 ja: "選択した内容でレコードを更新しました。"
             )
             syncStatusSystemImage = "checkmark.icloud"
+            updateAutoSyncLoopState()
         } catch {
             applySyncErrorState(error)
+            updateAutoSyncLoopState()
         }
     }
 
@@ -614,31 +657,20 @@ final class SessionStore {
         guard let subjectUserID = resolvedSubjectUserID(entity: entity, recordID: recordID) else {
             return
         }
-        let baseVersion = (try? MistiaSyncLocalStore.currentRemoteVersion(
-            for: entity,
-            recordID: recordID,
-            from: MistiaDataStack.sharedModelContainer
-        )) ?? 0
-
-        try? MistiaRecordOwnershipStore.upsert(
-            entity: entity,
-            recordID: recordID,
-            ownerUserID: subjectUserID,
-            updatedAt: modifiedAt,
-            in: MistiaDataStack.sharedModelContainer
+        let queuedMutations = queueReadyMutations(
+            for: [
+                MistiaSyncMutation(
+                    entity: entity,
+                    recordID: recordID,
+                    subjectUserID: subjectUserID,
+                    kind: .upsert,
+                    modifiedAt: modifiedAt,
+                    baseVersion: 0,
+                    deviceID: MistiaSyncDeviceIdentity.current()
+                )
+            ]
         )
-
-        syncCoordinator.queue(
-            MistiaSyncMutation(
-                entity: entity,
-                recordID: recordID,
-                subjectUserID: subjectUserID,
-                kind: .upsert,
-                modifiedAt: modifiedAt,
-                baseVersion: baseVersion,
-                deviceID: MistiaSyncDeviceIdentity.current()
-            )
-        )
+        syncCoordinator.queue(queuedMutations)
     }
 
     func recordDelete(
@@ -650,59 +682,25 @@ final class SessionStore {
         guard let subjectUserID = resolvedSubjectUserID(entity: entity, recordID: recordID) else {
             return
         }
-        let baseVersion = (try? MistiaSyncLocalStore.currentRemoteVersion(
-            for: entity,
-            recordID: recordID,
-            from: MistiaDataStack.sharedModelContainer
-        )) ?? 0
-
-        syncCoordinator.queue(
-            MistiaSyncMutation(
-                entity: entity,
-                recordID: recordID,
-                subjectUserID: subjectUserID,
-                kind: .delete,
-                modifiedAt: modifiedAt,
-                baseVersion: baseVersion,
-                deviceID: MistiaSyncDeviceIdentity.current()
-            )
+        let queuedMutations = queueReadyMutations(
+            for: [
+                MistiaSyncMutation(
+                    entity: entity,
+                    recordID: recordID,
+                    subjectUserID: subjectUserID,
+                    kind: .delete,
+                    modifiedAt: modifiedAt,
+                    baseVersion: 0,
+                    deviceID: MistiaSyncDeviceIdentity.current()
+                )
+            ]
         )
+        syncCoordinator.queue(queuedMutations)
     }
 
     func recordMutations(_ mutations: [MistiaSyncMutation]) {
         guard currentSession != nil else { return }
-        let normalized: [MistiaSyncMutation] = mutations.compactMap { mutation in
-            guard let subjectUserID = resolvedSubjectUserID(
-                entity: mutation.entity,
-                recordID: mutation.recordID,
-                fallbackSubjectUserID: mutation.subjectUserID
-            ) else {
-                return nil
-            }
-            let baseVersion = (try? MistiaSyncLocalStore.currentRemoteVersion(
-                for: mutation.entity,
-                recordID: mutation.recordID,
-                from: MistiaDataStack.sharedModelContainer
-            )) ?? mutation.baseVersion
-            try? MistiaRecordOwnershipStore.upsert(
-                entity: mutation.entity,
-                recordID: mutation.recordID,
-                ownerUserID: subjectUserID,
-                updatedAt: mutation.modifiedAt,
-                in: MistiaDataStack.sharedModelContainer
-            )
-            return MistiaSyncMutation(
-                entity: mutation.entity,
-                recordID: mutation.recordID,
-                subjectUserID: subjectUserID,
-                kind: mutation.kind,
-                modifiedAt: mutation.modifiedAt,
-                baseVersion: baseVersion,
-                deviceID: MistiaSyncDeviceIdentity.current()
-            )
-        }
-
-        syncCoordinator.queue(normalized)
+        syncCoordinator.queue(queueReadyMutations(for: mutations))
     }
 
     private func handleSignInFailure(_ error: Error, email: String) {
@@ -940,6 +938,7 @@ final class SessionStore {
                 to: baseSummary,
                 remoteAvatarURL: remoteProfile.avatarURL
             )
+            try normalizeCategoryHierarchyIfNeeded()
             lastSyncAt = storedProfile.lastSyncAt
             lastErrorMessage = nil
             authBanner = nil
@@ -992,6 +991,7 @@ final class SessionStore {
 
     private func applyConfigurationMissingState() {
         stopLiveSyncLoop()
+        MistiaSyncBackgroundScheduler.shared.cancelPendingRefresh()
         summary = nil
         currentSession = nil
         requiresInitialSync = false
@@ -1017,6 +1017,7 @@ final class SessionStore {
 
     private func applySignedOutState(preservingBanner: Bool = false) {
         stopLiveSyncLoop()
+        MistiaSyncBackgroundScheduler.shared.cancelPendingRefresh()
         summary = nil
         currentSession = nil
         requiresInitialSync = false
@@ -1357,11 +1358,18 @@ final class SessionStore {
         stopLiveSyncLoop()
         liveSyncTask = Task { [weak self] in
             while let self, !Task.isCancelled {
-                try? await Task.sleep(for: .seconds(Self.AUTOMATIC_SYNC_INTERVAL))
+                let delay = max(5, self.nextAutomaticSyncDate?.timeIntervalSinceNow ?? Self.AUTOMATIC_SYNC_INTERVAL)
+                try? await Task.sleep(for: .seconds(delay))
                 guard !Task.isCancelled else { return }
-                if !self.autoSyncPaused {
-                    await self.syncNow(isManual: false)
+
+                guard !self.autoSyncPaused, self.isReadyForAutomaticSync else {
+                    continue
                 }
+                guard self.lastSyncAt.map({ Date().timeIntervalSince($0) >= Self.AUTOMATIC_SYNC_INTERVAL }) ?? true else {
+                    continue
+                }
+
+                _ = await self.runMergeSync(trigger: .automaticLoop, showProgress: false)
             }
         }
     }
@@ -1380,12 +1388,111 @@ final class SessionStore {
     }
 
     private func updateAutoSyncLoopState() {
-        guard isAutoSyncEnabled, canManageSync, !requiresInitialSync else {
+        guard isReadyForAutomaticSync else {
             stopLiveSyncLoop()
+            MistiaSyncBackgroundScheduler.shared.cancelPendingRefresh()
             return
         }
 
         startLiveSyncLoop()
+        MistiaSyncBackgroundScheduler.shared.scheduleNextRefresh(after: nextAutomaticSyncDate)
+    }
+
+    private func shouldRunForegroundCatchUp() -> Bool {
+        guard isReadyForAutomaticSync, !isSyncInFlight else { return false }
+        guard let lastSyncAt else { return true }
+        return Date().timeIntervalSince(lastSyncAt) >= Self.AUTOMATIC_SYNC_INTERVAL
+    }
+
+    private func runInitialSyncFlow(showProgress: Bool = true) async {
+        await drainSyncQueue(showProgress: showProgress)
+    }
+
+    private func runMergeSync(
+        trigger: SessionSyncTrigger,
+        showProgress: Bool = true
+    ) async -> Bool {
+        guard currentSession != nil, !isSyncInFlight else { return false }
+        if trigger != .manual {
+            guard isReadyForAutomaticSync else { return false }
+        }
+
+        isSyncInFlight = true
+
+        if showProgress {
+            shouldShowSyncProgress = true
+            isCheckingData = false
+            syncStartTime = Date()
+            syncProgress = 0.0
+            syncTimeRemaining = nil
+            applySyncingState()
+        }
+
+        defer {
+            isSyncInFlight = false
+            if showProgress {
+                shouldShowSyncProgress = false
+                isCheckingData = false
+                syncProgress = nil
+                syncTimeRemaining = nil
+                syncStartTime = nil
+            }
+        }
+
+        do {
+            guard let activeSession = currentSession else { return false }
+            let validSession = try await authService.refreshSessionIfNeeded(activeSession)
+            currentSession = validSession
+
+            let result = try await syncCoordinator.sync(session: validSession)
+            try normalizeCategoryHierarchyIfNeeded()
+            lastSyncAt = .now
+            lastErrorMessage = nil
+            possibleDuplicateCount = ((try? MistiaSyncLocalStore.possibleDuplicateTransactions(
+                in: MistiaDataStack.sharedModelContainer
+            ).count) ?? 0)
+
+            if let userID = summary?.userID, let profile = storedProfile(for: userID) {
+                profile.lastSyncAt = lastSyncAt
+                try? modelContainer.mainContext.save()
+            }
+
+            if showProgress || trigger == .foregroundCatchUp {
+                syncStatusTitle = mistiaLocalized(
+                    vi: "Đồng bộ đã hoàn tất",
+                    en: "Sync completed",
+                    ja: "同期が完了しました"
+                )
+                if possibleDuplicateCount > 0 {
+                    syncStatusDetail = result.statusMessage + " " + mistiaLocalized(
+                        vi: "Mistia thấy \(possibleDuplicateCount) giao dịch có thể bị trùng và đang giữ an toàn cả hai bản ghi.",
+                        en: "Mistia found \(possibleDuplicateCount) possible duplicate transactions and kept both records safely.",
+                        ja: "重複の可能性がある取引を \(possibleDuplicateCount) 件検出したため, 両方のレコードを安全に保持しています。"
+                    )
+                } else {
+                    syncStatusDetail = result.statusMessage
+                }
+                syncStatusSystemImage = "checkmark.icloud"
+            }
+
+            if showProgress {
+                try? await Task.sleep(for: .seconds(0.5))
+            }
+
+            updateAutoSyncLoopState()
+            return true
+        } catch {
+            if showProgress || trigger == .manual || trigger == .foregroundCatchUp {
+                applySyncErrorState(error)
+                if showProgress {
+                    try? await Task.sleep(for: .seconds(0.5))
+                }
+            } else {
+                lastErrorMessage = friendlyErrorMessage(for: error)
+            }
+            updateAutoSyncLoopState()
+            return false
+        }
     }
 
     private func drainSyncQueue(showProgress: Bool = true) async {
@@ -1537,6 +1644,158 @@ final class SessionStore {
         )
     }
 
+    private func queueReadyMutations(
+        for mutations: [MistiaSyncMutation]
+    ) -> [MistiaSyncMutation] {
+        let normalized = mutations.flatMap(normalizedQueuedMutations(for:))
+        guard !normalized.isEmpty else { return [] }
+
+        var byKey: [String: MistiaSyncMutation] = [:]
+        for mutation in normalized {
+            let key = "\(mutation.entity.rawValue):\(mutation.recordID.uuidString.lowercased()):\(mutation.kind.rawValue)"
+            if let existing = byKey[key] {
+                byKey[key] = preferredQueuedMutation(existing, mutation)
+            } else {
+                byKey[key] = mutation
+            }
+        }
+
+        return byKey.values.sorted { lhs, rhs in
+            if lhs.entity.pushPriority != rhs.entity.pushPriority {
+                return lhs.entity.pushPriority < rhs.entity.pushPriority
+            }
+
+            if lhs.entity == .category, rhs.entity == .category {
+                let lhsParentID = categoryParentID(for: lhs.recordID)
+                let rhsParentID = categoryParentID(for: rhs.recordID)
+
+                if lhsParentID == nil && rhsParentID != nil { return true }
+                if lhsParentID != nil && rhsParentID == nil { return false }
+            }
+
+            return lhs.modifiedAt < rhs.modifiedAt
+        }
+    }
+
+    private func normalizedQueuedMutations(
+        for mutation: MistiaSyncMutation
+    ) -> [MistiaSyncMutation] {
+        guard let subjectUserID = resolvedSubjectUserID(
+            entity: mutation.entity,
+            recordID: mutation.recordID,
+            fallbackSubjectUserID: mutation.subjectUserID
+        ) else {
+            return []
+        }
+
+        var normalized: [MistiaSyncMutation] = []
+        let baseDeviceID = mutation.deviceID
+
+        if mutation.kind == .upsert {
+            let promotedCategories = (try? MistiaSystemCategorySyncSupport.promoteCategoriesRequiredForSync(
+                entity: mutation.entity,
+                recordID: mutation.recordID,
+                modifiedAt: mutation.modifiedAt,
+                in: MistiaDataStack.sharedModelContainer
+            )) ?? []
+
+            for category in promotedCategories where MistiaSystemCategorySyncSupport.shouldQueueCategoryMutation(category) {
+                try? MistiaRecordOwnershipStore.upsert(
+                    entity: .category,
+                    recordID: category.id,
+                    ownerUserID: subjectUserID,
+                    updatedAt: max(category.updatedAt, mutation.modifiedAt),
+                    in: MistiaDataStack.sharedModelContainer
+                )
+
+                normalized.append(
+                    MistiaSyncMutation(
+                        entity: .category,
+                        recordID: category.id,
+                        subjectUserID: subjectUserID,
+                        kind: .upsert,
+                        modifiedAt: max(category.updatedAt, mutation.modifiedAt),
+                        baseVersion: currentRemoteVersion(for: .category, recordID: category.id, fallback: 0),
+                        deviceID: baseDeviceID
+                    )
+                )
+            }
+        }
+
+        guard shouldQueueMutation(entity: mutation.entity, recordID: mutation.recordID) else {
+            return normalized
+        }
+
+        try? MistiaRecordOwnershipStore.upsert(
+            entity: mutation.entity,
+            recordID: mutation.recordID,
+            ownerUserID: subjectUserID,
+            updatedAt: mutation.modifiedAt,
+            in: MistiaDataStack.sharedModelContainer
+        )
+
+        normalized.append(
+            MistiaSyncMutation(
+                entity: mutation.entity,
+                recordID: mutation.recordID,
+                subjectUserID: subjectUserID,
+                kind: mutation.kind,
+                modifiedAt: mutation.modifiedAt,
+                baseVersion: currentRemoteVersion(
+                    for: mutation.entity,
+                    recordID: mutation.recordID,
+                    fallback: mutation.baseVersion
+                ),
+                deviceID: baseDeviceID
+            )
+        )
+
+        return normalized
+    }
+
+    private func shouldQueueMutation(entity: MistiaSyncEntity, recordID: UUID) -> Bool {
+        guard entity == .category else { return true }
+        guard let category = categoryRecord(for: recordID) else {
+            return currentRemoteVersion(for: entity, recordID: recordID, fallback: 0) > 0
+        }
+        return MistiaSystemCategorySyncSupport.shouldQueueCategoryMutation(category)
+    }
+
+    private func categoryRecord(for recordID: UUID) -> TransactionCategory? {
+        let descriptor = FetchDescriptor<TransactionCategory>(
+            predicate: #Predicate<TransactionCategory> { category in
+                category.id == recordID
+            }
+        )
+        return try? modelContainer.mainContext.fetch(descriptor).first
+    }
+
+    private func categoryParentID(for recordID: UUID) -> UUID? {
+        categoryRecord(for: recordID)?.parentCategory?.id
+    }
+
+    private func currentRemoteVersion(
+        for entity: MistiaSyncEntity,
+        recordID: UUID,
+        fallback: Int64
+    ) -> Int64 {
+        (try? MistiaSyncLocalStore.currentRemoteVersion(
+            for: entity,
+            recordID: recordID,
+            from: MistiaDataStack.sharedModelContainer
+        )) ?? fallback
+    }
+
+    private func preferredQueuedMutation(
+        _ lhs: MistiaSyncMutation,
+        _ rhs: MistiaSyncMutation
+    ) -> MistiaSyncMutation {
+        if lhs.modifiedAt != rhs.modifiedAt {
+            return lhs.modifiedAt >= rhs.modifiedAt ? lhs : rhs
+        }
+        return lhs.baseVersion >= rhs.baseVersion ? lhs : rhs
+    }
+
     private func clearSessionRuntimeState() {
         currentSession = nil
         summary = nil
@@ -1546,6 +1805,7 @@ final class SessionStore {
         possibleDuplicateCount = 0
         pendingInitialSyncChoice = nil
         syncCoordinator.clearQueuedMutations()
+        MistiaSyncBackgroundScheduler.shared.cancelPendingRefresh()
     }
 }
 

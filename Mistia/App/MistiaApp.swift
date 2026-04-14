@@ -6,6 +6,7 @@ import GoogleSignIn
 struct MistiaApp: App {
     @AppStorage(MistiaAppStorageKey.appearanceMode) private var appearanceModeRawValue = MistiaAppearanceMode.automatic.rawValue
     @AppStorage(MistiaAppStorageKey.appLanguage) private var appLanguageRawValue = ""
+    @Environment(\.scenePhase) private var scenePhase
     private let modelContainer: ModelContainer
     private let launchIssue: MistiaDataStack.LaunchIssue?
     @State private var sessionStore: SessionStore
@@ -45,6 +46,16 @@ struct MistiaApp: App {
                         store?.selectedSubjectUserID
                     }
                     await familyContextStore.bootstrapIfNeeded(sessionStore: sessionStore)
+                }
+                .onChange(of: scenePhase) { _, newPhase in
+                    switch newPhase {
+                    case .active:
+                        sessionStore.handleSceneDidBecomeActive()
+                    case .background:
+                        sessionStore.handleSceneDidEnterBackground()
+                    default:
+                        break
+                    }
                 }
         }
     }

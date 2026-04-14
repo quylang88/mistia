@@ -152,6 +152,7 @@ enum MistiaLegacyStoreRecovery {
                 hierarchyRole: snapshot.hierarchyRoleRawValue.flatMap(TransactionCategoryHierarchyRole.init(rawValue:)),
                 systemKey: snapshot.systemKey,
                 isSystem: snapshot.isSystem,
+                cloudSyncEnabled: !snapshot.isSystem || snapshot.remoteVersion > 0,
                 sortOrder: snapshot.sortOrder,
                 isArchived: snapshot.isArchived,
                 archivedAt: snapshot.archivedAt,

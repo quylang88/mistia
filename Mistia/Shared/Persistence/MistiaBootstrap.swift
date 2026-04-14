@@ -78,6 +78,9 @@ enum MistiaBootstrap {
         modelContext: ModelContext,
         sessionStore: SessionStore? = nil
     ) throws {
+        let repairResult = try MistiaSystemCategorySyncSupport.normalizeLocalSystemCategories(
+            modelContext: modelContext
+        )
         var existingCategories = try modelContext.fetch(FetchDescriptor<TransactionCategory>())
             .filter { $0.deletedAt == nil }
         let existingWallets = try modelContext.fetch(FetchDescriptor<LedgerWallet>())
@@ -136,12 +139,32 @@ enum MistiaBootstrap {
 
         if didMutate {
             try modelContext.save()
-            if let sessionStore {
-                queueCategoryUpserts(categoriesNeedingSync, sessionStore: sessionStore)
-                queuePlanningUpserts(goalsNeedingSync, entity: .savingsGoal, sessionStore: sessionStore)
-                queuePlanningUpserts(recurringBillsNeedingSync, entity: .recurringBillPlan, sessionStore: sessionStore)
-                queuePlanningUpserts(installmentsNeedingSync, entity: .installmentPlan, sessionStore: sessionStore)
-            }
+        }
+
+        if let sessionStore {
+            let repairedCategories = existingCategories.filter { repairResult.categoryIDsNeedingSync.contains($0.id) }
+            queueCategoryUpserts(repairedCategories + categoriesNeedingSync, sessionStore: sessionStore)
+            queueRepairRecordUpserts(
+                recordIDs: repairResult.transactionIDsNeedingSync,
+                entity: .transaction,
+                modelContext: modelContext,
+                sessionStore: sessionStore
+            )
+            queueRepairRecordUpserts(
+                recordIDs: repairResult.budgetPlanIDsNeedingSync,
+                entity: .budgetPlan,
+                modelContext: modelContext,
+                sessionStore: sessionStore
+            )
+            queueRepairRecordUpserts(
+                recordIDs: repairResult.recurringBillPlanIDsNeedingSync,
+                entity: .recurringBillPlan,
+                modelContext: modelContext,
+                sessionStore: sessionStore
+            )
+            queuePlanningUpserts(goalsNeedingSync, entity: .savingsGoal, sessionStore: sessionStore)
+            queuePlanningUpserts(recurringBillsNeedingSync, entity: .recurringBillPlan, sessionStore: sessionStore)
+            queuePlanningUpserts(installmentsNeedingSync, entity: .installmentPlan, sessionStore: sessionStore)
         }
     }
 
@@ -161,6 +184,7 @@ enum MistiaBootstrap {
         let parentCategory = try parentCategory(for: systemKey, modelContext: modelContext)
 
         let category = TransactionCategory(
+            id: MistiaSystemCategoryIdentity.canonicalID(for: systemKey),
             name: seed?.name ?? systemKey.title,
             kind: seed?.kind ?? systemKey.kind,
             iconSymbolName: seed?.iconSymbolName ?? systemKey.iconSymbolName,
@@ -169,6 +193,7 @@ enum MistiaBootstrap {
             hierarchyRole: .child,
             systemKey: systemKey.rawValue,
             isSystem: true,
+            cloudSyncEnabled: false,
             sortOrder: nextChildSortOrder(
                 for: seed?.kind ?? systemKey.kind,
                 parentID: parentCategory?.id,
@@ -208,6 +233,7 @@ enum MistiaBootstrap {
             }
 
             let category = TransactionCategory(
+                id: MistiaSystemCategoryIdentity.canonicalID(for: seed.systemKey),
                 name: seed.name,
                 kind: seed.kind,
                 iconSymbolName: seed.iconSymbolName,
@@ -215,6 +241,7 @@ enum MistiaBootstrap {
                 hierarchyRole: .parent,
                 systemKey: seed.systemKey.rawValue,
                 isSystem: true,
+                cloudSyncEnabled: false,
                 sortOrder: index
             )
             modelContext.insert(category)
@@ -274,6 +301,7 @@ enum MistiaBootstrap {
             }
 
             let category = TransactionCategory(
+                id: MistiaSystemCategoryIdentity.canonicalID(for: systemKey),
                 name: seed.name,
                 kind: seed.kind,
                 iconSymbolName: seed.iconSymbolName,
@@ -282,6 +310,7 @@ enum MistiaBootstrap {
                 hierarchyRole: .child,
                 systemKey: systemKey.rawValue,
                 isSystem: true,
+                cloudSyncEnabled: false,
                 sortOrder: sortOrder,
                 isArchived: seed.startsArchived
             )
@@ -518,6 +547,35 @@ enum MistiaBootstrap {
                 recordID: category.id,
                 modifiedAt: category.updatedAt
             )
+        }
+    }
+
+    private static func queueRepairRecordUpserts(
+        recordIDs: Set<UUID>,
+        entity: MistiaSyncEntity,
+        modelContext: ModelContext,
+        sessionStore: SessionStore
+    ) {
+        guard !recordIDs.isEmpty else { return }
+
+        switch entity {
+        case .transaction:
+            let records = (try? modelContext.fetch(FetchDescriptor<LedgerTransaction>())) ?? []
+            for record in records where recordIDs.contains(record.id) {
+                sessionStore.recordUpsert(entity: entity, recordID: record.id, modifiedAt: record.updatedAt)
+            }
+        case .budgetPlan:
+            let records = (try? modelContext.fetch(FetchDescriptor<BudgetPlan>())) ?? []
+            for record in records where recordIDs.contains(record.id) {
+                sessionStore.recordUpsert(entity: entity, recordID: record.id, modifiedAt: record.updatedAt)
+            }
+        case .recurringBillPlan:
+            let records = (try? modelContext.fetch(FetchDescriptor<RecurringBillPlan>())) ?? []
+            for record in records where recordIDs.contains(record.id) {
+                sessionStore.recordUpsert(entity: entity, recordID: record.id, modifiedAt: record.updatedAt)
+            }
+        case .wallet, .creditCardProfile, .category, .savingsGoal, .installmentPlan, .dueOccurrenceRecord:
+            break
         }
     }
 

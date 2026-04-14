@@ -41,6 +41,10 @@
 	</array>
 	<key>CFBundleVersion</key>
 	<string>$(CURRENT_PROJECT_VERSION)</string>
+	<key>BGTaskSchedulerPermittedIdentifiers</key>
+	<array>
+		<string>vn.com.quyln.mistia.sync.refresh</string>
+	</array>
 	<key>GIDClientID</key>
 	<string>741455632256-ldcq90u77edu4rhh7b6pmjnpqjsh34vv.apps.googleusercontent.com</string>
 	<key>GIDServerClientID</key>
@@ -56,6 +60,10 @@
 	</dict>
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>fetch</string>
+	</array>
 	<key>UILaunchScreen</key>
 	<dict>
 		<key>UILaunchScreen</key>
