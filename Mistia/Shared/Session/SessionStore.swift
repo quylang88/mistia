@@ -243,6 +243,11 @@ final class SessionStore {
     }
 
     func handleSceneDidBecomeActive() {
+        if requiresInitialSync && hasCompletedCloudSyncHistory() {
+            requiresInitialSync = false
+            initialSyncPreview = nil
+            pendingInitialSyncChoice = nil
+        }
         updateAutoSyncLoopState()
 
         guard shouldRunForegroundCatchUp() else { return }
@@ -534,6 +539,12 @@ final class SessionStore {
 
     func syncNow(isManual: Bool = false) async {
         guard currentSession != nil, !isSyncInFlight else { return }
+
+        if requiresInitialSync && hasCompletedCloudSyncHistory() {
+            requiresInitialSync = false
+            initialSyncPreview = nil
+            pendingInitialSyncChoice = nil
+        }
 
         if isManual {
             pauseAutoSyncLoop()
@@ -946,7 +957,7 @@ final class SessionStore {
             authPendingEmail = nil
             authPhase = .signIn
             activeAuthAction = nil
-            requiresInitialSync = storedProfile.lastSyncAt == nil
+            requiresInitialSync = !hasCompletedCloudSyncHistory(storedProfile: storedProfile)
             initialSyncPreview = nil
             pendingInitialSyncChoice = nil
 
@@ -1354,6 +1365,41 @@ final class SessionStore {
         return currentSession?.user.id
     }
 
+    private func hasCompletedCloudSyncHistory(
+        storedProfile: UserAccountProfile? = nil
+    ) -> Bool {
+        if storedProfile?.lastSyncAt != nil || lastSyncAt != nil {
+            return true
+        }
+
+        let context = modelContainer.mainContext
+
+        return hasAnyRemoteBackedRecord(in: context)
+            || ((try? context.fetch(FetchDescriptor<SyncConflict>())) ?? []).isEmpty == false
+    }
+
+    private func hasAnyRemoteBackedRecord(in context: ModelContext) -> Bool {
+        hasRemoteBackedRecord(LedgerWallet.self, in: context, predicate: #Predicate<LedgerWallet> { $0.remoteVersion > 0 })
+            || hasRemoteBackedRecord(CreditCardProfile.self, in: context, predicate: #Predicate<CreditCardProfile> { $0.remoteVersion > 0 })
+            || hasRemoteBackedRecord(TransactionCategory.self, in: context, predicate: #Predicate<TransactionCategory> { $0.remoteVersion > 0 })
+            || hasRemoteBackedRecord(LedgerTransaction.self, in: context, predicate: #Predicate<LedgerTransaction> { $0.remoteVersion > 0 })
+            || hasRemoteBackedRecord(BudgetPlan.self, in: context, predicate: #Predicate<BudgetPlan> { $0.remoteVersion > 0 })
+            || hasRemoteBackedRecord(SavingsGoal.self, in: context, predicate: #Predicate<SavingsGoal> { $0.remoteVersion > 0 })
+            || hasRemoteBackedRecord(RecurringBillPlan.self, in: context, predicate: #Predicate<RecurringBillPlan> { $0.remoteVersion > 0 })
+            || hasRemoteBackedRecord(InstallmentPlan.self, in: context, predicate: #Predicate<InstallmentPlan> { $0.remoteVersion > 0 })
+            || hasRemoteBackedRecord(DueOccurrenceRecord.self, in: context, predicate: #Predicate<DueOccurrenceRecord> { $0.remoteVersion > 0 })
+    }
+
+    private func hasRemoteBackedRecord<Model: PersistentModel>(
+        _ type: Model.Type,
+        in context: ModelContext,
+        predicate: Predicate<Model>
+    ) -> Bool {
+        var descriptor = FetchDescriptor<Model>(predicate: predicate)
+        descriptor.fetchLimit = 1
+        return ((try? context.fetch(descriptor)) ?? []).isEmpty == false
+    }
+
     private func startLiveSyncLoop() {
         stopLiveSyncLoop()
         liveSyncTask = Task { [weak self] in
@@ -1388,6 +1434,12 @@ final class SessionStore {
     }
 
     private func updateAutoSyncLoopState() {
+        if requiresInitialSync && hasCompletedCloudSyncHistory() {
+            requiresInitialSync = false
+            initialSyncPreview = nil
+            pendingInitialSyncChoice = nil
+        }
+
         guard isReadyForAutomaticSync else {
             stopLiveSyncLoop()
             MistiaSyncBackgroundScheduler.shared.cancelPendingRefresh()
@@ -1688,42 +1740,15 @@ final class SessionStore {
             return []
         }
 
-        var normalized: [MistiaSyncMutation] = []
         let baseDeviceID = mutation.deviceID
-
-        if mutation.kind == .upsert {
-            let promotedCategories = (try? MistiaSystemCategorySyncSupport.promoteCategoriesRequiredForSync(
-                entity: mutation.entity,
-                recordID: mutation.recordID,
-                modifiedAt: mutation.modifiedAt,
-                in: MistiaDataStack.sharedModelContainer
-            )) ?? []
-
-            for category in promotedCategories where MistiaSystemCategorySyncSupport.shouldQueueCategoryMutation(category) {
-                try? MistiaRecordOwnershipStore.upsert(
-                    entity: .category,
-                    recordID: category.id,
-                    ownerUserID: subjectUserID,
-                    updatedAt: max(category.updatedAt, mutation.modifiedAt),
-                    in: MistiaDataStack.sharedModelContainer
-                )
-
-                normalized.append(
-                    MistiaSyncMutation(
-                        entity: .category,
-                        recordID: category.id,
-                        subjectUserID: subjectUserID,
-                        kind: .upsert,
-                        modifiedAt: max(category.updatedAt, mutation.modifiedAt),
-                        baseVersion: currentRemoteVersion(for: .category, recordID: category.id, fallback: 0),
-                        deviceID: baseDeviceID
-                    )
-                )
-            }
-        }
+        let dependencyMutations = promotedCategoryMutationsRequiredForSync(
+            for: mutation,
+            subjectUserID: subjectUserID,
+            deviceID: baseDeviceID
+        )
 
         guard shouldQueueMutation(entity: mutation.entity, recordID: mutation.recordID) else {
-            return normalized
+            return dependencyMutations
         }
 
         try? MistiaRecordOwnershipStore.upsert(
@@ -1734,7 +1759,7 @@ final class SessionStore {
             in: MistiaDataStack.sharedModelContainer
         )
 
-        normalized.append(
+        return dependencyMutations + [
             MistiaSyncMutation(
                 entity: mutation.entity,
                 recordID: mutation.recordID,
@@ -1748,9 +1773,58 @@ final class SessionStore {
                 ),
                 deviceID: baseDeviceID
             )
-        )
+        ]
+    }
 
-        return normalized
+    private func promotedCategoryMutationsRequiredForSync(
+        for mutation: MistiaSyncMutation,
+        subjectUserID: UUID,
+        deviceID: UUID
+    ) -> [MistiaSyncMutation] {
+        guard mutation.kind == .upsert else { return [] }
+
+        let promotedCategories = (try? MistiaSystemCategorySyncSupport.promoteCategoriesRequiredForSync(
+            entity: mutation.entity,
+            recordID: mutation.recordID,
+            modifiedAt: mutation.modifiedAt,
+            in: MistiaDataStack.sharedModelContainer
+        )) ?? []
+
+        return promotedCategories.compactMap { category in
+            guard let categorySubjectUserID = resolvedSubjectUserID(
+                entity: .category,
+                recordID: category.id,
+                fallbackSubjectUserID: subjectUserID
+            ) else {
+                return nil
+            }
+
+            try? MistiaRecordOwnershipStore.upsert(
+                entity: .category,
+                recordID: category.id,
+                ownerUserID: categorySubjectUserID,
+                updatedAt: mutation.modifiedAt,
+                in: MistiaDataStack.sharedModelContainer
+            )
+
+            let effectiveModifiedAt = category.updatedAt > mutation.modifiedAt
+                ? category.updatedAt
+                : mutation.modifiedAt
+
+            return MistiaSyncMutation(
+                entity: .category,
+                recordID: category.id,
+                subjectUserID: categorySubjectUserID,
+                kind: .upsert,
+                modifiedAt: effectiveModifiedAt,
+                baseVersion: currentRemoteVersion(
+                    for: .category,
+                    recordID: category.id,
+                    fallback: 0
+                ),
+                deviceID: deviceID
+            )
+        }
     }
 
     private func shouldQueueMutation(entity: MistiaSyncEntity, recordID: UUID) -> Bool {

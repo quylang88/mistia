@@ -68,37 +68,8 @@ enum MistiaDataStack {
             }
         }
 
-        do {
-            let primaryContainer = try makePersistentContainer(schema: schema, storeURL: primaryStoreURL)
-            return LaunchState(modelContainer: primaryContainer, issue: nil)
-        } catch let primaryError {
-            guard MistiaLegacyStoreRecovery.canRecover(from: primaryError) else {
-                throw primaryError
-            }
-
-            do {
-                print(
-                    "MistiaDataStack: detected legacy store at \(primaryStoreURL.path). Starting recovery import."
-                )
-                try MistiaLegacyStoreRecovery.recoverStore(
-                    at: primaryStoreURL,
-                    recoveredStoreURL: recoveredStoreURL
-                )
-
-                let recoveredContainer = try makePersistentContainer(
-                    schema: schema,
-                    storeURL: recoveredStoreURL
-                )
-                return LaunchState(modelContainer: recoveredContainer, issue: nil)
-            } catch let recoveryError {
-                throw RecoveryLaunchError(
-                    primaryStoreURL: primaryStoreURL,
-                    primaryError: primaryError,
-                    recoveryStoreURL: recoveredStoreURL,
-                    recoveryError: recoveryError
-                )
-            }
-        }
+        let primaryContainer = try makePersistentContainer(schema: schema, storeURL: primaryStoreURL)
+        return LaunchState(modelContainer: primaryContainer, issue: nil)
     }
 
     private static func defaultStoreURL(for schema: Schema) -> URL {

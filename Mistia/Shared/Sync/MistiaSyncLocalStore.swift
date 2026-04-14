@@ -69,6 +69,34 @@ enum MistiaSyncLocalStore {
         )
     }
 
+    static func exportSnapshotForUpload(
+        for userID: UUID,
+        from container: ModelContainer
+    ) throws -> MistiaRemoteSnapshot {
+        let baseSnapshot = try exportSnapshot(for: userID, from: container)
+        let supplementalCategories = try supplementalSystemCategoriesForUpload(
+            userID: userID,
+            baseSnapshot: baseSnapshot,
+            from: container
+        )
+
+        guard !supplementalCategories.isEmpty else {
+            return baseSnapshot
+        }
+
+        return MistiaRemoteSnapshot(
+            wallets: baseSnapshot.wallets,
+            creditCardProfiles: baseSnapshot.creditCardProfiles,
+            categories: baseSnapshot.categories + supplementalCategories,
+            transactions: baseSnapshot.transactions,
+            budgetPlans: baseSnapshot.budgetPlans,
+            savingsGoals: baseSnapshot.savingsGoals,
+            recurringBillPlans: baseSnapshot.recurringBillPlans,
+            installmentPlans: baseSnapshot.installmentPlans,
+            dueOccurrences: baseSnapshot.dueOccurrences
+        )
+    }
+
     static func exportRecord(
         for mutation: MistiaSyncMutation,
         from container: ModelContainer
@@ -1079,6 +1107,62 @@ enum MistiaSyncLocalStore {
         return categories.first(where: {
             $0.deletedAt == nil && $0.systemKey == systemKey.rawValue
         })?.id
+    }
+
+    private static func supplementalSystemCategoriesForUpload(
+        userID: UUID,
+        baseSnapshot: MistiaRemoteSnapshot,
+        from container: ModelContainer
+    ) throws -> [RemoteTransactionCategory] {
+        let context = ModelContext(container)
+        let categories = try fetchCategories(context)
+        let categoryByID = Dictionary(uniqueKeysWithValues: categories.map { ($0.id, $0) })
+
+        var includedIDs = Set(baseSnapshot.categories.map(\.id))
+        var queuedIDs: Set<UUID> = []
+        var pendingIDs: [UUID] = []
+
+        func queueCategoryID(_ id: UUID?) {
+            guard let id else { return }
+            guard !includedIDs.contains(id), !queuedIDs.contains(id) else { return }
+            queuedIDs.insert(id)
+            pendingIDs.append(id)
+        }
+
+        for row in baseSnapshot.transactions where row.deletedAt == nil {
+            queueCategoryID(row.categoryID)
+        }
+
+        for row in baseSnapshot.budgetPlans where row.deletedAt == nil {
+            queueCategoryID(row.categoryID)
+        }
+
+        for row in baseSnapshot.recurringBillPlans where row.deletedAt == nil {
+            queueCategoryID(row.categoryID)
+        }
+
+        for row in baseSnapshot.categories where row.deletedAt == nil {
+            queueCategoryID(row.parentCategoryID)
+        }
+
+        var supplemental: [RemoteTransactionCategory] = []
+        var index = 0
+
+        while index < pendingIDs.count {
+            let categoryID = pendingIDs[index]
+            index += 1
+
+            guard let category = categoryByID[categoryID] else { continue }
+            guard category.deletedAt == nil, category.isSystem, category.systemKey != nil else {
+                continue
+            }
+
+            includedIDs.insert(categoryID)
+            supplemental.append(RemoteTransactionCategory(local: category, userID: userID))
+            queueCategoryID(category.parentCategory?.id)
+        }
+
+        return supplemental
     }
 
     private static func fetchInstallmentPlans(_ context: ModelContext) throws -> [InstallmentPlan] {

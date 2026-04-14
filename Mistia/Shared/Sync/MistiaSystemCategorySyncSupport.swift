@@ -90,7 +90,6 @@ enum MistiaSystemCategorySyncSupport {
 
         categories = try modelContext.fetch(FetchDescriptor<TransactionCategory>())
         let activeCategories = categories.filter { $0.deletedAt == nil }
-        let categoriesByID = Dictionary(uniqueKeysWithValues: activeCategories.map { ($0.id, $0) })
         let queuedCategoryIDs = Set(
             outbox.allMutations
                 .filter { $0.entity == .category }
@@ -101,16 +100,6 @@ enum MistiaSystemCategorySyncSupport {
                 .filter { $0.entity == .category }
                 .map(\.recordID)
         )
-        let referencedCategoryIDs = collectReferencedCategoryIDs(
-            transactions: transactions,
-            budgets: budgets,
-            recurringBills: recurringBills
-        )
-        let requiredCloudCategoryIDs = expandedCategoryDependencyIDs(
-            baseCategoryIDs: referencedCategoryIDs,
-            categoriesByID: categoriesByID
-        )
-
         for category in activeCategories {
             let previousValue = category.cloudSyncEnabled
             let nextValue: Bool
@@ -118,12 +107,11 @@ enum MistiaSystemCategorySyncSupport {
             if !category.isSystem || category.systemKey == nil {
                 nextValue = true
             } else {
-                nextValue = previousValue
-                    || category.remoteVersion > 0
-                    || queuedCategoryIDs.contains(category.id)
+                let isCustomized = isCustomizedSystemCategory(category)
+                nextValue = queuedCategoryIDs.contains(category.id)
                     || conflictCategoryIDs.contains(category.id)
-                    || requiredCloudCategoryIDs.contains(category.id)
-                    || isCustomizedSystemCategory(category)
+                    || (previousValue && isCustomized)
+                    || isCustomized
             }
 
             if previousValue != nextValue {

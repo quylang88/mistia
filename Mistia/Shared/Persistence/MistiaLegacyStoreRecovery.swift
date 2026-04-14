@@ -110,7 +110,7 @@ enum MistiaLegacyStoreRecovery {
     }
 
     private static func writeRecoveredStore(with payload: Payload, to recoveredStoreURL: URL) throws {
-        let schema = Schema(versionedSchema: MistiaSchemaV7.self)
+        let schema = Schema(versionedSchema: MistiaSchemaV9.self)
         let configuration = ModelConfiguration("default", schema: schema, url: recoveredStoreURL)
         let container = try ModelContainer(for: schema, configurations: [configuration])
         let context = ModelContext(container)
