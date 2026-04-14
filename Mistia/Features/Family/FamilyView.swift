@@ -357,6 +357,21 @@ private enum FamilyOverviewSheet: String, Identifiable {
     var id: String { rawValue }
 }
 
+private struct FamilyAggregateWalletRow: Identifiable {
+    let wallet: LedgerWallet
+    let currentBalanceMinor: Int64
+
+    var id: UUID { wallet.id }
+}
+
+private struct FamilyChartSegment: Identifiable {
+    let label: String
+    let valueMinor: Int64
+    let color: Color
+
+    var id: String { label }
+}
+
 // MARK: - Hero Components
 
 private struct FamilyHeroCard: View {
@@ -448,7 +463,7 @@ private struct FamilyDistributionSection: View {
             .padding(.horizontal, 4)
 
             MistiaGlassCard(cornerRadius: 24, tint: cardTint) {
-                VStack(spacing: 16) {
+                VStack(spacing: 18) {
                     // Mode picker
                     HStack(spacing: 8) {
                         ForEach(FamilyDistributionMode.allCases) { m in
@@ -474,36 +489,59 @@ private struct FamilyDistributionSection: View {
                         }
                     }
 
-                    // Chart & Legend
-                    HStack(spacing: 20) {
-                        FamilyDonutChart(mode: mode, summary: summary)
-                            .frame(width: 140, height: 140)
+                    if chartSegments.isEmpty {
+                        Text(mistiaLocalized(vi: "Chưa có dữ liệu để hiển thị", en: "No data to display yet", ja: "表示できるデータがまだありません"))
+                            .font(.system(size: 14, weight: .medium, design: .rounded))
+                            .foregroundStyle(.secondary)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 36)
+                    } else {
+                        VStack(spacing: 18) {
+                            FamilyDonutChart(
+                                segments: chartSegments,
+                                modeTitle: mode.title,
+                                totalValueMinor: totalValueMinor,
+                                currencyCode: currencyCode
+                            )
+                            .frame(height: 220)
 
-                        VStack(alignment: .leading, spacing: 10) {
-                            ForEach(Array(segments.prefix(4).enumerated()), id: \.element.id) { index, segment in
-                                Button {
-                                    onSegmentTap(segment)
-                                } label: {
-                                    HStack(spacing: 8) {
-                                        Circle()
-                                            .fill(MistiaAccent.purple.color.opacity(1.0 - Double(index) * 0.15))
-                                            .frame(width: 8, height: 8)
-                                        
-                                        VStack(alignment: .leading, spacing: 2) {
-                                            Text(segment.label)
-                                                .font(.system(size: 13, weight: .medium, design: .rounded))
-                                                .foregroundStyle(.primary)
-                                            Text(segment.valueMinor.formattedCurrency(code: currencyCode))
-                                                .font(.system(size: 11, weight: .bold, design: .rounded))
+                            VStack(spacing: 10) {
+                                ForEach(Array(chartSegments.enumerated()), id: \.element.id) { index, segment in
+                                    Button {
+                                        onSegmentTap(FamilyDonutSegment(label: segment.label, valueMinor: segment.valueMinor, colorHex: nil))
+                                    } label: {
+                                        HStack(spacing: 12) {
+                                            Circle()
+                                                .fill(segment.color)
+                                                .frame(width: 10, height: 10)
+
+                                            VStack(alignment: .leading, spacing: 2) {
+                                                Text(segment.label)
+                                                    .font(.system(size: 14, weight: .semibold, design: .rounded))
+                                                    .foregroundStyle(.primary)
+
+                                                Text(legendDetailText(for: segment, index: index))
+                                                    .font(.system(size: 12, weight: .medium, design: .rounded))
+                                                    .foregroundStyle(.secondary)
+                                            }
+
+                                            Spacer()
+
+                                            Text(percentageText(for: segment))
+                                                .font(.system(size: 13, weight: .bold, design: .rounded))
                                                 .foregroundStyle(.secondary)
                                         }
+                                        .padding(.horizontal, 14)
+                                        .padding(.vertical, 10)
+                                        .background {
+                                            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                                                .fill(colorScheme == .dark ? .white.opacity(0.03) : .white.opacity(0.54))
+                                        }
                                     }
+                                    .buttonStyle(.plain)
                                 }
-                                .buttonStyle(.plain)
                             }
                         }
-                        
-                        Spacer()
                     }
                 }
             }
@@ -523,7 +561,7 @@ private struct FamilyDistributionSection: View {
         colorScheme == .dark ? .white.opacity(0.04) : .white.opacity(0.16)
     }
 
-    private var segments: [FamilyDonutSegment] {
+    private var baseSegments: [FamilyDonutSegment] {
         switch mode {
         case .spending:
             return summary.expenseByCategory
@@ -532,6 +570,76 @@ private struct FamilyDistributionSection: View {
         case .members:
             return summary.spendingByMember.map { FamilyDonutSegment(label: $0.name, valueMinor: $0.amountMinor, colorHex: nil) }
         }
+    }
+
+    private var chartSegments: [FamilyChartSegment] {
+        let filtered = baseSegments
+            .map { FamilyDonutSegment(label: $0.label, valueMinor: max($0.valueMinor, 0), colorHex: $0.colorHex) }
+            .filter { $0.valueMinor > 0 }
+            .sorted { $0.valueMinor > $1.valueMinor }
+
+        guard !filtered.isEmpty else { return [] }
+
+        let leading = Array(filtered.prefix(4))
+        let remainder = filtered.dropFirst(4)
+
+        var displaySegments = leading
+        if !remainder.isEmpty {
+            let otherValue = remainder.reduce(into: Int64.zero) { partial, segment in
+                partial += segment.valueMinor
+            }
+            displaySegments.append(
+                FamilyDonutSegment(
+                    label: mistiaLocalized(vi: "Khác", en: "Other", ja: "その他"),
+                    valueMinor: otherValue,
+                    colorHex: nil
+                )
+            )
+        }
+
+        return displaySegments.enumerated().map { index, segment in
+            FamilyChartSegment(
+                label: segment.label,
+                valueMinor: segment.valueMinor,
+                color: chartColor(for: index)
+            )
+        }
+    }
+
+    private var totalValueMinor: Int64 {
+        chartSegments.reduce(into: Int64.zero) { partial, segment in
+            partial += segment.valueMinor
+        }
+    }
+
+    private func percentageText(for segment: FamilyChartSegment) -> String {
+        guard totalValueMinor > 0 else { return "0%" }
+        let percentage = (Double(segment.valueMinor) / Double(totalValueMinor)) * 100
+        return "\(Int(percentage.rounded()))%"
+    }
+
+    private func legendDetailText(for segment: FamilyChartSegment, index: Int) -> String {
+        let formattedValue = segment.valueMinor.formattedCurrency(code: currencyCode)
+        if index == 0 {
+            return mistiaLocalized(
+                vi: "Lớn nhất • \(formattedValue)",
+                en: "Largest • \(formattedValue)",
+                ja: "最大 • \(formattedValue)"
+            )
+        }
+        return formattedValue
+    }
+
+    private func chartColor(for index: Int) -> Color {
+        let palette: [Color] = [
+            Color(red: 0.40, green: 0.56, blue: 0.97),
+            Color(red: 0.48, green: 0.75, blue: 0.98),
+            Color(red: 0.45, green: 0.81, blue: 0.75),
+            Color(red: 0.97, green: 0.73, blue: 0.43),
+            Color(red: 0.82, green: 0.84, blue: 0.89)
+        ]
+
+        return palette[index % palette.count]
     }
 
     private func switchTimeframe(back: Bool) {
@@ -620,8 +728,7 @@ private struct FamilyMemberComparisonSection: View {
 
 private struct FamilyAggregateAccountList: View {
     @Environment(\.colorScheme) private var colorScheme
-    let wallets: [LedgerWallet]
-    let currencyCode: String
+    let rows: [FamilyAggregateWalletRow]
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -631,16 +738,16 @@ private struct FamilyAggregateAccountList: View {
 
             MistiaGlassCard(cornerRadius: 24, tint: cardTint, padding: 0) {
                 VStack(spacing: 0) {
-                    ForEach(Array(wallets.enumerated()), id: \.element.id) { index, wallet in
+                    ForEach(Array(rows.enumerated()), id: \.element.id) { index, row in
                         HStack(spacing: 12) {
-                            MistiaFinanceIconView(icon: wallet.kind.defaultIconSymbolName, fallbackColor: MistiaAccent.purple.color, size: 32)
+                            MistiaFinanceIconView(icon: row.wallet.kind.defaultIconSymbolName, fallbackColor: MistiaAccent.purple.color, size: 32)
                             
                             VStack(alignment: .leading, spacing: 2) {
-                                Text(wallet.name)
+                                Text(row.wallet.name)
                                     .font(.system(size: 15, weight: .semibold, design: .rounded))
                                     .foregroundStyle(.primary)
                                 
-                                if wallet.kind == .creditCard {
+                                if row.wallet.kind == .creditCard {
                                     Text(mistiaLocalized(vi: "Sắp đến hạn", en: "Upcoming", ja: "間もなく期限"))
                                         .font(.system(size: 11, weight: .medium, design: .rounded))
                                         .foregroundStyle(.orange)
@@ -649,14 +756,14 @@ private struct FamilyAggregateAccountList: View {
                             
                             Spacer()
                             
-                            Text(wallet.openingBalanceMinor.formattedCurrency(code: currencyCode))
+                            Text(row.currentBalanceMinor.formattedCurrency(code: row.wallet.currencyCode))
                                 .font(.system(size: 15, weight: .bold, design: .rounded))
-                                .foregroundStyle(amountColor(for: wallet))
+                                .foregroundStyle(amountColor(for: row))
                         }
                         .padding(.horizontal, 16)
                         .padding(.vertical, 12)
                         
-                        if index < wallets.count - 1 {
+                        if index < rows.count - 1 {
                             Divider()
                                 .padding(.leading, 60)
                         }
@@ -670,8 +777,8 @@ private struct FamilyAggregateAccountList: View {
         colorScheme == .dark ? .white.opacity(0.04) : .white.opacity(0.16)
     }
 
-    private func amountColor(for wallet: LedgerWallet) -> Color {
-        if wallet.kind == .creditCard && wallet.openingBalanceMinor < 0 {
+    private func amountColor(for row: FamilyAggregateWalletRow) -> Color {
+        if row.wallet.kind == .creditCard && row.currentBalanceMinor > 0 {
             return .red
         }
         return .primary
@@ -832,30 +939,41 @@ private struct FamilyAIInsightsSection: View {
 }
 
 private struct FamilyDonutChart: View {
-    let mode: FamilyDistributionMode
-    let summary: FamilyAggregateSummary
+    let segments: [FamilyChartSegment]
+    let modeTitle: String
+    let totalValueMinor: Int64
+    let currencyCode: String
 
     var body: some View {
-        Chart(Array(segments.enumerated()), id: \.element.id) { index, segment in
-            SectorMark(
-                angle: .value("Value", Double(max(segment.valueMinor, 0))),
-                innerRadius: .ratio(0.65),
-                angularInset: 2
-            )
-            .cornerRadius(4)
-            .foregroundStyle(MistiaAccent.purple.color.opacity(1.0 - Double(index) * 0.15))
-        }
-        .chartLegend(.hidden)
-    }
+        ZStack {
+            Circle()
+                .strokeBorder(Color.primary.opacity(0.06), lineWidth: 18)
 
-    private var segments: [FamilyDonutSegment] {
-        switch mode {
-        case .spending:
-            return summary.expenseByCategory
-        case .accounts:
-            return summary.balanceByWalletKind.map { FamilyDonutSegment(label: $0.key.rawValue.capitalized, valueMinor: $0.value, colorHex: nil) }
-        case .members:
-            return summary.spendingByMember.map { FamilyDonutSegment(label: $0.name, valueMinor: $0.amountMinor, colorHex: nil) }
+            Chart(segments) { segment in
+                SectorMark(
+                    angle: .value("Value", Double(segment.valueMinor)),
+                    innerRadius: .ratio(0.72),
+                    outerRadius: .ratio(0.98),
+                    angularInset: 2.2
+                )
+                .cornerRadius(6)
+                .foregroundStyle(segment.color.gradient)
+            }
+            .chartLegend(.hidden)
+
+            VStack(spacing: 4) {
+                Text(modeTitle)
+                    .font(.system(size: 12, weight: .semibold, design: .rounded))
+                    .foregroundStyle(.secondary)
+
+                Text(totalValueMinor.formattedCurrency(code: currencyCode))
+                    .font(.system(size: 16, weight: .bold, design: .rounded))
+                    .foregroundStyle(.primary)
+                    .lineLimit(2)
+                    .multilineTextAlignment(.center)
+                    .minimumScaleFactor(0.75)
+            }
+            .padding(.horizontal, 30)
         }
     }
 }
@@ -883,38 +1001,34 @@ private struct FamilyMiniTrendChart: View {
 
 private struct FamilyOverviewHeader: View {
     @Environment(FamilyContextStore.self) private var familyContextStore
-    let wallets: [LedgerWallet]
-    let currencyCode: String
+    let walletRows: [FamilyAggregateWalletRow]
+    let signedInUserID: UUID?
     let onInviteTap: () -> Void
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            Text("👨‍👩‍👧 \(familyContextStore.family?.name ?? "Gia đình")")
-                .font(.system(size: 24, weight: .bold, design: .rounded))
-                .foregroundStyle(.primary)
-
+        VStack(alignment: .leading, spacing: 10) {
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 12) {
                     // "All family" button
                     Button {
                         withAnimation(.snappy) {
-                            familyContextStore.returnToSelf()
+                            familyContextStore.activateFamilyHome()
                         }
                     } label: {
                         VStack(spacing: 8) {
                             ZStack {
                                 Circle()
-                                    .fill(familyContextStore.activeContext.scope == .personalSelf ? MistiaAccent.purple.color : Color(UIColor.secondarySystemGroupedBackground))
+                                    .fill(familyContextStore.isViewingFamilyAggregate ? MistiaAccent.purple.color : Color(UIColor.secondarySystemGroupedBackground))
                                     .frame(width: 56, height: 56)
                                 
                                 Image(systemName: "person.3.fill")
                                     .font(.system(size: 20, weight: .bold))
-                                    .foregroundStyle(familyContextStore.activeContext.scope == .personalSelf ? .white : MistiaAccent.purple.color)
+                                    .foregroundStyle(familyContextStore.isViewingFamilyAggregate ? .white : MistiaAccent.purple.color)
                             }
                             
                             Text(mistiaLocalized(vi: "Cả nhà", en: "Family", ja: "家族"))
                                 .font(.system(size: 12, weight: .medium, design: .rounded))
-                                .foregroundStyle(familyContextStore.activeContext.scope == .personalSelf ? .primary : .secondary)
+                                .foregroundStyle(familyContextStore.isViewingFamilyAggregate ? .primary : .secondary)
                         }
                     }
                     .buttonStyle(.plain)
@@ -922,12 +1036,10 @@ private struct FamilyOverviewHeader: View {
                     ForEach(familyContextStore.members) { member in
                         Button {
                             withAnimation(.snappy) {
-                                if case .member(let userID) = familyContextStore.activeContext.scope, userID == member.userID {
-                                    familyContextStore.returnToSelf()
+                                if member.userID == signedInUserID {
+                                    familyContextStore.activateSelfView()
                                 } else {
-                                    Task {
-                                        await familyContextStore.viewMember(member)
-                                    }
+                                    familyContextStore.activateMemberView(member)
                                 }
                             }
                         } label: {
@@ -939,7 +1051,7 @@ private struct FamilyOverviewHeader: View {
                                     showsStatus: false
                                 )
                                 .overlay {
-                                    if case .member(let userID) = familyContextStore.activeContext.scope, userID == member.userID {
+                                    if isSelected(member) {
                                         Circle()
                                             .stroke(MistiaAccent.purple.color, lineWidth: 3)
                                     }
@@ -953,13 +1065,13 @@ private struct FamilyOverviewHeader: View {
                         .buttonStyle(.plain)
                         .contextMenu {
                             Section(member.displayName) {
-                                ForEach(wallets.prefix(3)) { wallet in
+                                ForEach(walletRows.prefix(3)) { row in
                                     Button {} label: {
                                         HStack {
-                                            Image(systemName: wallet.kind.defaultIconSymbolName)
-                                            Text(wallet.name)
+                                            Image(systemName: row.wallet.kind.defaultIconSymbolName)
+                                            Text(row.wallet.name)
                                             Spacer()
-                                            Text(wallet.openingBalanceMinor.formattedCurrency(code: currencyCode))
+                                            Text(row.currentBalanceMinor.formattedCurrency(code: row.wallet.currencyCode))
                                         }
                                     }
                                 }
@@ -967,7 +1079,11 @@ private struct FamilyOverviewHeader: View {
                                 Divider()
 
                                 Button {
-                                    Task { await familyContextStore.viewMember(member) }
+                                    if member.userID == signedInUserID {
+                                        familyContextStore.activateSelfView()
+                                    } else {
+                                        familyContextStore.activateMemberView(member)
+                                    }
                                 } label: {
                                     Label(mistiaLocalized(vi: "Xem chi tiết", en: "View details", ja: "詳細を見る"), systemImage: "eye.fill")
                                 }
@@ -1000,10 +1116,12 @@ private struct FamilyOverviewHeader: View {
     }
 
     private func isSelected(_ member: FamilyMember) -> Bool {
-        if case .member(let userID) = familyContextStore.activeContext.scope {
-            return userID == member.userID
+        if member.userID == signedInUserID {
+            return familyContextStore.isViewingSelfContext
         }
-        return false
+
+        guard case .member(let userID) = familyContextStore.activeContext.scope else { return false }
+        return userID == member.userID
     }
 }
 
@@ -1188,67 +1306,104 @@ struct FamilyOverviewScreen: View {
     @Query private var ownershipScopes: [OwnedRecordScope]
 
     private var familyMemberIDs: Set<UUID> {
-        Set(familyContextStore.members.map(\.userID))
+        var ids = Set(familyContextStore.members.map(\.userID))
+        if let currentUserID = familyContextStore.currentUserID {
+            ids.insert(currentUserID)
+        }
+        return ids
     }
 
     private var allWallets: [LedgerWallet] {
-        FamilyScopedData.visible(
+        FamilyScopedData.visibleForFamilyOverview(
             storedWallets,
             entity: .wallet,
             scopes: ownershipScopes,
+            familyMemberUserIDs: familyMemberIDs,
             familyContextStore: familyContextStore,
             sessionStore: sessionStore
         )
     }
 
     private var allTransactions: [LedgerTransaction] {
-        FamilyScopedData.visible(
+        FamilyScopedData.visibleForFamilyOverview(
             storedTransactions,
             entity: .transaction,
             scopes: ownershipScopes,
+            familyMemberUserIDs: familyMemberIDs,
             familyContextStore: familyContextStore,
             sessionStore: sessionStore
         )
     }
 
     private var visibleBudgets: [BudgetPlan] {
-        FamilyScopedData.visible(
+        FamilyScopedData.visibleForFamilyOverview(
             storedBudgets,
             entity: .budgetPlan,
             scopes: ownershipScopes,
+            familyMemberUserIDs: familyMemberIDs,
             familyContextStore: familyContextStore,
             sessionStore: sessionStore
         )
     }
 
     private var visibleBills: [RecurringBillPlan] {
-        FamilyScopedData.visible(
+        FamilyScopedData.visibleForFamilyOverview(
             storedBills,
             entity: .recurringBillPlan,
             scopes: ownershipScopes,
+            familyMemberUserIDs: familyMemberIDs,
             familyContextStore: familyContextStore,
             sessionStore: sessionStore
         )
     }
 
     private var visibleInstallments: [InstallmentPlan] {
-        FamilyScopedData.visible(
+        FamilyScopedData.visibleForFamilyOverview(
             storedInstallments,
             entity: .installmentPlan,
             scopes: ownershipScopes,
+            familyMemberUserIDs: familyMemberIDs,
             familyContextStore: familyContextStore,
             sessionStore: sessionStore
         )
     }
 
     private var visibleOccurrences: [DueOccurrenceRecord] {
-        FamilyScopedData.visible(
+        FamilyScopedData.visibleForFamilyOverview(
             storedOccurrences,
             entity: .dueOccurrenceRecord,
             scopes: ownershipScopes,
+            familyMemberUserIDs: familyMemberIDs,
             familyContextStore: familyContextStore,
             sessionStore: sessionStore
         )
+    }
+
+    private var transactionRecords: [TransactionRecordSnapshot] {
+        allTransactions.map(\.planningRecordSnapshot)
+    }
+
+    private var aggregateWalletRows: [FamilyAggregateWalletRow] {
+        allWallets
+            .sorted {
+                if $0.sortOrder != $1.sortOrder {
+                    return $0.sortOrder < $1.sortOrder
+                }
+                return $0.createdAt < $1.createdAt
+            }
+            .map { wallet in
+                FamilyAggregateWalletRow(
+                    wallet: wallet,
+                    currentBalanceMinor: TransactionLogic.effectiveBalance(
+                        for: TransactionWalletSnapshot(
+                            id: wallet.id,
+                            kind: wallet.kind,
+                            openingBalanceMinor: wallet.openingBalanceMinor
+                        ),
+                        records: transactionRecords
+                    )
+                )
+            }
     }
 
     private var currentMonth: Date {
@@ -1256,7 +1411,6 @@ struct FamilyOverviewScreen: View {
     }
 
     private var budgetRows: [OverviewBudgetAlertSnapshot] {
-        let transactionRecords = allTransactions.map(\.planningRecordSnapshot)
         let activeBudgetPlans = visibleBudgets
             .filter {
                 !$0.isArchived
@@ -1274,7 +1428,6 @@ struct FamilyOverviewScreen: View {
 
     private var dueAlerts: [OverviewDueAlertSnapshot] {
         let occurrenceSnapshots = visibleOccurrences.map(\.planningSnapshot)
-        let transactionRecords = allTransactions.map(\.planningRecordSnapshot)
         
         let planningCreditCardAccounts = allWallets.compactMap { $0.planningCreditCardSnapshot(records: transactionRecords) }
         
@@ -1309,7 +1462,6 @@ struct FamilyOverviewScreen: View {
     }
 
     private var summary: FamilyAggregateSummary {
-        let walletOwnerMap = MistiaRecordOwnershipStore.ownerMap(from: ownershipScopes, entity: .wallet)
         let transactionOwnerMap = MistiaRecordOwnershipStore.ownerMap(from: ownershipScopes, entity: .transaction)
         
         let interval: DateInterval
@@ -1325,12 +1477,12 @@ struct FamilyOverviewScreen: View {
         let memberNames = Dictionary(uniqueKeysWithValues: familyContextStore.members.map { ($0.userID, $0.displayName) })
 
         return FamilyLogic.aggregateSummary(
-            wallets: allWallets.map { wallet in
+            wallets: aggregateWalletRows.map { row in
                 FamilyAggregateWalletSnapshot(
-                    ownerUserID: walletOwnerMap[wallet.id] ?? sessionStore.signedInUserID ?? UUID(),
-                    kind: wallet.kind.familyAggregateKind,
-                    balanceMinor: wallet.kind == .creditCard ? 0 : max(wallet.openingBalanceMinor, 0),
-                    debtMinor: wallet.kind == .creditCard ? max(abs(wallet.openingBalanceMinor), 0) : 0
+                    ownerUserID: familyOwnerUserID(for: row.wallet.id, entity: .wallet),
+                    kind: row.wallet.kind.familyAggregateKind,
+                    balanceMinor: row.wallet.kind == .creditCard ? 0 : row.currentBalanceMinor,
+                    debtMinor: row.wallet.kind == .creditCard ? max(row.currentBalanceMinor, 0) : 0
                 )
             },
             transactions: allTransactions.map { transaction in
@@ -1357,18 +1509,19 @@ struct FamilyOverviewScreen: View {
     var body: some View {
         MistiaPinnedTopBarScaffold(
             tone: .standard,
-            title: "",
+            title: familyContextStore.family?.name ?? mistiaLocalized(vi: "Gia đình", en: "Family", ja: "家族"),
             leadingSystemImage: "chevron.left",
             trailingSystemImage: nil,
             hidesSystemBackButton: true,
             onLeadingTap: { dismiss() },
-            contentSpacing: 18
+            contentSpacing: 18,
+            titleDisplayMode: .large
         ) {
             FamilyContextChipBar()
             
             FamilyOverviewHeader(
-                wallets: allWallets,
-                currencyCode: currencyCode,
+                walletRows: aggregateWalletRows,
+                signedInUserID: sessionStore.signedInUserID,
                 onInviteTap: { activeSheet = .invite }
             )
             .padding(.top, 8)
@@ -1395,8 +1548,7 @@ struct FamilyOverviewScreen: View {
             )
 
             FamilyAggregateAccountList(
-                wallets: allWallets,
-                currencyCode: currencyCode
+                rows: aggregateWalletRows
             )
 
             FamilyBudgetStatusSection(
@@ -1419,6 +1571,16 @@ struct FamilyOverviewScreen: View {
                 FamilyTransactionFilterSheet()
             }
         }
+        .task(id: familyContextStore.family?.id) {
+            if !familyContextStore.isViewingOtherMemberContext {
+                familyContextStore.activateFamilyHome()
+            }
+        }
+    }
+
+    private func familyOwnerUserID(for recordID: UUID, entity: MistiaSyncEntity) -> UUID {
+        let ownerMap = MistiaRecordOwnershipStore.ownerMap(from: ownershipScopes, entity: entity)
+        return ownerMap[recordID] ?? sessionStore.signedInUserID ?? UUID()
     }
 }
 
@@ -1586,10 +1748,8 @@ private struct FamilyMemberProfileScreen: View {
                     VStack(alignment: .leading, spacing: 0) {
                         MistiaGlassCard(cornerRadius: 18, tint: Color(UIColor.secondarySystemGroupedBackground), padding: 0) {
                             Button {
-                                Task {
-                                    await familyContextStore.viewMember(member)
-                                    dismiss()
-                                }
+                                familyContextStore.activateMemberView(member)
+                                dismiss()
                             } label: {
                                 HStack(spacing: 14) {
                                     if familyContextStore.isSwitchingContext {

@@ -15,8 +15,6 @@ final class FamilyContextStore {
     var isSwitchingContext = false
     var didBootstrap = false
 
-    var onTabSwitchRequested: ((String) -> Void)?
-
     @ObservationIgnored private let service: FamilyRemoteService
     @ObservationIgnored private let modelContainer: ModelContainer
 
@@ -60,6 +58,22 @@ final class FamilyContextStore {
         return false
     }
 
+    var isViewingFamilyAggregate: Bool {
+        if case .familyHome = activeContext.scope {
+            return true
+        }
+        return false
+    }
+
+    var isViewingSelfContext: Bool {
+        activeContext.scope == .personalSelf
+    }
+
+    var isViewingOtherMemberContext: Bool {
+        guard case .member(let userID) = activeContext.scope else { return false }
+        return userID != currentUserID
+    }
+
     var viewedMember: FamilyMember? {
         guard case .member(let userID) = activeContext.scope else { return nil }
         return members.first(where: { $0.userID == userID })
@@ -84,7 +98,7 @@ final class FamilyContextStore {
     }
 
     var contextChipTitle: String? {
-        guard let viewedMember else { return nil }
+        guard isViewingOtherMemberContext, let viewedMember else { return nil }
         return mistiaLocalized(
             vi: "Đang xem: \(viewedMember.displayName)",
             en: "Viewing: \(viewedMember.displayName)",
@@ -288,18 +302,22 @@ final class FamilyContextStore {
         activeContext = FamilyContext(scope: .familyHome(familyID: familyID))
     }
 
-    func viewMember(_ member: FamilyMember) async {
+    func activateSelfView() {
+        activeContext = .personalSelf
+    }
+
+    func activateMemberView(_ member: FamilyMember) {
         let capabilities = capabilities(for: member)
         guard capabilities.canViewTarget else { return }
-        
+
         isSwitchingContext = true
-        // Simulate network/processing delay as requested
-        try? await Task.sleep(for: .milliseconds(600))
-        
-        activeContext = FamilyContext(scope: .member(userID: member.userID))
-        isSwitchingContext = false
-        
-        onTabSwitchRequested?("overview")
+        defer { isSwitchingContext = false }
+
+        if member.userID == currentUserID {
+            activeContext = .personalSelf
+        } else {
+            activeContext = FamilyContext(scope: .member(userID: member.userID))
+        }
     }
 
     func returnToSelf() {

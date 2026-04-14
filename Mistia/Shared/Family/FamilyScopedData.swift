@@ -17,6 +17,34 @@ enum FamilyScopedData {
             signedInUserID: sessionStore.signedInUserID
         )
     }
+
+    static func visibleForFamilyOverview<Record: MistiaOwnedRecord>(
+        _ records: [Record],
+        entity: MistiaSyncEntity,
+        scopes: [OwnedRecordScope],
+        familyMemberUserIDs: Set<UUID>,
+        familyContextStore: FamilyContextStore,
+        sessionStore: SessionStore
+    ) -> [Record] {
+        let ownerMap = MistiaRecordOwnershipStore.ownerMap(from: scopes, entity: entity)
+
+        switch familyContextStore.activeContext.scope {
+        case .familyHome:
+            return records.filter { record in
+                let ownerUserID = ownerMap[record.id] ?? sessionStore.signedInUserID
+                guard let ownerUserID else { return false }
+                return familyMemberUserIDs.contains(ownerUserID)
+            }
+        case .personalSelf, .member:
+            return visible(
+                records,
+                entity: entity,
+                scopes: scopes,
+                familyContextStore: familyContextStore,
+                sessionStore: sessionStore
+            )
+        }
+    }
 }
 
 struct FamilyContextChipBar: View {
@@ -24,7 +52,7 @@ struct FamilyContextChipBar: View {
     @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
-        if let viewedMember = familyContextStore.viewedMember {
+        if familyContextStore.isViewingOtherMemberContext, let viewedMember = familyContextStore.viewedMember {
             Button {
                 withAnimation(.snappy) {
                     familyContextStore.returnToSelf()

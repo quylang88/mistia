@@ -76,7 +76,6 @@ struct RootTabView: View {
   @Environment(\.colorScheme) private var colorScheme
   @Environment(\.modelContext) private var modelContext
   @Environment(SessionStore.self) private var sessionStore
-  @Environment(FamilyContextStore.self) private var familyContextStore
   @AppStorage(MistiaAppStorageKey.appearanceMode) private var appearanceModeRawValue =
     MistiaAppearanceMode.automatic.rawValue
   @AppStorage(MistiaAppStorageKey.appLanguage) private var appLanguageRawValue = ""
@@ -160,12 +159,6 @@ struct RootTabView: View {
           modelContext: self.modelContext,
           sessionStore: self.sessionStore
         )
-        
-        self.familyContextStore.onTabSwitchRequested = { (tabID: String) in
-          if let tab = MistiaTab(rawValue: tabID) {
-            self.selectedTab = tab
-          }
-        }
       }
       .onChange(of: hideQuickCreate) { _, newValue in
         if newValue {
