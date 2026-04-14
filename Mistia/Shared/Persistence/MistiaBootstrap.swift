@@ -78,7 +78,7 @@ enum MistiaBootstrap {
         modelContext: ModelContext,
         sessionStore: SessionStore? = nil
     ) throws {
-        let repairResult = try MistiaSystemCategorySyncSupport.normalizeLocalSystemCategories(
+        let repairResult = try MistiaSystemCategorySyncSupport.normalizeLocalCategories(
             modelContext: modelContext
         )
         var existingCategories = try modelContext.fetch(FetchDescriptor<TransactionCategory>())

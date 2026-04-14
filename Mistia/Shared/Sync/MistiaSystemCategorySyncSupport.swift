@@ -16,7 +16,7 @@ struct MistiaSystemCategoryRepairResult {
 }
 
 enum MistiaSystemCategorySyncSupport {
-    static func normalizeLocalSystemCategories(
+    static func normalizeLocalCategories(
         modelContext: ModelContext
     ) throws -> MistiaSystemCategoryRepairResult {
         var result = MistiaSystemCategoryRepairResult()
@@ -90,6 +90,11 @@ enum MistiaSystemCategorySyncSupport {
 
         categories = try modelContext.fetch(FetchDescriptor<TransactionCategory>())
         let activeCategories = categories.filter { $0.deletedAt == nil }
+        let referencedCategoryIDs = collectReferencedCategoryIDs(
+            transactions: transactions,
+            budgets: budgets,
+            recurringBills: recurringBills
+        )
         let queuedCategoryIDs = Set(
             outbox.allMutations
                 .filter { $0.entity == .category }
@@ -102,17 +107,13 @@ enum MistiaSystemCategorySyncSupport {
         )
         for category in activeCategories {
             let previousValue = category.cloudSyncEnabled
-            let nextValue: Bool
+            let isReferenced = referencedCategoryIDs.contains(category.id)
+            let isQueued = queuedCategoryIDs.contains(category.id)
+            let isConflicted = conflictCategoryIDs.contains(category.id)
+            let isCustomized = isCustomizedSystemCategory(category)
+            let isAlreadyOnCloud = category.remoteVersion > 0
 
-            if !category.isSystem || category.systemKey == nil {
-                nextValue = true
-            } else {
-                let isCustomized = isCustomizedSystemCategory(category)
-                nextValue = queuedCategoryIDs.contains(category.id)
-                    || conflictCategoryIDs.contains(category.id)
-                    || (previousValue && isCustomized)
-                    || isCustomized
-            }
+            let nextValue = isReferenced || isQueued || isConflicted || isCustomized || isAlreadyOnCloud
 
             if previousValue != nextValue {
                 category.cloudSyncEnabled = nextValue
@@ -139,7 +140,7 @@ enum MistiaSystemCategorySyncSupport {
         let context = ModelContext(container)
         let categories = try context.fetch(FetchDescriptor<TransactionCategory>())
         let categoryByID = Dictionary(uniqueKeysWithValues: categories.map { ($0.id, $0) })
-        let requiredIDs = try requiredSystemCategoryIDsForSync(
+        let requiredIDs = try requiredCategoryIDsForSync(
             entity: entity,
             recordID: recordID,
             context: context,
@@ -153,7 +154,6 @@ enum MistiaSystemCategorySyncSupport {
 
         for categoryID in requiredIDs {
             guard let category = categoryByID[categoryID] else { continue }
-            guard category.isSystem, category.systemKey != nil else { continue }
             guard !category.cloudSyncEnabled else { continue }
 
             category.cloudSyncEnabled = true
@@ -180,11 +180,13 @@ enum MistiaSystemCategorySyncSupport {
     }
 
     static func shouldQueueCategoryMutation(_ category: TransactionCategory) -> Bool {
-        !category.isSystem || category.cloudSyncEnabled || category.systemKey == nil
+        if category.cloudSyncEnabled { return true }
+        if category.isSystem && isCustomizedSystemCategory(category) { return true }
+        return false
     }
 
     static func shouldExportCategory(_ category: TransactionCategory) -> Bool {
-        !category.isSystem || category.cloudSyncEnabled || category.systemKey == nil
+        category.cloudSyncEnabled
     }
 
     static func isCustomizedSystemCategory(_ category: TransactionCategory) -> Bool {
@@ -474,7 +476,7 @@ enum MistiaSystemCategorySyncSupport {
         return expanded
     }
 
-    private static func requiredSystemCategoryIDsForSync(
+    private static func requiredCategoryIDsForSync(
         entity: MistiaSyncEntity,
         recordID: UUID,
         context: ModelContext,

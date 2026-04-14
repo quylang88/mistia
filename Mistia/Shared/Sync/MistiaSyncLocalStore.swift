@@ -74,7 +74,7 @@ enum MistiaSyncLocalStore {
         from container: ModelContainer
     ) throws -> MistiaRemoteSnapshot {
         let baseSnapshot = try exportSnapshot(for: userID, from: container)
-        let supplementalCategories = try supplementalSystemCategoriesForUpload(
+        let supplementalCategories = try supplementalCategoriesForUpload(
             userID: userID,
             baseSnapshot: baseSnapshot,
             from: container
@@ -1109,7 +1109,7 @@ enum MistiaSyncLocalStore {
         })?.id
     }
 
-    private static func supplementalSystemCategoriesForUpload(
+    private static func supplementalCategoriesForUpload(
         userID: UUID,
         baseSnapshot: MistiaRemoteSnapshot,
         from container: ModelContainer
@@ -1153,7 +1153,7 @@ enum MistiaSyncLocalStore {
             index += 1
 
             guard let category = categoryByID[categoryID] else { continue }
-            guard category.deletedAt == nil, category.isSystem, category.systemKey != nil else {
+            guard category.deletedAt == nil else {
                 continue
             }
 
