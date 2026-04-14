@@ -953,12 +953,6 @@ private struct FamilyOverviewHeader: View {
                         .buttonStyle(.plain)
                         .contextMenu {
                             Section(member.displayName) {
-                                let memberWallets = wallets.filter { wallet in
-                                    // We'd need ownerMap here too, or just check if we can get it from somewhere.
-                                    // For simplicity in this component, let's pass a filtered list if possible or just show generic "View"
-                                    true
-                                }
-
                                 ForEach(wallets.prefix(3)) { wallet in
                                     Button {} label: {
                                         HStack {
