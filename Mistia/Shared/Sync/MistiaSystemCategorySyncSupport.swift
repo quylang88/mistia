@@ -111,9 +111,8 @@ enum MistiaSystemCategorySyncSupport {
             let isQueued = queuedCategoryIDs.contains(category.id)
             let isConflicted = conflictCategoryIDs.contains(category.id)
             let isCustomized = isCustomizedSystemCategory(category)
-            let isAlreadyOnCloud = category.remoteVersion > 0
 
-            let nextValue = isReferenced || isQueued || isConflicted || isCustomized || isAlreadyOnCloud
+            let nextValue = isReferenced || isQueued || isConflicted || isCustomized
 
             if previousValue != nextValue {
                 category.cloudSyncEnabled = nextValue
