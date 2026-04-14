@@ -251,7 +251,8 @@ enum FamilyLogic {
 
             let historicalSpendable = spendableMinor - incomeAfter + expenseAfter
             return FamilyTrendPoint(date: date, valueMinor: historicalSpendable)
-        }.reversed()
+        }
+        let reversedTrend = Array(assetTrend.reversed())
 
         // 3. Distribution
         let balanceByWalletKind = visibleWallets.reduce(into: [FamilyAggregateWalletSnapshot.Kind: Int64]()) {
@@ -342,7 +343,7 @@ enum FamilyLogic {
             totalAssetsMinor: totalAssetsMinor,
             totalDebtMinor: totalDebtMinor,
             spendableMinor: spendableMinor,
-            assetTrend: assetTrend,
+            assetTrend: reversedTrend,
             balanceByWalletKind: balanceByWalletKind,
             expenseByCategory: expenseByCategory,
             spendingByMember: spendingByMember,

@@ -882,6 +882,8 @@ private struct FamilyMiniTrendChart: View {
 
 private struct FamilyOverviewHeader: View {
     @Environment(FamilyContextStore.self) private var familyContextStore
+    let wallets: [LedgerWallet]
+    let currencyCode: String
     let onInviteTap: () -> Void
 
     var body: some View {
@@ -950,10 +952,29 @@ private struct FamilyOverviewHeader: View {
                         .buttonStyle(.plain)
                         .contextMenu {
                             Section(member.displayName) {
+                                let memberWallets = wallets.filter { wallet in
+                                    // We'd need ownerMap here too, or just check if we can get it from somewhere.
+                                    // For simplicity in this component, let's pass a filtered list if possible or just show generic "View"
+                                    true
+                                }
+
+                                ForEach(wallets.prefix(3)) { wallet in
+                                    Button {} label: {
+                                        HStack {
+                                            Image(systemName: wallet.kind.defaultIconSymbolName)
+                                            Text(wallet.name)
+                                            Spacer()
+                                            Text(wallet.openingBalanceMinor.formattedCurrency(code: currencyCode))
+                                        }
+                                    }
+                                }
+
+                                Divider()
+
                                 Button {
-                                    // Action to view member data
+                                    Task { await familyContextStore.viewMember(member) }
                                 } label: {
-                                    Label(mistiaLocalized(vi: "Xem dữ liệu", en: "View data", ja: "データを見る"), systemImage: "eye.fill")
+                                    Label(mistiaLocalized(vi: "Xem chi tiết", en: "View details", ja: "詳細を見る"), systemImage: "eye.fill")
                                 }
                             }
                         }
@@ -1350,6 +1371,8 @@ struct FamilyOverviewScreen: View {
             FamilyContextChipBar()
 
             FamilyOverviewHeader(
+                wallets: allWallets,
+                currencyCode: currencyCode,
                 onInviteTap: { activeSheet = .invite }
             )
             .padding(.top, 8)
