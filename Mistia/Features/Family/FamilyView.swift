@@ -1173,6 +1173,7 @@ private struct FamilyRoleBadge: View {
 // MARK: - Family Overview Screen
 
 struct FamilyOverviewScreen: View {
+    @Environment(\.dismiss) private var dismiss
     @Environment(\.calendar) private var calendar
     @Environment(SessionStore.self) private var sessionStore
     @Environment(FamilyContextStore.self) private var familyContextStore
