@@ -74,6 +74,7 @@ enum PlanningDueRowTone {
 struct PlanningSavedDuePayment {
     let transaction: LedgerTransaction
     let occurrenceID: UUID
+    let subjectUserID: UUID?
 }
 
 enum PlanningPersistenceSupport {
@@ -86,6 +87,7 @@ enum PlanningPersistenceSupport {
         wallets: [LedgerWallet],
         occurrences: [DueOccurrenceRecord],
         modelContext: ModelContext,
+        actorUserID: UUID?,
         calendar: Calendar = .current
     ) throws -> PlanningSavedDuePayment {
         let now = Date()
@@ -121,6 +123,29 @@ enum PlanningPersistenceSupport {
         }
 
         modelContext.insert(transaction)
+        let ownershipScopes = try modelContext.fetch(FetchDescriptor<OwnedRecordScope>())
+        let subjectUserID = TransactionAuditStore.resolveOwnerUserID(
+            forWalletID: sourceWallet.id,
+            ownershipScopes: ownershipScopes
+        )
+        if let subjectUserID {
+            try MistiaRecordOwnershipStore.upsert(
+                entity: .transaction,
+                recordID: transaction.id,
+                ownerUserID: subjectUserID,
+                updatedAt: now,
+                context: modelContext
+            )
+        }
+        if let createdByUserID = actorUserID ?? subjectUserID {
+            try TransactionAuditStore.upsert(
+                transactionID: transaction.id,
+                createdByUserID: createdByUserID,
+                lastModifiedByUserID: actorUserID ?? createdByUserID,
+                updatedAt: now,
+                context: modelContext
+            )
+        }
         let occurrence = try upsertOccurrence(
             sourceKind: sourceKind,
             sourceID: sourceID,
@@ -137,7 +162,8 @@ enum PlanningPersistenceSupport {
         try modelContext.save()
         return PlanningSavedDuePayment(
             transaction: transaction,
-            occurrenceID: occurrence.id
+            occurrenceID: occurrence.id,
+            subjectUserID: subjectUserID
         )
     }
 

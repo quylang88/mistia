@@ -769,12 +769,14 @@ struct PlanningBillEditorSheet: View {
                 scheduledDate: dueItem.dueDate,
                 wallets: storedWallets,
                 occurrences: Array(storedOccurrences),
-                modelContext: modelContext
+                modelContext: modelContext,
+                actorUserID: sessionStore.signedInUserID
             )
             sessionStore.recordUpsert(
                 entity: .transaction,
                 recordID: savedPayment.transaction.id,
-                modifiedAt: savedPayment.transaction.updatedAt
+                modifiedAt: savedPayment.transaction.updatedAt,
+                subjectUserIDOverride: savedPayment.subjectUserID
             )
             sessionStore.recordUpsert(
                 entity: .dueOccurrenceRecord,
@@ -1055,12 +1057,14 @@ struct PlanningInstallmentEditorSheet: View {
                 scheduledDate: dueItem.dueDate,
                 wallets: storedWallets,
                 occurrences: Array(storedOccurrences),
-                modelContext: modelContext
+                modelContext: modelContext,
+                actorUserID: sessionStore.signedInUserID
             )
             sessionStore.recordUpsert(
                 entity: .transaction,
                 recordID: savedPayment.transaction.id,
-                modifiedAt: savedPayment.transaction.updatedAt
+                modifiedAt: savedPayment.transaction.updatedAt,
+                subjectUserIDOverride: savedPayment.subjectUserID
             )
             sessionStore.recordUpsert(
                 entity: .dueOccurrenceRecord,
@@ -1385,12 +1389,14 @@ struct PlanningCreditCardEditorSheet: View {
                 scheduledDate: dueItem.dueDate,
                 wallets: storedWallets,
                 occurrences: Array(storedOccurrences),
-                modelContext: modelContext
+                modelContext: modelContext,
+                actorUserID: sessionStore.signedInUserID
             )
             sessionStore.recordUpsert(
                 entity: .transaction,
                 recordID: savedPayment.transaction.id,
-                modifiedAt: savedPayment.transaction.updatedAt
+                modifiedAt: savedPayment.transaction.updatedAt,
+                subjectUserIDOverride: savedPayment.subjectUserID
             )
             sessionStore.recordUpsert(
                 entity: .dueOccurrenceRecord,

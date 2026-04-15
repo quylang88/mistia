@@ -180,6 +180,8 @@ struct RemoteLedgerTransaction: MistiaRemoteRow {
     var occurredAt: Date
     var createdAt: Date
     var updatedAt: Date
+    var createdByUserID: UUID
+    var lastModifiedByUserID: UUID
     var counterpartyName: String?
     var normalizedCounterpartyKey: String?
     var sourceWalletID: UUID?
@@ -204,6 +206,8 @@ struct RemoteLedgerTransaction: MistiaRemoteRow {
         case occurredAt = "occurred_at"
         case createdAt = "created_at"
         case updatedAt = "updated_at"
+        case createdByUserID = "created_by_user_id"
+        case lastModifiedByUserID = "last_modified_by_user_id"
         case counterpartyName = "counterparty_name"
         case normalizedCounterpartyKey = "normalized_counterparty_key"
         case sourceWalletID = "source_wallet_id"
@@ -214,6 +218,34 @@ struct RemoteLedgerTransaction: MistiaRemoteRow {
         case archivedAt = "archived_at"
         case syncVersion = "sync_version"
         case lastModifiedByDeviceID = "last_modified_by_device_id"
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        userID = try container.decode(UUID.self, forKey: .userID)
+        id = try container.decode(UUID.self, forKey: .id)
+        primaryKindRawValue = try container.decode(String.self, forKey: .primaryKindRawValue)
+        transferSubtypeRawValue = try container.decodeIfPresent(String.self, forKey: .transferSubtypeRawValue)
+        debtIntentRawValue = try container.decodeIfPresent(String.self, forKey: .debtIntentRawValue)
+        entryStatusRawValue = try container.decode(String.self, forKey: .entryStatusRawValue)
+        title = try container.decode(String.self, forKey: .title)
+        note = try container.decodeIfPresent(String.self, forKey: .note)
+        amountMinor = try container.decode(Int64.self, forKey: .amountMinor)
+        occurredAt = try container.decode(Date.self, forKey: .occurredAt)
+        createdAt = try container.decode(Date.self, forKey: .createdAt)
+        updatedAt = try container.decode(Date.self, forKey: .updatedAt)
+        createdByUserID = try container.decodeIfPresent(UUID.self, forKey: .createdByUserID) ?? userID
+        lastModifiedByUserID = try container.decodeIfPresent(UUID.self, forKey: .lastModifiedByUserID) ?? createdByUserID
+        counterpartyName = try container.decodeIfPresent(String.self, forKey: .counterpartyName)
+        normalizedCounterpartyKey = try container.decodeIfPresent(String.self, forKey: .normalizedCounterpartyKey)
+        sourceWalletID = try container.decodeIfPresent(UUID.self, forKey: .sourceWalletID)
+        destinationWalletID = try container.decodeIfPresent(UUID.self, forKey: .destinationWalletID)
+        categoryID = try container.decodeIfPresent(UUID.self, forKey: .categoryID)
+        deletedAt = try container.decodeIfPresent(Date.self, forKey: .deletedAt)
+        isArchived = try container.decode(Bool.self, forKey: .isArchived)
+        archivedAt = try container.decodeIfPresent(Date.self, forKey: .archivedAt)
+        syncVersion = try container.decode(Int64.self, forKey: .syncVersion)
+        lastModifiedByDeviceID = try container.decodeIfPresent(UUID.self, forKey: .lastModifiedByDeviceID)
     }
 }
 
@@ -767,6 +799,7 @@ enum MistiaSyncUploadRecord {
                 row.transferSubtypeRawValue ?? "",
                 row.debtIntentRawValue ?? "",
                 row.entryStatusRawValue,
+                row.createdByUserID.uuidString.lowercased(),
                 row.title,
                 row.note ?? "",
                 "\(row.amountMinor)",

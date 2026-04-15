@@ -10,6 +10,7 @@ final class FamilyContextStore {
     var currentMembership: FamilyMembershipRecord?
     var members: [FamilyMember] = []
     var invites: [FamilyInviteRecord] = []
+    var walletAccessGrants: [FamilyWalletAccessGrantRecord] = []
     var lastErrorMessage: String?
     var isLoading = false
     var isSwitchingContext = false
@@ -87,6 +88,19 @@ final class FamilyContextStore {
         currentRole == .owner
     }
 
+    var operableTargetUserIDs: Set<UUID> {
+        guard let currentUserID else { return [] }
+
+        if currentRole == .owner {
+            return Set(members.map(\.userID)).union([currentUserID])
+        }
+
+        let grantedTargetUserIDs = walletAccessGrants
+            .filter { $0.granteeUserID == currentUserID && $0.revokedAt == nil }
+            .map(\.targetUserID)
+        return Set(grantedTargetUserIDs).union([currentUserID])
+    }
+
     var canEditSelectedSubject: Bool {
         guard let viewedMember else { return true }
         return capabilities(for: viewedMember).canEditTarget
@@ -133,10 +147,7 @@ final class FamilyContextStore {
 
         do {
             let snapshot = try await service.fetchState(session: session)
-            family = snapshot.family
-            currentMembership = snapshot.currentMembership
-            members = snapshot.members
-            invites = snapshot.invites
+            apply(snapshot: snapshot)
             lastErrorMessage = nil
 
             if let familyID = snapshot.family?.id, activeContext.scope == .familyHome(familyID: familyID) {
@@ -146,19 +157,25 @@ final class FamilyContextStore {
                 activeContext = .personalSelf
             }
 
-            if let sessionUserID = sessionStore.signedInUserID {
-                let subjectIDs = [sessionUserID] + members.map(\.userID)
-                let financeSnapshot = try await service.fetchAccessibleFinanceSnapshot(
-                    userIDs: Array(Set(subjectIDs)),
-                    session: session
-                )
-                try MistiaSyncLocalStore.applySnapshotIncrementally(
-                    financeSnapshot,
-                    shouldPruneMissing: false,
-                    protectedRecordIDs: [],
-                    in: modelContainer
-                )
-            }
+            try await refreshAccessibleFinance(
+                sessionStore: sessionStore,
+                session: session
+            )
+        } catch {
+            lastErrorMessage = error.localizedDescription
+        }
+    }
+
+    func refreshAccessibleFinance(sessionStore: SessionStore) async {
+        let refreshedSession = try? await sessionStore.refreshedSession()
+        guard let session = refreshedSession ?? nil else { return }
+
+        do {
+            try await refreshAccessibleFinance(
+                sessionStore: sessionStore,
+                session: session
+            )
+            lastErrorMessage = nil
         } catch {
             lastErrorMessage = error.localizedDescription
         }
@@ -191,10 +208,7 @@ final class FamilyContextStore {
 
         do {
             let snapshot = try await service.createFamily(name: name, session: session)
-            family = snapshot.family
-            currentMembership = snapshot.currentMembership
-            members = snapshot.members
-            invites = snapshot.invites
+            apply(snapshot: snapshot)
             lastErrorMessage = nil
             if let familyID = snapshot.family?.id {
                 activeContext = FamilyContext(scope: .familyHome(familyID: familyID))
@@ -217,10 +231,7 @@ final class FamilyContextStore {
 
         do {
             let snapshot = try await service.joinInvite(code: inviteCode, session: session)
-            family = snapshot.family
-            currentMembership = snapshot.currentMembership
-            members = snapshot.members
-            invites = snapshot.invites
+            apply(snapshot: snapshot)
             lastErrorMessage = nil
             if let familyID = snapshot.family?.id {
                 activeContext = FamilyContext(scope: .familyHome(familyID: familyID))
@@ -258,6 +269,7 @@ final class FamilyContextStore {
         _ member: FamilyMember,
         role: FamilyRole,
         policy: FamilyPermissionPolicy,
+        grantedTargetUserIDs: Set<UUID>? = nil,
         sessionStore: SessionStore
     ) async {
         let refreshedSession = try? await sessionStore.refreshedSession()
@@ -270,6 +282,15 @@ final class FamilyContextStore {
                 policy: policy,
                 session: session
             )
+            if let familyID = family?.id,
+               let grantedTargetUserIDs {
+                try await service.syncWalletAccessGrants(
+                    familyID: familyID,
+                    granteeUserID: member.userID,
+                    targetUserIDs: grantedTargetUserIDs,
+                    session: session
+                )
+            }
             await refresh(sessionStore: sessionStore)
         } catch {
             lastErrorMessage = error.localizedDescription
@@ -344,12 +365,72 @@ final class FamilyContextStore {
         """
     }
 
+    func walletAccessTargetUserIDs(for member: FamilyMember) -> Set<UUID> {
+        Set(
+            walletAccessGrants
+                .filter { $0.granteeUserID == member.userID && $0.revokedAt == nil }
+                .map(\.targetUserID)
+        )
+    }
+
+    func displayName(for userID: UUID?) -> String? {
+        guard let userID else { return nil }
+        return members.first(where: { $0.userID == userID })?.displayName
+    }
+
     func clear() {
         activeContext = .personalSelf
         family = nil
         currentMembership = nil
         members = []
         invites = []
+        walletAccessGrants = []
         lastErrorMessage = nil
+    }
+
+    private func apply(snapshot: FamilyStateSnapshot) {
+        family = snapshot.family
+        currentMembership = snapshot.currentMembership
+        members = snapshot.members
+        invites = snapshot.invites
+        walletAccessGrants = snapshot.walletAccessGrants
+    }
+
+    private func refreshAccessibleFinance(
+        sessionStore: SessionStore,
+        session: SupabaseAuthSession
+    ) async throws {
+        let accessibleUserIDs = Array(operableTargetUserIDs)
+        guard !accessibleUserIDs.isEmpty else { return }
+
+        let financeSnapshot = try await service.fetchAccessibleFinanceSnapshot(
+            userIDs: accessibleUserIDs,
+            session: session
+        )
+        let protectedRecordIDs = sessionStore.protectedQueuedRecordIDs()
+
+        let nonTransactionSnapshot = MistiaRemoteSnapshot(
+            wallets: financeSnapshot.wallets,
+            creditCardProfiles: financeSnapshot.creditCardProfiles,
+            categories: financeSnapshot.categories,
+            transactions: [],
+            budgetPlans: financeSnapshot.budgetPlans,
+            savingsGoals: financeSnapshot.savingsGoals,
+            recurringBillPlans: financeSnapshot.recurringBillPlans,
+            installmentPlans: financeSnapshot.installmentPlans,
+            dueOccurrences: financeSnapshot.dueOccurrences
+        )
+
+        try MistiaSyncLocalStore.applySnapshotIncrementally(
+            nonTransactionSnapshot,
+            shouldPruneMissing: false,
+            protectedRecordIDs: protectedRecordIDs,
+            in: modelContainer
+        )
+        try MistiaSyncLocalStore.mergeAccessibleTransactions(
+            financeSnapshot.transactions,
+            protectedRecordIDs: protectedRecordIDs,
+            in: modelContainer
+        )
     }
 }

@@ -43,6 +43,7 @@ struct TransactionsView: View {
     @Query private var storedWallets: [LedgerWallet]
     @Query private var storedCategories: [TransactionCategory]
     @Query private var ownershipScopes: [OwnedRecordScope]
+    @Query private var transactionAuditRecords: [TransactionAuditRecord]
 
     @State private var selectedSegment: TransactionSegment? = nil
     @State private var editorTarget: TransactionEditorTarget?
@@ -110,9 +111,9 @@ struct TransactionsView: View {
     }
 
     private var visibleTransactions: [LedgerTransaction] {
-        FamilyScopedData.visible(
+        FamilyScopedData.visibleTransactionsForHistory(
             storedTransactions,
-            entity: .transaction,
+            audits: transactionAuditRecords,
             scopes: ownershipScopes,
             familyContextStore: familyContextStore,
             sessionStore: sessionStore
@@ -141,6 +142,18 @@ struct TransactionsView: View {
 
     private var transactionsByID: [UUID: LedgerTransaction] {
         Dictionary(uniqueKeysWithValues: activeTransactions.map { ($0.id, $0) })
+    }
+
+    private var transactionAuditMap: [UUID: TransactionAuditRecord] {
+        TransactionAuditStore.auditMap(from: transactionAuditRecords)
+    }
+
+    private var walletOwnerMap: [UUID: UUID] {
+        MistiaRecordOwnershipStore.ownerMap(from: ownershipScopes, entity: .wallet)
+    }
+
+    private var transactionOwnerMap: [UUID: UUID] {
+        MistiaRecordOwnershipStore.ownerMap(from: ownershipScopes, entity: .transaction)
     }
 
     private var snapshotRecords: [TransactionRecordSnapshot] {
@@ -481,7 +494,10 @@ struct TransactionsView: View {
             ForEach(sections) { section in
                 TransactionSectionCard(
                     section: section,
-                    transactionsByID: transactionsByID
+                    transactionsByID: transactionsByID,
+                    transactionAuditMap: transactionAuditMap,
+                    walletOwnerMap: walletOwnerMap,
+                    transactionOwnerMap: transactionOwnerMap
                 ) { transaction in
                     editorTarget = TransactionEditorTarget(transaction: transaction)
                 }
@@ -565,8 +581,12 @@ private struct TransactionSummaryMetric: View {
 
 private struct TransactionSectionCard: View {
     @Environment(\.colorScheme) private var colorScheme
+    @Environment(FamilyContextStore.self) private var familyContextStore
     let section: TransactionSectionSnapshot
     let transactionsByID: [UUID: LedgerTransaction]
+    let transactionAuditMap: [UUID: TransactionAuditRecord]
+    let walletOwnerMap: [UUID: UUID]
+    let transactionOwnerMap: [UUID: UUID]
     let onSelect: (LedgerTransaction) -> Void
 
     private var cardTint: Color {
@@ -605,7 +625,14 @@ private struct TransactionSectionCard: View {
                             Button {
                                 onSelect(transaction)
                             } label: {
-                                TransactionRow(record: row, transaction: transaction)
+                                TransactionRow(
+                                    record: row,
+                                    transaction: transaction,
+                                    auditRecord: transactionAuditMap[transaction.id],
+                                    walletOwnerMap: walletOwnerMap,
+                                    transactionOwnerMap: transactionOwnerMap,
+                                    familyContextStore: familyContextStore
+                                )
                                     .padding(.horizontal, 14)
                                     .padding(.vertical, 12)
                             }
@@ -630,6 +657,10 @@ private struct TransactionRow: View {
 
     let record: TransactionRecordSnapshot
     let transaction: LedgerTransaction
+    let auditRecord: TransactionAuditRecord?
+    let walletOwnerMap: [UUID: UUID]
+    let transactionOwnerMap: [UUID: UUID]
+    let familyContextStore: FamilyContextStore
 
     private var icon: String {
         switch record.primaryKind {
@@ -702,6 +733,34 @@ private struct TransactionRow: View {
         }
     }
 
+    private var auditSubtitle: String? {
+        let canonicalOwnerUserID = transactionOwnerMap[transaction.id] ?? ownerUserID(for: transaction.sourceWallet?.id)
+        let createdByUserID = auditRecord?.createdByUserID ?? canonicalOwnerUserID
+
+        var parts: [String] = []
+
+        if let createdByUserID,
+           createdByUserID != canonicalOwnerUserID,
+           let createdByName = familyContextStore.displayName(for: createdByUserID) {
+            parts.append(
+                mistiaLocalized(
+                    vi: "Tạo bởi \(createdByName)",
+                    en: "Created by \(createdByName)",
+                    ja: "\(createdByName) が作成"
+                )
+            )
+        }
+
+        if let sourceWallet = transaction.sourceWallet,
+           let sourceOwnerUserID = ownerUserID(for: sourceWallet.id),
+           sourceOwnerUserID != createdByUserID,
+           let ownerName = familyContextStore.displayName(for: sourceOwnerUserID) {
+            parts.append("\(sourceWallet.name) • \(ownerName)")
+        }
+
+        return parts.isEmpty ? nil : parts.joined(separator: " • ")
+    }
+
     private var cashflowColor: Color {
         switch record.primaryKind {
         case .expense:
@@ -758,6 +817,13 @@ private struct TransactionRow: View {
                     .font(.system(size: 12, weight: .medium, design: .rounded))
                     .foregroundStyle(.secondary)
                     .lineLimit(2)
+
+                if let auditSubtitle {
+                    Text(auditSubtitle)
+                        .font(.system(size: 11, weight: .semibold, design: .rounded))
+                        .foregroundStyle(.tertiary)
+                        .lineLimit(2)
+                }
             }
 
             Spacer(minLength: 8)
@@ -768,6 +834,11 @@ private struct TransactionRow: View {
                 .lineLimit(1)
                 .minimumScaleFactor(0.74)
         }
+    }
+
+    private func ownerUserID(for walletID: UUID?) -> UUID? {
+        guard let walletID else { return nil }
+        return walletOwnerMap[walletID]
     }
 }
 

@@ -2988,6 +2988,30 @@ enum MistiaSchemaV9: VersionedSchema {
     }
 }
 
+enum MistiaSchemaV10: VersionedSchema {
+    static var versionIdentifier: Schema.Version {
+        Schema.Version(10, 0, 0)
+    }
+
+    static var models: [any PersistentModel.Type] {
+        [
+            LedgerWallet.self,
+            CreditCardProfile.self,
+            TransactionCategory.self,
+            LedgerTransaction.self,
+            BudgetPlan.self,
+            SavingsGoal.self,
+            RecurringBillPlan.self,
+            InstallmentPlan.self,
+            DueOccurrenceRecord.self,
+            SyncConflict.self,
+            UserAccountProfile.self,
+            OwnedRecordScope.self,
+            TransactionAuditRecord.self
+        ]
+    }
+}
+
 enum MistiaMigrationPlan: SchemaMigrationPlan {
     static var schemas: [any VersionedSchema.Type] {
         [
@@ -2999,7 +3023,8 @@ enum MistiaMigrationPlan: SchemaMigrationPlan {
             MistiaSchemaV6.self,
             MistiaSchemaV7.self,
             MistiaSchemaV8.self,
-            MistiaSchemaV9.self
+            MistiaSchemaV9.self,
+            MistiaSchemaV10.self
         ]
     }
 
@@ -3012,7 +3037,8 @@ enum MistiaMigrationPlan: SchemaMigrationPlan {
             .lightweight(fromVersion: MistiaSchemaV5.self, toVersion: MistiaSchemaV6.self),
             .lightweight(fromVersion: MistiaSchemaV6.self, toVersion: MistiaSchemaV7.self),
             .lightweight(fromVersion: MistiaSchemaV7.self, toVersion: MistiaSchemaV8.self),
-            .lightweight(fromVersion: MistiaSchemaV8.self, toVersion: MistiaSchemaV9.self)
+            .lightweight(fromVersion: MistiaSchemaV8.self, toVersion: MistiaSchemaV9.self),
+            .lightweight(fromVersion: MistiaSchemaV9.self, toVersion: MistiaSchemaV10.self)
         ]
     }
 }

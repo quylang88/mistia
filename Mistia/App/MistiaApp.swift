@@ -45,6 +45,10 @@ struct MistiaApp: App {
                     sessionStore.setSubjectUserIDProvider { [weak store] in
                         store?.selectedSubjectUserID
                     }
+                    sessionStore.setPostSyncRefreshHandler { [weak store, sessionStore] in
+                        guard let store else { return }
+                        await store.refresh(sessionStore: sessionStore)
+                    }
                     await familyContextStore.bootstrapIfNeeded(sessionStore: sessionStore)
                 }
                 .onChange(of: scenePhase) { _, newPhase in

@@ -188,17 +188,29 @@ struct SupabaseRemoteStore: MistiaRemoteStore {
             throw SupabaseServiceError.invalidURL
         }
 
-        let payload = DeletePatch(
-            updatedAt: modifiedAt,
-            deletedAt: modifiedAt,
-            syncVersion: expectedVersion + 1,
-            lastModifiedByDeviceID: deviceID
-        )
-
         var request = authorizedRequest(url: url, session: session)
         request.httpMethod = "PATCH"
         request.setValue("return=representation", forHTTPHeaderField: "Prefer")
-        request.httpBody = try encoder.encode(payload)
+        if entity == .transaction {
+            request.httpBody = try encoder.encode(
+                TransactionDeletePatch(
+                    updatedAt: modifiedAt,
+                    deletedAt: modifiedAt,
+                    syncVersion: expectedVersion + 1,
+                    lastModifiedByDeviceID: deviceID,
+                    lastModifiedByUserID: session.user.id
+                )
+            )
+        } else {
+            request.httpBody = try encoder.encode(
+                DeletePatch(
+                    updatedAt: modifiedAt,
+                    deletedAt: modifiedAt,
+                    syncVersion: expectedVersion + 1,
+                    lastModifiedByDeviceID: deviceID
+                )
+            )
+        }
 
         switch entity {
         case .wallet:
@@ -509,4 +521,20 @@ private struct DeletePatch: Encodable {
     let deletedAt: Date
     let syncVersion: Int64
     let lastModifiedByDeviceID: UUID
+}
+
+private struct TransactionDeletePatch: Encodable {
+    let updatedAt: Date
+    let deletedAt: Date
+    let syncVersion: Int64
+    let lastModifiedByDeviceID: UUID
+    let lastModifiedByUserID: UUID
+
+    enum CodingKeys: String, CodingKey {
+        case updatedAt = "updated_at"
+        case deletedAt = "deleted_at"
+        case syncVersion = "sync_version"
+        case lastModifiedByDeviceID = "last_modified_by_device_id"
+        case lastModifiedByUserID = "last_modified_by_user_id"
+    }
 }

@@ -103,6 +103,7 @@ final class SessionStore {
     @ObservationIgnored private var requiresInitialSync = false
     @ObservationIgnored private var pendingInitialSyncChoice: MistiaInitialSyncChoice?
     @ObservationIgnored private var subjectUserIDProvider: (() -> UUID?)?
+    @ObservationIgnored private var postSyncRefreshHandler: (() async -> Void)?
 
     init(
         modelContainer: ModelContainer,
@@ -240,6 +241,10 @@ final class SessionStore {
 
     func setSubjectUserIDProvider(_ provider: (() -> UUID?)?) {
         subjectUserIDProvider = provider
+    }
+
+    func setPostSyncRefreshHandler(_ handler: (() async -> Void)?) {
+        postSyncRefreshHandler = handler
     }
 
     func handleSceneDidBecomeActive() {
@@ -662,10 +667,13 @@ final class SessionStore {
     func recordUpsert(
         entity: MistiaSyncEntity,
         recordID: UUID,
-        modifiedAt: Date
+        modifiedAt: Date,
+        subjectUserIDOverride: UUID? = nil
     ) {
         guard currentSession != nil else { return }
-        guard let subjectUserID = resolvedSubjectUserID(entity: entity, recordID: recordID) else {
+        let subjectUserID = subjectUserIDOverride
+            ?? resolvedSubjectUserID(entity: entity, recordID: recordID)
+        guard let subjectUserID else {
             return
         }
         let queuedMutations = queueReadyMutations(
@@ -687,10 +695,13 @@ final class SessionStore {
     func recordDelete(
         entity: MistiaSyncEntity,
         recordID: UUID,
-        modifiedAt: Date
+        modifiedAt: Date,
+        subjectUserIDOverride: UUID? = nil
     ) {
         guard currentSession != nil else { return }
-        guard let subjectUserID = resolvedSubjectUserID(entity: entity, recordID: recordID) else {
+        let subjectUserID = subjectUserIDOverride
+            ?? resolvedSubjectUserID(entity: entity, recordID: recordID)
+        guard let subjectUserID else {
             return
         }
         let queuedMutations = queueReadyMutations(
@@ -712,6 +723,10 @@ final class SessionStore {
     func recordMutations(_ mutations: [MistiaSyncMutation]) {
         guard currentSession != nil else { return }
         syncCoordinator.queue(queueReadyMutations(for: mutations))
+    }
+
+    func protectedQueuedRecordIDs() -> Set<String> {
+        syncCoordinator.queuedMutationIDs()
     }
 
     private func handleSignInFailure(_ error: Error, email: String) {
@@ -1531,6 +1546,10 @@ final class SessionStore {
                 try? await Task.sleep(for: .seconds(0.5))
             }
 
+            if let postSyncRefreshHandler {
+                await postSyncRefreshHandler()
+            }
+
             updateAutoSyncLoopState()
             return true
         } catch {
@@ -1674,6 +1693,10 @@ final class SessionStore {
             if let userID = summary?.userID, let profile = storedProfile(for: userID) {
                 profile.lastSyncAt = .now
                 try? modelContainer.mainContext.save()
+            }
+
+            if let postSyncRefreshHandler {
+                await postSyncRefreshHandler()
             }
 
             if showProgress {

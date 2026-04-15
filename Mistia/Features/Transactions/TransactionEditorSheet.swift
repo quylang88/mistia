@@ -30,11 +30,14 @@ struct TransactionEditorSheet: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(\.colorScheme) private var colorScheme
     @Environment(SessionStore.self) private var sessionStore
+    @Environment(FamilyContextStore.self) private var familyContextStore
 
     @Query
     private var storedWallets: [LedgerWallet]
     @Query
     private var storedCategories: [TransactionCategory]
+    @Query
+    private var ownershipScopes: [OwnedRecordScope]
     @Query(filter: #Predicate<LedgerTransaction> {
         $0.entryStatusRawValue == "posted" && !$0.isArchived && $0.deletedAt == nil
     })
@@ -131,11 +134,21 @@ struct TransactionEditorSheet: View {
         transaction.updatedAt = Date()
         
         do {
+            if let actorUserID = sessionStore.signedInUserID {
+                try TransactionAuditStore.touch(
+                    transactionID: transaction.id,
+                    actorUserID: actorUserID,
+                    fallbackCreatedByUserID: actorUserID,
+                    updatedAt: transaction.updatedAt,
+                    context: modelContext
+                )
+            }
             try modelContext.save()
             sessionStore.recordUpsert(
                 entity: .transaction,
                 recordID: transaction.id,
-                modifiedAt: transaction.updatedAt
+                modifiedAt: transaction.updatedAt,
+                subjectUserIDOverride: walletOwnerUserID(for: transaction.sourceWallet)
             )
             onComplete(.savedTransaction)
             dismiss()
@@ -251,7 +264,7 @@ struct TransactionEditorSheet: View {
                     Picker(mistiaLocalized(vi: "Ví", en: "Wallet", ja: "ウォレット"), selection: $draft.sourceWalletID) {
                         Text(mistiaLocalized(vi: "Chọn ví", en: "Choose wallet", ja: "ウォレットを選択")).tag(Optional<UUID>.none)
                         ForEach(availableWallets) { wallet in
-                            Text(wallet.name).tag(Optional(wallet.id))
+                            Text(walletPickerTitle(for: wallet)).tag(Optional(wallet.id))
                         }
                     }
 
@@ -277,14 +290,14 @@ struct TransactionEditorSheet: View {
                         Picker(mistiaLocalized(vi: "Từ ví", en: "From wallet", ja: "出金元"), selection: $draft.sourceWalletID) {
                             Text(mistiaLocalized(vi: "Chọn nguồn", en: "Choose source", ja: "出金元を選択")).tag(Optional<UUID>.none)
                             ForEach(availableWallets) { wallet in
-                                Text(wallet.name).tag(Optional(wallet.id))
+                                Text(walletPickerTitle(for: wallet)).tag(Optional(wallet.id))
                             }
                         }
 
                         Picker(mistiaLocalized(vi: "Đến ví", en: "To wallet", ja: "入金先"), selection: $draft.destinationWalletID) {
                             Text(mistiaLocalized(vi: "Chọn đích", en: "Choose destination", ja: "入金先を選択")).tag(Optional<UUID>.none)
                             ForEach(availableWallets) { wallet in
-                                Text(wallet.name).tag(Optional(wallet.id))
+                                Text(walletPickerTitle(for: wallet)).tag(Optional(wallet.id))
                             }
                         }
                     }
@@ -293,7 +306,7 @@ struct TransactionEditorSheet: View {
                         Picker(mistiaLocalized(vi: "Ví thực hiện", en: "Wallet used", ja: "使用ウォレット"), selection: $draft.sourceWalletID) {
                             Text(mistiaLocalized(vi: "Chọn ví", en: "Choose wallet", ja: "ウォレットを選択")).tag(Optional<UUID>.none)
                             ForEach(availableWallets) { wallet in
-                                Text(wallet.name).tag(Optional(wallet.id))
+                                Text(walletPickerTitle(for: wallet)).tag(Optional(wallet.id))
                             }
                         }
 
@@ -368,10 +381,20 @@ struct TransactionEditorSheet: View {
     }
 
     private var availableWallets: [LedgerWallet] {
-        let preferredID = target.transaction?.sourceWallet?.id ?? target.transaction?.destinationWallet?.id
+        let preferredWalletIDs = Set([
+            target.transaction?.sourceWallet?.id,
+            target.transaction?.destinationWallet?.id
+        ].compactMap { $0 })
+        let operableTargetUserIDs = effectiveOperableTargetUserIDs
 
         return storedWallets
-            .filter { ($0.deletedAt == nil && !$0.isArchived) || $0.id == preferredID }
+            .filter {
+                guard let ownerUserID = walletOwnerUserID(for: $0) else {
+                    return preferredWalletIDs.contains($0.id)
+                }
+                return operableTargetUserIDs.contains(ownerUserID) || preferredWalletIDs.contains($0.id)
+            }
+            .filter { ($0.deletedAt == nil && !$0.isArchived) || preferredWalletIDs.contains($0.id) }
             .sorted {
                 if $0.sortOrder != $1.sortOrder {
                     return $0.sortOrder < $1.sortOrder
@@ -383,11 +406,16 @@ struct TransactionEditorSheet: View {
     private var availableCategories: [TransactionCategory] {
         let desiredKind: TransactionCategoryKind = draft.primaryKind == .income ? .income : .expense
         let preferredID = target.transaction?.category?.id
+        let allowedOwnerUserIDs = effectiveCategoryOwnerUserIDs
 
         return storedCategories
             .filter {
-                ($0.kind == desiredKind)
+                guard let ownerUserID = categoryOwnerUserID(for: $0) else {
+                    return false
+                }
+                return ($0.kind == desiredKind)
                     && $0.isChildCategory
+                    && allowedOwnerUserIDs.contains(ownerUserID)
                     && (($0.deletedAt == nil && !$0.isArchived) || $0.id == preferredID)
             }
             .sorted {
@@ -401,8 +429,14 @@ struct TransactionEditorSheet: View {
     private var categorySections: [TransactionCategoryGroupSection] {
         let desiredKind: TransactionCategoryKind = draft.primaryKind == .income ? .income : .expense
         let preferredID = target.transaction?.category?.id
+        let allowedOwnerUserIDs = effectiveCategoryOwnerUserIDs
         let relevantCategories = storedCategories.filter { category in
-            category.kind == desiredKind
+            guard let ownerUserID = categoryOwnerUserID(for: category) else {
+                return false
+            }
+
+            return category.kind == desiredKind
+                && allowedOwnerUserIDs.contains(ownerUserID)
                 && category.deletedAt == nil
                 && (!category.isArchived || category.id == preferredID || category.parentCategory?.id == target.transaction?.category?.parentCategory?.id)
         }
@@ -418,7 +452,10 @@ struct TransactionEditorSheet: View {
     private var favoriteCategories: [TransactionCategory] {
         let desiredKind: TransactionCategoryKind = draft.primaryKind == .income ? .income : .expense
         return MistiaCategoryPickerSupport.favoriteCategories(
-            from: storedCategories,
+            from: storedCategories.filter {
+                guard let ownerUserID = categoryOwnerUserID(for: $0) else { return false }
+                return effectiveCategoryOwnerUserIDs.contains(ownerUserID)
+            },
             kind: desiredKind
         )
     }
@@ -427,7 +464,10 @@ struct TransactionEditorSheet: View {
         let desiredKind: TransactionCategoryKind = draft.primaryKind == .income ? .income : .expense
         return MistiaCategoryPickerSupport.recentCategories(
             from: postedTransactions,
-            categories: storedCategories,
+            categories: storedCategories.filter {
+                guard let ownerUserID = categoryOwnerUserID(for: $0) else { return false }
+                return effectiveCategoryOwnerUserIDs.contains(ownerUserID)
+            },
             kind: desiredKind
         )
     }
@@ -756,25 +796,106 @@ struct TransactionEditorSheet: View {
             modelContext.insert(transaction)
         }
 
-        persist(transaction: transaction, completion: .savedTransaction)
+        let canonicalOwnerUserID = walletOwnerUserID(for: transaction.sourceWallet)
+        persist(
+            transaction: transaction,
+            completion: .savedTransaction,
+            subjectUserIDOverride: canonicalOwnerUserID
+        )
     }
 
     private func persist(
         transaction: LedgerTransaction,
-        completion: TransactionEditorCompletion
+        completion: TransactionEditorCompletion,
+        subjectUserIDOverride: UUID? = nil
     ) {
         do {
+            let actorUserID = sessionStore.signedInUserID ?? subjectUserIDOverride
+            let now = transaction.updatedAt
+            if let actorUserID {
+                let createdByUserID = try TransactionAuditStore.fetch(
+                    transactionID: transaction.id,
+                    context: modelContext
+                )?.createdByUserID ?? actorUserID
+                try TransactionAuditStore.upsert(
+                    transactionID: transaction.id,
+                    createdByUserID: createdByUserID,
+                    lastModifiedByUserID: actorUserID,
+                    updatedAt: now,
+                    context: modelContext
+                )
+            }
+
+            if let subjectUserIDOverride {
+                try MistiaRecordOwnershipStore.upsert(
+                    entity: .transaction,
+                    recordID: transaction.id,
+                    ownerUserID: subjectUserIDOverride,
+                    updatedAt: now,
+                    context: modelContext
+                )
+            }
+
             try modelContext.save()
-            sessionStore.recordUpsert(
-                entity: .transaction,
-                recordID: transaction.id,
-                modifiedAt: transaction.updatedAt
-            )
+            if let subjectUserIDOverride {
+                sessionStore.recordUpsert(
+                    entity: .transaction,
+                    recordID: transaction.id,
+                    modifiedAt: transaction.updatedAt,
+                    subjectUserIDOverride: subjectUserIDOverride
+                )
+            }
             onComplete(completion)
             dismiss()
         } catch {
             alertMessage = mistiaLocalized(vi: "Không thể lưu giao dịch lúc này.", en: "Couldn't save this transaction right now.", ja: "現在この取引を保存できません。") + " \(error.localizedDescription)"
         }
+    }
+
+    private var effectiveOperableTargetUserIDs: Set<UUID> {
+        let operable = familyContextStore.operableTargetUserIDs
+        if operable.isEmpty, let signedInUserID = sessionStore.signedInUserID {
+            return [signedInUserID]
+        }
+        return operable
+    }
+
+    private var walletOwnerMap: [UUID: UUID] {
+        MistiaRecordOwnershipStore.ownerMap(from: ownershipScopes, entity: .wallet)
+    }
+
+    private var categoryOwnerMap: [UUID: UUID] {
+        MistiaRecordOwnershipStore.ownerMap(from: ownershipScopes, entity: .category)
+    }
+
+    private var effectiveCategoryOwnerUserIDs: Set<UUID> {
+        if let selectedSourceWallet,
+           let ownerUserID = walletOwnerUserID(for: selectedSourceWallet) {
+            return [ownerUserID]
+        }
+        return effectiveOperableTargetUserIDs
+    }
+
+    private func walletOwnerUserID(for wallet: LedgerWallet?) -> UUID? {
+        guard let wallet else { return nil }
+        return walletOwnerMap[wallet.id] ?? sessionStore.signedInUserID
+    }
+
+    private func walletOwnerUserID(for walletID: UUID?) -> UUID? {
+        guard let walletID else { return nil }
+        return walletOwnerMap[walletID] ?? sessionStore.signedInUserID
+    }
+
+    private func categoryOwnerUserID(for category: TransactionCategory) -> UUID? {
+        categoryOwnerMap[category.id] ?? sessionStore.signedInUserID
+    }
+
+    private func walletPickerTitle(for wallet: LedgerWallet) -> String {
+        guard let ownerName = familyContextStore.displayName(for: walletOwnerUserID(for: wallet)),
+              familyContextStore.family != nil else {
+            return wallet.name
+        }
+        return "\(wallet.name) • \(ownerName)"
     }
 }
 

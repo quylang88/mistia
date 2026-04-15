@@ -45,6 +45,60 @@ enum FamilyScopedData {
             )
         }
     }
+
+    static func visibleTransactionsForHistory(
+        _ transactions: [LedgerTransaction],
+        audits: [TransactionAuditRecord],
+        scopes: [OwnedRecordScope],
+        familyContextStore: FamilyContextStore,
+        sessionStore: SessionStore
+    ) -> [LedgerTransaction] {
+        guard let subjectUserID = familyContextStore.selectedSubjectUserID ?? sessionStore.signedInUserID else {
+            return transactions
+        }
+
+        let auditMap = TransactionAuditStore.auditMap(from: audits)
+        let walletOwnerMap = MistiaRecordOwnershipStore.ownerMap(from: scopes, entity: .wallet)
+        let transactionOwnerMap = MistiaRecordOwnershipStore.ownerMap(from: scopes, entity: .transaction)
+
+        return transactions.filter { transaction in
+            let sourceOwnerUserID = ownerUserID(forWalletID: transaction.sourceWallet?.id, ownerMap: walletOwnerMap)
+            let destinationOwnerUserID = ownerUserID(forWalletID: transaction.destinationWallet?.id, ownerMap: walletOwnerMap)
+            let canonicalOwnerUserID = transactionOwnerMap[transaction.id] ?? sourceOwnerUserID
+            let createdByUserID = auditMap[transaction.id]?.createdByUserID ?? canonicalOwnerUserID
+
+            return canonicalOwnerUserID == subjectUserID
+                || createdByUserID == subjectUserID
+                || sourceOwnerUserID == subjectUserID
+                || destinationOwnerUserID == subjectUserID
+        }
+    }
+
+    static func visibleTransactionsForFinancial(
+        _ transactions: [LedgerTransaction],
+        scopes: [OwnedRecordScope],
+        familyContextStore: FamilyContextStore,
+        sessionStore: SessionStore
+    ) -> [LedgerTransaction] {
+        guard let subjectUserID = familyContextStore.selectedSubjectUserID ?? sessionStore.signedInUserID else {
+            return transactions
+        }
+
+        let walletOwnerMap = MistiaRecordOwnershipStore.ownerMap(from: scopes, entity: .wallet)
+
+        return transactions.filter { transaction in
+            ownerUserID(forWalletID: transaction.sourceWallet?.id, ownerMap: walletOwnerMap) == subjectUserID
+                || ownerUserID(forWalletID: transaction.destinationWallet?.id, ownerMap: walletOwnerMap) == subjectUserID
+        }
+    }
+
+    private static func ownerUserID(
+        forWalletID walletID: UUID?,
+        ownerMap: [UUID: UUID]
+    ) -> UUID? {
+        guard let walletID else { return nil }
+        return ownerMap[walletID]
+    }
 }
 
 struct FamilyContextChipBar: View {

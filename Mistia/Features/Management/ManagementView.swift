@@ -33,6 +33,7 @@ struct ManagementView: View {
     })
     private var postedTransactions: [LedgerTransaction]
     @Query private var ownershipScopes: [OwnedRecordScope]
+    @Query private var transactionAuditRecords: [TransactionAuditRecord]
 
     @State private var destination: ManagementNavigationDestination?
     @State private var walletEditorTarget: ManagementWalletEditorTarget?
@@ -95,9 +96,9 @@ struct ManagementView: View {
     }
 
     private var visiblePostedTransactions: [LedgerTransaction] {
-        FamilyScopedData.visible(
+        FamilyScopedData.visibleTransactionsForHistory(
             postedTransactions,
-            entity: .transaction,
+            audits: transactionAuditRecords,
             scopes: ownershipScopes,
             familyContextStore: familyContextStore,
             sessionStore: sessionStore

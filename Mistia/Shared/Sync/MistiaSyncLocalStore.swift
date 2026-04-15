@@ -8,6 +8,7 @@ enum MistiaSyncLocalStore {
             + fetchCreditCardProfiles(context).count
             + fetchCategories(context).count
             + fetchTransactions(context).count
+            + fetchTransactionAudits(context).count
             + fetchBudgetPlans(context).count
             + fetchSavingsGoals(context).count
             + fetchRecurringBillPlans(context).count
@@ -21,6 +22,7 @@ enum MistiaSyncLocalStore {
     ) throws -> MistiaRemoteSnapshot {
         let context = ModelContext(container)
         let ownershipScopes = try context.fetch(FetchDescriptor<OwnedRecordScope>())
+        let auditMap = try TransactionAuditStore.auditMap(from: fetchTransactionAudits(context))
         let walletOwnerMap = MistiaRecordOwnershipStore.ownerMap(from: ownershipScopes, entity: .wallet)
         let profileOwnerMap = MistiaRecordOwnershipStore.ownerMap(from: ownershipScopes, entity: .creditCardProfile)
         let categoryOwnerMap = MistiaRecordOwnershipStore.ownerMap(from: ownershipScopes, entity: .category)
@@ -54,7 +56,13 @@ enum MistiaSyncLocalStore {
             wallets: wallets.map { RemoteLedgerWallet(local: $0, userID: userID) },
             creditCardProfiles: creditCardProfiles.map { RemoteCreditCardProfile(local: $0, userID: userID) },
             categories: categories.map { RemoteTransactionCategory(local: $0, userID: userID) },
-            transactions: transactions.map { RemoteLedgerTransaction(local: $0, userID: userID) },
+            transactions: transactions.map {
+                RemoteLedgerTransaction(
+                    local: $0,
+                    userID: userID,
+                    auditRecord: auditMap[$0.id]
+                )
+            },
             budgetPlans: budgetPlans.map { RemoteBudgetPlan(local: $0, userID: userID) },
             savingsGoals: savingsGoals.map { RemoteSavingsGoal(local: $0, userID: userID) },
             recurringBillPlans: recurringBillPlans.map {
@@ -103,6 +111,7 @@ enum MistiaSyncLocalStore {
     ) throws -> MistiaSyncUploadRecord? {
         let context = ModelContext(container)
         let subjectUserID = mutation.subjectUserID
+        let auditMap = try TransactionAuditStore.auditMap(from: fetchTransactionAudits(context))
 
         switch mutation.entity {
         case .wallet:
@@ -127,7 +136,13 @@ enum MistiaSyncLocalStore {
             guard let transaction = try fetchTransactions(context).first(where: { $0.id == mutation.recordID }) else {
                 return nil
             }
-            return .transaction(RemoteLedgerTransaction(local: transaction, userID: subjectUserID))
+            return .transaction(
+                RemoteLedgerTransaction(
+                    local: transaction,
+                    userID: subjectUserID,
+                    auditRecord: auditMap[transaction.id]
+                )
+            )
         case .budgetPlan:
             guard let plan = try fetchBudgetPlans(context).first(where: { $0.id == mutation.recordID }) else {
                 return nil
@@ -407,6 +422,90 @@ enum MistiaSyncLocalStore {
         try context.save()
     }
 
+    static func mergeAccessibleTransactions(
+        _ rows: [RemoteLedgerTransaction],
+        protectedRecordIDs: Set<String>,
+        in container: ModelContainer
+    ) throws {
+        let context = ModelContext(container)
+        let wallets = try fetchWallets(context)
+        let categories = try fetchCategories(context)
+        let transactions = try fetchTransactions(context)
+        let ownershipScopes = try context.fetch(FetchDescriptor<OwnedRecordScope>())
+        let audits = try TransactionAuditStore.auditMap(from: fetchTransactionAudits(context))
+        let walletOwnerMap = MistiaRecordOwnershipStore.ownerMap(from: ownershipScopes, entity: .wallet)
+        let transactionOwnerMap = MistiaRecordOwnershipStore.ownerMap(from: ownershipScopes, entity: .transaction)
+        let walletByID = Dictionary(uniqueKeysWithValues: wallets.map { ($0.id, $0) })
+        let categoryByID = Dictionary(uniqueKeysWithValues: categories.map { ($0.id, $0) })
+        var transactionByID = Dictionary(uniqueKeysWithValues: transactions.map { ($0.id, $0) })
+
+        for row in rows {
+            let storageKey = canonicalStorageKey(entity: .transaction, recordID: row.id)
+            guard !protectedRecordIDs.contains(storageKey) else { continue }
+
+            guard let localTransaction = transactionByID[row.id] else {
+                try upsertTransaction(
+                    row,
+                    context: context,
+                    walletByID: walletByID,
+                    categoryByID: categoryByID,
+                    transactionByID: &transactionByID
+                )
+                continue
+            }
+
+            guard row.syncVersion >= localTransaction.remoteVersion else {
+                continue
+            }
+
+            let localOwnerUserID =
+                transactionOwnerMap[localTransaction.id]
+                ?? TransactionAuditStore.resolveOwnerUserID(
+                    forWalletID: localTransaction.sourceWallet?.id,
+                    ownershipScopes: ownershipScopes
+                )
+                ?? ownerUserID(
+                    forWalletID: localTransaction.destinationWallet?.id,
+                    ownerMap: walletOwnerMap
+                )
+                ?? row.userID
+
+            let localRecord = MistiaSyncUploadRecord.transaction(
+                RemoteLedgerTransaction(
+                    local: localTransaction,
+                    userID: localOwnerUserID,
+                    auditRecord: audits[localTransaction.id]
+                )
+            )
+            let remoteRecord = MistiaSyncUploadRecord.transaction(row)
+
+            if row.syncVersion > localTransaction.remoteVersion,
+               localTransaction.updatedAt > row.updatedAt,
+               localRecord.payloadFingerprint != remoteRecord.payloadFingerprint {
+                try saveConflict(
+                    entity: .transaction,
+                    recordID: row.id,
+                    kind: row.deletedAt == nil ? .editEdit : .editDelete,
+                    localDraft: localRecord,
+                    remoteRecord: remoteRecord,
+                    baseVersion: localTransaction.remoteVersion,
+                    remoteVersion: row.syncVersion,
+                    in: container
+                )
+            }
+
+            try upsertTransaction(
+                row,
+                context: context,
+                walletByID: walletByID,
+                categoryByID: categoryByID,
+                transactionByID: &transactionByID
+            )
+        }
+
+        try context.save()
+    }
+
     static func saveConflict(
         entity: MistiaSyncEntity,
         recordID: UUID,
@@ -537,6 +636,10 @@ enum MistiaSyncLocalStore {
 
         for scope in try context.fetch(FetchDescriptor<OwnedRecordScope>()) {
             context.delete(scope)
+        }
+
+        for record in try fetchTransactionAudits(context) {
+            context.delete(record)
         }
 
         for record in try fetchDueOccurrences(context) {
@@ -818,6 +921,13 @@ enum MistiaSyncLocalStore {
             updatedAt: row.updatedAt,
             context: context
         )
+        try TransactionAuditStore.upsert(
+            transactionID: row.id,
+            createdByUserID: row.createdByUserID,
+            lastModifiedByUserID: row.lastModifiedByUserID,
+            updatedAt: row.updatedAt,
+            context: context
+        )
     }
 
     private static func upsertBudget(
@@ -1080,6 +1190,10 @@ enum MistiaSyncLocalStore {
         try context.fetch(FetchDescriptor<LedgerTransaction>())
     }
 
+    private static func fetchTransactionAudits(_ context: ModelContext) throws -> [TransactionAuditRecord] {
+        try context.fetch(FetchDescriptor<TransactionAuditRecord>())
+    }
+
     private static func fetchBudgetPlans(_ context: ModelContext) throws -> [BudgetPlan] {
         try context.fetch(FetchDescriptor<BudgetPlan>())
     }
@@ -1176,6 +1290,21 @@ enum MistiaSyncLocalStore {
     private static func fetchConflicts(_ context: ModelContext) throws -> [SyncConflict] {
         try context.fetch(FetchDescriptor<SyncConflict>())
     }
+
+    private static func canonicalStorageKey(
+        entity: MistiaSyncEntity,
+        recordID: UUID
+    ) -> String {
+        "\(entity.rawValue):\(recordID.uuidString.lowercased())"
+    }
+
+    private static func ownerUserID(
+        forWalletID walletID: UUID?,
+        ownerMap: [UUID: UUID]
+    ) -> UUID? {
+        guard let walletID else { return nil }
+        return ownerMap[walletID]
+    }
 }
 
 private extension RemoteLedgerWallet {
@@ -1251,31 +1380,36 @@ private extension RemoteTransactionCategory {
 }
 
 private extension RemoteLedgerTransaction {
-    init(local transaction: LedgerTransaction, userID: UUID) {
-        self.init(
-            userID: userID,
-            id: transaction.id,
-            primaryKindRawValue: transaction.primaryKindRawValue,
-            transferSubtypeRawValue: transaction.transferSubtypeRawValue,
-            debtIntentRawValue: transaction.debtIntentRawValue,
-            entryStatusRawValue: transaction.entryStatusRawValue,
-            title: transaction.title,
-            note: transaction.note,
-            amountMinor: transaction.amountMinor,
-            occurredAt: transaction.occurredAt,
-            createdAt: transaction.createdAt,
-            updatedAt: transaction.updatedAt,
-            counterpartyName: transaction.counterpartyName,
-            normalizedCounterpartyKey: transaction.normalizedCounterpartyKey,
-            sourceWalletID: transaction.sourceWallet?.id,
-            destinationWalletID: transaction.destinationWallet?.id,
-            categoryID: transaction.category?.id,
-            deletedAt: transaction.deletedAt,
-            isArchived: transaction.isArchived,
-            archivedAt: transaction.archivedAt,
-            syncVersion: max(transaction.remoteVersion, 1),
-            lastModifiedByDeviceID: nil
-        )
+    init(
+        local transaction: LedgerTransaction,
+        userID: UUID,
+        auditRecord: TransactionAuditRecord?
+    ) {
+        let createdByUserID = auditRecord?.createdByUserID ?? userID
+        self.userID = userID
+        self.id = transaction.id
+        self.primaryKindRawValue = transaction.primaryKindRawValue
+        self.transferSubtypeRawValue = transaction.transferSubtypeRawValue
+        self.debtIntentRawValue = transaction.debtIntentRawValue
+        self.entryStatusRawValue = transaction.entryStatusRawValue
+        self.title = transaction.title
+        self.note = transaction.note
+        self.amountMinor = transaction.amountMinor
+        self.occurredAt = transaction.occurredAt
+        self.createdAt = transaction.createdAt
+        self.updatedAt = transaction.updatedAt
+        self.createdByUserID = createdByUserID
+        self.lastModifiedByUserID = auditRecord?.lastModifiedByUserID ?? createdByUserID
+        self.counterpartyName = transaction.counterpartyName
+        self.normalizedCounterpartyKey = transaction.normalizedCounterpartyKey
+        self.sourceWalletID = transaction.sourceWallet?.id
+        self.destinationWalletID = transaction.destinationWallet?.id
+        self.categoryID = transaction.category?.id
+        self.deletedAt = transaction.deletedAt
+        self.isArchived = transaction.isArchived
+        self.archivedAt = transaction.archivedAt
+        self.syncVersion = max(transaction.remoteVersion, 1)
+        self.lastModifiedByDeviceID = nil
     }
 }
 

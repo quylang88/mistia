@@ -16,7 +16,7 @@ enum MistiaDataStack {
         do {
             return try makeLaunchState()
         } catch {
-            let schema = Schema(versionedSchema: MistiaSchemaV9.self)
+            let schema = Schema(versionedSchema: MistiaSchemaV10.self)
             let fallbackConfiguration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)
             let fallbackContainer = try! ModelContainer(
                 for: schema,
@@ -37,7 +37,7 @@ enum MistiaDataStack {
     static let launchIssue: LaunchIssue? = sharedLaunchState.issue
 
     private static func makeLaunchState() throws -> LaunchState {
-        let schema = Schema(versionedSchema: MistiaSchemaV9.self)
+        let schema = Schema(versionedSchema: MistiaSchemaV10.self)
         let primaryStoreURL = defaultStoreURL(for: schema)
         let recoveredStoreURL = MistiaLegacyStoreRecovery.recoveredStoreURL(for: primaryStoreURL)
         let fileManager = FileManager.default

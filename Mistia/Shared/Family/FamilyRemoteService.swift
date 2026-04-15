@@ -116,6 +116,28 @@ struct FamilyUserProfileRecord: Codable, Identifiable, Equatable {
     var id: UUID { userID }
 }
 
+struct FamilyWalletAccessGrantRecord: Codable, Identifiable, Equatable {
+    let id: UUID
+    let familyID: UUID
+    let granteeUserID: UUID
+    let targetUserID: UUID
+    let grantedByUserID: UUID
+    let createdAt: Date
+    let updatedAt: Date
+    let revokedAt: Date?
+
+    enum CodingKeys: String, CodingKey {
+        case id
+        case familyID = "family_id"
+        case granteeUserID = "grantee_user_id"
+        case targetUserID = "target_user_id"
+        case grantedByUserID = "granted_by_user_id"
+        case createdAt = "created_at"
+        case updatedAt = "updated_at"
+        case revokedAt = "revoked_at"
+    }
+}
+
 struct FamilyMember: Identifiable, Equatable {
     let membershipID: UUID
     let familyID: UUID
@@ -139,6 +161,7 @@ struct FamilyStateSnapshot: Equatable {
     var currentMembership: FamilyMembershipRecord?
     var members: [FamilyMember]
     var invites: [FamilyInviteRecord]
+    var walletAccessGrants: [FamilyWalletAccessGrantRecord]
 }
 
 @MainActor
@@ -158,7 +181,8 @@ struct FamilyRemoteService {
                 family: nil,
                 currentMembership: nil,
                 members: [],
-                invites: []
+                invites: [],
+                walletAccessGrants: []
             )
         }
 
@@ -185,12 +209,18 @@ struct FamilyRemoteService {
         let invites = currentMembership.role == .owner
             ? try await fetchInvites(familyID: currentMembership.familyID, session: session)
             : []
+        let walletAccessGrants = try await fetchWalletAccessGrants(
+            familyID: currentMembership.familyID,
+            session: session,
+            granteeUserID: currentMembership.role == .owner ? nil : session.user.id
+        )
 
         return FamilyStateSnapshot(
             family: family,
             currentMembership: currentMembership,
             members: members,
-            invites: invites
+            invites: invites,
+            walletAccessGrants: walletAccessGrants
         )
     }
 
@@ -300,6 +330,53 @@ struct FamilyRemoteService {
         ) as [FamilyMembershipRecord]
     }
 
+    func syncWalletAccessGrants(
+        familyID: UUID,
+        granteeUserID: UUID,
+        targetUserIDs: Set<UUID>,
+        session: SupabaseAuthSession
+    ) async throws {
+        let currentGrants = try await fetchWalletAccessGrants(
+            familyID: familyID,
+            session: session,
+            granteeUserID: granteeUserID
+        )
+        let currentTargetUserIDs = Set(currentGrants.map(\.targetUserID))
+        let desiredTargetUserIDs = Set(targetUserIDs.filter { $0 != granteeUserID })
+
+        let grantsToInsert = desiredTargetUserIDs.subtracting(currentTargetUserIDs).map {
+            FamilyWalletAccessGrantInsertPayload(
+                familyID: familyID,
+                granteeUserID: granteeUserID,
+                targetUserID: $0,
+                grantedByUserID: session.user.id
+            )
+        }
+
+        if !grantsToInsert.isEmpty {
+            _ = try await insertRows(
+                path: "family_wallet_access_grants",
+                body: grantsToInsert,
+                session: session
+            ) as [FamilyWalletAccessGrantRecord]
+        }
+
+        let grantsToRevoke = currentTargetUserIDs.subtracting(desiredTargetUserIDs)
+        guard !grantsToRevoke.isEmpty else { return }
+
+        _ = try await patchRows(
+            path: "family_wallet_access_grants",
+            filters: [
+                URLQueryItem(name: "family_id", value: "eq.\(familyID.uuidString.lowercased())"),
+                URLQueryItem(name: "grantee_user_id", value: "eq.\(granteeUserID.uuidString.lowercased())"),
+                URLQueryItem(name: "target_user_id", value: inFilter(for: Array(grantsToRevoke))),
+                URLQueryItem(name: "revoked_at", value: "is.null")
+            ],
+            body: FamilyWalletAccessGrantRevokePayload(revokedAt: .now),
+            session: session
+        ) as [FamilyWalletAccessGrantRecord]
+    }
+
     func removeMember(
         membershipID: UUID,
         session: SupabaseAuthSession
@@ -373,7 +450,7 @@ struct FamilyRemoteService {
         async let wallets: [RemoteLedgerWallet] = fetchFinanceRows(path: MistiaSyncEntity.wallet.tableName, userIDs: userIDs, session: session)
         async let profiles: [RemoteCreditCardProfile] = fetchFinanceRows(path: MistiaSyncEntity.creditCardProfile.tableName, userIDs: userIDs, session: session)
         async let categories: [RemoteTransactionCategory] = fetchFinanceRows(path: MistiaSyncEntity.category.tableName, userIDs: userIDs, session: session)
-        async let transactions: [RemoteLedgerTransaction] = fetchFinanceRows(path: MistiaSyncEntity.transaction.tableName, userIDs: userIDs, session: session)
+        async let transactions: [RemoteLedgerTransaction] = fetchAccessibleTransactionRows(session: session)
         async let budgets: [RemoteBudgetPlan] = fetchFinanceRows(path: MistiaSyncEntity.budgetPlan.tableName, userIDs: userIDs, session: session)
         async let goals: [RemoteSavingsGoal] = fetchFinanceRows(path: MistiaSyncEntity.savingsGoal.tableName, userIDs: userIDs, session: session)
         async let bills: [RemoteRecurringBillPlan] = fetchFinanceRows(path: MistiaSyncEntity.recurringBillPlan.tableName, userIDs: userIDs, session: session)
@@ -471,6 +548,31 @@ struct FamilyRemoteService {
                 URLQueryItem(name: "revoked_at", value: "is.null"),
                 URLQueryItem(name: "order", value: "created_at.desc")
             ],
+            session: session
+        )
+    }
+
+    private func fetchWalletAccessGrants(
+        familyID: UUID,
+        session: SupabaseAuthSession,
+        granteeUserID: UUID? = nil
+    ) async throws -> [FamilyWalletAccessGrantRecord] {
+        var filters = [
+            URLQueryItem(name: "select", value: "*"),
+            URLQueryItem(name: "family_id", value: "eq.\(familyID.uuidString.lowercased())"),
+            URLQueryItem(name: "revoked_at", value: "is.null"),
+            URLQueryItem(name: "order", value: "created_at.asc")
+        ]
+
+        if let granteeUserID {
+            filters.append(
+                URLQueryItem(name: "grantee_user_id", value: "eq.\(granteeUserID.uuidString.lowercased())")
+            )
+        }
+
+        return try await fetchRows(
+            path: "family_wallet_access_grants",
+            filters: filters,
             session: session
         )
     }
@@ -686,6 +788,19 @@ struct FamilyRemoteService {
         )
     }
 
+    private func fetchAccessibleTransactionRows(
+        session: SupabaseAuthSession
+    ) async throws -> [RemoteLedgerTransaction] {
+        try await fetchRows(
+            path: MistiaSyncEntity.transaction.tableName,
+            filters: [
+                URLQueryItem(name: "select", value: "*"),
+                URLQueryItem(name: "order", value: "updated_at.asc")
+            ],
+            session: session
+        )
+    }
+
     private func configuration() throws -> MistiaSyncConfiguration {
         guard let configuration = configurationProvider() else {
             throw SupabaseServiceError.configurationMissing
@@ -823,5 +938,27 @@ private struct FamilyMembershipUpdatePayload: Encodable {
         case canViewDebts = "can_view_debts"
         case canViewKids = "can_view_kids"
         case canEditKids = "can_edit_kids"
+    }
+}
+
+private struct FamilyWalletAccessGrantInsertPayload: Encodable {
+    let familyID: UUID
+    let granteeUserID: UUID
+    let targetUserID: UUID
+    let grantedByUserID: UUID
+
+    enum CodingKeys: String, CodingKey {
+        case familyID = "family_id"
+        case granteeUserID = "grantee_user_id"
+        case targetUserID = "target_user_id"
+        case grantedByUserID = "granted_by_user_id"
+    }
+}
+
+private struct FamilyWalletAccessGrantRevokePayload: Encodable {
+    let revokedAt: Date
+
+    enum CodingKeys: String, CodingKey {
+        case revokedAt = "revoked_at"
     }
 }

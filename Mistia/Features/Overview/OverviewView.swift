@@ -109,9 +109,8 @@ struct OverviewView: View {
     }
 
     private var visibleTransactions: [LedgerTransaction] {
-        FamilyScopedData.visible(
+        FamilyScopedData.visibleTransactionsForFinancial(
             storedTransactions,
-            entity: .transaction,
             scopes: ownershipScopes,
             familyContextStore: familyContextStore,
             sessionStore: sessionStore

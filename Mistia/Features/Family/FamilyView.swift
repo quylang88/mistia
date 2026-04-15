@@ -2084,11 +2084,13 @@ private struct FamilyPermissionsSheet: View {
 
     @State private var role: FamilyRole
     @State private var policy: FamilyPermissionPolicy
+    @State private var grantedTargetUserIDs: Set<UUID>
 
     init(member: FamilyMember) {
         self.member = member
         _role = State(initialValue: member.role)
         _policy = State(initialValue: member.policy)
+        _grantedTargetUserIDs = State(initialValue: [])
     }
 
     var body: some View {
@@ -2112,6 +2114,32 @@ private struct FamilyPermissionsSheet: View {
                     Toggle(mistiaLocalized(vi: "Xem kid", en: "View kids", ja: "kid を表示"), isOn: $policy.canViewKids)
                     Toggle(mistiaLocalized(vi: "Sửa kid", en: "Edit kids", ja: "kid を編集"), isOn: $policy.canEditKids)
                 }
+
+                if familyContextStore.currentRole == .owner {
+                    Section(mistiaLocalized(vi: "Có thể dùng ví của ai", en: "Can use whose wallets", ja: "誰のウォレットを使えるか")) {
+                        ForEach(grantTargets, id: \.membershipID) { target in
+                            Toggle(
+                                target.displayName,
+                                isOn: Binding(
+                                    get: { grantedTargetUserIDs.contains(target.userID) },
+                                    set: { isEnabled in
+                                        if isEnabled {
+                                            grantedTargetUserIDs.insert(target.userID)
+                                        } else {
+                                            grantedTargetUserIDs.remove(target.userID)
+                                        }
+                                    }
+                                )
+                            )
+                        }
+
+                        if grantTargets.isEmpty {
+                            Text(mistiaLocalized(vi: "Không còn thành viên nào khác để cấp quyền.", en: "There are no other members to grant access to.", ja: "アクセス権を付与できる他のメンバーはいません。"))
+                                .font(.footnote)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                }
             }
             .dismissKeyboardOnTap()
             .navigationTitle(mistiaLocalized(vi: "Role & quyền", en: "Role & permissions", ja: "役割と権限"))
@@ -2130,6 +2158,7 @@ private struct FamilyPermissionsSheet: View {
                                 member,
                                 role: role,
                                 policy: policy,
+                                grantedTargetUserIDs: grantedTargetUserIDs,
                                 sessionStore: sessionStore
                             )
                             dismiss()
@@ -2141,6 +2170,13 @@ private struct FamilyPermissionsSheet: View {
         .onChange(of: role) { _, newRole in
             policy = FamilyPermissionPolicy.preset(for: newRole)
         }
+        .task {
+            grantedTargetUserIDs = familyContextStore.walletAccessTargetUserIDs(for: member)
+        }
+    }
+
+    private var grantTargets: [FamilyMember] {
+        familyContextStore.members.filter { $0.userID != member.userID }
     }
 }
 

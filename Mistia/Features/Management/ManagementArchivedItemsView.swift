@@ -104,8 +104,24 @@ struct ManagementArchivedItemsView: View {
 
     private func saveAndSync(entity: MistiaSyncEntity, id: UUID, updatedAt: Date) {
         do {
+            if entity == .transaction, let actorUserID = sessionStore.signedInUserID {
+                try TransactionAuditStore.touch(
+                    transactionID: id,
+                    actorUserID: actorUserID,
+                    fallbackCreatedByUserID: actorUserID,
+                    updatedAt: updatedAt,
+                    context: modelContext
+                )
+            }
             try modelContext.save()
-            sessionStore.recordUpsert(entity: entity, recordID: id, modifiedAt: updatedAt)
+            sessionStore.recordUpsert(
+                entity: entity,
+                recordID: id,
+                modifiedAt: updatedAt,
+                subjectUserIDOverride: entity == .transaction
+                    ? transactionOwnerUserID(for: id)
+                    : nil
+            )
         } catch {
             print("Failed to save and sync restore: \(error)")
         }
@@ -113,11 +129,39 @@ struct ManagementArchivedItemsView: View {
 
     private func saveAndSyncDelete(entity: MistiaSyncEntity, id: UUID, updatedAt: Date) {
         do {
+            if entity == .transaction, let actorUserID = sessionStore.signedInUserID {
+                try TransactionAuditStore.touch(
+                    transactionID: id,
+                    actorUserID: actorUserID,
+                    fallbackCreatedByUserID: actorUserID,
+                    updatedAt: updatedAt,
+                    context: modelContext
+                )
+            }
             try modelContext.save()
-            sessionStore.recordDelete(entity: entity, recordID: id, modifiedAt: updatedAt)
+            sessionStore.recordDelete(
+                entity: entity,
+                recordID: id,
+                modifiedAt: updatedAt,
+                subjectUserIDOverride: entity == .transaction
+                    ? transactionOwnerUserID(for: id)
+                    : nil
+            )
         } catch {
             print("Failed to save and sync delete: \(error)")
         }
+    }
+
+    private func transactionOwnerUserID(for transactionID: UUID) -> UUID? {
+        guard let walletID = archivedTransactions.first(where: { $0.id == transactionID })?.sourceWallet?.id else {
+            return nil
+        }
+
+        return try? MistiaRecordOwnershipStore.ownerUserID(
+            entity: .wallet,
+            recordID: walletID,
+            in: MistiaDataStack.sharedModelContainer
+        )
     }
 }
 
