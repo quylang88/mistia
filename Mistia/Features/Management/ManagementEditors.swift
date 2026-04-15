@@ -72,6 +72,7 @@ struct ManagementWalletEditorSheet: View {
                             Text(kind.title).tag(kind)
                         }
                     }
+                    .pickerStyle(.menu)
 
                     TextField(draft.kind.balanceFieldTitle, text: $draft.openingBalanceText)
                         .keyboardType(.numberPad)
@@ -125,6 +126,7 @@ struct ManagementWalletEditorSheet: View {
                                 Text(network.title).tag(network)
                             }
                         }
+                        .pickerStyle(.menu)
 
                         TextField(mistiaLocalized(vi: "4 số cuối", en: "Last 4 digits", ja: "下4桁"), text: $draft.last4)
                             .keyboardType(.numberPad)
@@ -140,12 +142,14 @@ struct ManagementWalletEditorSheet: View {
                                 Text(mistiaLocalized(vi: "Ngày \(day)", en: "Day \(day)", ja: "\(day) 日")).tag(day)
                             }
                         }
+                        .pickerStyle(.menu)
 
                         Picker(mistiaLocalized(vi: "Ngày thanh toán", en: "Payment day", ja: "支払日"), selection: $draft.paymentDueDay) {
                             ForEach(1...31, id: \.self) { day in
                                 Text(mistiaLocalized(vi: "Ngày \(day)", en: "Day \(day)", ja: "\(day) 日")).tag(day)
                             }
                         }
+                        .pickerStyle(.menu)
 
                         Picker(mistiaLocalized(vi: "Nguồn thanh toán", en: "Payment source", ja: "支払い元"), selection: $draft.paymentSourceWalletID) {
                             Text(mistiaLocalized(vi: "Chọn sau", en: "Choose later", ja: "あとで選択")).tag(Optional<UUID>.none)
@@ -154,6 +158,7 @@ struct ManagementWalletEditorSheet: View {
                                 Text(wallet.name).tag(Optional(wallet.id))
                             }
                         }
+                        .pickerStyle(.menu)
 
                         TextField(mistiaLocalized(vi: "Ghi chú", en: "Notes", ja: "メモ"), text: $draft.notes, axis: .vertical)
                             .lineLimit(3...5)
