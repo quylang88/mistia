@@ -267,6 +267,7 @@ struct TransactionEditorSheet: View {
                             Text(walletPickerTitle(for: wallet)).tag(Optional(wallet.id))
                         }
                     }
+                    .pickerStyle(.menu)
 
                     Button {
                         showsCategoryPicker = true
@@ -293,6 +294,7 @@ struct TransactionEditorSheet: View {
                                 Text(walletPickerTitle(for: wallet)).tag(Optional(wallet.id))
                             }
                         }
+                        .pickerStyle(.menu)
 
                         Picker(mistiaLocalized(vi: "Đến ví", en: "To wallet", ja: "入金先"), selection: $draft.destinationWalletID) {
                             Text(mistiaLocalized(vi: "Chọn đích", en: "Choose destination", ja: "入金先を選択")).tag(Optional<UUID>.none)
@@ -300,6 +302,7 @@ struct TransactionEditorSheet: View {
                                 Text(walletPickerTitle(for: wallet)).tag(Optional(wallet.id))
                             }
                         }
+                        .pickerStyle(.menu)
                     }
                 } else {
                     Section(mistiaLocalized(vi: "Đối tượng", en: "Counterparty", ja: "相手")) {
@@ -309,6 +312,7 @@ struct TransactionEditorSheet: View {
                                 Text(walletPickerTitle(for: wallet)).tag(Optional(wallet.id))
                             }
                         }
+                        .pickerStyle(.menu)
 
                         TextField(
                             mistiaLocalized(vi: "Tên người liên quan", en: "Counterparty name", ja: "相手の名前"),

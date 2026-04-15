@@ -399,6 +399,7 @@ struct PlanningGoalEditorSheet: View {
                             Text(wallet.name).tag(Optional(wallet.id))
                         }
                     }
+                    .pickerStyle(.menu)
                 }
 
                 if target.goal != nil {
@@ -619,6 +620,7 @@ struct PlanningBillEditorSheet: View {
                             Text(mistiaLocalized(vi: "Ngày \(day)", en: "Day \(day)", ja: "\(day) 日")).tag(day)
                         }
                     }
+                    .pickerStyle(.menu)
                     Stepper(
                         mistiaLocalized(
                             vi: "Tần suất: \(draft.frequencyMonths) tháng",
@@ -634,6 +636,7 @@ struct PlanningBillEditorSheet: View {
                             Text(wallet.name).tag(Optional(wallet.id))
                         }
                     }
+                    .pickerStyle(.menu)
                 }
 
                 if let dueItem = target.dueItem, dueItem.status == .pending {
@@ -903,6 +906,7 @@ struct PlanningInstallmentEditorSheet: View {
                             Text(mistiaLocalized(vi: "Ngày \(day)", en: "Day \(day)", ja: "\(day) 日")).tag(day)
                         }
                     }
+                    .pickerStyle(.menu)
                     Stepper(
                         mistiaLocalized(
                             vi: "Tần suất: \(draft.frequencyMonths) tháng",
@@ -920,6 +924,7 @@ struct PlanningInstallmentEditorSheet: View {
                             Text(wallet.name).tag(Optional(wallet.id))
                         }
                     }
+                    .pickerStyle(.menu)
                 }
 
                 if let dueItem = target.dueItem, dueItem.status == .pending {
@@ -1184,6 +1189,7 @@ struct PlanningCreditCardEditorSheet: View {
                             Text(network.title).tag(network)
                         }
                     }
+                    .pickerStyle(.menu)
                     TextField(mistiaLocalized(vi: "4 số cuối", en: "Last 4 digits", ja: "下4桁"), text: $draft.last4)
                         .keyboardType(.numberPad)
                         .onChange(of: draft.last4) { _, newValue in
@@ -1198,17 +1204,20 @@ struct PlanningCreditCardEditorSheet: View {
                             Text(mistiaLocalized(vi: "Ngày \(day)", en: "Day \(day)", ja: "\(day) 日")).tag(day)
                         }
                     }
+                    .pickerStyle(.menu)
                     Picker(mistiaLocalized(vi: "Ngày chốt sao kê", en: "Statement closing day", ja: "締め日"), selection: $draft.statementClosingDay) {
                         ForEach(1...31, id: \.self) { day in
                             Text(mistiaLocalized(vi: "Ngày \(day)", en: "Day \(day)", ja: "\(day) 日")).tag(day)
                         }
                     }
+                    .pickerStyle(.menu)
                     Picker(mistiaLocalized(vi: "Ví thanh toán", en: "Payment wallet", ja: "支払いウォレット"), selection: $draft.paymentSourceWalletID) {
                         Text(mistiaLocalized(vi: "Chọn ví", en: "Choose wallet", ja: "ウォレットを選択")).tag(Optional<UUID>.none)
                         ForEach(availablePaymentWallets) { wallet in
                             Text(wallet.name).tag(Optional(wallet.id))
                         }
                     }
+                    .pickerStyle(.menu)
                     TextField(mistiaLocalized(vi: "Ghi chú", en: "Notes", ja: "メモ"), text: $draft.notes, axis: .vertical)
                         .lineLimit(3...5)
                 }
