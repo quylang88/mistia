@@ -42,32 +42,67 @@ enum MistiaDataStack {
         let recoveredStoreURL = MistiaLegacyStoreRecovery.recoveredStoreURL(for: primaryStoreURL)
         let fileManager = FileManager.default
 
-        if fileManager.fileExists(atPath: recoveredStoreURL.path) {
+        // 1. Try primary store first
+        if fileManager.fileExists(atPath: primaryStoreURL.path) {
             do {
-                let recoveredContainer = try makePersistentContainer(schema: schema, storeURL: recoveredStoreURL)
-                return LaunchState(modelContainer: recoveredContainer, issue: nil)
+                let primaryContainer = try makePersistentContainer(schema: schema, storeURL: primaryStoreURL)
+                return LaunchState(modelContainer: primaryContainer, issue: nil)
             } catch {
-                print("MistiaDataStack: recovered store exists but failed to open: \(error)")
+                print("MistiaDataStack: primary store failed to open: \(error)")
+
+                // 2. Proactive recovery from primary store
+                do {
+                    if try MistiaLegacyStoreRecovery.recoverLegacyStoreIfNeeded(
+                        at: primaryStoreURL,
+                        recoveredStoreURL: recoveredStoreURL
+                    ) {
+                        let recoveredContainer = try makePersistentContainer(
+                            schema: schema,
+                            storeURL: recoveredStoreURL
+                        )
+                        return LaunchState(modelContainer: recoveredContainer, issue: nil)
+                    }
+                } catch {
+                    print("MistiaDataStack: proactive legacy recovery from primary failed: \(error)")
+                }
             }
         }
 
-        if fileManager.fileExists(atPath: primaryStoreURL.path) {
-            do {
-                if try MistiaLegacyStoreRecovery.recoverLegacyStoreIfNeeded(
-                    at: primaryStoreURL,
-                    recoveredStoreURL: recoveredStoreURL
-                ) {
+        // 3. Try alternative recovery sources (restore, backup, old)
+        let alternativeFilenames = ["default.restore", "default.backup", "default.old"]
+        let appSupportURL = primaryStoreURL.deletingLastPathComponent()
+
+        for filename in alternativeFilenames {
+            let altStoreURL = appSupportURL.appendingPathComponent(filename)
+            if fileManager.fileExists(atPath: altStoreURL.path) {
+                print("MistiaDataStack: found alternative store at \(filename), attempting recovery...")
+                do {
+                    try MistiaLegacyStoreRecovery.recoverStore(
+                        at: altStoreURL,
+                        recoveredStoreURL: recoveredStoreURL
+                    )
                     let recoveredContainer = try makePersistentContainer(
                         schema: schema,
                         storeURL: recoveredStoreURL
                     )
                     return LaunchState(modelContainer: recoveredContainer, issue: nil)
+                } catch {
+                    print("MistiaDataStack: recovery from \(filename) failed: \(error)")
                 }
-            } catch {
-                print("MistiaDataStack: proactive legacy recovery failed: \(error)")
             }
         }
 
+        // 4. Fallback to existing recovered store if it exists
+        if fileManager.fileExists(atPath: recoveredStoreURL.path) {
+            do {
+                let recoveredContainer = try makePersistentContainer(schema: schema, storeURL: recoveredStoreURL)
+                return LaunchState(modelContainer: recoveredContainer, issue: nil)
+            } catch {
+                print("MistiaDataStack: existing recovered store failed to open: \(error)")
+            }
+        }
+
+        // 5. Fresh start if all else fails (or just let the caller handle the throw)
         let primaryContainer = try makePersistentContainer(schema: schema, storeURL: primaryStoreURL)
         return LaunchState(modelContainer: primaryContainer, issue: nil)
     }
