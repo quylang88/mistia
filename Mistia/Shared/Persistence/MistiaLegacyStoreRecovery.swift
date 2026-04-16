@@ -340,12 +340,13 @@ enum MistiaLegacyStoreRecovery {
 
         for snapshot in payload.ownedRecordScopes {
             let scope = OwnedRecordScope(
-                id: snapshot.id,
-                entityRawValue: snapshot.entityRawValue,
+                entity: MistiaSyncEntity(rawValue: snapshot.entityRawValue) ?? .transaction,
                 recordID: snapshot.recordID,
                 ownerUserID: snapshot.ownerUserID,
                 updatedAt: snapshot.updatedAt
             )
+            // Manual ID override since the init generates one from entity/recordID
+            scope.id = snapshot.id
             context.insert(scope)
         }
 
