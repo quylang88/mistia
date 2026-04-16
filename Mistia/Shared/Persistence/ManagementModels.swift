@@ -18,7 +18,7 @@ final class LedgerWallet {
     var createdAt: Date
     var updatedAt: Date
     var deletedAt: Date?
-    var remoteVersion: Int64
+    var remoteVersion: Int64 = 0
     var creditCardProfile: CreditCardProfile?
 
     init(
@@ -76,7 +76,7 @@ final class CreditCardProfile {
     var createdAt: Date
     var updatedAt: Date
     var deletedAt: Date?
-    var remoteVersion: Int64
+    var remoteVersion: Int64 = 0
     var wallet: LedgerWallet?
     var paymentSourceWallet: LedgerWallet?
 
@@ -138,7 +138,7 @@ final class TransactionCategory {
     var createdAt: Date
     var updatedAt: Date
     var deletedAt: Date?
-    var remoteVersion: Int64
+    var remoteVersion: Int64 = 0
 
     init(
         id: UUID = UUID(),
@@ -218,7 +218,7 @@ final class LedgerTransaction {
     var createdAt: Date
     var updatedAt: Date
     var deletedAt: Date?
-    var remoteVersion: Int64
+    var remoteVersion: Int64 = 0
     var counterpartyName: String?
     var normalizedCounterpartyKey: String?
     var isArchived: Bool

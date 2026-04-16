@@ -13,7 +13,7 @@ final class BudgetPlan {
     var createdAt: Date
     var updatedAt: Date
     var deletedAt: Date?
-    var remoteVersion: Int64
+    var remoteVersion: Int64 = 0
 
     init(
         id: UUID = UUID(),
@@ -57,7 +57,7 @@ final class SavingsGoal {
     var createdAt: Date
     var updatedAt: Date
     var deletedAt: Date?
-    var remoteVersion: Int64
+    var remoteVersion: Int64 = 0
 
     init(
         id: UUID = UUID(),
@@ -107,7 +107,7 @@ final class RecurringBillPlan {
     var createdAt: Date
     var updatedAt: Date
     var deletedAt: Date?
-    var remoteVersion: Int64
+    var remoteVersion: Int64 = 0
 
     init(
         id: UUID = UUID(),
@@ -157,7 +157,7 @@ final class InstallmentPlan {
     var createdAt: Date
     var updatedAt: Date
     var deletedAt: Date?
-    var remoteVersion: Int64
+    var remoteVersion: Int64 = 0
 
     init(
         id: UUID = UUID(),
@@ -206,7 +206,7 @@ final class DueOccurrenceRecord {
     var createdAt: Date
     var updatedAt: Date
     var deletedAt: Date?
-    var remoteVersion: Int64
+    var remoteVersion: Int64 = 0
 
     init(
         id: UUID = UUID(),
