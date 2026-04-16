@@ -40,7 +40,65 @@ enum MistiaDataStack {
         let schema = Schema(versionedSchema: MistiaSchemaV10.self)
         let primaryStoreURL = defaultStoreURL(for: schema)
         let recoveredStoreURL = MistiaLegacyStoreRecovery.recoveredStoreURL(for: primaryStoreURL)
+        let legacyBackupStoreURL = legacyBackupStoreURL(for: primaryStoreURL)
         let fileManager = FileManager.default
+
+        if fileManager.fileExists(atPath: legacyBackupStoreURL.path) {
+            do {
+                if try MistiaLegacyStoreRecovery.recoverLegacyStoreIfNeeded(
+                    at: legacyBackupStoreURL,
+                    recoveredStoreURL: recoveredStoreURL
+                ) {
+                    let recoveredFromBackupContainer = try makePersistentContainer(
+                        schema: schema,
+                        storeURL: recoveredStoreURL
+                    )
+                    print(
+                        "MistiaDataStack: opened recovered store from legacy backup at \(legacyBackupStoreURL.path)"
+                    )
+                    return LaunchState(modelContainer: recoveredFromBackupContainer, issue: nil)
+                }
+            } catch {
+                print("MistiaDataStack: legacy backup recovery failed: \(error)")
+            }
+        }
+
+        if fileManager.fileExists(atPath: primaryStoreURL.path) {
+            do {
+                let primaryContainer = try makePersistentContainer(schema: schema, storeURL: primaryStoreURL)
+                return LaunchState(modelContainer: primaryContainer, issue: nil)
+            } catch {
+                print("MistiaDataStack: primary store failed to open: \(error)")
+
+                do {
+                    if try MistiaLegacyStoreRecovery.recoverLegacyStoreIfNeeded(
+                        at: primaryStoreURL,
+                        recoveredStoreURL: recoveredStoreURL
+                    ) {
+                        do {
+                            try promoteRecoveredStore(
+                                recoveredStoreURL: recoveredStoreURL,
+                                toPrimaryStoreURL: primaryStoreURL
+                            )
+                            let recoveredPrimaryContainer = try makePersistentContainer(
+                                schema: schema,
+                                storeURL: primaryStoreURL
+                            )
+                            return LaunchState(modelContainer: recoveredPrimaryContainer, issue: nil)
+                        } catch {
+                            do {
+                                try restorePrimaryStoreFromLegacyBackup(primaryStoreURL: primaryStoreURL)
+                            } catch {
+                                print("MistiaDataStack: failed to restore legacy backup after recovery promotion: \(error)")
+                            }
+                            throw error
+                        }
+                    }
+                } catch {
+                    print("MistiaDataStack: proactive legacy recovery failed: \(error)")
+                }
+            }
+        }
 
         if fileManager.fileExists(atPath: recoveredStoreURL.path) {
             do {
@@ -48,23 +106,6 @@ enum MistiaDataStack {
                 return LaunchState(modelContainer: recoveredContainer, issue: nil)
             } catch {
                 print("MistiaDataStack: recovered store exists but failed to open: \(error)")
-            }
-        }
-
-        if fileManager.fileExists(atPath: primaryStoreURL.path) {
-            do {
-                if try MistiaLegacyStoreRecovery.recoverLegacyStoreIfNeeded(
-                    at: primaryStoreURL,
-                    recoveredStoreURL: recoveredStoreURL
-                ) {
-                    let recoveredContainer = try makePersistentContainer(
-                        schema: schema,
-                        storeURL: recoveredStoreURL
-                    )
-                    return LaunchState(modelContainer: recoveredContainer, issue: nil)
-                }
-            } catch {
-                print("MistiaDataStack: proactive legacy recovery failed: \(error)")
             }
         }
 
@@ -94,6 +135,61 @@ enum MistiaDataStack {
             migrationPlan: MistiaMigrationPlan.self,
             configurations: [configuration]
         )
+    }
+
+    private static func promoteRecoveredStore(
+        recoveredStoreURL: URL,
+        toPrimaryStoreURL primaryStoreURL: URL
+    ) throws {
+        let backupStoreURL = legacyBackupStoreURL(for: primaryStoreURL)
+        try removeStoreFamily(at: backupStoreURL)
+        try moveStoreFamily(from: primaryStoreURL, to: backupStoreURL)
+        try removeStoreFamily(at: primaryStoreURL)
+        try moveStoreFamily(from: recoveredStoreURL, to: primaryStoreURL)
+    }
+
+    private static func legacyBackupStoreURL(for primaryStoreURL: URL) -> URL {
+        let directoryURL = primaryStoreURL.deletingLastPathComponent()
+        let baseName = primaryStoreURL.deletingPathExtension().lastPathComponent
+        return directoryURL
+            .appendingPathComponent("\(baseName).legacy")
+            .appendingPathExtension(primaryStoreURL.pathExtension)
+    }
+
+    private static func restorePrimaryStoreFromLegacyBackup(primaryStoreURL: URL) throws {
+        let backupStoreURL = legacyBackupStoreURL(for: primaryStoreURL)
+        guard FileManager.default.fileExists(atPath: backupStoreURL.path) else {
+            return
+        }
+
+        try removeStoreFamily(at: primaryStoreURL)
+        try moveStoreFamily(from: backupStoreURL, to: primaryStoreURL)
+    }
+
+    private static func removeStoreFamily(at storeURL: URL) throws {
+        let fileManager = FileManager.default
+        for url in storeFamilyURLs(for: storeURL) where fileManager.fileExists(atPath: url.path) {
+            try fileManager.removeItem(at: url)
+        }
+    }
+
+    private static func moveStoreFamily(from sourceStoreURL: URL, to destinationStoreURL: URL) throws {
+        let fileManager = FileManager.default
+        for (sourceURL, destinationURL) in zip(storeFamilyURLs(for: sourceStoreURL), storeFamilyURLs(for: destinationStoreURL)) {
+            guard fileManager.fileExists(atPath: sourceURL.path) else { continue }
+            if fileManager.fileExists(atPath: destinationURL.path) {
+                try fileManager.removeItem(at: destinationURL)
+            }
+            try fileManager.moveItem(at: sourceURL, to: destinationURL)
+        }
+    }
+
+    private static func storeFamilyURLs(for storeURL: URL) -> [URL] {
+        [
+            storeURL,
+            URL(fileURLWithPath: storeURL.path + "-wal"),
+            URL(fileURLWithPath: storeURL.path + "-shm")
+        ]
     }
 }
 

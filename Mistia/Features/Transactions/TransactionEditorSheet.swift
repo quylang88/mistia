@@ -55,6 +55,8 @@ struct TransactionEditorSheet: View {
     @State private var draft: TransactionFormDraft
     @State private var alertMessage: String?
     @State private var showsCategoryPicker = false
+    @State private var suppressTitleSuggestions = false
+    @State private var isApplyingTitleSuggestion = false
     @FocusState private var focusedField: TransactionEditorFocusedField?
 
     init(
@@ -245,24 +247,30 @@ struct TransactionEditorSheet: View {
 
             Section(mistiaLocalized(vi: "Thông tin chính", en: "Main details", ja: "基本情報")) {
                 if let titleFieldPlaceholder {
-                    TextField(titleFieldPlaceholder, text: $bindableDraft.title)
-                        .focused($focusedField, equals: .title)
-                        .textInputAutocapitalization(.words)
-                        .autocorrectionDisabled()
-
-                    if shouldShowTitleSuggestions {
-                        ForEach(titleSuggestions) { suggestion in
-                            Button {
-                                applyTitleSuggestion(suggestion)
-                            } label: {
-                                titleSuggestionRow(suggestion)
+                    VStack(alignment: .leading, spacing: 10) {
+                        TextField(titleFieldPlaceholder, text: $bindableDraft.title)
+                            .focused($focusedField, equals: .title)
+                            .textInputAutocapitalization(.words)
+                            .autocorrectionDisabled()
+                            .onChange(of: focusedField) { _, newValue in
+                                if newValue == .title {
+                                    suppressTitleSuggestions = false
+                                }
                             }
-                            .buttonStyle(MistiaPressableButtonStyle(cornerRadius: 18, tint: accentColor))
-                            .listRowInsets(EdgeInsets(top: 4, leading: 0, bottom: 4, trailing: 0))
-                            .listRowBackground(Color.clear)
-                            .listRowSeparator(.hidden)
+                            .onChange(of: bindableDraft.title) { _, _ in
+                                if isApplyingTitleSuggestion {
+                                    isApplyingTitleSuggestion = false
+                                } else {
+                                    suppressTitleSuggestions = false
+                                }
+                            }
+
+                        if shouldShowTitleSuggestions {
+                            titleSuggestionsPanel
+                                .transition(.move(edge: .top).combined(with: .opacity))
                         }
                     }
+                    .animation(.snappy(duration: 0.2), value: shouldShowTitleSuggestions)
                 }
 
                 TextField(mistiaLocalized(vi: "Số tiền", en: "Amount", ja: "金額"), text: $bindableDraft.amountText)
@@ -488,7 +496,7 @@ struct TransactionEditorSheet: View {
     }
 
     private var shouldShowTitleSuggestions: Bool {
-        focusedField == .title && !titleSuggestions.isEmpty
+        focusedField == .title && !suppressTitleSuggestions && !titleSuggestions.isEmpty
     }
 
     private var categorySections: [TransactionCategoryGroupSection] {
@@ -964,39 +972,52 @@ struct TransactionEditorSheet: View {
     }
 
     private func applyTitleSuggestion(_ suggestion: TransactionTitleSuggestion) {
+        isApplyingTitleSuggestion = true
+        suppressTitleSuggestions = true
         draft.title = suggestion.title
-
-        Task { @MainActor in
-            focusedField = .title
-        }
     }
 
-    @ViewBuilder
-    private func titleSuggestionRow(_ suggestion: TransactionTitleSuggestion) -> some View {
-        HStack(spacing: 12) {
-            Image(systemName: "clock.arrow.circlepath")
-                .font(.system(size: 14, weight: .semibold))
-                .foregroundStyle(.secondary)
+    private var titleSuggestionsPanel: some View {
+        VStack(spacing: 0) {
+            ForEach(Array(titleSuggestions.enumerated()), id: \.element.id) { index, suggestion in
+                Button {
+                    applyTitleSuggestion(suggestion)
+                } label: {
+                    HStack(spacing: 12) {
+                        Image(systemName: "clock.arrow.circlepath")
+                            .font(.system(size: 13, weight: .semibold))
+                            .foregroundStyle(.secondary)
 
-            Text(suggestion.title)
-                .font(.system(size: 15.5, weight: .medium, design: .rounded))
-                .foregroundStyle(.primary)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .lineLimit(1)
+                        Text(suggestion.title)
+                            .font(.system(size: 15, weight: .medium, design: .rounded))
+                            .foregroundStyle(.primary)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .lineLimit(1)
 
-            Image(systemName: "arrow.up.left")
-                .font(.system(size: 11, weight: .bold))
-                .foregroundStyle(.tertiary)
+                        Image(systemName: "arrow.up.left")
+                            .font(.system(size: 11, weight: .bold))
+                            .foregroundStyle(.tertiary)
+                    }
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 12)
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+
+                if index < titleSuggestions.count - 1 {
+                    Divider()
+                        .padding(.leading, 39)
+                }
+            }
         }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 12)
+        .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
         .background {
             if #available(iOS 26, *) {
                 RoundedRectangle(cornerRadius: 18, style: .continuous)
                     .fill(.clear)
                     .glassEffect(
                         Glass.regular
-                            .tint(colorScheme == .dark ? .white.opacity(0.08) : .white.opacity(0.18))
+                            .tint(colorScheme == .dark ? .white.opacity(0.06) : .white.opacity(0.12))
                             .interactive(true),
                         in: .rect(cornerRadius: 18)
                     )
@@ -1005,6 +1026,18 @@ struct TransactionEditorSheet: View {
                     .fill(Color(UIColor.secondarySystemBackground))
             }
         }
+        .overlay {
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .strokeBorder(
+                    colorScheme == .dark ? .white.opacity(0.06) : .black.opacity(0.06),
+                    lineWidth: 0.8
+                )
+        }
+        .shadow(
+            color: colorScheme == .dark ? .black.opacity(0.12) : .black.opacity(0.05),
+            radius: 10,
+            y: 4
+        )
         .contentShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
     }
 }

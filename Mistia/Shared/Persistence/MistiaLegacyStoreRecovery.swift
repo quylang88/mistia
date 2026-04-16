@@ -23,6 +23,12 @@ enum MistiaLegacyStoreRecovery {
         var dueOccurrences: [LegacyDueOccurrenceSnapshot] = []
         var syncConflicts: [LegacySyncConflictSnapshot] = []
         var userProfiles: [LegacyUserProfileSnapshot] = []
+        var ownershipScopes: [LegacyOwnedRecordScopeSnapshot] = []
+        var transactionAuditRecords: [LegacyTransactionAuditSnapshot] = []
+
+        var debugSummary: String {
+            "wallets=\(wallets.count), creditCards=\(creditCards.count), categories=\(categories.count), transactions=\(transactions.count), budgets=\(budgetPlans.count), goals=\(savingsGoals.count), recurringBills=\(recurringBills.count), installments=\(installmentPlans.count), dueOccurrences=\(dueOccurrences.count), syncConflicts=\(syncConflicts.count), userProfiles=\(userProfiles.count), ownershipScopes=\(ownershipScopes.count), transactionAudits=\(transactionAuditRecords.count)"
+        }
     }
 
     static func canRecover(from error: Error) -> Bool {
@@ -81,27 +87,40 @@ enum MistiaLegacyStoreRecovery {
         try removeStoreFamily(at: recoveredStoreURL)
         try moveStoreFamily(from: temporaryStoreURL, to: recoveredStoreURL)
 
-        print("MistiaLegacyStoreRecovery: recovered legacy \(payload.sourceVersion) store to \(recoveredStoreURL.path)")
+        print(
+            "MistiaLegacyStoreRecovery: recovered legacy \(payload.sourceVersion) store to \(recoveredStoreURL.path) with \(payload.debugSummary)"
+        )
     }
 
     private static func loadPayloadIfSupported(from legacyStoreURL: URL) throws -> Payload? {
-        typealias Loader = (URL) throws -> Payload
+        typealias LabeledLoader = (label: String, load: (URL) throws -> Payload)
 
-        let loaders: [Loader] = [
-            loadV6Payload,
-            loadV5Payload,
-            loadV4Payload,
-            loadV3Payload,
-            loadLegacyAccountV2Payload,
-            loadV2Payload,
-            loadLegacyAccountV1Payload,
-            loadV1Payload
+        let loaders: [LabeledLoader] = [
+            ("V10", loadV10Payload),
+            ("V9", loadV9Payload),
+            ("V8", loadV8Payload),
+            ("V7", loadV7Payload),
+            ("V6", loadV6Payload),
+            ("V5", loadV5Payload),
+            ("V4", loadV4Payload),
+            ("V3", loadV3Payload),
+            ("V2-Account", loadLegacyAccountV2Payload),
+            ("V2", loadV2Payload),
+            ("V1-Account", loadLegacyAccountV1Payload),
+            ("V1", loadV1Payload)
         ]
 
         for loader in loaders {
             do {
-                return try loader(legacyStoreURL)
+                let payload = try loader.load(legacyStoreURL)
+                print(
+                    "MistiaLegacyStoreRecovery: loaded \(payload.sourceVersion) payload from \(legacyStoreURL.path) with \(payload.debugSummary)"
+                )
+                return payload
             } catch {
+                print(
+                    "MistiaLegacyStoreRecovery: \(loader.label) loader failed for \(legacyStoreURL.path): \(error)"
+                )
                 continue
             }
         }
@@ -110,7 +129,7 @@ enum MistiaLegacyStoreRecovery {
     }
 
     private static func writeRecoveredStore(with payload: Payload, to recoveredStoreURL: URL) throws {
-        let schema = Schema(versionedSchema: MistiaSchemaV9.self)
+        let schema = Schema(versionedSchema: MistiaSchemaV10.self)
         let configuration = ModelConfiguration("default", schema: schema, url: recoveredStoreURL)
         let container = try ModelContainer(for: schema, configurations: [configuration])
         let context = ModelContext(container)
@@ -328,10 +347,32 @@ enum MistiaLegacyStoreRecovery {
                 displayName: snapshot.displayName,
                 avatarFileName: snapshot.avatarFileName,
                 birthday: snapshot.birthday,
+                lastSyncAt: snapshot.lastSyncAt,
                 createdAt: snapshot.createdAt,
                 updatedAt: snapshot.updatedAt
             )
             context.insert(profile)
+        }
+
+        for snapshot in payload.ownershipScopes {
+            guard let entity = MistiaSyncEntity(rawValue: snapshot.entityRawValue) else { continue }
+            let scope = OwnedRecordScope(
+                entity: entity,
+                recordID: snapshot.recordID,
+                ownerUserID: snapshot.ownerUserID,
+                updatedAt: snapshot.updatedAt
+            )
+            context.insert(scope)
+        }
+
+        for snapshot in payload.transactionAuditRecords {
+            let auditRecord = TransactionAuditRecord(
+                transactionID: snapshot.transactionID,
+                createdByUserID: snapshot.createdByUserID,
+                lastModifiedByUserID: snapshot.lastModifiedByUserID,
+                updatedAt: snapshot.updatedAt
+            )
+            context.insert(auditRecord)
         }
 
         for snapshot in payload.categories {
@@ -466,6 +507,90 @@ enum MistiaLegacyStoreRecovery {
             dueOccurrences: try context.fetch(FetchDescriptor<MistiaSchemaV6.DueOccurrenceRecord>()).map(LegacyDueOccurrenceSnapshot.init),
             syncConflicts: try context.fetch(FetchDescriptor<MistiaSchemaV6.SyncConflict>()).map(LegacySyncConflictSnapshot.init),
             userProfiles: try context.fetch(FetchDescriptor<MistiaSchemaV6.UserAccountProfile>()).map(LegacyUserProfileSnapshot.init)
+        )
+    }
+
+    private static func loadV7Payload(from legacyStoreURL: URL) throws -> Payload {
+        let container = try legacyContainer(for: MistiaRecoverySchemaV7.self, at: legacyStoreURL)
+        let context = ModelContext(container)
+
+        return Payload(
+            sourceVersion: "V7",
+            wallets: try context.fetch(FetchDescriptor<MistiaRecoverySchemaV8.LedgerWallet>()).map(LegacyWalletSnapshot.init),
+            creditCards: try context.fetch(FetchDescriptor<MistiaRecoverySchemaV8.CreditCardProfile>()).map(LegacyCreditCardSnapshot.init),
+            categories: try context.fetch(FetchDescriptor<MistiaRecoverySchemaV8.TransactionCategory>()).map(LegacyCategorySnapshot.init),
+            transactions: try context.fetch(FetchDescriptor<MistiaRecoverySchemaV8.LedgerTransaction>()).map(LegacyTransactionSnapshot.init),
+            budgetPlans: try context.fetch(FetchDescriptor<MistiaRecoverySchemaV8.BudgetPlan>()).map(LegacyBudgetPlanSnapshot.init),
+            savingsGoals: try context.fetch(FetchDescriptor<MistiaRecoverySchemaV8.SavingsGoal>()).map(LegacySavingsGoalSnapshot.init),
+            recurringBills: try context.fetch(FetchDescriptor<MistiaRecoverySchemaV8.RecurringBillPlan>()).map(LegacyRecurringBillSnapshot.init),
+            installmentPlans: try context.fetch(FetchDescriptor<MistiaRecoverySchemaV8.InstallmentPlan>()).map(LegacyInstallmentPlanSnapshot.init),
+            dueOccurrences: try context.fetch(FetchDescriptor<MistiaRecoverySchemaV8.DueOccurrenceRecord>()).map(LegacyDueOccurrenceSnapshot.init),
+            syncConflicts: try context.fetch(FetchDescriptor<MistiaRecoverySchemaV8.SyncConflict>()).map(LegacySyncConflictSnapshot.init),
+            userProfiles: try context.fetch(FetchDescriptor<MistiaRecoverySchemaV8.UserAccountProfile>()).map(LegacyUserProfileSnapshot.init)
+        )
+    }
+
+    private static func loadV8Payload(from legacyStoreURL: URL) throws -> Payload {
+        let container = try legacyContainer(for: MistiaRecoverySchemaV8.self, at: legacyStoreURL)
+        let context = ModelContext(container)
+
+        return Payload(
+            sourceVersion: "V8",
+            wallets: try context.fetch(FetchDescriptor<MistiaRecoverySchemaV8.LedgerWallet>()).map(LegacyWalletSnapshot.init),
+            creditCards: try context.fetch(FetchDescriptor<MistiaRecoverySchemaV8.CreditCardProfile>()).map(LegacyCreditCardSnapshot.init),
+            categories: try context.fetch(FetchDescriptor<MistiaRecoverySchemaV8.TransactionCategory>()).map(LegacyCategorySnapshot.init),
+            transactions: try context.fetch(FetchDescriptor<MistiaRecoverySchemaV8.LedgerTransaction>()).map(LegacyTransactionSnapshot.init),
+            budgetPlans: try context.fetch(FetchDescriptor<MistiaRecoverySchemaV8.BudgetPlan>()).map(LegacyBudgetPlanSnapshot.init),
+            savingsGoals: try context.fetch(FetchDescriptor<MistiaRecoverySchemaV8.SavingsGoal>()).map(LegacySavingsGoalSnapshot.init),
+            recurringBills: try context.fetch(FetchDescriptor<MistiaRecoverySchemaV8.RecurringBillPlan>()).map(LegacyRecurringBillSnapshot.init),
+            installmentPlans: try context.fetch(FetchDescriptor<MistiaRecoverySchemaV8.InstallmentPlan>()).map(LegacyInstallmentPlanSnapshot.init),
+            dueOccurrences: try context.fetch(FetchDescriptor<MistiaRecoverySchemaV8.DueOccurrenceRecord>()).map(LegacyDueOccurrenceSnapshot.init),
+            syncConflicts: try context.fetch(FetchDescriptor<MistiaRecoverySchemaV8.SyncConflict>()).map(LegacySyncConflictSnapshot.init),
+            userProfiles: try context.fetch(FetchDescriptor<MistiaRecoverySchemaV8.UserAccountProfile>()).map(LegacyUserProfileSnapshot.init),
+            ownershipScopes: try context.fetch(FetchDescriptor<MistiaRecoverySchemaV8.OwnedRecordScope>()).map(LegacyOwnedRecordScopeSnapshot.init)
+        )
+    }
+
+    private static func loadV9Payload(from legacyStoreURL: URL) throws -> Payload {
+        let container = try legacyContainer(for: MistiaSchemaV9.self, at: legacyStoreURL)
+        let context = ModelContext(container)
+
+        return Payload(
+            sourceVersion: "V9",
+            wallets: try context.fetch(FetchDescriptor<LedgerWallet>()).map(LegacyWalletSnapshot.init),
+            creditCards: try context.fetch(FetchDescriptor<CreditCardProfile>()).map(LegacyCreditCardSnapshot.init),
+            categories: try context.fetch(FetchDescriptor<TransactionCategory>()).map(LegacyCategorySnapshot.init),
+            transactions: try context.fetch(FetchDescriptor<LedgerTransaction>()).map(LegacyTransactionSnapshot.init),
+            budgetPlans: try context.fetch(FetchDescriptor<BudgetPlan>()).map(LegacyBudgetPlanSnapshot.init),
+            savingsGoals: try context.fetch(FetchDescriptor<SavingsGoal>()).map(LegacySavingsGoalSnapshot.init),
+            recurringBills: try context.fetch(FetchDescriptor<RecurringBillPlan>()).map(LegacyRecurringBillSnapshot.init),
+            installmentPlans: try context.fetch(FetchDescriptor<InstallmentPlan>()).map(LegacyInstallmentPlanSnapshot.init),
+            dueOccurrences: try context.fetch(FetchDescriptor<DueOccurrenceRecord>()).map(LegacyDueOccurrenceSnapshot.init),
+            syncConflicts: try context.fetch(FetchDescriptor<SyncConflict>()).map(LegacySyncConflictSnapshot.init),
+            userProfiles: try context.fetch(FetchDescriptor<UserAccountProfile>()).map(LegacyUserProfileSnapshot.init),
+            ownershipScopes: try context.fetch(FetchDescriptor<OwnedRecordScope>()).map(LegacyOwnedRecordScopeSnapshot.init)
+        )
+    }
+
+    private static func loadV10Payload(from legacyStoreURL: URL) throws -> Payload {
+        let container = try legacyContainer(for: MistiaSchemaV10.self, at: legacyStoreURL)
+        let context = ModelContext(container)
+
+        return Payload(
+            sourceVersion: "V10",
+            wallets: try context.fetch(FetchDescriptor<LedgerWallet>()).map(LegacyWalletSnapshot.init),
+            creditCards: try context.fetch(FetchDescriptor<CreditCardProfile>()).map(LegacyCreditCardSnapshot.init),
+            categories: try context.fetch(FetchDescriptor<TransactionCategory>()).map(LegacyCategorySnapshot.init),
+            transactions: try context.fetch(FetchDescriptor<LedgerTransaction>()).map(LegacyTransactionSnapshot.init),
+            budgetPlans: try context.fetch(FetchDescriptor<BudgetPlan>()).map(LegacyBudgetPlanSnapshot.init),
+            savingsGoals: try context.fetch(FetchDescriptor<SavingsGoal>()).map(LegacySavingsGoalSnapshot.init),
+            recurringBills: try context.fetch(FetchDescriptor<RecurringBillPlan>()).map(LegacyRecurringBillSnapshot.init),
+            installmentPlans: try context.fetch(FetchDescriptor<InstallmentPlan>()).map(LegacyInstallmentPlanSnapshot.init),
+            dueOccurrences: try context.fetch(FetchDescriptor<DueOccurrenceRecord>()).map(LegacyDueOccurrenceSnapshot.init),
+            syncConflicts: try context.fetch(FetchDescriptor<SyncConflict>()).map(LegacySyncConflictSnapshot.init),
+            userProfiles: try context.fetch(FetchDescriptor<UserAccountProfile>()).map(LegacyUserProfileSnapshot.init),
+            ownershipScopes: try context.fetch(FetchDescriptor<OwnedRecordScope>()).map(LegacyOwnedRecordScopeSnapshot.init),
+            transactionAuditRecords: try context.fetch(FetchDescriptor<TransactionAuditRecord>()).map(LegacyTransactionAuditSnapshot.init)
         )
     }
 
@@ -646,6 +771,44 @@ private struct LegacyWalletSnapshot {
         remoteVersion = wallet.remoteVersion
     }
 
+    init(_ wallet: MistiaRecoverySchemaV8.LedgerWallet) {
+        id = wallet.id
+        name = wallet.name
+        kindRawValue = wallet.kindRawValue
+        iconSymbolName = wallet.iconSymbolName
+        iconColorHex = wallet.iconColorHex
+        currencyCode = wallet.currencyCode
+        openingBalanceMinor = wallet.openingBalanceMinor
+        institutionDisplayName = wallet.institutionDisplayName
+        institutionPresetKey = wallet.institutionPresetKey
+        sortOrder = wallet.sortOrder
+        isArchived = wallet.isArchived
+        archivedAt = wallet.archivedAt
+        createdAt = wallet.createdAt
+        updatedAt = wallet.updatedAt
+        deletedAt = wallet.deletedAt
+        remoteVersion = wallet.remoteVersion
+    }
+
+    init(_ wallet: LedgerWallet) {
+        id = wallet.id
+        name = wallet.name
+        kindRawValue = wallet.kindRawValue
+        iconSymbolName = wallet.iconSymbolName
+        iconColorHex = wallet.iconColorHex
+        currencyCode = wallet.currencyCode
+        openingBalanceMinor = wallet.openingBalanceMinor
+        institutionDisplayName = wallet.institutionDisplayName
+        institutionPresetKey = wallet.institutionPresetKey
+        sortOrder = wallet.sortOrder
+        isArchived = wallet.isArchived
+        archivedAt = wallet.archivedAt
+        createdAt = wallet.createdAt
+        updatedAt = wallet.updatedAt
+        deletedAt = wallet.deletedAt
+        remoteVersion = wallet.remoteVersion
+    }
+
     init(_ account: MistiaLegacyAccountSchemaV1.LedgerAccount) {
         id = account.id
         name = account.name
@@ -787,6 +950,40 @@ private struct LegacyCreditCardSnapshot {
     }
 
     init(_ profile: MistiaSchemaV6.CreditCardProfile) {
+        id = profile.id
+        issuerName = profile.issuerName
+        networkRawValue = profile.networkRawValue
+        last4 = profile.last4
+        creditLimitMinor = profile.creditLimitMinor
+        statementClosingDay = profile.statementClosingDay
+        paymentDueDay = profile.paymentDueDay
+        notes = profile.notes
+        walletID = profile.wallet?.id
+        paymentSourceWalletID = profile.paymentSourceWallet?.id
+        createdAt = profile.createdAt
+        updatedAt = profile.updatedAt
+        deletedAt = profile.deletedAt
+        remoteVersion = profile.remoteVersion
+    }
+
+    init(_ profile: MistiaRecoverySchemaV8.CreditCardProfile) {
+        id = profile.id
+        issuerName = profile.issuerName
+        networkRawValue = profile.networkRawValue
+        last4 = profile.last4
+        creditLimitMinor = profile.creditLimitMinor
+        statementClosingDay = profile.statementClosingDay
+        paymentDueDay = profile.paymentDueDay
+        notes = profile.notes
+        walletID = profile.wallet?.id
+        paymentSourceWalletID = profile.paymentSourceWallet?.id
+        createdAt = profile.createdAt
+        updatedAt = profile.updatedAt
+        deletedAt = profile.deletedAt
+        remoteVersion = profile.remoteVersion
+    }
+
+    init(_ profile: CreditCardProfile) {
         id = profile.id
         issuerName = profile.issuerName
         networkRawValue = profile.networkRawValue
@@ -964,6 +1161,66 @@ private struct LegacyCategorySnapshot {
         iconSymbolName = category.iconSymbolName
         iconColorHex = category.iconColorHex
         isFavorite = false
+        parentCategoryID = category.parentCategory?.id
+        hierarchyRoleRawValue = category.hierarchyRoleRawValue
+        systemKey = category.systemKey
+        isSystem = category.isSystem
+        sortOrder = category.sortOrder
+        isArchived = category.isArchived
+        archivedAt = category.archivedAt
+        createdAt = category.createdAt
+        updatedAt = category.updatedAt
+        deletedAt = category.deletedAt
+        remoteVersion = category.remoteVersion
+    }
+
+    init(_ category: MistiaRecoverySchemaV8.TransactionCategory) {
+        id = category.id
+        name = category.name
+        kindRawValue = category.kindRawValue
+        iconSymbolName = category.iconSymbolName
+        iconColorHex = category.iconColorHex
+        isFavorite = category.favoriteRawValue ?? false
+        parentCategoryID = category.parentCategory?.id
+        hierarchyRoleRawValue = category.hierarchyRoleRawValue
+        systemKey = category.systemKey
+        isSystem = category.isSystem
+        sortOrder = category.sortOrder
+        isArchived = category.isArchived
+        archivedAt = category.archivedAt
+        createdAt = category.createdAt
+        updatedAt = category.updatedAt
+        deletedAt = category.deletedAt
+        remoteVersion = category.remoteVersion
+    }
+
+    init(_ category: MistiaRecoverySchemaV10.TransactionCategory) {
+        id = category.id
+        name = category.name
+        kindRawValue = category.kindRawValue
+        iconSymbolName = category.iconSymbolName
+        iconColorHex = category.iconColorHex
+        isFavorite = category.favoriteRawValue ?? false
+        parentCategoryID = category.parentCategory?.id
+        hierarchyRoleRawValue = category.hierarchyRoleRawValue
+        systemKey = category.systemKey
+        isSystem = category.isSystem
+        sortOrder = category.sortOrder
+        isArchived = category.isArchived
+        archivedAt = category.archivedAt
+        createdAt = category.createdAt
+        updatedAt = category.updatedAt
+        deletedAt = category.deletedAt
+        remoteVersion = category.remoteVersion
+    }
+
+    init(_ category: TransactionCategory) {
+        id = category.id
+        name = category.name
+        kindRawValue = category.kindRawValue
+        iconSymbolName = category.iconSymbolName
+        iconColorHex = category.iconColorHex
+        isFavorite = category.favoriteRawValue ?? false
         parentCategoryID = category.parentCategory?.id
         hierarchyRoleRawValue = category.hierarchyRoleRawValue
         systemKey = category.systemKey
@@ -1155,6 +1412,75 @@ private struct LegacyTransactionSnapshot {
         archivedAt = transaction.archivedAt
     }
 
+    init(_ transaction: MistiaRecoverySchemaV8.LedgerTransaction) {
+        id = transaction.id
+        primaryKindRawValue = transaction.primaryKindRawValue
+        transferSubtypeRawValue = transaction.transferSubtypeRawValue
+        debtIntentRawValue = transaction.debtIntentRawValue
+        entryStatusRawValue = transaction.entryStatusRawValue
+        title = transaction.title
+        note = transaction.note
+        amountMinor = transaction.amountMinor
+        occurredAt = transaction.occurredAt
+        createdAt = transaction.createdAt
+        updatedAt = transaction.updatedAt
+        deletedAt = transaction.deletedAt
+        remoteVersion = transaction.remoteVersion
+        counterpartyName = transaction.counterpartyName
+        normalizedCounterpartyKey = transaction.normalizedCounterpartyKey
+        sourceWalletID = transaction.sourceWallet?.id
+        destinationWalletID = transaction.destinationWallet?.id
+        categoryID = transaction.category?.id
+        isArchived = transaction.isArchived
+        archivedAt = transaction.archivedAt
+    }
+
+    init(_ transaction: MistiaRecoverySchemaV10.LedgerTransaction) {
+        id = transaction.id
+        primaryKindRawValue = transaction.primaryKindRawValue
+        transferSubtypeRawValue = transaction.transferSubtypeRawValue
+        debtIntentRawValue = transaction.debtIntentRawValue
+        entryStatusRawValue = transaction.entryStatusRawValue
+        title = transaction.title
+        note = transaction.note
+        amountMinor = transaction.amountMinor
+        occurredAt = transaction.occurredAt
+        createdAt = transaction.createdAt
+        updatedAt = transaction.updatedAt
+        deletedAt = transaction.deletedAt
+        remoteVersion = transaction.remoteVersion
+        counterpartyName = transaction.counterpartyName
+        normalizedCounterpartyKey = transaction.normalizedCounterpartyKey
+        sourceWalletID = transaction.sourceWallet?.id
+        destinationWalletID = transaction.destinationWallet?.id
+        categoryID = transaction.category?.id
+        isArchived = transaction.isArchived
+        archivedAt = transaction.archivedAt
+    }
+
+    init(_ transaction: LedgerTransaction) {
+        id = transaction.id
+        primaryKindRawValue = transaction.primaryKindRawValue
+        transferSubtypeRawValue = transaction.transferSubtypeRawValue
+        debtIntentRawValue = transaction.debtIntentRawValue
+        entryStatusRawValue = transaction.entryStatusRawValue
+        title = transaction.title
+        note = transaction.note
+        amountMinor = transaction.amountMinor
+        occurredAt = transaction.occurredAt
+        createdAt = transaction.createdAt
+        updatedAt = transaction.updatedAt
+        deletedAt = transaction.deletedAt
+        remoteVersion = transaction.remoteVersion
+        counterpartyName = transaction.counterpartyName
+        normalizedCounterpartyKey = transaction.normalizedCounterpartyKey
+        sourceWalletID = transaction.sourceWallet?.id
+        destinationWalletID = transaction.destinationWallet?.id
+        categoryID = transaction.category?.id
+        isArchived = transaction.isArchived
+        archivedAt = transaction.archivedAt
+    }
+
     init(_ transaction: MistiaLegacyAccountSchemaV2.LedgerTransaction) {
         id = transaction.id
         primaryKindRawValue = transaction.primaryKindRawValue
@@ -1247,6 +1573,48 @@ private struct LegacyBudgetPlanSnapshot {
         deletedAt = budgetPlan.deletedAt
         remoteVersion = budgetPlan.remoteVersion
     }
+
+    init(_ budgetPlan: MistiaRecoverySchemaV8.BudgetPlan) {
+        id = budgetPlan.id
+        categoryID = budgetPlan.category?.id
+        monthAnchor = budgetPlan.monthAnchor
+        limitMinor = budgetPlan.limitMinor
+        rolloverEnabled = budgetPlan.rolloverEnabled
+        currencyCode = budgetPlan.currencyCode
+        isArchived = budgetPlan.isArchived
+        createdAt = budgetPlan.createdAt
+        updatedAt = budgetPlan.updatedAt
+        deletedAt = budgetPlan.deletedAt
+        remoteVersion = budgetPlan.remoteVersion
+    }
+
+    init(_ budgetPlan: MistiaRecoverySchemaV10.BudgetPlan) {
+        id = budgetPlan.id
+        categoryID = budgetPlan.category?.id
+        monthAnchor = budgetPlan.monthAnchor
+        limitMinor = budgetPlan.limitMinor
+        rolloverEnabled = budgetPlan.rolloverEnabled
+        currencyCode = budgetPlan.currencyCode
+        isArchived = budgetPlan.isArchived
+        createdAt = budgetPlan.createdAt
+        updatedAt = budgetPlan.updatedAt
+        deletedAt = budgetPlan.deletedAt
+        remoteVersion = budgetPlan.remoteVersion
+    }
+
+    init(_ budgetPlan: BudgetPlan) {
+        id = budgetPlan.id
+        categoryID = budgetPlan.category?.id
+        monthAnchor = budgetPlan.monthAnchor
+        limitMinor = budgetPlan.limitMinor
+        rolloverEnabled = budgetPlan.rolloverEnabled
+        currencyCode = budgetPlan.currencyCode
+        isArchived = budgetPlan.isArchived
+        createdAt = budgetPlan.createdAt
+        updatedAt = budgetPlan.updatedAt
+        deletedAt = budgetPlan.deletedAt
+        remoteVersion = budgetPlan.remoteVersion
+    }
 }
 
 private struct LegacySavingsGoalSnapshot {
@@ -1317,6 +1685,40 @@ private struct LegacySavingsGoalSnapshot {
     }
 
     init(_ savingsGoal: MistiaSchemaV6.SavingsGoal) {
+        id = savingsGoal.id
+        name = savingsGoal.name
+        iconSymbolName = savingsGoal.iconSymbolName
+        targetMinor = savingsGoal.targetMinor
+        currentSavedMinor = savingsGoal.currentSavedMinor
+        targetDate = savingsGoal.targetDate
+        linkedWalletID = savingsGoal.linkedWallet?.id
+        currencyCode = savingsGoal.currencyCode
+        sortOrder = savingsGoal.sortOrder
+        isArchived = savingsGoal.isArchived
+        createdAt = savingsGoal.createdAt
+        updatedAt = savingsGoal.updatedAt
+        deletedAt = savingsGoal.deletedAt
+        remoteVersion = savingsGoal.remoteVersion
+    }
+
+    init(_ savingsGoal: MistiaRecoverySchemaV8.SavingsGoal) {
+        id = savingsGoal.id
+        name = savingsGoal.name
+        iconSymbolName = savingsGoal.iconSymbolName
+        targetMinor = savingsGoal.targetMinor
+        currentSavedMinor = savingsGoal.currentSavedMinor
+        targetDate = savingsGoal.targetDate
+        linkedWalletID = savingsGoal.linkedWallet?.id
+        currencyCode = savingsGoal.currencyCode
+        sortOrder = savingsGoal.sortOrder
+        isArchived = savingsGoal.isArchived
+        createdAt = savingsGoal.createdAt
+        updatedAt = savingsGoal.updatedAt
+        deletedAt = savingsGoal.deletedAt
+        remoteVersion = savingsGoal.remoteVersion
+    }
+
+    init(_ savingsGoal: SavingsGoal) {
         id = savingsGoal.id
         name = savingsGoal.name
         iconSymbolName = savingsGoal.iconSymbolName
@@ -1417,6 +1819,57 @@ private struct LegacyRecurringBillSnapshot {
         deletedAt = recurringBill.deletedAt
         remoteVersion = recurringBill.remoteVersion
     }
+
+    init(_ recurringBill: MistiaRecoverySchemaV8.RecurringBillPlan) {
+        id = recurringBill.id
+        name = recurringBill.name
+        iconSymbolName = recurringBill.iconSymbolName
+        categoryID = recurringBill.category?.id
+        amountMinor = recurringBill.amountMinor
+        dueDay = recurringBill.dueDay
+        frequencyMonths = recurringBill.frequencyMonths
+        paymentWalletID = recurringBill.paymentWallet?.id
+        currencyCode = recurringBill.currencyCode
+        isArchived = recurringBill.isArchived
+        createdAt = recurringBill.createdAt
+        updatedAt = recurringBill.updatedAt
+        deletedAt = recurringBill.deletedAt
+        remoteVersion = recurringBill.remoteVersion
+    }
+
+    init(_ recurringBill: MistiaRecoverySchemaV10.RecurringBillPlan) {
+        id = recurringBill.id
+        name = recurringBill.name
+        iconSymbolName = recurringBill.iconSymbolName
+        categoryID = recurringBill.category?.id
+        amountMinor = recurringBill.amountMinor
+        dueDay = recurringBill.dueDay
+        frequencyMonths = recurringBill.frequencyMonths
+        paymentWalletID = recurringBill.paymentWallet?.id
+        currencyCode = recurringBill.currencyCode
+        isArchived = recurringBill.isArchived
+        createdAt = recurringBill.createdAt
+        updatedAt = recurringBill.updatedAt
+        deletedAt = recurringBill.deletedAt
+        remoteVersion = recurringBill.remoteVersion
+    }
+
+    init(_ recurringBill: RecurringBillPlan) {
+        id = recurringBill.id
+        name = recurringBill.name
+        iconSymbolName = recurringBill.iconSymbolName
+        categoryID = recurringBill.category?.id
+        amountMinor = recurringBill.amountMinor
+        dueDay = recurringBill.dueDay
+        frequencyMonths = recurringBill.frequencyMonths
+        paymentWalletID = recurringBill.paymentWallet?.id
+        currencyCode = recurringBill.currencyCode
+        isArchived = recurringBill.isArchived
+        createdAt = recurringBill.createdAt
+        updatedAt = recurringBill.updatedAt
+        deletedAt = recurringBill.deletedAt
+        remoteVersion = recurringBill.remoteVersion
+    }
 }
 
 private struct LegacyInstallmentPlanSnapshot {
@@ -1487,6 +1940,40 @@ private struct LegacyInstallmentPlanSnapshot {
     }
 
     init(_ installmentPlan: MistiaSchemaV6.InstallmentPlan) {
+        id = installmentPlan.id
+        name = installmentPlan.name
+        iconSymbolName = installmentPlan.iconSymbolName
+        amountPerCycleMinor = installmentPlan.amountPerCycleMinor
+        dueDay = installmentPlan.dueDay
+        totalCycles = installmentPlan.totalCycles
+        frequencyMonths = installmentPlan.frequencyMonths
+        paymentWalletID = installmentPlan.paymentWallet?.id
+        currencyCode = installmentPlan.currencyCode
+        isArchived = installmentPlan.isArchived
+        createdAt = installmentPlan.createdAt
+        updatedAt = installmentPlan.updatedAt
+        deletedAt = installmentPlan.deletedAt
+        remoteVersion = installmentPlan.remoteVersion
+    }
+
+    init(_ installmentPlan: MistiaRecoverySchemaV8.InstallmentPlan) {
+        id = installmentPlan.id
+        name = installmentPlan.name
+        iconSymbolName = installmentPlan.iconSymbolName
+        amountPerCycleMinor = installmentPlan.amountPerCycleMinor
+        dueDay = installmentPlan.dueDay
+        totalCycles = installmentPlan.totalCycles
+        frequencyMonths = installmentPlan.frequencyMonths
+        paymentWalletID = installmentPlan.paymentWallet?.id
+        currencyCode = installmentPlan.currencyCode
+        isArchived = installmentPlan.isArchived
+        createdAt = installmentPlan.createdAt
+        updatedAt = installmentPlan.updatedAt
+        deletedAt = installmentPlan.deletedAt
+        remoteVersion = installmentPlan.remoteVersion
+    }
+
+    init(_ installmentPlan: InstallmentPlan) {
         id = installmentPlan.id
         name = installmentPlan.name
         iconSymbolName = installmentPlan.iconSymbolName
@@ -1582,6 +2069,38 @@ private struct LegacyDueOccurrenceSnapshot {
         deletedAt = occurrence.deletedAt
         remoteVersion = occurrence.remoteVersion
     }
+
+    init(_ occurrence: MistiaRecoverySchemaV8.DueOccurrenceRecord) {
+        id = occurrence.id
+        sourceKindRawValue = occurrence.sourceKindRawValue
+        sourceID = occurrence.sourceID
+        selectedMonthKey = occurrence.selectedMonthKey
+        scheduledDate = occurrence.scheduledDate
+        amountMinorSnapshot = occurrence.amountMinorSnapshot
+        statusRawValue = occurrence.statusRawValue
+        paidAt = occurrence.paidAt
+        linkedTransactionID = occurrence.linkedTransactionID
+        createdAt = occurrence.createdAt
+        updatedAt = occurrence.updatedAt
+        deletedAt = occurrence.deletedAt
+        remoteVersion = occurrence.remoteVersion
+    }
+
+    init(_ occurrence: DueOccurrenceRecord) {
+        id = occurrence.id
+        sourceKindRawValue = occurrence.sourceKindRawValue
+        sourceID = occurrence.sourceID
+        selectedMonthKey = occurrence.selectedMonthKey
+        scheduledDate = occurrence.scheduledDate
+        amountMinorSnapshot = occurrence.amountMinorSnapshot
+        statusRawValue = occurrence.statusRawValue
+        paidAt = occurrence.paidAt
+        linkedTransactionID = occurrence.linkedTransactionID
+        createdAt = occurrence.createdAt
+        updatedAt = occurrence.updatedAt
+        deletedAt = occurrence.deletedAt
+        remoteVersion = occurrence.remoteVersion
+    }
 }
 
 private struct LegacySyncConflictSnapshot {
@@ -1630,6 +2149,30 @@ private struct LegacySyncConflictSnapshot {
         remoteVersion = conflict.remoteVersion
         createdAt = conflict.createdAt
     }
+
+    init(_ conflict: MistiaRecoverySchemaV8.SyncConflict) {
+        id = conflict.id
+        entityRawValue = conflict.entityRawValue
+        recordID = conflict.recordID
+        conflictKindRawValue = conflict.conflictKindRawValue
+        localPayloadJSON = conflict.localPayloadJSON
+        remotePayloadJSON = conflict.remotePayloadJSON
+        baseVersion = conflict.baseVersion
+        remoteVersion = conflict.remoteVersion
+        createdAt = conflict.createdAt
+    }
+
+    init(_ conflict: SyncConflict) {
+        id = conflict.id
+        entityRawValue = conflict.entityRawValue
+        recordID = conflict.recordID
+        conflictKindRawValue = conflict.conflictKindRawValue
+        localPayloadJSON = conflict.localPayloadJSON
+        remotePayloadJSON = conflict.remotePayloadJSON
+        baseVersion = conflict.baseVersion
+        remoteVersion = conflict.remoteVersion
+        createdAt = conflict.createdAt
+    }
 }
 
 private struct LegacyUserProfileSnapshot {
@@ -1638,6 +2181,7 @@ private struct LegacyUserProfileSnapshot {
     let displayName: String
     let avatarFileName: String?
     let birthday: Date?
+    let lastSyncAt: Date?
     let createdAt: Date
     let updatedAt: Date
 
@@ -1647,8 +2191,1040 @@ private struct LegacyUserProfileSnapshot {
         displayName = profile.displayName
         avatarFileName = profile.avatarFileName
         birthday = profile.birthday
+        lastSyncAt = nil
         createdAt = profile.createdAt
         updatedAt = profile.updatedAt
+    }
+
+    init(_ profile: MistiaRecoverySchemaV8.UserAccountProfile) {
+        userID = profile.userID
+        email = profile.email
+        displayName = profile.displayName
+        avatarFileName = profile.avatarFileName
+        birthday = profile.birthday
+        lastSyncAt = nil
+        createdAt = profile.createdAt
+        updatedAt = profile.updatedAt
+    }
+
+    init(_ profile: MistiaRecoverySchemaV10.UserAccountProfile) {
+        userID = profile.userID
+        email = profile.email
+        displayName = profile.displayName
+        avatarFileName = profile.avatarFileName
+        birthday = profile.birthday
+        lastSyncAt = profile.lastSyncAt
+        createdAt = profile.createdAt
+        updatedAt = profile.updatedAt
+    }
+
+    init(_ profile: UserAccountProfile) {
+        userID = profile.userID
+        email = profile.email
+        displayName = profile.displayName
+        avatarFileName = profile.avatarFileName
+        birthday = profile.birthday
+        lastSyncAt = profile.lastSyncAt
+        createdAt = profile.createdAt
+        updatedAt = profile.updatedAt
+    }
+}
+
+private struct LegacyOwnedRecordScopeSnapshot {
+    let entityRawValue: String
+    let recordID: UUID
+    let ownerUserID: UUID
+    let updatedAt: Date
+
+    init(_ scope: MistiaRecoverySchemaV8.OwnedRecordScope) {
+        entityRawValue = scope.entityRawValue
+        recordID = scope.recordID
+        ownerUserID = scope.ownerUserID
+        updatedAt = scope.updatedAt
+    }
+
+    init(_ scope: OwnedRecordScope) {
+        entityRawValue = scope.entityRawValue
+        recordID = scope.recordID
+        ownerUserID = scope.ownerUserID
+        updatedAt = scope.updatedAt
+    }
+
+    init(_ scope: MistiaRecoverySchemaV10.OwnedRecordScope) {
+        entityRawValue = scope.entityRawValue
+        recordID = scope.recordID
+        ownerUserID = scope.ownerUserID
+        updatedAt = scope.updatedAt
+    }
+}
+
+private struct LegacyTransactionAuditSnapshot {
+    let transactionID: UUID
+    let createdByUserID: UUID
+    let lastModifiedByUserID: UUID
+    let updatedAt: Date
+
+    init(_ record: TransactionAuditRecord) {
+        transactionID = record.transactionID
+        createdByUserID = record.createdByUserID
+        lastModifiedByUserID = record.lastModifiedByUserID
+        updatedAt = record.updatedAt
+    }
+
+    init(_ record: MistiaRecoverySchemaV10.TransactionAuditRecord) {
+        transactionID = record.transactionID
+        createdByUserID = record.createdByUserID
+        lastModifiedByUserID = record.lastModifiedByUserID
+        updatedAt = record.updatedAt
+    }
+}
+
+private enum MistiaRecoverySchemaV10: VersionedSchema {
+    static var versionIdentifier: Schema.Version {
+        Schema.Version(10, 0, 0)
+    }
+
+    static var models: [any PersistentModel.Type] {
+        [
+            MistiaRecoverySchemaV8.LedgerWallet.self,
+            MistiaRecoverySchemaV8.CreditCardProfile.self,
+            TransactionCategory.self,
+            LedgerTransaction.self,
+            BudgetPlan.self,
+            MistiaRecoverySchemaV8.SavingsGoal.self,
+            RecurringBillPlan.self,
+            MistiaRecoverySchemaV8.InstallmentPlan.self,
+            MistiaRecoverySchemaV8.DueOccurrenceRecord.self,
+            MistiaRecoverySchemaV8.SyncConflict.self,
+            UserAccountProfile.self,
+            OwnedRecordScope.self,
+            TransactionAuditRecord.self
+        ]
+    }
+
+    @Model
+    final class TransactionCategory {
+        @Attribute(.unique) var id: UUID
+        var name: String
+        var kindRawValue: String
+        var iconSymbolName: String
+        var iconColorHex: String
+        var favoriteRawValue: Bool?
+        var parentCategory: TransactionCategory?
+        @Relationship(deleteRule: .nullify, inverse: \TransactionCategory.parentCategory) var childCategories: [TransactionCategory] = []
+        var hierarchyRoleRawValue: String?
+        var systemKey: String?
+        var isSystem: Bool
+        var cloudSyncEnabled: Bool
+        var sortOrder: Int
+        var isArchived: Bool
+        var archivedAt: Date?
+        var createdAt: Date
+        var updatedAt: Date
+        var deletedAt: Date?
+        var remoteVersion: Int64
+
+        init(
+            id: UUID = UUID(),
+            name: String,
+            kindRawValue: String,
+            iconSymbolName: String,
+            iconColorHex: String,
+            favoriteRawValue: Bool? = false,
+            parentCategory: TransactionCategory? = nil,
+            hierarchyRoleRawValue: String? = nil,
+            systemKey: String? = nil,
+            isSystem: Bool = false,
+            cloudSyncEnabled: Bool = false,
+            sortOrder: Int = 0,
+            isArchived: Bool = false,
+            archivedAt: Date? = nil,
+            createdAt: Date = .now,
+            updatedAt: Date = .now,
+            deletedAt: Date? = nil,
+            remoteVersion: Int64 = 0
+        ) {
+            self.id = id
+            self.name = name
+            self.kindRawValue = kindRawValue
+            self.iconSymbolName = iconSymbolName
+            self.iconColorHex = iconColorHex
+            self.favoriteRawValue = favoriteRawValue
+            self.parentCategory = parentCategory
+            self.hierarchyRoleRawValue = hierarchyRoleRawValue
+            self.systemKey = systemKey
+            self.isSystem = isSystem
+            self.cloudSyncEnabled = cloudSyncEnabled
+            self.sortOrder = sortOrder
+            self.isArchived = isArchived
+            self.archivedAt = archivedAt
+            self.createdAt = createdAt
+            self.updatedAt = updatedAt
+            self.deletedAt = deletedAt
+            self.remoteVersion = remoteVersion
+        }
+    }
+
+    @Model
+    final class UserAccountProfile {
+        @Attribute(.unique) var userID: UUID
+        var email: String
+        var displayName: String
+        var avatarFileName: String?
+        var birthday: Date?
+        var lastSyncAt: Date?
+        var createdAt: Date
+        var updatedAt: Date
+
+        init(
+            userID: UUID,
+            email: String,
+            displayName: String,
+            avatarFileName: String? = nil,
+            birthday: Date? = nil,
+            lastSyncAt: Date? = nil,
+            createdAt: Date = .now,
+            updatedAt: Date = .now
+        ) {
+            self.userID = userID
+            self.email = email
+            self.displayName = displayName
+            self.avatarFileName = avatarFileName
+            self.birthday = birthday
+            self.lastSyncAt = lastSyncAt
+            self.createdAt = createdAt
+            self.updatedAt = updatedAt
+        }
+    }
+
+    @Model
+    final class LedgerTransaction {
+        @Attribute(.unique) var id: UUID
+        var primaryKindRawValue: String
+        var transferSubtypeRawValue: String?
+        var debtIntentRawValue: String?
+        var entryStatusRawValue: String
+        var title: String
+        var note: String?
+        var amountMinor: Int64
+        var occurredAt: Date
+        var createdAt: Date
+        var updatedAt: Date
+        var deletedAt: Date?
+        var remoteVersion: Int64
+        var counterpartyName: String?
+        var normalizedCounterpartyKey: String?
+        var isArchived: Bool
+        var archivedAt: Date?
+        @Relationship(deleteRule: .nullify) var sourceWallet: MistiaRecoverySchemaV8.LedgerWallet?
+        @Relationship(deleteRule: .nullify) var destinationWallet: MistiaRecoverySchemaV8.LedgerWallet?
+        @Relationship(deleteRule: .nullify) var category: TransactionCategory?
+
+        init(
+            id: UUID = UUID(),
+            primaryKindRawValue: String,
+            transferSubtypeRawValue: String? = nil,
+            debtIntentRawValue: String? = nil,
+            entryStatusRawValue: String,
+            title: String = "",
+            note: String? = nil,
+            amountMinor: Int64,
+            occurredAt: Date = .now,
+            createdAt: Date = .now,
+            updatedAt: Date = .now,
+            deletedAt: Date? = nil,
+            remoteVersion: Int64 = 0,
+            counterpartyName: String? = nil,
+            normalizedCounterpartyKey: String? = nil,
+            isArchived: Bool = false,
+            archivedAt: Date? = nil,
+            sourceWallet: MistiaRecoverySchemaV8.LedgerWallet? = nil,
+            destinationWallet: MistiaRecoverySchemaV8.LedgerWallet? = nil,
+            category: TransactionCategory? = nil
+        ) {
+            self.id = id
+            self.primaryKindRawValue = primaryKindRawValue
+            self.transferSubtypeRawValue = transferSubtypeRawValue
+            self.debtIntentRawValue = debtIntentRawValue
+            self.entryStatusRawValue = entryStatusRawValue
+            self.title = title
+            self.note = note
+            self.amountMinor = amountMinor
+            self.occurredAt = occurredAt
+            self.createdAt = createdAt
+            self.updatedAt = updatedAt
+            self.deletedAt = deletedAt
+            self.remoteVersion = remoteVersion
+            self.counterpartyName = counterpartyName
+            self.normalizedCounterpartyKey = normalizedCounterpartyKey
+            self.isArchived = isArchived
+            self.archivedAt = archivedAt
+            self.sourceWallet = sourceWallet
+            self.destinationWallet = destinationWallet
+            self.category = category
+        }
+    }
+
+    @Model
+    final class BudgetPlan {
+        @Attribute(.unique) var id: UUID
+        @Relationship(deleteRule: .nullify) var category: TransactionCategory?
+        var monthAnchor: Date
+        var limitMinor: Int64
+        var rolloverEnabled: Bool
+        var currencyCode: String
+        var isArchived: Bool
+        var createdAt: Date
+        var updatedAt: Date
+        var deletedAt: Date?
+        var remoteVersion: Int64
+
+        init(
+            id: UUID = UUID(),
+            category: TransactionCategory? = nil,
+            monthAnchor: Date,
+            limitMinor: Int64,
+            rolloverEnabled: Bool = false,
+            currencyCode: String = "JPY",
+            isArchived: Bool = false,
+            createdAt: Date = .now,
+            updatedAt: Date = .now,
+            deletedAt: Date? = nil,
+            remoteVersion: Int64 = 0
+        ) {
+            self.id = id
+            self.category = category
+            self.monthAnchor = monthAnchor
+            self.limitMinor = limitMinor
+            self.rolloverEnabled = rolloverEnabled
+            self.currencyCode = currencyCode
+            self.isArchived = isArchived
+            self.createdAt = createdAt
+            self.updatedAt = updatedAt
+            self.deletedAt = deletedAt
+            self.remoteVersion = remoteVersion
+        }
+    }
+
+    @Model
+    final class RecurringBillPlan {
+        @Attribute(.unique) var id: UUID
+        var name: String
+        var iconSymbolName: String
+        @Relationship(deleteRule: .nullify) var category: TransactionCategory?
+        var amountMinor: Int64?
+        var dueDay: Int
+        var frequencyMonths: Int
+        @Relationship(deleteRule: .nullify) var paymentWallet: MistiaRecoverySchemaV8.LedgerWallet?
+        var currencyCode: String
+        var isArchived: Bool
+        var createdAt: Date
+        var updatedAt: Date
+        var deletedAt: Date?
+        var remoteVersion: Int64
+
+        init(
+            id: UUID = UUID(),
+            name: String,
+            iconSymbolName: String,
+            category: TransactionCategory? = nil,
+            amountMinor: Int64? = nil,
+            dueDay: Int,
+            frequencyMonths: Int = 1,
+            paymentWallet: MistiaRecoverySchemaV8.LedgerWallet? = nil,
+            currencyCode: String = "JPY",
+            isArchived: Bool = false,
+            createdAt: Date = .now,
+            updatedAt: Date = .now,
+            deletedAt: Date? = nil,
+            remoteVersion: Int64 = 0
+        ) {
+            self.id = id
+            self.name = name
+            self.iconSymbolName = iconSymbolName
+            self.category = category
+            self.amountMinor = amountMinor
+            self.dueDay = dueDay
+            self.frequencyMonths = frequencyMonths
+            self.paymentWallet = paymentWallet
+            self.currencyCode = currencyCode
+            self.isArchived = isArchived
+            self.createdAt = createdAt
+            self.updatedAt = updatedAt
+            self.deletedAt = deletedAt
+            self.remoteVersion = remoteVersion
+        }
+    }
+
+    @Model
+    final class OwnedRecordScope {
+        @Attribute(.unique) var id: String
+        var entityRawValue: String
+        var recordID: UUID
+        var ownerUserID: UUID
+        var updatedAt: Date
+
+        init(
+            id: String,
+            entityRawValue: String,
+            recordID: UUID,
+            ownerUserID: UUID,
+            updatedAt: Date = .now
+        ) {
+            self.id = id
+            self.entityRawValue = entityRawValue
+            self.recordID = recordID
+            self.ownerUserID = ownerUserID
+            self.updatedAt = updatedAt
+        }
+    }
+
+    @Model
+    final class TransactionAuditRecord {
+        @Attribute(.unique) var transactionID: UUID
+        var createdByUserID: UUID
+        var lastModifiedByUserID: UUID
+        var updatedAt: Date
+
+        init(
+            transactionID: UUID,
+            createdByUserID: UUID,
+            lastModifiedByUserID: UUID,
+            updatedAt: Date = .now
+        ) {
+            self.transactionID = transactionID
+            self.createdByUserID = createdByUserID
+            self.lastModifiedByUserID = lastModifiedByUserID
+            self.updatedAt = updatedAt
+        }
+    }
+}
+
+private enum MistiaRecoverySchemaV9: VersionedSchema {
+    static var versionIdentifier: Schema.Version {
+        Schema.Version(9, 0, 0)
+    }
+
+    static var models: [any PersistentModel.Type] {
+        [
+            MistiaRecoverySchemaV8.LedgerWallet.self,
+            MistiaRecoverySchemaV8.CreditCardProfile.self,
+            MistiaRecoverySchemaV10.TransactionCategory.self,
+            MistiaRecoverySchemaV10.LedgerTransaction.self,
+            MistiaRecoverySchemaV10.BudgetPlan.self,
+            MistiaRecoverySchemaV8.SavingsGoal.self,
+            MistiaRecoverySchemaV10.RecurringBillPlan.self,
+            MistiaRecoverySchemaV8.InstallmentPlan.self,
+            MistiaRecoverySchemaV8.DueOccurrenceRecord.self,
+            MistiaRecoverySchemaV8.SyncConflict.self,
+            MistiaRecoverySchemaV10.UserAccountProfile.self,
+            MistiaRecoverySchemaV10.OwnedRecordScope.self
+        ]
+    }
+}
+
+private enum MistiaRecoverySchemaV7: VersionedSchema {
+    static var versionIdentifier: Schema.Version {
+        Schema.Version(7, 0, 0)
+    }
+
+    static var models: [any PersistentModel.Type] {
+        [
+            MistiaRecoverySchemaV8.LedgerWallet.self,
+            MistiaRecoverySchemaV8.CreditCardProfile.self,
+            MistiaRecoverySchemaV8.TransactionCategory.self,
+            MistiaRecoverySchemaV8.LedgerTransaction.self,
+            MistiaRecoverySchemaV8.BudgetPlan.self,
+            MistiaRecoverySchemaV8.SavingsGoal.self,
+            MistiaRecoverySchemaV8.RecurringBillPlan.self,
+            MistiaRecoverySchemaV8.InstallmentPlan.self,
+            MistiaRecoverySchemaV8.DueOccurrenceRecord.self,
+            MistiaRecoverySchemaV8.SyncConflict.self,
+            MistiaRecoverySchemaV8.UserAccountProfile.self
+        ]
+    }
+}
+
+private enum MistiaRecoverySchemaV8: VersionedSchema {
+    static var versionIdentifier: Schema.Version {
+        Schema.Version(8, 0, 0)
+    }
+
+    static var models: [any PersistentModel.Type] {
+        [
+            LedgerWallet.self,
+            CreditCardProfile.self,
+            TransactionCategory.self,
+            LedgerTransaction.self,
+            BudgetPlan.self,
+            SavingsGoal.self,
+            RecurringBillPlan.self,
+            InstallmentPlan.self,
+            DueOccurrenceRecord.self,
+            SyncConflict.self,
+            UserAccountProfile.self,
+            OwnedRecordScope.self
+        ]
+    }
+
+    @Model
+    final class LedgerWallet {
+        @Attribute(.unique) var id: UUID
+        var name: String
+        var kindRawValue: String
+        var iconSymbolName: String
+        var iconColorHex: String
+        var currencyCode: String
+        var openingBalanceMinor: Int64
+        var institutionDisplayName: String?
+        var institutionPresetKey: String?
+        var sortOrder: Int
+        var isArchived: Bool
+        var archivedAt: Date?
+        var createdAt: Date
+        var updatedAt: Date
+        var deletedAt: Date?
+        var remoteVersion: Int64
+        var creditCardProfile: CreditCardProfile?
+
+        init(
+            id: UUID = UUID(),
+            name: String,
+            kindRawValue: String,
+            iconSymbolName: String,
+            iconColorHex: String,
+            currencyCode: String = "JPY",
+            openingBalanceMinor: Int64 = 0,
+            institutionDisplayName: String? = nil,
+            institutionPresetKey: String? = nil,
+            sortOrder: Int = 0,
+            isArchived: Bool = false,
+            archivedAt: Date? = nil,
+            createdAt: Date = .now,
+            updatedAt: Date = .now,
+            deletedAt: Date? = nil,
+            remoteVersion: Int64 = 0
+        ) {
+            self.id = id
+            self.name = name
+            self.kindRawValue = kindRawValue
+            self.iconSymbolName = iconSymbolName
+            self.iconColorHex = iconColorHex
+            self.currencyCode = currencyCode
+            self.openingBalanceMinor = openingBalanceMinor
+            self.institutionDisplayName = institutionDisplayName
+            self.institutionPresetKey = institutionPresetKey
+            self.sortOrder = sortOrder
+            self.isArchived = isArchived
+            self.archivedAt = archivedAt
+            self.createdAt = createdAt
+            self.updatedAt = updatedAt
+            self.deletedAt = deletedAt
+            self.remoteVersion = remoteVersion
+        }
+    }
+
+    @Model
+    final class CreditCardProfile {
+        @Attribute(.unique) var id: UUID
+        var issuerName: String
+        var networkRawValue: String
+        var last4: String
+        var creditLimitMinor: Int64
+        var statementClosingDay: Int
+        var paymentDueDay: Int
+        var notes: String?
+        var createdAt: Date
+        var updatedAt: Date
+        var deletedAt: Date?
+        var remoteVersion: Int64
+        var wallet: LedgerWallet?
+        var paymentSourceWallet: LedgerWallet?
+
+        init(
+            id: UUID = UUID(),
+            issuerName: String = "",
+            networkRawValue: String = CreditCardNetwork.visa.rawValue,
+            last4: String = "",
+            creditLimitMinor: Int64 = 0,
+            statementClosingDay: Int = 25,
+            paymentDueDay: Int = 10,
+            notes: String? = nil,
+            createdAt: Date = .now,
+            updatedAt: Date = .now,
+            deletedAt: Date? = nil,
+            remoteVersion: Int64 = 0,
+            wallet: LedgerWallet? = nil,
+            paymentSourceWallet: LedgerWallet? = nil
+        ) {
+            self.id = id
+            self.issuerName = issuerName
+            self.networkRawValue = networkRawValue
+            self.last4 = last4
+            self.creditLimitMinor = creditLimitMinor
+            self.statementClosingDay = statementClosingDay
+            self.paymentDueDay = paymentDueDay
+            self.notes = notes
+            self.createdAt = createdAt
+            self.updatedAt = updatedAt
+            self.deletedAt = deletedAt
+            self.remoteVersion = remoteVersion
+            self.wallet = wallet
+            self.paymentSourceWallet = paymentSourceWallet
+        }
+    }
+
+    @Model
+    final class TransactionCategory {
+        @Attribute(.unique) var id: UUID
+        var name: String
+        var kindRawValue: String
+        var iconSymbolName: String
+        var iconColorHex: String
+        var favoriteRawValue: Bool?
+        var parentCategory: TransactionCategory?
+        @Relationship(deleteRule: .nullify, inverse: \TransactionCategory.parentCategory) var childCategories: [TransactionCategory] = []
+        var hierarchyRoleRawValue: String?
+        var systemKey: String?
+        var isSystem: Bool
+        var sortOrder: Int
+        var isArchived: Bool
+        var archivedAt: Date?
+        var createdAt: Date
+        var updatedAt: Date
+        var deletedAt: Date?
+        var remoteVersion: Int64
+
+        init(
+            id: UUID = UUID(),
+            name: String,
+            kindRawValue: String,
+            iconSymbolName: String,
+            iconColorHex: String,
+            favoriteRawValue: Bool? = false,
+            parentCategory: TransactionCategory? = nil,
+            hierarchyRoleRawValue: String? = nil,
+            systemKey: String? = nil,
+            isSystem: Bool = false,
+            sortOrder: Int = 0,
+            isArchived: Bool = false,
+            archivedAt: Date? = nil,
+            createdAt: Date = .now,
+            updatedAt: Date = .now,
+            deletedAt: Date? = nil,
+            remoteVersion: Int64 = 0
+        ) {
+            self.id = id
+            self.name = name
+            self.kindRawValue = kindRawValue
+            self.iconSymbolName = iconSymbolName
+            self.iconColorHex = iconColorHex
+            self.favoriteRawValue = favoriteRawValue
+            self.parentCategory = parentCategory
+            self.hierarchyRoleRawValue = hierarchyRoleRawValue
+            self.systemKey = systemKey
+            self.isSystem = isSystem
+            self.sortOrder = sortOrder
+            self.isArchived = isArchived
+            self.archivedAt = archivedAt
+            self.createdAt = createdAt
+            self.updatedAt = updatedAt
+            self.deletedAt = deletedAt
+            self.remoteVersion = remoteVersion
+        }
+    }
+
+    @Model
+    final class LedgerTransaction {
+        @Attribute(.unique) var id: UUID
+        var primaryKindRawValue: String
+        var transferSubtypeRawValue: String?
+        var debtIntentRawValue: String?
+        var entryStatusRawValue: String
+        var title: String
+        var note: String?
+        var amountMinor: Int64
+        var occurredAt: Date
+        var createdAt: Date
+        var updatedAt: Date
+        var deletedAt: Date?
+        var remoteVersion: Int64
+        var counterpartyName: String?
+        var normalizedCounterpartyKey: String?
+        var isArchived: Bool
+        var archivedAt: Date?
+        @Relationship(deleteRule: .nullify) var sourceWallet: LedgerWallet?
+        @Relationship(deleteRule: .nullify) var destinationWallet: LedgerWallet?
+        @Relationship(deleteRule: .nullify) var category: TransactionCategory?
+
+        init(
+            id: UUID = UUID(),
+            primaryKindRawValue: String,
+            transferSubtypeRawValue: String? = nil,
+            debtIntentRawValue: String? = nil,
+            entryStatusRawValue: String,
+            title: String = "",
+            note: String? = nil,
+            amountMinor: Int64,
+            occurredAt: Date = .now,
+            createdAt: Date = .now,
+            updatedAt: Date = .now,
+            deletedAt: Date? = nil,
+            remoteVersion: Int64 = 0,
+            counterpartyName: String? = nil,
+            normalizedCounterpartyKey: String? = nil,
+            isArchived: Bool = false,
+            archivedAt: Date? = nil,
+            sourceWallet: LedgerWallet? = nil,
+            destinationWallet: LedgerWallet? = nil,
+            category: TransactionCategory? = nil
+        ) {
+            self.id = id
+            self.primaryKindRawValue = primaryKindRawValue
+            self.transferSubtypeRawValue = transferSubtypeRawValue
+            self.debtIntentRawValue = debtIntentRawValue
+            self.entryStatusRawValue = entryStatusRawValue
+            self.title = title
+            self.note = note
+            self.amountMinor = amountMinor
+            self.occurredAt = occurredAt
+            self.createdAt = createdAt
+            self.updatedAt = updatedAt
+            self.deletedAt = deletedAt
+            self.remoteVersion = remoteVersion
+            self.counterpartyName = counterpartyName
+            self.normalizedCounterpartyKey = normalizedCounterpartyKey
+            self.isArchived = isArchived
+            self.archivedAt = archivedAt
+            self.sourceWallet = sourceWallet
+            self.destinationWallet = destinationWallet
+            self.category = category
+        }
+    }
+
+    @Model
+    final class BudgetPlan {
+        @Attribute(.unique) var id: UUID
+        @Relationship(deleteRule: .nullify) var category: TransactionCategory?
+        var monthAnchor: Date
+        var limitMinor: Int64
+        var rolloverEnabled: Bool
+        var currencyCode: String
+        var isArchived: Bool
+        var createdAt: Date
+        var updatedAt: Date
+        var deletedAt: Date?
+        var remoteVersion: Int64
+
+        init(
+            id: UUID = UUID(),
+            category: TransactionCategory? = nil,
+            monthAnchor: Date,
+            limitMinor: Int64,
+            rolloverEnabled: Bool = false,
+            currencyCode: String = "JPY",
+            isArchived: Bool = false,
+            createdAt: Date = .now,
+            updatedAt: Date = .now,
+            deletedAt: Date? = nil,
+            remoteVersion: Int64 = 0
+        ) {
+            self.id = id
+            self.category = category
+            self.monthAnchor = monthAnchor
+            self.limitMinor = limitMinor
+            self.rolloverEnabled = rolloverEnabled
+            self.currencyCode = currencyCode
+            self.isArchived = isArchived
+            self.createdAt = createdAt
+            self.updatedAt = updatedAt
+            self.deletedAt = deletedAt
+            self.remoteVersion = remoteVersion
+        }
+    }
+
+    @Model
+    final class SavingsGoal {
+        @Attribute(.unique) var id: UUID
+        var name: String
+        var iconSymbolName: String
+        var targetMinor: Int64
+        var currentSavedMinor: Int64
+        var targetDate: Date
+        @Relationship(deleteRule: .nullify) var linkedWallet: LedgerWallet?
+        var currencyCode: String
+        var sortOrder: Int
+        var isArchived: Bool
+        var createdAt: Date
+        var updatedAt: Date
+        var deletedAt: Date?
+        var remoteVersion: Int64
+
+        init(
+            id: UUID = UUID(),
+            name: String,
+            iconSymbolName: String,
+            targetMinor: Int64,
+            currentSavedMinor: Int64 = 0,
+            targetDate: Date,
+            linkedWallet: LedgerWallet? = nil,
+            currencyCode: String = "JPY",
+            sortOrder: Int = 0,
+            isArchived: Bool = false,
+            createdAt: Date = .now,
+            updatedAt: Date = .now,
+            deletedAt: Date? = nil,
+            remoteVersion: Int64 = 0
+        ) {
+            self.id = id
+            self.name = name
+            self.iconSymbolName = iconSymbolName
+            self.targetMinor = targetMinor
+            self.currentSavedMinor = currentSavedMinor
+            self.targetDate = targetDate
+            self.linkedWallet = linkedWallet
+            self.currencyCode = currencyCode
+            self.sortOrder = sortOrder
+            self.isArchived = isArchived
+            self.createdAt = createdAt
+            self.updatedAt = updatedAt
+            self.deletedAt = deletedAt
+            self.remoteVersion = remoteVersion
+        }
+    }
+
+    @Model
+    final class RecurringBillPlan {
+        @Attribute(.unique) var id: UUID
+        var name: String
+        var iconSymbolName: String
+        @Relationship(deleteRule: .nullify) var category: TransactionCategory?
+        var amountMinor: Int64?
+        var dueDay: Int
+        var frequencyMonths: Int
+        @Relationship(deleteRule: .nullify) var paymentWallet: LedgerWallet?
+        var currencyCode: String
+        var isArchived: Bool
+        var createdAt: Date
+        var updatedAt: Date
+        var deletedAt: Date?
+        var remoteVersion: Int64
+
+        init(
+            id: UUID = UUID(),
+            name: String,
+            iconSymbolName: String,
+            category: TransactionCategory? = nil,
+            amountMinor: Int64? = nil,
+            dueDay: Int,
+            frequencyMonths: Int = 1,
+            paymentWallet: LedgerWallet? = nil,
+            currencyCode: String = "JPY",
+            isArchived: Bool = false,
+            createdAt: Date = .now,
+            updatedAt: Date = .now,
+            deletedAt: Date? = nil,
+            remoteVersion: Int64 = 0
+        ) {
+            self.id = id
+            self.name = name
+            self.iconSymbolName = iconSymbolName
+            self.category = category
+            self.amountMinor = amountMinor
+            self.dueDay = dueDay
+            self.frequencyMonths = frequencyMonths
+            self.paymentWallet = paymentWallet
+            self.currencyCode = currencyCode
+            self.isArchived = isArchived
+            self.createdAt = createdAt
+            self.updatedAt = updatedAt
+            self.deletedAt = deletedAt
+            self.remoteVersion = remoteVersion
+        }
+    }
+
+    @Model
+    final class InstallmentPlan {
+        @Attribute(.unique) var id: UUID
+        var name: String
+        var iconSymbolName: String
+        var amountPerCycleMinor: Int64
+        var dueDay: Int
+        var totalCycles: Int?
+        var frequencyMonths: Int
+        @Relationship(deleteRule: .nullify) var paymentWallet: LedgerWallet?
+        var currencyCode: String
+        var isArchived: Bool
+        var createdAt: Date
+        var updatedAt: Date
+        var deletedAt: Date?
+        var remoteVersion: Int64
+
+        init(
+            id: UUID = UUID(),
+            name: String,
+            iconSymbolName: String,
+            amountPerCycleMinor: Int64,
+            dueDay: Int,
+            totalCycles: Int? = nil,
+            frequencyMonths: Int = 1,
+            paymentWallet: LedgerWallet? = nil,
+            currencyCode: String = "JPY",
+            isArchived: Bool = false,
+            createdAt: Date = .now,
+            updatedAt: Date = .now,
+            deletedAt: Date? = nil,
+            remoteVersion: Int64 = 0
+        ) {
+            self.id = id
+            self.name = name
+            self.iconSymbolName = iconSymbolName
+            self.amountPerCycleMinor = amountPerCycleMinor
+            self.dueDay = dueDay
+            self.totalCycles = totalCycles
+            self.frequencyMonths = frequencyMonths
+            self.paymentWallet = paymentWallet
+            self.currencyCode = currencyCode
+            self.isArchived = isArchived
+            self.createdAt = createdAt
+            self.updatedAt = updatedAt
+            self.deletedAt = deletedAt
+            self.remoteVersion = remoteVersion
+        }
+    }
+
+    @Model
+    final class DueOccurrenceRecord {
+        @Attribute(.unique) var id: UUID
+        var sourceKindRawValue: String
+        var sourceID: UUID
+        var selectedMonthKey: String
+        var scheduledDate: Date
+        var amountMinorSnapshot: Int64?
+        var statusRawValue: String
+        var paidAt: Date?
+        var linkedTransactionID: UUID?
+        var createdAt: Date
+        var updatedAt: Date
+        var deletedAt: Date?
+        var remoteVersion: Int64
+
+        init(
+            id: UUID = UUID(),
+            sourceKindRawValue: String,
+            sourceID: UUID,
+            selectedMonthKey: String,
+            scheduledDate: Date,
+            amountMinorSnapshot: Int64? = nil,
+            statusRawValue: String,
+            paidAt: Date? = nil,
+            linkedTransactionID: UUID? = nil,
+            createdAt: Date = .now,
+            updatedAt: Date = .now,
+            deletedAt: Date? = nil,
+            remoteVersion: Int64 = 0
+        ) {
+            self.id = id
+            self.sourceKindRawValue = sourceKindRawValue
+            self.sourceID = sourceID
+            self.selectedMonthKey = selectedMonthKey
+            self.scheduledDate = scheduledDate
+            self.amountMinorSnapshot = amountMinorSnapshot
+            self.statusRawValue = statusRawValue
+            self.paidAt = paidAt
+            self.linkedTransactionID = linkedTransactionID
+            self.createdAt = createdAt
+            self.updatedAt = updatedAt
+            self.deletedAt = deletedAt
+            self.remoteVersion = remoteVersion
+        }
+    }
+
+    @Model
+    final class SyncConflict {
+        @Attribute(.unique) var id: UUID
+        var entityRawValue: String
+        var recordID: UUID
+        var conflictKindRawValue: String
+        var localPayloadJSON: String
+        var remotePayloadJSON: String
+        var baseVersion: Int64
+        var remoteVersion: Int64
+        var createdAt: Date
+
+        init(
+            id: UUID = UUID(),
+            entityRawValue: String,
+            recordID: UUID,
+            conflictKindRawValue: String,
+            localPayloadJSON: String,
+            remotePayloadJSON: String,
+            baseVersion: Int64,
+            remoteVersion: Int64,
+            createdAt: Date = .now
+        ) {
+            self.id = id
+            self.entityRawValue = entityRawValue
+            self.recordID = recordID
+            self.conflictKindRawValue = conflictKindRawValue
+            self.localPayloadJSON = localPayloadJSON
+            self.remotePayloadJSON = remotePayloadJSON
+            self.baseVersion = baseVersion
+            self.remoteVersion = remoteVersion
+            self.createdAt = createdAt
+        }
+    }
+
+    @Model
+    final class UserAccountProfile {
+        @Attribute(.unique) var userID: UUID
+        var email: String
+        var displayName: String
+        var avatarFileName: String?
+        var birthday: Date?
+        var createdAt: Date
+        var updatedAt: Date
+
+        init(
+            userID: UUID,
+            email: String,
+            displayName: String,
+            avatarFileName: String? = nil,
+            birthday: Date? = nil,
+            createdAt: Date = .now,
+            updatedAt: Date = .now
+        ) {
+            self.userID = userID
+            self.email = email
+            self.displayName = displayName
+            self.avatarFileName = avatarFileName
+            self.birthday = birthday
+            self.createdAt = createdAt
+            self.updatedAt = updatedAt
+        }
+    }
+
+    @Model
+    final class OwnedRecordScope {
+        @Attribute(.unique) var id: String
+        var entityRawValue: String
+        var recordID: UUID
+        var ownerUserID: UUID
+        var updatedAt: Date
+
+        init(
+            id: String,
+            entityRawValue: String,
+            recordID: UUID,
+            ownerUserID: UUID,
+            updatedAt: Date = .now
+        ) {
+            self.id = id
+            self.entityRawValue = entityRawValue
+            self.recordID = recordID
+            self.ownerUserID = ownerUserID
+            self.updatedAt = updatedAt
+        }
     }
 }
 
