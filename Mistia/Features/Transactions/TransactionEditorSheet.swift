@@ -25,6 +25,10 @@ enum TransactionEditorCompletion: Equatable {
     case savedTransaction
 }
 
+private enum TransactionEditorFocusedField: Hashable {
+    case title
+}
+
 struct TransactionEditorSheet: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
@@ -38,6 +42,8 @@ struct TransactionEditorSheet: View {
     private var storedCategories: [TransactionCategory]
     @Query
     private var ownershipScopes: [OwnedRecordScope]
+    @Query
+    private var transactionAuditRecords: [TransactionAuditRecord]
     @Query(filter: #Predicate<LedgerTransaction> {
         $0.entryStatusRawValue == "posted" && !$0.isArchived && $0.deletedAt == nil
     })
@@ -49,6 +55,7 @@ struct TransactionEditorSheet: View {
     @State private var draft: TransactionFormDraft
     @State private var alertMessage: String?
     @State private var showsCategoryPicker = false
+    @FocusState private var focusedField: TransactionEditorFocusedField?
 
     init(
         target: TransactionEditorTarget,
@@ -237,18 +244,25 @@ struct TransactionEditorSheet: View {
             }
 
             Section(mistiaLocalized(vi: "Thông tin chính", en: "Main details", ja: "基本情報")) {
-                if draft.primaryKind != .transfer {
-                    TextField(
-                        draft.primaryKind == .expense
-                            ? mistiaLocalized(vi: "Tên khoản chi", en: "Expense name", ja: "支出名")
-                            : mistiaLocalized(vi: "Tên khoản thu", en: "Income name", ja: "収入名"),
-                        text: $bindableDraft.title
-                    )
-                } else if draft.transferSubtype == .debt {
-                    TextField(
-                        mistiaLocalized(vi: "Tên giao dịch (không bắt buộc)", en: "Transaction name (optional)", ja: "取引名（任意）"),
-                        text: $bindableDraft.title
-                    )
+                if let titleFieldPlaceholder {
+                    TextField(titleFieldPlaceholder, text: $bindableDraft.title)
+                        .focused($focusedField, equals: .title)
+                        .textInputAutocapitalization(.words)
+                        .autocorrectionDisabled()
+
+                    if shouldShowTitleSuggestions {
+                        ForEach(titleSuggestions) { suggestion in
+                            Button {
+                                applyTitleSuggestion(suggestion)
+                            } label: {
+                                titleSuggestionRow(suggestion)
+                            }
+                            .buttonStyle(MistiaPressableButtonStyle(cornerRadius: 18, tint: accentColor))
+                            .listRowInsets(EdgeInsets(top: 4, leading: 0, bottom: 4, trailing: 0))
+                            .listRowBackground(Color.clear)
+                            .listRowSeparator(.hidden)
+                        }
+                    }
                 }
 
                 TextField(mistiaLocalized(vi: "Số tiền", en: "Amount", ja: "金額"), text: $bindableDraft.amountText)
@@ -428,6 +442,53 @@ struct TransactionEditorSheet: View {
                 }
                 return $0.createdAt < $1.createdAt
             }
+    }
+
+    private var visiblePostedTransactions: [LedgerTransaction] {
+        FamilyScopedData.visibleTransactionsForHistory(
+            postedTransactions,
+            audits: transactionAuditRecords,
+            scopes: ownershipScopes,
+            familyContextStore: familyContextStore,
+            sessionStore: sessionStore
+        )
+    }
+
+    private var titleFieldPlaceholder: String? {
+        if draft.primaryKind != .transfer {
+            return draft.primaryKind == .expense
+                ? mistiaLocalized(vi: "Tên khoản chi", en: "Expense name", ja: "支出名")
+                : mistiaLocalized(vi: "Tên khoản thu", en: "Income name", ja: "収入名")
+        }
+
+        if draft.transferSubtype == .debt {
+            return mistiaLocalized(
+                vi: "Tên giao dịch (không bắt buộc)",
+                en: "Transaction name (optional)",
+                ja: "取引名（任意）"
+            )
+        }
+
+        return nil
+    }
+
+    private var titleSuggestions: [TransactionTitleSuggestion] {
+        guard titleFieldPlaceholder != nil else {
+            return []
+        }
+
+        return TransactionLogic.titleSuggestions(
+            from: visiblePostedTransactions.map(\.snapshot),
+            query: draft.title,
+            primaryKind: draft.primaryKind,
+            transferSubtype: draft.primaryKind == .transfer ? draft.transferSubtype : nil,
+            excludingTransactionID: target.transaction?.id,
+            limit: 5
+        )
+    }
+
+    private var shouldShowTitleSuggestions: Bool {
+        focusedField == .title && !titleSuggestions.isEmpty
     }
 
     private var categorySections: [TransactionCategoryGroupSection] {
@@ -900,6 +961,76 @@ struct TransactionEditorSheet: View {
             return wallet.name
         }
         return "\(wallet.name) • \(ownerName)"
+    }
+
+    private func applyTitleSuggestion(_ suggestion: TransactionTitleSuggestion) {
+        draft.title = suggestion.title
+
+        Task { @MainActor in
+            focusedField = .title
+        }
+    }
+
+    @ViewBuilder
+    private func titleSuggestionRow(_ suggestion: TransactionTitleSuggestion) -> some View {
+        HStack(spacing: 12) {
+            Image(systemName: "clock.arrow.circlepath")
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundStyle(.secondary)
+
+            Text(suggestion.title)
+                .font(.system(size: 15.5, weight: .medium, design: .rounded))
+                .foregroundStyle(.primary)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .lineLimit(1)
+
+            Image(systemName: "arrow.up.left")
+                .font(.system(size: 11, weight: .bold))
+                .foregroundStyle(.tertiary)
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 12)
+        .background {
+            if #available(iOS 26, *) {
+                RoundedRectangle(cornerRadius: 18, style: .continuous)
+                    .fill(.clear)
+                    .glassEffect(
+                        Glass.regular
+                            .tint(colorScheme == .dark ? .white.opacity(0.08) : .white.opacity(0.18))
+                            .interactive(true),
+                        in: .rect(cornerRadius: 18)
+                    )
+            } else {
+                RoundedRectangle(cornerRadius: 18, style: .continuous)
+                    .fill(Color(UIColor.secondarySystemBackground))
+            }
+        }
+        .contentShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+    }
+}
+
+private extension LedgerTransaction {
+    var snapshot: TransactionRecordSnapshot {
+        TransactionRecordSnapshot(
+            id: id,
+            primaryKind: primaryKind,
+            transferSubtype: transferSubtype,
+            debtIntent: debtIntent,
+            entryStatus: entryStatus,
+            title: title,
+            note: note,
+            amountMinor: amountMinor,
+            occurredAt: occurredAt,
+            createdAt: createdAt,
+            sourceWalletID: sourceWallet?.id,
+            sourceWalletKind: sourceWallet?.kind,
+            destinationWalletID: destinationWallet?.id,
+            destinationWalletKind: destinationWallet?.kind,
+            categoryID: category?.id,
+            categoryParentID: category?.parentCategory?.id,
+            counterpartyName: counterpartyName,
+            normalizedCounterpartyKey: normalizedCounterpartyKey
+        )
     }
 }
 

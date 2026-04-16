@@ -102,6 +102,11 @@ struct CounterpartyDebtSnapshot: Equatable, Identifiable {
     }
 }
 
+struct TransactionTitleSuggestion: Equatable, Identifiable {
+    let id: String
+    let title: String
+}
+
 nonisolated enum TransactionLogic {
     static func normalizeCounterpartyName(_ name: String?) -> String? {
         guard let normalized = name?
@@ -254,6 +259,98 @@ nonisolated enum TransactionLogic {
         }
     }
 
+    static func titleSuggestions(
+        from records: [TransactionRecordSnapshot],
+        query: String,
+        primaryKind: TransactionPrimaryKind,
+        transferSubtype: TransactionTransferSubtype? = nil,
+        excludingTransactionID: UUID? = nil,
+        limit: Int = 5
+    ) -> [TransactionTitleSuggestion] {
+        guard limit > 0,
+              let normalizedQuery = normalizeCounterpartyName(query),
+              !normalizedQuery.isEmpty
+        else {
+            return []
+        }
+
+        let groupedMatches = Dictionary(grouping: records) { record in
+            titleSuggestionGroupingKey(record.title) ?? record.id.uuidString
+        }
+
+        let rankedSuggestions: [
+            (
+                suggestion: TransactionTitleSuggestion,
+                matchRank: Int,
+                latestOccurredAt: Date,
+                latestCreatedAt: Date,
+                usageCount: Int
+            )
+        ] = groupedMatches.compactMap { entry in
+            let normalizedTitle = entry.key
+            let groupedRecords = entry.value
+            let matchingRecords = groupedRecords.filter { record in
+                guard record.id != excludingTransactionID,
+                      record.entryStatus == .posted,
+                      matchesTitleSuggestionScope(
+                        record,
+                        primaryKind: primaryKind,
+                        transferSubtype: transferSubtype
+                      ),
+                      !record.title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                else {
+                    return false
+                }
+
+                return true
+            }
+
+            guard let representative = matchingRecords.sorted(by: recordSort).first,
+                  let representativeKey = normalizeCounterpartyName(representative.title),
+                  let matchRank = titleSuggestionMatchRank(
+                    query: normalizedQuery,
+                    normalizedTitle: representativeKey
+                  )
+            else {
+                return nil
+            }
+
+            return (
+                suggestion: TransactionTitleSuggestion(
+                    id: normalizedTitle,
+                    title: representative.title.trimmingCharacters(in: .whitespacesAndNewlines)
+                ),
+                matchRank: matchRank,
+                latestOccurredAt: representative.occurredAt,
+                latestCreatedAt: representative.createdAt,
+                usageCount: matchingRecords.count
+            )
+        }
+
+        return rankedSuggestions
+            .sorted { lhs, rhs in
+                if lhs.matchRank != rhs.matchRank {
+                    return lhs.matchRank < rhs.matchRank
+                }
+
+                if lhs.latestOccurredAt != rhs.latestOccurredAt {
+                    return lhs.latestOccurredAt > rhs.latestOccurredAt
+                }
+
+                if lhs.latestCreatedAt != rhs.latestCreatedAt {
+                    return lhs.latestCreatedAt > rhs.latestCreatedAt
+                }
+
+                if lhs.usageCount != rhs.usageCount {
+                    return lhs.usageCount > rhs.usageCount
+                }
+
+                return lhs.suggestion.title.localizedCaseInsensitiveCompare(rhs.suggestion.title) == .orderedAscending
+            }
+            .prefix(limit)
+            .map { $0.suggestion }
+    }
+
     static func effectiveBalance(
         for wallet: TransactionWalletSnapshot,
         records: [TransactionRecordSnapshot]
@@ -397,6 +494,49 @@ nonisolated enum TransactionLogic {
         case .today:
             return calendar.isDate(record.occurredAt, inSameDayAs: referenceDate)
         }
+    }
+
+    private static func matchesTitleSuggestionScope(
+        _ record: TransactionRecordSnapshot,
+        primaryKind: TransactionPrimaryKind,
+        transferSubtype: TransactionTransferSubtype?
+    ) -> Bool {
+        guard record.primaryKind == primaryKind else {
+            return false
+        }
+
+        guard primaryKind == .transfer else {
+            return true
+        }
+
+        return record.transferSubtype == transferSubtype
+    }
+
+    private static func titleSuggestionMatchRank(
+        query: String,
+        normalizedTitle: String
+    ) -> Int? {
+        let condensedQuery = query.replacingOccurrences(of: " ", with: "")
+        let condensedTitle = normalizedTitle.replacingOccurrences(of: " ", with: "")
+
+        if normalizedTitle.hasPrefix(query) || condensedTitle.hasPrefix(condensedQuery) {
+            return 0
+        }
+
+        if normalizedTitle.contains(" \(query)") {
+            return 1
+        }
+
+        if normalizedTitle.contains(query) || condensedTitle.contains(condensedQuery) {
+            return 2
+        }
+
+        return nil
+    }
+
+    private static func titleSuggestionGroupingKey(_ title: String?) -> String? {
+        normalizeCounterpartyName(title)?
+            .replacingOccurrences(of: " ", with: "")
     }
 
     private static func balanceDelta(

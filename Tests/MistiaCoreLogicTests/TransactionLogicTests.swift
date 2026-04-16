@@ -323,7 +323,139 @@ final class TransactionLogicTests: XCTestCase {
         XCTAssertEqual(visible.map(\.id), [matching.id])
     }
 
+    func testTitleSuggestionsPreferPrefixMatchesAndKeepNewestDuplicateTitle() {
+        let walletID = UUID()
+        let referenceDate = Date(timeIntervalSince1970: 1_742_646_400)
+
+        let olderDuplicate = makeRecord(
+            primaryKind: .expense,
+            title: "Cafe sua",
+            amountMinor: 20_000,
+            occurredAt: referenceDate.addingTimeInterval(-300),
+            sourceWalletID: walletID,
+            sourceWalletKind: .cash,
+            categoryID: UUID()
+        )
+        let newestDuplicate = makeRecord(
+            primaryKind: .expense,
+            title: "Café sữa",
+            amountMinor: 21_000,
+            occurredAt: referenceDate.addingTimeInterval(-60),
+            sourceWalletID: walletID,
+            sourceWalletKind: .cash,
+            categoryID: UUID()
+        )
+        let containsMatch = makeRecord(
+            primaryKind: .expense,
+            title: "Di cafe voi ban",
+            amountMinor: 18_000,
+            occurredAt: referenceDate.addingTimeInterval(-30),
+            sourceWalletID: walletID,
+            sourceWalletKind: .cash,
+            categoryID: UUID()
+        )
+        let wrongKind = makeRecord(
+            primaryKind: .income,
+            title: "Cafe freelance",
+            amountMinor: 80_000,
+            occurredAt: referenceDate,
+            sourceWalletID: walletID,
+            sourceWalletKind: .bank,
+            categoryID: UUID()
+        )
+
+        let suggestions = TransactionLogic.titleSuggestions(
+            from: [olderDuplicate, newestDuplicate, containsMatch, wrongKind],
+            query: "cafe",
+            primaryKind: .expense,
+            limit: 5
+        )
+
+        XCTAssertEqual(
+            suggestions.map(\.title),
+            ["Café sữa", "Di cafe voi ban"]
+        )
+    }
+
+    func testTitleSuggestionsRespectTransferSubtypeExclusionAndLimit() {
+        let walletID = UUID()
+        let referenceDate = Date(timeIntervalSince1970: 1_742_646_400)
+        let excludedID = UUID()
+
+        let excluded = makeRecord(
+            id: excludedID,
+            primaryKind: .transfer,
+            transferSubtype: .debt,
+            debtIntent: .lend,
+            title: "Cho vay An",
+            amountMinor: 50_000,
+            occurredAt: referenceDate,
+            sourceWalletID: walletID,
+            sourceWalletKind: .cash,
+            counterpartyName: "An"
+        )
+        let second = makeRecord(
+            primaryKind: .transfer,
+            transferSubtype: .debt,
+            debtIntent: .lend,
+            title: "Cho vay Binh",
+            amountMinor: 40_000,
+            occurredAt: referenceDate.addingTimeInterval(-60),
+            sourceWalletID: walletID,
+            sourceWalletKind: .cash,
+            counterpartyName: "Binh"
+        )
+        let third = makeRecord(
+            primaryKind: .transfer,
+            transferSubtype: .debt,
+            debtIntent: .lend,
+            title: "Cho vay Cuong",
+            amountMinor: 30_000,
+            occurredAt: referenceDate.addingTimeInterval(-120),
+            sourceWalletID: walletID,
+            sourceWalletKind: .cash,
+            counterpartyName: "Cuong"
+        )
+        let fourth = makeRecord(
+            primaryKind: .transfer,
+            transferSubtype: .debt,
+            debtIntent: .lend,
+            title: "Cho vay Dung",
+            amountMinor: 20_000,
+            occurredAt: referenceDate.addingTimeInterval(-180),
+            sourceWalletID: walletID,
+            sourceWalletKind: .cash,
+            counterpartyName: "Dung"
+        )
+        let wrongSubtype = makeRecord(
+            primaryKind: .transfer,
+            transferSubtype: .internalTransfer,
+            title: "Chuyen tien noi bo",
+            amountMinor: 10_000,
+            occurredAt: referenceDate.addingTimeInterval(-15),
+            sourceWalletID: walletID,
+            sourceWalletKind: .cash,
+            destinationWalletID: UUID(),
+            destinationWalletKind: .bank
+        )
+
+        let suggestions = TransactionLogic.titleSuggestions(
+            from: [excluded, second, third, fourth, wrongSubtype],
+            query: "cho vay",
+            primaryKind: .transfer,
+            transferSubtype: .debt,
+            excludingTransactionID: excludedID,
+            limit: 2
+        )
+
+        XCTAssertEqual(
+            suggestions.map(\.title),
+            ["Cho vay Binh", "Cho vay Cuong"]
+        )
+    }
+
     private func makeRecord(
+        id: UUID = UUID(),
         primaryKind: TransactionPrimaryKind,
         transferSubtype: TransactionTransferSubtype? = nil,
         debtIntent: TransactionDebtIntent? = nil,
@@ -339,7 +471,7 @@ final class TransactionLogicTests: XCTestCase {
         counterpartyName: String? = nil
     ) -> TransactionRecordSnapshot {
         TransactionRecordSnapshot(
-            id: UUID(),
+            id: id,
             primaryKind: primaryKind,
             transferSubtype: transferSubtype,
             debtIntent: debtIntent,
