@@ -83,32 +83,8 @@ enum MistiaBootstrap {
         )
         var existingCategories = try modelContext.fetch(FetchDescriptor<TransactionCategory>())
             .filter { $0.deletedAt == nil }
-        let existingWallets = try modelContext.fetch(FetchDescriptor<LedgerWallet>())
-            .filter { $0.deletedAt == nil }
-        let existingGoals = try modelContext.fetch(FetchDescriptor<SavingsGoal>())
-            .filter { $0.deletedAt == nil }
-        let existingRecurringBills = try modelContext.fetch(FetchDescriptor<RecurringBillPlan>())
-            .filter { $0.deletedAt == nil }
-        let existingInstallments = try modelContext.fetch(FetchDescriptor<InstallmentPlan>())
-            .filter { $0.deletedAt == nil }
         var didMutate = false
         var categoriesNeedingSync: [TransactionCategory] = []
-        var goalsNeedingSync: [SavingsGoal] = []
-        var recurringBillsNeedingSync: [RecurringBillPlan] = []
-        var installmentsNeedingSync: [InstallmentPlan] = []
-
-        if normalizeLegacyDefaultIconColors(
-            categories: existingCategories,
-            wallets: existingWallets,
-            goals: existingGoals,
-            recurringBills: existingRecurringBills,
-            installments: existingInstallments,
-            goalsNeedingSync: &goalsNeedingSync,
-            recurringBillsNeedingSync: &recurringBillsNeedingSync,
-            installmentsNeedingSync: &installmentsNeedingSync
-        ) {
-            didMutate = true
-        }
 
         let (parentByKey, didSeedParents) = ensureDefaultParentCategories(
             modelContext: modelContext,
@@ -172,9 +148,6 @@ enum MistiaBootstrap {
                 modelContext: modelContext,
                 sessionStore: sessionStore
             )
-            queuePlanningUpserts(goalsNeedingSync, entity: .savingsGoal, sessionStore: sessionStore)
-            queuePlanningUpserts(recurringBillsNeedingSync, entity: .recurringBillPlan, sessionStore: sessionStore)
-            queuePlanningUpserts(installmentsNeedingSync, entity: .installmentPlan, sessionStore: sessionStore)
         }
     }
 
@@ -226,13 +199,6 @@ enum MistiaBootstrap {
 
         for (index, seed) in ManagementPresetData.defaultCategoryParentSeeds.enumerated() {
             if let existing = categories.first(where: { $0.systemKey == seed.systemKey.rawValue }) {
-                // One-time migration for renamed categories
-                if existing.systemKey == MistiaSystemCategoryParentKey.expenseFood.rawValue && existing.name == "Ăn uống" {
-                    existing.name = "Sinh hoạt"
-                    existing.iconSymbolName = MistiaSystemCategoryParentKey.expenseFood.iconSymbolName
-                    existing.iconColorHex = MistiaSystemCategoryParentKey.expenseFood.iconColorHex
-                }
-                
                 let didUpdateExisting = normalizeParentCategory(existing, with: seed, sortOrder: index)
                 didMutate = didUpdateExisting || didMutate
                 if didUpdateExisting {
@@ -288,15 +254,6 @@ enum MistiaBootstrap {
             let sortOrder = siblingSeeds.firstIndex(where: { $0.systemKey == systemKey }) ?? 0
 
             if let existing = categories.first(where: { $0.systemKey == systemKey.rawValue }) {
-                // One-time migration for renamed child categories
-                if existing.systemKey == MistiaSystemCategoryKey.sales.rawValue && existing.name == "Bán hàng" {
-                    existing.name = "Doanh thu bán hàng"
-                } else if existing.systemKey == MistiaSystemCategoryKey.serviceRevenue.rawValue && existing.name == "Doanh thu dịch vụ" {
-                    existing.name = "Thu dịch vụ"
-                } else if existing.systemKey == MistiaSystemCategoryKey.onlineCollaboratorIncome.rawValue && existing.name == "Thu từ online / cộng tác" {
-                    existing.name = "Thu từ online"
-                }
-
                 let didUpdateExisting = normalizeLeafCategory(
                     existing,
                     with: seed,
@@ -618,95 +575,4 @@ enum MistiaBootstrap {
         }
     }
 
-    private static func normalizeLegacyDefaultIconColors(
-        categories: [TransactionCategory],
-        wallets: [LedgerWallet],
-        goals: [SavingsGoal],
-        recurringBills: [RecurringBillPlan],
-        installments: [InstallmentPlan],
-        goalsNeedingSync: inout [SavingsGoal],
-        recurringBillsNeedingSync: inout [RecurringBillPlan],
-        installmentsNeedingSync: inout [InstallmentPlan]
-    ) -> Bool {
-        var didMutate = false
-
-        for wallet in wallets {
-            if wallet.kind.legacyDefaultIconSymbolNames.contains(wallet.iconSymbolName),
-               wallet.kind.matchesDefaultIconAppearance(
-                    symbolName: wallet.iconSymbolName,
-                    colorHex: wallet.iconColorHex
-               ) {
-                wallet.iconSymbolName = wallet.kind.defaultIconSymbolName
-                wallet.iconColorHex = MistiaIconColorPalette.presetHex(forDefault: wallet.kind.defaultColorHex)
-                wallet.updatedAt = .now
-                didMutate = true
-                continue
-            }
-
-            guard let migratedColorHex = wallet.kind.migratedLegacyDefaultColorHex(
-                for: wallet.iconColorHex,
-                symbolName: wallet.iconSymbolName
-            ) else {
-                continue
-            }
-
-            wallet.iconColorHex = migratedColorHex
-            wallet.updatedAt = .now
-            didMutate = true
-        }
-
-        for category in categories where !category.isSystem && category.systemKey == nil {
-            if category.kind.legacyDefaultIconSymbolNames.contains(category.iconSymbolName),
-               category.kind.matchesDefaultIconAppearance(
-                    symbolName: category.iconSymbolName,
-                    colorHex: category.iconColorHex
-               ) {
-                category.iconSymbolName = category.kind.defaultIconSymbolName
-                category.iconColorHex = MistiaIconColorPalette.presetHex(forDefault: category.kind.defaultColorHex)
-                category.updatedAt = .now
-                didMutate = true
-                continue
-            }
-
-            guard let migratedColorHex = category.kind.migratedLegacyDefaultColorHex(
-                for: category.iconColorHex,
-                symbolName: category.iconSymbolName
-            ) else {
-                continue
-            }
-
-            category.iconColorHex = migratedColorHex
-            category.updatedAt = .now
-            didMutate = true
-        }
-
-        for goal in goals {
-            guard goal.iconSymbolName == "target" else { continue }
-
-            goal.iconSymbolName = "mistia.goal.savings"
-            goal.updatedAt = .now
-            goalsNeedingSync.append(goal)
-            didMutate = true
-        }
-
-        for recurringBill in recurringBills {
-            guard recurringBill.iconSymbolName == "calendar.badge.clock" else { continue }
-
-            recurringBill.iconSymbolName = "mistia.plan.bill"
-            recurringBill.updatedAt = .now
-            recurringBillsNeedingSync.append(recurringBill)
-            didMutate = true
-        }
-
-        for installment in installments {
-            guard installment.iconSymbolName == "creditcard.and.123" else { continue }
-
-            installment.iconSymbolName = "mistia.plan.installment"
-            installment.updatedAt = .now
-            installmentsNeedingSync.append(installment)
-            didMutate = true
-        }
-
-        return didMutate
-    }
 }

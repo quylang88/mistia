@@ -2,6 +2,12 @@
   "images" : [
     {
       "idiom" : "universal",
+      "appearances" : [
+        {
+          "appearance" : "luminosity",
+          "value" : "light"
+        }
+      ],
       "filename" : "AppIcon.png",
       "scale" : "1x"
     },
@@ -9,7 +15,7 @@
       "idiom" : "universal",
       "appearances" : [
         {
-          "appearance" : "any",
+          "appearance" : "luminosity",
           "value" : "dark"
         }
       ],

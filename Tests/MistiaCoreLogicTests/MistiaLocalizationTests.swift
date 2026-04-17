@@ -171,20 +171,20 @@ final class MistiaLocalizationTests: XCTestCase {
         )
     }
 
-    func testLegacyDefaultIconColorsMapIntoCurrentPalette() {
-        XCTAssertEqual(MistiaIconColorPalette.migratedLegacyDefaultHex("#F59B3F"), "#FF9F1C")
-        XCTAssertEqual(MistiaIconColorPalette.migratedLegacyDefaultHex("#FF7E67"), "#F26A5A")
-        XCTAssertEqual(MistiaIconColorPalette.migratedLegacyDefaultHex("#7C85A3"), "#8A8A8E")
-        XCTAssertEqual(MistiaIconColorPalette.migratedLegacyDefaultHex("#FFB13B"), "#FF9F1C")
-        XCTAssertEqual(MistiaIconColorPalette.migratedLegacyDefaultHex("#F45C7E"), "#F26A5A")
-        XCTAssertEqual(MistiaIconColorPalette.migratedLegacyDefaultHex("#8A6BFF"), "#9A67FF")
+    func testDefaultIconColorsResolveToNearestPaletteColor() {
+        XCTAssertEqual(MistiaIconColorPalette.presetHex(forDefault: "#F59B3F"), "#FF9F1C")
+        XCTAssertEqual(MistiaIconColorPalette.presetHex(forDefault: "#FF7E67"), "#F26A5A")
+        XCTAssertEqual(MistiaIconColorPalette.presetHex(forDefault: "#7C85A3"), "#8A8A8E")
+        XCTAssertEqual(MistiaIconColorPalette.presetHex(forDefault: "#FFB13B"), "#FF9F1C")
+        XCTAssertEqual(MistiaIconColorPalette.presetHex(forDefault: "#F45C7E"), "#F26A5A")
+        XCTAssertEqual(MistiaIconColorPalette.presetHex(forDefault: "#8A6BFF"), "#9A67FF")
 
         XCTAssertEqual(MistiaIconColorPalette.presetHexes.count, 10)
         XCTAssertFalse(MistiaIconColorPalette.presetHexes.contains("#F59B3F"))
         XCTAssertFalse(MistiaIconColorPalette.presetHexes.contains("#7C85A3"))
     }
 
-    func testLegacyDefaultIconAppearanceStillCountsAsDefault() {
+    func testDefaultIconAppearanceAcceptsStoredOrCanonicalDefaultColor() {
         XCTAssertTrue(
             LedgerWalletKind.creditCard.matchesDefaultIconAppearance(
                 symbolName: LedgerWalletKind.creditCard.defaultIconSymbolName,
@@ -194,14 +194,16 @@ final class MistiaLocalizationTests: XCTestCase {
         XCTAssertTrue(
             TransactionCategoryKind.expense.matchesDefaultIconAppearance(
                 symbolName: TransactionCategoryKind.expense.defaultIconSymbolName,
-                colorHex: "#F59B3F"
+                colorHex: MistiaIconColorPalette.presetHex(
+                    forDefault: TransactionCategoryKind.expense.defaultColorHex
+                )
             )
         )
         XCTAssertEqual(
             MistiaIconColorPalette.pickerSelectionHex(forStored: "#7C85A3"),
-            "#8A8A8E"
+            "#7C85A3"
         )
-        XCTAssertFalse(MistiaIconColorPalette.shouldShowCurrentSwatch(forStored: "#7C85A3"))
+        XCTAssertTrue(MistiaIconColorPalette.shouldShowCurrentSwatch(forStored: "#7C85A3"))
         XCTAssertTrue(MistiaIconColorPalette.shouldShowCurrentSwatch(forStored: "#123456"))
     }
 

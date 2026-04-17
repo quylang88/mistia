@@ -59,10 +59,6 @@ struct FamilyManagementView: View {
             },
             contentSpacing: 22
         ) {
-            if familyContextStore.isRefreshingLatest {
-                FamilySyncLoadingBanner()
-            }
-
             if let lastErrorMessage = familyContextStore.lastErrorMessage {
                 FamilyAlertBanner(message: lastErrorMessage)
             }
@@ -73,6 +69,13 @@ struct FamilyManagementView: View {
                 emptyStateContent
             } else {
                 familyHubContent
+            }
+        }
+        .overlay(alignment: .topTrailing) {
+            if familyContextStore.isRefreshingLatest {
+                FamilySyncOverlayIndicator()
+                    .padding(.top, 12)
+                    .padding(.trailing, 18)
             }
         }
         .navigationDestination(item: $destination) { route in
@@ -1269,32 +1272,26 @@ private struct FamilyAlertBanner: View {
     }
 }
 
-private struct FamilySyncLoadingBanner: View {
+private struct FamilySyncOverlayIndicator: View {
     var body: some View {
-        MistiaGlassCard(cornerRadius: 14, tint: Color.accentColor.opacity(0.10)) {
-            HStack(spacing: 12) {
-                ProgressView()
-                    .controlSize(.regular)
-
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(mistiaLocalized(
-                        vi: "Đang đồng bộ gia đình",
-                        en: "Syncing family",
-                        ja: "家族データを同期中"
-                    ))
-                    .font(.system(size: 15, weight: .semibold, design: .rounded))
-
-                    Text(mistiaLocalized(
-                        vi: "Đang tải dữ liệu mới nhất từ cloud và hợp nhất với dữ liệu trên máy.",
-                        en: "Loading the latest cloud data and merging it with this device.",
-                        ja: "クラウドの最新データを読み込み、この端末のデータと統合しています。"
-                    ))
-                    .font(.system(size: 13.5, weight: .medium, design: .rounded))
-                    .foregroundStyle(.secondary)
-                }
+        ProgressView()
+            .controlSize(.regular)
+            .padding(10)
+            .background(.thinMaterial, in: Circle())
+            .overlay {
+                Circle()
+                    .strokeBorder(Color.primary.opacity(0.08), lineWidth: 0.5)
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
-        }
+            .shadow(color: .black.opacity(0.08), radius: 10, y: 4)
+            .allowsHitTesting(false)
+            .transition(.opacity.combined(with: .scale(scale: 0.9)))
+            .accessibilityLabel(
+                Text(mistiaLocalized(
+                    vi: "Đang đồng bộ gia đình",
+                    en: "Syncing family",
+                    ja: "家族データを同期中"
+                ))
+            )
     }
 }
 
@@ -1553,10 +1550,6 @@ struct FamilyOverviewScreen: View {
             contentSpacing: 18,
             titleDisplayMode: .large
         ) {
-            if familyContextStore.isRefreshingLatest {
-                FamilySyncLoadingBanner()
-            }
-
             FamilyContextChipBar()
             
             FamilyOverviewHeader(
@@ -1602,6 +1595,13 @@ struct FamilyOverviewScreen: View {
             )
 
             FamilyAIInsightsSection(insights: summary.insights)
+        }
+        .overlay(alignment: .topTrailing) {
+            if familyContextStore.isRefreshingLatest {
+                FamilySyncOverlayIndicator()
+                    .padding(.top, 12)
+                    .padding(.trailing, 18)
+            }
         }
         .sheet(item: $activeSheet) { sheet in
             switch sheet {

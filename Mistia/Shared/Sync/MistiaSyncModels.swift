@@ -1,5 +1,13 @@
 import Foundation
 
+private enum MistiaSyncSerializationError: LocalizedError {
+    case invalidResponse
+
+    var errorDescription: String? {
+        "Unable to serialize or decode the Mistia sync payload."
+    }
+}
+
 protocol MistiaRemoteRow: Codable {
     static var entity: MistiaSyncEntity { get }
 
@@ -1019,7 +1027,7 @@ enum MistiaSyncUploadRecord {
         }
 
         guard let json = String(data: data, encoding: .utf8) else {
-            throw SupabaseServiceError.invalidResponse
+            throw MistiaSyncSerializationError.invalidResponse
         }
         return json
     }
@@ -1027,7 +1035,7 @@ enum MistiaSyncUploadRecord {
     static func decode(entity: MistiaSyncEntity, jsonString: String) throws -> MistiaSyncUploadRecord {
         let decoder = JSONDecoder.mistiaSyncDecoder
         guard let data = jsonString.data(using: .utf8) else {
-            throw SupabaseServiceError.invalidResponse
+            throw MistiaSyncSerializationError.invalidResponse
         }
 
         switch entity {
@@ -1167,6 +1175,23 @@ extension JSONDecoder {
         return decoder
     }
 
+    static var mistiaBackupDecoder: JSONDecoder {
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .custom { decoder in
+            let container = try decoder.singleValueContainer()
+            let value = try container.decode(String.self)
+            if let date = ISO8601DateFormatter.mistiaSyncWithFractionalSeconds.date(from: value)
+                ?? ISO8601DateFormatter.mistiaSyncWithoutFractionalSeconds.date(from: value) {
+                return date
+            }
+            throw DecodingError.dataCorruptedError(
+                in: container,
+                debugDescription: "Invalid ISO8601 date: \(value)"
+            )
+        }
+        return decoder
+    }
+
     static var mistiaRemoteAPIDecoder: JSONDecoder {
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .custom { decoder in
@@ -1197,6 +1222,16 @@ extension JSONEncoder {
         return encoder
     }
 
+    static var mistiaBackupEncoder: JSONEncoder {
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.sortedKeys]
+        encoder.dateEncodingStrategy = .custom { date, encoder in
+            var container = encoder.singleValueContainer()
+            try container.encode(ISO8601DateFormatter.mistiaSyncWithFractionalSeconds.string(from: date))
+        }
+        return encoder
+    }
+
     static var mistiaRemoteAPIEncoder: JSONEncoder {
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.sortedKeys]
@@ -1209,17 +1244,19 @@ extension JSONEncoder {
 }
 
 extension ISO8601DateFormatter {
-    static let mistiaSyncWithFractionalSeconds: ISO8601DateFormatter = {
+    static var mistiaSyncWithFractionalSeconds: ISO8601DateFormatter {
         let formatter = ISO8601DateFormatter()
         formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
         return formatter
-    }()
+    }
 
-    static let mistiaSyncWithoutFractionalSeconds: ISO8601DateFormatter = {
+    static var mistiaSyncWithoutFractionalSeconds: ISO8601DateFormatter {
         let formatter = ISO8601DateFormatter()
         formatter.formatOptions = [.withInternetDateTime]
         return formatter
-    }()
+    }
 
-    static let mistiaRemoteAPI: ISO8601DateFormatter = mistiaSyncWithFractionalSeconds
+    static var mistiaRemoteAPI: ISO8601DateFormatter {
+        mistiaSyncWithFractionalSeconds
+    }
 }

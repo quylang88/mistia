@@ -131,7 +131,7 @@ final class SyncCoordinator {
         )
         onProgressUpdate?(0.1)
         let rawRemoteSnapshot = try await fetchRawSnapshot(session: session)
-        let remoteSnapshot = reconcileLegacySystemCategoryRows(in: rawRemoteSnapshot)
+        let remoteSnapshot = rawRemoteSnapshot
         onProgressUpdate?(0.2)
 
         let localCount = localSnapshot.activeRowCount
@@ -273,7 +273,7 @@ final class SyncCoordinator {
             rawRemoteSnapshot = try await fetchRawSnapshot(session: session)
         }
 
-        let snapshot = reconcileLegacySystemCategoryRows(in: rawRemoteSnapshot)
+        let snapshot = rawRemoteSnapshot
         let previousFingerprint = lastSnapshotFingerprint
         try applySnapshot(snapshot)
         onProgressUpdate?(1.0)
@@ -685,8 +685,7 @@ final class SyncCoordinator {
     private func fetchReconciledSnapshot(
         session: SupabaseAuthSession
     ) async throws -> MistiaRemoteSnapshot {
-        let snapshot = try await fetchRawSnapshot(session: session)
-        return reconcileLegacySystemCategoryRows(in: snapshot)
+        try await fetchRawSnapshot(session: session)
     }
 
     private func pushLocallyNewerRows(
@@ -730,223 +729,6 @@ final class SyncCoordinator {
 
         onProgressUpdate?(progressEnd)
         return true
-    }
-
-    private func reconcileLegacySystemCategoryRows(
-        in snapshot: MistiaRemoteSnapshot
-    ) -> MistiaRemoteSnapshot {
-        let activeSystemCategories = snapshot.categories.filter {
-            $0.deletedAt == nil && $0.isSystem && $0.systemKey != nil
-        }
-        guard !activeSystemCategories.isEmpty else { return snapshot }
-
-        let categoryByID = Dictionary(uniqueKeysWithValues: snapshot.categories.map { ($0.id, $0) })
-        let referencedCategoryIDs = referencedCategoryIDs(in: snapshot)
-        let groupedBySystemKey = Dictionary(grouping: activeSystemCategories) { $0.systemKey ?? "" }
-
-        var winnersBySystemKey: [String: RemoteTransactionCategory] = [:]
-        var parentSystemKeyBySystemKey: [String: String?] = [:]
-        var keptSystemKeys: Set<String> = []
-
-        for (systemKey, rows) in groupedBySystemKey where !systemKey.isEmpty {
-            let winner = preferredRemoteSystemCategory(
-                in: rows,
-                referencedCategoryIDs: referencedCategoryIDs,
-                categoryByID: categoryByID
-            )
-            winnersBySystemKey[systemKey] = winner
-
-            let parentSystemKey = winner.parentCategoryID.flatMap { categoryByID[$0]?.systemKey }
-            parentSystemKeyBySystemKey[systemKey] = parentSystemKey
-
-            let hasCustomizedRow = rows.contains {
-                MistiaSystemCategorySyncSupport.isCustomizedRemoteSystemCategory(
-                    $0,
-                    parentSystemKey: $0.parentCategoryID.flatMap { categoryByID[$0]?.systemKey }
-                )
-            }
-
-            if hasCustomizedRow {
-                keptSystemKeys.insert(systemKey)
-            }
-        }
-
-        var categoryRemappings: [UUID: UUID] = [:]
-        var transformedSystemCategories: [RemoteTransactionCategory] = []
-
-        for (systemKey, rows) in groupedBySystemKey where !systemKey.isEmpty {
-            guard let winner = winnersBySystemKey[systemKey] else { continue }
-            let parentSystemKey = parentSystemKeyBySystemKey[systemKey] ?? nil
-            let canonicalID = MistiaSystemCategoryIdentity.canonicalID(for: systemKey)
-            let canonicalRow = MistiaSystemCategorySyncSupport
-                .canonicalizedSystemCategoryRow(winner, parentSystemKey: parentSystemKey)
-
-            for row in rows where row.id != canonicalID {
-                categoryRemappings[row.id] = canonicalID
-            }
-
-            if keptSystemKeys.contains(systemKey) {
-                transformedSystemCategories.append(canonicalRow)
-            }
-        }
-
-        let categories = remappedCategories(
-            snapshot.categories,
-            categoryRemappings: categoryRemappings,
-            transformedSystemCategories: transformedSystemCategories
-        )
-
-        return MistiaRemoteSnapshot(
-            wallets: snapshot.wallets,
-            creditCardProfiles: snapshot.creditCardProfiles,
-            categories: categories,
-            transactions: snapshot.transactions.map { remappedTransaction($0, mappings: categoryRemappings) },
-            budgetPlans: snapshot.budgetPlans.map { remappedBudgetPlan($0, mappings: categoryRemappings) },
-            savingsGoals: snapshot.savingsGoals,
-            recurringBillPlans: snapshot.recurringBillPlans.map { remappedRecurringBillPlan($0, mappings: categoryRemappings) },
-            installmentPlans: snapshot.installmentPlans,
-            dueOccurrences: snapshot.dueOccurrences
-        )
-    }
-
-    private func referencedCategoryIDs(
-        in snapshot: MistiaRemoteSnapshot
-    ) -> Set<UUID> {
-        var ids: Set<UUID> = []
-
-        for row in snapshot.transactions where row.deletedAt == nil {
-            if let categoryID = row.categoryID {
-                ids.insert(categoryID)
-            }
-        }
-
-        for row in snapshot.budgetPlans where row.deletedAt == nil {
-            if let categoryID = row.categoryID {
-                ids.insert(categoryID)
-            }
-        }
-
-        for row in snapshot.recurringBillPlans where row.deletedAt == nil {
-            if let categoryID = row.categoryID {
-                ids.insert(categoryID)
-            }
-        }
-
-        return ids
-    }
-
-    private func preferredRemoteSystemCategory(
-        in rows: [RemoteTransactionCategory],
-        referencedCategoryIDs: Set<UUID>,
-        categoryByID: [UUID: RemoteTransactionCategory]
-    ) -> RemoteTransactionCategory {
-        rows.max { lhs, rhs in
-            remoteSystemCategoryPriority(
-                lhs,
-                referencedCategoryIDs: referencedCategoryIDs,
-                categoryByID: categoryByID
-            ) < remoteSystemCategoryPriority(
-                rhs,
-                referencedCategoryIDs: referencedCategoryIDs,
-                categoryByID: categoryByID
-            )
-        } ?? rows[0]
-    }
-
-    private func remoteSystemCategoryPriority(
-        _ row: RemoteTransactionCategory,
-        referencedCategoryIDs: Set<UUID>,
-        categoryByID: [UUID: RemoteTransactionCategory]
-    ) -> Int {
-        var score = 0
-
-        if let systemKey = row.systemKey,
-           row.id == MistiaSystemCategoryIdentity.canonicalID(for: systemKey) {
-            score += 8
-        }
-        if referencedCategoryIDs.contains(row.id) {
-            score += 16
-        }
-        if MistiaSystemCategorySyncSupport.isCustomizedRemoteSystemCategory(
-            row,
-            parentSystemKey: row.parentCategoryID.flatMap { categoryByID[$0]?.systemKey }
-        ) {
-            score += 32
-        }
-        score += Int(min(row.syncVersion, 1_000))
-        score += Int(row.updatedAt.timeIntervalSince1970 / 1_000_000)
-
-        return score
-    }
-
-    private func remappedCategories(
-        _ categories: [RemoteTransactionCategory],
-        categoryRemappings: [UUID: UUID],
-        transformedSystemCategories: [RemoteTransactionCategory]
-    ) -> [RemoteTransactionCategory] {
-        let transformedSystemKeys = Set(transformedSystemCategories.compactMap(\.systemKey))
-        let nonSystemCategories = categories.compactMap { row -> RemoteTransactionCategory? in
-            if row.isSystem, let systemKey = row.systemKey {
-                if transformedSystemKeys.contains(systemKey) {
-                    return nil
-                }
-                return nil
-            }
-
-            var remapped = row
-            if let parentCategoryID = row.parentCategoryID,
-               let replacementParentID = categoryRemappings[parentCategoryID] {
-                remapped.parentCategoryID = replacementParentID
-            }
-            return remapped
-        }
-
-        return nonSystemCategories + transformedSystemCategories
-    }
-
-    private func remappedTransaction(
-        _ row: RemoteLedgerTransaction,
-        mappings: [UUID: UUID]
-    ) -> RemoteLedgerTransaction {
-        guard !mappings.isEmpty,
-              let categoryID = row.categoryID,
-              let replacementCategoryID = mappings[categoryID] else {
-            return row
-        }
-
-        var remapped = row
-        remapped.categoryID = replacementCategoryID
-        return remapped
-    }
-
-    private func remappedBudgetPlan(
-        _ row: RemoteBudgetPlan,
-        mappings: [UUID: UUID]
-    ) -> RemoteBudgetPlan {
-        guard !mappings.isEmpty,
-              let categoryID = row.categoryID,
-              let replacementCategoryID = mappings[categoryID] else {
-            return row
-        }
-
-        var remapped = row
-        remapped.categoryID = replacementCategoryID
-        return remapped
-    }
-
-    private func remappedRecurringBillPlan(
-        _ row: RemoteRecurringBillPlan,
-        mappings: [UUID: UUID]
-    ) -> RemoteRecurringBillPlan {
-        guard !mappings.isEmpty,
-              let categoryID = row.categoryID,
-              let replacementCategoryID = mappings[categoryID] else {
-            return row
-        }
-
-        var remapped = row
-        remapped.categoryID = replacementCategoryID
-        return remapped
     }
 
     private func applySnapshot(_ snapshot: MistiaRemoteSnapshot) throws {

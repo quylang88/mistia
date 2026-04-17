@@ -629,6 +629,194 @@ enum MistiaSyncLocalStore {
         try clearAllData(context: context)
     }
 
+    static func exportBackupEnvelope(
+        from container: ModelContainer,
+        fallbackOwnerUserID: UUID,
+        appVersion: String,
+        appBuild: String
+    ) throws -> MistiaBackupEnvelopeV1 {
+        let context = ModelContext(container)
+        let ownershipScopes = try context.fetch(FetchDescriptor<OwnedRecordScope>())
+        let auditRecords = try fetchTransactionAudits(context)
+        let auditMap = TransactionAuditStore.auditMap(from: auditRecords)
+
+        let walletOwnerMap = MistiaRecordOwnershipStore.ownerMap(from: ownershipScopes, entity: .wallet)
+        let profileOwnerMap = MistiaRecordOwnershipStore.ownerMap(from: ownershipScopes, entity: .creditCardProfile)
+        let categoryOwnerMap = MistiaRecordOwnershipStore.ownerMap(from: ownershipScopes, entity: .category)
+        let transactionOwnerMap = MistiaRecordOwnershipStore.ownerMap(from: ownershipScopes, entity: .transaction)
+        let budgetOwnerMap = MistiaRecordOwnershipStore.ownerMap(from: ownershipScopes, entity: .budgetPlan)
+        let goalOwnerMap = MistiaRecordOwnershipStore.ownerMap(from: ownershipScopes, entity: .savingsGoal)
+        let recurringOwnerMap = MistiaRecordOwnershipStore.ownerMap(from: ownershipScopes, entity: .recurringBillPlan)
+        let installmentOwnerMap = MistiaRecordOwnershipStore.ownerMap(from: ownershipScopes, entity: .installmentPlan)
+        let occurrenceOwnerMap = MistiaRecordOwnershipStore.ownerMap(from: ownershipScopes, entity: .dueOccurrenceRecord)
+
+        let wallets = try fetchWallets(context).filter { $0.deletedAt == nil }
+        let creditCardProfiles = try fetchCreditCardProfiles(context).filter { $0.deletedAt == nil }
+        let categories = try fetchCategories(context).filter { $0.deletedAt == nil }
+        let transactions = try fetchTransactions(context).filter { $0.deletedAt == nil }
+        let budgetPlans = try fetchBudgetPlans(context).filter { $0.deletedAt == nil }
+        let savingsGoals = try fetchSavingsGoals(context).filter { $0.deletedAt == nil }
+        let recurringBillPlans = try fetchRecurringBillPlans(context).filter { $0.deletedAt == nil }
+        let installmentPlans = try fetchInstallmentPlans(context).filter { $0.deletedAt == nil }
+        let dueOccurrences = try fetchDueOccurrences(context).filter { $0.deletedAt == nil }
+        let userProfiles = try context.fetch(FetchDescriptor<UserAccountProfile>())
+
+        let snapshot = MistiaRemoteSnapshot(
+            wallets: wallets.map { wallet in
+                var row = RemoteLedgerWallet(
+                    local: wallet,
+                    userID: walletOwnerMap[wallet.id] ?? fallbackOwnerUserID
+                )
+                row.syncVersion = wallet.remoteVersion
+                return row
+            },
+            creditCardProfiles: creditCardProfiles.map { profile in
+                var row = RemoteCreditCardProfile(
+                    local: profile,
+                    userID: profileOwnerMap[profile.id] ?? fallbackOwnerUserID
+                )
+                row.syncVersion = profile.remoteVersion
+                return row
+            },
+            categories: categories.map { category in
+                var row = RemoteTransactionCategory(
+                    local: category,
+                    userID: categoryOwnerMap[category.id] ?? fallbackOwnerUserID
+                )
+                row.syncVersion = category.remoteVersion
+                return row
+            },
+            transactions: transactions.map { transaction in
+                var row = RemoteLedgerTransaction(
+                    local: transaction,
+                    userID: transactionOwnerMap[transaction.id] ?? fallbackOwnerUserID,
+                    auditRecord: auditMap[transaction.id]
+                )
+                row.syncVersion = transaction.remoteVersion
+                return row
+            },
+            budgetPlans: budgetPlans.map { budget in
+                var row = RemoteBudgetPlan(
+                    local: budget,
+                    userID: budgetOwnerMap[budget.id] ?? fallbackOwnerUserID
+                )
+                row.syncVersion = budget.remoteVersion
+                return row
+            },
+            savingsGoals: savingsGoals.map { goal in
+                var row = RemoteSavingsGoal(
+                    local: goal,
+                    userID: goalOwnerMap[goal.id] ?? fallbackOwnerUserID
+                )
+                row.syncVersion = goal.remoteVersion
+                return row
+            },
+            recurringBillPlans: recurringBillPlans.map { recurring in
+                var row = RemoteRecurringBillPlan(
+                    local: recurring,
+                    userID: recurringOwnerMap[recurring.id] ?? fallbackOwnerUserID,
+                    categoryID: recurringBillCategoryID(for: recurring, categories: categories)
+                )
+                row.syncVersion = recurring.remoteVersion
+                return row
+            },
+            installmentPlans: installmentPlans.map { installment in
+                var row = RemoteInstallmentPlan(
+                    local: installment,
+                    userID: installmentOwnerMap[installment.id] ?? fallbackOwnerUserID
+                )
+                row.syncVersion = installment.remoteVersion
+                return row
+            },
+            dueOccurrences: dueOccurrences.map { occurrence in
+                var row = RemoteDueOccurrenceRecord(
+                    local: occurrence,
+                    userID: occurrenceOwnerMap[occurrence.id] ?? fallbackOwnerUserID
+                )
+                row.syncVersion = occurrence.remoteVersion
+                return row
+            }
+        )
+
+        let activeIDsByEntity: [MistiaSyncEntity: Set<UUID>] = [
+            .wallet: Set(snapshot.wallets.map(\.id)),
+            .creditCardProfile: Set(snapshot.creditCardProfiles.map(\.id)),
+            .category: Set(snapshot.categories.map(\.id)),
+            .transaction: Set(snapshot.transactions.map(\.id)),
+            .budgetPlan: Set(snapshot.budgetPlans.map(\.id)),
+            .savingsGoal: Set(snapshot.savingsGoals.map(\.id)),
+            .recurringBillPlan: Set(snapshot.recurringBillPlans.map(\.id)),
+            .installmentPlan: Set(snapshot.installmentPlans.map(\.id)),
+            .dueOccurrenceRecord: Set(snapshot.dueOccurrences.map(\.id))
+        ]
+
+        let filteredOwnershipScopes = ownershipScopes.filter { scope in
+            activeIDsByEntity[scope.entity]?.contains(scope.recordID) == true
+        }
+        let activeTransactionIDs = Set(snapshot.transactions.map(\.id))
+        let filteredTransactionAudits = auditRecords.filter {
+            activeTransactionIDs.contains($0.transactionID)
+        }
+        let avatarAssets = try MistiaBackupAvatarStore.loadAssets(for: userProfiles)
+
+        return MistiaBackupEnvelopeV1(
+            manifest: MistiaBackupManifestV1(
+                backupFormatVersion: 1,
+                exportedAt: .now,
+                appVersion: appVersion,
+                appBuild: appBuild,
+                localSchemaVersion: 1
+            ),
+            snapshot: snapshot,
+            userProfiles: userProfiles.map { MistiaBackupUserAccountProfileV1($0) },
+            ownershipScopes: filteredOwnershipScopes.map { scope in
+                MistiaBackupOwnedRecordScopeV1(
+                    id: scope.id,
+                    entityRawValue: scope.entityRawValue,
+                    recordID: scope.recordID,
+                    ownerUserID: scope.ownerUserID,
+                    updatedAt: scope.updatedAt
+                )
+            },
+            transactionAudits: filteredTransactionAudits.map { record in
+                MistiaBackupTransactionAuditRecordV1(
+                    transactionID: record.transactionID,
+                    createdByUserID: record.createdByUserID,
+                    lastModifiedByUserID: record.lastModifiedByUserID,
+                    updatedAt: record.updatedAt
+                )
+            },
+            avatarAssets: avatarAssets
+        )
+    }
+
+    static func restoreBackupEnvelope(
+        _ envelope: MistiaBackupEnvelopeV1,
+        mode: MistiaBackupRestoreMode,
+        in container: ModelContainer
+    ) throws {
+        let context = ModelContext(container)
+
+        if mode == .replaceLocal {
+            try clearAllBackupRestorableData(context: context)
+        } else {
+            try clearBackupOperationalState(context: context)
+        }
+
+        try applySnapshotIncrementally(
+            envelope.snapshot,
+            shouldPruneMissing: false,
+            protectedRecordIDs: [],
+            in: container
+        )
+
+        try clearBackupOperationalState(context: context)
+        try upsertBackupUserProfiles(envelope.userProfiles, context: context)
+        try upsertBackupOwnershipScopes(envelope.ownershipScopes, context: context)
+        try upsertBackupTransactionAudits(envelope.transactionAudits, context: context)
+        try context.save()
+    }
+
     private static func clearAllData(context: ModelContext) throws {
         for record in try fetchConflicts(context) {
             context.delete(record)
@@ -679,6 +867,107 @@ enum MistiaSyncLocalStore {
         }
 
         try context.save()
+    }
+
+    private static func clearAllBackupRestorableData(context: ModelContext) throws {
+        try clearAllData(context: context)
+
+        for profile in try context.fetch(FetchDescriptor<UserAccountProfile>()) {
+            context.delete(profile)
+        }
+
+        try context.save()
+    }
+
+    private static func clearBackupOperationalState(context: ModelContext) throws {
+        for record in try fetchConflicts(context) {
+            context.delete(record)
+        }
+
+        try context.save()
+    }
+
+    private static func upsertBackupUserProfiles(
+        _ rows: [MistiaBackupUserAccountProfileV1],
+        context: ModelContext
+    ) throws {
+        let existingProfiles = try context.fetch(FetchDescriptor<UserAccountProfile>())
+        var profilesByUserID = Dictionary(uniqueKeysWithValues: existingProfiles.map { ($0.userID, $0) })
+
+        for row in rows {
+            let profile = profilesByUserID[row.userID] ?? UserAccountProfile(
+                userID: row.userID,
+                email: row.email,
+                displayName: row.displayName
+            )
+
+            if profilesByUserID[row.userID] == nil {
+                context.insert(profile)
+                profilesByUserID[row.userID] = profile
+            }
+
+            profile.email = row.email
+            profile.displayName = row.displayName
+            profile.avatarFileName = row.avatarFileName
+            profile.birthday = row.birthday
+            profile.lastSyncAt = row.lastSyncAt
+            profile.createdAt = row.createdAt
+            profile.updatedAt = row.updatedAt
+        }
+    }
+
+    private static func upsertBackupOwnershipScopes(
+        _ rows: [MistiaBackupOwnedRecordScopeV1],
+        context: ModelContext
+    ) throws {
+        let existingScopes = try context.fetch(FetchDescriptor<OwnedRecordScope>())
+        var scopesByID = Dictionary(uniqueKeysWithValues: existingScopes.map { ($0.id, $0) })
+
+        for row in rows {
+            let entity = MistiaSyncEntity(rawValue: row.entityRawValue) ?? .transaction
+            let scope = scopesByID[row.id] ?? OwnedRecordScope(
+                entity: entity,
+                recordID: row.recordID,
+                ownerUserID: row.ownerUserID,
+                updatedAt: row.updatedAt
+            )
+
+            if scopesByID[row.id] == nil {
+                context.insert(scope)
+                scopesByID[row.id] = scope
+            }
+
+            scope.entityRawValue = row.entityRawValue
+            scope.recordID = row.recordID
+            scope.ownerUserID = row.ownerUserID
+            scope.updatedAt = row.updatedAt
+        }
+    }
+
+    private static func upsertBackupTransactionAudits(
+        _ rows: [MistiaBackupTransactionAuditRecordV1],
+        context: ModelContext
+    ) throws {
+        let existingAudits = try fetchTransactionAudits(context)
+        var auditsByTransactionID = Dictionary(uniqueKeysWithValues: existingAudits.map { ($0.transactionID, $0) })
+
+        for row in rows {
+            let audit = auditsByTransactionID[row.transactionID] ?? TransactionAuditRecord(
+                transactionID: row.transactionID,
+                createdByUserID: row.createdByUserID,
+                lastModifiedByUserID: row.lastModifiedByUserID,
+                updatedAt: row.updatedAt
+            )
+
+            if auditsByTransactionID[row.transactionID] == nil {
+                context.insert(audit)
+                auditsByTransactionID[row.transactionID] = audit
+            }
+
+            audit.createdByUserID = row.createdByUserID
+            audit.lastModifiedByUserID = row.lastModifiedByUserID
+            audit.updatedAt = row.updatedAt
+        }
     }
 
     private static func pruneRecordsMissingFromRemote<Record: MistiaSyncLocalRecord>(
@@ -1214,13 +1503,17 @@ enum MistiaSyncLocalStore {
             return categoryID
         }
 
-        guard let systemKey = MistiaFinanceIconRegistry.categoryKey(for: plan.iconSymbolName) else {
+        guard let systemKey = MistiaSystemCategoryKey.allCases.first(where: {
+            $0.iconSymbolName == plan.iconSymbolName
+        }) else {
             return nil
         }
 
-        return categories.first(where: {
-            $0.deletedAt == nil && $0.systemKey == systemKey.rawValue
-        })?.id
+        let matchingCategory = categories.first { category in
+            guard category.deletedAt == nil else { return false }
+            return category.systemKey == systemKey.rawValue
+        }
+        return matchingCategory?.id
     }
 
     private static func supplementalCategoriesForUpload(
@@ -1536,5 +1829,356 @@ private extension String {
         let lhs = Set(normalizedForDuplicateCheck.split(separator: " ").map(String.init))
         let rhs = Set(other.normalizedForDuplicateCheck.split(separator: " ").map(String.init))
         return !lhs.intersection(rhs).isEmpty
+    }
+}
+
+enum MistiaBackupRestoreMode: String, CaseIterable, Identifiable, Codable {
+    case merge
+    case replaceLocal
+
+    var id: String { rawValue }
+}
+
+struct MistiaBackupManifestV1: Codable {
+    let backupFormatVersion: Int
+    let exportedAt: Date
+    let appVersion: String
+    let appBuild: String
+    let localSchemaVersion: Int
+}
+
+struct MistiaBackupUserAccountProfileV1: Codable {
+    let userID: UUID
+    let email: String
+    let displayName: String
+    let avatarFileName: String?
+    let birthday: Date?
+    let lastSyncAt: Date?
+    let createdAt: Date
+    let updatedAt: Date
+}
+
+struct MistiaBackupOwnedRecordScopeV1: Codable {
+    let id: String
+    let entityRawValue: String
+    let recordID: UUID
+    let ownerUserID: UUID
+    let updatedAt: Date
+}
+
+struct MistiaBackupTransactionAuditRecordV1: Codable {
+    let transactionID: UUID
+    let createdByUserID: UUID
+    let lastModifiedByUserID: UUID
+    let updatedAt: Date
+}
+
+struct MistiaBackupAvatarAssetV1: Codable {
+    let userID: UUID
+    let fileName: String
+    let imageData: Data
+}
+
+struct MistiaBackupEnvelopeV1: Codable {
+    let manifest: MistiaBackupManifestV1
+    let snapshot: MistiaRemoteSnapshot
+    let userProfiles: [MistiaBackupUserAccountProfileV1]
+    let ownershipScopes: [MistiaBackupOwnedRecordScopeV1]
+    let transactionAudits: [MistiaBackupTransactionAuditRecordV1]
+    let avatarAssets: [MistiaBackupAvatarAssetV1]
+}
+
+struct MistiaBackupValidationSummary {
+    let manifest: MistiaBackupManifestV1
+    let walletCount: Int
+    let creditCardProfileCount: Int
+    let categoryCount: Int
+    let transactionCount: Int
+    let budgetPlanCount: Int
+    let savingsGoalCount: Int
+    let recurringBillPlanCount: Int
+    let installmentPlanCount: Int
+    let dueOccurrenceCount: Int
+    let userProfileCount: Int
+    let ownershipScopeCount: Int
+    let transactionAuditCount: Int
+    let avatarAssetCount: Int
+
+    var activeRecordCount: Int {
+        walletCount
+            + creditCardProfileCount
+            + categoryCount
+            + transactionCount
+            + budgetPlanCount
+            + savingsGoalCount
+            + recurringBillPlanCount
+            + installmentPlanCount
+            + dueOccurrenceCount
+    }
+}
+
+struct MistiaBackupExportResult {
+    let fileName: String
+    let data: Data
+    let summary: MistiaBackupValidationSummary
+}
+
+struct MistiaBackupRestoreResult {
+    let mode: MistiaBackupRestoreMode
+    let summary: MistiaBackupValidationSummary
+    let safetySnapshotURL: URL?
+}
+
+enum MistiaBackupStoreError: LocalizedError {
+    case unsupportedBackupFormat(Int)
+    case unsupportedLocalSchema(Int)
+    case syncInProgress
+    case invalidBackupPayload(String)
+
+    var errorDescription: String? {
+        switch self {
+        case .unsupportedBackupFormat(let version):
+            "Unsupported Mistia backup format version \(version)."
+        case .unsupportedLocalSchema(let version):
+            "This backup was created for unsupported local schema version \(version)."
+        case .syncInProgress:
+            "Wait for the current sync to finish before restoring a snapshot."
+        case .invalidBackupPayload(let message):
+            message
+        }
+    }
+}
+
+@MainActor
+enum MistiaBackupStore {
+    static func exportBackup(
+        from container: ModelContainer,
+        fallbackOwnerUserID: UUID,
+        appVersion: String,
+        appBuild: String
+    ) throws -> MistiaBackupExportResult {
+        let envelope = try MistiaSyncLocalStore.exportBackupEnvelope(
+            from: container,
+            fallbackOwnerUserID: fallbackOwnerUserID,
+            appVersion: appVersion,
+            appBuild: appBuild
+        )
+        let data = try JSONEncoder.mistiaBackupEncoder.encode(envelope)
+        let summary = MistiaBackupValidationSummary(envelope: envelope)
+        return MistiaBackupExportResult(
+            fileName: backupFileName(for: envelope.manifest.exportedAt),
+            data: data,
+            summary: summary
+        )
+    }
+
+    static func validateBackup(_ data: Data) throws -> MistiaBackupValidationSummary {
+        try MistiaBackupValidationSummary(envelope: decodeBackup(data))
+    }
+
+    static func restoreBackup(
+        _ data: Data,
+        mode: MistiaBackupRestoreMode,
+        in container: ModelContainer,
+        fallbackOwnerUserID: UUID,
+        outbox: MistiaSyncOutbox? = nil
+    ) throws -> MistiaBackupRestoreResult {
+        let outbox = outbox ?? MistiaSyncOutbox()
+        let envelope = try decodeBackup(data)
+        let summary = MistiaBackupValidationSummary(envelope: envelope)
+        let safetySnapshotURL: URL?
+
+        if mode == .replaceLocal {
+            let safetySnapshot = try exportBackup(
+                from: container,
+                fallbackOwnerUserID: fallbackOwnerUserID,
+                appVersion: currentAppVersion(),
+                appBuild: currentAppBuild()
+            )
+            safetySnapshotURL = try writeSafetySnapshot(
+                data: safetySnapshot.data,
+                exportedAt: safetySnapshot.summary.manifest.exportedAt
+            )
+            try MistiaBackupAvatarStore.clearAllAssets()
+        } else {
+            safetySnapshotURL = nil
+        }
+
+        outbox.clear()
+        try MistiaSyncLocalStore.restoreBackupEnvelope(envelope, mode: mode, in: container)
+        try MistiaBackupAvatarStore.writeAssets(envelope.avatarAssets)
+        outbox.clear()
+
+        return MistiaBackupRestoreResult(
+            mode: mode,
+            summary: summary,
+            safetySnapshotURL: safetySnapshotURL
+        )
+    }
+
+    private static func decodeBackup(_ data: Data) throws -> MistiaBackupEnvelopeV1 {
+        let envelope: MistiaBackupEnvelopeV1
+
+        do {
+            envelope = try JSONDecoder.mistiaBackupDecoder.decode(MistiaBackupEnvelopeV1.self, from: data)
+        } catch {
+            throw MistiaBackupStoreError.invalidBackupPayload(String(describing: error))
+        }
+
+        guard envelope.manifest.backupFormatVersion == 1 else {
+            throw MistiaBackupStoreError.unsupportedBackupFormat(envelope.manifest.backupFormatVersion)
+        }
+        guard envelope.manifest.localSchemaVersion == 1 else {
+            throw MistiaBackupStoreError.unsupportedLocalSchema(envelope.manifest.localSchemaVersion)
+        }
+
+        return envelope
+    }
+
+    private static func currentAppVersion() -> String {
+        Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "dev"
+    }
+
+    private static func currentAppBuild() -> String {
+        Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "dev"
+    }
+
+    private static func backupFileName(for date: Date) -> String {
+        "mistia-snapshot-\(MistiaBackupFilenameFormatter.shared.string(from: date)).mistiabackup"
+    }
+
+    private static func writeSafetySnapshot(
+        data: Data,
+        exportedAt: Date
+    ) throws -> URL {
+        let directoryURL = try backupDirectoryURL()
+        let url = directoryURL.appendingPathComponent(
+            "mistia-safety-\(MistiaBackupFilenameFormatter.shared.string(from: exportedAt)).mistiabackup"
+        )
+
+        if FileManager.default.fileExists(atPath: url.path) {
+            try FileManager.default.removeItem(at: url)
+        }
+
+        try data.write(to: url, options: .atomic)
+        return url
+    }
+
+    private static func backupDirectoryURL() throws -> URL {
+        let baseURL = try FileManager.default.url(
+            for: .applicationSupportDirectory,
+            in: .userDomainMask,
+            appropriateFor: nil,
+            create: true
+        )
+        let directoryURL = baseURL.appendingPathComponent("MistiaBackups", isDirectory: true)
+        try FileManager.default.createDirectory(at: directoryURL, withIntermediateDirectories: true)
+        return directoryURL
+    }
+}
+
+private enum MistiaBackupAvatarStore {
+    static func loadAssets(for profiles: [UserAccountProfile]) throws -> [MistiaBackupAvatarAssetV1] {
+        try profiles.compactMap { profile in
+            guard let fileName = profile.avatarFileName else { return nil }
+            let fileURL = avatarURL(forFileName: fileName)
+            guard FileManager.default.fileExists(atPath: fileURL.path) else { return nil }
+            return MistiaBackupAvatarAssetV1(
+                userID: profile.userID,
+                fileName: fileName,
+                imageData: try Data(contentsOf: fileURL)
+            )
+        }
+    }
+
+    static func writeAssets(_ assets: [MistiaBackupAvatarAssetV1]) throws {
+        guard !assets.isEmpty else { return }
+        let directoryURL = try avatarDirectoryURL()
+
+        for asset in assets {
+            let fileURL = directoryURL.appendingPathComponent(asset.fileName)
+            try asset.imageData.write(to: fileURL, options: .atomic)
+        }
+    }
+
+    static func clearAllAssets() throws {
+        let directoryURL = try avatarDirectoryURL()
+        let fileManager = FileManager.default
+        let contents = try fileManager.contentsOfDirectory(
+            at: directoryURL,
+            includingPropertiesForKeys: nil
+        )
+
+        for url in contents {
+            try fileManager.removeItem(at: url)
+        }
+    }
+
+    private static func avatarDirectoryURL() throws -> URL {
+        let baseURL = try FileManager.default.url(
+            for: .applicationSupportDirectory,
+            in: .userDomainMask,
+            appropriateFor: nil,
+            create: true
+        )
+        let directoryURL = baseURL.appendingPathComponent("ProfileAvatars", isDirectory: true)
+        try FileManager.default.createDirectory(at: directoryURL, withIntermediateDirectories: true)
+        return directoryURL
+    }
+
+    private static func avatarURL(forFileName fileName: String) -> URL {
+        let baseURL = (try? avatarDirectoryURL()) ?? FileManager.default.temporaryDirectory
+        return baseURL.appendingPathComponent(fileName)
+    }
+}
+
+private enum MistiaBackupFilenameFormatter {
+    static let shared: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.calendar = Calendar(identifier: .gregorian)
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.timeZone = TimeZone(secondsFromGMT: 0)
+        formatter.dateFormat = "yyyyMMdd-HHmmss"
+        return formatter
+    }()
+}
+
+private extension MistiaBackupValidationSummary {
+    init(envelope: MistiaBackupEnvelopeV1) {
+        self.init(
+            manifest: envelope.manifest,
+            walletCount: envelope.snapshot.wallets.count,
+            creditCardProfileCount: envelope.snapshot.creditCardProfiles.count,
+            categoryCount: envelope.snapshot.categories.count,
+            transactionCount: envelope.snapshot.transactions.count,
+            budgetPlanCount: envelope.snapshot.budgetPlans.count,
+            savingsGoalCount: envelope.snapshot.savingsGoals.count,
+            recurringBillPlanCount: envelope.snapshot.recurringBillPlans.count,
+            installmentPlanCount: envelope.snapshot.installmentPlans.count,
+            dueOccurrenceCount: envelope.snapshot.dueOccurrences.count,
+            userProfileCount: envelope.userProfiles.count,
+            ownershipScopeCount: envelope.ownershipScopes.count,
+            transactionAuditCount: envelope.transactionAudits.count,
+            avatarAssetCount: envelope.avatarAssets.count
+        )
+    }
+}
+
+private extension MistiaBackupUserAccountProfileV1 {
+    init(profile: UserAccountProfile) {
+        self.init(
+            userID: profile.userID,
+            email: profile.email,
+            displayName: profile.displayName,
+            avatarFileName: profile.avatarFileName,
+            birthday: profile.birthday,
+            lastSyncAt: profile.lastSyncAt,
+            createdAt: profile.createdAt,
+            updatedAt: profile.updatedAt
+        )
+    }
+
+    init(_ profile: UserAccountProfile) {
+        self.init(profile: profile)
     }
 }

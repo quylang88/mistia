@@ -16,7 +16,7 @@ struct MistiaSyncConfiguration: Equatable {
         projectURL.appending(path: "functions/v1")
     }
 
-    static func load(
+    nonisolated static func load(
         bundle: Bundle = .main,
         processInfo: ProcessInfo = .processInfo
     ) -> MistiaSyncConfiguration? {
@@ -37,7 +37,7 @@ struct MistiaSyncConfiguration: Equatable {
         return MistiaSyncConfiguration(projectURL: projectURL, anonKey: anonKey)
     }
 
-    private static func loadBundleConfiguration(bundle: Bundle) -> MistiaSyncConfiguration? {
+    nonisolated private static func loadBundleConfiguration(bundle: Bundle) -> MistiaSyncConfiguration? {
         guard let url = bundle.url(forResource: "MistiaSyncConfig", withExtension: "plist") else {
             return nil
         }

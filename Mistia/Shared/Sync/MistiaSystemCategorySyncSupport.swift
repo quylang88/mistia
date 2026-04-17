@@ -15,6 +15,7 @@ struct MistiaSystemCategoryRepairResult {
     }
 }
 
+@MainActor
 enum MistiaSystemCategorySyncSupport {
     static func reconcileDuplicateSystemCategories(
         modelContext: ModelContext
@@ -204,7 +205,7 @@ enum MistiaSystemCategorySyncSupport {
         return false
     }
 
-    static func shouldExportCategory(_ category: TransactionCategory) -> Bool {
+    nonisolated static func shouldExportCategory(_ category: TransactionCategory) -> Bool {
         category.cloudSyncEnabled
     }
 

@@ -124,7 +124,7 @@ extension TransactionCategory {
     }
 
     var branchDisplayName: String {
-        parentCategory?.localizedDisplayName ?? localizedDisplayName
+        parentCategory?.mistiaHierarchyDisplayName ?? mistiaHierarchyDisplayName
     }
 
     func canAssignParent(_ candidate: TransactionCategory?) -> Bool {
@@ -134,5 +134,25 @@ extension TransactionCategory {
         guard candidate.kind == kind else { return false }
         guard candidate.parentCategory?.id != id else { return false }
         return true
+    }
+}
+
+private extension TransactionCategory {
+    var mistiaHierarchyDisplayName: String {
+        let trimmedName = name.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        if let systemKey,
+           let parentKey = MistiaSystemCategoryParentKey(rawValue: systemKey),
+           Set(parentKey.knownDefaultNames()).contains(trimmedName) {
+            return parentKey.localizedTitle(for: .current)
+        }
+
+        if let systemKey,
+           let categoryKey = MistiaSystemCategoryKey(rawValue: systemKey),
+           Set(categoryKey.knownDefaultNames()).contains(trimmedName) {
+            return categoryKey.localizedTitle(for: .current)
+        }
+
+        return name
     }
 }

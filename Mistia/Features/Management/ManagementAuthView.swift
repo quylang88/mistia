@@ -1,5 +1,6 @@
 import SwiftData
 import SwiftUI
+import UniformTypeIdentifiers
 import UIKit
 
 private enum ManagementAuthMode: String, CaseIterable, Identifiable {
@@ -235,16 +236,7 @@ struct ManagementAccountView: View {
             case .dataManagement:
                 ManagementDataConflictsView(accent: accent)
             case .backupRestore:
-                ManagementProfilePlaceholderView(
-                    title: mistiaLocalized(vi: "Sao lưu / Khôi phục", en: "Backup / Restore", ja: "バックアップ / 復元"),
-                    systemImage: "externaldrive.fill.badge.icloud",
-                    accent: accent,
-                    message: mistiaLocalized(
-                        vi: "UI entry cho sao lưu và khôi phục đã sẵn sàng. Logic chi tiết sẽ được nối ở bước sau.",
-                        en: "The UI entry for backup and restore is ready. Detailed logic can be connected later.",
-                        ja: "バックアップと復元の UI 導線は準備できています。詳細ロジックは次の段階で接続できます。"
-                    )
-                )
+                ManagementBackupRestoreView()
             case .signedInDevices:
                 ManagementProfilePlaceholderView(
                     title: mistiaLocalized(vi: "Thiết bị đã đăng nhập", en: "Signed-in devices", ja: "サインイン済みデバイス"),
@@ -3334,4 +3326,402 @@ private extension SessionAuthBannerStyle {
             return Color(red: 0.91, green: 0.29, blue: 0.32)
         }
     }
+}
+
+private struct ManagementBackupAlert: Identifiable {
+    let id = UUID()
+    let title: String
+    let message: String
+}
+
+struct ManagementBackupRestoreView: View {
+    @Environment(\.dismiss) private var dismiss
+    @Environment(\.colorScheme) private var colorScheme
+    @Environment(SessionStore.self) private var sessionStore
+
+    @State private var restoreMode: MistiaBackupRestoreMode = .merge
+    @State private var isImporting = false
+    @State private var isRestoring = false
+    @State private var shareItem: OverviewShareItem?
+    @State private var latestSummary: MistiaBackupValidationSummary?
+    @State private var latestRestoreResult: MistiaBackupRestoreResult?
+    @State private var alert: ManagementBackupAlert?
+
+    private var accent: Color {
+        MistiaAccent.income.color
+    }
+
+    private var cardTint: Color {
+        colorScheme == .dark ? Color(UIColor.secondarySystemGroupedBackground) : .white.opacity(0.22)
+    }
+
+    private var isBusy: Bool {
+        isRestoring || sessionStore.isAnySyncInProgress
+    }
+
+    var body: some View {
+        MistiaPinnedTopBarScaffold(
+            tone: .standard,
+            title: mistiaLocalized(vi: "Sao lưu / Khôi phục", en: "Backup / Restore", ja: "バックアップ / 復元"),
+            embedsInNavigationStack: false,
+            showsLeadingAvatar: false,
+            leadingSystemImage: "chevron.left",
+            trailingSystemImage: nil,
+            hidesSystemBackButton: true,
+            onLeadingTap: { dismiss() },
+            contentSpacing: 18
+        ) {
+            ManagementInlineMessageCard(
+                title: mistiaLocalized(vi: "Snapshot khẩn cấp", en: "Emergency snapshot", ja: "緊急スナップショット"),
+                message: mistiaLocalized(
+                    vi: "Tạo file `.mistiabackup` để lưu lại toàn bộ dữ liệu local hiện tại. Khi nhập lại snapshot, Mistia chỉ khôi phục local trước và sẽ không tự đẩy lên cloud cho tới khi bạn tự bấm Đồng bộ ngay.",
+                    en: "Create a `.mistiabackup` file to capture the current local state. When you restore it, Mistia updates local data first and won't push to the cloud until you manually tap Sync now.",
+                    ja: "現在のローカル状態を `.mistiabackup` ファイルとして保存できます。復元時はまずローカルデータだけを更新し、手動で「今すぐ同期」を押すまでクラウドへは自動送信しません。"
+                ),
+                accent: .mint
+            )
+
+            ManagementProfileListCard(tint: cardTint) {
+                VStack(spacing: 0) {
+                    backupActionRow(
+                        title: mistiaLocalized(vi: "Tạo snapshot", en: "Create snapshot", ja: "スナップショットを作成"),
+                        subtitle: mistiaLocalized(
+                            vi: "Xuất dữ liệu local hiện tại thành một file `.mistiabackup`.",
+                            en: "Export the current local data into a single `.mistiabackup` file.",
+                            ja: "現在のローカルデータを 1 つの `.mistiabackup` ファイルとして書き出します。"
+                        ),
+                        systemImage: "square.and.arrow.up.fill",
+                        tint: .blue,
+                        isDisabled: isBusy,
+                        action: exportSnapshot
+                    )
+
+                    ManagementProfileRowDivider()
+
+                    backupActionRow(
+                        title: mistiaLocalized(vi: "Nhập snapshot", en: "Import snapshot", ja: "スナップショットを読み込む"),
+                        subtitle: restoreMode == .merge
+                            ? mistiaLocalized(
+                                vi: "Nhập file và ưu tiên dữ liệu trong snapshot khi trùng ID, nhưng vẫn giữ các mục local khác.",
+                                en: "Import the file and let snapshot values win on matching IDs while keeping unrelated local records.",
+                                ja: "同じ ID はスナップショット側を優先しつつ、関係ないローカルレコードは維持して読み込みます。"
+                            )
+                            : mistiaLocalized(
+                                vi: "Nhập file và thay toàn bộ dữ liệu local hiện tại sau khi Mistia tạo một safety snapshot nội bộ.",
+                                en: "Import the file and replace the current local dataset after Mistia creates an internal safety snapshot first.",
+                                ja: "先に内部の安全用スナップショットを作成したうえで、現在のローカルデータ全体を置き換えて読み込みます。"
+                            ),
+                        systemImage: "square.and.arrow.down.fill",
+                        tint: .mint,
+                        isDisabled: isBusy,
+                        action: { isImporting = true }
+                    )
+                }
+            }
+
+            ManagementProfileListCard(tint: cardTint) {
+                VStack(alignment: .leading, spacing: 14) {
+                    Text(mistiaLocalized(vi: "Chế độ khôi phục", en: "Restore mode", ja: "復元モード"))
+                        .font(.system(size: 15.5, weight: .semibold, design: .rounded))
+                        .foregroundStyle(.primary)
+
+                    Picker("", selection: $restoreMode) {
+                        ForEach(MistiaBackupRestoreMode.allCases) { mode in
+                            Text(mode.localizedTitle).tag(mode)
+                        }
+                    }
+                    .pickerStyle(.segmented)
+
+                    Text(restoreMode.localizedDescription)
+                        .descriptionTextStyle()
+                }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 15)
+            }
+
+            if let latestSummary {
+                ManagementProfileListCard(tint: cardTint) {
+                    VStack(alignment: .leading, spacing: 12) {
+                        Text(mistiaLocalized(vi: "Nội dung snapshot gần nhất", en: "Latest snapshot summary", ja: "直近のスナップショット概要"))
+                            .font(.system(size: 15.5, weight: .semibold, design: .rounded))
+                            .foregroundStyle(.primary)
+
+                        Text(
+                            mistiaLocalized(
+                                vi: "Bản sao lưu format V\(latestSummary.manifest.backupFormatVersion) • app \(latestSummary.manifest.appVersion) (\(latestSummary.manifest.appBuild)) • schema local V\(latestSummary.manifest.localSchemaVersion)",
+                                en: "Backup format V\(latestSummary.manifest.backupFormatVersion) • app \(latestSummary.manifest.appVersion) (\(latestSummary.manifest.appBuild)) • local schema V\(latestSummary.manifest.localSchemaVersion)",
+                                ja: "バックアップ形式 V\(latestSummary.manifest.backupFormatVersion) • app \(latestSummary.manifest.appVersion) (\(latestSummary.manifest.appBuild)) • ローカルスキーマ V\(latestSummary.manifest.localSchemaVersion)"
+                            )
+                        )
+                        .descriptionTextStyle()
+
+                        Text(latestSummary.localizedBreakdown)
+                            .descriptionTextStyle()
+                    }
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 15)
+                }
+            }
+
+            if sessionStore.isManualSyncRequiredAfterRestore {
+                ManagementInlineMessageCard(
+                    title: mistiaLocalized(vi: "Đang chờ bạn kiểm tra rồi sync", en: "Waiting for your review before sync", ja: "確認後の手動同期待ち"),
+                    message: mistiaLocalized(
+                        vi: "Tự động sync đang tạm dừng sau khi khôi phục snapshot. Khi bạn đã kiểm tra dữ liệu ổn, hãy vào Đồng bộ dữ liệu và nhấn Đồng bộ ngay.",
+                        en: "Auto sync is paused after the restore. Once you've reviewed the data, open Sync settings and tap Sync now.",
+                        ja: "スナップショット復元後は自動同期を停止しています。データ確認後に同期設定へ移動して「今すぐ同期」を押してください。"
+                    ),
+                    accent: .orange
+                )
+            }
+
+            if let latestRestoreResult, let safetySnapshotURL = latestRestoreResult.safetySnapshotURL {
+                ManagementProfileListCard(tint: cardTint) {
+                    VStack(alignment: .leading, spacing: 12) {
+                        Text(mistiaLocalized(vi: "Safety snapshot nội bộ", en: "Internal safety snapshot", ja: "内部安全スナップショット"))
+                            .font(.system(size: 15.5, weight: .semibold, design: .rounded))
+                            .foregroundStyle(.primary)
+
+                        Text(
+                            mistiaLocalized(
+                                vi: "Mistia đã tạo một snapshot an toàn trước khi thay toàn bộ dữ liệu local. Bạn có thể share file này ra ngoài nếu muốn giữ thêm một lớp dự phòng.",
+                                en: "Mistia created a safety snapshot before replacing local data. You can share that file if you want an extra fallback copy.",
+                                ja: "ローカルデータを置き換える前に、安全用スナップショットを作成しました。追加の予備として外部共有することもできます。"
+                            )
+                        )
+                        .descriptionTextStyle()
+
+                        Button {
+                            shareItem = OverviewShareItem(url: safetySnapshotURL)
+                        } label: {
+                            Label(
+                                mistiaLocalized(vi: "Chia sẻ safety snapshot", en: "Share safety snapshot", ja: "安全スナップショットを共有"),
+                                systemImage: "square.and.arrow.up"
+                            )
+                            .font(.system(size: 14.5, weight: .semibold, design: .rounded))
+                            .frame(maxWidth: .infinity)
+                        }
+                        .buttonStyle(.borderedProminent)
+                        .tint(accent)
+                    }
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 15)
+                }
+            }
+        }
+        .sheet(item: $shareItem) { item in
+            OverviewShareSheet(url: item.url)
+        }
+        .fileImporter(
+            isPresented: $isImporting,
+            allowedContentTypes: [.mistiaBackup],
+            allowsMultipleSelection: false
+        ) { result in
+            handleImportSelection(result)
+        }
+        .alert(item: $alert) { alert in
+            Alert(
+                title: Text(mistiaCatalog(alert.title)),
+                message: Text(mistiaCatalog(alert.message)),
+                dismissButton: .default(Text(mistiaLocalized(vi: "OK", en: "OK", ja: "OK")))
+            )
+        }
+    }
+
+    private func backupActionRow(
+        title: String,
+        subtitle: String,
+        systemImage: String,
+        tint: Color,
+        isDisabled: Bool,
+        action: @escaping () -> Void
+    ) -> some View {
+        Button(action: action) {
+            HStack(spacing: 14) {
+                Image(systemName: systemImage)
+                    .font(.system(size: 18, weight: .semibold))
+                    .foregroundStyle(tint)
+                    .frame(width: 28, height: 28)
+
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(title)
+                        .font(.system(size: 16, weight: .semibold, design: .rounded))
+                        .foregroundStyle(.primary)
+
+                    Text(subtitle)
+                        .font(.system(size: 12.5, weight: .medium, design: .rounded))
+                        .foregroundStyle(.secondary)
+                        .multilineTextAlignment(.leading)
+                }
+
+                Spacer()
+
+                if isDisabled {
+                    ProgressView()
+                        .progressViewStyle(.circular)
+                } else {
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 11, weight: .bold))
+                        .foregroundStyle(.tertiary)
+                }
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 15)
+        }
+        .buttonStyle(.plain)
+        .disabled(isDisabled)
+    }
+
+    private func exportSnapshot() {
+        do {
+            let exportResult = try sessionStore.exportBackup(
+                appVersion: currentAppVersion(),
+                appBuild: currentAppBuild()
+            )
+            let url = try writeShareFile(
+                named: exportResult.fileName,
+                data: exportResult.data
+            )
+            latestSummary = exportResult.summary
+            latestRestoreResult = nil
+            shareItem = OverviewShareItem(url: url)
+        } catch {
+            alert = ManagementBackupAlert(
+                title: mistiaLocalized(vi: "Không thể tạo snapshot", en: "Couldn't create snapshot", ja: "スナップショットを作成できませんでした"),
+                message: error.localizedDescription
+            )
+        }
+    }
+
+    private func handleImportSelection(_ result: Result<[URL], Error>) {
+        switch result {
+        case .success(let urls):
+            guard let url = urls.first else {
+                alert = ManagementBackupAlert(
+                    title: mistiaLocalized(vi: "Không có file nào được chọn", en: "No file selected", ja: "ファイルが選択されていません"),
+                    message: mistiaLocalized(
+                        vi: "Hãy chọn một file `.mistiabackup` để tiếp tục.",
+                        en: "Choose a `.mistiabackup` file to continue.",
+                        ja: "続行するには `.mistiabackup` ファイルを選択してください。"
+                    )
+                )
+                return
+            }
+            let accessed = url.startAccessingSecurityScopedResource()
+            Task { @MainActor in
+                defer {
+                    if accessed {
+                        url.stopAccessingSecurityScopedResource()
+                    }
+                    isRestoring = false
+                }
+
+                isRestoring = true
+
+                do {
+                    let data = try Data(contentsOf: url)
+                    let summary = try MistiaBackupStore.validateBackup(data)
+                    latestSummary = summary
+                    latestRestoreResult = try await sessionStore.restoreBackup(
+                        data: data,
+                        mode: restoreMode
+                    )
+
+                    alert = ManagementBackupAlert(
+                        title: mistiaLocalized(vi: "Đã khôi phục snapshot", en: "Snapshot restored", ja: "スナップショットを復元しました"),
+                        message: restoreMode == .merge
+                            ? mistiaLocalized(
+                                vi: "Mistia đã merge dữ liệu từ snapshot vào local. Hãy kiểm tra lại rồi tự bấm Đồng bộ ngay nếu bạn muốn cập nhật cloud.",
+                                en: "Mistia merged the snapshot into local data. Review it, then manually tap Sync now if you want to update the cloud.",
+                                ja: "スナップショットをローカルデータへマージしました。内容を確認してから、必要に応じて手動で「今すぐ同期」を押してください。"
+                            )
+                            : mistiaLocalized(
+                                vi: "Mistia đã thay dữ liệu local bằng snapshot đã chọn và giữ lại một safety snapshot nội bộ trước đó.",
+                                en: "Mistia replaced local data with the selected snapshot and kept an internal safety snapshot beforehand.",
+                                ja: "選択したスナップショットでローカルデータを置き換え、事前に内部の安全用スナップショットも保存しました。"
+                            )
+                    )
+                } catch {
+                    alert = ManagementBackupAlert(
+                        title: mistiaLocalized(vi: "Không thể nhập snapshot", en: "Couldn't import snapshot", ja: "スナップショットを読み込めませんでした"),
+                        message: error.localizedDescription
+                    )
+                }
+            }
+        case .failure(let error):
+            alert = ManagementBackupAlert(
+                title: mistiaLocalized(vi: "Không thể mở file", en: "Couldn't open file", ja: "ファイルを開けませんでした"),
+                message: error.localizedDescription
+            )
+        }
+    }
+
+    private func writeShareFile(
+        named fileName: String,
+        data: Data
+    ) throws -> URL {
+        let directoryURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("mistia-backup-share", isDirectory: true)
+        try FileManager.default.createDirectory(
+            at: directoryURL,
+            withIntermediateDirectories: true
+        )
+
+        let fileURL = directoryURL.appendingPathComponent(fileName)
+        if FileManager.default.fileExists(atPath: fileURL.path) {
+            try FileManager.default.removeItem(at: fileURL)
+        }
+        try data.write(to: fileURL, options: .atomic)
+        return fileURL
+    }
+
+    private func currentAppVersion() -> String {
+        Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "dev"
+    }
+
+    private func currentAppBuild() -> String {
+        Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "dev"
+    }
+}
+
+private extension MistiaBackupRestoreMode {
+    var localizedTitle: String {
+        switch self {
+        case .merge:
+            mistiaLocalized(vi: "Merge", en: "Merge", ja: "マージ")
+        case .replaceLocal:
+            mistiaLocalized(vi: "Thay local", en: "Replace local", ja: "ローカルを置換")
+        }
+    }
+
+    var localizedDescription: String {
+        switch self {
+        case .merge:
+            mistiaLocalized(
+                vi: "Giữ dữ liệu local không liên quan, nhưng nếu snapshot có cùng ID thì bản trong snapshot sẽ ghi đè lên local.",
+                en: "Keep unrelated local records, but if the snapshot contains the same ID, the snapshot version wins.",
+                ja: "関係のないローカルレコードは維持しつつ、同じ ID がある場合はスナップショット側を優先します。"
+            )
+        case .replaceLocal:
+            mistiaLocalized(
+                vi: "Mistia sẽ tạo safety snapshot nội bộ, xóa toàn bộ dữ liệu local hiện tại rồi khôi phục đúng nội dung snapshot bạn đã chọn.",
+                en: "Mistia first creates an internal safety snapshot, clears the current local dataset, then restores exactly what the selected snapshot contains.",
+                ja: "最初に内部の安全用スナップショットを作成し、現在のローカルデータを消去してから、選択したスナップショットの内容をそのまま復元します。"
+            )
+        }
+    }
+}
+
+private extension MistiaBackupValidationSummary {
+    var localizedBreakdown: String {
+        mistiaLocalized(
+            vi: "Tổng \(activeRecordCount) bản ghi dữ liệu • Ví \(walletCount) • Thẻ \(creditCardProfileCount) • Danh mục \(categoryCount) • Giao dịch \(transactionCount) • Ngân sách \(budgetPlanCount) • Mục tiêu \(savingsGoalCount) • Hóa đơn định kỳ \(recurringBillPlanCount) • Trả góp \(installmentPlanCount) • Kỳ hạn \(dueOccurrenceCount) • Hồ sơ \(userProfileCount) • Quyền sở hữu \(ownershipScopeCount) • Audit \(transactionAuditCount)",
+            en: "\(activeRecordCount) data records total • Wallets \(walletCount) • Cards \(creditCardProfileCount) • Categories \(categoryCount) • Transactions \(transactionCount) • Budgets \(budgetPlanCount) • Goals \(savingsGoalCount) • Recurring bills \(recurringBillPlanCount) • Installments \(installmentPlanCount) • Due occurrences \(dueOccurrenceCount) • Profiles \(userProfileCount) • Ownership scopes \(ownershipScopeCount) • Audits \(transactionAuditCount)",
+            ja: "データ \(activeRecordCount) 件 • ウォレット \(walletCount) • カード \(creditCardProfileCount) • カテゴリ \(categoryCount) • 取引 \(transactionCount) • 予算 \(budgetPlanCount) • 目標 \(savingsGoalCount) • 定期請求 \(recurringBillPlanCount) • 分割払い \(installmentPlanCount) • 支払予定 \(dueOccurrenceCount) • プロフィール \(userProfileCount) • 所有スコープ \(ownershipScopeCount) • 監査 \(transactionAuditCount)"
+        )
+    }
+}
+
+private extension UTType {
+    static let mistiaBackup = UTType(filenameExtension: "mistiabackup") ?? UTType(exportedAs: "app.mistia.backup", conformingTo: .data)
 }

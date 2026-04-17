@@ -5,6 +5,7 @@ private enum ManagementNavigationDestination: String, Identifiable {
     case authPlaceholder
     case settings
     case archivedItems
+    case backupRestore
     case family
 
     var id: String { rawValue }
@@ -137,6 +138,8 @@ struct ManagementView: View {
                     SettingsView()
                 case .archivedItems:
                     ManagementArchivedItemsView()
+                case .backupRestore:
+                    ManagementBackupRestoreView()
                 case .family:
                     FamilyManagementView()
                 }
@@ -497,14 +500,7 @@ struct ManagementView: View {
                 )
             )
         case .backupRestore:
-            infoAlert = ManagementInfoAlert(
-                title: action.title,
-                message: mistiaLocalized(
-                    vi: "Backup & khôi phục sẽ được nối sau khi chốt chiến lược sync.",
-                    en: "Backup and restore will be added after the sync strategy is finalized.",
-                    ja: "バックアップと復元は同期戦略の確定後に追加されます。"
-                )
-            )
+            destination = .backupRestore
         case .archivedItems:
             destination = .archivedItems
         case .deleteAllData:

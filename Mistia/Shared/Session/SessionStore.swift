@@ -102,6 +102,7 @@ final class SessionStore {
     @ObservationIgnored private var shouldShowSyncProgress = false
     @ObservationIgnored private var syncStartTime: Date?
     @ObservationIgnored private var requiresInitialSync = false
+    @ObservationIgnored private var requiresManualSyncAfterRestore: Bool
     @ObservationIgnored private var pendingInitialSyncChoice: MistiaInitialSyncChoice?
     @ObservationIgnored private var subjectUserIDProvider: (() -> UUID?)?
     @ObservationIgnored private var postSyncRefreshHandler: (() async -> Void)?
@@ -118,6 +119,9 @@ final class SessionStore {
         userProfileStore = SupabaseUserProfileStore()
         syncCoordinator = SyncCoordinator(modelContainer: modelContainer)
         isAutoSyncEnabled = userDefaults.bool(forKey: MistiaAppStorageKey.syncAutoEnabled)
+        requiresManualSyncAfterRestore = userDefaults.bool(
+            forKey: MistiaAppStorageKey.syncManualReviewRequired
+        )
 
         if MistiaSyncConfiguration.load() == nil {
             syncStatusTitle = mistiaLocalized(
@@ -180,7 +184,11 @@ final class SessionStore {
     }
 
     var isReadyForAutomaticSync: Bool {
-        isAutoSyncEnabled && canManageSync && !requiresInitialSync
+        isAutoSyncEnabled && canManageSync && !requiresInitialSync && !requiresManualSyncAfterRestore
+    }
+
+    var isManualSyncRequiredAfterRestore: Bool {
+        requiresManualSyncAfterRestore
     }
 
     var nextAutomaticSyncDate: Date? {
@@ -581,6 +589,9 @@ final class SessionStore {
                 showProgress: isManual
             )
         }
+        if didSync && isManual && requiresManualSyncAfterRestore {
+            setRequiresManualSyncAfterRestore(false)
+        }
         return didSync
     }
 
@@ -588,7 +599,7 @@ final class SessionStore {
         guard currentSession != nil, !isSyncInFlight else { return }
         pendingInitialSyncChoice = choice
         initialSyncPreview = nil
-        await runInitialSyncFlow()
+        _ = await runInitialSyncFlow()
     }
 
     func cancelInitialSyncSelection() {
@@ -616,6 +627,97 @@ final class SessionStore {
         )
         syncStatusSystemImage = "pause.circle"
         updateAutoSyncLoopState()
+    }
+
+    func restoreBackup(
+        data: Data,
+        mode: MistiaBackupRestoreMode
+    ) async throws -> MistiaBackupRestoreResult {
+        guard !isSyncInFlight else {
+            throw MistiaBackupStoreError.syncInProgress
+        }
+
+        pauseAutoSyncLoop()
+        cancelQueuedAutoSync()
+        syncCoordinator.clearQueuedMutations()
+
+        do {
+            let fallbackOwnerUserID = summary?.userID
+                ?? currentSession?.user.id
+                ?? MistiaSyncDeviceIdentity.current()
+
+            let result = try MistiaBackupStore.restoreBackup(
+                data,
+                mode: mode,
+                in: modelContainer,
+                fallbackOwnerUserID: fallbackOwnerUserID
+            )
+
+            syncCoordinator.clearQueuedMutations()
+            initialSyncPreview = nil
+            pendingInitialSyncChoice = nil
+            try MistiaBootstrap.seedDefaultCategoriesIfNeeded(modelContext: modelContainer.mainContext)
+
+            lastSyncAt = nil
+            if let activeSession = currentSession {
+                let baseSummary = SessionSummary(user: activeSession.user)
+                if let profile = storedProfile(for: baseSummary.userID) {
+                    profile.lastSyncAt = nil
+                }
+                summary = applyStoredProfile(
+                    storedProfile(for: baseSummary.userID),
+                    to: baseSummary
+                )
+            }
+
+            try? modelContainer.mainContext.save()
+
+            possibleDuplicateCount = ((try? MistiaSyncLocalStore.possibleDuplicateTransactions(
+                in: modelContainer
+            ).count) ?? 0)
+            lastErrorMessage = nil
+            setRequiresManualSyncAfterRestore(isConfigured)
+
+            syncStatusTitle = mistiaLocalized(
+                vi: "Đã khôi phục snapshot",
+                en: "Snapshot restored",
+                ja: "スナップショットを復元しました"
+            )
+            syncStatusDetail = isConfigured
+                ? mistiaLocalized(
+                    vi: "Mistia đã khôi phục dữ liệu local. Hãy kiểm tra dữ liệu rồi nhấn Đồng bộ ngay khi bạn sẵn sàng cập nhật cloud.",
+                    en: "Mistia restored your local data. Review it first, then tap Sync now when you're ready to update the cloud.",
+                    ja: "ローカルデータを復元しました。内容を確認してから、クラウドを更新する準備ができた時点で「今すぐ同期」を押してください。"
+                )
+                : mistiaLocalized(
+                    vi: "Mistia đã khôi phục dữ liệu local từ snapshot đã chọn.",
+                    en: "Mistia restored local data from the selected snapshot.",
+                    ja: "選択したスナップショットからローカルデータを復元しました。"
+                )
+            syncStatusSystemImage = "externaldrive.badge.checkmark"
+            updateAutoSyncLoopState()
+            return result
+        } catch {
+            lastErrorMessage = error.localizedDescription
+            updateAutoSyncLoopState()
+            throw error
+        }
+    }
+
+    func exportBackup(
+        appVersion: String,
+        appBuild: String
+    ) throws -> MistiaBackupExportResult {
+        let fallbackOwnerUserID = summary?.userID
+            ?? currentSession?.user.id
+            ?? MistiaSyncDeviceIdentity.current()
+
+        return try MistiaBackupStore.exportBackup(
+            from: modelContainer,
+            fallbackOwnerUserID: fallbackOwnerUserID,
+            appVersion: appVersion,
+            appBuild: appBuild
+        )
     }
 
     func refreshedSession() async throws -> SupabaseAuthSession? {
@@ -1924,7 +2026,9 @@ final class SessionStore {
     }
 
     private func scheduleQueuedSyncIfAllowed() {
-        guard isAutoSyncEnabled, canManageSync, !requiresInitialSync else { return }
+        guard isAutoSyncEnabled, canManageSync, !requiresInitialSync, !requiresManualSyncAfterRestore else {
+            return
+        }
 
         pendingQueuedAutoSync = true
         queuedAutoSyncTask?.cancel()
@@ -1937,7 +2041,7 @@ final class SessionStore {
     private func flushQueuedAutoSyncIfAllowed() async {
         guard pendingQueuedAutoSync else { return }
 
-        guard isAutoSyncEnabled, canManageSync, !requiresInitialSync else {
+        guard isAutoSyncEnabled, canManageSync, !requiresInitialSync, !requiresManualSyncAfterRestore else {
             cancelQueuedAutoSync()
             return
         }
@@ -2021,13 +2125,10 @@ private extension SessionStore {
             return storedProfile
         }
 
-        let migratedProfile = migrateLegacyProfileOverrideIfNeeded(for: summary.userID)
         let newProfile = UserAccountProfile(
             userID: summary.userID,
             email: summary.email,
-            displayName: preferredDisplayName?.isEmpty == false ? preferredDisplayName! : (migratedProfile?.displayName ?? summary.displayName),
-            avatarFileName: migratedProfile?.avatarFileName,
-            birthday: migratedProfile?.birthday
+            displayName: preferredDisplayName?.isEmpty == false ? preferredDisplayName! : summary.displayName
         )
         modelContainer.mainContext.insert(newProfile)
         try modelContainer.mainContext.save()
@@ -2152,19 +2253,9 @@ private extension SessionStore {
         return trimmed.isEmpty ? fallback : trimmed
     }
 
-    func profileOverrideKey(for userID: UUID) -> String {
-        "\(MistiaAppStorageKey.sessionProfileOverridePrefix).\(userID.uuidString.lowercased())"
-    }
-
-    func migrateLegacyProfileOverrideIfNeeded(for userID: UUID) -> LegacySessionProfileOverride? {
-        let key = profileOverrideKey(for: userID)
-        guard let data = userDefaults.data(forKey: key),
-              let legacyProfile = try? JSONDecoder().decode(LegacySessionProfileOverride.self, from: data) else {
-            return nil
-        }
-
-        userDefaults.removeObject(forKey: key)
-        return legacyProfile
+    func setRequiresManualSyncAfterRestore(_ isRequired: Bool) {
+        requiresManualSyncAfterRestore = isRequired
+        userDefaults.set(isRequired, forKey: MistiaAppStorageKey.syncManualReviewRequired)
     }
 
     func saveAvatarImageData(_ data: Data, for userID: UUID) throws -> String {
@@ -2203,10 +2294,4 @@ private extension SessionStore {
         }
         return fileURL
     }
-}
-
-private struct LegacySessionProfileOverride: Codable {
-    var displayName: String?
-    var avatarFileName: String?
-    var birthday: Date?
 }

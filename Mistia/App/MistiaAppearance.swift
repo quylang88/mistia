@@ -8,7 +8,7 @@ enum MistiaAppStorageKey {
     static let currencyCode = "mistia.settings.currency.code"
     static let appLanguage = MistiaAppLanguage.userDefaultsKey
     static let syncAutoEnabled = "mistia.sync.auto.enabled"
-    static let sessionProfileOverridePrefix = "mistia.session.profile.override"
+    static let syncManualReviewRequired = "mistia.sync.manual-review-required"
 }
 
 enum MistiaAppearanceMode: String, CaseIterable, Identifiable {

@@ -331,16 +331,6 @@ nonisolated enum MistiaIconColorPalette {
         "#8A8A8E"
     ]
 
-    private static let legacyDefaultHexMappings: [String: String] = [
-        "#F59B3F": "#FF9F1C",
-        "#FF7E67": "#F26A5A",
-        "#7C85A3": "#8A8A8E",
-        "#FFB13B": "#FF9F1C",
-        "#F45C7E": "#F26A5A",
-        "#8A6BFF": "#9A67FF",
-        "#5FAEFF": "#57B7FF"
-    ]
-
     static func normalizedHex(_ hex: String) -> String {
         let sanitized = hex
             .trimmingCharacters(in: .whitespacesAndNewlines)
@@ -365,17 +355,13 @@ nonisolated enum MistiaIconColorPalette {
         presetHexes.contains(normalizedHex(hex))
     }
 
-    static func migratedLegacyDefaultHex(_ hex: String) -> String? {
-        legacyDefaultHexMappings[normalizedHex(hex)]
-    }
-
     static func pickerSelectionHex(forStored hex: String) -> String {
-        migratedLegacyDefaultHex(hex) ?? normalizedHex(hex)
+        normalizedHex(hex)
     }
 
     static func shouldShowCurrentSwatch(forStored hex: String) -> Bool {
         let normalized = normalizedHex(hex)
-        return !containsPreset(normalized) && migratedLegacyDefaultHex(normalized) == nil
+        return !containsPreset(normalized)
     }
 
     static func presetHex(forDefault hex: String) -> String {

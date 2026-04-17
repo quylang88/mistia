@@ -131,38 +131,6 @@ nonisolated enum LedgerWalletKind: String, CaseIterable, Identifiable, Codable {
         }
     }
 
-    var legacyDefaultIconSymbolNames: [String] {
-        switch self {
-        case .cash:
-            ["banknote.fill"]
-        case .payPay:
-            ["wallet.pass.fill"]
-        case .bank:
-            ["building.columns.fill"]
-        case .creditCard:
-            ["creditcard.fill"]
-        case .eWallet:
-            ["qrcode", "barcode.viewfinder"]
-        case .prepaid:
-            ["creditcard.fill", "creditcard.and.123"]
-        case .investment:
-            ["chart.line.uptrend.xyaxis", "chart.pie.fill"]
-        case .crypto:
-            ["bitcoinsign.circle.fill", "bitcoinsign.square.fill"]
-        case .other:
-            ["wallet.pass.fill", "tray.full.fill"]
-        }
-    }
-
-    var legacyDefaultColorHexes: [String] {
-        switch self {
-        case .creditCard:
-            ["#8A8A8E", "#7C85A3"]
-        default:
-            []
-        }
-    }
-
     var fallbackSystemName: String {
         switch self {
         case .cash:
@@ -187,22 +155,22 @@ nonisolated enum LedgerWalletKind: String, CaseIterable, Identifiable, Codable {
     }
 
     func matchesDefaultIconAppearance(symbolName: String, colorHex: String) -> Bool {
-        if symbolName == defaultIconSymbolName {
-            return true
-        }
-
-        guard legacyDefaultIconSymbolNames.contains(symbolName) else { return false }
         let normalizedColorHex = MistiaIconColorPalette.normalizedHex(colorHex)
-        return normalizedColorHex == defaultColorHex || legacyDefaultColorHexes.contains(normalizedColorHex)
+        let normalizedDefault = MistiaIconColorPalette.normalizedHex(defaultColorHex)
+        let presetDefault = MistiaIconColorPalette.presetHex(forDefault: defaultColorHex)
+        return symbolName == defaultIconSymbolName
+            && (normalizedColorHex == normalizedDefault || normalizedColorHex == presetDefault)
     }
 
     func migratedLegacyDefaultColorHex(for colorHex: String, symbolName: String) -> String? {
-        guard legacyDefaultIconSymbolNames.contains(symbolName) else { return nil }
         let normalizedColorHex = MistiaIconColorPalette.normalizedHex(colorHex)
-        guard normalizedColorHex == defaultColorHex || legacyDefaultColorHexes.contains(normalizedColorHex) else {
+        let normalizedDefault = MistiaIconColorPalette.normalizedHex(defaultColorHex)
+        let presetDefault = MistiaIconColorPalette.presetHex(forDefault: defaultColorHex)
+        guard symbolName == defaultIconSymbolName,
+              normalizedColorHex == normalizedDefault || normalizedColorHex == presetDefault else {
             return nil
         }
-        return MistiaIconColorPalette.presetHex(forDefault: defaultColorHex)
+        return presetDefault
     }
 
     var balanceFieldTitle: String {
@@ -248,41 +216,23 @@ nonisolated enum TransactionCategoryKind: String, CaseIterable, Identifiable, Co
         }
     }
 
-    var legacyDefaultIconSymbolNames: [String] {
-        switch self {
-        case .expense:
-            ["fork.knife"]
-        case .income:
-            ["briefcase.fill"]
-        }
-    }
-
-    var legacyDefaultColorHexes: [String] {
-        switch self {
-        case .expense:
-            ["#FF9F1C", "#F59B3F"]
-        case .income:
-            []
-        }
-    }
-
     func matchesDefaultIconAppearance(symbolName: String, colorHex: String) -> Bool {
-        if symbolName == defaultIconSymbolName {
-            return true
-        }
-
-        guard legacyDefaultIconSymbolNames.contains(symbolName) else { return false }
         let normalizedColorHex = MistiaIconColorPalette.normalizedHex(colorHex)
-        return normalizedColorHex == defaultColorHex || legacyDefaultColorHexes.contains(normalizedColorHex)
+        let normalizedDefault = MistiaIconColorPalette.normalizedHex(defaultColorHex)
+        let presetDefault = MistiaIconColorPalette.presetHex(forDefault: defaultColorHex)
+        return symbolName == defaultIconSymbolName
+            && (normalizedColorHex == normalizedDefault || normalizedColorHex == presetDefault)
     }
 
     func migratedLegacyDefaultColorHex(for colorHex: String, symbolName: String) -> String? {
-        guard legacyDefaultIconSymbolNames.contains(symbolName) else { return nil }
         let normalizedColorHex = MistiaIconColorPalette.normalizedHex(colorHex)
-        guard normalizedColorHex == defaultColorHex || legacyDefaultColorHexes.contains(normalizedColorHex) else {
+        let normalizedDefault = MistiaIconColorPalette.normalizedHex(defaultColorHex)
+        let presetDefault = MistiaIconColorPalette.presetHex(forDefault: defaultColorHex)
+        guard symbolName == defaultIconSymbolName,
+              normalizedColorHex == normalizedDefault || normalizedColorHex == presetDefault else {
             return nil
         }
-        return MistiaIconColorPalette.presetHex(forDefault: defaultColorHex)
+        return presetDefault
     }
 }
 
