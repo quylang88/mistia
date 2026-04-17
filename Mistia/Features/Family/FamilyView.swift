@@ -1969,18 +1969,25 @@ private struct FamilyMemberProfileScreen: View {
 
 // MARK: - Create Sheet
 
+private enum FamilySheetFocusedField: Hashable {
+    case familyName
+    case inviteCode
+}
+
 private struct FamilyCreateSheet: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(SessionStore.self) private var sessionStore
     @Environment(FamilyContextStore.self) private var familyContextStore
 
     @State private var familyName = ""
+    @FocusState private var focusedField: FamilySheetFocusedField?
 
     var body: some View {
         NavigationStack {
             Form {
                 Section(mistiaLocalized(vi: "Gia đình mới", en: "New family", ja: "新しい家族")) {
                     TextField(mistiaLocalized(vi: "Tên gia đình", en: "Family name", ja: "家族名"), text: $familyName)
+                        .focused($focusedField, equals: .familyName)
                 }
             }
             .dismissKeyboardOnTap()
@@ -1988,21 +1995,38 @@ private struct FamilyCreateSheet: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
-                    Button(mistiaLocalized(vi: "Hủy", en: "Cancel", ja: "キャンセル")) {
+                    Button {
                         dismiss()
+                    } label: {
+                        Image(systemName: "xmark")
+                            .font(.system(size: 16, weight: .semibold))
+                            .foregroundStyle(.secondary)
                     }
                 }
 
                 ToolbarItem(placement: .topBarTrailing) {
-                    Button(mistiaLocalized(vi: "Tạo", en: "Create", ja: "作成")) {
+                    Button {
                         Task {
                             await familyContextStore.createFamily(name: familyName, sessionStore: sessionStore)
                             dismiss()
                         }
+                    } label: {
+                        Image(systemName: "checkmark")
+                            .font(.system(size: 14, weight: .bold))
+                            .foregroundStyle(MistiaAccent.lightPurple.color)
+                            .frame(width: 30, height: 30)
                     }
+                    .buttonStyle(.glassProminent)
+                    .buttonBorderShape(.circle)
+                    .tint(MistiaAccent.purple.color)
                     .disabled(familyName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                 }
             }
+        }
+        .task {
+            guard focusedField == nil else { return }
+            try? await Task.sleep(for: .milliseconds(150))
+            focusedField = .familyName
         }
     }
 }
@@ -2015,12 +2039,14 @@ private struct FamilyJoinSheet: View {
     @Environment(FamilyContextStore.self) private var familyContextStore
 
     @State private var inviteCode = ""
+    @FocusState private var focusedField: FamilySheetFocusedField?
 
     var body: some View {
         NavigationStack {
             Form {
                 Section(mistiaLocalized(vi: "Mã mời", en: "Invite code", ja: "招待コード")) {
                     TextField("ABCD1234", text: $inviteCode)
+                        .focused($focusedField, equals: .inviteCode)
                         .textInputAutocapitalization(.characters)
                         .autocorrectionDisabled()
                 }
@@ -2030,21 +2056,38 @@ private struct FamilyJoinSheet: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
-                    Button(mistiaLocalized(vi: "Hủy", en: "Cancel", ja: "キャンセル")) {
+                    Button {
                         dismiss()
+                    } label: {
+                        Image(systemName: "xmark")
+                            .font(.system(size: 16, weight: .semibold))
+                            .foregroundStyle(.secondary)
                     }
                 }
 
                 ToolbarItem(placement: .topBarTrailing) {
-                    Button(mistiaLocalized(vi: "Tham gia", en: "Join", ja: "参加")) {
+                    Button {
                         Task {
                             await familyContextStore.joinFamily(inviteCode: inviteCode, sessionStore: sessionStore)
                             dismiss()
                         }
+                    } label: {
+                        Image(systemName: "checkmark")
+                            .font(.system(size: 14, weight: .bold))
+                            .foregroundStyle(MistiaAccent.lightPurple.color)
+                            .frame(width: 30, height: 30)
                     }
+                    .buttonStyle(.glassProminent)
+                    .buttonBorderShape(.circle)
+                    .tint(MistiaAccent.purple.color)
                     .disabled(inviteCode.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                 }
             }
+        }
+        .task {
+            guard focusedField == nil else { return }
+            try? await Task.sleep(for: .milliseconds(150))
+            focusedField = .inviteCode
         }
     }
 }
