@@ -2,6 +2,11 @@ import Foundation
 import Observation
 import SwiftData
 
+enum FamilyRefreshSource {
+    case enterFamily
+    case postManualSync
+}
+
 @MainActor
 @Observable
 final class FamilyContextStore {
@@ -13,6 +18,7 @@ final class FamilyContextStore {
     var walletAccessGrants: [FamilyWalletAccessGrantRecord] = []
     var lastErrorMessage: String?
     var isLoading = false
+    var isRefreshingLatest = false
     var isSwitchingContext = false
     var didBootstrap = false
 
@@ -163,6 +169,34 @@ final class FamilyContextStore {
             )
         } catch {
             lastErrorMessage = error.localizedDescription
+        }
+    }
+
+    func refreshLatest(
+        sessionStore: SessionStore,
+        source: FamilyRefreshSource
+    ) async {
+        switch source {
+        case .enterFamily:
+            guard sessionStore.isAutoSyncEnabled else { return }
+            guard !isRefreshingLatest else { return }
+
+            isRefreshingLatest = true
+            defer { isRefreshingLatest = false }
+
+            let didSync = await sessionStore.syncNow(isManual: false)
+            if !didSync && sessionStore.isAnySyncInProgress {
+                while sessionStore.isAnySyncInProgress {
+                    guard !Task.isCancelled else { return }
+                    try? await Task.sleep(for: .milliseconds(150))
+                }
+            }
+
+            guard !Task.isCancelled else { return }
+            await refresh(sessionStore: sessionStore)
+
+        case .postManualSync:
+            await refresh(sessionStore: sessionStore)
         }
     }
 
@@ -386,6 +420,7 @@ final class FamilyContextStore {
         invites = []
         walletAccessGrants = []
         lastErrorMessage = nil
+        isRefreshingLatest = false
     }
 
     private func apply(snapshot: FamilyStateSnapshot) {

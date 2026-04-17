@@ -47,7 +47,10 @@ struct MistiaApp: App {
                     }
                     sessionStore.setPostSyncRefreshHandler { [weak store, sessionStore] in
                         guard let store else { return }
-                        await store.refresh(sessionStore: sessionStore)
+                        await store.refreshLatest(
+                            sessionStore: sessionStore,
+                            source: .postManualSync
+                        )
                     }
                     await familyContextStore.bootstrapIfNeeded(sessionStore: sessionStore)
                 }

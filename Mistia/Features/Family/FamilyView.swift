@@ -59,6 +59,10 @@ struct FamilyManagementView: View {
             },
             contentSpacing: 22
         ) {
+            if familyContextStore.isRefreshingLatest {
+                FamilySyncLoadingBanner()
+            }
+
             if let lastErrorMessage = familyContextStore.lastErrorMessage {
                 FamilyAlertBanner(message: lastErrorMessage)
             }
@@ -90,7 +94,10 @@ struct FamilyManagementView: View {
             }
         }
         .task {
-            await familyContextStore.refresh(sessionStore: sessionStore)
+            await familyContextStore.refreshLatest(
+                sessionStore: sessionStore,
+                source: .enterFamily
+            )
         }
     }
 
@@ -1262,6 +1269,35 @@ private struct FamilyAlertBanner: View {
     }
 }
 
+private struct FamilySyncLoadingBanner: View {
+    var body: some View {
+        MistiaGlassCard(cornerRadius: 14, tint: Color.accentColor.opacity(0.10)) {
+            HStack(spacing: 12) {
+                ProgressView()
+                    .controlSize(.regular)
+
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(mistiaLocalized(
+                        vi: "Đang đồng bộ gia đình",
+                        en: "Syncing family",
+                        ja: "家族データを同期中"
+                    ))
+                    .font(.system(size: 15, weight: .semibold, design: .rounded))
+
+                    Text(mistiaLocalized(
+                        vi: "Đang tải dữ liệu mới nhất từ cloud và hợp nhất với dữ liệu trên máy.",
+                        en: "Loading the latest cloud data and merging it with this device.",
+                        ja: "クラウドの最新データを読み込み、この端末のデータと統合しています。"
+                    ))
+                    .font(.system(size: 13.5, weight: .medium, design: .rounded))
+                    .foregroundStyle(.secondary)
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+    }
+}
+
 // MARK: - Row Divider
 
 private struct FamilyRowDivider: View {
@@ -1517,6 +1553,10 @@ struct FamilyOverviewScreen: View {
             contentSpacing: 18,
             titleDisplayMode: .large
         ) {
+            if familyContextStore.isRefreshingLatest {
+                FamilySyncLoadingBanner()
+            }
+
             FamilyContextChipBar()
             
             FamilyOverviewHeader(
@@ -1575,6 +1615,12 @@ struct FamilyOverviewScreen: View {
             if !familyContextStore.isViewingOtherMemberContext {
                 familyContextStore.activateFamilyHome()
             }
+        }
+        .task {
+            await familyContextStore.refreshLatest(
+                sessionStore: sessionStore,
+                source: .enterFamily
+            )
         }
     }
 
