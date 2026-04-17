@@ -783,6 +783,7 @@ enum MistiaSyncUploadRecord {
                 row.kindRawValue,
                 row.iconSymbolName,
                 row.iconColorHex,
+                row.isFavorite ? "1" : "0",
                 row.parentCategoryID?.uuidString.lowercased() ?? "",
                 row.hierarchyRoleRawValue ?? "",
                 row.systemKey ?? "",

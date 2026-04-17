@@ -262,8 +262,18 @@ final class SyncCoordinator {
             onProgressUpdate?(0.8)
         }
 
+        if try await pushLocallyNewerRows(
+            localSnapshot: localSnapshot,
+            remoteSnapshot: rawRemoteSnapshot,
+            session: session,
+            progressStart: 0.8,
+            progressEnd: 0.85
+        ) {
+            pushedMutations = true
+            rawRemoteSnapshot = try await fetchRawSnapshot(session: session)
+        }
+
         let snapshot = reconcileLegacySystemCategoryRows(in: rawRemoteSnapshot)
-        onProgressUpdate?(0.85)
         let previousFingerprint = lastSnapshotFingerprint
         try applySnapshot(snapshot)
         onProgressUpdate?(1.0)
@@ -346,17 +356,19 @@ final class SyncCoordinator {
         if mutation.baseVersion == 0 {
             guard remoteRecord == nil else {
                 let conflictKind: MistiaSyncConflictKind = remoteRecord?.deletedAt == nil ? .createCreate : .editDelete
-                try handleConflict(
+                let resolvedLocally = try await resolveConflictingRecords(
                     entity: mutation.entity,
                     recordID: mutation.recordID,
                     kind: conflictKind,
                     localDraft: localRecord,
                     remoteRecord: remoteRecord ?? synthesizedDeletedRecord(from: localRecord, remoteVersion: 1),
                     baseVersion: mutation.baseVersion,
-                    remoteVersion: remoteRecord?.syncVersion ?? 1
+                    remoteVersion: remoteRecord?.syncVersion ?? 1,
+                    subjectUserID: mutation.subjectUserID,
+                    session: session
                 )
                 outbox.remove(mutation)
-                return false
+                return resolvedLocally
             }
 
             let created = try await remoteStore.create(
@@ -370,49 +382,46 @@ final class SyncCoordinator {
         }
 
         guard let remoteRecord else {
-            let deletedRemote = synthesizedDeletedRecord(
-                from: localRecord,
-                remoteVersion: mutation.baseVersion
-            )
-            try handleConflict(
-                entity: mutation.entity,
-                recordID: mutation.recordID,
-                kind: .editDelete,
-                localDraft: localRecord,
-                remoteRecord: deletedRemote,
-                baseVersion: mutation.baseVersion,
-                remoteVersion: mutation.baseVersion
+            _ = try await forcePushLocalRecord(
+                localRecord,
+                subjectUserID: mutation.subjectUserID,
+                remoteVersion: mutation.baseVersion,
+                session: session
             )
             outbox.remove(mutation)
-            return false
+            return true
         }
 
         if remoteRecord.deletedAt != nil {
-            try handleConflict(
+            let resolvedLocally = try await resolveConflictingRecords(
                 entity: mutation.entity,
                 recordID: mutation.recordID,
                 kind: .editDelete,
                 localDraft: localRecord,
                 remoteRecord: remoteRecord,
                 baseVersion: mutation.baseVersion,
-                remoteVersion: remoteRecord.syncVersion
+                remoteVersion: remoteRecord.syncVersion,
+                subjectUserID: mutation.subjectUserID,
+                session: session
             )
             outbox.remove(mutation)
-            return false
+            return resolvedLocally
         }
 
         if remoteRecord.syncVersion != mutation.baseVersion {
-            try handleConflict(
+            let resolvedLocally = try await resolveConflictingRecords(
                 entity: mutation.entity,
                 recordID: mutation.recordID,
                 kind: .editEdit,
                 localDraft: localRecord,
                 remoteRecord: remoteRecord,
                 baseVersion: mutation.baseVersion,
-                remoteVersion: remoteRecord.syncVersion
+                remoteVersion: remoteRecord.syncVersion,
+                subjectUserID: mutation.subjectUserID,
+                session: session
             )
             outbox.remove(mutation)
-            return false
+            return resolvedLocally
         }
 
         if let updated = try await remoteStore.conditionalUpdate(
@@ -433,17 +442,19 @@ final class SyncCoordinator {
             session: session
         ) ?? synthesizedDeletedRecord(from: localRecord, remoteVersion: mutation.baseVersion + 1)
 
-        try handleConflict(
+        let resolvedLocally = try await resolveConflictingRecords(
             entity: mutation.entity,
             recordID: mutation.recordID,
             kind: latestRemote.deletedAt == nil ? .editEdit : .editDelete,
             localDraft: localRecord,
             remoteRecord: latestRemote,
             baseVersion: mutation.baseVersion,
-            remoteVersion: latestRemote.syncVersion
+            remoteVersion: latestRemote.syncVersion,
+            subjectUserID: mutation.subjectUserID,
+            session: session
         )
         outbox.remove(mutation)
-        return false
+        return resolvedLocally
     }
 
     private func processDeleteMutation(
@@ -477,17 +488,19 @@ final class SyncCoordinator {
         }
 
         if remoteRecord.syncVersion != mutation.baseVersion {
-            try handleConflict(
+            let resolvedLocally = try await resolveConflictingRecords(
                 entity: mutation.entity,
                 recordID: mutation.recordID,
                 kind: .deleteEdit,
                 localDraft: localRecord,
                 remoteRecord: remoteRecord,
                 baseVersion: mutation.baseVersion,
-                remoteVersion: remoteRecord.syncVersion
+                remoteVersion: remoteRecord.syncVersion,
+                subjectUserID: mutation.subjectUserID,
+                session: session
             )
             outbox.remove(mutation)
-            return false
+            return resolvedLocally
         }
 
         if let deletedRecord = try await remoteStore.conditionalDelete(
@@ -517,17 +530,19 @@ final class SyncCoordinator {
             return false
         }
 
-        try handleConflict(
+        let resolvedLocally = try await resolveConflictingRecords(
             entity: mutation.entity,
             recordID: mutation.recordID,
             kind: .deleteEdit,
             localDraft: localRecord,
             remoteRecord: latestRemote,
             baseVersion: mutation.baseVersion,
-            remoteVersion: latestRemote.syncVersion
+            remoteVersion: latestRemote.syncVersion,
+            subjectUserID: mutation.subjectUserID,
+            session: session
         )
         outbox.remove(mutation)
-        return false
+        return resolvedLocally
     }
 
     private func mergeInitialSnapshots(
@@ -571,18 +586,19 @@ final class SyncCoordinator {
                 conflictKind = .editEdit
             }
 
-            try handleConflict(
+            _ = try await resolveConflictingRecords(
                 entity: localRecord.entity,
                 recordID: localRecord.id,
                 kind: conflictKind,
                 localDraft: localRecord,
                 remoteRecord: remoteRecord,
                 baseVersion: localRecord.syncVersion,
-                remoteVersion: remoteRecord.syncVersion
+                remoteVersion: remoteRecord.syncVersion,
+                subjectUserID: localRecord.userID,
+                session: session
             )
         }
 
-        try applySnapshot(reconcileLegacySystemCategoryRows(in: remoteSnapshot))
         _ = try await sync(session: session)
     }
 
@@ -671,6 +687,49 @@ final class SyncCoordinator {
     ) async throws -> MistiaRemoteSnapshot {
         let snapshot = try await fetchRawSnapshot(session: session)
         return reconcileLegacySystemCategoryRows(in: snapshot)
+    }
+
+    private func pushLocallyNewerRows(
+        localSnapshot: MistiaRemoteSnapshot,
+        remoteSnapshot: MistiaRemoteSnapshot,
+        session: SupabaseAuthSession,
+        progressStart: Double,
+        progressEnd: Double
+    ) async throws -> Bool {
+        let remoteByKey = remoteSnapshot.recordsByKey
+        let locallyNewer = hierarchicalSorted(
+            localSnapshot.allRecords.filter { localRecord in
+                guard let remoteRecord = remoteByKey[localRecord.storageKey] else {
+                    return false
+                }
+                guard localRecord.payloadFingerprint != remoteRecord.payloadFingerprint else {
+                    return false
+                }
+                return preferredAuthority(localDraft: localRecord, remoteRecord: remoteRecord) == .local
+            }
+        )
+
+        guard !locallyNewer.isEmpty else {
+            onProgressUpdate?(progressEnd)
+            return false
+        }
+
+        let total = locallyNewer.count
+        for (index, localRecord) in locallyNewer.enumerated() {
+            let progress = progressStart + (Double(index) / Double(max(1, total))) * (progressEnd - progressStart)
+            onProgressUpdate?(progress)
+
+            guard let remoteRecord = remoteByKey[localRecord.storageKey] else { continue }
+            _ = try await forcePushLocalRecord(
+                localRecord,
+                subjectUserID: localRecord.userID,
+                remoteVersion: remoteRecord.syncVersion,
+                session: session
+            )
+        }
+
+        onProgressUpdate?(progressEnd)
+        return true
     }
 
     private func reconcileLegacySystemCategoryRows(
@@ -900,6 +959,98 @@ final class SyncCoordinator {
         lastSnapshotFingerprint = snapshot.fingerprint
     }
 
+    private func resolveConflictingRecords(
+        entity: MistiaSyncEntity,
+        recordID: UUID,
+        kind: MistiaSyncConflictKind,
+        localDraft: MistiaSyncUploadRecord,
+        remoteRecord: MistiaSyncUploadRecord,
+        baseVersion: Int64,
+        remoteVersion: Int64,
+        subjectUserID: UUID,
+        session: SupabaseAuthSession
+    ) async throws -> Bool {
+        switch preferredAuthority(localDraft: localDraft, remoteRecord: remoteRecord) {
+        case .local:
+            _ = try await forcePushLocalRecord(
+                localDraft,
+                subjectUserID: subjectUserID,
+                remoteVersion: remoteVersion,
+                session: session
+            )
+            return true
+        case .remote:
+            try MistiaSyncLocalStore.applyRemoteRecord(remoteRecord, in: modelContainer)
+            return false
+        case .unresolved:
+            try handleConflict(
+                entity: entity,
+                recordID: recordID,
+                kind: kind,
+                localDraft: localDraft,
+                remoteRecord: remoteRecord,
+                baseVersion: baseVersion,
+                remoteVersion: remoteVersion
+            )
+            return false
+        }
+    }
+
+    private func forcePushLocalRecord(
+        _ localRecord: MistiaSyncUploadRecord,
+        subjectUserID: UUID,
+        remoteVersion: Int64,
+        session: SupabaseAuthSession
+    ) async throws -> MistiaSyncUploadRecord {
+        let nextVersion = max(max(remoteVersion, localRecord.syncVersion), 0) + 1
+        let authoritativeRecord = localRecord.preparedForMutation(
+            nextVersion: nextVersion,
+            deviceID: deviceID
+        )
+        let pushedRecord = try await remoteStore.forceUpsert(
+            authoritativeRecord,
+            subjectUserID: subjectUserID,
+            session: session
+        )
+        try MistiaSyncLocalStore.applyRemoteRecord(pushedRecord, in: modelContainer)
+        return pushedRecord
+    }
+
+    private func preferredAuthority(
+        localDraft: MistiaSyncUploadRecord,
+        remoteRecord: MistiaSyncUploadRecord
+    ) -> RecordAuthority {
+        if localDraft.payloadFingerprint == remoteRecord.payloadFingerprint {
+            return .remote
+        }
+
+        if localDraft.updatedAt > remoteRecord.updatedAt {
+            return .local
+        }
+
+        if remoteRecord.updatedAt > localDraft.updatedAt {
+            return .remote
+        }
+
+        if localDraft.deletedAt != nil, remoteRecord.deletedAt == nil {
+            return .local
+        }
+
+        if remoteRecord.deletedAt != nil, localDraft.deletedAt == nil {
+            return .remote
+        }
+
+        if localDraft.syncVersion > remoteRecord.syncVersion {
+            return .local
+        }
+
+        if remoteRecord.syncVersion > localDraft.syncVersion {
+            return .remote
+        }
+
+        return .unresolved
+    }
+
     private func handleConflict(
         entity: MistiaSyncEntity,
         recordID: UUID,
@@ -994,6 +1145,12 @@ final class SyncCoordinator {
             return .dueOccurrence(row)
         }
     }
+}
+
+private enum RecordAuthority {
+    case local
+    case remote
+    case unresolved
 }
 
 private extension MistiaRemoteSnapshot {
