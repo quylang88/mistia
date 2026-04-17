@@ -44,6 +44,18 @@ struct FamilyManagementView: View {
             : MistiaAccent.purple.color
     }
 
+    private var visibleErrorMessage: String? {
+        guard let lastErrorMessage = familyContextStore.lastErrorMessage else {
+            return nil
+        }
+
+        if familyContextStore.family == nil && shouldSuppressNoFamilyPermissionError(lastErrorMessage) {
+            return nil
+        }
+
+        return lastErrorMessage
+    }
+
     var body: some View {
         MistiaPinnedTopBarScaffold(
             tone: .standard,
@@ -59,8 +71,8 @@ struct FamilyManagementView: View {
             },
             contentSpacing: 22
         ) {
-            if let lastErrorMessage = familyContextStore.lastErrorMessage {
-                FamilyAlertBanner(message: lastErrorMessage)
+            if let visibleErrorMessage {
+                FamilyAlertBanner(message: visibleErrorMessage)
             }
 
             familyHeaderSection
@@ -107,59 +119,26 @@ struct FamilyManagementView: View {
     // MARK: - Empty State
 
     private var emptyStateContent: some View {
-        VStack(spacing: 18) {
-            // Hero illustration card
-            VStack(spacing: 16) {
-                ZStack {
-                    Circle()
-                        .fill(MistiaAccent.purple.color.opacity(0.18))
-                        .frame(width: 72, height: 72)
-
-                    Image(systemName: "person.3.fill")
-                        .font(.system(size: 28, weight: .semibold))
-                        .foregroundStyle(MistiaAccent.purple.color)
+        MistiaGlassCard(cornerRadius: 14, tint: cardTint, padding: 0) {
+            VStack(spacing: 0) {
+                FamilySettingsRow(
+                    title: mistiaLocalized(vi: "Tạo gia đình", en: "Create family", ja: "家族を作成"),
+                    subtitle: mistiaLocalized(vi: "Bạn trở thành owner và mời thêm thành viên sau.", en: "You become the owner and invite others later.", ja: "作成者が owner になり、あとでメンバーを招待できます。"),
+                    icon: "plus.circle.fill",
+                    iconColor: .mint
+                ) {
+                    activeSheet = .create
                 }
-                .padding(.top, 8)
 
-                Text(mistiaLocalized(vi: "Chưa có gia đình", en: "No family yet", ja: "家族はまだありません"))
-                    .font(.system(size: 22, weight: .bold, design: .rounded))
+                FamilyRowDivider()
 
-                Text(
-                    mistiaLocalized(
-                        vi: "Mỗi người vẫn giữ dữ liệu tài chính riêng của mình. Gia đình chỉ thêm lớp tổng hợp, quyền xem và quyền chỉnh sửa.",
-                        en: "Everyone keeps their own financial data. Family adds a shared layer for aggregates, visibility, and editing rights.",
-                        ja: "各メンバーは自分の財務データを保持したまま、家族では集計・閲覧・編集権限を重ねます。"
-                    )
-                )
-                .font(.system(size: 15, weight: .medium, design: .rounded))
-                .foregroundStyle(.secondary)
-                .multilineTextAlignment(.center)
-                .padding(.horizontal, 4)
-            }
-            .padding(.vertical, 12)
-
-            // Action card — Apple grouped style
-            MistiaGlassCard(cornerRadius: 14, tint: cardTint, padding: 0) {
-                VStack(spacing: 0) {
-                    FamilySettingsRow(
-                        title: mistiaLocalized(vi: "Tạo gia đình", en: "Create family", ja: "家族を作成"),
-                        subtitle: mistiaLocalized(vi: "Bạn trở thành owner và mời thêm thành viên sau.", en: "You become the owner and invite others later.", ja: "作成者が owner になり、あとでメンバーを招待できます。"),
-                        icon: "plus.circle.fill",
-                        iconColor: .mint
-                    ) {
-                        activeSheet = .create
-                    }
-
-                    FamilyRowDivider()
-
-                    FamilySettingsRow(
-                        title: mistiaLocalized(vi: "Nhập mã mời", en: "Join with code", ja: "招待コードで参加"),
-                        subtitle: mistiaLocalized(vi: "Dùng mã hoặc link mời từ owner của gia đình.", en: "Use the invite code or link shared by the family owner.", ja: "owner が共有した招待コードまたはリンクを使います。"),
-                        icon: "number.circle.fill",
-                        iconColor: .cyan
-                    ) {
-                        activeSheet = .join
-                    }
+                FamilySettingsRow(
+                    title: mistiaLocalized(vi: "Nhập mã mời", en: "Join with code", ja: "招待コードで参加"),
+                    subtitle: mistiaLocalized(vi: "Dùng mã hoặc link mời từ owner của gia đình.", en: "Use the invite code or link shared by the family owner.", ja: "owner が共有した招待コードまたはリンクを使います。"),
+                    icon: "number.circle.fill",
+                    iconColor: .cyan
+                ) {
+                    activeSheet = .join
                 }
             }
         }
@@ -321,6 +300,12 @@ struct FamilyManagementView: View {
             }
             .cardDescriptionStyle()
         }
+    }
+
+    private func shouldSuppressNoFamilyPermissionError(_ message: String) -> Bool {
+        let normalized = message.lowercased()
+        return normalized.contains("permission denied")
+            && (normalized.contains("family_memberships") || normalized.contains("family membership"))
     }
 }
 

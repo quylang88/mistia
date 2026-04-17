@@ -238,6 +238,10 @@ final class SessionStore {
             birthday: birthday,
             session: validSession
         )
+        await cacheRemoteAvatarIfNeeded(
+            for: profile,
+            remoteAvatarURL: remoteProfile.avatarURL ?? remoteAvatarURL
+        )
         syncStoredProfile(profile, with: remoteProfile, email: baseSummary.email)
         try modelContainer.mainContext.save()
         summary = applyStoredProfile(
@@ -1080,6 +1084,10 @@ final class SessionStore {
                 session: validSession,
                 baseSummary: baseSummary,
                 storedProfile: storedProfile
+            )
+            await cacheRemoteAvatarIfNeeded(
+                for: storedProfile,
+                remoteAvatarURL: remoteProfile.avatarURL ?? baseSummary.avatarURL
             )
             summary = applyStoredProfile(
                 storedProfile,
@@ -2253,6 +2261,37 @@ private extension SessionStore {
         return trimmed.isEmpty ? fallback : trimmed
     }
 
+    func cacheRemoteAvatarIfNeeded(
+        for storedProfile: UserAccountProfile,
+        remoteAvatarURL: URL?
+    ) async {
+        guard let remoteAvatarURL else { return }
+
+        if let avatarFileName = storedProfile.avatarFileName,
+           cachedProfileAvatarURL(forFileName: avatarFileName) != nil {
+            return
+        }
+
+        do {
+            let (data, response) = try await URLSession.shared.data(from: remoteAvatarURL)
+            guard let httpResponse = response as? HTTPURLResponse,
+                  (200..<300).contains(httpResponse.statusCode),
+                  !data.isEmpty else {
+                return
+            }
+
+            let fileName = try saveRemoteAvatarImageData(
+                data,
+                mimeType: httpResponse.mimeType,
+                sourceURL: remoteAvatarURL,
+                for: storedProfile.userID
+            )
+            storedProfile.avatarFileName = fileName
+        } catch {
+            return
+        }
+    }
+
     func setRequiresManualSyncAfterRestore(_ isRequired: Bool) {
         requiresManualSyncAfterRestore = isRequired
         userDefaults.set(isRequired, forKey: MistiaAppStorageKey.syncManualReviewRequired)
@@ -2261,6 +2300,22 @@ private extension SessionStore {
     func saveAvatarImageData(_ data: Data, for userID: UUID) throws -> String {
         let directoryURL = try profileAvatarDirectoryURL()
         let fileName = "\(userID.uuidString.lowercased()).jpg"
+        let fileURL = directoryURL.appendingPathComponent(fileName)
+        try data.write(to: fileURL, options: .atomic)
+        return fileName
+    }
+
+    func saveRemoteAvatarImageData(
+        _ data: Data,
+        mimeType: String?,
+        sourceURL: URL,
+        for userID: UUID
+    ) throws -> String {
+        let directoryURL = try profileAvatarDirectoryURL()
+        let fileExtension = avatarFileExtension(mimeType: mimeType, sourceURL: sourceURL)
+        let fileName = "\(userID.uuidString.lowercased()).\(fileExtension)"
+        try removeCachedAvatarFiles(for: userID, keeping: fileName, in: directoryURL)
+
         let fileURL = directoryURL.appendingPathComponent(fileName)
         try data.write(to: fileURL, options: .atomic)
         return fileName
@@ -2293,5 +2348,43 @@ private extension SessionStore {
             return nil
         }
         return fileURL
+    }
+
+    func avatarFileExtension(mimeType: String?, sourceURL: URL) -> String {
+        let trimmedExtension = sourceURL.pathExtension.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !trimmedExtension.isEmpty {
+            return trimmedExtension.lowercased()
+        }
+
+        switch mimeType?.lowercased() {
+        case "image/png":
+            return "png"
+        case "image/heic", "image/heif":
+            return "heic"
+        case "image/webp":
+            return "webp"
+        case "image/gif":
+            return "gif"
+        default:
+            return "jpg"
+        }
+    }
+
+    func removeCachedAvatarFiles(
+        for userID: UUID,
+        keeping keptFileName: String,
+        in directoryURL: URL
+    ) throws {
+        let fileManager = FileManager.default
+        let filePrefix = userID.uuidString.lowercased() + "."
+        let cachedFiles = try fileManager.contentsOfDirectory(
+            at: directoryURL,
+            includingPropertiesForKeys: nil
+        )
+
+        for fileURL in cachedFiles where fileURL.lastPathComponent.hasPrefix(filePrefix)
+            && fileURL.lastPathComponent != keptFileName {
+            try? fileManager.removeItem(at: fileURL)
+        }
     }
 }
