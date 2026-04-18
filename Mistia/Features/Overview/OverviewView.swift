@@ -4,6 +4,12 @@ import SwiftUI
 
 private let overviewAccentPurple = Color(red: 0.43, green: 0.23, blue: 0.76)
 
+private enum OverviewNavigationDestination: String, Identifiable {
+    case profile
+
+    var id: String { rawValue }
+}
+
 struct OverviewView: View {
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.calendar) private var calendar
@@ -28,6 +34,7 @@ struct OverviewView: View {
 
     @State private var shareItem: OverviewShareItem?
     @State private var exportErrorMessage: String?
+    @State private var destination: OverviewNavigationDestination?
 
     private var currentMonth: Date {
         PlanningLogic.startOfMonth(for: .now, calendar: calendar)
@@ -192,27 +199,37 @@ struct OverviewView: View {
     }
 
     var body: some View {
-        MistiaPinnedTopBarScaffold(
-            tone: .standard,
-            title: mistiaLocalized(vi: "Tổng quan", en: "Overview", ja: "ホーム"),
-            leadingInitials: sessionStore.summary?.initials ?? "MI",
-            leadingAvatarURL: sessionStore.summary?.avatarURL,
-            contentSpacing: 18,
-            titleDisplayMode: .large
-        ) {
-            FamilyContextChipBar()
-            OverviewHeroCard(
-                snapshot: dashboardSnapshot.hero,
-                onExportMonthly: { exportStatement(.monthlySummary) },
-                onExportCreditCard: { exportStatement(.creditCard) }
-            )
-            if !dashboardSnapshot.budgetAlerts.isEmpty {
-                BudgetFocusSection(rows: dashboardSnapshot.budgetAlerts)
+        NavigationStack {
+            MistiaPinnedTopBarScaffold(
+                tone: .standard,
+                title: mistiaLocalized(vi: "Tổng quan", en: "Overview", ja: "ホーム"),
+                embedsInNavigationStack: false,
+                leadingInitials: sessionStore.summary?.initials ?? "MI",
+                leadingAvatarURL: sessionStore.summary?.avatarURL,
+                onLeadingTap: { destination = .profile },
+                contentSpacing: 18,
+                titleDisplayMode: .large
+            ) {
+                FamilyContextChipBar()
+                OverviewHeroCard(
+                    snapshot: dashboardSnapshot.hero,
+                    onExportMonthly: { exportStatement(.monthlySummary) },
+                    onExportCreditCard: { exportStatement(.creditCard) }
+                )
+                if !dashboardSnapshot.budgetAlerts.isEmpty {
+                    BudgetFocusSection(rows: dashboardSnapshot.budgetAlerts)
+                }
+                if !dashboardSnapshot.dueAlerts.isEmpty {
+                    UpcomingBillsSection(rows: dashboardSnapshot.dueAlerts)
+                }
+                RecentTransactionsSection(rows: dashboardSnapshot.recentTransactions)
             }
-            if !dashboardSnapshot.dueAlerts.isEmpty {
-                UpcomingBillsSection(rows: dashboardSnapshot.dueAlerts)
+            .navigationDestination(item: $destination) { route in
+                switch route {
+                case .profile:
+                    ManagementAccountView()
+                }
             }
-            RecentTransactionsSection(rows: dashboardSnapshot.recentTransactions)
         }
         .sheet(item: $shareItem) { item in
             OverviewShareSheet(url: item.url)

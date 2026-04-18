@@ -52,6 +52,12 @@ private enum PlanningDueMode: String, CaseIterable, Identifiable {
 
 private let planningAccentPurple = Color(red: 0.43, green: 0.23, blue: 0.76)
 
+private enum PlanningNavigationDestination: String, Identifiable {
+    case profile
+
+    var id: String { rawValue }
+}
+
 struct PlanningView: View {
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.calendar) private var calendar
@@ -86,6 +92,7 @@ struct PlanningView: View {
     @State private var billEditorTarget: PlanningBillEditorTarget?
     @State private var installmentEditorTarget: PlanningInstallmentEditorTarget?
     @State private var creditCardEditorTarget: PlanningCreditCardEditorTarget?
+    @State private var destination: PlanningNavigationDestination?
 
     private var cardTint: Color {
         colorScheme == .dark ? .white.opacity(0.022) : .white.opacity(0.14)
@@ -273,128 +280,138 @@ struct PlanningView: View {
     }
 
     var body: some View {
-        MistiaPinnedTopBarScaffold(
-            tone: .standard,
-            title: mistiaLocalized(vi: "Kế hoạch", en: "Planning", ja: "プラン"),
-            leadingInitials: sessionStore.summary?.initials ?? "MI",
-            leadingAvatarURL: sessionStore.summary?.avatarURL,
-            trailingSystemImage: "calendar",
-            onTrailingTap: { isMonthPickerPresented = true },
-            contentSpacing: 18,
-            titleDisplayMode: .large,
-            pinnedHeader: {
-                VStack(alignment: .leading, spacing: 8) {
-                    FamilyContextChipBar()
-                        .padding(.horizontal, 18)
-                    PlanningModePicker(selection: $selectedMode)
+        NavigationStack {
+            MistiaPinnedTopBarScaffold(
+                tone: .standard,
+                title: mistiaLocalized(vi: "Kế hoạch", en: "Planning", ja: "プラン"),
+                embedsInNavigationStack: false,
+                leadingInitials: sessionStore.summary?.initials ?? "MI",
+                leadingAvatarURL: sessionStore.summary?.avatarURL,
+                trailingSystemImage: "calendar",
+                onLeadingTap: { destination = .profile },
+                onTrailingTap: { isMonthPickerPresented = true },
+                contentSpacing: 18,
+                titleDisplayMode: .large,
+                pinnedHeader: {
+                    VStack(alignment: .leading, spacing: 8) {
+                        FamilyContextChipBar()
+                            .padding(.horizontal, 18)
+                        PlanningModePicker(selection: $selectedMode)
+                    }
+                }
+            ) {
+                switch selectedMode {
+                case .budget:
+                    BudgetTabContent(
+                        summary: budgetSummary,
+                        currencyCode: currencyCode,
+                        rows: budgetRows,
+                        referenceDate: .now,
+                        onAdd: {
+                            budgetEditorTarget = PlanningBudgetEditorTarget(
+                                budget: nil,
+                                selectedMonth: selectedMonth,
+                                preferredParentCategoryID: nil
+                            )
+                        },
+                        onAddChild: { row in
+                            budgetEditorTarget = PlanningBudgetEditorTarget(
+                                budget: nil,
+                                selectedMonth: selectedMonth,
+                                preferredParentCategoryID: row.parentCategoryID
+                            )
+                        },
+                        onEditParent: { row in
+                            guard let budgetID = row.parentBudgetID else { return }
+                            let budget = storedBudgets.first(where: { $0.id == budgetID })
+                            budgetEditorTarget = PlanningBudgetEditorTarget(
+                                budget: budget,
+                                selectedMonth: selectedMonth,
+                                preferredParentCategoryID: row.parentCategoryID
+                            )
+                        },
+                        onEditChild: { row in
+                            let budget = storedBudgets.first(where: { $0.id == row.id })
+                            budgetEditorTarget = PlanningBudgetEditorTarget(
+                                budget: budget,
+                                selectedMonth: selectedMonth,
+                                preferredParentCategoryID: nil
+                            )
+                        }
+                    )
+                case .goals:
+                    GoalsTabContent(
+                        summary: goalSummary,
+                        currencyCode: currencyCode,
+                        rows: goalRows,
+                        onAdd: {
+                            goalEditorTarget = PlanningGoalEditorTarget(goal: nil)
+                        },
+                        onEdit: { row in
+                            goalEditorTarget = PlanningGoalEditorTarget(
+                                goal: storedGoals.first(where: { $0.id == row.id })
+                            )
+                        }
+                    )
+                case .due:
+                    DueTabContent(
+                        selectedMode: $selectedDueMode,
+                        summary: dueSummary,
+                        currencyCode: currencyCode,
+                        creditCards: creditCardDueItems,
+                        bills: recurringBillDueItems,
+                        installments: installmentDueItems,
+                        referenceDate: .now,
+                        onAddCreditCard: {
+                            creditCardEditorTarget = PlanningCreditCardEditorTarget(
+                                wallet: nil,
+                                dueItem: nil,
+                                selectedMonth: selectedMonth
+                            )
+                        },
+                        onEditCreditCard: { item in
+                            creditCardEditorTarget = PlanningCreditCardEditorTarget(
+                                wallet: storedWallets.first(where: { $0.id == item.walletID }),
+                                dueItem: item,
+                                selectedMonth: selectedMonth
+                            )
+                        },
+                        onAddBill: {
+                            billEditorTarget = PlanningBillEditorTarget(
+                                plan: nil,
+                                dueItem: nil,
+                                selectedMonth: selectedMonth
+                            )
+                        },
+                        onEditBill: { item in
+                            billEditorTarget = PlanningBillEditorTarget(
+                                plan: storedBills.first(where: { $0.id == item.sourceID }),
+                                dueItem: item,
+                                selectedMonth: selectedMonth
+                            )
+                        },
+                        onAddInstallment: {
+                            installmentEditorTarget = PlanningInstallmentEditorTarget(
+                                plan: nil,
+                                dueItem: nil,
+                                selectedMonth: selectedMonth
+                            )
+                        },
+                        onEditInstallment: { item in
+                            installmentEditorTarget = PlanningInstallmentEditorTarget(
+                                plan: storedInstallments.first(where: { $0.id == item.sourceID }),
+                                dueItem: item,
+                                selectedMonth: selectedMonth
+                            )
+                        }
+                    )
                 }
             }
-        ) {
-            switch selectedMode {
-            case .budget:
-                BudgetTabContent(
-                    summary: budgetSummary,
-                    currencyCode: currencyCode,
-                    rows: budgetRows,
-                    referenceDate: .now,
-                    onAdd: {
-                        budgetEditorTarget = PlanningBudgetEditorTarget(
-                            budget: nil,
-                            selectedMonth: selectedMonth,
-                            preferredParentCategoryID: nil
-                        )
-                    },
-                    onAddChild: { row in
-                        budgetEditorTarget = PlanningBudgetEditorTarget(
-                            budget: nil,
-                            selectedMonth: selectedMonth,
-                            preferredParentCategoryID: row.parentCategoryID
-                        )
-                    },
-                    onEditParent: { row in
-                        guard let budgetID = row.parentBudgetID else { return }
-                        let budget = storedBudgets.first(where: { $0.id == budgetID })
-                        budgetEditorTarget = PlanningBudgetEditorTarget(
-                            budget: budget,
-                            selectedMonth: selectedMonth,
-                            preferredParentCategoryID: row.parentCategoryID
-                        )
-                    },
-                    onEditChild: { row in
-                        let budget = storedBudgets.first(where: { $0.id == row.id })
-                        budgetEditorTarget = PlanningBudgetEditorTarget(
-                            budget: budget,
-                            selectedMonth: selectedMonth,
-                            preferredParentCategoryID: nil
-                        )
-                    }
-                )
-            case .goals:
-                GoalsTabContent(
-                    summary: goalSummary,
-                    currencyCode: currencyCode,
-                    rows: goalRows,
-                    onAdd: {
-                        goalEditorTarget = PlanningGoalEditorTarget(goal: nil)
-                    },
-                    onEdit: { row in
-                        goalEditorTarget = PlanningGoalEditorTarget(
-                            goal: storedGoals.first(where: { $0.id == row.id })
-                        )
-                    }
-                )
-            case .due:
-                DueTabContent(
-                    selectedMode: $selectedDueMode,
-                    summary: dueSummary,
-                    currencyCode: currencyCode,
-                    creditCards: creditCardDueItems,
-                    bills: recurringBillDueItems,
-                    installments: installmentDueItems,
-                    referenceDate: .now,
-                    onAddCreditCard: {
-                        creditCardEditorTarget = PlanningCreditCardEditorTarget(
-                            wallet: nil,
-                            dueItem: nil,
-                            selectedMonth: selectedMonth
-                        )
-                    },
-                    onEditCreditCard: { item in
-                        creditCardEditorTarget = PlanningCreditCardEditorTarget(
-                            wallet: storedWallets.first(where: { $0.id == item.walletID }),
-                            dueItem: item,
-                            selectedMonth: selectedMonth
-                        )
-                    },
-                    onAddBill: {
-                        billEditorTarget = PlanningBillEditorTarget(
-                            plan: nil,
-                            dueItem: nil,
-                            selectedMonth: selectedMonth
-                        )
-                    },
-                    onEditBill: { item in
-                        billEditorTarget = PlanningBillEditorTarget(
-                            plan: storedBills.first(where: { $0.id == item.sourceID }),
-                            dueItem: item,
-                            selectedMonth: selectedMonth
-                        )
-                    },
-                    onAddInstallment: {
-                        installmentEditorTarget = PlanningInstallmentEditorTarget(
-                            plan: nil,
-                            dueItem: nil,
-                            selectedMonth: selectedMonth
-                        )
-                    },
-                    onEditInstallment: { item in
-                        installmentEditorTarget = PlanningInstallmentEditorTarget(
-                            plan: storedInstallments.first(where: { $0.id == item.sourceID }),
-                            dueItem: item,
-                            selectedMonth: selectedMonth
-                        )
-                    }
-                )
+            .navigationDestination(item: $destination) { route in
+                switch route {
+                case .profile:
+                    ManagementAccountView()
+                }
             }
         }
         .sheet(item: $budgetEditorTarget) { target in

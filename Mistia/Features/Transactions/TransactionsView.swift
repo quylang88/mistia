@@ -33,6 +33,12 @@ private enum TransactionSegment: String, CaseIterable, Hashable {
     }
 }
 
+private enum TransactionsNavigationDestination: String, Identifiable {
+    case profile
+
+    var id: String { rawValue }
+}
+
 struct TransactionsView: View {
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.modelContext) private var modelContext
@@ -50,6 +56,7 @@ struct TransactionsView: View {
     @State private var filterState = TransactionFilterState(timeScope: .allTime, statusScope: .all)
     @State private var searchText = ""
     @State private var isSearchPresented = false
+    @State private var destination: TransactionsNavigationDestination?
 
     private var activeTransactions: [LedgerTransaction] {
         visibleTransactions
@@ -228,28 +235,38 @@ struct TransactionsView: View {
     }
 
     var body: some View {
-        MistiaPinnedTopBarScaffold(
-            tone: .standard,
-            title: mistiaLocalized(vi: "Giao dịch", en: "Transactions", ja: "取引"),
-            leadingInitials: sessionStore.summary?.initials ?? "MI",
-            leadingAvatarURL: sessionStore.summary?.avatarURL,
-            trailingSystemImage: nil,
-            contentSpacing: 18,
-            contentBottomPadding: 150,
-            titleDisplayMode: .large,
-            pinnedHeader: {
-                VStack(alignment: .leading, spacing: 8) {
-                    FamilyContextChipBar()
-                        .padding(.horizontal, 18)
-                    unifiedFilterRow
+        NavigationStack {
+            MistiaPinnedTopBarScaffold(
+                tone: .standard,
+                title: mistiaLocalized(vi: "Giao dịch", en: "Transactions", ja: "取引"),
+                embedsInNavigationStack: false,
+                leadingInitials: sessionStore.summary?.initials ?? "MI",
+                leadingAvatarURL: sessionStore.summary?.avatarURL,
+                trailingSystemImage: nil,
+                onLeadingTap: { destination = .profile },
+                contentSpacing: 18,
+                contentBottomPadding: 150,
+                titleDisplayMode: .large,
+                pinnedHeader: {
+                    VStack(alignment: .leading, spacing: 8) {
+                        FamilyContextChipBar()
+                            .padding(.horizontal, 18)
+                        unifiedFilterRow
+                    }
+                        .zIndex(99)
                 }
-                    .zIndex(99)
+            ) {
+                if !openDebtPositions.isEmpty {
+                    outstandingDebtSection
+                }
+                transactionsContent
             }
-        ) {
-            if !openDebtPositions.isEmpty {
-                outstandingDebtSection
+            .navigationDestination(item: $destination) { route in
+                switch route {
+                case .profile:
+                    ManagementAccountView()
+                }
             }
-            transactionsContent
         }
         .searchable(
             text: $searchText,

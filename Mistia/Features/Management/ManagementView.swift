@@ -56,6 +56,13 @@ struct ManagementView: View {
         MistiaAccent.purple.color
     }
 
+    private let profileLeadingVisualWidth: CGFloat = 50
+    private let profileRowSpacing: CGFloat = 20
+
+    private var hasFamilyProfile: Bool {
+        familyContextStore.family != nil && !familyContextStore.members.isEmpty
+    }
+
     private var activeWallets: [LedgerWallet] {
         visibleWallets
             .filter { !$0.isArchived }
@@ -209,13 +216,14 @@ struct ManagementView: View {
                         Button {
                             destination = .authPlaceholder
                         } label: {
-                            HStack(spacing: 20) {
+                            HStack(spacing: profileRowSpacing) {
                                 MistiaAvatarBadge(
                                     initials: summary.initials,
                                     avatarURL: summary.avatarURL,
                                     size: 50,
                                     showsStatus: false
                                 )
+                                .frame(width: profileLeadingVisualWidth, height: 50)
 
                                 VStack(alignment: .leading, spacing: 5) {
                                     Text(summary.displayName)
@@ -243,8 +251,8 @@ struct ManagementView: View {
                             .padding(.trailing, 0)
 
                         Button(action: { destination = .family }) {
-                            HStack(spacing: 20) {
-                                if familyContextStore.family != nil && !familyContextStore.members.isEmpty {
+                            HStack(spacing: profileRowSpacing) {
+                                if hasFamilyProfile {
                                     HStack(spacing: -12) {
                                         ForEach(Array(familyContextStore.members.prefix(3).enumerated()), id: \.element.membershipID) { index, member in
                                             MistiaAvatarBadge(
@@ -262,7 +270,7 @@ struct ManagementView: View {
                                             .zIndex(Double(familyContextStore.members.count - index))
                                         }
                                     }
-                                    .frame(width: 44, height: 44, alignment: .leading)
+                                    .frame(width: profileLeadingVisualWidth, height: 44, alignment: .leading)
                                 } else {
                                     ZStack {
                                         Circle()
@@ -272,14 +280,22 @@ struct ManagementView: View {
                                             .font(.system(size: 16, weight: .semibold))
                                             .foregroundStyle(MistiaAccent.lightPurple.color)
                                     }
-                                    .frame(width: 44, height: 44)
+                                    .frame(width: profileLeadingVisualWidth, height: 44)
                                 }
 
-                                Text(mistiaLocalized(vi: "Gia đình", en: "Family", ja: "家族"))
-                                    .font(.system(size: 16.5, weight: .semibold, design: .rounded))
-                                    .foregroundStyle(.primary)
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(mistiaLocalized(vi: "Gia đình", en: "Family", ja: "家族"))
+                                        .font(.system(size: 16.5, weight: .semibold, design: .rounded))
+                                        .foregroundStyle(.primary)
+                                }
 
                                 Spacer(minLength: 12)
+
+                                if !hasFamilyProfile {
+                                    Text(mistiaLocalized(vi: "Chưa có", en: "None", ja: "未設定"))
+                                        .font(.system(size: 14, weight: .medium, design: .rounded))
+                                        .foregroundStyle(.secondary)
+                                }
 
                                 Image(systemName: "chevron.right")
                                     .font(.system(size: 12, weight: .bold))
