@@ -302,7 +302,7 @@ struct MistiaTopBar: View {
     }
 }
 
-private let mistiaHeaderCircleSize: CGFloat = 38
+private let mistiaHeaderCircleSize: CGFloat = 32
 
 private struct MistiaHeaderCircleButton<Content: View>: View {
     @Environment(\.colorScheme) private var colorScheme

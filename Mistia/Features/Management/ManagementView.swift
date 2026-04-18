@@ -266,11 +266,11 @@ struct ManagementView: View {
                                 } else {
                                     ZStack {
                                         Circle()
-                                            .fill(MistiaAccent.purple.color.opacity(0.18))
-                                        
+                                            .fill(MistiaAccent.lightPurple.color.opacity(0.24))
+
                                         Image(systemName: "person.3.fill")
                                             .font(.system(size: 16, weight: .semibold))
-                                            .foregroundStyle(MistiaAccent.purple.color)
+                                            .foregroundStyle(MistiaAccent.lightPurple.color)
                                     }
                                     .frame(width: 44, height: 44)
                                 }

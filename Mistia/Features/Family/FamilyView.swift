@@ -124,7 +124,7 @@ struct FamilyManagementView: View {
                 FamilySettingsRow(
                     title: mistiaLocalized(vi: "Tạo gia đình", en: "Create family", ja: "家族を作成"),
                     subtitle: mistiaLocalized(vi: "Bạn trở thành owner và mời thêm thành viên sau.", en: "You become the owner and invite others later.", ja: "作成者が owner になり、あとでメンバーを招待できます。"),
-                    icon: "plus.circle.fill",
+                    icon: "plus",
                     iconColor: .mint
                 ) {
                     activeSheet = .create
@@ -135,7 +135,7 @@ struct FamilyManagementView: View {
                 FamilySettingsRow(
                     title: mistiaLocalized(vi: "Nhập mã mời", en: "Join with code", ja: "招待コードで参加"),
                     subtitle: mistiaLocalized(vi: "Dùng mã hoặc link mời từ owner của gia đình.", en: "Use the invite code or link shared by the family owner.", ja: "owner が共有した招待コードまたはリンクを使います。"),
-                    icon: "number.circle.fill",
+                    icon: "number",
                     iconColor: .cyan
                 ) {
                     activeSheet = .join
@@ -1198,13 +1198,13 @@ private struct FamilySettingsRow: View {
             HStack(spacing: 14) {
                 // Apple-style icon tile
                 ZStack {
-                    RoundedRectangle(cornerRadius: 8, style: .continuous)
-                        .fill(iconColor.gradient)
+                    RoundedRectangle(cornerRadius: 10, style: .continuous)
+                        .fill(iconColor.opacity(0.15))
                     Image(systemName: icon)
-                        .font(.system(size: 15, weight: .semibold))
-                        .foregroundStyle(.white)
+                        .font(.system(size: 14, weight: .bold))
+                        .foregroundStyle(iconColor)
                 }
-                .frame(width: 30, height: 30)
+                .frame(width: 32, height: 32)
 
                 VStack(alignment: .leading, spacing: 3) {
                     Text(title)
