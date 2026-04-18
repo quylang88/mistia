@@ -369,9 +369,9 @@ struct MistiaHeaderCircleMenu<Label: View, MenuContent: View>: View {
                     MistiaCircleGlassButtonLabel {
                         label
                     }
+                    .glassEffect(nativeGlassStyle, in: .circle)
                 }
                 .menuIndicator(.hidden)
-                .buttonStyle(.glass(nativeGlassStyle))
                 .buttonBorderShape(.circle)
             } else {
                 Menu {

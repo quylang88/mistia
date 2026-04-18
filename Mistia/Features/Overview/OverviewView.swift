@@ -293,6 +293,7 @@ struct OverviewView: View {
 private struct OverviewHeroCard: View {
     @Environment(\.colorScheme) private var colorScheme
     @State private var selectedWeekStart: Date
+    @State private var chartDismissToken: Int = 0
 
     let snapshot: OverviewHeroSnapshot
     let isSheetPresented: Bool
@@ -350,6 +351,8 @@ private struct OverviewHeroCard: View {
 
                     Spacer(minLength: 8)
                 }
+                .contentShape(Rectangle())
+                .onTapGesture { dismissChartSelection() }
 
                 HStack(spacing: 14) {
                     SummaryMetricColumn(
@@ -367,6 +370,8 @@ private struct OverviewHeroCard: View {
                         accent: Color(hex: "#F45C7E")
                     )
                 }
+                .contentShape(Rectangle())
+                .onTapGesture { dismissChartSelection() }
 
                 VStack(alignment: .leading, spacing: 12) {
                     HStack {
@@ -380,6 +385,8 @@ private struct OverviewHeroCard: View {
                             .font(.system(size: 11, weight: .semibold, design: .rounded))
                             .foregroundStyle(.secondary)
                     }
+                    .contentShape(Rectangle())
+                    .onTapGesture { dismissChartSelection() }
 
                     TabView(selection: $selectedWeekStart) {
                         ForEach(snapshot.weekPages) { week in
@@ -388,6 +395,7 @@ private struct OverviewHeroCard: View {
                                 currencyCode: snapshot.currencyCode,
                                 insetSurface: insetSurface,
                                 isVisible: selectedWeekStart == week.weekStart && !isSheetPresented,
+                                dismissToken: chartDismissToken,
                                 onOpenExpenseDay: onOpenExpenseDay
                             )
                             .tag(week.weekStart)
@@ -404,6 +412,10 @@ private struct OverviewHeroCard: View {
             }
         }
     }
+
+    private func dismissChartSelection() {
+        chartDismissToken += 1
+    }
 }
 
 private struct OverviewWeekSpendingChart: View {
@@ -415,6 +427,7 @@ private struct OverviewWeekSpendingChart: View {
     let currencyCode: String
     let insetSurface: Color
     let isVisible: Bool
+    let dismissToken: Int
     let onOpenExpenseDay: (Date) -> Void
 
     private var chartMax: Double {
@@ -498,8 +511,13 @@ private struct OverviewWeekSpendingChart: View {
                                             .allowsHitTesting(point.valueMinor > 0)
                                             .onTapGesture {
                                                 guard point.valueMinor > 0 else { return }
-                                                withAnimation(.snappy) {
-                                                    selectedDate = point.date
+                                                
+                                                if let selectedDate, calendar.isDate(selectedDate, inSameDayAs: point.date) {
+                                                    clearSelection()
+                                                } else {
+                                                    withAnimation(.snappy) {
+                                                        selectedDate = point.date
+                                                    }
                                                 }
                                             }
                                             .onLongPressGesture(minimumDuration: 0.35) {
@@ -518,10 +536,10 @@ private struct OverviewWeekSpendingChart: View {
                                 let anchorX = plotFrame.origin.x + xPosition
                                 let barTopY = plotFrame.origin.y + (proxy.position(forY: Double(selectedPoint.valueMinor)) ?? 0)
                                 let clampedX = min(
-                                    max(anchorX, plotFrame.minX + 48),
-                                    plotFrame.maxX - 48
+                                    max(anchorX, plotFrame.minX + 36),
+                                    plotFrame.maxX - 36
                                 )
-                                let calloutY = max(plotFrame.minY + 18, barTopY - 22)
+                                let calloutY = max(plotFrame.minY + 16, barTopY - 20)
 
                                 OverviewChartSelectionCallout(
                                     point: selectedPoint,
@@ -555,6 +573,9 @@ private struct OverviewWeekSpendingChart: View {
             if !visible {
                 clearSelection(animated: false)
             }
+        }
+        .onChange(of: dismissToken) { _, _ in
+            clearSelection()
         }
     }
 
@@ -598,6 +619,11 @@ private struct OverviewWeekSpendingChart: View {
             return
         }
 
+        if let selectedDate, calendar.isDate(selectedDate, inSameDayAs: point.date) {
+            clearSelection()
+            return
+        }
+
         withAnimation(.snappy) {
             selectedDate = point.date
         }
@@ -620,26 +646,39 @@ private struct OverviewChartSelectionCallout: View {
     let point: OverviewChartPoint
     let currencyCode: String
 
-    private var tint: Color {
-        colorScheme == .dark ? .white.opacity(0.08) : .white.opacity(0.96)
+    private var calloutLabel: some View {
+        Text(point.valueMinor.formattedCurrency(code: currencyCode))
+            .font(.system(size: 14, weight: .bold, design: .rounded))
+            .foregroundStyle(.primary)
+            .lineLimit(1)
+            .minimumScaleFactor(0.7)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 7)
     }
 
     var body: some View {
-        MistiaGlassCard(
-            cornerRadius: 20,
-            tint: tint,
-            padding: 0
-        ) {
-            Text(point.valueMinor.formattedCurrency(code: currencyCode))
-                .font(.system(size: 15, weight: .bold, design: .rounded))
-                .foregroundStyle(.primary)
-                .lineLimit(1)
-                .minimumScaleFactor(0.7)
-                .padding(.horizontal, 14)
-                .padding(.vertical, 8)
+        Group {
+            if #available(iOS 26.0, *) {
+                calloutLabel
+                    .glassEffect(.regular.tint(colorScheme == .dark ? .white.opacity(0.10) : .white.opacity(0.85)), in: .capsule)
+            } else {
+                calloutLabel
+                    .background {
+                        Capsule(style: .continuous)
+                            .fill(.ultraThinMaterial)
+                            .overlay {
+                                Capsule(style: .continuous)
+                                    .strokeBorder(
+                                        colorScheme == .dark ? .white.opacity(0.18) : .black.opacity(0.06),
+                                        lineWidth: 0.5
+                                    )
+                            }
+                    }
+            }
         }
         .fixedSize()
-        .shadow(color: .black.opacity(colorScheme == .dark ? 0.18 : 0.10), radius: 18, y: 8)
+        .shadow(color: .black.opacity(colorScheme == .dark ? 0.22 : 0.12), radius: 16, y: 6)
+        .transition(.scale(scale: 0.8).combined(with: .opacity))
     }
 }
 

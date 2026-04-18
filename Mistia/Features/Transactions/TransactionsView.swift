@@ -58,7 +58,7 @@ struct TransactionsView: View {
     @State private var filterState = TransactionFilterState(timeScope: .allTime, statusScope: .all)
     @State private var searchText = ""
     @State private var isSearchPresented = false
-    @State private var shareItem: OverviewShareItem?
+    @State private var shareItem: TransactionShareItem?
     @State private var exportErrorMessage: String?
     @State private var destination: TransactionsNavigationDestination?
 
@@ -184,24 +184,78 @@ struct TransactionsView: View {
     }
 
     private var statementCreditCardAccounts: [OverviewCreditCardStatementAccountSnapshot] {
-        activeWallets.compactMap { $0.overviewCreditCardStatementAccountSnapshot(records: transactionRecords) }
+        let filteredWallets: [LedgerWallet]
+        if let walletID = filterState.walletID {
+            filteredWallets = activeWallets.filter { $0.id == walletID }
+        } else {
+            filteredWallets = activeWallets
+        }
+        return filteredWallets.compactMap { $0.overviewCreditCardStatementAccountSnapshot(records: transactionRecords) }
     }
 
-    private var monthlyStatement: OverviewMonthlyStatementSnapshot {
-        OverviewLogic.monthlyStatement(
+    private var statementPeriod: DateInterval {
+        let now = Date.now
+        switch filterState.timeScope {
+        case .today:
+            let start = calendar.startOfDay(for: now)
+            let end = calendar.date(byAdding: .day, value: 1, to: start) ?? now
+            return DateInterval(start: start, end: end)
+        case .yesterday:
+            let today = calendar.startOfDay(for: now)
+            let start = calendar.date(byAdding: .day, value: -1, to: today) ?? today
+            return DateInterval(start: start, end: today)
+        case .thisMonth:
+            let monthStart = PlanningLogic.startOfMonth(for: now, calendar: calendar)
+            let monthEnd = calendar.dateInterval(of: .month, for: now)?.end ?? now
+            return DateInterval(start: monthStart, end: min(now, monthEnd))
+        case .allTime:
+            // Default: max 3 recent calendar months
+            let currentMonthEnd = calendar.dateInterval(of: .month, for: now)?.end ?? now
+            let threeMonthsAgo = calendar.date(byAdding: .month, value: -2, to: PlanningLogic.startOfMonth(for: now, calendar: calendar)) ?? now
+            return DateInterval(start: threeMonthsAgo, end: min(now, currentMonthEnd))
+        }
+    }
+
+    private var statementFilteredTransactions: [OverviewTransactionSnapshot] {
+        overviewTransactions.filter { transaction in
+            if let walletID = filterState.walletID {
+                guard transaction.sourceWalletID == walletID || transaction.destinationWalletID == walletID else {
+                    return false
+                }
+            }
+
+            if let categoryID = filterState.categoryID {
+                guard transaction.categoryID == categoryID else {
+                    return false
+                }
+            }
+
+            if let kind = selectedSegment?.kind {
+                guard transaction.primaryKind == kind else {
+                    return false
+                }
+            }
+
+            return true
+        }
+    }
+
+    private var monthlyStatement: TransactionSummaryStatementSnapshot {
+        TransactionLogic.monthlyStatement(
             wallets: walletSnapshots,
             transactionRecords: transactionRecords,
-            transactions: overviewTransactions,
+            transactions: statementFilteredTransactions,
+            statementPeriod: statementPeriod,
             currencyCode: currencyCode,
             referenceDate: .now,
             calendar: calendar
         )
     }
 
-    private var creditCardStatement: OverviewCreditCardStatementSnapshot {
-        OverviewLogic.creditCardStatement(
+    private var creditCardStatement: TransactionCreditCardStatementSnapshot {
+        TransactionLogic.creditCardStatement(
             accounts: statementCreditCardAccounts,
-            transactions: overviewTransactions,
+            transactions: statementFilteredTransactions,
             referenceDate: .now,
             calendar: calendar
         )
@@ -319,7 +373,7 @@ struct TransactionsView: View {
             }
         }
         .sheet(item: $shareItem) { item in
-            OverviewShareSheet(url: item.url)
+            TransactionShareSheet(url: item.url)
         }
         .sheet(item: $editorTarget) { target in
             TransactionEditorSheet(target: target)
@@ -362,7 +416,7 @@ struct TransactionsView: View {
         }) {
             Button(action: { exportStatement(.monthlySummary) }) {
                 Label(
-                    mistiaLocalized(vi: "Sao kê tổng hợp tháng", en: "Monthly summary statement", ja: "月次サマリー明細"),
+                    mistiaLocalized(vi: "Sao kê tổng hợp", en: "Summary statement", ja: "サマリー明細"),
                     systemImage: "doc.text.image"
                 )
             }
@@ -377,19 +431,19 @@ struct TransactionsView: View {
         .accessibilityLabel(mistiaLocalized(vi: "Sao kê", en: "Statement", ja: "明細"))
     }
 
-    private func exportStatement(_ kind: OverviewStatementKind) {
+    private func exportStatement(_ kind: TransactionStatementKind) {
         do {
-            let document: OverviewStatementDocument
+            let document: TransactionStatementDocument
 
             switch kind {
             case .monthlySummary:
-                document = OverviewLogic.renderMonthlyStatement(monthlyStatement)
+                document = TransactionLogic.renderMonthlyStatement(monthlyStatement)
             case .creditCard:
-                document = OverviewLogic.renderCreditCardStatement(creditCardStatement)
+                document = TransactionLogic.renderCreditCardStatement(creditCardStatement)
             }
 
-            let url = try OverviewStatementExportSupport.write(document: document)
-            shareItem = OverviewShareItem(url: url)
+            let url = try TransactionStatementExportSupport.write(document: document)
+            shareItem = TransactionShareItem(url: url)
         } catch {
             exportErrorMessage = error.localizedDescription
         }

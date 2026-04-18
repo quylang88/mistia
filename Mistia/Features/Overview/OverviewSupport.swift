@@ -1,13 +1,13 @@
 import SwiftUI
 import UIKit
 
-struct OverviewShareItem: Identifiable {
+struct TransactionShareItem: Identifiable {
     let id = UUID()
     let url: URL
 }
 
-enum OverviewStatementExportSupport {
-    static func write(document: OverviewStatementDocument) throws -> URL {
+enum TransactionStatementExportSupport {
+    static func write(document: TransactionStatementDocument) throws -> URL {
         let directory = FileManager.default.temporaryDirectory
             .appendingPathComponent("mistia-statements", isDirectory: true)
 
@@ -28,7 +28,7 @@ enum OverviewStatementExportSupport {
     }
 }
 
-struct OverviewShareSheet: UIViewControllerRepresentable {
+struct TransactionShareSheet: UIViewControllerRepresentable {
     let url: URL
 
     func makeUIViewController(context: Context) -> UIActivityViewController {

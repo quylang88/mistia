@@ -3335,7 +3335,7 @@ struct ManagementBackupRestoreView: View {
     @State private var restoreMode: MistiaBackupRestoreMode = .merge
     @State private var isImporting = false
     @State private var isRestoring = false
-    @State private var shareItem: OverviewShareItem?
+    @State private var shareItem: TransactionShareItem?
     @State private var latestSummary: MistiaBackupValidationSummary?
     @State private var latestRestoreResult: MistiaBackupRestoreResult?
     @State private var alert: ManagementBackupAlert?
@@ -3485,7 +3485,7 @@ struct ManagementBackupRestoreView: View {
                         .descriptionTextStyle()
 
                         Button {
-                            shareItem = OverviewShareItem(url: safetySnapshotURL)
+                            shareItem = TransactionShareItem(url: safetySnapshotURL)
                         } label: {
                             Label(
                                 mistiaLocalized(vi: "Chia sẻ safety snapshot", en: "Share safety snapshot", ja: "安全スナップショットを共有"),
@@ -3503,7 +3503,7 @@ struct ManagementBackupRestoreView: View {
             }
         }
         .sheet(item: $shareItem) { item in
-            OverviewShareSheet(url: item.url)
+            TransactionShareSheet(url: item.url)
         }
         .fileImporter(
             isPresented: $isImporting,
@@ -3577,7 +3577,7 @@ struct ManagementBackupRestoreView: View {
             )
             latestSummary = exportResult.summary
             latestRestoreResult = nil
-            shareItem = OverviewShareItem(url: url)
+            shareItem = TransactionShareItem(url: url)
         } catch {
             alert = ManagementBackupAlert(
                 title: mistiaLocalized(vi: "Không thể tạo snapshot", en: "Couldn't create snapshot", ja: "スナップショットを作成できませんでした"),

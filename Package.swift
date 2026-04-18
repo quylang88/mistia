@@ -47,6 +47,7 @@ let package = Package(
                 "CoreLogic/OverviewLogic.swift",
                 "CoreLogic/PlanningLogic.swift",
                 "CoreLogic/TransactionLogic.swift",
+                "CoreLogic/TransactionLogic+Statement.swift",
                 "Persistence/CategoryHierarchySupport.swift",
                 "Persistence/ManagementModels.swift",
                 "Persistence/MistiaDataStack.swift",
