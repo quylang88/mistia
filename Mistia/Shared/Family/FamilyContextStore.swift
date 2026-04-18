@@ -22,12 +22,12 @@ final class FamilyContextStore {
     var isSwitchingContext = false
     var didBootstrap = false
 
-    @ObservationIgnored private let service: FamilyRemoteService
+    @ObservationIgnored private let service: any FamilyRemoteServicing
     @ObservationIgnored private let modelContainer: ModelContainer
 
     init(
         modelContainer: ModelContainer,
-        service: FamilyRemoteService
+        service: any FamilyRemoteServicing
     ) {
         self.modelContainer = modelContainer
         self.service = service
@@ -94,6 +94,14 @@ final class FamilyContextStore {
         currentRole == .owner
     }
 
+    var hasCachedRemoteState: Bool {
+        family != nil
+            || currentMembership != nil
+            || !members.isEmpty
+            || !invites.isEmpty
+            || !walletAccessGrants.isEmpty
+    }
+
     var operableTargetUserIDs: Set<UUID> {
         guard let currentUserID else { return [] }
 
@@ -138,13 +146,7 @@ final class FamilyContextStore {
             return
         }
 
-        let refreshedSession = try? await sessionStore.refreshedSession()
-        guard let session = refreshedSession ?? nil else {
-            lastErrorMessage = mistiaLocalized(
-                vi: "Không thể làm mới phiên gia đình.",
-                en: "Couldn't refresh the family session.",
-                ja: "家族セッションを更新できませんでした。"
-            )
+        guard let session = await prepareRemoteSession(using: sessionStore) else {
             return
         }
 
@@ -168,7 +170,7 @@ final class FamilyContextStore {
                 session: session
             )
         } catch {
-            lastErrorMessage = error.localizedDescription
+            lastErrorMessage = visibleErrorMessage(for: error, sessionStore: sessionStore)
         }
     }
 
@@ -180,6 +182,10 @@ final class FamilyContextStore {
         case .enterFamily:
             guard sessionStore.isAutoSyncEnabled else { return }
             guard !isRefreshingLatest else { return }
+            guard sessionStore.canPerformRemoteActions else {
+                lastErrorMessage = sessionStore.remoteUnavailableReason
+                return
+            }
 
             isRefreshingLatest = true
             defer { isRefreshingLatest = false }
@@ -201,8 +207,7 @@ final class FamilyContextStore {
     }
 
     func refreshAccessibleFinance(sessionStore: SessionStore) async {
-        let refreshedSession = try? await sessionStore.refreshedSession()
-        guard let session = refreshedSession ?? nil else { return }
+        guard let session = await prepareRemoteSession(using: sessionStore) else { return }
 
         do {
             try await refreshAccessibleFinance(
@@ -211,21 +216,20 @@ final class FamilyContextStore {
             )
             lastErrorMessage = nil
         } catch {
-            lastErrorMessage = error.localizedDescription
+            lastErrorMessage = visibleErrorMessage(for: error, sessionStore: sessionStore)
         }
     }
 
     func deleteFamily(sessionStore: SessionStore) async {
         guard let familyID = family?.id else { return }
-        let refreshedSession = try? await sessionStore.refreshedSession()
-        guard let session = refreshedSession ?? nil else { return }
+        guard let session = await prepareRemoteSession(using: sessionStore) else { return }
 
         do {
             try await service.deleteFamily(familyID: familyID, session: session)
             activeContext = .personalSelf
             await refresh(sessionStore: sessionStore)
         } catch {
-            lastErrorMessage = error.localizedDescription
+            lastErrorMessage = visibleErrorMessage(for: error, sessionStore: sessionStore)
         }
     }
 
@@ -233,8 +237,7 @@ final class FamilyContextStore {
         name: String,
         sessionStore: SessionStore
     ) async {
-        let refreshedSession = try? await sessionStore.refreshedSession()
-        guard let session = refreshedSession ?? nil else { return }
+        guard let session = await prepareRemoteSession(using: sessionStore) else { return }
 
         isLoading = true
         lastErrorMessage = nil
@@ -249,7 +252,7 @@ final class FamilyContextStore {
             }
             await refresh(sessionStore: sessionStore)
         } catch {
-            lastErrorMessage = error.localizedDescription
+            lastErrorMessage = visibleErrorMessage(for: error, sessionStore: sessionStore)
         }
     }
 
@@ -257,8 +260,7 @@ final class FamilyContextStore {
         inviteCode: String,
         sessionStore: SessionStore
     ) async {
-        let refreshedSession = try? await sessionStore.refreshedSession()
-        guard let session = refreshedSession ?? nil else { return }
+        guard let session = await prepareRemoteSession(using: sessionStore) else { return }
 
         isLoading = true
         defer { isLoading = false }
@@ -272,7 +274,7 @@ final class FamilyContextStore {
             }
             await refresh(sessionStore: sessionStore)
         } catch {
-            lastErrorMessage = error.localizedDescription
+            lastErrorMessage = visibleErrorMessage(for: error, sessionStore: sessionStore)
         }
     }
 
@@ -281,8 +283,7 @@ final class FamilyContextStore {
         sessionStore: SessionStore
     ) async -> FamilyInviteRecord? {
         guard let familyID = family?.id else { return nil }
-        let refreshedSession = try? await sessionStore.refreshedSession()
-        guard let session = refreshedSession ?? nil else { return nil }
+        guard let session = await prepareRemoteSession(using: sessionStore) else { return nil }
 
         do {
             let invite = try await service.createInvite(
@@ -294,7 +295,7 @@ final class FamilyContextStore {
             invites.insert(invite, at: 0)
             return invite
         } catch {
-            lastErrorMessage = error.localizedDescription
+            lastErrorMessage = visibleErrorMessage(for: error, sessionStore: sessionStore)
             return nil
         }
     }
@@ -306,8 +307,7 @@ final class FamilyContextStore {
         grantedTargetUserIDs: Set<UUID>? = nil,
         sessionStore: SessionStore
     ) async {
-        let refreshedSession = try? await sessionStore.refreshedSession()
-        guard let session = refreshedSession ?? nil else { return }
+        guard let session = await prepareRemoteSession(using: sessionStore) else { return }
 
         do {
             try await service.updateMember(
@@ -327,7 +327,7 @@ final class FamilyContextStore {
             }
             await refresh(sessionStore: sessionStore)
         } catch {
-            lastErrorMessage = error.localizedDescription
+            lastErrorMessage = visibleErrorMessage(for: error, sessionStore: sessionStore)
         }
     }
 
@@ -335,8 +335,7 @@ final class FamilyContextStore {
         _ member: FamilyMember,
         sessionStore: SessionStore
     ) async {
-        let refreshedSession = try? await sessionStore.refreshedSession()
-        guard let session = refreshedSession ?? nil else { return }
+        guard let session = await prepareRemoteSession(using: sessionStore) else { return }
 
         do {
             try await service.removeMember(
@@ -348,7 +347,7 @@ final class FamilyContextStore {
             }
             await refresh(sessionStore: sessionStore)
         } catch {
-            lastErrorMessage = error.localizedDescription
+            lastErrorMessage = visibleErrorMessage(for: error, sessionStore: sessionStore)
         }
     }
 
@@ -467,5 +466,29 @@ final class FamilyContextStore {
             protectedRecordIDs: protectedRecordIDs,
             in: modelContainer
         )
+    }
+
+    private func prepareRemoteSession(
+        using sessionStore: SessionStore
+    ) async -> SupabaseAuthSession? {
+        do {
+            let session = try await sessionStore.prepareRemoteSession()
+            lastErrorMessage = nil
+            return session
+        } catch {
+            lastErrorMessage = visibleErrorMessage(for: error, sessionStore: sessionStore)
+            return nil
+        }
+    }
+
+    private func visibleErrorMessage(
+        for error: Error,
+        sessionStore: SessionStore
+    ) -> String {
+        if let remoteUnavailableReason = sessionStore.remoteUnavailableReason {
+            return remoteUnavailableReason
+        }
+
+        return error.localizedDescription
     }
 }

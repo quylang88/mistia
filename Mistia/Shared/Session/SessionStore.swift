@@ -2,6 +2,17 @@ import Foundation
 import Observation
 import SwiftData
 
+enum SessionRemoteAccessError: LocalizedError {
+    case offline
+
+    var errorDescription: String? {
+        switch self {
+        case .offline:
+            return "Offline"
+        }
+    }
+}
+
 struct SessionSummary: Equatable {
     let userID: UUID
     let displayName: String
@@ -89,11 +100,15 @@ final class SessionStore {
     var authFieldErrors: [SessionAuthField: String] = [:]
     var activeAuthAction: SessionAuthAction?
 
-    @ObservationIgnored private let authService: SupabaseAuthService
-    @ObservationIgnored private let userProfileStore: SupabaseUserProfileStore
+    var networkStatus: SessionNetworkStatus = .checking
+    var remoteUnavailableReason: String?
+
+    @ObservationIgnored private let authService: any SessionAuthServicing
+    @ObservationIgnored private let userProfileStore: any UserProfileRemoteStoring
     @ObservationIgnored private let modelContainer: ModelContainer
     @ObservationIgnored private let syncCoordinator: SyncCoordinator
     @ObservationIgnored private let userDefaults: UserDefaults
+    @ObservationIgnored private let connectivityMonitor: SessionConnectivityMonitor?
     @ObservationIgnored private var currentSession: SupabaseAuthSession?
     @ObservationIgnored private var didBootstrap = false
     @ObservationIgnored private var liveSyncTask: Task<Void, Never>?
@@ -108,20 +123,28 @@ final class SessionStore {
     @ObservationIgnored private var postSyncRefreshHandler: (() async -> Void)?
     @ObservationIgnored private var queuedAutoSyncTask: Task<Void, Never>?
     @ObservationIgnored private var pendingQueuedAutoSync = false
+    @ObservationIgnored private var reconnectValidationTask: Task<Void, Never>?
 
     init(
         modelContainer: ModelContainer,
-        userDefaults: UserDefaults = .standard
+        userDefaults: UserDefaults = .standard,
+        authService: (any SessionAuthServicing)? = nil,
+        userProfileStore: (any UserProfileRemoteStoring)? = nil,
+        syncCoordinator providedSyncCoordinator: SyncCoordinator? = nil,
+        connectivityMonitor providedConnectivityMonitor: SessionConnectivityMonitor? = nil,
+        registerBackgroundRefresh: Bool = true
     ) {
         self.modelContainer = modelContainer
         self.userDefaults = userDefaults
-        authService = SupabaseAuthService()
-        userProfileStore = SupabaseUserProfileStore()
-        syncCoordinator = SyncCoordinator(modelContainer: modelContainer)
+        self.authService = authService ?? SupabaseAuthService()
+        self.userProfileStore = userProfileStore ?? SupabaseUserProfileStore()
+        self.syncCoordinator = providedSyncCoordinator ?? SyncCoordinator(modelContainer: modelContainer)
+        self.connectivityMonitor = providedConnectivityMonitor ?? SessionConnectivityMonitor()
         isAutoSyncEnabled = userDefaults.bool(forKey: MistiaAppStorageKey.syncAutoEnabled)
         requiresManualSyncAfterRestore = userDefaults.bool(
             forKey: MistiaAppStorageKey.syncManualReviewRequired
         )
+        networkStatus = self.connectivityMonitor?.currentStatus ?? .checking
 
         if MistiaSyncConfiguration.load() == nil {
             syncStatusTitle = mistiaLocalized(
@@ -149,7 +172,7 @@ final class SessionStore {
             syncStatusSystemImage = "person.crop.circle.badge.plus"
         }
 
-        syncCoordinator.onProgressUpdate = { [weak self] progress in
+        self.syncCoordinator.onProgressUpdate = { [weak self] progress in
             Task { @MainActor in
                 guard let self, self.shouldShowSyncProgress else { return }
                 self.syncProgress = progress
@@ -164,7 +187,16 @@ final class SessionStore {
             }
         }
 
-        MistiaSyncBackgroundScheduler.shared.registerIfNeeded(sessionStore: self)
+        if registerBackgroundRefresh {
+            MistiaSyncBackgroundScheduler.shared.registerIfNeeded(sessionStore: self)
+        }
+        self.connectivityMonitor?.onStatusChange = { [weak self] status in
+            guard let self else { return }
+            Task { @MainActor in
+                self.handleConnectivityChanged(status)
+            }
+        }
+        self.connectivityMonitor?.start()
     }
 
     var isConfigured: Bool {
@@ -183,8 +215,20 @@ final class SessionStore {
         currentSession != nil && isConfigured
     }
 
+    var isOfflineModeActive: Bool {
+        isSignedIn && networkStatus == .disconnected
+    }
+
+    var canPerformRemoteActions: Bool {
+        canManageSync && networkStatus != .disconnected
+    }
+
     var isReadyForAutomaticSync: Bool {
-        isAutoSyncEnabled && canManageSync && !requiresInitialSync && !requiresManualSyncAfterRestore
+        isAutoSyncEnabled
+            && canManageSync
+            && canPerformRemoteActions
+            && !requiresInitialSync
+            && !requiresManualSyncAfterRestore
     }
 
     var isManualSyncRequiredAfterRestore: Bool {
@@ -209,10 +253,7 @@ final class SessionStore {
         birthday: Date?,
         avatarJPEGData: Data? = nil
     ) async throws {
-        guard let activeSession = currentSession else { return }
-
-        let validSession = try await authService.refreshSessionIfNeeded(activeSession)
-        currentSession = validSession
+        let validSession = try await prepareRemoteSession()
 
         let baseSummary = SessionSummary(user: validSession.user)
         let trimmedName = displayName.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -339,7 +380,7 @@ final class SessionStore {
         syncStatusSystemImage = "key.horizontal"
 
         do {
-            guard let restoredSession = try await authService.restoreSession() else {
+            guard let restoredSession = try authService.loadPersistedSession() else {
                 if summary == nil {
                     applySignedOutState()
                 }
@@ -358,9 +399,9 @@ final class SessionStore {
                 applySignedOutState(preservingBanner: true)
                 authBanner = SessionAuthBanner(
                     title: mistiaLocalized(
-                        vi: "Chưa thể khôi phục tài khoản",
-                        en: "Couldn't restore account",
-                        ja: "アカウントを復元できませんでした"
+                        vi: "Chưa thể đọc phiên đã lưu",
+                        en: "Couldn't read the saved session",
+                        ja: "保存済みセッションを読み取れませんでした"
                     ),
                     message: friendlyErrorMessage(for: error),
                     style: .error
@@ -528,13 +569,12 @@ final class SessionStore {
     }
 
     func deleteAccountKeepingLocalData() async {
-        guard let activeSession = currentSession else { return }
-
         stopLiveSyncLoop()
         isWorking = true
         lastErrorMessage = nil
 
         do {
+            let activeSession = try await prepareRemoteSession()
             try await authService.deleteAccount(session: activeSession)
             do {
                 try MistiaSyncLocalStore.detachFromCloud(in: modelContainer)
@@ -724,25 +764,82 @@ final class SessionStore {
         )
     }
 
+    func handleConnectivityChanged(_ status: SessionNetworkStatus) {
+        guard networkStatus != status else { return }
+
+        let wasOffline = networkStatus == .disconnected
+        networkStatus = status
+
+        switch status {
+        case .checking:
+            break
+        case .disconnected:
+            reconnectValidationTask?.cancel()
+            reconnectValidationTask = nil
+            queuedAutoSyncTask?.cancel()
+            queuedAutoSyncTask = nil
+            if isSignedIn {
+                applySignedInOfflineState()
+            }
+            updateAutoSyncLoopState()
+        case .connected:
+            updateAutoSyncLoopState()
+            guard wasOffline, currentSession != nil else { return }
+
+            reconnectValidationTask?.cancel()
+            reconnectValidationTask = Task { [weak self] in
+                await self?.revalidateRemoteSessionAfterReconnect()
+            }
+        }
+    }
+
     func refreshedSession() async throws -> SupabaseAuthSession? {
-        guard let currentSession else { return nil }
-        let validSession = try await authService.refreshSessionIfNeeded(currentSession)
-        self.currentSession = validSession
-        return validSession
+        guard currentSession != nil else { return nil }
+        return try await prepareRemoteSession()
+    }
+
+    func prepareRemoteSession() async throws -> SupabaseAuthSession {
+        guard isConfigured else {
+            throw SupabaseServiceError.configurationMissing
+        }
+
+        guard let currentSession else {
+            throw SupabaseServiceError.missingSession
+        }
+
+        guard networkStatus != .disconnected else {
+            applySignedInOfflineState()
+            throw SessionRemoteAccessError.offline
+        }
+
+        do {
+            let validSession = try await authService.refreshSessionIfNeeded(currentSession)
+            self.currentSession = validSession
+            remoteUnavailableReason = nil
+            return validSession
+        } catch {
+            if invalidateSessionIfNeeded(for: error) {
+                throw error
+            }
+
+            if isSignedIn {
+                applyRemoteUnavailableState(error, restoringExistingSession: true)
+            }
+            throw error
+        }
     }
 
     func resolveSyncConflict(
         id: UUID,
         resolution: MistiaSyncConflictResolution
     ) async {
-        guard let session = currentSession, !isSyncInFlight else { return }
+        guard currentSession != nil, !isSyncInFlight else { return }
 
         isSyncInFlight = true
         defer { isSyncInFlight = false }
 
         do {
-            let validSession = try await authService.refreshSessionIfNeeded(session)
-            currentSession = validSession
+            let validSession = try await prepareRemoteSession()
             applySyncingState()
             try await syncCoordinator.resolveConflict(
                 id: id,
@@ -1070,86 +1167,256 @@ final class SessionStore {
         _ session: SupabaseAuthSession,
         restoringExistingSession: Bool
     ) async throws {
-        do {
-            let validSession = try await authService.refreshSessionIfNeeded(session)
+        try applyLocalAuthenticatedState(
+            session,
+            restoringExistingSession: restoringExistingSession
+        )
 
-            currentSession = validSession
-            let baseSummary = SessionSummary(user: validSession.user)
-            let storedProfile = try ensureStoredProfileExists(for: baseSummary)
-            try MistiaRecordOwnershipStore.ensureMissingOwnershipClaims(
-                for: baseSummary.userID,
-                in: modelContainer
-            )
-            let remoteProfile = try await syncProfileWithRemote(
-                session: validSession,
-                baseSummary: baseSummary,
-                storedProfile: storedProfile
-            )
-            await cacheRemoteAvatarIfNeeded(
-                for: storedProfile,
-                remoteAvatarURL: remoteProfile.avatarURL ?? baseSummary.avatarURL
-            )
-            summary = applyStoredProfile(
-                storedProfile,
-                to: baseSummary,
-                remoteAvatarURL: remoteProfile.avatarURL
-            )
-            try normalizeCategoryHierarchyIfNeeded()
-            lastSyncAt = storedProfile.lastSyncAt
-            lastErrorMessage = nil
-            authBanner = nil
-            authFieldErrors = [:]
-            authPendingEmail = nil
-            authPhase = .signIn
-            activeAuthAction = nil
-            requiresInitialSync = !hasCompletedCloudSyncHistory(storedProfile: storedProfile)
-            initialSyncPreview = nil
-            pendingInitialSyncChoice = nil
-
-            syncStatusTitle = mistiaLocalized(
-                vi: "Đã đăng nhập",
-                en: "Signed in",
-                ja: "ログイン済み"
-            )
-            syncStatusDetail = mistiaLocalized(
-                vi: restoringExistingSession
-                    ? "Phiên đã được khôi phục. Nhấn Sync ngay khi bạn muốn đồng bộ với cloud."
-                    : "Đăng nhập thành công. Nhấn Sync ngay để bắt đầu đồng bộ dữ liệu.",
-                en: restoringExistingSession
-                    ? "Your session has been restored. Tap Sync now when you want to sync with the cloud."
-                    : "Sign-in succeeded. Tap Sync now to start syncing your data.",
-                ja: restoringExistingSession
-                    ? "セッションを復元しました。クラウドと同期するには「今すぐ同期」を押してください。"
-                    : "ログインに成功しました。データ同期を始めるには「今すぐ同期」を押してください。"
-            )
-            syncStatusSystemImage = "checkmark.circle"
+        guard canPerformRemoteActions else {
+            applySignedInOfflineState()
             updateAutoSyncLoopState()
-        } catch {
-            requiresInitialSync = false
-            lastErrorMessage = friendlyErrorMessage(for: error)
-            summary = nil
-            currentSession = nil
-            applySignedOutState(preservingBanner: true)
+            return
+        }
 
-            authBanner = SessionAuthBanner(
-                title: mistiaLocalized(
-                    vi: "Không thể hoàn tất đăng nhập",
-                    en: "Couldn't finish sign-in",
-                    ja: "ログインを完了できませんでした"
-                ),
-                message: friendlyErrorMessage(for: error),
-                style: .error
+        do {
+            let validSession = try await prepareRemoteSession()
+            try await syncAuthenticatedStateWithRemote(
+                validSession,
+                restoringExistingSession: restoringExistingSession
             )
+        } catch {
+            if invalidateSessionIfNeeded(for: error) {
+                throw error
+            }
+
+            if isSignedIn {
+                applyRemoteUnavailableState(
+                    error,
+                    restoringExistingSession: restoringExistingSession
+                )
+                return
+            }
 
             throw error
         }
     }
 
+    private func applyLocalAuthenticatedState(
+        _ session: SupabaseAuthSession,
+        restoringExistingSession: Bool
+    ) throws {
+        currentSession = session
+
+        let baseSummary = SessionSummary(user: session.user)
+        let storedProfile = try ensureStoredProfileExists(for: baseSummary)
+        try MistiaRecordOwnershipStore.ensureMissingOwnershipClaims(
+            for: baseSummary.userID,
+            in: modelContainer
+        )
+
+        summary = applyStoredProfile(storedProfile, to: baseSummary)
+        lastSyncAt = storedProfile.lastSyncAt
+        lastErrorMessage = nil
+        authBanner = nil
+        authFieldErrors = [:]
+        authPendingEmail = nil
+        authPhase = .signIn
+        activeAuthAction = nil
+        requiresInitialSync = !hasCompletedCloudSyncHistory(storedProfile: storedProfile)
+        initialSyncPreview = nil
+        pendingInitialSyncChoice = nil
+
+        if restoringExistingSession && networkStatus != .disconnected {
+            syncStatusTitle = mistiaLocalized(
+                vi: "Đang khôi phục phiên",
+                en: "Restoring session",
+                ja: "セッションを復元中"
+            )
+            syncStatusDetail = mistiaLocalized(
+                vi: "Mistia đang kiểm tra tài khoản đã đăng nhập trước đó.",
+                en: "Mistia is checking for a previously signed-in account.",
+                ja: "以前のログイン状態を確認しています。"
+            )
+            syncStatusSystemImage = "key.horizontal"
+        }
+    }
+
+    private func syncAuthenticatedStateWithRemote(
+        _ session: SupabaseAuthSession,
+        restoringExistingSession: Bool
+    ) async throws {
+        currentSession = session
+        let baseSummary = SessionSummary(user: session.user)
+        let storedProfile = try ensureStoredProfileExists(for: baseSummary)
+        let remoteProfile = try await syncProfileWithRemote(
+            session: session,
+            baseSummary: baseSummary,
+            storedProfile: storedProfile
+        )
+        await cacheRemoteAvatarIfNeeded(
+            for: storedProfile,
+            remoteAvatarURL: remoteProfile.avatarURL ?? baseSummary.avatarURL
+        )
+        summary = applyStoredProfile(
+            storedProfile,
+            to: baseSummary,
+            remoteAvatarURL: remoteProfile.avatarURL
+        )
+        try normalizeCategoryHierarchyIfNeeded()
+        lastSyncAt = storedProfile.lastSyncAt
+        lastErrorMessage = nil
+        remoteUnavailableReason = nil
+        authBanner = nil
+        authFieldErrors = [:]
+        authPendingEmail = nil
+        authPhase = .signIn
+        activeAuthAction = nil
+        requiresInitialSync = !hasCompletedCloudSyncHistory(storedProfile: storedProfile)
+        initialSyncPreview = nil
+        pendingInitialSyncChoice = nil
+        syncStatusTitle = mistiaLocalized(
+            vi: "Đã đăng nhập",
+            en: "Signed in",
+            ja: "ログイン済み"
+        )
+        syncStatusDetail = mistiaLocalized(
+            vi: restoringExistingSession
+                ? "Phiên đã được khôi phục. Nhấn Sync ngay khi bạn muốn đồng bộ với cloud."
+                : "Đăng nhập thành công. Nhấn Sync ngay để bắt đầu đồng bộ dữ liệu.",
+            en: restoringExistingSession
+                ? "Your session has been restored. Tap Sync now when you want to sync with the cloud."
+                : "Sign-in succeeded. Tap Sync now to start syncing your data.",
+            ja: restoringExistingSession
+                ? "セッションを復元しました。クラウドと同期するには「今すぐ同期」を押してください。"
+                : "ログインに成功しました。データ同期を始めるには「今すぐ同期」を押してください。"
+        )
+        syncStatusSystemImage = "checkmark.circle"
+        updateAutoSyncLoopState()
+    }
+
+    private func applySignedInOfflineState() {
+        guard isSignedIn else { return }
+
+        remoteUnavailableReason = mistiaLocalized(
+            vi: "Bạn vẫn đang đăng nhập trên thiết bị này. Các tính năng cần mạng sẽ khả dụng lại khi kết nối trở lại.",
+            en: "You're still signed in on this device. Features that need the network will be available again when your connection returns.",
+            ja: "この端末ではログイン状態が維持されています。ネットワークが戻ると、通信が必要な機能も再び利用できます。"
+        )
+        lastErrorMessage = nil
+        syncStatusTitle = mistiaLocalized(
+            vi: "Đang đăng nhập ngoại tuyến",
+            en: "Signed in offline",
+            ja: "オフラインでログイン中"
+        )
+        syncStatusDetail = mistiaLocalized(
+            vi: "Không có kết nối mạng. Hãy kết nối lại để đồng bộ, chỉnh sửa hồ sơ hoặc quản lý gia đình.",
+            en: "No network connection. Reconnect to sync, edit your profile, or manage family features.",
+            ja: "ネットワーク接続がありません。同期、プロフィール編集、家族機能の管理を行うには再接続してください。"
+        )
+        syncStatusSystemImage = "wifi.slash"
+    }
+
+    private func applyRemoteUnavailableState(
+        _ error: Error,
+        restoringExistingSession: Bool
+    ) {
+        if error is SessionRemoteAccessError || error is URLError || networkStatus == .disconnected {
+            applySignedInOfflineState()
+            updateAutoSyncLoopState()
+            return
+        }
+
+        let message = friendlyErrorMessage(for: error)
+        lastErrorMessage = message
+        remoteUnavailableReason = message
+        syncStatusTitle = restoringExistingSession
+            ? mistiaLocalized(
+                vi: "Phiên đã được giữ lại trên máy",
+                en: "The session was kept on this device",
+                ja: "この端末ではセッションを保持しています"
+            )
+            : mistiaLocalized(
+                vi: "Đã đăng nhập trên máy này",
+                en: "Signed in on this device",
+                ja: "この端末ではログイン済みです"
+            )
+        syncStatusDetail = message
+        syncStatusSystemImage = syncErrorSystemImage(for: error)
+        updateAutoSyncLoopState()
+    }
+
+    private func revalidateRemoteSessionAfterReconnect() async {
+        guard currentSession != nil else { return }
+
+        do {
+            let validSession = try await prepareRemoteSession()
+            try await syncAuthenticatedStateWithRemote(
+                validSession,
+                restoringExistingSession: true
+            )
+        } catch {
+            guard isSignedIn else { return }
+            applyRemoteUnavailableState(error, restoringExistingSession: true)
+        }
+    }
+
+    private func invalidateSessionIfNeeded(for error: Error) -> Bool {
+        guard isSessionInvalidationError(error) else { return false }
+
+        try? authService.clearPersistedSession()
+        clearSessionRuntimeState()
+        applySignedOutState(preservingBanner: true)
+        authBanner = SessionAuthBanner(
+            title: mistiaLocalized(
+                vi: "Phiên đã hết hạn sau khi kết nối lại",
+                en: "Session expired after reconnect",
+                ja: "再接続後にセッションの期限が切れました"
+            ),
+            message: friendlyErrorMessage(for: error),
+            style: .error
+        )
+        return true
+    }
+
+    private func isSessionInvalidationError(_ error: Error) -> Bool {
+        if let serviceError = error as? SupabaseServiceError {
+            switch serviceError {
+            case .missingRefreshToken:
+                return true
+            case .serverMessage(let message):
+                let normalized = message.lowercased()
+                return normalized.contains("401")
+                    || normalized.contains("unauthorized")
+                    || normalized.contains("jwt")
+                    || normalized.contains("refresh token")
+            case .configurationMissing,
+                    .invalidURL,
+                    .invalidResponse,
+                    .missingSession,
+                    .oauthCancelled,
+                    .googleClientIDMissing,
+                    .googleServerClientIDMissing,
+                    .googleCallbackSchemeMissing,
+                    .googlePresentationContextMissing,
+                    .googleTokensMissing:
+                return false
+            }
+        }
+
+        let message = errorMessage(for: error)
+        return message.contains("401")
+            || message.contains("unauthorized")
+            || message.contains("jwt")
+    }
+
     private func applyConfigurationMissingState() {
         stopLiveSyncLoop()
+        reconnectValidationTask?.cancel()
+        reconnectValidationTask = nil
         MistiaSyncBackgroundScheduler.shared.cancelPendingRefresh()
         summary = nil
         currentSession = nil
+        remoteUnavailableReason = nil
         requiresInitialSync = false
         initialSyncPreview = nil
         pendingInitialSyncChoice = nil
@@ -1173,9 +1440,12 @@ final class SessionStore {
 
     private func applySignedOutState(preservingBanner: Bool = false) {
         stopLiveSyncLoop()
+        reconnectValidationTask?.cancel()
+        reconnectValidationTask = nil
         MistiaSyncBackgroundScheduler.shared.cancelPendingRefresh()
         summary = nil
         currentSession = nil
+        remoteUnavailableReason = nil
         requiresInitialSync = false
         initialSyncPreview = nil
         pendingInitialSyncChoice = nil
@@ -1221,7 +1491,7 @@ final class SessionStore {
     }
 
     private func isInfrastructureAuthError(_ error: Error) -> Bool {
-        if error is URLError {
+        if error is URLError || error is SessionRemoteAccessError {
             return true
         }
 
@@ -1292,7 +1562,7 @@ final class SessionStore {
     }
 
     private func infrastructureErrorMessage(for error: Error) -> String {
-        if error is URLError {
+        if error is URLError || error is SessionRemoteAccessError {
             return mistiaLocalized(
                 vi: "Mistia chưa thể kết nối đến dịch vụ đồng bộ. Kiểm tra mạng rồi thử lại nhé.",
                 en: "Mistia can't reach the sync service right now. Check your connection and try again.",
@@ -1411,7 +1681,7 @@ final class SessionStore {
     }
 
     private func syncErrorTitle(for error: Error) -> String {
-        if error is URLError {
+        if error is URLError || error is SessionRemoteAccessError {
             return mistiaLocalized(
                 vi: "Đồng bộ đang chờ mạng",
                 en: "Sync is waiting for the network",
@@ -1461,7 +1731,7 @@ final class SessionStore {
     }
 
     private func syncErrorSystemImage(for error: Error) -> String {
-        if error is URLError {
+        if error is URLError || error is SessionRemoteAccessError {
             return "wifi.exclamationmark"
         }
 
@@ -1637,10 +1907,7 @@ final class SessionStore {
         }
 
         do {
-            guard let activeSession = currentSession else { return false }
-            let validSession = try await authService.refreshSessionIfNeeded(activeSession)
-            currentSession = validSession
-
+            let validSession = try await prepareRemoteSession()
             try normalizeCategoryHierarchyIfNeeded()
             let result = try await syncCoordinator.sync(session: validSession)
             lastSyncAt = .now
@@ -1722,10 +1989,7 @@ final class SessionStore {
         }
 
         do {
-            guard let activeSession = currentSession else { return false }
-            let validSession = try await authService.refreshSessionIfNeeded(activeSession)
-            currentSession = validSession
-
+            let validSession = try await prepareRemoteSession()
             try normalizeCategoryHierarchyIfNeeded()
             let result: MistiaSyncResult
 
@@ -2076,10 +2340,13 @@ final class SessionStore {
 
     private func clearSessionRuntimeState() {
         cancelQueuedAutoSync()
+        reconnectValidationTask?.cancel()
+        reconnectValidationTask = nil
         currentSession = nil
         summary = nil
         lastSyncAt = nil
         lastErrorMessage = nil
+        remoteUnavailableReason = nil
         initialSyncPreview = nil
         possibleDuplicateCount = 0
         pendingInitialSyncChoice = nil

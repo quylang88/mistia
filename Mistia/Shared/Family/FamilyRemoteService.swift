@@ -1,5 +1,48 @@
 import Foundation
 
+@MainActor
+protocol FamilyRemoteServicing {
+    func fetchState(session: SupabaseAuthSession) async throws -> FamilyStateSnapshot
+    func createFamily(
+        name: String,
+        session: SupabaseAuthSession
+    ) async throws -> FamilyStateSnapshot
+    func joinInvite(
+        code: String,
+        session: SupabaseAuthSession
+    ) async throws -> FamilyStateSnapshot
+    func createInvite(
+        familyID: UUID,
+        defaultRole: FamilyRole,
+        expiresAt: Date,
+        session: SupabaseAuthSession
+    ) async throws -> FamilyInviteRecord
+    func updateMember(
+        membershipID: UUID,
+        role: FamilyRole,
+        policy: FamilyPermissionPolicy,
+        session: SupabaseAuthSession
+    ) async throws
+    func syncWalletAccessGrants(
+        familyID: UUID,
+        granteeUserID: UUID,
+        targetUserIDs: Set<UUID>,
+        session: SupabaseAuthSession
+    ) async throws
+    func removeMember(
+        membershipID: UUID,
+        session: SupabaseAuthSession
+    ) async throws
+    func deleteFamily(
+        familyID: UUID,
+        session: SupabaseAuthSession
+    ) async throws
+    func fetchAccessibleFinanceSnapshot(
+        userIDs: [UUID],
+        session: SupabaseAuthSession
+    ) async throws -> MistiaRemoteSnapshot
+}
+
 struct FamilyGroupRecord: Codable, Identifiable, Equatable {
     let id: UUID
     var name: String
@@ -165,7 +208,7 @@ struct FamilyStateSnapshot: Equatable {
 }
 
 @MainActor
-struct FamilyRemoteService {
+struct FamilyRemoteService: FamilyRemoteServicing {
     private let configurationProvider: () -> MistiaSyncConfiguration?
     private let decoder = JSONDecoder.mistiaRemoteAPIDecoder
     private let encoder = JSONEncoder.mistiaRemoteAPIEncoder

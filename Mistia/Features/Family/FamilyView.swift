@@ -49,11 +49,27 @@ struct FamilyManagementView: View {
             return nil
         }
 
+        if lastErrorMessage == sessionStore.remoteUnavailableReason {
+            return nil
+        }
+
         if familyContextStore.family == nil && shouldSuppressNoFamilyPermissionError(lastErrorMessage) {
             return nil
         }
 
         return lastErrorMessage
+    }
+
+    private var remoteActionsDisabled: Bool {
+        !sessionStore.canPerformRemoteActions
+    }
+
+    private var remoteActionsDisabledReason: String? {
+        remoteActionsDisabled ? sessionStore.remoteUnavailableReason : nil
+    }
+
+    private var showsOfflineEmptyState: Bool {
+        remoteActionsDisabled && familyContextStore.family == nil && !familyContextStore.hasCachedRemoteState
     }
 
     var body: some View {
@@ -63,7 +79,7 @@ struct FamilyManagementView: View {
             embedsInNavigationStack: false,
             showsLeadingAvatar: false,
             leadingSystemImage: "chevron.left",
-            trailingSystemImage: familyContextStore.family == nil ? nil : "person.badge.plus",
+            trailingSystemImage: familyContextStore.family == nil || remoteActionsDisabled ? nil : "person.badge.plus",
             hidesSystemBackButton: true,
             onLeadingTap: { dismiss() },
             onTrailingTap: {
@@ -71,13 +87,19 @@ struct FamilyManagementView: View {
             },
             contentSpacing: 22
         ) {
+            if let remoteUnavailableReason = sessionStore.remoteUnavailableReason {
+                FamilyAlertBanner(message: remoteUnavailableReason)
+            }
+
             if let visibleErrorMessage {
                 FamilyAlertBanner(message: visibleErrorMessage)
             }
 
             familyHeaderSection
 
-            if familyContextStore.family == nil {
+            if showsOfflineEmptyState {
+                offlineEmptyStateContent
+            } else if familyContextStore.family == nil {
                 emptyStateContent
             } else {
                 familyHubContent
@@ -123,9 +145,10 @@ struct FamilyManagementView: View {
             VStack(spacing: 0) {
                 FamilySettingsRow(
                     title: mistiaLocalized(vi: "Tạo gia đình", en: "Create family", ja: "家族を作成"),
-                    subtitle: mistiaLocalized(vi: "Bạn trở thành owner và mời thêm thành viên sau.", en: "You become the owner and invite others later.", ja: "作成者が owner になり、あとでメンバーを招待できます。"),
+                    subtitle: remoteActionsDisabledReason ?? mistiaLocalized(vi: "Bạn trở thành owner và mời thêm thành viên sau.", en: "You become the owner and invite others later.", ja: "作成者が owner になり、あとでメンバーを招待できます。"),
                     icon: "plus",
-                    iconColor: .mint
+                    iconColor: .mint,
+                    isDisabled: remoteActionsDisabled
                 ) {
                     activeSheet = .create
                 }
@@ -134,13 +157,41 @@ struct FamilyManagementView: View {
 
                 FamilySettingsRow(
                     title: mistiaLocalized(vi: "Nhập mã mời", en: "Join with code", ja: "招待コードで参加"),
-                    subtitle: mistiaLocalized(vi: "Dùng mã hoặc link mời từ owner của gia đình.", en: "Use the invite code or link shared by the family owner.", ja: "owner が共有した招待コードまたはリンクを使います。"),
+                    subtitle: remoteActionsDisabledReason ?? mistiaLocalized(vi: "Dùng mã hoặc link mời từ owner của gia đình.", en: "Use the invite code or link shared by the family owner.", ja: "owner が共有した招待コードまたはリンクを使います。"),
                     icon: "number",
-                    iconColor: .cyan
+                    iconColor: .cyan,
+                    isDisabled: remoteActionsDisabled
                 ) {
                     activeSheet = .join
                 }
             }
+        }
+    }
+
+    private var offlineEmptyStateContent: some View {
+        MistiaGlassCard(cornerRadius: 14, tint: cardTint, padding: 20) {
+            VStack(alignment: .leading, spacing: 12) {
+                Label(
+                    mistiaLocalized(
+                        vi: "Gia đình đang chờ kết nối",
+                        en: "Family is waiting for the connection",
+                        ja: "家族機能は接続待ちです"
+                    ),
+                    systemImage: "wifi.slash"
+                )
+                .font(.system(size: 17, weight: .semibold, design: .rounded))
+                .foregroundStyle(.primary)
+
+                Text(sessionStore.remoteUnavailableReason ?? mistiaLocalized(
+                    vi: "Kết nối lại mạng để tạo gia đình mới, nhập mã mời hoặc đồng bộ lại dữ liệu gia đình.",
+                    en: "Reconnect to create a family, join with an invite code, or sync family data again.",
+                    ja: "ネットワークに再接続すると、家族の作成、招待コードでの参加、家族データの再同期が行えます。"
+                ))
+                .font(.system(size: 14.5, weight: .medium, design: .rounded))
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
     }
 
@@ -266,7 +317,8 @@ struct FamilyManagementView: View {
                     title: mistiaLocalized(vi: "Tổng quan gia đình", en: "Family overview", ja: "家族の概要"),
                     subtitle: mistiaLocalized(vi: "Tài sản, công nợ, sắp đến hạn và top chi tiêu của cả nhà.", en: "Assets, debts, upcoming due items, and top spending across the household.", ja: "家計全体の資産・負債・支払予定・支出の要点を確認します。"),
                     icon: "chart.bar.xaxis",
-                    iconColor: .indigo
+                    iconColor: .indigo,
+                    isDisabled: false
                 ) {
                     destination = .overview
                 }
@@ -1189,6 +1241,7 @@ private struct FamilySettingsRow: View {
     let subtitle: String
     let icon: String
     let iconColor: Color
+    let isDisabled: Bool
     let action: () -> Void
 
     @Environment(\.colorScheme) private var colorScheme
@@ -1228,6 +1281,8 @@ private struct FamilySettingsRow: View {
             .padding(.vertical, 12)
         }
         .buttonStyle(MistiaPressableButtonStyle(cornerRadius: 14))
+        .disabled(isDisabled)
+        .opacity(isDisabled ? 0.55 : 1)
     }
 }
 
@@ -1703,6 +1758,10 @@ private struct FamilyMemberProfileScreen: View {
         familyContextStore.currentRole == .owner
     }
 
+    private var remoteActionsDisabled: Bool {
+        !sessionStore.canPerformRemoteActions
+    }
+
     var body: some View {
         MistiaPinnedTopBarScaffold(
             tone: .standard,
@@ -1733,6 +1792,10 @@ private struct FamilyMemberProfileScreen: View {
             .padding(.top, 10)
             .padding(.bottom, 10)
 
+            if let remoteUnavailableReason = sessionStore.remoteUnavailableReason {
+                FamilyAlertBanner(message: remoteUnavailableReason)
+            }
+
             if !isMe {
                 // Roles & Permissions Card (Moved to First position)
                 if isOwner && member.role != .owner {
@@ -1761,6 +1824,8 @@ private struct FamilyMemberProfileScreen: View {
                                 .padding(.vertical, 16)
                             }
                             .buttonStyle(MistiaPressableButtonStyle(cornerRadius: 18))
+                            .disabled(remoteActionsDisabled)
+                            .opacity(remoteActionsDisabled ? 0.55 : 1)
                         }
 
                         Text(mistiaLocalized(
@@ -1852,6 +1917,8 @@ private struct FamilyMemberProfileScreen: View {
                             .padding(.vertical, 16)
                         }
                         .buttonStyle(MistiaPressableButtonStyle(cornerRadius: 18))
+                        .disabled(remoteActionsDisabled)
+                        .opacity(remoteActionsDisabled ? 0.55 : 1)
                     }
 
                     Text(
@@ -1985,11 +2052,20 @@ private struct FamilyCreateSheet: View {
     var body: some View {
         NavigationStack {
             Form {
+                if let remoteUnavailableReason = sessionStore.remoteUnavailableReason {
+                    Section {
+                        Text(remoteUnavailableReason)
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+
                 Section(mistiaLocalized(vi: "Gia đình mới", en: "New family", ja: "新しい家族")) {
                     TextField(mistiaLocalized(vi: "Tên gia đình", en: "Family name", ja: "家族名"), text: $familyName)
                         .focused($focusedField, equals: .familyName)
                 }
             }
+            .disabled(!sessionStore.canPerformRemoteActions)
             .dismissKeyboardOnTap()
             .navigationTitle(mistiaLocalized(vi: "Tạo gia đình", en: "Create family", ja: "家族を作成"))
             .navigationBarTitleDisplayMode(.inline)
@@ -2019,7 +2095,10 @@ private struct FamilyCreateSheet: View {
                     .buttonStyle(.glassProminent)
                     .buttonBorderShape(.circle)
                     .tint(MistiaAccent.purple.color)
-                    .disabled(familyName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                    .disabled(
+                        familyName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                            || !sessionStore.canPerformRemoteActions
+                    )
                 }
             }
         }
@@ -2044,6 +2123,14 @@ private struct FamilyJoinSheet: View {
     var body: some View {
         NavigationStack {
             Form {
+                if let remoteUnavailableReason = sessionStore.remoteUnavailableReason {
+                    Section {
+                        Text(remoteUnavailableReason)
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+
                 Section(mistiaLocalized(vi: "Mã mời", en: "Invite code", ja: "招待コード")) {
                     TextField("ABCD1234", text: $inviteCode)
                         .focused($focusedField, equals: .inviteCode)
@@ -2051,6 +2138,7 @@ private struct FamilyJoinSheet: View {
                         .autocorrectionDisabled()
                 }
             }
+            .disabled(!sessionStore.canPerformRemoteActions)
             .dismissKeyboardOnTap()
             .navigationTitle(mistiaLocalized(vi: "Tham gia gia đình", en: "Join family", ja: "家族に参加"))
             .navigationBarTitleDisplayMode(.inline)
@@ -2080,7 +2168,10 @@ private struct FamilyJoinSheet: View {
                     .buttonStyle(.glassProminent)
                     .buttonBorderShape(.circle)
                     .tint(MistiaAccent.purple.color)
-                    .disabled(inviteCode.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                    .disabled(
+                        inviteCode.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                            || !sessionStore.canPerformRemoteActions
+                    )
                 }
             }
         }
@@ -2105,6 +2196,14 @@ private struct FamilyInviteSheet: View {
     var body: some View {
         NavigationStack {
             Form {
+                if let remoteUnavailableReason = sessionStore.remoteUnavailableReason {
+                    Section {
+                        Text(remoteUnavailableReason)
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+
                 Section(mistiaLocalized(vi: "Role mặc định", en: "Default role", ja: "デフォルトの役割")) {
                     Picker(mistiaLocalized(vi: "Role", en: "Role", ja: "役割"), selection: $selectedRole) {
                         ForEach([FamilyRole.viewer, .editor, .kid], id: \.self) { role in
@@ -2122,6 +2221,7 @@ private struct FamilyInviteSheet: View {
                     }
                 }
             }
+            .disabled(!sessionStore.canPerformRemoteActions)
             .dismissKeyboardOnTap()
             .navigationTitle(mistiaLocalized(vi: "Mời thành viên", en: "Invite member", ja: "メンバーを招待"))
             .navigationBarTitleDisplayMode(.inline)
@@ -2141,6 +2241,7 @@ private struct FamilyInviteSheet: View {
                             )
                         }
                     }
+                    .disabled(!sessionStore.canPerformRemoteActions)
                 }
             }
         }
@@ -2170,6 +2271,14 @@ private struct FamilyPermissionsSheet: View {
     var body: some View {
         NavigationStack {
             Form {
+                if let remoteUnavailableReason = sessionStore.remoteUnavailableReason {
+                    Section {
+                        Text(remoteUnavailableReason)
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+
                 Section(mistiaLocalized(vi: "Role", en: "Role", ja: "役割")) {
                     Picker(mistiaLocalized(vi: "Role", en: "Role", ja: "役割"), selection: $role) {
                         ForEach([FamilyRole.viewer, .editor, .kid], id: \.self) { role in
@@ -2215,6 +2324,7 @@ private struct FamilyPermissionsSheet: View {
                     }
                 }
             }
+            .disabled(!sessionStore.canPerformRemoteActions)
             .dismissKeyboardOnTap()
             .navigationTitle(mistiaLocalized(vi: "Role & quyền", en: "Role & permissions", ja: "役割と権限"))
             .navigationBarTitleDisplayMode(.inline)
@@ -2238,6 +2348,7 @@ private struct FamilyPermissionsSheet: View {
                             dismiss()
                         }
                     }
+                    .disabled(!sessionStore.canPerformRemoteActions)
                 }
             }
         }

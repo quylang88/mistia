@@ -58,6 +58,18 @@ private struct ManagementAutoSyncDetailView: View {
             onLeadingTap: { dismiss() },
             contentSpacing: 18
         ) {
+            if let remoteUnavailableReason = sessionStore.remoteUnavailableReason {
+                ManagementInlineMessageCard(
+                    title: mistiaLocalized(
+                        vi: "Đồng bộ cần mạng",
+                        en: "Sync needs the network",
+                        ja: "同期にはネットワークが必要です"
+                    ),
+                    message: remoteUnavailableReason,
+                    accent: MistiaAccent.sky.color
+                )
+            }
+
             ManagementProfileListCard(tint: cardTint) {
                 HStack(spacing: 12) {
                     Text(mistiaLocalized(vi: "Tự động đồng bộ", en: "Auto sync", ja: "自動同期"))
@@ -72,7 +84,7 @@ private struct ManagementAutoSyncDetailView: View {
                     ))
                     .labelsHidden()
                     .tint(accent)
-                    .disabled(!sessionStore.canManageSync)
+                    .disabled(!sessionStore.canPerformRemoteActions)
                 }
                 .padding(.horizontal, 16)
                 .padding(.vertical, 15)
@@ -404,6 +416,18 @@ struct ManagementAccountView: View {
         VStack(spacing: 18) {
             profileHeaderCard(summary: summary)
 
+            if let remoteUnavailableReason = sessionStore.remoteUnavailableReason {
+                ManagementInlineMessageCard(
+                    title: mistiaLocalized(
+                        vi: "Bạn vẫn đang đăng nhập trên thiết bị này",
+                        en: "You're still signed in on this device",
+                        ja: "この端末ではログイン状態が維持されています"
+                    ),
+                    message: remoteUnavailableReason,
+                    accent: MistiaAccent.sky.color
+                )
+            }
+
             ManagementProfileListCard(tint: secondaryBackground) {
                 VStack(spacing: 0) {
                     ManagementProfileNavigationRow(
@@ -454,8 +478,9 @@ struct ManagementAccountView: View {
                     title: mistiaLocalized(vi: "Gia đình", en: "Family", ja: "家族"),
                     icon: "person.3.fill",
                     accent: .lightPurple,
-                    subtitle: nil,
-                    value: familyContextStore.family?.name ?? mistiaLocalized(vi: "Chưa có", en: "None", ja: "未設定")
+                    subtitle: remoteActionDisabledReason,
+                    value: familyContextStore.family?.name ?? mistiaLocalized(vi: "Chưa có", en: "None", ja: "未設定"),
+                    isDisabled: !sessionStore.canPerformRemoteActions
                 ) {
                     destination = .family
                 }
@@ -470,7 +495,7 @@ struct ManagementAccountView: View {
 
             ManagementProfileCenteredDestructiveButton(
                 title: mistiaLocalized(vi: "Xóa tài khoản", en: "Delete account", ja: "アカウントを削除"),
-                isDisabled: sessionStore.isWorking
+                isDisabled: sessionStore.isWorking || !sessionStore.canPerformRemoteActions
             ) {
                 destructiveAction = .deleteAccount
             }
@@ -503,6 +528,8 @@ struct ManagementAccountView: View {
                 .buttonStyle(.plain)
                 .accessibilityLabel(mistiaLocalized(vi: "Sửa hồ sơ", en: "Edit profile", ja: "プロフィールを編集"))
                 .offset(x: 2, y: 2)
+                .disabled(!sessionStore.canPerformRemoteActions)
+                .opacity(sessionStore.canPerformRemoteActions ? 1 : 0.55)
             }
 
             Text(summary.displayName)
@@ -519,7 +546,9 @@ struct ManagementAccountView: View {
 
             ManagementProfileSyncBadge(
                 title: lastSyncBadgeTitle,
-                accent: sessionStore.lastSyncAt == nil ? .slate : .mint
+                accent: sessionStore.isOfflineModeActive
+                    ? .sky
+                    : (sessionStore.lastSyncAt == nil ? .slate : .mint)
             )
         }
         .frame(maxWidth: .infinity)
@@ -528,6 +557,14 @@ struct ManagementAccountView: View {
     }
 
     private var lastSyncBadgeTitle: String {
+        if sessionStore.isOfflineModeActive {
+            return mistiaLocalized(
+                vi: "Đang đăng nhập ngoại tuyến",
+                en: "Signed in offline",
+                ja: "オフラインでログイン中"
+            )
+        }
+
         guard let lastSyncAt = sessionStore.lastSyncAt else {
             return mistiaLocalized(
                 vi: "Chưa đồng bộ",
@@ -547,6 +584,10 @@ struct ManagementAccountView: View {
         let issueCount = activeConflicts.count + sessionStore.possibleDuplicateCount
         guard issueCount > 0 else { return nil }
         return "\(issueCount)"
+    }
+
+    private var remoteActionDisabledReason: String? {
+        sessionStore.canPerformRemoteActions ? nil : sessionStore.remoteUnavailableReason
     }
 
     private var syncSettingsValue: String {
@@ -1435,6 +1476,7 @@ private struct ManagementProfileNavigationRow: View {
     let subtitle: String?
     var value: String? = nil
     var badge: String? = nil
+    var isDisabled: Bool = false
     let action: () -> Void
 
     var body: some View {
@@ -1483,6 +1525,8 @@ private struct ManagementProfileNavigationRow: View {
             .padding(.vertical, 15)
         }
         .buttonStyle(MistiaPressableButtonStyle(cornerRadius: 18, tint: accent.color))
+        .disabled(isDisabled)
+        .opacity(isDisabled ? 0.55 : 1)
     }
 }
 
@@ -1861,6 +1905,18 @@ private struct ManagementDataConflictsView: View {
             onLeadingTap: { dismiss() },
             contentSpacing: 18
         ) {
+            if let remoteUnavailableReason = sessionStore.remoteUnavailableReason {
+                ManagementInlineMessageCard(
+                    title: mistiaLocalized(
+                        vi: "Cần mạng để xử lý conflict",
+                        en: "Resolving conflicts needs the network",
+                        ja: "競合の解決にはネットワークが必要です"
+                    ),
+                    message: remoteUnavailableReason,
+                    accent: MistiaAccent.sky.color
+                )
+            }
+
             if sessionStore.possibleDuplicateCount > 0 {
                 ManagementInlineMessageCard(
                     title: mistiaLocalized(
@@ -1894,7 +1950,7 @@ private struct ManagementDataConflictsView: View {
                         ManagementSyncConflictCard(
                             conflict: conflict,
                             accent: accent,
-                            isDisabled: !sessionStore.canManageSync
+                            isDisabled: !sessionStore.canPerformRemoteActions
                         ) { resolution in
                             Task {
                                 await sessionStore.resolveSyncConflict(
@@ -1976,6 +2032,18 @@ private struct ManagementEditProfileView: View {
             contentSpacing: 22
         ) {
             VStack(spacing: 18) {
+                if let remoteUnavailableReason = sessionStore.remoteUnavailableReason {
+                    ManagementInlineMessageCard(
+                        title: mistiaLocalized(
+                            vi: "Chỉnh sửa hồ sơ cần mạng",
+                            en: "Editing your profile needs the network",
+                            ja: "プロフィール編集にはネットワークが必要です"
+                        ),
+                        message: remoteUnavailableReason,
+                        accent: MistiaAccent.sky.color
+                    )
+                }
+
                 VStack(spacing: 14) {
                     ManagementEditableAvatarBadge(
                         initials: currentInitials,
@@ -1994,6 +2062,8 @@ private struct ManagementEditProfileView: View {
                             .background(accent.opacity(0.16), in: Capsule())
                     }
                     .buttonStyle(.plain)
+                    .disabled(!sessionStore.canPerformRemoteActions)
+                    .opacity(sessionStore.canPerformRemoteActions ? 1 : 0.55)
                 }
                 .frame(maxWidth: .infinity)
                 .padding(.top, 8)
@@ -2003,7 +2073,8 @@ private struct ManagementEditProfileView: View {
                     VStack(spacing: 0) {
                         ManagementEditProfileNavigationRow(
                             title: mistiaLocalized(vi: "Họ và tên", en: "Full name", ja: "氏名"),
-                            value: draftDisplayName
+                            value: draftDisplayName,
+                            isDisabled: !sessionStore.canPerformRemoteActions
                         ) {
                             activeSheet = .name
                         }
@@ -2019,7 +2090,8 @@ private struct ManagementEditProfileView: View {
 
                         ManagementEditProfileNavigationRow(
                             title: mistiaLocalized(vi: "Ngày sinh", en: "Birthday", ja: "生年月日"),
-                            value: birthdayLabel
+                            value: birthdayLabel,
+                            isDisabled: !sessionStore.canPerformRemoteActions
                         ) {
                             activeSheet = .birthday
                         }
@@ -2123,6 +2195,11 @@ private struct ManagementEditProfileView: View {
         birthday: Date? = nil,
         avatarJPEGData: Data? = nil
     ) {
+        guard sessionStore.canPerformRemoteActions else {
+            profileErrorMessage = sessionStore.remoteUnavailableReason
+            return
+        }
+
         profileErrorMessage = nil
 
         Task {
@@ -2165,6 +2242,7 @@ private struct ManagementEditProfileView: View {
 private struct ManagementEditProfileNavigationRow: View {
     let title: String
     let value: String
+    let isDisabled: Bool
     let action: () -> Void
 
     var body: some View {
@@ -2190,6 +2268,8 @@ private struct ManagementEditProfileNavigationRow: View {
             .padding(.vertical, 18)
         }
         .buttonStyle(MistiaPressableButtonStyle(cornerRadius: 18))
+        .disabled(isDisabled)
+        .opacity(isDisabled ? 0.55 : 1)
     }
 }
 
@@ -2779,6 +2859,18 @@ private struct ManagementSyncSettingsView: View {
             onLeadingTap: { dismiss() },
             contentSpacing: 18
         ) {
+            if let remoteUnavailableReason = sessionStore.remoteUnavailableReason {
+                ManagementInlineMessageCard(
+                    title: mistiaLocalized(
+                        vi: "Các thao tác cloud đang tạm chờ",
+                        en: "Cloud actions are temporarily unavailable",
+                        ja: "クラウド操作は一時的に利用できません"
+                    ),
+                    message: remoteUnavailableReason,
+                    accent: MistiaAccent.sky.color
+                )
+            }
+
             ManagementProfileListCard(tint: cardTint) {
                 VStack(spacing: 0) {
                     ManagementProfileNavigationRow(
@@ -2805,7 +2897,7 @@ private struct ManagementSyncSettingsView: View {
                         title: mistiaLocalized(vi: "Tự động đồng bộ", en: "Auto sync", ja: "自動同期"),
                         icon: "arrow.triangle.2.circlepath.icloud",
                         accent: .mint,
-                        subtitle: nil,
+                        subtitle: sessionStore.canPerformRemoteActions ? nil : sessionStore.remoteUnavailableReason,
                         value: autoSyncValue
                     ) {
                         destination = .autoSync
@@ -2856,8 +2948,8 @@ private struct ManagementSyncSettingsView: View {
                     ManagementProfilePrimaryActionButton(
                         title: mistiaLocalized(vi: "Đồng bộ ngay", en: "Sync now", ja: "今すぐ同期"),
                         accent: accent,
-                        isDisabled: !sessionStore.canManageSync || sessionStore.isManualSyncInProgress,
-                        showsProgress: sessionStore.isManualSyncInProgress && sessionStore.canManageSync
+                        isDisabled: !sessionStore.canPerformRemoteActions || sessionStore.isManualSyncInProgress,
+                        showsProgress: sessionStore.isManualSyncInProgress && sessionStore.canPerformRemoteActions
                     ) {
                         Task {
                             await sessionStore.syncNow(isManual: true)

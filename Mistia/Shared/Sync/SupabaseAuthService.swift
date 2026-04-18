@@ -3,6 +3,28 @@ import Foundation
 import GoogleSignIn
 import UIKit
 
+protocol SessionAuthServicing {
+    func loadPersistedSession() throws -> SupabaseAuthSession?
+    func restoreSession() async throws -> SupabaseAuthSession?
+    func signUp(
+        email: String,
+        password: String,
+        displayName: String
+    ) async throws -> SupabaseSignUpOutcome
+    func signIn(
+        email: String,
+        password: String
+    ) async throws -> SupabaseAuthSession
+    @MainActor
+    func signInWithGoogle() async throws -> SupabaseAuthSession
+    func refreshSessionIfNeeded(_ session: SupabaseAuthSession) async throws -> SupabaseAuthSession
+    func signOut(session: SupabaseAuthSession?) async throws
+    func deleteAccount(session: SupabaseAuthSession) async throws
+    func requestPasswordReset(email: String) async throws
+    func resendConfirmation(email: String) async throws
+    func clearPersistedSession() throws
+}
+
 enum SupabaseServiceError: LocalizedError {
     case configurationMissing
     case invalidURL
@@ -128,7 +150,7 @@ struct SupabaseServiceErrorResponse: Codable {
     }
 }
 
-struct SupabaseAuthService {
+struct SupabaseAuthService: SessionAuthServicing {
     private let keychain: KeychainStore
     private let configurationProvider: () -> MistiaSyncConfiguration?
     private let decoder = JSONDecoder.mistiaSyncDecoder
@@ -142,12 +164,19 @@ struct SupabaseAuthService {
         self.configurationProvider = configurationProvider
     }
 
-    func restoreSession() async throws -> SupabaseAuthSession? {
+    func loadPersistedSession() throws -> SupabaseAuthSession? {
         guard let data = try keychain.data(for: "auth-session") else {
             return nil
         }
 
-        let session = try decoder.decode(SupabaseAuthSession.self, from: data)
+        return try decoder.decode(SupabaseAuthSession.self, from: data)
+    }
+
+    func restoreSession() async throws -> SupabaseAuthSession? {
+        guard let session = try loadPersistedSession() else {
+            return nil
+        }
+
         return try await refreshSessionIfNeeded(session)
     }
 
@@ -473,7 +502,7 @@ struct SupabaseAuthService {
         try keychain.set(data, for: "auth-session")
     }
 
-    private func clearPersistedSession() throws {
+    func clearPersistedSession() throws {
         GIDSignIn.sharedInstance.signOut()
         try keychain.removeData(for: "auth-session")
     }

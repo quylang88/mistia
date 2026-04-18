@@ -1,5 +1,19 @@
 import Foundation
 
+protocol UserProfileRemoteStoring {
+    func fetchProfile(session: SupabaseAuthSession) async throws -> RemoteUserProfile?
+    func upsertProfile(
+        displayName: String,
+        avatarURL: URL?,
+        birthday: Date?,
+        session: SupabaseAuthSession
+    ) async throws -> RemoteUserProfile
+    func uploadAvatarImageData(
+        _ data: Data,
+        session: SupabaseAuthSession
+    ) async throws -> URL
+}
+
 struct RemoteUserProfile: Decodable {
     let userID: UUID
     let displayName: String
@@ -15,6 +29,22 @@ struct RemoteUserProfile: Decodable {
         case birthday
         case createdAt = "created_at"
         case updatedAt = "updated_at"
+    }
+
+    init(
+        userID: UUID,
+        displayName: String,
+        avatarURL: URL?,
+        birthday: Date?,
+        createdAt: Date,
+        updatedAt: Date
+    ) {
+        self.userID = userID
+        self.displayName = displayName
+        self.avatarURL = avatarURL
+        self.birthday = birthday
+        self.createdAt = createdAt
+        self.updatedAt = updatedAt
     }
 
     init(from decoder: Decoder) throws {
@@ -50,7 +80,7 @@ struct RemoteUserProfile: Decodable {
     }()
 }
 
-struct SupabaseUserProfileStore {
+struct SupabaseUserProfileStore: UserProfileRemoteStoring {
     private let configurationProvider: () -> MistiaSyncConfiguration?
     private let decoder = JSONDecoder.mistiaRemoteAPIDecoder
     private let encoder = JSONEncoder()
