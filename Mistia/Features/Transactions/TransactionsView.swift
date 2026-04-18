@@ -278,7 +278,7 @@ struct TransactionsView: View {
         .sheet(item: $editorTarget) { target in
             TransactionEditorSheet(target: target)
                 .presentationDetents(target.quickCapture ? [.medium, .large] : [.large])
-                .presentationDragIndicator(.visible)
+                .presentationDragIndicator(.hidden)
         }
         .task {
             try? MistiaBootstrap.seedDefaultCategoriesIfNeeded(

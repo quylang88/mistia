@@ -4,8 +4,6 @@ import SwiftUI
 private enum ManagementNavigationDestination: String, Identifiable {
     case authPlaceholder
     case settings
-    case archivedItems
-    case backupRestore
     case family
 
     var id: String { rawValue }
@@ -42,7 +40,6 @@ struct ManagementView: View {
     @State private var selectedCategoryKind: TransactionCategoryKind = .expense
     @State private var expandedCategoryParentIDs: Set<UUID> = []
     @State private var infoAlert: ManagementInfoAlert?
-    @State private var showsDeleteAllConfirmation = false
 
     private var cardTint: Color {
         colorScheme == .dark ? .white.opacity(0.018) : .white.opacity(0.12)
@@ -113,8 +110,6 @@ struct ManagementView: View {
         )
     }
 
-    private let dataActions = ManagementDataActionKind.allCases
-
     var body: some View {
         NavigationStack {
             MistiaPinnedTopBarScaffold(
@@ -133,9 +128,6 @@ struct ManagementView: View {
                     .disabled(familyContextStore.isViewingMemberContext && !familyContextStore.canEditSelectedSubject)
                 categoriesSection
                     .disabled(familyContextStore.isViewingMemberContext && !familyContextStore.canEditSelectedSubject)
-                if !familyContextStore.isViewingMemberContext {
-                    dataSection
-                }
             }
             .navigationDestination(item: $destination) { route in
                 switch route {
@@ -143,10 +135,6 @@ struct ManagementView: View {
                     ManagementAccountView()
                 case .settings:
                     SettingsView()
-                case .archivedItems:
-                    ManagementArchivedItemsView()
-                case .backupRestore:
-                    ManagementBackupRestoreView()
                 case .family:
                     FamilyManagementView()
                 }
@@ -154,9 +142,11 @@ struct ManagementView: View {
         }
         .sheet(item: $walletEditorTarget) { target in
             ManagementWalletEditorSheet(target: target)
+                .presentationDragIndicator(.hidden)
         }
         .sheet(item: $categoryEditorTarget) { target in
             ManagementCategoryEditorSheet(target: target)
+                .presentationDragIndicator(.hidden)
         }
         .task {
             do {
@@ -185,25 +175,6 @@ struct ManagementView: View {
                 title: Text(mistiaCatalog(alert.title)),
                 message: Text(mistiaCatalog(alert.message)),
                 dismissButton: .default(Text(mistiaLocalized(vi: "OK", en: "OK", ja: "OK")))
-            )
-        }
-        .confirmationDialog(
-            mistiaLocalized(vi: "Xóa toàn bộ dữ liệu quản lý?", en: "Delete all management data?", ja: "管理データをすべて削除しますか？"),
-            isPresented: $showsDeleteAllConfirmation,
-            titleVisibility: .visible
-        ) {
-            Button(mistiaLocalized(vi: "Xóa toàn bộ dữ liệu", en: "Delete all data", ja: "すべてのデータを削除"), role: .destructive) {
-                deleteAllManagementData()
-            }
-
-            Button(mistiaLocalized(vi: "Hủy", en: "Cancel", ja: "キャンセル"), role: .cancel) { }
-        } message: {
-            Text(
-                mistiaLocalized(
-                    vi: "Hành động này sẽ xóa toàn bộ dữ liệu Mistia đang lưu trên thiết bị này.",
-                    en: "This will delete all Mistia data stored on this device.",
-                    ja: "この操作により、この端末に保存されている Mistia の全データが削除されます。"
-                )
             )
         }
     }
@@ -477,170 +448,6 @@ struct ManagementView: View {
         }
     }
 
-    private var dataSection: some View {
-        ManagementSection(title: mistiaLocalized(vi: "Dữ liệu", en: "Data", ja: "データ"), titleColor: sectionLabelColor) {
-            ManagementCard(tint: cardTint) {
-                VStack(spacing: 0) {
-                    ForEach(Array(dataActions.enumerated()), id: \.element.id) { index, action in
-                        ManagementActionRow(action: action) {
-                            handleDataAction(action)
-                        }
-
-                        if index < dataActions.count - 1 {
-                            Divider()
-                                .padding(.leading, 52)
-                                .padding(.trailing, 0)
-                        }
-                    }
-                }
-            }
-        }
-    }
-
-    private func handleDataAction(_ action: ManagementDataActionKind) {
-        switch action {
-        case .exportData:
-            infoAlert = ManagementInfoAlert(
-                title: action.title,
-                message: mistiaLocalized(
-                    vi: "Flow export sẽ được nối ở pha sau. Dữ liệu quản lý hiện đã được lưu local bằng SwiftData.",
-                    en: "The export flow will be connected later. Management data is currently stored locally with SwiftData.",
-                    ja: "書き出しフローは後続フェーズで追加されます。管理データは現在 SwiftData でローカル保存されています。"
-                )
-            )
-        case .importData:
-            infoAlert = ManagementInfoAlert(
-                title: action.title,
-                message: mistiaLocalized(
-                    vi: "Flow import chưa được bật trong build này.",
-                    en: "The import flow isn't enabled in this build yet.",
-                    ja: "このビルドでは取り込みフローはまだ有効になっていません。"
-                )
-            )
-        case .backupRestore:
-            destination = .backupRestore
-        case .archivedItems:
-            destination = .archivedItems
-        case .deleteAllData:
-            showsDeleteAllConfirmation = true
-        }
-    }
-
-    private func deleteAllManagementData() {
-        do {
-            let now = Date()
-            let wallets = try modelContext.fetch(FetchDescriptor<LedgerWallet>())
-                .filter { $0.deletedAt == nil }
-            let categories = try modelContext.fetch(FetchDescriptor<TransactionCategory>())
-                .filter { $0.deletedAt == nil }
-            let creditProfiles = try modelContext.fetch(FetchDescriptor<CreditCardProfile>())
-                .filter { $0.deletedAt == nil }
-            let transactions = try modelContext.fetch(FetchDescriptor<LedgerTransaction>())
-                .filter { $0.deletedAt == nil }
-            let budgets = try modelContext.fetch(FetchDescriptor<BudgetPlan>())
-                .filter { $0.deletedAt == nil }
-            let goals = try modelContext.fetch(FetchDescriptor<SavingsGoal>())
-                .filter { $0.deletedAt == nil }
-            let recurringBills = try modelContext.fetch(FetchDescriptor<RecurringBillPlan>())
-                .filter { $0.deletedAt == nil }
-            let installments = try modelContext.fetch(FetchDescriptor<InstallmentPlan>())
-                .filter { $0.deletedAt == nil }
-            let dueOccurrences = try modelContext.fetch(FetchDescriptor<DueOccurrenceRecord>())
-                .filter { $0.deletedAt == nil }
-            let fallbackSubjectUserID = sessionStore.signedInUserID ?? MistiaSyncDeviceIdentity.current()
-            let walletMutations: [MistiaSyncMutation] = wallets.map {
-                MistiaSyncMutation(entity: .wallet, recordID: $0.id, subjectUserID: fallbackSubjectUserID, kind: .delete, modifiedAt: now)
-            }
-            let categoryMutations: [MistiaSyncMutation] = categories.map {
-                MistiaSyncMutation(entity: .category, recordID: $0.id, subjectUserID: fallbackSubjectUserID, kind: .delete, modifiedAt: now)
-            }
-            let profileMutations: [MistiaSyncMutation] = creditProfiles.map {
-                MistiaSyncMutation(entity: .creditCardProfile, recordID: $0.id, subjectUserID: fallbackSubjectUserID, kind: .delete, modifiedAt: now)
-            }
-            let transactionMutations: [MistiaSyncMutation] = transactions.map {
-                MistiaSyncMutation(entity: .transaction, recordID: $0.id, subjectUserID: fallbackSubjectUserID, kind: .delete, modifiedAt: now)
-            }
-            let budgetMutations: [MistiaSyncMutation] = budgets.map {
-                MistiaSyncMutation(entity: .budgetPlan, recordID: $0.id, subjectUserID: fallbackSubjectUserID, kind: .delete, modifiedAt: now)
-            }
-            let goalMutations: [MistiaSyncMutation] = goals.map {
-                MistiaSyncMutation(entity: .savingsGoal, recordID: $0.id, subjectUserID: fallbackSubjectUserID, kind: .delete, modifiedAt: now)
-            }
-            let recurringMutations: [MistiaSyncMutation] = recurringBills.map {
-                MistiaSyncMutation(entity: .recurringBillPlan, recordID: $0.id, subjectUserID: fallbackSubjectUserID, kind: .delete, modifiedAt: now)
-            }
-            let installmentMutations: [MistiaSyncMutation] = installments.map {
-                MistiaSyncMutation(entity: .installmentPlan, recordID: $0.id, subjectUserID: fallbackSubjectUserID, kind: .delete, modifiedAt: now)
-            }
-            let occurrenceMutations: [MistiaSyncMutation] = dueOccurrences.map {
-                MistiaSyncMutation(entity: .dueOccurrenceRecord, recordID: $0.id, subjectUserID: fallbackSubjectUserID, kind: .delete, modifiedAt: now)
-            }
-            let mutations =
-                walletMutations
-                + categoryMutations
-                + profileMutations
-                + transactionMutations
-                + budgetMutations
-                + goalMutations
-                + recurringMutations
-                + installmentMutations
-                + occurrenceMutations
-
-            for wallet in wallets {
-                wallet.markDeleted(at: now)
-            }
-
-            for category in categories {
-                category.markDeleted(at: now)
-            }
-
-            for profile in creditProfiles {
-                profile.markDeleted(at: now)
-            }
-
-            for transaction in transactions {
-                transaction.markDeleted(at: now)
-            }
-
-            for budget in budgets {
-                budget.markDeleted(at: now)
-            }
-
-            for goal in goals {
-                goal.markDeleted(at: now)
-            }
-
-            for recurringBill in recurringBills {
-                recurringBill.markDeleted(at: now)
-            }
-
-            for installment in installments {
-                installment.markDeleted(at: now)
-            }
-
-            for occurrence in dueOccurrences {
-                occurrence.markDeleted(at: now)
-            }
-
-            try modelContext.save()
-            sessionStore.recordMutations(mutations)
-
-            infoAlert = ManagementInfoAlert(
-                title: mistiaLocalized(vi: "Đã xóa dữ liệu", en: "Data deleted", ja: "データを削除しました"),
-                message: mistiaLocalized(
-                    vi: "Toàn bộ dữ liệu Mistia trong máy hiện tại đã được xóa.",
-                    en: "All Mistia data on this device has been deleted.",
-                    ja: "この端末の Mistia データをすべて削除しました。"
-                )
-            )
-        } catch {
-            infoAlert = ManagementInfoAlert(
-                title: mistiaLocalized(vi: "Không thể xóa dữ liệu", en: "Couldn't delete data", ja: "データを削除できませんでした"),
-                message: error.localizedDescription
-            )
-        }
-    }
-
     private func toggleFavorite(for category: TransactionCategory) {
         guard category.isChildCategory else { return }
 
@@ -825,7 +632,7 @@ private struct ManagementWalletRow: View {
 
     var body: some View {
         Button(action: action) {
-            HStack(alignment: .top, spacing: 12) {
+            HStack(alignment: .center, spacing: 12) {
                 ManagementIconTile(icon: wallet.iconSymbolName, color: wallet.iconColor)
 
                 VStack(alignment: .leading, spacing: 3) {
@@ -851,7 +658,6 @@ private struct ManagementWalletRow: View {
                 Text(currentBalanceMinor.formattedCurrency(code: wallet.currencyCode))
                     .font(.system(size: 16, weight: .bold, design: .rounded))
                     .foregroundStyle(balanceColor)
-                    .padding(.top, 1)
             }
             .padding(.horizontal, 14)
             .padding(.vertical, 11)
@@ -1040,30 +846,6 @@ private struct ManagementCategoryTile: View {
             }
         }
         .buttonStyle(MistiaPressableButtonStyle(cornerRadius: 18))
-    }
-}
-
-private struct ManagementActionRow: View {
-    let action: ManagementDataActionKind
-    let onTap: () -> Void
-
-    var body: some View {
-        Button(action: onTap) {
-            HStack(spacing: 12) {
-                ManagementIconTile(icon: action.iconSymbolName, color: action.tintColor)
-
-                Text(action.title)
-                    .font(.system(size: 15.5, weight: .medium, design: .rounded))
-                    .foregroundStyle(action == .deleteAllData ? action.tintColor : .primary)
-
-                Spacer()
-
-                ManagementChevron()
-            }
-            .padding(.horizontal, 14)
-            .padding(.vertical, 13)
-        }
-        .buttonStyle(MistiaPressableButtonStyle(cornerRadius: 16))
     }
 }
 

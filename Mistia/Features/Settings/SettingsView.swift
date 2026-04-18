@@ -25,74 +25,90 @@ struct SettingsView: View {
         MistiaAppLanguage.resolve(storedRawValue: appLanguageRawValue)
     }
 
-    private var sections: [SettingsSectionDump] {
-        [
-            SettingsSectionDump(
-                rows: [
-                    SettingsRowDump(
-                        title: mistiaLocalized(vi: "Giao diện", en: "Appearance", ja: "表示"),
-                        icon: "moon.stars.fill",
-                        accent: .indigo,
-                        value: appearanceMode.title,
-                        action: .openAppearance
-                    ),
-                    SettingsRowDump(
-                        title: mistiaLocalized(vi: "Ngôn ngữ", en: "Language", ja: "言語"),
-                        icon: "globe.asia.australia.fill",
-                        accent: .sky,
-                        value: appLanguage.displayName,
-                        action: .openLanguage
-                    ),
-                    SettingsRowDump(
-                        title: mistiaLocalized(vi: "Tiền tệ", en: "Currency", ja: "通貨"),
-                        icon: "yensign.circle.fill",
-                        accent: .amber,
-                        value: currencyCode,
-                        action: .placeholder
-                    )
-                ]
-            ),
-            SettingsSectionDump(
-                rows: [
-                    SettingsRowDump(
-                        title: mistiaLocalized(vi: "Thông báo", en: "Notifications", ja: "通知"),
-                        icon: "bell.badge.fill",
-                        accent: .coral,
-                        value: nil,
-                        action: .placeholder
-                    ),
-                    SettingsRowDump(
-                        title: mistiaLocalized(vi: "Bảo mật", en: "Security", ja: "セキュリティ"),
-                        icon: "lock.shield.fill",
-                        accent: .mint,
-                        value: nil,
-                        action: .placeholder
-                    )
-                ]
-            ),
-            SettingsSectionDump(
-                rows: [
-                    SettingsRowDump(
-                        title: mistiaLocalized(vi: "Thói quen", en: "Habits", ja: "習慣"),
-                        icon: "circle.hexagongrid.fill",
-                        accent: .rose,
-                        value: nil,
-                        action: .placeholder
-                    )
-                ]
-            ),
-            SettingsSectionDump(
-                rows: [
-                    SettingsRowDump(
-                        title: mistiaLocalized(vi: "Gửi feedback", en: "Send feedback", ja: "フィードバック"),
-                        icon: "bubble.left.and.bubble.right.fill",
-                        accent: .indigo,
-                        value: nil,
-                        action: .placeholder
-                    )
-                ]
-            )
-        ]
+    private var customizationSection: SettingsSectionDump {
+        SettingsSectionDump(
+            rows: [
+                SettingsRowDump(
+                    title: mistiaLocalized(vi: "Giao diện", en: "Appearance", ja: "表示"),
+                    icon: "moon.stars.fill",
+                    accent: .indigo,
+                    value: appearanceMode.title,
+                    action: .openAppearance
+                ),
+                SettingsRowDump(
+                    title: mistiaLocalized(vi: "Ngôn ngữ", en: "Language", ja: "言語"),
+                    icon: "globe.asia.australia.fill",
+                    accent: .sky,
+                    value: appLanguage.displayName,
+                    action: .openLanguage
+                ),
+                SettingsRowDump(
+                    title: mistiaLocalized(vi: "Tiền tệ", en: "Currency", ja: "通貨"),
+                    icon: "yensign.circle.fill",
+                    accent: .amber,
+                    value: currencyCode,
+                    action: .placeholder
+                )
+            ]
+        )
+    }
+
+    private var preferencesSection: SettingsSectionDump {
+        SettingsSectionDump(
+            rows: [
+                SettingsRowDump(
+                    title: mistiaLocalized(vi: "Thông báo", en: "Notifications", ja: "通知"),
+                    icon: "bell.badge.fill",
+                    accent: .coral,
+                    value: nil,
+                    action: .placeholder
+                ),
+                SettingsRowDump(
+                    title: mistiaLocalized(vi: "Bảo mật", en: "Security", ja: "セキュリティ"),
+                    icon: "lock.shield.fill",
+                    accent: .mint,
+                    value: nil,
+                    action: .placeholder
+                )
+            ]
+        )
+    }
+
+    private var dataSection: SettingsSectionDump {
+        SettingsSectionDump(
+            rows: [
+                SettingsRowDump(dataAction: .backupRestore),
+                SettingsRowDump(dataAction: .archivedItems)
+            ]
+        )
+    }
+
+    private var habitsSection: SettingsSectionDump {
+        SettingsSectionDump(
+            rows: [
+                SettingsRowDump(
+                    title: mistiaLocalized(vi: "Thói quen", en: "Habits", ja: "習慣"),
+                    icon: "circle.hexagongrid.fill",
+                    accent: .rose,
+                    value: nil,
+                    action: .placeholder
+                )
+            ]
+        )
+    }
+
+    private var feedbackSection: SettingsSectionDump {
+        SettingsSectionDump(
+            rows: [
+                SettingsRowDump(
+                    title: mistiaLocalized(vi: "Gửi feedback", en: "Send feedback", ja: "フィードバック"),
+                    icon: "bubble.left.and.bubble.right.fill",
+                    accent: .indigo,
+                    value: nil,
+                    action: .placeholder
+                )
+            ]
+        )
     }
 
     var body: some View {
@@ -108,9 +124,8 @@ struct SettingsView: View {
             contentSpacing: 18
         ) {
             VStack(spacing: 18) {
-                // First section - Customization
                 SettingsCardSection(
-                    section: sections[0],
+                    section: customizationSection,
                     tint: cardTint,
                     accentPurple: accentPurple,
                     onTap: handleTap
@@ -126,18 +141,45 @@ struct SettingsView: View {
                     .padding(.horizontal, 2)
                 }
                 .cardDescriptionStyle()
-                
-                // Remaining sections
-                ForEach(Array(sections.enumerated()), id: \.element.id) { index, section in
-                    if index > 0 {
-                        SettingsCardSection(
-                            section: section,
-                            tint: cardTint,
-                            accentPurple: accentPurple,
-                            onTap: handleTap
-                        )
-                    }
+
+                SettingsCardSection(
+                    section: preferencesSection,
+                    tint: cardTint,
+                    accentPurple: accentPurple,
+                    onTap: handleTap
+                )
+
+                SettingsCardSection(
+                    section: dataSection,
+                    tint: cardTint,
+                    accentPurple: accentPurple,
+                    onTap: handleTap
+                )
+
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(mistiaLocalized(
+                        vi: "Mở lại mục đã lưu trữ hoặc quản lý bản sao lưu cục bộ để dữ liệu Mistia luôn sẵn sàng khi bạn cần khôi phục.",
+                        en: "Review archived items and manage local snapshots so your Mistia data stays ready when you need to restore it.",
+                        ja: "アーカイブ済みアイテムの確認やローカルスナップショットの管理を行い、必要なときに Mistia のデータを復元できるようにします。"
+                    ))
+                    .descriptionTextStyle()
+                    .padding(.horizontal, 2)
                 }
+                .cardDescriptionStyle()
+
+                SettingsCardSection(
+                    section: habitsSection,
+                    tint: cardTint,
+                    accentPurple: accentPurple,
+                    onTap: handleTap
+                )
+
+                SettingsCardSection(
+                    section: feedbackSection,
+                    tint: cardTint,
+                    accentPurple: accentPurple,
+                    onTap: handleTap
+                )
             }
 
             SettingsVersionFooter()
@@ -149,6 +191,10 @@ struct SettingsView: View {
                 AppearanceSettingsView()
             case .language:
                 LanguageSettingsView()
+            case .backupRestore:
+                ManagementBackupRestoreView()
+            case .archivedItems:
+                ManagementArchivedItemsView()
             }
         }
     }
@@ -159,6 +205,10 @@ struct SettingsView: View {
             destination = .appearance
         case .openLanguage:
             destination = .language
+        case .openBackupRestore:
+            destination = .backupRestore
+        case .openArchivedItems:
+            destination = .archivedItems
         case .placeholder:
             break
         }
@@ -525,12 +575,47 @@ private struct SettingsRowDump: Identifiable {
 private enum SettingsRowAction {
     case openAppearance
     case openLanguage
+    case openBackupRestore
+    case openArchivedItems
     case placeholder
 }
 
 private enum SettingsDestination: String, Identifiable {
     case appearance
     case language
+    case backupRestore
+    case archivedItems
 
     var id: String { rawValue }
+}
+
+private extension SettingsRowDump {
+    init(dataAction: ManagementDataActionKind) {
+        switch dataAction {
+        case .backupRestore:
+            self.init(
+                title: dataAction.title,
+                icon: dataAction.iconSymbolName,
+                accent: .mint,
+                value: nil,
+                action: .openBackupRestore
+            )
+        case .archivedItems:
+            self.init(
+                title: dataAction.title,
+                icon: dataAction.iconSymbolName,
+                accent: .slate,
+                value: nil,
+                action: .openArchivedItems
+            )
+        case .exportData, .importData, .deleteAllData:
+            self.init(
+                title: dataAction.title,
+                icon: dataAction.iconSymbolName,
+                accent: .purple,
+                value: nil,
+                action: .placeholder
+            )
+        }
+    }
 }

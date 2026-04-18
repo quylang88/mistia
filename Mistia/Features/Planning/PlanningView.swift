@@ -416,18 +416,23 @@ struct PlanningView: View {
         }
         .sheet(item: $budgetEditorTarget) { target in
             PlanningBudgetEditorSheet(target: target)
+                .presentationDragIndicator(.hidden)
         }
         .sheet(item: $goalEditorTarget) { target in
             PlanningGoalEditorSheet(target: target)
+                .presentationDragIndicator(.hidden)
         }
         .sheet(item: $billEditorTarget) { target in
             PlanningBillEditorSheet(target: target)
+                .presentationDragIndicator(.hidden)
         }
         .sheet(item: $installmentEditorTarget) { target in
             PlanningInstallmentEditorSheet(target: target)
+                .presentationDragIndicator(.hidden)
         }
         .sheet(item: $creditCardEditorTarget) { target in
             PlanningCreditCardEditorSheet(target: target)
+                .presentationDragIndicator(.hidden)
         }
         .sheet(isPresented: $isMonthPickerPresented) {
             PlanningMonthPickerSheet(selection: $selectedMonth, calendar: calendar)

@@ -109,16 +109,42 @@ struct TransactionTitleSuggestion: Equatable, Identifiable {
 
 nonisolated enum TransactionLogic {
     static func normalizeCounterpartyName(_ name: String?) -> String? {
-        guard let normalized = name?
-            .folding(options: [.diacriticInsensitive, .caseInsensitive], locale: MistiaAppLanguage.current.locale)
-            .replacingOccurrences(of: "[^a-zA-Z0-9]+", with: " ", options: .regularExpression)
+        guard let trimmed = name?
             .trimmingCharacters(in: .whitespacesAndNewlines),
-            !normalized.isEmpty
+            !trimmed.isEmpty
         else {
             return nil
         }
 
-        return normalized.lowercased()
+        let folded = trimmed
+            .precomposedStringWithCompatibilityMapping
+            .folding(
+                options: [.diacriticInsensitive, .caseInsensitive, .widthInsensitive],
+                locale: MistiaAppLanguage.current.locale
+            )
+
+        var normalized = ""
+        var lastCharacterWasSeparator = false
+
+        for scalar in folded.unicodeScalars {
+            if CharacterSet.alphanumerics.contains(scalar) {
+                normalized.unicodeScalars.append(scalar)
+                lastCharacterWasSeparator = false
+            } else {
+                guard !normalized.isEmpty, !lastCharacterWasSeparator else {
+                    continue
+                }
+                normalized.append(" ")
+                lastCharacterWasSeparator = true
+            }
+        }
+
+        let collapsed = normalized.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !collapsed.isEmpty else {
+            return nil
+        }
+
+        return collapsed.lowercased()
     }
 
     static func visibleRecords(
