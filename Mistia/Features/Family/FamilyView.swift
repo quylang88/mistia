@@ -1198,7 +1198,7 @@ private struct FamilySettingsRow: View {
             HStack(spacing: 14) {
                 // Apple-style icon tile
                 ZStack {
-                    RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    RoundedRectangle(cornerRadius: 11, style: .continuous)
                         .fill(iconColor.opacity(0.15))
                     Image(systemName: icon)
                         .font(.system(size: 14, weight: .bold))
