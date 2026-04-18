@@ -1296,17 +1296,11 @@ final class SessionStore {
 
     private func applySignedInOfflineState() {
         guard isSignedIn else { return }
-
-        remoteUnavailableReason = mistiaLocalized(
-            vi: "Bạn vẫn đang đăng nhập trên thiết bị này. Các tính năng cần mạng sẽ khả dụng lại khi kết nối trở lại.",
-            en: "You're still signed in on this device. Features that need the network will be available again when your connection returns.",
-            ja: "この端末ではログイン状態が維持されています。ネットワークが戻ると、通信が必要な機能も再び利用できます。"
-        )
         lastErrorMessage = nil
         syncStatusTitle = mistiaLocalized(
-            vi: "Đang đăng nhập ngoại tuyến",
-            en: "Signed in offline",
-            ja: "オフラインでログイン中"
+            vi: "Đang ngoại tuyến",
+            en: "Offline",
+            ja: "オフライン"
         )
         syncStatusDetail = mistiaLocalized(
             vi: "Không có kết nối mạng. Hãy kết nối lại để đồng bộ, chỉnh sửa hồ sơ hoặc quản lý gia đình.",

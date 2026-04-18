@@ -58,18 +58,6 @@ private struct ManagementAutoSyncDetailView: View {
             onLeadingTap: { dismiss() },
             contentSpacing: 18
         ) {
-            if let remoteUnavailableReason = sessionStore.remoteUnavailableReason {
-                ManagementInlineMessageCard(
-                    title: mistiaLocalized(
-                        vi: "Đồng bộ cần mạng",
-                        en: "Sync needs the network",
-                        ja: "同期にはネットワークが必要です"
-                    ),
-                    message: remoteUnavailableReason,
-                    accent: MistiaAccent.sky.color
-                )
-            }
-
             ManagementProfileListCard(tint: cardTint) {
                 HStack(spacing: 12) {
                     Text(mistiaLocalized(vi: "Tự động đồng bộ", en: "Auto sync", ja: "自動同期"))
@@ -116,13 +104,6 @@ private enum ManagementProfileDestination: String, Identifiable {
     case backupRestore
     case signedInDevices
     case editProfile
-
-    var id: String { rawValue }
-}
-
-private enum ManagementProfileDestructiveAction: String, Identifiable {
-    case signOut
-    case deleteAccount
 
     var id: String { rawValue }
 }
@@ -178,7 +159,6 @@ struct ManagementAccountView: View {
     @State private var isConfirmPasswordVisible = false
     @State private var isEmailAuthExpanded = false
     @State private var destination: ManagementProfileDestination?
-    @State private var destructiveAction: ManagementProfileDestructiveAction?
     @FocusState private var focusedField: ManagementAuthInput?
     
     @Environment(\.colorScheme) private var colorScheme
@@ -330,49 +310,6 @@ struct ManagementAccountView: View {
             .presentationDetents([.medium])
             .presentationDragIndicator(.hidden)
         }
-        .confirmationDialog(
-            destructiveActionConfirmationTitle,
-            isPresented: Binding(
-                get: { destructiveAction != nil },
-                set: { isPresented in
-                    if !isPresented {
-                        destructiveAction = nil
-                    }
-                }
-            ),
-            titleVisibility: .visible
-        ) {
-            switch destructiveAction {
-            case .signOut:
-                Button(
-                    mistiaLocalized(vi: "Đăng xuất", en: "Sign out", ja: "ログアウト"),
-                    role: .destructive
-                ) {
-                    destructiveAction = nil
-                    Task {
-                        await sessionStore.signOut()
-                    }
-                }
-            case .deleteAccount:
-                Button(
-                    mistiaLocalized(vi: "Xóa tài khoản", en: "Delete account", ja: "アカウントを削除"),
-                    role: .destructive
-                ) {
-                    destructiveAction = nil
-                    Task {
-                        await sessionStore.deleteAccountKeepingLocalData()
-                    }
-                }
-            case .none:
-                EmptyView()
-            }
-
-            Button(mistiaLocalized(vi: "Hủy", en: "Cancel", ja: "キャンセル"), role: .cancel) {
-                destructiveAction = nil
-            }
-        } message: {
-            Text(destructiveActionConfirmationMessage)
-        }
     }
 
     private var configurationCard: some View {
@@ -415,18 +352,6 @@ struct ManagementAccountView: View {
     private func signedInContent(summary: SessionSummary) -> some View {
         VStack(spacing: 18) {
             profileHeaderCard(summary: summary)
-
-            if let remoteUnavailableReason = sessionStore.remoteUnavailableReason {
-                ManagementInlineMessageCard(
-                    title: mistiaLocalized(
-                        vi: "Bạn vẫn đang đăng nhập trên thiết bị này",
-                        en: "You're still signed in on this device",
-                        ja: "この端末ではログイン状態が維持されています"
-                    ),
-                    message: remoteUnavailableReason,
-                    accent: MistiaAccent.sky.color
-                )
-            }
 
             ManagementProfileListCard(tint: secondaryBackground) {
                 VStack(spacing: 0) {
@@ -478,7 +403,7 @@ struct ManagementAccountView: View {
                     title: mistiaLocalized(vi: "Gia đình", en: "Family", ja: "家族"),
                     icon: "person.3.fill",
                     accent: .lightPurple,
-                    subtitle: remoteActionDisabledReason,
+                    subtitle: nil,
                     value: familyContextStore.family?.name ?? mistiaLocalized(vi: "Chưa có", en: "None", ja: "未設定"),
                     isDisabled: !sessionStore.canPerformRemoteActions
                 ) {
@@ -488,16 +413,30 @@ struct ManagementAccountView: View {
 
             ManagementProfileCenteredDestructiveButton(
                 title: mistiaLocalized(vi: "Đăng xuất", en: "Sign out", ja: "ログアウト"),
-                isDisabled: sessionStore.isWorking
+                confirmationMessage: mistiaLocalized(
+                    vi: "Bạn sẽ bị đăng xuất khỏi Mistia trên thiết bị này. Dữ liệu local hiện có vẫn được giữ lại.",
+                    en: "You will be signed out of Mistia on this device. Existing local data will stay on the device.",
+                    ja: "この端末で Mistia からログアウトします。既存のローカルデータは保持されます。"
+                ),
+                isDisabled: sessionStore.isWorking || !sessionStore.canPerformRemoteActions
             ) {
-                destructiveAction = .signOut
+                Task {
+                    await sessionStore.signOut()
+                }
             }
 
             ManagementProfileCenteredDestructiveButton(
                 title: mistiaLocalized(vi: "Xóa tài khoản", en: "Delete account", ja: "アカウントを削除"),
+                confirmationMessage: mistiaLocalized(
+                    vi: "Tài khoản và dữ liệu đồng bộ trên cloud sẽ bị xóa vĩnh viễn. Dữ liệu local trên máy này vẫn được giữ lại.",
+                    en: "Your cloud account and synced server data will be permanently deleted. Local data on this device will remain.",
+                    ja: "クラウドアカウントと同期済みサーバーデータは完全に削除されます。この端末のローカルデータは保持されます。"
+                ),
                 isDisabled: sessionStore.isWorking || !sessionStore.canPerformRemoteActions
             ) {
-                destructiveAction = .deleteAccount
+                Task {
+                    await sessionStore.deleteAccountKeepingLocalData()
+                }
             }
         }
     }
@@ -559,9 +498,9 @@ struct ManagementAccountView: View {
     private var lastSyncBadgeTitle: String {
         if sessionStore.isOfflineModeActive {
             return mistiaLocalized(
-                vi: "Đang đăng nhập ngoại tuyến",
-                en: "Signed in offline",
-                ja: "オフラインでログイン中"
+                vi: "Đang ngoại tuyến",
+                en: "Offline",
+                ja: "オフライン"
             )
         }
 
@@ -586,10 +525,6 @@ struct ManagementAccountView: View {
         return "\(issueCount)"
     }
 
-    private var remoteActionDisabledReason: String? {
-        sessionStore.canPerformRemoteActions ? nil : sessionStore.remoteUnavailableReason
-    }
-
     private var syncSettingsValue: String {
         if sessionStore.isAutoSyncEnabled {
             return mistiaLocalized(vi: "Tự động", en: "Auto", ja: "自動")
@@ -600,44 +535,6 @@ struct ManagementAccountView: View {
         }
 
         return mistiaLocalized(vi: "Tắt", en: "Off", ja: "オフ")
-    }
-
-    private var destructiveActionConfirmationTitle: String {
-        switch destructiveAction {
-        case .signOut:
-            return mistiaLocalized(
-                vi: "Đăng xuất khỏi thiết bị này?",
-                en: "Sign out of this device?",
-                ja: "この端末からログアウトしますか？"
-            )
-        case .deleteAccount:
-            return mistiaLocalized(
-                vi: "Xóa tài khoản này?",
-                en: "Delete this account?",
-                ja: "このアカウントを削除しますか？"
-            )
-        case .none:
-            return ""
-        }
-    }
-
-    private var destructiveActionConfirmationMessage: String {
-        switch destructiveAction {
-        case .signOut:
-            return mistiaLocalized(
-                vi: "Bạn sẽ bị đăng xuất khỏi Mistia trên thiết bị này. Dữ liệu local hiện có vẫn được giữ lại.",
-                en: "You will be signed out of Mistia on this device. Existing local data will stay on the device.",
-                ja: "この端末で Mistia からログアウトします。既存のローカルデータは保持されます。"
-            )
-        case .deleteAccount:
-            return mistiaLocalized(
-                vi: "Tài khoản và dữ liệu đồng bộ trên cloud sẽ bị xóa vĩnh viễn. Dữ liệu local trên máy này vẫn được giữ lại.",
-                en: "Your cloud account and synced server data will be permanently deleted. Local data on this device will remain.",
-                ja: "クラウドアカウントと同期済みサーバーデータは完全に削除されます。この端末のローカルデータは保持されます。"
-            )
-        case .none:
-            return ""
-        }
     }
 
     private var authForm: some View {
@@ -1580,10 +1477,12 @@ private struct ManagementSettingsFootnote: View {
 
 private struct ManagementProfileCenteredDestructiveButton: View {
     let title: String
+    let confirmationMessage: String
     let isDisabled: Bool
     let action: () -> Void
 
     @Environment(\.colorScheme) private var colorScheme
+    @State private var showsConfirmation = false
 
     private var backgroundColor: Color {
         colorScheme == .dark
@@ -1592,7 +1491,9 @@ private struct ManagementProfileCenteredDestructiveButton: View {
     }
 
     var body: some View {
-        Button(action: action) {
+        Button {
+            showsConfirmation = true
+        } label: {
             Text(title)
                 .font(.system(size: 17, weight: .semibold, design: .rounded))
                 .foregroundStyle(.red)
@@ -1603,6 +1504,18 @@ private struct ManagementProfileCenteredDestructiveButton: View {
         .buttonStyle(.plain)
         .disabled(isDisabled)
         .opacity(isDisabled ? 0.55 : 1)
+        .confirmationDialog(
+            "",
+            isPresented: $showsConfirmation,
+            titleVisibility: .hidden
+        ) {
+            Button(title, role: .destructive) {
+                action()
+            }
+            Button(mistiaLocalized(vi: "Hủy", en: "Cancel", ja: "キャンセル"), role: .cancel) { }
+        } message: {
+            Text(confirmationMessage)
+        }
     }
 }
 
@@ -2859,18 +2772,6 @@ private struct ManagementSyncSettingsView: View {
             onLeadingTap: { dismiss() },
             contentSpacing: 18
         ) {
-            if let remoteUnavailableReason = sessionStore.remoteUnavailableReason {
-                ManagementInlineMessageCard(
-                    title: mistiaLocalized(
-                        vi: "Các thao tác cloud đang tạm chờ",
-                        en: "Cloud actions are temporarily unavailable",
-                        ja: "クラウド操作は一時的に利用できません"
-                    ),
-                    message: remoteUnavailableReason,
-                    accent: MistiaAccent.sky.color
-                )
-            }
-
             ManagementProfileListCard(tint: cardTint) {
                 VStack(spacing: 0) {
                     ManagementProfileNavigationRow(

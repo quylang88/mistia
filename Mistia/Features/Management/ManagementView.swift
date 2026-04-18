@@ -305,6 +305,8 @@ struct ManagementView: View {
                             .padding(.vertical, 16)
                         }
                         .buttonStyle(MistiaPressableButtonStyle(cornerRadius: 20))
+                        .disabled(!sessionStore.canPerformRemoteActions)
+                        .opacity(sessionStore.canPerformRemoteActions ? 1 : 0.55)
                     }
                 }
             } else {
