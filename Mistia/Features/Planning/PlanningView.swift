@@ -866,7 +866,7 @@ private struct PlanningBudgetSummaryCard: View {
 
                         Text(summary.totalBudgetMinor.formattedCurrency(code: currencyCode))
                             .font(.system(size: 28, weight: .bold, design: .rounded))
-                            .foregroundStyle(MistiaAccent.coral.color)
+                            .foregroundStyle(.primary)
                             .lineLimit(1)
                             .minimumScaleFactor(0.7)
 

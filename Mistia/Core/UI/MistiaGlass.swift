@@ -302,7 +302,7 @@ struct MistiaTopBar: View {
     }
 }
 
-private let mistiaHeaderCircleSize: CGFloat = 32
+private let mistiaHeaderCircleSize: CGFloat = 30
 
 struct MistiaCircleGlassButtonLabel<Content: View>: View {
     @ViewBuilder let content: Content
@@ -369,9 +369,10 @@ struct MistiaHeaderCircleMenu<Label: View, MenuContent: View>: View {
                     MistiaCircleGlassButtonLabel {
                         label
                     }
-                    .glassEffect(nativeGlassStyle, in: .circle)
                 }
+                .menuStyle(.button)
                 .menuIndicator(.hidden)
+                .buttonStyle(.glass(nativeGlassStyle))
                 .buttonBorderShape(.circle)
             } else {
                 Menu {

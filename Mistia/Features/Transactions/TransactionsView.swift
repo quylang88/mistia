@@ -351,6 +351,7 @@ struct TransactionsView: View {
                 },
                 trailingAccessory: {
                     transactionsStatementMenuButton
+                        .padding(.trailing, -12)
                 }
             ) {
                 if !openDebtPositions.isEmpty {
