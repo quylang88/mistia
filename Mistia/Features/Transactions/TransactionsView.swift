@@ -40,10 +40,12 @@ private enum TransactionsNavigationDestination: String, Identifiable {
 }
 
 struct TransactionsView: View {
+    @Environment(\.calendar) private var calendar
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.modelContext) private var modelContext
     @Environment(SessionStore.self) private var sessionStore
     @Environment(FamilyContextStore.self) private var familyContextStore
+    @AppStorage(MistiaAppStorageKey.currencyCode) private var currencyCode = "JPY"
 
     @Query private var storedTransactions: [LedgerTransaction]
     @Query private var storedWallets: [LedgerWallet]
@@ -56,6 +58,8 @@ struct TransactionsView: View {
     @State private var filterState = TransactionFilterState(timeScope: .allTime, statusScope: .all)
     @State private var searchText = ""
     @State private var isSearchPresented = false
+    @State private var shareItem: OverviewShareItem?
+    @State private var exportErrorMessage: String?
     @State private var destination: TransactionsNavigationDestination?
 
     private var activeTransactions: [LedgerTransaction] {
@@ -167,6 +171,42 @@ struct TransactionsView: View {
         activeTransactions.map { $0.snapshot }
     }
 
+    private var transactionRecords: [TransactionRecordSnapshot] {
+        activeTransactions.map(\.planningRecordSnapshot)
+    }
+
+    private var overviewTransactions: [OverviewTransactionSnapshot] {
+        activeTransactions.map(\.overviewSnapshot)
+    }
+
+    private var walletSnapshots: [OverviewWalletSnapshot] {
+        activeWallets.compactMap(\.overviewWalletSnapshot)
+    }
+
+    private var statementCreditCardAccounts: [OverviewCreditCardStatementAccountSnapshot] {
+        activeWallets.compactMap { $0.overviewCreditCardStatementAccountSnapshot(records: transactionRecords) }
+    }
+
+    private var monthlyStatement: OverviewMonthlyStatementSnapshot {
+        OverviewLogic.monthlyStatement(
+            wallets: walletSnapshots,
+            transactionRecords: transactionRecords,
+            transactions: overviewTransactions,
+            currencyCode: currencyCode,
+            referenceDate: .now,
+            calendar: calendar
+        )
+    }
+
+    private var creditCardStatement: OverviewCreditCardStatementSnapshot {
+        OverviewLogic.creditCardStatement(
+            accounts: statementCreditCardAccounts,
+            transactions: overviewTransactions,
+            referenceDate: .now,
+            calendar: calendar
+        )
+    }
+
     private var effectiveFilters: TransactionFilterState {
         var effective = filterState
         effective.searchText = searchText
@@ -254,6 +294,9 @@ struct TransactionsView: View {
                         unifiedFilterRow
                     }
                         .zIndex(99)
+                },
+                trailingAccessory: {
+                    transactionsStatementMenuButton
                 }
             ) {
                 if !openDebtPositions.isEmpty {
@@ -261,6 +304,13 @@ struct TransactionsView: View {
                 }
                 transactionsContent
             }
+            .searchable(
+                text: $searchText,
+                isPresented: $isSearchPresented,
+                prompt: mistiaLocalized(vi: "Tìm tên giao dịch...", en: "Search transaction name...", ja: "取引名を検索...")
+            )
+            .searchToolbarBehavior(.minimize)
+            .searchPresentationToolbarBehavior(.avoidHidingContent)
             .navigationDestination(item: $destination) { route in
                 switch route {
                 case .profile:
@@ -268,23 +318,80 @@ struct TransactionsView: View {
                 }
             }
         }
-        .searchable(
-            text: $searchText,
-            isPresented: $isSearchPresented,
-            prompt: mistiaLocalized(vi: "Tìm tên giao dịch...", en: "Search transaction name...", ja: "取引名を検索...")
-        )
-        .searchToolbarBehavior(.minimize)
-        .searchPresentationToolbarBehavior(.avoidHidingContent)
+        .sheet(item: $shareItem) { item in
+            OverviewShareSheet(url: item.url)
+        }
         .sheet(item: $editorTarget) { target in
             TransactionEditorSheet(target: target)
                 .presentationDetents(target.quickCapture ? [.medium, .large] : [.large])
                 .presentationDragIndicator(.hidden)
+        }
+        .alert(
+            mistiaLocalized(vi: "Không thể xuất sao kê", en: "Couldn't export statement", ja: "明細を出力できませんでした"),
+            isPresented: Binding(
+                get: { exportErrorMessage != nil },
+                set: { isPresented in
+                    if !isPresented {
+                        exportErrorMessage = nil
+                    }
+                }
+            )
+        ) {
+            Button(mistiaLocalized(vi: "Đóng", en: "Close", ja: "閉じる"), role: .cancel) {
+                exportErrorMessage = nil
+            }
+        } message: {
+            Text(mistiaCatalog(exportErrorMessage ?? ""))
         }
         .task {
             try? MistiaBootstrap.seedDefaultCategoriesIfNeeded(
                 modelContext: modelContext,
                 sessionStore: sessionStore
             )
+        }
+    }
+
+    private var transactionsStatementMenuButton: some View {
+        MistiaHeaderCircleMenu(label: {
+            ZStack {
+                Image(systemName: "doc.text.fill")
+                    .font(.system(size: 15, weight: .bold))
+                    .symbolRenderingMode(.monochrome)
+                    .foregroundStyle(colorScheme == .dark ? .white.opacity(0.96) : Color.black.opacity(0.72))
+            }
+        }) {
+            Button(action: { exportStatement(.monthlySummary) }) {
+                Label(
+                    mistiaLocalized(vi: "Sao kê tổng hợp tháng", en: "Monthly summary statement", ja: "月次サマリー明細"),
+                    systemImage: "doc.text.image"
+                )
+            }
+
+            Button(action: { exportStatement(.creditCard) }) {
+                Label(
+                    mistiaLocalized(vi: "Sao kê thẻ tín dụng", en: "Credit card statement", ja: "クレジットカード明細"),
+                    systemImage: "creditcard.and.123"
+                )
+            }
+        }
+        .accessibilityLabel(mistiaLocalized(vi: "Sao kê", en: "Statement", ja: "明細"))
+    }
+
+    private func exportStatement(_ kind: OverviewStatementKind) {
+        do {
+            let document: OverviewStatementDocument
+
+            switch kind {
+            case .monthlySummary:
+                document = OverviewLogic.renderMonthlyStatement(monthlyStatement)
+            case .creditCard:
+                document = OverviewLogic.renderCreditCardStatement(creditCardStatement)
+            }
+
+            let url = try OverviewStatementExportSupport.write(document: document)
+            shareItem = OverviewShareItem(url: url)
+        } catch {
+            exportErrorMessage = error.localizedDescription
         }
     }
 

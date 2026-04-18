@@ -304,7 +304,17 @@ struct MistiaTopBar: View {
 
 private let mistiaHeaderCircleSize: CGFloat = 32
 
-private struct MistiaHeaderCircleButton<Content: View>: View {
+struct MistiaCircleGlassButtonLabel<Content: View>: View {
+    @ViewBuilder let content: Content
+
+    var body: some View {
+        content
+            .frame(width: mistiaHeaderCircleSize, height: mistiaHeaderCircleSize)
+            .contentShape(Circle())
+    }
+}
+
+struct MistiaHeaderCircleButton<Content: View>: View {
     @Environment(\.colorScheme) private var colorScheme
     let action: () -> Void
     @ViewBuilder let content: Content
@@ -313,17 +323,17 @@ private struct MistiaHeaderCircleButton<Content: View>: View {
         Group {
             if #available(iOS 26.0, *) {
                 Button(action: action) {
-                    content
-                        .frame(width: mistiaHeaderCircleSize, height: mistiaHeaderCircleSize)
-                        .contentShape(Circle())
+                    MistiaCircleGlassButtonLabel {
+                        content
+                    }
                 }
                 .buttonStyle(.glass(nativeGlassStyle))
                 .buttonBorderShape(.circle)
             } else {
                 Button(action: action) {
-                    content
-                        .frame(width: mistiaHeaderCircleSize, height: mistiaHeaderCircleSize)
-                        .contentShape(Circle())
+                    MistiaCircleGlassButtonLabel {
+                        content
+                    }
                         .background {
                             MistiaCircleGlassBackground(
                                 tint: colorScheme == .dark ? .white.opacity(0.12) : .white.opacity(0.30),
@@ -345,7 +355,54 @@ private struct MistiaHeaderCircleButton<Content: View>: View {
     }
 }
 
-struct MistiaPinnedTopBarScaffold<PinnedHeader: View, Content: View>: View {
+struct MistiaHeaderCircleMenu<Label: View, MenuContent: View>: View {
+    @Environment(\.colorScheme) private var colorScheme
+    @ViewBuilder let label: Label
+    @ViewBuilder let content: MenuContent
+
+    var body: some View {
+        Group {
+            if #available(iOS 26.0, *) {
+                Menu {
+                    content
+                } label: {
+                    MistiaCircleGlassButtonLabel {
+                        label
+                    }
+                }
+                .menuIndicator(.hidden)
+                .buttonStyle(.glass(nativeGlassStyle))
+                .buttonBorderShape(.circle)
+            } else {
+                Menu {
+                    content
+                } label: {
+                    MistiaCircleGlassButtonLabel {
+                        label
+                    }
+                    .background {
+                        MistiaCircleGlassBackground(
+                            tint: colorScheme == .dark ? .white.opacity(0.12) : .white.opacity(0.30),
+                            interactive: true
+                        )
+                    }
+                }
+                .menuIndicator(.hidden)
+                .buttonStyle(.plain)
+            }
+        }
+        .hoverEffect(.highlight)
+        .accessibilityAddTraits(.isButton)
+    }
+
+    @available(iOS 26.0, *)
+    private var nativeGlassStyle: Glass {
+        Glass.regular
+            .interactive()
+    }
+}
+
+struct MistiaPinnedTopBarScaffold<PinnedHeader: View, Content: View, TrailingAccessory: View>: View {
     let tone: MistiaBackgroundTone
     let title: String
     var embedsInNavigationStack: Bool = true
@@ -361,6 +418,7 @@ struct MistiaPinnedTopBarScaffold<PinnedHeader: View, Content: View>: View {
     var contentBottomPadding: CGFloat = 150
     var titleDisplayMode: NavigationBarItem.TitleDisplayMode = .inline
     @ViewBuilder let pinnedHeader: PinnedHeader
+    @ViewBuilder let trailingAccessory: TrailingAccessory
     @ViewBuilder let content: Content
 
     init(
@@ -379,6 +437,7 @@ struct MistiaPinnedTopBarScaffold<PinnedHeader: View, Content: View>: View {
         contentBottomPadding: CGFloat = 150,
         titleDisplayMode: NavigationBarItem.TitleDisplayMode = .inline,
         @ViewBuilder pinnedHeader: () -> PinnedHeader,
+        @ViewBuilder trailingAccessory: () -> TrailingAccessory,
         @ViewBuilder content: () -> Content
     ) {
         self.tone = tone
@@ -396,6 +455,7 @@ struct MistiaPinnedTopBarScaffold<PinnedHeader: View, Content: View>: View {
         self.contentBottomPadding = contentBottomPadding
         self.titleDisplayMode = titleDisplayMode
         self.pinnedHeader = pinnedHeader()
+        self.trailingAccessory = trailingAccessory()
         self.content = content()
     }
 
@@ -466,7 +526,7 @@ struct MistiaPinnedTopBarScaffold<PinnedHeader: View, Content: View>: View {
 
     @ToolbarContentBuilder
     private var trailingToolbarContent: some ToolbarContent {
-        if trailingSystemImage != nil {
+        if trailingSystemImage != nil || TrailingAccessory.self != EmptyView.self {
             ToolbarItem(placement: .topBarTrailing) {
                 trailingToolbarAccessory
             }
@@ -492,7 +552,9 @@ struct MistiaPinnedTopBarScaffold<PinnedHeader: View, Content: View>: View {
 
     @ViewBuilder
     private var trailingToolbarAccessory: some View {
-        if let trailingSystemImage {
+        if TrailingAccessory.self != EmptyView.self {
+            trailingAccessory
+        } else if let trailingSystemImage {
             MistiaHeaderCircleButton(action: onTrailingTap) {
                 Image(systemName: trailingSystemImage)
                     .font(.system(size: 17, weight: .bold))
@@ -503,7 +565,48 @@ struct MistiaPinnedTopBarScaffold<PinnedHeader: View, Content: View>: View {
     }
 }
 
-extension MistiaPinnedTopBarScaffold where PinnedHeader == EmptyView {
+extension MistiaPinnedTopBarScaffold where TrailingAccessory == EmptyView {
+    init(
+        tone: MistiaBackgroundTone,
+        title: String,
+        embedsInNavigationStack: Bool = true,
+        showsLeadingAvatar: Bool = true,
+        leadingInitials: String = "QL",
+        leadingAvatarURL: URL? = nil,
+        leadingSystemImage: String? = nil,
+        trailingSystemImage: String? = "bell",
+        hidesSystemBackButton: Bool = false,
+        onLeadingTap: @escaping () -> Void = {},
+        onTrailingTap: @escaping () -> Void = {},
+        contentSpacing: CGFloat = 18,
+        contentBottomPadding: CGFloat = 150,
+        titleDisplayMode: NavigationBarItem.TitleDisplayMode = .inline,
+        @ViewBuilder pinnedHeader: () -> PinnedHeader,
+        @ViewBuilder content: () -> Content
+    ) {
+        self.init(
+            tone: tone,
+            title: title,
+            embedsInNavigationStack: embedsInNavigationStack,
+            showsLeadingAvatar: showsLeadingAvatar,
+            leadingInitials: leadingInitials,
+            leadingAvatarURL: leadingAvatarURL,
+            leadingSystemImage: leadingSystemImage,
+            trailingSystemImage: trailingSystemImage,
+            hidesSystemBackButton: hidesSystemBackButton,
+            onLeadingTap: onLeadingTap,
+            onTrailingTap: onTrailingTap,
+            contentSpacing: contentSpacing,
+            contentBottomPadding: contentBottomPadding,
+            titleDisplayMode: titleDisplayMode,
+            pinnedHeader: pinnedHeader,
+            trailingAccessory: { EmptyView() },
+            content: content
+        )
+    }
+}
+
+extension MistiaPinnedTopBarScaffold where PinnedHeader == EmptyView, TrailingAccessory == EmptyView {
     init(
         tone: MistiaBackgroundTone,
         title: String,
@@ -537,6 +640,7 @@ extension MistiaPinnedTopBarScaffold where PinnedHeader == EmptyView {
             contentBottomPadding: contentBottomPadding,
             titleDisplayMode: titleDisplayMode,
             pinnedHeader: { EmptyView() },
+            trailingAccessory: { EmptyView() },
             content: content
         )
     }

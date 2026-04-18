@@ -2,16 +2,19 @@ import Charts
 import SwiftData
 import SwiftUI
 
-private let overviewAccentPurple = Color(red: 0.43, green: 0.23, blue: 0.76)
-
 private enum OverviewNavigationDestination: String, Identifiable {
     case profile
 
     var id: String { rawValue }
 }
 
+private struct OverviewExpenseDaySelection: Identifiable, Equatable {
+    let date: Date
+
+    var id: Date { date }
+}
+
 struct OverviewView: View {
-    @Environment(\.colorScheme) private var colorScheme
     @Environment(\.calendar) private var calendar
     @Environment(\.modelContext) private var modelContext
     @Environment(SessionStore.self) private var sessionStore
@@ -32,12 +35,20 @@ struct OverviewView: View {
     private var storedTransactions: [LedgerTransaction]
     @Query private var ownershipScopes: [OwnedRecordScope]
 
-    @State private var shareItem: OverviewShareItem?
-    @State private var exportErrorMessage: String?
+    @State private var editorTarget: TransactionEditorTarget?
+    @State private var selectedExpenseDay: OverviewExpenseDaySelection?
     @State private var destination: OverviewNavigationDestination?
 
     private var currentMonth: Date {
         PlanningLogic.startOfMonth(for: .now, calendar: calendar)
+    }
+
+    private var transactionsByID: [UUID: LedgerTransaction] {
+        Dictionary(
+            uniqueKeysWithValues: visibleTransactions
+                .filter { $0.deletedAt == nil && !$0.isArchived }
+                .map { ($0.id, $0) }
+        )
     }
 
     private var transactionRecords: [TransactionRecordSnapshot] {
@@ -67,10 +78,6 @@ struct OverviewView: View {
 
     private var planningCreditCardAccounts: [PlanningCreditCardAccountSnapshot] {
         storedWallets.compactMap { $0.planningCreditCardSnapshot(records: transactionRecords) }
-    }
-
-    private var statementCreditCardAccounts: [OverviewCreditCardStatementAccountSnapshot] {
-        storedWallets.compactMap { $0.overviewCreditCardStatementAccountSnapshot(records: transactionRecords) }
     }
 
     private var creditCardDueItems: [PlanningCreditCardDueSnapshot] {
@@ -178,24 +185,19 @@ struct OverviewView: View {
         )
     }
 
-    private var monthlyStatement: OverviewMonthlyStatementSnapshot {
-        OverviewLogic.monthlyStatement(
-            wallets: walletSnapshots,
-            transactionRecords: transactionRecords,
-            transactions: overviewTransactions,
-            currencyCode: currencyCode,
-            referenceDate: .now,
-            calendar: calendar
+    private var postedExpenseTransactionsByDay: [Date: [LedgerTransaction]] {
+        Dictionary(
+            grouping: visibleTransactions.filter { transaction in
+                transaction.deletedAt == nil
+                    && !transaction.isArchived
+                    && transaction.entryStatus == .posted
+                    && transaction.primaryKind == .expense
+            },
+            by: { calendar.startOfDay(for: $0.occurredAt) }
         )
-    }
-
-    private var creditCardStatement: OverviewCreditCardStatementSnapshot {
-        OverviewLogic.creditCardStatement(
-            accounts: statementCreditCardAccounts,
-            transactions: overviewTransactions,
-            referenceDate: .now,
-            calendar: calendar
-        )
+        .mapValues { transactions in
+            transactions.sorted(by: sortTransactionsByRecency)
+        }
     }
 
     var body: some View {
@@ -213,8 +215,8 @@ struct OverviewView: View {
                 FamilyContextChipBar()
                 OverviewHeroCard(
                     snapshot: dashboardSnapshot.hero,
-                    onExportMonthly: { exportStatement(.monthlySummary) },
-                    onExportCreditCard: { exportStatement(.creditCard) }
+                    isSheetPresented: selectedExpenseDay != nil,
+                    onOpenExpenseDay: openExpenseDay
                 )
                 if !dashboardSnapshot.budgetAlerts.isEmpty {
                     BudgetFocusSection(rows: dashboardSnapshot.budgetAlerts)
@@ -222,7 +224,10 @@ struct OverviewView: View {
                 if !dashboardSnapshot.dueAlerts.isEmpty {
                     UpcomingBillsSection(rows: dashboardSnapshot.dueAlerts)
                 }
-                RecentTransactionsSection(rows: dashboardSnapshot.recentTransactions)
+                RecentTransactionsSection(rows: dashboardSnapshot.recentTransactions) { row in
+                    guard let transaction = transactionsByID[row.id] else { return }
+                    presentEditor(for: transaction)
+                }
             }
             .navigationDestination(item: $destination) { route in
                 switch route {
@@ -231,25 +236,20 @@ struct OverviewView: View {
                 }
             }
         }
-        .sheet(item: $shareItem) { item in
-            OverviewShareSheet(url: item.url)
-        }
-        .alert(
-            mistiaLocalized(vi: "Không thể xuất sao kê", en: "Couldn't export statement", ja: "明細を出力できませんでした"),
-            isPresented: Binding(
-                get: { exportErrorMessage != nil },
-                set: { isPresented in
-                    if !isPresented {
-                        exportErrorMessage = nil
-                    }
-                }
+        .sheet(item: $selectedExpenseDay) { selection in
+            OverviewDayTransactionsSheet(
+                day: selection.date,
+                transactions: postedExpenseTransactionsByDay[selection.date] ?? [],
+                currencyCode: currencyCode,
+                onSelectTransaction: presentEditorFromDaySheet
             )
-        ) {
-            Button(mistiaLocalized(vi: "Đóng", en: "Close", ja: "閉じる"), role: .cancel) {
-                exportErrorMessage = nil
-            }
-        } message: {
-            Text(mistiaCatalog(exportErrorMessage ?? ""))
+            .presentationDetents([.medium, .large])
+            .presentationDragIndicator(.hidden)
+        }
+        .sheet(item: $editorTarget) { target in
+            TransactionEditorSheet(target: target)
+                .presentationDetents([.large])
+                .presentationDragIndicator(.hidden)
         }
         .task {
             try? MistiaBootstrap.seedDefaultCategoriesIfNeeded(
@@ -259,22 +259,34 @@ struct OverviewView: View {
         }
     }
 
-    private func exportStatement(_ kind: OverviewStatementKind) {
-        do {
-            let document: OverviewStatementDocument
+    private func openExpenseDay(_ date: Date) {
+        let day = calendar.startOfDay(for: date)
 
-            switch kind {
-            case .monthlySummary:
-                document = OverviewLogic.renderMonthlyStatement(monthlyStatement)
-            case .creditCard:
-                document = OverviewLogic.renderCreditCardStatement(creditCardStatement)
-            }
-
-            let url = try OverviewStatementExportSupport.write(document: document)
-            shareItem = OverviewShareItem(url: url)
-        } catch {
-            exportErrorMessage = error.localizedDescription
+        guard let transactions = postedExpenseTransactionsByDay[day], !transactions.isEmpty else {
+            return
         }
+
+        selectedExpenseDay = OverviewExpenseDaySelection(date: day)
+    }
+
+    private func presentEditor(for transaction: LedgerTransaction) {
+        editorTarget = TransactionEditorTarget(transaction: transaction)
+    }
+
+    private func presentEditorFromDaySheet(_ transaction: LedgerTransaction) {
+        selectedExpenseDay = nil
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.18) {
+            editorTarget = TransactionEditorTarget(transaction: transaction)
+        }
+    }
+
+    private func sortTransactionsByRecency(_ lhs: LedgerTransaction, _ rhs: LedgerTransaction) -> Bool {
+        if lhs.occurredAt != rhs.occurredAt {
+            return lhs.occurredAt > rhs.occurredAt
+        }
+
+        return lhs.createdAt > rhs.createdAt
     }
 }
 
@@ -283,17 +295,17 @@ private struct OverviewHeroCard: View {
     @State private var selectedWeekStart: Date
 
     let snapshot: OverviewHeroSnapshot
-    let onExportMonthly: () -> Void
-    let onExportCreditCard: () -> Void
+    let isSheetPresented: Bool
+    let onOpenExpenseDay: (Date) -> Void
 
     init(
         snapshot: OverviewHeroSnapshot,
-        onExportMonthly: @escaping () -> Void,
-        onExportCreditCard: @escaping () -> Void
+        isSheetPresented: Bool,
+        onOpenExpenseDay: @escaping (Date) -> Void
     ) {
         self.snapshot = snapshot
-        self.onExportMonthly = onExportMonthly
-        self.onExportCreditCard = onExportCreditCard
+        self.isSheetPresented = isSheetPresented
+        self.onOpenExpenseDay = onOpenExpenseDay
         _selectedWeekStart = State(initialValue: snapshot.currentWeekStart)
     }
 
@@ -337,11 +349,6 @@ private struct OverviewHeroCard: View {
                     }
 
                     Spacer(minLength: 8)
-
-                    OverviewStatementMenuButton(
-                        onExportMonthly: onExportMonthly,
-                        onExportCreditCard: onExportCreditCard
-                    )
                 }
 
                 HStack(spacing: 14) {
@@ -378,7 +385,10 @@ private struct OverviewHeroCard: View {
                         ForEach(snapshot.weekPages) { week in
                             OverviewWeekSpendingChart(
                                 week: week,
-                                insetSurface: insetSurface
+                                currencyCode: snapshot.currencyCode,
+                                insetSurface: insetSurface,
+                                isVisible: selectedWeekStart == week.weekStart && !isSheetPresented,
+                                onOpenExpenseDay: onOpenExpenseDay
                             )
                             .tag(week.weekStart)
                         }
@@ -396,70 +406,49 @@ private struct OverviewHeroCard: View {
     }
 }
 
-private struct OverviewStatementMenuButton: View {
-    let onExportMonthly: () -> Void
-    let onExportCreditCard: () -> Void
-
-    var body: some View {
-        Menu {
-            Button(action: onExportMonthly) {
-                Label(mistiaLocalized(vi: "Sao kê tổng hợp tháng", en: "Monthly summary statement", ja: "月次サマリー明細"), systemImage: "doc.text.image")
-            }
-
-            Button(action: onExportCreditCard) {
-                Label(mistiaLocalized(vi: "Sao kê thẻ tín dụng", en: "Credit card statement", ja: "クレジットカード明細"), systemImage: "creditcard.and.123")
-            }
-        } label: {
-            HStack(spacing: 5) {
-                Image(systemName: "doc.text.fill")
-                    .font(.system(size: 11, weight: .bold, design: .rounded))
-
-                Text(mistiaLocalized(vi: "Sao kê", en: "Statement", ja: "明細"))
-                    .font(.system(size: 12, weight: .bold, design: .rounded))
-            }
-            .foregroundStyle(Color(red: 0.88, green: 0.78, blue: 1.0))
-            .padding(.horizontal, 5)
-            .padding(.vertical, 3)
-        }
-        .menuIndicator(.hidden)
-        .buttonStyle(.glassProminent)
-        .buttonBorderShape(.capsule)
-        .tint(overviewAccentPurple)
-        .shadow(color: .black.opacity(0.16), radius: 16, y: 8)
-    }
-}
-
 private struct OverviewWeekSpendingChart: View {
+    @Environment(\.calendar) private var calendar
     @Environment(\.colorScheme) private var colorScheme
-    @State private var selectedPointIndex: Int?
-    @State private var showDetailSheet = false
+    @State private var selectedDate: Date?
 
     let week: OverviewWeekSpendingSnapshot
+    let currencyCode: String
     let insetSurface: Color
+    let isVisible: Bool
+    let onOpenExpenseDay: (Date) -> Void
 
     private var chartMax: Double {
         let highest = Double(week.points.map(\.valueMinor).max() ?? 0)
         return max(highest * 1.2, 1)
     }
 
+    private var selectedPoint: OverviewChartPoint? {
+        guard let selectedDate else { return nil }
+
+        return week.points.first { point in
+            calendar.isDate(point.date, inSameDayAs: selectedDate)
+                && point.valueMinor > 0
+        }
+    }
+
     var body: some View {
-        ZStack {
-            // Chart with gestures
-            Chart(week.points) { point in
+        Chart(week.points) { point in
+                let isSelected = selectedPoint?.id == point.id
+
                 BarMark(
-                    x: .value("Ngày", point.label),
+                    x: .value("Ngày", point.date, unit: .day),
                     y: .value("Giá trị", Double(point.valueMinor))
                 )
                 .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
                 .foregroundStyle(chartColor(for: point.intensity).gradient)
-                .opacity(0.92)
+                .opacity(selectedPoint == nil ? 0.92 : (isSelected ? 1 : 0.42))
             }
             .chartLegend(.hidden)
             .chartXAxis {
-                AxisMarks(values: week.points.map(\.label)) { value in
+                AxisMarks(values: week.points.map(\.date)) { value in
                     AxisValueLabel {
-                        if let label = value.as(String.self) {
-                            Text(label)
+                        if let date = value.as(Date.self) {
+                            Text(weekdayLabel(for: date))
                                 .font(.system(size: 10, weight: .semibold, design: .rounded))
                         }
                     }
@@ -479,102 +468,92 @@ private struct OverviewWeekSpendingChart: View {
                 }
             }
             .chartYScale(domain: 0 ... chartMax)
-            .overlay(
-                GeometryReader { geo in
-                    let width = geo.size.width
-                    let height = geo.size.height
-                    let columnWidth = width / CGFloat(week.points.count)
+            .chartOverlay { proxy in
+                GeometryReader { geometry in
+                    if let plotFrameAnchor = proxy.plotFrame {
+                        let plotFrame = geometry[plotFrameAnchor]
 
-                    ZStack(alignment: .topLeading) {
-                        // Gesture rectangles
-                        ForEach(Array(week.points.enumerated()), id: \.offset) { index, _ in
-                            ZStack {
-                                Rectangle()
-                                    .fill(Color.clear)
-                                    .contentShape(Rectangle())
-                                
-                                // Tooltip for this column
-                                if selectedPointIndex == index, !showDetailSheet {
-                                    VStack(spacing: 8) {
-                                        Text(week.points[index].label)
-                                            .font(.system(size: 12, weight: .semibold, design: .rounded))
-                                            .foregroundStyle(.secondary)
+                        ZStack(alignment: .topLeading) {
+                            Color.clear
+                                .frame(width: geometry.size.width, height: geometry.size.height)
+                                .contentShape(Rectangle())
+                                .gesture(
+                                    SpatialTapGesture()
+                                        .onEnded { event in
+                                            guard plotFrame.contains(event.location) else {
+                                                clearSelection()
+                                                return
+                                            }
 
-                                        Text(week.points[index].valueMinor.formattedCurrency(code: "JPY"))
-                                            .font(.system(size: 16, weight: .bold, design: .rounded))
-                                            .foregroundStyle(.primary)
+                                            selectPoint(at: event.location, in: plotFrame)
+                                        }
+                                )
+
+                            if plotFrame.width > 0 {
+                                HStack(spacing: 0) {
+                                    ForEach(week.points) { point in
+                                        Rectangle()
+                                            .fill(Color.clear)
+                                            .contentShape(Rectangle())
+                                            .allowsHitTesting(point.valueMinor > 0)
+                                            .onTapGesture {
+                                                guard point.valueMinor > 0 else { return }
+                                                withAnimation(.snappy) {
+                                                    selectedDate = point.date
+                                                }
+                                            }
+                                            .onLongPressGesture(minimumDuration: 0.35) {
+                                                UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+                                                clearSelection(animated: false)
+                                                onOpenExpenseDay(point.date)
+                                            }
                                     }
-                                    .padding(12)
-                                    .background(Color(UIColor.systemBackground))
-                                    .cornerRadius(8)
-                                    .shadow(radius: 4)
-                                    .offset(y: -50)
-                                    .frame(maxWidth: .infinity, alignment: .center)
                                 }
+                                .frame(width: plotFrame.width, height: plotFrame.height)
+                                .position(x: plotFrame.midX, y: plotFrame.midY)
                             }
-                            .frame(width: columnWidth, height: height)
-                            .offset(x: CGFloat(index) * columnWidth)
-                            .onTapGesture {
-                                withAnimation(.snappy) {
-                                    selectedPointIndex = index
-                                }
-                            }
-                            .onLongPressGesture(minimumDuration: 0.3) {
-                                UIImpactFeedbackGenerator(style: .medium).impactOccurred()
-                                withAnimation(.snappy) {
-                                    selectedPointIndex = index
-                                }
-                                showDetailSheet = true
+
+                            if let selectedPoint,
+                               let xPosition = proxy.position(forX: selectedPoint.date) {
+                                let anchorX = plotFrame.origin.x + xPosition
+                                let barTopY = plotFrame.origin.y + (proxy.position(forY: Double(selectedPoint.valueMinor)) ?? 0)
+                                let clampedX = min(
+                                    max(anchorX, plotFrame.minX + 48),
+                                    plotFrame.maxX - 48
+                                )
+                                let calloutY = max(plotFrame.minY + 18, barTopY - 22)
+
+                                OverviewChartSelectionCallout(
+                                    point: selectedPoint,
+                                    currencyCode: currencyCode
+                                )
+                                .position(x: clampedX, y: calloutY)
+                                .allowsHitTesting(false)
                             }
                         }
                     }
                 }
-            )            }        .frame(height: 122)
+            }
+            .frame(height: 122)
         .padding(.horizontal, 12)
         .padding(.vertical, 10)
         .background {
             RoundedRectangle(cornerRadius: 18, style: .continuous)
                 .fill(insetSurface)
         }
-        .sheet(isPresented: $showDetailSheet) {
-            if let index = selectedPointIndex, index < week.points.count {
-                VStack(alignment: .leading, spacing: 16) {
-                    HStack {
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text(mistiaLocalized(vi: "Giao dịch ngày", en: "Transactions on", ja: "取引日"))
-                                .font(.system(size: 12, weight: .semibold, design: .rounded))
-                                .foregroundStyle(.secondary)
+        .onChange(of: selectedDate) { _, newValue in
+            guard let newValue,
+                  let nearestPoint = nearestPoint(to: newValue),
+                  !calendar.isDate(nearestPoint.date, inSameDayAs: newValue)
+            else {
+                return
+            }
 
-                            Text(week.points[index].label)
-                                .font(.system(size: 18, weight: .bold, design: .rounded))
-                                .foregroundStyle(.primary)
-                        }
-
-                        Spacer()
-
-                        Text(week.points[index].valueMinor.formattedCurrency(code: "JPY"))
-                            .font(.system(size: 16, weight: .bold, design: .rounded))
-                            .foregroundStyle(Color(red: 0.96, green: 0.36, blue: 0.49))
-                    }
-                    .padding(.horizontal, 16)
-                    .padding(.top, 16)
-
-                    Divider()
-                        .padding(.horizontal, 16)
-
-                    VStack(spacing: 12) {
-                        Text(mistiaLocalized(vi: "Danh sách giao dịch sẽ được hiển thị tại đây", en: "Transaction list will be displayed here", ja: "取引リストがここに表示されます"))
-                            .font(.system(size: 14, weight: .semibold, design: .rounded))
-                            .foregroundStyle(.secondary)
-                            .frame(maxWidth: .infinity, alignment: .center)
-                            .padding(.vertical, 32)
-                    }
-
-                    Spacer()
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .presentationDetents([.medium, .large])
-                .presentationDragIndicator(.visible)
+            selectedDate = nearestPoint.date
+        }
+        .onChange(of: isVisible) { _, visible in
+            if !visible {
+                clearSelection(animated: false)
             }
         }
     }
@@ -589,6 +568,279 @@ private struct OverviewWeekSpendingChart: View {
             green: start.green + (end.green - start.green) * clamped,
             blue: start.blue + (end.blue - start.blue) * clamped
         )
+    }
+
+    private func weekdayLabel(for date: Date) -> String {
+        week.points.first { calendar.isDate($0.date, inSameDayAs: date) }?.label
+            ?? MistiaDateFormatting.weekdayLabel(for: date, calendar: calendar)
+    }
+
+    private func nearestPoint(to date: Date) -> OverviewChartPoint? {
+        week.points.min { lhs, rhs in
+            abs(lhs.date.timeIntervalSince(date)) < abs(rhs.date.timeIntervalSince(date))
+        }
+    }
+
+    private func selectPoint(at location: CGPoint, in plotFrame: CGRect) {
+        guard plotFrame.width > 0, !week.points.isEmpty else {
+            clearSelection()
+            return
+        }
+
+        let columnWidth = plotFrame.width / CGFloat(week.points.count)
+        let relativeX = min(max(location.x - plotFrame.minX, 0), plotFrame.width - 1)
+        let rawIndex = Int(floor(relativeX / max(columnWidth, 1)))
+        let index = min(max(rawIndex, 0), week.points.count - 1)
+        let point = week.points[index]
+
+        guard point.valueMinor > 0 else {
+            clearSelection()
+            return
+        }
+
+        withAnimation(.snappy) {
+            selectedDate = point.date
+        }
+    }
+
+    private func clearSelection(animated: Bool = true) {
+        if animated {
+            withAnimation(.snappy) {
+                selectedDate = nil
+            }
+        } else {
+            selectedDate = nil
+        }
+    }
+}
+
+private struct OverviewChartSelectionCallout: View {
+    @Environment(\.colorScheme) private var colorScheme
+
+    let point: OverviewChartPoint
+    let currencyCode: String
+
+    private var tint: Color {
+        colorScheme == .dark ? .white.opacity(0.08) : .white.opacity(0.96)
+    }
+
+    var body: some View {
+        MistiaGlassCard(
+            cornerRadius: 20,
+            tint: tint,
+            padding: 0
+        ) {
+            Text(point.valueMinor.formattedCurrency(code: currencyCode))
+                .font(.system(size: 15, weight: .bold, design: .rounded))
+                .foregroundStyle(.primary)
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
+                .padding(.horizontal, 14)
+                .padding(.vertical, 8)
+        }
+        .fixedSize()
+        .shadow(color: .black.opacity(colorScheme == .dark ? 0.18 : 0.10), radius: 18, y: 8)
+    }
+}
+
+private struct OverviewDayTransactionsSheet: View {
+    @Environment(\.dismiss) private var dismiss
+    @Environment(\.calendar) private var calendar
+    @Environment(\.colorScheme) private var colorScheme
+
+    let day: Date
+    let transactions: [LedgerTransaction]
+    let currencyCode: String
+    let onSelectTransaction: (LedgerTransaction) -> Void
+
+    private var totalMinor: Int64 {
+        transactions.reduce(into: Int64.zero) { partialResult, transaction in
+            partialResult += transaction.amountMinor
+        }
+    }
+
+    private var groupedBackground: Color {
+        Color(UIColor.systemGroupedBackground)
+    }
+
+    var body: some View {
+        NavigationStack {
+            ZStack {
+                groupedBackground
+                    .ignoresSafeArea()
+
+                ScrollView(.vertical, showsIndicators: false) {
+                    VStack(spacing: 18) {
+                        MistiaBlockCard(cornerRadius: 24, padding: 18) {
+                            VStack(alignment: .leading, spacing: 16) {
+                                Text(
+                                    mistiaLocalized(
+                                        vi: "Chi tiêu trong ngày",
+                                        en: "Daily expenses",
+                                        ja: "その日の支出"
+                                    )
+                                )
+                                .font(.system(size: 13, weight: .bold, design: .rounded))
+                                .foregroundStyle(.secondary)
+                                .textCase(.uppercase)
+                                .tracking(0.6)
+
+                                Text(MistiaDateFormatting.fullDateString(for: day, calendar: calendar))
+                                    .font(.system(size: 28, weight: .bold, design: .rounded))
+                                    .foregroundStyle(.primary)
+
+                                HStack(spacing: 12) {
+                                    OverviewDaySummaryMetric(
+                                        title: mistiaLocalized(vi: "Tổng chi", en: "Total spent", ja: "合計支出"),
+                                        value: totalMinor.formattedCurrency(code: currencyCode),
+                                        tint: MistiaAccent.expense.color
+                                    )
+
+                                    Divider()
+                                        .frame(height: 28)
+
+                                    OverviewDaySummaryMetric(
+                                        title: mistiaLocalized(vi: "Giao dịch", en: "Transactions", ja: "取引"),
+                                        value: "\(transactions.count)",
+                                        tint: colorScheme == .dark ? .white : .primary
+                                    )
+                                }
+                            }
+                        }
+
+                        MistiaBlockCard(cornerRadius: 22, padding: 0) {
+                            VStack(spacing: 0) {
+                                ForEach(Array(transactions.enumerated()), id: \.element.id) { index, transaction in
+                                    Button {
+                                        dismiss()
+                                        onSelectTransaction(transaction)
+                                    } label: {
+                                        OverviewDayTransactionRow(
+                                            transaction: transaction,
+                                            currencyCode: currencyCode
+                                        )
+                                        .padding(.horizontal, 14)
+                                        .padding(.vertical, 12)
+                                    }
+                                    .buttonStyle(MistiaPressableButtonStyle(cornerRadius: 18))
+
+                                    if index < transactions.count - 1 {
+                                        Divider()
+                                            .padding(.leading, 52)
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    .padding(.horizontal, 18)
+                    .padding(.top, 14)
+                    .padding(.bottom, 28)
+                }
+            }
+            .navigationTitle(mistiaLocalized(vi: "Chi tiết ngày", en: "Day details", ja: "日別詳細"))
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    Button {
+                        dismiss()
+                    } label: {
+                        Image(systemName: "xmark")
+                            .font(.system(size: 16, weight: .semibold))
+                            .foregroundStyle(.secondary)
+                    }
+                }
+            }
+            .toolbarBackground(groupedBackground, for: .navigationBar)
+            .toolbarBackground(.visible, for: .navigationBar)
+        }
+        .presentationBackground(groupedBackground)
+    }
+}
+
+private struct OverviewDaySummaryMetric: View {
+    let title: String
+    let value: String
+    let tint: Color
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(title)
+                .font(.system(size: 11, weight: .semibold, design: .rounded))
+                .foregroundStyle(.secondary)
+
+            Text(value)
+                .font(.system(size: 16, weight: .bold, design: .rounded))
+                .foregroundStyle(tint)
+                .lineLimit(1)
+                .minimumScaleFactor(0.72)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+}
+
+private struct OverviewDayTransactionRow: View {
+    let transaction: LedgerTransaction
+    let currencyCode: String
+
+    private var titleText: String {
+        let trimmed = transaction.title.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        if !trimmed.isEmpty {
+            return trimmed
+        }
+
+        return transaction.category?.localizedDisplayName
+            ?? mistiaLocalized(vi: "Chi tiêu", en: "Expense", ja: "支出")
+    }
+
+    private var subtitleText: String {
+        let timeText = transaction.occurredAt.formatted(
+            Date.FormatStyle(date: .omitted, time: .shortened)
+                .locale(MistiaAppLanguage.current.locale)
+        )
+        let walletName = transaction.sourceWallet?.name
+            ?? mistiaLocalized(vi: "Chưa chọn ví", en: "No wallet selected", ja: "ウォレット未選択")
+
+        if let categoryName = transaction.category?.localizedDisplayName,
+           categoryName != titleText {
+            return "\(timeText) • \(walletName) • \(categoryName)"
+        }
+
+        return "\(timeText) • \(walletName)"
+    }
+
+    private var iconName: String {
+        transaction.category?.iconSymbolName ?? transaction.primaryKind.financeIconToken
+    }
+
+    private var amountColor: Color {
+        MistiaAccent.expense.color
+    }
+
+    var body: some View {
+        HStack(spacing: 12) {
+            MistiaFinanceIconView(icon: iconName, fallbackColor: amountColor, size: 34)
+
+            VStack(alignment: .leading, spacing: 4) {
+                Text(titleText)
+                    .font(.system(size: 16, weight: .semibold, design: .rounded))
+                    .foregroundStyle(.primary)
+                    .lineLimit(1)
+
+                Text(subtitleText)
+                    .font(.system(size: 12, weight: .medium, design: .rounded))
+                    .foregroundStyle(.secondary)
+                    .lineLimit(2)
+            }
+
+            Spacer(minLength: 8)
+
+            Text("-" + transaction.amountMinor.formattedCurrency(code: currencyCode))
+                .font(.system(size: 15, weight: .bold, design: .rounded))
+                .foregroundStyle(amountColor)
+                .lineLimit(1)
+                .minimumScaleFactor(0.8)
+        }
     }
 }
 
@@ -765,6 +1017,7 @@ private struct DueRow: View {
 
 private struct RecentTransactionsSection: View {
     let rows: [OverviewRecentTransactionSnapshot]
+    let onSelect: (OverviewRecentTransactionSnapshot) -> Void
 
     var body: some View {
         OverviewSection(title: mistiaLocalized(vi: "Giao dịch gần đây", en: "Recent transactions", ja: "最近の取引")) {
@@ -779,9 +1032,14 @@ private struct RecentTransactionsSection: View {
             } else {
                 VStack(spacing: 0) {
                     ForEach(Array(rows.enumerated()), id: \.element.id) { index, row in
-                        RecentTransactionRow(row: row)
-                            .padding(.horizontal, 14)
-                            .padding(.vertical, 12)
+                        Button {
+                            onSelect(row)
+                        } label: {
+                            RecentTransactionRow(row: row)
+                                .padding(.horizontal, 14)
+                                .padding(.vertical, 12)
+                        }
+                        .buttonStyle(MistiaPressableButtonStyle(cornerRadius: 18))
 
                         if index < rows.count - 1 {
                             Divider()
