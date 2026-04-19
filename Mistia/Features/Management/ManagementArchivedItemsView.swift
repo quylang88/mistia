@@ -61,19 +61,7 @@ struct ManagementArchivedItemsView: View {
     }
 
     private var navigationTitle: String {
-        guard isSelecting else {
-            return mistiaLocalized(vi: "Mục đã lưu trữ", en: "Archived items", ja: "アーカイブ済みアイテム")
-        }
-
-        if selectedItems.isEmpty {
-            return mistiaLocalized(vi: "Chọn mục", en: "Select items", ja: "項目を選択")
-        }
-
-        return mistiaLocalized(
-            vi: "\(selectedItems.count) mục đã chọn",
-            en: "\(selectedItems.count) selected",
-            ja: "\(selectedItems.count)件を選択"
-        )
+        mistiaLocalized(vi: "Mục đã lưu trữ", en: "Archived items", ja: "アーカイブ済みアイテム")
     }
 
     var body: some View {
@@ -239,16 +227,13 @@ struct ManagementArchivedItemsView: View {
     @ViewBuilder
     private var trailingToolbarAccessory: some View {
         if isSelecting {
-            MistiaHeaderCircleButton(action: exitSelectionMode) {
-                Image(systemName: "xmark")
-                    .font(.system(size: 16, weight: .bold))
-                    .foregroundStyle(.primary)
-            }
+            Button(mistiaLocalized(vi: "Xong", en: "Done", ja: "完了"), action: exitSelectionMode)
+                .font(.system(size: 17, weight: .bold))
+                .foregroundStyle(MistiaAccent.purple.color)
         } else if hasArchivedItems {
-            ArchivedToolbarGlassButton(
-                title: mistiaLocalized(vi: "Chọn", en: "Select", ja: "選択"),
-                action: enterSelectionMode
-            )
+            Button(mistiaLocalized(vi: "Chọn", en: "Select", ja: "選択"), action: enterSelectionMode)
+                .font(.system(size: 17, weight: .regular))
+                .foregroundStyle(MistiaAccent.purple.color)
         }
     }
 
@@ -806,24 +791,5 @@ private struct ArchivedBottomActionBar: View {
             en: "\(selectedCount) selected",
             ja: "\(selectedCount)件を選択"
         )
-    }
-}
-
-
-private struct ArchivedToolbarGlassButton: View {
-    let title: String
-    let action: () -> Void
-
-    var body: some View {
-        Button(action: action) {
-            Text(title)
-                .font(.system(size: 13, weight: .bold, design: .rounded))
-                .foregroundStyle(.primary)
-                .padding(.horizontal, 12)
-                .frame(height: 30)
-        }
-        .buttonStyle(.glass)
-        .buttonBorderShape(.capsule)
-        .accessibilityLabel(title)
     }
 }
