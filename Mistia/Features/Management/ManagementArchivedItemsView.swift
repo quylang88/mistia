@@ -87,7 +87,7 @@ struct ManagementArchivedItemsView: View {
             hidesSystemBackButton: true,
             onLeadingTap: { dismiss() },
             contentSpacing: 16,
-            contentBottomPadding: isSelecting ? 72 : 150
+            contentBottomPadding: isSelecting ? 110 : 150
         ) {
             EmptyView()
         } trailingAccessory: {
@@ -96,14 +96,16 @@ struct ManagementArchivedItemsView: View {
             archivedContent
         }
         .toolbar(isSelecting ? .hidden : .visible, for: .tabBar)
-        .safeAreaInset(edge: .bottom) {
+        .safeAreaInset(edge: .bottom, spacing: 0) {
             if isSelecting {
                 ArchivedBottomActionBar(
+                    selectedCount: selectedItems.count,
                     canRestore: hasSelection,
                     canDelete: hasSelection,
                     onRestore: restoreSelectedItems,
                     onDelete: { showsDeleteConfirmation = true }
                 )
+                .transition(.move(edge: .bottom).combined(with: .opacity))
             }
         }
         .confirmationDialog(
@@ -756,6 +758,7 @@ private struct ArchivedTypeBadge: View {
 }
 
 private struct ArchivedBottomActionBar: View {
+    let selectedCount: Int
     let canRestore: Bool
     let canDelete: Bool
     let onRestore: () -> Void
@@ -763,52 +766,49 @@ private struct ArchivedBottomActionBar: View {
 
     var body: some View {
         HStack {
-            ArchivedBottomActionButton(
-                accessibilityTitle: mistiaLocalized(vi: "Khôi phục", en: "Restore", ja: "復元"),
-                systemImage: "arrow.uturn.backward",
-                tint: MistiaAccent.purple.color,
-                isEnabled: canRestore,
-                action: onRestore
-            )
+            Button(action: onRestore) {
+                Image(systemName: "arrow.uturn.backward")
+                    .font(.system(size: 20, weight: .bold))
+                    .foregroundStyle(canRestore ? MistiaAccent.purple.color : .secondary.opacity(0.5))
+            }
+            .disabled(!canRestore)
+            .frame(width: 44, height: 44)
 
             Spacer()
 
-            ArchivedBottomActionButton(
-                accessibilityTitle: mistiaLocalized(vi: "Xóa", en: "Delete", ja: "削除"),
-                systemImage: "trash",
-                tint: .red,
-                isEnabled: canDelete,
-                action: onDelete
-            )
+            Text(selectionText)
+                .font(.system(size: 15, weight: .bold, design: .rounded))
+                .foregroundStyle(.primary)
+
+            Spacer()
+
+            Button(action: onDelete) {
+                Image(systemName: "trash")
+                    .font(.system(size: 20, weight: .bold))
+                    .foregroundStyle(canDelete ? .red : .secondary.opacity(0.5))
+            }
+            .disabled(!canDelete)
+            .frame(width: 44, height: 44)
         }
-        .frame(maxWidth: .infinity)
-        .padding(.horizontal, 28)
-        .padding(.top, 8)
-        .padding(.bottom, 8)
+        .padding(.horizontal, 20)
+        .padding(.top, 12)
+        .padding(.bottom, 34) // Standard TabBar height area
+        .background(.ultraThinMaterial)
+    }
+
+    private var selectionText: String {
+        if selectedCount == 0 {
+            return mistiaLocalized(vi: "Chọn mục", en: "Select items", ja: "項目を選択")
+        }
+
+        return mistiaLocalized(
+            vi: "Đã chọn \(selectedCount) mục",
+            en: "\(selectedCount) selected",
+            ja: "\(selectedCount)件を選択"
+        )
     }
 }
 
-private struct ArchivedBottomActionButton: View {
-    let accessibilityTitle: String
-    let systemImage: String
-    let tint: Color
-    let isEnabled: Bool
-    let action: () -> Void
-
-    var body: some View {
-        Button(action: action) {
-            Image(systemName: systemImage)
-                .font(.system(size: 18, weight: .semibold))
-                .foregroundStyle(isEnabled ? tint : Color.secondary.opacity(0.82))
-                .frame(width: 44, height: 44)
-        }
-        .buttonStyle(.glass)
-        .buttonBorderShape(.circle)
-        .opacity(isEnabled ? 1 : 0.48)
-        .disabled(!isEnabled)
-        .accessibilityLabel(accessibilityTitle)
-    }
-}
 
 private struct ArchivedToolbarGlassButton: View {
     let title: String
@@ -817,10 +817,10 @@ private struct ArchivedToolbarGlassButton: View {
     var body: some View {
         Button(action: action) {
             Text(title)
-                .font(.system(size: 15, weight: .semibold, design: .rounded))
+                .font(.system(size: 13, weight: .bold, design: .rounded))
                 .foregroundStyle(.primary)
                 .padding(.horizontal, 12)
-                .padding(.vertical, 8)
+                .frame(height: 30)
         }
         .buttonStyle(.glass)
         .buttonBorderShape(.capsule)
