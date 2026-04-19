@@ -4,6 +4,8 @@ import UIKit
 enum MistiaAppStorageKey {
     static let appearanceMode = "mistia.appearance.mode"
     static let hideQuickCreate = "mistia.chrome.hideQuickCreate"
+    static let mistiaShortcutKind = "mistia.shortcut.kind"
+    static let mistiaShortcutMemberUserID = "mistia.shortcut.member-user-id"
     static let didSeedManagementCategories = "mistia.management.didSeedCategories"
     static let currencyCode = "mistia.settings.currency.code"
     static let appLanguage = MistiaAppLanguage.userDefaultsKey

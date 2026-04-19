@@ -920,23 +920,6 @@
         }
       }
     },
-    "Mistia Assistant" : {
-      "extractionState" : "stale",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Mistia Assistant"
-          }
-        },
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Mistia Assistant"
-          }
-        }
-      }
-    },
     "Mistia/MistiaSyncConfig.plist" : {
 
     },
@@ -1402,23 +1385,6 @@
     },
     "SUPABASE_URL" : {
 
-    },
-    "Tab AI assistant đang được giữ chỗ để hoàn thiện UI trước, chưa nối logic chat hoặc automation." : {
-      "extractionState" : "stale",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "The AI assistant tab is a placeholder while we finish the UI, and chat or automation logic is not connected yet."
-          }
-        },
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "AIアシスタントタブはUI仕上げのためのプレースホルダーで、チャットや自動化ロジックはまだ接続されていません。"
-          }
-        }
-      }
     },
     "Tab này đang để trống để ưu tiên hoàn thiện giao diện Tổng quan trước." : {
       "extractionState" : "stale",

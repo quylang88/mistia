@@ -68,7 +68,7 @@ enum ManagementDataActionKind: String, Identifiable, CaseIterable {
         case .importData:
             mistiaLocalized(vi: "Nhập dữ liệu", en: "Import data", ja: "データを取り込む")
         case .backupRestore:
-            mistiaLocalized(vi: "Backup & khôi phục", en: "Backup & restore", ja: "バックアップと復元")
+            mistiaLocalized(vi: "Sao lưu & khôi phục", en: "Backup & restore", ja: "バックアップ & 復元")
         case .deleteAllData:
             mistiaLocalized(vi: "Xóa tất cả dữ liệu", en: "Delete all data", ja: "すべてのデータを削除")
         }

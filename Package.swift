@@ -43,6 +43,7 @@ let package = Package(
                 "CoreLogic/FamilyLogic.swift",
                 "CoreLogic/FinanceEnums.swift",
                 "CoreLogic/MistiaLocalization.swift",
+                "CoreLogic/MistiaShortcutLogic.swift",
                 "CoreLogic/MistiaSystemCategoryIdentity.swift",
                 "CoreLogic/OverviewLogic.swift",
                 "CoreLogic/PlanningLogic.swift",

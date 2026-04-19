@@ -76,11 +76,15 @@ struct RootTabView: View {
   @Environment(\.colorScheme) private var colorScheme
   @Environment(\.modelContext) private var modelContext
   @Environment(SessionStore.self) private var sessionStore
+  @Environment(FamilyContextStore.self) private var familyContextStore
   @Environment(MistiaUIState.self) private var uiState
   @AppStorage(MistiaAppStorageKey.appearanceMode) private var appearanceModeRawValue =
     MistiaAppearanceMode.automatic.rawValue
   @AppStorage(MistiaAppStorageKey.appLanguage) private var appLanguageRawValue = ""
   @AppStorage(MistiaAppStorageKey.hideQuickCreate) private var hideQuickCreate = false
+  @AppStorage(MistiaAppStorageKey.mistiaShortcutKind) private var shortcutKindRawValue =
+    MistiaShortcutKind.profile.rawValue
+  @AppStorage(MistiaAppStorageKey.mistiaShortcutMemberUserID) private var shortcutMemberUserIDRawValue = ""
   @State private var selectedTab: MistiaTab = .overview
   @State private var isQuickCreateMenuVisible = false
   @State private var isQuickCreateMenuExpanded = false
@@ -102,10 +106,8 @@ struct RootTabView: View {
           appLanguage: appLanguage,
           hidesQuickCreate: hideQuickCreate || isQuickCreateMenuVisible,
           hidesTabBar: uiState.isTabBarHidden,
-          onAssistantTap: {
-            dismissQuickCreateMenu()
-            activeSheet = .assistant
-          },
+          shortcutPresentation: shortcutResolution.presentation,
+          onShortcutTap: handlePinnedShortcutTap,
           onQuickCreateTap: toggleQuickCreateMenu,
           onQuickCreateFrameChange: { frame in
             if !isQuickCreateMenuVisible {
@@ -142,9 +144,11 @@ struct RootTabView: View {
       }
       .sheet(item: $activeSheet) { sheet in
         switch sheet {
-        case .assistant:
-          MistiaAssistantSheet()
-            .presentationDetents([.medium])
+        case .shortcut(let destination):
+          NavigationStack {
+            shortcutSheetView(for: destination)
+          }
+            .presentationDetents([.large])
             .presentationDragIndicator(.hidden)
         case .quickCreate(let destination):
           TransactionEditorSheet(target: quickCreateTarget(for: destination)) { completion in
@@ -161,6 +165,9 @@ struct RootTabView: View {
           modelContext: self.modelContext,
           sessionStore: self.sessionStore
         )
+      }
+      .task(id: shortcutNormalizationKey) {
+        persistShortcutSelectionIfNeeded(shortcutResolution.selection)
       }
       .onChange(of: hideQuickCreate) { _, newValue in
         if newValue {
@@ -179,6 +186,63 @@ struct RootTabView: View {
 
   private var appLanguage: MistiaAppLanguage {
     MistiaAppLanguage.resolve(storedRawValue: appLanguageRawValue)
+  }
+
+  private var shortcutAccent: Color {
+    colorScheme == .dark ? MistiaAccent.lightPurple.color : MistiaAccent.purple.color
+  }
+
+  private var storedShortcutSelection: MistiaShortcutSelection {
+    MistiaShortcutSelection(
+      storedKindRawValue: shortcutKindRawValue,
+      storedMemberUserIDRawValue: shortcutMemberUserIDRawValue
+    )
+  }
+
+  private var shortcutInput: MistiaShortcutResolveInput {
+    MistiaShortcutResolveInput(
+      currentUserInitials: sessionStore.summary?.initials ?? "MI",
+      currentUserAvatarURL: sessionStore.summary?.avatarURL,
+      familyID: familyContextStore.family?.id,
+      canOpenFamilyHome: familyContextStore.canPresentFamilyHome,
+      members: familyContextStore.members.map { member in
+        MistiaShortcutMemberContext(
+          userID: member.userID,
+          displayName: member.displayName,
+          initials: String(member.displayName.prefix(2)).uppercased(),
+          avatarURL: member.avatarURL,
+          canView: familyContextStore.capabilities(for: member).canViewTarget,
+          isCurrentUser: member.userID == sessionStore.signedInUserID
+        )
+      }
+    )
+  }
+
+  private var shortcutResolution: MistiaShortcutResolution {
+    MistiaShortcutLogic.resolve(
+      selection: storedShortcutSelection,
+      input: shortcutInput
+    )
+  }
+
+  private var shortcutNormalizationKey: String {
+    let memberFingerprint = familyContextStore.members
+      .map { member in
+        let canView = familyContextStore.capabilities(for: member).canViewTarget ? "1" : "0"
+        let isCurrent = member.userID == sessionStore.signedInUserID ? "1" : "0"
+        return "\(member.userID.uuidString.lowercased()):\(canView):\(isCurrent)"
+      }
+      .sorted()
+      .joined(separator: ",")
+
+    return [
+      shortcutKindRawValue,
+      shortcutMemberUserIDRawValue,
+      familyContextStore.family?.id.uuidString.lowercased() ?? "none",
+      familyContextStore.canPresentFamilyHome ? "1" : "0",
+      sessionStore.signedInUserID?.uuidString.lowercased() ?? "none",
+      memberFingerprint
+    ].joined(separator: "|")
   }
 
   private func toggleQuickCreateMenu() {
@@ -224,6 +288,67 @@ struct RootTabView: View {
     }
   }
 
+  private func handlePinnedShortcutTap() {
+    dismissQuickCreateMenu()
+
+    switch shortcutResolution.presentation.action {
+    case .profile:
+      activeSheet = .shortcut(.profile)
+
+    case .syncSettings:
+      if sessionStore.isSignedIn && sessionStore.isConfigured {
+        activeSheet = .shortcut(.syncSettings)
+      } else {
+        activeSheet = .shortcut(.profile)
+      }
+
+    case .backupRestore:
+      activeSheet = .shortcut(.backupRestore)
+
+    case .archivedItems:
+      activeSheet = .shortcut(.archivedItems)
+
+    case .familyOverview:
+      familyContextStore.activateFamilyHome()
+      activeSheet = .shortcut(.familyOverview)
+
+    case .memberOverview(let userID):
+      guard let member = familyContextStore.members.first(where: { $0.userID == userID }) else {
+        activeSheet = .shortcut(.profile)
+        return
+      }
+
+      familyContextStore.activateMemberView(member)
+      selectedTab = .overview
+    }
+  }
+
+  private func persistShortcutSelectionIfNeeded(_ selection: MistiaShortcutSelection) {
+    guard shortcutKindRawValue != selection.storedKindRawValue
+      || shortcutMemberUserIDRawValue != selection.storedMemberUserIDRawValue else {
+      return
+    }
+
+    shortcutKindRawValue = selection.storedKindRawValue
+    shortcutMemberUserIDRawValue = selection.storedMemberUserIDRawValue
+  }
+
+  @ViewBuilder
+  private func shortcutSheetView(for destination: RootShortcutDestination) -> some View {
+    switch destination {
+    case .profile:
+      ManagementAccountView()
+    case .syncSettings:
+      ManagementSyncSettingsView(accent: shortcutAccent)
+    case .backupRestore:
+      ManagementBackupRestoreView()
+    case .archivedItems:
+      ManagementArchivedItemsView()
+    case .familyOverview:
+      FamilyOverviewScreen()
+    }
+  }
+
   private func quickCreateTarget(for destination: MistiaQuickCreateDestination) -> TransactionEditorTarget {
     switch destination {
     case .expense:
@@ -256,60 +381,27 @@ struct RootTabView: View {
 }
 
 private enum RootSheet: Identifiable {
-  case assistant
+  case shortcut(RootShortcutDestination)
   case quickCreate(MistiaQuickCreateDestination)
 
   var id: String {
     switch self {
-    case .assistant:
-      "assistant"
+    case .shortcut(let destination):
+      "shortcut-\(destination.rawValue)"
     case .quickCreate(let destination):
       "quick-create-\(destination.rawValue)"
     }
   }
 }
 
-private struct MistiaAssistantSheet: View {
-  var body: some View {
-    ZStack {
-      MistiaBackgroundView()
+private enum RootShortcutDestination: String, Identifiable {
+  case profile
+  case syncSettings
+  case backupRestore
+  case archivedItems
+  case familyOverview
 
-      VStack(spacing: 18) {
-        Text(mistiaLocalized(vi: "Mistia Assistant", en: "Mistia Assistant", ja: "Mistia Assistant"))
-          .font(.system(size: 24, weight: .bold, design: .rounded))
-
-        MistiaGlassCard(
-          cornerRadius: 28,
-          tint: Color(red: 0.29, green: 0.50, blue: 0.96).opacity(0.14)
-        ) {
-          VStack(spacing: 14) {
-            ZStack {
-              MistiaRoundedGlassBackground(
-                cornerRadius: 24,
-                tint: Color.white.opacity(0.08)
-              )
-
-              MistiaAssistantGlyph(isCompact: false)
-            }
-            .frame(width: 76, height: 76)
-
-            Text(
-              mistiaLocalized(
-                vi: "Tab AI assistant đang được giữ chỗ để hoàn thiện UI trước, chưa nối logic chat hoặc automation.",
-                en: "The AI assistant tab is a placeholder for now while we finish the UI first. Chat and automation logic are not connected yet.",
-                ja: "AI アシスタントタブは、まず UI を仕上げるためのプレースホルダーです。チャットや自動化のロジックはまだ接続されていません。"
-              )
-            )
-            .multilineTextAlignment(.center)
-            .font(.system(size: 15, weight: .medium, design: .rounded))
-            .foregroundStyle(.secondary)
-          }
-          .frame(maxWidth: .infinity)
-        }
-      }
-      .padding(.horizontal, 20)
-    }
-  }
+  var id: String { rawValue }
 }
 
 private enum MistiaQuickCreateDestination: String, CaseIterable, Identifiable {
@@ -562,16 +654,5 @@ private struct MistiaQuickCreateMenuRow: View {
     .padding(.horizontal, 20)
     .frame(height: 60) // Reduced height for rows
     .contentShape(Rectangle())
-  }
-}
-
-private struct MistiaAssistantGlyph: View {
-  let isCompact: Bool
-
-  var body: some View {
-    Image(systemName: "magnifyingglass")
-      .font(.system(size: isCompact ? 18 : 22, weight: .semibold, design: .rounded))
-      .foregroundStyle(.white.opacity(0.96))
-      .shadow(color: .black.opacity(0.12), radius: isCompact ? 4 : 8, y: 2)
   }
 }

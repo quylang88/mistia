@@ -7,7 +7,8 @@ struct MistiaNativeTabShell: UIViewControllerRepresentable {
   var appLanguage: MistiaAppLanguage
   var hidesQuickCreate: Bool
   var hidesTabBar: Bool
-  var onAssistantTap: () -> Void
+  var shortcutPresentation: MistiaShortcutPresentation
+  var onShortcutTap: () -> Void
   var onQuickCreateTap: () -> Void
   var onQuickCreateFrameChange: (CGRect) -> Void
 
@@ -22,6 +23,7 @@ struct MistiaNativeTabShell: UIViewControllerRepresentable {
       selectedTab: selectedTab,
       appearanceMode: appearanceMode,
       appLanguage: appLanguage,
+      shortcutPresentation: shortcutPresentation,
       hidesQuickCreate: hidesQuickCreate,
       hidesTabBar: hidesTabBar
     )
@@ -35,6 +37,7 @@ struct MistiaNativeTabShell: UIViewControllerRepresentable {
       selectedTab: selectedTab,
       appearanceMode: appearanceMode,
       appLanguage: appLanguage,
+      shortcutPresentation: shortcutPresentation,
       hidesQuickCreate: hidesQuickCreate,
       hidesTabBar: hidesTabBar
     )
@@ -54,8 +57,8 @@ struct MistiaNativeTabShell: UIViewControllerRepresentable {
       parent.selectedTab = tab
     }
 
-    func nativeTabBarControllerDidTapAssistant(_ controller: MistiaNativeTabBarController) {
-      parent.onAssistantTap()
+    func nativeTabBarControllerDidTapShortcut(_ controller: MistiaNativeTabBarController) {
+      parent.onShortcutTap()
     }
 
     func nativeTabBarControllerDidTapQuickCreate(_ controller: MistiaNativeTabBarController) {
@@ -72,7 +75,7 @@ struct MistiaNativeTabShell: UIViewControllerRepresentable {
 
 protocol MistiaNativeTabBarControllerDelegate: AnyObject {
   func nativeTabBarController(_ controller: MistiaNativeTabBarController, didSelect tab: MistiaTab)
-  func nativeTabBarControllerDidTapAssistant(_ controller: MistiaNativeTabBarController)
+  func nativeTabBarControllerDidTapShortcut(_ controller: MistiaNativeTabBarController)
   func nativeTabBarControllerDidTapQuickCreate(_ controller: MistiaNativeTabBarController)
   func nativeTabBarController(
     _ controller: MistiaNativeTabBarController, didUpdateQuickCreateFrame frame: CGRect)
@@ -93,10 +96,19 @@ final class MistiaNativeTabBarController: UITabBarController, UITabBarController
   private var cachedControllers: [MistiaTab: UIViewController] = [:]
   @available(iOS 18.0, *)
   private var cachedRootTabs: [MistiaTab: UITab] = [:]
-  private weak var assistantTab: UISearchTab?
+  private weak var shortcutTab: UISearchTab?
+  private var shortcutAvatarTask: Task<Void, Never>?
+  private var shortcutAvatarImageCache: [String: UIImage] = [:]
+  private var currentShortcutImageKey = ""
   private var quickCreateCenterXConstraint: NSLayoutConstraint?
   private var currentAppearanceMode: MistiaAppearanceMode = .automatic
   private var currentAppLanguage: MistiaAppLanguage = .english
+  private var currentShortcutPresentation = MistiaShortcutPresentation(
+    title: "",
+    accessibilityLabel: "",
+    icon: .systemImage("person.crop.circle.fill"),
+    action: .profile
+  )
 
   private lazy var quickCreateController = UIHostingController(
     rootView: MistiaQuickCreateFloatingButton(appLanguage: currentAppLanguage) { [weak self] in
@@ -147,6 +159,7 @@ final class MistiaNativeTabBarController: UITabBarController, UITabBarController
     selectedTab: MistiaTab,
     appearanceMode: MistiaAppearanceMode,
     appLanguage: MistiaAppLanguage,
+    shortcutPresentation: MistiaShortcutPresentation,
     hidesQuickCreate: Bool,
     hidesTabBar: Bool
   )
@@ -155,9 +168,11 @@ final class MistiaNativeTabBarController: UITabBarController, UITabBarController
     configureQuickCreateButtonIfNeeded()
     currentAppearanceMode = appearanceMode
     currentAppLanguage = appLanguage
+    currentShortcutPresentation = shortcutPresentation
     overrideUserInterfaceStyle = appearanceMode.interfaceStyle
     refreshLocalizedContent()
     applyChromeAppearance()
+    refreshShortcutTabContent()
     updateQuickCreateVisibility(isHidden: hidesQuickCreate || hidesTabBar)
     updateTabBarVisibility(isHidden: hidesTabBar)
     syncTabSymbols(selectedTab: selectedTab)
@@ -178,8 +193,8 @@ final class MistiaNativeTabBarController: UITabBarController, UITabBarController
 
       let rootTabs = MistiaTab.nativeShellTabs.map(makeRootTab(for:))
       cachedRootTabs = Dictionary(uniqueKeysWithValues: zip(MistiaTab.nativeShellTabs, rootTabs))
-      let searchTab = makeAssistantSearchTab()
-      tabs = rootTabs + [searchTab]
+      let pinnedShortcutTab = makePinnedShortcutTab()
+      tabs = rootTabs + [pinnedShortcutTab]
       selectedTab = rootTabs.first
       syncTabSymbols(selectedTab: .overview)
     } else {
@@ -227,6 +242,7 @@ final class MistiaNativeTabBarController: UITabBarController, UITabBarController
 
   private func refreshLocalizedContent() {
     refreshQuickCreateRootView()
+    refreshShortcutTabContent()
 
     if #available(iOS 18.0, *) {
       for tab in MistiaTab.nativeShellTabs {
@@ -250,6 +266,152 @@ final class MistiaNativeTabBarController: UITabBarController, UITabBarController
       guard let self else { return }
       chromeDelegate?.nativeTabBarControllerDidTapQuickCreate(self)
     }
+  }
+
+  private func refreshShortcutTabContent() {
+    guard #available(iOS 18.0, *), let shortcutTab else { return }
+
+    shortcutTab.title = currentShortcutPresentation.title
+    shortcutAvatarTask?.cancel()
+    shortcutAvatarTask = nil
+
+    switch currentShortcutPresentation.icon {
+    case .systemImage(let systemName):
+      currentShortcutImageKey = "system:\(systemName)"
+      shortcutTab.image = shortcutSystemImage(systemName)
+
+    case .currentUserAvatar(_, let avatarURL):
+      currentShortcutImageKey = avatarURL?.absoluteString ?? "system:person.crop.circle.fill"
+
+      guard let avatarURL else {
+        shortcutTab.image = shortcutSystemImage("person.crop.circle.fill")
+        return
+      }
+
+      if let cachedImage = shortcutAvatarImageCache[avatarURL.absoluteString] {
+        shortcutTab.image = cachedImage
+        return
+      }
+
+      shortcutTab.image = shortcutSystemImage("person.crop.circle.fill")
+      loadShortcutAvatarImage(from: avatarURL, fallbackImage: shortcutSystemImage("person.crop.circle.fill"))
+
+    case .memberAvatar(let initials, let avatarURL):
+      let fallbackImage = makeShortcutFallbackAvatarImage(initials: initials)
+      currentShortcutImageKey = avatarURL?.absoluteString ?? "member:\(initials)"
+
+      guard let avatarURL else {
+        shortcutTab.image = fallbackImage
+        return
+      }
+
+      if let cachedImage = shortcutAvatarImageCache[avatarURL.absoluteString] {
+        shortcutTab.image = cachedImage
+        return
+      }
+
+      shortcutTab.image = fallbackImage
+      loadShortcutAvatarImage(from: avatarURL, fallbackImage: fallbackImage)
+    }
+  }
+
+  private func loadShortcutAvatarImage(from url: URL, fallbackImage: UIImage?) {
+    let cacheKey = url.absoluteString
+
+    shortcutAvatarTask = Task { [weak self] in
+      guard let self else { return }
+      let image = await self.fetchShortcutAvatarImage(from: url)
+      guard !Task.isCancelled else { return }
+
+      await MainActor.run {
+        guard let resolvedImage = image ?? fallbackImage else { return }
+        if image != nil {
+          self.shortcutAvatarImageCache[cacheKey] = resolvedImage
+        }
+        guard self.currentShortcutImageKey == cacheKey else { return }
+        self.shortcutTab?.image = resolvedImage
+      }
+    }
+  }
+
+  private func fetchShortcutAvatarImage(from url: URL) async -> UIImage? {
+    if url.isFileURL {
+      return await Task.detached(priority: .utility) {
+        guard let data = try? Data(contentsOf: url),
+              let image = UIImage(data: data) else { return nil }
+        return Self.makeShortcutAvatarImage(from: image)
+      }.value
+    }
+
+    do {
+      let (data, _) = try await URLSession.shared.data(from: url)
+      guard let image = UIImage(data: data) else { return nil }
+      return Self.makeShortcutAvatarImage(from: image)
+    } catch {
+      return nil
+    }
+  }
+
+  private func shortcutSystemImage(_ systemName: String) -> UIImage? {
+    let config = UIImage.SymbolConfiguration(pointSize: 22, weight: .medium)
+    return UIImage(systemName: systemName, withConfiguration: config)?
+      .withRenderingMode(.alwaysTemplate)
+  }
+
+  private func makeShortcutFallbackAvatarImage(initials: String) -> UIImage? {
+    let size = CGSize(width: 28, height: 28)
+    let renderer = UIGraphicsImageRenderer(size: size)
+    return renderer.image { context in
+      let rect = CGRect(origin: .zero, size: size)
+      let path = UIBezierPath(ovalIn: rect)
+      path.addClip()
+
+      let colors = [
+        UIColor(red: 0.49, green: 0.34, blue: 0.95, alpha: 1),
+        UIColor(red: 0.36, green: 0.50, blue: 0.98, alpha: 1)
+      ] as CFArray
+
+      guard let gradient = CGGradient(
+        colorsSpace: CGColorSpaceCreateDeviceRGB(),
+        colors: colors,
+        locations: [0, 1]
+      ) else {
+        return
+      }
+
+      context.cgContext.drawLinearGradient(
+        gradient,
+        start: CGPoint(x: 0, y: 0),
+        end: CGPoint(x: rect.maxX, y: rect.maxY),
+        options: []
+      )
+
+      let paragraphStyle = NSMutableParagraphStyle()
+      paragraphStyle.alignment = .center
+      let attributes: [NSAttributedString.Key: Any] = [
+        .font: UIFont.systemFont(ofSize: 10.5, weight: .heavy),
+        .foregroundColor: UIColor.white,
+        .paragraphStyle: paragraphStyle
+      ]
+      let string = NSString(string: initials)
+      let size = string.size(withAttributes: attributes)
+      let textRect = CGRect(
+        x: (rect.width - size.width) / 2,
+        y: (rect.height - size.height) / 2,
+        width: size.width,
+        height: size.height
+      )
+      string.draw(in: textRect, withAttributes: attributes)
+    }.withRenderingMode(.alwaysOriginal)
+  }
+
+  private nonisolated static func makeShortcutAvatarImage(from image: UIImage) -> UIImage? {
+    let size = CGSize(width: 28, height: 28)
+    let renderer = UIGraphicsImageRenderer(size: size)
+    return renderer.image { _ in
+      UIBezierPath(ovalIn: CGRect(origin: .zero, size: size)).addClip()
+      image.draw(in: CGRect(origin: .zero, size: size))
+    }.withRenderingMode(.alwaysOriginal)
   }
 
   private func alignQuickCreateButtonToSearchPill() {
@@ -448,17 +610,16 @@ final class MistiaNativeTabBarController: UITabBarController, UITabBarController
   }
 
   @available(iOS 18.0, *)
-  private func makeAssistantSearchTab() -> UISearchTab {
+  private func makePinnedShortcutTab() -> UISearchTab {
     let searchTab = UISearchTab { _ in
       UIViewController()
     }
-    let config = UIImage.SymbolConfiguration(pointSize: 22, weight: .medium)
-    searchTab.image = UIImage(systemName: "apple.intelligence", withConfiguration: config)
     searchTab.preferredPlacement = UITab.Placement.pinned
     if #available(iOS 26.0, *) {
       searchTab.automaticallyActivatesSearch = false
     }
-    assistantTab = searchTab
+    shortcutTab = searchTab
+    refreshShortcutTabContent()
     return searchTab
   }
 
@@ -486,8 +647,8 @@ final class MistiaNativeTabBarController: UITabBarController, UITabBarController
   @available(iOS 18.0, *)
   func tabBarController(_ tabBarController: UITabBarController, shouldSelectTab tab: UITab) -> Bool
   {
-    guard let assistantTab, tab === assistantTab else { return true }
-    chromeDelegate?.nativeTabBarControllerDidTapAssistant(self)
+    guard let shortcutTab, tab === shortcutTab else { return true }
+    chromeDelegate?.nativeTabBarControllerDidTapShortcut(self)
     return false
   }
 

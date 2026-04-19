@@ -369,7 +369,7 @@ struct ManagementAccountView: View {
                     ManagementProfileRowDivider()
 
                     ManagementProfileNavigationRow(
-                        title: mistiaLocalized(vi: "Sao lưu / Khôi phục", en: "Backup / Restore", ja: "バックアップ / 復元"),
+                        title: mistiaLocalized(vi: "Sao lưu & Khôi phục", en: "Backup & Restore", ja: "バックアップ & 復元"),
                         icon: "externaldrive.fill.badge.icloud",
                         accent: .mint,
                         subtitle: nil
@@ -2700,7 +2700,7 @@ private struct ManagementProfilePlaceholderCard: View {
     }
 }
 
-private struct ManagementSyncSettingsView: View {
+struct ManagementSyncSettingsView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.colorScheme) private var colorScheme
     @Environment(SessionStore.self) private var sessionStore
@@ -3355,7 +3355,7 @@ struct ManagementBackupRestoreView: View {
     var body: some View {
         MistiaPinnedTopBarScaffold(
             tone: .standard,
-            title: mistiaLocalized(vi: "Sao lưu / Khôi phục", en: "Backup / Restore", ja: "バックアップ / 復元"),
+            title: mistiaLocalized(vi: "Sao lưu & Khôi phục", en: "Backup & Restore", ja: "バックアップ & 復元"),
             embedsInNavigationStack: false,
             showsLeadingAvatar: false,
             leadingSystemImage: "chevron.left",
