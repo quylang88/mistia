@@ -75,7 +75,7 @@ struct ManagementArchivedItemsView: View {
             hidesSystemBackButton: true,
             onLeadingTap: { dismiss() },
             contentSpacing: 16,
-            contentBottomPadding: isSelecting ? 110 : 150
+            contentBottomPadding: isSelecting ? 96 : 150
         ) {
             EmptyView()
         } trailingAccessory: {
@@ -756,46 +756,67 @@ private struct ArchivedBottomActionBar: View {
     let onDelete: () -> Void
 
     var body: some View {
-        VStack(spacing: 0) {
-            Divider()
-                .opacity(colorScheme == .dark ? 0.3 : 0.5)
-
-            HStack {
-                Button(action: onRestore) {
-                    Image(systemName: "arrow.uturn.backward")
-                        .font(.system(size: 20, weight: .bold))
-                        .foregroundStyle(canRestore ? Color.primary : Color.primary.opacity(0.2))
-                        .animation(.spring(response: 0.3), value: canRestore)
+        Group {
+            if #available(iOS 26.0, *) {
+                GlassEffectContainer(spacing: 18) {
+                    actionRow
                 }
-                .disabled(!canRestore)
-                .frame(width: 44, height: 44)
-
-                Spacer()
-
-                Text(selectionText)
-                    .font(.system(size: 15, weight: .bold, design: .rounded))
-                    .foregroundStyle(.primary)
-
-                Spacer()
-
-                Button(action: onDelete) {
-                    Image(systemName: "trash")
-                        .font(.system(size: 20, weight: .bold))
-                        .foregroundStyle(canDelete ? Color.red : Color.primary.opacity(0.2))
-                        .animation(.spring(response: 0.3), value: canDelete)
-                }
-                .disabled(!canDelete)
-                .frame(width: 44, height: 44)
+            } else {
+                actionRow
             }
-            .padding(.horizontal, 20)
-            .frame(height: 50)
-            
-            // This spacer or extra padding ensures the content sits above the home indicator
-            // while the background material covers the entire safe area.
-            Spacer(minLength: 0)
-                .frame(maxHeight: 34) // Approximate home indicator area
         }
-        .background(.ultraThinMaterial)
+        .padding(.horizontal, 20)
+        .padding(.top, 4)
+        .padding(.bottom, 6)
+        .frame(maxWidth: .infinity)
+        .background {
+            barBackground
+            .ignoresSafeArea(edges: .bottom)
+        }
+        .overlay(alignment: .top) {
+            Rectangle()
+                .fill(.white.opacity(colorScheme == .dark ? 0.06 : 0.10))
+                .frame(height: 0.5)
+        }
+    }
+
+    private var actionRow: some View {
+        HStack(alignment: .center, spacing: 16) {
+            ArchivedBottomActionButton(
+                accessibilityTitle: mistiaLocalized(vi: "Khôi phục", en: "Restore", ja: "復元"),
+                systemImage: "arrow.uturn.backward",
+                isEnabled: canRestore,
+                action: onRestore
+            )
+
+            Spacer(minLength: 12)
+
+            Text(selectionText)
+                .font(.system(size: 17, weight: .semibold, design: .rounded))
+                .foregroundStyle(.white.opacity(0.96))
+                .multilineTextAlignment(.center)
+                .lineLimit(1)
+                .minimumScaleFactor(0.8)
+                .frame(maxWidth: .infinity)
+
+            Spacer(minLength: 12)
+
+            ArchivedBottomActionButton(
+                accessibilityTitle: mistiaLocalized(vi: "Xóa", en: "Delete", ja: "削除"),
+                systemImage: "trash",
+                isEnabled: canDelete,
+                action: onDelete
+            )
+        }
+        .frame(maxWidth: .infinity)
+        .frame(height: 60)
+    }
+
+    private var barBackground: some View {
+        ZStack {
+            Rectangle()
+                .fill(colorScheme == .dark ? .black.opacity(0.22) : .white.opacity(0.42))
+        }
     }
 
     private var selectionText: String {
@@ -811,4 +832,115 @@ private struct ArchivedBottomActionBar: View {
     }
 }
 
+private struct ArchivedBottomActionButton: View {
+    @Environment(\.colorScheme) private var colorScheme
 
+    let accessibilityTitle: String
+    let systemImage: String
+    let isEnabled: Bool
+    let action: () -> Void
+
+    private let visualSize: CGFloat = 38
+    private let touchTargetSize: CGFloat = 44
+
+    var body: some View {
+        Group {
+            if #available(iOS 26.0, *) {
+                Button(action: action) {
+                    label
+                }
+                .buttonStyle(.glass(nativeGlassStyle))
+                .buttonBorderShape(.circle)
+            } else {
+                Button(action: action) {
+                    label
+                        .background {
+                            ArchivedBottomActionButtonBackground(isEnabled: isEnabled)
+                        }
+                        .overlay {
+                            Circle()
+                                .strokeBorder(borderColor, lineWidth: 0.8)
+                        }
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .disabled(!isEnabled)
+        .frame(width: touchTargetSize, height: touchTargetSize)
+        .contentShape(Rectangle())
+        .hoverEffect(.highlight)
+        .animation(.spring(response: 0.3, dampingFraction: 0.86), value: isEnabled)
+        .accessibilityLabel(accessibilityTitle)
+        .accessibilityAddTraits(.isButton)
+        .opacity(isEnabled ? 1 : 0.46)
+        .scaleEffect(isEnabled ? 1 : 0.98)
+    }
+
+    private var label: some View {
+        Image(systemName: systemImage)
+            .font(.system(size: 24, weight: .regular))
+            .symbolRenderingMode(.hierarchical)
+            .foregroundStyle(iconColor)
+            .frame(width: visualSize, height: visualSize)
+    }
+
+    private var iconColor: Color {
+        .white.opacity(isEnabled ? 0.94 : 0.50)
+    }
+
+    private var borderColor: Color {
+        .white.opacity(colorScheme == .dark ? 0.14 : 0.20)
+    }
+
+    @available(iOS 26.0, *)
+    private var nativeGlassStyle: Glass {
+        var style = Glass.regular.tint(
+            .white.opacity(colorScheme == .dark ? (isEnabled ? 0.08 : 0.04) : (isEnabled ? 0.14 : 0.08))
+        )
+        if isEnabled {
+            style = style.interactive(true)
+        }
+        return style
+    }
+}
+
+private struct ArchivedBottomActionButtonBackground: View {
+    @Environment(\.colorScheme) private var colorScheme
+    let isEnabled: Bool
+
+    var body: some View {
+        Group {
+            if #available(iOS 26.0, *) {
+                Circle()
+                    .fill(.clear)
+                    .glassEffect(nativeGlassStyle, in: .circle)
+            } else {
+                Circle()
+                    .fill(.ultraThinMaterial)
+                    .overlay {
+                        Circle()
+                            .fill(fallbackTint)
+                    }
+            }
+        }
+        .overlay {
+            Circle()
+                .strokeBorder(.white.opacity(colorScheme == .dark ? 0.10 : 0.16), lineWidth: 0.5)
+        }
+    }
+
+    private var fallbackTint: Color {
+        .white.opacity(isEnabled ? (colorScheme == .dark ? 0.08 : 0.14) : (colorScheme == .dark ? 0.04 : 0.08))
+    }
+
+    @available(iOS 26.0, *)
+    private var nativeGlassStyle: Glass {
+        var style = Glass.regular.tint(
+            .white.opacity(isEnabled ? (colorScheme == .dark ? 0.10 : 0.16) : (colorScheme == .dark ? 0.05 : 0.10))
+        )
+        if isEnabled {
+            style = style.interactive(true)
+        }
+        return style
+    }
+}
