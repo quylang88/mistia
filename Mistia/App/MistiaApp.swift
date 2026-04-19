@@ -11,6 +11,7 @@ struct MistiaApp: App {
     private let launchIssue: MistiaDataStack.LaunchIssue?
     @State private var sessionStore: SessionStore
     @State private var familyContextStore: FamilyContextStore
+    @State private var uiState = MistiaUIState()
 
     init() {
         MistiaAppLanguage.bootstrapStoredPreference()
@@ -36,6 +37,7 @@ struct MistiaApp: App {
                 .environment(\.calendar, appLanguage.calendar)
                 .environment(sessionStore)
                 .environment(familyContextStore)
+                .environment(uiState)
                 .modelContainer(modelContainer)
                 .onOpenURL { url in
                     GIDSignIn.sharedInstance.handle(url)

@@ -76,6 +76,7 @@ struct RootTabView: View {
   @Environment(\.colorScheme) private var colorScheme
   @Environment(\.modelContext) private var modelContext
   @Environment(SessionStore.self) private var sessionStore
+  @Environment(MistiaUIState.self) private var uiState
   @AppStorage(MistiaAppStorageKey.appearanceMode) private var appearanceModeRawValue =
     MistiaAppearanceMode.automatic.rawValue
   @AppStorage(MistiaAppStorageKey.appLanguage) private var appLanguageRawValue = ""
@@ -88,7 +89,6 @@ struct RootTabView: View {
   @State private var quickCreateAnchorFrame: CGRect = .zero
   @State private var quickCreateDragOffset: CGFloat = 0
   @State private var isDraggingQuickCreate = false
-  @State private var hidesTabBarFromPreference = false
 
   private let quickCreateMenuAnimation = Animation.spring(response: 0.34, dampingFraction: 0.84)
   private let quickCreateMenuDuration = 0.28
@@ -101,7 +101,7 @@ struct RootTabView: View {
           appearanceMode: appearanceMode,
           appLanguage: appLanguage,
           hidesQuickCreate: hideQuickCreate || isQuickCreateMenuVisible,
-          hidesTabBar: hidesTabBarFromPreference,
+          hidesTabBar: uiState.isTabBarHidden,
           onAssistantTap: {
             dismissQuickCreateMenu()
             activeSheet = .assistant
@@ -169,9 +169,6 @@ struct RootTabView: View {
       }
       .onChange(of: selectedTab) { _, _ in
         dismissQuickCreateMenu()
-      }
-      .onPreferenceChange(MistiaTabBarHiddenPreferenceKey.self) { hides in
-        hidesTabBarFromPreference = hides
       }
     }
   }

@@ -107,6 +107,7 @@ final class MistiaNativeTabBarController: UITabBarController, UITabBarController
 
   override func viewDidLoad() {
     super.viewDidLoad()
+    setupNotifications()
     delegate = self
     view.backgroundColor = .clear
     registerForTraitChanges([UITraitUserInterfaceStyle.self]) { (self: Self, _) in
@@ -121,6 +122,14 @@ final class MistiaNativeTabBarController: UITabBarController, UITabBarController
     configureTabsIfNeeded()
     configureSystemTabBar()
     configureQuickCreateButtonIfNeeded()
+  }
+
+  private func setupNotifications() {
+    NotificationCenter.default.addObserver(forName: NSNotification.Name("MistiaHideTabBar"), object: nil, queue: .main) { [weak self] notification in
+      if let isHidden = notification.userInfo?["isHidden"] as? Bool {
+        self?.updateTabBarVisibility(isHidden: isHidden)
+      }
+    }
   }
 
   override func viewDidLayoutSubviews() {
@@ -343,9 +352,7 @@ final class MistiaNativeTabBarController: UITabBarController, UITabBarController
 
   private func updateTabBarVisibility(isHidden: Bool) {
     let targetAlpha: CGFloat = isHidden ? 0 : 1
-    let targetTranslation: CGFloat = isHidden ? tabBar.frame.height : 0
-    
-    guard tabBar.alpha != targetAlpha || tabBar.isHidden != isHidden else { return }
+    let targetTranslation: CGFloat = isHidden ? (tabBar.frame.height > 0 ? tabBar.frame.height : 100) : 0
     
     if !isHidden {
       tabBar.isHidden = false
@@ -354,6 +361,12 @@ final class MistiaNativeTabBarController: UITabBarController, UITabBarController
     UIView.animate(withDuration: 0.3, delay: 0, usingSpringWithDamping: 0.85, initialSpringVelocity: 0) {
       self.tabBar.alpha = targetAlpha
       self.tabBar.transform = CGAffineTransform(translationX: 0, y: targetTranslation)
+      
+      // Triệt tiêu vùng Safe Area của TabBar để View con tràn xuống đáy
+      self.additionalSafeAreaInsets.bottom = isHidden ? -self.tabBar.frame.height : 0
+      
+      self.view.setNeedsLayout()
+      self.view.layoutIfNeeded()
     } completion: { _ in
       self.tabBar.isHidden = isHidden
     }

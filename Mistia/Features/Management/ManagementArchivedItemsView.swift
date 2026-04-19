@@ -26,6 +26,8 @@ private struct ArchivedTransactionDescriptor {
 }
 
 struct ManagementArchivedItemsView: View {
+    @Environment(FamilyContextStore.self) private var familyContextStore
+    @Environment(MistiaUIState.self) private var uiState
     @Environment(\.modelContext) private var modelContext
     @Environment(\.dismiss) private var dismiss
     @Environment(\.colorScheme) private var colorScheme
@@ -45,6 +47,7 @@ struct ManagementArchivedItemsView: View {
     @State private var isSelecting = false
     @State private var selectedItems: Set<ArchivedItemSelection> = []
     @State private var showsDeleteConfirmation = false
+    @State private var viewID = UUID()
 
     private var availableSelections: Set<ArchivedItemSelection> {
         Set(archivedTransactions.map { .transaction($0.id) })
@@ -84,8 +87,18 @@ struct ManagementArchivedItemsView: View {
             archivedContent
         }
         .animation(.spring(response: 0.35, dampingFraction: 0.85), value: isSelecting)
-        .mistiaTabBarHidden(isSelecting)
-        .safeAreaInset(edge: .bottom, spacing: 0) {
+        .onChange(of: isSelecting, initial: true) { _, newValue in
+            uiState.requestTabBarHidden(newValue, id: viewID)
+            NotificationCenter.default.post(
+                name: NSNotification.Name("MistiaHideTabBar"),
+                object: nil,
+                userInfo: ["isHidden": newValue]
+            )
+        }
+        .onDisappear {
+            uiState.requestTabBarHidden(false, id: viewID)
+        }
+        .overlay(alignment: .bottom) {
             if isSelecting {
                 ArchivedBottomActionBar(
                     selectedCount: selectedItems.count,
@@ -97,6 +110,7 @@ struct ManagementArchivedItemsView: View {
                 .transition(.move(edge: .bottom).combined(with: .opacity))
             }
         }
+        .ignoresSafeArea(.all, edges: .bottom)
         .confirmationDialog(
             mistiaLocalized(
                 vi: "Xóa vĩnh viễn các mục đã chọn?",
@@ -756,27 +770,21 @@ private struct ArchivedBottomActionBar: View {
     let onDelete: () -> Void
 
     var body: some View {
-        Group {
-            if #available(iOS 26.0, *) {
-                GlassEffectContainer(spacing: 18) {
-                    actionRow
-                }
-            } else {
-                actionRow
-            }
+        VStack(spacing: 0) {
+            Divider()
+                .opacity(colorScheme == .dark ? 0.3 : 0.5)
+
+            actionRow
+                .padding(.horizontal, 20)
+
+            // Bù khoảng trống cho Home Indicator để icon không bị đè
+            Spacer(minLength: 0)
+                .frame(height: 34)
         }
-        .padding(.horizontal, 20)
-        .padding(.top, 4)
-        .padding(.bottom, 6)
         .frame(maxWidth: .infinity)
         .background {
-            barBackground
-            .ignoresSafeArea(edges: .bottom)
-        }
-        .overlay(alignment: .top) {
-            Rectangle()
-                .fill(.white.opacity(colorScheme == .dark ? 0.06 : 0.10))
-                .frame(height: 0.5)
+            (colorScheme == .dark ? Color.black.opacity(0.22) : Color.white.opacity(0.42))
+                .ignoresSafeArea(edges: .bottom)
         }
     }
 
@@ -786,14 +794,15 @@ private struct ArchivedBottomActionBar: View {
                 accessibilityTitle: mistiaLocalized(vi: "Khôi phục", en: "Restore", ja: "復元"),
                 systemImage: "arrow.uturn.backward",
                 isEnabled: canRestore,
+                tint: .primary,
                 action: onRestore
             )
 
             Spacer(minLength: 12)
 
             Text(selectionText)
-                .font(.system(size: 17, weight: .semibold, design: .rounded))
-                .foregroundStyle(.white.opacity(0.96))
+                .font(.system(size: 16, weight: .bold, design: .rounded))
+                .foregroundStyle(.primary)
                 .multilineTextAlignment(.center)
                 .lineLimit(1)
                 .minimumScaleFactor(0.8)
@@ -805,11 +814,11 @@ private struct ArchivedBottomActionBar: View {
                 accessibilityTitle: mistiaLocalized(vi: "Xóa", en: "Delete", ja: "削除"),
                 systemImage: "trash",
                 isEnabled: canDelete,
+                tint: .red,
                 action: onDelete
             )
         }
-        .frame(maxWidth: .infinity)
-        .frame(height: 60)
+        .frame(height: 49)
     }
 
     private var barBackground: some View {
@@ -838,10 +847,11 @@ private struct ArchivedBottomActionButton: View {
     let accessibilityTitle: String
     let systemImage: String
     let isEnabled: Bool
+    let tint: Color
     let action: () -> Void
 
-    private let visualSize: CGFloat = 38
-    private let touchTargetSize: CGFloat = 44
+    private let visualSize: CGFloat = 36
+    private let touchTargetSize: CGFloat = 42
 
     var body: some View {
         Group {
@@ -878,14 +888,14 @@ private struct ArchivedBottomActionButton: View {
 
     private var label: some View {
         Image(systemName: systemImage)
-            .font(.system(size: 24, weight: .regular))
+            .font(.system(size: 20, weight: .regular))
             .symbolRenderingMode(.hierarchical)
             .foregroundStyle(iconColor)
             .frame(width: visualSize, height: visualSize)
     }
 
     private var iconColor: Color {
-        .white.opacity(isEnabled ? 0.94 : 0.50)
+        isEnabled ? tint : .primary.opacity(0.25)
     }
 
     private var borderColor: Color {
