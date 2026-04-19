@@ -86,7 +86,6 @@ struct ManagementArchivedItemsView: View {
         } content: {
             archivedContent
         }
-        .animation(.spring(response: 0.35, dampingFraction: 0.85), value: isSelecting)
         .onChange(of: isSelecting, initial: true) { _, newValue in
             uiState.requestTabBarHidden(newValue, id: viewID)
             NotificationCenter.default.post(
@@ -610,7 +609,7 @@ private struct ArchivedTransactionRow: View {
             isSelected: isSelected,
             onToggleSelection: onToggleSelection
         ) {
-            ArchivedTypeBadge(title: descriptor.badgeTitle, tint: descriptor.badgeTint)
+            EmptyView()
         } trailingContent: {
             HStack(spacing: 12) {
                 Text(descriptor.amountText)
@@ -618,11 +617,8 @@ private struct ArchivedTransactionRow: View {
                     .foregroundStyle(descriptor.amountTint)
                     .lineLimit(1)
                     .minimumScaleFactor(0.8)
-
-                if !isSelecting {
-                    ArchivedItemActionMenu(onRestore: onRestore, onDelete: onDelete)
-                }
             }
+            .animation(.spring(response: 0.3, dampingFraction: 0.8), value: isSelecting)
         }
     }
 }
@@ -650,9 +646,7 @@ private struct ArchivedDetailRow: View {
         ) {
             EmptyView()
         } trailingContent: {
-            if !isSelecting {
-                ArchivedItemActionMenu(onRestore: onRestore, onDelete: onDelete)
-            }
+            EmptyView()
         }
     }
 }
@@ -699,11 +693,12 @@ private struct ArchivedBaseRow<TitleAccessory: View, TrailingContent: View>: Vie
                     .font(.system(size: 22, weight: .semibold))
                     .foregroundStyle(
                         isSelected
-                            ? MistiaAccent.purple.color
+                            ? MistiaAccent.lightPurple.color
                             : Color.secondary.opacity(0.45)
                     )
             }
         }
+        .animation(.spring(response: 0.3, dampingFraction: 0.85), value: isSelecting)
         .padding(.horizontal, 14)
         .padding(.vertical, 11)
         .background(
@@ -718,46 +713,6 @@ private struct ArchivedBaseRow<TitleAccessory: View, TrailingContent: View>: Vie
                 onToggleSelection()
             }
         }
-    }
-}
-
-private struct ArchivedItemActionMenu: View {
-    let onRestore: () -> Void
-    let onDelete: () -> Void
-
-    var body: some View {
-        Menu {
-            Button(mistiaLocalized(vi: "Khôi phục", en: "Restore", ja: "復元")) {
-                onRestore()
-            }
-            Button(
-                mistiaLocalized(vi: "Xóa vĩnh viễn", en: "Delete permanently", ja: "完全に削除"),
-                role: .destructive
-            ) {
-                onDelete()
-            }
-        } label: {
-            Image(systemName: "ellipsis.circle")
-                .font(.system(size: 16, weight: .semibold))
-                .foregroundStyle(.secondary)
-        }
-    }
-}
-
-private struct ArchivedTypeBadge: View {
-    let title: String
-    let tint: Color
-
-    var body: some View {
-        Text(title)
-            .font(.system(size: 10, weight: .bold, design: .rounded))
-            .foregroundStyle(tint)
-            .padding(.horizontal, 8)
-            .padding(.vertical, 4)
-            .background {
-                Capsule()
-                    .fill(tint.opacity(0.14))
-            }
     }
 }
 

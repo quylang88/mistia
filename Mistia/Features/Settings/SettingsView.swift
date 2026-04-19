@@ -448,28 +448,9 @@ private struct AppearanceModeRow: View {
             Spacer(minLength: 12)
 
             if isSelected {
-                ZStack {
-                    Circle()
-                        .fill(
-                            LinearGradient(
-                                colors: [
-                                    accentPurple.opacity(colorScheme == .dark ? 0.98 : 0.90),
-                                    Color(red: 0.62, green: 0.45, blue: 0.94).opacity(colorScheme == .dark ? 0.96 : 0.86)
-                                ],
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
-                            )
-                        )
-
-                    Circle()
-                        .strokeBorder(.white.opacity(colorScheme == .dark ? 0.24 : 0.56), lineWidth: 0.9)
-
-                    Image(systemName: "checkmark")
-                        .font(.system(size: 11, weight: .heavy))
-                        .foregroundStyle(.white.opacity(0.98))
-                }
-                .frame(width: 26, height: 26)
-                .shadow(color: accentPurple.opacity(colorScheme == .dark ? 0.30 : 0.12), radius: colorScheme == .dark ? 8 : 4, y: 1)
+                Image(systemName: "checkmark.circle.fill")
+                    .font(.system(size: 24, weight: .semibold))
+                    .foregroundStyle(MistiaAccent.lightPurple.color)
             }
         }
     }
@@ -490,28 +471,9 @@ private struct LanguageOptionRow: View {
             Spacer(minLength: 12)
 
             if isSelected {
-                ZStack {
-                    Circle()
-                        .fill(
-                            LinearGradient(
-                                colors: [
-                                    accentPurple.opacity(colorScheme == .dark ? 0.98 : 0.90),
-                                    Color(red: 0.62, green: 0.45, blue: 0.94).opacity(colorScheme == .dark ? 0.96 : 0.86)
-                                ],
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
-                            )
-                        )
-
-                    Circle()
-                        .strokeBorder(.white.opacity(colorScheme == .dark ? 0.24 : 0.56), lineWidth: 0.9)
-
-                    Image(systemName: "checkmark")
-                        .font(.system(size: 11, weight: .heavy))
-                        .foregroundStyle(.white.opacity(0.98))
-                }
-                .frame(width: 26, height: 26)
-                .shadow(color: accentPurple.opacity(colorScheme == .dark ? 0.30 : 0.12), radius: colorScheme == .dark ? 8 : 4, y: 1)
+                Image(systemName: "checkmark.circle.fill")
+                    .font(.system(size: 24, weight: .semibold))
+                    .foregroundStyle(MistiaAccent.lightPurple.color)
             }
         }
     }
