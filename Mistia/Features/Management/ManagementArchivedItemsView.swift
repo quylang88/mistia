@@ -87,7 +87,7 @@ struct ManagementArchivedItemsView: View {
             hidesSystemBackButton: true,
             onLeadingTap: { dismiss() },
             contentSpacing: 16,
-            contentBottomPadding: isSelecting ? 110 : 150
+            contentBottomPadding: isSelecting ? 72 : 150
         ) {
             EmptyView()
         } trailingAccessory: {
@@ -243,12 +243,10 @@ struct ManagementArchivedItemsView: View {
                     .foregroundStyle(.primary)
             }
         } else if hasArchivedItems {
-            Button(action: enterSelectionMode) {
-                Text(mistiaLocalized(vi: "Chọn", en: "Select", ja: "選択"))
-                    .font(.system(size: 16, weight: .semibold, design: .rounded))
-                    .foregroundStyle(MistiaAccent.purple.color)
-            }
-            .buttonStyle(.plain)
+            ArchivedToolbarGlassButton(
+                title: mistiaLocalized(vi: "Chọn", en: "Select", ja: "選択"),
+                action: enterSelectionMode
+            )
         }
     }
 
@@ -766,7 +764,7 @@ private struct ArchivedBottomActionBar: View {
     var body: some View {
         HStack {
             ArchivedBottomActionButton(
-                title: mistiaLocalized(vi: "Khôi phục", en: "Restore", ja: "復元"),
+                accessibilityTitle: mistiaLocalized(vi: "Khôi phục", en: "Restore", ja: "復元"),
                 systemImage: "arrow.uturn.backward",
                 tint: MistiaAccent.purple.color,
                 isEnabled: canRestore,
@@ -776,25 +774,22 @@ private struct ArchivedBottomActionBar: View {
             Spacer()
 
             ArchivedBottomActionButton(
-                title: mistiaLocalized(vi: "Xóa", en: "Delete", ja: "削除"),
+                accessibilityTitle: mistiaLocalized(vi: "Xóa", en: "Delete", ja: "削除"),
                 systemImage: "trash",
                 tint: .red,
                 isEnabled: canDelete,
                 action: onDelete
             )
         }
-        .padding(.horizontal, 22)
-        .padding(.top, 12)
-        .padding(.bottom, 12)
-        .background(.ultraThinMaterial)
-        .overlay(alignment: .top) {
-            Divider()
-        }
+        .frame(maxWidth: .infinity)
+        .padding(.horizontal, 28)
+        .padding(.top, 8)
+        .padding(.bottom, 8)
     }
 }
 
 private struct ArchivedBottomActionButton: View {
-    let title: String
+    let accessibilityTitle: String
     let systemImage: String
     let tint: Color
     let isEnabled: Bool
@@ -802,18 +797,33 @@ private struct ArchivedBottomActionButton: View {
 
     var body: some View {
         Button(action: action) {
-            VStack(spacing: 4) {
-                Image(systemName: systemImage)
-                    .font(.system(size: 18, weight: .semibold))
-
-                Text(title)
-                    .font(.system(size: 12, weight: .semibold, design: .rounded))
-            }
-            .foregroundStyle(isEnabled ? tint : .secondary)
-            .frame(minWidth: 72)
-            .opacity(isEnabled ? 1 : 0.45)
+            Image(systemName: systemImage)
+                .font(.system(size: 18, weight: .semibold))
+                .foregroundStyle(isEnabled ? tint : Color.secondary.opacity(0.82))
+                .frame(width: 44, height: 44)
         }
-        .buttonStyle(.plain)
+        .buttonStyle(.glass)
+        .buttonBorderShape(.circle)
+        .opacity(isEnabled ? 1 : 0.48)
         .disabled(!isEnabled)
+        .accessibilityLabel(accessibilityTitle)
+    }
+}
+
+private struct ArchivedToolbarGlassButton: View {
+    let title: String
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            Text(title)
+                .font(.system(size: 15, weight: .semibold, design: .rounded))
+                .foregroundStyle(.primary)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 8)
+        }
+        .buttonStyle(.glass)
+        .buttonBorderShape(.capsule)
+        .accessibilityLabel(title)
     }
 }
