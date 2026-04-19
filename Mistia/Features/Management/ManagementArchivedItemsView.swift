@@ -46,7 +46,6 @@ struct ManagementArchivedItemsView: View {
 
     @State private var isSelecting = false
     @State private var selectedItems: Set<ArchivedItemSelection> = []
-    @State private var showsDeleteConfirmation = false
     @State private var viewID = UUID()
 
     private var availableSelections: Set<ArchivedItemSelection> {
@@ -104,41 +103,13 @@ struct ManagementArchivedItemsView: View {
                     canRestore: hasSelection,
                     canDelete: hasSelection,
                     onRestore: restoreSelectedItems,
-                    onDelete: { showsDeleteConfirmation = true }
+                    onDelete: deleteSelectedItems
                 )
                 .transition(.move(edge: .bottom).combined(with: .opacity))
             }
         }
         .ignoresSafeArea(.all, edges: .bottom)
-        .confirmationDialog(
-            mistiaLocalized(
-                vi: "Xóa vĩnh viễn các mục đã chọn?",
-                en: "Delete selected items permanently?",
-                ja: "選択した項目を完全に削除しますか？"
-            ),
-            isPresented: $showsDeleteConfirmation,
-            titleVisibility: .visible
-        ) {
-            Button(
-                mistiaLocalized(
-                    vi: "Xóa vĩnh viễn",
-                    en: "Delete permanently",
-                    ja: "完全に削除"
-                ),
-                role: .destructive
-            ) {
-                deleteSelectedItems()
-            }
-            Button(mistiaLocalized(vi: "Hủy", en: "Cancel", ja: "キャンセル"), role: .cancel) { }
-        } message: {
-            Text(
-                mistiaLocalized(
-                    vi: "Các mục này sẽ bị xóa khỏi lưu trữ và không thể hoàn tác.",
-                    en: "These items will be removed from the archive and can't be undone.",
-                    ja: "これらの項目はアーカイブから削除され、元に戻せません。"
-                )
-            )
-        }
+        .animation(.spring(response: 0.35, dampingFraction: 0.85), value: isSelecting)
         .onChange(of: availableSelections, initial: true) { _, newValue in
             selectedItems = selectedItems.intersection(newValue)
 
@@ -745,13 +716,35 @@ private struct ArchivedBottomActionBar: View {
 
     private var actionRow: some View {
         HStack(alignment: .center, spacing: 16) {
-            ArchivedBottomActionButton(
+            ArchivedBottomActionMenu(
                 accessibilityTitle: mistiaLocalized(vi: "Khôi phục", en: "Restore", ja: "復元"),
                 systemImage: "arrow.uturn.backward",
                 isEnabled: canRestore,
-                tint: .primary,
-                action: onRestore
-            )
+                tint: .primary
+            ) {
+                Section {
+                    Button {
+                        onRestore()
+                    } label: {
+                        Label(
+                            mistiaLocalized(
+                                vi: "Khôi phục",
+                                en: "Restore",
+                                ja: "復元"
+                            ),
+                            systemImage: "arrow.uturn.backward"
+                        )
+                    }
+                } header: {
+                    Text(
+                        mistiaLocalized(
+                            vi: "Các mục đã chọn sẽ được khôi phục về trạng thái hoạt động.",
+                            en: "The selected items will be restored to their active state.",
+                            ja: "選択した項目を元の状態に復元します。"
+                        )
+                    )
+                }
+            }
 
             Spacer(minLength: 12)
 
@@ -765,13 +758,35 @@ private struct ArchivedBottomActionBar: View {
 
             Spacer(minLength: 12)
 
-            ArchivedBottomActionButton(
+            ArchivedBottomActionMenu(
                 accessibilityTitle: mistiaLocalized(vi: "Xóa", en: "Delete", ja: "削除"),
                 systemImage: "trash",
                 isEnabled: canDelete,
-                tint: .red,
-                action: onDelete
-            )
+                tint: .red
+            ) {
+                Section {
+                    Button(role: .destructive) {
+                        onDelete()
+                    } label: {
+                        Label(
+                            mistiaLocalized(
+                                vi: "Xóa vĩnh viễn",
+                                en: "Delete permanently",
+                                ja: "完全に削除"
+                            ),
+                            systemImage: "trash"
+                        )
+                    }
+                } header: {
+                    Text(
+                        mistiaLocalized(
+                            vi: "Các mục này sẽ bị xóa khỏi lưu trữ và không thể hoàn tác.",
+                            en: "These items will be removed from the archive and can't be undone.",
+                            ja: "これらの項目はアーカイブから削除され、元に戻せません。"
+                        )
+                    )
+                }
+            }
         }
         .frame(height: 49)
     }
@@ -796,14 +811,14 @@ private struct ArchivedBottomActionBar: View {
     }
 }
 
-private struct ArchivedBottomActionButton: View {
+private struct ArchivedBottomActionMenu<Content: View>: View {
     @Environment(\.colorScheme) private var colorScheme
 
     let accessibilityTitle: String
     let systemImage: String
     let isEnabled: Bool
     let tint: Color
-    let action: () -> Void
+    @ViewBuilder let content: Content
 
     private let visualSize: CGFloat = 36
     private let touchTargetSize: CGFloat = 42
@@ -811,13 +826,20 @@ private struct ArchivedBottomActionButton: View {
     var body: some View {
         Group {
             if #available(iOS 26.0, *) {
-                Button(action: action) {
+                Menu {
+                    content
+                } label: {
                     label
                 }
+                .menuIndicator(.hidden)
+                .menuOrder(.fixed)
+                .menuStyle(.button)
                 .buttonStyle(.glass(nativeGlassStyle))
                 .buttonBorderShape(.circle)
             } else {
-                Button(action: action) {
+                Menu {
+                    content
+                } label: {
                     label
                         .background {
                             ArchivedBottomActionButtonBackground(isEnabled: isEnabled)
@@ -827,6 +849,9 @@ private struct ArchivedBottomActionButton: View {
                                 .strokeBorder(borderColor, lineWidth: 0.8)
                         }
                 }
+                .menuIndicator(.hidden)
+                .menuOrder(.fixed)
+                .menuStyle(.button)
                 .buttonStyle(.plain)
             }
         }
