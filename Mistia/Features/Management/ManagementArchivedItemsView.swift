@@ -61,19 +61,7 @@ struct ManagementArchivedItemsView: View {
     }
 
     private var navigationTitle: String {
-        guard isSelecting else {
-            return mistiaLocalized(vi: "Mục đã lưu trữ", en: "Archived items", ja: "アーカイブ済みアイテム")
-        }
-
-        if selectedItems.isEmpty {
-            return mistiaLocalized(vi: "Chọn mục", en: "Select items", ja: "項目を選択")
-        }
-
-        return mistiaLocalized(
-            vi: "\(selectedItems.count) mục đã chọn",
-            en: "\(selectedItems.count) selected",
-            ja: "\(selectedItems.count)件を選択"
-        )
+        mistiaLocalized(vi: "Mục đã lưu trữ", en: "Archived items", ja: "アーカイブ済みアイテム")
     }
 
     var body: some View {
@@ -87,7 +75,7 @@ struct ManagementArchivedItemsView: View {
             hidesSystemBackButton: true,
             onLeadingTap: { dismiss() },
             contentSpacing: 16,
-            contentBottomPadding: isSelecting ? 72 : 150
+            contentBottomPadding: isSelecting ? 110 : 150
         ) {
             EmptyView()
         } trailingAccessory: {
@@ -95,15 +83,18 @@ struct ManagementArchivedItemsView: View {
         } content: {
             archivedContent
         }
-        .toolbar(isSelecting ? .hidden : .visible, for: .tabBar)
-        .safeAreaInset(edge: .bottom) {
+        .animation(.spring(response: 0.35, dampingFraction: 0.85), value: isSelecting)
+        .mistiaTabBarHidden(isSelecting)
+        .safeAreaInset(edge: .bottom, spacing: 0) {
             if isSelecting {
                 ArchivedBottomActionBar(
+                    selectedCount: selectedItems.count,
                     canRestore: hasSelection,
                     canDelete: hasSelection,
                     onRestore: restoreSelectedItems,
                     onDelete: { showsDeleteConfirmation = true }
                 )
+                .transition(.move(edge: .bottom).combined(with: .opacity))
             }
         }
         .confirmationDialog(
@@ -243,10 +234,11 @@ struct ManagementArchivedItemsView: View {
                     .foregroundStyle(.primary)
             }
         } else if hasArchivedItems {
-            ArchivedToolbarGlassButton(
-                title: mistiaLocalized(vi: "Chọn", en: "Select", ja: "選択"),
-                action: enterSelectionMode
-            )
+            MistiaHeaderCircleButton(action: enterSelectionMode) {
+                Image(systemName: "checklist")
+                    .font(.system(size: 16, weight: .bold))
+                    .foregroundStyle(.primary)
+            }
         }
     }
 
@@ -756,74 +748,67 @@ private struct ArchivedTypeBadge: View {
 }
 
 private struct ArchivedBottomActionBar: View {
+    @Environment(\.colorScheme) private var colorScheme
+    let selectedCount: Int
     let canRestore: Bool
     let canDelete: Bool
     let onRestore: () -> Void
     let onDelete: () -> Void
 
     var body: some View {
-        HStack {
-            ArchivedBottomActionButton(
-                accessibilityTitle: mistiaLocalized(vi: "Khôi phục", en: "Restore", ja: "復元"),
-                systemImage: "arrow.uturn.backward",
-                tint: MistiaAccent.purple.color,
-                isEnabled: canRestore,
-                action: onRestore
-            )
+        VStack(spacing: 0) {
+            Divider()
+                .opacity(colorScheme == .dark ? 0.3 : 0.5)
 
-            Spacer()
-
-            ArchivedBottomActionButton(
-                accessibilityTitle: mistiaLocalized(vi: "Xóa", en: "Delete", ja: "削除"),
-                systemImage: "trash",
-                tint: .red,
-                isEnabled: canDelete,
-                action: onDelete
-            )
-        }
-        .frame(maxWidth: .infinity)
-        .padding(.horizontal, 28)
-        .padding(.top, 8)
-        .padding(.bottom, 8)
-    }
-}
-
-private struct ArchivedBottomActionButton: View {
-    let accessibilityTitle: String
-    let systemImage: String
-    let tint: Color
-    let isEnabled: Bool
-    let action: () -> Void
-
-    var body: some View {
-        Button(action: action) {
-            Image(systemName: systemImage)
-                .font(.system(size: 18, weight: .semibold))
-                .foregroundStyle(isEnabled ? tint : Color.secondary.opacity(0.82))
+            HStack {
+                Button(action: onRestore) {
+                    Image(systemName: "arrow.uturn.backward")
+                        .font(.system(size: 20, weight: .bold))
+                        .foregroundStyle(canRestore ? Color.primary : Color.primary.opacity(0.2))
+                        .animation(.spring(response: 0.3), value: canRestore)
+                }
+                .disabled(!canRestore)
                 .frame(width: 44, height: 44)
+
+                Spacer()
+
+                Text(selectionText)
+                    .font(.system(size: 15, weight: .bold, design: .rounded))
+                    .foregroundStyle(.primary)
+
+                Spacer()
+
+                Button(action: onDelete) {
+                    Image(systemName: "trash")
+                        .font(.system(size: 20, weight: .bold))
+                        .foregroundStyle(canDelete ? Color.red : Color.primary.opacity(0.2))
+                        .animation(.spring(response: 0.3), value: canDelete)
+                }
+                .disabled(!canDelete)
+                .frame(width: 44, height: 44)
+            }
+            .padding(.horizontal, 20)
+            .frame(height: 50)
+            
+            // This spacer or extra padding ensures the content sits above the home indicator
+            // while the background material covers the entire safe area.
+            Spacer(minLength: 0)
+                .frame(maxHeight: 34) // Approximate home indicator area
         }
-        .buttonStyle(.glass)
-        .buttonBorderShape(.circle)
-        .opacity(isEnabled ? 1 : 0.48)
-        .disabled(!isEnabled)
-        .accessibilityLabel(accessibilityTitle)
+        .background(.ultraThinMaterial)
+    }
+
+    private var selectionText: String {
+        if selectedCount == 0 {
+            return mistiaLocalized(vi: "Chọn mục", en: "Select items", ja: "項目を選択")
+        }
+
+        return mistiaLocalized(
+            vi: "Đã chọn \(selectedCount) mục",
+            en: "\(selectedCount) selected",
+            ja: "\(selectedCount)件を選択"
+        )
     }
 }
 
-private struct ArchivedToolbarGlassButton: View {
-    let title: String
-    let action: () -> Void
 
-    var body: some View {
-        Button(action: action) {
-            Text(title)
-                .font(.system(size: 15, weight: .semibold, design: .rounded))
-                .foregroundStyle(.primary)
-                .padding(.horizontal, 12)
-                .padding(.vertical, 8)
-        }
-        .buttonStyle(.glass)
-        .buttonBorderShape(.capsule)
-        .accessibilityLabel(title)
-    }
-}

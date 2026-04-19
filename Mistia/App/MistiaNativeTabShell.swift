@@ -6,6 +6,7 @@ struct MistiaNativeTabShell: UIViewControllerRepresentable {
   var appearanceMode: MistiaAppearanceMode
   var appLanguage: MistiaAppLanguage
   var hidesQuickCreate: Bool
+  var hidesTabBar: Bool
   var onAssistantTap: () -> Void
   var onQuickCreateTap: () -> Void
   var onQuickCreateFrameChange: (CGRect) -> Void
@@ -21,7 +22,8 @@ struct MistiaNativeTabShell: UIViewControllerRepresentable {
       selectedTab: selectedTab,
       appearanceMode: appearanceMode,
       appLanguage: appLanguage,
-      hidesQuickCreate: hidesQuickCreate
+      hidesQuickCreate: hidesQuickCreate,
+      hidesTabBar: hidesTabBar
     )
     return controller
   }
@@ -33,7 +35,8 @@ struct MistiaNativeTabShell: UIViewControllerRepresentable {
       selectedTab: selectedTab,
       appearanceMode: appearanceMode,
       appLanguage: appLanguage,
-      hidesQuickCreate: hidesQuickCreate
+      hidesQuickCreate: hidesQuickCreate,
+      hidesTabBar: hidesTabBar
     )
   }
 
@@ -135,7 +138,8 @@ final class MistiaNativeTabBarController: UITabBarController, UITabBarController
     selectedTab: MistiaTab,
     appearanceMode: MistiaAppearanceMode,
     appLanguage: MistiaAppLanguage,
-    hidesQuickCreate: Bool
+    hidesQuickCreate: Bool,
+    hidesTabBar: Bool
   )
   {
     configureTabsIfNeeded()
@@ -145,7 +149,8 @@ final class MistiaNativeTabBarController: UITabBarController, UITabBarController
     overrideUserInterfaceStyle = appearanceMode.interfaceStyle
     refreshLocalizedContent()
     applyChromeAppearance()
-    updateQuickCreateVisibility(isHidden: hidesQuickCreate)
+    updateQuickCreateVisibility(isHidden: hidesQuickCreate || hidesTabBar)
+    updateTabBarVisibility(isHidden: hidesTabBar)
     syncTabSymbols(selectedTab: selectedTab)
 
     guard #available(iOS 18.0, *) else { return }
@@ -333,6 +338,24 @@ final class MistiaNativeTabBarController: UITabBarController, UITabBarController
     } completion: { _ in
       self.quickCreateController.view.isHidden = isHidden
       self.notifyQuickCreateFrameChanged()
+    }
+  }
+
+  private func updateTabBarVisibility(isHidden: Bool) {
+    let targetAlpha: CGFloat = isHidden ? 0 : 1
+    let targetTranslation: CGFloat = isHidden ? tabBar.frame.height : 0
+    
+    guard tabBar.alpha != targetAlpha || tabBar.isHidden != isHidden else { return }
+    
+    if !isHidden {
+      tabBar.isHidden = false
+    }
+    
+    UIView.animate(withDuration: 0.3, delay: 0, usingSpringWithDamping: 0.85, initialSpringVelocity: 0) {
+      self.tabBar.alpha = targetAlpha
+      self.tabBar.transform = CGAffineTransform(translationX: 0, y: targetTranslation)
+    } completion: { _ in
+      self.tabBar.isHidden = isHidden
     }
   }
 
