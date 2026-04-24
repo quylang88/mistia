@@ -7,6 +7,7 @@ struct MistiaNativeTabShell: UIViewControllerRepresentable {
   var appLanguage: MistiaAppLanguage
   var hidesQuickCreate: Bool
   var hidesTabBar: Bool
+  var showsShortcutTab: Bool
   var shortcutPresentation: MistiaShortcutPresentation
   var onShortcutTap: () -> Void
   var onQuickCreateTap: () -> Void
@@ -25,7 +26,8 @@ struct MistiaNativeTabShell: UIViewControllerRepresentable {
       appLanguage: appLanguage,
       shortcutPresentation: shortcutPresentation,
       hidesQuickCreate: hidesQuickCreate,
-      hidesTabBar: hidesTabBar
+      hidesTabBar: hidesTabBar,
+      showsShortcutTab: showsShortcutTab
     )
     return controller
   }
@@ -39,7 +41,8 @@ struct MistiaNativeTabShell: UIViewControllerRepresentable {
       appLanguage: appLanguage,
       shortcutPresentation: shortcutPresentation,
       hidesQuickCreate: hidesQuickCreate,
-      hidesTabBar: hidesTabBar
+      hidesTabBar: hidesTabBar,
+      showsShortcutTab: showsShortcutTab
     )
   }
 
@@ -161,7 +164,8 @@ final class MistiaNativeTabBarController: UITabBarController, UITabBarController
     appLanguage: MistiaAppLanguage,
     shortcutPresentation: MistiaShortcutPresentation,
     hidesQuickCreate: Bool,
-    hidesTabBar: Bool
+    hidesTabBar: Bool,
+    showsShortcutTab: Bool
   )
   {
     configureTabsIfNeeded()
@@ -172,6 +176,7 @@ final class MistiaNativeTabBarController: UITabBarController, UITabBarController
     overrideUserInterfaceStyle = appearanceMode.interfaceStyle
     refreshLocalizedContent()
     applyChromeAppearance()
+    updateShortcutTabVisibilityIfNeeded(showsShortcutTab: showsShortcutTab)
     refreshShortcutTabContent()
     updateQuickCreateVisibility(isHidden: hidesQuickCreate || hidesTabBar)
     updateTabBarVisibility(isHidden: hidesTabBar)
@@ -193,8 +198,7 @@ final class MistiaNativeTabBarController: UITabBarController, UITabBarController
 
       let rootTabs = MistiaTab.nativeShellTabs.map(makeRootTab(for:))
       cachedRootTabs = Dictionary(uniqueKeysWithValues: zip(MistiaTab.nativeShellTabs, rootTabs))
-      let pinnedShortcutTab = makePinnedShortcutTab()
-      tabs = rootTabs + [pinnedShortcutTab]
+      tabs = rootTabs
       selectedTab = rootTabs.first
       syncTabSymbols(selectedTab: .overview)
     } else {
@@ -621,6 +625,21 @@ final class MistiaNativeTabBarController: UITabBarController, UITabBarController
     shortcutTab = searchTab
     refreshShortcutTabContent()
     return searchTab
+  }
+
+  private func updateShortcutTabVisibilityIfNeeded(showsShortcutTab: Bool) {
+    guard #available(iOS 18.0, *) else { return }
+
+    if showsShortcutTab {
+      guard shortcutTab == nil else { return }
+      tabs = tabs + [makePinnedShortcutTab()]
+    } else {
+      guard let shortcutTab else { return }
+      var nextTabs = tabs
+      nextTabs.removeAll { $0 === shortcutTab }
+      tabs = nextTabs
+      self.shortcutTab = nil
+    }
   }
 
   private func viewController(for tab: MistiaTab) -> UIViewController {

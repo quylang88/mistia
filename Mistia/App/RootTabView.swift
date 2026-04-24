@@ -82,6 +82,7 @@ struct RootTabView: View {
     MistiaAppearanceMode.automatic.rawValue
   @AppStorage(MistiaAppStorageKey.appLanguage) private var appLanguageRawValue = ""
   @AppStorage(MistiaAppStorageKey.hideQuickCreate) private var hideQuickCreate = false
+  @AppStorage(MistiaAppStorageKey.mistiaShortcutEnabled) private var mistiaShortcutEnabled = false
   @AppStorage(MistiaAppStorageKey.mistiaShortcutKind) private var shortcutKindRawValue =
     MistiaShortcutKind.profile.rawValue
   @AppStorage(MistiaAppStorageKey.mistiaShortcutMemberUserID) private var shortcutMemberUserIDRawValue = ""
@@ -106,6 +107,7 @@ struct RootTabView: View {
           appLanguage: appLanguage,
           hidesQuickCreate: hideQuickCreate || isQuickCreateMenuVisible,
           hidesTabBar: uiState.isTabBarHidden,
+          showsShortcutTab: mistiaShortcutEnabled,
           shortcutPresentation: shortcutResolution.presentation,
           onShortcutTap: handlePinnedShortcutTap,
           onQuickCreateTap: toggleQuickCreateMenu,

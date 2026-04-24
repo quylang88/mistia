@@ -2290,12 +2290,26 @@ private struct FamilyPermissionsSheet: View {
 
                 Section(mistiaLocalized(vi: "Quyền", en: "Permissions", ja: "権限")) {
                     Toggle(mistiaLocalized(vi: "Xem dashboard gia đình", en: "View family dashboard", ja: "家族ダッシュボードを見る"), isOn: $policy.canViewFamilyDashboard)
+                        .tint(MistiaAccent.purple.color)
+                    .toggleStyle(.switch)
                     Toggle(mistiaLocalized(vi: "Xem dữ liệu người khác", en: "View others", ja: "他メンバーを表示"), isOn: $policy.canViewOthers)
+                        .tint(MistiaAccent.purple.color)
+                    .toggleStyle(.switch)
                     Toggle(mistiaLocalized(vi: "Sửa dữ liệu người khác", en: "Edit others", ja: "他メンバーを編集"), isOn: $policy.canEditOthers)
+                        .tint(MistiaAccent.purple.color)
+                    .toggleStyle(.switch)
                     Toggle(mistiaLocalized(vi: "Xem ví / tài khoản", en: "View wallets", ja: "ウォレットを見る"), isOn: $policy.canViewWallets)
+                        .tint(MistiaAccent.purple.color)
+                    .toggleStyle(.switch)
                     Toggle(mistiaLocalized(vi: "Xem công nợ", en: "View debts", ja: "負債を見る"), isOn: $policy.canViewDebts)
+                        .tint(MistiaAccent.purple.color)
+                    .toggleStyle(.switch)
                     Toggle(mistiaLocalized(vi: "Xem kid", en: "View kids", ja: "kid を表示"), isOn: $policy.canViewKids)
+                        .tint(MistiaAccent.purple.color)
+                    .toggleStyle(.switch)
                     Toggle(mistiaLocalized(vi: "Sửa kid", en: "Edit kids", ja: "kid を編集"), isOn: $policy.canEditKids)
+                        .tint(MistiaAccent.purple.color)
+                    .toggleStyle(.switch)
                 }
 
                 if familyContextStore.currentRole == .owner {
@@ -2314,6 +2328,8 @@ private struct FamilyPermissionsSheet: View {
                                     }
                                 )
                             )
+                            .tint(MistiaAccent.purple.color)
+                            .toggleStyle(.switch)
                         }
 
                         if grantTargets.isEmpty {

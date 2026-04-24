@@ -17,10 +17,6 @@ struct SettingsView: View {
         colorScheme == .dark ? Color(UIColor.secondarySystemGroupedBackground) : .white.opacity(0.22)
     }
 
-    private var accentPurple: Color {
-        Color(red: 0.43, green: 0.23, blue: 0.76)
-    }
-
     private var appearanceMode: MistiaAppearanceMode {
         MistiaAppearanceMode(rawValue: appearanceModeRawValue) ?? .automatic
     }
@@ -178,35 +174,40 @@ struct SettingsView: View {
                 SettingsCardSection(
                     section: customizationSection,
                     tint: cardTint,
-                    accentPurple: accentPurple,
                     onTap: handleTap
                 )
 
                 SettingsCardSection(
                     section: preferencesSection,
                     tint: cardTint,
-                    accentPurple: accentPurple,
                     onTap: handleTap
                 )
 
                 SettingsCardSection(
                     section: dataSection,
                     tint: cardTint,
-                    accentPurple: accentPurple,
                     onTap: handleTap
                 )
 
                 SettingsCardSection(
                     section: shortcutSection,
                     tint: cardTint,
-                    accentPurple: accentPurple,
                     onTap: handleTap
                 )
+
+                Text(
+                    mistiaLocalized(
+                        vi: "Bật Lối tắt Mistia để hiện nút pinned ở tab bar. Nút này sẽ mở thẳng mục bạn chọn.",
+                        en: "Enable the Mistia shortcut to show a pinned button in the tab bar. It opens the destination you choose.",
+                        ja: "Mistia ショートカットを有効にするとタブバーに固定ボタンが表示されます。選んだ項目を直接開きます。"
+                    )
+                )
+                .descriptionTextStyle()
+                .cardDescriptionStyle()
 
                 SettingsCardSection(
                     section: feedbackSection,
                     tint: cardTint,
-                    accentPurple: accentPurple,
                     onTap: handleTap
                 )
             }
@@ -265,10 +266,6 @@ private struct AppearanceSettingsView: View {
     @Environment(\.dismiss) private var dismiss
     @AppStorage(MistiaAppStorageKey.appearanceMode) private var appearanceModeRawValue = MistiaAppearanceMode.automatic.rawValue
 
-    private var accentPurple: Color {
-        Color(red: 0.43, green: 0.23, blue: 0.76)
-    }
-
     private var selectedMode: MistiaAppearanceMode {
         MistiaAppearanceMode(rawValue: appearanceModeRawValue) ?? .automatic
     }
@@ -287,7 +284,6 @@ private struct AppearanceSettingsView: View {
         ) {
             AppearanceModeCard(
                 selectedMode: selectedMode,
-                accentPurple: accentPurple
             ) { mode in
                 withAnimation(.spring(response: 0.30, dampingFraction: 0.84)) {
                     appearanceModeRawValue = mode.rawValue
@@ -300,10 +296,6 @@ private struct AppearanceSettingsView: View {
 private struct LanguageSettingsView: View {
     @Environment(\.dismiss) private var dismiss
     @AppStorage(MistiaAppStorageKey.appLanguage) private var appLanguageRawValue = ""
-
-    private var accentPurple: Color {
-        Color(red: 0.43, green: 0.23, blue: 0.76)
-    }
 
     private var selectedLanguage: MistiaAppLanguage {
         MistiaAppLanguage.resolve(storedRawValue: appLanguageRawValue)
@@ -323,7 +315,6 @@ private struct LanguageSettingsView: View {
         ) {
             LanguageSelectionCard(
                 selectedLanguage: selectedLanguage,
-                accentPurple: accentPurple
             ) { language in
                 withAnimation(.spring(response: 0.30, dampingFraction: 0.84)) {
                     MistiaAppLanguage.persist(language)
@@ -339,15 +330,12 @@ private struct MistiaShortcutSettingsView: View {
     @Environment(\.colorScheme) private var colorScheme
     @Environment(SessionStore.self) private var sessionStore
     @Environment(FamilyContextStore.self) private var familyContextStore
+    @AppStorage(MistiaAppStorageKey.mistiaShortcutEnabled) private var mistiaShortcutEnabled = false
     @AppStorage(MistiaAppStorageKey.mistiaShortcutKind) private var shortcutKindRawValue = MistiaShortcutKind.profile.rawValue
     @AppStorage(MistiaAppStorageKey.mistiaShortcutMemberUserID) private var shortcutMemberUserIDRawValue = ""
 
     private var cardTint: Color {
         colorScheme == .dark ? Color(UIColor.secondarySystemGroupedBackground) : .white.opacity(0.22)
-    }
-
-    private var accentPurple: Color {
-        Color(red: 0.43, green: 0.23, blue: 0.76)
     }
 
     private var storedSelection: MistiaShortcutSelection {
@@ -423,8 +411,6 @@ private struct MistiaShortcutSettingsView: View {
         }
 
         let utilitySelections: [MistiaShortcutSelection] = [
-            .profile,
-            .syncSettings,
             .backupRestore,
             .archivedItems
         ]
@@ -451,32 +437,34 @@ private struct MistiaShortcutSettingsView: View {
             onLeadingTap: { dismiss() },
             contentSpacing: 18
         ) {
-            Text(
+            Toggle(
                 mistiaLocalized(
-                    vi: "Nút pinned trên tab bar sẽ mở thẳng mục bạn chọn ở đây.",
-                    en: "The pinned button in the tab bar will open the destination you choose here.",
-                    ja: "タブバーの固定ボタンは、ここで選んだ項目を直接開きます。"
-                )
+                    vi: "Bật nút pinned",
+                    en: "Enable pinned button",
+                    ja: "固定ボタンを有効にする"
+                ),
+                isOn: $mistiaShortcutEnabled
             )
-            .descriptionTextStyle()
-            .padding(.horizontal, 2)
+            .tint(MistiaAccent.purple.color)
+            .toggleStyle(.switch)
 
-            ForEach(sections) { section in
-                VStack(alignment: .leading, spacing: 10) {
-                    Text(section.title)
-                        .font(.system(size: 13, weight: .bold, design: .rounded))
-                        .foregroundStyle(.secondary)
-                        .padding(.horizontal, 4)
+            if mistiaShortcutEnabled {
+                ForEach(sections) { section in
+                    VStack(alignment: .leading, spacing: 10) {
+                        Text(section.title)
+                            .font(.system(size: 13, weight: .bold, design: .rounded))
+                            .foregroundStyle(.secondary)
+                            .padding(.horizontal, 4)
 
-                    MistiaShortcutOptionSectionCard(
-                        section: section,
-                        selectedSelection: currentResolution.selection,
-                        tint: cardTint,
-                        accentPurple: accentPurple
-                    ) { selection in
-                        withAnimation(.spring(response: 0.28, dampingFraction: 0.84)) {
-                            shortcutKindRawValue = selection.storedKindRawValue
-                            shortcutMemberUserIDRawValue = selection.storedMemberUserIDRawValue
+                        MistiaShortcutOptionSectionCard(
+                            section: section,
+                            selectedSelection: currentResolution.selection,
+                            tint: cardTint,
+                        ) { selection in
+                            withAnimation(.spring(response: 0.28, dampingFraction: 0.84)) {
+                                shortcutKindRawValue = selection.storedKindRawValue
+                                shortcutMemberUserIDRawValue = selection.storedMemberUserIDRawValue
+                            }
                         }
                     }
                 }
@@ -559,7 +547,6 @@ private struct MistiaShortcutOptionSectionCard: View {
     let section: MistiaShortcutOptionSectionDump
     let selectedSelection: MistiaShortcutSelection
     let tint: Color
-    let accentPurple: Color
     let onSelect: (MistiaShortcutSelection) -> Void
 
     var body: some View {
@@ -596,7 +583,7 @@ private struct MistiaShortcutOptionSectionCard: View {
                         .padding(.horizontal, 14)
                         .padding(.vertical, 15)
                     }
-                    .buttonStyle(MistiaPressableButtonStyle(cornerRadius: 18, tint: accentPurple))
+                    .buttonStyle(MistiaPressableButtonStyle(cornerRadius: 18, tint: MistiaAccent.purple.color))
 
                     if index < section.rows.count - 1 {
                         Divider()
@@ -612,14 +599,13 @@ private struct MistiaShortcutOptionSectionCard: View {
 private struct SettingsCardSection: View {
     let section: SettingsSectionDump
     let tint: Color
-    let accentPurple: Color
     let onTap: (SettingsRowDump) -> Void
 
     var body: some View {
         MistiaGlassCard(cornerRadius: 22, tint: tint, padding: 0) {
             VStack(spacing: 0) {
                 ForEach(Array(section.rows.enumerated()), id: \.element.id) { index, row in
-                    SettingsRowButton(row: row, accentPurple: accentPurple) {
+                    SettingsRowButton(row: row) {
                         onTap(row)
                     }
 
@@ -636,7 +622,6 @@ private struct SettingsCardSection: View {
 
 private struct SettingsRowButton: View {
     let row: SettingsRowDump
-    let accentPurple: Color
     let action: () -> Void
 
     @Environment(\.colorScheme) private var colorScheme
@@ -666,7 +651,7 @@ private struct SettingsRowButton: View {
             .padding(.horizontal, 14)
             .padding(.vertical, 15)
         }
-        .buttonStyle(MistiaPressableButtonStyle(cornerRadius: 18, tint: accentPurple))
+        .buttonStyle(MistiaPressableButtonStyle(cornerRadius: 18, tint: MistiaAccent.purple.color))
     }
 
     private var titleColor: Color {
@@ -681,7 +666,6 @@ private struct SettingsRowButton: View {
 private struct AppearanceModeCard: View {
     @Environment(\.colorScheme) private var colorScheme
     let selectedMode: MistiaAppearanceMode
-    let accentPurple: Color
     let onSelect: (MistiaAppearanceMode) -> Void
 
     private var cardTint: Color {
@@ -698,12 +682,11 @@ private struct AppearanceModeCard: View {
                         AppearanceModeRow(
                             mode: mode,
                             isSelected: mode == selectedMode,
-                            accentPurple: accentPurple
                         )
                         .padding(.horizontal, 18)
                         .padding(.vertical, 16)
                     }
-                    .buttonStyle(MistiaPressableButtonStyle(cornerRadius: 18, tint: accentPurple))
+                    .buttonStyle(MistiaPressableButtonStyle(cornerRadius: 18, tint: MistiaAccent.purple.color))
 
                     if index < MistiaAppearanceMode.allCases.count - 1 {
                         Divider()
@@ -719,7 +702,6 @@ private struct AppearanceModeCard: View {
 private struct LanguageSelectionCard: View {
     @Environment(\.colorScheme) private var colorScheme
     let selectedLanguage: MistiaAppLanguage
-    let accentPurple: Color
     let onSelect: (MistiaAppLanguage) -> Void
 
     private var cardTint: Color {
@@ -736,12 +718,11 @@ private struct LanguageSelectionCard: View {
                         LanguageOptionRow(
                             language: language,
                             isSelected: language == selectedLanguage,
-                            accentPurple: accentPurple
                         )
                         .padding(.horizontal, 18)
                         .padding(.vertical, 16)
                     }
-                    .buttonStyle(MistiaPressableButtonStyle(cornerRadius: 18, tint: accentPurple))
+                    .buttonStyle(MistiaPressableButtonStyle(cornerRadius: 18, tint: MistiaAccent.purple.color))
 
                     if index < MistiaAppLanguage.allCases.count - 1 {
                         Divider()
@@ -757,7 +738,6 @@ private struct LanguageSelectionCard: View {
 private struct AppearanceModeRow: View {
     let mode: MistiaAppearanceMode
     let isSelected: Bool
-    let accentPurple: Color
     @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
@@ -780,7 +760,6 @@ private struct AppearanceModeRow: View {
 private struct LanguageOptionRow: View {
     let language: MistiaAppLanguage
     let isSelected: Bool
-    let accentPurple: Color
     @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {

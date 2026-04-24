@@ -110,6 +110,8 @@ struct PlanningBudgetEditorSheet: View {
                     }
 
                     Toggle(mistiaLocalized(vi: "Rollover", en: "Rollover", ja: "繰り越し"), isOn: $draft.rolloverEnabled)
+                        .tint(MistiaAccent.purple.color)
+                        .toggleStyle(.switch)
                 }
 
                 if target.budget != nil {

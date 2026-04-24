@@ -533,6 +533,8 @@ struct ManagementCategoryEditorSheet: View {
                             mistiaLocalized(vi: "Yêu thích", en: "Favorite", ja: "お気に入り"),
                             isOn: $draft.isFavorite
                         )
+                        .tint(MistiaAccent.purple.color)
+                        .toggleStyle(.switch)
                     }
                 }
 
