@@ -17,6 +17,7 @@ enum MistiaSchemaV1: VersionedSchema {
             RecurringBillPlan.self,
             InstallmentPlan.self,
             DueOccurrenceRecord.self,
+            AppNotificationRecord.self,
             SyncConflict.self,
             UserAccountProfile.self,
             OwnedRecordScope.self,

@@ -12,6 +12,11 @@ enum MistiaAppStorageKey {
     static let appLanguage = MistiaAppLanguage.userDefaultsKey
     static let syncAutoEnabled = "mistia.sync.auto.enabled"
     static let syncManualReviewRequired = "mistia.sync.manual-review-required"
+
+    static let notificationsEnabled = "mistia.notifications.enabled"
+    static let notificationsHadAnyGroupOn = "mistia.notifications.hadAnyGroupOn"
+    static let notificationsGroupRemindersEnabled = "mistia.notifications.group.reminders.enabled"
+    static let notificationsGroupFamilyEnabled = "mistia.notifications.group.family.enabled"
 }
 
 enum MistiaAppearanceMode: String, CaseIterable, Identifiable {

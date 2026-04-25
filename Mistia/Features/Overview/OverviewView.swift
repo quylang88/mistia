@@ -4,6 +4,7 @@ import SwiftUI
 
 private enum OverviewNavigationDestination: String, Identifiable {
     case profile
+    case notificationCenter
 
     var id: String { rawValue }
 }
@@ -20,6 +21,7 @@ struct OverviewView: View {
     @Environment(SessionStore.self) private var sessionStore
     @Environment(FamilyContextStore.self) private var familyContextStore
     @AppStorage(MistiaAppStorageKey.currencyCode) private var currencyCode = "JPY"
+    @AppStorage(MistiaAppStorageKey.notificationsEnabled) private var notificationsEnabled = false
 
     @Query(filter: #Predicate<BudgetPlan> { $0.deletedAt == nil })
     private var storedBudgets: [BudgetPlan]
@@ -208,7 +210,9 @@ struct OverviewView: View {
                 embedsInNavigationStack: false,
                 leadingInitials: sessionStore.summary?.initials ?? "MI",
                 leadingAvatarURL: sessionStore.summary?.avatarURL,
+                trailingSystemImage: notificationsEnabled ? "bell" : nil,
                 onLeadingTap: { destination = .profile },
+                onTrailingTap: { destination = .notificationCenter },
                 contentSpacing: 18,
                 titleDisplayMode: .large
             ) {
@@ -233,6 +237,8 @@ struct OverviewView: View {
                 switch route {
                 case .profile:
                     ManagementAccountView()
+                case .notificationCenter:
+                    NotificationCenterView()
                 }
             }
         }

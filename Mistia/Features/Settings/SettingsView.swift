@@ -8,6 +8,7 @@ struct SettingsView: View {
     @AppStorage(MistiaAppStorageKey.appearanceMode) private var appearanceModeRawValue = MistiaAppearanceMode.automatic.rawValue
     @AppStorage(MistiaAppStorageKey.appLanguage) private var appLanguageRawValue = ""
     @AppStorage(MistiaAppStorageKey.currencyCode) private var currencyCode = "JPY"
+    @AppStorage(MistiaAppStorageKey.mistiaShortcutEnabled) private var mistiaShortcutEnabled = false
     @AppStorage(MistiaAppStorageKey.mistiaShortcutKind) private var shortcutKindRawValue = MistiaShortcutKind.profile.rawValue
     @AppStorage(MistiaAppStorageKey.mistiaShortcutMemberUserID) private var shortcutMemberUserIDRawValue = ""
 
@@ -114,7 +115,7 @@ struct SettingsView: View {
                     icon: "bell.badge.fill",
                     accent: .coral,
                     value: nil,
-                    action: .placeholder
+                    action: .openNotifications
                 ),
                 SettingsRowDump(
                     title: mistiaLocalized(vi: "Bảo mật", en: "Security", ja: "セキュリティ"),
@@ -137,11 +138,20 @@ struct SettingsView: View {
     }
 
     private var shortcutSection: SettingsSectionDump {
-        SettingsSectionDump(
-            rows: [
-                SettingsRowDump(shortcutResolution: shortcutResolution)
-            ]
-        )
+        let row: SettingsRowDump
+        if mistiaShortcutEnabled {
+            row = SettingsRowDump(shortcutResolution: shortcutResolution)
+        } else {
+            row = SettingsRowDump(
+                title: mistiaLocalized(vi: "Lối tắt Mistia", en: "Mistia shortcut", ja: "Mistia ショートカット"),
+                icon: "pin.slash",
+                accent: .slate,
+                value: mistiaLocalized(vi: "Đang tắt", en: "Off", ja: "オフ"),
+                action: .openShortcut
+            )
+        }
+
+        return SettingsSectionDump(rows: [row])
     }
 
     private var feedbackSection: SettingsSectionDump {
@@ -221,6 +231,8 @@ struct SettingsView: View {
                 AppearanceSettingsView()
             case .language:
                 LanguageSettingsView()
+            case .notifications:
+                NotificationsSettingsView()
             case .backupRestore:
                 ManagementBackupRestoreView()
             case .archivedItems:
@@ -240,6 +252,8 @@ struct SettingsView: View {
             destination = .appearance
         case .openLanguage:
             destination = .language
+        case .openNotifications:
+            destination = .notifications
         case .openBackupRestore:
             destination = .backupRestore
         case .openArchivedItems:
@@ -447,6 +461,16 @@ private struct MistiaShortcutSettingsView: View {
             )
             .tint(MistiaAccent.purple.color)
             .toggleStyle(.switch)
+            .onChange(of: mistiaShortcutEnabled) { _, newValue in
+                guard newValue else { return }
+                guard shortcutKindRawValue == MistiaShortcutKind.profile.rawValue
+                    || shortcutKindRawValue == MistiaShortcutKind.syncSettings.rawValue else {
+                    return
+                }
+                guard let firstSelection = sections.first?.rows.first?.selection else { return }
+                shortcutKindRawValue = firstSelection.storedKindRawValue
+                shortcutMemberUserIDRawValue = firstSelection.storedMemberUserIDRawValue
+            }
 
             if mistiaShortcutEnabled {
                 ForEach(sections) { section in
@@ -873,6 +897,7 @@ private enum SettingsRowIconContent: Equatable {
 private enum SettingsRowAction {
     case openAppearance
     case openLanguage
+    case openNotifications
     case openBackupRestore
     case openArchivedItems
     case openShortcut
@@ -882,6 +907,7 @@ private enum SettingsRowAction {
 private enum SettingsDestination: String, Identifiable {
     case appearance
     case language
+    case notifications
     case backupRestore
     case archivedItems
     case shortcut
