@@ -672,27 +672,7 @@ struct TransactionEditorSheet: View {
                 openingBalanceMinor: sourceWallet.openingBalanceMinor
             )
             
-            let snapshots = postedTransactions.filter { $0.id != target.transaction?.id }.map {
-                TransactionRecordSnapshot(
-                    id: $0.id,
-                    primaryKind: $0.primaryKind,
-                    transferSubtype: $0.transferSubtype,
-                    debtIntent: $0.debtIntent,
-                    entryStatus: $0.entryStatus,
-                    title: $0.title,
-                    note: $0.note,
-                    amountMinor: $0.amountMinor,
-                    occurredAt: $0.occurredAt,
-                    createdAt: $0.createdAt,
-                    sourceWalletID: $0.sourceWallet?.id,
-                    sourceWalletKind: $0.sourceWallet?.kind,
-                    destinationWalletID: $0.destinationWallet?.id,
-                    destinationWalletKind: $0.destinationWallet?.kind,
-                    categoryID: $0.category?.id,
-                    counterpartyName: $0.counterpartyName,
-                    normalizedCounterpartyKey: $0.normalizedCounterpartyKey
-                )
-            }
+            let snapshots = postedTransactions.filter { $0.id != target.transaction?.id }.map { $0.snapshot }
             let currentBalance = TransactionLogic.effectiveBalance(for: snapshot, records: snapshots)
             
             if currentBalance - amountMinor < 0 {
@@ -714,27 +694,7 @@ struct TransactionEditorSheet: View {
                     openingBalanceMinor: sourceWallet.openingBalanceMinor
                 )
                 
-                let snapshots = postedTransactions.filter { $0.id != target.transaction?.id }.map {
-                    TransactionRecordSnapshot(
-                        id: $0.id,
-                        primaryKind: $0.primaryKind,
-                        transferSubtype: $0.transferSubtype,
-                        debtIntent: $0.debtIntent,
-                        entryStatus: $0.entryStatus,
-                        title: $0.title,
-                        note: $0.note,
-                        amountMinor: $0.amountMinor,
-                        occurredAt: $0.occurredAt,
-                        createdAt: $0.createdAt,
-                        sourceWalletID: $0.sourceWallet?.id,
-                        sourceWalletKind: $0.sourceWallet?.kind,
-                        destinationWalletID: $0.destinationWallet?.id,
-                        destinationWalletKind: $0.destinationWallet?.kind,
-                        categoryID: $0.category?.id,
-                        counterpartyName: $0.counterpartyName,
-                        normalizedCounterpartyKey: $0.normalizedCounterpartyKey
-                    )
-                }
+                let snapshots = postedTransactions.filter { $0.id != target.transaction?.id }.map { $0.snapshot }
                 let currentBalance = TransactionLogic.effectiveBalance(for: snapshot, records: snapshots)
                 
                 if currentBalance - amountMinor < 0 {
@@ -755,27 +715,7 @@ struct TransactionEditorSheet: View {
                         openingBalanceMinor: sourceWallet.openingBalanceMinor
                     )
                     
-                    let snapshots = postedTransactions.filter { $0.id != target.transaction?.id }.map {
-                        TransactionRecordSnapshot(
-                            id: $0.id,
-                            primaryKind: $0.primaryKind,
-                            transferSubtype: $0.transferSubtype,
-                            debtIntent: $0.debtIntent,
-                            entryStatus: $0.entryStatus,
-                            title: $0.title,
-                            note: $0.note,
-                            amountMinor: $0.amountMinor,
-                            occurredAt: $0.occurredAt,
-                            createdAt: $0.createdAt,
-                            sourceWalletID: $0.sourceWallet?.id,
-                            sourceWalletKind: $0.sourceWallet?.kind,
-                            destinationWalletID: $0.destinationWallet?.id,
-                            destinationWalletKind: $0.destinationWallet?.kind,
-                            categoryID: $0.category?.id,
-                            counterpartyName: $0.counterpartyName,
-                            normalizedCounterpartyKey: $0.normalizedCounterpartyKey
-                        )
-                    }
+                    let snapshots = postedTransactions.filter { $0.id != target.transaction?.id }.map { $0.snapshot }
                     let currentBalance = TransactionLogic.effectiveBalance(for: snapshot, records: snapshots)
                     
                     if currentBalance - amountMinor < 0 {
@@ -1063,29 +1003,6 @@ struct TransactionEditorSheet: View {
     }
 }
 
-private extension LedgerTransaction {
-    var snapshot: TransactionRecordSnapshot {
-        TransactionRecordSnapshot(
-            id: id,
-            primaryKind: primaryKind,
-            transferSubtype: transferSubtype,
-            debtIntent: debtIntent,
-            entryStatus: entryStatus,
-            title: title,
-            note: note,
-            amountMinor: amountMinor,
-            occurredAt: occurredAt,
-            createdAt: createdAt,
-            sourceWalletID: sourceWallet?.id,
-            sourceWalletKind: sourceWallet?.kind,
-            destinationWalletID: destinationWallet?.id,
-            destinationWalletKind: destinationWallet?.kind,
-            categoryID: category?.id,
-            categoryParentID: category?.parentCategory?.id,
-            counterpartyName: counterpartyName,
-            normalizedCounterpartyKey: normalizedCounterpartyKey
-        )
-    }
 }
 
 @Observable final class TransactionFormDraft {

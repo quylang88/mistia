@@ -1191,29 +1191,6 @@ private struct TransactionsPlaceholderCard: View {
     }
 }
 
-private extension LedgerTransaction {
-    var snapshot: TransactionRecordSnapshot {
-        TransactionRecordSnapshot(
-            id: id,
-            primaryKind: primaryKind,
-            transferSubtype: transferSubtype,
-            debtIntent: debtIntent,
-            entryStatus: entryStatus,
-            title: title,
-            note: note,
-            amountMinor: amountMinor,
-            occurredAt: occurredAt,
-            createdAt: createdAt,
-            sourceWalletID: sourceWallet?.id,
-            sourceWalletKind: sourceWallet?.kind,
-            destinationWalletID: destinationWallet?.id,
-            destinationWalletKind: destinationWallet?.kind,
-            categoryID: category?.id,
-            categoryParentID: category?.parentCategory?.id,
-            counterpartyName: counterpartyName,
-            normalizedCounterpartyKey: normalizedCounterpartyKey
-        )
-    }
 }
 
 private extension String {
