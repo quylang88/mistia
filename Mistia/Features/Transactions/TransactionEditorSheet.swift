@@ -54,6 +54,14 @@ struct TransactionEditorSheet: View {
 
     @State private var draft: TransactionFormDraft
     @State private var alertMessage: String?
+
+    private var isAdjustment: Bool {
+        if let transaction = target.transaction {
+            return transaction.category?.id == MistiaSystemCategoryIdentity.balanceAdjustmentExpenseID ||
+                   transaction.category?.id == MistiaSystemCategoryIdentity.balanceAdjustmentIncomeID
+        }
+        return false
+    }
     @State private var showsCategoryPicker = false
     @State private var suppressTitleSuggestions = false
     @State private var isApplyingTitleSuggestion = false
@@ -92,17 +100,19 @@ struct TransactionEditorSheet: View {
                 }
 
                 ToolbarItem(placement: .topBarTrailing) {
-                    Button {
-                        save()
-                    } label: {
-                        Image(systemName: "checkmark")
-                            .font(.system(size: 14, weight: .bold))
-                            .foregroundStyle(Color(red: 0.88, green: 0.78, blue: 1.0))
-                            .frame(width: 30, height: 30)
+                    if !isAdjustment {
+                        Button {
+                            save()
+                        } label: {
+                            Image(systemName: "checkmark")
+                                .font(.system(size: 14, weight: .bold))
+                                .foregroundStyle(Color(red: 0.88, green: 0.78, blue: 1.0))
+                                .frame(width: 30, height: 30)
+                        }
+                        .buttonStyle(.glassProminent)
+                        .buttonBorderShape(.circle)
+                        .tint(Color(red: 0.43, green: 0.23, blue: 0.76))
                     }
-                    .buttonStyle(.glassProminent)
-                    .buttonBorderShape(.circle)
-                    .tint(Color(red: 0.43, green: 0.23, blue: 0.76))
                 }
             }
         }
@@ -361,8 +371,11 @@ struct TransactionEditorSheet: View {
                     .listRowInsets(EdgeInsets())
                     .listRowBackground(Color.clear)
                 }
+                .disabled(isAdjustment)
+                .opacity(isAdjustment ? 0.6 : 1.0)
             }
         }
+        .disabled(isAdjustment)
     }
     private var navigationTitle: String {
         if target.transaction == nil {
@@ -508,7 +521,11 @@ struct TransactionEditorSheet: View {
                 return false
             }
 
-            return category.kind == desiredKind
+            let isAdjustmentCategory = category.id == MistiaSystemCategoryIdentity.balanceAdjustmentExpenseID ||
+                                       category.id == MistiaSystemCategoryIdentity.balanceAdjustmentIncomeID
+
+            return !isAdjustmentCategory
+                && category.kind == desiredKind
                 && allowedOwnerUserIDs.contains(ownerUserID)
                 && category.deletedAt == nil
                 && (!category.isArchived || category.id == preferredID || category.parentCategory?.id == target.transaction?.category?.parentCategory?.id)
@@ -527,7 +544,9 @@ struct TransactionEditorSheet: View {
         return MistiaCategoryPickerSupport.favoriteCategories(
             from: storedCategories.filter {
                 guard let ownerUserID = categoryOwnerUserID(for: $0) else { return false }
-                return effectiveCategoryOwnerUserIDs.contains(ownerUserID)
+                let isAdjustmentCategory = $0.id == MistiaSystemCategoryIdentity.balanceAdjustmentExpenseID ||
+                                           $0.id == MistiaSystemCategoryIdentity.balanceAdjustmentIncomeID
+                return !isAdjustmentCategory && effectiveCategoryOwnerUserIDs.contains(ownerUserID)
             },
             kind: desiredKind
         )
@@ -539,7 +558,9 @@ struct TransactionEditorSheet: View {
             from: postedTransactions,
             categories: storedCategories.filter {
                 guard let ownerUserID = categoryOwnerUserID(for: $0) else { return false }
-                return effectiveCategoryOwnerUserIDs.contains(ownerUserID)
+                let isAdjustmentCategory = $0.id == MistiaSystemCategoryIdentity.balanceAdjustmentExpenseID ||
+                                           $0.id == MistiaSystemCategoryIdentity.balanceAdjustmentIncomeID
+                return !isAdjustmentCategory && effectiveCategoryOwnerUserIDs.contains(ownerUserID)
             },
             kind: desiredKind
         )
@@ -651,27 +672,7 @@ struct TransactionEditorSheet: View {
                 openingBalanceMinor: sourceWallet.openingBalanceMinor
             )
             
-            let snapshots = postedTransactions.filter { $0.id != target.transaction?.id }.map {
-                TransactionRecordSnapshot(
-                    id: $0.id,
-                    primaryKind: $0.primaryKind,
-                    transferSubtype: $0.transferSubtype,
-                    debtIntent: $0.debtIntent,
-                    entryStatus: $0.entryStatus,
-                    title: $0.title,
-                    note: $0.note,
-                    amountMinor: $0.amountMinor,
-                    occurredAt: $0.occurredAt,
-                    createdAt: $0.createdAt,
-                    sourceWalletID: $0.sourceWallet?.id,
-                    sourceWalletKind: $0.sourceWallet?.kind,
-                    destinationWalletID: $0.destinationWallet?.id,
-                    destinationWalletKind: $0.destinationWallet?.kind,
-                    categoryID: $0.category?.id,
-                    counterpartyName: $0.counterpartyName,
-                    normalizedCounterpartyKey: $0.normalizedCounterpartyKey
-                )
-            }
+            let snapshots = postedTransactions.filter { $0.id != target.transaction?.id }.map { $0.snapshot }
             let currentBalance = TransactionLogic.effectiveBalance(for: snapshot, records: snapshots)
             
             if currentBalance - amountMinor < 0 {
@@ -693,27 +694,7 @@ struct TransactionEditorSheet: View {
                     openingBalanceMinor: sourceWallet.openingBalanceMinor
                 )
                 
-                let snapshots = postedTransactions.filter { $0.id != target.transaction?.id }.map {
-                    TransactionRecordSnapshot(
-                        id: $0.id,
-                        primaryKind: $0.primaryKind,
-                        transferSubtype: $0.transferSubtype,
-                        debtIntent: $0.debtIntent,
-                        entryStatus: $0.entryStatus,
-                        title: $0.title,
-                        note: $0.note,
-                        amountMinor: $0.amountMinor,
-                        occurredAt: $0.occurredAt,
-                        createdAt: $0.createdAt,
-                        sourceWalletID: $0.sourceWallet?.id,
-                        sourceWalletKind: $0.sourceWallet?.kind,
-                        destinationWalletID: $0.destinationWallet?.id,
-                        destinationWalletKind: $0.destinationWallet?.kind,
-                        categoryID: $0.category?.id,
-                        counterpartyName: $0.counterpartyName,
-                        normalizedCounterpartyKey: $0.normalizedCounterpartyKey
-                    )
-                }
+                let snapshots = postedTransactions.filter { $0.id != target.transaction?.id }.map { $0.snapshot }
                 let currentBalance = TransactionLogic.effectiveBalance(for: snapshot, records: snapshots)
                 
                 if currentBalance - amountMinor < 0 {
@@ -734,27 +715,7 @@ struct TransactionEditorSheet: View {
                         openingBalanceMinor: sourceWallet.openingBalanceMinor
                     )
                     
-                    let snapshots = postedTransactions.filter { $0.id != target.transaction?.id }.map {
-                        TransactionRecordSnapshot(
-                            id: $0.id,
-                            primaryKind: $0.primaryKind,
-                            transferSubtype: $0.transferSubtype,
-                            debtIntent: $0.debtIntent,
-                            entryStatus: $0.entryStatus,
-                            title: $0.title,
-                            note: $0.note,
-                            amountMinor: $0.amountMinor,
-                            occurredAt: $0.occurredAt,
-                            createdAt: $0.createdAt,
-                            sourceWalletID: $0.sourceWallet?.id,
-                            sourceWalletKind: $0.sourceWallet?.kind,
-                            destinationWalletID: $0.destinationWallet?.id,
-                            destinationWalletKind: $0.destinationWallet?.kind,
-                            categoryID: $0.category?.id,
-                            counterpartyName: $0.counterpartyName,
-                            normalizedCounterpartyKey: $0.normalizedCounterpartyKey
-                        )
-                    }
+                    let snapshots = postedTransactions.filter { $0.id != target.transaction?.id }.map { $0.snapshot }
                     let currentBalance = TransactionLogic.effectiveBalance(for: snapshot, records: snapshots)
                     
                     if currentBalance - amountMinor < 0 {
@@ -1039,31 +1000,6 @@ struct TransactionEditorSheet: View {
             y: 4
         )
         .contentShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
-    }
-}
-
-private extension LedgerTransaction {
-    var snapshot: TransactionRecordSnapshot {
-        TransactionRecordSnapshot(
-            id: id,
-            primaryKind: primaryKind,
-            transferSubtype: transferSubtype,
-            debtIntent: debtIntent,
-            entryStatus: entryStatus,
-            title: title,
-            note: note,
-            amountMinor: amountMinor,
-            occurredAt: occurredAt,
-            createdAt: createdAt,
-            sourceWalletID: sourceWallet?.id,
-            sourceWalletKind: sourceWallet?.kind,
-            destinationWalletID: destinationWallet?.id,
-            destinationWalletKind: destinationWallet?.kind,
-            categoryID: category?.id,
-            categoryParentID: category?.parentCategory?.id,
-            counterpartyName: counterpartyName,
-            normalizedCounterpartyKey: normalizedCounterpartyKey
-        )
     }
 }
 

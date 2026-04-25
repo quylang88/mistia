@@ -472,6 +472,7 @@ nonisolated enum MistiaSystemCategoryKey: String, CaseIterable, Codable, Identif
     case petGrooming = "pet_grooming"
     case petOther = "pet_other"
     case otherExpense = "other_expense"
+    case balanceAdjustmentExpense = "balance_adjustment_expense"
     case salary
     case sideSalary = "side_salary"
     case bonus
@@ -505,6 +506,7 @@ nonisolated enum MistiaSystemCategoryKey: String, CaseIterable, Codable, Identif
     case liquidateHousehold = "liquidate_household"
     case otherLiquidationIncome = "other_liquidation_income"
     case otherIncome = "other_income"
+    case balanceAdjustmentIncome = "balance_adjustment_income"
 
     private struct Meta {
         let title: String
@@ -647,6 +649,7 @@ nonisolated enum MistiaSystemCategoryKey: String, CaseIterable, Codable, Identif
         .petGrooming: .init(title: "Grooming / chăm sóc", parentKey: .expensePetCare, iconToken: "mistia.category.expense.pet_care.pet_grooming", fallbackSystemName: "sparkles", iconColorHex: "#A76BFF", group: .family, activeDefault: true, aliases: []),
         .petOther: .init(title: "Chi khác cho thú cưng", parentKey: .expensePetCare, iconToken: "mistia.category.expense.pet_care.pet_other", fallbackSystemName: "tray.full.fill", iconColorHex: "#8A8A8E", group: .family, activeDefault: true, aliases: []),
         .otherExpense: .init(title: "Chi khác", parentKey: .expenseOther, iconToken: "mistia.category.expense.other.expense", fallbackSystemName: "tray.full.fill", iconColorHex: "#8A8A8E", group: .generic, activeDefault: false, aliases: []),
+        .balanceAdjustmentExpense: .init(title: "Điều chỉnh số dư", englishTitle: "Balance Adjustment", japaneseTitle: "残高調整", parentKey: .expenseOther, iconToken: "mistia.flow.transfer", fallbackSystemName: "arrow.left.arrow.right", iconColorHex: "#7C85A3", group: .generic, activeDefault: true, aliases: []),
         .salary: .init(title: "Lương chính", parentKey: .incomeSalaryWork, iconToken: "mistia.category.income.salary_work.salary", fallbackSystemName: "banknote.fill", iconColorHex: "#2DAA9E", group: .income, activeDefault: true, aliases: ["Lương"]),
         .sideSalary: .init(title: "Lương phụ", parentKey: .incomeSalaryWork, iconToken: "mistia.category.income.salary_work.side_salary", fallbackSystemName: "banknote.fill", iconColorHex: "#57B7FF", group: .income, activeDefault: true, aliases: []),
         .bonus: .init(title: "Thưởng", parentKey: .incomeSalaryWork, iconToken: "mistia.category.income.salary_work.bonus", fallbackSystemName: "gift.fill", iconColorHex: "#FFB347", group: .income, activeDefault: true, aliases: []),
@@ -679,7 +682,8 @@ nonisolated enum MistiaSystemCategoryKey: String, CaseIterable, Codable, Identif
         .sellUsedItems: .init(title: "Bán đồ cũ", parentKey: .incomeLiquidation, iconToken: "mistia.category.income.liquidation.sell_used_items", fallbackSystemName: "tag.fill", iconColorHex: "#F59B3F", group: .income, activeDefault: true, aliases: []),
         .liquidateHousehold: .init(title: "Thanh lý đồ gia dụng", parentKey: .incomeLiquidation, iconToken: "mistia.category.income.liquidation.liquidate_household", fallbackSystemName: "chair.fill", iconColorHex: "#57B7FF", group: .income, activeDefault: true, aliases: []),
         .otherLiquidationIncome: .init(title: "Thu khác từ thanh lý", parentKey: .incomeLiquidation, iconToken: "mistia.category.income.liquidation.other_liquidation_income", fallbackSystemName: "tray.full.fill", iconColorHex: "#8A8A8E", group: .income, activeDefault: true, aliases: []),
-        .otherIncome: .init(title: "Thu khác", parentKey: .incomeOther, iconToken: "mistia.category.income.other.income", fallbackSystemName: "plusminus.circle.fill", iconColorHex: "#8A8A8E", group: .generic, activeDefault: false, aliases: [])
+        .otherIncome: .init(title: "Thu khác", parentKey: .incomeOther, iconToken: "mistia.category.income.other.income", fallbackSystemName: "plusminus.circle.fill", iconColorHex: "#8A8A8E", group: .generic, activeDefault: false, aliases: ["Chưa phân loại thu"]),
+        .balanceAdjustmentIncome: .init(title: "Điều chỉnh số dư", englishTitle: "Balance Adjustment", japaneseTitle: "残高調整", parentKey: .incomeOther, iconToken: "mistia.flow.transfer", fallbackSystemName: "arrow.left.arrow.right", iconColorHex: "#7C85A3", group: .generic, activeDefault: true, aliases: [])
     ]
 
     static let activeDefaults: [Self] = [
@@ -694,13 +698,13 @@ nonisolated enum MistiaSystemCategoryKey: String, CaseIterable, Codable, Identif
         .moviesLeisure, .travel, .gamesApps, .booksMusic, .subscriptions, .hobbies, .coffeeFriends,
         .workTools, .workSoftwareSubscriptions, .clientEntertainment, .businessTravel, .courses, .professionalBooks, .examsCertificates,
         .insurance, .taxesFees, .bankingFees, .loanInterest, .loanRepayment, .finesFees, .otherObligations,
-        .petFood, .petMedical, .petSupplies, .petGrooming, .petOther,
+        .petFood, .petMedical, .petSupplies, .petGrooming, .petOther, .balanceAdjustmentExpense,
         .salary, .sideSalary, .bonus, .allowance, .commission, .freelance, .overtime,
         .sales, .serviceRevenue, .businessProfit, .onlineCollaboratorIncome, .otherBusinessIncome,
         .bankInterest, .dividends, .investmentGain, .loanInterestReceived, .otherFinancialIncome,
         .refund, .cashback, .reimbursement, .peopleRepayment, .expenseRecovery, .insurancePayout,
         .gift, .familySupport, .childAllowance, .maternityAllowance, .subsidy, .supportReceived,
-        .sellUsedItems, .liquidateHousehold, .otherLiquidationIncome
+        .sellUsedItems, .liquidateHousehold, .otherLiquidationIncome, .balanceAdjustmentIncome
     ]
 
     static let recurringBillQuickPickDefaults: [Self] = [

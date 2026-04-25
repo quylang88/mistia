@@ -46,9 +46,9 @@ enum MistiaLocalNotificationScheduler {
             )
         )) ?? []
 
-        let transactionRecords = transactions.map(\.planningRecordSnapshot)
+        let transactionRecords = transactions.map { $0.planningRecordSnapshot }
         let planningCreditCardAccounts = wallets.compactMap { $0.planningCreditCardSnapshot(records: transactionRecords) }
-        let occurrenceSnapshots = occurrences.map(\.planningSnapshot)
+        let occurrenceSnapshots = occurrences.map { $0.planningSnapshot }
 
         let cardDueItems = PlanningLogic.creditCardDueItems(
             accounts: planningCreditCardAccounts,
@@ -59,14 +59,14 @@ enum MistiaLocalNotificationScheduler {
         )
 
         let recurringDueItems = PlanningLogic.recurringBillDueItems(
-            bills: bills.map(\.planningSnapshot),
+            bills: bills.map { $0.planningSnapshot },
             occurrences: occurrenceSnapshots,
             selectedMonth: startOfMonth,
             calendar: calendar
         )
 
         let installmentDueItems = PlanningLogic.installmentDueItems(
-            plans: installments.map(\.planningSnapshot),
+            plans: installments.map { $0.planningSnapshot },
             occurrences: occurrenceSnapshots,
             selectedMonth: startOfMonth,
             calendar: calendar

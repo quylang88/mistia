@@ -5,6 +5,7 @@ private enum TransactionSegment: String, CaseIterable, Hashable {
     case expense
     case income
     case transfer
+    case adjustment
 
     var title: String {
         switch self {
@@ -14,6 +15,8 @@ private enum TransactionSegment: String, CaseIterable, Hashable {
             mistiaLocalized(vi: "Thu nhập", en: "Income", ja: "収入")
         case .transfer:
             mistiaLocalized(vi: "Chuyển tiền", en: "Transfer", ja: "振替")
+        case .adjustment:
+            mistiaLocalized(vi: "Điều chỉnh số dư", en: "Adjustment", ja: "残高調整")
         }
     }
 
@@ -21,7 +24,7 @@ private enum TransactionSegment: String, CaseIterable, Hashable {
         MistiaAccent.purple.color
     }
 
-    var kind: TransactionPrimaryKind {
+    var kind: TransactionPrimaryKind? {
         switch self {
         case .expense:
             return .expense
@@ -29,6 +32,8 @@ private enum TransactionSegment: String, CaseIterable, Hashable {
             return .income
         case .transfer:
             return .transfer
+        case .adjustment:
+            return nil
         }
     }
 }
@@ -264,13 +269,14 @@ struct TransactionsView: View {
     private var effectiveFilters: TransactionFilterState {
         var effective = filterState
         effective.searchText = searchText
+        effective.isAdjustmentOnly = selectedSegment == .adjustment
         return effective
     }
 
     private var visibleRecords: [TransactionRecordSnapshot] {
         TransactionLogic.visibleRecords(
             from: snapshotRecords,
-            selectedKind: selectedSegment?.kind,
+            selectedKind: selectedSegment?.kind ?? nil,
             filters: effectiveFilters
         )
     }
@@ -297,6 +303,10 @@ struct TransactionsView: View {
         }
 
         return TransactionLogic.openDebtPositions(from: debtRecords)
+    }
+
+    private var hasAdjustments: Bool {
+        snapshotRecords.contains { TransactionLogic.isAdjustment($0) }
     }
 
     private var activeFilterCount: Int {
@@ -543,9 +553,11 @@ struct TransactionsView: View {
                     }
                 }
                 ForEach(TransactionSegment.allCases, id: \.self) { segment in
-                    Button(segment.title) {
-                        withAnimation(.snappy) {
-                            selectedSegment = segment
+                    if segment != .adjustment || hasAdjustments {
+                        Button(segment.title) {
+                            withAnimation(.snappy) {
+                                selectedSegment = segment
+                            }
                         }
                     }
                 }
@@ -589,7 +601,7 @@ struct TransactionsView: View {
                 }
             }
 
-            if selectedSegment?.kind != .transfer {
+            if selectedSegment?.kind != .transfer && selectedSegment != .adjustment {
                 filterMenu(isActive: filterState.categoryID != nil) {
                     let title = activeCategories.first { $0.id == filterState.categoryID }?.localizedDisplayName
                         ?? mistiaLocalized(vi: "Danh mục", en: "Category", ja: "カテゴリ")
@@ -1176,31 +1188,6 @@ private struct TransactionsPlaceholderCard: View {
             .frame(maxWidth: .infinity)
             .padding(.vertical, 12)
         }
-    }
-}
-
-private extension LedgerTransaction {
-    var snapshot: TransactionRecordSnapshot {
-        TransactionRecordSnapshot(
-            id: id,
-            primaryKind: primaryKind,
-            transferSubtype: transferSubtype,
-            debtIntent: debtIntent,
-            entryStatus: entryStatus,
-            title: title,
-            note: note,
-            amountMinor: amountMinor,
-            occurredAt: occurredAt,
-            createdAt: createdAt,
-            sourceWalletID: sourceWallet?.id,
-            sourceWalletKind: sourceWallet?.kind,
-            destinationWalletID: destinationWallet?.id,
-            destinationWalletKind: destinationWallet?.kind,
-            categoryID: category?.id,
-            categoryParentID: category?.parentCategory?.id,
-            counterpartyName: counterpartyName,
-            normalizedCounterpartyKey: normalizedCounterpartyKey
-        )
     }
 }
 
