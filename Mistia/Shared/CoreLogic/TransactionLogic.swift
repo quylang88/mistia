@@ -68,6 +68,7 @@ struct TransactionRecordSnapshot: Equatable, Identifiable {
 }
 
 struct TransactionFilterState: Equatable {
+    var isAdjustmentOnly: Bool = false
     var timeScope: TransactionTimeScope = .thisMonth
     var walletID: UUID?
     var categoryID: UUID?
@@ -147,6 +148,11 @@ nonisolated enum TransactionLogic {
         return collapsed.lowercased()
     }
 
+    static func isAdjustment(_ record: TransactionRecordSnapshot) -> Bool {
+        record.categoryID == MistiaSystemCategoryIdentity.balanceAdjustmentExpenseID ||
+        record.categoryID == MistiaSystemCategoryIdentity.balanceAdjustmentIncomeID
+    }
+
     static func visibleRecords(
         from records: [TransactionRecordSnapshot],
         selectedKind: TransactionPrimaryKind?,
@@ -156,6 +162,12 @@ nonisolated enum TransactionLogic {
     ) -> [TransactionRecordSnapshot] {
         records
             .filter { record in
+                if filters.isAdjustmentOnly {
+                    guard isAdjustment(record) else { return false }
+                } else {
+                    guard !isAdjustment(record) else { return false }
+                }
+
                 guard selectedKind == nil || record.primaryKind == selectedKind else {
                     return false
                 }

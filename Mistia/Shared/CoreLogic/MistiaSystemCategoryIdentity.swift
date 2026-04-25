@@ -29,6 +29,14 @@ nonisolated enum MistiaSystemCategoryIdentity {
         canonicalID(for: parentKey.rawValue)
     }
 
+    static var balanceAdjustmentExpenseID: UUID {
+        canonicalID(for: .balanceAdjustmentExpense)
+    }
+
+    static var balanceAdjustmentIncomeID: UUID {
+        canonicalID(for: .balanceAdjustmentIncome)
+    }
+
     static func descriptor(for rawSystemKey: String?) -> MistiaSystemCategoryDescriptor? {
         guard let rawSystemKey else { return nil }
 

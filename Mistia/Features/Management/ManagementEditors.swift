@@ -25,6 +25,7 @@ struct ManagementWalletEditorSheet: View {
 
     @State private var draft: WalletDraft
     @State private var showsIconPicker = false
+    @State private var showsBalanceAdjustment = false
     @State private var showsBankPicker = false
     @State private var alertMessage: String?
 
@@ -74,8 +75,26 @@ struct ManagementWalletEditorSheet: View {
                     }
                     .pickerStyle(.menu)
 
-                    TextField(draft.kind.balanceFieldTitle, text: $draft.openingBalanceText)
-                        .keyboardType(.numberPad)
+                    if target.wallet == nil {
+                        TextField(draft.kind.balanceFieldTitle, text: $draft.openingBalanceText)
+                            .keyboardType(.numberPad)
+                    } else {
+                        LabeledContent(mistiaLocalized(vi: "Số dư hiện tại", en: "Current balance", ja: "現在の残高")) {
+                            HStack {
+                                Text(effectiveBalance.formattedCurrency(code: draft.currencyCode))
+                                    .foregroundStyle(.secondary)
+
+                                Button {
+                                    showsBalanceAdjustment = true
+                                } label: {
+                                    Text(mistiaLocalized(vi: "Sửa", en: "Edit", ja: "編集"))
+                                        .font(.subheadline.weight(.semibold))
+                                        .foregroundStyle(MistiaAccent.purple.color)
+                                }
+                                .buttonStyle(.plain)
+                            }
+                        }
+                    }
 
                     LabeledContent(mistiaLocalized(vi: "Tiền tệ", en: "Currency", ja: "通貨")) {
                         Text(draft.currencyCode)
@@ -243,6 +262,14 @@ struct ManagementWalletEditorSheet: View {
         .onChange(of: draft.kind) { oldValue, newValue in
             draft.handleKindChange(from: oldValue, to: newValue)
         }
+        .sheet(isPresented: $showsBalanceAdjustment) {
+            if let wallet = target.wallet {
+                ManagementBalanceAdjustmentSheet(
+                    wallet: wallet,
+                    currentBalance: effectiveBalance
+                )
+            }
+        }
     }
 
     private var paymentSourceWallets: [LedgerWallet] {
@@ -343,6 +370,24 @@ struct ManagementWalletEditorSheet: View {
         } catch {
             alertMessage = mistiaLocalized(vi: "Không thể lưu ví lúc này.", en: "Couldn't save this wallet right now.", ja: "現在このウォレットを保存できません。") + " \(error.localizedDescription)"
         }
+    }
+
+    private var effectiveBalance: Int64 {
+        guard let wallet = target.wallet else { return 0 }
+
+        let txDescriptor = FetchDescriptor<LedgerTransaction>()
+        let allTransactions = (try? modelContext.fetch(txDescriptor)) ?? []
+        let records = allTransactions
+            .filter { $0.deletedAt == nil }
+            .map { $0.snapshot }
+
+        let walletSnapshot = TransactionWalletSnapshot(
+            id: wallet.id,
+            kind: wallet.kind,
+            openingBalanceMinor: wallet.openingBalanceMinor
+        )
+
+        return TransactionLogic.effectiveBalance(for: walletSnapshot, records: records)
     }
 
     private func updateCreditCardProfile(for wallet: LedgerWallet, now: Date) {
@@ -1097,5 +1142,110 @@ private extension String {
         }
 
         return value
+    }
+}
+
+
+struct ManagementBalanceAdjustmentSheet: View {
+    @Environment(\.dismiss) private var dismiss
+    @Environment(\.modelContext) private var modelContext
+    @Environment(SessionStore.self) private var sessionStore
+    @Query private var storedCategories: [TransactionCategory]
+
+    let wallet: LedgerWallet
+    let currentBalance: Int64
+
+    @State private var newBalanceText: String = ""
+    @State private var reason: String = ""
+    @State private var showsConfirmation = false
+
+    init(wallet: LedgerWallet, currentBalance: Int64) {
+        self.wallet = wallet
+        self.currentBalance = currentBalance
+        _newBalanceText = State(initialValue: "\(currentBalance)")
+    }
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section(mistiaLocalized(vi: "Số dư thực tế", en: "Actual balance", ja: "実際の残高")) {
+                    TextField(mistiaLocalized(vi: "Nhập số dư hiện tại", en: "Enter current balance", ja: "現在の残高を入力"), text: $newBalanceText)
+                        .keyboardType(.numberPad)
+                }
+
+                Section(mistiaLocalized(vi: "Lý do điều chỉnh", en: "Adjustment reason", ja: "調整の理由")) {
+                    TextField(mistiaLocalized(vi: "Ví dụ: Kiểm kê lại, sai sót...", en: "e.g. Audit, error...", ja: "例：棚卸し、入力ミスなど"), text: $reason, axis: .vertical)
+                        .lineLimit(3...5)
+                }
+            }
+            .dismissKeyboardOnTap()
+            .navigationTitle(mistiaLocalized(vi: "Điều chỉnh số dư", en: "Balance adjustment", ja: "残高調整"))
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    Button(mistiaLocalized(vi: "Hủy", en: "Cancel", ja: "キャンセル")) {
+                        dismiss()
+                    }
+                }
+
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button(mistiaLocalized(vi: "Lưu", en: "Save", ja: "保存")) {
+                        showsConfirmation = true
+                    }
+                    .disabled(reason.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                }
+            }
+            .alert(mistiaLocalized(vi: "Lưu ý", en: "Notice", ja: "ご注意"), isPresented: $showsConfirmation) {
+                Button(mistiaLocalized(vi: "Hủy", en: "Cancel", ja: "キャンセル"), role: .cancel) { }
+                Button(mistiaLocalized(vi: "Đồng ý", en: "Agree", ja: "同意する")) {
+                    save()
+                }
+            } message: {
+                Text(mistiaLocalized(
+                    vi: "Hành động điều chỉnh này sẽ không thể hoàn tác. Bạn có chắc chắn muốn tiếp tục?",
+                    en: "This adjustment cannot be undone. Are you sure you want to proceed?",
+                    ja: "この調整は取り消すことができません。続行してもよろしいですか？"
+                ))
+            }
+        }
+    }
+
+    private func save() {
+        let newBalance = newBalanceText.currencyInputToMinorUnits(currencyCode: wallet.currencyCode)
+        let diff = newBalance - currentBalance
+        guard diff != 0 else {
+            dismiss()
+            return
+        }
+
+        let isIncome = wallet.kind == .creditCard ? diff < 0 : diff > 0
+        let absDiff = abs(diff)
+
+        let categoryID = isIncome ? MistiaSystemCategoryIdentity.balanceAdjustmentIncomeID : MistiaSystemCategoryIdentity.balanceAdjustmentExpenseID
+        let category = storedCategories.first(where: { $0.id == categoryID })
+
+        let transaction = LedgerTransaction(
+            primaryKind: isIncome ? .income : .expense,
+            title: mistiaLocalized(vi: "Điều chỉnh số dư", en: "Balance Adjustment", ja: "残高調整"),
+            note: reason,
+            amountMinor: absDiff,
+            occurredAt: .now,
+            sourceWallet: wallet,
+            category: category
+        )
+
+        modelContext.insert(transaction)
+
+        do {
+            try modelContext.save()
+            sessionStore.recordUpsert(
+                entity: .transaction,
+                recordID: transaction.id,
+                modifiedAt: transaction.updatedAt
+            )
+            dismiss()
+        } catch {
+            // Error handling could be improved
+        }
     }
 }
