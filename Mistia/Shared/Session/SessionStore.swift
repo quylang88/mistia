@@ -66,6 +66,36 @@ struct SessionAuthBanner: Equatable {
     let style: SessionAuthBannerStyle
 }
 
+enum SessionLocalContext: Equatable {
+    case authenticated(profileID: UUID, cloudUserID: UUID)
+    case guestAttached(profileID: UUID, cloudUserID: UUID)
+    case guestUnbound(profileID: UUID)
+}
+
+enum SessionPendingAuthenticationPromptKind: Equatable {
+    case keepOrDeleteGuestData
+    case attachGuestData
+}
+
+enum SessionPendingAuthenticationDecision: Equatable {
+    case keepGuestDataSeparate
+    case deleteGuestData
+    case attachGuestData
+}
+
+struct SessionPendingAuthenticationPrompt: Identifiable {
+    let id = UUID()
+    let kind: SessionPendingAuthenticationPromptKind
+    let title: String
+    let message: String
+}
+
+private struct PendingAuthenticationState {
+    let result: SessionAuthResult
+    let sourceGuestDescriptor: MistiaLocalProfileDescriptor
+    let prompt: SessionPendingAuthenticationPrompt
+}
+
 private enum SessionSyncTrigger {
     case manual
     case automaticLoop
@@ -99,18 +129,20 @@ final class SessionStore {
     var authPendingEmail: String?
     var authFieldErrors: [SessionAuthField: String] = [:]
     var activeAuthAction: SessionAuthAction?
-    var localModeProfileUserID: UUID?
+    var pendingAuthenticationPrompt: SessionPendingAuthenticationPrompt?
 
     var networkStatus: SessionNetworkStatus = .checking
     var remoteUnavailableReason: String?
 
     @ObservationIgnored private let authService: any SessionAuthServicing
     @ObservationIgnored private let userProfileStore: any UserProfileRemoteStoring
-    @ObservationIgnored private let modelContainer: ModelContainer
-    @ObservationIgnored private let syncCoordinator: SyncCoordinator
+    @ObservationIgnored private let launchState: MistiaDataStack.LaunchState?
+    @ObservationIgnored private var modelContainer: ModelContainer
+    @ObservationIgnored private var syncCoordinator: SyncCoordinator
     @ObservationIgnored private let userDefaults: UserDefaults
     @ObservationIgnored private let connectivityMonitor: SessionConnectivityMonitor?
     @ObservationIgnored private var currentSession: SupabaseAuthSession?
+    @ObservationIgnored private var legacyLocalModeProfileUserID: UUID?
     @ObservationIgnored private var didBootstrap = false
     @ObservationIgnored private var liveSyncTask: Task<Void, Never>?
     @ObservationIgnored private var isSyncInFlight = false
@@ -125,9 +157,11 @@ final class SessionStore {
     @ObservationIgnored private var queuedAutoSyncTask: Task<Void, Never>?
     @ObservationIgnored private var pendingQueuedAutoSync = false
     @ObservationIgnored private var reconnectValidationTask: Task<Void, Never>?
+    @ObservationIgnored private var pendingAuthenticationState: PendingAuthenticationState?
 
     init(
         modelContainer: ModelContainer,
+        launchState: MistiaDataStack.LaunchState? = nil,
         userDefaults: UserDefaults = .standard,
         authService: (any SessionAuthServicing)? = nil,
         userProfileStore: (any UserProfileRemoteStoring)? = nil,
@@ -136,15 +170,17 @@ final class SessionStore {
         registerBackgroundRefresh: Bool = true
     ) {
         self.modelContainer = modelContainer
+        self.launchState = launchState
         self.userDefaults = userDefaults
         self.authService = authService ?? SupabaseAuthService()
         self.userProfileStore = userProfileStore ?? SupabaseUserProfileStore()
         self.syncCoordinator = providedSyncCoordinator ?? SyncCoordinator(modelContainer: modelContainer)
         self.connectivityMonitor = providedConnectivityMonitor ?? SessionConnectivityMonitor()
         isAutoSyncEnabled = userDefaults.bool(forKey: MistiaAppStorageKey.syncAutoEnabled)
-        localModeProfileUserID = Self.storedLocalModeProfileUserID(in: userDefaults)
-        requiresManualSyncAfterRestore = userDefaults.bool(
-            forKey: MistiaAppStorageKey.syncManualReviewRequired
+        legacyLocalModeProfileUserID = Self.storedLocalModeProfileUserID(in: userDefaults)
+        requiresManualSyncAfterRestore = Self.storedManualSyncReviewRequired(
+            in: userDefaults,
+            profileID: launchState?.activeProfileDescriptor?.id
         )
         networkStatus = self.connectivityMonitor?.currentStatus ?? .checking
 
@@ -174,20 +210,7 @@ final class SessionStore {
             syncStatusSystemImage = "person.crop.circle.badge.plus"
         }
 
-        self.syncCoordinator.onProgressUpdate = { [weak self] progress in
-            Task { @MainActor in
-                guard let self, self.shouldShowSyncProgress else { return }
-                self.syncProgress = progress
-                
-                if let startTime = self.syncStartTime, progress > 0.05 {
-                    let elapsed = Date().timeIntervalSince(startTime)
-                    let totalEstimated = elapsed / progress
-                    self.syncTimeRemaining = max(0, totalEstimated - elapsed)
-                } else {
-                    self.syncTimeRemaining = nil
-                }
-            }
-        }
+        configureSyncCoordinator()
 
         if registerBackgroundRefresh {
             MistiaSyncBackgroundScheduler.shared.registerIfNeeded(sessionStore: self)
@@ -213,16 +236,86 @@ final class SessionStore {
         summary?.userID
     }
 
+    var activeLocalProfileID: UUID? {
+        switch activeLocalContext {
+        case .authenticated(let profileID, _),
+                .guestAttached(let profileID, _),
+                .guestUnbound(let profileID):
+            return profileID
+        case nil:
+            return nil
+        }
+    }
+
     var activeLocalProfileUserID: UUID? {
-        signedInUserID ?? localModeProfileUserID
+        switch activeLocalContext {
+        case .authenticated(_, let cloudUserID),
+                .guestAttached(_, let cloudUserID):
+            return cloudUserID
+        case .guestUnbound(let profileID):
+            return profileID
+        case nil:
+            return nil
+        }
+    }
+
+    var localModeProfileUserID: UUID? {
+        switch activeLocalContext {
+        case .guestAttached(_, let cloudUserID):
+            return cloudUserID
+        case .authenticated,
+                .guestUnbound,
+                nil:
+            return nil
+        }
+    }
+
+    var activeLocalContext: SessionLocalContext? {
+        if let descriptor = launchState?.activeProfileDescriptor {
+            switch descriptor.kind {
+            case .cloudUser:
+                guard let cloudUserID = descriptor.cloudUserID else { return nil }
+                if signedInUserID == cloudUserID && currentSession != nil {
+                    return .authenticated(profileID: descriptor.id, cloudUserID: cloudUserID)
+                }
+                return .guestAttached(profileID: descriptor.id, cloudUserID: cloudUserID)
+            case .guestUnbound:
+                return .guestUnbound(profileID: descriptor.id)
+            }
+        }
+
+        if let signedInUserID {
+            return .authenticated(profileID: signedInUserID, cloudUserID: signedInUserID)
+        }
+        if let legacyLocalModeProfileUserID {
+            return .guestAttached(
+                profileID: legacyLocalModeProfileUserID,
+                cloudUserID: legacyLocalModeProfileUserID
+            )
+        }
+        return nil
     }
 
     var isGuestLocalModeActive: Bool {
-        !isSignedIn && localModeProfileUserID != nil
+        if case .guestAttached = activeLocalContext {
+            return !isSignedIn
+        }
+        return false
+    }
+
+    var isGuestUnboundModeActive: Bool {
+        if case .guestUnbound = activeLocalContext {
+            return !isSignedIn
+        }
+        return false
     }
 
     var canManageSync: Bool {
         currentSession != nil && isConfigured
+    }
+
+    var currentModelContainer: ModelContainer {
+        modelContainer
     }
 
     var isOfflineModeActive: Bool {
@@ -398,8 +491,11 @@ final class SessionStore {
             }
 
             if summary == nil {
-                try await finishAuthentication(
-                    restoredSession,
+                try await handleAuthenticationResult(
+                    SessionAuthResult(
+                        session: restoredSession,
+                        origin: .existing
+                    ),
                     restoringExistingSession: true
                 )
             }
@@ -432,8 +528,8 @@ final class SessionStore {
         activeAuthAction = .credentials
 
         do {
-            let session = try await authService.signIn(email: email, password: password)
-            try await finishAuthentication(session, restoringExistingSession: false)
+            let result = try await authService.signIn(email: email, password: password)
+            try await handleAuthenticationResult(result, restoringExistingSession: false)
         } catch {
             handleSignInFailure(error, email: email)
         }
@@ -460,8 +556,8 @@ final class SessionStore {
                 displayName: displayName
             )
             switch result {
-            case .signedIn(let session):
-                try await finishAuthentication(session, restoringExistingSession: false)
+            case .signedIn(let authResult):
+                try await handleAuthenticationResult(authResult, restoringExistingSession: false)
             case .emailConfirmationRequired:
                 presentEmailConfirmationState(for: email)
             }
@@ -485,8 +581,8 @@ final class SessionStore {
         activeAuthAction = .google
 
         do {
-            let session = try await authService.signInWithGoogle()
-            try await finishAuthentication(session, restoringExistingSession: false)
+            let result = try await authService.signInWithGoogle()
+            try await handleAuthenticationResult(result, restoringExistingSession: false)
         } catch {
             handleGoogleSignInFailure(error)
         }
@@ -564,11 +660,8 @@ final class SessionStore {
     func signOut() async {
         stopLiveSyncLoop()
         isWorking = true
+        lastErrorMessage = nil
         let activeSession = currentSession
-        let localProfileUserID = activeLocalProfileUserID ?? activeSession?.user.id
-
-        clearSessionRuntimeState()
-        setLocalModeProfileUserID(localProfileUserID)
 
         do {
             try await authService.signOut(session: activeSession)
@@ -576,6 +669,41 @@ final class SessionStore {
             lastErrorMessage = friendlyErrorMessage(for: error)
         }
 
+        if launchState == nil {
+            setLocalModeProfileUserID(activeSession?.user.id)
+        }
+        clearSessionRuntimeState()
+        isWorking = false
+        applySignedOutState()
+    }
+
+    func signOutAndDeleteLocalData() async {
+        stopLiveSyncLoop()
+        isWorking = true
+        lastErrorMessage = nil
+        let activeSession = currentSession
+        let currentDescriptor = launchState?.activeProfileDescriptor
+
+        do {
+            try await authService.signOut(session: activeSession)
+        } catch {
+            lastErrorMessage = friendlyErrorMessage(for: error)
+        }
+
+        do {
+            if let currentDescriptor,
+               let fallbackDescriptor = try fallbackGuestDescriptor(excluding: currentDescriptor.id) {
+                try activateLocalProfile(fallbackDescriptor)
+                try deleteLocalProfile(currentDescriptor)
+            } else if launchState == nil {
+                try MistiaSyncLocalStore.clearAllProfileData(in: modelContainer)
+                setLocalModeProfileUserID(nil)
+            }
+        } catch {
+            lastErrorMessage = friendlyErrorMessage(for: error)
+        }
+
+        clearSessionRuntimeState()
         isWorking = false
         applySignedOutState()
     }
@@ -588,12 +716,13 @@ final class SessionStore {
         do {
             let activeSession = try await prepareRemoteSession()
             try await authService.deleteAccount(session: activeSession)
-            do {
+            if let launchState, let currentDescriptor = launchState.activeProfileDescriptor {
                 try MistiaSyncLocalStore.detachFromCloud(in: modelContainer)
-            } catch {
-                lastErrorMessage = friendlyErrorMessage(for: error)
+                let guestDescriptor = try launchState.convertProfileToGuestUnbound(currentDescriptor)
+                try activateLocalProfile(guestDescriptor)
+            } else {
+                setLocalModeProfileUserID(activeSession.user.id)
             }
-            setLocalModeProfileUserID(activeSession.user.id)
             clearSessionRuntimeState()
             applySignedOutState(preservingBanner: true)
             authBanner = SessionAuthBanner(
@@ -888,7 +1017,7 @@ final class SessionStore {
         let hasConflict = (try? MistiaSyncLocalStore.hasConflict(
             entity: entity,
             recordID: recordID,
-            in: MistiaDataStack.sharedModelContainer
+            in: modelContainer
         )) ?? false
         return !hasQueuedMutation && !hasConflict
     }
@@ -1190,6 +1319,217 @@ final class SessionStore {
         )
     }
 
+    func resolvePendingAuthentication(
+        _ decision: SessionPendingAuthenticationDecision
+    ) async {
+        guard let state = pendingAuthenticationState else { return }
+
+        isWorking = true
+        lastErrorMessage = nil
+        defer { isWorking = false }
+
+        do {
+            try resolvePendingAuthenticationState(state, decision: decision)
+            try authService.persistSession(state.result.session)
+            clearPendingAuthenticationState()
+            try await finishAuthentication(
+                state.result.session,
+                restoringExistingSession: false
+            )
+        } catch {
+            lastErrorMessage = friendlyErrorMessage(for: error)
+            authBanner = SessionAuthBanner(
+                title: mistiaLocalized(
+                    vi: "Chưa thể hoàn tất đăng nhập",
+                    en: "Couldn't finish signing in",
+                    ja: "ログインを完了できませんでした"
+                ),
+                message: friendlyErrorMessage(for: error),
+                style: .error
+            )
+        }
+    }
+
+    func clearPendingAuthenticationPrompt() {
+        clearPendingAuthenticationState()
+    }
+
+    private func handleAuthenticationResult(
+        _ result: SessionAuthResult,
+        restoringExistingSession: Bool
+    ) async throws {
+        if let pendingState = try preparePendingAuthenticationState(for: result) {
+            pendingAuthenticationState = pendingState
+            pendingAuthenticationPrompt = pendingState.prompt
+            return
+        }
+
+        try authService.persistSession(result.session)
+        clearPendingAuthenticationState()
+        try await finishAuthentication(
+            result.session,
+            restoringExistingSession: restoringExistingSession
+        )
+    }
+
+    private func preparePendingAuthenticationState(
+        for result: SessionAuthResult
+    ) throws -> PendingAuthenticationState? {
+        guard let launchState,
+              let activeDescriptor = launchState.activeProfileDescriptor else {
+            return nil
+        }
+
+        if activeDescriptor.kind == .guestUnbound {
+            let guestHasData = try launchState.hasMeaningfulUserData(in: activeDescriptor)
+            let existingCloudDescriptor = launchState.cloudProfileDescriptor(for: result.session.user.id)
+
+            guard guestHasData else {
+                let targetDescriptor = try launchState.ensureCloudProfile(for: result.session.user.id)
+                if targetDescriptor.id != activeDescriptor.id {
+                    try activateLocalProfile(targetDescriptor)
+                }
+                return nil
+            }
+
+            if existingCloudDescriptor != nil || result.origin == .existing {
+                return PendingAuthenticationState(
+                    result: result,
+                    sourceGuestDescriptor: activeDescriptor,
+                    prompt: SessionPendingAuthenticationPrompt(
+                        kind: .keepOrDeleteGuestData,
+                        title: mistiaLocalized(
+                            vi: "Dữ liệu local guest đang tách riêng",
+                            en: "Guest local data is separate",
+                            ja: "ゲストのローカルデータは分離されています"
+                        ),
+                        message: mistiaLocalized(
+                            vi: "Tài khoản này không được nhận dữ liệu local guest hiện tại. Giữ dữ liệu guest lại riêng hoặc xóa nó trước khi mở tài khoản.",
+                            en: "This account can't automatically take the current guest local data. Keep the guest data separate or delete it before opening the account.",
+                            ja: "このアカウントには現在のゲストローカルデータを自動で引き継げません。アカウントを開く前に、ゲストデータを分離したまま保持するか削除してください。"
+                        )
+                    )
+                )
+            }
+
+            if result.origin == .unknown {
+                return PendingAuthenticationState(
+                    result: result,
+                    sourceGuestDescriptor: activeDescriptor,
+                    prompt: SessionPendingAuthenticationPrompt(
+                        kind: .attachGuestData,
+                        title: mistiaLocalized(
+                            vi: "Chọn cách dùng dữ liệu local guest",
+                            en: "Choose how to use the guest local data",
+                            ja: "ゲストのローカルデータの使い方を選択してください"
+                        ),
+                        message: mistiaLocalized(
+                            vi: "Mistia chưa thể xác định chắc dữ liệu local guest có nên gắn vào tài khoản này hay không. Bạn có thể gắn vào tài khoản hoặc giữ tách riêng.",
+                            en: "Mistia can't confirm yet whether the current guest local data should attach to this account. You can attach it now or keep it separate.",
+                            ja: "現在のゲストローカルデータをこのアカウントへ紐づけるべきか、Mistia がまだ確定できません。今すぐ紐づけるか、分離したまま保持できます。"
+                        )
+                    )
+                )
+            }
+
+            if result.origin == .new {
+                let claimedDescriptor = try launchState.claimGuestProfile(
+                    activeDescriptor,
+                    to: result.session.user.id
+                )
+                try activateLocalProfile(claimedDescriptor)
+                return nil
+            }
+        }
+
+        let targetUserID = result.session.user.id
+        if let currentDescriptor = launchState.activeProfileDescriptor,
+           currentDescriptor.kind == .cloudUser,
+           currentDescriptor.cloudUserID == targetUserID {
+            return nil
+        }
+
+        let targetDescriptor = try launchState.ensureCloudProfile(for: targetUserID)
+        try activateLocalProfile(targetDescriptor)
+        return nil
+    }
+
+    private func resolvePendingAuthenticationState(
+        _ state: PendingAuthenticationState,
+        decision: SessionPendingAuthenticationDecision
+    ) throws {
+        guard let launchState else { return }
+        let targetUserID = state.result.session.user.id
+
+        switch state.prompt.kind {
+        case .keepOrDeleteGuestData:
+            switch decision {
+            case .keepGuestDataSeparate:
+                let targetDescriptor = try launchState.ensureCloudProfile(for: targetUserID)
+                try activateLocalProfile(targetDescriptor)
+            case .deleteGuestData:
+                let targetDescriptor = try launchState.ensureCloudProfile(for: targetUserID)
+                try activateLocalProfile(targetDescriptor)
+                try deleteLocalProfile(state.sourceGuestDescriptor)
+            case .attachGuestData:
+                let targetDescriptor = try launchState.ensureCloudProfile(for: targetUserID)
+                try activateLocalProfile(targetDescriptor)
+            }
+
+        case .attachGuestData:
+            switch decision {
+            case .attachGuestData:
+                let claimedDescriptor = try launchState.claimGuestProfile(
+                    state.sourceGuestDescriptor,
+                    to: targetUserID
+                )
+                try activateLocalProfile(claimedDescriptor)
+            case .keepGuestDataSeparate:
+                let targetDescriptor = try launchState.ensureCloudProfile(for: targetUserID)
+                try activateLocalProfile(targetDescriptor)
+            case .deleteGuestData:
+                let targetDescriptor = try launchState.ensureCloudProfile(for: targetUserID)
+                try activateLocalProfile(targetDescriptor)
+                try deleteLocalProfile(state.sourceGuestDescriptor)
+            }
+        }
+    }
+
+    private func activateLocalProfile(
+        _ descriptor: MistiaLocalProfileDescriptor
+    ) throws {
+        guard let launchState else { return }
+        try launchState.activateProfile(descriptor)
+        modelContainer = launchState.modelContainer
+        syncCoordinator = SyncCoordinator(modelContainer: modelContainer)
+        configureSyncCoordinator()
+        requiresManualSyncAfterRestore = Self.storedManualSyncReviewRequired(
+            in: userDefaults,
+            profileID: descriptor.id
+        )
+        possibleDuplicateCount = ((try? MistiaSyncLocalStore.possibleDuplicateTransactions(
+            in: modelContainer
+        ).count) ?? 0)
+    }
+
+    private func deleteLocalProfile(
+        _ descriptor: MistiaLocalProfileDescriptor
+    ) throws {
+        clearManualSyncReviewRequired(for: descriptor.id)
+        if descriptor.id == activeLocalProfileID {
+            try MistiaSyncLocalStore.clearAllProfileData(in: modelContainer)
+            if launchState == nil {
+                setLocalModeProfileUserID(nil)
+            }
+        }
+        try launchState?.deleteProfile(descriptor)
+    }
+
+    private func clearPendingAuthenticationState() {
+        pendingAuthenticationState = nil
+        pendingAuthenticationPrompt = nil
+    }
+
     private func finishAuthentication(
         _ session: SupabaseAuthSession,
         restoringExistingSession: Bool
@@ -1233,10 +1573,11 @@ final class SessionStore {
         restoringExistingSession: Bool
     ) throws {
         currentSession = session
+        setLocalModeProfileUserID(nil)
 
         let baseSummary = SessionSummary(user: session.user)
         let storedProfile = try ensureStoredProfileExists(for: baseSummary)
-        if localModeProfileUserID == nil || localModeProfileUserID == baseSummary.userID {
+        if launchState?.activeProfileDescriptor?.kind == .cloudUser || launchState == nil {
             try MistiaRecordOwnershipStore.ensureMissingOwnershipClaims(
                 for: baseSummary.userID,
                 in: modelContainer
@@ -1392,7 +1733,9 @@ final class SessionStore {
         guard isSessionInvalidationError(error) else { return false }
 
         try? authService.clearPersistedSession()
-        setLocalModeProfileUserID(activeLocalProfileUserID ?? currentSession?.user.id)
+        if launchState == nil {
+            setLocalModeProfileUserID(activeLocalProfileUserID ?? currentSession?.user.id)
+        }
         clearSessionRuntimeState()
         applySignedOutState(preservingBanner: true)
         authBanner = SessionAuthBanner(
@@ -1485,23 +1828,53 @@ final class SessionStore {
         authPendingEmail = nil
         authFieldErrors = [:]
         activeAuthAction = nil
-        syncStatusTitle = mistiaLocalized(
-            vi: isGuestLocalModeActive ? "Đang dùng local" : "Chưa đăng nhập",
-            en: isGuestLocalModeActive ? "Local mode" : "Signed out",
-            ja: isGuestLocalModeActive ? "ローカルモード" : "未ログイン"
-        )
-        syncStatusDetail = mistiaLocalized(
-            vi: isGuestLocalModeActive
-                ? "Bạn đang chỉnh sửa dữ liệu cục bộ của profile trước đó. Thay đổi chỉ đồng bộ khi đăng nhập lại đúng tài khoản."
-                : "Đăng nhập để đồng bộ ví, danh mục, giao dịch và kế hoạch giữa các thiết bị.",
-            en: isGuestLocalModeActive
-                ? "You're editing local data for the previous profile. Changes sync only after signing back into that same account."
-                : "Sign in to sync wallets, categories, transactions, and planning data across devices.",
-            ja: isGuestLocalModeActive
-                ? "以前のプロフィールのローカルデータを編集中です。変更は同じアカウントで再ログインした場合のみ同期されます。"
-                : "ログインするとウォレット、カテゴリ、取引、計画データを端末間で同期できます。"
-        )
-        syncStatusSystemImage = isGuestLocalModeActive ? "externaldrive.badge.person.crop" : "person.crop.circle.badge.plus"
+        let guestUnboundHasData = currentGuestUnboundHasMeaningfulData()
+        switch activeLocalContext {
+        case .guestAttached:
+            syncStatusTitle = mistiaLocalized(
+                vi: "Đang dùng local",
+                en: "Local mode",
+                ja: "ローカルモード"
+            )
+            syncStatusDetail = mistiaLocalized(
+                vi: "Bạn đang chỉnh sửa dữ liệu cục bộ của profile trước đó. Thay đổi chỉ đồng bộ khi đăng nhập lại đúng tài khoản.",
+                en: "You're editing local data for the previous profile. Changes sync only after signing back into that same account.",
+                ja: "以前のプロフィールのローカルデータを編集中です。変更は同じアカウントで再ログインした場合のみ同期されます。"
+            )
+            syncStatusSystemImage = "externaldrive.badge.person.crop"
+        case .guestUnbound:
+            syncStatusTitle = mistiaLocalized(
+                vi: guestUnboundHasData ? "Guest local" : "Guest sạch",
+                en: guestUnboundHasData ? "Guest local" : "Clean guest",
+                ja: guestUnboundHasData ? "ゲストローカル" : "クリーンゲスト"
+            )
+            syncStatusDetail = mistiaLocalized(
+                vi: guestUnboundHasData
+                    ? "Dữ liệu local guest trên máy này đang tách riêng. Bạn có thể tiếp tục chỉnh sửa và quyết định sau sẽ gắn nó với tài khoản nào."
+                    : "Thiết bị hiện chưa gắn với dữ liệu local của tài khoản nào. Đăng nhập để tải dữ liệu tài khoản của bạn hoặc bắt đầu dùng local mới.",
+                en: guestUnboundHasData
+                    ? "This device has separate guest local data. You can keep editing it now and decide later whether it should stay separate or attach to an account."
+                    : "This device isn't attached to any saved account data right now. Sign in to load your account, or start fresh with new local data.",
+                ja: guestUnboundHasData
+                    ? "この端末には独立したゲストのローカルデータがあります。今のまま編集を続け、後でどのアカウントに紐づけるか決められます。"
+                    : "この端末は現在どの保存済みアカウントデータにも紐づいていません。ログインしてアカウントデータを読み込むか、新しいローカルデータから始められます。"
+            )
+            syncStatusSystemImage = guestUnboundHasData
+                ? "externaldrive.badge.plus"
+                : "person.crop.circle.badge.questionmark"
+        case .authenticated, nil:
+            syncStatusTitle = mistiaLocalized(
+                vi: "Chưa đăng nhập",
+                en: "Signed out",
+                ja: "未ログイン"
+            )
+            syncStatusDetail = mistiaLocalized(
+                vi: "Đăng nhập để đồng bộ ví, danh mục, giao dịch và kế hoạch giữa các thiết bị.",
+                en: "Sign in to sync wallets, categories, transactions, and planning data across devices.",
+                ja: "ログインするとウォレット、カテゴリ、取引、計画データを端末間で同期できます。"
+            )
+            syncStatusSystemImage = "person.crop.circle.badge.plus"
+        }
     }
 
     private func applySyncingState() {
@@ -1956,7 +2329,7 @@ final class SessionStore {
             lastSyncAt = .now
             lastErrorMessage = nil
             possibleDuplicateCount = ((try? MistiaSyncLocalStore.possibleDuplicateTransactions(
-                in: MistiaDataStack.sharedModelContainer
+                in: modelContainer
             ).count) ?? 0)
 
             if let userID = summary?.userID, let profile = storedProfile(for: userID) {
@@ -2109,7 +2482,7 @@ final class SessionStore {
             lastSyncAt = .now
             lastErrorMessage = nil
             possibleDuplicateCount = ((try? MistiaSyncLocalStore.possibleDuplicateTransactions(
-                in: MistiaDataStack.sharedModelContainer
+                in: modelContainer
             ).count) ?? 0)
             
             if showProgress {
@@ -2226,7 +2599,7 @@ final class SessionStore {
             recordID: mutation.recordID,
             ownerUserID: subjectUserID,
             updatedAt: mutation.modifiedAt,
-            in: MistiaDataStack.sharedModelContainer
+            in: modelContainer
         )
 
         return dependencyMutations + [
@@ -2257,7 +2630,7 @@ final class SessionStore {
             entity: mutation.entity,
             recordID: mutation.recordID,
             modifiedAt: mutation.modifiedAt,
-            in: MistiaDataStack.sharedModelContainer
+            in: modelContainer
         )) ?? []
 
         return promotedCategories.compactMap { category in
@@ -2274,7 +2647,7 @@ final class SessionStore {
                 recordID: category.id,
                 ownerUserID: categorySubjectUserID,
                 updatedAt: mutation.modifiedAt,
-                in: MistiaDataStack.sharedModelContainer
+                in: modelContainer
             )
 
             let effectiveModifiedAt = category.updatedAt > mutation.modifiedAt
@@ -2326,7 +2699,7 @@ final class SessionStore {
         (try? MistiaSyncLocalStore.currentRemoteVersion(
             for: entity,
             recordID: recordID,
-            from: MistiaDataStack.sharedModelContainer
+            from: modelContainer
         )) ?? fallback
     }
 
@@ -2395,6 +2768,7 @@ final class SessionStore {
         pendingInitialSyncChoice = nil
         syncCoordinator.clearQueuedMutations()
         MistiaSyncBackgroundScheduler.shared.cancelPendingRefresh()
+        clearPendingAuthenticationState()
     }
 }
 
@@ -2602,18 +2976,88 @@ private extension SessionStore {
         }
     }
 
+    func configureSyncCoordinator() {
+        syncCoordinator.onProgressUpdate = { [weak self] progress in
+            Task { @MainActor in
+                guard let self, self.shouldShowSyncProgress else { return }
+                self.syncProgress = progress
+
+                if let startTime = self.syncStartTime, progress > 0.05 {
+                    let elapsed = Date().timeIntervalSince(startTime)
+                    let totalEstimated = elapsed / progress
+                    self.syncTimeRemaining = max(0, totalEstimated - elapsed)
+                } else {
+                    self.syncTimeRemaining = nil
+                }
+            }
+        }
+    }
+
+    func fallbackGuestDescriptor(
+        excluding profileID: UUID? = nil
+    ) throws -> MistiaLocalProfileDescriptor? {
+        guard let launchState else { return nil }
+        if let existing = launchState.latestGuestProfile(excluding: profileID) {
+            return existing
+        }
+        return try launchState.createGuestProfile(activate: false)
+    }
+
+    func currentGuestUnboundHasMeaningfulData() -> Bool {
+        guard isGuestUnboundModeActive else { return false }
+        if let launchState {
+            return (try? launchState.hasMeaningfulUserData()) ?? false
+        }
+        return (try? MistiaSyncLocalStore.hasMeaningfulUserData(in: modelContainer)) ?? false
+    }
+
     func setRequiresManualSyncAfterRestore(_ isRequired: Bool) {
         requiresManualSyncAfterRestore = isRequired
-        userDefaults.set(isRequired, forKey: MistiaAppStorageKey.syncManualReviewRequired)
+        let profileID = activeLocalProfileID
+        userDefaults.set(isRequired, forKey: Self.manualSyncReviewRequiredKey(for: profileID))
+        if profileID != nil {
+            userDefaults.removeObject(forKey: MistiaAppStorageKey.syncManualReviewRequired)
+        }
     }
 
     func setLocalModeProfileUserID(_ userID: UUID?) {
-        localModeProfileUserID = userID
+        legacyLocalModeProfileUserID = userID
         if let userID {
             userDefaults.set(userID.uuidString.lowercased(), forKey: MistiaAppStorageKey.localModeProfileUserID)
         } else {
             userDefaults.removeObject(forKey: MistiaAppStorageKey.localModeProfileUserID)
         }
+    }
+
+    func clearManualSyncReviewRequired(for profileID: UUID?) {
+        userDefaults.removeObject(forKey: Self.manualSyncReviewRequiredKey(for: profileID))
+        if profileID == nil {
+            userDefaults.removeObject(forKey: MistiaAppStorageKey.syncManualReviewRequired)
+        }
+    }
+
+    private static func manualSyncReviewRequiredKey(for profileID: UUID?) -> String {
+        guard let profileID else { return MistiaAppStorageKey.syncManualReviewRequired }
+        return "\(MistiaAppStorageKey.syncManualReviewRequired).\(profileID.uuidString.lowercased())"
+    }
+
+    private static func storedManualSyncReviewRequired(
+        in userDefaults: UserDefaults,
+        profileID: UUID?
+    ) -> Bool {
+        let key = manualSyncReviewRequiredKey(for: profileID)
+        if userDefaults.object(forKey: key) != nil {
+            return userDefaults.bool(forKey: key)
+        }
+
+        if let profileID, userDefaults.object(forKey: MistiaAppStorageKey.syncManualReviewRequired) != nil {
+            let legacyValue = userDefaults.bool(forKey: MistiaAppStorageKey.syncManualReviewRequired)
+            userDefaults.set(legacyValue, forKey: manualSyncReviewRequiredKey(for: profileID))
+            userDefaults.removeObject(forKey: MistiaAppStorageKey.syncManualReviewRequired)
+            return legacyValue
+        }
+
+        return userDefaults.bool(forKey: MistiaAppStorageKey.syncManualReviewRequired)
     }
 
     private static func storedLocalModeProfileUserID(in userDefaults: UserDefaults) -> UUID? {

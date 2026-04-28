@@ -181,7 +181,7 @@ struct FamilyWalletAccessGrantRecord: Codable, Identifiable, Equatable {
     }
 }
 
-struct FamilyMember: Identifiable, Equatable {
+struct FamilyMember: Codable, Identifiable, Equatable {
     let membershipID: UUID
     let familyID: UUID
     let userID: UUID
@@ -194,12 +194,12 @@ struct FamilyMember: Identifiable, Equatable {
     var id: UUID { membershipID }
 }
 
-struct FamilyInvitePreview: Equatable {
+struct FamilyInvitePreview: Codable, Equatable {
     let invite: FamilyInviteRecord
     let family: FamilyGroupRecord
 }
 
-struct FamilyStateSnapshot: Equatable {
+struct FamilyStateSnapshot: Codable, Equatable {
     var family: FamilyGroupRecord?
     var currentMembership: FamilyMembershipRecord?
     var members: [FamilyMember]

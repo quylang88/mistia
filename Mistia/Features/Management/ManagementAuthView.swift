@@ -310,6 +310,75 @@ struct ManagementAccountView: View {
             .presentationDetents([.medium])
             .presentationDragIndicator(.hidden)
         }
+        .confirmationDialog(
+            sessionStore.pendingAuthenticationPrompt?.title ?? "",
+            isPresented: Binding(
+                get: { sessionStore.pendingAuthenticationPrompt != nil },
+                set: { isPresented in
+                    if !isPresented {
+                        sessionStore.clearPendingAuthenticationPrompt()
+                    }
+                }
+            ),
+            titleVisibility: .visible
+        ) {
+            switch sessionStore.pendingAuthenticationPrompt?.kind {
+            case .keepOrDeleteGuestData:
+                Button(mistiaLocalized(
+                    vi: "Giữ guest riêng",
+                    en: "Keep guest separate",
+                    ja: "ゲストを分離したまま保持"
+                )) {
+                    Task {
+                        await sessionStore.resolvePendingAuthentication(.keepGuestDataSeparate)
+                    }
+                }
+                Button(mistiaLocalized(
+                    vi: "Xóa dữ liệu guest",
+                    en: "Delete guest data",
+                    ja: "ゲストデータを削除"
+                ), role: .destructive) {
+                    Task {
+                        await sessionStore.resolvePendingAuthentication(.deleteGuestData)
+                    }
+                }
+            case .attachGuestData:
+                Button(mistiaLocalized(
+                    vi: "Gắn vào tài khoản này",
+                    en: "Attach to this account",
+                    ja: "このアカウントに紐づける"
+                )) {
+                    Task {
+                        await sessionStore.resolvePendingAuthentication(.attachGuestData)
+                    }
+                }
+                Button(mistiaLocalized(
+                    vi: "Giữ guest riêng",
+                    en: "Keep guest separate",
+                    ja: "ゲストを分離したまま保持"
+                )) {
+                    Task {
+                        await sessionStore.resolvePendingAuthentication(.keepGuestDataSeparate)
+                    }
+                }
+                Button(mistiaLocalized(
+                    vi: "Xóa dữ liệu guest",
+                    en: "Delete guest data",
+                    ja: "ゲストデータを削除"
+                ), role: .destructive) {
+                    Task {
+                        await sessionStore.resolvePendingAuthentication(.deleteGuestData)
+                    }
+                }
+            case nil:
+                EmptyView()
+            }
+            Button(mistiaLocalized(vi: "Hủy", en: "Cancel", ja: "キャンセル"), role: .cancel) {
+                sessionStore.clearPendingAuthenticationPrompt()
+            }
+        } message: {
+            Text(sessionStore.pendingAuthenticationPrompt?.message ?? "")
+        }
     }
 
     private var configurationCard: some View {
@@ -412,16 +481,30 @@ struct ManagementAccountView: View {
             }
 
             ManagementProfileCenteredDestructiveButton(
-                title: mistiaLocalized(vi: "Đăng xuất", en: "Sign out", ja: "ログアウト"),
+                title: mistiaLocalized(vi: "Đăng xuất và giữ local", en: "Sign out and keep local", ja: "ログアウトしてローカルを保持"),
                 confirmationMessage: mistiaLocalized(
                     vi: "Bạn sẽ bị đăng xuất khỏi Mistia trên thiết bị này. Dữ liệu local hiện có vẫn được giữ lại.",
                     en: "You will be signed out of Mistia on this device. Existing local data will stay on the device.",
                     ja: "この端末で Mistia からログアウトします。既存のローカルデータは保持されます。"
                 ),
-                isDisabled: sessionStore.isWorking || !sessionStore.canPerformRemoteActions
+                isDisabled: sessionStore.isWorking
             ) {
                 Task {
                     await sessionStore.signOut()
+                }
+            }
+
+            ManagementProfileCenteredDestructiveButton(
+                title: mistiaLocalized(vi: "Đăng xuất và xóa local", en: "Sign out and delete local", ja: "ログアウトしてローカルを削除"),
+                confirmationMessage: mistiaLocalized(
+                    vi: "Bạn sẽ bị đăng xuất và toàn bộ dữ liệu local của profile hiện tại trên máy này sẽ bị xóa. Các profile local khác trên thiết bị vẫn được giữ nguyên.",
+                    en: "You will be signed out and the current profile's local data on this device will be deleted. Other local profiles on this device will stay untouched.",
+                    ja: "ログアウトして、この端末にある現在のプロフィールのローカルデータを削除します。この端末上の他のローカルプロフィールは保持されます。"
+                ),
+                isDisabled: sessionStore.isWorking
+            ) {
+                Task {
+                    await sessionStore.signOutAndDeleteLocalData()
                 }
             }
 

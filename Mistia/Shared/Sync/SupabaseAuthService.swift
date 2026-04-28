@@ -6,6 +6,7 @@ import UIKit
 protocol SessionAuthServicing {
     func loadPersistedSession() throws -> SupabaseAuthSession?
     func restoreSession() async throws -> SupabaseAuthSession?
+    func persistSession(_ session: SupabaseAuthSession) throws
     func signUp(
         email: String,
         password: String,
@@ -14,9 +15,9 @@ protocol SessionAuthServicing {
     func signIn(
         email: String,
         password: String
-    ) async throws -> SupabaseAuthSession
+    ) async throws -> SessionAuthResult
     @MainActor
-    func signInWithGoogle() async throws -> SupabaseAuthSession
+    func signInWithGoogle() async throws -> SessionAuthResult
     func refreshSessionIfNeeded(_ session: SupabaseAuthSession) async throws -> SupabaseAuthSession
     func signOut(session: SupabaseAuthSession?) async throws
     func deleteAccount(session: SupabaseAuthSession) async throws
@@ -70,8 +71,19 @@ enum SupabaseServiceError: LocalizedError {
 }
 
 enum SupabaseSignUpOutcome {
-    case signedIn(SupabaseAuthSession)
+    case signedIn(SessionAuthResult)
     case emailConfirmationRequired
+}
+
+enum SessionCloudAccountOrigin {
+    case new
+    case existing
+    case unknown
+}
+
+struct SessionAuthResult {
+    let session: SupabaseAuthSession
+    let origin: SessionCloudAccountOrigin
 }
 
 struct SupabaseAuthUser: Codable {
@@ -180,6 +192,10 @@ struct SupabaseAuthService: SessionAuthServicing {
         return try await refreshSessionIfNeeded(session)
     }
 
+    func persistSession(_ session: SupabaseAuthSession) throws {
+        try persist(session: session)
+    }
+
     func signUp(
         email: String,
         password: String,
@@ -199,8 +215,12 @@ struct SupabaseAuthService: SessionAuthServicing {
         )
 
         if let session = response.resolvedSession() {
-            try persist(session: session)
-            return .signedIn(session)
+            return .signedIn(
+                SessionAuthResult(
+                    session: session,
+                    origin: .new
+                )
+            )
         }
 
         if response.user != nil {
@@ -208,13 +228,18 @@ struct SupabaseAuthService: SessionAuthServicing {
         }
 
         let signedInSession = try await signIn(email: email, password: password)
-        return .signedIn(signedInSession)
+        return .signedIn(
+            SessionAuthResult(
+                session: signedInSession.session,
+                origin: .new
+            )
+        )
     }
 
     func signIn(
         email: String,
         password: String
-    ) async throws -> SupabaseAuthSession {
+    ) async throws -> SessionAuthResult {
         let configuration = try configuration()
         guard var components = URLComponents(url: configuration.authBaseURL.appending(path: "token"), resolvingAgainstBaseURL: false) else {
             throw SupabaseServiceError.invalidURL
@@ -236,12 +261,11 @@ struct SupabaseAuthService: SessionAuthServicing {
             throw SupabaseServiceError.invalidResponse
         }
 
-        try persist(session: session)
-        return session
+        return SessionAuthResult(session: session, origin: .existing)
     }
 
     @MainActor
-    func signInWithGoogle() async throws -> SupabaseAuthSession {
+    func signInWithGoogle() async throws -> SessionAuthResult {
         let configuration = try configuration()
         let googleConfiguration = try googleConfiguration()
         
@@ -273,8 +297,7 @@ struct SupabaseAuthService: SessionAuthServicing {
         }
 
         let enrichedSession = session.enriched(with: signInResult.user)
-        try persist(session: enrichedSession)
-        return enrichedSession
+        return SessionAuthResult(session: enrichedSession, origin: .unknown)
     }
 
     func refreshSessionIfNeeded(_ session: SupabaseAuthSession) async throws -> SupabaseAuthSession {

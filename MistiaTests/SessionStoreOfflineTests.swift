@@ -252,6 +252,96 @@ final class SessionStoreOfflineTests: XCTestCase {
         XCTAssertEqual(ownerUserID, localProfileUserID)
     }
 
+    func testGuestUnboundSignInToExistingAccountPromptsToKeepDataSeparate() async throws {
+        let userDefaults = UserDefaults(suiteName: "MistiaTests.\(UUID().uuidString)") ?? .standard
+        let launchState = try MistiaDataStack.LaunchState(userDefaults: userDefaults)
+        let guestProfileID = try XCTUnwrap(launchState.activeProfileDescriptor?.id)
+        let existingSession = makeSession(
+            userID: UUID(),
+            email: "existing@example.com",
+            displayName: "Existing User"
+        )
+        let authService = SessionAuthServiceSpy(
+            persistedSession: nil,
+            signInResult: SessionAuthResult(
+                session: existingSession,
+                origin: .existing
+            )
+        )
+        let store = SessionStore(
+            modelContainer: launchState.modelContainer,
+            launchState: launchState,
+            userDefaults: userDefaults,
+            authService: authService,
+            userProfileStore: UserProfileStoreSpy(),
+            connectivityMonitor: SessionConnectivityMonitor(initialStatus: .connected),
+            registerBackgroundRefresh: false
+        )
+
+        let wallet = LedgerWallet(
+            name: "Guest wallet",
+            kind: .cash,
+            iconSymbolName: "banknote",
+            iconColorHex: "#34C759"
+        )
+        launchState.modelContainer.mainContext.insert(wallet)
+        try launchState.modelContainer.mainContext.save()
+
+        await store.signIn(email: existingSession.user.email ?? "", password: "password")
+
+        XCTAssertEqual(store.pendingAuthenticationPrompt?.kind, .keepOrDeleteGuestData)
+        XCTAssertFalse(store.isSignedIn)
+        XCTAssertEqual(launchState.activeProfileDescriptor?.id, guestProfileID)
+
+        await store.resolvePendingAuthentication(.keepGuestDataSeparate)
+
+        XCTAssertTrue(store.isSignedIn)
+        XCTAssertEqual(store.summary?.userID, existingSession.user.id)
+        XCTAssertEqual(launchState.activeProfileDescriptor?.kind, .cloudUser)
+        XCTAssertEqual(launchState.activeProfileDescriptor?.cloudUserID, existingSession.user.id)
+        XCTAssertNotNil(launchState.profileDescriptors.first(where: { $0.id == guestProfileID }))
+    }
+
+    func testSignOutAndDeleteLocalDataReturnsToCleanGuestProfile() async throws {
+        let session = makeSession(
+            userID: UUID(),
+            email: "owner@example.com",
+            displayName: "Owner"
+        )
+        let userDefaults = UserDefaults(suiteName: "MistiaTests.\(UUID().uuidString)") ?? .standard
+        let launchState = try MistiaDataStack.LaunchState(userDefaults: userDefaults)
+        let authService = SessionAuthServiceSpy(persistedSession: session)
+        let store = SessionStore(
+            modelContainer: launchState.modelContainer,
+            launchState: launchState,
+            userDefaults: userDefaults,
+            authService: authService,
+            userProfileStore: UserProfileStoreSpy(),
+            connectivityMonitor: SessionConnectivityMonitor(initialStatus: .disconnected),
+            registerBackgroundRefresh: false
+        )
+
+        await store.bootstrapIfNeeded()
+        let cloudProfileID = try XCTUnwrap(launchState.activeProfileDescriptor?.id)
+        let wallet = LedgerWallet(
+            name: "Cloud wallet",
+            kind: .cash,
+            iconSymbolName: "banknote",
+            iconColorHex: "#34C759"
+        )
+        store.currentModelContainer.mainContext.insert(wallet)
+        try store.currentModelContainer.mainContext.save()
+
+        await store.signOutAndDeleteLocalData()
+
+        XCTAssertFalse(store.isSignedIn)
+        XCTAssertTrue(store.isGuestUnboundModeActive)
+        XCTAssertEqual(launchState.activeProfileDescriptor?.kind, .guestUnbound)
+        XCTAssertNotEqual(launchState.activeProfileDescriptor?.id, cloudProfileID)
+        XCTAssertNil(launchState.cloudProfileDescriptor(for: session.user.id))
+        XCTAssertFalse((try launchState.hasMeaningfulUserData()))
+    }
+
     private func makeSessionStore(
         authService: SessionAuthServiceSpy,
         userProfileStore: UserProfileStoreSpy,
@@ -378,19 +468,26 @@ final class SessionStoreOfflineTests: XCTestCase {
 private final class SessionAuthServiceSpy: SessionAuthServicing {
     private let persistedSession: SupabaseAuthSession?
     private let refreshResult: Result<SupabaseAuthSession, Error>
+    private let signInResult: SessionAuthResult?
+    private let googleSignInResult: SessionAuthResult?
 
     private(set) var loadPersistedSessionCallCount = 0
     private(set) var refreshSessionCallCount = 0
     private(set) var clearPersistedSessionCallCount = 0
+    private(set) var persistSessionCallCount = 0
 
     init(
         persistedSession: SupabaseAuthSession?,
-        refreshResult: Result<SupabaseAuthSession, Error>? = nil
+        refreshResult: Result<SupabaseAuthSession, Error>? = nil,
+        signInResult: SessionAuthResult? = nil,
+        googleSignInResult: SessionAuthResult? = nil
     ) {
         self.persistedSession = persistedSession
         self.refreshResult = refreshResult
             ?? persistedSession.map { .success($0) }
             ?? .failure(SessionRemoteAccessError.offline)
+        self.signInResult = signInResult
+        self.googleSignInResult = googleSignInResult
     }
 
     func loadPersistedSession() throws -> SupabaseAuthSession? {
@@ -400,6 +497,10 @@ private final class SessionAuthServiceSpy: SessionAuthServicing {
 
     func restoreSession() async throws -> SupabaseAuthSession? {
         persistedSession
+    }
+
+    func persistSession(_ session: SupabaseAuthSession) throws {
+        persistSessionCallCount += 1
     }
 
     func signUp(
@@ -413,12 +514,18 @@ private final class SessionAuthServiceSpy: SessionAuthServicing {
     func signIn(
         email: String,
         password: String
-    ) async throws -> SupabaseAuthSession {
-        fatalError("Unused in tests")
+    ) async throws -> SessionAuthResult {
+        guard let signInResult else {
+            fatalError("Unused in tests")
+        }
+        return signInResult
     }
 
-    func signInWithGoogle() async throws -> SupabaseAuthSession {
-        fatalError("Unused in tests")
+    func signInWithGoogle() async throws -> SessionAuthResult {
+        guard let googleSignInResult else {
+            fatalError("Unused in tests")
+        }
+        return googleSignInResult
     }
 
     func refreshSessionIfNeeded(_ session: SupabaseAuthSession) async throws -> SupabaseAuthSession {

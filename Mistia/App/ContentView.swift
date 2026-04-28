@@ -10,7 +10,7 @@ struct ContentView: View {
             .task {
                 await runStartupTasks()
             }
-            .task(id: sessionStore.summary?.userID) {
+            .task(id: familyRefreshToken) {
                 await familyContextStore.refresh(sessionStore: sessionStore)
             }
     }
@@ -19,7 +19,7 @@ struct ContentView: View {
     private func runStartupTasks() async {
         await Task.yield()
         do {
-            let context = MistiaDataStack.sharedModelContainer.mainContext
+            let context = sessionStore.currentModelContainer.mainContext
             try MistiaBootstrap.seedDefaultCategoriesIfNeeded(
                 modelContext: context,
                 sessionStore: sessionStore
@@ -31,10 +31,14 @@ struct ContentView: View {
         await familyContextStore.bootstrapIfNeeded(sessionStore: sessionStore)
 
         do {
-            let context = MistiaDataStack.sharedModelContainer.mainContext
+            let context = sessionStore.currentModelContainer.mainContext
             try MistiaBootstrap.cleanupExpiredArchivedData(modelContext: context, sessionStore: sessionStore)
         } catch {
             print("Failed to clean up expired archived data: \(error)")
         }
+    }
+
+    private var familyRefreshToken: String {
+        "\(sessionStore.activeLocalProfileID?.uuidString.lowercased() ?? "none"):\(sessionStore.isSignedIn)"
     }
 }

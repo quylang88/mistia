@@ -16,6 +16,65 @@ enum MistiaSyncLocalStore {
             + fetchDueOccurrences(context).count
     }
 
+    static func hasMeaningfulUserData(in container: ModelContainer) throws -> Bool {
+        let context = ModelContext(container)
+
+        if try fetchWallets(context).contains(where: { $0.deletedAt == nil }) {
+            return true
+        }
+        if try fetchCreditCardProfiles(context).contains(where: { $0.deletedAt == nil }) {
+            return true
+        }
+        if try fetchTransactions(context).contains(where: { $0.deletedAt == nil }) {
+            return true
+        }
+        if try fetchBudgetPlans(context).contains(where: { $0.deletedAt == nil }) {
+            return true
+        }
+        if try fetchSavingsGoals(context).contains(where: { $0.deletedAt == nil }) {
+            return true
+        }
+        if try fetchRecurringBillPlans(context).contains(where: { $0.deletedAt == nil }) {
+            return true
+        }
+        if try fetchInstallmentPlans(context).contains(where: { $0.deletedAt == nil }) {
+            return true
+        }
+        if try fetchDueOccurrences(context).contains(where: { $0.deletedAt == nil }) {
+            return true
+        }
+        if try fetchCategories(context).contains(where: { $0.deletedAt == nil && !$0.isSystem }) {
+            return true
+        }
+
+        return false
+    }
+
+    static func reassignLocalOwnership(
+        from previousOwnerUserID: UUID,
+        to newOwnerUserID: UUID,
+        in container: ModelContainer
+    ) throws {
+        let context = ModelContext(container)
+
+        for scope in try context.fetch(FetchDescriptor<OwnedRecordScope>()) where scope.ownerUserID == previousOwnerUserID {
+            scope.ownerUserID = newOwnerUserID
+            scope.updatedAt = .now
+        }
+
+        for audit in try fetchTransactionAudits(context) {
+            if audit.createdByUserID == previousOwnerUserID {
+                audit.createdByUserID = newOwnerUserID
+            }
+            if audit.lastModifiedByUserID == previousOwnerUserID {
+                audit.lastModifiedByUserID = newOwnerUserID
+            }
+            audit.updatedAt = .now
+        }
+
+        try context.save()
+    }
+
     static func exportSnapshot(
         for userID: UUID,
         from container: ModelContainer
@@ -627,6 +686,11 @@ enum MistiaSyncLocalStore {
     static func clearAllData(in container: ModelContainer) throws {
         let context = ModelContext(container)
         try clearAllData(context: context)
+    }
+
+    static func clearAllProfileData(in container: ModelContainer) throws {
+        let context = ModelContext(container)
+        try clearAllBackupRestorableData(context: context)
     }
 
     static func exportBackupEnvelope(

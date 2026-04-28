@@ -7,8 +7,7 @@ struct MistiaApp: App {
     @AppStorage(MistiaAppStorageKey.appearanceMode) private var appearanceModeRawValue = MistiaAppearanceMode.automatic.rawValue
     @AppStorage(MistiaAppStorageKey.appLanguage) private var appLanguageRawValue = ""
     @Environment(\.scenePhase) private var scenePhase
-    private let modelContainer: ModelContainer
-    private let launchIssue: MistiaDataStack.LaunchIssue?
+    @State private var launchState: MistiaDataStack.LaunchState
     @State private var sessionStore: SessionStore
     @State private var familyContextStore: FamilyContextStore
     @State private var uiState = MistiaUIState()
@@ -16,17 +15,22 @@ struct MistiaApp: App {
     init() {
         MistiaAppLanguage.bootstrapStoredPreference()
         let launchState = MistiaDataStack.sharedLaunchState
-        modelContainer = launchState.modelContainer
-        launchIssue = launchState.issue
-        _sessionStore = State(initialValue: SessionStore(modelContainer: launchState.modelContainer))
-        let familyStore = FamilyContextStore(modelContainer: launchState.modelContainer)
+        _launchState = State(initialValue: launchState)
+        _sessionStore = State(initialValue: SessionStore(
+            modelContainer: launchState.modelContainer,
+            launchState: launchState
+        ))
+        let familyStore = FamilyContextStore(
+            modelContainer: launchState.modelContainer,
+            launchState: launchState
+        )
         _familyContextStore = State(initialValue: familyStore)
     }
 
     var body: some Scene {
         WindowGroup {
             Group {
-                if let launchIssue {
+                if let launchIssue = launchState.issue {
                     MistiaProtectedLaunchView(launchIssue: launchIssue, appLanguage: appLanguage)
                 } else {
                     ContentView()
@@ -38,7 +42,6 @@ struct MistiaApp: App {
                 .environment(sessionStore)
                 .environment(familyContextStore)
                 .environment(uiState)
-                .modelContainer(modelContainer)
                 .onOpenURL { url in
                     GIDSignIn.sharedInstance.handle(url)
                 }
@@ -54,6 +57,7 @@ struct MistiaApp: App {
                             source: .postManualSync
                         )
                     }
+                    familyContextStore.setModelContainer(sessionStore.currentModelContainer)
                     await familyContextStore.bootstrapIfNeeded(sessionStore: sessionStore)
                 }
                 .onChange(of: scenePhase) { _, newPhase in
@@ -66,6 +70,7 @@ struct MistiaApp: App {
                         break
                     }
                 }
+                .modelContainer(launchState.modelContainer)
         }
     }
 

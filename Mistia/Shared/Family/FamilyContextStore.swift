@@ -23,18 +23,28 @@ final class FamilyContextStore {
     var didBootstrap = false
 
     @ObservationIgnored private let service: any FamilyRemoteServicing
-    @ObservationIgnored private let modelContainer: ModelContainer
+    @ObservationIgnored private let launchState: MistiaDataStack.LaunchState?
+    @ObservationIgnored private var modelContainer: ModelContainer
 
     init(
         modelContainer: ModelContainer,
+        launchState: MistiaDataStack.LaunchState? = nil,
         service: any FamilyRemoteServicing
     ) {
         self.modelContainer = modelContainer
+        self.launchState = launchState
         self.service = service
     }
 
-    convenience init(modelContainer: ModelContainer) {
-        self.init(modelContainer: modelContainer, service: FamilyRemoteService())
+    convenience init(
+        modelContainer: ModelContainer,
+        launchState: MistiaDataStack.LaunchState? = nil
+    ) {
+        self.init(
+            modelContainer: modelContainer,
+            launchState: launchState,
+            service: FamilyRemoteService()
+        )
     }
 
     var currentUserID: UUID? {
@@ -145,9 +155,15 @@ final class FamilyContextStore {
         await refresh(sessionStore: sessionStore)
     }
 
+    func setModelContainer(_ modelContainer: ModelContainer) {
+        self.modelContainer = modelContainer
+    }
+
     func refresh(sessionStore: SessionStore) async {
+        setModelContainer(sessionStore.currentModelContainer)
+
         guard sessionStore.isSignedIn else {
-            clear()
+            restoreSignedOutLocalState(sessionStore: sessionStore)
             return
         }
 
@@ -161,14 +177,10 @@ final class FamilyContextStore {
         do {
             let snapshot = try await service.fetchState(session: session)
             apply(snapshot: snapshot)
+            persistCachedState(snapshot)
             lastErrorMessage = nil
 
-            if let familyID = snapshot.family?.id, activeContext.scope == .familyHome(familyID: familyID) {
-                activeContext = FamilyContext(scope: .familyHome(familyID: familyID))
-            } else if case .member(let userID) = activeContext.scope,
-                      !members.contains(where: { $0.userID == userID }) {
-                activeContext = .personalSelf
-            }
+            normalizeActiveContextAfterStateLoad()
 
             try await refreshAccessibleFinance(
                 sessionStore: sessionStore,
@@ -433,6 +445,68 @@ final class FamilyContextStore {
         members = snapshot.members
         invites = snapshot.invites
         walletAccessGrants = snapshot.walletAccessGrants
+    }
+
+    private func restoreSignedOutLocalState(sessionStore: SessionStore) {
+        switch sessionStore.activeLocalContext {
+        case .guestAttached(let profileID, _):
+            if restoreCachedState(profileID: profileID) {
+                lastErrorMessage = nil
+            } else {
+                clear()
+            }
+        case .guestUnbound, .authenticated, nil:
+            clear()
+        }
+    }
+
+    private func normalizeActiveContextAfterStateLoad() {
+        if let familyID = family?.id,
+           activeContext.scope == .familyHome(familyID: familyID) {
+            activeContext = FamilyContext(scope: .familyHome(familyID: familyID))
+        } else if case .member(let userID) = activeContext.scope,
+                  !members.contains(where: { $0.userID == userID }) {
+            activeContext = .personalSelf
+        } else if family == nil {
+            activeContext = .personalSelf
+        }
+    }
+
+    private func persistCachedState(_ snapshot: FamilyStateSnapshot) {
+        guard let cacheURL = activeFamilyCacheURL() else { return }
+        do {
+            let data = try JSONEncoder.mistiaSyncEncoder.encode(snapshot)
+            try data.write(to: cacheURL, options: .atomic)
+        } catch {
+            return
+        }
+    }
+
+    private func restoreCachedState(profileID: UUID) -> Bool {
+        guard let cacheURL = familyCacheURL(profileID: profileID),
+              let data = try? Data(contentsOf: cacheURL),
+              let snapshot = try? JSONDecoder.mistiaSyncDecoder.decode(
+                FamilyStateSnapshot.self,
+                from: data
+              ) else {
+            return false
+        }
+
+        apply(snapshot: snapshot)
+        normalizeActiveContextAfterStateLoad()
+        return true
+    }
+
+    private func activeFamilyCacheURL() -> URL? {
+        guard let descriptor = launchState?.activeProfileDescriptor else { return nil }
+        return launchState?.familyCacheURL(for: descriptor)
+    }
+
+    private func familyCacheURL(profileID: UUID) -> URL? {
+        guard let descriptor = launchState?.profileDescriptors.first(where: { $0.id == profileID }) else {
+            return nil
+        }
+        return launchState?.familyCacheURL(for: descriptor)
     }
 
     private func refreshAccessibleFinance(
