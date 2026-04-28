@@ -42,11 +42,11 @@ final class FamilyContextStore {
     }
 
     var currentRole: FamilyRole {
-        currentMembership?.role ?? .viewer
+        currentMembership?.role ?? .member
     }
 
     var currentPolicy: FamilyPermissionPolicy {
-        currentMembership?.policy ?? .preset(for: .viewer)
+        currentMembership?.policy ?? .preset(for: .member)
     }
 
     var selectedSubjectUserID: UUID? {
@@ -105,14 +105,19 @@ final class FamilyContextStore {
     var operableTargetUserIDs: Set<UUID> {
         guard let currentUserID else { return [] }
 
-        if currentRole == .owner {
-            return Set(members.map(\.userID)).union([currentUserID])
-        }
-
         let grantedTargetUserIDs = walletAccessGrants
             .filter { $0.granteeUserID == currentUserID && $0.revokedAt == nil }
             .map(\.targetUserID)
         return Set(grantedTargetUserIDs).union([currentUserID])
+    }
+
+    var viewableTargetUserIDs: Set<UUID> {
+        guard let currentUserID else { return [] }
+
+        let viewableMemberIDs = members
+            .filter { capabilities(for: $0).canViewTarget }
+            .map(\.userID)
+        return Set(viewableMemberIDs).union([currentUserID])
     }
 
     var canEditSelectedSubject: Bool {
@@ -434,7 +439,7 @@ final class FamilyContextStore {
         sessionStore: SessionStore,
         session: SupabaseAuthSession
     ) async throws {
-        let accessibleUserIDs = Array(operableTargetUserIDs)
+        let accessibleUserIDs = Array(viewableTargetUserIDs)
         guard !accessibleUserIDs.isEmpty else { return }
 
         let financeSnapshot = try await service.fetchAccessibleFinanceSnapshot(

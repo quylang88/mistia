@@ -99,6 +99,7 @@ final class SessionStore {
     var authPendingEmail: String?
     var authFieldErrors: [SessionAuthField: String] = [:]
     var activeAuthAction: SessionAuthAction?
+    var localModeProfileUserID: UUID?
 
     var networkStatus: SessionNetworkStatus = .checking
     var remoteUnavailableReason: String?
@@ -141,6 +142,7 @@ final class SessionStore {
         self.syncCoordinator = providedSyncCoordinator ?? SyncCoordinator(modelContainer: modelContainer)
         self.connectivityMonitor = providedConnectivityMonitor ?? SessionConnectivityMonitor()
         isAutoSyncEnabled = userDefaults.bool(forKey: MistiaAppStorageKey.syncAutoEnabled)
+        localModeProfileUserID = Self.storedLocalModeProfileUserID(in: userDefaults)
         requiresManualSyncAfterRestore = userDefaults.bool(
             forKey: MistiaAppStorageKey.syncManualReviewRequired
         )
@@ -209,6 +211,14 @@ final class SessionStore {
 
     var signedInUserID: UUID? {
         summary?.userID
+    }
+
+    var activeLocalProfileUserID: UUID? {
+        signedInUserID ?? localModeProfileUserID
+    }
+
+    var isGuestLocalModeActive: Bool {
+        !isSignedIn && localModeProfileUserID != nil
     }
 
     var canManageSync: Bool {
@@ -555,8 +565,10 @@ final class SessionStore {
         stopLiveSyncLoop()
         isWorking = true
         let activeSession = currentSession
+        let localProfileUserID = activeLocalProfileUserID ?? activeSession?.user.id
 
         clearSessionRuntimeState()
+        setLocalModeProfileUserID(localProfileUserID)
 
         do {
             try await authService.signOut(session: activeSession)
@@ -581,6 +593,7 @@ final class SessionStore {
             } catch {
                 lastErrorMessage = friendlyErrorMessage(for: error)
             }
+            setLocalModeProfileUserID(activeSession.user.id)
             clearSessionRuntimeState()
             applySignedOutState(preservingBanner: true)
             authBanner = SessionAuthBanner(
@@ -886,12 +899,19 @@ final class SessionStore {
         modifiedAt: Date,
         subjectUserIDOverride: UUID? = nil
     ) {
-        guard currentSession != nil else { return }
         let subjectUserID = subjectUserIDOverride
             ?? resolvedSubjectUserID(entity: entity, recordID: recordID)
         guard let subjectUserID else {
             return
         }
+        try? MistiaRecordOwnershipStore.upsert(
+            entity: entity,
+            recordID: recordID,
+            ownerUserID: subjectUserID,
+            updatedAt: modifiedAt,
+            in: modelContainer
+        )
+        guard currentSession != nil else { return }
         let queuedMutations = queueReadyMutations(
             for: [
                 MistiaSyncMutation(
@@ -916,12 +936,19 @@ final class SessionStore {
         modifiedAt: Date,
         subjectUserIDOverride: UUID? = nil
     ) {
-        guard currentSession != nil else { return }
         let subjectUserID = subjectUserIDOverride
             ?? resolvedSubjectUserID(entity: entity, recordID: recordID)
         guard let subjectUserID else {
             return
         }
+        try? MistiaRecordOwnershipStore.upsert(
+            entity: entity,
+            recordID: recordID,
+            ownerUserID: subjectUserID,
+            updatedAt: modifiedAt,
+            in: modelContainer
+        )
+        guard currentSession != nil else { return }
         let queuedMutations = queueReadyMutations(
             for: [
                 MistiaSyncMutation(
@@ -1209,10 +1236,12 @@ final class SessionStore {
 
         let baseSummary = SessionSummary(user: session.user)
         let storedProfile = try ensureStoredProfileExists(for: baseSummary)
-        try MistiaRecordOwnershipStore.ensureMissingOwnershipClaims(
-            for: baseSummary.userID,
-            in: modelContainer
-        )
+        if localModeProfileUserID == nil || localModeProfileUserID == baseSummary.userID {
+            try MistiaRecordOwnershipStore.ensureMissingOwnershipClaims(
+                for: baseSummary.userID,
+                in: modelContainer
+            )
+        }
 
         summary = applyStoredProfile(storedProfile, to: baseSummary)
         lastSyncAt = storedProfile.lastSyncAt
@@ -1297,6 +1326,11 @@ final class SessionStore {
     private func applySignedInOfflineState() {
         guard isSignedIn else { return }
         lastErrorMessage = nil
+        remoteUnavailableReason = mistiaLocalized(
+            vi: "Không có kết nối mạng. Hãy kết nối lại để đồng bộ, chỉnh sửa hồ sơ hoặc quản lý gia đình.",
+            en: "No network connection. Reconnect to sync, edit your profile, or manage family features.",
+            ja: "ネットワーク接続がありません。同期、プロフィール編集、家族機能の管理を行うには再接続してください。"
+        )
         syncStatusTitle = mistiaLocalized(
             vi: "Đang ngoại tuyến",
             en: "Offline",
@@ -1358,6 +1392,7 @@ final class SessionStore {
         guard isSessionInvalidationError(error) else { return false }
 
         try? authService.clearPersistedSession()
+        setLocalModeProfileUserID(activeLocalProfileUserID ?? currentSession?.user.id)
         clearSessionRuntimeState()
         applySignedOutState(preservingBanner: true)
         authBanner = SessionAuthBanner(
@@ -1451,16 +1486,22 @@ final class SessionStore {
         authFieldErrors = [:]
         activeAuthAction = nil
         syncStatusTitle = mistiaLocalized(
-            vi: "Chưa đăng nhập",
-            en: "Signed out",
-            ja: "未ログイン"
+            vi: isGuestLocalModeActive ? "Đang dùng local" : "Chưa đăng nhập",
+            en: isGuestLocalModeActive ? "Local mode" : "Signed out",
+            ja: isGuestLocalModeActive ? "ローカルモード" : "未ログイン"
         )
         syncStatusDetail = mistiaLocalized(
-            vi: "Đăng nhập để đồng bộ ví, danh mục, giao dịch và kế hoạch giữa các thiết bị.",
-            en: "Sign in to sync wallets, categories, transactions, and planning data across devices.",
-            ja: "ログインするとウォレット、カテゴリ、取引、計画データを端末間で同期できます。"
+            vi: isGuestLocalModeActive
+                ? "Bạn đang chỉnh sửa dữ liệu cục bộ của profile trước đó. Thay đổi chỉ đồng bộ khi đăng nhập lại đúng tài khoản."
+                : "Đăng nhập để đồng bộ ví, danh mục, giao dịch và kế hoạch giữa các thiết bị.",
+            en: isGuestLocalModeActive
+                ? "You're editing local data for the previous profile. Changes sync only after signing back into that same account."
+                : "Sign in to sync wallets, categories, transactions, and planning data across devices.",
+            ja: isGuestLocalModeActive
+                ? "以前のプロフィールのローカルデータを編集中です。変更は同じアカウントで再ログインした場合のみ同期されます。"
+                : "ログインするとウォレット、カテゴリ、取引、計画データを端末間で同期できます。"
         )
-        syncStatusSystemImage = "person.crop.circle.badge.plus"
+        syncStatusSystemImage = isGuestLocalModeActive ? "externaldrive.badge.person.crop" : "person.crop.circle.badge.plus"
     }
 
     private func applySyncingState() {
@@ -1585,20 +1626,32 @@ final class SessionStore {
     }
 
     private func friendlyErrorMessage(for error: Error) -> String {
+        let rawServerMessage: String?
         if let serviceError = error as? SupabaseServiceError {
             switch serviceError {
             case .serverMessage(let message):
-                return message
+                rawServerMessage = message
             case .configurationMissing, .invalidURL, .invalidResponse, .missingSession, .missingRefreshToken, .oauthCancelled, .googleClientIDMissing, .googleServerClientIDMissing, .googleCallbackSchemeMissing, .googlePresentationContextMissing, .googleTokensMissing:
-                break
+                rawServerMessage = nil
             }
+        } else {
+            rawServerMessage = nil
         }
 
         if let decodingError = error as? DecodingError {
             return localizedDecodingErrorMessage(decodingError)
         }
 
-        let message = error.localizedDescription.lowercased()
+        let rawMessage = rawServerMessage ?? error.localizedDescription
+        let message = rawMessage.lowercased()
+
+        if message.contains("401") || message.contains("unauthorized") || message.contains("jwt") {
+            return mistiaLocalized(
+                vi: "Phiên đăng nhập hết hạn hoặc không hợp lệ. Thử đăng nhập lại nhé.",
+                en: "Session expired or invalid. Please try signing in again.",
+                ja: "セッションの期限が切れたか無効です。もう一度ログインをお試しください。"
+            )
+        }
 
         if message.contains("404") || message.contains("not found") {
             return mistiaLocalized(
@@ -1613,14 +1666,6 @@ final class SessionStore {
                 vi: "Bị từ chối truy cập (Lỗi 403). Kiểm tra lại quyền hạn (RLS) trên database Supabase nhé.",
                 en: "Access denied (Error 403). Please check your database Row Level Security (RLS) policies.",
                 ja: "アクセスが拒否されました (Error 403)。Supabase のデータベース権限 (RLS) を確認してください。"
-            )
-        }
-
-        if message.contains("401") || message.contains("unauthorized") || message.contains("jwt") {
-            return mistiaLocalized(
-                vi: "Phiên đăng nhập hết hạn hoặc không hợp lệ. Thử đăng nhập lại nhé.",
-                en: "Session expired or invalid. Please try signing in again.",
-                ja: "セッションの期限が切れたか無効です。もう一度ログインをお試しください。"
             )
         }
 
@@ -1648,7 +1693,7 @@ final class SessionStore {
             )
         }
 
-        return error.localizedDescription
+        return rawMessage
     }
 
     private func localizedDecodingErrorMessage(_ error: DecodingError) -> String {
@@ -1758,7 +1803,7 @@ final class SessionStore {
         if let ownerUserID = try? MistiaRecordOwnershipStore.ownerUserID(
             entity: entity,
             recordID: recordID,
-            in: MistiaDataStack.sharedModelContainer
+            in: modelContainer
         ) {
             return ownerUserID
         }
@@ -1769,6 +1814,10 @@ final class SessionStore {
 
         if let provided = subjectUserIDProvider?() {
             return provided
+        }
+
+        if let activeLocalProfileUserID {
+            return activeLocalProfileUserID
         }
 
         return currentSession?.user.id
@@ -2556,6 +2605,22 @@ private extension SessionStore {
     func setRequiresManualSyncAfterRestore(_ isRequired: Bool) {
         requiresManualSyncAfterRestore = isRequired
         userDefaults.set(isRequired, forKey: MistiaAppStorageKey.syncManualReviewRequired)
+    }
+
+    func setLocalModeProfileUserID(_ userID: UUID?) {
+        localModeProfileUserID = userID
+        if let userID {
+            userDefaults.set(userID.uuidString.lowercased(), forKey: MistiaAppStorageKey.localModeProfileUserID)
+        } else {
+            userDefaults.removeObject(forKey: MistiaAppStorageKey.localModeProfileUserID)
+        }
+    }
+
+    private static func storedLocalModeProfileUserID(in userDefaults: UserDefaults) -> UUID? {
+        guard let rawValue = userDefaults.string(forKey: MistiaAppStorageKey.localModeProfileUserID) else {
+            return nil
+        }
+        return UUID(uuidString: rawValue)
     }
 
     func saveAvatarImageData(_ data: Data, for userID: UUID) throws -> String {

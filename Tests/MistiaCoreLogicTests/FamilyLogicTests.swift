@@ -42,6 +42,88 @@ final class FamilyLogicTests: XCTestCase {
         XCTAssertEqual(summary.spendableMinor, 130_000)
     }
 
+    func testOwnerAndMemberCanViewOthersByDefaultButCannotEditWithoutPermission() {
+        let ownerAccess = FamilyLogic.access(
+            viewerRole: .owner,
+            viewerPolicy: .preset(for: .owner),
+            targetRole: .member,
+            isSameUser: false
+        )
+
+        XCTAssertTrue(ownerAccess.canOpenFamilyHome)
+        XCTAssertTrue(ownerAccess.canInviteMembers)
+        XCTAssertTrue(ownerAccess.canManageMembers)
+        XCTAssertTrue(ownerAccess.canViewTarget)
+        XCTAssertTrue(ownerAccess.canViewTargetWallets)
+        XCTAssertFalse(ownerAccess.canEditTarget)
+
+        let memberAccess = FamilyLogic.access(
+            viewerRole: .member,
+            viewerPolicy: .preset(for: .member),
+            targetRole: .owner,
+            isSameUser: false
+        )
+
+        XCTAssertTrue(memberAccess.canOpenFamilyHome)
+        XCTAssertFalse(memberAccess.canInviteMembers)
+        XCTAssertFalse(memberAccess.canManageMembers)
+        XCTAssertTrue(memberAccess.canViewTarget)
+        XCTAssertTrue(memberAccess.canViewTargetWallets)
+        XCTAssertFalse(memberAccess.canEditTarget)
+    }
+
+    func testKidCannotViewOthersByDefault() {
+        let access = FamilyLogic.access(
+            viewerRole: .kid,
+            viewerPolicy: .preset(for: .kid),
+            targetRole: .member,
+            isSameUser: false
+        )
+
+        XCTAssertFalse(access.canOpenFamilyHome)
+        XCTAssertFalse(access.canViewTarget)
+        XCTAssertFalse(access.canViewTargetWallets)
+        XCTAssertFalse(access.canEditTarget)
+    }
+
+    func testKidViewGrantDoesNotGrantEdit() {
+        var policy = FamilyPermissionPolicy.preset(for: .kid)
+        policy.canViewFamilyDashboard = true
+        policy.canViewOthers = true
+        policy.canViewWallets = true
+
+        let access = FamilyLogic.access(
+            viewerRole: .kid,
+            viewerPolicy: policy,
+            targetRole: .member,
+            isSameUser: false
+        )
+
+        XCTAssertTrue(access.canOpenFamilyHome)
+        XCTAssertTrue(access.canViewTarget)
+        XCTAssertTrue(access.canViewTargetWallets)
+        XCTAssertFalse(access.canEditTarget)
+    }
+
+    func testSameUserCanViewAndEditOwnData() {
+        let access = FamilyLogic.access(
+            viewerRole: .kid,
+            viewerPolicy: .preset(for: .kid),
+            targetRole: .kid,
+            isSameUser: true
+        )
+
+        XCTAssertTrue(access.canViewTarget)
+        XCTAssertTrue(access.canEditTarget)
+        XCTAssertTrue(access.canViewTargetWallets)
+    }
+
+    func testLegacyViewerAndEditorRolesDecodeAsMember() {
+        XCTAssertEqual(FamilyRole(rawValue: "viewer"), .member)
+        XCTAssertEqual(FamilyRole(rawValue: "editor"), .member)
+        XCTAssertEqual(FamilyRole.member.rawValue, "member")
+    }
+
     func testAggregateSummaryCanScopeToSingleMember() {
         let memberA = UUID()
         let memberB = UUID()

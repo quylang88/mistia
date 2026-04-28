@@ -95,7 +95,7 @@ struct FamilyMembershipRecord: Codable, Identifiable, Equatable {
     }
 
     var role: FamilyRole {
-        FamilyRole(rawValue: roleRawValue) ?? .viewer
+        FamilyRole(rawValue: roleRawValue) ?? .member
     }
 
     var policy: FamilyPermissionPolicy {
@@ -141,7 +141,7 @@ struct FamilyInviteRecord: Codable, Identifiable, Equatable {
     }
 
     var defaultRole: FamilyRole {
-        FamilyRole(rawValue: defaultRoleRawValue) ?? .viewer
+        FamilyRole(rawValue: defaultRoleRawValue) ?? .member
     }
 }
 

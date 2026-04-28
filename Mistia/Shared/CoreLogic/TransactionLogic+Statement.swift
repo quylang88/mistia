@@ -3,6 +3,9 @@ import SwiftUI
 
 typealias TransactionCashflowStyle = OverviewCashflowStyle
 typealias TransactionStatementChartPoint = OverviewChartPoint
+typealias OverviewStatementWalletRow = TransactionStatementWalletRow
+typealias OverviewStatementTransactionRow = TransactionStatementRow
+typealias OverviewMonthlyStatementSnapshot = TransactionSummaryStatementSnapshot
 
 nonisolated enum TransactionStatementKind: String, Equatable {
     case monthlySummary
@@ -81,6 +84,50 @@ nonisolated struct TransactionStatementDocument: Equatable {
     let kind: TransactionStatementKind
     let filename: String
     let html: String
+}
+
+nonisolated extension OverviewLogic {
+    static func monthlyStatement(
+        wallets: [OverviewWalletSnapshot],
+        transactionRecords: [TransactionRecordSnapshot],
+        transactions: [OverviewTransactionSnapshot],
+        currencyCode: String,
+        referenceDate: Date = .now,
+        calendar: Calendar = .current
+    ) -> TransactionSummaryStatementSnapshot {
+        let statementPeriod = calendar.dateInterval(of: .month, for: referenceDate)
+            ?? DateInterval(start: referenceDate, duration: 0)
+
+        return TransactionLogic.monthlyStatement(
+            wallets: wallets,
+            transactionRecords: transactionRecords,
+            transactions: transactions,
+            statementPeriod: statementPeriod,
+            currencyCode: currencyCode,
+            referenceDate: referenceDate,
+            calendar: calendar
+        )
+    }
+
+    static func creditCardStatement(
+        accounts: [OverviewCreditCardStatementAccountSnapshot],
+        transactions: [OverviewTransactionSnapshot],
+        referenceDate: Date = .now,
+        calendar: Calendar = .current
+    ) -> TransactionCreditCardStatementSnapshot {
+        TransactionLogic.creditCardStatement(
+            accounts: accounts,
+            transactions: transactions,
+            referenceDate: referenceDate,
+            calendar: calendar
+        )
+    }
+
+    static func renderMonthlyStatement(
+        _ statement: TransactionSummaryStatementSnapshot
+    ) -> TransactionStatementDocument {
+        TransactionLogic.renderMonthlyStatement(statement)
+    }
 }
 
 

@@ -2190,7 +2190,7 @@ private struct FamilyInviteSheet: View {
     @Environment(SessionStore.self) private var sessionStore
     @Environment(FamilyContextStore.self) private var familyContextStore
 
-    @State private var selectedRole: FamilyRole = .viewer
+    @State private var selectedRole: FamilyRole = .member
     @State private var createdInvite: FamilyInviteRecord?
 
     var body: some View {
@@ -2206,7 +2206,7 @@ private struct FamilyInviteSheet: View {
 
                 Section(mistiaLocalized(vi: "Role mặc định", en: "Default role", ja: "デフォルトの役割")) {
                     Picker(mistiaLocalized(vi: "Role", en: "Role", ja: "役割"), selection: $selectedRole) {
-                        ForEach([FamilyRole.viewer, .editor, .kid], id: \.self) { role in
+                        ForEach([FamilyRole.member, .kid], id: \.self) { role in
                             Text(role.title).tag(role)
                         }
                     }
@@ -2281,7 +2281,7 @@ private struct FamilyPermissionsSheet: View {
 
                 Section(mistiaLocalized(vi: "Role", en: "Role", ja: "役割")) {
                     Picker(mistiaLocalized(vi: "Role", en: "Role", ja: "役割"), selection: $role) {
-                        ForEach([FamilyRole.viewer, .editor, .kid], id: \.self) { role in
+                        ForEach([FamilyRole.member, .kid], id: \.self) { role in
                             Text(role.title).tag(role)
                         }
                     }
@@ -2388,10 +2388,8 @@ private extension FamilyRole {
         switch self {
         case .owner:
             mistiaLocalized(vi: "Chủ sở hữu", en: "Owner", ja: "Owner")
-        case .viewer:
-            mistiaLocalized(vi: "Thành viên", en: "Viewer", ja: "Viewer")
-        case .editor:
-            mistiaLocalized(vi: "Quản trị viên", en: "Editor", ja: "Editor")
+        case .member:
+            mistiaLocalized(vi: "Thành viên", en: "Member", ja: "Member")
         case .kid:
             mistiaLocalized(vi: "Trẻ con", en: "Kid", ja: "Kid")
         }
@@ -2401,10 +2399,8 @@ private extension FamilyRole {
         switch self {
         case .owner:
             .orange
-        case .viewer:
+        case .member:
             .cyan
-        case .editor:
-            .mint
         case .kid:
             .red
         }

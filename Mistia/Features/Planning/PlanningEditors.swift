@@ -775,7 +775,7 @@ struct PlanningBillEditorSheet: View {
                 wallets: storedWallets,
                 occurrences: Array(storedOccurrences),
                 modelContext: modelContext,
-                actorUserID: sessionStore.signedInUserID
+                actorUserID: sessionStore.activeLocalProfileUserID
             )
             sessionStore.recordUpsert(
                 entity: .transaction,
@@ -797,7 +797,7 @@ struct PlanningBillEditorSheet: View {
     private func deletePlan() {
         guard let plan = target.plan else { return }
         let now = Date()
-        let fallbackSubjectUserID = sessionStore.signedInUserID ?? MistiaSyncDeviceIdentity.current()
+        let fallbackSubjectUserID = sessionStore.activeLocalProfileUserID ?? MistiaSyncDeviceIdentity.current()
         let occurrenceMutations = storedOccurrences
             .filter { $0.sourceKind == .recurringBill && $0.sourceID == plan.id }
             .map {
@@ -1065,7 +1065,7 @@ struct PlanningInstallmentEditorSheet: View {
                 wallets: storedWallets,
                 occurrences: Array(storedOccurrences),
                 modelContext: modelContext,
-                actorUserID: sessionStore.signedInUserID
+                actorUserID: sessionStore.activeLocalProfileUserID
             )
             sessionStore.recordUpsert(
                 entity: .transaction,
@@ -1087,7 +1087,7 @@ struct PlanningInstallmentEditorSheet: View {
     private func deletePlan() {
         guard let plan = target.plan else { return }
         let now = Date()
-        let fallbackSubjectUserID = sessionStore.signedInUserID ?? MistiaSyncDeviceIdentity.current()
+        let fallbackSubjectUserID = sessionStore.activeLocalProfileUserID ?? MistiaSyncDeviceIdentity.current()
         let occurrenceMutations = storedOccurrences
             .filter { $0.sourceKind == .installment && $0.sourceID == plan.id }
             .map {
@@ -1401,7 +1401,7 @@ struct PlanningCreditCardEditorSheet: View {
                 wallets: storedWallets,
                 occurrences: Array(storedOccurrences),
                 modelContext: modelContext,
-                actorUserID: sessionStore.signedInUserID
+                actorUserID: sessionStore.activeLocalProfileUserID
             )
             sessionStore.recordUpsert(
                 entity: .transaction,
@@ -1423,7 +1423,7 @@ struct PlanningCreditCardEditorSheet: View {
     private func archiveWallet() {
         guard let wallet = target.wallet else { return }
         let now = Date()
-        let fallbackSubjectUserID = sessionStore.signedInUserID ?? MistiaSyncDeviceIdentity.current()
+        let fallbackSubjectUserID = sessionStore.activeLocalProfileUserID ?? MistiaSyncDeviceIdentity.current()
         wallet.isArchived = true
         wallet.archivedAt = now
         wallet.updatedAt = now

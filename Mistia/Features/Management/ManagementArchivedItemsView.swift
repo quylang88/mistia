@@ -465,7 +465,7 @@ struct ManagementArchivedItemsView: View {
         at date: Date,
         mutations: inout [ArchivedSyncMutation]
     ) throws {
-        if let actorUserID = sessionStore.signedInUserID {
+        if let actorUserID = sessionStore.activeLocalProfileUserID {
             try TransactionAuditStore.touch(
                 transactionID: transaction.id,
                 actorUserID: actorUserID,

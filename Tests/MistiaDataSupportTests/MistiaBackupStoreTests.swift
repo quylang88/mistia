@@ -267,7 +267,7 @@ final class MistiaBackupStoreTests: XCTestCase {
         let container = try makeContainer()
         let schema = Schema(versionedSchema: MistiaSchemaV1.self)
 
-        XCTAssertEqual(schema.entities.count, 13)
+        XCTAssertEqual(schema.entities.count, 14)
         XCTAssertEqual(try MistiaSyncLocalStore.totalObjectCount(in: container), 0)
     }
 

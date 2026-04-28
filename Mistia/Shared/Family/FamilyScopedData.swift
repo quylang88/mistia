@@ -13,8 +13,8 @@ enum FamilyScopedData {
             records,
             entity: entity,
             ownerMap: ownerMap,
-            subjectUserID: familyContextStore.selectedSubjectUserID ?? sessionStore.signedInUserID,
-            signedInUserID: sessionStore.signedInUserID
+            subjectUserID: familyContextStore.selectedSubjectUserID ?? sessionStore.activeLocalProfileUserID,
+            signedInUserID: sessionStore.activeLocalProfileUserID
         )
     }
 
@@ -31,7 +31,7 @@ enum FamilyScopedData {
         switch familyContextStore.activeContext.scope {
         case .familyHome:
             return records.filter { record in
-                let ownerUserID = ownerMap[record.id] ?? sessionStore.signedInUserID
+                let ownerUserID = ownerMap[record.id] ?? sessionStore.activeLocalProfileUserID
                 guard let ownerUserID else { return false }
                 return familyMemberUserIDs.contains(ownerUserID)
             }
@@ -53,7 +53,7 @@ enum FamilyScopedData {
         familyContextStore: FamilyContextStore,
         sessionStore: SessionStore
     ) -> [LedgerTransaction] {
-        guard let subjectUserID = familyContextStore.selectedSubjectUserID ?? sessionStore.signedInUserID else {
+        guard let subjectUserID = familyContextStore.selectedSubjectUserID ?? sessionStore.activeLocalProfileUserID else {
             return transactions
         }
 
@@ -80,7 +80,7 @@ enum FamilyScopedData {
         familyContextStore: FamilyContextStore,
         sessionStore: SessionStore
     ) -> [LedgerTransaction] {
-        guard let subjectUserID = familyContextStore.selectedSubjectUserID ?? sessionStore.signedInUserID else {
+        guard let subjectUserID = familyContextStore.selectedSubjectUserID ?? sessionStore.activeLocalProfileUserID else {
             return transactions
         }
 

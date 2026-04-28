@@ -29,7 +29,7 @@ final class SessionStoreOfflineTests: XCTestCase {
         XCTAssertEqual(store.summary?.displayName, "Taylor Offline")
         XCTAssertTrue(store.isOfflineModeActive)
         XCTAssertFalse(store.canPerformRemoteActions)
-        XCTAssertEqual(store.syncStatusTitle, "Signed in offline")
+        XCTAssertEqual(store.syncStatusTitle, "Offline")
         XCTAssertNotNil(store.remoteUnavailableReason)
         XCTAssertEqual(authService.loadPersistedSessionCallCount, 1)
         XCTAssertEqual(authService.refreshSessionCallCount, 0)
@@ -93,14 +93,16 @@ final class SessionStoreOfflineTests: XCTestCase {
         await store.bootstrapIfNeeded()
         store.handleConnectivityChanged(.connected)
         await waitUntil("session reconnects") {
-            authService.refreshSessionCallCount == 1 && store.canPerformRemoteActions
+            authService.refreshSessionCallCount == 1
+                && userProfileStore.fetchProfileCallCount == 1
+                && store.canPerformRemoteActions
         }
 
         XCTAssertTrue(store.isSignedIn)
         XCTAssertFalse(store.isOfflineModeActive)
         XCTAssertTrue(store.canPerformRemoteActions)
         XCTAssertNil(store.remoteUnavailableReason)
-        XCTAssertEqual(store.summary?.displayName, "Taylor Remote")
+        XCTAssertEqual(store.summary?.displayName, "Taylor Offline")
         XCTAssertEqual(userProfileStore.fetchProfileCallCount, 1)
     }
 
@@ -192,14 +194,81 @@ final class SessionStoreOfflineTests: XCTestCase {
         XCTAssertEqual(familyStore.lastErrorMessage, store.remoteUnavailableReason)
     }
 
+    func testSignOutKeepsPreviousAccountAsEditableLocalProfile() async throws {
+        let session = makeSession()
+        let authService = SessionAuthServiceSpy(persistedSession: session)
+        let store = try makeSessionStore(
+            authService: authService,
+            userProfileStore: UserProfileStoreSpy(),
+            networkStatus: .disconnected
+        )
+
+        await store.bootstrapIfNeeded()
+        await store.signOut()
+
+        XCTAssertFalse(store.isSignedIn)
+        XCTAssertTrue(store.isGuestLocalModeActive)
+        XCTAssertEqual(store.localModeProfileUserID, session.user.id)
+        XCTAssertEqual(store.syncStatusTitle, "Local mode")
+        XCTAssertTrue(store.syncStatusDetail.contains("same account"))
+    }
+
+    func testGuestLocalEditIsOwnedByPreviousLocalProfile() throws {
+        let localProfileUserID = UUID()
+        let container = try storeTestContainer()
+        let userDefaults = UserDefaults(suiteName: "MistiaTests.\(UUID().uuidString)") ?? .standard
+        userDefaults.set(
+            localProfileUserID.uuidString.lowercased(),
+            forKey: MistiaAppStorageKey.localModeProfileUserID
+        )
+        let store = try makeSessionStore(
+            authService: SessionAuthServiceSpy(persistedSession: nil),
+            userProfileStore: UserProfileStoreSpy(),
+            networkStatus: .connected,
+            modelContainer: container,
+            userDefaults: userDefaults
+        )
+
+        let wallet = LedgerWallet(
+            name: "Local cash",
+            kind: .cash,
+            iconSymbolName: "banknote",
+            iconColorHex: "#34C759"
+        )
+        container.mainContext.insert(wallet)
+        try container.mainContext.save()
+
+        store.recordUpsert(
+            entity: .wallet,
+            recordID: wallet.id,
+            modifiedAt: wallet.updatedAt
+        )
+
+        let ownerUserID = try MistiaRecordOwnershipStore.ownerUserID(
+            entity: .wallet,
+            recordID: wallet.id,
+            in: container
+        )
+        XCTAssertEqual(ownerUserID, localProfileUserID)
+    }
+
     private func makeSessionStore(
         authService: SessionAuthServiceSpy,
         userProfileStore: UserProfileStoreSpy,
-        networkStatus: SessionNetworkStatus
+        networkStatus: SessionNetworkStatus,
+        modelContainer: ModelContainer? = nil,
+        userDefaults: UserDefaults? = nil
     ) throws -> SessionStore {
-        SessionStore(
-            modelContainer: try storeTestContainer(),
-            userDefaults: UserDefaults(suiteName: "MistiaTests.\(UUID().uuidString)") ?? .standard,
+        let resolvedContainer: ModelContainer
+        if let modelContainer {
+            resolvedContainer = modelContainer
+        } else {
+            resolvedContainer = try storeTestContainer()
+        }
+
+        return SessionStore(
+            modelContainer: resolvedContainer,
+            userDefaults: userDefaults ?? UserDefaults(suiteName: "MistiaTests.\(UUID().uuidString)") ?? .standard,
             authService: authService,
             userProfileStore: userProfileStore,
             connectivityMonitor: SessionConnectivityMonitor(initialStatus: networkStatus),
@@ -319,7 +388,9 @@ private final class SessionAuthServiceSpy: SessionAuthServicing {
         refreshResult: Result<SupabaseAuthSession, Error>? = nil
     ) {
         self.persistedSession = persistedSession
-        self.refreshResult = refreshResult ?? .success(persistedSession!)
+        self.refreshResult = refreshResult
+            ?? persistedSession.map { .success($0) }
+            ?? .failure(SessionRemoteAccessError.offline)
     }
 
     func loadPersistedSession() throws -> SupabaseAuthSession? {
@@ -356,7 +427,7 @@ private final class SessionAuthServiceSpy: SessionAuthServicing {
     }
 
     func signOut(session: SupabaseAuthSession?) async throws {
-        fatalError("Unused in tests")
+        // no-op for tests
     }
 
     func deleteAccount(session: SupabaseAuthSession) async throws {

@@ -153,7 +153,7 @@ struct TransactionEditorSheet: View {
         transaction.updatedAt = Date()
         
         do {
-            if let actorUserID = sessionStore.signedInUserID {
+            if let actorUserID = sessionStore.activeLocalProfileUserID {
                 try TransactionAuditStore.touch(
                     transactionID: transaction.id,
                     actorUserID: actorUserID,
@@ -844,7 +844,7 @@ struct TransactionEditorSheet: View {
         subjectUserIDOverride: UUID? = nil
     ) {
         do {
-            let actorUserID = sessionStore.signedInUserID ?? subjectUserIDOverride
+            let actorUserID = sessionStore.activeLocalProfileUserID ?? subjectUserIDOverride
             let now = transaction.updatedAt
             if let actorUserID {
                 let createdByUserID = try TransactionAuditStore.fetch(
@@ -888,8 +888,8 @@ struct TransactionEditorSheet: View {
 
     private var effectiveOperableTargetUserIDs: Set<UUID> {
         let operable = familyContextStore.operableTargetUserIDs
-        if operable.isEmpty, let signedInUserID = sessionStore.signedInUserID {
-            return [signedInUserID]
+        if operable.isEmpty, let activeLocalProfileUserID = sessionStore.activeLocalProfileUserID {
+            return [activeLocalProfileUserID]
         }
         return operable
     }
@@ -912,16 +912,16 @@ struct TransactionEditorSheet: View {
 
     private func walletOwnerUserID(for wallet: LedgerWallet?) -> UUID? {
         guard let wallet else { return nil }
-        return walletOwnerMap[wallet.id] ?? sessionStore.signedInUserID
+        return walletOwnerMap[wallet.id] ?? sessionStore.activeLocalProfileUserID
     }
 
     private func walletOwnerUserID(for walletID: UUID?) -> UUID? {
         guard let walletID else { return nil }
-        return walletOwnerMap[walletID] ?? sessionStore.signedInUserID
+        return walletOwnerMap[walletID] ?? sessionStore.activeLocalProfileUserID
     }
 
     private func categoryOwnerUserID(for category: TransactionCategory) -> UUID? {
-        categoryOwnerMap[category.id] ?? sessionStore.signedInUserID
+        categoryOwnerMap[category.id] ?? sessionStore.activeLocalProfileUserID
     }
 
     private func walletPickerTitle(for wallet: LedgerWallet) -> String {

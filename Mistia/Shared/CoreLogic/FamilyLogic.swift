@@ -1,10 +1,52 @@
 import Foundation
 
-enum FamilyRole: String, CaseIterable, Codable, Hashable {
+enum FamilyRole: CaseIterable, Codable, Hashable, RawRepresentable {
+    typealias RawValue = String
+
     case owner
-    case viewer
-    case editor
+    case member
     case kid
+
+    init?(rawValue: String) {
+        switch rawValue {
+        case "owner":
+            self = .owner
+        case "member", "viewer", "editor":
+            self = .member
+        case "kid":
+            self = .kid
+        default:
+            return nil
+        }
+    }
+
+    var rawValue: String {
+        switch self {
+        case .owner:
+            "owner"
+        case .member:
+            "member"
+        case .kid:
+            "kid"
+        }
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.singleValueContainer()
+        let storedValue = try container.decode(String.self)
+        guard let role = FamilyRole(rawValue: storedValue) else {
+            throw DecodingError.dataCorruptedError(
+                in: container,
+                debugDescription: "Unknown family role: \(storedValue)"
+            )
+        }
+        self = role
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.singleValueContainer()
+        try container.encode(rawValue)
+    }
 }
 
 struct FamilyPermissionPolicy: Codable, Equatable, Hashable {
@@ -22,30 +64,20 @@ struct FamilyPermissionPolicy: Codable, Equatable, Hashable {
             FamilyPermissionPolicy(
                 canViewFamilyDashboard: true,
                 canViewOthers: true,
-                canEditOthers: true,
-                canViewWallets: true,
-                canViewDebts: true,
-                canViewKids: true,
-                canEditKids: true
-            )
-        case .viewer:
-            FamilyPermissionPolicy(
-                canViewFamilyDashboard: true,
-                canViewOthers: false,
                 canEditOthers: false,
                 canViewWallets: true,
                 canViewDebts: true,
-                canViewKids: false,
+                canViewKids: true,
                 canEditKids: false
             )
-        case .editor:
+        case .member:
             FamilyPermissionPolicy(
                 canViewFamilyDashboard: true,
                 canViewOthers: true,
-                canEditOthers: true,
+                canEditOthers: false,
                 canViewWallets: true,
                 canViewDebts: true,
-                canViewKids: false,
+                canViewKids: true,
                 canEditKids: false
             )
         case .kid:
@@ -169,7 +201,7 @@ enum FamilyLogic {
     ) -> FamilyMemberAccessCapabilities {
         if isSameUser {
             return FamilyMemberAccessCapabilities(
-                canOpenFamilyHome: viewerRole != .kid && viewerPolicy.canViewFamilyDashboard,
+                canOpenFamilyHome: viewerPolicy.canViewFamilyDashboard,
                 canInviteMembers: viewerRole == .owner,
                 canManageMembers: viewerRole == .owner,
                 canViewTarget: true,
@@ -185,14 +217,10 @@ enum FamilyLogic {
                 canInviteMembers: true,
                 canManageMembers: true,
                 canViewTarget: true,
-                canEditTarget: true,
+                canEditTarget: viewerPolicy.canEditOthers && (targetRole != .kid || viewerPolicy.canEditKids),
                 canViewTargetWallets: true,
                 canViewTargetDebts: true
             )
-        }
-
-        if viewerRole == .kid {
-            return .none
         }
 
         let targetIsKid = targetRole == .kid
@@ -201,8 +229,8 @@ enum FamilyLogic {
 
         return FamilyMemberAccessCapabilities(
             canOpenFamilyHome: viewerPolicy.canViewFamilyDashboard,
-            canInviteMembers: false,
-            canManageMembers: false,
+            canInviteMembers: viewerRole == .owner,
+            canManageMembers: viewerRole == .owner,
             canViewTarget: canViewTarget,
             canEditTarget: canEditTarget,
             canViewTargetWallets: canViewTarget && viewerPolicy.canViewWallets,
