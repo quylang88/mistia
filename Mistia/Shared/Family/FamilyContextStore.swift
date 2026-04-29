@@ -10,12 +10,15 @@ enum FamilyRefreshSource {
 @MainActor
 @Observable
 final class FamilyContextStore {
+    private static let pendingInviteTokenKey = "Mistia.pendingFamilyInviteToken"
+
     var activeContext: FamilyContext = .personalSelf
     var family: FamilyGroupRecord?
     var currentMembership: FamilyMembershipRecord?
     var members: [FamilyMember] = []
     var invites: [FamilyInviteRecord] = []
     var walletAccessGrants: [FamilyWalletAccessGrantRecord] = []
+    var pendingInviteRoute: FamilyInviteRoute?
     var lastErrorMessage: String?
     var isLoading = false
     var isRefreshingLatest = false
@@ -34,6 +37,10 @@ final class FamilyContextStore {
         self.modelContainer = modelContainer
         self.launchState = launchState
         self.service = service
+        if let token = UserDefaults.standard.string(forKey: Self.pendingInviteTokenKey),
+           let normalizedToken = FamilyInviteLinking.normalizedToken(token) {
+            self.pendingInviteRoute = FamilyInviteRoute(token: normalizedToken)
+        }
     }
 
     convenience init(
@@ -319,6 +326,67 @@ final class FamilyContextStore {
         }
     }
 
+    func handleInviteURL(_ url: URL) -> Bool {
+        guard let token = FamilyInviteLinking.token(from: url) else {
+            return false
+        }
+
+        presentInvite(token: token)
+        return true
+    }
+
+    func presentInvite(token: String) {
+        guard let normalizedToken = FamilyInviteLinking.normalizedToken(token) else {
+            return
+        }
+
+        UserDefaults.standard.set(normalizedToken, forKey: Self.pendingInviteTokenKey)
+        pendingInviteRoute = FamilyInviteRoute(token: normalizedToken)
+    }
+
+    func clearPendingInvite() {
+        UserDefaults.standard.removeObject(forKey: Self.pendingInviteTokenKey)
+        pendingInviteRoute = nil
+    }
+
+    func dismissPendingInviteForNow() {
+        pendingInviteRoute = nil
+    }
+
+    func previewInvite(
+        token: String,
+        sessionStore: SessionStore
+    ) async throws -> FamilyInvitePreviewRecord {
+        let session = try await requireRemoteSession(using: sessionStore)
+        return try await service.previewInvite(token: token, session: session)
+    }
+
+    func acceptInvite(
+        token: String,
+        sessionStore: SessionStore
+    ) async -> Bool {
+        guard let session = await prepareRemoteSession(using: sessionStore) else { return false }
+
+        isLoading = true
+        defer { isLoading = false }
+
+        do {
+            let snapshot = try await service.acceptInvite(token: token, session: session)
+            apply(snapshot: snapshot)
+            persistCachedState(snapshot)
+            lastErrorMessage = nil
+            if let familyID = snapshot.family?.id {
+                activeContext = FamilyContext(scope: .familyHome(familyID: familyID))
+            }
+            UserDefaults.standard.removeObject(forKey: Self.pendingInviteTokenKey)
+            await refresh(sessionStore: sessionStore)
+            return true
+        } catch {
+            lastErrorMessage = visibleErrorMessage(for: error, sessionStore: sessionStore)
+            return false
+        }
+    }
+
     func createInvite(
         defaultRole: FamilyRole,
         sessionStore: SessionStore
@@ -330,7 +398,7 @@ final class FamilyContextStore {
             let invite = try await service.createInvite(
                 familyID: familyID,
                 defaultRole: defaultRole,
-                expiresAt: Calendar.current.date(byAdding: .minute, value: 10, to: .now) ?? .now,
+                expiresAt: Calendar.current.date(byAdding: .day, value: 7, to: .now) ?? .now,
                 session: session
             )
             invites.insert(invite, at: 0)
@@ -338,6 +406,26 @@ final class FamilyContextStore {
         } catch {
             lastErrorMessage = visibleErrorMessage(for: error, sessionStore: sessionStore)
             return nil
+        }
+    }
+
+    func revokeInvite(
+        _ invite: FamilyInviteRecord,
+        sessionStore: SessionStore
+    ) async {
+        guard invite.status == .pending else { return }
+        guard let session = await prepareRemoteSession(using: sessionStore) else { return }
+
+        do {
+            let revokedInvite = try await service.revokeInvite(inviteID: invite.id, session: session)
+            if let index = invites.firstIndex(where: { $0.id == revokedInvite.id }) {
+                invites[index] = revokedInvite
+            } else {
+                invites.insert(revokedInvite, at: 0)
+            }
+            lastErrorMessage = nil
+        } catch {
+            lastErrorMessage = visibleErrorMessage(for: error, sessionStore: sessionStore)
         }
     }
 
@@ -503,13 +591,23 @@ final class FamilyContextStore {
 
     func shareMessage(for invite: FamilyInviteRecord) -> String {
         guard let family else {
-            return invite.code
+            return inviteLink(for: invite).absoluteString
         }
 
         return """
-        \(mistiaLocalized(vi: "Mời bạn vào gia đình", en: "Join my family", ja: "家族に参加してください")): \(family.name)
-        \(mistiaLocalized(vi: "Mã mời", en: "Invite code", ja: "招待コード")): \(invite.code)
+        \(mistiaLocalized(vi: "Bạn đã được mời tham gia gia đình", en: "You've been invited to join the family", ja: "家族への招待が届いています")) \(family.name) \(mistiaLocalized(vi: "trên Mistia.", en: "on Mistia.", ja: "にMistiaで参加できます。"))
+
+        \(mistiaLocalized(vi: "Mở lời mời", en: "Open invite", ja: "招待を開く")):
+        \(inviteLink(for: invite).absoluteString)
         """
+    }
+
+    func inviteLink(for invite: FamilyInviteRecord) -> URL {
+        FamilyInviteLinking.webInviteURL(token: invite.token ?? invite.code)
+    }
+
+    func appInviteLink(for invite: FamilyInviteRecord) -> URL {
+        FamilyInviteLinking.appInviteURL(token: invite.token ?? invite.code)
     }
 
     func walletAccessTargetUserIDs(for member: FamilyMember) -> Set<UUID> {
@@ -676,6 +774,23 @@ final class FamilyContextStore {
             lastErrorMessage = visibleErrorMessage(for: error, sessionStore: sessionStore)
             return nil
         }
+    }
+
+    private func requireRemoteSession(
+        using sessionStore: SessionStore
+    ) async throws -> SupabaseAuthSession {
+        if let session = await prepareRemoteSession(using: sessionStore) {
+            return session
+        }
+
+        throw SupabaseServiceError.serverMessage(
+            lastErrorMessage
+                ?? mistiaLocalized(
+                    vi: "Không thể kiểm tra lời mời do mất kết nối. Vui lòng thử lại.",
+                    en: "Can't check this invite because the connection is unavailable. Please try again.",
+                    ja: "接続できないため招待を確認できません。もう一度お試しください。"
+                )
+        )
     }
 
     private func visibleErrorMessage(

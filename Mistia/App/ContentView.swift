@@ -6,7 +6,14 @@ struct ContentView: View {
     @Environment(FamilyContextStore.self) private var familyContextStore
 
     var body: some View {
+        @Bindable var familyContextStore = familyContextStore
+
         RootTabView()
+            .sheet(item: $familyContextStore.pendingInviteRoute) { route in
+                FamilyInviteAcceptanceSheet(route: route)
+                    .presentationDetents([.large])
+                    .presentationDragIndicator(.hidden)
+            }
             .task {
                 await runStartupTasks()
             }

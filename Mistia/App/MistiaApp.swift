@@ -43,7 +43,9 @@ struct MistiaApp: App {
                 .environment(familyContextStore)
                 .environment(uiState)
                 .onOpenURL { url in
-                    GIDSignIn.sharedInstance.handle(url)
+                    if !GIDSignIn.sharedInstance.handle(url) {
+                        _ = familyContextStore.handleInviteURL(url)
+                    }
                 }
                 .task {
                     let store = familyContextStore

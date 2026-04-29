@@ -11,10 +11,22 @@ protocol FamilyRemoteServicing {
         code: String,
         session: SupabaseAuthSession
     ) async throws -> FamilyStateSnapshot
+    func previewInvite(
+        token: String,
+        session: SupabaseAuthSession
+    ) async throws -> FamilyInvitePreviewRecord
+    func acceptInvite(
+        token: String,
+        session: SupabaseAuthSession
+    ) async throws -> FamilyStateSnapshot
     func createInvite(
         familyID: UUID,
         defaultRole: FamilyRole,
         expiresAt: Date,
+        session: SupabaseAuthSession
+    ) async throws -> FamilyInviteRecord
+    func revokeInvite(
+        inviteID: UUID,
         session: SupabaseAuthSession
     ) async throws -> FamilyInviteRecord
     func updateMember(
@@ -58,6 +70,27 @@ protocol FamilyRemoteServicing {
 }
 
 extension FamilyRemoteServicing {
+    func previewInvite(
+        token: String,
+        session: SupabaseAuthSession
+    ) async throws -> FamilyInvitePreviewRecord {
+        throw SupabaseServiceError.serverMessage("Family invite links are unavailable.")
+    }
+
+    func acceptInvite(
+        token: String,
+        session: SupabaseAuthSession
+    ) async throws -> FamilyStateSnapshot {
+        try await joinInvite(code: token, session: session)
+    }
+
+    func revokeInvite(
+        inviteID: UUID,
+        session: SupabaseAuthSession
+    ) async throws -> FamilyInviteRecord {
+        throw SupabaseServiceError.serverMessage("Family invite revocation is unavailable.")
+    }
+
     func fetchFamilyNotifications(session: SupabaseAuthSession) async throws -> [FamilyNotificationRemoteRecord] {
         []
     }
@@ -155,6 +188,7 @@ struct FamilyInviteRecord: Codable, Identifiable, Equatable {
     let id: UUID
     let familyID: UUID
     let code: String
+    let token: String?
     let createdByUserID: UUID
     var defaultRoleRawValue: String
     let expiresAt: Date
@@ -169,6 +203,7 @@ struct FamilyInviteRecord: Codable, Identifiable, Equatable {
         case id
         case familyID = "family_id"
         case code
+        case token
         case createdByUserID = "created_by_user_id"
         case defaultRoleRawValue = "default_role"
         case expiresAt = "expires_at"
@@ -182,6 +217,22 @@ struct FamilyInviteRecord: Codable, Identifiable, Equatable {
 
     var defaultRole: FamilyRole {
         FamilyRole(rawValue: defaultRoleRawValue) ?? .member
+    }
+
+    var status: FamilyInviteStatus {
+        if deletedAt != nil {
+            return .invalid
+        }
+        if acceptedAt != nil {
+            return .accepted
+        }
+        if revokedAt != nil {
+            return .revoked
+        }
+        if expiresAt < .now {
+            return .expired
+        }
+        return .pending
     }
 }
 
@@ -237,6 +288,44 @@ struct FamilyMember: Codable, Identifiable, Equatable {
 struct FamilyInvitePreview: Codable, Equatable {
     let invite: FamilyInviteRecord
     let family: FamilyGroupRecord
+}
+
+struct FamilyInvitePreviewRecord: Codable, Equatable {
+    let inviteID: UUID
+    let familyID: UUID
+    let familyName: String
+    let inviterUserID: UUID
+    let inviterName: String
+    let roleRawValue: String
+    let expiresAt: Date
+    let createdAt: Date
+    let acceptedByUserID: UUID?
+    let statusRawValue: String
+    let alreadyMemberOfFamily: Bool
+    let belongsToAnotherFamily: Bool
+
+    enum CodingKeys: String, CodingKey {
+        case inviteID = "invite_id"
+        case familyID = "family_id"
+        case familyName = "family_name"
+        case inviterUserID = "inviter_user_id"
+        case inviterName = "inviter_name"
+        case roleRawValue = "role"
+        case expiresAt = "expires_at"
+        case createdAt = "created_at"
+        case acceptedByUserID = "accepted_by_user_id"
+        case statusRawValue = "status"
+        case alreadyMemberOfFamily = "already_member_of_family"
+        case belongsToAnotherFamily = "belongs_to_another_family"
+    }
+
+    var role: FamilyRole {
+        FamilyRole(rawValue: roleRawValue) ?? .member
+    }
+
+    var status: FamilyInviteStatus {
+        FamilyInviteStatus(rawValue: statusRawValue) ?? .invalid
+    }
 }
 
 struct FamilyStateSnapshot: Codable, Equatable {
@@ -336,28 +425,33 @@ struct FamilyRemoteService: FamilyRemoteServicing {
         code: String,
         session: SupabaseAuthSession
     ) async throws -> FamilyStateSnapshot {
-        let preview = try await previewInvite(code: code, session: session)
-        guard let preview else {
-            throw SupabaseServiceError.serverMessage(mistiaLocalized(
-                vi: "Mã mời không tồn tại hoặc đã bị xóa.",
-                en: "Invite code does not exist or has been deleted.",
-                ja: "招待コードが存在しないか、削除されました。"
-            ))
+        try await acceptInvite(token: code, session: session)
+    }
+
+    func previewInvite(
+        token: String,
+        session: SupabaseAuthSession
+    ) async throws -> FamilyInvitePreviewRecord {
+        let rows: [FamilyInvitePreviewRecord] = try await callRPC(
+            functionName: "preview_family_invite",
+            body: PreviewFamilyInviteRPCBody(token: token),
+            session: session
+        )
+        guard let preview = rows.first else {
+            throw SupabaseServiceError.invalidResponse
         }
+        return preview
+    }
 
-        let policy = FamilyPermissionPolicy.preset(for: preview.invite.defaultRole)
-        _ = try await insertMembership(
-            familyID: preview.family.id,
-            userID: session.user.id,
-            role: preview.invite.defaultRole,
-            policy: policy,
+    func acceptInvite(
+        token: String,
+        session: SupabaseAuthSession
+    ) async throws -> FamilyStateSnapshot {
+        let _: FamilyMembershipRecord = try await callRPC(
+            functionName: "accept_family_invite",
+            body: AcceptFamilyInviteRPCBody(token: token),
             session: session
         )
-        _ = try await markInviteAccepted(
-            inviteID: preview.invite.id,
-            session: session
-        )
-
         return try await fetchState(session: session)
     }
 
@@ -367,9 +461,38 @@ struct FamilyRemoteService: FamilyRemoteServicing {
         expiresAt: Date,
         session: SupabaseAuthSession
     ) async throws -> FamilyInviteRecord {
+        try await callRPC(
+            functionName: "create_family_invite_link",
+            body: CreateFamilyInviteLinkRPCBody(
+                familyID: familyID,
+                defaultRole: defaultRole,
+                expiresAt: expiresAt
+            ),
+            session: session
+        )
+    }
+
+    func revokeInvite(
+        inviteID: UUID,
+        session: SupabaseAuthSession
+    ) async throws -> FamilyInviteRecord {
+        try await callRPC(
+            functionName: "revoke_family_invite",
+            body: RevokeFamilyInviteRPCBody(inviteID: inviteID),
+            session: session
+        )
+    }
+
+    private func legacyCreateInvite(
+        familyID: UUID,
+        defaultRole: FamilyRole,
+        expiresAt: Date,
+        session: SupabaseAuthSession
+    ) async throws -> FamilyInviteRecord {
         let body = FamilyInviteInsertPayload(
             familyID: familyID,
             code: makeInviteCode(),
+            token: makeInviteToken(),
             createdByUserID: session.user.id,
             defaultRoleRawValue: defaultRole.rawValue,
             expiresAt: expiresAt
@@ -710,8 +833,6 @@ struct FamilyRemoteService: FamilyRemoteServicing {
                 URLQueryItem(name: "select", value: "*"),
                 URLQueryItem(name: "family_id", value: "eq.\(familyID.uuidString.lowercased())"),
                 URLQueryItem(name: "deleted_at", value: "is.null"),
-                URLQueryItem(name: "accepted_at", value: "is.null"),
-                URLQueryItem(name: "revoked_at", value: "is.null"),
                 URLQueryItem(name: "order", value: "created_at.desc")
             ],
             session: session
@@ -1034,6 +1155,11 @@ struct FamilyRemoteService: FamilyRemoteServicing {
     private func makeInviteCode() -> String {
         String(UUID().uuidString.prefix(8)).uppercased()
     }
+
+    private func makeInviteToken() -> String {
+        UUID().uuidString.replacingOccurrences(of: "-", with: "")
+            + UUID().uuidString.replacingOccurrences(of: "-", with: "")
+    }
 }
 
 private struct EmptyResponse: Decodable {}
@@ -1077,6 +1203,7 @@ private struct FamilyMembershipInsertPayload: Encodable {
 private struct FamilyInviteInsertPayload: Encodable {
     let familyID: UUID
     let code: String
+    let token: String
     let createdByUserID: UUID
     let defaultRoleRawValue: String
     let expiresAt: Date
@@ -1084,9 +1211,56 @@ private struct FamilyInviteInsertPayload: Encodable {
     enum CodingKeys: String, CodingKey {
         case familyID = "family_id"
         case code
+        case token
         case createdByUserID = "created_by_user_id"
         case defaultRoleRawValue = "default_role"
         case expiresAt = "expires_at"
+    }
+}
+
+private struct CreateFamilyInviteLinkRPCBody: Encodable {
+    let familyID: UUID
+    let defaultRole: String
+    let expiresAt: Date
+
+    init(
+        familyID: UUID,
+        defaultRole: FamilyRole,
+        expiresAt: Date
+    ) {
+        self.familyID = familyID
+        self.defaultRole = defaultRole.rawValue
+        self.expiresAt = expiresAt
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case familyID = "p_family_id"
+        case defaultRole = "p_default_role"
+        case expiresAt = "p_expires_at"
+    }
+}
+
+private struct PreviewFamilyInviteRPCBody: Encodable {
+    let token: String
+
+    enum CodingKeys: String, CodingKey {
+        case token = "p_token"
+    }
+}
+
+private struct AcceptFamilyInviteRPCBody: Encodable {
+    let token: String
+
+    enum CodingKeys: String, CodingKey {
+        case token = "p_token"
+    }
+}
+
+private struct RevokeFamilyInviteRPCBody: Encodable {
+    let inviteID: UUID
+
+    enum CodingKeys: String, CodingKey {
+        case inviteID = "p_invite_id"
     }
 }
 

@@ -1,6 +1,7 @@
 import Charts
 import SwiftData
 import SwiftUI
+import UIKit
 
 private enum FamilyDestination: String, Identifiable {
     case overview
@@ -79,7 +80,7 @@ struct FamilyManagementView: View {
             embedsInNavigationStack: false,
             showsLeadingAvatar: false,
             leadingSystemImage: "chevron.left",
-            trailingSystemImage: familyContextStore.family == nil || remoteActionsDisabled ? nil : "person.badge.plus",
+            trailingSystemImage: familyContextStore.family == nil || remoteActionsDisabled || !familyContextStore.canInviteMembers ? nil : "person.badge.plus",
             hidesSystemBackButton: true,
             onLeadingTap: { dismiss() },
             onTrailingTap: {
@@ -156,9 +157,9 @@ struct FamilyManagementView: View {
                 FamilyRowDivider()
 
                 FamilySettingsRow(
-                    title: mistiaLocalized(vi: "Nhập mã mời", en: "Join with code", ja: "招待コードで参加"),
-                    subtitle: remoteActionsDisabledReason ?? mistiaLocalized(vi: "Dùng mã hoặc link mời từ owner của gia đình.", en: "Use the invite code or link shared by the family owner.", ja: "owner が共有した招待コードまたはリンクを使います。"),
-                    icon: "number",
+                    title: mistiaLocalized(vi: "Dùng link mời", en: "Use invite link", ja: "招待リンクを使う"),
+                    subtitle: remoteActionsDisabledReason ?? mistiaLocalized(vi: "Bấm link owner đã chia sẻ, hoặc dán link nếu bạn đã copy.", en: "Tap the owner's shared link, or paste the link if you've copied it.", ja: "owner が共有したリンクを開くか、コピー済みのリンクを貼り付けます。"),
+                    icon: "link",
                     iconColor: .cyan,
                     isDisabled: remoteActionsDisabled
                 ) {
@@ -183,9 +184,9 @@ struct FamilyManagementView: View {
                 .foregroundStyle(.primary)
 
                 Text(sessionStore.remoteUnavailableReason ?? mistiaLocalized(
-                    vi: "Kết nối lại mạng để tạo gia đình mới, nhập mã mời hoặc đồng bộ lại dữ liệu gia đình.",
-                    en: "Reconnect to create a family, join with an invite code, or sync family data again.",
-                    ja: "ネットワークに再接続すると、家族の作成、招待コードでの参加、家族データの再同期が行えます。"
+                    vi: "Kết nối lại mạng để tạo gia đình mới, dùng link mời hoặc đồng bộ lại dữ liệu gia đình.",
+                    en: "Reconnect to create a family, use an invite link, or sync family data again.",
+                    ja: "ネットワークに再接続すると、家族の作成、招待リンクの使用、家族データの再同期が行えます。"
                 ))
                 .font(.system(size: 14.5, weight: .medium, design: .rounded))
                 .foregroundStyle(.secondary)
@@ -1050,6 +1051,7 @@ private struct FamilyOverviewHeader: View {
     @Environment(FamilyContextStore.self) private var familyContextStore
     let walletRows: [FamilyAggregateWalletRow]
     let signedInUserID: UUID?
+    let canInviteMembers: Bool
     let onInviteTap: () -> Void
 
     var body: some View {
@@ -1138,24 +1140,26 @@ private struct FamilyOverviewHeader: View {
                         }
                     }
 
-                    Button(action: onInviteTap) {
-                        VStack(spacing: 8) {
-                            ZStack {
-                                Circle()
-                                    .fill(Color(UIColor.secondarySystemGroupedBackground))
-                                    .frame(width: 56, height: 56)
-                                
-                                Image(systemName: "plus")
-                                    .font(.system(size: 20, weight: .bold))
+                    if canInviteMembers {
+                        Button(action: onInviteTap) {
+                            VStack(spacing: 8) {
+                                ZStack {
+                                    Circle()
+                                        .fill(Color(UIColor.secondarySystemGroupedBackground))
+                                        .frame(width: 56, height: 56)
+
+                                    Image(systemName: "plus")
+                                        .font(.system(size: 20, weight: .bold))
+                                        .foregroundStyle(.secondary)
+                                }
+
+                                Text(mistiaLocalized(vi: "Thêm", en: "Invite", ja: "招待"))
+                                    .font(.system(size: 12, weight: .medium, design: .rounded))
                                     .foregroundStyle(.secondary)
                             }
-                            
-                            Text(mistiaLocalized(vi: "Thêm", en: "Invite", ja: "招待"))
-                                .font(.system(size: 12, weight: .medium, design: .rounded))
-                                .foregroundStyle(.secondary)
                         }
+                        .buttonStyle(.plain)
                     }
-                    .buttonStyle(.plain)
                 }
                 .padding(.horizontal, 4)
             }
@@ -1595,6 +1599,7 @@ struct FamilyOverviewScreen: View {
             FamilyOverviewHeader(
                 walletRows: aggregateWalletRows,
                 signedInUserID: sessionStore.signedInUserID,
+                canInviteMembers: familyContextStore.canInviteMembers,
                 onInviteTap: { activeSheet = .invite }
             )
             .padding(.top, 8)
@@ -2117,7 +2122,8 @@ private struct FamilyJoinSheet: View {
     @Environment(SessionStore.self) private var sessionStore
     @Environment(FamilyContextStore.self) private var familyContextStore
 
-    @State private var inviteCode = ""
+    @State private var inviteLink = ""
+    @State private var validationMessage: String?
     @FocusState private var focusedField: FamilySheetFocusedField?
 
     var body: some View {
@@ -2131,16 +2137,33 @@ private struct FamilyJoinSheet: View {
                     }
                 }
 
-                Section(mistiaLocalized(vi: "Mã mời", en: "Invite code", ja: "招待コード")) {
-                    TextField("ABCD1234", text: $inviteCode)
+                Section {
+                    Text(mistiaLocalized(
+                        vi: "Nếu bạn đã copy link mời, hãy dán link ở đây. Mistia sẽ mở màn hình chào mừng và không tự tham gia cho đến khi bạn xác nhận.",
+                        en: "If you've copied an invite link, paste it here. Mistia will open the welcome screen and won't join until you confirm.",
+                        ja: "招待リンクをコピー済みの場合はここに貼り付けてください。確認するまで自動参加はしません。"
+                    ))
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+                }
+
+                Section(mistiaLocalized(vi: "Link mời", en: "Invite link", ja: "招待リンク")) {
+                    TextField("https://mistia.app/invite/family/...", text: $inviteLink)
                         .focused($focusedField, equals: .inviteCode)
-                        .textInputAutocapitalization(.characters)
+                        .keyboardType(.URL)
+                        .textInputAutocapitalization(.never)
                         .autocorrectionDisabled()
+
+                    if let validationMessage {
+                        Text(validationMessage)
+                            .font(.footnote)
+                            .foregroundStyle(.orange)
+                    }
                 }
             }
             .disabled(!sessionStore.canPerformRemoteActions)
             .dismissKeyboardOnTap()
-            .navigationTitle(mistiaLocalized(vi: "Tham gia gia đình", en: "Join family", ja: "家族に参加"))
+            .navigationTitle(mistiaLocalized(vi: "Dùng link mời", en: "Use invite link", ja: "招待リンクを使う"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
@@ -2155,10 +2178,17 @@ private struct FamilyJoinSheet: View {
 
                 ToolbarItem(placement: .topBarTrailing) {
                     Button {
-                        Task {
-                            await familyContextStore.joinFamily(inviteCode: inviteCode, sessionStore: sessionStore)
-                            dismiss()
+                        guard let token = inviteToken else {
+                            validationMessage = mistiaLocalized(
+                                vi: "Link mời không hợp lệ.",
+                                en: "This invite link isn't valid.",
+                                ja: "招待リンクが無効です。"
+                            )
+                            return
                         }
+
+                        familyContextStore.presentInvite(token: token)
+                            dismiss()
                     } label: {
                         Image(systemName: "checkmark")
                             .font(.system(size: 14, weight: .bold))
@@ -2169,7 +2199,7 @@ private struct FamilyJoinSheet: View {
                     .buttonBorderShape(.circle)
                     .tint(MistiaAccent.purple.color)
                     .disabled(
-                        inviteCode.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                        inviteLink.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
                             || !sessionStore.canPerformRemoteActions
                     )
                 }
@@ -2180,6 +2210,15 @@ private struct FamilyJoinSheet: View {
             try? await Task.sleep(for: .milliseconds(150))
             focusedField = .inviteCode
         }
+    }
+
+    private var inviteToken: String? {
+        let trimmed = inviteLink.trimmingCharacters(in: .whitespacesAndNewlines)
+        if let url = URL(string: trimmed),
+           let token = FamilyInviteLinking.token(from: url) {
+            return token
+        }
+        return FamilyInviteLinking.normalizedToken(trimmed)
     }
 }
 
@@ -2192,6 +2231,7 @@ private struct FamilyInviteSheet: View {
 
     @State private var selectedRole: FamilyRole = .member
     @State private var createdInvite: FamilyInviteRecord?
+    @State private var copiedInviteID: UUID?
 
     var body: some View {
         NavigationStack {
@@ -2204,20 +2244,69 @@ private struct FamilyInviteSheet: View {
                     }
                 }
 
-                Section(mistiaLocalized(vi: "Role mặc định", en: "Default role", ja: "デフォルトの役割")) {
+                Section(mistiaLocalized(vi: "Vai trò được mời", en: "Invite role", ja: "招待する役割")) {
                     Picker(mistiaLocalized(vi: "Role", en: "Role", ja: "役割"), selection: $selectedRole) {
-                        ForEach([FamilyRole.member, .kid], id: \.self) { role in
+                        ForEach([FamilyRole.owner, .member, .kid], id: \.self) { role in
                             Text(role.title).tag(role)
                         }
                     }
                     .pickerStyle(.inline)
+
+                    Text(roleDescription(selectedRole))
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+
+                    if selectedRole == .owner && ownerCount >= 2 {
+                        Text(mistiaLocalized(
+                            vi: "Gia đình này đã có tối đa 2 chủ sở hữu.",
+                            en: "This family already has the maximum of 2 owners.",
+                            ja: "この家族にはすでに最大2人の所有者がいます。"
+                        ))
+                        .font(.footnote)
+                        .foregroundStyle(.orange)
+                    }
                 }
 
                 if let createdInvite {
-                    Section(mistiaLocalized(vi: "Mã mời mới", en: "New invite code", ja: "新しい招待コード")) {
-                        Text(createdInvite.code)
-                            .font(.system(size: 24, weight: .bold, design: .monospaced))
-                        ShareLink(item: familyContextStore.shareMessage(for: createdInvite))
+                    Section(mistiaLocalized(vi: "Link mời mới", en: "New invite link", ja: "新しい招待リンク")) {
+                        Text(familyContextStore.inviteLink(for: createdInvite).absoluteString)
+                            .font(.system(size: 13, weight: .semibold, design: .monospaced))
+                            .textSelection(.enabled)
+                            .fixedSize(horizontal: false, vertical: true)
+
+                        Text(mistiaLocalized(
+                            vi: "Hết hạn: \(createdInvite.expiresAt.formatted(date: .abbreviated, time: .shortened))",
+                            en: "Expires: \(createdInvite.expiresAt.formatted(date: .abbreviated, time: .shortened))",
+                            ja: "期限: \(createdInvite.expiresAt.formatted(date: .abbreviated, time: .shortened))"
+                        ))
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+
+                        ShareLink(item: familyContextStore.shareMessage(for: createdInvite)) {
+                            Label(mistiaLocalized(vi: "Chia sẻ link", en: "Share link", ja: "リンクを共有"), systemImage: "square.and.arrow.up")
+                        }
+
+                        Button {
+                            copyInviteLink(createdInvite)
+                        } label: {
+                            Label(copyTitle(for: createdInvite), systemImage: copiedInviteID == createdInvite.id ? "checkmark" : "doc.on.doc")
+                        }
+                    }
+                }
+
+                Section(mistiaLocalized(vi: "Quản lý lời mời", en: "Manage invites", ja: "招待を管理")) {
+                    if familyContextStore.invites.isEmpty {
+                        Text(mistiaLocalized(
+                            vi: "Chưa có lời mời nào.",
+                            en: "No invites yet.",
+                            ja: "招待はまだありません。"
+                        ))
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                    } else {
+                        ForEach(familyContextStore.invites) { invite in
+                            inviteManagementRow(invite)
+                        }
                     }
                 }
             }
@@ -2233,7 +2322,7 @@ private struct FamilyInviteSheet: View {
                 }
 
                 ToolbarItem(placement: .topBarTrailing) {
-                    Button(mistiaLocalized(vi: "Tạo mã", en: "Create code", ja: "コードを作成")) {
+                    Button(mistiaLocalized(vi: "Tạo link", en: "Create link", ja: "リンク作成")) {
                         Task {
                             createdInvite = await familyContextStore.createInvite(
                                 defaultRole: selectedRole,
@@ -2241,9 +2330,157 @@ private struct FamilyInviteSheet: View {
                             )
                         }
                     }
-                    .disabled(!sessionStore.canPerformRemoteActions)
+                    .disabled(!sessionStore.canPerformRemoteActions || !canCreateSelectedRole)
                 }
             }
+        }
+    }
+
+    private var ownerCount: Int {
+        familyContextStore.members.filter { $0.role == .owner }.count
+    }
+
+    private var canCreateSelectedRole: Bool {
+        selectedRole != .owner || ownerCount < 2
+    }
+
+    private func roleDescription(_ role: FamilyRole) -> String {
+        switch role {
+        case .owner:
+            return mistiaLocalized(
+                vi: "Chủ sở hữu có thể mời thành viên, quản lý vai trò và cài đặt gia đình. Gia đình có tối đa 2 owner.",
+                en: "Owners can invite members, manage roles, and manage family settings. A family can have up to 2 owners.",
+                ja: "所有者はメンバー招待、役割、家族設定を管理できます。所有者は最大2人です。"
+            )
+        case .member:
+            return mistiaLocalized(
+                vi: "Thành viên dùng không gian gia đình theo quyền được cấp. Mặc định không xem ví riêng của người khác.",
+                en: "Members use the family space based on granted permissions. They don't see others' private wallets by default.",
+                ja: "メンバーは付与された権限で家族スペースを利用します。初期状態では他の人の個人ウォレットは表示されません。"
+            )
+        case .kid:
+            return mistiaLocalized(
+                vi: "Trẻ em mặc định bị giới hạn và có thể chịu sự quản lý của phụ huynh hoặc chủ gia đình.",
+                en: "Kids are limited by default and can be managed by a parent or family owner.",
+                ja: "子どもは初期状態で制限され、保護者または所有者が管理できます。"
+            )
+        }
+    }
+
+    @ViewBuilder
+    private func inviteManagementRow(_ invite: FamilyInviteRecord) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(alignment: .firstTextBaseline) {
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(invite.defaultRole.title)
+                        .font(.system(size: 15.5, weight: .semibold, design: .rounded))
+                    Text(inviteStatusTitle(invite.status))
+                        .font(.system(size: 12.5, weight: .bold, design: .rounded))
+                        .foregroundStyle(inviteStatusTint(invite.status))
+                }
+
+                Spacer()
+
+                Text(invite.createdAt.formatted(date: .abbreviated, time: .shortened))
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            VStack(alignment: .leading, spacing: 4) {
+                Text(mistiaLocalized(
+                    vi: "Hết hạn: \(invite.expiresAt.formatted(date: .abbreviated, time: .shortened))",
+                    en: "Expires: \(invite.expiresAt.formatted(date: .abbreviated, time: .shortened))",
+                    ja: "期限: \(invite.expiresAt.formatted(date: .abbreviated, time: .shortened))"
+                ))
+
+                Text(acceptedByTitle(invite))
+            }
+            .font(.caption)
+            .foregroundStyle(.secondary)
+
+            Text(familyContextStore.inviteLink(for: invite).absoluteString)
+                .font(.system(size: 12, weight: .medium, design: .monospaced))
+                .foregroundStyle(.secondary)
+                .lineLimit(2)
+                .textSelection(.enabled)
+
+            HStack {
+                if invite.status == .pending {
+                    ShareLink(item: familyContextStore.shareMessage(for: invite)) {
+                        Label(mistiaLocalized(vi: "Chia sẻ", en: "Share", ja: "共有"), systemImage: "square.and.arrow.up")
+                    }
+                }
+
+                Button {
+                    copyInviteLink(invite)
+                } label: {
+                    Label(copyTitle(for: invite), systemImage: copiedInviteID == invite.id ? "checkmark" : "doc.on.doc")
+                }
+
+                if invite.status == .pending {
+                    Spacer()
+
+                    Button(role: .destructive) {
+                        Task {
+                            await familyContextStore.revokeInvite(invite, sessionStore: sessionStore)
+                        }
+                    } label: {
+                        Label(mistiaLocalized(vi: "Thu hồi", en: "Revoke", ja: "取り消す"), systemImage: "xmark.circle")
+                    }
+                }
+            }
+            .font(.footnote)
+        }
+        .padding(.vertical, 6)
+    }
+
+    private func copyInviteLink(_ invite: FamilyInviteRecord) {
+        UIPasteboard.general.string = familyContextStore.inviteLink(for: invite).absoluteString
+        copiedInviteID = invite.id
+    }
+
+    private func copyTitle(for invite: FamilyInviteRecord) -> String {
+        if copiedInviteID == invite.id {
+            return mistiaLocalized(vi: "Đã copy", en: "Copied", ja: "コピー済み")
+        }
+        return mistiaLocalized(vi: "Sao chép", en: "Copy", ja: "コピー")
+    }
+
+    private func acceptedByTitle(_ invite: FamilyInviteRecord) -> String {
+        guard let acceptedByUserID = invite.acceptedByUserID else {
+            return mistiaLocalized(vi: "Người được mời: Chưa xác định", en: "Invitee: Unknown yet", ja: "招待された人: 未確定")
+        }
+
+        let name = familyContextStore.members.first(where: { $0.userID == acceptedByUserID })?.displayName
+            ?? mistiaLocalized(vi: "Đã chấp nhận", en: "Accepted user", ja: "承認済みユーザー")
+        return mistiaLocalized(vi: "Đã chấp nhận: \(name)", en: "Accepted by: \(name)", ja: "承認者: \(name)")
+    }
+
+    private func inviteStatusTitle(_ status: FamilyInviteStatus) -> String {
+        switch status {
+        case .pending:
+            return mistiaLocalized(vi: "Đang chờ chấp nhận", en: "Pending", ja: "承認待ち")
+        case .accepted:
+            return mistiaLocalized(vi: "Đã được chấp nhận", en: "Accepted", ja: "承認済み")
+        case .expired:
+            return mistiaLocalized(vi: "Đã hết hạn", en: "Expired", ja: "期限切れ")
+        case .revoked:
+            return mistiaLocalized(vi: "Đã bị thu hồi", en: "Revoked", ja: "取り消し済み")
+        case .invalid:
+            return mistiaLocalized(vi: "Không hợp lệ", en: "Invalid", ja: "無効")
+        }
+    }
+
+    private func inviteStatusTint(_ status: FamilyInviteStatus) -> Color {
+        switch status {
+        case .pending:
+            return .orange
+        case .accepted:
+            return .mint
+        case .expired:
+            return .secondary
+        case .revoked, .invalid:
+            return .red
         }
     }
 }
