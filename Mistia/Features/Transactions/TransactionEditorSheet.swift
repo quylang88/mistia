@@ -347,7 +347,7 @@ struct TransactionEditorSheet: View {
                     Section(mistiaLocalized(vi: "Luồng chuyển", en: "Transfer flow", ja: "振替の流れ")) {
                         Picker(mistiaLocalized(vi: "Từ ví", en: "From wallet", ja: "出金元"), selection: $draft.sourceWalletID) {
                             Text(mistiaLocalized(vi: "Chọn nguồn", en: "Choose source", ja: "出金元を選択")).tag(Optional<UUID>.none)
-                            ForEach(availableWallets) { wallet in
+                            ForEach(availableSourceWalletsForTransfer) { wallet in
                                 Text(walletPickerTitle(for: wallet)).tag(Optional(wallet.id))
                             }
                         }
@@ -355,7 +355,7 @@ struct TransactionEditorSheet: View {
 
                         Picker(mistiaLocalized(vi: "Đến ví", en: "To wallet", ja: "入金先"), selection: $draft.destinationWalletID) {
                             Text(mistiaLocalized(vi: "Chọn đích", en: "Choose destination", ja: "入金先を選択")).tag(Optional<UUID>.none)
-                            ForEach(availableWallets) { wallet in
+                            ForEach(availableDestinationWalletsForTransfer) { wallet in
                                 Text(walletPickerTitle(for: wallet)).tag(Optional(wallet.id))
                             }
                         }
@@ -459,12 +459,33 @@ struct TransactionEditorSheet: View {
                 return operableTargetUserIDs.contains(ownerUserID) || preferredWalletIDs.contains($0.id)
             }
             .filter { ($0.deletedAt == nil && !$0.isArchived) || preferredWalletIDs.contains($0.id) }
+            .filter { wallet in
+                // Credit cards cannot be used for income transactions
+                if draft.primaryKind == .income && wallet.kind == .creditCard {
+                    return preferredWalletIDs.contains(wallet.id)
+                }
+                return true
+            }
             .sorted {
                 if $0.sortOrder != $1.sortOrder {
                     return $0.sortOrder < $1.sortOrder
                 }
                 return $0.createdAt < $1.createdAt
             }
+    }
+
+    private var availableWalletsForIncome: [LedgerWallet] {
+        availableWallets.filter { $0.kind != .creditCard }
+    }
+    
+    private var availableSourceWalletsForTransfer: [LedgerWallet] {
+        // Credit cards cannot be source wallet for transfers (cannot send money)
+        availableWallets.filter { $0.kind != .creditCard }
+    }
+    
+    private var availableDestinationWalletsForTransfer: [LedgerWallet] {
+        // All wallets can receive transfers (including credit cards for payment)
+        availableWallets
     }
 
     private var lockedViewableWallets: [LedgerWallet] {
@@ -703,6 +724,23 @@ struct TransactionEditorSheet: View {
 
         guard !availableWallets.isEmpty else {
             alertMessage = mistiaLocalized(vi: "Bạn chưa có ví nào để gắn vào giao dịch.", en: "You don't have any wallets available for this transaction.", ja: "この取引に使えるウォレットがまだありません。")
+            return
+        }
+
+        // Credit cards cannot receive income transactions
+        if draft.primaryKind == .income,
+           let sourceWallet = selectedSourceWallet,
+           sourceWallet.kind == .creditCard {
+            alertMessage = mistiaLocalized(vi: "Thẻ tín dụng không thể ghi nhận thu nhập. Hãy chọn ví tiền mặt, ngân hàng hoặc ví điện tử.", en: "Credit cards cannot receive income. Please select a cash, bank, or e-wallet instead.", ja: "クレジットカードは収入を記録できません。現金、銀行、または電子マネーを選択してください。")
+            return
+        }
+        
+        // Credit cards cannot be source wallet for transfers
+        if draft.primaryKind == .transfer,
+           draft.transferSubtype == .internalTransfer,
+           let sourceWallet = selectedSourceWallet,
+           sourceWallet.kind == .creditCard {
+            alertMessage = mistiaLocalized(vi: "Thẻ tín dụng không thể chuyển tiền đi. Chỉ có thể nhận tiền để trả nợ.", en: "Credit cards cannot send money via transfer. They can only receive payments for debt repayment.", ja: "クレジットカードは振替で送金できません。返済の受け取りのみ可能です。")
             return
         }
 

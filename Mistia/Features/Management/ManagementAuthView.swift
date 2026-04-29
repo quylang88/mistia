@@ -310,74 +310,22 @@ struct ManagementAccountView: View {
             .presentationDetents([.medium])
             .presentationDragIndicator(.hidden)
         }
-        .confirmationDialog(
-            sessionStore.pendingAuthenticationPrompt?.title ?? "",
-            isPresented: Binding(
-                get: { sessionStore.pendingAuthenticationPrompt != nil },
-                set: { isPresented in
-                    if !isPresented {
+        .overlay {
+            if let prompt = sessionStore.pendingAuthenticationPrompt {
+                ManagementPendingAuthenticationPromptOverlay(
+                    prompt: prompt,
+                    accent: accent,
+                    isWorking: sessionStore.isWorking,
+                    onDecision: { decision in
+                        Task {
+                            await sessionStore.resolvePendingAuthentication(decision)
+                        }
+                    },
+                    onCancel: {
                         sessionStore.clearPendingAuthenticationPrompt()
                     }
-                }
-            ),
-            titleVisibility: .visible
-        ) {
-            switch sessionStore.pendingAuthenticationPrompt?.kind {
-            case .keepOrDeleteGuestData:
-                Button(mistiaLocalized(
-                    vi: "Giữ guest riêng",
-                    en: "Keep guest separate",
-                    ja: "ゲストを分離したまま保持"
-                )) {
-                    Task {
-                        await sessionStore.resolvePendingAuthentication(.keepGuestDataSeparate)
-                    }
-                }
-                Button(mistiaLocalized(
-                    vi: "Xóa dữ liệu guest",
-                    en: "Delete guest data",
-                    ja: "ゲストデータを削除"
-                ), role: .destructive) {
-                    Task {
-                        await sessionStore.resolvePendingAuthentication(.deleteGuestData)
-                    }
-                }
-            case .attachGuestData:
-                Button(mistiaLocalized(
-                    vi: "Gắn vào tài khoản này",
-                    en: "Attach to this account",
-                    ja: "このアカウントに紐づける"
-                )) {
-                    Task {
-                        await sessionStore.resolvePendingAuthentication(.attachGuestData)
-                    }
-                }
-                Button(mistiaLocalized(
-                    vi: "Giữ guest riêng",
-                    en: "Keep guest separate",
-                    ja: "ゲストを分離したまま保持"
-                )) {
-                    Task {
-                        await sessionStore.resolvePendingAuthentication(.keepGuestDataSeparate)
-                    }
-                }
-                Button(mistiaLocalized(
-                    vi: "Xóa dữ liệu guest",
-                    en: "Delete guest data",
-                    ja: "ゲストデータを削除"
-                ), role: .destructive) {
-                    Task {
-                        await sessionStore.resolvePendingAuthentication(.deleteGuestData)
-                    }
-                }
-            case nil:
-                EmptyView()
+                )
             }
-            Button(mistiaLocalized(vi: "Hủy", en: "Cancel", ja: "キャンセル"), role: .cancel) {
-                sessionStore.clearPendingAuthenticationPrompt()
-            }
-        } message: {
-            Text(sessionStore.pendingAuthenticationPrompt?.message ?? "")
         }
     }
 
@@ -1280,6 +1228,419 @@ private struct ManagementProfileSectionLabel: View {
             .foregroundStyle(colorScheme == .dark ? .white.opacity(0.64) : Color.black.opacity(0.46))
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.horizontal, 4)
+    }
+}
+
+private struct ManagementPendingAuthenticationPromptOverlay: View {
+    @Environment(\.colorScheme) private var colorScheme
+
+    let prompt: SessionPendingAuthenticationPrompt
+    let accent: Color
+    let isWorking: Bool
+    let onDecision: (SessionPendingAuthenticationDecision) -> Void
+    let onCancel: () -> Void
+
+    var body: some View {
+        ZStack {
+            Color.black.opacity(colorScheme == .dark ? 0.34 : 0.22)
+                .ignoresSafeArea()
+
+            VStack(alignment: .leading, spacing: 20) {
+                    HStack(alignment: .top, spacing: 14) {
+                        ManagementPendingAuthenticationSymbolBadge(
+                            systemImage: promptSymbolName,
+                            accent: accent
+                        )
+
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text(prompt.title)
+                                .font(.system(size: 22, weight: .bold, design: .rounded))
+                                .foregroundStyle(.primary)
+                                .fixedSize(horizontal: false, vertical: true)
+
+                            Text(prompt.message)
+                                .font(.system(size: 14.5, weight: .medium, design: .rounded))
+                                .foregroundStyle(.secondary)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                    }
+
+                    VStack(spacing: 12) {
+                        ForEach(actionOptions) { option in
+                            ManagementPendingAuthenticationOptionButton(
+                                title: option.title,
+                                subtitle: option.subtitle,
+                                systemImage: option.systemImage,
+                                accent: accent,
+                                role: option.role,
+                                isDisabled: isWorking
+                            ) {
+                                onDecision(option.decision)
+                            }
+                        }
+                    }
+
+                    Button(mistiaLocalized(vi: "Hủy", en: "Cancel", ja: "キャンセル")) {
+                        onCancel()
+                    }
+                    .font(.system(size: 15, weight: .semibold, design: .rounded))
+                    .foregroundStyle(.primary)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 14)
+                    .background {
+                        ManagementPendingAuthenticationOptionBackground(
+                            accent: accent,
+                            role: .normal,
+                            isEnabled: !isWorking
+                        )
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(isWorking)
+                    .opacity(isWorking ? 0.5 : 1)
+            }
+            .padding(22)
+            .frame(maxWidth: 420)
+            .background {
+                ManagementPendingAuthenticationCardBackground(accent: accent)
+            }
+            .overlay {
+                RoundedRectangle(cornerRadius: 30, style: .continuous)
+                    .strokeBorder(borderColor, lineWidth: 0.75)
+            }
+            .shadow(
+                color: colorScheme == .dark ? .black.opacity(0.24) : .black.opacity(0.10),
+                radius: 28,
+                y: 16
+            )
+            .padding(.horizontal, 24)
+        }
+        .transition(.opacity.combined(with: .scale(scale: 0.96)))
+    }
+
+    private var promptSymbolName: String {
+        switch prompt.kind {
+        case .attachGuestData:
+            return "person.crop.circle.badge.questionmark"
+        case .keepOrDeleteGuestData:
+            return "externaldrive.badge.person.crop"
+        }
+    }
+
+    private var actionOptions: [ManagementPendingAuthenticationOption] {
+        switch prompt.kind {
+        case .attachGuestData:
+            return [
+                .init(
+                    decision: .attachGuestData,
+                    role: .primary,
+                    systemImage: "arrow.down.circle.fill",
+                    title: mistiaLocalized(
+                        vi: "Gắn vào tài khoản này",
+                        en: "Attach to this account",
+                        ja: "このアカウントに紐づける"
+                    ),
+                    subtitle: mistiaLocalized(
+                        vi: "Giữ luôn dữ liệu local guest hiện tại như dữ liệu của tài khoản này.",
+                        en: "Keep the current guest local data as part of this account.",
+                        ja: "現在のゲストローカルデータをこのアカウントのデータとして引き継ぎます。"
+                    )
+                ),
+                .init(
+                    decision: .keepGuestDataSeparate,
+                    role: .normal,
+                    systemImage: "square.split.2x1.fill",
+                    title: mistiaLocalized(
+                        vi: "Giữ guest riêng",
+                        en: "Keep guest separate",
+                        ja: "ゲストを分離したまま保持"
+                    ),
+                    subtitle: mistiaLocalized(
+                        vi: "Đăng nhập tài khoản này nhưng không trộn với dữ liệu guest hiện tại.",
+                        en: "Sign in to this account without mixing in the current guest data.",
+                        ja: "現在のゲストデータとは分けたまま、このアカウントでログインします。"
+                    )
+                ),
+                .init(
+                    decision: .deleteGuestData,
+                    role: .destructive,
+                    systemImage: "trash.fill",
+                    title: mistiaLocalized(
+                        vi: "Xóa dữ liệu guest",
+                        en: "Delete guest data",
+                        ja: "ゲストデータを削除"
+                    ),
+                    subtitle: mistiaLocalized(
+                        vi: "Xóa local guest hiện tại rồi mở tài khoản này với trạng thái sạch.",
+                        en: "Delete the current guest local data before opening this account cleanly.",
+                        ja: "現在のゲストローカルデータを削除してから、このアカウントをクリーンに開きます。"
+                    )
+                )
+            ]
+
+        case .keepOrDeleteGuestData:
+            return [
+                .init(
+                    decision: .keepGuestDataSeparate,
+                    role: .primary,
+                    systemImage: "square.split.2x1.fill",
+                    title: mistiaLocalized(
+                        vi: "Giữ guest riêng",
+                        en: "Keep guest separate",
+                        ja: "ゲストを分離したまま保持"
+                    ),
+                    subtitle: mistiaLocalized(
+                        vi: "Mở tài khoản này bằng profile riêng, không chuyển dữ liệu guest cũ sang.",
+                        en: "Open this account in its own profile without moving over the old guest data.",
+                        ja: "古いゲストデータを移さず、このアカウント専用のプロファイルで開きます。"
+                    )
+                ),
+                .init(
+                    decision: .deleteGuestData,
+                    role: .destructive,
+                    systemImage: "trash.fill",
+                    title: mistiaLocalized(
+                        vi: "Xóa dữ liệu guest",
+                        en: "Delete guest data",
+                        ja: "ゲストデータを削除"
+                    ),
+                    subtitle: mistiaLocalized(
+                        vi: "Xóa local guest hiện tại trước khi tiếp tục với tài khoản này.",
+                        en: "Delete the current guest local data before continuing with this account.",
+                        ja: "このアカウントを続ける前に、現在のゲストローカルデータを削除します。"
+                    )
+                )
+            ]
+        }
+    }
+
+    private var borderColor: Color {
+        colorScheme == .dark ? .white.opacity(0.12) : .white.opacity(0.48)
+    }
+}
+
+private struct ManagementPendingAuthenticationOption: Identifiable {
+    let decision: SessionPendingAuthenticationDecision
+    let role: ManagementPendingAuthenticationOptionButton.Role
+    let systemImage: String
+    let title: String
+    let subtitle: String
+
+    var id: SessionPendingAuthenticationDecision { decision }
+}
+
+private struct ManagementPendingAuthenticationCardBackground: View {
+    @Environment(\.colorScheme) private var colorScheme
+
+    let accent: Color
+
+    var body: some View {
+        ZStack {
+            RoundedRectangle(cornerRadius: 30, style: .continuous)
+                .fill(baseFillColor)
+
+            if #available(iOS 26.0, *) {
+                RoundedRectangle(cornerRadius: 30, style: .continuous)
+                    .fill(.clear)
+                    .glassEffect(
+                        Glass.regular.tint(
+                            colorScheme == .dark ? .white.opacity(0.06) : accent.opacity(0.08)
+                        ),
+                        in: .rect(cornerRadius: 30)
+                    )
+            }
+        }
+    }
+
+    private var baseFillColor: Color {
+        colorScheme == .dark
+            ? Color(UIColor.secondarySystemGroupedBackground).opacity(0.96)
+            : Color.white.opacity(0.86)
+    }
+}
+
+private struct ManagementPendingAuthenticationSymbolBadge: View {
+    @Environment(\.colorScheme) private var colorScheme
+
+    let systemImage: String
+    let accent: Color
+
+    var body: some View {
+        ZStack {
+            Circle()
+                .fill(colorScheme == .dark ? Color.white.opacity(0.08) : accent.opacity(0.12))
+
+            if #available(iOS 26.0, *) {
+                Circle()
+                    .fill(.clear)
+                    .glassEffect(
+                        Glass.regular
+                            .tint(colorScheme == .dark ? .white.opacity(0.08) : accent.opacity(0.10)),
+                        in: .circle
+                    )
+            }
+
+            Image(systemName: systemImage)
+                .font(.system(size: 20, weight: .semibold))
+                .foregroundStyle(accent)
+        }
+        .frame(width: 48, height: 48)
+        .overlay {
+            Circle()
+                .strokeBorder(colorScheme == .dark ? .white.opacity(0.10) : .white.opacity(0.42), lineWidth: 0.75)
+        }
+    }
+}
+
+private struct ManagementPendingAuthenticationOptionButton: View {
+    enum Role {
+        case primary
+        case normal
+        case destructive
+    }
+
+    let title: String
+    let subtitle: String
+    let systemImage: String
+    let accent: Color
+    let role: Role
+    let isDisabled: Bool
+    let action: () -> Void
+
+    @Environment(\.colorScheme) private var colorScheme
+
+    private var foregroundColor: Color {
+        switch role {
+        case .primary:
+            .primary
+        case .normal:
+            .primary
+        case .destructive:
+            .red
+        }
+    }
+
+    private var subtitleColor: Color {
+        role == .destructive ? .red.opacity(0.78) : .secondary
+    }
+
+    private var iconTint: Color {
+        switch role {
+        case .primary:
+            accent
+        case .normal:
+            colorScheme == .dark ? .white.opacity(0.92) : .primary
+        case .destructive:
+            .red
+        }
+    }
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 14) {
+                ZStack {
+                    Circle()
+                        .fill(iconTint.opacity(colorScheme == .dark ? 0.18 : 0.12))
+
+                    Image(systemName: systemImage)
+                        .font(.system(size: 16, weight: .bold))
+                        .foregroundStyle(iconTint)
+                }
+                .frame(width: 36, height: 36)
+
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(title)
+                        .font(.system(size: 16, weight: .semibold, design: .rounded))
+                        .foregroundStyle(foregroundColor)
+                        .fixedSize(horizontal: false, vertical: true)
+
+                    Text(subtitle)
+                        .font(.system(size: 13.5, weight: .medium, design: .rounded))
+                        .foregroundStyle(subtitleColor)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+
+                Spacer(minLength: 10)
+
+                Image(systemName: role == .destructive ? "minus.circle.fill" : "arrow.right")
+                    .font(.system(size: 14, weight: .bold))
+                    .foregroundStyle(role == .destructive ? Color.red : accent)
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 15)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background {
+                ManagementPendingAuthenticationOptionBackground(
+                    accent: accent,
+                    role: role,
+                    isEnabled: !isDisabled
+                )
+            }
+        }
+        .buttonStyle(.plain)
+        .disabled(isDisabled)
+        .opacity(isDisabled ? 0.55 : 1)
+    }
+}
+
+private struct ManagementPendingAuthenticationOptionBackground: View {
+    @Environment(\.colorScheme) private var colorScheme
+
+    let accent: Color
+    let role: ManagementPendingAuthenticationOptionButton.Role
+    let isEnabled: Bool
+
+    var body: some View {
+        ZStack {
+            RoundedRectangle(cornerRadius: 24, style: .continuous)
+                .fill(baseFillColor)
+
+            if #available(iOS 26.0, *) {
+                RoundedRectangle(cornerRadius: 24, style: .continuous)
+                    .fill(.clear)
+                    .glassEffect(nativeGlassStyle, in: .rect(cornerRadius: 24))
+            }
+        }
+        .overlay {
+            RoundedRectangle(cornerRadius: 24, style: .continuous)
+                .strokeBorder(borderColor, lineWidth: 0.75)
+        }
+    }
+
+    private var borderColor: Color {
+        colorScheme == .dark ? .white.opacity(0.08) : .white.opacity(0.44)
+    }
+
+    private var baseFillColor: Color {
+        switch role {
+        case .primary:
+            return colorScheme == .dark ? accent.opacity(0.18) : accent.opacity(0.12)
+        case .normal:
+            return colorScheme == .dark
+                ? Color(UIColor.tertiarySystemGroupedBackground).opacity(0.92)
+                : Color.white.opacity(0.72)
+        case .destructive:
+            return colorScheme == .dark ? Color.red.opacity(0.14) : Color.red.opacity(0.08)
+        }
+    }
+
+    @available(iOS 26.0, *)
+    private var nativeGlassStyle: Glass {
+        let tint: Color
+
+        switch role {
+        case .primary:
+            tint = colorScheme == .dark ? accent.opacity(isEnabled ? 0.18 : 0.08) : accent.opacity(isEnabled ? 0.12 : 0.06)
+        case .normal:
+            tint = colorScheme == .dark ? .white.opacity(isEnabled ? 0.07 : 0.04) : .white.opacity(isEnabled ? 0.18 : 0.10)
+        case .destructive:
+            tint = colorScheme == .dark ? .red.opacity(isEnabled ? 0.14 : 0.07) : .red.opacity(isEnabled ? 0.10 : 0.06)
+        }
+
+        var style = Glass.regular.tint(tint)
+        if isEnabled {
+            style = style.interactive(true)
+        }
+        return style
     }
 }
 

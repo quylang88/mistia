@@ -361,6 +361,8 @@ extension LedgerWallet {
             ),
             0
         )
+        
+        let availableCredit = max(profile.creditLimitMinor - debt, 0)
 
         return PlanningCreditCardAccountSnapshot(
             id: id,
@@ -372,6 +374,7 @@ extension LedgerWallet {
             paymentSourceWalletID: profile.paymentSourceWallet?.id,
             currencyCode: currencyCode,
             currentDebtMinor: debt,
+            availableCreditMinor: availableCredit,
             openedAt: createdAt
         )
     }

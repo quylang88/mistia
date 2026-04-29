@@ -1330,6 +1330,7 @@ final class SessionStore {
         _ decision: SessionPendingAuthenticationDecision
     ) async {
         guard let state = pendingAuthenticationState else { return }
+        clearPendingAuthenticationState()
 
         isWorking = true
         lastErrorMessage = nil
@@ -1367,15 +1368,14 @@ final class SessionStore {
         _ result: SessionAuthResult,
         restoringExistingSession: Bool
     ) async throws {
-        await beginAuthTransition()
-        defer { endAuthTransition() }
-
         if let pendingState = try preparePendingAuthenticationState(for: result) {
             pendingAuthenticationState = pendingState
             pendingAuthenticationPrompt = pendingState.prompt
             return
         }
 
+        await beginAuthTransition()
+        defer { endAuthTransition() }
         try authService.persistSession(result.session)
         clearPendingAuthenticationState()
         try await finishAuthentication(

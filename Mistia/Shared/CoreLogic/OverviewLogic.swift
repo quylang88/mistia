@@ -33,6 +33,7 @@ nonisolated struct OverviewCreditCardStatementAccountSnapshot: Equatable, Identi
     let last4: String
     let creditLimitMinor: Int64
     let currentDebtMinor: Int64
+    let availableCreditMinor: Int64
     let statementClosingDay: Int
     let paymentDueDay: Int
     let paymentSourceWalletName: String?

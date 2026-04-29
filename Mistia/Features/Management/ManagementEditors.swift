@@ -76,8 +76,13 @@ struct ManagementWalletEditorSheet: View {
                     .pickerStyle(.menu)
 
                     if target.wallet == nil {
-                        TextField(draft.kind.balanceFieldTitle, text: $draft.openingBalanceText)
-                            .keyboardType(.numberPad)
+                        if draft.kind == .creditCard {
+                            TextField(mistiaLocalized(vi: "Số tiền khả dụng", en: "Available credit", ja: "利用可能額"), text: $draft.availableCreditText)
+                                .keyboardType(.numberPad)
+                        } else {
+                            TextField(draft.kind.balanceFieldTitle, text: $draft.openingBalanceText)
+                                .keyboardType(.numberPad)
+                        }
                     } else {
                         LabeledContent(mistiaLocalized(vi: "Số dư hiện tại", en: "Current balance", ja: "現在の残高")) {
                             HStack(spacing: 10) {
@@ -308,6 +313,14 @@ struct ManagementWalletEditorSheet: View {
         let now = Date()
         let existingProfileID = target.wallet?.creditCardProfile?.id
         let walletForSync: LedgerWallet
+        
+        // For credit cards, calculate debt from available credit
+        let currentDebtMinor: Int64
+        if draft.kind == .creditCard {
+            currentDebtMinor = max(draft.creditLimitMinor - draft.availableCreditMinor, 0)
+        } else {
+            currentDebtMinor = draft.openingBalanceMinor
+        }
 
         if let existingWallet = target.wallet {
             existingWallet.name = trimmedName
@@ -315,7 +328,7 @@ struct ManagementWalletEditorSheet: View {
             existingWallet.iconSymbolName = draft.iconSymbolName
             existingWallet.iconColorHex = draft.iconColorHex
             existingWallet.currencyCode = draft.currencyCode
-            existingWallet.openingBalanceMinor = draft.openingBalanceMinor
+            existingWallet.openingBalanceMinor = currentDebtMinor
             existingWallet.institutionDisplayName = draft.kind == .bank ? draft.institutionDisplayName.nilIfBlank : nil
             existingWallet.institutionPresetKey = draft.kind == .bank ? draft.institutionPresetKey : nil
             existingWallet.updatedAt = now
@@ -329,7 +342,7 @@ struct ManagementWalletEditorSheet: View {
                 iconSymbolName: draft.iconSymbolName,
                 iconColorHex: draft.iconColorHex,
                 currencyCode: draft.currencyCode,
-                openingBalanceMinor: draft.openingBalanceMinor,
+                openingBalanceMinor: currentDebtMinor,
                 institutionDisplayName: draft.kind == .bank ? draft.institutionDisplayName.nilIfBlank : nil,
                 institutionPresetKey: draft.kind == .bank ? draft.institutionPresetKey : nil,
                 sortOrder: nextSortOrder()
@@ -1025,6 +1038,7 @@ private struct WalletDraft {
     var iconColorHex: String
     var currencyCode: String
     var openingBalanceText: String
+    var availableCreditText: String
     var institutionDisplayName: String
     var institutionPresetKey: String?
     var issuerName: String
@@ -1044,6 +1058,10 @@ private struct WalletDraft {
                 symbolName: wallet.iconSymbolName,
                 colorHex: wallet.iconColorHex
             )
+            
+            let currentDebtMinor = wallet.openingBalanceMinor
+            let creditLimitMinor = profile?.creditLimitMinor ?? 0
+            let availableCreditMinor = max(creditLimitMinor - currentDebtMinor, 0)
 
             self.name = wallet.name
             self.kind = wallet.kind
@@ -1054,6 +1072,7 @@ private struct WalletDraft {
             ) ?? MistiaIconColorPalette.normalizedHex(wallet.iconColorHex)
             self.currencyCode = wallet.currencyCode
             self.openingBalanceText = "\(wallet.openingBalanceMinor)"
+            self.availableCreditText = "\(availableCreditMinor)"
             self.institutionDisplayName = wallet.institutionDisplayName ?? ""
             self.institutionPresetKey = wallet.institutionPresetKey
             self.issuerName = profile?.issuerName ?? ""
@@ -1072,6 +1091,7 @@ private struct WalletDraft {
             self.iconColorHex = defaultKind.defaultColorHex
             self.currencyCode = "JPY"
             self.openingBalanceText = ""
+            self.availableCreditText = ""
             self.institutionDisplayName = ""
             self.institutionPresetKey = nil
             self.issuerName = ""
@@ -1088,6 +1108,10 @@ private struct WalletDraft {
 
     var openingBalanceMinor: Int64 {
         openingBalanceText.currencyInputToMinorUnits(currencyCode: currencyCode)
+    }
+    
+    var availableCreditMinor: Int64 {
+        availableCreditText.currencyInputToMinorUnits(currencyCode: currencyCode)
     }
 
     var creditLimitMinor: Int64 {

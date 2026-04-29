@@ -71,6 +71,8 @@ extension LedgerWallet {
             ),
             0
         )
+        
+        let availableCredit = max(profile.creditLimitMinor - debt, 0)
 
         return OverviewCreditCardStatementAccountSnapshot(
             id: id,
@@ -82,6 +84,7 @@ extension LedgerWallet {
             last4: profile.last4,
             creditLimitMinor: profile.creditLimitMinor,
             currentDebtMinor: debt,
+            availableCreditMinor: availableCredit,
             statementClosingDay: profile.statementClosingDay,
             paymentDueDay: profile.paymentDueDay,
             paymentSourceWalletName: profile.paymentSourceWallet?.name,

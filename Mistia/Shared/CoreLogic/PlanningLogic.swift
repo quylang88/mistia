@@ -220,6 +220,7 @@ nonisolated struct PlanningCreditCardAccountSnapshot: Equatable, Identifiable {
     let paymentSourceWalletID: UUID?
     let currencyCode: String
     let currentDebtMinor: Int64
+    let availableCreditMinor: Int64
     let openedAt: Date
 }
 
@@ -267,6 +268,7 @@ nonisolated struct PlanningCreditCardDueSnapshot: Equatable, Identifiable {
     let network: CreditCardNetwork
     let last4: String
     let amountMinor: Int64
+    let availableCreditMinor: Int64
     let dueDate: Date
     let paymentSourceWalletID: UUID?
     let currencyCode: String
@@ -632,6 +634,7 @@ nonisolated enum PlanningLogic {
                     network: account.network,
                     last4: account.last4,
                     amountMinor: amount,
+                    availableCreditMinor: account.availableCreditMinor,
                     dueDate: scheduledDate,
                     paymentSourceWalletID: account.paymentSourceWalletID,
                     currencyCode: account.currencyCode,

@@ -751,19 +751,19 @@
         }
       }
     },
-    "Lưu an toàn ví, danh mục và sẵn sàng cho backup hoặc sync ở các bản sau." : {
+    "Ví, danh mục và giao dịch của bạn đã sẵn sàng cho backup, khôi phục và đồng bộ giữa các thiết bị." : {
       "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Safely keep wallets and categories ready for backup or sync in later versions."
+            "value" : "Your wallets, categories, and transactions are ready for backup, restore, and sync across devices."
           }
         },
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "ウォレットとカテゴリを安全に保持し、今後のバックアップや同期に備えます。"
+            "value" : "ウォレット、カテゴリ、取引はバックアップ、復元、端末間同期に対応しています。"
           }
         }
       }

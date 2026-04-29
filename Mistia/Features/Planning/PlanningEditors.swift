@@ -1148,7 +1148,7 @@ struct PlanningCreditCardEditorSheet: View {
         self.target = target
         let initialDraft = PlanningCreditCardDraft(wallet: target.wallet)
         _draft = State(initialValue: initialDraft)
-        _paymentAmountText = State(initialValue: target.dueItem.map { String($0.amountMinor) } ?? initialDraft.currentDebtText)
+        _paymentAmountText = State(initialValue: target.dueItem.map { String($0.amountMinor) } ?? initialDraft.availableCreditText)
     }
 
     private var availablePaymentWallets: [LedgerWallet] {
@@ -1197,7 +1197,7 @@ struct PlanningCreditCardEditorSheet: View {
                         .onChange(of: draft.last4) { _, newValue in
                             draft.last4 = String(newValue.filter(\.isNumber).prefix(4))
                         }
-                    TextField(mistiaLocalized(vi: "Dư nợ hiện tại", en: "Current balance", ja: "現在の残高"), text: $draft.currentDebtText)
+                    TextField(mistiaLocalized(vi: "Số tiền khả dụng", en: "Available credit", ja: "利用可能額"), text: $draft.availableCreditText)
                         .keyboardType(.numberPad)
                     TextField(mistiaLocalized(vi: "Hạn mức", en: "Credit limit", ja: "利用限度額"), text: $draft.creditLimitText)
                         .keyboardType(.numberPad)
@@ -1279,6 +1279,10 @@ struct PlanningCreditCardEditorSheet: View {
     private var currentDueSnapshot: PlanningCreditCardDueSnapshot? {
         guard let wallet = target.wallet else { return nil }
 
+        let availableCreditMinor = draft.availableCreditText.currencyInputToMinorUnits(currencyCode: activeCurrencyCode)
+        let creditLimitMinor = draft.creditLimitText.currencyInputToMinorUnits(currencyCode: activeCurrencyCode)
+        let currentDebtMinor = max(creditLimitMinor - availableCreditMinor, 0)
+
         return PlanningCreditCardDueSnapshot(
             id: wallet.id,
             walletID: wallet.id,
@@ -1287,8 +1291,9 @@ struct PlanningCreditCardEditorSheet: View {
             last4: draft.last4,
             amountMinor: max(
                 paymentAmountText.currencyInputToMinorUnits(currencyCode: activeCurrencyCode),
-                draft.currentDebtText.currencyInputToMinorUnits(currencyCode: activeCurrencyCode)
+                currentDebtMinor
             ),
+            availableCreditMinor: availableCreditMinor,
             dueDate: target.dueItem?.dueDate ?? PlanningLogic.scheduledDate(dueDay: draft.paymentDueDay, selectedMonth: target.selectedMonth),
             paymentSourceWalletID: draft.paymentSourceWalletID,
             currencyCode: wallet.currencyCode,
@@ -1303,8 +1308,9 @@ struct PlanningCreditCardEditorSheet: View {
             return
         }
 
-        let currentDebtMinor = draft.currentDebtText.currencyInputToMinorUnits(currencyCode: activeCurrencyCode)
+        let availableCreditMinor = draft.availableCreditText.currencyInputToMinorUnits(currencyCode: activeCurrencyCode)
         let creditLimitMinor = draft.creditLimitText.currencyInputToMinorUnits(currencyCode: activeCurrencyCode)
+        let currentDebtMinor = max(creditLimitMinor - availableCreditMinor, 0)
         let now = Date()
         let walletForSync: LedgerWallet
 
@@ -1382,6 +1388,7 @@ struct PlanningCreditCardEditorSheet: View {
                 network: dueItem.network,
                 last4: dueItem.last4,
                 amountMinor: amountOverride ?? dueItem.amountMinor,
+                availableCreditMinor: dueItem.availableCreditMinor,
                 dueDate: dueItem.dueDate,
                 paymentSourceWalletID: draft.paymentSourceWalletID,
                 currencyCode: dueItem.currencyCode,
@@ -1658,7 +1665,7 @@ private struct PlanningCreditCardDraft {
     var issuerName: String
     var network: CreditCardNetwork
     var last4: String
-    var currentDebtText: String
+    var availableCreditText: String
     var creditLimitText: String
     var paymentDueDay: Int
     var statementClosingDay: Int
@@ -1680,7 +1687,14 @@ private struct PlanningCreditCardDraft {
         issuerName = profile?.issuerName ?? ""
         network = profile?.network ?? .visa
         last4 = profile?.last4 ?? ""
-        currentDebtText = wallet.map { String($0.openingBalanceMinor) } ?? ""
+        if let wallet {
+            let currentDebtMinor = wallet.openingBalanceMinor
+            let creditLimitMinor = profile?.creditLimitMinor ?? 0
+            let availableCreditMinor = max(creditLimitMinor - currentDebtMinor, 0)
+            availableCreditText = String(availableCreditMinor)
+        } else {
+            availableCreditText = ""
+        }
         creditLimitText = profile.map { String($0.creditLimitMinor) } ?? ""
         paymentDueDay = profile?.paymentDueDay ?? 10
         statementClosingDay = profile?.statementClosingDay ?? 25

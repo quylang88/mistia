@@ -302,6 +302,58 @@ final class SessionStoreOfflineTests: XCTestCase {
         XCTAssertNotNil(launchState.profileDescriptors.first(where: { $0.id == guestProfileID }))
     }
 
+    func testGuestUnboundSignInWithUnknownAccountShowsAttachPromptAndCompletesLogin() async throws {
+        let userDefaults = UserDefaults(suiteName: "MistiaTests.\(UUID().uuidString)") ?? .standard
+        let launchState = try MistiaDataStack.LaunchState(userDefaults: userDefaults)
+        let guestProfileID = try XCTUnwrap(launchState.activeProfileDescriptor?.id)
+        let unknownSession = makeSession(
+            userID: UUID(),
+            email: "unknown@example.com",
+            displayName: "Unknown User"
+        )
+        let authService = SessionAuthServiceSpy(
+            persistedSession: nil,
+            signInResult: SessionAuthResult(
+                session: unknownSession,
+                origin: .unknown
+            )
+        )
+        let store = SessionStore(
+            modelContainer: launchState.modelContainer,
+            launchState: launchState,
+            userDefaults: userDefaults,
+            authService: authService,
+            userProfileStore: UserProfileStoreSpy(),
+            connectivityMonitor: SessionConnectivityMonitor(initialStatus: .connected),
+            registerBackgroundRefresh: false
+        )
+
+        let wallet = LedgerWallet(
+            name: "Guest wallet",
+            kind: .cash,
+            iconSymbolName: "banknote",
+            iconColorHex: "#34C759"
+        )
+        launchState.modelContainer.mainContext.insert(wallet)
+        try launchState.modelContainer.mainContext.save()
+
+        await store.signIn(email: unknownSession.user.email ?? "", password: "password")
+
+        XCTAssertEqual(store.pendingAuthenticationPrompt?.kind, .attachGuestData)
+        XCTAssertFalse(store.isSignedIn)
+        XCTAssertFalse(store.isAuthTransitioning)
+        XCTAssertEqual(launchState.activeProfileDescriptor?.id, guestProfileID)
+        XCTAssertEqual(launchState.activeProfileDescriptor?.kind, .guestUnbound)
+
+        await store.resolvePendingAuthentication(.attachGuestData)
+
+        XCTAssertTrue(store.isSignedIn)
+        XCTAssertEqual(store.summary?.userID, unknownSession.user.id)
+        XCTAssertEqual(launchState.activeProfileDescriptor?.id, guestProfileID)
+        XCTAssertEqual(launchState.activeProfileDescriptor?.kind, .cloudUser)
+        XCTAssertEqual(launchState.activeProfileDescriptor?.cloudUserID, unknownSession.user.id)
+    }
+
     func testSignOutAndDeleteLocalDataReturnsToCleanGuestProfile() async throws {
         let session = makeSession(
             userID: UUID(),

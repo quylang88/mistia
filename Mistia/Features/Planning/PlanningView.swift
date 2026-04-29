@@ -1367,6 +1367,10 @@ private struct PlanningCreditCardCard: View {
                 Text(item.walletName)
                     .font(.system(size: 17, weight: .bold, design: .rounded))
                     .foregroundStyle(.white)
+                
+                Text(mistiaLocalized(vi: "Số tiền khả dụng", en: "Available credit", ja: "利用可能額"))
+                    .font(.system(size: 11.5, weight: .semibold, design: .rounded))
+                    .foregroundStyle(.white.opacity(0.65))
 
                 Text(amountText)
                     .font(.system(size: 22, weight: .bold, design: .rounded))
@@ -1415,19 +1419,19 @@ private struct PlanningCreditCardCard: View {
     }
 
     private var amountText: String {
-        item.amountMinor > 0
-            ? item.amountMinor.formattedCurrency(code: item.currencyCode)
-            : mistiaLocalized(vi: "Không dư nợ", en: "No debt", ja: "残高なし")
+        item.availableCreditMinor > 0
+            ? item.availableCreditMinor.formattedCurrency(code: item.currencyCode)
+            : mistiaLocalized(vi: "Hết hạn mức", en: "Limit reached", ja: "限度額到達")
     }
 
     private var badgeTitle: String {
         if item.status == .paid {
             return mistiaLocalized(vi: "Đã thanh toán", en: "Paid", ja: "支払い済み")
         }
-        if item.amountMinor <= 0 {
-            return mistiaLocalized(vi: "Ổn", en: "Good", ja: "問題なし")
+        if item.availableCreditMinor <= 0 {
+            return mistiaLocalized(vi: "Hết hạn mức", en: "Limit reached", ja: "限度額到達")
         }
-        return mistiaLocalized(vi: "Đang nợ", en: "Outstanding", ja: "未払い")
+        return mistiaLocalized(vi: "Còn hạn mức", en: "Available", ja: "利用可能")
     }
 }
 

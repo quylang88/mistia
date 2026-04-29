@@ -618,9 +618,9 @@ private struct ManagementSignedOutCard: View {
 
                         Text(
                             mistiaLocalized(
-                                vi: "Lưu an toàn ví, danh mục và sẵn sàng cho backup hoặc sync ở các bản sau.",
-                                en: "Keep your wallets and categories safe, ready for backup or sync in future versions.",
-                                ja: "ウォレットとカテゴリを安全に保持し、今後のバックアップや同期に備えます。"
+                                vi: "Ví, danh mục và giao dịch của bạn đã sẵn sàng cho backup, khôi phục và đồng bộ giữa các thiết bị.",
+                                en: "Your wallets, categories, and transactions are ready for backup, restore, and sync across devices.",
+                                ja: "ウォレット、カテゴリ、取引はバックアップ、復元、端末間同期に対応しています。"
                             )
                         )
                             .font(.system(size: 13.5, weight: .medium, design: .rounded))
@@ -659,7 +659,7 @@ private struct ManagementWalletRow: View {
             kind: wallet.kind,
             openingBalanceMinor: wallet.openingBalanceMinor
         )
-        
+
         let snapshots = transactions.map {
             TransactionRecordSnapshot(
                 id: $0.id,
@@ -681,11 +681,25 @@ private struct ManagementWalletRow: View {
                 normalizedCounterpartyKey: $0.normalizedCounterpartyKey
             )
         }
-        
+
         return TransactionLogic.effectiveBalance(for: snapshot, records: snapshots)
     }
     
+    private var availableCreditMinor: Int64? {
+        guard wallet.kind == .creditCard,
+              let profile = wallet.creditCardProfile else {
+            return nil
+        }
+        let creditLimitMinor = profile.creditLimitMinor
+        let debt = max(currentBalanceMinor, 0)
+        return max(creditLimitMinor - debt, 0)
+    }
+
     private var balanceColor: Color {
+        if wallet.kind == .creditCard {
+            // For credit cards, available credit is always positive (good)
+            return MistiaAccent.income.color
+        }
         if currentBalanceMinor < 1000 {
             return MistiaAccent.expense.color
         }
@@ -717,9 +731,20 @@ private struct ManagementWalletRow: View {
 
                 Spacer(minLength: 8)
 
-                Text(currentBalanceMinor.formattedCurrency(code: wallet.currencyCode))
-                    .font(.system(size: 16, weight: .bold, design: .rounded))
-                    .foregroundStyle(balanceColor)
+                if wallet.kind == .creditCard, let availableCredit = availableCreditMinor {
+                    VStack(alignment: .trailing, spacing: 2) {
+                        Text(mistiaLocalized(vi: "Khả dụng", en: "Available", ja: "利用可能"))
+                            .font(.system(size: 10.5, weight: .medium, design: .rounded))
+                            .foregroundStyle(.secondary)
+                        Text(availableCredit.formattedCurrency(code: wallet.currencyCode))
+                            .font(.system(size: 16, weight: .bold, design: .rounded))
+                            .foregroundStyle(balanceColor)
+                    }
+                } else {
+                    Text(currentBalanceMinor.formattedCurrency(code: wallet.currencyCode))
+                        .font(.system(size: 16, weight: .bold, design: .rounded))
+                        .foregroundStyle(balanceColor)
+                }
             }
             .padding(.horizontal, 14)
             .padding(.vertical, 11)
