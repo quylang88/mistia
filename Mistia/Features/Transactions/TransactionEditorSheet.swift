@@ -501,6 +501,7 @@ struct TransactionEditorSheet: View {
                 }
                 return ($0.kind == desiredKind)
                     && $0.isChildCategory
+                    && !$0.isBalanceAdjustmentSystemCategory
                     && allowedOwnerUserIDs.contains(ownerUserID)
                     && (($0.deletedAt == nil && !$0.isArchived) || $0.id == preferredID)
             }
@@ -568,10 +569,7 @@ struct TransactionEditorSheet: View {
                 return false
             }
 
-            let isAdjustmentCategory = category.id == MistiaSystemCategoryIdentity.balanceAdjustmentExpenseID ||
-                                       category.id == MistiaSystemCategoryIdentity.balanceAdjustmentIncomeID
-
-            return !isAdjustmentCategory
+            return !category.isBalanceAdjustmentSystemCategory
                 && category.kind == desiredKind
                 && allowedOwnerUserIDs.contains(ownerUserID)
                 && category.deletedAt == nil
@@ -591,9 +589,7 @@ struct TransactionEditorSheet: View {
         return MistiaCategoryPickerSupport.favoriteCategories(
             from: storedCategories.filter {
                 guard let ownerUserID = categoryOwnerUserID(for: $0) else { return false }
-                let isAdjustmentCategory = $0.id == MistiaSystemCategoryIdentity.balanceAdjustmentExpenseID ||
-                                           $0.id == MistiaSystemCategoryIdentity.balanceAdjustmentIncomeID
-                return !isAdjustmentCategory && effectiveCategoryOwnerUserIDs.contains(ownerUserID)
+                return !$0.isBalanceAdjustmentSystemCategory && effectiveCategoryOwnerUserIDs.contains(ownerUserID)
             },
             kind: desiredKind
         )
@@ -605,9 +601,7 @@ struct TransactionEditorSheet: View {
             from: postedTransactions,
             categories: storedCategories.filter {
                 guard let ownerUserID = categoryOwnerUserID(for: $0) else { return false }
-                let isAdjustmentCategory = $0.id == MistiaSystemCategoryIdentity.balanceAdjustmentExpenseID ||
-                                           $0.id == MistiaSystemCategoryIdentity.balanceAdjustmentIncomeID
-                return !isAdjustmentCategory && effectiveCategoryOwnerUserIDs.contains(ownerUserID)
+                return !$0.isBalanceAdjustmentSystemCategory && effectiveCategoryOwnerUserIDs.contains(ownerUserID)
             },
             kind: desiredKind
         )

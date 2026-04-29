@@ -52,6 +52,7 @@ enum MistiaCategoryHierarchy {
                     && (includeArchived || !$0.isArchived)
                     && $0.kind == kind
                     && $0.isChildCategory
+                    && !$0.isBalanceAdjustmentSystemCategory
             }
             .sorted { lhs, rhs in
                 if lhs.sortOrder != rhs.sortOrder {
@@ -125,6 +126,16 @@ extension TransactionCategory {
 
     var branchDisplayName: String {
         parentCategory?.mistiaHierarchyDisplayName ?? mistiaHierarchyDisplayName
+    }
+
+    var isBalanceAdjustmentSystemCategory: Bool {
+        if id == MistiaSystemCategoryIdentity.balanceAdjustmentExpenseID ||
+            id == MistiaSystemCategoryIdentity.balanceAdjustmentIncomeID {
+            return true
+        }
+
+        return systemKey == MistiaSystemCategoryKey.balanceAdjustmentExpense.rawValue ||
+            systemKey == MistiaSystemCategoryKey.balanceAdjustmentIncome.rawValue
     }
 
     func canAssignParent(_ candidate: TransactionCategory?) -> Bool {

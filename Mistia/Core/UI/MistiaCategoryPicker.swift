@@ -57,6 +57,7 @@ enum MistiaCategoryPickerSupport {
                     && $0.kind == kind
                     && $0.isChildCategory
                     && $0.isFavorite
+                    && !$0.isBalanceAdjustmentSystemCategory
             }
             .sorted { lhs, rhs in
                 MistiaCategoryHierarchy.categorySort(lhs: lhs, rhs: rhs)
@@ -77,6 +78,7 @@ enum MistiaCategoryPickerSupport {
                 && !$0.isArchived
                 && $0.kind == kind
                 && $0.isChildCategory
+                && !$0.isBalanceAdjustmentSystemCategory
         }
         let allowedByID = Dictionary(uniqueKeysWithValues: allowedCategories.map { ($0.id, $0) })
 
