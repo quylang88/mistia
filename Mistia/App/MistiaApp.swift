@@ -32,10 +32,13 @@ struct MistiaApp: App {
             Group {
                 if let launchIssue = launchState.issue {
                     MistiaProtectedLaunchView(launchIssue: launchIssue, appLanguage: appLanguage)
+                } else if sessionStore.isAuthTransitioning {
+                    MistiaAuthTransitionView(appLanguage: appLanguage)
                 } else {
                     ContentView()
                 }
             }
+                .id(appRootIdentity)
                 .preferredColorScheme(appearanceMode.colorScheme)
                 .environment(\.locale, appLanguage.locale)
                 .environment(\.calendar, appLanguage.calendar)
@@ -76,12 +79,47 @@ struct MistiaApp: App {
         }
     }
 
+    private var appRootIdentity: String {
+        let profileID = launchState.activeProfileID?.uuidString.lowercased() ?? "none"
+        let signedInUserID = sessionStore.signedInUserID?.uuidString.lowercased() ?? "guest"
+        let authState = sessionStore.isSignedIn ? "signed-in" : "signed-out"
+        let launchStateKind = launchState.issue == nil ? "healthy" : "protected"
+        return [profileID, signedInUserID, authState, launchStateKind].joined(separator: ":")
+    }
+
     private var appearanceMode: MistiaAppearanceMode {
         MistiaAppearanceMode(rawValue: appearanceModeRawValue) ?? .automatic
     }
 
     private var appLanguage: MistiaAppLanguage {
         MistiaAppLanguage.resolve(storedRawValue: appLanguageRawValue)
+    }
+}
+
+private struct MistiaAuthTransitionView: View {
+    let appLanguage: MistiaAppLanguage
+
+    var body: some View {
+        ZStack {
+            Color(.systemBackground)
+                .ignoresSafeArea()
+
+            VStack(spacing: 14) {
+                ProgressView()
+                    .controlSize(.large)
+
+                Text(mistiaLocalized(
+                    vi: "Đang chuyển phiên...",
+                    en: "Switching session...",
+                    ja: "セッションを切り替えています..."
+                ))
+                .font(.system(size: 16, weight: .semibold, design: .rounded))
+                .foregroundStyle(.secondary)
+            }
+            .padding(24)
+        }
+        .environment(\.locale, appLanguage.locale)
+        .environment(\.calendar, appLanguage.calendar)
     }
 }
 

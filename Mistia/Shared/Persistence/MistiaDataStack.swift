@@ -286,10 +286,17 @@ enum MistiaDataStack {
                 fileManager: fileManager
             )
             let configuration = ModelConfiguration("default", schema: schema, url: storeURL)
-            return try ModelContainer(
-                for: schema,
-                configurations: [configuration]
-            )
+            do {
+                return try ModelContainer(
+                    for: schema,
+                    configurations: [configuration]
+                )
+            } catch {
+                throw LaunchIssue(
+                    storeURL: storeURL,
+                    underlyingErrorDescription: String(describing: error)
+                )
+            }
         }
 
         private func ensureProfileDirectoryExists(
@@ -447,13 +454,19 @@ enum MistiaDataStack {
                 for: schema,
                 configurations: [fallbackConfiguration]
             )
-
-            return LaunchState(
-                fallbackContainer: fallbackContainer,
-                issue: LaunchIssue(
+            let launchIssue: LaunchIssue
+            if let existingIssue = error as? LaunchIssue {
+                launchIssue = existingIssue
+            } else {
+                launchIssue = LaunchIssue(
                     storeURL: defaultStoreURL(),
                     underlyingErrorDescription: String(describing: error)
                 )
+            }
+
+            return LaunchState(
+                fallbackContainer: fallbackContainer,
+                issue: launchIssue
             )
         }
     }()

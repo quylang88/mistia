@@ -130,6 +130,7 @@ final class SessionStore {
     var authFieldErrors: [SessionAuthField: String] = [:]
     var activeAuthAction: SessionAuthAction?
     var pendingAuthenticationPrompt: SessionPendingAuthenticationPrompt?
+    var isAuthTransitioning = false
 
     var networkStatus: SessionNetworkStatus = .checking
     var remoteUnavailableReason: String?
@@ -662,6 +663,8 @@ final class SessionStore {
         isWorking = true
         lastErrorMessage = nil
         let activeSession = currentSession
+        await beginAuthTransition()
+        defer { endAuthTransition() }
 
         do {
             try await authService.signOut(session: activeSession)
@@ -683,6 +686,8 @@ final class SessionStore {
         lastErrorMessage = nil
         let activeSession = currentSession
         let currentDescriptor = launchState?.activeProfileDescriptor
+        await beginAuthTransition()
+        defer { endAuthTransition() }
 
         do {
             try await authService.signOut(session: activeSession)
@@ -712,6 +717,8 @@ final class SessionStore {
         stopLiveSyncLoop()
         isWorking = true
         lastErrorMessage = nil
+        await beginAuthTransition()
+        defer { endAuthTransition() }
 
         do {
             let activeSession = try await prepareRemoteSession()
@@ -1329,6 +1336,8 @@ final class SessionStore {
         defer { isWorking = false }
 
         do {
+            await beginAuthTransition()
+            defer { endAuthTransition() }
             try resolvePendingAuthenticationState(state, decision: decision)
             try authService.persistSession(state.result.session)
             clearPendingAuthenticationState()
@@ -1358,6 +1367,9 @@ final class SessionStore {
         _ result: SessionAuthResult,
         restoringExistingSession: Bool
     ) async throws {
+        await beginAuthTransition()
+        defer { endAuthTransition() }
+
         if let pendingState = try preparePendingAuthenticationState(for: result) {
             pendingAuthenticationState = pendingState
             pendingAuthenticationPrompt = pendingState.prompt
@@ -1523,6 +1535,16 @@ final class SessionStore {
             }
         }
         try launchState?.deleteProfile(descriptor)
+    }
+
+    private func beginAuthTransition() async {
+        guard !isAuthTransitioning else { return }
+        isAuthTransitioning = true
+        await Task.yield()
+    }
+
+    private func endAuthTransition() {
+        isAuthTransitioning = false
     }
 
     private func clearPendingAuthenticationState() {
