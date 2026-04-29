@@ -6,9 +6,11 @@ struct NotificationCenterView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(SessionStore.self) private var sessionStore
     @Environment(FamilyContextStore.self) private var familyContextStore
+    @Environment(MistiaUIState.self) private var uiState
     
     @Query(sort: \AppNotificationRecord.createdAt, order: .reverse)
     private var rows: [AppNotificationRecord]
+    @State private var viewID = UUID()
 
     private var visibleRows: [AppNotificationRecord] {
         MistiaNotificationStore.visibleRows(
@@ -34,29 +36,31 @@ struct NotificationCenterView: View {
         .task {
             markVisibleAsRead()
         }
+        .onAppear {
+            uiState.requestQuickCreateHidden(true, id: viewID)
+        }
+        .onDisappear {
+            uiState.requestQuickCreateHidden(false, id: viewID)
+        }
     }
 
     private var trailingMenu: some View {
-        Menu {
+        MistiaHeaderCircleMenu(label: {
+            Image(systemName: "ellipsis")
+                .font(.system(size: 17, weight: .bold))
+                .symbolRenderingMode(.monochrome)
+                .foregroundStyle(.primary)
+        }) {
             Button {
                 markAllAsRead()
             } label: {
                 Label(
                     mistiaLocalized(vi: "Đọc hết", en: "Mark all as read", ja: "すべて既読"),
-                    systemImage: "checkmark.circle"
+                    systemImage: "envelope.open"
                 )
             }
-        } label: {
-            MistiaHeaderCircleButton(action: {}) {
-                Image(systemName: "ellipsis.circle")
-                    .font(.system(size: 17, weight: .bold))
-                    .symbolRenderingMode(.monochrome)
-                    .foregroundStyle(.primary)
-            }
         }
-        .menuIndicator(.hidden)
-        .menuOrder(.fixed)
-        .buttonStyle(.plain)
+        .accessibilityLabel(mistiaLocalized(vi: "Tác vụ thông báo", en: "Notification actions", ja: "通知アクション"))
     }
 
     private var content: some View {

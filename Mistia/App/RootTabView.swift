@@ -105,7 +105,7 @@ struct RootTabView: View {
           selectedTab: $selectedTab,
           appearanceMode: appearanceMode,
           appLanguage: appLanguage,
-          hidesQuickCreate: hideQuickCreate || isQuickCreateMenuVisible,
+          hidesQuickCreate: hideQuickCreate || uiState.isQuickCreateHidden || isQuickCreateMenuVisible,
           hidesTabBar: uiState.isTabBarHidden,
           showsShortcutTab: mistiaShortcutEnabled,
           shortcutPresentation: shortcutResolution.presentation,
