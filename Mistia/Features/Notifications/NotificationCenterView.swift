@@ -4,9 +4,18 @@ import SwiftUI
 struct NotificationCenterView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
+    @Environment(SessionStore.self) private var sessionStore
+    @Environment(FamilyContextStore.self) private var familyContextStore
     
     @Query(sort: \AppNotificationRecord.createdAt, order: .reverse)
     private var rows: [AppNotificationRecord]
+
+    private var visibleRows: [AppNotificationRecord] {
+        MistiaNotificationStore.visibleRows(
+            rows,
+            userID: sessionStore.activeLocalProfileUserID
+        )
+    }
 
     var body: some View {
         MistiaPinnedTopBarScaffold(
@@ -22,6 +31,9 @@ struct NotificationCenterView: View {
             trailingAccessory: { trailingMenu },
             content: { content }
         )
+        .task {
+            markVisibleAsRead()
+        }
     }
 
     private var trailingMenu: some View {
@@ -49,11 +61,11 @@ struct NotificationCenterView: View {
 
     private var content: some View {
         Group {
-            if rows.isEmpty {
+            if visibleRows.isEmpty {
                 emptyState
             } else {
                 List {
-                    ForEach(rows) { row in
+                    ForEach(visibleRows) { row in
                         notificationRow(row)
                             .listRowInsets(EdgeInsets(top: 10, leading: 16, bottom: 10, trailing: 16))
                             .listRowSeparator(.hidden)
@@ -78,9 +90,9 @@ struct NotificationCenterView: View {
                 .font(.system(.headline, design: .rounded))
 
                 Text(mistiaLocalized(
-                    vi: "Khi bạn bật Nhắc nhở, Mistia sẽ hiển thị thông báo ở đây.",
-                    en: "When you enable Reminders, Mistia will show notifications here.",
-                    ja: "リマインダーを有効にすると、ここに通知が表示されます。"
+                    vi: "Yêu cầu quyền và hoạt động gia đình sẽ xuất hiện tại đây sau khi đồng bộ.",
+                    en: "Permission requests and family activity will appear here after sync.",
+                    ja: "権限リクエストと家族のアクティビティは同期後にここに表示されます。"
                 ))
                 .descriptionTextStyle()
                 .foregroundStyle(.secondary)
@@ -121,6 +133,34 @@ struct NotificationCenterView: View {
                 Text(row.body)
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
+
+                if row.kind == .permissionRequestReceived, row.actionState == .pending {
+                    HStack(spacing: 10) {
+                        Button {
+                            respond(to: row, approve: true)
+                        } label: {
+                            Label(
+                                mistiaLocalized(vi: "Chấp thuận", en: "Approve", ja: "承認"),
+                                systemImage: "checkmark.circle.fill"
+                            )
+                        }
+                        .buttonStyle(.borderedProminent)
+                        .controlSize(.small)
+                        .tint(MistiaAccent.purple.color)
+
+                        Button(role: .destructive) {
+                            respond(to: row, approve: false)
+                        } label: {
+                            Label(
+                                mistiaLocalized(vi: "Từ chối", en: "Reject", ja: "拒否"),
+                                systemImage: "xmark.circle"
+                            )
+                        }
+                        .buttonStyle(.bordered)
+                        .controlSize(.small)
+                    }
+                    .padding(.top, 4)
+                }
             }
         }
         .padding(14)
@@ -131,22 +171,89 @@ struct NotificationCenterView: View {
     }
     
     private func markAsRead(_ row: AppNotificationRecord) {
-        guard !row.isRead else { return }
-        row.isRead = true
-        row.updatedAt = .now
-        try? modelContext.save()
+        guard let remoteIDs = try? MistiaNotificationStore.markAsRead([row], in: modelContext),
+              !remoteIDs.isEmpty else { return }
+        Task {
+            await familyContextStore.pushNotificationReadState(sessionStore: sessionStore)
+        }
     }
     
     private func markAllAsRead() {
-        var changed = false
-        for row in rows where !row.isRead {
-            row.isRead = true
-            row.updatedAt = .now
-            changed = true
+        guard let remoteIDs = try? MistiaNotificationStore.markAllAsRead(
+            for: sessionStore.activeLocalProfileUserID,
+            in: modelContext
+        ), !remoteIDs.isEmpty else {
+            return
         }
-        if changed {
-            try? modelContext.save()
+
+        Task {
+            await familyContextStore.pushNotificationReadState(sessionStore: sessionStore)
+        }
+    }
+
+    private func markVisibleAsRead() {
+        guard let remoteIDs = try? MistiaNotificationStore.markAsRead(visibleRows, in: modelContext),
+              !remoteIDs.isEmpty else { return }
+        Task {
+            await familyContextStore.pushNotificationReadState(sessionStore: sessionStore)
+        }
+    }
+
+    private func respond(to row: AppNotificationRecord, approve: Bool) {
+        Task {
+            await familyContextStore.respondToPermissionNotification(
+                row,
+                approve: approve,
+                sessionStore: sessionStore
+            )
         }
     }
 }
 
+struct MistiaNotificationBellButton: View {
+    @Environment(SessionStore.self) private var sessionStore
+    @Query private var rows: [AppNotificationRecord]
+
+    let action: () -> Void
+
+    private var unreadCount: Int {
+        MistiaNotificationStore.unreadCount(
+            rows: rows,
+            userID: sessionStore.activeLocalProfileUserID
+        )
+    }
+
+    var body: some View {
+        MistiaHeaderCircleButton(action: action) {
+            ZStack(alignment: .topTrailing) {
+                Image(systemName: "bell")
+                    .font(.system(size: 17, weight: .bold))
+                    .symbolRenderingMode(.monochrome)
+                    .foregroundStyle(.primary)
+
+                if unreadCount > 0 {
+                    Text(badgeText)
+                        .font(.system(size: unreadCount > 99 ? 7 : 8, weight: .heavy, design: .rounded))
+                        .foregroundStyle(.white)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.7)
+                        .padding(.horizontal, unreadCount > 9 ? 3 : 0)
+                        .frame(minWidth: 13, minHeight: 13)
+                        .background(MistiaAccent.expense.color, in: Capsule())
+                        .offset(x: 9, y: -9)
+                        .accessibilityLabel(
+                            mistiaLocalized(
+                                vi: "\(unreadCount) thông báo chưa đọc",
+                                en: "\(unreadCount) unread notifications",
+                                ja: "未読通知 \(unreadCount) 件"
+                            )
+                        )
+                }
+            }
+        }
+    }
+
+    private var badgeText: String {
+        unreadCount > 99 ? "99+" : "\(unreadCount)"
+    }
+}

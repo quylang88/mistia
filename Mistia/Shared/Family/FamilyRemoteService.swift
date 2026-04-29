@@ -41,6 +41,46 @@ protocol FamilyRemoteServicing {
         userIDs: [UUID],
         session: SupabaseAuthSession
     ) async throws -> MistiaRemoteSnapshot
+    func fetchFamilyNotifications(session: SupabaseAuthSession) async throws -> [FamilyNotificationRemoteRecord]
+    func createFamilyPermissionRequest(
+        input: FamilyPermissionRequestInput,
+        session: SupabaseAuthSession
+    ) async throws -> FamilyPermissionRequestRemoteRecord
+    func respondFamilyPermissionRequest(
+        requestID: UUID,
+        approve: Bool,
+        session: SupabaseAuthSession
+    ) async throws -> FamilyPermissionRequestRemoteRecord
+    func markFamilyNotificationsRead(
+        ids: [UUID],
+        session: SupabaseAuthSession
+    ) async throws
+}
+
+extension FamilyRemoteServicing {
+    func fetchFamilyNotifications(session: SupabaseAuthSession) async throws -> [FamilyNotificationRemoteRecord] {
+        []
+    }
+
+    func createFamilyPermissionRequest(
+        input: FamilyPermissionRequestInput,
+        session: SupabaseAuthSession
+    ) async throws -> FamilyPermissionRequestRemoteRecord {
+        throw SupabaseServiceError.serverMessage("Family permission requests are unavailable.")
+    }
+
+    func respondFamilyPermissionRequest(
+        requestID: UUID,
+        approve: Bool,
+        session: SupabaseAuthSession
+    ) async throws -> FamilyPermissionRequestRemoteRecord {
+        throw SupabaseServiceError.serverMessage("Family permission responses are unavailable.")
+    }
+
+    func markFamilyNotificationsRead(
+        ids: [UUID],
+        session: SupabaseAuthSession
+    ) async throws {}
 }
 
 struct FamilyGroupRecord: Codable, Identifiable, Equatable {
@@ -545,6 +585,57 @@ struct FamilyRemoteService: FamilyRemoteServicing {
         )
     }
 
+    func fetchFamilyNotifications(session: SupabaseAuthSession) async throws -> [FamilyNotificationRemoteRecord] {
+        try await fetchRows(
+            path: "family_notifications",
+            filters: [
+                URLQueryItem(name: "select", value: "*"),
+                URLQueryItem(name: "user_id", value: "eq.\(session.user.id.uuidString.lowercased())"),
+                URLQueryItem(name: "order", value: "created_at.desc"),
+                URLQueryItem(name: "limit", value: "100")
+            ],
+            session: session
+        )
+    }
+
+    func createFamilyPermissionRequest(
+        input: FamilyPermissionRequestInput,
+        session: SupabaseAuthSession
+    ) async throws -> FamilyPermissionRequestRemoteRecord {
+        try await callRPC(
+            functionName: "create_family_permission_request",
+            body: CreateFamilyPermissionRequestRPCBody(input: input),
+            session: session
+        )
+    }
+
+    func respondFamilyPermissionRequest(
+        requestID: UUID,
+        approve: Bool,
+        session: SupabaseAuthSession
+    ) async throws -> FamilyPermissionRequestRemoteRecord {
+        try await callRPC(
+            functionName: "respond_family_permission_request",
+            body: RespondFamilyPermissionRequestRPCBody(
+                requestID: requestID,
+                approve: approve
+            ),
+            session: session
+        )
+    }
+
+    func markFamilyNotificationsRead(
+        ids: [UUID],
+        session: SupabaseAuthSession
+    ) async throws {
+        guard !ids.isEmpty else { return }
+        let _: EmptyResponse = try await callRPC(
+            functionName: "mark_family_notifications_read",
+            body: MarkFamilyNotificationsReadRPCBody(notificationIDs: ids),
+            session: session
+        )
+    }
+
     private func fetchCurrentMembership(session: SupabaseAuthSession) async throws -> FamilyMembershipRecord? {
         let rows: [FamilyMembershipRecord] = try await fetchRows(
             path: "family_memberships",
@@ -847,6 +938,21 @@ struct FamilyRemoteService: FamilyRemoteServicing {
         return try await performRequest(request: request)
     }
 
+    private func callRPC<Body: Encodable, Response: Decodable>(
+        functionName: String,
+        body: Body,
+        session: SupabaseAuthSession
+    ) async throws -> Response {
+        let configuration = try configuration()
+        let url = configuration.restBaseURL
+            .appending(path: "rpc")
+            .appending(path: functionName)
+        var request = authorizedRequest(url: url, session: session)
+        request.httpMethod = "POST"
+        request.httpBody = try encoder.encode(body)
+        return try await performRequest(request: request)
+    }
+
     private func fetchFinanceRows<Row: Decodable>(
         path: String,
         userIDs: [UUID],
@@ -1035,5 +1141,56 @@ private struct FamilyWalletAccessGrantRevokePayload: Encodable {
 
     enum CodingKeys: String, CodingKey {
         case revokedAt = "revoked_at"
+    }
+}
+
+private struct CreateFamilyPermissionRequestRPCBody: Encodable {
+    let familyID: UUID
+    let recipientUserID: UUID
+    let resourceType: String
+    let resourceID: UUID
+    let permissionScope: String
+    let title: String
+    let body: String
+    let message: String?
+
+    init(input: FamilyPermissionRequestInput) {
+        familyID = input.familyID
+        recipientUserID = input.recipientUserID
+        resourceType = input.resourceType.rawValue
+        resourceID = input.resourceID
+        permissionScope = input.permissionScope.rawValue
+        title = input.title
+        body = input.body
+        message = input.message
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case familyID = "p_family_id"
+        case recipientUserID = "p_recipient_user_id"
+        case resourceType = "p_resource_type"
+        case resourceID = "p_resource_id"
+        case permissionScope = "p_permission_scope"
+        case title = "p_title"
+        case body = "p_body"
+        case message = "p_message"
+    }
+}
+
+private struct RespondFamilyPermissionRequestRPCBody: Encodable {
+    let requestID: UUID
+    let approve: Bool
+
+    enum CodingKeys: String, CodingKey {
+        case requestID = "p_request_id"
+        case approve = "p_approve"
+    }
+}
+
+private struct MarkFamilyNotificationsReadRPCBody: Encodable {
+    let notificationIDs: [UUID]
+
+    enum CodingKeys: String, CodingKey {
+        case notificationIDs = "p_notification_ids"
     }
 }

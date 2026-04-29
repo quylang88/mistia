@@ -110,6 +110,14 @@ struct ManagementView: View {
         )
     }
 
+    private var walletOwnerMap: [UUID: UUID] {
+        MistiaRecordOwnershipStore.ownerMap(from: ownershipScopes, entity: .wallet)
+    }
+
+    private var shouldRequestWalletEditPermission: Bool {
+        familyContextStore.isViewingMemberContext && !familyContextStore.canEditSelectedSubject
+    }
+
     var body: some View {
         NavigationStack {
             MistiaPinnedTopBarScaffold(
@@ -125,7 +133,6 @@ struct ManagementView: View {
                 FamilyContextChipBar()
                 profileSection
                 walletsSection
-                    .disabled(familyContextStore.isViewingMemberContext && !familyContextStore.canEditSelectedSubject)
                 categoriesSection
                     .disabled(familyContextStore.isViewingMemberContext && !familyContextStore.canEditSelectedSubject)
             }
@@ -303,7 +310,9 @@ struct ManagementView: View {
                         accent: accentPurple,
                         symbols: ["banknote.fill", "wallet.pass.fill", "building.columns.fill", "creditcard.fill"]
                     ) {
-                        walletEditorTarget = ManagementWalletEditorTarget(wallet: nil, defaultKind: .cash)
+                        if !shouldRequestWalletEditPermission {
+                            walletEditorTarget = ManagementWalletEditorTarget(wallet: nil, defaultKind: .cash)
+                        }
                     }
                 } else {
                     VStack(spacing: 0) {
@@ -312,7 +321,11 @@ struct ManagementView: View {
                                 wallet: wallet,
                                 transactions: visiblePostedTransactions
                             ) {
-                                walletEditorTarget = ManagementWalletEditorTarget(wallet: wallet, defaultKind: wallet.kind)
+                                if shouldRequestWalletEditPermission {
+                                    requestWalletEditPermission(wallet)
+                                } else {
+                                    walletEditorTarget = ManagementWalletEditorTarget(wallet: wallet, defaultKind: wallet.kind)
+                                }
                             }
 
                             if index < activeWallets.count - 1 {
@@ -326,17 +339,66 @@ struct ManagementView: View {
                                 .padding(.leading, 52)
                                 .padding(.trailing, 0)
 
-                        ManagementFooterAddButton(
-                            title: mistiaLocalized(vi: "Thêm ví", en: "Add wallet", ja: "ウォレットを追加"),
-                            accent: accentPurple
-                        ) {
-                            walletEditorTarget = ManagementWalletEditorTarget(wallet: nil, defaultKind: .cash)
+                        if shouldRequestWalletEditPermission, let firstWallet = activeWallets.first {
+                            ManagementFooterAddButton(
+                                title: mistiaLocalized(vi: "Yêu cầu quyền chỉnh sửa", en: "Request edit access", ja: "編集権限をリクエスト"),
+                                accent: accentPurple
+                            ) {
+                                requestWalletEditPermission(firstWallet)
+                            }
+                            .padding(.horizontal, 14)
+                            .padding(.vertical, 14)
+                        } else {
+                            ManagementFooterAddButton(
+                                title: mistiaLocalized(vi: "Thêm ví", en: "Add wallet", ja: "ウォレットを追加"),
+                                accent: accentPurple
+                            ) {
+                                walletEditorTarget = ManagementWalletEditorTarget(wallet: nil, defaultKind: .cash)
+                            }
+                            .padding(.horizontal, 14)
+                            .padding(.vertical, 14)
                         }
-                        .padding(.horizontal, 14)
-                        .padding(.vertical, 14)
                     }
                 }
             }
+        }
+    }
+
+    private func walletOwnerUserID(for wallet: LedgerWallet) -> UUID? {
+        walletOwnerMap[wallet.id] ?? sessionStore.activeLocalProfileUserID
+    }
+
+    private func requestWalletEditPermission(_ wallet: LedgerWallet) {
+        guard let ownerUserID = walletOwnerUserID(for: wallet) else { return }
+        let walletID = wallet.id
+        let walletName = wallet.name
+
+        Task { @MainActor in
+            let didSend = await familyContextStore.requestPermission(
+                resourceType: .wallet,
+                resourceID: walletID,
+                ownerUserID: ownerUserID,
+                scope: .edit,
+                resourceName: walletName,
+                sessionStore: sessionStore
+            )
+
+            infoAlert = ManagementInfoAlert(
+                title: didSend
+                    ? mistiaLocalized(vi: "Đã gửi yêu cầu", en: "Request sent", ja: "リクエストを送信しました")
+                    : mistiaLocalized(vi: "Chưa thể gửi", en: "Couldn't send", ja: "送信できませんでした"),
+                message: didSend
+                    ? mistiaLocalized(
+                        vi: "Yêu cầu quyền chỉnh sửa đã được gửi tới chủ ví.",
+                        en: "The edit access request was sent to the wallet owner.",
+                        ja: "編集権限のリクエストをウォレット所有者へ送信しました。"
+                    )
+                    : (familyContextStore.lastErrorMessage ?? mistiaLocalized(
+                        vi: "Không thể gửi yêu cầu lúc này.",
+                        en: "Couldn't send the request right now.",
+                        ja: "現在リクエストを送信できません。"
+                    ))
+            )
         }
     }
 

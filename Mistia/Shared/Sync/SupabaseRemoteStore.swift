@@ -1,5 +1,15 @@
 import Foundation
 
+struct RemoteFamilyActivityNotificationEvent: Equatable {
+    let recipientUserID: UUID
+    let resourceType: MistiaFamilyNotificationResourceType
+    let resourceID: UUID
+    let sourceEventKey: String
+    let title: String
+    let body: String
+    let metadata: [String: String]
+}
+
 protocol MistiaRemoteStore {
     func fetchSnapshot(session: SupabaseAuthSession) async throws -> MistiaRemoteSnapshot
     func fetchRecord(
@@ -33,6 +43,10 @@ protocol MistiaRemoteStore {
         subjectUserID: UUID,
         session: SupabaseAuthSession
     ) async throws -> MistiaSyncUploadRecord
+    func createFamilyActivityNotification(
+        _ event: RemoteFamilyActivityNotificationEvent,
+        session: SupabaseAuthSession
+    ) async throws
 }
 
 struct SupabaseRemoteStore: MistiaRemoteStore {
@@ -270,6 +284,17 @@ struct SupabaseRemoteStore: MistiaRemoteStore {
         }
     }
 
+    func createFamilyActivityNotification(
+        _ event: RemoteFamilyActivityNotificationEvent,
+        session: SupabaseAuthSession
+    ) async throws {
+        let _: UUID = try await callRPC(
+            functionName: "create_family_activity_notification",
+            body: CreateFamilyActivityNotificationRPCBody(event: event),
+            session: session
+        )
+    }
+
     private func fetchRows<Row: MistiaRemoteRow>(
         entity: MistiaSyncEntity,
         session: SupabaseAuthSession
@@ -435,6 +460,21 @@ struct SupabaseRemoteStore: MistiaRemoteStore {
         return upserted
     }
 
+    private func callRPC<Body: Encodable, Response: Decodable>(
+        functionName: String,
+        body: Body,
+        session: SupabaseAuthSession
+    ) async throws -> Response {
+        let configuration = try configuration()
+        let url = configuration.restBaseURL
+            .appending(path: "rpc")
+            .appending(path: functionName)
+        var request = authorizedRequest(url: url, session: session)
+        request.httpMethod = "POST"
+        request.httpBody = try encoder.encode(body)
+        return try await performRequest(request: request)
+    }
+
     private func configuration() throws -> MistiaSyncConfiguration {
         guard let configuration = configurationProvider() else {
             throw SupabaseServiceError.configurationMissing
@@ -536,5 +576,35 @@ private struct TransactionDeletePatch: Encodable {
         case syncVersion = "sync_version"
         case lastModifiedByDeviceID = "last_modified_by_device_id"
         case lastModifiedByUserID = "last_modified_by_user_id"
+    }
+}
+
+private struct CreateFamilyActivityNotificationRPCBody: Encodable {
+    let recipientUserID: UUID
+    let resourceType: String
+    let resourceID: UUID
+    let sourceEventKey: String
+    let title: String
+    let body: String
+    let metadata: [String: String]
+
+    init(event: RemoteFamilyActivityNotificationEvent) {
+        recipientUserID = event.recipientUserID
+        resourceType = event.resourceType.rawValue
+        resourceID = event.resourceID
+        sourceEventKey = event.sourceEventKey
+        title = event.title
+        body = event.body
+        metadata = event.metadata
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case recipientUserID = "p_recipient_user_id"
+        case resourceType = "p_resource_type"
+        case resourceID = "p_resource_id"
+        case sourceEventKey = "p_source_event_key"
+        case title = "p_title"
+        case body = "p_body"
+        case metadata = "p_metadata"
     }
 }

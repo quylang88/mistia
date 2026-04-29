@@ -186,6 +186,30 @@ final class FamilyContextStore {
                 sessionStore: sessionStore,
                 session: session
             )
+            try await refreshFamilyNotifications(session: session)
+            try await pushPendingNotificationReadState(session: session)
+        } catch {
+            lastErrorMessage = visibleErrorMessage(for: error, sessionStore: sessionStore)
+        }
+    }
+
+    func refreshNotifications(sessionStore: SessionStore) async {
+        guard let session = await prepareRemoteSession(using: sessionStore) else { return }
+
+        do {
+            try await refreshFamilyNotifications(session: session)
+            try await pushPendingNotificationReadState(session: session)
+            lastErrorMessage = nil
+        } catch {
+            lastErrorMessage = visibleErrorMessage(for: error, sessionStore: sessionStore)
+        }
+    }
+
+    func pushNotificationReadState(sessionStore: SessionStore) async {
+        guard let session = await prepareRemoteSession(using: sessionStore) else { return }
+
+        do {
+            try await pushPendingNotificationReadState(session: session)
         } catch {
             lastErrorMessage = visibleErrorMessage(for: error, sessionStore: sessionStore)
         }
@@ -342,6 +366,79 @@ final class FamilyContextStore {
                     session: session
                 )
             }
+            await refresh(sessionStore: sessionStore)
+        } catch {
+            lastErrorMessage = visibleErrorMessage(for: error, sessionStore: sessionStore)
+        }
+    }
+
+    @discardableResult
+    func requestPermission(
+        resourceType: MistiaFamilyNotificationResourceType,
+        resourceID: UUID,
+        ownerUserID: UUID,
+        scope: MistiaFamilyPermissionScope,
+        resourceName: String,
+        sessionStore: SessionStore
+    ) async -> Bool {
+        guard let familyID = family?.id else { return false }
+        guard let session = await prepareRemoteSession(using: sessionStore) else { return false }
+
+        let requesterName = sessionStore.summary?.displayName
+            ?? displayName(for: session.user.id)
+            ?? mistiaLocalized(vi: "Một thành viên", en: "A family member", ja: "家族メンバー")
+
+        let input = FamilyPermissionRequestInput(
+            familyID: familyID,
+            recipientUserID: ownerUserID,
+            resourceType: resourceType,
+            resourceID: resourceID,
+            permissionScope: scope,
+            title: permissionRequestTitle(
+                requesterName: requesterName,
+                scope: scope,
+                resourceName: resourceName
+            ),
+            body: permissionRequestBody(
+                requesterName: requesterName,
+                scope: scope,
+                resourceName: resourceName
+            ),
+            message: nil
+        )
+
+        do {
+            _ = try await service.createFamilyPermissionRequest(input: input, session: session)
+            lastErrorMessage = nil
+            return true
+        } catch {
+            lastErrorMessage = visibleErrorMessage(for: error, sessionStore: sessionStore)
+            return false
+        }
+    }
+
+    func respondToPermissionNotification(
+        _ notification: AppNotificationRecord,
+        approve: Bool,
+        sessionStore: SessionStore
+    ) async {
+        guard let requestID = notification.permissionRequestID else { return }
+        guard let session = await prepareRemoteSession(using: sessionStore) else { return }
+
+        do {
+            _ = try await service.respondFamilyPermissionRequest(
+                requestID: requestID,
+                approve: approve,
+                session: session
+            )
+            notification.actionState = approve ? .approved : .rejected
+            notification.isRead = true
+            notification.readAt = notification.readAt ?? .now
+            notification.updatedAt = .now
+            if notification.source == .family {
+                notification.needsReadSync = true
+            }
+            try? modelContainer.mainContext.save()
             await refresh(sessionStore: sessionStore)
         } catch {
             lastErrorMessage = visibleErrorMessage(for: error, sessionStore: sessionStore)
@@ -547,6 +644,27 @@ final class FamilyContextStore {
         )
     }
 
+    private func refreshFamilyNotifications(session: SupabaseAuthSession) async throws {
+        let remoteRows = try await service.fetchFamilyNotifications(session: session)
+        try MistiaNotificationStore.applyRemoteNotifications(
+            remoteRows,
+            currentUserID: session.user.id,
+            in: modelContainer.mainContext
+        )
+    }
+
+    private func pushPendingNotificationReadState(session: SupabaseAuthSession) async throws {
+        let context = modelContainer.mainContext
+        let ids = try MistiaNotificationStore.pendingReadSyncIDs(
+            for: session.user.id,
+            in: context
+        )
+        guard !ids.isEmpty else { return }
+
+        try await service.markFamilyNotificationsRead(ids: ids, session: session)
+        try MistiaNotificationStore.clearReadSyncFlags(ids: ids, in: context)
+    }
+
     private func prepareRemoteSession(
         using sessionStore: SessionStore
     ) async -> SupabaseAuthSession? {
@@ -569,5 +687,59 @@ final class FamilyContextStore {
         }
 
         return error.localizedDescription
+    }
+
+    private func permissionRequestTitle(
+        requesterName: String,
+        scope: MistiaFamilyPermissionScope,
+        resourceName: String
+    ) -> String {
+        switch scope {
+        case .use:
+            return mistiaLocalized(
+                vi: "\(requesterName) xin quyền sử dụng",
+                en: "\(requesterName) requests use access",
+                ja: "\(requesterName) が使用権限をリクエスト"
+            )
+        case .edit:
+            return mistiaLocalized(
+                vi: "\(requesterName) xin quyền chỉnh sửa",
+                en: "\(requesterName) requests edit access",
+                ja: "\(requesterName) が編集権限をリクエスト"
+            )
+        case .view:
+            return mistiaLocalized(
+                vi: "\(requesterName) xin quyền xem",
+                en: "\(requesterName) requests view access",
+                ja: "\(requesterName) が閲覧権限をリクエスト"
+            )
+        }
+    }
+
+    private func permissionRequestBody(
+        requesterName: String,
+        scope: MistiaFamilyPermissionScope,
+        resourceName: String
+    ) -> String {
+        switch scope {
+        case .use:
+            return mistiaLocalized(
+                vi: "\(requesterName) muốn sử dụng \(resourceName) của bạn.",
+                en: "\(requesterName) wants to use your \(resourceName).",
+                ja: "\(requesterName) があなたの\(resourceName)を使用したいとリクエストしています。"
+            )
+        case .edit:
+            return mistiaLocalized(
+                vi: "\(requesterName) muốn chỉnh sửa \(resourceName) của bạn.",
+                en: "\(requesterName) wants to edit your \(resourceName).",
+                ja: "\(requesterName) があなたの\(resourceName)を編集したいとリクエストしています。"
+            )
+        case .view:
+            return mistiaLocalized(
+                vi: "\(requesterName) muốn xem \(resourceName) của bạn.",
+                en: "\(requesterName) wants to view your \(resourceName).",
+                ja: "\(requesterName) があなたの\(resourceName)を見たいとリクエストしています。"
+            )
+        }
     }
 }

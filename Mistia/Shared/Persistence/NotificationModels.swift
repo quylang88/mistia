@@ -5,12 +5,46 @@ enum MistiaAppNotificationSource: String, Codable, CaseIterable {
     case localReminder
     case system
     case remote
+    case family
 }
 
 enum MistiaAppNotificationKind: String, Codable, CaseIterable {
     case dueSoon
     case lowWallet
     case familyPlaceholder
+    case permissionRequestReceived
+    case permissionRequestApproved
+    case permissionRequestRejected
+    case permissionRevoked
+    case permissionPolicyChanged
+    case familyActivity
+    case accessIssue
+}
+
+enum MistiaFamilyNotificationResourceType: String, Codable, CaseIterable {
+    case wallet
+    case category
+    case goal
+    case card
+    case debt
+    case transaction
+    case permission
+}
+
+enum MistiaFamilyPermissionScope: String, Codable, CaseIterable {
+    case use
+    case edit
+    case view
+}
+
+enum MistiaNotificationActionState: String, Codable, CaseIterable {
+    case informational
+    case pending
+    case approved
+    case rejected
+    case revoked
+    case canceled
+    case resolved
 }
 
 @Model
@@ -25,6 +59,18 @@ final class AppNotificationRecord {
     var sourceRawValue: String
     var isRead: Bool
     var actionRoute: String?
+    var recipientUserID: UUID?
+    var actorUserID: UUID?
+    var familyID: UUID?
+    var resourceTypeRawValue: String?
+    var resourceID: UUID?
+    var permissionScopeRawValue: String?
+    var permissionRequestID: UUID?
+    var actionStateRawValue: String?
+    var readAt: Date?
+    var metadataJSON: String?
+    var remoteVersion: Int64
+    var needsReadSync: Bool
 
     init(
         id: UUID = UUID(),
@@ -36,7 +82,19 @@ final class AppNotificationRecord {
         kind: MistiaAppNotificationKind,
         source: MistiaAppNotificationSource,
         isRead: Bool = false,
-        actionRoute: String? = nil
+        actionRoute: String? = nil,
+        recipientUserID: UUID? = nil,
+        actorUserID: UUID? = nil,
+        familyID: UUID? = nil,
+        resourceType: MistiaFamilyNotificationResourceType? = nil,
+        resourceID: UUID? = nil,
+        permissionScope: MistiaFamilyPermissionScope? = nil,
+        permissionRequestID: UUID? = nil,
+        actionState: MistiaNotificationActionState? = nil,
+        readAt: Date? = nil,
+        metadataJSON: String? = nil,
+        remoteVersion: Int64 = 0,
+        needsReadSync: Bool = false
     ) {
         self.id = id
         self.key = key
@@ -48,6 +106,18 @@ final class AppNotificationRecord {
         self.sourceRawValue = source.rawValue
         self.isRead = isRead
         self.actionRoute = actionRoute
+        self.recipientUserID = recipientUserID
+        self.actorUserID = actorUserID
+        self.familyID = familyID
+        self.resourceTypeRawValue = resourceType?.rawValue
+        self.resourceID = resourceID
+        self.permissionScopeRawValue = permissionScope?.rawValue
+        self.permissionRequestID = permissionRequestID
+        self.actionStateRawValue = actionState?.rawValue
+        self.readAt = readAt
+        self.metadataJSON = metadataJSON
+        self.remoteVersion = remoteVersion
+        self.needsReadSync = needsReadSync
     }
 
     var kind: MistiaAppNotificationKind {
@@ -59,5 +129,297 @@ final class AppNotificationRecord {
         get { MistiaAppNotificationSource(rawValue: sourceRawValue) ?? .system }
         set { sourceRawValue = newValue.rawValue }
     }
+
+    var resourceType: MistiaFamilyNotificationResourceType? {
+        get { resourceTypeRawValue.flatMap(MistiaFamilyNotificationResourceType.init(rawValue:)) }
+        set { resourceTypeRawValue = newValue?.rawValue }
+    }
+
+    var permissionScope: MistiaFamilyPermissionScope? {
+        get { permissionScopeRawValue.flatMap(MistiaFamilyPermissionScope.init(rawValue:)) }
+        set { permissionScopeRawValue = newValue?.rawValue }
+    }
+
+    var actionState: MistiaNotificationActionState {
+        get { actionStateRawValue.flatMap(MistiaNotificationActionState.init(rawValue:)) ?? .informational }
+        set { actionStateRawValue = newValue.rawValue }
+    }
 }
 
+struct FamilyNotificationRemoteRecord: Codable, Identifiable, Equatable {
+    let id: UUID
+    let sourceEventKey: String
+    let familyID: UUID
+    let userID: UUID
+    let actorUserID: UUID?
+    let kindRawValue: String
+    let resourceTypeRawValue: String?
+    let resourceID: UUID?
+    let permissionScopeRawValue: String?
+    let permissionRequestID: UUID?
+    let actionStateRawValue: String
+    let title: String
+    let body: String
+    let metadata: [String: String]?
+    let readAt: Date?
+    let createdAt: Date
+    let updatedAt: Date
+    let syncVersion: Int64
+
+    enum CodingKeys: String, CodingKey {
+        case id
+        case sourceEventKey = "source_event_key"
+        case familyID = "family_id"
+        case userID = "user_id"
+        case actorUserID = "actor_user_id"
+        case kindRawValue = "kind"
+        case resourceTypeRawValue = "resource_type"
+        case resourceID = "resource_id"
+        case permissionScopeRawValue = "permission_scope"
+        case permissionRequestID = "permission_request_id"
+        case actionStateRawValue = "action_state"
+        case title
+        case body
+        case metadata
+        case readAt = "read_at"
+        case createdAt = "created_at"
+        case updatedAt = "updated_at"
+        case syncVersion = "sync_version"
+    }
+
+    var kind: MistiaAppNotificationKind {
+        switch kindRawValue {
+        case "permission_request_received":
+            return .permissionRequestReceived
+        case "permission_request_approved":
+            return .permissionRequestApproved
+        case "permission_request_rejected":
+            return .permissionRequestRejected
+        case "permission_revoked":
+            return .permissionRevoked
+        case "permission_policy_changed":
+            return .permissionPolicyChanged
+        case "family_activity":
+            return .familyActivity
+        case "access_issue":
+            return .accessIssue
+        default:
+            return .familyPlaceholder
+        }
+    }
+
+    var resourceType: MistiaFamilyNotificationResourceType? {
+        resourceTypeRawValue.flatMap(MistiaFamilyNotificationResourceType.init(rawValue:))
+    }
+
+    var permissionScope: MistiaFamilyPermissionScope? {
+        permissionScopeRawValue.flatMap(MistiaFamilyPermissionScope.init(rawValue:))
+    }
+
+    var actionState: MistiaNotificationActionState {
+        MistiaNotificationActionState(rawValue: actionStateRawValue) ?? .informational
+    }
+}
+
+struct FamilyPermissionRequestRemoteRecord: Codable, Identifiable, Equatable {
+    let id: UUID
+    let familyID: UUID
+    let requesterUserID: UUID
+    let recipientUserID: UUID
+    let resourceTypeRawValue: String
+    let resourceID: UUID
+    let permissionScopeRawValue: String
+    let statusRawValue: String
+    let message: String?
+    let respondedByUserID: UUID?
+    let respondedAt: Date?
+    let createdAt: Date
+    let updatedAt: Date
+
+    enum CodingKeys: String, CodingKey {
+        case id
+        case familyID = "family_id"
+        case requesterUserID = "requester_user_id"
+        case recipientUserID = "recipient_user_id"
+        case resourceTypeRawValue = "resource_type"
+        case resourceID = "resource_id"
+        case permissionScopeRawValue = "permission_scope"
+        case statusRawValue = "status"
+        case message
+        case respondedByUserID = "responded_by_user_id"
+        case respondedAt = "responded_at"
+        case createdAt = "created_at"
+        case updatedAt = "updated_at"
+    }
+}
+
+struct FamilyPermissionRequestInput: Encodable, Equatable {
+    let familyID: UUID
+    let recipientUserID: UUID
+    let resourceType: MistiaFamilyNotificationResourceType
+    let resourceID: UUID
+    let permissionScope: MistiaFamilyPermissionScope
+    let title: String
+    let body: String
+    let message: String?
+}
+
+enum MistiaNotificationStore {
+    static func applyRemoteNotifications(
+        _ remoteRows: [FamilyNotificationRemoteRecord],
+        currentUserID: UUID,
+        in context: ModelContext
+    ) throws {
+        let existingRows = try context.fetch(FetchDescriptor<AppNotificationRecord>())
+        var existingByID = Dictionary(uniqueKeysWithValues: existingRows.map { ($0.id, $0) })
+        var existingByKey = Dictionary(uniqueKeysWithValues: existingRows.map { ($0.key, $0) })
+
+        for remote in remoteRows where remote.userID == currentUserID {
+            let row = existingByID[remote.id] ?? existingByKey[remote.sourceEventKey] ?? AppNotificationRecord(
+                id: remote.id,
+                key: remote.sourceEventKey,
+                createdAt: remote.createdAt,
+                updatedAt: remote.updatedAt,
+                title: remote.title,
+                body: remote.body,
+                kind: remote.kind,
+                source: .family,
+                isRead: remote.readAt != nil,
+                recipientUserID: remote.userID
+            )
+
+            if row.modelContext == nil {
+                context.insert(row)
+            }
+
+            let localReadAt = row.readAt
+            let resolvedReadAt = latestReadAt(localReadAt, remote.readAt)
+
+            row.id = remote.id
+            row.key = remote.sourceEventKey
+            row.createdAt = remote.createdAt
+            row.updatedAt = max(remote.updatedAt, row.updatedAt)
+            row.title = remote.title
+            row.body = remote.body
+            row.kind = remote.kind
+            row.source = .family
+            row.isRead = resolvedReadAt != nil
+            row.actionRoute = nil
+            row.recipientUserID = remote.userID
+            row.actorUserID = remote.actorUserID
+            row.familyID = remote.familyID
+            row.resourceType = remote.resourceType
+            row.resourceID = remote.resourceID
+            row.permissionScope = remote.permissionScope
+            row.permissionRequestID = remote.permissionRequestID
+            row.actionState = remote.actionState
+            row.readAt = resolvedReadAt
+            row.metadataJSON = metadataJSONString(remote.metadata)
+            row.remoteVersion = remote.syncVersion
+            row.needsReadSync = row.needsReadSync || (localReadAt != nil && remote.readAt == nil)
+
+            existingByID[remote.id] = row
+            existingByKey[remote.sourceEventKey] = row
+        }
+
+        try context.save()
+    }
+
+    static func markAllAsRead(
+        for userID: UUID?,
+        in context: ModelContext
+    ) throws -> [UUID] {
+        let rows = try context.fetch(FetchDescriptor<AppNotificationRecord>())
+        return try markAsRead(
+            rows.filter { isVisible($0, to: userID) && !$0.isRead },
+            in: context
+        )
+    }
+
+    static func markAsRead(
+        _ rows: [AppNotificationRecord],
+        in context: ModelContext
+    ) throws -> [UUID] {
+        let now = Date()
+        var remoteIDs: [UUID] = []
+
+        for row in rows where !row.isRead || row.readAt == nil {
+            row.isRead = true
+            row.readAt = row.readAt ?? now
+            row.updatedAt = now
+
+            if row.source == .family {
+                row.needsReadSync = true
+                remoteIDs.append(row.id)
+            }
+        }
+
+        try context.save()
+        return remoteIDs
+    }
+
+    static func pendingReadSyncIDs(
+        for userID: UUID?,
+        in context: ModelContext
+    ) throws -> [UUID] {
+        try context.fetch(FetchDescriptor<AppNotificationRecord>())
+            .filter { isVisible($0, to: userID) && $0.source == .family && $0.needsReadSync && $0.readAt != nil }
+            .map(\.id)
+    }
+
+    static func clearReadSyncFlags(
+        ids: [UUID],
+        in context: ModelContext
+    ) throws {
+        guard !ids.isEmpty else { return }
+        let idSet = Set(ids)
+        let rows = try context.fetch(FetchDescriptor<AppNotificationRecord>())
+        for row in rows where idSet.contains(row.id) {
+            row.needsReadSync = false
+        }
+        try context.save()
+    }
+
+    static func unreadCount(
+        rows: [AppNotificationRecord],
+        userID: UUID?
+    ) -> Int {
+        rows.filter { isVisible($0, to: userID) && !$0.isRead }.count
+    }
+
+    static func visibleRows(
+        _ rows: [AppNotificationRecord],
+        userID: UUID?
+    ) -> [AppNotificationRecord] {
+        rows.filter { isVisible($0, to: userID) }
+    }
+
+    static func isVisible(
+        _ row: AppNotificationRecord,
+        to userID: UUID?
+    ) -> Bool {
+        guard let recipientUserID = row.recipientUserID else {
+            return true
+        }
+        return recipientUserID == userID
+    }
+
+    private static func latestReadAt(_ lhs: Date?, _ rhs: Date?) -> Date? {
+        switch (lhs, rhs) {
+        case (.none, .none):
+            return nil
+        case (.some(let lhs), .none):
+            return lhs
+        case (.none, .some(let rhs)):
+            return rhs
+        case (.some(let lhs), .some(let rhs)):
+            return max(lhs, rhs)
+        }
+    }
+
+    private static func metadataJSONString(_ metadata: [String: String]?) -> String? {
+        guard let metadata, !metadata.isEmpty else { return nil }
+        let encoder = JSONEncoder.mistiaSyncEncoder
+        return try? String(data: encoder.encode(metadata), encoding: .utf8)
+    }
+}

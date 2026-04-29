@@ -44,6 +44,12 @@ enum MistiaSyncResult {
     }
 }
 
+private enum FamilyActivityNotificationAction: String {
+    case created
+    case updated
+    case deleted
+}
+
 @MainActor
 final class SyncCoordinator {
     private let modelContainer: ModelContainer
@@ -377,6 +383,12 @@ final class SyncCoordinator {
                 session: session
             )
             try MistiaSyncLocalStore.applyRemoteRecord(created, in: modelContainer)
+            await createFamilyActivityNotificationIfNeeded(
+                for: created,
+                subjectUserID: mutation.subjectUserID,
+                action: .created,
+                session: session
+            )
             outbox.remove(mutation)
             return true
         }
@@ -431,6 +443,12 @@ final class SyncCoordinator {
             session: session
         ) {
             try MistiaSyncLocalStore.applyRemoteRecord(updated, in: modelContainer)
+            await createFamilyActivityNotificationIfNeeded(
+                for: updated,
+                subjectUserID: mutation.subjectUserID,
+                action: .updated,
+                session: session
+            )
             outbox.remove(mutation)
             return true
         }
@@ -513,6 +531,12 @@ final class SyncCoordinator {
             session: session
         ) {
             try MistiaSyncLocalStore.applyRemoteRecord(deletedRecord, in: modelContainer)
+            await createFamilyActivityNotificationIfNeeded(
+                for: deletedRecord,
+                subjectUserID: mutation.subjectUserID,
+                action: .deleted,
+                session: session
+            )
             outbox.remove(mutation)
             return true
         }
@@ -795,7 +819,189 @@ final class SyncCoordinator {
             session: session
         )
         try MistiaSyncLocalStore.applyRemoteRecord(pushedRecord, in: modelContainer)
+        await createFamilyActivityNotificationIfNeeded(
+            for: pushedRecord,
+            subjectUserID: subjectUserID,
+            action: pushedRecord.deletedAt == nil ? .updated : .deleted,
+            session: session
+        )
         return pushedRecord
+    }
+
+    private func createFamilyActivityNotificationIfNeeded(
+        for record: MistiaSyncUploadRecord,
+        subjectUserID: UUID,
+        action: FamilyActivityNotificationAction,
+        session: SupabaseAuthSession
+    ) async {
+        guard session.user.id != subjectUserID else { return }
+
+        guard let resourceType = familyNotificationResourceType(for: record.entity) else {
+            return
+        }
+
+        let actorName = familyActivityActorName(session: session)
+        let event = RemoteFamilyActivityNotificationEvent(
+            recipientUserID: subjectUserID,
+            resourceType: resourceType,
+            resourceID: record.id,
+            sourceEventKey: familyActivitySourceEventKey(
+                record: record,
+                action: action,
+                actorUserID: session.user.id
+            ),
+            title: familyActivityTitle(action: action, resourceType: resourceType),
+            body: familyActivityBody(
+                record: record,
+                action: action,
+                resourceType: resourceType,
+                actorName: actorName
+            ),
+            metadata: familyActivityMetadata(record: record, action: action, actorName: actorName)
+        )
+
+        try? await remoteStore.createFamilyActivityNotification(event, session: session)
+    }
+
+    private func familyActivityActorName(session: SupabaseAuthSession) -> String {
+        let candidates = [
+            session.user.userMetadata?.displayName,
+            session.user.userMetadata?.fullName,
+            session.user.userMetadata?.name,
+            session.user.email
+        ]
+
+        return candidates
+            .compactMap { $0?.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .first { !$0.isEmpty }
+            ?? mistiaLocalized(vi: "Một thành viên", en: "A family member", ja: "家族メンバー")
+    }
+
+    private func familyNotificationResourceType(
+        for entity: MistiaSyncEntity
+    ) -> MistiaFamilyNotificationResourceType? {
+        switch entity {
+        case .wallet:
+            return .wallet
+        case .transaction:
+            return .transaction
+        default:
+            return nil
+        }
+    }
+
+    private func familyActivitySourceEventKey(
+        record: MistiaSyncUploadRecord,
+        action: FamilyActivityNotificationAction,
+        actorUserID: UUID
+    ) -> String {
+        [
+            "family-activity",
+            record.entity.rawValue,
+            record.id.uuidString.lowercased(),
+            action.rawValue,
+            "\(record.syncVersion)",
+            actorUserID.uuidString.lowercased()
+        ].joined(separator: ":")
+    }
+
+    private func familyActivityTitle(
+        action: FamilyActivityNotificationAction,
+        resourceType: MistiaFamilyNotificationResourceType
+    ) -> String {
+        switch (resourceType, action) {
+        case (.transaction, .created):
+            return mistiaLocalized(vi: "Giao dịch mới", en: "New transaction", ja: "新しい取引")
+        case (.transaction, .updated):
+            return mistiaLocalized(vi: "Giao dịch đã cập nhật", en: "Transaction updated", ja: "取引が更新されました")
+        case (.transaction, .deleted):
+            return mistiaLocalized(vi: "Giao dịch đã xóa", en: "Transaction deleted", ja: "取引が削除されました")
+        case (.wallet, .updated), (.wallet, .created):
+            return mistiaLocalized(vi: "Ví đã cập nhật", en: "Wallet updated", ja: "ウォレットが更新されました")
+        case (.wallet, .deleted):
+            return mistiaLocalized(vi: "Ví đã xóa", en: "Wallet deleted", ja: "ウォレットが削除されました")
+        default:
+            return mistiaLocalized(vi: "Hoạt động gia đình", en: "Family activity", ja: "家族のアクティビティ")
+        }
+    }
+
+    private func familyActivityBody(
+        record: MistiaSyncUploadRecord,
+        action: FamilyActivityNotificationAction,
+        resourceType: MistiaFamilyNotificationResourceType,
+        actorName: String
+    ) -> String {
+        switch (record, action) {
+        case (.transaction(let row), .created):
+            let label = row.title.isEmpty ? mistiaLocalized(vi: "một giao dịch", en: "a transaction", ja: "取引") : row.title
+            return mistiaLocalized(
+                vi: "\(actorName) vừa tạo \(label) trên ví của bạn.",
+                en: "\(actorName) created \(label) on your wallet.",
+                ja: "\(actorName)があなたのウォレットで\(label)を作成しました。"
+            )
+        case (.transaction(let row), .updated):
+            let label = row.title.isEmpty ? mistiaLocalized(vi: "một giao dịch", en: "a transaction", ja: "取引") : row.title
+            return mistiaLocalized(
+                vi: "\(actorName) vừa chỉnh sửa \(label) trên ví của bạn.",
+                en: "\(actorName) edited \(label) on your wallet.",
+                ja: "\(actorName)があなたのウォレットの\(label)を編集しました。"
+            )
+        case (.transaction(let row), .deleted):
+            let label = row.title.isEmpty ? mistiaLocalized(vi: "một giao dịch", en: "a transaction", ja: "取引") : row.title
+            return mistiaLocalized(
+                vi: "\(actorName) vừa xóa \(label) trên ví của bạn.",
+                en: "\(actorName) deleted \(label) on your wallet.",
+                ja: "\(actorName)があなたのウォレットの\(label)を削除しました。"
+            )
+        case (.wallet(let row), _):
+            return mistiaLocalized(
+                vi: "\(actorName) vừa cập nhật ví \(row.name) của bạn.",
+                en: "\(actorName) updated your \(row.name) wallet.",
+                ja: "\(actorName)があなたの\(row.name)ウォレットを更新しました。"
+            )
+        default:
+            switch resourceType {
+            case .transaction:
+                return mistiaLocalized(
+                    vi: "\(actorName) vừa thao tác trên giao dịch của bạn.",
+                    en: "\(actorName) changed one of your transactions.",
+                    ja: "\(actorName)があなたの取引を変更しました。"
+                )
+            default:
+                return mistiaLocalized(
+                    vi: "\(actorName) vừa thao tác trên dữ liệu của bạn.",
+                    en: "\(actorName) changed your data.",
+                    ja: "\(actorName)があなたのデータを変更しました。"
+                )
+            }
+        }
+    }
+
+    private func familyActivityMetadata(
+        record: MistiaSyncUploadRecord,
+        action: FamilyActivityNotificationAction,
+        actorName: String
+    ) -> [String: String] {
+        var metadata: [String: String] = [
+            "action": action.rawValue,
+            "entity": record.entity.rawValue,
+            "record_id": record.id.uuidString.lowercased(),
+            "actor_name": actorName
+        ]
+
+        switch record {
+        case .transaction(let row):
+            metadata["amount_minor"] = "\(row.amountMinor)"
+            metadata["transaction_title"] = row.title
+            metadata["source_wallet_id"] = row.sourceWalletID?.uuidString.lowercased()
+            metadata["destination_wallet_id"] = row.destinationWalletID?.uuidString.lowercased()
+        case .wallet(let row):
+            metadata["wallet_name"] = row.name
+        default:
+            break
+        }
+
+        return metadata.filter { !$0.value.isEmpty }
     }
 
     private func preferredAuthority(
