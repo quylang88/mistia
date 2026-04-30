@@ -190,6 +190,190 @@ final class OverviewLogicTests: XCTestCase {
         )
     }
 
+    func testCategorySpendingMonthGroupsExpenseByParentBranch() {
+        let foodParent = UUID()
+        let healthParent = UUID()
+        let grocery = UUID()
+        let dineOut = UUID()
+        let medicine = UUID()
+
+        let page = OverviewLogic.categorySpendingMonth(
+            from: [
+                makeOverviewExpense(
+                    amountMinor: 5_000,
+                    occurredAt: makeDate(year: 2026, month: 4, day: 2),
+                    categoryID: grocery,
+                    categoryName: "Đi chợ",
+                    categoryParentID: foodParent,
+                    categoryParentName: "Sinh hoạt",
+                    categoryParentColorHex: "#FF8A4C"
+                ),
+                makeOverviewExpense(
+                    amountMinor: 3_000,
+                    occurredAt: makeDate(year: 2026, month: 4, day: 3),
+                    categoryID: dineOut,
+                    categoryName: "Ăn ngoài",
+                    categoryParentID: foodParent,
+                    categoryParentName: "Sinh hoạt",
+                    categoryParentColorHex: "#FF8A4C"
+                ),
+                makeOverviewExpense(
+                    amountMinor: 2_000,
+                    occurredAt: makeDate(year: 2026, month: 4, day: 4),
+                    categoryID: medicine,
+                    categoryName: "Thuốc",
+                    categoryParentID: healthParent,
+                    categoryParentName: "Sức khỏe",
+                    categoryParentColorHex: "#F45C7E"
+                ),
+                makeOverviewTransaction(
+                    primaryKind: .income,
+                    title: "Ignored income",
+                    amountMinor: 9_000,
+                    occurredAt: makeDate(year: 2026, month: 4, day: 5)
+                ),
+                makeOverviewExpense(
+                    amountMinor: 7_000,
+                    occurredAt: makeDate(year: 2026, month: 4, day: 6),
+                    categoryID: UUID(),
+                    categoryName: "Archived",
+                    isArchived: true
+                )
+            ],
+            selectedMonth: makeDate(year: 2026, month: 4, day: 15),
+            currencyCode: "JPY",
+            calendar: calendar
+        )
+
+        XCTAssertEqual(page.totalExpenseMinor, 10_000)
+        XCTAssertEqual(page.slices.map(\.name), ["Sinh hoạt", "Sức khỏe"])
+        XCTAssertEqual(page.slices.map(\.amountMinor), [8_000, 2_000])
+        XCTAssertEqual(page.slices[0].colorHex, "#FF8A4C")
+        XCTAssertEqual(page.slices[0].childSlices.map(\.name), ["Đi chợ", "Ăn ngoài"])
+        XCTAssertEqual(page.slices[0].childSlices.map(\.amountMinor), [5_000, 3_000])
+    }
+
+    func testCategorySpendingDrilldownIncludesChildAndDirectParentTransactions() {
+        let foodParent = UUID()
+        let grocery = UUID()
+        let dineOut = UUID()
+
+        let page = OverviewLogic.categorySpendingMonth(
+            from: [
+                makeOverviewExpense(
+                    amountMinor: 5_000,
+                    occurredAt: makeDate(year: 2026, month: 4, day: 2),
+                    categoryID: grocery,
+                    categoryName: "Đi chợ",
+                    categoryParentID: foodParent,
+                    categoryParentName: "Sinh hoạt"
+                ),
+                makeOverviewExpense(
+                    amountMinor: 3_000,
+                    occurredAt: makeDate(year: 2026, month: 4, day: 3),
+                    categoryID: dineOut,
+                    categoryName: "Ăn ngoài",
+                    categoryParentID: foodParent,
+                    categoryParentName: "Sinh hoạt"
+                ),
+                makeOverviewExpense(
+                    amountMinor: 1_000,
+                    occurredAt: makeDate(year: 2026, month: 4, day: 4),
+                    categoryID: foodParent,
+                    categoryName: "Sinh hoạt"
+                )
+            ],
+            selectedMonth: makeDate(year: 2026, month: 4, day: 15),
+            currencyCode: "JPY",
+            calendar: calendar
+        )
+
+        let drilldown = page.drilldownSlices(for: foodParent)
+
+        XCTAssertEqual(page.slices.first?.amountMinor, 9_000)
+        XCTAssertEqual(drilldown.map(\.name), ["Đi chợ", "Ăn ngoài", "Sinh hoạt"])
+        XCTAssertEqual(drilldown.map(\.amountMinor), [5_000, 3_000, 1_000])
+    }
+
+    func testCategorySpendingMonthKeepsUncategorizedExpensesVisible() throws {
+        let page = OverviewLogic.categorySpendingMonth(
+            from: [
+                makeOverviewExpense(
+                    amountMinor: 4_000,
+                    occurredAt: makeDate(year: 2026, month: 4, day: 9)
+                )
+            ],
+            selectedMonth: makeDate(year: 2026, month: 4, day: 15),
+            currencyCode: "JPY",
+            calendar: calendar
+        )
+
+        let slice = try XCTUnwrap(page.slices.first)
+
+        XCTAssertNil(slice.categoryID)
+        XCTAssertEqual(slice.name, "Chưa phân loại")
+        XCTAssertEqual(slice.amountMinor, 4_000)
+        XCTAssertEqual(page.totalExpenseMinor, 4_000)
+    }
+
+    func testCategorySpendingMonthPagesRunFromEarliestExpenseThroughCurrentMonthOnly() {
+        let referenceDate = makeDate(year: 2026, month: 5, day: 18)
+        let categoryID = UUID()
+
+        let pages = OverviewLogic.categorySpendingMonthPages(
+            from: [
+                makeOverviewExpense(
+                    amountMinor: 1_000,
+                    occurredAt: makeDate(year: 2026, month: 3, day: 31),
+                    categoryID: categoryID,
+                    categoryName: "March"
+                ),
+                makeOverviewExpense(
+                    amountMinor: 2_000,
+                    occurredAt: makeDate(year: 2026, month: 4, day: 1),
+                    categoryID: categoryID,
+                    categoryName: "April"
+                ),
+                makeOverviewExpense(
+                    amountMinor: 3_000,
+                    occurredAt: makeDate(year: 2026, month: 6, day: 1),
+                    categoryID: categoryID,
+                    categoryName: "Future"
+                )
+            ],
+            currencyCode: "JPY",
+            referenceDate: referenceDate,
+            calendar: calendar
+        )
+
+        XCTAssertEqual(
+            pages.map(\.monthStart),
+            [
+                makeDate(year: 2026, month: 3, day: 1),
+                makeDate(year: 2026, month: 4, day: 1),
+                makeDate(year: 2026, month: 5, day: 1)
+            ]
+        )
+        XCTAssertEqual(pages.map(\.totalExpenseMinor), [1_000, 2_000, 0])
+    }
+
+    func testCategorySpendingTopSlicesUseAmountThenNameOrdering() {
+        let page = OverviewLogic.categorySpendingMonth(
+            from: [
+                makeOverviewExpense(amountMinor: 100, occurredAt: makeDate(year: 2026, month: 4, day: 1), categoryID: UUID(), categoryName: "Beta"),
+                makeOverviewExpense(amountMinor: 100, occurredAt: makeDate(year: 2026, month: 4, day: 1), categoryID: UUID(), categoryName: "Alpha"),
+                makeOverviewExpense(amountMinor: 300, occurredAt: makeDate(year: 2026, month: 4, day: 1), categoryID: UUID(), categoryName: "Gamma"),
+                makeOverviewExpense(amountMinor: 200, occurredAt: makeDate(year: 2026, month: 4, day: 1), categoryID: UUID(), categoryName: "Delta")
+            ],
+            selectedMonth: makeDate(year: 2026, month: 4, day: 15),
+            currencyCode: "JPY",
+            calendar: calendar
+        )
+
+        XCTAssertEqual(page.slices.map(\.name), ["Gamma", "Delta", "Alpha", "Beta"])
+        XCTAssertEqual(page.topSlices.map(\.name), ["Gamma", "Delta", "Alpha"])
+    }
+
     func testBudgetAlertsFilterOverFiftyPercentSortDescendingAndApplyThresholds() {
         let selectedMonth = makeDate(year: 2026, month: 4, day: 1)
         let referenceDate = makeDate(year: 2026, month: 4, day: 24)
@@ -698,7 +882,15 @@ final class OverviewLogicTests: XCTestCase {
         sourceWalletKind: LedgerWalletKind? = nil,
         destinationWalletID: UUID? = nil,
         destinationWalletName: String? = nil,
-        destinationWalletKind: LedgerWalletKind? = nil
+        destinationWalletKind: LedgerWalletKind? = nil,
+        categoryID: UUID? = nil,
+        categoryName: String? = nil,
+        categoryIconSymbolName: String? = nil,
+        categoryColorHex: String? = nil,
+        categoryParentID: UUID? = nil,
+        categoryParentName: String? = nil,
+        categoryParentIconSymbolName: String? = nil,
+        categoryParentColorHex: String? = nil
     ) -> OverviewTransactionSnapshot {
         OverviewTransactionSnapshot(
             id: UUID(),
@@ -717,11 +909,46 @@ final class OverviewLogicTests: XCTestCase {
             destinationWalletID: destinationWalletID,
             destinationWalletName: destinationWalletName,
             destinationWalletKind: destinationWalletKind,
-            categoryID: nil,
-            categoryName: nil,
-            categoryIconSymbolName: nil,
+            categoryID: categoryID,
+            categoryName: categoryName,
+            categoryIconSymbolName: categoryIconSymbolName,
+            categoryColorHex: categoryColorHex,
+            categoryParentID: categoryParentID,
+            categoryParentName: categoryParentName,
+            categoryParentIconSymbolName: categoryParentIconSymbolName,
+            categoryParentColorHex: categoryParentColorHex,
             counterpartyName: nil,
             isArchived: isArchived
+        )
+    }
+
+    private func makeOverviewExpense(
+        amountMinor: Int64,
+        occurredAt: Date,
+        categoryID: UUID? = nil,
+        categoryName: String? = nil,
+        categoryIconSymbolName: String? = "fork.knife",
+        categoryColorHex: String? = "#FF9F1C",
+        categoryParentID: UUID? = nil,
+        categoryParentName: String? = nil,
+        categoryParentIconSymbolName: String? = "folder.fill",
+        categoryParentColorHex: String? = "#5B7BFF",
+        isArchived: Bool = false
+    ) -> OverviewTransactionSnapshot {
+        makeOverviewTransaction(
+            primaryKind: .expense,
+            title: categoryName ?? "Expense",
+            amountMinor: amountMinor,
+            occurredAt: occurredAt,
+            isArchived: isArchived,
+            categoryID: categoryID,
+            categoryName: categoryName,
+            categoryIconSymbolName: categoryID == nil ? nil : categoryIconSymbolName,
+            categoryColorHex: categoryID == nil ? nil : categoryColorHex,
+            categoryParentID: categoryParentID,
+            categoryParentName: categoryParentName,
+            categoryParentIconSymbolName: categoryParentID == nil ? nil : categoryParentIconSymbolName,
+            categoryParentColorHex: categoryParentID == nil ? nil : categoryParentColorHex
         )
     }
 

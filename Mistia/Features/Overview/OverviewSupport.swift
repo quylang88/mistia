@@ -116,6 +116,11 @@ extension LedgerTransaction {
             categoryID: category?.id,
             categoryName: category?.localizedDisplayName,
             categoryIconSymbolName: category?.iconSymbolName,
+            categoryColorHex: category?.iconColorHex,
+            categoryParentID: category?.parentCategory?.id,
+            categoryParentName: category?.parentCategory?.localizedDisplayName,
+            categoryParentIconSymbolName: category?.parentCategory?.iconSymbolName,
+            categoryParentColorHex: category?.parentCategory?.iconColorHex,
             counterpartyName: counterpartyName,
             isArchived: isArchived
         )

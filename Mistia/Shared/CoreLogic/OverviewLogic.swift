@@ -61,6 +61,11 @@ nonisolated struct OverviewTransactionSnapshot: Equatable, Identifiable {
     let categoryID: UUID?
     let categoryName: String?
     let categoryIconSymbolName: String?  // Icon of transaction category
+    let categoryColorHex: String?
+    let categoryParentID: UUID?
+    let categoryParentName: String?
+    let categoryParentIconSymbolName: String?
+    let categoryParentColorHex: String?
     let counterpartyName: String?
     let isArchived: Bool
 }
@@ -88,11 +93,63 @@ nonisolated struct OverviewWeekSpendingSnapshot: Equatable, Identifiable {
     }
 }
 
+nonisolated struct OverviewCategorySpendingSlice: Equatable, Identifiable {
+    let id: String
+    let categoryID: UUID?
+    let name: String
+    let iconSymbolName: String
+    let colorHex: String
+    let amountMinor: Int64
+    let childSlices: [OverviewCategorySpendingSlice]
+
+    var canDrillDown: Bool {
+        categoryID != nil && !childSlices.isEmpty
+    }
+
+    var withoutChildren: OverviewCategorySpendingSlice {
+        OverviewCategorySpendingSlice(
+            id: id,
+            categoryID: categoryID,
+            name: name,
+            iconSymbolName: iconSymbolName,
+            colorHex: colorHex,
+            amountMinor: amountMinor,
+            childSlices: []
+        )
+    }
+}
+
+nonisolated struct OverviewCategorySpendingMonthSnapshot: Equatable, Identifiable {
+    let monthStart: Date
+    let title: String
+    let currencyCode: String
+    let slices: [OverviewCategorySpendingSlice]
+
+    var id: String {
+        String(Int(monthStart.timeIntervalSince1970))
+    }
+
+    var totalExpenseMinor: Int64 {
+        slices.reduce(into: Int64.zero) { partialResult, slice in
+            partialResult += slice.amountMinor
+        }
+    }
+
+    var topSlices: [OverviewCategorySpendingSlice] {
+        Array(slices.prefix(3))
+    }
+
+    func drilldownSlices(for categoryID: UUID) -> [OverviewCategorySpendingSlice] {
+        slices.first { $0.categoryID == categoryID }?.childSlices ?? []
+    }
+}
+
 nonisolated struct OverviewHeroSnapshot: Equatable {
     let totalAssetBalanceMinor: Int64
     let incomeThisMonthMinor: Int64
     let expenseThisMonthMinor: Int64
     let weekPages: [OverviewWeekSpendingSnapshot]
+    let categoryMonthPages: [OverviewCategorySpendingMonthSnapshot]
     let currentWeekStart: Date
     let currencyCode: String
 }
@@ -158,6 +215,7 @@ nonisolated enum OverviewLogic {
             hero: hero(
                 wallets: wallets,
                 transactionRecords: transactionRecords,
+                transactions: transactions,
                 currencyCode: currencyCode,
                 referenceDate: referenceDate,
                 calendar: calendar
@@ -186,6 +244,7 @@ nonisolated enum OverviewLogic {
     static func hero(
         wallets: [OverviewWalletSnapshot],
         transactionRecords: [TransactionRecordSnapshot],
+        transactions: [OverviewTransactionSnapshot] = [],
         currencyCode: String,
         referenceDate: Date = .now,
         calendar: Calendar = .current
@@ -231,6 +290,12 @@ nonisolated enum OverviewLogic {
             expenseThisMonthMinor: expenseThisMonth,
             weekPages: weeklySpendingPages(
                 from: transactionRecords,
+                referenceDate: referenceDate,
+                calendar: calendar
+            ),
+            categoryMonthPages: categorySpendingMonthPages(
+                from: transactions,
+                currencyCode: currencyCode,
                 referenceDate: referenceDate,
                 calendar: calendar
             ),
@@ -402,6 +467,223 @@ nonisolated enum OverviewLogic {
                 )
             )
         }
+    }
+
+    static func categorySpendingMonthPages(
+        from transactions: [OverviewTransactionSnapshot],
+        currencyCode: String,
+        referenceDate: Date = .now,
+        calendar: Calendar = .current
+    ) -> [OverviewCategorySpendingMonthSnapshot] {
+        let currentMonthStart = PlanningLogic.startOfMonth(for: referenceDate, calendar: calendar)
+        let earliestExpenseMonthStart = transactions
+            .filter(isCategorySpendingTransaction)
+            .map { PlanningLogic.startOfMonth(for: $0.occurredAt, calendar: calendar) }
+            .min()
+
+        let firstMonthStart = earliestExpenseMonthStart ?? currentMonthStart
+        var monthStart = firstMonthStart
+        var pages: [OverviewCategorySpendingMonthSnapshot] = []
+
+        while monthStart <= currentMonthStart {
+            pages.append(
+                categorySpendingMonth(
+                    from: transactions,
+                    selectedMonth: monthStart,
+                    currencyCode: currencyCode,
+                    calendar: calendar
+                )
+            )
+
+            guard let nextMonth = calendar.date(byAdding: .month, value: 1, to: monthStart) else {
+                break
+            }
+            monthStart = nextMonth
+        }
+
+        if pages.isEmpty {
+            return [
+                categorySpendingMonth(
+                    from: transactions,
+                    selectedMonth: currentMonthStart,
+                    currencyCode: currencyCode,
+                    calendar: calendar
+                )
+            ]
+        }
+
+        return pages
+    }
+
+    static func categorySpendingMonth(
+        from transactions: [OverviewTransactionSnapshot],
+        selectedMonth: Date,
+        currencyCode: String,
+        calendar: Calendar = .current
+    ) -> OverviewCategorySpendingMonthSnapshot {
+        let monthStart = PlanningLogic.startOfMonth(for: selectedMonth, calendar: calendar)
+        let monthInterval = calendar.dateInterval(of: .month, for: monthStart)
+        let transactionsInMonth = transactions.filter { transaction in
+            guard isCategorySpendingTransaction(transaction),
+                  let monthInterval
+            else {
+                return false
+            }
+
+            return monthInterval.contains(transaction.occurredAt)
+        }
+
+        let groupedByBranch = Dictionary(grouping: transactionsInMonth) { transaction in
+            categoryBranchKey(for: transaction)
+        }
+        let slices = groupedByBranch
+            .map { _, branchTransactions in
+                categoryBranchSlice(from: branchTransactions)
+            }
+            .sorted(by: categorySliceSort)
+
+        return OverviewCategorySpendingMonthSnapshot(
+            monthStart: monthStart,
+            title: MistiaDateFormatting.monthYearString(for: monthStart, calendar: calendar),
+            currencyCode: currencyCode,
+            slices: slices
+        )
+    }
+
+    private static let uncategorizedSpendingSliceID = "uncategorized-expense"
+    private static let uncategorizedSpendingName = mistiaLocalized(
+        vi: "Chưa phân loại",
+        en: "Uncategorized",
+        ja: "未分類"
+    )
+    private static let uncategorizedSpendingIcon = "tray.full.fill"
+    private static let uncategorizedSpendingColorHex = "#8A8A8E"
+
+    private static func isCategorySpendingTransaction(
+        _ transaction: OverviewTransactionSnapshot
+    ) -> Bool {
+        transaction.entryStatus == .posted
+            && transaction.primaryKind == .expense
+            && !transaction.isArchived
+    }
+
+    private static func categoryBranchKey(
+        for transaction: OverviewTransactionSnapshot
+    ) -> String {
+        guard let categoryID = transaction.categoryParentID ?? transaction.categoryID else {
+            return uncategorizedSpendingSliceID
+        }
+
+        return categorySliceID(for: categoryID)
+    }
+
+    private static func categoryChildKey(
+        for transaction: OverviewTransactionSnapshot
+    ) -> String {
+        guard let categoryID = transaction.categoryID else {
+            return uncategorizedSpendingSliceID
+        }
+
+        return categorySliceID(for: categoryID)
+    }
+
+    private static func categoryBranchSlice(
+        from transactions: [OverviewTransactionSnapshot]
+    ) -> OverviewCategorySpendingSlice {
+        guard let template = transactions.first else {
+            return uncategorizedCategorySlice(amountMinor: 0)
+        }
+
+        let amount = transactions.reduce(into: Int64.zero) { partialResult, transaction in
+            partialResult += transaction.amountMinor
+        }
+        let categoryID = template.categoryParentID ?? template.categoryID
+        let childSlices = Dictionary(grouping: transactions) { transaction in
+            categoryChildKey(for: transaction)
+        }
+            .map { _, childTransactions in
+                categoryChildSlice(from: childTransactions)
+            }
+            .sorted(by: categorySliceSort)
+
+        guard let categoryID else {
+            return uncategorizedCategorySlice(amountMinor: amount, childSlices: childSlices)
+        }
+
+        return OverviewCategorySpendingSlice(
+            id: categorySliceID(for: categoryID),
+            categoryID: categoryID,
+            name: template.categoryParentName ?? template.categoryName ?? uncategorizedSpendingName,
+            iconSymbolName: template.categoryParentIconSymbolName
+                ?? template.categoryIconSymbolName
+                ?? uncategorizedSpendingIcon,
+            colorHex: template.categoryParentColorHex
+                ?? template.categoryColorHex
+                ?? uncategorizedSpendingColorHex,
+            amountMinor: amount,
+            childSlices: childSlices.map(\.withoutChildren)
+        )
+    }
+
+    private static func categoryChildSlice(
+        from transactions: [OverviewTransactionSnapshot]
+    ) -> OverviewCategorySpendingSlice {
+        guard let template = transactions.first else {
+            return uncategorizedCategorySlice(amountMinor: 0)
+        }
+
+        let amount = transactions.reduce(into: Int64.zero) { partialResult, transaction in
+            partialResult += transaction.amountMinor
+        }
+
+        guard let categoryID = template.categoryID else {
+            return uncategorizedCategorySlice(amountMinor: amount)
+        }
+
+        return OverviewCategorySpendingSlice(
+            id: categorySliceID(for: categoryID),
+            categoryID: categoryID,
+            name: template.categoryName ?? uncategorizedSpendingName,
+            iconSymbolName: template.categoryIconSymbolName ?? uncategorizedSpendingIcon,
+            colorHex: template.categoryColorHex ?? uncategorizedSpendingColorHex,
+            amountMinor: amount,
+            childSlices: []
+        )
+    }
+
+    private static func uncategorizedCategorySlice(
+        amountMinor: Int64,
+        childSlices: [OverviewCategorySpendingSlice] = []
+    ) -> OverviewCategorySpendingSlice {
+        OverviewCategorySpendingSlice(
+            id: uncategorizedSpendingSliceID,
+            categoryID: nil,
+            name: uncategorizedSpendingName,
+            iconSymbolName: uncategorizedSpendingIcon,
+            colorHex: uncategorizedSpendingColorHex,
+            amountMinor: amountMinor,
+            childSlices: childSlices.map(\.withoutChildren)
+        )
+    }
+
+    private static func categorySliceID(for categoryID: UUID) -> String {
+        "category-\(categoryID.uuidString.lowercased())"
+    }
+
+    private static func categorySliceSort(
+        lhs: OverviewCategorySpendingSlice,
+        rhs: OverviewCategorySpendingSlice
+    ) -> Bool {
+        if lhs.amountMinor != rhs.amountMinor {
+            return lhs.amountMinor > rhs.amountMinor
+        }
+
+        let nameComparison = lhs.name.localizedCaseInsensitiveCompare(rhs.name)
+        if nameComparison != .orderedSame {
+            return nameComparison == .orderedAscending
+        }
+
+        return lhs.id < rhs.id
     }
 
     static func budgetAlerts(

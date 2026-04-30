@@ -15,6 +15,29 @@ private struct OverviewExpenseDaySelection: Identifiable, Equatable {
     var id: Date { date }
 }
 
+private enum OverviewHeroChartMode: String, CaseIterable, Identifiable {
+    case day
+    case category
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .day:
+            mistiaLocalized(vi: "Ngày", en: "Day", ja: "日")
+        case .category:
+            mistiaLocalized(vi: "Danh mục", en: "Category", ja: "カテゴリ")
+        }
+    }
+}
+
+private struct OverviewCategoryDrilldownSelection: Identifiable, Equatable {
+    let id: UUID
+    let name: String
+    let iconSymbolName: String
+    let colorHex: String
+}
+
 struct OverviewView: View {
     @Environment(\.calendar) private var calendar
     @Environment(\.modelContext) private var modelContext
@@ -266,6 +289,10 @@ struct OverviewView: View {
                 modelContext: modelContext,
                 sessionStore: sessionStore
             )
+            try? MistiaOverviewDebugFixtures.seedCategoryChartDataIfNeeded(
+                modelContext: modelContext,
+                sessionStore: sessionStore
+            )
         }
     }
 
@@ -300,9 +327,162 @@ struct OverviewView: View {
     }
 }
 
+private enum MistiaOverviewDebugFixtures {
+    static var startsInCategoryMode: Bool {
+        #if DEBUG
+        ProcessInfo.processInfo.environment["MISTIA_OVERVIEW_DEBUG_CATEGORY_MODE"] == "1"
+        #else
+        false
+        #endif
+    }
+
+    static var startsInFirstCategoryDrilldown: Bool {
+        #if DEBUG
+        ProcessInfo.processInfo.environment["MISTIA_OVERVIEW_DEBUG_DRILLDOWN_FIRST"] == "1"
+        #else
+        false
+        #endif
+    }
+
+    static func seedCategoryChartDataIfNeeded(
+        modelContext: ModelContext,
+        sessionStore: SessionStore
+    ) throws {
+        #if DEBUG
+        guard ProcessInfo.processInfo.environment["MISTIA_OVERVIEW_DEBUG_SAMPLE_DATA"] == "1" else {
+            return
+        }
+
+        let wallet = try sampleWallet(in: modelContext)
+        let grocery = try MistiaBootstrap.ensureSystemCategory(.grocery, modelContext: modelContext)
+        let dineOut = try MistiaBootstrap.ensureSystemCategory(.dineOut, modelContext: modelContext)
+        let rent = try MistiaBootstrap.ensureSystemCategory(.rent, modelContext: modelContext)
+        let medicine = try MistiaBootstrap.ensureSystemCategory(.medicine, modelContext: modelContext)
+        let calendar = Calendar(identifier: .gregorian)
+        let currentMonth = PlanningLogic.startOfMonth(for: .now, calendar: calendar)
+        let previousMonth = calendar.date(byAdding: .month, value: -1, to: currentMonth) ?? currentMonth
+        let existingTransactionIDs = Set(try modelContext.fetch(FetchDescriptor<LedgerTransaction>()).map(\.id))
+
+        let samples: [(id: UUID, title: String, amountMinor: Int64, occurredAt: Date, category: TransactionCategory)] = [
+            (
+                UUID(uuidString: "00000000-0000-0000-0000-00000000E001")!,
+                "Debug groceries",
+                12_500,
+                sampleDate(dayOffset: 3, from: currentMonth, calendar: calendar),
+                grocery
+            ),
+            (
+                UUID(uuidString: "00000000-0000-0000-0000-00000000E002")!,
+                "Debug dinner",
+                8_200,
+                sampleDate(dayOffset: 8, from: currentMonth, calendar: calendar),
+                dineOut
+            ),
+            (
+                UUID(uuidString: "00000000-0000-0000-0000-00000000E003")!,
+                "Debug rent",
+                72_000,
+                sampleDate(dayOffset: 1, from: currentMonth, calendar: calendar),
+                rent
+            ),
+            (
+                UUID(uuidString: "00000000-0000-0000-0000-00000000E004")!,
+                "Debug medicine",
+                4_600,
+                sampleDate(dayOffset: 15, from: currentMonth, calendar: calendar),
+                medicine
+            ),
+            (
+                UUID(uuidString: "00000000-0000-0000-0000-00000000E005")!,
+                "Debug last month groceries",
+                9_400,
+                sampleDate(dayOffset: 5, from: previousMonth, calendar: calendar),
+                grocery
+            )
+        ]
+
+        var didInsert = false
+        let ownerUserID = sessionStore.activeLocalProfileUserID
+        if let ownerUserID {
+            try MistiaRecordOwnershipStore.upsert(
+                entity: .wallet,
+                recordID: wallet.id,
+                ownerUserID: ownerUserID,
+                context: modelContext
+            )
+        }
+
+        for sample in samples where !existingTransactionIDs.contains(sample.id) {
+            modelContext.insert(
+                LedgerTransaction(
+                    id: sample.id,
+                    primaryKind: .expense,
+                    title: sample.title,
+                    amountMinor: sample.amountMinor,
+                    occurredAt: sample.occurredAt,
+                    createdAt: sample.occurredAt,
+                    updatedAt: sample.occurredAt,
+                    sourceWallet: wallet,
+                    category: sample.category
+                )
+            )
+            if let ownerUserID {
+                try MistiaRecordOwnershipStore.upsert(
+                    entity: .transaction,
+                    recordID: sample.id,
+                    ownerUserID: ownerUserID,
+                    context: modelContext
+                )
+            }
+            didInsert = true
+        }
+
+        if didInsert || ownerUserID != nil {
+            try modelContext.save()
+        }
+        #endif
+    }
+
+    #if DEBUG
+    private static func sampleWallet(in modelContext: ModelContext) throws -> LedgerWallet {
+        let walletID = UUID(uuidString: "00000000-0000-0000-0000-00000000C001")!
+        if let existing = try modelContext.fetch(FetchDescriptor<LedgerWallet>())
+            .first(where: { $0.id == walletID }) {
+            return existing
+        }
+
+        let wallet = LedgerWallet(
+            id: walletID,
+            name: "Mistia Demo",
+            kind: .cash,
+            iconSymbolName: LedgerWalletKind.cash.defaultIconSymbolName,
+            iconColorHex: LedgerWalletKind.cash.defaultColorHex,
+            currencyCode: "JPY",
+            openingBalanceMinor: 500_000,
+            sortOrder: -1
+        )
+        modelContext.insert(wallet)
+        return wallet
+    }
+
+    private static func sampleDate(
+        dayOffset: Int,
+        from monthStart: Date,
+        calendar: Calendar
+    ) -> Date {
+        calendar.date(byAdding: .day, value: dayOffset, to: monthStart) ?? monthStart
+    }
+    #endif
+}
+
 private struct OverviewHeroCard: View {
+    @Environment(\.calendar) private var calendar
     @Environment(\.colorScheme) private var colorScheme
     @State private var selectedWeekStart: Date
+    @State private var selectedCategoryMonth: Date
+    @State private var chartMode: OverviewHeroChartMode
+    @State private var selectedCategory: OverviewCategoryDrilldownSelection?
+    @State private var didApplyDebugDrilldown = false
     @State private var chartDismissToken: Int = 0
 
     let snapshot: OverviewHeroSnapshot
@@ -318,6 +498,11 @@ private struct OverviewHeroCard: View {
         self.isSheetPresented = isSheetPresented
         self.onOpenExpenseDay = onOpenExpenseDay
         _selectedWeekStart = State(initialValue: snapshot.currentWeekStart)
+        _selectedCategoryMonth = State(
+            initialValue: snapshot.categoryMonthPages.last?.monthStart
+                ?? PlanningLogic.startOfMonth(for: .now)
+        )
+        _chartMode = State(initialValue: MistiaOverviewDebugFixtures.startsInCategoryMode ? .category : .day)
     }
 
     private var cardTint: Color {
@@ -338,6 +523,35 @@ private struct OverviewHeroCard: View {
                 isCurrentWeek: true,
                 points: []
             )
+    }
+
+    private var activeCategoryMonth: OverviewCategorySpendingMonthSnapshot {
+        snapshot.categoryMonthPages.first(where: { $0.monthStart == selectedCategoryMonth })
+            ?? snapshot.categoryMonthPages.last
+            ?? OverviewCategorySpendingMonthSnapshot(
+                monthStart: PlanningLogic.startOfMonth(for: .now, calendar: calendar),
+                title: MistiaDateFormatting.monthYearString(for: .now, calendar: calendar),
+                currencyCode: snapshot.currencyCode,
+                slices: []
+            )
+    }
+
+    private var chartTitle: String {
+        switch chartMode {
+        case .day:
+            mistiaLocalized(vi: "Chi tiêu theo ngày", en: "Daily spending", ja: "日別支出")
+        case .category:
+            mistiaLocalized(vi: "Chi tiêu theo danh mục", en: "Spending by category", ja: "カテゴリ別支出")
+        }
+    }
+
+    private var chartSubtitle: String {
+        switch chartMode {
+        case .day:
+            activeWeek.title
+        case .category:
+            activeCategoryMonth.title
+        }
     }
 
     var body: some View {
@@ -384,35 +598,64 @@ private struct OverviewHeroCard: View {
                 .onTapGesture { dismissChartSelection() }
 
                 VStack(alignment: .leading, spacing: 12) {
-                    HStack {
-                        Text(mistiaLocalized(vi: "Chi tiêu theo ngày", en: "Daily spending", ja: "日別支出"))
+                    HStack(alignment: .firstTextBaseline) {
+                        Text(chartTitle)
                             .font(.system(size: 16, weight: .bold, design: .rounded))
                             .foregroundStyle(.primary)
 
                         Spacer()
 
-                        Text(activeWeek.title)
+                        Text(chartSubtitle)
                             .font(.system(size: 11, weight: .semibold, design: .rounded))
                             .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.72)
                     }
                     .contentShape(Rectangle())
                     .onTapGesture { dismissChartSelection() }
 
-                    TabView(selection: $selectedWeekStart) {
-                        ForEach(snapshot.weekPages) { week in
-                            OverviewWeekSpendingChart(
-                                week: week,
-                                currencyCode: snapshot.currencyCode,
-                                insetSurface: insetSurface,
-                                isVisible: selectedWeekStart == week.weekStart && !isSheetPresented,
-                                dismissToken: chartDismissToken,
-                                onOpenExpenseDay: onOpenExpenseDay
-                            )
-                            .tag(week.weekStart)
+                    Picker("", selection: $chartMode) {
+                        ForEach(OverviewHeroChartMode.allCases) { mode in
+                            Text(mode.title).tag(mode)
                         }
                     }
-                    .tabViewStyle(.page(indexDisplayMode: .never))
-                    .frame(height: 154)
+                    .pickerStyle(.segmented)
+                    .accessibilityIdentifier("overview.hero.chart.mode")
+
+                    if chartMode == .day {
+                        TabView(selection: $selectedWeekStart) {
+                            ForEach(snapshot.weekPages) { week in
+                                OverviewWeekSpendingChart(
+                                    week: week,
+                                    currencyCode: snapshot.currencyCode,
+                                    insetSurface: insetSurface,
+                                    isVisible: selectedWeekStart == week.weekStart && !isSheetPresented,
+                                    dismissToken: chartDismissToken,
+                                    onOpenExpenseDay: onOpenExpenseDay
+                                )
+                                .tag(week.weekStart)
+                            }
+                        }
+                        .tabViewStyle(.page(indexDisplayMode: .never))
+                        .frame(height: 154)
+                        .transition(.opacity.combined(with: .move(edge: .leading)))
+                    } else {
+                        TabView(selection: $selectedCategoryMonth) {
+                            ForEach(snapshot.categoryMonthPages) { month in
+                                OverviewCategorySpendingMonthView(
+                                    month: month,
+                                    selectedCategory: selectedCategory,
+                                    insetSurface: insetSurface,
+                                    onSelectSlice: openCategorySlice,
+                                    onBack: clearSelectedCategory
+                                )
+                                .tag(month.monthStart)
+                            }
+                        }
+                        .tabViewStyle(.page(indexDisplayMode: .never))
+                        .frame(height: 188)
+                        .transition(.opacity.combined(with: .move(edge: .trailing)))
+                    }
                 }
             }
         }
@@ -421,10 +664,69 @@ private struct OverviewHeroCard: View {
                 selectedWeekStart = snapshot.currentWeekStart
             }
         }
+        .onChange(of: snapshot.categoryMonthPages.map(\.monthStart)) { _, monthStarts in
+            if !monthStarts.contains(selectedCategoryMonth) {
+                selectedCategoryMonth = snapshot.categoryMonthPages.last?.monthStart
+                    ?? PlanningLogic.startOfMonth(for: .now, calendar: calendar)
+                selectedCategory = nil
+            }
+        }
+        .onChange(of: chartMode) { _, mode in
+            dismissChartSelection()
+            if mode == .day {
+                selectedCategory = nil
+            }
+        }
+        .onAppear {
+            applyDebugDrilldownIfNeeded()
+        }
+        .onChange(of: activeCategoryMonth.slices.map(\.id)) { _, _ in
+            applyDebugDrilldownIfNeeded()
+        }
     }
 
     private func dismissChartSelection() {
         chartDismissToken += 1
+    }
+
+    private func openCategorySlice(_ slice: OverviewCategorySpendingSlice) {
+        guard slice.canDrillDown, let categoryID = slice.categoryID else { return }
+
+        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+        withAnimation(.snappy) {
+            selectedCategory = OverviewCategoryDrilldownSelection(
+                id: categoryID,
+                name: slice.name,
+                iconSymbolName: slice.iconSymbolName,
+                colorHex: slice.colorHex
+            )
+        }
+    }
+
+    private func clearSelectedCategory() {
+        withAnimation(.snappy) {
+            selectedCategory = nil
+        }
+    }
+
+    private func applyDebugDrilldownIfNeeded() {
+        guard MistiaOverviewDebugFixtures.startsInFirstCategoryDrilldown,
+              !didApplyDebugDrilldown,
+              chartMode == .category,
+              selectedCategory == nil,
+              let slice = activeCategoryMonth.slices.first(where: \.canDrillDown),
+              let categoryID = slice.categoryID
+        else {
+            return
+        }
+
+        didApplyDebugDrilldown = true
+        selectedCategory = OverviewCategoryDrilldownSelection(
+            id: categoryID,
+            name: slice.name,
+            iconSymbolName: slice.iconSymbolName,
+            colorHex: slice.colorHex
+        )
     }
 }
 
@@ -647,6 +949,281 @@ private struct OverviewWeekSpendingChart: View {
         } else {
             selectedDate = nil
         }
+    }
+}
+
+private struct OverviewCategorySpendingMonthView: View {
+    @Environment(\.colorScheme) private var colorScheme
+
+    let month: OverviewCategorySpendingMonthSnapshot
+    let selectedCategory: OverviewCategoryDrilldownSelection?
+    let insetSurface: Color
+    let onSelectSlice: (OverviewCategorySpendingSlice) -> Void
+    let onBack: () -> Void
+
+    private var visibleSlices: [OverviewCategorySpendingSlice] {
+        guard let selectedCategory else {
+            return month.slices
+        }
+
+        return month.drilldownSlices(for: selectedCategory.id)
+    }
+
+    private var totalMinor: Int64 {
+        visibleSlices.reduce(into: Int64.zero) { partialResult, slice in
+            partialResult += slice.amountMinor
+        }
+    }
+
+    private var centerTitle: String {
+        selectedCategory?.name
+            ?? mistiaLocalized(vi: "Tất cả", en: "All", ja: "すべて")
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            if let selectedCategory {
+                Button(action: onBack) {
+                    HStack(spacing: 7) {
+                        Image(systemName: "chevron.left")
+                            .font(.system(size: 11, weight: .bold))
+
+                        MistiaFinanceIconView(
+                            icon: selectedCategory.iconSymbolName,
+                            fallbackColor: Color(hex: selectedCategory.colorHex),
+                            size: 18
+                        )
+
+                        Text(selectedCategory.name)
+                            .lineLimit(1)
+                    }
+                    .font(.system(size: 12, weight: .bold, design: .rounded))
+                    .foregroundStyle(.secondary)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 6)
+                    .background {
+                        Capsule(style: .continuous)
+                            .fill(colorScheme == .dark ? .white.opacity(0.05) : .white.opacity(0.62))
+                    }
+                }
+                .buttonStyle(.plain)
+                .accessibilityIdentifier("overview.category.back")
+            }
+
+            HStack(alignment: .center, spacing: 12) {
+                OverviewCategoryDonutChart(
+                    slices: visibleSlices,
+                    totalMinor: totalMinor,
+                    currencyCode: month.currencyCode,
+                    centerTitle: centerTitle,
+                    onSelectSlice: onSelectSlice
+                )
+                .frame(width: 128, height: 128)
+                .accessibilityIdentifier("overview.category.donut")
+
+                OverviewCategoryTopList(
+                    slices: Array(visibleSlices.prefix(3)),
+                    totalMinor: totalMinor,
+                    currencyCode: month.currencyCode,
+                    onSelectSlice: onSelectSlice
+                )
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 10)
+        .frame(maxHeight: .infinity, alignment: .center)
+        .background {
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .fill(insetSurface)
+        }
+    }
+}
+
+private struct OverviewCategoryDonutChart: View {
+    @Environment(\.colorScheme) private var colorScheme
+    @State private var selectedAngle: Double?
+
+    let slices: [OverviewCategorySpendingSlice]
+    let totalMinor: Int64
+    let currencyCode: String
+    let centerTitle: String
+    let onSelectSlice: (OverviewCategorySpendingSlice) -> Void
+
+    var body: some View {
+        ZStack {
+            Circle()
+                .strokeBorder(Color.primary.opacity(colorScheme == .dark ? 0.12 : 0.07), lineWidth: 18)
+
+            if slices.isEmpty {
+                Image(systemName: "chart.pie")
+                    .font(.system(size: 24, weight: .semibold))
+                    .foregroundStyle(.secondary)
+            } else {
+                Chart(slices) { slice in
+                    SectorMark(
+                        angle: .value("Chi tiêu", Double(slice.amountMinor)),
+                        innerRadius: .ratio(0.68),
+                        outerRadius: .ratio(0.98),
+                        angularInset: 2.0
+                    )
+                    .cornerRadius(6)
+                    .foregroundStyle(Color(hex: slice.colorHex).gradient)
+                    .opacity(slice.canDrillDown ? 1 : 0.88)
+                }
+                .chartLegend(.hidden)
+                .chartAngleSelection(value: $selectedAngle)
+            }
+
+            VStack(spacing: 3) {
+                Text(centerTitle)
+                    .font(.system(size: 10, weight: .semibold, design: .rounded))
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.7)
+
+                Text(totalMinor.formattedCurrency(code: currencyCode))
+                    .font(.system(size: 13, weight: .bold, design: .rounded))
+                    .foregroundStyle(.primary)
+                    .lineLimit(2)
+                    .multilineTextAlignment(.center)
+                    .minimumScaleFactor(0.68)
+            }
+            .padding(.horizontal, 24)
+        }
+        .onChange(of: selectedAngle) { _, value in
+            guard let value,
+                  let slice = slice(at: value),
+                  slice.canDrillDown
+            else {
+                return
+            }
+
+            onSelectSlice(slice)
+            DispatchQueue.main.async {
+                selectedAngle = nil
+            }
+        }
+    }
+
+    private func slice(at selectedValue: Double) -> OverviewCategorySpendingSlice? {
+        var lowerBound = 0.0
+
+        for slice in slices {
+            let upperBound = lowerBound + Double(slice.amountMinor)
+            if selectedValue >= lowerBound && selectedValue <= upperBound {
+                return slice
+            }
+            lowerBound = upperBound
+        }
+
+        return nil
+    }
+}
+
+private struct OverviewCategoryTopList: View {
+    let slices: [OverviewCategorySpendingSlice]
+    let totalMinor: Int64
+    let currencyCode: String
+    let onSelectSlice: (OverviewCategorySpendingSlice) -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 7) {
+            if slices.isEmpty {
+                VStack(alignment: .leading, spacing: 5) {
+                    Text(mistiaLocalized(vi: "Chưa có chi tiêu", en: "No spending yet", ja: "支出はまだありません"))
+                        .font(.system(size: 13, weight: .bold, design: .rounded))
+                        .foregroundStyle(.primary)
+
+                    Text(mistiaLocalized(vi: "Vuốt để xem tháng khác.", en: "Swipe to another month.", ja: "スワイプして別の月を表示します。"))
+                        .font(.system(size: 11, weight: .medium, design: .rounded))
+                        .foregroundStyle(.secondary)
+                        .lineLimit(2)
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
+            } else {
+                Text(mistiaLocalized(vi: "Top 3", en: "Top 3", ja: "トップ3"))
+                    .font(.system(size: 10, weight: .bold, design: .rounded))
+                    .foregroundStyle(.secondary)
+                    .textCase(.uppercase)
+
+                ForEach(slices) { slice in
+                    if slice.canDrillDown {
+                        Button {
+                            onSelectSlice(slice)
+                        } label: {
+                            OverviewCategoryTopRow(
+                                slice: slice,
+                                totalMinor: totalMinor,
+                                currencyCode: currencyCode
+                            )
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityIdentifier("overview.category.row.\(slice.id)")
+                    } else {
+                        OverviewCategoryTopRow(
+                            slice: slice,
+                            totalMinor: totalMinor,
+                            currencyCode: currencyCode
+                        )
+                        .accessibilityIdentifier("overview.category.row.\(slice.id)")
+                    }
+                }
+            }
+        }
+        .frame(maxWidth: .infinity, maxHeight: 128, alignment: .topLeading)
+    }
+}
+
+private struct OverviewCategoryTopRow: View {
+    @Environment(\.colorScheme) private var colorScheme
+
+    let slice: OverviewCategorySpendingSlice
+    let totalMinor: Int64
+    let currencyCode: String
+
+    private var percentageText: String {
+        guard totalMinor > 0 else { return "0%" }
+
+        let percentage = Double(slice.amountMinor) / Double(totalMinor) * 100
+        return "\(Int(percentage.rounded()))%"
+    }
+
+    var body: some View {
+        HStack(spacing: 8) {
+            MistiaFinanceIconView(
+                icon: slice.iconSymbolName,
+                fallbackColor: Color(hex: slice.colorHex),
+                size: 26
+            )
+
+            VStack(alignment: .leading, spacing: 1) {
+                Text(slice.name)
+                    .font(.system(size: 12, weight: .semibold, design: .rounded))
+                    .foregroundStyle(.primary)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.7)
+
+                Text(percentageText)
+                    .font(.system(size: 10, weight: .bold, design: .rounded))
+                    .foregroundStyle(.secondary)
+            }
+
+            Spacer(minLength: 6)
+
+            Text(slice.amountMinor.formattedCurrency(code: currencyCode))
+                .font(.system(size: 11, weight: .bold, design: .rounded))
+                .foregroundStyle(Color(hex: slice.colorHex))
+                .lineLimit(1)
+                .minimumScaleFactor(0.62)
+        }
+        .padding(.horizontal, 8)
+        .padding(.vertical, 6)
+        .background {
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .fill(colorScheme == .dark ? .white.opacity(0.035) : .white.opacity(0.58))
+        }
+        .contentShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
     }
 }
 
