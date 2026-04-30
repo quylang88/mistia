@@ -553,6 +553,25 @@ final class FamilyContextStore {
         }
     }
 
+    func transferOwner(
+        to member: FamilyMember,
+        sessionStore: SessionStore
+    ) async {
+        guard let familyID = family?.id else { return }
+        guard let session = await prepareRemoteSession(using: sessionStore) else { return }
+
+        do {
+            try await service.transferOwner(
+                familyID: familyID,
+                newOwnerMembershipID: member.membershipID,
+                session: session
+            )
+            await refresh(sessionStore: sessionStore)
+        } catch {
+            lastErrorMessage = visibleErrorMessage(for: error, sessionStore: sessionStore)
+        }
+    }
+
     func activateFamilyHome() {
         guard let familyID = family?.id else { return }
         activeContext = FamilyContext(scope: .familyHome(familyID: familyID))

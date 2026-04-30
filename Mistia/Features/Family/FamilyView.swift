@@ -1776,6 +1776,7 @@ private struct FamilyMemberProfileScreen: View {
 
     @State private var showsPermissionsSheet = false
     @State private var destructiveAction: FamilyMemberDestructiveAction?
+    @State private var confirmsTransferOwner = false
 
     private var isMe: Bool {
         member.userID == sessionStore.signedInUserID
@@ -1859,6 +1860,50 @@ private struct FamilyMemberProfileScreen: View {
                             vi: "Thiết lập quyền xem hoặc chỉnh sửa dữ liệu cho thành viên này trong gia đình.",
                             en: "Configure viewing or editing permissions for this member.",
                             ja: "このメンバーの閲覧・編集権限を設定します。"
+                        ))
+                        .descriptionTextStyle()
+                    }
+                    .cardDescriptionStyle()
+                }
+
+                if isOwner && member.role == .member {
+                    VStack(alignment: .leading, spacing: 0) {
+                        MistiaGlassCard(cornerRadius: 18, tint: Color(UIColor.secondarySystemGroupedBackground), padding: 0) {
+                            Button {
+                                confirmsTransferOwner = true
+                            } label: {
+                                HStack(spacing: 14) {
+                                    Image(systemName: "crown.fill")
+                                        .font(.system(size: 16, weight: .semibold))
+                                        .foregroundStyle(.orange)
+                                        .frame(width: 32)
+
+                                    Text(mistiaLocalized(
+                                        vi: "Nhượng quyền owner",
+                                        en: "Transfer owner",
+                                        ja: "owner を譲渡"
+                                    ))
+                                    .font(.system(size: 17, weight: .semibold, design: .rounded))
+                                    .foregroundStyle(.primary)
+
+                                    Spacer()
+
+                                    Image(systemName: "chevron.right")
+                                        .font(.system(size: 12, weight: .semibold))
+                                        .foregroundStyle(.tertiary)
+                                }
+                                .padding(.horizontal, 16)
+                                .padding(.vertical, 16)
+                            }
+                            .buttonStyle(MistiaPressableButtonStyle(cornerRadius: 18))
+                            .disabled(remoteActionsDisabled)
+                            .opacity(remoteActionsDisabled ? 0.55 : 1)
+                        }
+
+                        Text(mistiaLocalized(
+                            vi: "\(member.displayName) sẽ trở thành owner duy nhất. Bạn sẽ chuyển về vai trò thành viên.",
+                            en: "\(member.displayName) will become the only owner. You will become a member.",
+                            ja: "\(member.displayName) が唯一の owner になり、あなたはメンバーになります。"
                         ))
                         .descriptionTextStyle()
                     }
@@ -2006,6 +2051,26 @@ private struct FamilyMemberProfileScreen: View {
             }
         } message: {
             Text(destructiveActionMessage)
+        }
+        .confirmationDialog(
+            mistiaLocalized(vi: "Nhượng quyền owner?", en: "Transfer owner?", ja: "owner を譲渡しますか？"),
+            isPresented: $confirmsTransferOwner,
+            titleVisibility: .visible
+        ) {
+            Button(mistiaLocalized(vi: "Nhượng quyền owner", en: "Transfer owner", ja: "owner を譲渡"), role: .destructive) {
+                Task {
+                    await familyContextStore.transferOwner(to: member, sessionStore: sessionStore)
+                    dismiss()
+                }
+            }
+
+            Button(mistiaLocalized(vi: "Hủy", en: "Cancel", ja: "キャンセル"), role: .cancel) {}
+        } message: {
+            Text(mistiaLocalized(
+                vi: "\(member.displayName) sẽ là owner duy nhất của gia đình này. Bạn sẽ không còn quyền quản lý thành viên sau khi chuyển.",
+                en: "\(member.displayName) will be the only owner of this family. You will no longer manage members after transfer.",
+                ja: "\(member.displayName) がこの家族の唯一の owner になります。譲渡後、あなたはメンバー管理ができません。"
+            ))
         }
     }
 
@@ -2268,7 +2333,7 @@ private struct FamilyInviteSheet: View {
 
                 Section(mistiaLocalized(vi: "Vai trò được mời", en: "Invite role", ja: "招待する役割")) {
                     Picker(mistiaLocalized(vi: "Role", en: "Role", ja: "役割"), selection: $selectedRole) {
-                        ForEach([FamilyRole.owner, .member, .kid], id: \.self) { role in
+                        ForEach([FamilyRole.member, .kid], id: \.self) { role in
                             Text(role.title).tag(role)
                         }
                     }
@@ -2277,16 +2342,6 @@ private struct FamilyInviteSheet: View {
                     Text(roleDescription(selectedRole))
                         .font(.footnote)
                         .foregroundStyle(.secondary)
-
-                    if selectedRole == .owner && ownerCount >= 2 {
-                        Text(mistiaLocalized(
-                            vi: "Gia đình này đã có tối đa 2 chủ sở hữu.",
-                            en: "This family already has the maximum of 2 owners.",
-                            ja: "この家族にはすでに最大2人の所有者がいます。"
-                        ))
-                        .font(.footnote)
-                        .foregroundStyle(.orange)
-                    }
                 }
 
                 if let createdInvite {
@@ -2352,33 +2407,25 @@ private struct FamilyInviteSheet: View {
                             )
                         }
                     }
-                    .disabled(!sessionStore.canPerformRemoteActions || !canCreateSelectedRole)
+                    .disabled(!sessionStore.canPerformRemoteActions)
                 }
             }
         }
-    }
-
-    private var ownerCount: Int {
-        familyContextStore.members.filter { $0.role == .owner }.count
-    }
-
-    private var canCreateSelectedRole: Bool {
-        selectedRole != .owner || ownerCount < 2
     }
 
     private func roleDescription(_ role: FamilyRole) -> String {
         switch role {
         case .owner:
             return mistiaLocalized(
-                vi: "Chủ sở hữu có thể mời thành viên, quản lý vai trò và cài đặt gia đình. Gia đình có tối đa 2 owner.",
-                en: "Owners can invite members, manage roles, and manage family settings. A family can have up to 2 owners.",
-                ja: "所有者はメンバー招待、役割、家族設定を管理できます。所有者は最大2人です。"
+                vi: "Gia đình chỉ có một owner. Hãy mời thành viên rồi nhượng quyền owner từ màn hình thông tin thành viên.",
+                en: "A family has one owner. Invite a member, then transfer ownership from that member's info screen.",
+                ja: "家族の owner は1人です。メンバーとして招待してから、メンバー情報画面で owner を譲渡します。"
             )
         case .member:
             return mistiaLocalized(
-                vi: "Thành viên dùng không gian gia đình theo quyền được cấp. Mặc định không xem ví riêng của người khác.",
-                en: "Members use the family space based on granted permissions. They don't see others' private wallets by default.",
-                ja: "メンバーは付与された権限で家族スペースを利用します。初期状態では他の人の個人ウォレットは表示されません。"
+                vi: "Thành viên có thể xem dữ liệu gia đình theo quyền xem mặc định, nhưng muốn sửa hoặc dùng ví thì cần được cấp quyền.",
+                en: "Members can view family data by default, but editing or using wallets requires an explicit grant.",
+                ja: "メンバーは既定で家族データを表示できますが、編集やウォレット利用には明示的な許可が必要です。"
             )
         case .kid:
             return mistiaLocalized(

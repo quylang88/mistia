@@ -45,6 +45,11 @@ protocol FamilyRemoteServicing {
         membershipID: UUID,
         session: SupabaseAuthSession
     ) async throws
+    func transferOwner(
+        familyID: UUID,
+        newOwnerMembershipID: UUID,
+        session: SupabaseAuthSession
+    ) async throws
     func deleteFamily(
         familyID: UUID,
         session: SupabaseAuthSession
@@ -587,52 +592,37 @@ struct FamilyRemoteService: FamilyRemoteServicing {
         membershipID: UUID,
         session: SupabaseAuthSession
     ) async throws {
-        let payload = ["deleted_at": ISO8601DateFormatter.mistiaRemoteAPI.string(from: .now)]
-        _ = try await patchRows(
-            path: "family_memberships",
-            filters: [
-                URLQueryItem(name: "id", value: "eq.\(membershipID.uuidString.lowercased())")
-            ],
-            body: payload,
+        let _: FamilyMembershipRecord = try await callRPC(
+            functionName: "remove_family_member",
+            body: RemoveFamilyMemberRPCBody(membershipID: membershipID),
             session: session
-        ) as [FamilyMembershipRecord]
+        )
+    }
+
+    func transferOwner(
+        familyID: UUID,
+        newOwnerMembershipID: UUID,
+        session: SupabaseAuthSession
+    ) async throws {
+        let _: FamilyMembershipRecord = try await callRPC(
+            functionName: "transfer_family_owner",
+            body: TransferFamilyOwnerRPCBody(
+                familyID: familyID,
+                newOwnerMembershipID: newOwnerMembershipID
+            ),
+            session: session
+        )
     }
 
     func deleteFamily(
         familyID: UUID,
         session: SupabaseAuthSession
     ) async throws {
-        let now = ISO8601DateFormatter.mistiaRemoteAPI.string(from: .now)
-        
-        // 1. Soft delete family
-        _ = try await patchRows(
-            path: "families",
-            filters: [
-                URLQueryItem(name: "id", value: "eq.\(familyID.uuidString.lowercased())")
-            ],
-            body: ["deleted_at": now],
+        let _: EmptyResponse = try await callRPC(
+            functionName: "delete_family",
+            body: DeleteFamilyRPCBody(familyID: familyID),
             session: session
-        ) as [FamilyGroupRecord]
-        
-        // 2. Soft delete all memberships in family
-        _ = try await patchRows(
-            path: "family_memberships",
-            filters: [
-                URLQueryItem(name: "family_id", value: "eq.\(familyID.uuidString.lowercased())")
-            ],
-            body: ["deleted_at": now],
-            session: session
-        ) as [FamilyMembershipRecord]
-        
-        // 3. Soft delete all invites in family
-        _ = try await patchRows(
-            path: "family_invites",
-            filters: [
-                URLQueryItem(name: "family_id", value: "eq.\(familyID.uuidString.lowercased())")
-            ],
-            body: ["deleted_at": now],
-            session: session
-        ) as [FamilyInviteRecord]
+        )
     }
 
     func fetchAccessibleFinanceSnapshot(
@@ -1261,6 +1251,32 @@ private struct RevokeFamilyInviteRPCBody: Encodable {
 
     enum CodingKeys: String, CodingKey {
         case inviteID = "p_invite_id"
+    }
+}
+
+private struct RemoveFamilyMemberRPCBody: Encodable {
+    let membershipID: UUID
+
+    enum CodingKeys: String, CodingKey {
+        case membershipID = "p_membership_id"
+    }
+}
+
+private struct TransferFamilyOwnerRPCBody: Encodable {
+    let familyID: UUID
+    let newOwnerMembershipID: UUID
+
+    enum CodingKeys: String, CodingKey {
+        case familyID = "p_family_id"
+        case newOwnerMembershipID = "p_new_owner_membership_id"
+    }
+}
+
+private struct DeleteFamilyRPCBody: Encodable {
+    let familyID: UUID
+
+    enum CodingKeys: String, CodingKey {
+        case familyID = "p_family_id"
     }
 }
 

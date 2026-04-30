@@ -73,10 +73,10 @@ struct FamilyPermissionPolicy: Codable, Equatable, Hashable {
         case .member:
             FamilyPermissionPolicy(
                 canViewFamilyDashboard: true,
-                canViewOthers: false,
+                canViewOthers: true,
                 canEditOthers: false,
-                canViewWallets: false,
-                canViewDebts: false,
+                canViewWallets: true,
+                canViewDebts: true,
                 canViewKids: false,
                 canEditKids: false
             )

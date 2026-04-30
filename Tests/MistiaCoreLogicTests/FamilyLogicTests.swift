@@ -42,7 +42,7 @@ final class FamilyLogicTests: XCTestCase {
         XCTAssertEqual(summary.spendableMinor, 130_000)
     }
 
-    func testOwnerCanViewOthersButMemberNeedsExplicitPermission() {
+    func testOwnerAndMemberCanViewOthersButCannotEditWithoutPermission() {
         let ownerAccess = FamilyLogic.access(
             viewerRole: .owner,
             viewerPolicy: .preset(for: .owner),
@@ -67,8 +67,8 @@ final class FamilyLogicTests: XCTestCase {
         XCTAssertTrue(memberAccess.canOpenFamilyHome)
         XCTAssertFalse(memberAccess.canInviteMembers)
         XCTAssertFalse(memberAccess.canManageMembers)
-        XCTAssertFalse(memberAccess.canViewTarget)
-        XCTAssertFalse(memberAccess.canViewTargetWallets)
+        XCTAssertTrue(memberAccess.canViewTarget)
+        XCTAssertTrue(memberAccess.canViewTargetWallets)
         XCTAssertFalse(memberAccess.canEditTarget)
     }
 
