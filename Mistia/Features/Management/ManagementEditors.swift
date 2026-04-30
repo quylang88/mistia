@@ -264,9 +264,11 @@ struct ManagementWalletEditorSheet: View {
         }
         .sheet(isPresented: $showsBalanceAdjustment) {
             if let wallet = target.wallet {
+                let creditLimit = wallet.kind == .creditCard ? wallet.creditCardProfile?.creditLimitMinor : nil
                 ManagementBalanceAdjustmentSheet(
                     wallet: wallet,
-                    currentBalance: effectiveBalance
+                    currentBalance: effectiveBalance,
+                    creditLimit: creditLimit
                 )
             }
         }
@@ -382,20 +384,27 @@ struct ManagementWalletEditorSheet: View {
 
     private var effectiveBalance: Int64 {
         guard let wallet = target.wallet else { return 0 }
-        
+
         let txDescriptor = FetchDescriptor<LedgerTransaction>()
         let allTransactions = (try? modelContext.fetch(txDescriptor)) ?? []
         let records = allTransactions
             .filter { $0.deletedAt == nil }
             .map { $0.snapshot }
-        
+
         let walletSnapshot = TransactionWalletSnapshot(
             id: wallet.id,
             kind: wallet.kind,
             openingBalanceMinor: wallet.openingBalanceMinor
         )
+
+        let debt = TransactionLogic.effectiveBalance(for: walletSnapshot, records: records)
         
-        return TransactionLogic.effectiveBalance(for: walletSnapshot, records: records)
+        // For credit cards, show available credit (limit - debt), not debt
+        if wallet.kind == .creditCard, let profile = wallet.creditCardProfile {
+            return max(profile.creditLimitMinor - debt, 0)
+        }
+        
+        return debt
     }
 
     private func updateCreditCardProfile(for wallet: LedgerWallet, now: Date) {
@@ -1227,25 +1236,28 @@ struct ManagementBalanceAdjustmentSheet: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(SessionStore.self) private var sessionStore
     @Query private var storedCategories: [TransactionCategory]
+    @Query private var storedWallets: [LedgerWallet]
 
     let wallet: LedgerWallet
     let currentBalance: Int64
+    let creditLimit: Int64?
 
     @State private var newBalanceText: String = ""
     @State private var reason: String = ""
     @State private var showsConfirmation = false
 
-    init(wallet: LedgerWallet, currentBalance: Int64) {
+    init(wallet: LedgerWallet, currentBalance: Int64, creditLimit: Int64? = nil) {
         self.wallet = wallet
         self.currentBalance = currentBalance
+        self.creditLimit = creditLimit
         _newBalanceText = State(initialValue: "\(currentBalance)")
     }
 
     var body: some View {
         NavigationStack {
             Form {
-                Section(mistiaLocalized(vi: "Số dư thực tế", en: "Actual balance", ja: "実際の残高")) {
-                    TextField(mistiaLocalized(vi: "Nhập số dư hiện tại", en: "Enter current balance", ja: "現在の残高を入力"), text: $newBalanceText)
+                Section(mistiaLocalized(vi: wallet.kind == .creditCard ? "Số tiền khả dụng" : "Số dư thực tế", en: wallet.kind == .creditCard ? "Available credit" : "Actual balance", ja: wallet.kind == .creditCard ? "利用可能額" : "実際の残高")) {
+                    TextField(mistiaLocalized(vi: wallet.kind == .creditCard ? "Nhập số tiền khả dụng" : "Nhập số dư hiện tại", en: wallet.kind == .creditCard ? "Enter available credit" : "Enter current balance", ja: wallet.kind == .creditCard ? "利用可能額を入力" : "現在の残高を入力"), text: $newBalanceText)
                         .keyboardType(.numberPad)
                 }
 
@@ -1288,7 +1300,16 @@ struct ManagementBalanceAdjustmentSheet: View {
 
     private func save() {
         let newBalance = newBalanceText.currencyInputToMinorUnits(currencyCode: wallet.currencyCode)
-        let diff = newBalance - currentBalance
+        
+        // For credit cards, convert available credit to debt
+        let targetBalance: Int64
+        if wallet.kind == .creditCard, let limit = creditLimit {
+            targetBalance = max(limit - newBalance, 0)
+        } else {
+            targetBalance = newBalance
+        }
+        
+        let diff = targetBalance - currentBalance
         guard diff != 0 else {
             dismiss()
             return

@@ -826,8 +826,12 @@ private struct FamilyAggregateAccountList: View {
     }
 
     private func amountColor(for row: FamilyAggregateWalletRow) -> Color {
-        if row.wallet.kind == .creditCard && row.currentBalanceMinor > 0 {
-            return .red
+        if row.wallet.kind == .creditCard {
+            // For credit cards, show available credit in green (positive)
+            return MistiaAccent.income.color
+        }
+        if row.currentBalanceMinor < 1000 {
+            return MistiaAccent.expense.color
         }
         return .primary
     }
@@ -1469,16 +1473,26 @@ struct FamilyOverviewScreen: View {
                 return $0.createdAt < $1.createdAt
             }
             .map { wallet in
-                FamilyAggregateWalletRow(
+                let debt = TransactionLogic.effectiveBalance(
+                    for: TransactionWalletSnapshot(
+                        id: wallet.id,
+                        kind: wallet.kind,
+                        openingBalanceMinor: wallet.openingBalanceMinor
+                    ),
+                    records: transactionRecords
+                )
+                
+                // For credit cards, calculate available credit (limit - debt)
+                let balanceForDisplay: Int64
+                if wallet.kind == .creditCard, let profile = wallet.creditCardProfile {
+                    balanceForDisplay = max(profile.creditLimitMinor - debt, 0)
+                } else {
+                    balanceForDisplay = debt
+                }
+                
+                return FamilyAggregateWalletRow(
                     wallet: wallet,
-                    currentBalanceMinor: TransactionLogic.effectiveBalance(
-                        for: TransactionWalletSnapshot(
-                            id: wallet.id,
-                            kind: wallet.kind,
-                            openingBalanceMinor: wallet.openingBalanceMinor
-                        ),
-                        records: transactionRecords
-                    )
+                    currentBalanceMinor: balanceForDisplay
                 )
             }
     }
@@ -1555,11 +1569,19 @@ struct FamilyOverviewScreen: View {
 
         return FamilyLogic.aggregateSummary(
             wallets: aggregateWalletRows.map { row in
-                FamilyAggregateWalletSnapshot(
+                // Calculate actual debt for credit cards
+                let debt: Int64
+                if row.wallet.kind == .creditCard, let profile = row.wallet.creditCardProfile {
+                    debt = max(profile.creditLimitMinor - row.currentBalanceMinor, 0)
+                } else {
+                    debt = 0
+                }
+                
+                return FamilyAggregateWalletSnapshot(
                     ownerUserID: familyOwnerUserID(for: row.wallet.id, entity: .wallet),
                     kind: row.wallet.kind.familyAggregateKind,
                     balanceMinor: row.wallet.kind == .creditCard ? 0 : row.currentBalanceMinor,
-                    debtMinor: row.wallet.kind == .creditCard ? max(row.currentBalanceMinor, 0) : 0
+                    debtMinor: debt
                 )
             },
             transactions: allTransactions.map { transaction in

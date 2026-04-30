@@ -60,5 +60,6 @@ playground.xcworkspace
 
 # Supabase CLI temporary files
 **/supabase/.temp
+**/supabase/.branches
 
 .cursor/

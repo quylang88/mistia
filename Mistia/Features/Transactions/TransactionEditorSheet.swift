@@ -629,11 +629,11 @@ struct TransactionEditorSheet: View {
     }
 
     private var selectedSourceWallet: LedgerWallet? {
-        availableWallets.first(where: { $0.id == draft.sourceWalletID })
+        storedWallets.first(where: { $0.id == draft.sourceWalletID })
     }
 
     private var selectedDestinationWallet: LedgerWallet? {
-        availableWallets.first(where: { $0.id == draft.destinationWalletID })
+        storedWallets.first(where: { $0.id == draft.destinationWalletID })
     }
 
     private var selectedCategory: TransactionCategory? {
@@ -756,11 +756,23 @@ struct TransactionEditorSheet: View {
                 kind: sourceWallet.kind,
                 openingBalanceMinor: sourceWallet.openingBalanceMinor
             )
-            
+
             let snapshots = postedTransactions.filter { $0.id != target.transaction?.id }.map { $0.snapshot }
             let currentBalance = TransactionLogic.effectiveBalance(for: snapshot, records: snapshots)
-            
-            if currentBalance - amountMinor < 0 {
+
+            // For credit cards, check available credit (limit - debt), not debt itself
+            if sourceWallet.kind == .creditCard {
+                let availableCredit: Int64
+                if let profile = sourceWallet.creditCardProfile {
+                    availableCredit = max(profile.creditLimitMinor - currentBalance, 0)
+                } else {
+                    availableCredit = 0
+                }
+                if amountMinor > availableCredit {
+                    alertMessage = mistiaLocalized(vi: "Số tiền vượt quá hạn mức khả dụng của thẻ.", en: "The amount exceeds the available credit on the card.", ja: "金額がカードの利用可能額を超えています。")
+                    return
+                }
+            } else if currentBalance - amountMinor < 0 {
                 alertMessage = mistiaLocalized(vi: "Số dư ví không đủ để thực hiện giao dịch.", en: "Insufficient wallet balance to perform the transaction.", ja: "取引を実行するためのウォレット残高が不足しています。")
                 return
             }
