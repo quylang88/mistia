@@ -116,6 +116,7 @@ final class MistiaNativeTabBarController: UITabBarController, UITabBarController
     action: .backupRestore
   )
   private var isCurrentShortcutSyncing = false
+  private var spinnerActivityIndicatorView: UIActivityIndicatorView?
 
   private lazy var quickCreateController = UIHostingController(
     rootView: MistiaQuickCreateFloatingButton(appLanguage: currentAppLanguage) { [weak self] in
@@ -284,10 +285,10 @@ final class MistiaNativeTabBarController: UITabBarController, UITabBarController
     shortcutTab.title = currentShortcutPresentation.title
     shortcutAvatarTask?.cancel()
     shortcutAvatarTask = nil
+    stopSpinnerAnimation()
 
     if isCurrentShortcutSyncing && currentShortcutPresentation.action == MistiaShortcutResolvedAction.syncNow {
       currentShortcutImageKey = "syncing_spinner"
-      shortcutTab.image = shortcutSpinnerImage()
       startSpinnerAnimation()
       return
     }
@@ -375,49 +376,43 @@ final class MistiaNativeTabBarController: UITabBarController, UITabBarController
       .withRenderingMode(.alwaysTemplate)
   }
 
-  private var spinnerAnimationTask: Task<Void, Never>?
-
-  private func shortcutSpinnerImage() -> UIImage? {
-    let config = UIImage.SymbolConfiguration(pointSize: 22, weight: .medium)
-    return UIImage(systemName: "arrow.clockwise.circle.fill", withConfiguration: config)?
-      .withRenderingMode(.alwaysTemplate)
+  private func findSearchTabButton() -> UIView? {
+    guard #available(iOS 18.0, *) else { return nil }
+    let control = tabBar.rightmostVisibleControl
+    return control
   }
 
   private func startSpinnerAnimation() {
-    spinnerAnimationTask?.cancel()
-    spinnerAnimationTask = Task { @MainActor [weak self] in
-      guard let self, let tab = self.shortcutTab else { return }
-      // Use CABasicAnimation for continuous rotation
-      let tabBarButton = self.tabBar.subviews.first { subview in
-        if #available(iOS 18.0, *) {
-          return subview.accessibilityIdentifier?.contains("search") == true
-            || subview.accessibilityLabel == tab.title
-        }
-        return false
-      }
-      guard let tabBarButton else { return }
-      let iconView = tabBarButton.subviews.first(where: { $0 is UIImageView }) ?? tabBarButton
-      let animation = CABasicAnimation(keyPath: "transform.rotation.z")
-      animation.fromValue = 0.0
-      animation.toValue = .pi * 2.0
-      animation.duration = 1.5
-      animation.repeatCount = .infinity
-      iconView.layer.add(animation, forKey: "spinAnimation")
-    }
+    stopSpinnerAnimation()
+    guard let tabButton = findSearchTabButton() else { return }
+
+    let iconView = tabButton.subviews.first(where: { $0 is UIImageView }) as? UIImageView
+    iconView?.isHidden = true
+
+    let indicator = UIActivityIndicatorView(style: .medium)
+    indicator.color = tabBar.tintColor
+    indicator.translatesAutoresizingMaskIntoConstraints = false
+    tabButton.addSubview(indicator)
+
+    NSLayoutConstraint.activate([
+      indicator.centerXAnchor.constraint(equalTo: tabButton.centerXAnchor),
+      indicator.centerYAnchor.constraint(equalTo: iconView?.centerYAnchor ?? tabButton.centerYAnchor),
+      indicator.widthAnchor.constraint(equalToConstant: 22),
+      indicator.heightAnchor.constraint(equalToConstant: 22),
+    ])
+
+    spinnerActivityIndicatorView = indicator
+    indicator.startAnimating()
   }
 
   private func stopSpinnerAnimation() {
-    spinnerAnimationTask?.cancel()
-    spinnerAnimationTask = nil
-    guard let shortcutTab else { return }
-    if #available(iOS 18.0, *) {
-      let tabBarButton = tabBar.subviews.first { subview in
-        subview.accessibilityIdentifier?.contains("search") == true
-          || subview.accessibilityLabel == shortcutTab.title
-      }
-      guard let tabBarButton else { return }
-      let iconView = tabBarButton.subviews.first(where: { $0 is UIImageView }) ?? tabBarButton
-      iconView.layer.removeAnimation(forKey: "spinAnimation")
+    spinnerActivityIndicatorView?.stopAnimating()
+    spinnerActivityIndicatorView?.removeFromSuperview()
+    spinnerActivityIndicatorView = nil
+
+    if let tabButton = findSearchTabButton() {
+      let iconView = tabButton.subviews.first(where: { $0 is UIImageView }) as? UIImageView
+      iconView?.isHidden = false
     }
   }
 

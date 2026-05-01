@@ -34,6 +34,8 @@ struct MistiaApp: App {
                     MistiaProtectedLaunchView(launchIssue: launchIssue, appLanguage: appLanguage)
                 } else if sessionStore.isAuthTransitioning {
                     MistiaAuthTransitionView(appLanguage: appLanguage)
+                } else if sessionStore.isBootstrapping {
+                    MistiaStartupLoadingView(appLanguage: appLanguage)
                 } else {
                     ContentView()
                 }
@@ -213,5 +215,67 @@ private struct MistiaProtectedLaunchView: View {
                 .frame(maxWidth: .infinity)
             }
         }
+    }
+}
+
+// MARK: - Startup Loading View
+
+private struct MistiaStartupLoadingView: View {
+    let appLanguage: MistiaAppLanguage
+    @State private var isAnimating = false
+
+    var body: some View {
+        ZStack {
+            // Gradient background giống MistiaProtectedLaunchView
+            LinearGradient(
+                colors: [
+                    Color(red: 0.08, green: 0.11, blue: 0.18),
+                    Color(red: 0.13, green: 0.16, blue: 0.25)
+                ],
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            )
+            .ignoresSafeArea()
+
+            VStack(spacing: 24) {
+                // Logo hoặc icon
+                Image(systemName: "heart.text.square.fill")
+                    .font(.system(size: 72))
+                    .foregroundStyle(Color.white.opacity(0.9))
+                    .symbolEffect(.bounce, value: isAnimating)
+
+                VStack(spacing: 12) {
+                    ProgressView()
+                        .controlSize(.large)
+                        .tint(.white)
+
+                    Text(mistiaLocalized(
+                        vi: "Đang tải dữ liệu...",
+                        en: "Loading your data...",
+                        ja: "データを読み込み中..."
+                    ))
+                    .font(.system(size: 18, weight: .semibold, design: .rounded))
+                    .foregroundStyle(.white)
+
+                    Text(mistiaLocalized(
+                        vi: "Mistia đang khôi phục thông tin cá nhân",
+                        en: "Mistia is restoring your personal information",
+                        ja: "Mistia は個人情報を復元しています"
+                    ))
+                    .font(.system(size: 14, weight: .regular, design: .rounded))
+                    .foregroundStyle(.white.opacity(0.7))
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal, 32)
+                }
+            }
+            .padding(32)
+        }
+        .onAppear {
+            withAnimation(.easeInOut(duration: 0.6).repeatForever(autoreverses: true)) {
+                isAnimating = true
+            }
+        }
+        .environment(\.locale, appLanguage.locale)
+        .environment(\.calendar, appLanguage.calendar)
     }
 }

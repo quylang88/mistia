@@ -131,6 +131,7 @@ final class SessionStore {
     var activeAuthAction: SessionAuthAction?
     var pendingAuthenticationPrompt: SessionPendingAuthenticationPrompt?
     var isAuthTransitioning = false
+    var isBootstrapping = false
 
     var networkStatus: SessionNetworkStatus = .checking
     var remoteUnavailableReason: String?
@@ -462,9 +463,11 @@ final class SessionStore {
     func bootstrapIfNeeded() async {
         guard !didBootstrap else { return }
         didBootstrap = true
+        isBootstrapping = true
 
         guard isConfigured else {
             applyConfigurationMissingState()
+            isBootstrapping = false
             return
         }
 
@@ -515,6 +518,7 @@ final class SessionStore {
                 )
             }
         }
+        isBootstrapping = false
     }
 
     func signIn(email: String, password: String) async {
