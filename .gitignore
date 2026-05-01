@@ -62,4 +62,6 @@ playground.xcworkspace
 **/supabase/.temp
 **/supabase/.branches
 
-.cursor/
+# Qwen
+.qwen/
+QWEN.md
