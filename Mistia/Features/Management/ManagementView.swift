@@ -1,7 +1,7 @@
 import SwiftData
 import SwiftUI
 
-private enum ManagementNavigationDestination: String, Identifiable {
+private enum ManagementNavigationDestination: Identifiable, Equatable {
     case authPlaceholder
     case settings
     case family
@@ -14,6 +14,10 @@ private enum ManagementNavigationDestination: String, Identifiable {
         case .family: return "family"
         case .creditCardStatement(let wallet): return "creditCardStatement-\(wallet.id)"
         }
+    }
+
+    static func == (lhs: ManagementNavigationDestination, rhs: ManagementNavigationDestination) -> Bool {
+        lhs.id == rhs.id
     }
 }
 
