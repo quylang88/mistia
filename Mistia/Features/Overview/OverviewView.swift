@@ -1010,25 +1010,46 @@ private struct OverviewCategorySpendingMonthView: View {
                 .accessibilityIdentifier("overview.category.back")
             }
 
-            HStack(alignment: .center, spacing: 12) {
-                OverviewCategoryDonutChart(
-                    slices: visibleSlices,
-                    totalMinor: totalMinor,
-                    currencyCode: month.currencyCode,
-                    centerTitle: centerTitle,
-                    onSelectSlice: onSelectSlice
-                )
-                .frame(width: 128, height: 128)
-                .accessibilityIdentifier("overview.category.donut")
+            if visibleSlices.isEmpty {
+                VStack(spacing: 8) {
+                    Image(systemName: "chart.pie.fill")
+                        .font(.system(size: 32, weight: .semibold))
+                        .foregroundStyle(.secondary.opacity(0.6))
 
-                OverviewCategoryTopList(
-                    slices: Array(visibleSlices.prefix(3)),
-                    totalMinor: totalMinor,
-                    currencyCode: month.currencyCode,
-                    onSelectSlice: onSelectSlice
-                )
+                    VStack(spacing: 4) {
+                        Text(mistiaLocalized(vi: "Chưa có chi tiêu", en: "No spending yet", ja: "支出はまだありません"))
+                            .font(.system(size: 15, weight: .bold, design: .rounded))
+                            .foregroundStyle(.primary)
+
+                        Text(mistiaLocalized(vi: "Vuốt để xem tháng khác.", en: "Swipe to another month.", ja: "スワイプして別の月を表示します。"))
+                            .font(.system(size: 12, weight: .medium, design: .rounded))
+                            .foregroundStyle(.secondary)
+                            .lineLimit(2)
+                            .multilineTextAlignment(.center)
+                    }
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else {
+                HStack(alignment: .center, spacing: 12) {
+                    OverviewCategoryDonutChart(
+                        slices: visibleSlices,
+                        totalMinor: totalMinor,
+                        currencyCode: month.currencyCode,
+                        centerTitle: centerTitle,
+                        onSelectSlice: onSelectSlice
+                    )
+                    .frame(width: 128, height: 128)
+                    .accessibilityIdentifier("overview.category.donut")
+
+                    OverviewCategoryTopList(
+                        slices: Array(visibleSlices.prefix(3)),
+                        totalMinor: totalMinor,
+                        currencyCode: month.currencyCode,
+                        onSelectSlice: onSelectSlice
+                    )
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 10)
@@ -1129,45 +1150,31 @@ private struct OverviewCategoryTopList: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 7) {
-            if slices.isEmpty {
-                VStack(alignment: .leading, spacing: 5) {
-                    Text(mistiaLocalized(vi: "Chưa có chi tiêu", en: "No spending yet", ja: "支出はまだありません"))
-                        .font(.system(size: 13, weight: .bold, design: .rounded))
-                        .foregroundStyle(.primary)
+            Text(mistiaLocalized(vi: "Top 3", en: "Top 3", ja: "トップ3"))
+                .font(.system(size: 10, weight: .bold, design: .rounded))
+                .foregroundStyle(.secondary)
+                .textCase(.uppercase)
 
-                    Text(mistiaLocalized(vi: "Vuốt để xem tháng khác.", en: "Swipe to another month.", ja: "スワイプして別の月を表示します。"))
-                        .font(.system(size: 11, weight: .medium, design: .rounded))
-                        .foregroundStyle(.secondary)
-                        .lineLimit(2)
-                }
-                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
-            } else {
-                Text(mistiaLocalized(vi: "Top 3", en: "Top 3", ja: "トップ3"))
-                    .font(.system(size: 10, weight: .bold, design: .rounded))
-                    .foregroundStyle(.secondary)
-                    .textCase(.uppercase)
-
-                ForEach(slices) { slice in
-                    if slice.canDrillDown {
-                        Button {
-                            onSelectSlice(slice)
-                        } label: {
-                            OverviewCategoryTopRow(
-                                slice: slice,
-                                totalMinor: totalMinor,
-                                currencyCode: currencyCode
-                            )
-                        }
-                        .buttonStyle(.plain)
-                        .accessibilityIdentifier("overview.category.row.\(slice.id)")
-                    } else {
+            ForEach(slices) { slice in
+                if slice.canDrillDown {
+                    Button {
+                        onSelectSlice(slice)
+                    } label: {
                         OverviewCategoryTopRow(
                             slice: slice,
                             totalMinor: totalMinor,
                             currencyCode: currencyCode
                         )
-                        .accessibilityIdentifier("overview.category.row.\(slice.id)")
                     }
+                    .buttonStyle(.plain)
+                    .accessibilityIdentifier("overview.category.row.\(slice.id)")
+                } else {
+                    OverviewCategoryTopRow(
+                        slice: slice,
+                        totalMinor: totalMinor,
+                        currencyCode: currencyCode
+                    )
+                    .accessibilityIdentifier("overview.category.row.\(slice.id)")
                 }
             }
         }
