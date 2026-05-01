@@ -84,7 +84,7 @@ struct RootTabView: View {
   @AppStorage(MistiaAppStorageKey.hideQuickCreate) private var hideQuickCreate = false
   @AppStorage(MistiaAppStorageKey.mistiaShortcutEnabled) private var mistiaShortcutEnabled = false
   @AppStorage(MistiaAppStorageKey.mistiaShortcutKind) private var shortcutKindRawValue =
-    MistiaShortcutKind.profile.rawValue
+    MistiaShortcutKind.backupRestore.rawValue
   @AppStorage(MistiaAppStorageKey.mistiaShortcutMemberUserID) private var shortcutMemberUserIDRawValue = ""
   @State private var selectedTab: MistiaTab = .overview
   @State private var isQuickCreateMenuVisible = false
@@ -94,6 +94,7 @@ struct RootTabView: View {
   @State private var quickCreateAnchorFrame: CGRect = .zero
   @State private var quickCreateDragOffset: CGFloat = 0
   @State private var isDraggingQuickCreate = false
+  @State private var isSyncingShortcut = false
 
   private let quickCreateMenuAnimation = Animation.spring(response: 0.34, dampingFraction: 0.84)
   private let quickCreateMenuDuration = 0.28
@@ -108,6 +109,7 @@ struct RootTabView: View {
           hidesQuickCreate: hideQuickCreate || uiState.isQuickCreateHidden || isQuickCreateMenuVisible,
           hidesTabBar: uiState.isTabBarHidden,
           showsShortcutTab: mistiaShortcutEnabled,
+          isShortcutSyncing: isSyncingShortcut,
           shortcutPresentation: shortcutResolution.presentation,
           onShortcutTap: handlePinnedShortcutTap,
           onQuickCreateTap: toggleQuickCreateMenu,
@@ -201,6 +203,10 @@ struct RootTabView: View {
     )
   }
 
+  private var effectiveShortcutSelection: MistiaShortcutSelection {
+    storedShortcutSelection
+  }
+
   private var shortcutInput: MistiaShortcutResolveInput {
     MistiaShortcutResolveInput(
       currentUserInitials: sessionStore.summary?.initials ?? "MI",
@@ -222,7 +228,7 @@ struct RootTabView: View {
 
   private var shortcutResolution: MistiaShortcutResolution {
     MistiaShortcutLogic.resolve(
-      selection: storedShortcutSelection,
+      selection: effectiveShortcutSelection,
       input: shortcutInput
     )
   }
@@ -237,9 +243,10 @@ struct RootTabView: View {
       .sorted()
       .joined(separator: ",")
 
+    let effective = effectiveShortcutSelection
     return [
-      shortcutKindRawValue,
-      shortcutMemberUserIDRawValue,
+      effective.storedKindRawValue,
+      effective.storedMemberUserIDRawValue,
       familyContextStore.family?.id.uuidString.lowercased() ?? "none",
       familyContextStore.canPresentFamilyHome ? "1" : "0",
       sessionStore.signedInUserID?.uuidString.lowercased() ?? "none",
@@ -294,16 +301,6 @@ struct RootTabView: View {
     dismissQuickCreateMenu()
 
     switch shortcutResolution.presentation.action {
-    case .profile:
-      activeSheet = .shortcut(.profile)
-
-    case .syncSettings:
-      if sessionStore.isSignedIn && sessionStore.isConfigured {
-        activeSheet = .shortcut(.syncSettings)
-      } else {
-        activeSheet = .shortcut(.profile)
-      }
-
     case .backupRestore:
       activeSheet = .shortcut(.backupRestore)
 
@@ -316,20 +313,28 @@ struct RootTabView: View {
 
     case .memberOverview(let userID):
       guard let member = familyContextStore.members.first(where: { $0.userID == userID }) else {
-        activeSheet = .shortcut(.profile)
+        activeSheet = .shortcut(.backupRestore)
         return
       }
 
       familyContextStore.activateMemberView(member)
       selectedTab = .overview
+
+    case .syncNow:
+      guard !isSyncingShortcut else { return }
+      isSyncingShortcut = true
+      Task {
+        let _ = await sessionStore.syncNow(isManual: true)
+        isSyncingShortcut = false
+      }
     }
   }
 
   private func persistShortcutSelectionIfNeeded(_ selection: MistiaShortcutSelection) {
-    guard shortcutKindRawValue != selection.storedKindRawValue
-      || shortcutMemberUserIDRawValue != selection.storedMemberUserIDRawValue else {
-      return
-    }
+    // Chỉ persist khi selection được resolve GIỐNG với stored (valid).
+    // Nếu resolve fallback về profile → KHÔNG persist ngược lại.
+    let stored = storedShortcutSelection
+    guard stored == selection else { return }
 
     shortcutKindRawValue = selection.storedKindRawValue
     shortcutMemberUserIDRawValue = selection.storedMemberUserIDRawValue
@@ -338,10 +343,6 @@ struct RootTabView: View {
   @ViewBuilder
   private func shortcutSheetView(for destination: RootShortcutDestination) -> some View {
     switch destination {
-    case .profile:
-      ManagementAccountView()
-    case .syncSettings:
-      ManagementSyncSettingsView(accent: shortcutAccent)
     case .backupRestore:
       ManagementBackupRestoreView()
     case .archivedItems:
@@ -397,8 +398,6 @@ private enum RootSheet: Identifiable {
 }
 
 private enum RootShortcutDestination: String, Identifiable {
-  case profile
-  case syncSettings
   case backupRestore
   case archivedItems
   case familyOverview

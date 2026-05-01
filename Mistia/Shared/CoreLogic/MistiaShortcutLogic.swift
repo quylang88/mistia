@@ -1,12 +1,11 @@
 import Foundation
 
 enum MistiaShortcutKind: String, CaseIterable, Codable, Identifiable {
-    case profile
-    case syncSettings
     case backupRestore
     case archivedItems
     case familyOverview
     case familyMember
+    case syncNow
 
     var id: String { rawValue }
 }
@@ -28,16 +27,15 @@ struct MistiaShortcutSelection: Equatable, Codable {
         storedMemberUserIDRawValue: String
     ) {
         self.init(
-            kind: MistiaShortcutKind(rawValue: storedKindRawValue) ?? .profile,
+            kind: MistiaShortcutKind(rawValue: storedKindRawValue) ?? .backupRestore,
             memberUserID: UUID(uuidString: storedMemberUserIDRawValue)
         )
     }
 
-    static let profile = MistiaShortcutSelection(kind: .profile)
-    static let syncSettings = MistiaShortcutSelection(kind: .syncSettings)
     static let backupRestore = MistiaShortcutSelection(kind: .backupRestore)
     static let archivedItems = MistiaShortcutSelection(kind: .archivedItems)
     static let familyOverview = MistiaShortcutSelection(kind: .familyOverview)
+    static let syncNow = MistiaShortcutSelection(kind: .syncNow)
 
     var storedKindRawValue: String {
         kind.rawValue
@@ -73,12 +71,11 @@ enum MistiaShortcutIconContent: Equatable {
 }
 
 enum MistiaShortcutResolvedAction: Equatable {
-    case profile
-    case syncSettings
     case backupRestore
     case archivedItems
     case familyOverview(familyID: UUID)
     case memberOverview(userID: UUID)
+    case syncNow
 }
 
 struct MistiaShortcutPresentation: Equatable {
@@ -104,23 +101,6 @@ enum MistiaShortcutLogic {
         )
 
         switch normalizedSelection.kind {
-        case .profile:
-            return MistiaShortcutResolution(
-                selection: .profile,
-                presentation: profilePresentation(input: input)
-            )
-
-        case .syncSettings:
-            return MistiaShortcutResolution(
-                selection: .syncSettings,
-                presentation: MistiaShortcutPresentation(
-                    title: mistiaLocalized(vi: "Đồng bộ dữ liệu", en: "Sync settings", ja: "同期設定"),
-                    accessibilityLabel: mistiaLocalized(vi: "Mở Đồng bộ dữ liệu", en: "Open sync settings", ja: "同期設定を開く"),
-                    icon: .systemImage("arrow.triangle.2.circlepath.icloud"),
-                    action: .syncSettings
-                )
-            )
-
         case .backupRestore:
             return MistiaShortcutResolution(
                 selection: .backupRestore,
@@ -146,8 +126,8 @@ enum MistiaShortcutLogic {
         case .familyOverview:
             guard input.canOpenFamilyHome, let familyID = input.familyID else {
                 return MistiaShortcutResolution(
-                    selection: .profile,
-                    presentation: profilePresentation(input: input)
+                    selection: .backupRestore,
+                    presentation: backupRestorePresentation()
                 )
             }
 
@@ -156,7 +136,7 @@ enum MistiaShortcutLogic {
                 presentation: MistiaShortcutPresentation(
                     title: mistiaLocalized(vi: "Tổng quan gia đình", en: "Family overview", ja: "家族の概要"),
                     accessibilityLabel: mistiaLocalized(vi: "Mở tổng quan gia đình", en: "Open family overview", ja: "家族の概要を開く"),
-                    icon: .systemImage("person.3.fill"),
+                    icon: .systemImage("person.2.circle.fill"),
                     action: .familyOverview(familyID: familyID)
                 )
             )
@@ -167,8 +147,8 @@ enum MistiaShortcutLogic {
                   member.canView,
                   !member.isCurrentUser else {
                 return MistiaShortcutResolution(
-                    selection: .profile,
-                    presentation: profilePresentation(input: input)
+                    selection: .backupRestore,
+                    presentation: backupRestorePresentation()
                 )
             }
 
@@ -185,20 +165,26 @@ enum MistiaShortcutLogic {
                     action: .memberOverview(userID: member.userID)
                 )
             )
+
+        case .syncNow:
+            return MistiaShortcutResolution(
+                selection: .syncNow,
+                presentation: MistiaShortcutPresentation(
+                    title: mistiaLocalized(vi: "Đồng bộ ngay", en: "Sync now", ja: "今すぐ同期"),
+                    accessibilityLabel: mistiaLocalized(vi: "Đồng bộ ngay", en: "Sync now", ja: "今すぐ同期"),
+                    icon: .systemImage("arrow.triangle.2.circlepath.icloud.fill"),
+                    action: .syncNow
+                )
+            )
         }
     }
 
-    private static func profilePresentation(
-        input: MistiaShortcutResolveInput
-    ) -> MistiaShortcutPresentation {
+    private static func backupRestorePresentation() -> MistiaShortcutPresentation {
         MistiaShortcutPresentation(
-            title: mistiaLocalized(vi: "Hồ sơ", en: "Profile", ja: "プロフィール"),
-            accessibilityLabel: mistiaLocalized(vi: "Mở Hồ sơ", en: "Open profile", ja: "プロフィールを開く"),
-            icon: .currentUserAvatar(
-                initials: input.currentUserInitials,
-                avatarURL: input.currentUserAvatarURL
-            ),
-            action: .profile
+            title: mistiaLocalized(vi: "Sao lưu & Khôi phục", en: "Backup & Restore", ja: "バックアップ & 復元"),
+            accessibilityLabel: mistiaLocalized(vi: "Mở Sao lưu & Khôi phục", en: "Open backup and restore", ja: "バックアップと復元を開く"),
+            icon: .systemImage("externaldrive.fill.badge.icloud"),
+            action: .backupRestore
         )
     }
 }

@@ -8,6 +8,7 @@ struct MistiaNativeTabShell: UIViewControllerRepresentable {
   var hidesQuickCreate: Bool
   var hidesTabBar: Bool
   var showsShortcutTab: Bool
+  var isShortcutSyncing: Bool
   var shortcutPresentation: MistiaShortcutPresentation
   var onShortcutTap: () -> Void
   var onQuickCreateTap: () -> Void
@@ -25,6 +26,7 @@ struct MistiaNativeTabShell: UIViewControllerRepresentable {
       appearanceMode: appearanceMode,
       appLanguage: appLanguage,
       shortcutPresentation: shortcutPresentation,
+      isShortcutSyncing: isShortcutSyncing,
       hidesQuickCreate: hidesQuickCreate,
       hidesTabBar: hidesTabBar,
       showsShortcutTab: showsShortcutTab
@@ -40,6 +42,7 @@ struct MistiaNativeTabShell: UIViewControllerRepresentable {
       appearanceMode: appearanceMode,
       appLanguage: appLanguage,
       shortcutPresentation: shortcutPresentation,
+      isShortcutSyncing: isShortcutSyncing,
       hidesQuickCreate: hidesQuickCreate,
       hidesTabBar: hidesTabBar,
       showsShortcutTab: showsShortcutTab
@@ -109,9 +112,10 @@ final class MistiaNativeTabBarController: UITabBarController, UITabBarController
   private var currentShortcutPresentation = MistiaShortcutPresentation(
     title: "",
     accessibilityLabel: "",
-    icon: .systemImage("person.crop.circle.fill"),
-    action: .profile
+    icon: .systemImage("externaldrive.fill.badge.icloud"),
+    action: .backupRestore
   )
+  private var isCurrentShortcutSyncing = false
 
   private lazy var quickCreateController = UIHostingController(
     rootView: MistiaQuickCreateFloatingButton(appLanguage: currentAppLanguage) { [weak self] in
@@ -163,6 +167,7 @@ final class MistiaNativeTabBarController: UITabBarController, UITabBarController
     appearanceMode: MistiaAppearanceMode,
     appLanguage: MistiaAppLanguage,
     shortcutPresentation: MistiaShortcutPresentation,
+    isShortcutSyncing: Bool,
     hidesQuickCreate: Bool,
     hidesTabBar: Bool,
     showsShortcutTab: Bool
@@ -173,6 +178,7 @@ final class MistiaNativeTabBarController: UITabBarController, UITabBarController
     currentAppearanceMode = appearanceMode
     currentAppLanguage = appLanguage
     currentShortcutPresentation = shortcutPresentation
+    isCurrentShortcutSyncing = isShortcutSyncing
     overrideUserInterfaceStyle = appearanceMode.interfaceStyle
     refreshLocalizedContent()
     applyChromeAppearance()
@@ -279,6 +285,13 @@ final class MistiaNativeTabBarController: UITabBarController, UITabBarController
     shortcutAvatarTask?.cancel()
     shortcutAvatarTask = nil
 
+    if isCurrentShortcutSyncing && currentShortcutPresentation.action == MistiaShortcutResolvedAction.syncNow {
+      currentShortcutImageKey = "syncing_spinner"
+      shortcutTab.image = shortcutSpinnerImage()
+      startSpinnerAnimation()
+      return
+    }
+
     switch currentShortcutPresentation.icon {
     case .systemImage(let systemName):
       currentShortcutImageKey = "system:\(systemName)"
@@ -360,6 +373,52 @@ final class MistiaNativeTabBarController: UITabBarController, UITabBarController
     let config = UIImage.SymbolConfiguration(pointSize: 22, weight: .medium)
     return UIImage(systemName: systemName, withConfiguration: config)?
       .withRenderingMode(.alwaysTemplate)
+  }
+
+  private var spinnerAnimationTask: Task<Void, Never>?
+
+  private func shortcutSpinnerImage() -> UIImage? {
+    let config = UIImage.SymbolConfiguration(pointSize: 22, weight: .medium)
+    return UIImage(systemName: "arrow.clockwise.circle.fill", withConfiguration: config)?
+      .withRenderingMode(.alwaysTemplate)
+  }
+
+  private func startSpinnerAnimation() {
+    spinnerAnimationTask?.cancel()
+    spinnerAnimationTask = Task { @MainActor [weak self] in
+      guard let self, let tab = self.shortcutTab else { return }
+      // Use CABasicAnimation for continuous rotation
+      let tabBarButton = self.tabBar.subviews.first { subview in
+        if #available(iOS 18.0, *) {
+          return subview.accessibilityIdentifier?.contains("search") == true
+            || subview.accessibilityLabel == tab.title
+        }
+        return false
+      }
+      guard let tabBarButton else { return }
+      let iconView = tabBarButton.subviews.first(where: { $0 is UIImageView }) ?? tabBarButton
+      let animation = CABasicAnimation(keyPath: "transform.rotation.z")
+      animation.fromValue = 0.0
+      animation.toValue = .pi * 2.0
+      animation.duration = 1.5
+      animation.repeatCount = .infinity
+      iconView.layer.add(animation, forKey: "spinAnimation")
+    }
+  }
+
+  private func stopSpinnerAnimation() {
+    spinnerAnimationTask?.cancel()
+    spinnerAnimationTask = nil
+    guard let shortcutTab else { return }
+    if #available(iOS 18.0, *) {
+      let tabBarButton = tabBar.subviews.first { subview in
+        subview.accessibilityIdentifier?.contains("search") == true
+          || subview.accessibilityLabel == shortcutTab.title
+      }
+      guard let tabBarButton else { return }
+      let iconView = tabBarButton.subviews.first(where: { $0 is UIImageView }) ?? tabBarButton
+      iconView.layer.removeAnimation(forKey: "spinAnimation")
+    }
   }
 
   private func makeShortcutFallbackAvatarImage(initials: String) -> UIImage? {
@@ -667,6 +726,10 @@ final class MistiaNativeTabBarController: UITabBarController, UITabBarController
   func tabBarController(_ tabBarController: UITabBarController, shouldSelectTab tab: UITab) -> Bool
   {
     guard let shortcutTab, tab === shortcutTab else { return true }
+    // Block interaction while syncing
+    if isCurrentShortcutSyncing && currentShortcutPresentation.action == MistiaShortcutResolvedAction.syncNow {
+      return false
+    }
     chromeDelegate?.nativeTabBarControllerDidTapShortcut(self)
     return false
   }

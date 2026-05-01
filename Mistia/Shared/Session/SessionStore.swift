@@ -150,7 +150,7 @@ final class SessionStore {
     @ObservationIgnored private var autoSyncPaused = false
     @ObservationIgnored private var shouldShowSyncProgress = false
     @ObservationIgnored private var syncStartTime: Date?
-    @ObservationIgnored private var requiresInitialSync = false
+    @ObservationIgnored var requiresInitialSync = false
     @ObservationIgnored private var requiresManualSyncAfterRestore: Bool
     @ObservationIgnored private var pendingInitialSyncChoice: MistiaInitialSyncChoice?
     @ObservationIgnored private var subjectUserIDProvider: (() -> UUID?)?
@@ -663,6 +663,9 @@ final class SessionStore {
         isWorking = true
         lastErrorMessage = nil
         let activeSession = currentSession
+
+        disableShortcutIfNeededOnLogout()
+
         await beginAuthTransition()
         defer { endAuthTransition() }
 
@@ -686,6 +689,9 @@ final class SessionStore {
         lastErrorMessage = nil
         let activeSession = currentSession
         let currentDescriptor = launchState?.activeProfileDescriptor
+
+        disableShortcutIfNeededOnLogout()
+
         await beginAuthTransition()
         defer { endAuthTransition() }
 
@@ -1830,6 +1836,20 @@ final class SessionStore {
             ja: "MistiaSyncConfig.plist にサービス URL と公開キーを設定してから再ビルドしてください。"
         )
         syncStatusSystemImage = "wrench.and.screwdriver"
+    }
+
+    private func disableShortcutIfNeededOnLogout() {
+        let shortcutKindsRequiringAuth: Set<MistiaShortcutKind> = [
+            .familyOverview,
+            .familyMember,
+            .syncNow
+        ]
+        let storedKind = MistiaShortcutKind(rawValue: userDefaults.string(forKey: MistiaAppStorageKey.mistiaShortcutKind) ?? "")
+        let isEnabled = userDefaults.bool(forKey: MistiaAppStorageKey.mistiaShortcutEnabled)
+
+        if isEnabled, let kind = storedKind, shortcutKindsRequiringAuth.contains(kind) {
+            userDefaults.set(false, forKey: MistiaAppStorageKey.mistiaShortcutEnabled)
+        }
     }
 
     private func applySignedOutState(preservingBanner: Bool = false) {

@@ -9,7 +9,7 @@ struct SettingsView: View {
     @AppStorage(MistiaAppStorageKey.appLanguage) private var appLanguageRawValue = ""
     @AppStorage(MistiaAppStorageKey.currencyCode) private var currencyCode = "JPY"
     @AppStorage(MistiaAppStorageKey.mistiaShortcutEnabled) private var mistiaShortcutEnabled = false
-    @AppStorage(MistiaAppStorageKey.mistiaShortcutKind) private var shortcutKindRawValue = MistiaShortcutKind.profile.rawValue
+    @AppStorage(MistiaAppStorageKey.mistiaShortcutKind) private var shortcutKindRawValue = MistiaShortcutKind.backupRestore.rawValue
     @AppStorage(MistiaAppStorageKey.mistiaShortcutMemberUserID) private var shortcutMemberUserIDRawValue = ""
 
     @State private var destination: SettingsDestination?
@@ -345,7 +345,7 @@ private struct MistiaShortcutSettingsView: View {
     @Environment(SessionStore.self) private var sessionStore
     @Environment(FamilyContextStore.self) private var familyContextStore
     @AppStorage(MistiaAppStorageKey.mistiaShortcutEnabled) private var mistiaShortcutEnabled = false
-    @AppStorage(MistiaAppStorageKey.mistiaShortcutKind) private var shortcutKindRawValue = MistiaShortcutKind.profile.rawValue
+    @AppStorage(MistiaAppStorageKey.mistiaShortcutKind) private var shortcutKindRawValue = MistiaShortcutKind.backupRestore.rawValue
     @AppStorage(MistiaAppStorageKey.mistiaShortcutMemberUserID) private var shortcutMemberUserIDRawValue = ""
 
     private var cardTint: Color {
@@ -424,10 +424,17 @@ private struct MistiaShortcutSettingsView: View {
             )
         }
 
-        let utilitySelections: [MistiaShortcutSelection] = [
-            .backupRestore,
-            .archivedItems
-        ]
+        let utilitySelections: [MistiaShortcutSelection] = {
+            var selections: [MistiaShortcutSelection] = [
+                .backupRestore,
+                .archivedItems
+            ]
+            // syncNow only available when signed in AND initial sync is completed
+            if sessionStore.isSignedIn && !sessionStore.requiresInitialSync {
+                selections.append(.syncNow)
+            }
+            return selections
+        }()
 
         output.append(
             MistiaShortcutOptionSectionDump(
@@ -463,10 +470,10 @@ private struct MistiaShortcutSettingsView: View {
             .toggleStyle(.switch)
             .onChange(of: mistiaShortcutEnabled) { _, newValue in
                 guard newValue else { return }
-                guard shortcutKindRawValue == MistiaShortcutKind.profile.rawValue
-                    || shortcutKindRawValue == MistiaShortcutKind.syncSettings.rawValue else {
-                    return
-                }
+                let availableSelections: Set<String> = Set(
+                    sections.flatMap { $0.rows.map { $0.selection.storedKindRawValue } }
+                )
+                guard !availableSelections.contains(shortcutKindRawValue) else { return }
                 guard let firstSelection = sections.first?.rows.first?.selection else { return }
                 shortcutKindRawValue = firstSelection.storedKindRawValue
                 shortcutMemberUserIDRawValue = firstSelection.storedMemberUserIDRawValue
@@ -512,20 +519,6 @@ private struct MistiaShortcutSettingsView: View {
 
     private func subtitle(for presentation: MistiaShortcutPresentation) -> String? {
         switch presentation.action {
-        case .profile:
-            return mistiaLocalized(
-                vi: "Mở hồ sơ, tài khoản và phần quản lý chính của Mistia.",
-                en: "Open your profile, account, and main management area.",
-                ja: "プロフィール、アカウント、管理画面を開きます。"
-            )
-
-        case .syncSettings:
-            return mistiaLocalized(
-                vi: "Mở cài đặt đồng bộ. Nếu sync chưa sẵn sàng, nút sẽ đưa về Hồ sơ.",
-                en: "Open sync settings. If sync is not ready yet, the button falls back to Profile.",
-                ja: "同期設定を開きます。同期の準備ができていない場合はプロフィールを開きます。"
-            )
-
         case .backupRestore:
             return mistiaLocalized(
                 vi: "Mở sao lưu cục bộ và khôi phục dữ liệu.",
@@ -552,6 +545,13 @@ private struct MistiaShortcutSettingsView: View {
                 vi: "Chuyển ngay sang chế độ xem dữ liệu của thành viên này trong tab Tổng quan.",
                 en: "Jump straight into this member's data in Overview.",
                 ja: "概要タブでこのメンバーのデータへすぐ移動します。"
+            )
+
+        case .syncNow:
+            return mistiaLocalized(
+                vi: "Đồng bộ dữ liệu ngay lập tức với cloud.",
+                en: "Sync data immediately with cloud.",
+                ja: "すぐにクラウドとデータを同期します。"
             )
         }
     }
@@ -989,10 +989,6 @@ private extension MistiaShortcutPresentation {
 
     private var selectionAccent: MistiaAccent {
         switch action {
-        case .profile:
-            .rose
-        case .syncSettings:
-            .sky
         case .backupRestore:
             .mint
         case .archivedItems:
@@ -1001,6 +997,8 @@ private extension MistiaShortcutPresentation {
             .indigo
         case .memberOverview:
             .rose
+        case .syncNow:
+            .sky
         }
     }
 }
