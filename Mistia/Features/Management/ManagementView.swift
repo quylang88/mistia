@@ -1,24 +1,13 @@
 import SwiftData
 import SwiftUI
 
-private enum ManagementNavigationDestination: Identifiable, Equatable {
+private enum ManagementNavigationDestination: String, Identifiable {
     case authPlaceholder
     case settings
     case family
-    case creditCardStatement(LedgerWallet)
+    case creditCardStatement
 
-    var id: String {
-        switch self {
-        case .authPlaceholder: return "authPlaceholder"
-        case .settings: return "settings"
-        case .family: return "family"
-        case .creditCardStatement(let wallet): return "creditCardStatement-\(wallet.id)"
-        }
-    }
-
-    static func == (lhs: ManagementNavigationDestination, rhs: ManagementNavigationDestination) -> Bool {
-        lhs.id == rhs.id
-    }
+    var id: String { rawValue }
 }
 
 private struct ManagementInfoAlert: Identifiable {
@@ -47,6 +36,7 @@ struct ManagementView: View {
     @Query private var transactionAuditRecords: [TransactionAuditRecord]
 
     @State private var destination: ManagementNavigationDestination?
+    @State private var statementWallet: LedgerWallet?
     @State private var walletEditorTarget: ManagementWalletEditorTarget?
     @State private var categoryEditorTarget: ManagementCategoryEditorTarget?
     @State private var selectedCategoryKind: TransactionCategoryKind = .expense
@@ -156,8 +146,10 @@ struct ManagementView: View {
                     SettingsView()
                 case .family:
                     FamilyManagementView()
-                case .creditCardStatement(let wallet):
-                    ManagementCreditCardStatementView(wallet: wallet)
+                case .creditCardStatement:
+                    if let wallet = statementWallet {
+                        ManagementCreditCardStatementView(wallet: wallet)
+                    }
                 }
             }
         }
@@ -193,7 +185,8 @@ struct ManagementView: View {
         }
         .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("MistiaOpenCreditCardStatement"))) { notification in
             if let wallet = notification.object as? LedgerWallet {
-                destination = .creditCardStatement(wallet)
+                statementWallet = wallet
+                destination = .creditCardStatement
             }
         }
         .alert(item: $infoAlert) { alert in
