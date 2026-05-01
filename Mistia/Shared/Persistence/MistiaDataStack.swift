@@ -347,7 +347,21 @@ enum MistiaDataStack {
             guard let data = userDefaults.data(forKey: MistiaAppStorageKey.localProfileDescriptors) else {
                 return []
             }
-            return try JSONDecoder().decode(
+
+            let decoder = JSONDecoder()
+            decoder.dateDecodingStrategy = .custom { decoder in
+                let container = try decoder.singleValueContainer()
+                if let stringValue = try? container.decode(String.self) {
+                    if let date = ISO8601DateFormatter.mistiaSyncWithFractionalSeconds.date(from: stringValue)
+                        ?? ISO8601DateFormatter.mistiaSyncWithoutFractionalSeconds.date(from: stringValue) {
+                        return date
+                    }
+                }
+                let doubleValue = try container.decode(Double.self)
+                return Date(timeIntervalSince1970: doubleValue)
+            }
+
+            return try decoder.decode(
                 [MistiaLocalProfileDescriptor].self,
                 from: data
             )
@@ -357,7 +371,12 @@ enum MistiaDataStack {
             _ descriptors: [MistiaLocalProfileDescriptor],
             userDefaults: UserDefaults
         ) throws {
-            let data = try JSONEncoder().encode(descriptors)
+            let encoder = JSONEncoder()
+            encoder.dateEncodingStrategy = .custom { date, encoder in
+                var container = encoder.singleValueContainer()
+                try container.encode(ISO8601DateFormatter.mistiaSyncWithFractionalSeconds.string(from: date))
+            }
+            let data = try encoder.encode(descriptors)
             userDefaults.set(data, forKey: MistiaAppStorageKey.localProfileDescriptors)
         }
 
