@@ -12,6 +12,14 @@ struct MistiaLocalProfileDescriptor: Codable, Equatable, Identifiable {
     var createdAt: Date
     var lastUsedAt: Date
 
+    enum CodingKeys: String, CodingKey {
+        case id
+        case kind
+        case cloudUserID = "cloud_user_id"
+        case createdAt = "created_at"
+        case lastUsedAt = "last_used_at"
+    }
+
     init(
         id: UUID = UUID(),
         kind: MistiaLocalProfileKind,

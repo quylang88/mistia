@@ -221,6 +221,14 @@ enum MistiaDataStack {
                 try saveProfileRegistry(descriptors, userDefaults: userDefaults)
             }
 
+            // Heal registry if descriptors are missing but files exist
+            descriptors = try healProfileRegistryIfNeeded(
+                descriptors,
+                schema: schema,
+                userDefaults: userDefaults,
+                fileManager: fileManager
+            )
+
             if descriptors.isEmpty {
                 let guestDescriptor = MistiaLocalProfileDescriptor(kind: .guestUnbound)
                 try ensureProfileDirectoryExists(
@@ -238,7 +246,7 @@ enum MistiaDataStack {
             let activeProfileID = storedActiveProfileID(
                 in: userDefaults,
                 descriptors: descriptors
-            ) ?? descriptors[0].id
+            ) ?? descriptors.first?.id ?? UUID()
             let activeDescriptor = descriptors.first(where: { $0.id == activeProfileID }) ?? descriptors[0]
             let container = try openContainer(
                 for: activeDescriptor,
@@ -339,7 +347,7 @@ enum MistiaDataStack {
             guard let data = userDefaults.data(forKey: MistiaAppStorageKey.localProfileDescriptors) else {
                 return []
             }
-            return try JSONDecoder.mistiaSyncDecoder.decode(
+            return try JSONDecoder().decode(
                 [MistiaLocalProfileDescriptor].self,
                 from: data
             )
@@ -349,7 +357,7 @@ enum MistiaDataStack {
             _ descriptors: [MistiaLocalProfileDescriptor],
             userDefaults: UserDefaults
         ) throws {
-            let data = try JSONEncoder.mistiaSyncEncoder.encode(descriptors)
+            let data = try JSONEncoder().encode(descriptors)
             userDefaults.set(data, forKey: MistiaAppStorageKey.localProfileDescriptors)
         }
 
@@ -406,6 +414,52 @@ enum MistiaDataStack {
             }
 
             return descriptor
+        }
+
+        private static func healProfileRegistryIfNeeded(
+            _ currentDescriptors: [MistiaLocalProfileDescriptor],
+            schema: Schema,
+            userDefaults: UserDefaults,
+            fileManager: FileManager
+        ) throws -> [MistiaLocalProfileDescriptor] {
+            let rootURL = profilesRootURL(fileManager: fileManager)
+            guard let contents = try? fileManager.contentsOfDirectory(
+                at: rootURL,
+                includingPropertiesForKeys: nil
+            ) else {
+                return currentDescriptors
+            }
+
+            var updatedDescriptors = currentDescriptors
+            var didHeal = false
+
+            for directoryURL in contents where directoryURL.hasDirectoryPath {
+                guard let profileID = UUID(uuidString: directoryURL.lastPathComponent) else { continue }
+                if updatedDescriptors.contains(where: { $0.id == profileID }) { continue }
+
+                // Orphaned directory found
+                let storeURL = directoryURL.appendingPathComponent("profile").appendingPathExtension("store")
+                guard fileManager.fileExists(atPath: storeURL.path) else { continue }
+
+                // Try to infer owner from the store
+                let configuration = ModelConfiguration("inference", schema: schema, url: storeURL)
+                guard let container = try? ModelContainer(for: schema, configurations: [configuration]) else { continue }
+                let context = ModelContext(container)
+                let profile = (try? context.fetch(FetchDescriptor<UserAccountProfile>()))?.first
+
+                let descriptor = MistiaLocalProfileDescriptor(
+                    id: profileID,
+                    kind: profile == nil ? .guestUnbound : .cloudUser,
+                    cloudUserID: profile?.userID
+                )
+                updatedDescriptors.append(descriptor)
+                didHeal = true
+            }
+
+            if didHeal {
+                try saveProfileRegistry(updatedDescriptors, userDefaults: userDefaults)
+            }
+            return updatedDescriptors
         }
 
         private static func storedLegacyLocalModeProfileUserID(
