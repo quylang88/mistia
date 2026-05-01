@@ -328,6 +328,7 @@ extension LedgerTransaction {
             title: title,
             note: note,
             amountMinor: amountMinor,
+            isArchived: isArchived,
             occurredAt: occurredAt,
             createdAt: createdAt,
             sourceWalletID: sourceWallet?.id,

@@ -5,8 +5,16 @@ private enum ManagementNavigationDestination: String, Identifiable {
     case authPlaceholder
     case settings
     case family
+    case creditCardStatement(LedgerWallet)
 
-    var id: String { rawValue }
+    var id: String {
+        switch self {
+        case .authPlaceholder: return "authPlaceholder"
+        case .settings: return "settings"
+        case .family: return "family"
+        case .creditCardStatement(let wallet): return "creditCardStatement-\(wallet.id)"
+        }
+    }
 }
 
 private struct ManagementInfoAlert: Identifiable {
@@ -144,6 +152,8 @@ struct ManagementView: View {
                     SettingsView()
                 case .family:
                     FamilyManagementView()
+                case .creditCardStatement(let wallet):
+                    ManagementCreditCardStatementView(wallet: wallet)
                 }
             }
         }
@@ -176,6 +186,11 @@ struct ManagementView: View {
         }
         .onDisappear {
             hideQuickCreate = false
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("MistiaOpenCreditCardStatement"))) { notification in
+            if let wallet = notification.object as? LedgerWallet {
+                destination = .creditCardStatement(wallet)
+            }
         }
         .alert(item: $infoAlert) { alert in
             Alert(
@@ -670,6 +685,7 @@ private struct ManagementWalletRow: View {
                 title: $0.title,
                 note: $0.note,
                 amountMinor: $0.amountMinor,
+                isArchived: $0.isArchived,
                 occurredAt: $0.occurredAt,
                 createdAt: $0.createdAt,
                 sourceWalletID: $0.sourceWallet?.id,
@@ -726,13 +742,28 @@ private struct ManagementWalletRow: View {
                 Spacer(minLength: 8)
 
                 if wallet.kind == .creditCard, let availableCredit = availableCreditMinor {
-                    VStack(alignment: .trailing, spacing: 2) {
-                        Text(mistiaLocalized(vi: "Khả dụng", en: "Available", ja: "利用可能"))
-                            .font(.system(size: 10.5, weight: .medium, design: .rounded))
-                            .foregroundStyle(.secondary)
-                        Text(availableCredit.formattedCurrency(code: wallet.currencyCode))
-                            .font(.system(size: 16, weight: .bold, design: .rounded))
-                            .foregroundStyle(balanceColor)
+                    VStack(alignment: .trailing, spacing: 6) {
+                        VStack(alignment: .trailing, spacing: 2) {
+                            Text(mistiaLocalized(vi: "Khả dụng", en: "Available", ja: "利用可能"))
+                                .font(.system(size: 10.5, weight: .medium, design: .rounded))
+                                .foregroundStyle(.secondary)
+                            Text(availableCredit.formattedCurrency(code: wallet.currencyCode))
+                                .font(.system(size: 16, weight: .bold, design: .rounded))
+                                .foregroundStyle(balanceColor)
+                        }
+
+                        Button {
+                            // This will be handled by the parent view's destination
+                            NotificationCenter.default.post(name: NSNotification.Name("MistiaOpenCreditCardStatement"), object: wallet)
+                        } label: {
+                            Text(mistiaLocalized(vi: "Sao kê", en: "Statement", ja: "明細"))
+                                .font(.system(size: 11, weight: .bold, design: .rounded))
+                                .foregroundStyle(MistiaAccent.purple.color)
+                                .padding(.horizontal, 10)
+                                .padding(.vertical, 5)
+                                .background(MistiaAccent.purple.color.opacity(0.12), in: Capsule())
+                        }
+                        .buttonStyle(.plain)
                     }
                 } else {
                     Text(currentBalanceMinor.formattedCurrency(code: wallet.currencyCode))

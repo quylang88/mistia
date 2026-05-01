@@ -1649,7 +1649,7 @@ private struct PlanningMonthPickerSheet: View {
             VStack(spacing: 0) {
                 HStack(spacing: 0) {
                     Picker(mistiaLocalized(vi: "Tháng", en: "Month", ja: "月"), selection: $draftMonth) {
-                        ForEach(1...12, id: \.self) { month in
+                        ForEach(allowedMonths, id: \.self) { month in
                             Text(
                                 mistiaLocalized(
                                     vi: "Tháng \(month)",
@@ -1677,6 +1677,9 @@ private struct PlanningMonthPickerSheet: View {
                     }
                     .pickerStyle(.wheel)
                     .frame(maxWidth: .infinity)
+                    .onChange(of: draftYear) { _, _ in
+                        validateDraft()
+                    }
                 }
                 .frame(height: 220)
             }
@@ -1713,11 +1716,30 @@ private struct PlanningMonthPickerSheet: View {
         }
     }
 
+    private var allowedMonths: [Int] {
+        let currentYear = calendar.component(.year, from: .now)
+        if draftYear < currentYear {
+            return Array(1...12)
+        } else {
+            let currentMonth = calendar.component(.month, from: .now)
+            return Array(1...currentMonth)
+        }
+    }
+
     private var yearOptions: [Int] {
         let currentYear = calendar.component(.year, from: .now)
-        let lowerBound = min(currentYear - 10, draftYear - 2)
-        let upperBound = max(currentYear + 10, draftYear + 10)
+        let lowerBound = currentYear - 10
+        let upperBound = currentYear
         return Array(lowerBound...upperBound)
+    }
+
+    private func validateDraft() {
+        let currentYear = calendar.component(.year, from: .now)
+        let currentMonth = calendar.component(.month, from: .now)
+
+        if draftYear == currentYear && draftMonth > currentMonth {
+            draftMonth = currentMonth
+        }
     }
 
     private func applySelection() {
@@ -1725,7 +1747,15 @@ private struct PlanningMonthPickerSheet: View {
             return
         }
 
-        selection = PlanningLogic.startOfMonth(for: date, calendar: calendar)
+        let startOfTarget = PlanningLogic.startOfMonth(for: date, calendar: calendar)
+        let startOfCurrent = PlanningLogic.startOfMonth(for: .now, calendar: calendar)
+
+        if startOfTarget > startOfCurrent {
+            selection = startOfCurrent
+        } else {
+            selection = startOfTarget
+        }
+
         dismiss()
     }
 }

@@ -15,6 +15,7 @@ struct TransactionRecordSnapshot: Equatable, Identifiable {
     let title: String
     let note: String?
     let amountMinor: Int64
+    let isArchived: Bool
     let occurredAt: Date
     let createdAt: Date
     let sourceWalletID: UUID?
@@ -35,6 +36,7 @@ struct TransactionRecordSnapshot: Equatable, Identifiable {
         title: String,
         note: String?,
         amountMinor: Int64,
+        isArchived: Bool = false,
         occurredAt: Date,
         createdAt: Date,
         sourceWalletID: UUID?,
@@ -54,6 +56,7 @@ struct TransactionRecordSnapshot: Equatable, Identifiable {
         self.title = title
         self.note = note
         self.amountMinor = amountMinor
+        self.isArchived = isArchived
         self.occurredAt = occurredAt
         self.createdAt = createdAt
         self.sourceWalletID = sourceWalletID
@@ -394,7 +397,7 @@ nonisolated enum TransactionLogic {
         records: [TransactionRecordSnapshot]
     ) -> Int64 {
         records
-            .filter { $0.entryStatus == .posted }
+            .filter { $0.entryStatus == .posted && !$0.isArchived }
             .reduce(wallet.openingBalanceMinor) { partialResult, record in
                 partialResult + balanceDelta(for: wallet, record: record)
             }
@@ -661,6 +664,7 @@ extension LedgerTransaction {
             title: title,
             note: note,
             amountMinor: amountMinor,
+            isArchived: isArchived,
             occurredAt: occurredAt,
             createdAt: createdAt,
             sourceWalletID: sourceWallet?.id,
