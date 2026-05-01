@@ -65,7 +65,7 @@ struct MistiaApp: App {
                         )
                     }
                     familyContextStore.setModelContainer(sessionStore.currentModelContainer)
-                    await familyContextStore.bootstrapIfNeeded(sessionStore: sessionStore)
+                    await runStartupTasks()
                 }
                 .onChange(of: scenePhase) { _, newPhase in
                     switch newPhase {
@@ -95,6 +95,31 @@ struct MistiaApp: App {
 
     private var appLanguage: MistiaAppLanguage {
         MistiaAppLanguage.resolve(storedRawValue: appLanguageRawValue)
+    }
+
+    @MainActor
+    private func runStartupTasks() async {
+        await sessionStore.bootstrapIfNeeded()
+        await familyContextStore.bootstrapIfNeeded(sessionStore: sessionStore)
+
+        do {
+            let context = sessionStore.currentModelContainer.mainContext
+            try MistiaBootstrap.seedDefaultCategoriesIfNeeded(
+                modelContext: context,
+                sessionStore: sessionStore
+            )
+        } catch {
+            print("Failed to seed category hierarchy: \(error)")
+        }
+
+        do {
+            let context = sessionStore.currentModelContainer.mainContext
+            try MistiaBootstrap.cleanupExpiredArchivedData(modelContext: context, sessionStore: sessionStore)
+        } catch {
+            print("Failed to clean up expired archived data: \(error)")
+        }
+
+        sessionStore.finishBootstrapping()
     }
 }
 
@@ -222,58 +247,25 @@ private struct MistiaProtectedLaunchView: View {
 
 private struct MistiaStartupLoadingView: View {
     let appLanguage: MistiaAppLanguage
-    @State private var isAnimating = false
 
     var body: some View {
         ZStack {
-            // Gradient background giống MistiaProtectedLaunchView
-            LinearGradient(
-                colors: [
-                    Color(red: 0.08, green: 0.11, blue: 0.18),
-                    Color(red: 0.13, green: 0.16, blue: 0.25)
-                ],
-                startPoint: .topLeading,
-                endPoint: .bottomTrailing
-            )
-            .ignoresSafeArea()
+            Color(.systemBackground)
+                .ignoresSafeArea()
 
-            VStack(spacing: 24) {
-                // Logo hoặc icon
-                Image(systemName: "heart.text.square.fill")
-                    .font(.system(size: 72))
-                    .foregroundStyle(Color.white.opacity(0.9))
-                    .symbolEffect(.bounce, value: isAnimating)
+            VStack(spacing: 14) {
+                ProgressView()
+                    .controlSize(.large)
 
-                VStack(spacing: 12) {
-                    ProgressView()
-                        .controlSize(.large)
-                        .tint(.white)
-
-                    Text(mistiaLocalized(
-                        vi: "Đang tải dữ liệu...",
-                        en: "Loading your data...",
-                        ja: "データを読み込み中..."
-                    ))
-                    .font(.system(size: 18, weight: .semibold, design: .rounded))
-                    .foregroundStyle(.white)
-
-                    Text(mistiaLocalized(
-                        vi: "Mistia đang khôi phục thông tin cá nhân",
-                        en: "Mistia is restoring your personal information",
-                        ja: "Mistia は個人情報を復元しています"
-                    ))
-                    .font(.system(size: 14, weight: .regular, design: .rounded))
-                    .foregroundStyle(.white.opacity(0.7))
-                    .multilineTextAlignment(.center)
-                    .padding(.horizontal, 32)
-                }
+                Text(mistiaLocalized(
+                    vi: "Đang tải dữ liệu...",
+                    en: "Loading your data...",
+                    ja: "データを読み込み中..."
+                ))
+                .font(.system(size: 16, weight: .semibold, design: .rounded))
+                .foregroundStyle(.secondary)
             }
-            .padding(32)
-        }
-        .onAppear {
-            withAnimation(.easeInOut(duration: 0.6).repeatForever(autoreverses: true)) {
-                isAnimating = true
-            }
+            .padding(24)
         }
         .environment(\.locale, appLanguage.locale)
         .environment(\.calendar, appLanguage.calendar)

@@ -721,12 +721,6 @@ private struct ManagementWalletRow: View {
                             .font(.system(size: 12.5, weight: .medium, design: .rounded))
                             .foregroundStyle(.secondary)
                     }
-
-                    if let footnote = wallet.footnoteText {
-                        Text(footnote)
-                            .font(.system(size: 12.5, weight: .medium, design: .rounded))
-                            .foregroundStyle(.secondary)
-                    }
                 }
 
                 Spacer(minLength: 8)

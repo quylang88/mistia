@@ -14,35 +14,9 @@ struct ContentView: View {
                     .presentationDetents([.large])
                     .presentationDragIndicator(.hidden)
             }
-            .task {
-                await runStartupTasks()
-            }
             .task(id: familyRefreshToken) {
                 await familyContextStore.refresh(sessionStore: sessionStore)
             }
-    }
-
-    @MainActor
-    private func runStartupTasks() async {
-        await Task.yield()
-        do {
-            let context = sessionStore.currentModelContainer.mainContext
-            try MistiaBootstrap.seedDefaultCategoriesIfNeeded(
-                modelContext: context,
-                sessionStore: sessionStore
-            )
-        } catch {
-            print("Failed to seed category hierarchy: \(error)")
-        }
-        await sessionStore.bootstrapIfNeeded()
-        await familyContextStore.bootstrapIfNeeded(sessionStore: sessionStore)
-
-        do {
-            let context = sessionStore.currentModelContainer.mainContext
-            try MistiaBootstrap.cleanupExpiredArchivedData(modelContext: context, sessionStore: sessionStore)
-        } catch {
-            print("Failed to clean up expired archived data: \(error)")
-        }
     }
 
     private var familyRefreshToken: String {

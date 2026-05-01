@@ -185,6 +185,7 @@ final class SessionStore {
             profileID: launchState?.activeProfileDescriptor?.id
         )
         networkStatus = self.connectivityMonitor?.currentStatus ?? .checking
+        isBootstrapping = true
 
         if MistiaSyncConfiguration.load() == nil {
             syncStatusTitle = mistiaLocalized(
@@ -463,11 +464,9 @@ final class SessionStore {
     func bootstrapIfNeeded() async {
         guard !didBootstrap else { return }
         didBootstrap = true
-        isBootstrapping = true
 
         guard isConfigured else {
             applyConfigurationMissingState()
-            isBootstrapping = false
             return
         }
 
@@ -518,6 +517,10 @@ final class SessionStore {
                 )
             }
         }
+    }
+
+    /// Called by ContentView after all startup tasks complete
+    func finishBootstrapping() {
         isBootstrapping = false
     }
 

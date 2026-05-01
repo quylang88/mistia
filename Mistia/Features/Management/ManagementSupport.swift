@@ -178,15 +178,6 @@ extension LedgerWallet {
             }
         }
     }
-
-    var footnoteText: String? {
-        guard kind == .creditCard, let profile = creditCardProfile else { return nil }
-        return mistiaLocalized(
-            vi: "Chốt sao kê ngày \(profile.statementClosingDay), thanh toán ngày \(profile.paymentDueDay)",
-            en: "Statement closes on day \(profile.statementClosingDay), payment due on day \(profile.paymentDueDay)",
-            ja: "締め日は毎月 \(profile.statementClosingDay) 日、支払日は毎月 \(profile.paymentDueDay) 日です"
-        )
-    }
 }
 
 extension TransactionCategory {
