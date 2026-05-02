@@ -494,7 +494,7 @@ struct ManagementArchivedItemsView: View {
                 tx.primaryKind == .transfer &&
                 tx.transferSubtype == .internalTransfer &&
                 calendar.isDate(tx.occurredAt, equalTo: transaction.occurredAt, toGranularity: .month) &&
-                tx.title.contains(mistiaLocalized(vi: "thanh toán thẻ", en: "card payment", ja: "カード支払い"))
+                tx.title.localizedStandardContains(mistiaLocalized(vi: "thanh toán thẻ", en: "card payment", ja: "カード支払い"))
             }
 
             if isDuplicate {
@@ -591,7 +591,7 @@ struct ManagementArchivedItemsView: View {
         transaction.primaryKind == .transfer &&
         transaction.transferSubtype == .internalTransfer &&
         transaction.destinationWallet?.kind == .creditCard &&
-        transaction.title.contains(mistiaLocalized(vi: "thanh toán thẻ", en: "card payment", ja: "カード支払い"))
+        transaction.title.localizedStandardContains(mistiaLocalized(vi: "thanh toán thẻ", en: "card payment", ja: "カード支払い"))
     }
 
     private func transactionOwnerUserID(for transaction: LedgerTransaction) -> UUID? {

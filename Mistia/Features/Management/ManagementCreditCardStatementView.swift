@@ -39,16 +39,6 @@ struct ManagementCreditCardStatementView: View {
         monthlyTransactions.reduce(0) { $0 + $1.amountMinor }
     }
 
-    private var isAlreadyPaid: Bool {
-        allTransactions.contains { tx in
-            tx.destinationWallet?.id == wallet.id &&
-            tx.primaryKind == .transfer &&
-            tx.transferSubtype == .internalTransfer &&
-            calendar.isDate(tx.occurredAt, equalTo: selectedMonth, toGranularity: .month) &&
-            tx.title.contains(mistiaLocalized(vi: "thanh toán thẻ", en: "card payment", ja: "カード支払い"))
-        }
-    }
-
     private var dynamicAccentColor: Color {
         colorScheme == .dark ? MistiaAccent.lightPurple.color : MistiaAccent.purple.color
     }
@@ -74,11 +64,13 @@ struct ManagementCreditCardStatementView: View {
                 }
                 .tabViewStyle(.page(indexDisplayMode: .never))
 
-                // Overlay a narrow strip on the left to allow edge-swipe back gesture
-                // by allowing gestures to fall through to the navigation controller
-                Color.clear
-                    .frame(width: 20)
+                // Overlay a strip on the left to allow edge-swipe back gesture
+                // by blocking the TabView's horizontal drag gesture in this area.
+                // 44pt is the standard Apple touch target size.
+                Color.white.opacity(0.001)
+                    .frame(width: 44)
                     .contentShape(Rectangle())
+                    .gesture(DragGesture(minimumDistance: 0))
             }
         }
         .background(MistiaBackgroundView(tone: .muted))
@@ -152,7 +144,7 @@ struct ManagementCreditCardStatementView: View {
             tx.primaryKind == .transfer &&
             tx.transferSubtype == .internalTransfer &&
             calendar.isDate(tx.occurredAt, equalTo: month, toGranularity: .month) &&
-            tx.title.contains(mistiaLocalized(vi: "thanh toán thẻ", en: "card payment", ja: "カード支払い"))
+            tx.title.localizedStandardContains(mistiaLocalized(vi: "thanh toán thẻ", en: "card payment", ja: "カード支払い"))
         }
     }
 

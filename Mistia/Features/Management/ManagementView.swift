@@ -396,7 +396,7 @@ struct ManagementView: View {
                     : (familyContextStore.lastErrorMessage ?? mistiaLocalized(
                         vi: "Không thể gửi yêu cầu lúc này.",
                         en: "Couldn't send the request right now.",
-                        ja: "現在リクエスト hay送信できません。"
+                        ja: "現在リクエストは送信できません。"
                     ))
             )
         }
