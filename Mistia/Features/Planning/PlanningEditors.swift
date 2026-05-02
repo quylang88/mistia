@@ -1224,19 +1224,6 @@ struct PlanningCreditCardEditorSheet: View {
                         .lineLimit(3...5)
                 }
 
-                if target.wallet != nil, let dueItem = currentDueSnapshot, dueItem.status == .pending {
-                    Section {
-                        TextField(mistiaLocalized(vi: "Số tiền thanh toán", en: "Payment amount", ja: "支払い金額"), text: $paymentAmountText)
-                            .keyboardType(.numberPad)
-                        Button(mistiaLocalized(vi: "Thanh toán trước", en: "Pay early", ja: "先に支払う")) {
-                            payEarly(with: dueItem)
-                        }
-                    } header: {
-                        Text(mistiaLocalized(vi: "Thanh toán trước", en: "Early payment", ja: "前倒し支払い"))
-                    } footer: {
-                        Text(mistiaLocalized(vi: "Khoản thanh toán sẽ được ghi nhận thành giao dịch chuyển tiền sang thẻ tín dụng.", en: "This payment will be recorded as a transfer transaction to the credit card.", ja: "この支払いはクレジットカードへの振替取引として記録されます。"))
-                    }
-                }
 
                 if target.wallet != nil {
                     Section {
@@ -1378,54 +1365,6 @@ struct PlanningCreditCardEditorSheet: View {
         }
     }
 
-    private func payEarly(with dueItem: PlanningCreditCardDueSnapshot) {
-        do {
-            let amountOverride = paymentAmountText.nilIfBlank?.currencyInputToMinorUnits(currencyCode: activeCurrencyCode)
-            let effectiveDueItem = PlanningCreditCardDueSnapshot(
-                id: dueItem.id,
-                walletID: dueItem.walletID,
-                walletName: dueItem.walletName,
-                network: dueItem.network,
-                last4: dueItem.last4,
-                amountMinor: amountOverride ?? dueItem.amountMinor,
-                availableCreditMinor: dueItem.availableCreditMinor,
-                dueDate: dueItem.dueDate,
-                paymentSourceWalletID: draft.paymentSourceWalletID,
-                currencyCode: dueItem.currencyCode,
-                status: dueItem.status,
-                linkedTransactionID: dueItem.linkedTransactionID
-            )
-            let paymentDraft = try PlanningLogic.makePaymentDraft(
-                for: effectiveDueItem,
-                overrideAmountMinor: amountOverride
-            )
-            let savedPayment = try PlanningPersistenceSupport.saveDuePayment(
-                draft: paymentDraft,
-                sourceKind: .creditCard,
-                sourceID: dueItem.walletID,
-                selectedMonth: target.selectedMonth,
-                scheduledDate: dueItem.dueDate,
-                wallets: storedWallets,
-                occurrences: Array(storedOccurrences),
-                modelContext: modelContext,
-                actorUserID: sessionStore.activeLocalProfileUserID
-            )
-            sessionStore.recordUpsert(
-                entity: .transaction,
-                recordID: savedPayment.transaction.id,
-                modifiedAt: savedPayment.transaction.updatedAt,
-                subjectUserIDOverride: savedPayment.subjectUserID
-            )
-            sessionStore.recordUpsert(
-                entity: .dueOccurrenceRecord,
-                recordID: savedPayment.occurrenceID,
-                modifiedAt: savedPayment.transaction.updatedAt
-            )
-            dismiss()
-        } catch {
-            alertMessage = error.localizedDescription
-        }
-    }
 
     private func archiveWallet() {
         guard let wallet = target.wallet else { return }

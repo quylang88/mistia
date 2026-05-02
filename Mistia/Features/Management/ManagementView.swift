@@ -396,7 +396,7 @@ struct ManagementView: View {
                     : (familyContextStore.lastErrorMessage ?? mistiaLocalized(
                         vi: "Không thể gửi yêu cầu lúc này.",
                         en: "Couldn't send the request right now.",
-                        ja: "現在リクエストを送信できません。"
+                        ja: "現在リクエストは送信できません。"
                     ))
             )
         }
@@ -670,6 +670,7 @@ private struct ManagementWalletRow: View {
                 title: $0.title,
                 note: $0.note,
                 amountMinor: $0.amountMinor,
+                isArchived: $0.isArchived,
                 occurredAt: $0.occurredAt,
                 createdAt: $0.createdAt,
                 sourceWalletID: $0.sourceWallet?.id,

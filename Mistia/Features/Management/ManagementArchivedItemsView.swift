@@ -1,6 +1,10 @@
 import SwiftData
 import SwiftUI
 
+enum MistiaRestoreError: Error {
+    case duplicatePayment
+}
+
 private enum ArchivedItemSelection: Hashable {
     case transaction(UUID)
     case wallet(UUID)
@@ -35,6 +39,9 @@ struct ManagementArchivedItemsView: View {
 
     @AppStorage(MistiaAppStorageKey.currencyCode) private var currencyCode = "JPY"
 
+    @Query(filter: #Predicate<LedgerTransaction> { $0.deletedAt == nil && !$0.isArchived })
+    private var activeTransactions: [LedgerTransaction]
+
     @Query(filter: #Predicate<LedgerTransaction> { $0.isArchived == true && $0.deletedAt == nil })
     private var archivedTransactions: [LedgerTransaction]
 
@@ -47,6 +54,7 @@ struct ManagementArchivedItemsView: View {
     @State private var isSelecting = false
     @State private var selectedItems: Set<ArchivedItemSelection> = []
     @State private var viewID = UUID()
+    @State private var alertMessage: String?
 
     private var availableSelections: Set<ArchivedItemSelection> {
         Set(archivedTransactions.map { .transaction($0.id) })
@@ -110,6 +118,19 @@ struct ManagementArchivedItemsView: View {
         }
         .ignoresSafeArea(.all, edges: .bottom)
         .animation(.spring(response: 0.35, dampingFraction: 0.85), value: isSelecting)
+        .alert(
+            mistiaLocalized(vi: "Chưa thể khôi phục", en: "Cannot restore", ja: "復元できません"),
+            isPresented: Binding(
+                get: { alertMessage != nil },
+                set: { if !$0 { alertMessage = nil } }
+            )
+        ) {
+            Button("OK", role: .cancel) { }
+        } message: {
+            if let alertMessage {
+                Text(alertMessage)
+            }
+        }
         .onChange(of: availableSelections, initial: true) { _, newValue in
             selectedItems = selectedItems.intersection(newValue)
 
@@ -465,6 +486,28 @@ struct ManagementArchivedItemsView: View {
         at date: Date,
         mutations: inout [ArchivedSyncMutation]
     ) throws {
+        if action == .restore && isCreditCardPayment(transaction) {
+            let calendar = Calendar.current
+            let isDuplicate = activeTransactions.contains { tx in
+                tx.id != transaction.id &&
+                tx.destinationWallet?.id == transaction.destinationWallet?.id &&
+                tx.primaryKind == .transfer &&
+                tx.transferSubtype == .internalTransfer &&
+                calendar.isDate(tx.occurredAt, equalTo: transaction.occurredAt, toGranularity: .month) &&
+                tx.title.localizedStandardContains(mistiaLocalized(vi: "thanh toán thẻ", en: "card payment", ja: "カード支払い"))
+            }
+
+            if isDuplicate {
+                let monthStr = MistiaDateFormatting.monthYearString(for: transaction.occurredAt, calendar: calendar)
+                alertMessage = mistiaLocalized(
+                    vi: "Tháng \(monthStr) đã có giao dịch thanh toán thẻ. Mỗi tháng chỉ được thanh toán một lần.",
+                    en: "Month \(monthStr) already has a card payment. Only one payment is allowed per month.",
+                    ja: "\(monthStr) は既にカード支払いがあります。毎月1回のみ支払いが可能です。"
+                )
+                throw MistiaRestoreError.duplicatePayment
+            }
+        }
+
         if let actorUserID = sessionStore.activeLocalProfileUserID {
             try TransactionAuditStore.touch(
                 transactionID: transaction.id,
@@ -542,6 +585,13 @@ struct ManagementArchivedItemsView: View {
                 subjectUserIDOverride: nil
             )
         )
+    }
+
+    private func isCreditCardPayment(_ transaction: LedgerTransaction) -> Bool {
+        transaction.primaryKind == .transfer &&
+        transaction.transferSubtype == .internalTransfer &&
+        transaction.destinationWallet?.kind == .creditCard &&
+        transaction.title.localizedStandardContains(mistiaLocalized(vi: "thanh toán thẻ", en: "card payment", ja: "カード支払い"))
     }
 
     private func transactionOwnerUserID(for transaction: LedgerTransaction) -> UUID? {

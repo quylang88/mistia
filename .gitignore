@@ -65,3 +65,6 @@ playground.xcworkspace
 # Qwen
 .qwen/
 QWEN.md
+
+# AI input files
+.ai-input/

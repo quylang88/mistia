@@ -140,6 +140,14 @@ enum MistiaLocalNotificationScheduler {
         content.categoryIdentifier = reminderCategoryID
 
         let identifier = "mistia.reminder.due.\(alert.id)"
+        
+        var resourceID: UUID?
+        var resourceType: MistiaFamilyNotificationResourceType?
+        if alert.id.hasPrefix("credit-") {
+            resourceType = .card
+            resourceID = UUID(uuidString: String(alert.id.dropFirst(7)))
+        }
+
         let request = UNNotificationRequest(
             identifier: identifier,
             content: content,
@@ -154,7 +162,9 @@ enum MistiaLocalNotificationScheduler {
             title: content.title,
             body: content.body,
             kind: .dueSoon,
-            source: .localReminder
+            source: .localReminder,
+            resourceType: resourceType,
+            resourceID: resourceID
         )
     }
 
@@ -239,7 +249,9 @@ enum MistiaLocalNotificationScheduler {
         title: String,
         body: String,
         kind: MistiaAppNotificationKind,
-        source: MistiaAppNotificationSource
+        source: MistiaAppNotificationSource,
+        resourceType: MistiaFamilyNotificationResourceType? = nil,
+        resourceID: UUID? = nil
     ) {
         let existing = (try? modelContext.fetch(
             FetchDescriptor<AppNotificationRecord>(
@@ -254,6 +266,8 @@ enum MistiaLocalNotificationScheduler {
             existing.body = body
             existing.kind = kind
             existing.source = source
+            existing.resourceType = resourceType
+            existing.resourceID = resourceID
         } else {
             modelContext.insert(AppNotificationRecord(
                 key: key,
@@ -264,7 +278,9 @@ enum MistiaLocalNotificationScheduler {
                 kind: kind,
                 source: source,
                 isRead: false,
-                actionRoute: nil
+                actionRoute: nil,
+                resourceType: resourceType,
+                resourceID: resourceID
             ))
         }
 

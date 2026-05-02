@@ -10,7 +10,11 @@ struct NotificationCenterView: View {
     
     @Query(sort: \AppNotificationRecord.createdAt, order: .reverse)
     private var rows: [AppNotificationRecord]
+    @Query(filter: #Predicate<LedgerWallet> { $0.deletedAt == nil && !$0.isArchived })
+    private var storedWallets: [LedgerWallet]
+
     @State private var viewID = UUID()
+    @State private var statementWallet: LedgerWallet?
 
     private var visibleRows: [AppNotificationRecord] {
         MistiaNotificationStore.visibleRows(
@@ -41,6 +45,9 @@ struct NotificationCenterView: View {
         }
         .onDisappear {
             uiState.requestQuickCreateHidden(false, id: viewID)
+        }
+        .navigationDestination(item: $statementWallet) { wallet in
+            ManagementCreditCardStatementView(wallet: wallet)
         }
     }
 
@@ -163,6 +170,21 @@ struct NotificationCenterView: View {
                         .buttonStyle(.bordered)
                         .controlSize(.small)
                     }
+                    .padding(.top, 4)
+                } else if row.kind == .dueSoon, row.resourceType == .card, let walletID = row.resourceID {
+                    Button {
+                        if let wallet = storedWallets.first(where: { $0.id == walletID }) {
+                            statementWallet = wallet
+                        }
+                    } label: {
+                        Label(
+                            mistiaLocalized(vi: "Thanh toán ngay", en: "Pay now", ja: "今すぐ支払う"),
+                            systemImage: "creditcard.fill"
+                        )
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .controlSize(.small)
+                    .tint(MistiaAccent.purple.color)
                     .padding(.top, 4)
                 }
             }
