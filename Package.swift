@@ -53,6 +53,7 @@ let package = Package(
                 "Persistence/CategoryHierarchySupport.swift",
                 "Persistence/ManagementModels.swift",
                 "Persistence/MistiaDataStack.swift",
+                "Persistence/MistiaLocalProfiles.swift",
                 "Persistence/MistiaMigration.swift",
                 "Persistence/NotificationModels.swift",
                 "Persistence/MistiaRecordOwnership.swift",

@@ -651,6 +651,47 @@ nonisolated enum TransactionLogic {
 
         return lhs.id.uuidString > rhs.id.uuidString
     }
+
+    static func isLockedByPaidStatement(
+        transaction: TransactionRecordSnapshot,
+        allTransactions: [TransactionRecordSnapshot],
+        calendar: Calendar = .current
+    ) -> Bool {
+        // Only expenses and internal transfers can be locked by a statement
+        guard transaction.primaryKind == .expense || transaction.primaryKind == .transfer else {
+            return false
+        }
+        
+        // Find the relevant credit card wallet ID
+        let creditCardWalletID: UUID?
+        if transaction.primaryKind == .expense {
+            // For expenses, the source wallet must be a credit card
+            guard transaction.sourceWalletKind == .creditCard else { return false }
+            creditCardWalletID = transaction.sourceWalletID
+        } else {
+            // For transfers, the destination wallet must be a credit card
+            // and it must be an internal transfer (likely a payment)
+            guard transaction.destinationWalletKind == .creditCard,
+                  transaction.transferSubtype == .internalTransfer else { return false }
+            creditCardWalletID = transaction.destinationWalletID
+        }
+        
+        guard let walletID = creditCardWalletID else { return false }
+        
+        // Check if there's a payment transaction for this wallet and month
+        // We use the same logic as in ManagementCreditCardStatementView
+        return allTransactions.contains { tx in
+            tx.destinationWalletID == walletID &&
+            tx.primaryKind == .transfer &&
+            tx.transferSubtype == .internalTransfer &&
+            calendar.isDate(tx.occurredAt, equalTo: transaction.occurredAt, toGranularity: .month) &&
+            (
+                tx.title.localizedStandardContains("thanh toán thẻ") ||
+                tx.title.localizedStandardContains("card payment") ||
+                tx.title.localizedStandardContains("カード支払い")
+            )
+        }
+    }
 }
 
 extension LedgerTransaction {

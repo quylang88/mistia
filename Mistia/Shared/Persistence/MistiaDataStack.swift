@@ -2,6 +2,14 @@ import Foundation
 import Observation
 import SwiftData
 
+/// App storage keys for persistence (Package target version).
+/// This is a subset to avoid dependency on UI target.
+private enum MistiaPersistenceStorageKey {
+    static let localModeProfileUserID = "mistia.local-mode.profile-user-id"
+    static let localProfileDescriptors = "mistia.local-profile.descriptors"
+    static let activeLocalProfileID = "mistia.local-profile.active-id"
+}
+
 enum MistiaDataStack {
     struct LaunchIssue: Error {
         let storeURL: URL?
@@ -123,7 +131,7 @@ enum MistiaDataStack {
             upsertDescriptor(updatedDescriptor)
             userDefaults.set(
                 updatedDescriptor.id.uuidString.lowercased(),
-                forKey: MistiaAppStorageKey.activeLocalProfileID
+                forKey: MistiaPersistenceStorageKey.activeLocalProfileID
             )
         }
 
@@ -191,7 +199,7 @@ enum MistiaDataStack {
 
             if activeProfileID == descriptor.id {
                 activeProfileID = nil
-                userDefaults.removeObject(forKey: MistiaAppStorageKey.activeLocalProfileID)
+                userDefaults.removeObject(forKey: MistiaPersistenceStorageKey.activeLocalProfileID)
             }
 
             try removeProfileArtifactsIfPossible(for: descriptor)
@@ -239,7 +247,7 @@ enum MistiaDataStack {
                 try saveProfileRegistry(descriptors, userDefaults: userDefaults)
                 userDefaults.set(
                     guestDescriptor.id.uuidString.lowercased(),
-                    forKey: MistiaAppStorageKey.activeLocalProfileID
+                    forKey: MistiaPersistenceStorageKey.activeLocalProfileID
                 )
             }
 
@@ -344,7 +352,7 @@ enum MistiaDataStack {
         private static func loadProfileRegistry(
             userDefaults: UserDefaults
         ) throws -> [MistiaLocalProfileDescriptor] {
-            guard let data = userDefaults.data(forKey: MistiaAppStorageKey.localProfileDescriptors) else {
+            guard let data = userDefaults.data(forKey: MistiaPersistenceStorageKey.localProfileDescriptors) else {
                 return []
             }
             
@@ -377,14 +385,14 @@ enum MistiaDataStack {
                 try container.encode(ISO8601DateFormatter.mistiaSyncWithFractionalSeconds.string(from: date))
             }
             let data = try encoder.encode(descriptors)
-            userDefaults.set(data, forKey: MistiaAppStorageKey.localProfileDescriptors)
+            userDefaults.set(data, forKey: MistiaPersistenceStorageKey.localProfileDescriptors)
         }
 
         private static func storedActiveProfileID(
             in userDefaults: UserDefaults,
             descriptors: [MistiaLocalProfileDescriptor]
         ) -> UUID? {
-            guard let rawValue = userDefaults.string(forKey: MistiaAppStorageKey.activeLocalProfileID),
+            guard let rawValue = userDefaults.string(forKey: MistiaPersistenceStorageKey.activeLocalProfileID),
                   let profileID = UUID(uuidString: rawValue),
                   descriptors.contains(where: { $0.id == profileID }) else {
                 return nil
@@ -409,7 +417,9 @@ enum MistiaDataStack {
                 return nil
             }
 
-            let persistedUserID = ((try? SupabaseAuthService().loadPersistedSession()) ?? nil)?.user.id
+            // Note: SupabaseAuthService is not available in this target.
+            // Legacy migration will rely on the local mode profile user ID stored in UserDefaults.
+            let persistedUserID: UUID? = nil
             let guestAttachedUserID = persistedUserID ?? storedLegacyLocalModeProfileUserID(in: userDefaults)
             let descriptor = MistiaLocalProfileDescriptor(
                 kind: guestAttachedUserID == nil ? .guestUnbound : .cloudUser,
@@ -484,7 +494,7 @@ enum MistiaDataStack {
         private static func storedLegacyLocalModeProfileUserID(
             in userDefaults: UserDefaults
         ) -> UUID? {
-            guard let rawValue = userDefaults.string(forKey: MistiaAppStorageKey.localModeProfileUserID) else {
+            guard let rawValue = userDefaults.string(forKey: MistiaPersistenceStorageKey.localModeProfileUserID) else {
                 return nil
             }
             return UUID(uuidString: rawValue)
@@ -517,6 +527,7 @@ enum MistiaDataStack {
         }
     }
 
+    @MainActor
     static let sharedLaunchState: LaunchState = {
         do {
             return try LaunchState()
@@ -544,10 +555,12 @@ enum MistiaDataStack {
         }
     }()
 
+    @MainActor
     static var sharedModelContainer: ModelContainer {
         sharedLaunchState.modelContainer
     }
 
+    @MainActor
     static var launchIssue: LaunchIssue? {
         sharedLaunchState.issue
     }

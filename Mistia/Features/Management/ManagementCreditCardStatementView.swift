@@ -136,7 +136,12 @@ struct ManagementCreditCardStatementView: View {
             tx.primaryKind == .transfer &&
             tx.transferSubtype == .internalTransfer &&
             calendar.isDate(tx.occurredAt, equalTo: month, toGranularity: .month) &&
-            tx.title.localizedStandardContains(mistiaLocalized(vi: "thanh toán thẻ", en: "card payment", ja: "カード支払い"))
+            (
+                tx.title.localizedStandardContains(mistiaLocalized(vi: "thanh toán thẻ", en: "card payment", ja: "カード支払い")) ||
+                tx.title.localizedStandardContains("thanh toán thẻ") ||
+                tx.title.localizedStandardContains("card payment") ||
+                tx.title.localizedStandardContains("カード支払い")
+            )
         }
     }
 
@@ -157,28 +162,86 @@ struct ManagementCreditCardStatementView: View {
                 }
                 
                 if total > 0 || paid {
-                    Button {
-                        performPayment(for: month, total: total)
-                    } label: {
-                        HStack {
-                            if paid {
-                                Image(systemName: "checkmark.circle.fill")
-                                Text(mistiaLocalized(vi: "Đã thanh toán", en: "Paid", ja: "支払い済み"))
-                            } else {
-                                Text(mistiaLocalized(vi: "Thanh toán", en: "Pay now", ja: "支払う"))
+                    HStack(spacing: 12) {
+                        Button {
+                            performPayment(for: month, total: total)
+                        } label: {
+                            HStack {
+                                if paid {
+                                    Image(systemName: "checkmark.circle.fill")
+                                    Text(mistiaLocalized(vi: "Đã thanh toán", en: "Paid", ja: "支払い済み"))
+                                } else {
+                                    Text(mistiaLocalized(vi: "Thanh toán", en: "Pay now", ja: "支払う"))
+                                }
                             }
+                            .font(.system(size: 16, weight: .bold, design: .rounded))
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 14)
+                            .background(paid ? Color.gray.opacity(0.3) : dynamicAccentColor)
+                            .foregroundStyle(paid ? AnyShapeStyle(Color.secondary) : AnyShapeStyle(Color.white))
+                            .clipShape(Capsule())
                         }
-                        .font(.system(size: 16, weight: .bold, design: .rounded))
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 14)
-                        .background(paid ? Color.gray.opacity(0.3) : dynamicAccentColor)
-                        .foregroundStyle(paid ? AnyShapeStyle(Color.secondary) : AnyShapeStyle(Color.white))
-                        .clipShape(Capsule())
+                        .disabled(paid || total <= 0)
+                        
+                        if paid {
+                            Button {
+                                undoPayment(for: month)
+                            } label: {
+                                Image(systemName: "arrow.uturn.backward")
+                                    .font(.system(size: 16, weight: .bold))
+                                    .frame(width: 48, height: 48)
+                                    .background(Color.red.opacity(0.1))
+                                    .foregroundStyle(Color.red)
+                                    .clipShape(Circle())
+                            }
+                            .accessibilityLabel(mistiaLocalized(vi: "Hoàn tác", en: "Undo", ja: "元に戻す"))
+                        }
                     }
-                    .disabled(paid || total <= 0)
                 }
             }
             .padding(20)
+        }
+    }
+
+    private func findPaymentTransaction(for month: Date) -> LedgerTransaction? {
+        allTransactions.first { tx in
+            tx.destinationWallet?.id == wallet.id &&
+            tx.primaryKind == .transfer &&
+            tx.transferSubtype == .internalTransfer &&
+            calendar.isDate(tx.occurredAt, equalTo: month, toGranularity: .month) &&
+            (
+                tx.title.localizedStandardContains(mistiaLocalized(vi: "thanh toán thẻ", en: "card payment", ja: "カード支払い")) ||
+                tx.title.localizedStandardContains("thanh toán thẻ") ||
+                tx.title.localizedStandardContains("card payment") ||
+                tx.title.localizedStandardContains("カード支払い")
+            )
+        }
+    }
+
+    private func undoPayment(for month: Date) {
+        guard let paymentTx = findPaymentTransaction(for: month) else { return }
+        
+        let now = Date.now
+        paymentTx.deletedAt = now
+        paymentTx.updatedAt = now
+        
+        do {
+            if let actorUserID = sessionStore.activeLocalProfileUserID {
+                try TransactionAuditStore.touch(
+                    transactionID: paymentTx.id,
+                    actorUserID: actorUserID,
+                    fallbackCreatedByUserID: actorUserID,
+                    updatedAt: now,
+                    context: modelContext
+                )
+            }
+            try modelContext.save()
+            sessionStore.recordUpsert(entity: .transaction, recordID: paymentTx.id, modifiedAt: paymentTx.updatedAt)
+            alertMessage = mistiaLocalized(vi: "Đã hoàn tác thanh toán.", en: "Payment undone.", ja: "支払いを元に戻しました。")
+            showingAlert = true
+        } catch {
+            alertMessage = error.localizedDescription
+            showingAlert = true
         }
     }
 
@@ -201,8 +264,9 @@ struct ManagementCreditCardStatementView: View {
                         .padding(.vertical, 30)
                 } else {
                     VStack(spacing: 0) {
+                        let isPaid = isAlreadyPaid(for: month)
                         ForEach(Array(transactions.enumerated()), id: \.element.id) { index, tx in
-                            TransactionRow(tx: tx, currencyCode: wallet.currencyCode)
+                            TransactionRow(tx: tx, currencyCode: wallet.currencyCode, isLocked: isPaid)
                             
                             if index < transactions.count - 1 {
                                 Divider().padding(.leading, 56)
@@ -248,6 +312,15 @@ struct ManagementCreditCardStatementView: View {
         modelContext.insert(paymentTx)
         
         do {
+            if let actorUserID = sessionStore.activeLocalProfileUserID {
+                try TransactionAuditStore.touch(
+                    transactionID: paymentTx.id,
+                    actorUserID: actorUserID,
+                    fallbackCreatedByUserID: actorUserID,
+                    updatedAt: paymentTx.updatedAt,
+                    context: modelContext
+                )
+            }
             try modelContext.save()
             sessionStore.recordUpsert(entity: .transaction, recordID: paymentTx.id, modifiedAt: paymentTx.updatedAt)
             alertMessage = mistiaLocalized(vi: "Đã thanh toán thành công.", en: "Payment successful.", ja: "支払いが完了しました。")
@@ -262,6 +335,7 @@ struct ManagementCreditCardStatementView: View {
 private struct TransactionRow: View {
     let tx: LedgerTransaction
     let currencyCode: String
+    let isLocked: Bool
 
     var body: some View {
         HStack(spacing: 12) {
@@ -272,9 +346,17 @@ private struct TransactionRow: View {
             )
             
             VStack(alignment: .leading, spacing: 4) {
-                Text(tx.title.isEmpty ? (tx.category?.localizedDisplayName ?? "") : tx.title)
-                    .font(.system(size: 15, weight: .semibold, design: .rounded))
-                    .foregroundStyle(.primary)
+                HStack(spacing: 6) {
+                    Text(tx.title.isEmpty ? (tx.category?.localizedDisplayName ?? "") : tx.title)
+                        .font(.system(size: 15, weight: .semibold, design: .rounded))
+                        .foregroundStyle(.primary)
+                    
+                    if isLocked {
+                        Image(systemName: "lock.fill")
+                            .font(.system(size: 10))
+                            .foregroundStyle(.secondary)
+                    }
+                }
                 
                 Text(MistiaDateFormatting.shortDateString(for: tx.occurredAt))
                     .font(.system(size: 12, weight: .medium, design: .rounded))

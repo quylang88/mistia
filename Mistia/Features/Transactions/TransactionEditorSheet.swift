@@ -76,9 +76,39 @@ struct TransactionEditorSheet: View {
         _draft = State(initialValue: TransactionFormDraft(target: target))
     }
 
+    private var isLockedByStatement: Bool {
+        guard let transaction = target.transaction else { return false }
+        return TransactionLogic.isLockedByPaidStatement(
+            transaction: transaction.snapshot,
+            allTransactions: postedTransactions.map { $0.snapshot }
+        )
+    }
+
     var body: some View {
         NavigationStack {
             Form {
+                if isLockedByStatement {
+                    Section {
+                        HStack(spacing: 12) {
+                            Image(systemName: "lock.fill")
+                                .font(.system(size: 14))
+                                .foregroundStyle(.orange)
+                                .padding(8)
+                                .background(.orange.opacity(0.1))
+                                .clipShape(Circle())
+
+                            Text(mistiaLocalized(
+                                vi: "Giao dịch này thuộc sao kê đã thanh toán nên không thể sửa đổi hoặc lưu trữ.",
+                                en: "This transaction is part of a paid statement and cannot be modified or archived.",
+                                ja: "この取引は支払い済みの明細に含まれているため、変更やアーカイブはできません。"
+                            ))
+                            .font(.system(size: 13, weight: .medium, design: .rounded))
+                            .foregroundStyle(.secondary)
+                        }
+                        .listRowInsets(EdgeInsets(top: 12, leading: 16, bottom: 12, trailing: 16))
+                    }
+                }
+
                 if target.quickCapture && target.transaction == nil {
                     quickCaptureContent
                 } else {
@@ -88,6 +118,7 @@ struct TransactionEditorSheet: View {
             .dismissKeyboardOnTap()
             .navigationTitle(navigationTitle)
             .navigationBarTitleDisplayMode(.inline)
+            .disabled(isLockedByStatement)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
                     Button {
@@ -100,7 +131,7 @@ struct TransactionEditorSheet: View {
                 }
 
                 ToolbarItem(placement: .topBarTrailing) {
-                    if !isAdjustment {
+                    if !isAdjustment && !isLockedByStatement {
                         Button {
                             save()
                         } label: {
