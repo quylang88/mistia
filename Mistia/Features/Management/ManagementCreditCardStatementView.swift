@@ -46,32 +46,24 @@ struct ManagementCreditCardStatementView: View {
     var body: some View {
         VStack(spacing: 0) {
             monthSelector
+                .padding(.horizontal, 16)
 
-            ZStack(alignment: .leading) {
-                TabView(selection: $selectedMonth) {
-                    ForEach(availableMonths, id: \.self) { month in
-                        ScrollView {
-                            VStack(spacing: 20) {
-                                summaryCardForMonth(month)
+            TabView(selection: $selectedMonth) {
+                ForEach(availableMonths, id: \.self) { month in
+                    ScrollView {
+                        VStack(spacing: 20) {
+                            summaryCardForMonth(month)
 
-                                transactionsSectionForMonth(month)
-                            }
-                            .padding(.horizontal, 18)
-                            .padding(.vertical, 20)
+                            transactionsSectionForMonth(month)
                         }
-                        .tag(month)
+                        .padding(.horizontal, 4)
+                        .padding(.vertical, 20)
                     }
+                    .tag(month)
                 }
-                .tabViewStyle(.page(indexDisplayMode: .never))
-
-                // Overlay a strip on the left to allow edge-swipe back gesture
-                // by blocking the TabView's horizontal drag gesture in this area.
-                // 44pt is the standard Apple touch target size.
-                Color.white.opacity(0.001)
-                    .frame(width: 44)
-                    .contentShape(Rectangle())
-                    .gesture(DragGesture(minimumDistance: 0))
             }
+            .tabViewStyle(.page(indexDisplayMode: .never))
+            .padding(.horizontal, 16)
         }
         .background(MistiaBackgroundView(tone: .muted))
         .navigationTitle(wallet.name)
