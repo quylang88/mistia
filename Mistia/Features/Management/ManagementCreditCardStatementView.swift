@@ -17,7 +17,7 @@ struct ManagementCreditCardStatementView: View {
     @State private var alertMessage = ""
 
     private var monthYearTitle: String {
-        MistiaDateFormatting.monthYearString(for: selectedMonth, calendar: calendar)
+        MistiaDateFormatting.statementMonthYearString(for: selectedMonth, calendar: calendar)
     }
 
     private var availableMonths: [Date] {
@@ -49,29 +49,37 @@ struct ManagementCreditCardStatementView: View {
         }
     }
 
-    private var accentPurple: Color {
-        MistiaAccent.purple.color
+    private var dynamicAccentColor: Color {
+        colorScheme == .dark ? MistiaAccent.lightPurple.color : MistiaAccent.purple.color
     }
 
     var body: some View {
         VStack(spacing: 0) {
             monthSelector
 
-            TabView(selection: $selectedMonth) {
-                ForEach(availableMonths, id: \.self) { month in
-                    ScrollView {
-                        VStack(spacing: 20) {
-                            summaryCardForMonth(month)
+            ZStack(alignment: .leading) {
+                TabView(selection: $selectedMonth) {
+                    ForEach(availableMonths, id: \.self) { month in
+                        ScrollView {
+                            VStack(spacing: 20) {
+                                summaryCardForMonth(month)
 
-                            transactionsSectionForMonth(month)
+                                transactionsSectionForMonth(month)
+                            }
+                            .padding(.horizontal, 18)
+                            .padding(.vertical, 20)
                         }
-                        .padding(.horizontal, 18)
-                        .padding(.vertical, 20)
+                        .tag(month)
                     }
-                    .tag(month)
                 }
+                .tabViewStyle(.page(indexDisplayMode: .never))
+
+                // Overlay a narrow strip on the left to allow edge-swipe back gesture
+                // by allowing gestures to fall through to the navigation controller
+                Color.clear
+                    .frame(width: 20)
+                    .contentShape(Rectangle())
             }
-            .tabViewStyle(.page(indexDisplayMode: .never))
         }
         .background(MistiaBackgroundView(tone: .muted))
         .navigationTitle(wallet.name)
@@ -89,13 +97,13 @@ struct ManagementCreditCardStatementView: View {
                 HStack(spacing: 25) {
                     ForEach(availableMonths, id: \.self) { month in
                         VStack(spacing: 8) {
-                            Text(MistiaDateFormatting.monthYearString(for: month, calendar: calendar))
+                            Text(MistiaDateFormatting.statementMonthYearString(for: month, calendar: calendar))
                                 .font(.system(size: 15, weight: selectedMonth == month ? .bold : .medium, design: .rounded))
-                                .foregroundStyle(selectedMonth == month ? AnyShapeStyle(accentPurple) : AnyShapeStyle(Color.secondary))
+                                .foregroundStyle(selectedMonth == month ? AnyShapeStyle(dynamicAccentColor) : AnyShapeStyle(Color.secondary))
 
                             if selectedMonth == month {
                                 Capsule()
-                                    .fill(accentPurple)
+                                    .fill(dynamicAccentColor)
                                     .frame(width: 40, height: 3)
                             } else {
                                 Color.clear.frame(height: 3)
@@ -152,7 +160,7 @@ struct ManagementCreditCardStatementView: View {
         let total = totalSpentMinor(for: month)
         let paid = isAlreadyPaid(for: month)
 
-        return MistiaGlassCard(cornerRadius: 24, tint: accentPurple.opacity(0.12)) {
+        return MistiaGlassCard(cornerRadius: 24, tint: dynamicAccentColor.opacity(0.12)) {
             VStack(spacing: 16) {
                 VStack(spacing: 8) {
                     Text(mistiaLocalized(vi: "Tổng chi tiêu", en: "Total spending", ja: "合計支出"))
@@ -164,25 +172,27 @@ struct ManagementCreditCardStatementView: View {
                         .foregroundStyle(.primary)
                 }
 
-                Button {
-                    performPayment(for: month, total: total)
-                } label: {
-                    HStack {
-                        if paid {
-                            Image(systemName: "checkmark.circle.fill")
-                            Text(mistiaLocalized(vi: "Đã thanh toán", en: "Paid", ja: "支払い済み"))
-                        } else {
-                            Text(mistiaLocalized(vi: "Thanh toán", en: "Pay now", ja: "支払う"))
+                if total > 0 || paid {
+                    Button {
+                        performPayment(for: month, total: total)
+                    } label: {
+                        HStack {
+                            if paid {
+                                Image(systemName: "checkmark.circle.fill")
+                                Text(mistiaLocalized(vi: "Đã thanh toán", en: "Paid", ja: "支払い済み"))
+                            } else {
+                                Text(mistiaLocalized(vi: "Thanh toán", en: "Pay now", ja: "支払う"))
+                            }
                         }
+                        .font(.system(size: 16, weight: .bold, design: .rounded))
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 14)
+                        .background(paid ? Color.gray.opacity(0.3) : dynamicAccentColor)
+                        .foregroundStyle(paid ? AnyShapeStyle(Color.secondary) : AnyShapeStyle(Color.white))
+                        .clipShape(Capsule())
                     }
-                    .font(.system(size: 16, weight: .bold, design: .rounded))
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 14)
-                    .background(paid ? Color.gray.opacity(0.3) : accentPurple)
-                    .foregroundStyle(paid ? AnyShapeStyle(Color.secondary) : AnyShapeStyle(Color.white))
-                    .clipShape(Capsule())
+                    .disabled(paid || total <= 0)
                 }
-                .disabled(paid || total <= 0)
             }
             .padding(20)
         }
@@ -192,7 +202,7 @@ struct ManagementCreditCardStatementView: View {
         let transactions = monthlyTransactions(for: month)
 
         return VStack(alignment: .leading, spacing: 12) {
-            Text(mistiaLocalized(vi: "Giao dịch chi tiêu", en: "Spending transactions", ja: "利用明細"))
+            Text(mistiaLocalized(vi: "Lịch sử giao dịch", en: "Transaction history", ja: "取引履歴"))
                 .font(.system(size: 14, weight: .bold, design: .rounded))
                 .foregroundStyle(.secondary)
                 .textCase(.uppercase)
@@ -238,7 +248,7 @@ struct ManagementCreditCardStatementView: View {
             return
         }
 
-        let monthStr = MistiaDateFormatting.monthYearString(for: month, calendar: calendar)
+        let monthStr = MistiaDateFormatting.statementMonthYearString(for: month, calendar: calendar)
         let txTitle = mistiaLocalized(vi: "Thanh toán thẻ tháng \(monthStr)", en: "Card payment for \(monthStr)", ja: "カード支払い \(monthStr)")
 
         let paymentTx = LedgerTransaction(

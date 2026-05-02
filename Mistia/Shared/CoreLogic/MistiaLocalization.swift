@@ -191,6 +191,21 @@ nonisolated enum MistiaDateFormatting {
         ).string(from: date)
     }
 
+    static func statementMonthYearString(
+        for date: Date,
+        language: MistiaAppLanguage = .current,
+        calendar: Calendar? = nil
+    ) -> String {
+        let formatter = formatter(language: language, calendar: calendar)
+        switch language {
+        case .vietnamese, .english:
+            formatter.dateFormat = "MM/yyyy"
+        case .japanese:
+            formatter.dateFormat = "yyyy年MM月"
+        }
+        return formatter.string(from: date)
+    }
+
     static func weekRangeTitle(
         start: Date,
         end: Date,
