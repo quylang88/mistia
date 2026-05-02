@@ -1,13 +1,20 @@
 import SwiftData
 import SwiftUI
 
-private enum ManagementNavigationDestination: String, Identifiable {
+private enum ManagementNavigationDestination: Identifiable, Equatable {
     case authPlaceholder
     case settings
     case family
     case creditCardStatement
 
-    var id: String { rawValue }
+    var id: String {
+        switch self {
+        case .authPlaceholder: return "authPlaceholder"
+        case .settings: return "settings"
+        case .family: return "family"
+        case .creditCardStatement: return "creditCardStatement"
+        }
+    }
 }
 
 private struct ManagementInfoAlert: Identifiable {
@@ -408,7 +415,7 @@ struct ManagementView: View {
                     : (familyContextStore.lastErrorMessage ?? mistiaLocalized(
                         vi: "Không thể gửi yêu cầu lúc này.",
                         en: "Couldn't send the request right now.",
-                        ja: "現在リクエストを送信できません。"
+                        ja: "現在リクエスト hay送信できません。"
                     ))
             )
         }

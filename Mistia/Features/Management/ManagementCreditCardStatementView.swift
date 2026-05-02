@@ -91,7 +91,7 @@ struct ManagementCreditCardStatementView: View {
                         VStack(spacing: 8) {
                             Text(MistiaDateFormatting.monthYearString(for: month, calendar: calendar))
                                 .font(.system(size: 15, weight: selectedMonth == month ? .bold : .medium, design: .rounded))
-                                .foregroundStyle(selectedMonth == month ? accentPurple : .secondary)
+                                .foregroundStyle(selectedMonth == month ? AnyShapeStyle(accentPurple) : AnyShapeStyle(Color.secondary))
 
                             if selectedMonth == month {
                                 Capsule()
@@ -179,7 +179,7 @@ struct ManagementCreditCardStatementView: View {
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 14)
                     .background(paid ? Color.gray.opacity(0.3) : accentPurple)
-                    .foregroundStyle(paid ? .secondary : .white)
+                    .foregroundStyle(paid ? AnyShapeStyle(Color.secondary) : AnyShapeStyle(Color.white))
                     .clipShape(Capsule())
                 }
                 .disabled(paid || total <= 0)
