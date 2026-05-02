@@ -52,10 +52,20 @@ private enum PlanningDueMode: String, CaseIterable, Identifiable {
 
 private let planningAccentPurple = Color(red: 0.43, green: 0.23, blue: 0.76)
 
-private enum PlanningNavigationDestination: String, Identifiable {
+private enum PlanningNavigationDestination: Identifiable, Equatable {
     case profile
+    case creditCardStatement(LedgerWallet)
 
-    var id: String { rawValue }
+    var id: String {
+        switch self {
+        case .profile: return "profile"
+        case .creditCardStatement(let wallet): return "creditCardStatement-\(wallet.id)"
+        }
+    }
+
+    static func == (lhs: PlanningNavigationDestination, rhs: PlanningNavigationDestination) -> Bool {
+        lhs.id == rhs.id
+    }
 }
 
 struct PlanningView: View {
@@ -411,6 +421,8 @@ struct PlanningView: View {
                 switch route {
                 case .profile:
                     ManagementAccountView()
+                case .creditCardStatement(let wallet):
+                    ManagementCreditCardStatementView(wallet: wallet)
                 }
             }
         }
@@ -444,6 +456,12 @@ struct PlanningView: View {
                 modelContext: modelContext,
                 sessionStore: sessionStore
             )
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("MistiaOpenCreditCardStatementFromPlanning"))) { notification in
+            if let walletID = notification.object as? UUID,
+               let wallet = storedWallets.first(where: { $0.id == walletID }) {
+                destination = .creditCardStatement(wallet)
+            }
         }
     }
 }
@@ -671,12 +689,16 @@ private struct CreditCardsSection: View {
             VStack(spacing: 10) {
                 LazyVGrid(columns: columns, spacing: 10) {
                     ForEach(items) { item in
-                        Button {
+                        PlanningCreditCardCard(
+                            item: item,
+                            referenceDate: referenceDate,
+                            onOpenStatement: {
+                                NotificationCenter.default.post(name: NSNotification.Name("MistiaOpenCreditCardStatementFromPlanning"), object: item.walletID)
+                            }
+                        )
+                        .onTapGesture {
                             onEdit(item)
-                        } label: {
-                            PlanningCreditCardCard(item: item, referenceDate: referenceDate)
                         }
-                        .buttonStyle(MistiaPressableButtonStyle(cornerRadius: 24))
                     }
                 }
 
@@ -1343,6 +1365,7 @@ private struct PlanningDueRow: View {
 private struct PlanningCreditCardCard: View {
     let item: PlanningCreditCardDueSnapshot
     let referenceDate: Date
+    let onOpenStatement: () -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -1389,7 +1412,19 @@ private struct PlanningCreditCardCard: View {
 
                 Spacer()
 
-                PlanningStatusBadge(title: badgeTitle, color: item.tone(referenceDate: referenceDate).color)
+                HStack(spacing: 8) {
+                    Button(action: onOpenStatement) {
+                        Text(mistiaLocalized(vi: "Sao kê", en: "Statement", ja: "明細"))
+                            .font(.system(size: 11.5, weight: .bold, design: .rounded))
+                            .foregroundStyle(.white)
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 6)
+                            .background(.white.opacity(0.14), in: Capsule())
+                    }
+                    .buttonStyle(.plain)
+
+                    PlanningStatusBadge(title: badgeTitle, color: item.tone(referenceDate: referenceDate).color)
+                }
             }
         }
         .padding(15)

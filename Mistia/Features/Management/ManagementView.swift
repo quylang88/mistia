@@ -1,20 +1,12 @@
 import SwiftData
 import SwiftUI
 
-private enum ManagementNavigationDestination: Identifiable, Equatable {
+private enum ManagementNavigationDestination: String, Identifiable {
     case authPlaceholder
     case settings
     case family
-    case creditCardStatement
 
-    var id: String {
-        switch self {
-        case .authPlaceholder: return "authPlaceholder"
-        case .settings: return "settings"
-        case .family: return "family"
-        case .creditCardStatement: return "creditCardStatement"
-        }
-    }
+    var id: String { rawValue }
 }
 
 private struct ManagementInfoAlert: Identifiable {
@@ -43,7 +35,6 @@ struct ManagementView: View {
     @Query private var transactionAuditRecords: [TransactionAuditRecord]
 
     @State private var destination: ManagementNavigationDestination?
-    @State private var statementWallet: LedgerWallet?
     @State private var walletEditorTarget: ManagementWalletEditorTarget?
     @State private var categoryEditorTarget: ManagementCategoryEditorTarget?
     @State private var selectedCategoryKind: TransactionCategoryKind = .expense
@@ -153,10 +144,6 @@ struct ManagementView: View {
                     SettingsView()
                 case .family:
                     FamilyManagementView()
-                case .creditCardStatement:
-                    if let wallet = statementWallet {
-                        ManagementCreditCardStatementView(wallet: wallet)
-                    }
                 }
             }
         }
@@ -189,12 +176,6 @@ struct ManagementView: View {
         }
         .onDisappear {
             hideQuickCreate = false
-        }
-        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("MistiaOpenCreditCardStatement"))) { notification in
-            if let wallet = notification.object as? LedgerWallet {
-                statementWallet = wallet
-                destination = .creditCardStatement
-            }
         }
         .alert(item: $infoAlert) { alert in
             Alert(
@@ -746,28 +727,13 @@ private struct ManagementWalletRow: View {
                 Spacer(minLength: 8)
 
                 if wallet.kind == .creditCard, let availableCredit = availableCreditMinor {
-                    VStack(alignment: .trailing, spacing: 6) {
-                        VStack(alignment: .trailing, spacing: 2) {
-                            Text(mistiaLocalized(vi: "Khả dụng", en: "Available", ja: "利用可能"))
-                                .font(.system(size: 10.5, weight: .medium, design: .rounded))
-                                .foregroundStyle(.secondary)
-                            Text(availableCredit.formattedCurrency(code: wallet.currencyCode))
-                                .font(.system(size: 16, weight: .bold, design: .rounded))
-                                .foregroundStyle(balanceColor)
-                        }
-
-                        Button {
-                            // This will be handled by the parent view's destination
-                            NotificationCenter.default.post(name: NSNotification.Name("MistiaOpenCreditCardStatement"), object: wallet)
-                        } label: {
-                            Text(mistiaLocalized(vi: "Sao kê", en: "Statement", ja: "明細"))
-                                .font(.system(size: 11, weight: .bold, design: .rounded))
-                                .foregroundStyle(MistiaAccent.purple.color)
-                                .padding(.horizontal, 10)
-                                .padding(.vertical, 5)
-                                .background(MistiaAccent.purple.color.opacity(0.12), in: Capsule())
-                        }
-                        .buttonStyle(.plain)
+                    VStack(alignment: .trailing, spacing: 2) {
+                        Text(mistiaLocalized(vi: "Khả dụng", en: "Available", ja: "利用可能"))
+                            .font(.system(size: 10.5, weight: .medium, design: .rounded))
+                            .foregroundStyle(.secondary)
+                        Text(availableCredit.formattedCurrency(code: wallet.currencyCode))
+                            .font(.system(size: 16, weight: .bold, design: .rounded))
+                            .foregroundStyle(balanceColor)
                     }
                 } else {
                     Text(currentBalanceMinor.formattedCurrency(code: wallet.currencyCode))
