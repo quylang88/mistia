@@ -52,7 +52,7 @@ private enum PlanningDueMode: String, CaseIterable, Identifiable {
 
 private let planningAccentPurple = Color(red: 0.43, green: 0.23, blue: 0.76)
 
-private enum PlanningNavigationDestination: Identifiable, Equatable {
+private enum PlanningNavigationDestination: Identifiable, Equatable, Hashable {
     case profile
     case creditCardStatement(LedgerWallet)
 
@@ -65,6 +65,10 @@ private enum PlanningNavigationDestination: Identifiable, Equatable {
 
     static func == (lhs: PlanningNavigationDestination, rhs: PlanningNavigationDestination) -> Bool {
         lhs.id == rhs.id
+    }
+
+    func hash(into hasher: inout Hasher) {
+        hasher.combine(id)
     }
 }
 

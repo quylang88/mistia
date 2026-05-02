@@ -2,7 +2,15 @@ import Foundation
 import SwiftData
 
 @Model
-final class LedgerWallet {
+final class LedgerWallet: Identifiable, Hashable {
+    static func == (lhs: LedgerWallet, rhs: LedgerWallet) -> Bool {
+        lhs.id == rhs.id
+    }
+
+    func hash(into hasher: inout Hasher) {
+        hasher.combine(id)
+    }
+
     @Attribute(.unique) var id: UUID
     var name: String
     var kindRawValue: String
