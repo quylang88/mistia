@@ -28,6 +28,9 @@ struct ManagementWalletEditorSheet: View {
     @State private var showsBalanceAdjustment = false
     @State private var showsBankPicker = false
     @State private var alertMessage: String?
+    // Edge Case 6: Confirmation for changing payment source wallet with debt
+    @State private var showingPaymentSourceChangeConfirmation = false
+    @State private var pendingPaymentSourceWalletID: UUID?
 
     init(target: ManagementWalletEditorTarget) {
         self.target = target
@@ -259,8 +262,26 @@ struct ManagementWalletEditorSheet: View {
         } message: {
             Text(mistiaCatalog(alertMessage ?? ""))
         }
+        // Edge Case 6: Confirmation dialog for changing payment source wallet with debt
+        .alert(
+            mistiaLocalized(vi: "Xác nhận thay đổi ví thanh toán", en: "Confirm payment source change", ja: "支払い元ウォレットの変更を確認"),
+            isPresented: $showingPaymentSourceChangeConfirmation
+        ) {
+            Button(mistiaLocalized(vi: "Hủy", en: "Cancel", ja: "キャンセル"), role: .cancel) {
+                pendingPaymentSourceWalletID = nil
+            }
+            Button(mistiaLocalized(vi: "Tiếp tục", en: "Continue", ja: "続行"), role: .destructive) {
+                performSave()
+            }
+        } message: {
+            Text(mistiaLocalized(
+                vi: "Thẻ tín dụng này đang có dư nợ chưa thanh toán. Thay đổi ví nguồn thanh toán có thể ảnh hưởng đến việc theo dõi sao kê. Bạn có chắc muốn tiếp tục?",
+                en: "This credit card has outstanding debt. Changing the payment source wallet may affect statement tracking. Are you sure you want to continue?",
+                ja: "このクレジットカードには未払いの債務があります。支払い元ウォレットを変更すると明細の追跡に影響する可能性があります。続行してもよろしいですか？"
+            ))
+        }
         .onChange(of: draft.kind) { oldValue, newValue in
-            draft.handleKindChange(from: oldValue, to: newValue)
+            draft.handleKindChange(from: oldValue, newValue)
         }
         .sheet(isPresented: $showsBalanceAdjustment) {
             if let wallet = target.wallet {
@@ -296,6 +317,36 @@ struct ManagementWalletEditorSheet: View {
             return
         }
 
+        // Edge Case 6: Check for payment source wallet change with outstanding debt
+        if draft.kind == .creditCard,
+           let existingWallet = target.wallet,
+           let existingProfile = existingWallet.creditCardProfile,
+           existingProfile.paymentSourceWallet?.id != draft.paymentSourceWalletID {
+            
+            // Calculate current debt
+            let txDescriptor = FetchDescriptor<LedgerTransaction>()
+            let allTransactions = (try? modelContext.fetch(txDescriptor)) ?? []
+            let records = allTransactions.filter { $0.deletedAt == nil }.map { $0.snapshot }
+
+            let walletSnapshot = TransactionWalletSnapshot(
+                id: existingWallet.id,
+                kind: existingWallet.kind,
+                openingBalanceMinor: existingWallet.openingBalanceMinor
+            )
+            let currentDebt = TransactionLogic.effectiveBalance(for: walletSnapshot, records: records)
+
+            if currentDebt > 0 {
+                // Show confirmation dialog
+                pendingPaymentSourceWalletID = draft.paymentSourceWalletID
+                showingPaymentSourceChangeConfirmation = true
+                return
+            }
+        }
+
+        performSave()
+    }
+
+    private func performSave() {
         let defaultName: String
         switch draft.kind {
         case .bank:
@@ -315,7 +366,7 @@ struct ManagementWalletEditorSheet: View {
         let now = Date()
         let existingProfileID = target.wallet?.creditCardProfile?.id
         let walletForSync: LedgerWallet
-        
+
         // For credit cards, calculate debt from available credit
         let currentDebtMinor: Int64
         if draft.kind == .creditCard {
@@ -334,6 +385,12 @@ struct ManagementWalletEditorSheet: View {
             existingWallet.institutionDisplayName = draft.kind == .bank ? draft.institutionDisplayName.nilIfBlank : nil
             existingWallet.institutionPresetKey = draft.kind == .bank ? draft.institutionPresetKey : nil
             existingWallet.updatedAt = now
+
+            // Apply pending payment source wallet ID if confirmed
+            if let pendingID = pendingPaymentSourceWalletID {
+                draft.paymentSourceWalletID = pendingID
+                pendingPaymentSourceWalletID = nil
+            }
 
             updateCreditCardProfile(for: existingWallet, now: now)
             walletForSync = existingWallet
@@ -438,6 +495,66 @@ struct ManagementWalletEditorSheet: View {
 
     private func archiveWallet() {
         guard let wallet = target.wallet else { return }
+
+        // Edge Case 5: Validate cannot archive credit card with outstanding debt
+        if wallet.kind == .creditCard {
+            let txDescriptor = FetchDescriptor<LedgerTransaction>()
+            let allTransactions = (try? modelContext.fetch(txDescriptor)) ?? []
+            let records = allTransactions
+                .filter { $0.deletedAt == nil }
+                .map { $0.snapshot }
+
+            let walletSnapshot = TransactionWalletSnapshot(
+                id: wallet.id,
+                kind: wallet.kind,
+                openingBalanceMinor: wallet.openingBalanceMinor
+            )
+
+            let currentDebt = TransactionLogic.effectiveBalance(for: walletSnapshot, records: records)
+
+            if currentDebt > 0 {
+                alertMessage = mistiaLocalized(
+                    vi: "Không thể lưu trữ thẻ tín dụng khi còn dư nợ chưa thanh toán (dư nợ hiện tại: \(currentDebt.formattedCurrency(code: wallet.currencyCode))).",
+                    en: "Cannot archive credit card with outstanding debt (current debt: \(currentDebt.formattedCurrency(code: wallet.currencyCode))).",
+                    ja: "未払いの債務があるためクレジットカードをアーカイブできません（現在の債務：\(currentDebt.formattedCurrency(code: wallet.currencyCode))）。"
+                )
+                return
+            }
+
+            // Also check for any unpaid statements in recent months
+            let calendar = Calendar.current
+            let currentMonth = PlanningLogic.startOfMonth(for: .now, calendar: calendar)
+            let recentMonths = (0...3).compactMap { calendar.date(byAdding: .month, value: -$0, to: currentMonth) }
+
+            for month in recentMonths {
+                let hasPayment = allTransactions.contains { tx in
+                    tx.destinationWallet?.id == wallet.id &&
+                    tx.primaryKind == .transfer &&
+                    tx.transferSubtype == .internalTransfer &&
+                    calendar.isDate(tx.occurredAt, equalTo: month, toGranularity: .month) &&
+                    (
+                        tx.title.localizedStandardContains("thanh toán thẻ") ||
+                        tx.title.localizedStandardContains("card payment") ||
+                        tx.title.localizedStandardContains("カード支払い")
+                    )
+                }
+
+                let hasExpenses = allTransactions.contains { tx in
+                    tx.sourceWallet?.id == wallet.id &&
+                    tx.primaryKind == .expense &&
+                    calendar.isDate(tx.occurredAt, equalTo: month, toGranularity: .month)
+                }
+
+                if hasExpenses && !hasPayment {
+                    alertMessage = mistiaLocalized(
+                        vi: "Không thể lưu trữ thẻ tín dụng khi còn sao kê chưa thanh toán.",
+                        en: "Cannot archive credit card with unpaid statements.",
+                        ja: "未払いの明細があるためクレジットカードをアーカイブできません。"
+                    )
+                    return
+                }
+            }
+        }
 
         wallet.isArchived = true
         wallet.archivedAt = .now

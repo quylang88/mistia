@@ -152,7 +152,7 @@ nonisolated extension TransactionLogic {
         date >= interval.start && date < interval.end
     }
 
-    private static func nextPaymentDate(
+    static func nextPaymentDate(
         paymentDueDay: Int,
         cycleEnd: Date,
         calendar: Calendar
