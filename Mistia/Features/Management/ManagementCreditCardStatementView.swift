@@ -4,6 +4,7 @@ import SwiftUI
 struct ManagementCreditCardStatementView: View {
     @Environment(\.calendar) private var calendar
     @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
     @Environment(SessionStore.self) private var sessionStore
 
@@ -11,32 +12,44 @@ struct ManagementCreditCardStatementView: View {
 
     @Query(filter: #Predicate<LedgerTransaction> { $0.deletedAt == nil && !$0.isArchived })
     private var allTransactions: [LedgerTransaction]
+    @Query(filter: #Predicate<DueOccurrenceRecord> { $0.deletedAt == nil })
+    private var storedOccurrences: [DueOccurrenceRecord]
+    @Query(filter: #Predicate<LedgerWallet> { $0.deletedAt == nil })
+    private var storedWallets: [LedgerWallet]
 
     @State private var selectedMonth = PlanningLogic.startOfMonth(for: .now)
     @State private var showingAlert = false
     @State private var alertMessage = ""
 
-    private var monthYearTitle: String {
-        MistiaDateFormatting.statementMonthYearString(for: selectedMonth, calendar: calendar)
+    private var transactionRecords: [TransactionRecordSnapshot] {
+        allTransactions.map(\.planningRecordSnapshot)
+    }
+
+    private var occurrenceSnapshots: [PlanningDueOccurrenceSnapshot] {
+        storedOccurrences.map(\.planningSnapshot)
+    }
+
+    private var accountSnapshot: PlanningCreditCardAccountSnapshot? {
+        wallet.planningCreditCardSnapshot(records: transactionRecords)
+    }
+
+    private var selectedStatement: PlanningCreditCardStatementSnapshot? {
+        guard let accountSnapshot else { return nil }
+        return PlanningLogic.creditCardStatementItems(
+            accounts: [accountSnapshot],
+            records: transactionRecords,
+            occurrences: occurrenceSnapshots,
+            statementMonths: [selectedMonth],
+            referenceDate: .now,
+            calendar: calendar
+        ).first
     }
 
     private var availableMonths: [Date] {
         let currentMonth = PlanningLogic.startOfMonth(for: .now, calendar: calendar)
-        return (0...24).compactMap { i in
-            calendar.date(byAdding: .month, value: -i, to: currentMonth)
-        }.reversed()
-    }
-
-    private var monthlyTransactions: [LedgerTransaction] {
-        allTransactions.filter { tx in
-            tx.sourceWallet?.id == wallet.id &&
-            tx.primaryKind == .expense &&
-            calendar.isDate(tx.occurredAt, equalTo: selectedMonth, toGranularity: .month)
-        }.sorted { $0.occurredAt > $1.occurredAt }
-    }
-
-    private var totalSpentMinor: Int64 {
-        monthlyTransactions.reduce(0) { $0 + $1.amountMinor }
+        return (0...24).compactMap { offset in
+            calendar.date(byAdding: .month, value: -offset, to: currentMonth)
+        }
     }
 
     private var dynamicAccentColor: Color {
@@ -44,30 +57,42 @@ struct ManagementCreditCardStatementView: View {
     }
 
     var body: some View {
-        VStack(spacing: 0) {
-            monthSelector
-                .padding(.horizontal, 16)
-            
-            TabView(selection: $selectedMonth) {
-                ForEach(availableMonths, id: \.self) { month in
-                    ScrollView {
-                        VStack(spacing: 20) {
-                            summaryCardForMonth(month)
-                            
-                            transactionsSectionForMonth(month)
-                        }
-                        .padding(.horizontal, 4)
-                        .padding(.vertical, 20)
-                    }
-                    .tag(month)
-                }
+        MistiaPinnedTopBarScaffold(
+            tone: .muted,
+            title: wallet.name,
+            embedsInNavigationStack: false,
+            showsLeadingAvatar: false,
+            leadingSystemImage: "chevron.left",
+            trailingSystemImage: nil,
+            hidesSystemBackButton: true,
+            onLeadingTap: { dismiss() },
+            contentSpacing: 16,
+            contentBottomPadding: 56,
+            titleDisplayMode: .inline
+        ) {
+            monthMenu
+
+            if let selectedStatement {
+                statementHero(selectedStatement)
+                statementTimeline(selectedStatement)
+                transactionSection(
+                    title: mistiaLocalized(vi: "Chi tiêu trong kỳ", en: "Charges in cycle", ja: "期間内の利用"),
+                    emptyText: mistiaLocalized(vi: "Không có chi tiêu nào trong kỳ này", en: "No charges in this cycle", ja: "この期間の利用はありません"),
+                    transactions: chargeTransactions(for: selectedStatement),
+                    isPayment: false,
+                    isLocked: effectiveState(for: selectedStatement) == .paid
+                )
+                transactionSection(
+                    title: mistiaLocalized(vi: "Thanh toán vào thẻ", en: "Payments to card", ja: "カードへの支払い"),
+                    emptyText: mistiaLocalized(vi: "Chưa có thanh toán nào", en: "No payments yet", ja: "支払いはまだありません"),
+                    transactions: paymentTransactions(for: selectedStatement),
+                    isPayment: true,
+                    isLocked: false
+                )
+            } else {
+                emptyStatementCard
             }
-            .tabViewStyle(.page(indexDisplayMode: .never))
-            .padding(.horizontal, 16)
         }
-        .background(MistiaBackgroundView(tone: .muted))
-        .navigationTitle(wallet.name)
-        .navigationBarTitleDisplayMode(.inline)
         .alert(mistiaLocalized(vi: "Thông báo", en: "Notice", ja: "お知らせ"), isPresented: $showingAlert) {
             Button("OK", role: .cancel) { }
         } message: {
@@ -75,199 +100,167 @@ struct ManagementCreditCardStatementView: View {
         }
     }
 
-    private var monthSelector: some View {
-        ScrollViewReader { proxy in
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 25) {
-                    ForEach(availableMonths, id: \.self) { month in
-                        VStack(spacing: 8) {
-                            Text(MistiaDateFormatting.statementMonthYearString(for: month, calendar: calendar))
-                                .font(.system(size: 15, weight: selectedMonth == month ? .bold : .medium, design: .rounded))
-                                .foregroundStyle(selectedMonth == month ? AnyShapeStyle(dynamicAccentColor) : AnyShapeStyle(Color.secondary))
-                            
-                            if selectedMonth == month {
-                                Capsule()
-                                    .fill(dynamicAccentColor)
-                                    .frame(width: 40, height: 3)
-                            } else {
-                                Color.clear.frame(height: 3)
-                            }
-                        }
-                        .id(month)
-                        .contentShape(Rectangle())
-                        .onTapGesture {
-                            withAnimation(.snappy) {
-                                selectedMonth = month
-                            }
-                        }
-                    }
+    private var monthMenu: some View {
+        Menu {
+            ForEach(availableMonths, id: \.self) { month in
+                Button {
+                    selectedMonth = month
+                } label: {
+                    Label(
+                        MistiaDateFormatting.statementMonthYearString(for: month, calendar: calendar),
+                        systemImage: calendar.isDate(month, equalTo: selectedMonth, toGranularity: .month) ? "checkmark" : "calendar"
+                    )
                 }
-                .padding(.horizontal, 20)
-                .padding(.top, 12)
             }
-            .onAppear {
-                proxy.scrollTo(selectedMonth, anchor: .center)
+        } label: {
+            HStack(spacing: 10) {
+                Image(systemName: "calendar")
+                    .font(.system(size: 14, weight: .bold))
+                Text(MistiaDateFormatting.statementMonthYearString(for: selectedMonth, calendar: calendar))
+                    .font(.system(size: 15, weight: .bold, design: .rounded))
+                Spacer(minLength: 8)
+                Image(systemName: "chevron.up.chevron.down")
+                    .font(.system(size: 11, weight: .bold))
+                    .foregroundStyle(.secondary)
             }
-            .onChange(of: selectedMonth) { _, newValue in
-                proxy.scrollTo(newValue, anchor: .center)
-            }
-            .background(Color(UIColor.secondarySystemGroupedBackground).opacity(0.5))
-            .overlay(alignment: .bottom) {
-                Divider()
-            }
-        }
-    }
-
-    private func monthlyTransactions(for month: Date) -> [LedgerTransaction] {
-        allTransactions.filter { tx in
-            tx.sourceWallet?.id == wallet.id &&
-            tx.primaryKind == .expense &&
-            calendar.isDate(tx.occurredAt, equalTo: month, toGranularity: .month)
-        }.sorted { $0.occurredAt > $1.occurredAt }
-    }
-
-    private func totalSpentMinor(for month: Date) -> Int64 {
-        monthlyTransactions(for: month).reduce(0) { $0 + $1.amountMinor }
-    }
-
-    private func isAlreadyPaid(for month: Date) -> Bool {
-        allTransactions.contains { tx in
-            tx.destinationWallet?.id == wallet.id &&
-            tx.primaryKind == .transfer &&
-            tx.transferSubtype == .internalTransfer &&
-            calendar.isDate(tx.occurredAt, equalTo: month, toGranularity: .month) &&
-            (
-                tx.title.localizedStandardContains(mistiaLocalized(vi: "thanh toán thẻ", en: "card payment", ja: "カード支払い")) ||
-                tx.title.localizedStandardContains("thanh toán thẻ") ||
-                tx.title.localizedStandardContains("card payment") ||
-                tx.title.localizedStandardContains("カード支払い")
+            .foregroundStyle(.primary)
+            .padding(.horizontal, 14)
+            .padding(.vertical, 11)
+            .background(
+                Color(UIColor.secondarySystemGroupedBackground).opacity(0.66),
+                in: RoundedRectangle(cornerRadius: 16, style: .continuous)
             )
         }
+        .buttonStyle(.plain)
     }
 
-    private func summaryCardForMonth(_ month: Date) -> some View {
-        let total = totalSpentMinor(for: month)
-        let paid = isAlreadyPaid(for: month)
-        
+    private func statementHero(_ statement: PlanningCreditCardStatementSnapshot) -> some View {
+        let state = effectiveState(for: statement)
+
         return MistiaGlassCard(cornerRadius: 24, tint: dynamicAccentColor.opacity(0.12)) {
-            VStack(spacing: 16) {
-                VStack(spacing: 8) {
-                    Text(mistiaLocalized(vi: "Tổng chi tiêu", en: "Total spending", ja: "合計支出"))
-                        .font(.system(size: 14, weight: .medium, design: .rounded))
-                        .foregroundStyle(.secondary)
-                    
-                    Text(total.formattedCurrency(code: wallet.currencyCode))
-                        .font(.system(size: 32, weight: .bold, design: .rounded))
-                        .foregroundStyle(.primary)
-                }
-                
-                if total > 0 || paid {
-                    HStack(spacing: 12) {
-                        Button {
-                            performPayment(for: month, total: total)
-                        } label: {
-                            HStack {
-                                if paid {
-                                    Image(systemName: "checkmark.circle.fill")
-                                    Text(mistiaLocalized(vi: "Đã thanh toán", en: "Paid", ja: "支払い済み"))
-                                } else {
-                                    Text(mistiaLocalized(vi: "Thanh toán", en: "Pay now", ja: "支払う"))
-                                }
-                            }
-                            .font(.system(size: 16, weight: .bold, design: .rounded))
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, 14)
-                            .background(paid ? Color.gray.opacity(0.3) : dynamicAccentColor)
-                            .foregroundStyle(paid ? AnyShapeStyle(Color.secondary) : AnyShapeStyle(Color.white))
-                            .clipShape(Capsule())
-                        }
-                        .disabled(paid || total <= 0)
-                        
-                        if paid {
-                            Button {
-                                undoPayment(for: month)
-                            } label: {
-                                Image(systemName: "arrow.uturn.backward")
-                                    .font(.system(size: 16, weight: .bold))
-                                    .frame(width: 48, height: 48)
-                                    .background(Color.red.opacity(0.1))
-                                    .foregroundStyle(Color.red)
-                                    .clipShape(Circle())
-                            }
-                            .accessibilityLabel(mistiaLocalized(vi: "Hoàn tác", en: "Undo", ja: "元に戻す"))
-                        }
+            VStack(alignment: .leading, spacing: 18) {
+                HStack(alignment: .top, spacing: 12) {
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text(statementStateTitle(state, amountMinor: statement.amountMinor))
+                            .font(.system(size: 14, weight: .bold, design: .rounded))
+                            .foregroundStyle(stateColor(state))
+                        Text(mistiaLocalized(vi: "Sao kê", en: "Statement", ja: "明細"))
+                            .font(.system(size: 12, weight: .semibold, design: .rounded))
+                            .foregroundStyle(.secondary)
                     }
+
+                    Spacer(minLength: 10)
+
+                    Text(maskedLast4(statement.last4))
+                        .font(.system(size: 13, weight: .bold, design: .rounded))
+                        .foregroundStyle(.secondary)
                 }
+
+                VStack(alignment: .leading, spacing: 5) {
+                    Text(statement.amountMinor.formattedCurrency(code: statement.currencyCode))
+                        .font(.system(size: 34, weight: .black, design: .rounded))
+                        .foregroundStyle(.primary)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.72)
+
+                    Text(statementCycleText(statement))
+                        .font(.system(size: 13, weight: .semibold, design: .rounded))
+                        .foregroundStyle(.secondary)
+                }
+
+                Button {
+                    performPayment(for: statement)
+                } label: {
+                    HStack {
+                        Image(systemName: paymentButtonIcon(state, amountMinor: statement.amountMinor))
+                        Text(paymentButtonTitle(state, amountMinor: statement.amountMinor))
+                    }
+                    .font(.system(size: 16, weight: .bold, design: .rounded))
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 14)
+                    .background(paymentButtonBackground(state), in: Capsule())
+                    .foregroundStyle(paymentButtonForeground(state))
+                }
+                .buttonStyle(.plain)
+                .disabled(!canPay(statement, state: state))
             }
             .padding(20)
         }
     }
 
-    private func findPaymentTransaction(for month: Date) -> LedgerTransaction? {
-        allTransactions.first { tx in
-            tx.destinationWallet?.id == wallet.id &&
-            tx.primaryKind == .transfer &&
-            tx.transferSubtype == .internalTransfer &&
-            calendar.isDate(tx.occurredAt, equalTo: month, toGranularity: .month) &&
-            (
-                tx.title.localizedStandardContains(mistiaLocalized(vi: "thanh toán thẻ", en: "card payment", ja: "カード支払い")) ||
-                tx.title.localizedStandardContains("thanh toán thẻ") ||
-                tx.title.localizedStandardContains("card payment") ||
-                tx.title.localizedStandardContains("カード支払い")
+    private func statementTimeline(_ statement: PlanningCreditCardStatementSnapshot) -> some View {
+        HStack(spacing: 10) {
+            timelineItem(
+                title: mistiaLocalized(vi: "Chi tiêu", en: "Spend", ja: "利用"),
+                value: MistiaDateFormatting.statementMonthYearString(for: statement.statementMonth, calendar: calendar),
+                color: Color(hex: "#5B7BFF")
+            )
+            timelineItem(
+                title: mistiaLocalized(vi: "Chốt", en: "Close", ja: "締め"),
+                value: MistiaDateFormatting.shortDateString(for: statement.closingDate),
+                color: dynamicAccentColor
+            )
+            timelineItem(
+                title: mistiaLocalized(vi: "Hạn", en: "Due", ja: "支払"),
+                value: MistiaDateFormatting.shortDateString(for: statement.dueDate),
+                color: Color(hex: "#F59B3F")
             )
         }
     }
 
-    private func undoPayment(for month: Date) {
-        guard let paymentTx = findPaymentTransaction(for: month) else { return }
-        
-        let now = Date.now
-        paymentTx.deletedAt = now
-        paymentTx.updatedAt = now
-        
-        do {
-            if let actorUserID = sessionStore.activeLocalProfileUserID {
-                try TransactionAuditStore.touch(
-                    transactionID: paymentTx.id,
-                    actorUserID: actorUserID,
-                    fallbackCreatedByUserID: actorUserID,
-                    updatedAt: now,
-                    context: modelContext
-                )
-            }
-            try modelContext.save()
-            sessionStore.recordUpsert(entity: .transaction, recordID: paymentTx.id, modifiedAt: paymentTx.updatedAt)
-            alertMessage = mistiaLocalized(vi: "Đã hoàn tác thanh toán.", en: "Payment undone.", ja: "支払いを元に戻しました。")
-            showingAlert = true
-        } catch {
-            alertMessage = error.localizedDescription
-            showingAlert = true
+    private func timelineItem(title: String, value: String, color: Color) -> some View {
+        VStack(alignment: .leading, spacing: 7) {
+            Circle()
+                .fill(color)
+                .frame(width: 9, height: 9)
+            Text(title)
+                .font(.system(size: 11.5, weight: .bold, design: .rounded))
+                .foregroundStyle(.secondary)
+            Text(value)
+                .font(.system(size: 12.5, weight: .bold, design: .rounded))
+                .foregroundStyle(.primary)
+                .lineLimit(1)
+                .minimumScaleFactor(0.78)
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(14)
+        .background(
+            Color(UIColor.secondarySystemGroupedBackground).opacity(0.58),
+            in: RoundedRectangle(cornerRadius: 18, style: .continuous)
+        )
     }
 
-    private func transactionsSectionForMonth(_ month: Date) -> some View {
-        let transactions = monthlyTransactions(for: month)
-        
-        return VStack(alignment: .leading, spacing: 12) {
-            Text(mistiaLocalized(vi: "Lịch sử giao dịch", en: "Transaction history", ja: "取引履歴"))
-                .font(.system(size: 14, weight: .bold, design: .rounded))
+    private func transactionSection(
+        title: String,
+        emptyText: String,
+        transactions: [LedgerTransaction],
+        isPayment: Bool,
+        isLocked: Bool
+    ) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text(title)
+                .font(.system(size: 13, weight: .bold, design: .rounded))
                 .foregroundStyle(.secondary)
                 .textCase(.uppercase)
                 .padding(.leading, 4)
-            
+
             MistiaBlockCard(cornerRadius: 22, padding: 0) {
                 if transactions.isEmpty {
-                    Text(mistiaLocalized(vi: "Không có giao dịch nào", en: "No transactions", ja: "取引はありません"))
+                    Text(emptyText)
                         .font(.system(size: 14, weight: .medium, design: .rounded))
                         .foregroundStyle(.secondary)
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 30)
                 } else {
                     VStack(spacing: 0) {
-                        let isPaid = isAlreadyPaid(for: month)
                         ForEach(Array(transactions.enumerated()), id: \.element.id) { index, tx in
-                            TransactionRow(tx: tx, currencyCode: wallet.currencyCode, isLocked: isPaid)
-                            
+                            TransactionRow(
+                                tx: tx,
+                                currencyCode: wallet.currencyCode,
+                                isLocked: isLocked,
+                                isPayment: isPayment
+                            )
+
                             if index < transactions.count - 1 {
                                 Divider().padding(.leading, 56)
                             }
@@ -278,57 +271,222 @@ struct ManagementCreditCardStatementView: View {
         }
     }
 
-    private func performPayment(for month: Date, total: Int64) {
-        guard let sourceWallet = wallet.creditCardProfile?.paymentSourceWallet else {
-            alertMessage = mistiaLocalized(vi: "Vui lòng thiết lập ví nguồn thanh toán cho thẻ này trong phần sửa ví.", en: "Please set up a payment source wallet for this card in wallet settings.", ja: "ウォレット設定でこのカードの支払い元ウォレットを設定してください。")
+    private var emptyStatementCard: some View {
+        MistiaBlockCard(cornerRadius: 22, padding: 18) {
+            VStack(alignment: .leading, spacing: 8) {
+                Text(mistiaLocalized(vi: "Chưa có sao kê", en: "No statement yet", ja: "明細はまだありません"))
+                    .font(.system(.headline, design: .rounded))
+                Text(mistiaLocalized(vi: "Thẻ này chưa có dữ liệu chi tiêu trong tháng đã chọn.", en: "This card has no spending data for the selected month.", ja: "選択した月の利用データはありません。"))
+                    .descriptionTextStyle()
+                    .foregroundStyle(.secondary)
+            }
+        }
+    }
+
+    private func chargeTransactions(for statement: PlanningCreditCardStatementSnapshot) -> [LedgerTransaction] {
+        allTransactions.filter { tx in
+            tx.sourceWallet?.id == wallet.id
+                && tx.primaryKind == .expense
+                && calendar.isDate(tx.occurredAt, equalTo: statement.statementMonth, toGranularity: .month)
+        }
+        .sorted { $0.occurredAt > $1.occurredAt }
+    }
+
+    private func paymentTransactions(for statement: PlanningCreditCardStatementSnapshot) -> [LedgerTransaction] {
+        let dueEnd = calendar.date(
+            byAdding: .day,
+            value: 1,
+            to: calendar.startOfDay(for: statement.dueDate)
+        ) ?? statement.dueDate
+
+        return allTransactions.filter { tx in
+            tx.destinationWallet?.id == wallet.id
+                && tx.primaryKind == .transfer
+                && tx.transferSubtype == .internalTransfer
+                && tx.occurredAt >= statement.closingDate
+                && tx.occurredAt < dueEnd
+        }
+        .sorted { $0.occurredAt > $1.occurredAt }
+    }
+
+    private func findPaymentTransaction(for statement: PlanningCreditCardStatementSnapshot) -> LedgerTransaction? {
+        paymentTransactions(for: statement).first { $0.amountMinor >= statement.amountMinor }
+    }
+
+    private func effectiveState(for statement: PlanningCreditCardStatementSnapshot) -> PlanningCreditCardStatementState {
+        if statement.state != .unclosed,
+           statement.amountMinor > 0,
+           findPaymentTransaction(for: statement) != nil {
+            return .paid
+        }
+        return statement.state
+    }
+
+    private func canPay(
+        _ statement: PlanningCreditCardStatementSnapshot,
+        state: PlanningCreditCardStatementState
+    ) -> Bool {
+        statement.amountMinor > 0 && (state == .payable || state == .overdue)
+    }
+
+    private func performPayment(for statement: PlanningCreditCardStatementSnapshot) {
+        let state = effectiveState(for: statement)
+        guard canPay(statement, state: state) else { return }
+
+        guard let sourceWalletID = statement.paymentSourceWalletID,
+              let sourceWallet = storedWallets.first(where: { $0.id == sourceWalletID }) else {
+            alertMessage = mistiaLocalized(vi: "Vui lòng thiết lập ví liên kết cho thẻ này.", en: "Please set a linked payment wallet for this card.", ja: "このカードの連携支払いウォレットを設定してください。")
             showingAlert = true
             return
         }
-        
+
         let sourceBalanceMinor = TransactionLogic.effectiveBalance(
-            for: TransactionWalletSnapshot(id: sourceWallet.id, kind: sourceWallet.kind, openingBalanceMinor: sourceWallet.openingBalanceMinor),
+            for: TransactionWalletSnapshot(
+                id: sourceWallet.id,
+                kind: sourceWallet.kind,
+                openingBalanceMinor: sourceWallet.openingBalanceMinor
+            ),
             records: allTransactions.map(\.snapshot)
         )
-        
-        if sourceBalanceMinor < total {
-            alertMessage = mistiaLocalized(vi: "Số dư ví nguồn không đủ để thanh toán.", en: "Insufficient funds in the source wallet.", ja: "支払い元ウォレットの残高が不足しています。")
+
+        guard sourceBalanceMinor >= statement.amountMinor else {
+            alertMessage = mistiaLocalized(vi: "Số dư ví liên kết không đủ để thanh toán sao kê này.", en: "The linked wallet balance is not enough for this statement.", ja: "連携ウォレットの残高がこの明細の支払いに不足しています。")
             showingAlert = true
             return
         }
-        
-        let monthStr = MistiaDateFormatting.statementMonthYearString(for: month, calendar: calendar)
-        let txTitle = mistiaLocalized(vi: "Thanh toán thẻ tháng \(monthStr)", en: "Card payment for \(monthStr)", ja: "カード支払い \(monthStr)")
-        
-        let paymentTx = LedgerTransaction(
-            primaryKind: .transfer,
-            transferSubtype: .internalTransfer,
-            title: txTitle,
-            amountMinor: total,
-            occurredAt: month == PlanningLogic.startOfMonth(for: .now) ? .now : month,
-            sourceWallet: sourceWallet,
-            destinationWallet: wallet
-        )
-        
-        modelContext.insert(paymentTx)
-        
+
         do {
-            if let actorUserID = sessionStore.activeLocalProfileUserID {
-                try TransactionAuditStore.touch(
-                    transactionID: paymentTx.id,
-                    actorUserID: actorUserID,
-                    fallbackCreatedByUserID: actorUserID,
-                    updatedAt: paymentTx.updatedAt,
-                    context: modelContext
-                )
-            }
-            try modelContext.save()
-            sessionStore.recordUpsert(entity: .transaction, recordID: paymentTx.id, modifiedAt: paymentTx.updatedAt)
-            alertMessage = mistiaLocalized(vi: "Đã thanh toán thành công.", en: "Payment successful.", ja: "支払いが完了しました。")
+            let draft = try PlanningLogic.makePaymentDraft(for: statement)
+            let savedPayment = try PlanningPersistenceSupport.saveDuePayment(
+                draft: draft,
+                sourceKind: .creditCard,
+                sourceID: statement.walletID,
+                selectedMonth: PlanningLogic.startOfMonth(for: statement.dueDate, calendar: calendar),
+                scheduledDate: statement.dueDate,
+                wallets: Array(storedWallets),
+                occurrences: Array(storedOccurrences),
+                modelContext: modelContext,
+                actorUserID: sessionStore.activeLocalProfileUserID,
+                calendar: calendar
+            )
+            sessionStore.recordUpsert(
+                entity: .transaction,
+                recordID: savedPayment.transaction.id,
+                modifiedAt: savedPayment.transaction.updatedAt,
+                subjectUserIDOverride: savedPayment.subjectUserID
+            )
+            sessionStore.recordUpsert(
+                entity: .dueOccurrenceRecord,
+                recordID: savedPayment.occurrenceID,
+                modifiedAt: savedPayment.transaction.updatedAt
+            )
+            alertMessage = mistiaLocalized(vi: "Đã thanh toán sao kê.", en: "Statement paid.", ja: "明細を支払いました。")
             showingAlert = true
         } catch {
             alertMessage = error.localizedDescription
             showingAlert = true
         }
+    }
+
+    private func statementStateTitle(
+        _ state: PlanningCreditCardStatementState,
+        amountMinor: Int64
+    ) -> String {
+        if amountMinor <= 0, state != .unclosed {
+            return mistiaLocalized(vi: "Không cần thanh toán", en: "No payment needed", ja: "支払い不要")
+        }
+
+        switch state {
+        case .unclosed:
+            return mistiaLocalized(vi: "Chưa chốt", en: "Not closed yet", ja: "未締め")
+        case .payable:
+            return mistiaLocalized(vi: "Có thể thanh toán", en: "Ready to pay", ja: "支払い可能")
+        case .paid:
+            return mistiaLocalized(vi: "Đã thanh toán", en: "Paid", ja: "支払い済み")
+        case .overdue:
+            return mistiaLocalized(vi: "Quá hạn", en: "Overdue", ja: "延滞")
+        }
+    }
+
+    private func paymentButtonTitle(
+        _ state: PlanningCreditCardStatementState,
+        amountMinor: Int64
+    ) -> String {
+        if amountMinor <= 0, state != .unclosed {
+            return mistiaLocalized(vi: "Không cần thanh toán", en: "No payment needed", ja: "支払い不要")
+        }
+
+        switch state {
+        case .unclosed:
+            return mistiaLocalized(vi: "Chưa chốt", en: "Not closed yet", ja: "未締め")
+        case .payable, .overdue:
+            return mistiaLocalized(vi: "Thanh toán trước", en: "Pay early", ja: "先に支払う")
+        case .paid:
+            return mistiaLocalized(vi: "Đã thanh toán", en: "Paid", ja: "支払い済み")
+        }
+    }
+
+    private func paymentButtonIcon(
+        _ state: PlanningCreditCardStatementState,
+        amountMinor: Int64
+    ) -> String {
+        if amountMinor <= 0, state != .unclosed {
+            return "checkmark.circle.fill"
+        }
+
+        switch state {
+        case .unclosed:
+            return "lock.fill"
+        case .payable:
+            return "creditcard.fill"
+        case .paid:
+            return "checkmark.circle.fill"
+        case .overdue:
+            return "exclamationmark.circle.fill"
+        }
+    }
+
+    private func paymentButtonBackground(_ state: PlanningCreditCardStatementState) -> Color {
+        switch state {
+        case .payable:
+            return dynamicAccentColor
+        case .overdue:
+            return Color(hex: "#F45C7E")
+        case .unclosed, .paid:
+            return Color(UIColor.secondarySystemGroupedBackground).opacity(0.72)
+        }
+    }
+
+    private func paymentButtonForeground(_ state: PlanningCreditCardStatementState) -> AnyShapeStyle {
+        switch state {
+        case .payable, .overdue:
+            return AnyShapeStyle(Color.white)
+        case .unclosed, .paid:
+            return AnyShapeStyle(Color.secondary)
+        }
+    }
+
+    private func stateColor(_ state: PlanningCreditCardStatementState) -> Color {
+        switch state {
+        case .unclosed:
+            return .secondary
+        case .payable:
+            return dynamicAccentColor
+        case .paid:
+            return .mint
+        case .overdue:
+            return Color(hex: "#F45C7E")
+        }
+    }
+
+    private func statementCycleText(_ statement: PlanningCreditCardStatementSnapshot) -> String {
+        let closing = MistiaDateFormatting.shortDateString(for: statement.closingDate)
+        let due = MistiaDateFormatting.shortDateString(for: statement.dueDate)
+        return mistiaLocalized(vi: "Chốt \(closing) - hạn \(due)", en: "Closes \(closing) - due \(due)", ja: "締め \(closing) - 支払 \(due)")
+    }
+
+    private func maskedLast4(_ last4: String) -> String {
+        "•••• \(last4)"
     }
 }
 
@@ -336,18 +494,19 @@ private struct TransactionRow: View {
     let tx: LedgerTransaction
     let currencyCode: String
     let isLocked: Bool
+    let isPayment: Bool
 
     var body: some View {
         HStack(spacing: 12) {
             MistiaFinanceIconView(
                 icon: tx.category?.iconSymbolName ?? tx.primaryKind.financeIconToken,
-                fallbackColor: MistiaAccent.expense.color,
+                fallbackColor: isPayment ? .mint : MistiaAccent.expense.color,
                 size: 32
             )
             
             VStack(alignment: .leading, spacing: 4) {
                 HStack(spacing: 6) {
-                    Text(tx.title.isEmpty ? (tx.category?.localizedDisplayName ?? "") : tx.title)
+                    Text(rowTitle)
                         .font(.system(size: 15, weight: .semibold, design: .rounded))
                         .foregroundStyle(.primary)
                     
@@ -365,11 +524,20 @@ private struct TransactionRow: View {
             
             Spacer()
             
-            Text("-" + tx.amountMinor.formattedCurrency(code: currencyCode))
+            Text(amountText)
                 .font(.system(size: 15, weight: .bold, design: .rounded))
-                .foregroundStyle(MistiaAccent.expense.color)
+                .foregroundStyle(isPayment ? Color.mint : MistiaAccent.expense.color)
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 12)
+    }
+
+    private var rowTitle: String {
+        tx.title.isEmpty ? (tx.category?.localizedDisplayName ?? "") : tx.title
+    }
+
+    private var amountText: String {
+        let prefix = isPayment ? "+" : "-"
+        return prefix + tx.amountMinor.formattedCurrency(code: currencyCode)
     }
 }

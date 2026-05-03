@@ -171,7 +171,7 @@ struct NotificationCenterView: View {
                         .controlSize(.small)
                     }
                     .padding(.top, 4)
-                } else if row.kind == .dueSoon, row.resourceType == .card, let walletID = row.resourceID {
+                } else if row.isCreditCardPaymentNotification, row.resourceType == .card, let walletID = row.resourceID {
                     Button {
                         if let wallet = storedWallets.first(where: { $0.id == walletID }) {
                             statementWallet = wallet
@@ -281,5 +281,16 @@ struct MistiaNotificationBellButton: View {
 
     private var badgeText: String {
         unreadCount > 99 ? "99+" : "\(unreadCount)"
+    }
+}
+
+private extension AppNotificationRecord {
+    var isCreditCardPaymentNotification: Bool {
+        switch kind {
+        case .dueSoon, .creditCardStatementReady, .creditCardAutoPaymentFailed:
+            return true
+        case .lowWallet, .creditCardAutoPaymentSucceeded, .familyPlaceholder, .permissionRequestReceived, .permissionRequestApproved, .permissionRequestRejected, .permissionRevoked, .permissionPolicyChanged, .familyActivity, .accessIssue:
+            return false
+        }
     }
 }

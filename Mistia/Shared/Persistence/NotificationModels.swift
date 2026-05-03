@@ -11,6 +11,9 @@ enum MistiaAppNotificationSource: String, Codable, CaseIterable {
 enum MistiaAppNotificationKind: String, Codable, CaseIterable {
     case dueSoon
     case lowWallet
+    case creditCardStatementReady
+    case creditCardAutoPaymentSucceeded
+    case creditCardAutoPaymentFailed
     case familyPlaceholder
     case permissionRequestReceived
     case permissionRequestApproved

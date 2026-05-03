@@ -63,6 +63,10 @@ struct MistiaApp: App {
                             sessionStore: sessionStore,
                             source: .postManualSync
                         )
+                        await MistiaCreditCardStatementMaintenance.run(
+                            modelContext: sessionStore.currentModelContainer.mainContext,
+                            sessionStore: sessionStore
+                        )
                     }
                     familyContextStore.setModelContainer(sessionStore.currentModelContainer)
                     await runStartupTasks()
@@ -71,6 +75,9 @@ struct MistiaApp: App {
                     switch newPhase {
                     case .active:
                         sessionStore.handleSceneDidBecomeActive()
+                        Task {
+                            await runCreditCardMaintenance()
+                        }
                     case .background:
                         sessionStore.handleSceneDidEnterBackground()
                     default:
@@ -120,6 +127,15 @@ struct MistiaApp: App {
         }
 
         sessionStore.finishBootstrapping()
+        await runCreditCardMaintenance()
+    }
+
+    @MainActor
+    private func runCreditCardMaintenance() async {
+        await MistiaCreditCardStatementMaintenance.run(
+            modelContext: sessionStore.currentModelContainer.mainContext,
+            sessionStore: sessionStore
+        )
     }
 }
 

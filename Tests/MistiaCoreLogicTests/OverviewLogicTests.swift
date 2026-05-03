@@ -514,6 +514,7 @@ final class OverviewLogicTests: XCTestCase {
                 network: .visa,
                 last4: "1111",
                 amountMinor: 10_000,
+                availableCreditMinor: 5_000,
                 dueDate: makeDate(year: 2026, month: 4, day: 12),
                 paymentSourceWalletID: UUID(),
                 currencyCode: "JPY",
@@ -581,7 +582,7 @@ final class OverviewLogicTests: XCTestCase {
         )
 
         XCTAssertEqual(alerts.count, 3)
-        XCTAssertEqual(alerts.map(\.name), ["Internet", "Visa", "Laptop"])
+        XCTAssertEqual(alerts.map { $0.name }, ["Internet", "Visa", "Laptop"])
         XCTAssertEqual(alerts[0].tint, .red)
         XCTAssertEqual(alerts[1].tint, .red)
         XCTAssertEqual(alerts[2].tint, .blue)
@@ -657,6 +658,7 @@ final class OverviewLogicTests: XCTestCase {
             last4: "1234",
             creditLimitMinor: 100_000,
             currentDebtMinor: 20_000,
+            availableCreditMinor: 80_000,
             statementClosingDay: 25,
             paymentDueDay: 10,
             paymentSourceWalletName: "SMBC Bank",
@@ -712,7 +714,7 @@ final class OverviewLogicTests: XCTestCase {
             calendar: calendar
         )
 
-        let card = try XCTUnwrap(statement.cards.first)
+        let card = try XCTUnwrap(statement.cards.first as? OverviewCreditCardStatementCycle)
         XCTAssertEqual(card.cycle.start, makeDate(year: 2026, month: 3, day: 26))
         XCTAssertEqual(card.cycle.end, makeDate(year: 2026, month: 4, day: 26))
         XCTAssertEqual(card.charges.map(\.title), ["Cafe"])

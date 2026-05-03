@@ -213,6 +213,7 @@ final class PlanningLogicTests: XCTestCase {
                 network: .visa,
                 last4: "1234",
                 amountMinor: 12_000, // Thẻ đến hạn tháng này
+                availableCreditMinor: 8_000,
                 dueDate: makeDate(year: 2026, month: 4, day: 14),
                 paymentSourceWalletID: UUID(),
                 currencyCode: "JPY",
@@ -265,10 +266,181 @@ final class PlanningLogicTests: XCTestCase {
 
         // Sắp đến hạn: chỉ SMBC (14th) vì trong 7 ngày tới (10th -> 17th)
         XCTAssertEqual(summary.upcomingCount, 1)
-        // Tổng cần trả: Dư nợ thẻ (12k) + Hóa đơn sắp tới (0 vì ko có bill nào trong 7 ngày tới)
-        XCTAssertEqual(summary.totalDueMinor, 12_000)
+        // Tổng cần trả: thẻ + hóa đơn + trả góp trong tháng đang chọn.
+        XCTAssertEqual(summary.totalDueMinor, 20_000)
         // Quá hạn: Điện (8th)
         XCTAssertEqual(summary.overdueCount, 1)
+    }
+
+    func testCreditCardStatementClosesNextMonthAndBecomesPayableOnClosingDay() {
+        let cardWalletID = UUID()
+        let paymentWalletID = UUID()
+        let statementMonth = makeDate(year: 2026, month: 2, day: 1)
+        let account = makeCreditCardAccount(
+            walletID: cardWalletID,
+            paymentWalletID: paymentWalletID,
+            dueDay: 26,
+            statementClosingDay: 10
+        )
+        let records = [
+            makeRecord(
+                primaryKind: .expense,
+                amountMinor: 32_456,
+                occurredAt: makeDate(year: 2026, month: 2, day: 12),
+                categoryID: nil,
+                sourceWalletID: cardWalletID,
+                sourceWalletKind: .creditCard
+            ),
+            makeRecord(
+                primaryKind: .expense,
+                amountMinor: 9_000,
+                occurredAt: makeDate(year: 2026, month: 3, day: 2),
+                categoryID: nil,
+                sourceWalletID: cardWalletID,
+                sourceWalletKind: .creditCard
+            )
+        ]
+
+        let beforeClosing = PlanningLogic.creditCardStatementItems(
+            accounts: [account],
+            records: records,
+            occurrences: [],
+            statementMonths: [statementMonth],
+            referenceDate: makeDate(year: 2026, month: 3, day: 9),
+            calendar: calendar
+        )
+
+        XCTAssertEqual(beforeClosing.first?.amountMinor, 32_456)
+        XCTAssertEqual(beforeClosing.first?.closingDate, makeDate(year: 2026, month: 3, day: 10))
+        XCTAssertEqual(beforeClosing.first?.dueDate, makeDate(year: 2026, month: 3, day: 26))
+        XCTAssertEqual(beforeClosing.first?.state, .unclosed)
+
+        let afterClosing = PlanningLogic.creditCardStatementItems(
+            accounts: [account],
+            records: records,
+            occurrences: [],
+            statementMonths: [statementMonth],
+            referenceDate: makeDate(year: 2026, month: 3, day: 10),
+            calendar: calendar
+        )
+
+        XCTAssertEqual(afterClosing.first?.state, .payable)
+    }
+
+    func testSelectedDueMonthSummaryCountsOnlyClosedCreditStatement() {
+        let cardWalletID = UUID()
+        let account = makeCreditCardAccount(
+            walletID: cardWalletID,
+            paymentWalletID: UUID(),
+            dueDay: 26,
+            statementClosingDay: 10
+        )
+        let records = [
+            makeRecord(
+                primaryKind: .expense,
+                amountMinor: 32_456,
+                occurredAt: makeDate(year: 2026, month: 2, day: 12),
+                categoryID: nil,
+                sourceWalletID: cardWalletID,
+                sourceWalletKind: .creditCard
+            )
+        ]
+        let dueMonth = makeDate(year: 2026, month: 3, day: 1)
+
+        let beforeClosingStatements = PlanningLogic.creditCardStatementsDue(
+            in: dueMonth,
+            accounts: [account],
+            records: records,
+            occurrences: [],
+            referenceDate: makeDate(year: 2026, month: 3, day: 9),
+            calendar: calendar
+        )
+        let beforeSummary = PlanningLogic.dueSummary(
+            creditStatements: beforeClosingStatements,
+            recurring: [],
+            selectedMonth: dueMonth,
+            referenceDate: makeDate(year: 2026, month: 3, day: 9),
+            calendar: calendar
+        )
+        XCTAssertEqual(beforeSummary.totalDueMinor, 0)
+
+        let afterClosingStatements = PlanningLogic.creditCardStatementsDue(
+            in: dueMonth,
+            accounts: [account],
+            records: records,
+            occurrences: [],
+            referenceDate: makeDate(year: 2026, month: 3, day: 10),
+            calendar: calendar
+        )
+        let afterSummary = PlanningLogic.dueSummary(
+            creditStatements: afterClosingStatements,
+            recurring: [],
+            selectedMonth: dueMonth,
+            referenceDate: makeDate(year: 2026, month: 3, day: 10),
+            calendar: calendar
+        )
+
+        XCTAssertEqual(afterSummary.totalDueMinor, 32_456)
+        XCTAssertEqual(afterSummary.upcomingCount, 0)
+    }
+
+    func testCreditCardAutoPaymentDecisionWaitsForDueDateAndRequiresFunds() {
+        let paymentWalletID = UUID()
+        let statement = makeCreditCardStatement(
+            paymentWalletID: paymentWalletID,
+            status: .pending,
+            state: .payable
+        )
+
+        XCTAssertEqual(
+            PlanningLogic.creditCardAutoPaymentDecision(
+                statement: statement,
+                sourceWalletBalanceMinor: 40_000,
+                referenceDate: makeDate(year: 2026, month: 3, day: 25),
+                calendar: calendar
+            ),
+            .notDue
+        )
+
+        XCTAssertEqual(
+            PlanningLogic.creditCardAutoPaymentDecision(
+                statement: makeCreditCardStatement(paymentWalletID: nil, status: .pending, state: .overdue),
+                sourceWalletBalanceMinor: nil,
+                referenceDate: makeDate(year: 2026, month: 3, day: 26),
+                calendar: calendar
+            ),
+            .missingLinkedWallet
+        )
+
+        XCTAssertEqual(
+            PlanningLogic.creditCardAutoPaymentDecision(
+                statement: statement,
+                sourceWalletBalanceMinor: 20_000,
+                referenceDate: makeDate(year: 2026, month: 3, day: 26),
+                calendar: calendar
+            ),
+            .insufficientFunds(availableMinor: 20_000, requiredMinor: 32_456)
+        )
+
+        XCTAssertEqual(
+            PlanningLogic.creditCardAutoPaymentDecision(
+                statement: statement,
+                sourceWalletBalanceMinor: 32_456,
+                referenceDate: makeDate(year: 2026, month: 3, day: 26),
+                calendar: calendar
+            ),
+            .payable
+        )
+
+        XCTAssertEqual(
+            PlanningLogic.creditCardAutoPaymentDecision(
+                statement: makeCreditCardStatement(paymentWalletID: paymentWalletID, status: .paid, state: .paid),
+                sourceWalletBalanceMinor: 40_000,
+                referenceDate: makeDate(year: 2026, month: 3, day: 26),
+                calendar: calendar
+            ),
+            .alreadyPaid
+        )
     }
 
     func testInstallmentOccurrenceGenerationHonorsFrequencyAndCycleLimit() {
@@ -317,6 +489,7 @@ final class PlanningLogicTests: XCTestCase {
                 network: .visa,
                 last4: "1234",
                 amountMinor: 8_000,
+                availableCreditMinor: 12_000,
                 dueDate: makeDate(year: 2026, month: 4, day: 20),
                 paymentSourceWalletID: paymentWallet,
                 currencyCode: "JPY",
@@ -328,6 +501,20 @@ final class PlanningLogicTests: XCTestCase {
         XCTAssertEqual(cardDraft.transferSubtype, .internalTransfer)
         XCTAssertEqual(cardDraft.sourceWalletID, paymentWallet)
         XCTAssertEqual(cardDraft.destinationWalletID, cardWallet)
+
+        let statementDraft = try PlanningLogic.makePaymentDraft(
+            for: makeCreditCardStatement(
+                walletID: cardWallet,
+                paymentWalletID: paymentWallet,
+                status: .pending,
+                state: .payable
+            )
+        )
+        XCTAssertEqual(statementDraft.primaryKind, .transfer)
+        XCTAssertEqual(statementDraft.transferSubtype, .internalTransfer)
+        XCTAssertEqual(statementDraft.amountMinor, 32_456)
+        XCTAssertEqual(statementDraft.sourceWalletID, paymentWallet)
+        XCTAssertEqual(statementDraft.destinationWalletID, cardWallet)
 
         let billDraft = try PlanningLogic.makePaymentDraft(
             for: PlanningRecurringDueSnapshot(
@@ -376,7 +563,9 @@ final class PlanningLogicTests: XCTestCase {
         amountMinor: Int64,
         occurredAt: Date,
         categoryID: UUID?,
-        categoryParentID: UUID? = nil
+        categoryParentID: UUID? = nil,
+        sourceWalletID: UUID = UUID(),
+        sourceWalletKind: LedgerWalletKind = .cash
     ) -> TransactionRecordSnapshot {
         TransactionRecordSnapshot(
             id: UUID(),
@@ -389,8 +578,8 @@ final class PlanningLogicTests: XCTestCase {
             amountMinor: amountMinor,
             occurredAt: occurredAt,
             createdAt: occurredAt,
-            sourceWalletID: UUID(),
-            sourceWalletKind: .cash,
+            sourceWalletID: sourceWalletID,
+            sourceWalletKind: sourceWalletKind,
             destinationWalletID: nil,
             destinationWalletKind: nil,
             categoryID: categoryID,
@@ -426,6 +615,57 @@ final class PlanningLogicTests: XCTestCase {
             categoryParentIconSymbolName: categoryParentIconSymbolName,
             categoryParentColorHex: categoryParentColorHex,
             categoryIsParent: categoryIsParent
+        )
+    }
+
+    private func makeCreditCardAccount(
+        walletID: UUID,
+        paymentWalletID: UUID,
+        dueDay: Int,
+        statementClosingDay: Int
+    ) -> PlanningCreditCardAccountSnapshot {
+        PlanningCreditCardAccountSnapshot(
+            id: walletID,
+            walletID: walletID,
+            walletName: "SMBC Card",
+            issuerName: "SMBC",
+            network: .visa,
+            last4: "1234",
+            dueDay: dueDay,
+            statementClosingDay: statementClosingDay,
+            paymentSourceWalletID: paymentWalletID,
+            paymentSourceWalletName: "Main",
+            currencyCode: "JPY",
+            currentDebtMinor: 0,
+            availableCreditMinor: 100_000,
+            openedAt: makeDate(year: 2026, month: 1, day: 1)
+        )
+    }
+
+    private func makeCreditCardStatement(
+        walletID: UUID = UUID(),
+        paymentWalletID: UUID?,
+        status: PlanningDueOccurrenceStatus,
+        state: PlanningCreditCardStatementState
+    ) -> PlanningCreditCardStatementSnapshot {
+        PlanningCreditCardStatementSnapshot(
+            id: "\(walletID.uuidString.lowercased())-2026-02",
+            walletID: walletID,
+            walletName: "SMBC Card",
+            issuerName: "SMBC",
+            network: .visa,
+            last4: "1234",
+            statementMonth: makeDate(year: 2026, month: 2, day: 1),
+            closingDate: makeDate(year: 2026, month: 3, day: 10),
+            dueDate: makeDate(year: 2026, month: 3, day: 26),
+            amountMinor: 32_456,
+            availableCreditMinor: 100_000,
+            paymentSourceWalletID: paymentWalletID,
+            paymentSourceWalletName: paymentWalletID == nil ? nil : "Main",
+            currencyCode: "JPY",
+            status: status,
+            linkedTransactionID: nil,
+            state: state
         )
     }
 

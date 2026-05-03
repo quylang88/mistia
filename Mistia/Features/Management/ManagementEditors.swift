@@ -131,60 +131,13 @@ struct ManagementWalletEditorSheet: View {
 
                         TextField(mistiaLocalized(vi: "Hoặc nhập tên ngân hàng", en: "Or enter the bank name", ja: "または銀行名を入力"), text: $draft.institutionDisplayName)
                             .onChange(of: draft.institutionDisplayName) { _, newValue in
-                                if let selectedBank = ManagementPresetData.japaneseBanks.first(where: { $0.key == draft.institutionPresetKey }),
-                                   selectedBank.name != newValue {
-                                    draft.institutionPresetKey = nil
-                                }
+                                handleInstitutionDisplayNameChange(newValue)
                             }
                     }
                 }
 
                 if draft.kind == .creditCard {
-                    Section(mistiaLocalized(vi: "Credit card", en: "Credit card", ja: "クレジットカード")) {
-                        TextField(mistiaLocalized(vi: "Tên đơn vị phát hành", en: "Issuer name", ja: "発行会社名"), text: $draft.issuerName)
-
-                        Picker(mistiaLocalized(vi: "Mạng thẻ", en: "Card network", ja: "カードブランド"), selection: $draft.network) {
-                            ForEach(CreditCardNetwork.allCases) { network in
-                                Text(network.title).tag(network)
-                            }
-                        }
-                        .pickerStyle(.menu)
-
-                        TextField(mistiaLocalized(vi: "4 số cuối", en: "Last 4 digits", ja: "下4桁"), text: $draft.last4)
-                            .keyboardType(.numberPad)
-                            .onChange(of: draft.last4) { _, newValue in
-                                draft.last4 = String(newValue.filter(\.isNumber).prefix(4))
-                            }
-
-                        TextField(mistiaLocalized(vi: "Hạn mức tín dụng", en: "Credit limit", ja: "利用限度額"), text: $draft.creditLimitText)
-                            .keyboardType(.numberPad)
-
-                        Picker(mistiaLocalized(vi: "Ngày chốt sao kê", en: "Statement closing day", ja: "締め日"), selection: $draft.statementClosingDay) {
-                            ForEach(1...31, id: \.self) { day in
-                                Text(mistiaLocalized(vi: "Ngày \(day)", en: "Day \(day)", ja: "\(day) 日")).tag(day)
-                            }
-                        }
-                        .pickerStyle(.menu)
-
-                        Picker(mistiaLocalized(vi: "Ngày thanh toán", en: "Payment day", ja: "支払日"), selection: $draft.paymentDueDay) {
-                            ForEach(1...31, id: \.self) { day in
-                                Text(mistiaLocalized(vi: "Ngày \(day)", en: "Day \(day)", ja: "\(day) 日")).tag(day)
-                            }
-                        }
-                        .pickerStyle(.menu)
-
-                        Picker(mistiaLocalized(vi: "Nguồn thanh toán", en: "Payment source", ja: "支払い元"), selection: $draft.paymentSourceWalletID) {
-                            Text(mistiaLocalized(vi: "Chọn sau", en: "Choose later", ja: "あとで選択")).tag(Optional<UUID>.none)
-
-                            ForEach(paymentSourceWallets) { wallet in
-                                Text(wallet.name).tag(Optional(wallet.id))
-                            }
-                        }
-                        .pickerStyle(.menu)
-
-                        TextField(mistiaLocalized(vi: "Ghi chú", en: "Notes", ja: "メモ"), text: $draft.notes, axis: .vertical)
-                            .lineLimit(3...5)
-                    }
+                    creditCardFormSection
                 }
 
                 if target.wallet != nil {
@@ -281,7 +234,7 @@ struct ManagementWalletEditorSheet: View {
             ))
         }
         .onChange(of: draft.kind) { oldValue, newValue in
-            draft.handleKindChange(from: oldValue, newValue)
+            draft.handleKindChange(from: oldValue, to: newValue)
         }
         .sheet(isPresented: $showsBalanceAdjustment) {
             if let wallet = target.wallet {
@@ -292,6 +245,72 @@ struct ManagementWalletEditorSheet: View {
                     creditLimit: creditLimit
                 )
             }
+        }
+    }
+
+    private var creditCardFormSection: some View {
+        Section(mistiaLocalized(vi: "Credit card", en: "Credit card", ja: "クレジットカード")) {
+            TextField(mistiaLocalized(vi: "Tên đơn vị phát hành", en: "Issuer name", ja: "発行会社名"), text: $draft.issuerName)
+
+            Picker(mistiaLocalized(vi: "Mạng thẻ", en: "Card network", ja: "カードブランド"), selection: $draft.network) {
+                ForEach(CreditCardNetwork.allCases) { network in
+                    Text(network.title).tag(network)
+                }
+            }
+            .pickerStyle(.menu)
+
+            TextField(mistiaLocalized(vi: "4 số cuối", en: "Last 4 digits", ja: "下4桁"), text: $draft.last4)
+                .keyboardType(.numberPad)
+                .onChange(of: draft.last4) { _, newValue in
+                    draft.last4 = String(newValue.filter(\.isNumber).prefix(4))
+                }
+
+            TextField(mistiaLocalized(vi: "Hạn mức tín dụng", en: "Credit limit", ja: "利用限度額"), text: $draft.creditLimitText)
+                .keyboardType(.numberPad)
+
+            creditCardDayPicker(
+                title: mistiaLocalized(vi: "Ngày chốt sao kê", en: "Statement closing day", ja: "締め日"),
+                selection: $draft.statementClosingDay
+            )
+
+            creditCardDayPicker(
+                title: mistiaLocalized(vi: "Ngày thanh toán", en: "Payment day", ja: "支払日"),
+                selection: $draft.paymentDueDay
+            )
+
+            Picker(mistiaLocalized(vi: "Nguồn thanh toán", en: "Payment source", ja: "支払い元"), selection: $draft.paymentSourceWalletID) {
+                Text(mistiaLocalized(vi: "Chọn sau", en: "Choose later", ja: "あとで選択")).tag(Optional<UUID>.none)
+
+                ForEach(paymentSourceWallets) { wallet in
+                    Text(wallet.name).tag(Optional(wallet.id))
+                }
+            }
+            .pickerStyle(.menu)
+
+            TextField(mistiaLocalized(vi: "Ghi chú", en: "Notes", ja: "メモ"), text: $draft.notes, axis: .vertical)
+                .lineLimit(3...5)
+        }
+    }
+
+    private func creditCardDayPicker(
+        title: String,
+        selection: Binding<Int>
+    ) -> some View {
+        Picker(title, selection: selection) {
+            ForEach(1...31, id: \.self) { day in
+                Text(mistiaLocalized(vi: "Ngày \(day)", en: "Day \(day)", ja: "\(day) 日")).tag(day)
+            }
+        }
+        .pickerStyle(.menu)
+    }
+
+    private func handleInstitutionDisplayNameChange(_ newValue: String) {
+        let selectedKey = draft.institutionPresetKey
+        let selectedBank = ManagementPresetData.japaneseBanks.first { bank in
+            bank.key == selectedKey
+        }
+        if let selectedBank, selectedBank.name != newValue {
+            draft.institutionPresetKey = nil
         }
     }
 

@@ -165,8 +165,20 @@ struct PlanningView: View {
     private var creditCardDueItems: [PlanningCreditCardDueSnapshot] {
         PlanningLogic.creditCardDueItems(
             accounts: creditCardAccounts,
+            records: transactionSnapshots,
             occurrences: occurrenceSnapshots,
             selectedMonth: selectedMonth,
+            referenceDate: .now,
+            calendar: calendar
+        )
+    }
+
+    private var creditCardStatementDueItems: [PlanningCreditCardStatementSnapshot] {
+        PlanningLogic.creditCardStatementsDue(
+            in: selectedMonth,
+            accounts: creditCardAccounts,
+            records: transactionSnapshots,
+            occurrences: occurrenceSnapshots,
             referenceDate: .now,
             calendar: calendar
         )
@@ -285,7 +297,7 @@ struct PlanningView: View {
 
     private var dueSummary: PlanningDueSummarySnapshot {
         PlanningLogic.dueSummary(
-            creditCards: creditCardDueItems,
+            creditStatements: creditCardStatementDueItems,
             recurring: recurringBillDueItems + installmentDueItems,
             selectedMonth: selectedMonth,
             referenceDate: .now,
@@ -372,7 +384,7 @@ struct PlanningView: View {
                         selectedMode: $selectedDueMode,
                         summary: dueSummary,
                         currencyCode: currencyCode,
-                        creditCards: creditCardDueItems,
+                        creditCards: creditCardAccounts,
                         bills: recurringBillDueItems,
                         installments: installmentDueItems,
                         referenceDate: .now,
@@ -386,7 +398,7 @@ struct PlanningView: View {
                         onEditCreditCard: { item in
                             creditCardEditorTarget = PlanningCreditCardEditorTarget(
                                 wallet: storedWallets.first(where: { $0.id == item.walletID }),
-                                dueItem: item,
+                                dueItem: nil,
                                 selectedMonth: selectedMonth
                             )
                         },
@@ -605,12 +617,12 @@ private struct DueTabContent: View {
 
     let summary: PlanningDueSummarySnapshot
     let currencyCode: String
-    let creditCards: [PlanningCreditCardDueSnapshot]
+    let creditCards: [PlanningCreditCardAccountSnapshot]
     let bills: [PlanningRecurringDueSnapshot]
     let installments: [PlanningRecurringDueSnapshot]
     let referenceDate: Date
     let onAddCreditCard: () -> Void
-    let onEditCreditCard: (PlanningCreditCardDueSnapshot) -> Void
+    let onEditCreditCard: (PlanningCreditCardAccountSnapshot) -> Void
     let onAddBill: () -> Void
     let onEditBill: (PlanningRecurringDueSnapshot) -> Void
     let onAddInstallment: () -> Void
@@ -667,10 +679,10 @@ private struct DueTabContent: View {
 }
 
 private struct CreditCardsSection: View {
-    let items: [PlanningCreditCardDueSnapshot]
+    let items: [PlanningCreditCardAccountSnapshot]
     let referenceDate: Date
     let onAdd: () -> Void
-    let onEdit: (PlanningCreditCardDueSnapshot) -> Void
+    let onEdit: (PlanningCreditCardAccountSnapshot) -> Void
 
     private let columns = [GridItem(.flexible(), spacing: 10)]
 
@@ -695,7 +707,6 @@ private struct CreditCardsSection: View {
                     ForEach(items) { item in
                         PlanningCreditCardCard(
                             item: item,
-                            referenceDate: referenceDate,
                             onOpenStatement: {
                                 NotificationCenter.default.post(name: NSNotification.Name("MistiaOpenCreditCardStatementFromPlanning"), object: item.walletID)
                             }
@@ -1367,85 +1378,94 @@ private struct PlanningDueRow: View {
 }
 
 private struct PlanningCreditCardCard: View {
-    let item: PlanningCreditCardDueSnapshot
-    let referenceDate: Date
+    let item: PlanningCreditCardAccountSnapshot
     let onOpenStatement: () -> Void
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack {
-                Text(item.network.title.uppercased())
-                    .font(.system(size: 11.5, weight: .bold, design: .rounded))
-                    .foregroundStyle(.white.opacity(0.9))
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 6)
-                    .background(.white.opacity(0.14), in: Capsule())
+        ZStack(alignment: .topLeading) {
+            cardBackground
 
-                Spacer()
+            VStack(alignment: .leading, spacing: 0) {
+                HStack(alignment: .top) {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(issuerTitle.uppercased())
+                            .font(.system(size: 11, weight: .bold, design: .rounded))
+                            .foregroundStyle(.white.opacity(0.72))
+                            .lineLimit(1)
+                        Text(item.network.title.uppercased())
+                            .font(.system(size: 18, weight: .black, design: .rounded))
+                            .foregroundStyle(.white)
+                            .lineLimit(1)
+                    }
 
-                Text(maskedLast4)
-                    .font(.system(size: 14, weight: .semibold, design: .rounded))
-                    .foregroundStyle(.white.opacity(0.78))
-            }
+                    Spacer(minLength: 12)
 
-            Spacer(minLength: 4)
-
-            VStack(alignment: .leading, spacing: 5) {
-                Text(item.walletName)
-                    .font(.system(size: 17, weight: .bold, design: .rounded))
-                    .foregroundStyle(.white)
-                
-                Text(mistiaLocalized(vi: "Số tiền khả dụng", en: "Available credit", ja: "利用可能額"))
-                    .font(.system(size: 11.5, weight: .semibold, design: .rounded))
-                    .foregroundStyle(.white.opacity(0.65))
-
-                Text(amountText)
-                    .font(.system(size: 22, weight: .bold, design: .rounded))
-                    .foregroundStyle(.white)
-            }
-
-            HStack {
-                VStack(alignment: .leading, spacing: 3) {
-                    Text(mistiaLocalized(vi: "Ngày đến hạn", en: "Due date", ja: "支払日"))
-                        .font(.system(size: 11.5, weight: .semibold, design: .rounded))
-                        .foregroundStyle(.white.opacity(0.65))
-                    Text(item.dueDate.shortDisplayText)
-                        .font(.system(size: 13.5, weight: .semibold, design: .rounded))
-                        .foregroundStyle(.white.opacity(0.92))
+                    Text(maskedLast4)
+                        .font(.system(size: 14, weight: .bold, design: .rounded))
+                        .foregroundStyle(.white.opacity(0.82))
                 }
 
-                Spacer()
+                Spacer(minLength: 14)
 
-                HStack(spacing: 8) {
+                VStack(alignment: .leading, spacing: 5) {
+                    Text(item.walletName)
+                        .font(.system(size: 18, weight: .bold, design: .rounded))
+                        .foregroundStyle(.white)
+                        .lineLimit(1)
+
+                    Text(mistiaLocalized(vi: "Khả dụng", en: "Available", ja: "利用可能"))
+                        .font(.system(size: 11.5, weight: .semibold, design: .rounded))
+                        .foregroundStyle(.white.opacity(0.64))
+
+                    Text(item.availableCreditMinor.formattedCurrency(code: item.currencyCode))
+                        .font(.system(size: 25, weight: .black, design: .rounded))
+                        .foregroundStyle(.white)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.78)
+
+                    Text(paymentSourceText)
+                        .font(.system(size: 11, weight: .semibold, design: .rounded))
+                        .foregroundStyle(.white.opacity(0.64))
+                        .lineLimit(1)
+                }
+
+                Spacer(minLength: 14)
+
+                HStack(alignment: .bottom, spacing: 12) {
+                    HStack(spacing: 10) {
+                        statementMiniLabel(
+                            title: mistiaLocalized(vi: "Chốt", en: "Close", ja: "締め"),
+                            value: "\(item.statementClosingDay)"
+                        )
+                        statementMiniLabel(
+                            title: mistiaLocalized(vi: "Hạn", en: "Due", ja: "支払"),
+                            value: "\(item.dueDay)"
+                        )
+                    }
+
+                    Spacer(minLength: 10)
+
                     Button(action: onOpenStatement) {
-                        Text(mistiaLocalized(vi: "Sao kê", en: "Statement", ja: "明細"))
-                            .font(.system(size: 11.5, weight: .bold, design: .rounded))
-                            .foregroundStyle(.white)
-                            .padding(.horizontal, 10)
-                            .padding(.vertical, 6)
-                            .background(.white.opacity(0.14), in: Capsule())
+                        Label(
+                            mistiaLocalized(vi: "Sao kê", en: "Statement", ja: "明細"),
+                            systemImage: "doc.text"
+                        )
+                        .font(.system(size: 12, weight: .bold, design: .rounded))
+                        .labelStyle(.titleAndIcon)
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 11)
+                        .padding(.vertical, 7)
+                        .background(.white.opacity(0.16), in: Capsule())
                     }
                     .buttonStyle(.plain)
-
-                    PlanningStatusBadge(title: badgeTitle, color: item.tone(referenceDate: referenceDate).color)
                 }
             }
+            .padding(18)
         }
-        .padding(15)
-        .frame(maxWidth: .infinity, minHeight: 168, alignment: .leading)
+        .aspectRatio(1.586, contentMode: .fit)
+        .frame(maxWidth: .infinity, alignment: .leading)
         .background {
             RoundedRectangle(cornerRadius: 24, style: .continuous)
-                .fill(
-                    LinearGradient(
-                        colors: [
-                            Color(hex: "#24305F"),
-                            Color(hex: "#1C2241"),
-                            item.tone(referenceDate: referenceDate).color.opacity(0.78)
-                        ],
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
-                    )
-                )
                 .overlay {
                     RoundedRectangle(cornerRadius: 24, style: .continuous)
                         .strokeBorder(.white.opacity(0.12), lineWidth: 0.8)
@@ -1457,20 +1477,59 @@ private struct PlanningCreditCardCard: View {
         "•••• \(item.last4)"
     }
 
-    private var amountText: String {
-        item.availableCreditMinor > 0
-            ? item.availableCreditMinor.formattedCurrency(code: item.currencyCode)
-            : mistiaLocalized(vi: "Hết hạn mức", en: "Limit reached", ja: "限度額到達")
+    private var issuerTitle: String {
+        let trimmed = item.issuerName.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? item.network.title : trimmed
     }
 
-    private var badgeTitle: String {
-        if item.status == .paid {
-            return mistiaLocalized(vi: "Đã thanh toán", en: "Paid", ja: "支払い済み")
+    private var paymentSourceText: String {
+        if let name = item.paymentSourceWalletName?.trimmingCharacters(in: .whitespacesAndNewlines), !name.isEmpty {
+            return mistiaLocalized(vi: "Ví liên kết: \(name)", en: "Linked wallet: \(name)", ja: "連携ウォレット: \(name)")
         }
-        if item.availableCreditMinor <= 0 {
-            return mistiaLocalized(vi: "Hết hạn mức", en: "Limit reached", ja: "限度額到達")
+        return mistiaLocalized(vi: "Chưa chọn ví liên kết", en: "No linked wallet", ja: "連携ウォレット未設定")
+    }
+
+    private var cardBackground: some View {
+        RoundedRectangle(cornerRadius: 24, style: .continuous)
+            .fill(
+                LinearGradient(
+                    colors: [
+                        Color(hex: "#151922"),
+                        Color(hex: "#3A2B78"),
+                        Color(hex: "#2DAA9E").opacity(0.88)
+                    ],
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                )
+            )
+            .overlay(alignment: .topTrailing) {
+                RoundedRectangle(cornerRadius: 18, style: .continuous)
+                    .fill(.white.opacity(0.10))
+                    .frame(width: 92, height: 52)
+                    .rotationEffect(.degrees(-10))
+                    .offset(x: 18, y: 16)
+            }
+            .overlay(alignment: .bottomLeading) {
+                Rectangle()
+                    .fill(.white.opacity(0.10))
+                    .frame(height: 34)
+                    .blur(radius: 18)
+                    .offset(y: 14)
+            }
+    }
+
+    private func statementMiniLabel(title: String, value: String) -> some View {
+        HStack(spacing: 5) {
+            Text(title)
+                .font(.system(size: 10.5, weight: .bold, design: .rounded))
+                .foregroundStyle(.white.opacity(0.62))
+            Text(value)
+                .font(.system(size: 13.5, weight: .black, design: .rounded))
+                .foregroundStyle(.white)
         }
-        return mistiaLocalized(vi: "Còn hạn mức", en: "Available", ja: "利用可能")
+        .padding(.horizontal, 9)
+        .padding(.vertical, 6)
+        .background(.white.opacity(0.13), in: Capsule())
     }
 }
 

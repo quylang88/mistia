@@ -34,7 +34,7 @@ final class MistiaShortcutLogicTests: XCTestCase {
             )
         )
 
-        XCTAssertEqual(resolution.selection, .profile)
+        XCTAssertEqual(resolution.selection, .userProfile)
         XCTAssertEqual(resolution.presentation.title, "Hồ sơ")
         XCTAssertEqual(
             resolution.presentation.icon,
@@ -90,7 +90,7 @@ final class MistiaShortcutLogicTests: XCTestCase {
             )
         )
 
-        XCTAssertEqual(resolution.selection, .profile)
+        XCTAssertEqual(resolution.selection, .userProfile)
         XCTAssertEqual(resolution.presentation.title, "Hồ sơ")
     }
 
@@ -112,7 +112,7 @@ final class MistiaShortcutLogicTests: XCTestCase {
             )
         )
 
-        XCTAssertEqual(resolution.selection, .profile)
+        XCTAssertEqual(resolution.selection, .userProfile)
         XCTAssertEqual(resolution.presentation.title, "Hồ sơ")
     }
 

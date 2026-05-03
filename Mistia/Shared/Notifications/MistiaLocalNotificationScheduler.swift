@@ -52,6 +52,7 @@ enum MistiaLocalNotificationScheduler {
 
         let cardDueItems = PlanningLogic.creditCardDueItems(
             accounts: planningCreditCardAccounts,
+            records: transactionRecords,
             occurrences: occurrenceSnapshots,
             selectedMonth: startOfMonth,
             referenceDate: referenceDate,
@@ -287,4 +288,3 @@ enum MistiaLocalNotificationScheduler {
         try? modelContext.save()
     }
 }
-

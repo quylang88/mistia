@@ -214,14 +214,56 @@ nonisolated struct PlanningCreditCardAccountSnapshot: Equatable, Identifiable {
     let id: UUID
     let walletID: UUID
     let walletName: String
+    let issuerName: String
     let network: CreditCardNetwork
     let last4: String
     let dueDay: Int
+    let statementClosingDay: Int
     let paymentSourceWalletID: UUID?
+    let paymentSourceWalletName: String?
     let currencyCode: String
     let currentDebtMinor: Int64
     let availableCreditMinor: Int64
     let openedAt: Date
+}
+
+nonisolated enum PlanningCreditCardStatementState: String, Equatable {
+    case unclosed
+    case payable
+    case paid
+    case overdue
+}
+
+nonisolated enum PlanningCreditCardAutoPaymentDecision: Equatable {
+    case notDue
+    case alreadyPaid
+    case missingLinkedWallet
+    case insufficientFunds(availableMinor: Int64, requiredMinor: Int64)
+    case payable
+}
+
+nonisolated struct PlanningCreditCardStatementSnapshot: Equatable, Identifiable {
+    let id: String
+    let walletID: UUID
+    let walletName: String
+    let issuerName: String
+    let network: CreditCardNetwork
+    let last4: String
+    let statementMonth: Date
+    let closingDate: Date
+    let dueDate: Date
+    let amountMinor: Int64
+    let availableCreditMinor: Int64
+    let paymentSourceWalletID: UUID?
+    let paymentSourceWalletName: String?
+    let currencyCode: String
+    let status: PlanningDueOccurrenceStatus
+    let linkedTransactionID: UUID?
+    let state: PlanningCreditCardStatementState
+
+    var isPayable: Bool {
+        state == .payable || state == .overdue
+    }
 }
 
 nonisolated struct PlanningBillSnapshot: Equatable, Identifiable {
@@ -602,47 +644,132 @@ nonisolated enum PlanningLogic {
 
     static func creditCardDueItems(
         accounts: [PlanningCreditCardAccountSnapshot],
+        records: [TransactionRecordSnapshot] = [],
         occurrences: [PlanningDueOccurrenceSnapshot],
         selectedMonth: Date,
         referenceDate: Date = .now,
         calendar: Calendar = .current
     ) -> [PlanningCreditCardDueSnapshot] {
-        let monthKey = monthKey(for: selectedMonth, calendar: calendar)
+        creditCardStatementsDue(
+            in: selectedMonth,
+            accounts: accounts,
+            records: records,
+            occurrences: occurrences,
+            referenceDate: referenceDate,
+            calendar: calendar
+        )
+        .filter { $0.state != .unclosed && $0.amountMinor > 0 }
+        .map { statement in
+            PlanningCreditCardDueSnapshot(
+                id: statement.walletID,
+                walletID: statement.walletID,
+                walletName: statement.walletName,
+                network: statement.network,
+                last4: statement.last4,
+                amountMinor: statement.amountMinor,
+                availableCreditMinor: statement.availableCreditMinor,
+                dueDate: statement.dueDate,
+                paymentSourceWalletID: statement.paymentSourceWalletID,
+                currencyCode: statement.currencyCode,
+                status: statement.status,
+                linkedTransactionID: statement.linkedTransactionID
+            )
+        }
+        .sorted(by: dueSort)
+    }
 
-        return accounts
-            .filter { account in
-                calendar.compare(account.openedAt, to: endOfMonth(for: selectedMonth, calendar: calendar), toGranularity: .second) != .orderedDescending
-            }
-            .map { account in
-                let scheduledDate = scheduledDate(
-                    dueDay: account.dueDay,
-                    selectedMonth: selectedMonth,
+    static func creditCardStatementsDue(
+        in selectedMonth: Date,
+        accounts: [PlanningCreditCardAccountSnapshot],
+        records: [TransactionRecordSnapshot],
+        occurrences: [PlanningDueOccurrenceSnapshot],
+        referenceDate: Date = .now,
+        calendar: Calendar = .current
+    ) -> [PlanningCreditCardStatementSnapshot] {
+        let selectedMonthStart = startOfMonth(for: selectedMonth, calendar: calendar)
+        let candidateMonths = (-2...0).compactMap { offset in
+            calendar.date(byAdding: .month, value: offset, to: selectedMonthStart)
+        }
+
+        return creditCardStatementItems(
+            accounts: accounts,
+            records: records,
+            occurrences: occurrences,
+            statementMonths: candidateMonths,
+            referenceDate: referenceDate,
+            calendar: calendar
+        )
+        .filter { isSameMonth($0.dueDate, other: selectedMonthStart, calendar: calendar) }
+        .sorted(by: dueSort)
+    }
+
+    static func creditCardStatementItems(
+        accounts: [PlanningCreditCardAccountSnapshot],
+        records: [TransactionRecordSnapshot],
+        occurrences: [PlanningDueOccurrenceSnapshot],
+        statementMonths: [Date],
+        referenceDate: Date = .now,
+        calendar: Calendar = .current
+    ) -> [PlanningCreditCardStatementSnapshot] {
+        let months = Dictionary(
+            grouping: statementMonths.map { startOfMonth(for: $0, calendar: calendar) },
+            by: { monthKey(for: $0, calendar: calendar) }
+        )
+            .compactMap { $0.value.first }
+            .sorted()
+
+        return accounts.flatMap { account in
+            months.compactMap { month in
+                creditCardStatementItem(
+                    account: account,
+                    records: records,
+                    occurrences: occurrences,
+                    statementMonth: month,
+                    referenceDate: referenceDate,
                     calendar: calendar
                 )
-                let occurrence = occurrenceRecord(
-                    for: .creditCard,
-                    sourceID: account.walletID,
-                    monthKey: monthKey,
-                    occurrences: occurrences
-                )
-                let amount = occurrence?.amountMinorSnapshot ?? account.currentDebtMinor
-
-                return PlanningCreditCardDueSnapshot(
-                    id: account.id,
-                    walletID: account.walletID,
-                    walletName: account.walletName,
-                    network: account.network,
-                    last4: account.last4,
-                    amountMinor: amount,
-                    availableCreditMinor: account.availableCreditMinor,
-                    dueDate: scheduledDate,
-                    paymentSourceWalletID: account.paymentSourceWalletID,
-                    currencyCode: account.currencyCode,
-                    status: occurrence?.status ?? .pending,
-                    linkedTransactionID: occurrence?.linkedTransactionID
-                )
             }
-            .sorted(by: dueSort)
+        }
+        .sorted(by: dueSort)
+    }
+
+    static func creditCardStatementClosingDate(
+        statementMonth: Date,
+        statementClosingDay: Int,
+        calendar: Calendar = .current
+    ) -> Date {
+        let nextMonth = calendar.date(
+            byAdding: .month,
+            value: 1,
+            to: startOfMonth(for: statementMonth, calendar: calendar)
+        ) ?? statementMonth
+        return scheduledDate(dueDay: statementClosingDay, selectedMonth: nextMonth, calendar: calendar)
+    }
+
+    static func creditCardStatementDueDate(
+        statementMonth: Date,
+        statementClosingDay: Int,
+        paymentDueDay: Int,
+        calendar: Calendar = .current
+    ) -> Date {
+        let closingDate = creditCardStatementClosingDate(
+            statementMonth: statementMonth,
+            statementClosingDay: statementClosingDay,
+            calendar: calendar
+        )
+        let closingMonth = startOfMonth(for: closingDate, calendar: calendar)
+        let sameMonthDue = scheduledDate(
+            dueDay: paymentDueDay,
+            selectedMonth: closingMonth,
+            calendar: calendar
+        )
+
+        if sameMonthDue >= closingDate {
+            return sameMonthDue
+        }
+
+        let nextMonth = calendar.date(byAdding: .month, value: 1, to: closingMonth) ?? closingMonth
+        return scheduledDate(dueDay: paymentDueDay, selectedMonth: nextMonth, calendar: calendar)
     }
 
     static func recurringBillDueItems(
@@ -744,7 +871,7 @@ nonisolated enum PlanningLogic {
     }
 
     static func dueSummary(
-        creditCards: [PlanningCreditCardDueSnapshot],
+        creditStatements: [PlanningCreditCardStatementSnapshot],
         recurring: [PlanningRecurringDueSnapshot],
         selectedMonth: Date,
         referenceDate: Date = .now,
@@ -752,26 +879,34 @@ nonisolated enum PlanningLogic {
     ) -> PlanningDueSummarySnapshot {
         let startOfToday = calendar.startOfDay(for: referenceDate)
         let windowEnd = calendar.date(byAdding: .day, value: 7, to: startOfToday) ?? startOfToday
+        let selectedMonthStart = startOfMonth(for: selectedMonth, calendar: calendar)
 
-        let pendingCards = creditCards.filter { $0.status == .pending }
-        let pendingRecurring = recurring.filter { $0.status == .pending }
+        let pendingStatements = creditStatements.filter {
+            $0.status == .pending
+                && $0.state != .unclosed
+                && $0.amountMinor > 0
+                && isSameMonth($0.dueDate, other: selectedMonthStart, calendar: calendar)
+        }
+        let pendingRecurring = recurring.filter {
+            $0.status == .pending
+                && isSameMonth($0.dueDate, other: selectedMonthStart, calendar: calendar)
+        }
 
         // Sắp đến hạn: Trong vòng 7 ngày tới
-        let upcomingCards = pendingCards.filter { $0.dueDate >= startOfToday && $0.dueDate <= windowEnd }
+        let upcomingCards = pendingStatements.filter { $0.dueDate >= startOfToday && $0.dueDate <= windowEnd }
         let upcomingRecurring = pendingRecurring.filter { $0.dueDate >= startOfToday && $0.dueDate <= windowEnd }
         let upcomingCount = upcomingCards.count + upcomingRecurring.count
 
-        // Tổng cần trả: Dư nợ thẻ trong tháng + Hóa đơn trong 7 ngày tới
-        let totalDueCards = pendingCards.reduce(into: Int64.zero) { $0 += $1.amountMinor }
-        let totalDueRecurringUpcoming = upcomingRecurring.reduce(into: Int64.zero) { $0 += $1.amountMinor ?? 0 }
-        let totalDueMinor = totalDueCards + totalDueRecurringUpcoming
+        let totalDueCards = pendingStatements.reduce(into: Int64.zero) { $0 += $1.amountMinor }
+        let totalDueRecurring = pendingRecurring.reduce(into: Int64.zero) { $0 += $1.amountMinor ?? 0 }
+        let totalDueMinor = totalDueCards + totalDueRecurring
 
         // Quá hạn
         let overdueCount: Int
         if isPastMonth(selectedMonth, referenceDate: referenceDate, calendar: calendar) {
-            overdueCount = pendingCards.count + pendingRecurring.count
+            overdueCount = pendingStatements.count + pendingRecurring.count
         } else if isSameMonth(selectedMonth, other: referenceDate, calendar: calendar) {
-            let overdueCards = pendingCards.filter { $0.dueDate < startOfToday }
+            let overdueCards = pendingStatements.filter { $0.dueDate < startOfToday }
             let overdueRecurring = pendingRecurring.filter { $0.dueDate < startOfToday }
             overdueCount = overdueCards.count + overdueRecurring.count
         } else {
@@ -782,6 +917,43 @@ nonisolated enum PlanningLogic {
             upcomingCount: upcomingCount,
             totalDueMinor: totalDueMinor,
             overdueCount: overdueCount
+        )
+    }
+
+    static func dueSummary(
+        creditCards: [PlanningCreditCardDueSnapshot],
+        recurring: [PlanningRecurringDueSnapshot],
+        selectedMonth: Date,
+        referenceDate: Date = .now,
+        calendar: Calendar = .current
+    ) -> PlanningDueSummarySnapshot {
+        let statements = creditCards.map { card in
+            PlanningCreditCardStatementSnapshot(
+                id: "\(card.walletID.uuidString.lowercased())-\(monthKey(for: card.dueDate, calendar: calendar))",
+                walletID: card.walletID,
+                walletName: card.walletName,
+                issuerName: "",
+                network: card.network,
+                last4: card.last4,
+                statementMonth: selectedMonth,
+                closingDate: selectedMonth,
+                dueDate: card.dueDate,
+                amountMinor: card.amountMinor,
+                availableCreditMinor: card.availableCreditMinor,
+                paymentSourceWalletID: card.paymentSourceWalletID,
+                paymentSourceWalletName: nil,
+                currencyCode: card.currencyCode,
+                status: card.status,
+                linkedTransactionID: card.linkedTransactionID,
+                state: card.status == .paid ? .paid : .payable
+            )
+        }
+        return dueSummary(
+            creditStatements: statements,
+            recurring: recurring,
+            selectedMonth: selectedMonth,
+            referenceDate: referenceDate,
+            calendar: calendar
         )
     }
 
@@ -805,6 +977,30 @@ nonisolated enum PlanningLogic {
             amountMinor: amount,
             sourceWalletID: sourceWalletID,
             destinationWalletID: creditCard.walletID,
+            categorySystemKey: nil
+        )
+    }
+
+    static func makePaymentDraft(
+        for statement: PlanningCreditCardStatementSnapshot,
+        overrideAmountMinor: Int64? = nil
+    ) throws -> PlanningDuePaymentDraft {
+        guard let sourceWalletID = statement.paymentSourceWalletID else {
+            throw PlanningDuePaymentError.missingSourceWallet
+        }
+
+        let amount = overrideAmountMinor ?? statement.amountMinor
+        guard amount > 0 else {
+            throw PlanningDuePaymentError.missingAmount
+        }
+
+        return PlanningDuePaymentDraft(
+            primaryKind: .transfer,
+            transferSubtype: .internalTransfer,
+            title: "Thanh toán thẻ \(statement.walletName)",
+            amountMinor: amount,
+            sourceWalletID: sourceWalletID,
+            destinationWalletID: statement.walletID,
             categorySystemKey: nil
         )
     }
@@ -870,6 +1066,162 @@ nonisolated enum PlanningLogic {
         let clampedDay = min(max(dueDay, 1), maxDay)
 
         return calendar.date(byAdding: .day, value: clampedDay - 1, to: monthStart) ?? monthStart
+    }
+
+    private static func creditCardStatementItem(
+        account: PlanningCreditCardAccountSnapshot,
+        records: [TransactionRecordSnapshot],
+        occurrences: [PlanningDueOccurrenceSnapshot],
+        statementMonth: Date,
+        referenceDate: Date,
+        calendar: Calendar
+    ) -> PlanningCreditCardStatementSnapshot? {
+        let monthStart = startOfMonth(for: statementMonth, calendar: calendar)
+        guard calendar.compare(
+            account.openedAt,
+            to: endOfMonth(for: monthStart, calendar: calendar),
+            toGranularity: .second
+        ) != .orderedDescending else {
+            return nil
+        }
+
+        let closingDate = creditCardStatementClosingDate(
+            statementMonth: monthStart,
+            statementClosingDay: account.statementClosingDay,
+            calendar: calendar
+        )
+        let dueDate = creditCardStatementDueDate(
+            statementMonth: monthStart,
+            statementClosingDay: account.statementClosingDay,
+            paymentDueDay: account.dueDay,
+            calendar: calendar
+        )
+        let dueMonthKey = monthKey(for: dueDate, calendar: calendar)
+        let occurrence = occurrenceRecord(
+            for: .creditCard,
+            sourceID: account.walletID,
+            monthKey: dueMonthKey,
+            occurrences: occurrences
+        )
+        let amount = occurrence?.amountMinorSnapshot ?? creditCardStatementAmount(
+            walletID: account.walletID,
+            records: records,
+            statementMonth: monthStart,
+            calendar: calendar
+        )
+        let status = occurrence?.status ?? .pending
+        let state = creditCardStatementState(
+            status: status,
+            amountMinor: amount,
+            closingDate: closingDate,
+            dueDate: dueDate,
+            referenceDate: referenceDate,
+            calendar: calendar
+        )
+
+        return PlanningCreditCardStatementSnapshot(
+            id: "\(account.walletID.uuidString.lowercased())-\(monthKey(for: monthStart, calendar: calendar))",
+            walletID: account.walletID,
+            walletName: account.walletName,
+            issuerName: account.issuerName,
+            network: account.network,
+            last4: account.last4,
+            statementMonth: monthStart,
+            closingDate: closingDate,
+            dueDate: dueDate,
+            amountMinor: amount,
+            availableCreditMinor: account.availableCreditMinor,
+            paymentSourceWalletID: account.paymentSourceWalletID,
+            paymentSourceWalletName: account.paymentSourceWalletName,
+            currencyCode: account.currencyCode,
+            status: status,
+            linkedTransactionID: occurrence?.linkedTransactionID,
+            state: state
+        )
+    }
+
+    private static func creditCardStatementAmount(
+        walletID: UUID,
+        records: [TransactionRecordSnapshot],
+        statementMonth: Date,
+        calendar: Calendar
+    ) -> Int64 {
+        guard let monthInterval = calendar.dateInterval(of: .month, for: statementMonth) else {
+            return 0
+        }
+
+        return records.reduce(into: Int64.zero) { partial, record in
+            guard record.entryStatus == .posted,
+                  !record.isArchived,
+                  record.primaryKind == .expense,
+                  record.sourceWalletID == walletID,
+                  record.occurredAt >= monthInterval.start,
+                  record.occurredAt < monthInterval.end
+            else {
+                return
+            }
+
+            partial += record.amountMinor
+        }
+    }
+
+    static func creditCardStatementState(
+        status: PlanningDueOccurrenceStatus,
+        amountMinor: Int64,
+        closingDate: Date,
+        dueDate: Date,
+        referenceDate: Date = .now,
+        calendar: Calendar = .current
+    ) -> PlanningCreditCardStatementState {
+        if status == .paid {
+            return .paid
+        }
+
+        let today = calendar.startOfDay(for: referenceDate)
+        let closingDay = calendar.startOfDay(for: closingDate)
+        if today < closingDay {
+            return .unclosed
+        }
+
+        if amountMinor <= 0 {
+            return .paid
+        }
+
+        if calendar.startOfDay(for: dueDate) < today {
+            return .overdue
+        }
+
+        return .payable
+    }
+
+    static func creditCardAutoPaymentDecision(
+        statement: PlanningCreditCardStatementSnapshot,
+        sourceWalletBalanceMinor: Int64?,
+        referenceDate: Date = .now,
+        calendar: Calendar = .current
+    ) -> PlanningCreditCardAutoPaymentDecision {
+        guard statement.status == .pending, statement.state != .paid, statement.amountMinor > 0 else {
+            return .alreadyPaid
+        }
+
+        let today = calendar.startOfDay(for: referenceDate)
+        let dueDay = calendar.startOfDay(for: statement.dueDate)
+        guard today >= dueDay else {
+            return .notDue
+        }
+
+        guard statement.paymentSourceWalletID != nil, let sourceWalletBalanceMinor else {
+            return .missingLinkedWallet
+        }
+
+        guard sourceWalletBalanceMinor >= statement.amountMinor else {
+            return .insufficientFunds(
+                availableMinor: sourceWalletBalanceMinor,
+                requiredMinor: statement.amountMinor
+            )
+        }
+
+        return .payable
     }
 
     static func monthsRemaining(
@@ -987,6 +1339,10 @@ private nonisolated protocol DueSortable {
 }
 
 nonisolated extension PlanningCreditCardDueSnapshot: DueSortable {
+    fileprivate var displayName: String { walletName }
+}
+
+nonisolated extension PlanningCreditCardStatementSnapshot: DueSortable {
     fileprivate var displayName: String { walletName }
 }
 

@@ -107,6 +107,7 @@ struct OverviewView: View {
     private var creditCardDueItems: [PlanningCreditCardDueSnapshot] {
         PlanningLogic.creditCardDueItems(
             accounts: planningCreditCardAccounts,
+            records: transactionRecords,
             occurrences: occurrenceSnapshots,
             selectedMonth: currentMonth,
             referenceDate: .now,

@@ -1524,6 +1524,7 @@ struct FamilyOverviewScreen: View {
         
         let creditCardDueItems = PlanningLogic.creditCardDueItems(
             accounts: planningCreditCardAccounts,
+            records: transactionRecords,
             occurrences: occurrenceSnapshots,
             selectedMonth: currentMonth,
             referenceDate: .now,
