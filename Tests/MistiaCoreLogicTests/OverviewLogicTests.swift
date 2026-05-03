@@ -714,7 +714,7 @@ final class OverviewLogicTests: XCTestCase {
             calendar: calendar
         )
 
-        let card = try XCTUnwrap(statement.cards.first as? OverviewCreditCardStatementCycle)
+        let card = try XCTUnwrap(statement.cards.first)
         XCTAssertEqual(card.cycle.start, makeDate(year: 2026, month: 3, day: 26))
         XCTAssertEqual(card.cycle.end, makeDate(year: 2026, month: 4, day: 26))
         XCTAssertEqual(card.charges.map(\.title), ["Cafe"])

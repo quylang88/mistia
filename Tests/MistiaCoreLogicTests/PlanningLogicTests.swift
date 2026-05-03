@@ -384,6 +384,163 @@ final class PlanningLogicTests: XCTestCase {
         XCTAssertEqual(afterSummary.upcomingCount, 0)
     }
 
+    func testBackdatedCreditCardExpenseCreatesStatementBeforeWalletCreatedMonth() {
+        let cardWalletID = UUID()
+        let account = makeCreditCardAccount(
+            walletID: cardWalletID,
+            paymentWalletID: UUID(),
+            dueDay: 26,
+            statementClosingDay: 10,
+            openedAt: makeDate(year: 2026, month: 3, day: 5)
+        )
+        let records = [
+            makeRecord(
+                primaryKind: .expense,
+                amountMinor: 32_456,
+                occurredAt: makeDate(year: 2026, month: 2, day: 12),
+                categoryID: nil,
+                sourceWalletID: cardWalletID,
+                sourceWalletKind: .creditCard
+            )
+        ]
+
+        let statements = PlanningLogic.creditCardStatementItems(
+            accounts: [account],
+            records: records,
+            occurrences: [],
+            statementMonths: [makeDate(year: 2026, month: 2, day: 1)],
+            referenceDate: makeDate(year: 2026, month: 3, day: 10),
+            calendar: calendar
+        )
+
+        XCTAssertEqual(statements.count, 1)
+        XCTAssertEqual(statements.first?.amountMinor, 32_456)
+        XCTAssertEqual(statements.first?.statementMonth, makeDate(year: 2026, month: 2, day: 1))
+        XCTAssertEqual(statements.first?.state, .payable)
+    }
+
+    func testPaidCreditCardStatementForExpenseDetectsClosedPaidMonth() {
+        let cardWalletID = UUID()
+        let paymentTransactionID = UUID()
+        let account = makeCreditCardAccount(
+            walletID: cardWalletID,
+            paymentWalletID: UUID(),
+            dueDay: 26,
+            statementClosingDay: 10
+        )
+        let records = [
+            makeRecord(
+                primaryKind: .expense,
+                amountMinor: 32_456,
+                occurredAt: makeDate(year: 2026, month: 2, day: 12),
+                categoryID: nil,
+                sourceWalletID: cardWalletID,
+                sourceWalletKind: .creditCard
+            )
+        ]
+        let occurrence = PlanningDueOccurrenceSnapshot(
+            id: UUID(),
+            sourceKind: .creditCard,
+            sourceID: cardWalletID,
+            selectedMonthKey: "2026-03",
+            scheduledDate: makeDate(year: 2026, month: 3, day: 26),
+            amountMinorSnapshot: 32_456,
+            status: .paid,
+            linkedTransactionID: paymentTransactionID
+        )
+
+        let paidStatement = PlanningLogic.paidCreditCardStatementForExpense(
+            account: account,
+            records: records,
+            occurrences: [occurrence],
+            occurredAt: makeDate(year: 2026, month: 2, day: 20),
+            referenceDate: makeDate(year: 2026, month: 3, day: 27),
+            calendar: calendar
+        )
+
+        XCTAssertEqual(paidStatement?.statementMonth, makeDate(year: 2026, month: 2, day: 1))
+        XCTAssertEqual(paidStatement?.amountMinor, 32_456)
+        XCTAssertEqual(paidStatement?.state, .paid)
+    }
+
+    func testCreditCardStatementIgnoresStalePaidOccurrenceWhenSpendingChanged() {
+        let cardWalletID = UUID()
+        let account = makeCreditCardAccount(
+            walletID: cardWalletID,
+            paymentWalletID: UUID(),
+            dueDay: 26,
+            statementClosingDay: 10
+        )
+        let records = [
+            makeRecord(
+                primaryKind: .expense,
+                amountMinor: 6_666,
+                occurredAt: makeDate(year: 2026, month: 3, day: 15),
+                categoryID: nil,
+                sourceWalletID: cardWalletID,
+                sourceWalletKind: .creditCard
+            )
+        ]
+        let staleOccurrence = PlanningDueOccurrenceSnapshot(
+            id: UUID(),
+            sourceKind: .creditCard,
+            sourceID: cardWalletID,
+            selectedMonthKey: "2026-04",
+            scheduledDate: makeDate(year: 2026, month: 4, day: 26),
+            amountMinorSnapshot: 2_000,
+            status: .paid,
+            linkedTransactionID: UUID()
+        )
+
+        let statement = PlanningLogic.creditCardStatementItems(
+            accounts: [account],
+            records: records,
+            occurrences: [staleOccurrence],
+            statementMonths: [makeDate(year: 2026, month: 3, day: 1)],
+            referenceDate: makeDate(year: 2026, month: 4, day: 27),
+            calendar: calendar
+        ).first
+
+        XCTAssertEqual(statement?.amountMinor, 6_666)
+        XCTAssertEqual(statement?.status, .pending)
+        XCTAssertEqual(statement?.state, .overdue)
+        XCTAssertNil(statement?.linkedTransactionID)
+    }
+
+    func testCreditCardStatementIgnoresStaleOccurrenceForEmptyStatementMonth() {
+        let cardWalletID = UUID()
+        let account = makeCreditCardAccount(
+            walletID: cardWalletID,
+            paymentWalletID: UUID(),
+            dueDay: 26,
+            statementClosingDay: 10
+        )
+        let staleOccurrence = PlanningDueOccurrenceSnapshot(
+            id: UUID(),
+            sourceKind: .creditCard,
+            sourceID: cardWalletID,
+            selectedMonthKey: "2026-03",
+            scheduledDate: makeDate(year: 2026, month: 3, day: 26),
+            amountMinorSnapshot: 6_000,
+            status: .paid,
+            linkedTransactionID: UUID()
+        )
+
+        let statement = PlanningLogic.creditCardStatementItems(
+            accounts: [account],
+            records: [],
+            occurrences: [staleOccurrence],
+            statementMonths: [makeDate(year: 2026, month: 2, day: 1)],
+            referenceDate: makeDate(year: 2026, month: 3, day: 27),
+            calendar: calendar
+        ).first
+
+        XCTAssertEqual(statement?.amountMinor, 0)
+        XCTAssertEqual(statement?.status, .pending)
+        XCTAssertEqual(statement?.state, .paid)
+        XCTAssertNil(statement?.linkedTransactionID)
+    }
+
     func testCreditCardAutoPaymentDecisionWaitsForDueDateAndRequiresFunds() {
         let paymentWalletID = UUID()
         let statement = makeCreditCardStatement(
@@ -622,7 +779,8 @@ final class PlanningLogicTests: XCTestCase {
         walletID: UUID,
         paymentWalletID: UUID,
         dueDay: Int,
-        statementClosingDay: Int
+        statementClosingDay: Int,
+        openedAt: Date? = nil
     ) -> PlanningCreditCardAccountSnapshot {
         PlanningCreditCardAccountSnapshot(
             id: walletID,
@@ -638,7 +796,7 @@ final class PlanningLogicTests: XCTestCase {
             currencyCode: "JPY",
             currentDebtMinor: 0,
             availableCreditMinor: 100_000,
-            openedAt: makeDate(year: 2026, month: 1, day: 1)
+            openedAt: openedAt ?? makeDate(year: 2026, month: 1, day: 1)
         )
     }
 

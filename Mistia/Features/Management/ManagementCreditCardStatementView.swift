@@ -79,15 +79,7 @@ struct ManagementCreditCardStatementView: View {
                     title: mistiaLocalized(vi: "Chi tiêu trong kỳ", en: "Charges in cycle", ja: "期間内の利用"),
                     emptyText: mistiaLocalized(vi: "Không có chi tiêu nào trong kỳ này", en: "No charges in this cycle", ja: "この期間の利用はありません"),
                     transactions: chargeTransactions(for: selectedStatement),
-                    isPayment: false,
                     isLocked: effectiveState(for: selectedStatement) == .paid
-                )
-                transactionSection(
-                    title: mistiaLocalized(vi: "Thanh toán vào thẻ", en: "Payments to card", ja: "カードへの支払い"),
-                    emptyText: mistiaLocalized(vi: "Chưa có thanh toán nào", en: "No payments yet", ja: "支払いはまだありません"),
-                    transactions: paymentTransactions(for: selectedStatement),
-                    isPayment: true,
-                    isLocked: false
                 )
             } else {
                 emptyStatementCard
@@ -138,34 +130,17 @@ struct ManagementCreditCardStatementView: View {
         let state = effectiveState(for: statement)
 
         return MistiaGlassCard(cornerRadius: 24, tint: dynamicAccentColor.opacity(0.12)) {
-            VStack(alignment: .leading, spacing: 18) {
-                HStack(alignment: .top, spacing: 12) {
-                    VStack(alignment: .leading, spacing: 6) {
-                        Text(statementStateTitle(state, amountMinor: statement.amountMinor))
-                            .font(.system(size: 14, weight: .bold, design: .rounded))
-                            .foregroundStyle(stateColor(state))
-                        Text(mistiaLocalized(vi: "Sao kê", en: "Statement", ja: "明細"))
-                            .font(.system(size: 12, weight: .semibold, design: .rounded))
-                            .foregroundStyle(.secondary)
-                    }
-
-                    Spacer(minLength: 10)
-
-                    Text(maskedLast4(statement.last4))
+            VStack(alignment: .leading, spacing: 16) {
+                VStack(alignment: .leading, spacing: 6) {
+                    Text(mistiaLocalized(vi: "Tổng cần thanh toán", en: "Total due", ja: "支払い合計"))
                         .font(.system(size: 13, weight: .bold, design: .rounded))
                         .foregroundStyle(.secondary)
-                }
 
-                VStack(alignment: .leading, spacing: 5) {
                     Text(statement.amountMinor.formattedCurrency(code: statement.currencyCode))
-                        .font(.system(size: 34, weight: .black, design: .rounded))
+                        .font(.system(size: 36, weight: .black, design: .rounded))
                         .foregroundStyle(.primary)
                         .lineLimit(1)
                         .minimumScaleFactor(0.72)
-
-                    Text(statementCycleText(statement))
-                        .font(.system(size: 13, weight: .semibold, design: .rounded))
-                        .foregroundStyle(.secondary)
                 }
 
                 Button {
@@ -234,7 +209,6 @@ struct ManagementCreditCardStatementView: View {
         title: String,
         emptyText: String,
         transactions: [LedgerTransaction],
-        isPayment: Bool,
         isLocked: Bool
     ) -> some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -257,8 +231,7 @@ struct ManagementCreditCardStatementView: View {
                             TransactionRow(
                                 tx: tx,
                                 currencyCode: wallet.currencyCode,
-                                isLocked: isLocked,
-                                isPayment: isPayment
+                                isLocked: isLocked
                             )
 
                             if index < transactions.count - 1 {
@@ -286,6 +259,7 @@ struct ManagementCreditCardStatementView: View {
     private func chargeTransactions(for statement: PlanningCreditCardStatementSnapshot) -> [LedgerTransaction] {
         allTransactions.filter { tx in
             tx.sourceWallet?.id == wallet.id
+                && tx.entryStatus == .posted
                 && tx.primaryKind == .expense
                 && calendar.isDate(tx.occurredAt, equalTo: statement.statementMonth, toGranularity: .month)
         }
@@ -301,6 +275,7 @@ struct ManagementCreditCardStatementView: View {
 
         return allTransactions.filter { tx in
             tx.destinationWallet?.id == wallet.id
+                && tx.entryStatus == .posted
                 && tx.primaryKind == .transfer
                 && tx.transferSubtype == .internalTransfer
                 && tx.occurredAt >= statement.closingDate
@@ -388,26 +363,6 @@ struct ManagementCreditCardStatementView: View {
         }
     }
 
-    private func statementStateTitle(
-        _ state: PlanningCreditCardStatementState,
-        amountMinor: Int64
-    ) -> String {
-        if amountMinor <= 0, state != .unclosed {
-            return mistiaLocalized(vi: "Không cần thanh toán", en: "No payment needed", ja: "支払い不要")
-        }
-
-        switch state {
-        case .unclosed:
-            return mistiaLocalized(vi: "Chưa chốt", en: "Not closed yet", ja: "未締め")
-        case .payable:
-            return mistiaLocalized(vi: "Có thể thanh toán", en: "Ready to pay", ja: "支払い可能")
-        case .paid:
-            return mistiaLocalized(vi: "Đã thanh toán", en: "Paid", ja: "支払い済み")
-        case .overdue:
-            return mistiaLocalized(vi: "Quá hạn", en: "Overdue", ja: "延滞")
-        }
-    }
-
     private func paymentButtonTitle(
         _ state: PlanningCreditCardStatementState,
         amountMinor: Int64
@@ -419,8 +374,10 @@ struct ManagementCreditCardStatementView: View {
         switch state {
         case .unclosed:
             return mistiaLocalized(vi: "Chưa chốt", en: "Not closed yet", ja: "未締め")
-        case .payable, .overdue:
+        case .payable:
             return mistiaLocalized(vi: "Thanh toán trước", en: "Pay early", ja: "先に支払う")
+        case .overdue:
+            return mistiaLocalized(vi: "Thanh toán ngay", en: "Pay now", ja: "今すぐ支払う")
         case .paid:
             return mistiaLocalized(vi: "Đã thanh toán", en: "Paid", ja: "支払い済み")
         }
@@ -466,41 +423,18 @@ struct ManagementCreditCardStatementView: View {
         }
     }
 
-    private func stateColor(_ state: PlanningCreditCardStatementState) -> Color {
-        switch state {
-        case .unclosed:
-            return .secondary
-        case .payable:
-            return dynamicAccentColor
-        case .paid:
-            return .mint
-        case .overdue:
-            return Color(hex: "#F45C7E")
-        }
-    }
-
-    private func statementCycleText(_ statement: PlanningCreditCardStatementSnapshot) -> String {
-        let closing = MistiaDateFormatting.shortDateString(for: statement.closingDate)
-        let due = MistiaDateFormatting.shortDateString(for: statement.dueDate)
-        return mistiaLocalized(vi: "Chốt \(closing) - hạn \(due)", en: "Closes \(closing) - due \(due)", ja: "締め \(closing) - 支払 \(due)")
-    }
-
-    private func maskedLast4(_ last4: String) -> String {
-        "•••• \(last4)"
-    }
 }
 
 private struct TransactionRow: View {
     let tx: LedgerTransaction
     let currencyCode: String
     let isLocked: Bool
-    let isPayment: Bool
 
     var body: some View {
         HStack(spacing: 12) {
             MistiaFinanceIconView(
                 icon: tx.category?.iconSymbolName ?? tx.primaryKind.financeIconToken,
-                fallbackColor: isPayment ? .mint : MistiaAccent.expense.color,
+                fallbackColor: MistiaAccent.expense.color,
                 size: 32
             )
             
@@ -526,7 +460,7 @@ private struct TransactionRow: View {
             
             Text(amountText)
                 .font(.system(size: 15, weight: .bold, design: .rounded))
-                .foregroundStyle(isPayment ? Color.mint : MistiaAccent.expense.color)
+                .foregroundStyle(MistiaAccent.expense.color)
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 12)
@@ -537,7 +471,6 @@ private struct TransactionRow: View {
     }
 
     private var amountText: String {
-        let prefix = isPayment ? "+" : "-"
-        return prefix + tx.amountMinor.formattedCurrency(code: currencyCode)
+        "-" + tx.amountMinor.formattedCurrency(code: currencyCode)
     }
 }

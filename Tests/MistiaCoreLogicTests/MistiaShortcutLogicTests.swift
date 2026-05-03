@@ -34,11 +34,11 @@ final class MistiaShortcutLogicTests: XCTestCase {
             )
         )
 
-        XCTAssertEqual(resolution.selection, .userProfile)
-        XCTAssertEqual(resolution.presentation.title, "Hồ sơ")
+        XCTAssertEqual(resolution.selection, .backupRestore)
+        XCTAssertEqual(resolution.presentation.title, "Sao lưu & Khôi phục")
         XCTAssertEqual(
             resolution.presentation.icon,
-            .currentUserAvatar(initials: "QL", avatarURL: URL(string: "file:///tmp/me.png"))
+            .systemImage("externaldrive.fill.badge.icloud")
         )
     }
 
@@ -90,8 +90,8 @@ final class MistiaShortcutLogicTests: XCTestCase {
             )
         )
 
-        XCTAssertEqual(resolution.selection, .userProfile)
-        XCTAssertEqual(resolution.presentation.title, "Hồ sơ")
+        XCTAssertEqual(resolution.selection, .backupRestore)
+        XCTAssertEqual(resolution.presentation.title, "Sao lưu & Khôi phục")
     }
 
     func testResolveFallsBackToProfileWhenMemberMatchesCurrentUser() {
@@ -112,8 +112,8 @@ final class MistiaShortcutLogicTests: XCTestCase {
             )
         )
 
-        XCTAssertEqual(resolution.selection, .userProfile)
-        XCTAssertEqual(resolution.presentation.title, "Hồ sơ")
+        XCTAssertEqual(resolution.selection, .backupRestore)
+        XCTAssertEqual(resolution.presentation.title, "Sao lưu & Khôi phục")
     }
 
     private func makeInput(

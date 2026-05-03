@@ -30,6 +30,7 @@ private enum TransactionEditorFocusedField: Hashable {
 }
 
 struct TransactionEditorSheet: View {
+    @Environment(\.calendar) private var calendar
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
     @Environment(\.colorScheme) private var colorScheme
@@ -48,6 +49,8 @@ struct TransactionEditorSheet: View {
         $0.entryStatusRawValue == "posted" && !$0.isArchived && $0.deletedAt == nil
     })
     private var postedTransactions: [LedgerTransaction]
+    @Query(filter: #Predicate<DueOccurrenceRecord> { $0.deletedAt == nil })
+    private var storedDueOccurrences: [DueOccurrenceRecord]
 
     let target: TransactionEditorTarget
     var onComplete: (TransactionEditorCompletion) -> Void = { _ in }
@@ -78,6 +81,13 @@ struct TransactionEditorSheet: View {
 
     private var isLockedByStatement: Bool {
         guard let transaction = target.transaction else { return false }
+        if transaction.primaryKind == .expense,
+           let sourceWallet = transaction.sourceWallet,
+           sourceWallet.kind == .creditCard,
+           paidCreditCardStatement(for: sourceWallet, occurredAt: transaction.occurredAt) != nil {
+            return true
+        }
+
         return TransactionLogic.isLockedByPaidStatement(
             transaction: transaction.snapshot,
             allTransactions: postedTransactions.map { $0.snapshot }
@@ -793,6 +803,11 @@ struct TransactionEditorSheet: View {
 
             // For credit cards, check available credit (limit - debt), not debt itself
             if sourceWallet.kind == .creditCard {
+                if let paidStatement = paidCreditCardStatement(for: sourceWallet, occurredAt: draft.occurredAt) {
+                    alertMessage = paidStatementExpenseAlertMessage(for: paidStatement)
+                    return
+                }
+
                 let availableCredit: Int64
                 if let profile = sourceWallet.creditCardProfile {
                     availableCredit = max(profile.creditLimitMinor - currentBalance, 0)
@@ -963,6 +978,46 @@ struct TransactionEditorSheet: View {
             transaction: transaction,
             completion: .savedTransaction,
             subjectUserIDOverride: canonicalOwnerUserID
+        )
+    }
+
+    private var transactionRecordSnapshots: [TransactionRecordSnapshot] {
+        postedTransactions.map(\.planningRecordSnapshot)
+    }
+
+    private var dueOccurrenceSnapshots: [PlanningDueOccurrenceSnapshot] {
+        storedDueOccurrences.map(\.planningSnapshot)
+    }
+
+    private func paidCreditCardStatement(
+        for wallet: LedgerWallet,
+        occurredAt: Date
+    ) -> PlanningCreditCardStatementSnapshot? {
+        guard let account = wallet.planningCreditCardSnapshot(records: transactionRecordSnapshots) else {
+            return nil
+        }
+
+        return PlanningLogic.paidCreditCardStatementForExpense(
+            account: account,
+            records: transactionRecordSnapshots,
+            occurrences: dueOccurrenceSnapshots,
+            occurredAt: occurredAt,
+            referenceDate: .now,
+            calendar: calendar
+        )
+    }
+
+    private func paidStatementExpenseAlertMessage(
+        for statement: PlanningCreditCardStatementSnapshot
+    ) -> String {
+        let statementMonth = MistiaDateFormatting.statementMonthYearString(
+            for: statement.statementMonth,
+            calendar: calendar
+        )
+        return mistiaLocalized(
+            vi: "Sao kê \(statementMonth) của thẻ này đã thanh toán xong. Không thể thêm chi tiêu mới vào kỳ đã đóng.",
+            en: "The \(statementMonth) statement for this card has already been paid. You can't add a new expense to a closed cycle.",
+            ja: "このカードの \(statementMonth) 明細は支払い済みです。締め済みの期間に新しい支出は追加できません。"
         )
     }
 

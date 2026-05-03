@@ -1170,6 +1170,14 @@ struct PlanningCreditCardEditorSheet: View {
         target.wallet?.currencyCode ?? target.dueItem?.currencyCode ?? currencyCode
     }
 
+    private var statementClosingDayOptions: [Int] {
+        Array(1..<draft.paymentDueDay)
+    }
+
+    private var paymentDueDayOptions: [Int] {
+        Array((draft.statementClosingDay + 1)...31)
+    }
+
     var body: some View {
         NavigationStack {
             Form {
@@ -1202,13 +1210,13 @@ struct PlanningCreditCardEditorSheet: View {
                     TextField(mistiaLocalized(vi: "Hạn mức", en: "Credit limit", ja: "利用限度額"), text: $draft.creditLimitText)
                         .keyboardType(.numberPad)
                     Picker(mistiaLocalized(vi: "Ngày đến hạn", en: "Due day", ja: "支払日"), selection: $draft.paymentDueDay) {
-                        ForEach(1...31, id: \.self) { day in
+                        ForEach(paymentDueDayOptions, id: \.self) { day in
                             Text(mistiaLocalized(vi: "Ngày \(day)", en: "Day \(day)", ja: "\(day) 日")).tag(day)
                         }
                     }
                     .pickerStyle(.menu)
                     Picker(mistiaLocalized(vi: "Ngày chốt sao kê", en: "Statement closing day", ja: "締め日"), selection: $draft.statementClosingDay) {
-                        ForEach(1...31, id: \.self) { day in
+                        ForEach(statementClosingDayOptions, id: \.self) { day in
                             Text(mistiaLocalized(vi: "Ngày \(day)", en: "Day \(day)", ja: "\(day) 日")).tag(day)
                         }
                     }
@@ -1292,6 +1300,15 @@ struct PlanningCreditCardEditorSheet: View {
     private func save() {
         guard let trimmedName = draft.name.nilIfBlank else {
             alertMessage = mistiaLocalized(vi: "Nhập tên thẻ trước khi lưu.", en: "Enter a card name before saving.", ja: "保存する前にカード名を入力してください。")
+            return
+        }
+
+        guard draft.statementClosingDay < draft.paymentDueDay else {
+            alertMessage = mistiaLocalized(
+                vi: "Ngày chốt sao kê phải trước ngày đến hạn thanh toán.",
+                en: "Statement closing day must be earlier than the payment due day.",
+                ja: "締め日は支払日より前である必要があります。"
+            )
             return
         }
 
@@ -1598,6 +1615,9 @@ private struct PlanningInstallmentDraft {
 }
 
 private struct PlanningCreditCardDraft {
+    static let defaultPaymentDueDay = 26
+    static let defaultStatementClosingDay = 10
+
     var name: String
     var iconSymbolName: String
     var iconColorHex: String
@@ -1613,6 +1633,10 @@ private struct PlanningCreditCardDraft {
 
     init(wallet: LedgerWallet?) {
         let profile = wallet?.creditCardProfile
+        let normalizedBillingDays = Self.normalizedBillingDays(
+            statementClosingDay: profile?.statementClosingDay,
+            paymentDueDay: profile?.paymentDueDay
+        )
         name = wallet?.name ?? ""
         iconSymbolName = wallet?.iconSymbolName ?? LedgerWalletKind.creditCard.defaultIconSymbolName
         if let wallet {
@@ -1635,10 +1659,24 @@ private struct PlanningCreditCardDraft {
             availableCreditText = ""
         }
         creditLimitText = profile.map { String($0.creditLimitMinor) } ?? ""
-        paymentDueDay = profile?.paymentDueDay ?? 10
-        statementClosingDay = profile?.statementClosingDay ?? 25
+        paymentDueDay = normalizedBillingDays.paymentDueDay
+        statementClosingDay = normalizedBillingDays.statementClosingDay
         paymentSourceWalletID = profile?.paymentSourceWallet?.id
         notes = profile?.notes ?? ""
+    }
+
+    private static func normalizedBillingDays(
+        statementClosingDay: Int?,
+        paymentDueDay: Int?
+    ) -> (statementClosingDay: Int, paymentDueDay: Int) {
+        let closingDay = statementClosingDay ?? defaultStatementClosingDay
+        let dueDay = paymentDueDay ?? defaultPaymentDueDay
+
+        guard (1..<dueDay).contains(closingDay), (2...31).contains(dueDay) else {
+            return (defaultStatementClosingDay, defaultPaymentDueDay)
+        }
+
+        return (closingDay, dueDay)
     }
 }
 

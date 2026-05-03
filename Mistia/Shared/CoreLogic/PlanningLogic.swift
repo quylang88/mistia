@@ -1077,14 +1077,6 @@ nonisolated enum PlanningLogic {
         calendar: Calendar
     ) -> PlanningCreditCardStatementSnapshot? {
         let monthStart = startOfMonth(for: statementMonth, calendar: calendar)
-        guard calendar.compare(
-            account.openedAt,
-            to: endOfMonth(for: monthStart, calendar: calendar),
-            toGranularity: .second
-        ) != .orderedDescending else {
-            return nil
-        }
-
         let closingDate = creditCardStatementClosingDate(
             statementMonth: monthStart,
             statementClosingDay: account.statementClosingDay,
@@ -1103,13 +1095,32 @@ nonisolated enum PlanningLogic {
             monthKey: dueMonthKey,
             occurrences: occurrences
         )
-        let amount = occurrence?.amountMinorSnapshot ?? creditCardStatementAmount(
+        let computedAmount = creditCardStatementAmount(
             walletID: account.walletID,
             records: records,
             statementMonth: monthStart,
             calendar: calendar
         )
-        let status = occurrence?.status ?? .pending
+        let matchedOccurrence = occurrence.flatMap { occurrence -> PlanningDueOccurrenceSnapshot? in
+            guard let snapshotAmount = occurrence.amountMinorSnapshot,
+                  snapshotAmount == computedAmount,
+                  computedAmount > 0 else {
+                return nil
+            }
+            return occurrence
+        }
+        let amount = matchedOccurrence?.amountMinorSnapshot ?? computedAmount
+        if calendar.compare(
+            account.openedAt,
+            to: endOfMonth(for: monthStart, calendar: calendar),
+            toGranularity: .second
+        ) == .orderedDescending,
+           matchedOccurrence == nil,
+           amount <= 0 {
+            return nil
+        }
+
+        let status = matchedOccurrence?.status ?? .pending
         let state = creditCardStatementState(
             status: status,
             amountMinor: amount,
@@ -1135,7 +1146,7 @@ nonisolated enum PlanningLogic {
             paymentSourceWalletName: account.paymentSourceWalletName,
             currencyCode: account.currencyCode,
             status: status,
-            linkedTransactionID: occurrence?.linkedTransactionID,
+            linkedTransactionID: matchedOccurrence?.linkedTransactionID,
             state: state
         )
     }
@@ -1192,6 +1203,30 @@ nonisolated enum PlanningLogic {
         }
 
         return .payable
+    }
+
+    static func paidCreditCardStatementForExpense(
+        account: PlanningCreditCardAccountSnapshot,
+        records: [TransactionRecordSnapshot],
+        occurrences: [PlanningDueOccurrenceSnapshot],
+        occurredAt: Date,
+        referenceDate: Date = .now,
+        calendar: Calendar = .current
+    ) -> PlanningCreditCardStatementSnapshot? {
+        let statements = creditCardStatementItems(
+            accounts: [account],
+            records: records,
+            occurrences: occurrences,
+            statementMonths: [occurredAt],
+            referenceDate: referenceDate,
+            calendar: calendar
+        )
+
+        guard let statement = statements.first, statement.state == .paid else {
+            return nil
+        }
+
+        return statement
     }
 
     static func creditCardAutoPaymentDecision(

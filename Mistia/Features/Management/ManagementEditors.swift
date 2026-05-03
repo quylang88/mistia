@@ -270,11 +270,13 @@ struct ManagementWalletEditorSheet: View {
 
             creditCardDayPicker(
                 title: mistiaLocalized(vi: "Ngày chốt sao kê", en: "Statement closing day", ja: "締め日"),
+                days: statementClosingDayOptions,
                 selection: $draft.statementClosingDay
             )
 
             creditCardDayPicker(
                 title: mistiaLocalized(vi: "Ngày thanh toán", en: "Payment day", ja: "支払日"),
+                days: paymentDueDayOptions,
                 selection: $draft.paymentDueDay
             )
 
@@ -294,14 +296,23 @@ struct ManagementWalletEditorSheet: View {
 
     private func creditCardDayPicker(
         title: String,
+        days: [Int],
         selection: Binding<Int>
     ) -> some View {
         Picker(title, selection: selection) {
-            ForEach(1...31, id: \.self) { day in
+            ForEach(days, id: \.self) { day in
                 Text(mistiaLocalized(vi: "Ngày \(day)", en: "Day \(day)", ja: "\(day) 日")).tag(day)
             }
         }
         .pickerStyle(.menu)
+    }
+
+    private var statementClosingDayOptions: [Int] {
+        Array(1..<draft.paymentDueDay)
+    }
+
+    private var paymentDueDayOptions: [Int] {
+        Array((draft.statementClosingDay + 1)...31)
     }
 
     private func handleInstitutionDisplayNameChange(_ newValue: String) {
@@ -333,6 +344,15 @@ struct ManagementWalletEditorSheet: View {
     private func save() {
         if draft.kind == .bank, draft.institutionDisplayName.nilIfBlank == nil {
             alertMessage = mistiaLocalized(vi: "Chọn hoặc nhập tên ngân hàng cho ví này.", en: "Choose or enter a bank name for this wallet.", ja: "このウォレットの銀行名を選択または入力してください。")
+            return
+        }
+
+        if draft.kind == .creditCard, draft.statementClosingDay >= draft.paymentDueDay {
+            alertMessage = mistiaLocalized(
+                vi: "Ngày chốt sao kê phải trước ngày thanh toán.",
+                en: "Statement closing day must be earlier than the payment day.",
+                ja: "締め日は支払日より前である必要があります。"
+            )
             return
         }
 
@@ -1177,6 +1197,9 @@ private struct ManagementBalanceEditButton: View {
 }
 
 private struct WalletDraft {
+    static let defaultStatementClosingDay = 10
+    static let defaultPaymentDueDay = 26
+
     var name: String
     var kind: LedgerWalletKind
     var iconSymbolName: String
@@ -1199,6 +1222,10 @@ private struct WalletDraft {
     init(wallet: LedgerWallet?, defaultKind: LedgerWalletKind) {
         if let wallet {
             let profile = wallet.creditCardProfile
+            let normalizedBillingDays = Self.normalizedBillingDays(
+                statementClosingDay: profile?.statementClosingDay,
+                paymentDueDay: profile?.paymentDueDay
+            )
             let matchesDefaultIcon = wallet.kind.matchesDefaultIconAppearance(
                 symbolName: wallet.iconSymbolName,
                 colorHex: wallet.iconColorHex
@@ -1224,8 +1251,8 @@ private struct WalletDraft {
             self.network = profile?.network ?? .visa
             self.last4 = profile?.last4 ?? ""
             self.creditLimitText = profile.map { "\($0.creditLimitMinor)" } ?? ""
-            self.statementClosingDay = profile?.statementClosingDay ?? 25
-            self.paymentDueDay = profile?.paymentDueDay ?? 10
+            self.statementClosingDay = normalizedBillingDays.statementClosingDay
+            self.paymentDueDay = normalizedBillingDays.paymentDueDay
             self.notes = profile?.notes ?? ""
             self.paymentSourceWalletID = profile?.paymentSourceWallet?.id
             self.iconWasCustomized = !matchesDefaultIcon
@@ -1243,8 +1270,8 @@ private struct WalletDraft {
             self.network = .visa
             self.last4 = ""
             self.creditLimitText = ""
-            self.statementClosingDay = 25
-            self.paymentDueDay = 10
+            self.statementClosingDay = Self.defaultStatementClosingDay
+            self.paymentDueDay = Self.defaultPaymentDueDay
             self.notes = ""
             self.paymentSourceWalletID = nil
             self.iconWasCustomized = false
@@ -1283,9 +1310,23 @@ private struct WalletDraft {
             paymentSourceWalletID = nil
             notes = ""
             network = .visa
-            statementClosingDay = 25
-            paymentDueDay = 10
+            statementClosingDay = Self.defaultStatementClosingDay
+            paymentDueDay = Self.defaultPaymentDueDay
         }
+    }
+
+    private static func normalizedBillingDays(
+        statementClosingDay: Int?,
+        paymentDueDay: Int?
+    ) -> (statementClosingDay: Int, paymentDueDay: Int) {
+        let closingDay = statementClosingDay ?? defaultStatementClosingDay
+        let dueDay = paymentDueDay ?? defaultPaymentDueDay
+
+        guard (1..<dueDay).contains(closingDay), (2...31).contains(dueDay) else {
+            return (defaultStatementClosingDay, defaultPaymentDueDay)
+        }
+
+        return (closingDay, dueDay)
     }
 }
 
