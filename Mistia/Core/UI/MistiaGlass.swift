@@ -415,6 +415,7 @@ struct MistiaPinnedTopBarScaffold<PinnedHeader: View, Content: View, TrailingAcc
     var hidesSystemBackButton: Bool = false
     var onLeadingTap: () -> Void = {}
     var onTrailingTap: () -> Void = {}
+    var onRefresh: (() async -> Void)? = nil
     var contentSpacing: CGFloat = 18
     var contentBottomPadding: CGFloat = 150
     var titleDisplayMode: NavigationBarItem.TitleDisplayMode = .inline
@@ -434,6 +435,7 @@ struct MistiaPinnedTopBarScaffold<PinnedHeader: View, Content: View, TrailingAcc
         hidesSystemBackButton: Bool = false,
         onLeadingTap: @escaping () -> Void = {},
         onTrailingTap: @escaping () -> Void = {},
+        onRefresh: (() async -> Void)? = nil,
         contentSpacing: CGFloat = 18,
         contentBottomPadding: CGFloat = 150,
         titleDisplayMode: NavigationBarItem.TitleDisplayMode = .inline,
@@ -452,6 +454,7 @@ struct MistiaPinnedTopBarScaffold<PinnedHeader: View, Content: View, TrailingAcc
         self.hidesSystemBackButton = hidesSystemBackButton
         self.onLeadingTap = onLeadingTap
         self.onTrailingTap = onTrailingTap
+        self.onRefresh = onRefresh
         self.contentSpacing = contentSpacing
         self.contentBottomPadding = contentBottomPadding
         self.titleDisplayMode = titleDisplayMode
@@ -472,8 +475,7 @@ struct MistiaPinnedTopBarScaffold<PinnedHeader: View, Content: View, TrailingAcc
         }
     }
 
-    @ViewBuilder
-    private var scrollableContent: some View {
+    private var baseScrollableContent: some View {
         ScrollView(.vertical, showsIndicators: false) {
             VStack(spacing: contentSpacing) {
                 content
@@ -485,6 +487,18 @@ struct MistiaPinnedTopBarScaffold<PinnedHeader: View, Content: View, TrailingAcc
         }
         .modifier(MistiaTopScrollEdgeEffect())
         .scrollIndicators(.hidden)
+    }
+
+    @ViewBuilder
+    private var scrollableContent: some View {
+        if let onRefresh {
+            baseScrollableContent
+                .refreshable {
+                    await onRefresh()
+                }
+        } else {
+            baseScrollableContent
+        }
     }
 
     private var screenContent: some View {
@@ -579,6 +593,7 @@ extension MistiaPinnedTopBarScaffold where TrailingAccessory == EmptyView {
         hidesSystemBackButton: Bool = false,
         onLeadingTap: @escaping () -> Void = {},
         onTrailingTap: @escaping () -> Void = {},
+        onRefresh: (() async -> Void)? = nil,
         contentSpacing: CGFloat = 18,
         contentBottomPadding: CGFloat = 150,
         titleDisplayMode: NavigationBarItem.TitleDisplayMode = .inline,
@@ -597,6 +612,7 @@ extension MistiaPinnedTopBarScaffold where TrailingAccessory == EmptyView {
             hidesSystemBackButton: hidesSystemBackButton,
             onLeadingTap: onLeadingTap,
             onTrailingTap: onTrailingTap,
+            onRefresh: onRefresh,
             contentSpacing: contentSpacing,
             contentBottomPadding: contentBottomPadding,
             titleDisplayMode: titleDisplayMode,
@@ -620,6 +636,7 @@ extension MistiaPinnedTopBarScaffold where PinnedHeader == EmptyView, TrailingAc
         hidesSystemBackButton: Bool = false,
         onLeadingTap: @escaping () -> Void = {},
         onTrailingTap: @escaping () -> Void = {},
+        onRefresh: (() async -> Void)? = nil,
         contentSpacing: CGFloat = 18,
         contentBottomPadding: CGFloat = 150,
         titleDisplayMode: NavigationBarItem.TitleDisplayMode = .inline,
@@ -637,6 +654,7 @@ extension MistiaPinnedTopBarScaffold where PinnedHeader == EmptyView, TrailingAc
             hidesSystemBackButton: hidesSystemBackButton,
             onLeadingTap: onLeadingTap,
             onTrailingTap: onTrailingTap,
+            onRefresh: onRefresh,
             contentSpacing: contentSpacing,
             contentBottomPadding: contentBottomPadding,
             titleDisplayMode: titleDisplayMode,

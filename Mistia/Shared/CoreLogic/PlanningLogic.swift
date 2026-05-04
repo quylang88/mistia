@@ -357,6 +357,31 @@ nonisolated enum PlanningDuePaymentError: Error, Equatable {
     case missingDestinationWallet
 }
 
+extension PlanningDuePaymentError: LocalizedError {
+    var errorDescription: String? {
+        switch self {
+        case .missingAmount:
+            mistiaLocalized(
+                vi: "Nhập số tiền thanh toán trước khi tiếp tục.",
+                en: "Enter a payment amount before continuing.",
+                ja: "続行する前に支払い金額を入力してください。"
+            )
+        case .missingSourceWallet:
+            mistiaLocalized(
+                vi: "Chọn ví thanh toán trước khi tiếp tục.",
+                en: "Choose a payment wallet before continuing.",
+                ja: "続行する前に支払いウォレットを選択してください。"
+            )
+        case .missingDestinationWallet:
+            mistiaLocalized(
+                vi: "Không tìm thấy ví đích cho khoản thanh toán này.",
+                en: "The destination wallet for this payment could not be found.",
+                ja: "この支払いの振替先ウォレットが見つかりません。"
+            )
+        }
+    }
+}
+
 nonisolated enum PlanningLogic {
     static func health(forProgress progress: Double) -> PlanningBudgetHealth {
         if progress >= 1.0 {
@@ -1007,9 +1032,10 @@ nonisolated enum PlanningLogic {
 
     static func makePaymentDraft(
         for recurringItem: PlanningRecurringDueSnapshot,
-        overrideAmountMinor: Int64? = nil
+        overrideAmountMinor: Int64? = nil,
+        sourceWalletIDOverride: UUID? = nil
     ) throws -> PlanningDuePaymentDraft {
-        guard let sourceWalletID = recurringItem.paymentWalletID else {
+        guard let sourceWalletID = sourceWalletIDOverride ?? recurringItem.paymentWalletID else {
             throw PlanningDuePaymentError.missingSourceWallet
         }
 
@@ -1253,6 +1279,11 @@ nonisolated enum PlanningLogic {
 
         let today = calendar.startOfDay(for: referenceDate)
         let dueDay = calendar.startOfDay(for: statement.dueDate)
+        let currentMonth = startOfMonth(for: referenceDate, calendar: calendar)
+        let dueMonth = startOfMonth(for: statement.dueDate, calendar: calendar)
+        guard currentMonth == dueMonth else {
+            return .notDue
+        }
         guard today >= dueDay else {
             return .notDue
         }

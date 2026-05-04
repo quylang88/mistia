@@ -17,6 +17,7 @@ struct DuePaymentSheetTarget: Identifiable {
 // MARK: - Sheet
 
 struct DuePaymentSheet: View {
+    @Environment(\.colorScheme) private var colorScheme
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
     @Environment(\.calendar) private var calendar
@@ -29,14 +30,13 @@ struct DuePaymentSheet: View {
     private var bills: [RecurringBillPlan]
     @Query(filter: #Predicate<InstallmentPlan> { $0.deletedAt == nil })
     private var installments: [InstallmentPlan]
-    @Query(filter: #Predicate<LedgerTransaction> { $0.deletedAt == nil })
-    private var transactions: [LedgerTransaction]
 
     let target: DuePaymentSheetTarget
     /// Called after a successful payment so the caller can mark the notification as read.
     var onPaid: (() -> Void)? = nil
 
     @State private var amountText = ""
+    @State private var selectedWalletID: UUID?
     @State private var alertMessage: String?
 
     // MARK: - Init
@@ -83,7 +83,7 @@ struct DuePaymentSheet: View {
     }
 
     private var selectedMonthDate: Date {
-        PlanningLogic.date(from: target.dueMonthKey, calendar: calendar)
+        PlanningLogic.month(from: target.dueMonthKey, calendar: calendar)
             ?? PlanningLogic.startOfMonth(for: target.dueDate, calendar: calendar)
     }
 
@@ -92,22 +92,98 @@ struct DuePaymentSheet: View {
         return String(amount)
     }
 
-    private var effectiveAmountMinor: Int64? {
-        if target.requiresAmountInput {
-            return amountText.nilIfBlank?.currencyInputToMinorUnits(currencyCode: activeCurrencyCode)
-        }
-        return resolvedDueItem?.amountMinor
-    }
-
-    private var walletName: String? {
+    private var defaultWalletID: UUID? {
         switch target.sourceKind {
-        case .recurringBill:
-            return bills.first(where: { $0.id == target.sourceID })?.paymentWallet?.name
-        case .installment:
-            return installments.first(where: { $0.id == target.sourceID })?.paymentWallet?.name
+        case .recurringBill, .installment:
+            return resolvedDueItem?.paymentWalletID
         case .creditCard:
             return nil
         }
+    }
+
+    private var availableWallets: [LedgerWallet] {
+        wallets
+            .filter { !$0.isArchived }
+            .filter { wallet in
+                switch target.sourceKind {
+                case .recurringBill:
+                    return true
+                case .installment:
+                    return wallet.kind != .creditCard
+                case .creditCard:
+                    return true
+                }
+            }
+            .sorted {
+                if $0.sortOrder != $1.sortOrder {
+                    return $0.sortOrder < $1.sortOrder
+                }
+                return $0.createdAt < $1.createdAt
+            }
+    }
+
+    private var parsedAmountInput: Int64? {
+        amountText.nilIfBlank?.currencyInputToMinorUnits(currencyCode: activeCurrencyCode)
+    }
+
+    private var selectedWalletName: String {
+        guard let selectedWalletID,
+              let wallet = wallets.first(where: { $0.id == selectedWalletID }) else {
+            return mistiaLocalized(vi: "Chọn ví", en: "Choose wallet", ja: "ウォレットを選択")
+        }
+        return wallet.name
+    }
+
+    private var resolvedIconSymbolName: String {
+        switch target.sourceKind {
+        case .recurringBill:
+            if let plan = bills.first(where: { $0.id == target.sourceID }) {
+                return plan.category?.iconSymbolName ?? plan.iconSymbolName
+            }
+            return "mistia.plan.bill"
+        case .installment:
+            return installments.first(where: { $0.id == target.sourceID })?.iconSymbolName ?? "mistia.plan.installment"
+        case .creditCard:
+            return "mistia.plan.card_bill"
+        }
+    }
+
+    private var resolvedIconColor: Color {
+        switch target.sourceKind {
+        case .recurringBill:
+            if let plan = bills.first(where: { $0.id == target.sourceID }) {
+                let hex = plan.category?.iconColorHex ?? MistiaFinanceIconRegistry.defaultColorHex(for: resolvedIconSymbolName)
+                return Color(hex: hex)
+            }
+        case .installment:
+            if let plan = installments.first(where: { $0.id == target.sourceID }) {
+                return Color(hex: MistiaFinanceIconRegistry.defaultColorHex(for: plan.iconSymbolName))
+            }
+        case .creditCard:
+            break
+        }
+
+        return colorScheme == .dark ? MistiaAccent.lightPurple.color : MistiaAccent.purple.color
+    }
+
+    private var payButtonDisabled: Bool {
+        guard resolvedDueItem != nil, selectedWalletID != nil else {
+            return true
+        }
+
+        if target.requiresAmountInput {
+            return (parsedAmountInput ?? 0) <= 0
+        }
+
+        return (resolvedDueItem?.amountMinor ?? 0) <= 0
+    }
+
+    private var amountFieldTitle: String {
+        mistiaLocalized(vi: "Số tiền", en: "Amount", ja: "金額")
+    }
+
+    private var walletFieldTitle: String {
+        mistiaLocalized(vi: "Ví thanh toán", en: "Payment wallet", ja: "支払いウォレット")
     }
 
     // MARK: - Body
@@ -117,14 +193,11 @@ struct DuePaymentSheet: View {
             Form {
                 Section {
                     HStack(spacing: 14) {
-                        ZStack {
-                            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                                .fill(MistiaAccent.purple.color.opacity(0.15))
-                                .frame(width: 44, height: 44)
-                            Image(systemName: "banknote.fill")
-                                .font(.system(size: 18, weight: .bold))
-                                .foregroundStyle(MistiaAccent.purple.color)
-                        }
+                        MistiaFinanceIconView(
+                            icon: resolvedIconSymbolName,
+                            fallbackColor: resolvedIconColor,
+                            size: 44
+                        )
 
                         VStack(alignment: .leading, spacing: 3) {
                             Text(target.name)
@@ -136,69 +209,37 @@ struct DuePaymentSheet: View {
                     }
                     .padding(.vertical, 4)
                 }
-
-                if target.requiresAmountInput {
-                    Section {
-                        TextField(
-                            mistiaLocalized(vi: "Nhập số tiền thanh toán", en: "Enter payment amount", ja: "支払い金額を入力"),
-                            text: $amountText
-                        )
-                        .keyboardType(.numberPad)
-                    } header: {
-                        Text(mistiaLocalized(vi: "Số tiền", en: "Amount", ja: "金額"))
-                    } footer: {
-                        Text(mistiaLocalized(
-                            vi: "Hóa đơn này chưa có số tiền mặc định.",
-                            en: "This bill has no default amount.",
-                            ja: "この請求にはデフォルトの金額がありません。"
-                        ))
-                    }
-                } else if let amount = resolvedDueItem?.amountMinor {
-                    Section(mistiaLocalized(vi: "Số tiền", en: "Amount", ja: "金額")) {
-                        HStack {
-                            Text(mistiaLocalized(vi: "Thanh toán", en: "Payment", ja: "支払い"))
-                                .foregroundStyle(.secondary)
-                            Spacer()
-                            Text(amount.formattedCurrency(code: activeCurrencyCode))
-                                .font(.system(size: 17, weight: .bold, design: .rounded))
-                                .foregroundStyle(MistiaAccent.purple.color)
-                        }
-                    }
-                }
-
-                if let walletName {
-                    Section(mistiaLocalized(vi: "Ví thanh toán", en: "Payment wallet", ja: "支払いウォレット")) {
-                        Text(walletName)
-                            .foregroundStyle(.secondary)
-                    }
-                }
-
-                Section {
-                    Button {
-                        pay()
-                    } label: {
-                        HStack {
-                            Spacer()
-                            Text(mistiaLocalized(vi: "Thanh toán ngay", en: "Pay now", ja: "今すぐ支払う"))
-                                .font(.system(size: 17, weight: .bold, design: .rounded))
-                            Spacer()
-                        }
-                    }
-                    .foregroundStyle(MistiaAccent.purple.color)
-                }
+                paymentDetailsSection
             }
             .navigationTitle(mistiaLocalized(vi: "Thanh toán hóa đơn", en: "Pay bill", ja: "請求の支払い"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button(mistiaLocalized(vi: "Đóng", en: "Close", ja: "閉じる")) {
+                ToolbarItem(placement: .topBarLeading) {
+                    Button {
                         dismiss()
+                    } label: {
+                        Image(systemName: "xmark")
+                            .font(.system(size: 16, weight: .semibold))
+                            .foregroundStyle(.secondary)
                     }
                 }
             }
         }
+        .safeAreaInset(edge: .bottom) {
+            DuePaymentPrimaryActionButton(
+                title: mistiaLocalized(vi: "Thanh toán ngay", en: "Pay now", ja: "今すぐ支払う"),
+                isDisabled: payButtonDisabled
+            ) {
+                pay()
+            }
+            .padding(.horizontal, 16)
+            .padding(.top, 8)
+            .padding(.bottom, 12)
+            .background(Color.clear)
+        }
         .onAppear {
             amountText = defaultAmountText
+            selectedWalletID = defaultWalletID
         }
         .alert(
             mistiaLocalized(vi: "Không thể thanh toán", en: "Payment failed", ja: "支払いに失敗しました"),
@@ -208,6 +249,102 @@ struct DuePaymentSheet: View {
         } message: {
             if let alertMessage { Text(alertMessage) }
         }
+    }
+
+    @ViewBuilder
+    private var paymentDetailsSection: some View {
+        Section {
+            VStack(spacing: 0) {
+                amountRow
+
+                Divider()
+
+                walletMenuRow
+            }
+        } footer: {
+            if target.requiresAmountInput {
+                Text(mistiaLocalized(
+                    vi: "Hóa đơn này chưa có số tiền mặc định.",
+                    en: "This bill has no default amount.",
+                    ja: "この請求にはデフォルトの金額がありません。"
+                ))
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var amountRow: some View {
+        HStack(spacing: 12) {
+            Text(amountFieldTitle)
+                .foregroundStyle(.primary)
+
+            Spacer(minLength: 12)
+
+            if target.requiresAmountInput {
+                TextField(
+                    mistiaLocalized(vi: "Nhập số tiền", en: "Enter amount", ja: "金額を入力"),
+                    text: $amountText
+                )
+                .keyboardType(.numberPad)
+                .multilineTextAlignment(.trailing)
+                .foregroundStyle(.primary)
+            } else if let amount = resolvedDueItem?.amountMinor {
+                Text(amount.formattedCurrency(code: activeCurrencyCode))
+                    .font(.system(size: 17, weight: .bold, design: .rounded))
+                    .foregroundStyle(resolvedIconColor)
+                    .multilineTextAlignment(.trailing)
+            } else {
+                Text("—")
+                    .foregroundStyle(.tertiary)
+            }
+        }
+        .padding(.vertical, 4)
+    }
+
+    private var walletMenuRow: some View {
+        Menu {
+            Button {
+                selectedWalletID = nil
+            } label: {
+                if selectedWalletID == nil {
+                    Label(
+                        mistiaLocalized(vi: "Chọn ví", en: "Choose wallet", ja: "ウォレットを選択"),
+                        systemImage: "checkmark"
+                    )
+                } else {
+                    Text(mistiaLocalized(vi: "Chọn ví", en: "Choose wallet", ja: "ウォレットを選択"))
+                }
+            }
+
+            ForEach(availableWallets) { wallet in
+                Button {
+                    selectedWalletID = wallet.id
+                } label: {
+                    if selectedWalletID == wallet.id {
+                        Label(wallet.name, systemImage: "checkmark")
+                    } else {
+                        Text(wallet.name)
+                    }
+                }
+            }
+        } label: {
+            HStack(spacing: 12) {
+                Text(walletFieldTitle)
+                    .foregroundStyle(.primary)
+
+                Spacer(minLength: 12)
+
+                Text(selectedWalletName)
+                    .foregroundStyle(selectedWalletID == nil ? .tertiary : .secondary)
+                    .lineLimit(1)
+
+                Image(systemName: "chevron.up.chevron.down")
+                    .font(.system(size: 11, weight: .bold))
+                    .foregroundStyle(.tertiary)
+            }
+            .padding(.vertical, 4)
+        }
+        .buttonStyle(.plain)
     }
 
     // MARK: - Pay
@@ -229,12 +366,13 @@ struct DuePaymentSheet: View {
 
         do {
             let overrideAmount: Int64? = target.requiresAmountInput
-                ? amountText.nilIfBlank?.currencyInputToMinorUnits(currencyCode: activeCurrencyCode)
+                ? parsedAmountInput
                 : nil
 
             let draft = try PlanningLogic.makePaymentDraft(
                 for: dueItem,
-                overrideAmountMinor: overrideAmount
+                overrideAmountMinor: overrideAmount,
+                sourceWalletIDOverride: selectedWalletID
             )
             let saved = try PlanningPersistenceSupport.saveDuePayment(
                 draft: draft,
@@ -261,9 +399,44 @@ struct DuePaymentSheet: View {
             )
             onPaid?()
             dismiss()
+        } catch let error as LocalizedError {
+            alertMessage = error.errorDescription ?? error.localizedDescription
         } catch {
             alertMessage = error.localizedDescription
         }
+    }
+}
+
+struct DuePaymentPrimaryActionButton: View {
+    @Environment(\.colorScheme) private var colorScheme
+    let title: String
+    let isDisabled: Bool
+    let action: () -> Void
+
+    private var accent: Color {
+        colorScheme == .dark ? MistiaAccent.lightPurple.color : MistiaAccent.purple.color
+    }
+
+    var body: some View {
+        Button(action: action) {
+            Text(title)
+                .font(.system(size: 17, weight: .bold, design: .rounded))
+                .foregroundStyle(.white)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 17)
+                .background(
+                    isDisabled ? Color(UIColor.systemGray4) : accent,
+                    in: Capsule()
+                )
+                .overlay {
+                    Capsule()
+                        .strokeBorder(Color.white.opacity(0.12), lineWidth: 1)
+                }
+        }
+        .buttonStyle(.plain)
+        .disabled(isDisabled)
+        .scaleEffect(isDisabled ? 0.98 : 1.0)
+        .animation(.snappy, value: isDisabled)
     }
 }
 

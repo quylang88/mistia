@@ -136,7 +136,7 @@ enum MistiaShortcutLogic {
                 presentation: MistiaShortcutPresentation(
                     title: mistiaLocalized(vi: "Tổng quan gia đình", en: "Family overview", ja: "家族の概要"),
                     accessibilityLabel: mistiaLocalized(vi: "Mở tổng quan gia đình", en: "Open family overview", ja: "家族の概要を開く"),
-                    icon: .systemImage("person.2.circle.fill"),
+                    icon: .systemImage("person.2.fill"),
                     action: .familyOverview(familyID: familyID)
                 )
             )

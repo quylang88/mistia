@@ -141,6 +141,98 @@ final class MistiaNotificationStoreTests: XCTestCase {
         XCTAssertEqual(MistiaNotificationStore.unreadCount(rows: rows, userID: otherUserID), 1)
     }
 
+    func testVisibleRowsExcludeFutureLocalRowsAndLegacyDueSoon() {
+        let referenceDate = Date(timeIntervalSince1970: 1_777_800_000)
+        let visibleRow = AppNotificationRecord(
+            key: "visible",
+            createdAt: referenceDate.addingTimeInterval(-60),
+            title: "Visible",
+            body: "Visible row",
+            kind: .lowWallet,
+            source: .system
+        )
+        let futureRow = AppNotificationRecord(
+            key: "future",
+            createdAt: referenceDate.addingTimeInterval(3600),
+            title: "Future",
+            body: "Future row",
+            kind: .lowWallet,
+            source: .localReminder
+        )
+        let obsoleteDueSoonRow = AppNotificationRecord(
+            key: "due-soon",
+            createdAt: referenceDate.addingTimeInterval(-120),
+            title: "Due soon",
+            body: "Old generic due reminder",
+            kind: .dueSoon,
+            source: .localReminder
+        )
+
+        let rows = [visibleRow, futureRow, obsoleteDueSoonRow]
+        let visibleRows = MistiaNotificationStore.visibleRows(
+            rows,
+            userID: nil,
+            referenceDate: referenceDate
+        )
+
+        XCTAssertEqual(visibleRows.map(\.key), ["visible"])
+        XCTAssertEqual(
+            MistiaNotificationStore.unreadCount(
+                rows: rows,
+                userID: nil,
+                referenceDate: referenceDate
+            ),
+            1
+        )
+    }
+
+    func testNotificationPayloadDecodingSupportsCreditPayloadAndLegacyBillMetadata() throws {
+        let statementMonthKey = "2026-05"
+        let linkedWalletID = UUID()
+        let creditPayload = CreditCardNotificationActionPayload(
+            actionKind: .autoPaymentFailed,
+            statementMonthKey: statementMonthKey,
+            dueDate: Date(timeIntervalSince1970: 1_777_800_000),
+            linkedPaymentWalletID: linkedWalletID,
+            walletName: "Visa",
+            currencyCode: "JPY"
+        )
+        let creditMetadata = try XCTUnwrap(
+            String(
+                data: JSONEncoder.mistiaSyncEncoder.encode(creditPayload),
+                encoding: .utf8
+            )
+        )
+        let creditRow = AppNotificationRecord(
+            key: "credit",
+            title: "Credit",
+            body: "Credit body",
+            kind: .creditCardAutoPaymentFailed,
+            source: .system,
+            metadataJSON: creditMetadata
+        )
+
+        XCTAssertEqual(creditRow.creditCardActionPayload?.statementMonthKey, statementMonthKey)
+        XCTAssertEqual(creditRow.creditCardActionPayload?.linkedPaymentWalletID, linkedWalletID)
+        XCTAssertEqual(creditRow.creditCardActionPayload?.actionKind, .autoPaymentFailed)
+
+        let legacyBillMetadata = """
+        {"sourceKind":"recurringBill","sourceId":"11111111-1111-1111-1111-111111111111","dueMonthKey":"2026-05","dueDate":"2026-05-10T00:00:00Z","requiresAmountInput":false,"currencyCode":"JPY","billName":"Water"}
+        """
+        let billRow = AppNotificationRecord(
+            key: "bill",
+            title: "Bill",
+            body: "Bill body",
+            kind: .billPaymentRequired,
+            source: .system,
+            metadataJSON: legacyBillMetadata
+        )
+
+        XCTAssertEqual(billRow.dueActionPayload?.dueMonthKey, "2026-05")
+        XCTAssertEqual(billRow.dueActionPayload?.billName, "Water")
+        XCTAssertNil(billRow.dueActionPayload?.linkedPaymentWalletID)
+    }
+
     private func makeContainer() throws -> ModelContainer {
         let schema = Schema([AppNotificationRecord.self])
         let configuration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)

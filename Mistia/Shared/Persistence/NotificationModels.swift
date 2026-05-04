@@ -156,7 +156,7 @@ final class AppNotificationRecord {
 
 // MARK: - Due-action notification payload
 
-struct DueNotificationActionPayload: Codable {
+nonisolated struct DueNotificationActionPayload: Codable {
     let sourceKind: String       // PlanningDueSourceKind raw value
     let sourceID: UUID
     let dueMonthKey: String
@@ -164,6 +164,7 @@ struct DueNotificationActionPayload: Codable {
     let requiresAmountInput: Bool
     let currencyCode: String
     let billName: String
+    let linkedPaymentWalletID: UUID?
 
     enum CodingKeys: String, CodingKey {
         case sourceKind
@@ -173,14 +174,47 @@ struct DueNotificationActionPayload: Codable {
         case requiresAmountInput
         case currencyCode
         case billName
+        case linkedPaymentWalletID = "linkedPaymentWalletId"
+    }
+}
+
+enum CreditCardNotificationActionKind: String, Codable, CaseIterable {
+    case statementReady
+    case autoPaymentSucceeded
+    case autoPaymentFailed
+}
+
+nonisolated struct CreditCardNotificationActionPayload: Codable {
+    let actionKind: CreditCardNotificationActionKind
+    let statementMonthKey: String
+    let dueDate: Date
+    let linkedPaymentWalletID: UUID?
+    let walletName: String
+    let currencyCode: String
+
+    enum CodingKeys: String, CodingKey {
+        case actionKind
+        case statementMonthKey
+        case dueDate
+        case linkedPaymentWalletID = "linkedPaymentWalletId"
+        case walletName
+        case currencyCode
     }
 }
 
 extension AppNotificationRecord {
-    var dueActionPayload: DueNotificationActionPayload? {
+    private func decodeMetadata<T: Decodable>(_ type: T.Type) -> T? {
         guard let json = metadataJSON,
               let data = json.data(using: .utf8) else { return nil }
-        return try? JSONDecoder.mistiaSyncDecoder.decode(DueNotificationActionPayload.self, from: data)
+        return try? JSONDecoder.mistiaSyncDecoder.decode(type, from: data)
+    }
+
+    var dueActionPayload: DueNotificationActionPayload? {
+        decodeMetadata(DueNotificationActionPayload.self)
+    }
+
+    var creditCardActionPayload: CreditCardNotificationActionPayload? {
+        decodeMetadata(CreditCardNotificationActionPayload.self)
     }
 
     var isBillActionableNotification: Bool {
@@ -431,22 +465,33 @@ enum MistiaNotificationStore {
 
     static func unreadCount(
         rows: [AppNotificationRecord],
-        userID: UUID?
+        userID: UUID?,
+        referenceDate: Date = .now
     ) -> Int {
-        rows.filter { isVisible($0, to: userID) && !$0.isRead }.count
+        rows.filter { isVisible($0, to: userID, referenceDate: referenceDate) && !$0.isRead }.count
     }
 
     static func visibleRows(
         _ rows: [AppNotificationRecord],
-        userID: UUID?
+        userID: UUID?,
+        referenceDate: Date = .now
     ) -> [AppNotificationRecord] {
-        rows.filter { isVisible($0, to: userID) }
+        rows.filter { isVisible($0, to: userID, referenceDate: referenceDate) }
     }
 
     static func isVisible(
         _ row: AppNotificationRecord,
-        to userID: UUID?
+        to userID: UUID?,
+        referenceDate: Date = .now
     ) -> Bool {
+        guard row.kind != .dueSoon else {
+            return false
+        }
+
+        if (row.source == .localReminder || row.source == .system), row.createdAt > referenceDate {
+            return false
+        }
+
         guard let recipientUserID = row.recipientUserID else {
             return true
         }

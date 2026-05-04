@@ -1,22 +1,45 @@
 import SwiftData
 import SwiftUI
 
+struct TransactionTransferPreset: Equatable {
+    let transferSubtype: TransactionTransferSubtype
+    let sourceWalletID: UUID?
+    let destinationWalletID: UUID?
+
+    init(
+        transferSubtype: TransactionTransferSubtype = .internalTransfer,
+        sourceWalletID: UUID? = nil,
+        destinationWalletID: UUID? = nil
+    ) {
+        self.transferSubtype = transferSubtype
+        self.sourceWalletID = sourceWalletID
+        self.destinationWalletID = destinationWalletID
+    }
+}
+
 struct TransactionEditorTarget: Identifiable {
     let id = UUID()
     let transaction: LedgerTransaction?
     let initialKind: TransactionPrimaryKind
     let quickCapture: Bool
+    let transferPreset: TransactionTransferPreset?
 
     init(transaction: LedgerTransaction) {
         self.transaction = transaction
         self.initialKind = transaction.primaryKind
         self.quickCapture = false
+        self.transferPreset = nil
     }
 
-    init(initialKind: TransactionPrimaryKind, quickCapture: Bool = false) {
+    init(
+        initialKind: TransactionPrimaryKind,
+        quickCapture: Bool = false,
+        transferPreset: TransactionTransferPreset? = nil
+    ) {
         self.transaction = nil
         self.initialKind = initialKind
         self.quickCapture = quickCapture
+        self.transferPreset = transferPreset
     }
 }
 
@@ -1252,15 +1275,18 @@ struct TransactionEditorSheet: View {
             self.categoryID = transaction.category?.id
             self.counterpartyName = transaction.counterpartyName ?? ""
         } else {
+            let transferPreset = target.initialKind == .transfer ? target.transferPreset : nil
             self.primaryKind = target.initialKind
-            self.transferSubtype = target.initialKind == .transfer ? .internalTransfer : nil
+            self.transferSubtype = target.initialKind == .transfer
+                ? (transferPreset?.transferSubtype ?? .internalTransfer)
+                : nil
             self.debtIntent = target.initialKind == .transfer ? .lend : nil
             self.title = ""
             self.amountText = ""
             self.note = ""
             self.occurredAt = .now
-            self.sourceWalletID = nil
-            self.destinationWalletID = nil
+            self.sourceWalletID = transferPreset?.sourceWalletID
+            self.destinationWalletID = transferPreset?.destinationWalletID
             self.categoryID = nil
             self.counterpartyName = ""
         }

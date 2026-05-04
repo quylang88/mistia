@@ -561,6 +561,16 @@ final class PlanningLogicTests: XCTestCase {
 
         XCTAssertEqual(
             PlanningLogic.creditCardAutoPaymentDecision(
+                statement: statement,
+                sourceWalletBalanceMinor: 40_000,
+                referenceDate: makeDate(year: 2026, month: 4, day: 2),
+                calendar: calendar
+            ),
+            .notDue
+        )
+
+        XCTAssertEqual(
+            PlanningLogic.creditCardAutoPaymentDecision(
                 statement: makeCreditCardStatement(paymentWalletID: nil, status: .pending, state: .overdue),
                 sourceWalletBalanceMinor: nil,
                 referenceDate: makeDate(year: 2026, month: 3, day: 26),

@@ -54,6 +54,9 @@ enum MistiaRecurringBillMaintenance {
                 calendar: calendar
             )
             guard let dueItem = dueItems.first, dueItem.status == .pending else { continue }
+            guard PlanningLogic.startOfMonth(for: dueItem.dueDate, calendar: calendar) == selectedMonth else {
+                continue
+            }
 
             let requiresAmountInput = dueItem.amountMinor == nil
             let hasSufficientSetup = dueItem.amountMinor != nil && snap.paymentWalletID != nil
@@ -174,7 +177,6 @@ enum MistiaRecurringBillMaintenance {
         modelContext.insert(tx)
 
         // Mark occurrence paid
-        let occurrenceSnaps = occurrences.map(\.planningSnapshot)
         let selectedMonth = PlanningLogic.startOfMonth(for: dueItem.dueDate)
 
         do {
@@ -285,7 +287,8 @@ enum MistiaRecurringBillMaintenance {
             dueDate: dueItem.dueDate,
             requiresAmountInput: dueItem.amountMinor == nil,
             currencyCode: bill.currencyCode,
-            billName: bill.name
+            billName: bill.name,
+            linkedPaymentWalletID: bill.paymentWallet?.id
         )
         let metadataJSON: String? = {
             guard let data = try? JSONEncoder.mistiaSyncEncoder.encode(payload) else { return nil }
@@ -308,6 +311,7 @@ enum MistiaRecurringBillMaintenance {
             existing.metadataJSON = metadataJSON
             existing.updatedAt = .now
             if forceUnread {
+                existing.createdAt = .now
                 existing.isRead = false
                 existing.readAt = nil
             }

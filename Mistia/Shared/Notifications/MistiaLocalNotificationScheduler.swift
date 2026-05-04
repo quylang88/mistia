@@ -13,26 +13,7 @@ enum MistiaLocalNotificationScheduler {
     ) async {
         await requestAuthorizationIfNeeded()
         await clearScheduledRemindersOnly()
-
-        let startOfMonth = PlanningLogic.startOfMonth(for: referenceDate, calendar: calendar)
-
-        let bills = (try? modelContext.fetch(
-            FetchDescriptor<RecurringBillPlan>(
-                predicate: #Predicate { $0.deletedAt == nil && !$0.isArchived }
-            )
-        )) ?? []
-
-        let installments = (try? modelContext.fetch(
-            FetchDescriptor<InstallmentPlan>(
-                predicate: #Predicate { $0.deletedAt == nil && !$0.isArchived }
-            )
-        )) ?? []
-
-        let occurrences = (try? modelContext.fetch(
-            FetchDescriptor<DueOccurrenceRecord>(
-                predicate: #Predicate { $0.deletedAt == nil }
-            )
-        )) ?? []
+        removeObsoleteDueSoonInboxRecords(modelContext: modelContext)
 
         let wallets = (try? modelContext.fetch(
             FetchDescriptor<LedgerWallet>(
@@ -47,43 +28,6 @@ enum MistiaLocalNotificationScheduler {
         )) ?? []
 
         let transactionRecords = transactions.map { $0.planningRecordSnapshot }
-        let planningCreditCardAccounts = wallets.compactMap { $0.planningCreditCardSnapshot(records: transactionRecords) }
-        let occurrenceSnapshots = occurrences.map { $0.planningSnapshot }
-
-        let cardDueItems = PlanningLogic.creditCardDueItems(
-            accounts: planningCreditCardAccounts,
-            records: transactionRecords,
-            occurrences: occurrenceSnapshots,
-            selectedMonth: startOfMonth,
-            referenceDate: referenceDate,
-            calendar: calendar
-        )
-
-        let recurringDueItems = PlanningLogic.recurringBillDueItems(
-            bills: bills.map { $0.planningSnapshot },
-            occurrences: occurrenceSnapshots,
-            selectedMonth: startOfMonth,
-            calendar: calendar
-        )
-
-        let installmentDueItems = PlanningLogic.installmentDueItems(
-            plans: installments.map { $0.planningSnapshot },
-            occurrences: occurrenceSnapshots,
-            selectedMonth: startOfMonth,
-            calendar: calendar
-        )
-
-        let dueAlerts = OverviewLogic.dueAlerts(
-            creditCardDues: cardDueItems,
-            recurringDues: recurringDueItems + installmentDueItems,
-            referenceDate: referenceDate,
-            calendar: calendar
-        )
-
-        for alert in dueAlerts {
-            await scheduleDueAlert(alert, referenceDate: referenceDate, modelContext: modelContext)
-        }
-
         await scheduleLowWalletAlerts(
             wallets: wallets,
             transactionRecords: transactionRecords,
@@ -115,72 +59,17 @@ enum MistiaLocalNotificationScheduler {
         center.removePendingNotificationRequests(withIdentifiers: ids)
     }
 
-    private static func scheduleDueAlert(
-        _ alert: OverviewDueAlertSnapshot,
-        referenceDate: Date,
-        modelContext: ModelContext
-    ) async {
-        // One-day-before reminder at 09:00 local time.
-        let startOfDueDay = calendar.startOfDay(for: alert.dueDate)
-        let triggerDay = calendar.date(byAdding: .day, value: -1, to: startOfDueDay) ?? startOfDueDay
-        var triggerComponents = calendar.dateComponents([.year, .month, .day], from: triggerDay)
-        triggerComponents.hour = 9
-        triggerComponents.minute = 0
-
-        let triggerDate = calendar.date(from: triggerComponents) ?? triggerDay
-        guard triggerDate > referenceDate else { return }
-
-        let content = UNMutableNotificationContent()
-        content.title = mistiaLocalized(
-            vi: "Sắp đến hạn",
-            en: "Due soon",
-            ja: "期限が近い"
-        )
-
-        let monthString = MistiaDateFormatting.statementMonthYearString(for: alert.dueDate)
-        content.body = "\(alert.name) (\(monthString)) — \(MistiaDateFormatting.shortDateString(for: alert.dueDate))"
-        content.sound = .default
-        content.categoryIdentifier = reminderCategoryID
-
-        let identifier = "mistia.reminder.due.\(alert.id)"
-        
-        var resourceID: UUID?
-        var resourceType: MistiaFamilyNotificationResourceType?
-        if alert.id.hasPrefix("credit-") {
-            resourceType = .card
-            resourceID = UUID(uuidString: String(alert.id.dropFirst(7)))
+    private static func removeObsoleteDueSoonInboxRecords(modelContext: ModelContext) {
+        let rows = (try? modelContext.fetch(FetchDescriptor<AppNotificationRecord>())) ?? []
+        let obsoleteRows = rows.filter { row in
+            row.kind == .dueSoon || row.key.hasPrefix("mistia.reminder.due.")
         }
 
-        let request = UNNotificationRequest(
-            identifier: identifier,
-            content: content,
-            trigger: UNCalendarNotificationTrigger(dateMatching: triggerComponents, repeats: false)
-        )
-        try? await UNUserNotificationCenter.current().add(request)
-
-        let payload = DueNotificationActionPayload(
-            sourceKind: alert.sourceKind.rawValue,
-            sourceID: resourceID ?? alert.sourceID ?? UUID(),
-            dueMonthKey: alert.dueMonthKey,
-            dueDate: alert.dueDate,
-            requiresAmountInput: alert.requiresAmountInput,
-            currencyCode: alert.currencyCode,
-            billName: alert.name
-        )
-        let metadataJSON = (try? JSONEncoder.mistiaSyncEncoder.encode(payload)).flatMap { String(data: $0, encoding: .utf8) }
-
-        upsertInboxRecord(
-            modelContext: modelContext,
-            key: identifier,
-            createdAt: triggerDate,
-            title: content.title,
-            body: content.body,
-            kind: .dueSoon,
-            source: .localReminder,
-            resourceType: resourceType,
-            resourceID: resourceID,
-            metadataJSON: metadataJSON
-        )
+        guard !obsoleteRows.isEmpty else { return }
+        for row in obsoleteRows {
+            modelContext.delete(row)
+        }
+        try? modelContext.save()
     }
 
     private static func scheduleLowWalletAlerts(

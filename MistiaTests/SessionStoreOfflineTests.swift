@@ -708,6 +708,14 @@ private final class FamilyRemoteServiceSpy: FamilyRemoteServicing {
         fatalError("Unused in tests")
     }
 
+    func transferOwner(
+        familyID: UUID,
+        newOwnerMembershipID: UUID,
+        session: SupabaseAuthSession
+    ) async throws {
+        fatalError("Unused in tests")
+    }
+
     func deleteFamily(
         familyID: UUID,
         session: SupabaseAuthSession

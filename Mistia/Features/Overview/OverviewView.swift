@@ -300,7 +300,6 @@ struct OverviewView: View {
         }
         .sheet(item: $duePaymentTarget) { target in
             DuePaymentSheet(target: target)
-                .presentationDetents([.medium, .large])
                 .presentationDragIndicator(.hidden)
         }
         .task {

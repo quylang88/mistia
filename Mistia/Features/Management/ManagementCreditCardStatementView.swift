@@ -7,6 +7,7 @@ struct ManagementCreditCardStatementView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
     @Environment(SessionStore.self) private var sessionStore
+    @Environment(MistiaUIState.self) private var uiState
 
     let wallet: LedgerWallet
     let initialMonth: Date?
@@ -21,6 +22,7 @@ struct ManagementCreditCardStatementView: View {
     @State private var selectedMonth: Date
     @State private var showingAlert = false
     @State private var alertMessage = ""
+    @State private var viewID = UUID()
 
     init(wallet: LedgerWallet, initialMonth: Date? = nil) {
         self.wallet = wallet
@@ -96,6 +98,12 @@ struct ManagementCreditCardStatementView: View {
             Button("OK", role: .cancel) { }
         } message: {
             Text(alertMessage)
+        }
+        .onAppear {
+            uiState.requestQuickCreateHidden(true, id: viewID)
+        }
+        .onDisappear {
+            uiState.requestQuickCreateHidden(false, id: viewID)
         }
     }
 

@@ -76,7 +76,8 @@ final class BillWorkflowTests: XCTestCase {
             dueDate: Date(timeIntervalSince1970: 0),
             requiresAmountInput: false,
             currencyCode: "USD",
-            billName: "Test Name"
+            billName: "Test Name",
+            linkedPaymentWalletID: nil
         )
         
         let encoder = JSONEncoder.mistiaSyncEncoder
@@ -91,5 +92,6 @@ final class BillWorkflowTests: XCTestCase {
         XCTAssertEqual(decoded.requiresAmountInput, false)
         XCTAssertEqual(decoded.currencyCode, "USD")
         XCTAssertEqual(decoded.billName, "Test Name")
+        XCTAssertNil(decoded.linkedPaymentWalletID)
     }
 }

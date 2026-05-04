@@ -535,22 +535,17 @@ struct PlanningBillEditorSheet: View {
     private var storedCategories: [TransactionCategory]
     @Query(filter: #Predicate<LedgerWallet> { $0.deletedAt == nil })
     private var storedWallets: [LedgerWallet]
-    @Query(filter: #Predicate<DueOccurrenceRecord> { $0.deletedAt == nil })
-    private var storedOccurrences: [DueOccurrenceRecord]
 
     let target: PlanningBillEditorTarget
 
     @State private var draft: PlanningBillDraft
-    @State private var paymentAmountText: String
     @State private var alertMessage: String?
-    @State private var showsArchiveConfirmation = false
     @State private var showsCategoryPicker = false
 
     init(target: PlanningBillEditorTarget) {
         self.target = target
         let initialDraft = PlanningBillDraft(plan: target.plan)
         _draft = State(initialValue: initialDraft)
-        _paymentAmountText = State(initialValue: target.dueItem?.amountMinor.map(String.init) ?? initialDraft.amountText)
     }
 
     private var availableWallets: [LedgerWallet] {
@@ -641,27 +636,25 @@ struct PlanningBillEditorSheet: View {
                     .pickerStyle(.menu)
                 }
 
-                if let dueItem = target.dueItem, dueItem.status == .pending {
-                    Section {
-                        TextField(mistiaLocalized(vi: "Số tiền thanh toán", en: "Payment amount", ja: "支払い金額"), text: $paymentAmountText)
-                            .keyboardType(.numberPad)
-
-                        Button(mistiaLocalized(vi: "Thanh toán trước", en: "Pay early", ja: "先に支払う")) {
-                            payEarly()
-                        }
-                    } header: {
-                        Text(mistiaLocalized(vi: "Thanh toán trước", en: "Early payment", ja: "前倒し支払い"))
-                    } footer: {
-                        Text(mistiaLocalized(vi: "Thanh toán ngay sẽ tạo giao dịch chi tiêu thật ở tab Giao dịch.", en: "Paying now will create a real expense transaction in the Transactions tab.", ja: "今すぐ支払うと、取引タブに実際の支出取引が作成されます。"))
-                    }
-                }
-
                 if target.plan != nil {
                     Section {
-                        Button(mistiaLocalized(vi: "Lưu trữ hóa đơn", en: "Archive bill", ja: "請求をアーカイブ")) {
-                            showsArchiveConfirmation = true
+                        MistiaArchiveSection(
+                            buttonTitle: mistiaLocalized(vi: "Lưu trữ hóa đơn", en: "Archive bill", ja: "請求をアーカイブ"),
+                            descriptionText: mistiaLocalized(
+                                vi: "Hóa đơn lưu trữ sẽ không còn hiện trong tab Kế hoạch. Mục này sẽ được tự động xóa vĩnh viễn sau 30 ngày.",
+                                en: "Archived bills will no longer appear in Planning. They will be automatically deleted permanently after 30 days.",
+                                ja: "アーカイブした請求はプラン画面に表示されなくなり、30日後に自動で完全削除されます。"
+                            ),
+                            popupMessage: mistiaLocalized(
+                                vi: "Hóa đơn này sẽ bị lưu trữ. Hóa đơn đã lưu trữ sẽ nằm trong \"Mục đã lưu trữ\" và được giữ lại trong 30 ngày.",
+                                en: "This bill will be archived. Archived bills remain in \"Archived items\" for 30 days.",
+                                ja: "この請求はアーカイブされます。アーカイブ済みの請求は「アーカイブ済みアイテム」に30日間保持されます。"
+                            )
+                        ) {
+                            archivePlan()
                         }
-                        .foregroundStyle(.orange)
+                        .listRowInsets(EdgeInsets())
+                        .listRowBackground(Color.clear)
                     }
                 }
             }
@@ -686,17 +679,6 @@ struct PlanningBillEditorSheet: View {
             }
         }
         .planningAlert(message: $alertMessage)
-        .confirmationDialog(
-            mistiaLocalized(vi: "Lưu trữ hóa đơn này?", en: "Archive this bill?", ja: "この請求をアーカイブしますか？"),
-            isPresented: $showsArchiveConfirmation,
-            titleVisibility: .visible
-        ) {
-            Button(mistiaLocalized(vi: "Lưu trữ", en: "Archive", ja: "アーカイブ")) {
-                archivePlan()
-            }
-
-            Button(mistiaLocalized(vi: "Hủy", en: "Cancel", ja: "キャンセル"), role: .cancel) { }
-        }
     }
 
     private func save() {
@@ -756,42 +738,6 @@ struct PlanningBillEditorSheet: View {
             dismiss()
         } catch {
             alertMessage = mistiaLocalized(vi: "Không thể lưu hóa đơn lúc này.", en: "Couldn't save this bill right now.", ja: "現在この請求を保存できません。") + " \(error.localizedDescription)"
-        }
-    }
-
-    private func payEarly() {
-        guard let dueItem = target.dueItem else { return }
-
-        do {
-            let draft = try PlanningLogic.makePaymentDraft(
-                for: dueItem,
-                overrideAmountMinor: paymentAmountText.nilIfBlank?.currencyInputToMinorUnits(currencyCode: activeCurrencyCode)
-            )
-            let savedPayment = try PlanningPersistenceSupport.saveDuePayment(
-                draft: draft,
-                sourceKind: .recurringBill,
-                sourceID: dueItem.sourceID,
-                selectedMonth: target.selectedMonth,
-                scheduledDate: dueItem.dueDate,
-                wallets: storedWallets,
-                occurrences: Array(storedOccurrences),
-                modelContext: modelContext,
-                actorUserID: sessionStore.activeLocalProfileUserID
-            )
-            sessionStore.recordUpsert(
-                entity: .transaction,
-                recordID: savedPayment.transaction.id,
-                modifiedAt: savedPayment.transaction.updatedAt,
-                subjectUserIDOverride: savedPayment.subjectUserID
-            )
-            sessionStore.recordUpsert(
-                entity: .dueOccurrenceRecord,
-                recordID: savedPayment.occurrenceID,
-                modifiedAt: savedPayment.transaction.updatedAt
-            )
-            dismiss()
-        } catch {
-            alertMessage = error.localizedDescription
         }
     }
 

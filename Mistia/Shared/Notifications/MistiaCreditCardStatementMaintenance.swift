@@ -80,13 +80,15 @@ enum MistiaCreditCardStatementMaintenance {
                     upsertAutoPaymentFailureNotification(
                         statement,
                         reason: mistiaLocalized(vi: "chưa thiết lập ví liên kết", en: "no linked wallet is set", ja: "連携ウォレットが未設定です"),
-                        modelContext: modelContext
+                        modelContext: modelContext,
+                        calendar: calendar
                     )
                 case .insufficientFunds:
                     upsertAutoPaymentFailureNotification(
                         statement,
                         reason: mistiaLocalized(vi: "ví liên kết không đủ số dư", en: "the linked wallet has insufficient funds", ja: "連携ウォレットの残高が不足しています"),
-                        modelContext: modelContext
+                        modelContext: modelContext,
+                        calendar: calendar
                     )
                 case .payable:
                     await attemptAutoPayment(
@@ -200,7 +202,8 @@ enum MistiaCreditCardStatementMaintenance {
             upsertAutoPaymentFailureNotification(
                 statement,
                 reason: mistiaLocalized(vi: "chưa thiết lập ví liên kết", en: "no linked wallet is set", ja: "連携ウォレットが未設定です"),
-                modelContext: modelContext
+                modelContext: modelContext,
+                calendar: calendar
             )
             return
         }
@@ -217,7 +220,8 @@ enum MistiaCreditCardStatementMaintenance {
             upsertAutoPaymentFailureNotification(
                 statement,
                 reason: mistiaLocalized(vi: "ví liên kết không đủ số dư", en: "the linked wallet has insufficient funds", ja: "連携ウォレットの残高が不足しています"),
-                modelContext: modelContext
+                modelContext: modelContext,
+                calendar: calendar
             )
             return
         }
@@ -271,12 +275,18 @@ enum MistiaCreditCardStatementMaintenance {
                 recordID: occurrence.id,
                 modifiedAt: occurrence.updatedAt
             )
-            upsertAutoPaymentSuccessNotification(statement, modelContext: modelContext)
+            upsertAutoPaymentSuccessNotification(
+                statement,
+                modelContext: modelContext,
+                calendar: calendar,
+                createdAt: paymentTx.updatedAt
+            )
         } catch {
             upsertAutoPaymentFailureNotification(
                 statement,
                 reason: error.localizedDescription,
-                modelContext: modelContext
+                modelContext: modelContext,
+                calendar: calendar
             )
         }
     }
@@ -318,24 +328,35 @@ enum MistiaCreditCardStatementMaintenance {
         modelContext: ModelContext,
         calendar: Calendar
     ) {
+        let statementMonthString = MistiaDateFormatting.statementMonthYearString(
+            for: statement.statementMonth,
+            calendar: calendar
+        )
         upsertNotification(
             key: "mistia.credit.statement.ready.\(statement.walletID.uuidString.lowercased()).\(PlanningLogic.monthKey(for: statement.statementMonth, calendar: calendar))",
             title: mistiaLocalized(vi: "Sao kê đã chốt", en: "Statement ready", ja: "明細が確定しました"),
             body: mistiaLocalized(
-                vi: "Số tiền cần thanh toán của thẻ \(statement.walletName) là \(statement.amountMinor.formattedCurrency(code: statement.currencyCode)). Hạn \(MistiaDateFormatting.shortDateString(for: statement.dueDate)).",
+                vi: "Số tiền cần thanh toán tháng \(statementMonthString) của thẻ \(statement.walletName) là \(statement.amountMinor.formattedCurrency(code: statement.currencyCode)). Hạn \(MistiaDateFormatting.shortDateString(for: statement.dueDate)).",
                 en: "\(statement.walletName) needs \(statement.amountMinor.formattedCurrency(code: statement.currencyCode)) by \(MistiaDateFormatting.shortDateString(for: statement.dueDate)).",
                 ja: "\(statement.walletName) は \(MistiaDateFormatting.shortDateString(for: statement.dueDate)) までに \(statement.amountMinor.formattedCurrency(code: statement.currencyCode)) の支払いが必要です。"
             ),
             kind: .creditCardStatementReady,
             resourceID: statement.walletID,
             modelContext: modelContext,
-            createdAt: statement.closingDate
+            createdAt: statement.closingDate,
+            metadataJSON: creditCardMetadataJSON(
+                actionKind: .statementReady,
+                statement: statement,
+                calendar: calendar
+            )
         )
     }
 
     private static func upsertAutoPaymentSuccessNotification(
         _ statement: PlanningCreditCardStatementSnapshot,
-        modelContext: ModelContext
+        modelContext: ModelContext,
+        calendar: Calendar,
+        createdAt: Date
     ) {
         upsertNotification(
             key: "mistia.credit.autopay.success.\(statement.walletID.uuidString.lowercased()).\(PlanningLogic.monthKey(for: statement.statementMonth))",
@@ -348,27 +369,42 @@ enum MistiaCreditCardStatementMaintenance {
             kind: .creditCardAutoPaymentSucceeded,
             resourceID: statement.walletID,
             modelContext: modelContext,
-            createdAt: statement.dueDate
+            createdAt: createdAt,
+            metadataJSON: creditCardMetadataJSON(
+                actionKind: .autoPaymentSucceeded,
+                statement: statement,
+                calendar: calendar
+            )
         )
     }
 
     private static func upsertAutoPaymentFailureNotification(
         _ statement: PlanningCreditCardStatementSnapshot,
         reason: String,
-        modelContext: ModelContext
+        modelContext: ModelContext,
+        calendar: Calendar
     ) {
+        let statementMonthString = MistiaDateFormatting.statementMonthYearString(
+            for: statement.statementMonth,
+            calendar: calendar
+        )
         upsertNotification(
             key: "mistia.credit.autopay.failed.\(statement.walletID.uuidString.lowercased()).\(PlanningLogic.monthKey(for: statement.statementMonth))",
             title: mistiaLocalized(vi: "Tự động thanh toán thất bại", en: "Auto payment failed", ja: "自動支払いに失敗しました"),
             body: mistiaLocalized(
-                vi: "Không thể tự động thanh toán thẻ \(statement.walletName) vì \(reason). Vui lòng nạp thêm tiền hoặc thanh toán thủ công.",
+                vi: "Không thể tự động thanh toán sao kê tháng \(statementMonthString) của thẻ \(statement.walletName) vì \(reason). Vui lòng nạp thêm tiền hoặc thanh toán thủ công.",
                 en: "Mistia could not auto-pay \(statement.walletName) because \(reason). Please add funds or pay manually.",
                 ja: "\(reason) のため \(statement.walletName) の自動支払いができませんでした。入金するか手動で支払ってください。"
             ),
             kind: .creditCardAutoPaymentFailed,
             resourceID: statement.walletID,
             modelContext: modelContext,
-            createdAt: Date()
+            createdAt: Date(),
+            metadataJSON: creditCardMetadataJSON(
+                actionKind: .autoPaymentFailed,
+                statement: statement,
+                calendar: calendar
+            )
         )
     }
 
@@ -379,7 +415,8 @@ enum MistiaCreditCardStatementMaintenance {
         kind: MistiaAppNotificationKind,
         resourceID: UUID,
         modelContext: ModelContext,
-        createdAt: Date
+        createdAt: Date,
+        metadataJSON: String?
     ) {
         let existing = (try? modelContext.fetch(
             FetchDescriptor<AppNotificationRecord>(
@@ -394,7 +431,7 @@ enum MistiaCreditCardStatementMaintenance {
             existing.source = .system
             existing.resourceType = .card
             existing.resourceID = resourceID
-            existing.createdAt = createdAt
+            existing.metadataJSON = metadataJSON
             existing.updatedAt = .now
         } else {
             modelContext.insert(AppNotificationRecord(
@@ -407,10 +444,30 @@ enum MistiaCreditCardStatementMaintenance {
                 source: .system,
                 isRead: false,
                 resourceType: .card,
-                resourceID: resourceID
+                resourceID: resourceID,
+                metadataJSON: metadataJSON
             ))
         }
 
         try? modelContext.save()
+    }
+
+    private static func creditCardMetadataJSON(
+        actionKind: CreditCardNotificationActionKind,
+        statement: PlanningCreditCardStatementSnapshot,
+        calendar: Calendar
+    ) -> String? {
+        let payload = CreditCardNotificationActionPayload(
+            actionKind: actionKind,
+            statementMonthKey: PlanningLogic.monthKey(for: statement.statementMonth, calendar: calendar),
+            dueDate: statement.dueDate,
+            linkedPaymentWalletID: statement.paymentSourceWalletID,
+            walletName: statement.walletName,
+            currencyCode: statement.currencyCode
+        )
+        guard let data = try? JSONEncoder.mistiaSyncEncoder.encode(payload) else {
+            return nil
+        }
+        return String(data: data, encoding: .utf8)
     }
 }

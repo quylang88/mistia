@@ -106,6 +106,7 @@ struct PlanningView: View {
     @State private var billEditorTarget: PlanningBillEditorTarget?
     @State private var installmentEditorTarget: PlanningInstallmentEditorTarget?
     @State private var creditCardEditorTarget: PlanningCreditCardEditorTarget?
+    @State private var duePaymentTarget: DuePaymentSheetTarget?
     @State private var destination: PlanningNavigationDestination?
 
     private var cardTint: Color {
@@ -429,6 +430,17 @@ struct PlanningView: View {
                                 dueItem: item,
                                 selectedMonth: selectedMonth
                             )
+                        },
+                        onPayBill: { item in
+                            duePaymentTarget = DuePaymentSheetTarget(
+                                sourceKind: .recurringBill,
+                                sourceID: item.sourceID,
+                                dueMonthKey: PlanningLogic.monthKey(for: selectedMonth),
+                                dueDate: item.dueDate,
+                                requiresAmountInput: item.amountMinor == nil,
+                                currencyCode: item.currencyCode,
+                                name: item.name
+                            )
                         }
                     )
                 }
@@ -460,6 +472,10 @@ struct PlanningView: View {
         }
         .sheet(item: $creditCardEditorTarget) { target in
             PlanningCreditCardEditorSheet(target: target)
+                .presentationDragIndicator(.hidden)
+        }
+        .sheet(item: $duePaymentTarget) { target in
+            DuePaymentSheet(target: target)
                 .presentationDragIndicator(.hidden)
         }
         .sheet(isPresented: $isMonthPickerPresented) {
@@ -627,6 +643,7 @@ private struct DueTabContent: View {
     let onEditBill: (PlanningRecurringDueSnapshot) -> Void
     let onAddInstallment: () -> Void
     let onEditInstallment: (PlanningRecurringDueSnapshot) -> Void
+    let onPayBill: (PlanningRecurringDueSnapshot) -> Void
 
     var body: some View {
         VStack(spacing: 16) {
@@ -655,7 +672,8 @@ private struct DueTabContent: View {
                     addTitle: mistiaLocalized(vi: "Thêm hóa đơn", en: "Add bill", ja: "請求を追加"),
                     referenceDate: referenceDate,
                     onAdd: onAddBill,
-                    onEdit: onEditBill
+                    onEdit: onEditBill,
+                    onPay: onPayBill
                 )
             case .installments:
                 DueRowsSection(
@@ -735,6 +753,7 @@ private struct DueRowsSection: View {
     let referenceDate: Date
     let onAdd: () -> Void
     let onEdit: (PlanningRecurringDueSnapshot) -> Void
+    var onPay: ((PlanningRecurringDueSnapshot) -> Void)? = nil
 
     var body: some View {
         if items.isEmpty {
@@ -750,14 +769,16 @@ private struct DueRowsSection: View {
         } else {
             PlanningListCard {
                 ForEach(Array(items.enumerated()), id: \.element.id) { index, item in
-                    Button {
-                        onEdit(item)
-                    } label: {
-                        PlanningDueRow(item: item, referenceDate: referenceDate)
-                            .padding(.horizontal, 15)
-                            .padding(.vertical, 12)
-                    }
-                    .buttonStyle(MistiaPressableButtonStyle(cornerRadius: 18))
+                    PlanningDueRow(
+                        item: item,
+                        referenceDate: referenceDate,
+                        onTap: { onEdit(item) },
+                        onPay: {
+                            onPay?(item)
+                        }
+                    )
+                    .padding(.horizontal, 15)
+                    .padding(.vertical, 12)
 
                     if index < items.count - 1 {
                         Divider()
@@ -1288,6 +1309,8 @@ private struct PlanningGoalRowView: View {
 private struct PlanningDueRow: View {
     let item: PlanningRecurringDueSnapshot
     let referenceDate: Date
+    let onTap: () -> Void
+    let onPay: () -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -1304,7 +1327,13 @@ private struct PlanningDueRow: View {
 
                 Spacer(minLength: 10)
 
-                PlanningStatusBadge(title: statusText, color: tone.color)
+                if showsPayButton {
+                    PlanningDueActionButton(title: mistiaLocalized(vi: "Thanh toán", en: "Pay", ja: "支払う")) {
+                        onPay()
+                    }
+                } else {
+                    PlanningStatusBadge(title: statusText, color: tone.color)
+                }
             }
 
             HStack {
@@ -1318,6 +1347,10 @@ private struct PlanningDueRow: View {
                     .font(.system(size: 12.5, weight: .semibold, design: .rounded))
                     .foregroundStyle(tone.color)
             }
+        }
+        .contentShape(Rectangle())
+        .onTapGesture {
+            onTap()
         }
     }
 
@@ -1348,6 +1381,10 @@ private struct PlanningDueRow: View {
         }
     }
 
+    private var showsPayButton: Bool {
+        item.sourceKind == .recurringBill && item.status != .paid
+    }
+
     private var dueDetailText: String {
         if item.status == .paid {
             return mistiaLocalized(vi: "Hoàn tất", en: "Completed", ja: "完了")
@@ -1374,6 +1411,58 @@ private struct PlanningDueRow: View {
             en: "\(dayDelta) days left",
             ja: "あと \(dayDelta) 日"
         )
+    }
+}
+
+private struct PlanningDueActionButton: View {
+    @Environment(\.colorScheme) private var colorScheme
+    let title: String
+    let action: () -> Void
+
+    private var accent: Color {
+        colorScheme == .dark ? MistiaAccent.lightPurple.color : MistiaAccent.purple.color
+    }
+
+    var body: some View {
+        Group {
+            if #available(iOS 26.0, *) {
+                Button(action: action) {
+                    label
+                        .foregroundStyle(accent)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 5)
+                }
+                .buttonStyle(.glass)
+                .buttonBorderShape(.capsule)
+                .controlSize(.small)
+                .tint(accent)
+            } else {
+                Button(action: action) {
+                    label
+                        .foregroundStyle(accent)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 5)
+                        .background {
+                            MistiaCapsuleGlassBackground(
+                                tint: accent.opacity(colorScheme == .dark ? 0.18 : 0.12),
+                                interactive: true
+                            )
+                        }
+                        .overlay {
+                            Capsule()
+                                .strokeBorder(accent.opacity(colorScheme == .dark ? 0.22 : 0.16), lineWidth: 0.8)
+                        }
+                }
+                .buttonStyle(.plain)
+            }
+        }
+    }
+
+    private var label: some View {
+        Text(title)
+            .font(.system(size: 13, weight: .semibold, design: .rounded))
+            .lineLimit(1)
+            .fixedSize()
     }
 }
 
