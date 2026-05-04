@@ -179,6 +179,11 @@ nonisolated struct OverviewDueAlertSnapshot: Equatable, Identifiable {
     let dayDelta: Int
     let currencyCode: String
     let tint: OverviewTint
+    // Typed routing — avoids string-prefix heuristics downstream
+    let sourceKind: PlanningDueSourceKind
+    let sourceID: UUID?        // walletID for .creditCard, planID for .recurringBill/.installment
+    let dueMonthKey: String
+    let requiresAmountInput: Bool
 }
 
 nonisolated struct OverviewRecentTransactionSnapshot: Equatable, Identifiable {
@@ -736,7 +741,20 @@ nonisolated enum OverviewLogic {
     ) -> [OverviewDueAlertSnapshot] {
         let startOfToday = calendar.startOfDay(for: referenceDate)
 
-        let items = creditCardDues
+        struct DueCandidate {
+            let id: String
+            let name: String
+            let iconSymbolName: String
+            let amountMinor: Int64?
+            let dueDate: Date
+            let currencyCode: String
+            let sourceKind: PlanningDueSourceKind
+            let sourceID: UUID?
+            let dueMonthKey: String
+            let requiresAmountInput: Bool
+        }
+
+        let items: [DueCandidate] = creditCardDues
             .filter { $0.status == .pending }
             .map {
                 DueCandidate(
@@ -745,7 +763,11 @@ nonisolated enum OverviewLogic {
                     iconSymbolName: LedgerWalletKind.creditCard.defaultIconSymbolName,
                     amountMinor: $0.amountMinor,
                     dueDate: $0.dueDate,
-                    currencyCode: $0.currencyCode
+                    currencyCode: $0.currencyCode,
+                    sourceKind: .creditCard,
+                    sourceID: $0.walletID,
+                    dueMonthKey: PlanningLogic.monthKey(for: $0.dueDate, calendar: calendar),
+                    requiresAmountInput: false
                 )
             }
             + recurringDues
@@ -757,7 +779,11 @@ nonisolated enum OverviewLogic {
                     iconSymbolName: $0.iconSymbolName,
                     amountMinor: $0.amountMinor,
                     dueDate: $0.dueDate,
-                    currencyCode: $0.currencyCode
+                    currencyCode: $0.currencyCode,
+                    sourceKind: $0.sourceKind,
+                    sourceID: $0.sourceID,
+                    dueMonthKey: PlanningLogic.monthKey(for: $0.dueDate, calendar: calendar),
+                    requiresAmountInput: $0.amountMinor == nil
                 )
             }
 
@@ -781,7 +807,11 @@ nonisolated enum OverviewLogic {
                     dueDate: item.dueDate,
                     dayDelta: dayDelta,
                     currencyCode: item.currencyCode,
-                    tint: dayDelta <= 3 ? .red : .blue
+                    tint: dayDelta <= 3 ? .red : .blue,
+                    sourceKind: item.sourceKind,
+                    sourceID: item.sourceID,
+                    dueMonthKey: item.dueMonthKey,
+                    requiresAmountInput: item.requiresAmountInput
                 )
             }
             .sorted { lhs, rhs in
@@ -1051,14 +1081,6 @@ nonisolated enum OverviewLogic {
 
 }
 
-private nonisolated struct DueCandidate: Equatable {
-    let id: String
-    let name: String
-    let iconSymbolName: String
-    let amountMinor: Int64?
-    let dueDate: Date
-    let currencyCode: String
-}
 
 extension String {
     nonisolated var nonEmpty: String? {

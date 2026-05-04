@@ -1339,7 +1339,7 @@ private struct PlanningDueRow: View {
         case .pending:
             switch item.sourceKind {
             case .recurringBill:
-                mistiaLocalized(vi: "Hóa đơn", en: "Bill", ja: "請求")
+                mistiaLocalized(vi: "Sắp đến hạn", en: "Upcoming", ja: "まもなく")
             case .installment:
                 mistiaLocalized(vi: "Trả góp / vay", en: "Installment / loan", ja: "分割払い・借入")
             case .creditCard:

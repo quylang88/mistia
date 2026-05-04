@@ -1044,6 +1044,18 @@ nonisolated enum PlanningLogic {
         return String(format: "%04d-%02d", components.year ?? 0, components.month ?? 0)
     }
 
+    static func month(from key: String, calendar: Calendar = .current) -> Date? {
+        let parts = key.split(separator: "-")
+        guard parts.count == 2,
+              let year = Int(parts[0]),
+              let month = Int(parts[1]) else { return nil }
+        var components = DateComponents()
+        components.year = year
+        components.month = month
+        components.day = 1
+        return calendar.date(from: components)
+    }
+
     static func startOfMonth(for date: Date, calendar: Calendar = .current) -> Date {
         calendar.dateInterval(of: .month, for: date)?.start ?? calendar.startOfDay(for: date)
     }

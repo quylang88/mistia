@@ -63,7 +63,7 @@ struct MistiaApp: App {
                             sessionStore: sessionStore,
                             source: .postManualSync
                         )
-                        await MistiaCreditCardStatementMaintenance.run(
+                        await MistiaDueMaintenance.run(
                             modelContext: sessionStore.currentModelContainer.mainContext,
                             sessionStore: sessionStore
                         )
@@ -76,7 +76,7 @@ struct MistiaApp: App {
                     case .active:
                         sessionStore.handleSceneDidBecomeActive()
                         Task {
-                            await runCreditCardMaintenance()
+                            await runDueMaintenance()
                         }
                     case .background:
                         sessionStore.handleSceneDidEnterBackground()
@@ -127,12 +127,12 @@ struct MistiaApp: App {
         }
 
         sessionStore.finishBootstrapping()
-        await runCreditCardMaintenance()
+        await runDueMaintenance()
     }
 
     @MainActor
-    private func runCreditCardMaintenance() async {
-        await MistiaCreditCardStatementMaintenance.run(
+    private func runDueMaintenance() async {
+        await MistiaDueMaintenance.run(
             modelContext: sessionStore.currentModelContainer.mainContext,
             sessionStore: sessionStore
         )

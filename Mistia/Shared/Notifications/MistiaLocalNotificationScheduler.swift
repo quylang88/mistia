@@ -136,7 +136,9 @@ enum MistiaLocalNotificationScheduler {
             en: "Due soon",
             ja: "期限が近い"
         )
-        content.body = "\(alert.name) — \(MistiaDateFormatting.shortDateString(for: alert.dueDate))"
+
+        let monthString = MistiaDateFormatting.statementMonthYearString(for: alert.dueDate)
+        content.body = "\(alert.name) (\(monthString)) — \(MistiaDateFormatting.shortDateString(for: alert.dueDate))"
         content.sound = .default
         content.categoryIdentifier = reminderCategoryID
 
@@ -156,6 +158,17 @@ enum MistiaLocalNotificationScheduler {
         )
         try? await UNUserNotificationCenter.current().add(request)
 
+        let payload = DueNotificationActionPayload(
+            sourceKind: alert.sourceKind.rawValue,
+            sourceID: resourceID ?? alert.sourceID ?? UUID(),
+            dueMonthKey: alert.dueMonthKey,
+            dueDate: alert.dueDate,
+            requiresAmountInput: alert.requiresAmountInput,
+            currencyCode: alert.currencyCode,
+            billName: alert.name
+        )
+        let metadataJSON = (try? JSONEncoder.mistiaSyncEncoder.encode(payload)).flatMap { String(data: $0, encoding: .utf8) }
+
         upsertInboxRecord(
             modelContext: modelContext,
             key: identifier,
@@ -165,7 +178,8 @@ enum MistiaLocalNotificationScheduler {
             kind: .dueSoon,
             source: .localReminder,
             resourceType: resourceType,
-            resourceID: resourceID
+            resourceID: resourceID,
+            metadataJSON: metadataJSON
         )
     }
 
@@ -252,7 +266,8 @@ enum MistiaLocalNotificationScheduler {
         kind: MistiaAppNotificationKind,
         source: MistiaAppNotificationSource,
         resourceType: MistiaFamilyNotificationResourceType? = nil,
-        resourceID: UUID? = nil
+        resourceID: UUID? = nil,
+        metadataJSON: String? = nil
     ) {
         let existing = (try? modelContext.fetch(
             FetchDescriptor<AppNotificationRecord>(
@@ -269,6 +284,7 @@ enum MistiaLocalNotificationScheduler {
             existing.source = source
             existing.resourceType = resourceType
             existing.resourceID = resourceID
+            existing.metadataJSON = metadataJSON
         } else {
             modelContext.insert(AppNotificationRecord(
                 key: key,
@@ -281,7 +297,8 @@ enum MistiaLocalNotificationScheduler {
                 isRead: false,
                 actionRoute: nil,
                 resourceType: resourceType,
-                resourceID: resourceID
+                resourceID: resourceID,
+                metadataJSON: metadataJSON
             ))
         }
 

@@ -22,6 +22,10 @@ enum MistiaAppNotificationKind: String, Codable, CaseIterable {
     case permissionPolicyChanged
     case familyActivity
     case accessIssue
+    case billPaymentRequired
+    case billAutoPaymentSucceeded
+    case billAutoPaymentFailed
+    case billOverdue
 }
 
 enum MistiaFamilyNotificationResourceType: String, Codable, CaseIterable {
@@ -32,6 +36,7 @@ enum MistiaFamilyNotificationResourceType: String, Codable, CaseIterable {
     case debt
     case transaction
     case permission
+    case bill
 }
 
 enum MistiaFamilyPermissionScope: String, Codable, CaseIterable {
@@ -148,6 +153,47 @@ final class AppNotificationRecord {
         set { actionStateRawValue = newValue.rawValue }
     }
 }
+
+// MARK: - Due-action notification payload
+
+struct DueNotificationActionPayload: Codable {
+    let sourceKind: String       // PlanningDueSourceKind raw value
+    let sourceID: UUID
+    let dueMonthKey: String
+    let dueDate: Date
+    let requiresAmountInput: Bool
+    let currencyCode: String
+    let billName: String
+
+    enum CodingKeys: String, CodingKey {
+        case sourceKind
+        case sourceID = "sourceId"
+        case dueMonthKey
+        case dueDate
+        case requiresAmountInput
+        case currencyCode
+        case billName
+    }
+}
+
+extension AppNotificationRecord {
+    var dueActionPayload: DueNotificationActionPayload? {
+        guard let json = metadataJSON,
+              let data = json.data(using: .utf8) else { return nil }
+        return try? JSONDecoder.mistiaSyncDecoder.decode(DueNotificationActionPayload.self, from: data)
+    }
+
+    var isBillActionableNotification: Bool {
+        switch kind {
+        case .billPaymentRequired, .billAutoPaymentFailed, .billOverdue:
+            return true
+        default:
+            return false
+        }
+    }
+}
+
+struct AppNotificationRecord_Extension {}
 
 struct FamilyNotificationRemoteRecord: Codable, Identifiable, Equatable {
     let id: UUID

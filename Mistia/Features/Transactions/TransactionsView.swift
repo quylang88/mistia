@@ -994,12 +994,11 @@ private struct TransactionRow: View {
                         .foregroundStyle(.primary)
                         .lineLimit(1)
 
-                    if record.primaryKind == .transfer, let subtype = record.transferSubtype {
+                    if record.primaryKind == .transfer, let subtype = record.transferSubtype,
+                       subtype == .debt {
                         TransactionMiniBadge(
                             title: subtype.title,
-                            tint: subtype == .debt
-                                ? Color(red: 0.29, green: 0.56, blue: 0.96)
-                                : Color(red: 0.36, green: 0.37, blue: 0.43)
+                            tint: Color(red: 0.29, green: 0.56, blue: 0.96)
                         )
                     }
                 }

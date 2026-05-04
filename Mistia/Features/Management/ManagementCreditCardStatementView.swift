@@ -9,6 +9,7 @@ struct ManagementCreditCardStatementView: View {
     @Environment(SessionStore.self) private var sessionStore
 
     let wallet: LedgerWallet
+    let initialMonth: Date?
 
     @Query(filter: #Predicate<LedgerTransaction> { $0.deletedAt == nil && !$0.isArchived })
     private var allTransactions: [LedgerTransaction]
@@ -17,9 +18,15 @@ struct ManagementCreditCardStatementView: View {
     @Query(filter: #Predicate<LedgerWallet> { $0.deletedAt == nil })
     private var storedWallets: [LedgerWallet]
 
-    @State private var selectedMonth = PlanningLogic.startOfMonth(for: .now)
+    @State private var selectedMonth: Date
     @State private var showingAlert = false
     @State private var alertMessage = ""
+
+    init(wallet: LedgerWallet, initialMonth: Date? = nil) {
+        self.wallet = wallet
+        self.initialMonth = initialMonth
+        _selectedMonth = State(initialValue: initialMonth ?? PlanningLogic.startOfMonth(for: .now))
+    }
 
     private var transactionRecords: [TransactionRecordSnapshot] {
         allTransactions.map(\.planningRecordSnapshot)

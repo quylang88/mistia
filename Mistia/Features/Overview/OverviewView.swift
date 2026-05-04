@@ -59,9 +59,17 @@ struct OverviewView: View {
     private var storedTransactions: [LedgerTransaction]
     @Query private var ownershipScopes: [OwnedRecordScope]
 
+    private struct StatementTarget: Identifiable, Hashable {
+        let wallet: LedgerWallet
+        let month: Date?
+        var id: String { "\(wallet.id.uuidString)-\(month?.timeIntervalSince1970 ?? 0)" }
+    }
+
     @State private var editorTarget: TransactionEditorTarget?
     @State private var selectedExpenseDay: OverviewExpenseDaySelection?
     @State private var destination: OverviewNavigationDestination?
+    @State private var statementTarget: StatementTarget?
+    @State private var duePaymentTarget: DuePaymentSheetTarget?
 
     private var currentMonth: Date {
         PlanningLogic.startOfMonth(for: .now, calendar: calendar)
@@ -254,7 +262,9 @@ struct OverviewView: View {
                     BudgetFocusSection(rows: dashboardSnapshot.budgetAlerts)
                 }
                 if !dashboardSnapshot.dueAlerts.isEmpty {
-                    UpcomingBillsSection(rows: dashboardSnapshot.dueAlerts)
+                    UpcomingBillsSection(rows: dashboardSnapshot.dueAlerts) { row in
+                        routeDueAlertTap(row)
+                    }
                 }
                 RecentTransactionsSection(rows: dashboardSnapshot.recentTransactions) { row in
                     guard let transaction = transactionsByID[row.id] else { return }
@@ -268,6 +278,9 @@ struct OverviewView: View {
                 case .notificationCenter:
                     NotificationCenterView()
                 }
+            }
+            .navigationDestination(item: $statementTarget) { target in
+                ManagementCreditCardStatementView(wallet: target.wallet, initialMonth: target.month)
             }
         }
         .sheet(item: $selectedExpenseDay) { selection in
@@ -283,6 +296,11 @@ struct OverviewView: View {
         .sheet(item: $editorTarget) { target in
             TransactionEditorSheet(target: target)
                 .presentationDetents([.large])
+                .presentationDragIndicator(.hidden)
+        }
+        .sheet(item: $duePaymentTarget) { target in
+            DuePaymentSheet(target: target)
+                .presentationDetents([.medium, .large])
                 .presentationDragIndicator(.hidden)
         }
         .task {
@@ -325,6 +343,31 @@ struct OverviewView: View {
         }
 
         return lhs.createdAt > rhs.createdAt
+    }
+
+    private func routeDueAlertTap(_ alert: OverviewDueAlertSnapshot) {
+        switch alert.sourceKind {
+        case .creditCard:
+            if let walletID = alert.sourceID,
+               let wallet = storedWallets.first(where: { $0.id == walletID }) {
+                let month = PlanningLogic.month(from: alert.dueMonthKey, calendar: calendar) ?? alert.dueDate
+                statementTarget = StatementTarget(
+                    wallet: wallet,
+                    month: PlanningLogic.startOfMonth(for: month, calendar: calendar)
+                )
+            }
+        case .recurringBill, .installment:
+            guard let sourceID = alert.sourceID else { return }
+            duePaymentTarget = DuePaymentSheetTarget(
+                sourceKind: alert.sourceKind,
+                sourceID: sourceID,
+                dueMonthKey: alert.dueMonthKey,
+                dueDate: alert.dueDate,
+                requiresAmountInput: alert.requiresAmountInput,
+                currencyCode: alert.currencyCode,
+                name: alert.name
+            )
+        }
     }
 }
 
@@ -1574,6 +1617,7 @@ private struct BudgetRow: View {
 
 private struct UpcomingBillsSection: View {
     let rows: [OverviewDueAlertSnapshot]
+    let onSelect: (OverviewDueAlertSnapshot) -> Void
 
     var body: some View {
         OverviewSection(title: mistiaLocalized(vi: "Khoản sắp đến hạn", en: "Upcoming due items", ja: "まもなく期限の項目")) {
@@ -1588,9 +1632,14 @@ private struct UpcomingBillsSection: View {
             } else {
                 VStack(spacing: 0) {
                     ForEach(Array(rows.enumerated()), id: \.element.id) { index, row in
-                        DueRow(row: row)
-                            .padding(.horizontal, 14)
-                            .padding(.vertical, 12)
+                        Button {
+                            onSelect(row)
+                        } label: {
+                            DueRow(row: row)
+                                .padding(.horizontal, 14)
+                                .padding(.vertical, 12)
+                        }
+                        .buttonStyle(MistiaPressableButtonStyle(cornerRadius: 18))
 
                         if index < rows.count - 1 {
                             Divider()

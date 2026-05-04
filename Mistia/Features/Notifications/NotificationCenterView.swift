@@ -13,8 +13,16 @@ struct NotificationCenterView: View {
     @Query(filter: #Predicate<LedgerWallet> { $0.deletedAt == nil && !$0.isArchived })
     private var storedWallets: [LedgerWallet]
 
+    private struct StatementTarget: Identifiable, Hashable {
+        let wallet: LedgerWallet
+        let month: Date?
+        var id: String { "\(wallet.id.uuidString)-\(month?.timeIntervalSince1970 ?? 0)" }
+    }
+
     @State private var viewID = UUID()
-    @State private var statementWallet: LedgerWallet?
+    @State private var statementTarget: StatementTarget?
+    @State private var duePaymentTarget: DuePaymentSheetTarget?
+    @State private var duePaymentOriginRow: AppNotificationRecord?
 
     private var visibleRows: [AppNotificationRecord] {
         MistiaNotificationStore.visibleRows(
@@ -38,7 +46,7 @@ struct NotificationCenterView: View {
             content: { content }
         )
         .task {
-            markVisibleAsRead()
+            await familyContextStore.refreshNotifications(sessionStore: sessionStore)
         }
         .onAppear {
             uiState.requestQuickCreateHidden(true, id: viewID)
@@ -46,8 +54,18 @@ struct NotificationCenterView: View {
         .onDisappear {
             uiState.requestQuickCreateHidden(false, id: viewID)
         }
-        .navigationDestination(item: $statementWallet) { wallet in
-            ManagementCreditCardStatementView(wallet: wallet)
+        .navigationDestination(item: $statementTarget) { target in
+            ManagementCreditCardStatementView(wallet: target.wallet, initialMonth: target.month)
+        }
+        .sheet(item: $duePaymentTarget) { target in
+            DuePaymentSheet(target: target) {
+                if let row = duePaymentOriginRow {
+                    row.actionState = .resolved
+                    markAsRead(row)
+                }
+            }
+            .presentationDetents([.medium, .large])
+            .presentationDragIndicator(.hidden)
         }
     }
 
@@ -75,17 +93,12 @@ struct NotificationCenterView: View {
             if visibleRows.isEmpty {
                 emptyState
             } else {
-                List {
+                VStack(spacing: 0) {
                     ForEach(visibleRows) { row in
                         notificationRow(row)
-                            .listRowInsets(EdgeInsets(top: 10, leading: 16, bottom: 10, trailing: 16))
-                            .listRowSeparator(.hidden)
-                            .listRowBackground(Color.clear)
-                            .onTapGesture { markAsRead(row) }
+                            .onTapGesture { handleRowTap(row) }
                     }
                 }
-                .listStyle(.plain)
-                .scrollContentBackground(.hidden)
             }
         }
     }
@@ -118,32 +131,28 @@ struct NotificationCenterView: View {
     
     @ViewBuilder
     private func notificationRow(_ row: AppNotificationRecord) -> some View {
-        HStack(alignment: .top, spacing: 12) {
-            Circle()
-                .fill(row.isRead ? Color.clear : MistiaAccent.purple.color)
-                .frame(width: 10, height: 10)
-                .padding(.top, 6)
-                .overlay {
-                    if row.isRead {
-                        Circle()
-                            .stroke(Color(UIColor.systemGray4), lineWidth: 1)
-                    }
-                }
+        HStack(alignment: .top, spacing: 14) {
+            notificationIcon(row)
+                .frame(width: 32, height: 32)
+                .padding(.top, 2)
 
-            VStack(alignment: .leading, spacing: 6) {
-                HStack(alignment: .firstTextBaseline) {
+            VStack(alignment: .leading, spacing: 4) {
+                HStack(alignment: .top) {
                     Text(row.title)
-                        .font(.system(.headline, design: .rounded))
+                        .font(.system(size: 15, weight: .semibold, design: .rounded))
                         .foregroundStyle(.primary)
-                    Spacer(minLength: 10)
-                    Text(MistiaDateFormatting.dateTimeString(for: row.createdAt))
-                        .font(.footnote)
+
+                    Spacer()
+
+                    Text(MistiaDateFormatting.relativeTimeLabel(for: row.createdAt))
+                        .font(.system(size: 11, weight: .medium, design: .rounded))
                         .foregroundStyle(.secondary)
                 }
 
                 Text(row.body)
-                    .font(.subheadline)
+                    .font(.system(size: 14, weight: .regular, design: .rounded))
                     .foregroundStyle(.secondary)
+                    .lineLimit(2)
 
                 if row.kind == .permissionRequestReceived, row.actionState == .pending {
                     HStack(spacing: 10) {
@@ -171,31 +180,92 @@ struct NotificationCenterView: View {
                         .controlSize(.small)
                     }
                     .padding(.top, 4)
-                } else if row.isCreditCardPaymentNotification, row.resourceType == .card, let walletID = row.resourceID {
-                    Button {
-                        if let wallet = storedWallets.first(where: { $0.id == walletID }) {
-                            statementWallet = wallet
-                        }
-                    } label: {
-                        Label(
-                            mistiaLocalized(vi: "Thanh toán ngay", en: "Pay now", ja: "今すぐ支払う"),
-                            systemImage: "creditcard.fill"
-                        )
-                    }
-                    .buttonStyle(.borderedProminent)
-                    .controlSize(.small)
-                    .tint(MistiaAccent.purple.color)
-                    .padding(.top, 4)
                 }
             }
         }
-        .padding(14)
+        .padding(.horizontal, 16)
+        .padding(.vertical, 14)
         .background(
-            (row.isRead ? Color(UIColor.secondarySystemGroupedBackground).opacity(0.35) : Color(UIColor.secondarySystemGroupedBackground).opacity(0.70)),
-            in: RoundedRectangle(cornerRadius: 20, style: .continuous)
+            row.isRead ? Color.clear : MistiaAccent.purple.color.opacity(0.04)
         )
+        .overlay(alignment: .bottom) {
+            Divider().padding(.leading, 62)
+        }
     }
-    
+
+    @ViewBuilder
+    private func notificationIcon(_ row: AppNotificationRecord) -> some View {
+        let config = iconConfig(for: row)
+        ZStack {
+            Circle()
+                .fill(config.color.opacity(0.12))
+
+            Image(systemName: config.systemImage)
+                .font(.system(size: 14, weight: .bold))
+                .foregroundStyle(config.color)
+        }
+    }
+
+    private struct IconConfig {
+        let systemImage: String
+        let color: Color
+    }
+
+    private func iconConfig(for row: AppNotificationRecord) -> IconConfig {
+        switch row.kind {
+        case .dueSoon, .billPaymentRequired, .billOverdue:
+            return IconConfig(systemImage: "calendar.badge.clock", color: .orange)
+        case .creditCardStatementReady:
+            return IconConfig(systemImage: "doc.text.fill", color: MistiaAccent.purple.color)
+        case .creditCardAutoPaymentFailed, .billAutoPaymentFailed:
+            return IconConfig(systemImage: "exclamationmark.triangle.fill", color: .red)
+        case .creditCardAutoPaymentSucceeded, .billAutoPaymentSucceeded:
+            return IconConfig(systemImage: "checkmark.circle.fill", color: .green)
+        case .lowWallet:
+            return IconConfig(systemImage: "tray.and.arrow.down.fill", color: .orange)
+        case .permissionRequestReceived:
+            return IconConfig(systemImage: "person.badge.key.fill", color: MistiaAccent.purple.color)
+        case .permissionRequestApproved, .permissionRequestRejected, .permissionRevoked, .permissionPolicyChanged:
+            return IconConfig(systemImage: "shield.fill", color: MistiaAccent.purple.color)
+        case .familyActivity:
+            return IconConfig(systemImage: "person.2.fill", color: .blue)
+        case .accessIssue:
+            return IconConfig(systemImage: "lock.fill", color: .red)
+        case .familyPlaceholder:
+            return IconConfig(systemImage: "bell.fill", color: .secondary)
+        }
+    }
+
+    private func handleRowTap(_ row: AppNotificationRecord) {
+        markAsRead(row)
+
+        if row.kind == .permissionRequestReceived, row.actionState == .pending {
+            // Wait for user to tap specific action buttons
+            return
+        }
+
+        if let payload = row.dueActionPayload, row.actionState == .pending {
+            duePaymentOriginRow = row
+            duePaymentTarget = DuePaymentSheetTarget(
+                sourceKind: PlanningDueSourceKind(rawValue: payload.sourceKind) ?? .recurringBill,
+                sourceID: payload.sourceID,
+                dueMonthKey: payload.dueMonthKey,
+                dueDate: payload.dueDate,
+                requiresAmountInput: payload.requiresAmountInput,
+                currencyCode: payload.currencyCode,
+                name: payload.billName
+            )
+        } else if row.isCreditCardPaymentNotification, row.resourceType == .card, let walletID = row.resourceID {
+            if let wallet = storedWallets.first(where: { $0.id == walletID }) {
+                let monthHint = (row.dueActionPayload?.dueDate) ?? row.createdAt
+                statementTarget = StatementTarget(
+                    wallet: wallet,
+                    month: PlanningLogic.startOfMonth(for: monthHint)
+                )
+            }
+        }
+    }
+
     private func markAsRead(_ row: AppNotificationRecord) {
         guard let remoteIDs = try? MistiaNotificationStore.markAsRead([row], in: modelContext),
               !remoteIDs.isEmpty else { return }
@@ -212,14 +282,6 @@ struct NotificationCenterView: View {
             return
         }
 
-        Task {
-            await familyContextStore.pushNotificationReadState(sessionStore: sessionStore)
-        }
-    }
-
-    private func markVisibleAsRead() {
-        guard let remoteIDs = try? MistiaNotificationStore.markAsRead(visibleRows, in: modelContext),
-              !remoteIDs.isEmpty else { return }
         Task {
             await familyContextStore.pushNotificationReadState(sessionStore: sessionStore)
         }
@@ -289,7 +351,7 @@ private extension AppNotificationRecord {
         switch kind {
         case .dueSoon, .creditCardStatementReady, .creditCardAutoPaymentFailed:
             return true
-        case .lowWallet, .creditCardAutoPaymentSucceeded, .familyPlaceholder, .permissionRequestReceived, .permissionRequestApproved, .permissionRequestRejected, .permissionRevoked, .permissionPolicyChanged, .familyActivity, .accessIssue:
+        case .lowWallet, .creditCardAutoPaymentSucceeded, .familyPlaceholder, .permissionRequestReceived, .permissionRequestApproved, .permissionRequestRejected, .permissionRevoked, .permissionPolicyChanged, .familyActivity, .accessIssue, .billPaymentRequired, .billAutoPaymentFailed, .billOverdue, .billAutoPaymentSucceeded:
             return false
         }
     }

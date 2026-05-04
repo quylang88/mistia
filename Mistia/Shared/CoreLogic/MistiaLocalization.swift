@@ -149,11 +149,9 @@ nonisolated enum MistiaDateFormatting {
         language: MistiaAppLanguage = .current,
         calendar: Calendar? = nil
     ) -> String {
-        formatter(
-            template: "ddMM",
-            language: language,
-            calendar: calendar
-        ).string(from: date)
+        let f = formatter(language: language, calendar: calendar)
+        f.dateFormat = "dd/MM"
+        return f.string(from: date)
     }
 
     static func fullDateString(
@@ -161,11 +159,9 @@ nonisolated enum MistiaDateFormatting {
         language: MistiaAppLanguage = .current,
         calendar: Calendar? = nil
     ) -> String {
-        formatter(
-            template: "ddMMyyyy",
-            language: language,
-            calendar: calendar
-        ).string(from: date)
+        let f = formatter(language: language, calendar: calendar)
+        f.dateFormat = "dd/MM/yyyy"
+        return f.string(from: date)
     }
 
     static func dateTimeString(
@@ -280,39 +276,53 @@ nonisolated enum MistiaDateFormatting {
         calendar: Calendar = .current,
         language: MistiaAppLanguage = .current
     ) -> String {
-        let startOfReference = calendar.startOfDay(for: referenceDate)
-        let startOfDate = calendar.startOfDay(for: date)
-        let dayDelta = calendar.dateComponents([.day], from: startOfDate, to: startOfReference).day ?? 0
-
-        if dayDelta == 0 {
-            let minutes = max(Int(referenceDate.timeIntervalSince(date) / 60), 0)
-            if minutes < 60 {
-                let safeMinutes = max(minutes, 1)
-                return mistiaLocalized(
-                    vi: "\(safeMinutes) phút trước",
-                    en: "\(safeMinutes) min ago",
-                    ja: "\(safeMinutes)分前",
-                    language: language
-                )
-            }
-
-            let hours = max(Int(referenceDate.timeIntervalSince(date) / 3_600), 0)
-            if hours < 10 {
-                let safeHours = max(hours, 1)
-                return mistiaLocalized(
-                    vi: "\(safeHours) tiếng trước",
-                    en: "\(safeHours) hr ago",
-                    ja: "\(safeHours)時間前",
-                    language: language
-                )
-            }
+        let diff = referenceDate.timeIntervalSince(date)
+        
+        // < 1 hour: 3 minutes ago
+        if diff < 3600 {
+            let minutes = max(Int(diff / 60), 1)
+            return mistiaLocalized(
+                vi: "\(minutes) phút trước",
+                en: "\(minutes) min ago",
+                ja: "\(minutes)分前",
+                language: language
+            )
+        }
+        
+        // < 24 hours: 5 hours ago
+        if diff < 86400 {
+            let hours = max(Int(diff / 3600), 1)
+            return mistiaLocalized(
+                vi: "\(hours) tiếng trước",
+                en: "\(hours) hr ago",
+                ja: "\(hours)時間前",
+                language: language
+            )
+        }
+        
+        // < 30 days: 10 days ago
+        if diff < 2592000 {
+            let days = max(Int(diff / 86400), 1)
+            return mistiaLocalized(
+                vi: "\(days) ngày trước",
+                en: "\(days) days ago",
+                ja: "\(days)日前",
+                language: language
+            )
+        }
+        
+        // < 1 year: 1 month ago, 2 months ago
+        if diff < 31536000 {
+            let months = max(Int(diff / 2592000), 1)
+            return mistiaLocalized(
+                vi: "\(months) tháng trước",
+                en: "\(months) months ago",
+                ja: "\(months)ヶ月前",
+                language: language
+            )
         }
 
-        if let relativeLabel = relativeDayLabel(for: dayDelta, language: language) {
-            return relativeLabel
-        }
-
-        return shortDateString(for: date, language: language, calendar: calendar)
+        return fullDateString(for: date, language: language, calendar: calendar)
     }
 
     private static func formatter(

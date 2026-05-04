@@ -543,7 +543,7 @@ struct PlanningBillEditorSheet: View {
     @State private var draft: PlanningBillDraft
     @State private var paymentAmountText: String
     @State private var alertMessage: String?
-    @State private var showsDeleteConfirmation = false
+    @State private var showsArchiveConfirmation = false
     @State private var showsCategoryPicker = false
 
     init(target: PlanningBillEditorTarget) {
@@ -555,7 +555,7 @@ struct PlanningBillEditorSheet: View {
 
     private var availableWallets: [LedgerWallet] {
         storedWallets
-            .filter { !$0.isArchived && $0.kind != .creditCard }
+            .filter { !$0.isArchived }
             .sorted {
                 if $0.sortOrder != $1.sortOrder {
                     return $0.sortOrder < $1.sortOrder
@@ -658,9 +658,10 @@ struct PlanningBillEditorSheet: View {
 
                 if target.plan != nil {
                     Section {
-                        Button(mistiaLocalized(vi: "Xóa hóa đơn", en: "Delete bill", ja: "請求を削除"), role: .destructive) {
-                            showsDeleteConfirmation = true
+                        Button(mistiaLocalized(vi: "Lưu trữ hóa đơn", en: "Archive bill", ja: "請求をアーカイブ")) {
+                            showsArchiveConfirmation = true
                         }
+                        .foregroundStyle(.orange)
                     }
                 }
             }
@@ -686,12 +687,12 @@ struct PlanningBillEditorSheet: View {
         }
         .planningAlert(message: $alertMessage)
         .confirmationDialog(
-            mistiaLocalized(vi: "Xóa hóa đơn này?", en: "Delete this bill?", ja: "この請求を削除しますか？"),
-            isPresented: $showsDeleteConfirmation,
+            mistiaLocalized(vi: "Lưu trữ hóa đơn này?", en: "Archive this bill?", ja: "この請求をアーカイブしますか？"),
+            isPresented: $showsArchiveConfirmation,
             titleVisibility: .visible
         ) {
-            Button(mistiaLocalized(vi: "Xóa", en: "Delete", ja: "削除"), role: .destructive) {
-                deletePlan()
+            Button(mistiaLocalized(vi: "Lưu trữ", en: "Archive", ja: "アーカイブ")) {
+                archivePlan()
             }
 
             Button(mistiaLocalized(vi: "Hủy", en: "Cancel", ja: "キャンセル"), role: .cancel) { }
@@ -794,45 +795,22 @@ struct PlanningBillEditorSheet: View {
         }
     }
 
-    private func deletePlan() {
+    private func archivePlan() {
         guard let plan = target.plan else { return }
         let now = Date()
-        let fallbackSubjectUserID = sessionStore.activeLocalProfileUserID ?? MistiaSyncDeviceIdentity.current()
-        let occurrenceMutations = storedOccurrences
-            .filter { $0.sourceKind == .recurringBill && $0.sourceID == plan.id }
-            .map {
-                MistiaSyncMutation(
-                    entity: .dueOccurrenceRecord,
-                    recordID: $0.id,
-                    subjectUserID: fallbackSubjectUserID,
-                    kind: .delete,
-                    modifiedAt: now
-                )
-            }
-        PlanningPersistenceSupport.deleteOccurrences(
-            sourceKind: .recurringBill,
-            sourceID: plan.id,
-            occurrences: Array(storedOccurrences),
-            modelContext: modelContext
-        )
-        plan.markDeleted(at: now)
+        plan.isArchived = true
+        plan.updatedAt = now
 
         do {
             try modelContext.save()
-            sessionStore.recordMutations(
-                occurrenceMutations + [
-                    MistiaSyncMutation(
-                        entity: .recurringBillPlan,
-                        recordID: plan.id,
-                        subjectUserID: fallbackSubjectUserID,
-                        kind: .delete,
-                        modifiedAt: now
-                    )
-                ]
+            sessionStore.recordUpsert(
+                entity: .recurringBillPlan,
+                recordID: plan.id,
+                modifiedAt: now
             )
             dismiss()
         } catch {
-            alertMessage = mistiaLocalized(vi: "Không thể xóa hóa đơn lúc này.", en: "Couldn't delete this bill right now.", ja: "現在この請求を削除できません。") + " \(error.localizedDescription)"
+            alertMessage = mistiaLocalized(vi: "Không thể lưu trữ hóa đơn lúc này.", en: "Couldn't archive this bill right now.", ja: "現在この請求をアーカイブできません。") + " \(error.localizedDescription)"
         }
     }
 
