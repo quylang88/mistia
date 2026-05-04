@@ -178,10 +178,6 @@ struct DuePaymentSheet: View {
         return (resolvedDueItem?.amountMinor ?? 0) <= 0
     }
 
-    private var amountFieldTitle: String {
-        mistiaLocalized(vi: "Số tiền", en: "Amount", ja: "金額")
-    }
-
     private var walletFieldTitle: String {
         mistiaLocalized(vi: "Ví thanh toán", en: "Payment wallet", ja: "支払いウォレット")
     }
@@ -210,6 +206,7 @@ struct DuePaymentSheet: View {
                     .padding(.vertical, 4)
                 }
                 paymentDetailsSection
+                paymentActionSection
             }
             .navigationTitle(mistiaLocalized(vi: "Thanh toán hóa đơn", en: "Pay bill", ja: "請求の支払い"))
             .navigationBarTitleDisplayMode(.inline)
@@ -224,18 +221,6 @@ struct DuePaymentSheet: View {
                     }
                 }
             }
-        }
-        .safeAreaInset(edge: .bottom) {
-            DuePaymentPrimaryActionButton(
-                title: mistiaLocalized(vi: "Thanh toán ngay", en: "Pay now", ja: "今すぐ支払う"),
-                isDisabled: payButtonDisabled
-            ) {
-                pay()
-            }
-            .padding(.horizontal, 16)
-            .padding(.top, 8)
-            .padding(.bottom, 12)
-            .background(Color.clear)
         }
         .onAppear {
             amountText = defaultAmountText
@@ -254,13 +239,8 @@ struct DuePaymentSheet: View {
     @ViewBuilder
     private var paymentDetailsSection: some View {
         Section {
-            VStack(spacing: 0) {
-                amountRow
-
-                Divider()
-
-                walletMenuRow
-            }
+            amountRow
+            walletMenuRow
         } footer: {
             if target.requiresAmountInput {
                 Text(mistiaLocalized(
@@ -272,79 +252,57 @@ struct DuePaymentSheet: View {
         }
     }
 
+    private var paymentActionSection: some View {
+        Section {
+            DuePaymentPrimaryActionButton(
+                title: mistiaLocalized(vi: "Thanh toán ngay", en: "Pay now", ja: "今すぐ支払う"),
+                isDisabled: payButtonDisabled
+            ) {
+                pay()
+            }
+            .padding(.horizontal, 16)
+            .padding(.top, 8)
+            .padding(.bottom, 4)
+            .listRowInsets(EdgeInsets())
+            .listRowBackground(Color.clear)
+        }
+    }
+
     @ViewBuilder
     private var amountRow: some View {
-        HStack(spacing: 12) {
-            Text(amountFieldTitle)
-                .foregroundStyle(.primary)
-
-            Spacer(minLength: 12)
-
-            if target.requiresAmountInput {
-                TextField(
-                    mistiaLocalized(vi: "Nhập số tiền", en: "Enter amount", ja: "金額を入力"),
-                    text: $amountText
-                )
-                .keyboardType(.numberPad)
-                .multilineTextAlignment(.trailing)
-                .foregroundStyle(.primary)
-            } else if let amount = resolvedDueItem?.amountMinor {
-                Text(amount.formattedCurrency(code: activeCurrencyCode))
-                    .font(.system(size: 17, weight: .bold, design: .rounded))
-                    .foregroundStyle(resolvedIconColor)
-                    .multilineTextAlignment(.trailing)
-            } else {
-                Text("—")
+        if target.requiresAmountInput {
+            TextField(
+                "",
+                text: $amountText,
+                prompt: Text(mistiaLocalized(vi: "Nhập số tiền", en: "Enter amount", ja: "金額を入力"))
                     .foregroundStyle(.tertiary)
-            }
+            )
+            .keyboardType(.numberPad)
+            .font(.system(size: 17, weight: .semibold, design: .rounded))
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .frame(minHeight: 44)
+        } else if let amount = resolvedDueItem?.amountMinor {
+            Text(amount.formattedCurrency(code: activeCurrencyCode))
+                .font(.system(size: 17, weight: .bold, design: .rounded))
+                .foregroundStyle(resolvedIconColor)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .frame(minHeight: 44)
+        } else {
+            Text("—")
+                .foregroundStyle(.tertiary)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .frame(minHeight: 44)
         }
-        .padding(.vertical, 4)
     }
 
     private var walletMenuRow: some View {
-        Menu {
-            Button {
-                selectedWalletID = nil
-            } label: {
-                if selectedWalletID == nil {
-                    Label(
-                        mistiaLocalized(vi: "Chọn ví", en: "Choose wallet", ja: "ウォレットを選択"),
-                        systemImage: "checkmark"
-                    )
-                } else {
-                    Text(mistiaLocalized(vi: "Chọn ví", en: "Choose wallet", ja: "ウォレットを選択"))
-                }
-            }
-
+        Picker(walletFieldTitle, selection: $selectedWalletID) {
+            Text(mistiaLocalized(vi: "Chọn ví", en: "Choose wallet", ja: "ウォレットを選択")).tag(Optional<UUID>.none)
             ForEach(availableWallets) { wallet in
-                Button {
-                    selectedWalletID = wallet.id
-                } label: {
-                    if selectedWalletID == wallet.id {
-                        Label(wallet.name, systemImage: "checkmark")
-                    } else {
-                        Text(wallet.name)
-                    }
-                }
+                Text(wallet.name).tag(Optional(wallet.id))
             }
-        } label: {
-            HStack(spacing: 12) {
-                Text(walletFieldTitle)
-                    .foregroundStyle(.primary)
-
-                Spacer(minLength: 12)
-
-                Text(selectedWalletName)
-                    .foregroundStyle(selectedWalletID == nil ? .tertiary : .secondary)
-                    .lineLimit(1)
-
-                Image(systemName: "chevron.up.chevron.down")
-                    .font(.system(size: 11, weight: .bold))
-                    .foregroundStyle(.tertiary)
-            }
-            .padding(.vertical, 4)
         }
-        .buttonStyle(.plain)
+        .pickerStyle(.menu)
     }
 
     // MARK: - Pay
@@ -408,13 +366,12 @@ struct DuePaymentSheet: View {
 }
 
 struct DuePaymentPrimaryActionButton: View {
-    @Environment(\.colorScheme) private var colorScheme
     let title: String
     let isDisabled: Bool
     let action: () -> Void
 
     private var accent: Color {
-        colorScheme == .dark ? MistiaAccent.lightPurple.color : MistiaAccent.purple.color
+        MistiaAccent.purple.color
     }
 
     var body: some View {

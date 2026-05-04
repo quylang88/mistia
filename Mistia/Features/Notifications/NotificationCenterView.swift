@@ -148,8 +148,6 @@ struct NotificationCenterView: View {
 
             VStack(alignment: .leading, spacing: 4) {
                 HStack(alignment: .firstTextBaseline, spacing: 8) {
-                    unreadDot(for: row)
-
                     Text(row.title)
                         .font(.system(size: 15, weight: .semibold, design: .rounded))
                         .foregroundStyle(.primary)
@@ -201,6 +199,10 @@ struct NotificationCenterView: View {
                     .padding(.top, 4)
                 }
             }
+            .overlay(alignment: .topLeading) {
+                unreadDot(for: row)
+                    .offset(x: -14, y: 4)
+            }
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 14)
@@ -214,10 +216,11 @@ struct NotificationCenterView: View {
 
     @ViewBuilder
     private func unreadDot(for row: AppNotificationRecord) -> some View {
-        Circle()
-            .fill(row.isRead ? .clear : notificationPurpleAccent)
-            .frame(width: 8, height: 8)
-            .padding(.top, 4)
+        if !row.isRead {
+            Circle()
+                .fill(notificationPurpleAccent)
+                .frame(width: 8, height: 8)
+        }
     }
 
     @ViewBuilder
@@ -228,6 +231,12 @@ struct NotificationCenterView: View {
             MistiaFinanceIconView(
                 icon: iconSymbolName,
                 fallbackColor: Color(hex: iconColorHex),
+                size: 32
+            )
+        } else if let wallet = walletResource(for: row) {
+            MistiaFinanceIconView(
+                icon: wallet.iconSymbolName,
+                fallbackColor: Color(hex: wallet.iconColorHex),
                 size: 32
             )
         } else {
@@ -421,6 +430,19 @@ struct NotificationCenterView: View {
         }
 
         return storedBills.first(where: { $0.id == resourceID })
+    }
+
+    private func walletResource(for row: AppNotificationRecord) -> LedgerWallet? {
+        guard let resourceID = row.resourceID else {
+            return nil
+        }
+
+        switch row.resourceType {
+        case .card, .wallet:
+            return storedWallets.first(where: { $0.id == resourceID })
+        default:
+            return nil
+        }
     }
 }
 
