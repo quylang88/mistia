@@ -351,7 +351,7 @@ struct ManagementCreditCardStatementView: View {
                 draft: draft,
                 sourceKind: .creditCard,
                 sourceID: statement.walletID,
-                selectedMonth: PlanningLogic.startOfMonth(for: statement.dueDate, calendar: calendar),
+                selectedMonth: statement.statementMonth,
                 scheduledDate: statement.dueDate,
                 wallets: Array(storedWallets),
                 occurrences: Array(storedOccurrences),

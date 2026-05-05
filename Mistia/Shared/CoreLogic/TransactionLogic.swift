@@ -167,8 +167,8 @@ nonisolated enum TransactionLogic {
             .filter { record in
                 if filters.isAdjustmentOnly {
                     guard isAdjustment(record) else { return false }
-                } else {
-                    guard !isAdjustment(record) else { return false }
+                } else if selectedKind != nil, isAdjustment(record) {
+                    return false
                 }
 
                 guard selectedKind == nil || record.primaryKind == selectedKind else {

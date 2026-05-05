@@ -311,6 +311,7 @@ nonisolated struct PlanningCreditCardDueSnapshot: Equatable, Identifiable {
     let last4: String
     let amountMinor: Int64
     let availableCreditMinor: Int64
+    let statementMonth: Date
     let dueDate: Date
     let paymentSourceWalletID: UUID?
     let currencyCode: String
@@ -693,6 +694,7 @@ nonisolated enum PlanningLogic {
                 last4: statement.last4,
                 amountMinor: statement.amountMinor,
                 availableCreditMinor: statement.availableCreditMinor,
+                statementMonth: statement.statementMonth,
                 dueDate: statement.dueDate,
                 paymentSourceWalletID: statement.paymentSourceWalletID,
                 currencyCode: statement.currencyCode,
@@ -1126,11 +1128,17 @@ nonisolated enum PlanningLogic {
             paymentDueDay: account.dueDay,
             calendar: calendar
         )
-        let dueMonthKey = monthKey(for: dueDate, calendar: calendar)
+        let statementMonthKey = monthKey(for: monthStart, calendar: calendar)
+        let legacyDueMonthKey = monthKey(for: dueDate, calendar: calendar)
         let occurrence = occurrenceRecord(
             for: .creditCard,
             sourceID: account.walletID,
-            monthKey: dueMonthKey,
+            monthKey: statementMonthKey,
+            occurrences: occurrences
+        ) ?? occurrenceRecord(
+            for: .creditCard,
+            sourceID: account.walletID,
+            monthKey: legacyDueMonthKey,
             occurrences: occurrences
         )
         let computedAmount = creditCardStatementAmount(

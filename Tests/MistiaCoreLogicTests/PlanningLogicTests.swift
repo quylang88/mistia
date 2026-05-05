@@ -214,6 +214,7 @@ final class PlanningLogicTests: XCTestCase {
                 last4: "1234",
                 amountMinor: 12_000, // Thẻ đến hạn tháng này
                 availableCreditMinor: 8_000,
+                statementMonth: makeDate(year: 2026, month: 3, day: 1),
                 dueDate: makeDate(year: 2026, month: 4, day: 14),
                 paymentSourceWalletID: UUID(),
                 currencyCode: "JPY",
@@ -442,7 +443,7 @@ final class PlanningLogicTests: XCTestCase {
             id: UUID(),
             sourceKind: .creditCard,
             sourceID: cardWalletID,
-            selectedMonthKey: "2026-03",
+            selectedMonthKey: "2026-02",
             scheduledDate: makeDate(year: 2026, month: 3, day: 26),
             amountMinorSnapshot: 32_456,
             status: .paid,
@@ -460,6 +461,50 @@ final class PlanningLogicTests: XCTestCase {
 
         XCTAssertEqual(paidStatement?.statementMonth, makeDate(year: 2026, month: 2, day: 1))
         XCTAssertEqual(paidStatement?.amountMinor, 32_456)
+        XCTAssertEqual(paidStatement?.state, .paid)
+    }
+
+    func testPaidCreditCardStatementFallsBackToLegacyDueMonthOccurrence() {
+        let cardWalletID = UUID()
+        let paymentTransactionID = UUID()
+        let account = makeCreditCardAccount(
+            walletID: cardWalletID,
+            paymentWalletID: UUID(),
+            dueDay: 26,
+            statementClosingDay: 10
+        )
+        let records = [
+            makeRecord(
+                primaryKind: .expense,
+                amountMinor: 23_456,
+                occurredAt: makeDate(year: 2026, month: 2, day: 12),
+                categoryID: nil,
+                sourceWalletID: cardWalletID,
+                sourceWalletKind: .creditCard
+            )
+        ]
+        let legacyOccurrence = PlanningDueOccurrenceSnapshot(
+            id: UUID(),
+            sourceKind: .creditCard,
+            sourceID: cardWalletID,
+            selectedMonthKey: "2026-03",
+            scheduledDate: makeDate(year: 2026, month: 3, day: 26),
+            amountMinorSnapshot: 23_456,
+            status: .paid,
+            linkedTransactionID: paymentTransactionID
+        )
+
+        let paidStatement = PlanningLogic.paidCreditCardStatementForExpense(
+            account: account,
+            records: records,
+            occurrences: [legacyOccurrence],
+            occurredAt: makeDate(year: 2026, month: 2, day: 20),
+            referenceDate: makeDate(year: 2026, month: 3, day: 27),
+            calendar: calendar
+        )
+
+        XCTAssertEqual(paidStatement?.statementMonth, makeDate(year: 2026, month: 2, day: 1))
+        XCTAssertEqual(paidStatement?.amountMinor, 23_456)
         XCTAssertEqual(paidStatement?.state, .paid)
     }
 
@@ -485,7 +530,7 @@ final class PlanningLogicTests: XCTestCase {
             id: UUID(),
             sourceKind: .creditCard,
             sourceID: cardWalletID,
-            selectedMonthKey: "2026-04",
+            selectedMonthKey: "2026-03",
             scheduledDate: makeDate(year: 2026, month: 4, day: 26),
             amountMinorSnapshot: 2_000,
             status: .paid,
@@ -519,7 +564,7 @@ final class PlanningLogicTests: XCTestCase {
             id: UUID(),
             sourceKind: .creditCard,
             sourceID: cardWalletID,
-            selectedMonthKey: "2026-03",
+            selectedMonthKey: "2026-02",
             scheduledDate: makeDate(year: 2026, month: 3, day: 26),
             amountMinorSnapshot: 6_000,
             status: .paid,
@@ -657,6 +702,7 @@ final class PlanningLogicTests: XCTestCase {
                 last4: "1234",
                 amountMinor: 8_000,
                 availableCreditMinor: 12_000,
+                statementMonth: makeDate(year: 2026, month: 3, day: 1),
                 dueDate: makeDate(year: 2026, month: 4, day: 20),
                 paymentSourceWalletID: paymentWallet,
                 currencyCode: "JPY",

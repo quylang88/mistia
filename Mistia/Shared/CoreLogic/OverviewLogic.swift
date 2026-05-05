@@ -766,7 +766,7 @@ nonisolated enum OverviewLogic {
                     currencyCode: $0.currencyCode,
                     sourceKind: .creditCard,
                     sourceID: $0.walletID,
-                    dueMonthKey: PlanningLogic.monthKey(for: $0.dueDate, calendar: calendar),
+                    dueMonthKey: PlanningLogic.monthKey(for: $0.statementMonth, calendar: calendar),
                     requiresAmountInput: false
                 )
             }

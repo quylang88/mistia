@@ -266,6 +266,86 @@ final class TransactionLogicTests: XCTestCase {
         XCTAssertEqual(visible.map(\.id), [matching.id])
     }
 
+    func testVisibleRecordsIncludesBalanceAdjustmentsInAllTransactions() {
+        let walletID = UUID()
+        let referenceDate = Date(timeIntervalSince1970: 1_742_646_400)
+        let normalExpense = makeRecord(
+            primaryKind: .expense,
+            title: "Cafe",
+            amountMinor: 1_000,
+            occurredAt: referenceDate.addingTimeInterval(-120),
+            sourceWalletID: walletID,
+            sourceWalletKind: .cash,
+            categoryID: UUID()
+        )
+        let adjustment = makeRecord(
+            primaryKind: .expense,
+            title: "Dieu chinh so du",
+            amountMinor: 2_000,
+            occurredAt: referenceDate,
+            sourceWalletID: walletID,
+            sourceWalletKind: .cash,
+            categoryID: MistiaSystemCategoryIdentity.balanceAdjustmentExpenseID
+        )
+
+        var filters = TransactionFilterState()
+        filters.timeScope = .allTime
+
+        let visible = TransactionLogic.visibleRecords(
+            from: [normalExpense, adjustment],
+            selectedKind: nil,
+            filters: filters,
+            referenceDate: referenceDate
+        )
+
+        XCTAssertEqual(visible.map(\.id), [adjustment.id, normalExpense.id])
+    }
+
+    func testVisibleRecordsKeepsBalanceAdjustmentsInTheirOwnSegment() {
+        let walletID = UUID()
+        let referenceDate = Date(timeIntervalSince1970: 1_742_646_400)
+        let normalExpense = makeRecord(
+            primaryKind: .expense,
+            title: "Cafe",
+            amountMinor: 1_000,
+            occurredAt: referenceDate.addingTimeInterval(-120),
+            sourceWalletID: walletID,
+            sourceWalletKind: .cash,
+            categoryID: UUID()
+        )
+        let adjustment = makeRecord(
+            primaryKind: .expense,
+            title: "Dieu chinh so du",
+            amountMinor: 2_000,
+            occurredAt: referenceDate,
+            sourceWalletID: walletID,
+            sourceWalletKind: .cash,
+            categoryID: MistiaSystemCategoryIdentity.balanceAdjustmentExpenseID
+        )
+
+        var expenseFilters = TransactionFilterState()
+        expenseFilters.timeScope = .allTime
+        let expenseVisible = TransactionLogic.visibleRecords(
+            from: [normalExpense, adjustment],
+            selectedKind: .expense,
+            filters: expenseFilters,
+            referenceDate: referenceDate
+        )
+
+        var adjustmentFilters = TransactionFilterState()
+        adjustmentFilters.timeScope = .allTime
+        adjustmentFilters.isAdjustmentOnly = true
+        let adjustmentVisible = TransactionLogic.visibleRecords(
+            from: [normalExpense, adjustment],
+            selectedKind: nil,
+            filters: adjustmentFilters,
+            referenceDate: referenceDate
+        )
+
+        XCTAssertEqual(expenseVisible.map(\.id), [normalExpense.id])
+        XCTAssertEqual(adjustmentVisible.map(\.id), [adjustment.id])
+    }
+
     func testTransferFiltersCombineSubtypeAmountTimeStatusAndSearch() {
         let walletID = UUID()
         let referenceDate = Date(timeIntervalSince1970: 1_742_646_400)

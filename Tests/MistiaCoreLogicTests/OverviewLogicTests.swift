@@ -515,6 +515,7 @@ final class OverviewLogicTests: XCTestCase {
                 last4: "1111",
                 amountMinor: 10_000,
                 availableCreditMinor: 5_000,
+                statementMonth: makeDate(year: 2026, month: 3, day: 1),
                 dueDate: makeDate(year: 2026, month: 4, day: 12),
                 paymentSourceWalletID: UUID(),
                 currencyCode: "JPY",
@@ -585,6 +586,7 @@ final class OverviewLogicTests: XCTestCase {
         XCTAssertEqual(alerts.map { $0.name }, ["Internet", "Visa", "Laptop"])
         XCTAssertEqual(alerts[0].tint, .red)
         XCTAssertEqual(alerts[1].tint, .red)
+        XCTAssertEqual(alerts[1].dueMonthKey, "2026-03")
         XCTAssertEqual(alerts[2].tint, .blue)
     }
 

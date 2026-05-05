@@ -114,17 +114,32 @@ enum MistiaCreditCardStatementMaintenance {
         sessionStore: SessionStore,
         calendar: Calendar
     ) -> DueOccurrenceRecord {
-        let monthKey = PlanningLogic.monthKey(for: statement.dueDate, calendar: calendar)
+        let monthKey = PlanningLogic.monthKey(for: statement.statementMonth, calendar: calendar)
+        let legacyDueMonthKey = PlanningLogic.monthKey(for: statement.dueDate, calendar: calendar)
         let now = Date()
 
         if let existing = occurrences.first(where: {
             $0.sourceKind == .creditCard
                 && $0.sourceID == statement.walletID
-                && $0.selectedMonthKey == monthKey
+                && ($0.selectedMonthKey == monthKey || $0.selectedMonthKey == legacyDueMonthKey)
         }) {
-            guard existing.status == .pending else { return existing }
-
             var didChange = false
+            if existing.selectedMonthKey != monthKey {
+                existing.selectedMonthKey = monthKey
+                didChange = true
+            }
+            guard existing.status == .pending else {
+                if didChange {
+                    existing.updatedAt = now
+                    try? modelContext.save()
+                    sessionStore.recordUpsert(
+                        entity: .dueOccurrenceRecord,
+                        recordID: existing.id,
+                        modifiedAt: existing.updatedAt
+                    )
+                }
+                return existing
+            }
             if existing.scheduledDate != statement.dueDate {
                 existing.scheduledDate = statement.dueDate
                 didChange = true
@@ -244,6 +259,7 @@ enum MistiaCreditCardStatementMaintenance {
         modelContext.insert(paymentTx)
 
         occurrence.status = .paid
+        occurrence.selectedMonthKey = PlanningLogic.monthKey(for: statement.statementMonth, calendar: calendar)
         occurrence.paidAt = statement.dueDate
         occurrence.linkedTransactionID = paymentTx.id
         occurrence.amountMinorSnapshot = statement.amountMinor

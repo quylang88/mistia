@@ -1213,6 +1213,7 @@ struct PlanningCreditCardEditorSheet: View {
                 currentDebtMinor
             ),
             availableCreditMinor: availableCreditMinor,
+            statementMonth: target.dueItem?.statementMonth ?? target.selectedMonth,
             dueDate: target.dueItem?.dueDate ?? PlanningLogic.scheduledDate(dueDay: draft.paymentDueDay, selectedMonth: target.selectedMonth),
             paymentSourceWalletID: draft.paymentSourceWalletID,
             currencyCode: wallet.currencyCode,
