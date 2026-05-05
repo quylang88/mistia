@@ -190,7 +190,27 @@ struct FamilyInviteAcceptanceSheet: View {
 
     @ViewBuilder
     private func previewContent(_ preview: FamilyInvitePreviewRecord) -> some View {
-        if preview.alreadyMemberOfFamily {
+        if preview.inviterUserID == sessionStore.signedInUserID {
+            inviteErrorContent(
+                title: mistiaLocalized(
+                    vi: "Link này không khả dụng với bạn",
+                    en: "This link isn't available to you",
+                    ja: "このリンクはこのアカウントでは利用できません"
+                ),
+                message: mistiaLocalized(
+                    vi: "Bạn là người tạo lời mời này. Hãy gửi link cho thành viên cần tham gia; tài khoản của bạn không thể dùng chính lời mời này.",
+                    en: "You created this invite. Send the link to the person who should join; your account can't use its own invite.",
+                    ja: "この招待を作成したアカウントです。参加する相手にリンクを共有してください。このアカウントでは使用できません。"
+                ),
+                showsRetry: false,
+                actionTitle: mistiaLocalized(vi: "Mở Gia đình", en: "Open Family", ja: "家族を開く"),
+                action: {
+                    familyContextStore.clearPendingInvite()
+                    familyContextStore.activateFamilyHome()
+                    dismiss()
+                }
+            )
+        } else if preview.alreadyMemberOfFamily {
             inviteErrorContent(
                 title: mistiaLocalized(vi: "Bạn đã là thành viên", en: "Already a member", ja: "すでにメンバーです"),
                 message: mistiaLocalized(
@@ -351,6 +371,7 @@ struct FamilyInviteAcceptanceSheet: View {
     private func inviteErrorContent(
         title: String = mistiaLocalized(vi: "Lời mời không khả dụng", en: "Invite unavailable", ja: "招待を利用できません"),
         message: String,
+        showsRetry: Bool = true,
         actionTitle: String? = nil,
         action: (() -> Void)? = nil
     ) -> some View {
@@ -368,16 +389,18 @@ struct FamilyInviteAcceptanceSheet: View {
                     .multilineTextAlignment(.center)
             }
 
-            Button {
-                Task { await loadPreviewIfNeeded(force: true) }
-            } label: {
-                Text(mistiaLocalized(vi: "Thử lại", en: "Try again", ja: "再試行"))
-                    .font(.system(size: 16, weight: .bold, design: .rounded))
-                    .frame(maxWidth: .infinity)
+            if showsRetry {
+                Button {
+                    Task { await loadPreviewIfNeeded(force: true) }
+                } label: {
+                    Text(mistiaLocalized(vi: "Thử lại", en: "Try again", ja: "再試行"))
+                        .font(.system(size: 16, weight: .bold, design: .rounded))
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.borderedProminent)
+                .controlSize(.large)
+                .tint(accent)
             }
-            .buttonStyle(.borderedProminent)
-            .controlSize(.large)
-            .tint(accent)
 
             if let actionTitle, let action {
                 Button(action: action) {

@@ -616,17 +616,20 @@ final class FamilyContextStore {
         return """
         \(mistiaLocalized(vi: "Bạn đã được mời tham gia gia đình", en: "You've been invited to join the family", ja: "家族への招待が届いています")) \(family.name) \(mistiaLocalized(vi: "trên Mistia.", en: "on Mistia.", ja: "にMistiaで参加できます。"))
 
-        \(mistiaLocalized(vi: "Mở lời mời", en: "Open invite", ja: "招待を開く")):
-        \(inviteLink(for: invite).absoluteString)
+        \(mistiaLocalized(vi: "Mở link bên dưới bằng Mistia. App sẽ hiển thị lời mời trước khi bạn xác nhận tham gia.", en: "Open the link below with Mistia. The app will show the invite before you confirm joining.", ja: "下のリンクをMistiaで開いてください。参加を確定する前に招待内容を確認できます。"))
         """
     }
 
     func inviteLink(for invite: FamilyInviteRecord) -> URL {
-        FamilyInviteLinking.webInviteURL(token: invite.token ?? invite.code)
+        appInviteLink(for: invite)
     }
 
     func appInviteLink(for invite: FamilyInviteRecord) -> URL {
         FamilyInviteLinking.appInviteURL(token: invite.token ?? invite.code)
+    }
+
+    func webInviteLink(for invite: FamilyInviteRecord) -> URL {
+        FamilyInviteLinking.webInviteURL(token: invite.token ?? invite.code)
     }
 
     func walletAccessTargetUserIDs(for member: FamilyMember) -> Set<UUID> {

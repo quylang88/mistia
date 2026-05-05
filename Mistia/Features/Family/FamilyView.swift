@@ -5,6 +5,7 @@ import UIKit
 
 private enum FamilyDestination: String, Identifiable {
     case overview
+    case inviteManagement
 
     var id: String { rawValue }
 }
@@ -117,6 +118,8 @@ struct FamilyManagementView: View {
             switch route {
             case .overview:
                 FamilyOverviewScreen()
+            case .inviteManagement:
+                FamilyInviteManagementScreen()
             }
         }
         .sheet(item: $activeSheet) { sheet in
@@ -325,6 +328,20 @@ struct FamilyManagementView: View {
                 }
             }
 
+            if familyContextStore.canInviteMembers {
+                MistiaGlassCard(cornerRadius: 18, tint: cardTint, padding: 0) {
+                    FamilySettingsRow(
+                        title: mistiaLocalized(vi: "Quản lý lời mời", en: "Manage invites", ja: "招待を管理"),
+                        subtitle: inviteManagementSubtitle,
+                        icon: "link.badge.plus",
+                        iconColor: .cyan,
+                        isDisabled: false
+                    ) {
+                        destination = .inviteManagement
+                    }
+                }
+            }
+
             // Privacy Link
             VStack(alignment: .leading, spacing: 6) {
                 Text(mistiaLocalized(
@@ -353,6 +370,26 @@ struct FamilyManagementView: View {
             }
             .cardDescriptionStyle()
         }
+    }
+
+    private var inviteManagementSubtitle: String {
+        let pendingCount = familyContextStore.invites.filter { $0.status == .pending }.count
+        let acceptedCount = familyContextStore.invites.filter { $0.status == .accepted }.count
+        let expiredCount = familyContextStore.invites.filter { $0.status == .expired }.count
+
+        if familyContextStore.invites.isEmpty {
+            return mistiaLocalized(
+                vi: "Chưa có lời mời nào.",
+                en: "No invites yet.",
+                ja: "招待はまだありません。"
+            )
+        }
+
+        return mistiaLocalized(
+            vi: "\(pendingCount) đang chờ · \(acceptedCount) đã dùng · \(expiredCount) hết hạn",
+            en: "\(pendingCount) pending · \(acceptedCount) used · \(expiredCount) expired",
+            ja: "\(pendingCount)件待機中 · \(acceptedCount)件使用済み · \(expiredCount)件期限切れ"
+        )
     }
 
     private func shouldSuppressNoFamilyPermissionError(_ message: String) -> Bool {
@@ -1796,6 +1833,7 @@ private struct FamilyMemberProfileScreen: View {
             tone: .standard,
             title: "",
             leadingSystemImage: "chevron.left",
+            trailingSystemImage: nil,
             hidesSystemBackButton: true,
             onLeadingTap: { dismiss() },
             contentSpacing: 22
@@ -1857,14 +1895,12 @@ private struct FamilyMemberProfileScreen: View {
                             .opacity(remoteActionsDisabled ? 0.55 : 1)
                         }
 
-                        Text(mistiaLocalized(
+                        memberDetailText(mistiaLocalized(
                             vi: "Thiết lập quyền xem hoặc chỉnh sửa dữ liệu cho thành viên này trong gia đình.",
                             en: "Configure viewing or editing permissions for this member.",
                             ja: "このメンバーの閲覧・編集権限を設定します。"
                         ))
-                        .descriptionTextStyle()
                     }
-                    .cardDescriptionStyle()
                 }
 
                 if isOwner && member.role == .member {
@@ -1901,14 +1937,12 @@ private struct FamilyMemberProfileScreen: View {
                             .opacity(remoteActionsDisabled ? 0.55 : 1)
                         }
 
-                        Text(mistiaLocalized(
+                        memberDetailText(mistiaLocalized(
                             vi: "\(member.displayName) sẽ trở thành owner duy nhất. Bạn sẽ chuyển về vai trò thành viên.",
                             en: "\(member.displayName) will become the only owner. You will become a member.",
                             ja: "\(member.displayName) が唯一の owner になり、あなたはメンバーになります。"
                         ))
-                        .descriptionTextStyle()
                     }
-                    .cardDescriptionStyle()
                 }
 
                 // View Data Card (Moved to Second position)
@@ -1948,14 +1982,12 @@ private struct FamilyMemberProfileScreen: View {
                             .disabled(familyContextStore.isSwitchingContext)
                         }
 
-                        Text(mistiaLocalized(
+                        memberDetailText(mistiaLocalized(
                             vi: "Xem các giao dịch, ví và ngân sách mà \(member.displayName) đã chia sẻ với gia đình.",
                             en: "View transactions, wallets, and budgets shared by \(member.displayName).",
                             ja: "\(member.displayName)が共有した履歴やウォレットを確認します。"
                         ))
-                        .descriptionTextStyle()
                     }
-                    .cardDescriptionStyle()
                 }
             }
 
@@ -1994,7 +2026,7 @@ private struct FamilyMemberProfileScreen: View {
                         .opacity(remoteActionsDisabled ? 0.55 : 1)
                     }
 
-                    Text(
+                    memberDetailText(
                         isMe
                             ? (isOwner
                                ? mistiaLocalized(
@@ -2015,9 +2047,7 @@ private struct FamilyMemberProfileScreen: View {
                                )
                                : "")
                     )
-                    .descriptionTextStyle()
                 }
-                .cardDescriptionStyle()
             }
         }
         .sheet(isPresented: $showsPermissionsSheet) {
@@ -2073,6 +2103,13 @@ private struct FamilyMemberProfileScreen: View {
                 ja: "\(member.displayName) がこの家族の唯一の owner になります。譲渡後、あなたはメンバー管理ができません。"
             ))
         }
+    }
+
+    private func memberDetailText(_ text: String) -> some View {
+        Text(text)
+            .descriptionTextStyle()
+            .cardDescriptionStyle()
+            .fixedSize(horizontal: false, vertical: true)
     }
 
     private var destructiveActionTitle: String {
@@ -2236,7 +2273,7 @@ private struct FamilyJoinSheet: View {
                 }
 
                 Section(mistiaLocalized(vi: "Link mời", en: "Invite link", ja: "招待リンク")) {
-                    TextField("https://mistia.app/invite/family/...", text: $inviteLink)
+                    TextField("mistia://family-invite/...", text: $inviteLink)
                         .focused($focusedField, equals: .inviteCode)
                         .keyboardType(.URL)
                         .textInputAutocapitalization(.never)
@@ -2310,6 +2347,304 @@ private struct FamilyJoinSheet: View {
     }
 }
 
+// MARK: - Invite Management Screen
+
+private struct FamilyInviteManagementScreen: View {
+    @Environment(\.dismiss) private var dismiss
+    @Environment(SessionStore.self) private var sessionStore
+    @Environment(FamilyContextStore.self) private var familyContextStore
+
+    @State private var copiedInviteID: UUID?
+    @State private var activeShareItem: FamilyInviteShareItem?
+
+    private var sortedInvites: [FamilyInviteRecord] {
+        familyContextStore.invites.sorted { lhs, rhs in
+            if lhs.createdAt != rhs.createdAt {
+                return lhs.createdAt > rhs.createdAt
+            }
+            return lhs.id.uuidString < rhs.id.uuidString
+        }
+    }
+
+    private var pendingCount: Int {
+        familyContextStore.invites.filter { $0.status == .pending }.count
+    }
+
+    private var acceptedCount: Int {
+        familyContextStore.invites.filter { $0.status == .accepted }.count
+    }
+
+    private var expiredCount: Int {
+        familyContextStore.invites.filter { $0.status == .expired }.count
+    }
+
+    var body: some View {
+        MistiaPinnedTopBarScaffold(
+            tone: .standard,
+            title: mistiaLocalized(vi: "Quản lý lời mời", en: "Manage invites", ja: "招待を管理"),
+            leadingSystemImage: "chevron.left",
+            trailingSystemImage: nil,
+            hidesSystemBackButton: true,
+            onLeadingTap: { dismiss() },
+            contentSpacing: 18
+        ) {
+            if let remoteUnavailableReason = sessionStore.remoteUnavailableReason {
+                FamilyAlertBanner(message: remoteUnavailableReason)
+            }
+
+            if sortedInvites.isEmpty {
+                emptyInviteTimeline
+            } else {
+                inviteSummarySection
+                inviteTimelineSection
+            }
+        }
+        .sheet(item: $activeShareItem) { item in
+            FamilyInviteActivitySheet(message: item.message, inviteURL: item.inviteURL) {
+                activeShareItem = nil
+            }
+        }
+    }
+
+    private var emptyInviteTimeline: some View {
+        MistiaGlassCard(cornerRadius: 18, tint: Color(UIColor.secondarySystemGroupedBackground), padding: 18) {
+            VStack(alignment: .leading, spacing: 10) {
+                Label(
+                    mistiaLocalized(vi: "Chưa có lời mời nào", en: "No invites yet", ja: "招待はまだありません"),
+                    systemImage: "link.badge.plus"
+                )
+                .font(.system(size: 17, weight: .semibold, design: .rounded))
+                .foregroundStyle(.primary)
+
+                Text(mistiaLocalized(
+                    vi: "Các link đã tạo sẽ xuất hiện ở đây cùng trạng thái chờ, đã dùng, hết hạn hoặc đã thu hồi.",
+                    en: "Created links will appear here with pending, used, expired, or revoked states.",
+                    ja: "作成済みリンクは、待機中・使用済み・期限切れ・取り消し済みの状態でここに表示されます。"
+                ))
+                .descriptionTextStyle()
+                .fixedSize(horizontal: false, vertical: true)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+    }
+
+    private var inviteSummarySection: some View {
+        MistiaGlassCard(cornerRadius: 18, tint: Color(UIColor.secondarySystemGroupedBackground), padding: 16) {
+            HStack(spacing: 12) {
+                inviteSummaryMetric(
+                    title: mistiaLocalized(vi: "Đang chờ", en: "Pending", ja: "待機中"),
+                    count: pendingCount,
+                    tint: .orange
+                )
+                Divider().frame(height: 32)
+                inviteSummaryMetric(
+                    title: mistiaLocalized(vi: "Đã dùng", en: "Used", ja: "使用済み"),
+                    count: acceptedCount,
+                    tint: .mint
+                )
+                Divider().frame(height: 32)
+                inviteSummaryMetric(
+                    title: mistiaLocalized(vi: "Hết hạn", en: "Expired", ja: "期限切れ"),
+                    count: expiredCount,
+                    tint: .secondary
+                )
+            }
+        }
+    }
+
+    private var inviteTimelineSection: some View {
+        MistiaGlassCard(cornerRadius: 18, tint: Color(UIColor.secondarySystemGroupedBackground), padding: 0) {
+            VStack(spacing: 0) {
+                ForEach(Array(sortedInvites.enumerated()), id: \.element.id) { index, invite in
+                    FamilyInviteTimelineRow(
+                        invite: invite,
+                        acceptedDisplayName: acceptedDisplayName(for: invite),
+                        linkText: familyContextStore.inviteLink(for: invite).absoluteString,
+                        copiedInviteID: copiedInviteID,
+                        isLast: index == sortedInvites.count - 1,
+                        canRevoke: sessionStore.canPerformRemoteActions,
+                        onShare: { shareInvite(invite) },
+                        onCopy: { copyInviteLink(invite) },
+                        onRevoke: {
+                            Task {
+                                await familyContextStore.revokeInvite(invite, sessionStore: sessionStore)
+                            }
+                        }
+                    )
+
+                    if index < sortedInvites.count - 1 {
+                        Divider()
+                            .padding(.leading, 60)
+                    }
+                }
+            }
+        }
+    }
+
+    private func inviteSummaryMetric(title: String, count: Int, tint: Color) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text("\(count)")
+                .font(.system(size: 22, weight: .bold, design: .rounded))
+                .foregroundStyle(tint)
+            Text(title)
+                .font(.system(size: 12.5, weight: .semibold, design: .rounded))
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+                .minimumScaleFactor(0.82)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private func acceptedDisplayName(for invite: FamilyInviteRecord) -> String? {
+        guard invite.status == .accepted,
+              let acceptedByUserID = invite.acceptedByUserID else {
+            return nil
+        }
+
+        return familyContextStore.displayName(for: acceptedByUserID)
+            ?? mistiaLocalized(vi: "Thành viên đã chấp nhận", en: "Accepted member", ja: "承認済みメンバー")
+    }
+
+    private func shareInvite(_ invite: FamilyInviteRecord) {
+        activeShareItem = FamilyInviteShareItem(
+            message: familyContextStore.shareMessage(for: invite),
+            inviteURL: familyContextStore.inviteLink(for: invite)
+        )
+    }
+
+    private func copyInviteLink(_ invite: FamilyInviteRecord) {
+        UIPasteboard.general.string = familyContextStore.inviteLink(for: invite).absoluteString
+        copiedInviteID = invite.id
+    }
+}
+
+private struct FamilyInviteTimelineRow: View {
+    let invite: FamilyInviteRecord
+    let acceptedDisplayName: String?
+    let linkText: String
+    let copiedInviteID: UUID?
+    let isLast: Bool
+    let canRevoke: Bool
+    let onShare: () -> Void
+    let onCopy: () -> Void
+    let onRevoke: () -> Void
+
+    private var statusTint: Color {
+        familyInviteStatusTint(invite.status)
+    }
+
+    private var title: String {
+        acceptedDisplayName ?? invite.defaultRole.title
+    }
+
+    private var roleDetail: String {
+        if acceptedDisplayName != nil {
+            return mistiaLocalized(
+                vi: "Vai trò: \(invite.defaultRole.title)",
+                en: "Role: \(invite.defaultRole.title)",
+                ja: "役割: \(invite.defaultRole.title)"
+            )
+        }
+
+        return mistiaLocalized(
+            vi: "Vai trò được mời: \(invite.defaultRole.title)",
+            en: "Invite role: \(invite.defaultRole.title)",
+            ja: "招待する役割: \(invite.defaultRole.title)"
+        )
+    }
+
+    private var copyTitle: String {
+        if copiedInviteID == invite.id {
+            return mistiaLocalized(vi: "Đã copy", en: "Copied", ja: "コピー済み")
+        }
+        return mistiaLocalized(vi: "Sao chép", en: "Copy", ja: "コピー")
+    }
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 12) {
+            timelineMarker
+
+            VStack(alignment: .leading, spacing: 9) {
+                HStack(alignment: .firstTextBaseline, spacing: 10) {
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text(title)
+                            .font(.system(size: 16.5, weight: .semibold, design: .rounded))
+                            .foregroundStyle(.primary)
+
+                        Text(roleDetail)
+                            .font(.system(size: 12.5, weight: .medium, design: .rounded))
+                            .foregroundStyle(.secondary)
+                    }
+
+                    Spacer(minLength: 8)
+
+                    Text(familyInviteStatusTitle(invite.status))
+                        .font(.system(size: 12.5, weight: .bold, design: .rounded))
+                        .foregroundStyle(statusTint)
+                        .lineLimit(1)
+                }
+
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(familyInviteCreatedText(invite))
+                    Text(familyInviteLifecycleText(invite))
+                }
+                .font(.caption)
+                .foregroundStyle(.secondary)
+
+                Text(linkText)
+                    .font(.system(size: 12, weight: .medium, design: .monospaced))
+                    .foregroundStyle(.secondary)
+                    .lineLimit(2)
+                    .textSelection(.enabled)
+
+                HStack(spacing: 14) {
+                    if invite.status == .pending {
+                        Button(action: onShare) {
+                            Label(mistiaLocalized(vi: "Chia sẻ", en: "Share", ja: "共有"), systemImage: "square.and.arrow.up")
+                        }
+                    }
+
+                    Button(action: onCopy) {
+                        Label(copyTitle, systemImage: copiedInviteID == invite.id ? "checkmark" : "doc.on.doc")
+                    }
+
+                    if invite.status == .pending {
+                        Spacer(minLength: 0)
+
+                        Button(role: .destructive, action: onRevoke) {
+                            Label(mistiaLocalized(vi: "Thu hồi", en: "Revoke", ja: "取り消す"), systemImage: "xmark.circle")
+                        }
+                        .disabled(!canRevoke)
+                        .opacity(canRevoke ? 1 : 0.45)
+                    }
+                }
+                .font(.system(size: 13, weight: .semibold, design: .rounded))
+            }
+            .padding(.vertical, 14)
+            .padding(.trailing, 14)
+        }
+        .padding(.leading, 14)
+    }
+
+    private var timelineMarker: some View {
+        ZStack(alignment: .top) {
+            if !isLast {
+                Rectangle()
+                    .fill(Color.secondary.opacity(0.18))
+                    .frame(width: 2)
+                    .padding(.top, 24)
+            }
+
+            Circle()
+                .fill(statusTint)
+                .frame(width: 10, height: 10)
+                .padding(.top, 19)
+        }
+        .frame(width: 20)
+        .frame(maxHeight: .infinity)
+    }
+}
+
 // MARK: - Invite Sheet
 
 private struct FamilyInviteSheet: View {
@@ -2318,8 +2653,8 @@ private struct FamilyInviteSheet: View {
     @Environment(FamilyContextStore.self) private var familyContextStore
 
     @State private var selectedRole: FamilyRole = .member
-    @State private var createdInvite: FamilyInviteRecord?
-    @State private var copiedInviteID: UUID?
+    @State private var isCreatingInvite = false
+    @State private var activeShareItem: FamilyInviteShareItem?
 
     var body: some View {
         NavigationStack {
@@ -2333,62 +2668,25 @@ private struct FamilyInviteSheet: View {
                 }
 
                 Section(mistiaLocalized(vi: "Vai trò được mời", en: "Invite role", ja: "招待する役割")) {
-                    Picker(mistiaLocalized(vi: "Role", en: "Role", ja: "役割"), selection: $selectedRole) {
-                        ForEach([FamilyRole.member, .kid], id: \.self) { role in
-                            Text(role.title).tag(role)
+                    ForEach([FamilyRole.member, .kid], id: \.self) { role in
+                        Button {
+                            selectedRole = role
+                        } label: {
+                            FamilyInviteRoleOptionRow(
+                                role: role,
+                                isSelected: selectedRole == role
+                            )
+                            .contentShape(Rectangle())
                         }
+                        .buttonStyle(.plain)
                     }
-                    .pickerStyle(.inline)
 
                     Text(roleDescription(selectedRole))
                         .font(.footnote)
                         .foregroundStyle(.secondary)
                 }
-
-                if let createdInvite {
-                    Section(mistiaLocalized(vi: "Link mời mới", en: "New invite link", ja: "新しい招待リンク")) {
-                        Text(familyContextStore.inviteLink(for: createdInvite).absoluteString)
-                            .font(.system(size: 13, weight: .semibold, design: .monospaced))
-                            .textSelection(.enabled)
-                            .fixedSize(horizontal: false, vertical: true)
-
-                        Text(mistiaLocalized(
-                            vi: "Hết hạn: \(createdInvite.expiresAt.formatted(date: .abbreviated, time: .shortened))",
-                            en: "Expires: \(createdInvite.expiresAt.formatted(date: .abbreviated, time: .shortened))",
-                            ja: "期限: \(createdInvite.expiresAt.formatted(date: .abbreviated, time: .shortened))"
-                        ))
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
-
-                        ShareLink(item: familyContextStore.shareMessage(for: createdInvite)) {
-                            Label(mistiaLocalized(vi: "Chia sẻ link", en: "Share link", ja: "リンクを共有"), systemImage: "square.and.arrow.up")
-                        }
-
-                        Button {
-                            copyInviteLink(createdInvite)
-                        } label: {
-                            Label(copyTitle(for: createdInvite), systemImage: copiedInviteID == createdInvite.id ? "checkmark" : "doc.on.doc")
-                        }
-                    }
-                }
-
-                Section(mistiaLocalized(vi: "Quản lý lời mời", en: "Manage invites", ja: "招待を管理")) {
-                    if familyContextStore.invites.isEmpty {
-                        Text(mistiaLocalized(
-                            vi: "Chưa có lời mời nào.",
-                            en: "No invites yet.",
-                            ja: "招待はまだありません。"
-                        ))
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
-                    } else {
-                        ForEach(familyContextStore.invites) { invite in
-                            inviteManagementRow(invite)
-                        }
-                    }
-                }
             }
-            .disabled(!sessionStore.canPerformRemoteActions)
+            .disabled(!sessionStore.canPerformRemoteActions || isCreatingInvite)
             .dismissKeyboardOnTap()
             .navigationTitle(mistiaLocalized(vi: "Mời thành viên", en: "Invite member", ja: "メンバーを招待"))
             .navigationBarTitleDisplayMode(.inline)
@@ -2400,18 +2698,47 @@ private struct FamilyInviteSheet: View {
                 }
 
                 ToolbarItem(placement: .topBarTrailing) {
-                    Button(mistiaLocalized(vi: "Tạo link", en: "Create link", ja: "リンク作成")) {
+                    Button {
                         Task {
-                            createdInvite = await familyContextStore.createInvite(
-                                defaultRole: selectedRole,
-                                sessionStore: sessionStore
-                            )
+                            await createInviteAndPresentShareSheet()
+                        }
+                    } label: {
+                        if isCreatingInvite {
+                            ProgressView()
+                                .controlSize(.small)
+                        } else {
+                            Text(mistiaLocalized(vi: "Tạo link", en: "Create link", ja: "リンク作成"))
                         }
                     }
-                    .disabled(!sessionStore.canPerformRemoteActions)
+                    .disabled(!sessionStore.canPerformRemoteActions || isCreatingInvite)
                 }
             }
         }
+        .sheet(item: $activeShareItem) { item in
+            FamilyInviteActivitySheet(message: item.message, inviteURL: item.inviteURL) {
+                activeShareItem = nil
+                dismiss()
+            }
+        }
+    }
+
+    private func createInviteAndPresentShareSheet() async {
+        guard !isCreatingInvite else { return }
+
+        isCreatingInvite = true
+        defer { isCreatingInvite = false }
+
+        guard let invite = await familyContextStore.createInvite(
+            defaultRole: selectedRole,
+            sessionStore: sessionStore
+        ) else {
+            return
+        }
+
+        activeShareItem = FamilyInviteShareItem(
+            message: familyContextStore.shareMessage(for: invite),
+            inviteURL: familyContextStore.inviteLink(for: invite)
+        )
     }
 
     private func roleDescription(_ role: FamilyRole) -> String {
@@ -2436,122 +2763,134 @@ private struct FamilyInviteSheet: View {
             )
         }
     }
+}
 
-    @ViewBuilder
-    private func inviteManagementRow(_ invite: FamilyInviteRecord) -> some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack(alignment: .firstTextBaseline) {
-                VStack(alignment: .leading, spacing: 3) {
-                    Text(invite.defaultRole.title)
-                        .font(.system(size: 15.5, weight: .semibold, design: .rounded))
-                    Text(inviteStatusTitle(invite.status))
-                        .font(.system(size: 12.5, weight: .bold, design: .rounded))
-                        .foregroundStyle(inviteStatusTint(invite.status))
-                }
+private struct FamilyInviteRoleOptionRow: View {
+    let role: FamilyRole
+    let isSelected: Bool
 
-                Spacer()
+    var body: some View {
+        HStack(spacing: 12) {
+            Text(role.title)
+                .font(.system(size: 17, weight: .semibold, design: .rounded))
+                .foregroundStyle(.primary)
 
-                Text(invite.createdAt.formatted(date: .abbreviated, time: .shortened))
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+            Spacer(minLength: 12)
+
+            if isSelected {
+                Image(systemName: "checkmark.circle.fill")
+                    .font(.system(size: 24, weight: .semibold))
+                    .foregroundStyle(MistiaAccent.lightPurple.color)
             }
+        }
+    }
+}
 
-            VStack(alignment: .leading, spacing: 4) {
-                Text(mistiaLocalized(
-                    vi: "Hết hạn: \(invite.expiresAt.formatted(date: .abbreviated, time: .shortened))",
-                    en: "Expires: \(invite.expiresAt.formatted(date: .abbreviated, time: .shortened))",
-                    ja: "期限: \(invite.expiresAt.formatted(date: .abbreviated, time: .shortened))"
-                ))
+private struct FamilyInviteShareItem: Identifiable {
+    let id = UUID()
+    let message: String
+    let inviteURL: URL
+}
 
-                Text(acceptedByTitle(invite))
+private struct FamilyInviteActivitySheet: UIViewControllerRepresentable {
+    let message: String
+    let inviteURL: URL
+    let onComplete: () -> Void
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator(onComplete: onComplete)
+    }
+
+    func makeUIViewController(context: Context) -> UIActivityViewController {
+        let controller = UIActivityViewController(activityItems: [message, inviteURL], applicationActivities: nil)
+        controller.completionWithItemsHandler = { _, _, _, _ in
+            context.coordinator.complete()
+        }
+        controller.presentationController?.delegate = context.coordinator
+        return controller
+    }
+
+    func updateUIViewController(_ uiViewController: UIActivityViewController, context: Context) { }
+
+    final class Coordinator: NSObject, UIAdaptivePresentationControllerDelegate {
+        private let onComplete: () -> Void
+        private var didComplete = false
+
+        init(onComplete: @escaping () -> Void) {
+            self.onComplete = onComplete
+        }
+
+        func presentationControllerDidDismiss(_ presentationController: UIPresentationController) {
+            complete()
+        }
+
+        func complete() {
+            guard !didComplete else { return }
+            didComplete = true
+            Task { @MainActor in
+                onComplete()
             }
-            .font(.caption)
-            .foregroundStyle(.secondary)
-
-            Text(familyContextStore.inviteLink(for: invite).absoluteString)
-                .font(.system(size: 12, weight: .medium, design: .monospaced))
-                .foregroundStyle(.secondary)
-                .lineLimit(2)
-                .textSelection(.enabled)
-
-            HStack {
-                if invite.status == .pending {
-                    ShareLink(item: familyContextStore.shareMessage(for: invite)) {
-                        Label(mistiaLocalized(vi: "Chia sẻ", en: "Share", ja: "共有"), systemImage: "square.and.arrow.up")
-                    }
-                }
-
-                Button {
-                    copyInviteLink(invite)
-                } label: {
-                    Label(copyTitle(for: invite), systemImage: copiedInviteID == invite.id ? "checkmark" : "doc.on.doc")
-                }
-
-                if invite.status == .pending {
-                    Spacer()
-
-                    Button(role: .destructive) {
-                        Task {
-                            await familyContextStore.revokeInvite(invite, sessionStore: sessionStore)
-                        }
-                    } label: {
-                        Label(mistiaLocalized(vi: "Thu hồi", en: "Revoke", ja: "取り消す"), systemImage: "xmark.circle")
-                    }
-                }
-            }
-            .font(.footnote)
-        }
-        .padding(.vertical, 6)
-    }
-
-    private func copyInviteLink(_ invite: FamilyInviteRecord) {
-        UIPasteboard.general.string = familyContextStore.inviteLink(for: invite).absoluteString
-        copiedInviteID = invite.id
-    }
-
-    private func copyTitle(for invite: FamilyInviteRecord) -> String {
-        if copiedInviteID == invite.id {
-            return mistiaLocalized(vi: "Đã copy", en: "Copied", ja: "コピー済み")
-        }
-        return mistiaLocalized(vi: "Sao chép", en: "Copy", ja: "コピー")
-    }
-
-    private func acceptedByTitle(_ invite: FamilyInviteRecord) -> String {
-        guard let acceptedByUserID = invite.acceptedByUserID else {
-            return mistiaLocalized(vi: "Người được mời: Chưa xác định", en: "Invitee: Unknown yet", ja: "招待された人: 未確定")
-        }
-
-        let name = familyContextStore.members.first(where: { $0.userID == acceptedByUserID })?.displayName
-            ?? mistiaLocalized(vi: "Đã chấp nhận", en: "Accepted user", ja: "承認済みユーザー")
-        return mistiaLocalized(vi: "Đã chấp nhận: \(name)", en: "Accepted by: \(name)", ja: "承認者: \(name)")
-    }
-
-    private func inviteStatusTitle(_ status: FamilyInviteStatus) -> String {
-        switch status {
-        case .pending:
-            return mistiaLocalized(vi: "Đang chờ chấp nhận", en: "Pending", ja: "承認待ち")
-        case .accepted:
-            return mistiaLocalized(vi: "Đã được chấp nhận", en: "Accepted", ja: "承認済み")
-        case .expired:
-            return mistiaLocalized(vi: "Đã hết hạn", en: "Expired", ja: "期限切れ")
-        case .revoked:
-            return mistiaLocalized(vi: "Đã bị thu hồi", en: "Revoked", ja: "取り消し済み")
-        case .invalid:
-            return mistiaLocalized(vi: "Không hợp lệ", en: "Invalid", ja: "無効")
         }
     }
+}
 
-    private func inviteStatusTint(_ status: FamilyInviteStatus) -> Color {
-        switch status {
-        case .pending:
-            return .orange
-        case .accepted:
-            return .mint
-        case .expired:
-            return .secondary
-        case .revoked, .invalid:
-            return .red
-        }
+private func familyInviteCreatedText(_ invite: FamilyInviteRecord) -> String {
+    mistiaLocalized(
+        vi: "Đã gửi: \(invite.createdAt.formatted(date: .abbreviated, time: .shortened))",
+        en: "Sent: \(invite.createdAt.formatted(date: .abbreviated, time: .shortened))",
+        ja: "送信: \(invite.createdAt.formatted(date: .abbreviated, time: .shortened))"
+    )
+}
+
+private func familyInviteLifecycleText(_ invite: FamilyInviteRecord) -> String {
+    if invite.status == .accepted, let acceptedAt = invite.acceptedAt {
+        return mistiaLocalized(
+            vi: "Đã chấp nhận: \(acceptedAt.formatted(date: .abbreviated, time: .shortened))",
+            en: "Accepted: \(acceptedAt.formatted(date: .abbreviated, time: .shortened))",
+            ja: "承認: \(acceptedAt.formatted(date: .abbreviated, time: .shortened))"
+        )
+    }
+
+    if invite.status == .revoked, let revokedAt = invite.revokedAt {
+        return mistiaLocalized(
+            vi: "Đã thu hồi: \(revokedAt.formatted(date: .abbreviated, time: .shortened))",
+            en: "Revoked: \(revokedAt.formatted(date: .abbreviated, time: .shortened))",
+            ja: "取り消し: \(revokedAt.formatted(date: .abbreviated, time: .shortened))"
+        )
+    }
+
+    return mistiaLocalized(
+        vi: "Hết hạn: \(invite.expiresAt.formatted(date: .abbreviated, time: .shortened))",
+        en: "Expires: \(invite.expiresAt.formatted(date: .abbreviated, time: .shortened))",
+        ja: "期限: \(invite.expiresAt.formatted(date: .abbreviated, time: .shortened))"
+    )
+}
+
+private func familyInviteStatusTitle(_ status: FamilyInviteStatus) -> String {
+    switch status {
+    case .pending:
+        return mistiaLocalized(vi: "Đang chờ", en: "Pending", ja: "待機中")
+    case .accepted:
+        return mistiaLocalized(vi: "Đã dùng", en: "Used", ja: "使用済み")
+    case .expired:
+        return mistiaLocalized(vi: "Hết hạn", en: "Expired", ja: "期限切れ")
+    case .revoked:
+        return mistiaLocalized(vi: "Đã thu hồi", en: "Revoked", ja: "取り消し済み")
+    case .invalid:
+        return mistiaLocalized(vi: "Không hợp lệ", en: "Invalid", ja: "無効")
+    }
+}
+
+private func familyInviteStatusTint(_ status: FamilyInviteStatus) -> Color {
+    switch status {
+    case .pending:
+        return .orange
+    case .accepted:
+        return .mint
+    case .expired:
+        return .secondary
+    case .revoked, .invalid:
+        return .red
     }
 }
 
