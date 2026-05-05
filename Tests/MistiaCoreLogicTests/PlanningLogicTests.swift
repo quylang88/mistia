@@ -189,6 +189,7 @@ final class PlanningLogicTests: XCTestCase {
             return
         }
         XCTAssertEqual(livingRow.mode, .parentWithChildren)
+        XCTAssertEqual(livingRow.primaryBudgetID, livingRow.parentBudgetID)
         XCTAssertEqual(livingRow.spentMinor, 13_000)
         XCTAssertEqual(livingRow.limitMinor, 35_000)
         XCTAssertEqual(livingRow.allocatedChildLimitMinor, 30_000)
@@ -200,6 +201,7 @@ final class PlanningLogicTests: XCTestCase {
             return
         }
         XCTAssertEqual(travelRow.mode, .parentOnly)
+        XCTAssertEqual(travelRow.primaryBudgetID, travelRow.parentBudgetID)
         XCTAssertEqual(travelRow.spentMinor, 3_000)
         XCTAssertEqual(travelRow.limitMinor, 15_000)
         XCTAssertEqual(travelRow.childRows.count, 0)
@@ -210,7 +212,57 @@ final class PlanningLogicTests: XCTestCase {
         XCTAssertEqual(summary.remainingMinor, 34_000)
     }
 
-    func testBudgetAllocationValidationRequiresParentAndCapsChildren() {
+    func testBudgetBranchRowsShowSingleChildWithoutParentAsTopLevelBudget() {
+        let selectedMonth = makeDate(year: 2026, month: 4, day: 1)
+        let referenceDate = makeDate(year: 2026, month: 4, day: 10)
+        let livingParent = UUID()
+        let foodCategory = UUID()
+        let foodBudgetID = UUID()
+
+        let rows = PlanningLogic.budgetBranchRows(
+            plans: [
+                makeBudget(
+                    id: foodBudgetID,
+                    categoryID: foodCategory,
+                    categoryName: "Ăn uống",
+                    limitMinor: 10_000,
+                    monthAnchor: selectedMonth,
+                    categoryParentID: livingParent,
+                    categoryParentName: "Sinh hoạt",
+                    categoryParentIconSymbolName: "house.fill",
+                    categoryParentColorHex: "#5A6C7D"
+                )
+            ],
+            records: [
+                makeRecord(
+                    primaryKind: .expense,
+                    amountMinor: 4_000,
+                    occurredAt: makeDate(year: 2026, month: 4, day: 8),
+                    categoryID: foodCategory,
+                    categoryParentID: livingParent
+                )
+            ],
+            selectedMonth: selectedMonth,
+            referenceDate: referenceDate,
+            calendar: calendar
+        )
+
+        XCTAssertEqual(rows.count, 1)
+        let row = rows[0]
+        XCTAssertEqual(row.mode, .childOnly)
+        XCTAssertEqual(row.parentCategoryID, livingParent)
+        XCTAssertEqual(row.primaryBudgetID, foodBudgetID)
+        XCTAssertEqual(row.name, "Ăn uống")
+        XCTAssertEqual(row.spentMinor, 4_000)
+        XCTAssertEqual(row.limitMinor, 10_000)
+        XCTAssertTrue(row.childRows.isEmpty)
+
+        let summary = PlanningLogic.budgetSummary(from: rows)
+        XCTAssertEqual(summary.totalBudgetMinor, 10_000)
+        XCTAssertEqual(summary.spentMinor, 4_000)
+    }
+
+    func testBudgetAllocationValidationAllowsChildOnlyAndCapsExistingParent() {
         let selectedMonth = makeDate(year: 2026, month: 4, day: 1)
         let livingParent = UUID()
         let foodCategory = UUID()
@@ -288,7 +340,7 @@ final class PlanningLogicTests: XCTestCase {
                 plans: [],
                 calendar: calendar
             ),
-            .missingParentBudget
+            .valid
         )
     }
 

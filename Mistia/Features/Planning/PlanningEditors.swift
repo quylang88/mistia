@@ -43,18 +43,6 @@ struct PlanningBudgetEditorSheet: View {
             includeEmptyParents: true
         )
 
-        if isAddingChildBudget, let preferredParentCategoryID = target.preferredParentCategoryID {
-            return sections.compactMap { section in
-                guard section.parent.id == preferredParentCategoryID else {
-                    return nil
-                }
-                return TransactionCategoryGroupSection(
-                    parent: section.parent,
-                    children: section.children
-                )
-            }
-        }
-
         guard let preferredParentCategoryID = target.preferredParentCategoryID else {
             return sections
         }
@@ -68,7 +56,7 @@ struct PlanningBudgetEditorSheet: View {
 
     private var availableCategories: [TransactionCategory] {
         categorySections.flatMap { section in
-            isAddingChildBudget ? section.children : [section.parent] + section.children
+            [section.parent] + section.children
         }
     }
 
@@ -97,10 +85,6 @@ struct PlanningBudgetEditorSheet: View {
 
     private var activeCurrencyCode: String {
         target.budget?.currencyCode ?? currencyCode
-    }
-
-    private var isAddingChildBudget: Bool {
-        target.budget == nil && target.preferredParentCategoryID != nil
     }
 
     private var activeBudgetSnapshots: [BudgetPlanSnapshot] {
@@ -168,7 +152,7 @@ struct PlanningBudgetEditorSheet: View {
                 sections: categorySections,
                 recentCategories: recentBudgetCategories,
                 favoriteCategories: favoriteBudgetCategories,
-                allowsParentSelectionInAll: !isAddingChildBudget,
+                allowsParentSelectionInAll: true,
                 allModeSubtitle: { category in
                     category.isParentCategory
                         ? mistiaLocalized(vi: "Ngân sách cha", en: "Parent budget", ja: "親予算")
@@ -206,15 +190,6 @@ struct PlanningBudgetEditorSheet: View {
         let limitMinor = draft.limitText.currencyInputToMinorUnits(currencyCode: activeCurrencyCode)
         guard limitMinor > 0 else {
             alertMessage = mistiaLocalized(vi: "Nhập số tiền ngân sách lớn hơn 0.", en: "Enter a budget amount greater than 0.", ja: "0 より大きい予算金額を入力してください。")
-            return
-        }
-
-        if isAddingChildBudget, !category.isChildCategory {
-            alertMessage = mistiaLocalized(
-                vi: "Chọn một danh mục con trong nhóm này.",
-                en: "Choose a child category in this group.",
-                ja: "このグループの子カテゴリを選択してください。"
-            )
             return
         }
 
@@ -269,6 +244,13 @@ struct PlanningBudgetEditorSheet: View {
             budgetForSync = budget
         }
 
+        let autoCreatedParentBudget = autoCreateParentBudgetIfNeeded(
+            for: category,
+            savedBudget: budgetForSync,
+            monthAnchor: monthAnchor,
+            now: now
+        )
+
         do {
             try modelContext.save()
             sessionStore.recordUpsert(
@@ -276,10 +258,94 @@ struct PlanningBudgetEditorSheet: View {
                 recordID: budgetForSync.id,
                 modifiedAt: budgetForSync.updatedAt
             )
+            if let autoCreatedParentBudget {
+                sessionStore.recordUpsert(
+                    entity: .budgetPlan,
+                    recordID: autoCreatedParentBudget.id,
+                    modifiedAt: autoCreatedParentBudget.updatedAt
+                )
+            }
             dismiss()
         } catch {
             alertMessage = mistiaLocalized(vi: "Không thể lưu ngân sách lúc này.", en: "Couldn't save this budget right now.", ja: "現在この予算を保存できません。") + " \(error.localizedDescription)"
         }
+    }
+
+    private func autoCreateParentBudgetIfNeeded(
+        for category: TransactionCategory,
+        savedBudget: BudgetPlan,
+        monthAnchor: Date,
+        now: Date
+    ) -> BudgetPlan? {
+        guard category.isChildCategory else { return nil }
+
+        let branchCategoryID = category.branchCategoryID
+        guard activeParentBudget(for: branchCategoryID, monthAnchor: monthAnchor, excluding: savedBudget.id) == nil else {
+            return nil
+        }
+
+        let childBudgets = activeChildBudgets(
+            for: branchCategoryID,
+            monthAnchor: monthAnchor,
+            including: savedBudget
+        )
+        guard childBudgets.count >= 2 else { return nil }
+        guard let parentCategory = category.parentCategory ?? storedCategories.first(where: { $0.id == branchCategoryID && $0.isParentCategory }) else {
+            return nil
+        }
+
+        let totalLimitMinor = childBudgets.reduce(into: Int64.zero) { partial, budget in
+            partial += budget.limitMinor
+        }
+        let parentBudget = BudgetPlan(
+            category: parentCategory,
+            monthAnchor: monthAnchor,
+            limitMinor: totalLimitMinor,
+            rolloverEnabled: false,
+            currencyCode: activeCurrencyCode,
+            createdAt: now,
+            updatedAt: now
+        )
+        modelContext.insert(parentBudget)
+        return parentBudget
+    }
+
+    private func activeParentBudget(
+        for branchCategoryID: UUID,
+        monthAnchor: Date,
+        excluding budgetID: UUID
+    ) -> BudgetPlan? {
+        storedBudgets.first { budget in
+            guard budget.id != budgetID else { return false }
+            guard budget.deletedAt == nil && !budget.isArchived else { return false }
+            guard PlanningLogic.startOfMonth(for: budget.monthAnchor) == monthAnchor else { return false }
+            return budget.category?.id == branchCategoryID && budget.category?.isParentCategory == true
+        }
+    }
+
+    private func activeChildBudgets(
+        for branchCategoryID: UUID,
+        monthAnchor: Date,
+        including savedBudget: BudgetPlan
+    ) -> [BudgetPlan] {
+        var budgets = storedBudgets.filter { budget in
+            guard budget.id != savedBudget.id else { return false }
+            guard budget.deletedAt == nil && !budget.isArchived else { return false }
+            guard PlanningLogic.startOfMonth(for: budget.monthAnchor) == monthAnchor else { return false }
+            guard let category = budget.category else { return false }
+            return category.isChildCategory && category.branchCategoryID == branchCategoryID
+        }
+
+        if savedBudget.deletedAt == nil,
+           !savedBudget.isArchived,
+           PlanningLogic.startOfMonth(for: savedBudget.monthAnchor) == monthAnchor,
+           let savedCategory = savedBudget.category,
+           savedCategory.isChildCategory,
+           savedCategory.branchCategoryID == branchCategoryID {
+            budgets.append(savedBudget)
+        }
+
+        return budgets
     }
 
     private func allocationValidationMessage(
@@ -288,12 +354,6 @@ struct PlanningBudgetEditorSheet: View {
         switch result {
         case .valid:
             return ""
-        case .missingParentBudget:
-            return mistiaLocalized(
-                vi: "Tạo ngân sách cha cho nhóm này trước khi thêm ngân sách con.",
-                en: "Create a parent budget for this group before adding child budgets.",
-                ja: "子予算を追加する前に、このグループの親予算を作成してください。"
-            )
         case .childBudgetsExceedParent(let childTotalMinor, let parentLimitMinor):
             return mistiaLocalized(
                 vi: "Tổng ngân sách con \(childTotalMinor.formattedCurrency(code: activeCurrencyCode)) vượt ngân sách cha \(parentLimitMinor.formattedCurrency(code: activeCurrencyCode)).",

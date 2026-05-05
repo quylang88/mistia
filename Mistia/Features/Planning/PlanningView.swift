@@ -341,15 +341,8 @@ struct PlanningView: View {
                                 preferredParentCategoryID: nil
                             )
                         },
-                        onAddChild: { row in
-                            budgetEditorTarget = PlanningBudgetEditorTarget(
-                                budget: nil,
-                                selectedMonth: selectedMonth,
-                                preferredParentCategoryID: row.parentCategoryID
-                            )
-                        },
-                        onEditParent: { row in
-                            guard let budgetID = row.parentBudgetID else { return }
+                        onEditPrimary: { row in
+                            guard let budgetID = row.primaryBudgetID else { return }
                             let budget = storedBudgets.first(where: { $0.id == budgetID })
                             budgetEditorTarget = PlanningBudgetEditorTarget(
                                 budget: budget,
@@ -504,8 +497,7 @@ private struct BudgetTabContent: View {
     let rows: [PlanningBudgetBranchRowSnapshot]
     let referenceDate: Date
     let onAdd: () -> Void
-    let onAddChild: (PlanningBudgetBranchRowSnapshot) -> Void
-    let onEditParent: (PlanningBudgetBranchRowSnapshot) -> Void
+    let onEditPrimary: (PlanningBudgetBranchRowSnapshot) -> Void
     let onEditChild: (PlanningBudgetRowSnapshot) -> Void
 
     var body: some View {
@@ -532,8 +524,7 @@ private struct BudgetTabContent: View {
                         PlanningBudgetBranchCard(
                             row: row,
                             referenceDate: referenceDate,
-                            onEditParent: { onEditParent(row) },
-                            onAddChild: { onAddChild(row) },
+                            onEditPrimary: { onEditPrimary(row) },
                             onEditChild: onEditChild
                         )
                         .padding(.horizontal, 16)
@@ -547,8 +538,8 @@ private struct BudgetTabContent: View {
                     }
 
                     Divider()
-                                .padding(.leading, 52)
-                                .padding(.trailing, 0)
+                        .padding(.leading, 52)
+                        .padding(.trailing, 0)
 
                     PlanningFooterAddButton(title: mistiaLocalized(vi: "Thêm ngân sách", en: "Add budget", ja: "予算を追加")) {
                         onAdd()
@@ -1056,54 +1047,12 @@ private struct PlanningDueSummaryCard: View {
 private struct PlanningBudgetBranchCard: View {
     let row: PlanningBudgetBranchRowSnapshot
     let referenceDate: Date
-    let onEditParent: () -> Void
-    let onAddChild: () -> Void
+    let onEditPrimary: () -> Void
     let onEditChild: (PlanningBudgetRowSnapshot) -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
-            Button {
-                if row.parentBudgetID != nil {
-                    onEditParent()
-                }
-            } label: {
-                VStack(alignment: .leading, spacing: 12) {
-                    HStack(spacing: 12) {
-                        PlanningIconTile(icon: row.iconSymbolName, color: toneColor)
-
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text(row.name)
-                                .font(.system(size: 17, weight: .semibold, design: .rounded))
-                            Text("\(row.spentMinor.formattedCurrency(code: row.currencyCode)) / \(row.limitMinor.formattedCurrency(code: row.currencyCode))")
-                                .font(.system(size: 13, weight: .semibold, design: .rounded))
-                                .foregroundStyle(.secondary)
-                        }
-
-                        Spacer(minLength: 10)
-
-                        PlanningMiniSemiGauge(
-                            progress: row.progress,
-                            text: row.progress.percentText,
-                            tint: toneColor
-                        )
-                    }
-
-                    PlanningProgressBar(progress: row.progressClamped, tint: toneColor)
-
-                    HStack {
-                        PlanningStatusBadge(title: statusText, color: toneColor)
-                        Spacer()
-                        Text(daysText)
-                            .font(.system(size: 12.5, weight: .semibold, design: .rounded))
-                            .foregroundStyle(.secondary)
-                    }
-
-                    if row.parentBudgetID != nil {
-                        PlanningBudgetAllocationInset(row: row, tint: Color(hex: row.colorHex))
-                    }
-                }
-            }
-            .buttonStyle(MistiaPressableButtonStyle(cornerRadius: 18))
+            primarySection
 
             if !row.childRows.isEmpty {
                 VStack(alignment: .leading, spacing: 10) {
@@ -1112,15 +1061,47 @@ private struct PlanningBudgetBranchCard: View {
                 }
                 .padding(.top, 2)
             }
+        }
+    }
 
-            if row.parentBudgetID != nil {
-                MistiaFooterAddButton(
-                    title: mistiaLocalized(vi: "Thêm ngân sách con", en: "Add child budget", ja: "子予算を追加"),
-                    accent: planningAccentPurple
-                ) {
-                    onAddChild()
-                }
+    @ViewBuilder
+    private var primarySection: some View {
+        if row.primaryBudgetID != nil {
+            Button(action: onEditPrimary) {
+                primaryContent
             }
+            .buttonStyle(MistiaPressableButtonStyle(cornerRadius: 18))
+        } else {
+            primaryContent
+        }
+    }
+
+    private var primaryContent: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(spacing: 12) {
+                PlanningIconTile(icon: row.iconSymbolName, color: toneColor)
+
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(row.name)
+                        .font(.system(size: 17, weight: .semibold, design: .rounded))
+                    Text("\(row.spentMinor.formattedCurrency(code: row.currencyCode)) / \(row.limitMinor.formattedCurrency(code: row.currencyCode))")
+                        .font(.system(size: 13, weight: .semibold, design: .rounded))
+                        .foregroundStyle(.secondary)
+                }
+
+                Spacer(minLength: 10)
+
+                Text(row.progress.percentText)
+                    .font(.system(size: 17, weight: .bold, design: .rounded))
+                    .foregroundStyle(toneColor)
+            }
+
+            PlanningProgressBar(progress: row.progressClamped, tint: toneColor)
+
+            Text(daysText)
+                .font(.system(size: 12.5, weight: .semibold, design: .rounded))
+                .foregroundStyle(.secondary)
+                .frame(maxWidth: .infinity, alignment: .trailing)
         }
     }
 
@@ -1176,21 +1157,6 @@ private struct PlanningBudgetBranchCard: View {
         }
     }
 
-    private var statusText: String {
-        switch row.mode {
-        case .parentOnly:
-            return mistiaLocalized(vi: "Ngân sách cha", en: "Parent budget", ja: "親予算")
-        case .parentWithChildren:
-            return mistiaLocalized(
-                vi: "\(row.childRows.count) ngân sách con",
-                en: "\(row.childRows.count) child budgets",
-                ja: "子予算 \(row.childRows.count) 件"
-            )
-        case .childOnly:
-            return mistiaLocalized(vi: "Ngân sách con", en: "Child budgets", ja: "子カテゴリ予算")
-        }
-    }
-
     private var daysText: String {
         if row.isPastMonth {
             return mistiaLocalized(vi: "Tháng đã kết thúc", en: "Month ended", ja: "月が終了しました")
@@ -1201,46 +1167,6 @@ private struct PlanningBudgetBranchCard: View {
             en: "\(row.daysRemaining) days left",
             ja: "あと \(row.daysRemaining) 日"
         )
-    }
-}
-
-private struct PlanningBudgetAllocationInset: View {
-    let row: PlanningBudgetBranchRowSnapshot
-    let tint: Color
-
-    private var allocationProgress: Double {
-        guard row.limitMinor > 0 else { return 0 }
-        return min(max(Double(row.allocatedChildLimitMinor) / Double(row.limitMinor), 0), 1)
-    }
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack(spacing: 12) {
-                PlanningMetricColumn(
-                    title: mistiaLocalized(vi: "Đã phân bổ", en: "Allocated", ja: "割り当て済み"),
-                    value: "\(row.allocatedChildLimitMinor.formattedCurrency(code: row.currencyCode)) / \(row.limitMinor.formattedCurrency(code: row.currencyCode))",
-                    tint: tint
-                )
-
-                Divider()
-                    .frame(height: 28)
-
-                PlanningMetricColumn(
-                    title: mistiaLocalized(vi: "Chưa phân bổ", en: "Unallocated", ja: "未割り当て"),
-                    value: row.unallocatedLimitMinor.formattedCurrency(code: row.currencyCode),
-                    tint: Color(hex: "#2DAA9E")
-                )
-            }
-
-            PlanningProgressBar(progress: allocationProgress, tint: tint)
-                .frame(height: 8)
-        }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 10)
-        .background {
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .fill(Color.primary.opacity(0.04))
-        }
     }
 }
 
@@ -1270,13 +1196,10 @@ private struct PlanningBudgetRowView: View {
 
             PlanningProgressBar(progress: row.progressClamped, tint: toneColor)
 
-            HStack {
-                PlanningStatusBadge(title: row.health.title, color: toneColor)
-                Spacer()
-                Text(daysText)
-                    .font(.system(size: 12.5, weight: .semibold, design: .rounded))
-                    .foregroundStyle(.secondary)
-            }
+            Text(daysText)
+                .font(.system(size: 12.5, weight: .semibold, design: .rounded))
+                .foregroundStyle(.secondary)
+                .frame(maxWidth: .infinity, alignment: .trailing)
         }
     }
 
@@ -1796,41 +1719,6 @@ private struct PlanningSemiGauge: View {
                     .background(gaugeColor.opacity(0.12), in: Capsule())
             }
         }
-    }
-
-    private var gaugeColor: Color {
-        progress >= 1 ? Color(hex: "#F45C7E") : tint
-    }
-}
-
-private struct PlanningMiniSemiGauge: View {
-    @Environment(\.colorScheme) private var colorScheme
-    let progress: Double
-    let text: String
-    let tint: Color
-
-    var body: some View {
-        ZStack(alignment: .bottom) {
-            PlanningSemiGaugeArc(progress: 1)
-                .stroke(
-                    colorScheme == .dark ? .white.opacity(0.10) : .black.opacity(0.07),
-                    style: StrokeStyle(lineWidth: 6, lineCap: .round)
-                )
-
-            PlanningSemiGaugeArc(progress: min(max(progress, 0), 1))
-                .stroke(
-                    gaugeColor,
-                    style: StrokeStyle(lineWidth: 6, lineCap: .round)
-                )
-
-            Text(text)
-                .font(.system(size: 12, weight: .heavy, design: .rounded))
-                .foregroundStyle(gaugeColor)
-                .lineLimit(1)
-                .minimumScaleFactor(0.72)
-                .padding(.bottom, 1)
-        }
-        .frame(width: 62, height: 36)
     }
 
     private var gaugeColor: Color {

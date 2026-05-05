@@ -153,6 +153,7 @@ nonisolated struct PlanningBudgetBranchRowSnapshot: Equatable, Identifiable {
     let isPastMonth: Bool
     let mode: PlanningBudgetBranchMode
     let parentBudgetID: UUID?
+    let primaryBudgetID: UUID?
     let allocatedChildLimitMinor: Int64
     let unallocatedLimitMinor: Int64
     let childRows: [PlanningBudgetRowSnapshot]
@@ -177,7 +178,6 @@ nonisolated struct PlanningBudgetBranchRowSnapshot: Equatable, Identifiable {
 
 nonisolated enum PlanningBudgetAllocationValidationResult: Equatable {
     case valid
-    case missingParentBudget
     case childBudgetsExceedParent(childTotalMinor: Int64, parentLimitMinor: Int64)
     case parentLimitBelowChildren(childTotalMinor: Int64, parentLimitMinor: Int64)
 }
@@ -573,9 +573,31 @@ nonisolated enum PlanningLogic {
                         isPastMonth: isPastMonth,
                         mode: childRows.isEmpty ? .parentOnly : .parentWithChildren,
                         parentBudgetID: parentPlan.id,
+                        primaryBudgetID: parentPlan.id,
                         allocatedChildLimitMinor: allocatedChildLimit,
                         unallocatedLimitMinor: max(parentPlan.limitMinor - allocatedChildLimit, 0),
                         childRows: childRows
+                    )
+                }
+
+                if childRows.count == 1, let childRow = childRows.first {
+                    return PlanningBudgetBranchRowSnapshot(
+                        id: branchID,
+                        parentCategoryID: branchTemplate.branchCategoryID,
+                        name: childRow.name,
+                        iconSymbolName: childRow.iconSymbolName,
+                        colorHex: childRow.colorHex,
+                        spentMinor: childRow.spentMinor,
+                        limitMinor: childRow.limitMinor,
+                        currencyCode: childRow.currencyCode,
+                        daysRemaining: childRow.daysRemaining,
+                        isPastMonth: childRow.isPastMonth,
+                        mode: .childOnly,
+                        parentBudgetID: nil,
+                        primaryBudgetID: childRow.id,
+                        allocatedChildLimitMinor: childRow.limitMinor,
+                        unallocatedLimitMinor: 0,
+                        childRows: []
                     )
                 }
 
@@ -599,6 +621,7 @@ nonisolated enum PlanningLogic {
                     isPastMonth: isPastMonth,
                     mode: .childOnly,
                     parentBudgetID: nil,
+                    primaryBudgetID: nil,
                     allocatedChildLimitMinor: limit,
                     unallocatedLimitMinor: 0,
                     childRows: childRows
@@ -674,16 +697,14 @@ nonisolated enum PlanningLogic {
             return .valid
         }
 
-        guard let parentPlan = branchPlans.first(where: { $0.categoryIsParent }) else {
-            return .missingParentBudget
-        }
-
-        let projectedChildLimitTotal = childLimitTotal + limitMinor
-        guard projectedChildLimitTotal <= parentPlan.limitMinor else {
-            return .childBudgetsExceedParent(
-                childTotalMinor: projectedChildLimitTotal,
-                parentLimitMinor: parentPlan.limitMinor
-            )
+        if let parentPlan = branchPlans.first(where: { $0.categoryIsParent }) {
+            let projectedChildLimitTotal = childLimitTotal + limitMinor
+            guard projectedChildLimitTotal <= parentPlan.limitMinor else {
+                return .childBudgetsExceedParent(
+                    childTotalMinor: projectedChildLimitTotal,
+                    parentLimitMinor: parentPlan.limitMinor
+                )
+            }
         }
 
         return .valid
