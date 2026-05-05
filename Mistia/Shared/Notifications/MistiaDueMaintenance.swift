@@ -69,7 +69,10 @@ private enum MistiaBudgetReminderMaintenance {
                 .map { $0.planningSnapshot(calendar: calendar) },
             transactionRecords: transactions.map(\.planningRecordSnapshot),
             referenceDate: referenceDate,
-            calendar: calendar
+            calendar: calendar,
+            minimumProgress: 0.8,
+            includesMinimumProgress: true,
+            maximumCount: nil
         )
 
         let monthKey = PlanningLogic.monthKey(for: selectedMonth, calendar: calendar)

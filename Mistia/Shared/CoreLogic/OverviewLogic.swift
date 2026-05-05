@@ -695,7 +695,10 @@ nonisolated enum OverviewLogic {
         budgets: [BudgetPlanSnapshot],
         transactionRecords: [TransactionRecordSnapshot],
         referenceDate: Date = .now,
-        calendar: Calendar = .current
+        calendar: Calendar = .current,
+        minimumProgress: Double = 0.5,
+        includesMinimumProgress: Bool = false,
+        maximumCount: Int? = 3
     ) -> [OverviewBudgetAlertSnapshot] {
         let selectedMonth = PlanningLogic.startOfMonth(for: referenceDate, calendar: calendar)
         let rows = PlanningLogic.budgetBranchRows(
@@ -706,15 +709,22 @@ nonisolated enum OverviewLogic {
             calendar: calendar
         )
 
-        return rows
-            .filter { $0.progress > 0.5 }
+        let sortedRows = rows
+            .filter { row in
+                includesMinimumProgress
+                    ? row.progress >= minimumProgress
+                    : row.progress > minimumProgress
+            }
             .sorted { lhs, rhs in
                 if lhs.progress != rhs.progress {
                     return lhs.progress > rhs.progress
                 }
                 return lhs.name.localizedCaseInsensitiveCompare(rhs.name) == .orderedAscending
             }
-            .prefix(3)
+
+        let visibleRows = maximumCount.map { Array(sortedRows.prefix($0)) } ?? sortedRows
+
+        return visibleRows
             .map { row in
                 OverviewBudgetAlertSnapshot(
                     id: row.id,

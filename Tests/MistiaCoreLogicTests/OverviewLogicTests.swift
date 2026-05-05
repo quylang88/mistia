@@ -429,6 +429,42 @@ final class OverviewLogicTests: XCTestCase {
         XCTAssertEqual(alerts[2].tint, .orange)
     }
 
+    func testBudgetAlertsForNotificationsAreEightyPercentInclusiveAndUnlimited() {
+        let selectedMonth = makeDate(year: 2026, month: 4, day: 1)
+        let referenceDate = makeDate(year: 2026, month: 4, day: 24)
+        let categoryIDs = (0..<5).map { _ in UUID() }
+
+        let budgets = categoryIDs.enumerated().map { index, categoryID in
+            makeBudget(
+                categoryID: categoryID,
+                name: "Budget \(index)",
+                limitMinor: 10_000,
+                monthAnchor: selectedMonth
+            )
+        }
+        let records = [
+            makeTransactionRecord(primaryKind: .expense, amountMinor: 12_000, occurredAt: makeDate(year: 2026, month: 4, day: 4), categoryID: categoryIDs[0]),
+            makeTransactionRecord(primaryKind: .expense, amountMinor: 9_000, occurredAt: makeDate(year: 2026, month: 4, day: 5), categoryID: categoryIDs[1]),
+            makeTransactionRecord(primaryKind: .expense, amountMinor: 8_100, occurredAt: makeDate(year: 2026, month: 4, day: 6), categoryID: categoryIDs[2]),
+            makeTransactionRecord(primaryKind: .expense, amountMinor: 8_000, occurredAt: makeDate(year: 2026, month: 4, day: 7), categoryID: categoryIDs[3]),
+            makeTransactionRecord(primaryKind: .expense, amountMinor: 7_999, occurredAt: makeDate(year: 2026, month: 4, day: 8), categoryID: categoryIDs[4])
+        ]
+
+        let alerts = OverviewLogic.budgetAlerts(
+            budgets: budgets,
+            transactionRecords: records,
+            referenceDate: referenceDate,
+            calendar: calendar,
+            minimumProgress: 0.8,
+            includesMinimumProgress: true,
+            maximumCount: nil
+        )
+
+        XCTAssertEqual(alerts.map(\.name), ["Budget 0", "Budget 1", "Budget 2", "Budget 3"])
+        XCTAssertEqual(alerts[0].tint, .red)
+        XCTAssertEqual(alerts[3].progressPercentText, "80%")
+    }
+
     func testBudgetAlertsRollUpChildBudgetsByParentBranch() {
         let selectedMonth = makeDate(year: 2026, month: 4, day: 1)
         let referenceDate = makeDate(year: 2026, month: 4, day: 24)

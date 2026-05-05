@@ -508,8 +508,6 @@ private struct BudgetTabContent: View {
     let onEditParent: (PlanningBudgetBranchRowSnapshot) -> Void
     let onEditChild: (PlanningBudgetRowSnapshot) -> Void
 
-    @State private var expandedBranchIDs: Set<UUID> = []
-
     var body: some View {
         VStack(spacing: 16) {
             PlanningBudgetSummaryCard(summary: summary, currencyCode: currencyCode)
@@ -534,16 +532,6 @@ private struct BudgetTabContent: View {
                         PlanningBudgetBranchCard(
                             row: row,
                             referenceDate: referenceDate,
-                            isExpanded: Binding(
-                                get: { expandedBranchIDs.contains(row.id) },
-                                set: { isExpanded in
-                                    if isExpanded {
-                                        expandedBranchIDs.insert(row.id)
-                                    } else {
-                                        expandedBranchIDs.remove(row.id)
-                                    }
-                                }
-                            ),
                             onEditParent: { onEditParent(row) },
                             onAddChild: { onAddChild(row) },
                             onEditChild: onEditChild
@@ -933,7 +921,11 @@ private struct PlanningBudgetSummaryCard: View {
 
                     Spacer(minLength: 12)
 
-                PlanningProgressRing(progress: summary.progress, text: summary.progress.percentText)
+                    PlanningSemiGauge(
+                        progress: summary.progress,
+                        text: summary.progress.percentText,
+                        tint: summaryColor
+                    )
                 }
 
                 HStack(spacing: 14) {
@@ -1064,17 +1056,18 @@ private struct PlanningDueSummaryCard: View {
 private struct PlanningBudgetBranchCard: View {
     let row: PlanningBudgetBranchRowSnapshot
     let referenceDate: Date
-    @Binding var isExpanded: Bool
     let onEditParent: () -> Void
     let onAddChild: () -> Void
     let onEditChild: (PlanningBudgetRowSnapshot) -> Void
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: 14) {
             Button {
-                handlePrimaryAction()
+                if row.parentBudgetID != nil {
+                    onEditParent()
+                }
             } label: {
-                VStack(alignment: .leading, spacing: 10) {
+                VStack(alignment: .leading, spacing: 12) {
                     HStack(spacing: 12) {
                         PlanningIconTile(icon: row.iconSymbolName, color: toneColor)
 
@@ -1088,17 +1081,11 @@ private struct PlanningBudgetBranchCard: View {
 
                         Spacer(minLength: 10)
 
-                        VStack(alignment: .trailing, spacing: 6) {
-                            Text(row.progress.percentText)
-                                .font(.system(size: 17, weight: .bold, design: .rounded))
-                                .foregroundStyle(toneColor)
-
-                            if row.mode == .child {
-                                Image(systemName: isExpanded ? "chevron.up" : "chevron.down")
-                                    .font(.system(size: 11, weight: .bold))
-                                    .foregroundStyle(.tertiary)
-                            }
-                        }
+                        PlanningMiniSemiGauge(
+                            progress: row.progress,
+                            text: row.progress.percentText,
+                            tint: toneColor
+                        )
                     }
 
                     PlanningProgressBar(progress: row.progressClamped, tint: toneColor)
@@ -1110,60 +1097,70 @@ private struct PlanningBudgetBranchCard: View {
                             .font(.system(size: 12.5, weight: .semibold, design: .rounded))
                             .foregroundStyle(.secondary)
                     }
+
+                    if row.parentBudgetID != nil {
+                        PlanningBudgetAllocationInset(row: row, tint: Color(hex: row.colorHex))
+                    }
                 }
             }
             .buttonStyle(MistiaPressableButtonStyle(cornerRadius: 18))
 
-            if row.mode == .child && isExpanded {
+            if !row.childRows.isEmpty {
                 VStack(alignment: .leading, spacing: 10) {
-                    Text(
-                        mistiaLocalized(
-                            vi: "Ngân sách con",
-                            en: "Child budgets",
-                            ja: "子カテゴリ予算"
-                        )
-                    )
-                        .font(.system(size: 13, weight: .bold, design: .rounded))
-                        .foregroundStyle(.secondary)
-
-                    ForEach(Array(row.childRows.enumerated()), id: \.element.id) { index, childRow in
-                        Button {
-                            onEditChild(childRow)
-                        } label: {
-                            PlanningBudgetRowView(row: childRow, referenceDate: referenceDate)
-                                .padding(.horizontal, 14)
-                                .padding(.vertical, 12)
-                                .background {
-                                    RoundedRectangle(cornerRadius: 18, style: .continuous)
-                                        .fill(Color.primary.opacity(0.04))
-                                }
-                        }
-                        .buttonStyle(MistiaPressableButtonStyle(cornerRadius: 18))
-
-                        if index < row.childRows.count - 1 {
-                            Divider()
-                                .padding(.leading, 48)
-                        }
-                    }
-
-                    PlanningFooterAddButton(
-                        title: mistiaLocalized(vi: "Thêm ngân sách con", en: "Add child budget", ja: "子予算を追加")
-                    ) {
-                        onAddChild()
-                    }
+                    childHeader
+                    childRows
                 }
                 .padding(.top, 2)
+            }
+
+            if row.parentBudgetID != nil {
+                MistiaFooterAddButton(
+                    title: mistiaLocalized(vi: "Thêm ngân sách con", en: "Add child budget", ja: "子予算を追加"),
+                    accent: planningAccentPurple
+                ) {
+                    onAddChild()
+                }
             }
         }
     }
 
-    private func handlePrimaryAction() {
-        switch row.mode {
-        case .parent:
-            onEditParent()
-        case .child:
-            withAnimation(.snappy) {
-                isExpanded.toggle()
+    private var childHeader: some View {
+        HStack(spacing: 8) {
+            Text(
+                mistiaLocalized(
+                    vi: "Ngân sách con",
+                    en: "Child budgets",
+                    ja: "子カテゴリ予算"
+                )
+            )
+            .font(.system(size: 13, weight: .bold, design: .rounded))
+            .foregroundStyle(.secondary)
+
+            Spacer()
+        }
+    }
+
+    private var childRows: some View {
+        VStack(spacing: 0) {
+            ForEach(Array(row.childRows.enumerated()), id: \.element.id) { index, childRow in
+                Button {
+                    onEditChild(childRow)
+                } label: {
+                    PlanningBudgetRowView(row: childRow, referenceDate: referenceDate)
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 12)
+                        .background {
+                            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                                .fill(Color.primary.opacity(0.04))
+                        }
+                }
+                .buttonStyle(MistiaPressableButtonStyle(cornerRadius: 18))
+
+                if index < row.childRows.count - 1 {
+                    Divider()
+                        .padding(.leading, 48)
+                        .padding(.vertical, 4)
+                }
             }
         }
     }
@@ -1181,14 +1178,16 @@ private struct PlanningBudgetBranchCard: View {
 
     private var statusText: String {
         switch row.mode {
-        case .parent:
+        case .parentOnly:
             return mistiaLocalized(vi: "Ngân sách cha", en: "Parent budget", ja: "親予算")
-        case .child:
+        case .parentWithChildren:
             return mistiaLocalized(
                 vi: "\(row.childRows.count) ngân sách con",
                 en: "\(row.childRows.count) child budgets",
                 ja: "子予算 \(row.childRows.count) 件"
             )
+        case .childOnly:
+            return mistiaLocalized(vi: "Ngân sách con", en: "Child budgets", ja: "子カテゴリ予算")
         }
     }
 
@@ -1202,6 +1201,46 @@ private struct PlanningBudgetBranchCard: View {
             en: "\(row.daysRemaining) days left",
             ja: "あと \(row.daysRemaining) 日"
         )
+    }
+}
+
+private struct PlanningBudgetAllocationInset: View {
+    let row: PlanningBudgetBranchRowSnapshot
+    let tint: Color
+
+    private var allocationProgress: Double {
+        guard row.limitMinor > 0 else { return 0 }
+        return min(max(Double(row.allocatedChildLimitMinor) / Double(row.limitMinor), 0), 1)
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 12) {
+                PlanningMetricColumn(
+                    title: mistiaLocalized(vi: "Đã phân bổ", en: "Allocated", ja: "割り当て済み"),
+                    value: "\(row.allocatedChildLimitMinor.formattedCurrency(code: row.currencyCode)) / \(row.limitMinor.formattedCurrency(code: row.currencyCode))",
+                    tint: tint
+                )
+
+                Divider()
+                    .frame(height: 28)
+
+                PlanningMetricColumn(
+                    title: mistiaLocalized(vi: "Chưa phân bổ", en: "Unallocated", ja: "未割り当て"),
+                    value: row.unallocatedLimitMinor.formattedCurrency(code: row.currencyCode),
+                    tint: Color(hex: "#2DAA9E")
+                )
+            }
+
+            PlanningProgressBar(progress: allocationProgress, tint: tint)
+                .frame(height: 8)
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 10)
+        .background {
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .fill(Color.primary.opacity(0.04))
+        }
     }
 }
 
@@ -1693,78 +1732,133 @@ private struct PlanningProgressBar: View {
     var body: some View {
         GeometryReader { proxy in
             ZStack(alignment: .leading) {
+                let clamped = min(max(progress, 0), 1)
+
                 Capsule()
                     .fill(colorScheme == .dark ? .white.opacity(0.08) : .black.opacity(0.06))
 
                 Capsule()
                     .fill(tint.opacity(colorScheme == .dark ? 0.94 : 0.82))
-                    .frame(width: max(proxy.size.width * progress, progress > 0 ? 18 : 0))
+                    .frame(width: max(proxy.size.width * clamped, progress > 0 ? 18 : 0))
             }
         }
         .frame(height: 10)
     }
 }
 
-private struct PlanningProgressRing: View {
+private struct PlanningSemiGauge: View {
     @Environment(\.colorScheme) private var colorScheme
     let progress: Double
     let text: String
+    let tint: Color
 
-    private let lineWidth: CGFloat = 12
+    private let lineWidth: CGFloat = 13
 
     var body: some View {
-        ZStack {
-            Circle()
-                .stroke(colorScheme == .dark ? .white.opacity(0.10) : .black.opacity(0.06), lineWidth: lineWidth)
-
-            if progress > 0 {
-                let fullCircles = Int(progress)
-                let remainder = progress.truncatingRemainder(dividingBy: 1.0)
-
-                // Các vòng tròn đầy 100%
-                ForEach(0..<fullCircles, id: \.self) { i in
-                    Circle()
-                        .trim(from: 0, to: 1.0)
-                        .stroke(
-                            ringColor(for: Double(i + 1)),
-                            style: StrokeStyle(lineWidth: lineWidth, lineCap: .round)
-                        )
-                        .rotationEffect(.degrees(-90))
-                        .shadow(color: i >= 1 ? ringColor(for: Double(i + 1)).opacity(0.5) : .clear, radius: 4)
-                }
-
-                // Vòng tròn lẻ cuối cùng
-                Circle()
-                    .trim(from: 0, to: remainder == 0 && fullCircles > 0 ? 0 : remainder)
+        VStack(spacing: 4) {
+            ZStack(alignment: .bottom) {
+                PlanningSemiGaugeArc(progress: 1)
                     .stroke(
-                        ringColor(for: progress),
+                        colorScheme == .dark ? .white.opacity(0.10) : .black.opacity(0.07),
                         style: StrokeStyle(lineWidth: lineWidth, lineCap: .round)
                     )
-                    .rotationEffect(.degrees(-90))
-                    .shadow(color: progress > 1.0 ? ringColor(for: progress).opacity(0.3) : .clear, radius: 3)
-            }
 
-            Text(text)
-                .font(.system(size: 19, weight: .bold, design: .rounded))
-                .foregroundStyle(ringColor(for: progress))
+                PlanningSemiGaugeArc(progress: min(max(progress, 0), 1))
+                    .stroke(
+                        gaugeColor,
+                        style: StrokeStyle(lineWidth: lineWidth, lineCap: .round)
+                    )
+                    .shadow(color: progress >= 1 ? gaugeColor.opacity(0.24) : .clear, radius: 4, y: 2)
+
+                VStack(spacing: 2) {
+                    Text(text)
+                        .font(.system(size: 20, weight: .bold, design: .rounded))
+                        .foregroundStyle(gaugeColor)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.72)
+
+                    if progress > 1 {
+                        Text(mistiaLocalized(vi: "vượt", en: "over", ja: "超過"))
+                            .font(.system(size: 10.5, weight: .bold, design: .rounded))
+                            .foregroundStyle(gaugeColor)
+                    }
+                }
+                .padding(.bottom, 2)
+            }
+            .frame(width: 126, height: 72)
+
+            if progress > 1 {
+                Text("+\(Int(((progress - 1) * 100).rounded()))%")
+                    .font(.system(size: 11, weight: .bold, design: .rounded))
+                    .foregroundStyle(gaugeColor)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 3)
+                    .background(gaugeColor.opacity(0.12), in: Capsule())
+            }
         }
-        .frame(width: 112, height: 112)
     }
 
-    private func ringColor(for val: Double) -> Color {
-        if val >= 1.0 {
-            // Đỏ rực / Hồng Neon cho > 100%
-            return Color(hex: "#FF2D55")
-        } else if val >= 0.8 {
-            // Cam đào cho 80-100%
-            return Color(hex: "#FF9500")
-        } else if val >= 0.6 {
-            // Vàng chanh cho 60-80%
-            return Color(hex: "#FFD60A")
-        } else {
-            // Xanh lá cho < 60%
-            return Color(hex: "#34C759")
+    private var gaugeColor: Color {
+        progress >= 1 ? Color(hex: "#F45C7E") : tint
+    }
+}
+
+private struct PlanningMiniSemiGauge: View {
+    @Environment(\.colorScheme) private var colorScheme
+    let progress: Double
+    let text: String
+    let tint: Color
+
+    var body: some View {
+        ZStack(alignment: .bottom) {
+            PlanningSemiGaugeArc(progress: 1)
+                .stroke(
+                    colorScheme == .dark ? .white.opacity(0.10) : .black.opacity(0.07),
+                    style: StrokeStyle(lineWidth: 6, lineCap: .round)
+                )
+
+            PlanningSemiGaugeArc(progress: min(max(progress, 0), 1))
+                .stroke(
+                    gaugeColor,
+                    style: StrokeStyle(lineWidth: 6, lineCap: .round)
+                )
+
+            Text(text)
+                .font(.system(size: 12, weight: .heavy, design: .rounded))
+                .foregroundStyle(gaugeColor)
+                .lineLimit(1)
+                .minimumScaleFactor(0.72)
+                .padding(.bottom, 1)
         }
+        .frame(width: 62, height: 36)
+    }
+
+    private var gaugeColor: Color {
+        progress >= 1 ? Color(hex: "#F45C7E") : tint
+    }
+}
+
+private struct PlanningSemiGaugeArc: Shape {
+    var progress: Double
+
+    var animatableData: Double {
+        get { progress }
+        set { progress = newValue }
+    }
+
+    func path(in rect: CGRect) -> Path {
+        var path = Path()
+        let clamped = min(max(progress, 0), 1)
+        let radius = min(rect.width / 2, rect.height)
+        let center = CGPoint(x: rect.midX, y: rect.maxY)
+        path.addArc(
+            center: center,
+            radius: radius,
+            startAngle: .degrees(180),
+            endAngle: .degrees(180 + 180 * clamped),
+            clockwise: false
+        )
+        return path
     }
 }
 

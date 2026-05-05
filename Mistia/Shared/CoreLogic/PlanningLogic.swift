@@ -135,8 +135,9 @@ nonisolated struct PlanningBudgetSummarySnapshot: Equatable {
 }
 
 nonisolated enum PlanningBudgetBranchMode: Equatable {
-    case parent
-    case child
+    case parentOnly
+    case parentWithChildren
+    case childOnly
 }
 
 nonisolated struct PlanningBudgetBranchRowSnapshot: Equatable, Identifiable {
@@ -152,6 +153,8 @@ nonisolated struct PlanningBudgetBranchRowSnapshot: Equatable, Identifiable {
     let isPastMonth: Bool
     let mode: PlanningBudgetBranchMode
     let parentBudgetID: UUID?
+    let allocatedChildLimitMinor: Int64
+    let unallocatedLimitMinor: Int64
     let childRows: [PlanningBudgetRowSnapshot]
 
     var progress: Double {
@@ -170,6 +173,13 @@ nonisolated struct PlanningBudgetBranchRowSnapshot: Equatable, Identifiable {
     var tone: PlanningBudgetTone {
         PlanningLogic.tone(forProgress: progress)
     }
+}
+
+nonisolated enum PlanningBudgetAllocationValidationResult: Equatable {
+    case valid
+    case missingParentBudget
+    case childBudgetsExceedParent(childTotalMinor: Int64, parentLimitMinor: Int64)
+    case parentLimitBelowChildren(childTotalMinor: Int64, parentLimitMinor: Int64)
 }
 
 nonisolated struct SavingsGoalSnapshot: Equatable, Identifiable {
@@ -514,30 +524,6 @@ nonisolated enum PlanningLogic {
                 let branchTemplate = parentPlan ?? childPlans.first
                 guard let branchTemplate else { return nil }
 
-                if childPlans.isEmpty {
-                    guard let parentPlan else { return nil }
-                    let spent = spentByBranch[branchID]?
-                        .reduce(into: Int64.zero) { partial, record in
-                            partial += record.amountMinor
-                        } ?? 0
-
-                    return PlanningBudgetBranchRowSnapshot(
-                        id: branchID,
-                        parentCategoryID: branchTemplate.branchCategoryID,
-                        name: parentPlan.branchCategoryName,
-                        iconSymbolName: parentPlan.branchIconSymbolName,
-                        colorHex: parentPlan.branchColorHex,
-                        spentMinor: spent,
-                        limitMinor: parentPlan.limitMinor,
-                        currencyCode: parentPlan.currencyCode,
-                        daysRemaining: remainingDays,
-                        isPastMonth: isPastMonth,
-                        mode: .parent,
-                        parentBudgetID: parentPlan.id,
-                        childRows: []
-                    )
-                }
-
                 let childRows = childPlans
                     .map { plan in
                         let spent = spentByCategory[plan.categoryID]?
@@ -565,6 +551,34 @@ nonisolated enum PlanningLogic {
                         return lhs.name.localizedCaseInsensitiveCompare(rhs.name) == .orderedAscending
                     }
 
+                if let parentPlan {
+                    let spent = spentByBranch[branchID]?
+                        .reduce(into: Int64.zero) { partial, record in
+                            partial += record.amountMinor
+                        } ?? 0
+                    let allocatedChildLimit = childRows.reduce(into: Int64.zero) { partial, row in
+                        partial += row.limitMinor
+                    }
+
+                    return PlanningBudgetBranchRowSnapshot(
+                        id: branchID,
+                        parentCategoryID: branchTemplate.branchCategoryID,
+                        name: parentPlan.branchCategoryName,
+                        iconSymbolName: parentPlan.branchIconSymbolName,
+                        colorHex: parentPlan.branchColorHex,
+                        spentMinor: spent,
+                        limitMinor: parentPlan.limitMinor,
+                        currencyCode: parentPlan.currencyCode,
+                        daysRemaining: remainingDays,
+                        isPastMonth: isPastMonth,
+                        mode: childRows.isEmpty ? .parentOnly : .parentWithChildren,
+                        parentBudgetID: parentPlan.id,
+                        allocatedChildLimitMinor: allocatedChildLimit,
+                        unallocatedLimitMinor: max(parentPlan.limitMinor - allocatedChildLimit, 0),
+                        childRows: childRows
+                    )
+                }
+
                 let spent = childRows.reduce(into: Int64.zero) { partial, row in
                     partial += row.spentMinor
                 }
@@ -583,8 +597,10 @@ nonisolated enum PlanningLogic {
                     currencyCode: branchTemplate.currencyCode,
                     daysRemaining: remainingDays,
                     isPastMonth: isPastMonth,
-                    mode: .child,
+                    mode: .childOnly,
                     parentBudgetID: nil,
+                    allocatedChildLimitMinor: limit,
+                    unallocatedLimitMinor: 0,
                     childRows: childRows
                 )
             }
@@ -613,7 +629,64 @@ nonisolated enum PlanningLogic {
             spentMinor: spent,
             remainingMinor: remaining,
             health: health(forProgress: totalBudget > 0 ? Double(spent) / Double(totalBudget) : 0)
-        )
+            )
+    }
+
+    static func validateBudgetAllocation(
+        categoryID: UUID?,
+        branchCategoryID: UUID?,
+        categoryIsParent: Bool,
+        categoryIsChild: Bool,
+        limitMinor: Int64,
+        monthAnchor: Date,
+        plans: [BudgetPlanSnapshot],
+        editingBudgetID: UUID? = nil,
+        calendar: Calendar = .current
+    ) -> PlanningBudgetAllocationValidationResult {
+        guard let branchCategoryID else {
+            return .valid
+        }
+
+        let selectedMonth = startOfMonth(for: monthAnchor, calendar: calendar)
+        let branchPlans = plans.filter { plan in
+            guard plan.id != editingBudgetID else { return false }
+            return plan.branchCategoryID == branchCategoryID
+                && startOfMonth(for: plan.monthAnchor, calendar: calendar) == selectedMonth
+        }
+
+        let childLimitTotal = branchPlans.reduce(into: Int64.zero) { partial, plan in
+            guard !plan.categoryIsParent else { return }
+            partial += plan.limitMinor
+        }
+
+        if categoryIsParent {
+            guard limitMinor >= childLimitTotal else {
+                return .parentLimitBelowChildren(
+                    childTotalMinor: childLimitTotal,
+                    parentLimitMinor: limitMinor
+                )
+            }
+
+            return .valid
+        }
+
+        guard categoryIsChild else {
+            return .valid
+        }
+
+        guard let parentPlan = branchPlans.first(where: { $0.categoryIsParent }) else {
+            return .missingParentBudget
+        }
+
+        let projectedChildLimitTotal = childLimitTotal + limitMinor
+        guard projectedChildLimitTotal <= parentPlan.limitMinor else {
+            return .childBudgetsExceedParent(
+                childTotalMinor: projectedChildLimitTotal,
+                parentLimitMinor: parentPlan.limitMinor
+            )
+        }
+
+        return .valid
     }
 
     static func goalRows(

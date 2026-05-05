@@ -226,6 +226,17 @@ extension AppNotificationRecord {
             return false
         }
     }
+
+    var topUpTransferDestinationWalletID: UUID? {
+        switch kind {
+        case .creditCardAutoPaymentFailed:
+            creditCardActionPayload?.linkedPaymentWalletID
+        case .billAutoPaymentFailed:
+            dueActionPayload?.linkedPaymentWalletID
+        default:
+            nil
+        }
+    }
 }
 
 struct AppNotificationRecord_Extension {}

@@ -14,6 +14,8 @@ struct NotificationCenterView: View {
     private var rows: [AppNotificationRecord]
     @Query(filter: #Predicate<LedgerWallet> { $0.deletedAt == nil && !$0.isArchived })
     private var storedWallets: [LedgerWallet]
+    @Query(filter: #Predicate<TransactionCategory> { $0.deletedAt == nil })
+    private var storedCategories: [TransactionCategory]
     @Query(filter: #Predicate<RecurringBillPlan> { $0.deletedAt == nil && !$0.isArchived })
     private var storedBills: [RecurringBillPlan]
 
@@ -164,7 +166,10 @@ struct NotificationCenterView: View {
                     .foregroundStyle(row.isRead ? .secondary : .primary)
                     .fixedSize(horizontal: false, vertical: true)
 
-                if let actionHint = actionHint(for: row) {
+                if row.opensTopUpTransfer {
+                    topUpActionRow(for: row)
+                        .padding(.top, 4)
+                } else if let actionHint = actionHint(for: row) {
                     Text(actionHint)
                         .font(.system(size: 12, weight: .bold, design: .rounded))
                         .foregroundStyle(actionHintColor(for: row))
@@ -233,6 +238,12 @@ struct NotificationCenterView: View {
                 fallbackColor: Color(hex: iconColorHex),
                 size: 32
             )
+        } else if let category = categoryResource(for: row) {
+            MistiaFinanceIconView(
+                icon: category.iconSymbolName,
+                fallbackColor: Color(hex: category.iconColorHex),
+                size: 32
+            )
         } else if let wallet = walletResource(for: row) {
             MistiaFinanceIconView(
                 icon: wallet.iconSymbolName,
@@ -250,6 +261,39 @@ struct NotificationCenterView: View {
                     .foregroundStyle(config.color)
             }
         }
+    }
+
+    private func topUpActionRow(for row: AppNotificationRecord) -> some View {
+        Button {
+            handleRowTap(row)
+        } label: {
+            HStack(spacing: 8) {
+                Image(systemName: "arrow.down.to.line.compact")
+                    .font(.system(size: 12, weight: .bold))
+
+                Text(
+                    mistiaLocalized(
+                        vi: "Chạm vào để nạp tiền vào ví",
+                        en: "Tap to add funds to wallet",
+                        ja: "タップしてウォレットに入金"
+                    )
+                )
+                .font(.system(size: 12.5, weight: .bold, design: .rounded))
+                .lineLimit(1)
+                .minimumScaleFactor(0.78)
+
+                Spacer(minLength: 4)
+
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 10, weight: .bold))
+                    .foregroundStyle(.secondary)
+            }
+            .foregroundStyle(.orange)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 8)
+            .background(.orange.opacity(colorScheme == .dark ? 0.16 : 0.10), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+        }
+        .buttonStyle(MistiaPressableButtonStyle(cornerRadius: 14, tint: .orange))
     }
 
     private struct IconConfig {
@@ -354,14 +398,6 @@ struct NotificationCenterView: View {
     }
 
     private func actionHint(for row: AppNotificationRecord) -> String? {
-        if row.opensTopUpTransfer {
-            return mistiaLocalized(
-                vi: "Chạm để nạp tiền",
-                en: "Tap to top up",
-                ja: "タップして入金"
-            )
-        }
-
         if row.opensCreditCardStatement {
             return mistiaLocalized(
                 vi: "Chạm để mở sao kê và thanh toán",
@@ -382,21 +418,11 @@ struct NotificationCenterView: View {
     }
 
     private func actionHintColor(for row: AppNotificationRecord) -> Color {
-        row.opensTopUpTransfer ? .orange : notificationPurpleAccent
+        notificationPurpleAccent
     }
 
     private func makeTransferTarget(for row: AppNotificationRecord) -> TransactionEditorTarget? {
-        let destinationWalletID: UUID?
-        switch row.kind {
-        case .creditCardAutoPaymentFailed:
-            destinationWalletID = row.creditCardActionPayload?.linkedPaymentWalletID
-        case .billAutoPaymentFailed:
-            destinationWalletID = row.dueActionPayload?.linkedPaymentWalletID
-        default:
-            destinationWalletID = nil
-        }
-
-        guard let destinationWalletID else {
+        guard let destinationWalletID = row.topUpTransferDestinationWalletID else {
             return nil
         }
 
@@ -432,6 +458,16 @@ struct NotificationCenterView: View {
         }
 
         return storedBills.first(where: { $0.id == resourceID })
+    }
+
+    private func categoryResource(for row: AppNotificationRecord) -> TransactionCategory? {
+        guard row.kind == .budgetWarning,
+              row.resourceType == .category,
+              let resourceID = row.resourceID else {
+            return nil
+        }
+
+        return storedCategories.first(where: { $0.id == resourceID })
     }
 
     private func walletResource(for row: AppNotificationRecord) -> LedgerWallet? {
@@ -516,13 +552,6 @@ private extension AppNotificationRecord {
     }
 
     var opensTopUpTransfer: Bool {
-        switch kind {
-        case .creditCardAutoPaymentFailed:
-            return creditCardActionPayload?.linkedPaymentWalletID != nil
-        case .billAutoPaymentFailed:
-            return dueActionPayload?.linkedPaymentWalletID != nil
-        default:
-            return false
-        }
+        topUpTransferDestinationWalletID != nil
     }
 }

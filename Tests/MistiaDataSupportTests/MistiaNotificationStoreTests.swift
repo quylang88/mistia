@@ -215,6 +215,7 @@ final class MistiaNotificationStoreTests: XCTestCase {
         XCTAssertEqual(creditRow.creditCardActionPayload?.statementMonthKey, statementMonthKey)
         XCTAssertEqual(creditRow.creditCardActionPayload?.linkedPaymentWalletID, linkedWalletID)
         XCTAssertEqual(creditRow.creditCardActionPayload?.actionKind, .autoPaymentFailed)
+        XCTAssertEqual(creditRow.topUpTransferDestinationWalletID, linkedWalletID)
 
         let legacyBillMetadata = """
         {"sourceKind":"recurringBill","sourceId":"11111111-1111-1111-1111-111111111111","dueMonthKey":"2026-05","dueDate":"2026-05-10T00:00:00Z","requiresAmountInput":false,"currencyCode":"JPY","billName":"Water"}
@@ -231,6 +232,34 @@ final class MistiaNotificationStoreTests: XCTestCase {
         XCTAssertEqual(billRow.dueActionPayload?.dueMonthKey, "2026-05")
         XCTAssertEqual(billRow.dueActionPayload?.billName, "Water")
         XCTAssertNil(billRow.dueActionPayload?.linkedPaymentWalletID)
+        XCTAssertNil(billRow.topUpTransferDestinationWalletID)
+
+        let billPayload = DueNotificationActionPayload(
+            sourceKind: PlanningDueSourceKind.recurringBill.rawValue,
+            sourceID: UUID(),
+            dueMonthKey: "2026-05",
+            dueDate: Date(timeIntervalSince1970: 1_777_800_000),
+            requiresAmountInput: false,
+            currencyCode: "JPY",
+            billName: "Internet",
+            linkedPaymentWalletID: linkedWalletID
+        )
+        let billMetadata = try XCTUnwrap(
+            String(
+                data: JSONEncoder.mistiaSyncEncoder.encode(billPayload),
+                encoding: .utf8
+            )
+        )
+        let billFailedRow = AppNotificationRecord(
+            key: "bill-failed",
+            title: "Bill",
+            body: "Bill body",
+            kind: .billAutoPaymentFailed,
+            source: .system,
+            metadataJSON: billMetadata
+        )
+
+        XCTAssertEqual(billFailedRow.topUpTransferDestinationWalletID, linkedWalletID)
     }
 
     private func makeContainer() throws -> ModelContainer {

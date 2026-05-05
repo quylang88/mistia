@@ -43,6 +43,18 @@ struct PlanningBudgetEditorSheet: View {
             includeEmptyParents: true
         )
 
+        if isAddingChildBudget, let preferredParentCategoryID = target.preferredParentCategoryID {
+            return sections.compactMap { section in
+                guard section.parent.id == preferredParentCategoryID else {
+                    return nil
+                }
+                return TransactionCategoryGroupSection(
+                    parent: section.parent,
+                    children: section.children
+                )
+            }
+        }
+
         guard let preferredParentCategoryID = target.preferredParentCategoryID else {
             return sections
         }
@@ -55,22 +67,28 @@ struct PlanningBudgetEditorSheet: View {
     }
 
     private var availableCategories: [TransactionCategory] {
-        categorySections.flatMap { [$0.parent] + $0.children }
+        categorySections.flatMap { section in
+            isAddingChildBudget ? section.children : [section.parent] + section.children
+        }
     }
 
     private var favoriteBudgetCategories: [TransactionCategory] {
-        MistiaCategoryPickerSupport.favoriteCategories(
+        let allowedCategoryIDs = Set(availableCategories.map(\.id))
+        return MistiaCategoryPickerSupport.favoriteCategories(
             from: storedCategories,
             kind: .expense
         )
+        .filter { allowedCategoryIDs.contains($0.id) }
     }
 
     private var recentBudgetCategories: [TransactionCategory] {
-        MistiaCategoryPickerSupport.recentCategories(
+        let allowedCategoryIDs = Set(availableCategories.map(\.id))
+        return MistiaCategoryPickerSupport.recentCategories(
             from: postedTransactions,
             categories: storedCategories,
             kind: .expense
         )
+        .filter { allowedCategoryIDs.contains($0.id) }
     }
 
     private var selectedCategory: TransactionCategory? {
@@ -79,6 +97,16 @@ struct PlanningBudgetEditorSheet: View {
 
     private var activeCurrencyCode: String {
         target.budget?.currencyCode ?? currencyCode
+    }
+
+    private var isAddingChildBudget: Bool {
+        target.budget == nil && target.preferredParentCategoryID != nil
+    }
+
+    private var activeBudgetSnapshots: [BudgetPlanSnapshot] {
+        storedBudgets
+            .filter { $0.deletedAt == nil && !$0.isArchived }
+            .map { $0.planningSnapshot() }
     }
 
     var body: some View {
@@ -140,7 +168,7 @@ struct PlanningBudgetEditorSheet: View {
                 sections: categorySections,
                 recentCategories: recentBudgetCategories,
                 favoriteCategories: favoriteBudgetCategories,
-                allowsParentSelectionInAll: true,
+                allowsParentSelectionInAll: !isAddingChildBudget,
                 allModeSubtitle: { category in
                     category.isParentCategory
                         ? mistiaLocalized(vi: "Ngân sách cha", en: "Parent budget", ja: "親予算")
@@ -181,6 +209,15 @@ struct PlanningBudgetEditorSheet: View {
             return
         }
 
+        if isAddingChildBudget, !category.isChildCategory {
+            alertMessage = mistiaLocalized(
+                vi: "Chọn một danh mục con trong nhóm này.",
+                en: "Choose a child category in this group.",
+                ja: "このグループの子カテゴリを選択してください。"
+            )
+            return
+        }
+
         let monthAnchor = PlanningLogic.startOfMonth(for: target.selectedMonth)
         let hasDuplicate = storedBudgets.contains(where: { budget in
             guard !budget.isArchived else { return false }
@@ -194,30 +231,18 @@ struct PlanningBudgetEditorSheet: View {
             return
         }
 
-        let branchBudgets = storedBudgets.filter { budget in
-            guard budget.deletedAt == nil, !budget.isArchived else { return false }
-            guard budget.id != target.budget?.id else { return false }
-            guard PlanningLogic.startOfMonth(for: budget.monthAnchor) == monthAnchor else { return false }
-            return budget.category?.branchCategoryID == category.branchCategoryID
-        }
-        let hasParentBudget = branchBudgets.contains { $0.category?.isParentCategory == true }
-        let hasChildBudget = branchBudgets.contains { $0.category?.isChildCategory == true }
-
-        if category.isParentCategory && hasChildBudget {
-            alertMessage = mistiaLocalized(
-                vi: "Nhánh này đã có ngân sách con trong tháng đang xem. Xóa hoặc chỉnh các ngân sách con trước khi tạo ngân sách cha.",
-                en: "This branch already has child budgets in the selected month. Remove or edit those child budgets before creating a parent budget.",
-                ja: "この月の同じ枝にはすでに子予算があります。親予算を作る前に子予算を調整してください。"
-            )
-            return
-        }
-
-        if category.isChildCategory && hasParentBudget {
-            alertMessage = mistiaLocalized(
-                vi: "Nhánh này đã có ngân sách cha trong tháng đang xem. Xóa hoặc chỉnh ngân sách cha trước khi tạo ngân sách con.",
-                en: "This branch already has a parent budget in the selected month. Remove or edit that parent budget before creating a child budget.",
-                ja: "この月の同じ枝にはすでに親予算があります。子予算を作る前に親予算を調整してください。"
-            )
+        let allocationValidation = PlanningLogic.validateBudgetAllocation(
+            categoryID: category.id,
+            branchCategoryID: category.branchCategoryID,
+            categoryIsParent: category.isParentCategory,
+            categoryIsChild: category.isChildCategory,
+            limitMinor: limitMinor,
+            monthAnchor: monthAnchor,
+            plans: activeBudgetSnapshots,
+            editingBudgetID: target.budget?.id
+        )
+        guard allocationValidation == .valid else {
+            alertMessage = allocationValidationMessage(allocationValidation)
             return
         }
 
@@ -254,6 +279,33 @@ struct PlanningBudgetEditorSheet: View {
             dismiss()
         } catch {
             alertMessage = mistiaLocalized(vi: "Không thể lưu ngân sách lúc này.", en: "Couldn't save this budget right now.", ja: "現在この予算を保存できません。") + " \(error.localizedDescription)"
+        }
+    }
+
+    private func allocationValidationMessage(
+        _ result: PlanningBudgetAllocationValidationResult
+    ) -> String {
+        switch result {
+        case .valid:
+            return ""
+        case .missingParentBudget:
+            return mistiaLocalized(
+                vi: "Tạo ngân sách cha cho nhóm này trước khi thêm ngân sách con.",
+                en: "Create a parent budget for this group before adding child budgets.",
+                ja: "子予算を追加する前に、このグループの親予算を作成してください。"
+            )
+        case .childBudgetsExceedParent(let childTotalMinor, let parentLimitMinor):
+            return mistiaLocalized(
+                vi: "Tổng ngân sách con \(childTotalMinor.formattedCurrency(code: activeCurrencyCode)) vượt ngân sách cha \(parentLimitMinor.formattedCurrency(code: activeCurrencyCode)).",
+                en: "Child budgets total \(childTotalMinor.formattedCurrency(code: activeCurrencyCode)), above the parent budget \(parentLimitMinor.formattedCurrency(code: activeCurrencyCode)).",
+                ja: "子予算の合計 \(childTotalMinor.formattedCurrency(code: activeCurrencyCode)) が親予算 \(parentLimitMinor.formattedCurrency(code: activeCurrencyCode)) を超えています。"
+            )
+        case .parentLimitBelowChildren(let childTotalMinor, let parentLimitMinor):
+            return mistiaLocalized(
+                vi: "Ngân sách cha \(parentLimitMinor.formattedCurrency(code: activeCurrencyCode)) phải lớn hơn hoặc bằng tổng ngân sách con \(childTotalMinor.formattedCurrency(code: activeCurrencyCode)).",
+                en: "Parent budget \(parentLimitMinor.formattedCurrency(code: activeCurrencyCode)) must be at least the child budget total \(childTotalMinor.formattedCurrency(code: activeCurrencyCode)).",
+                ja: "親予算 \(parentLimitMinor.formattedCurrency(code: activeCurrencyCode)) は子予算合計 \(childTotalMinor.formattedCurrency(code: activeCurrencyCode)) 以上にしてください。"
+            )
         }
     }
 
