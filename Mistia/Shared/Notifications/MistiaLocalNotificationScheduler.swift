@@ -11,9 +11,11 @@ enum MistiaLocalNotificationScheduler {
         modelContext: ModelContext,
         referenceDate: Date = .now
     ) async {
-        await requestAuthorizationIfNeeded()
         await clearScheduledRemindersOnly()
         removeObsoleteDueSoonInboxRecords(modelContext: modelContext)
+        guard MistiaNotificationPreferences.reminderEnabled(.wallets) else { return }
+
+        await requestAuthorizationIfNeeded()
 
         let wallets = (try? modelContext.fetch(
             FetchDescriptor<LedgerWallet>(

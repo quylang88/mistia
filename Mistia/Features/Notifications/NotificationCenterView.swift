@@ -261,6 +261,8 @@ struct NotificationCenterView: View {
         switch row.kind {
         case .dueSoon, .billPaymentRequired, .billOverdue:
             return IconConfig(systemImage: "calendar.badge.clock", color: .orange)
+        case .budgetWarning:
+            return IconConfig(systemImage: "chart.pie.fill", color: .mint)
         case .creditCardStatementReady:
             return IconConfig(systemImage: "doc.text.fill", color: notificationPurpleAccent)
         case .creditCardAutoPaymentFailed, .billAutoPaymentFailed:

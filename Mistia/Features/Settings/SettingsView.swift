@@ -11,6 +11,7 @@ struct SettingsView: View {
     @AppStorage(MistiaAppStorageKey.mistiaShortcutEnabled) private var mistiaShortcutEnabled = false
     @AppStorage(MistiaAppStorageKey.mistiaShortcutKind) private var shortcutKindRawValue = MistiaShortcutKind.backupRestore.rawValue
     @AppStorage(MistiaAppStorageKey.mistiaShortcutMemberUserID) private var shortcutMemberUserIDRawValue = ""
+    @AppStorage(MistiaAppStorageKey.notificationsEnabled) private var notificationsEnabled = false
 
     @State private var destination: SettingsDestination?
 
@@ -114,7 +115,7 @@ struct SettingsView: View {
                     title: mistiaLocalized(vi: "Thông báo", en: "Notifications", ja: "通知"),
                     icon: "bell.badge.fill",
                     accent: .coral,
-                    value: nil,
+                    value: notificationStatusText,
                     action: .openNotifications
                 ),
                 SettingsRowDump(
@@ -126,6 +127,12 @@ struct SettingsView: View {
                 )
             ]
         )
+    }
+
+    private var notificationStatusText: String {
+        notificationsEnabled
+            ? mistiaLocalized(vi: "Bật", en: "On", ja: "オン")
+            : mistiaLocalized(vi: "Tắt", en: "Off", ja: "オフ")
     }
 
     private var dataSection: SettingsSectionDump {

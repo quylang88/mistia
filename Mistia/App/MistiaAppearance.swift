@@ -21,6 +21,74 @@ enum MistiaAppStorageKey {
     static let notificationsHadAnyGroupOn = "mistia.notifications.hadAnyGroupOn"
     static let notificationsGroupRemindersEnabled = "mistia.notifications.group.reminders.enabled"
     static let notificationsGroupFamilyEnabled = "mistia.notifications.group.family.enabled"
+    static let notificationsReminderBudgetEnabled = "mistia.notifications.reminder.budget.enabled"
+    static let notificationsReminderBillsEnabled = "mistia.notifications.reminder.bills.enabled"
+    static let notificationsReminderCreditCardsEnabled = "mistia.notifications.reminder.creditCards.enabled"
+    static let notificationsReminderWalletsEnabled = "mistia.notifications.reminder.wallets.enabled"
+}
+
+enum MistiaNotificationReminderKind: CaseIterable {
+    case budget
+    case bills
+    case creditCards
+    case wallets
+
+    var storageKey: String {
+        switch self {
+        case .budget:
+            MistiaAppStorageKey.notificationsReminderBudgetEnabled
+        case .bills:
+            MistiaAppStorageKey.notificationsReminderBillsEnabled
+        case .creditCards:
+            MistiaAppStorageKey.notificationsReminderCreditCardsEnabled
+        case .wallets:
+            MistiaAppStorageKey.notificationsReminderWalletsEnabled
+        }
+    }
+}
+
+enum MistiaNotificationPreferences {
+    static func notificationsEnabled(defaults: UserDefaults = .standard) -> Bool {
+        defaults.bool(forKey: MistiaAppStorageKey.notificationsEnabled)
+    }
+
+    static func familyEnabled(defaults: UserDefaults = .standard) -> Bool {
+        notificationsEnabled(defaults: defaults)
+            && defaults.bool(forKey: MistiaAppStorageKey.notificationsGroupFamilyEnabled)
+    }
+
+    static func remindersEnabled(defaults: UserDefaults = .standard) -> Bool {
+        notificationsEnabled(defaults: defaults)
+            && defaults.bool(forKey: MistiaAppStorageKey.notificationsGroupRemindersEnabled)
+            && MistiaNotificationReminderKind.allCases.contains {
+                reminderEnabled($0, defaults: defaults)
+            }
+    }
+
+    static func reminderEnabled(
+        _ kind: MistiaNotificationReminderKind,
+        defaults: UserDefaults = .standard
+    ) -> Bool {
+        guard notificationsEnabled(defaults: defaults),
+              defaults.bool(forKey: MistiaAppStorageKey.notificationsGroupRemindersEnabled)
+        else {
+            return false
+        }
+
+        if defaults.object(forKey: kind.storageKey) == nil {
+            return true
+        }
+        return defaults.bool(forKey: kind.storageKey)
+    }
+
+    static func setAllReminderDetails(
+        _ isEnabled: Bool,
+        defaults: UserDefaults = .standard
+    ) {
+        MistiaNotificationReminderKind.allCases.forEach {
+            defaults.set(isEnabled, forKey: $0.storageKey)
+        }
+    }
 }
 
 enum MistiaAppearanceMode: String, CaseIterable, Identifiable {

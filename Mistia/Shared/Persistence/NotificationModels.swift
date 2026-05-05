@@ -10,6 +10,7 @@ enum MistiaAppNotificationSource: String, Codable, CaseIterable {
 
 enum MistiaAppNotificationKind: String, Codable, CaseIterable {
     case dueSoon
+    case budgetWarning
     case lowWallet
     case creditCardStatementReady
     case creditCardAutoPaymentSucceeded

@@ -280,6 +280,8 @@ enum MistiaRecurringBillMaintenance {
         modelContext: ModelContext,
         forceUnread: Bool = false
     ) {
+        guard MistiaNotificationPreferences.reminderEnabled(.bills) else { return }
+
         let payload = DueNotificationActionPayload(
             sourceKind: PlanningDueSourceKind.recurringBill.rawValue,
             sourceID: bill.id,

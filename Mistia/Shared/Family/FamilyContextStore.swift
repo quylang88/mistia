@@ -762,6 +762,8 @@ final class FamilyContextStore {
     }
 
     private func refreshFamilyNotifications(session: SupabaseAuthSession) async throws {
+        guard MistiaNotificationPreferences.familyEnabled() else { return }
+
         let remoteRows = try await service.fetchFamilyNotifications(session: session)
         try MistiaNotificationStore.applyRemoteNotifications(
             remoteRows,

@@ -434,6 +434,8 @@ enum MistiaCreditCardStatementMaintenance {
         createdAt: Date,
         metadataJSON: String?
     ) {
+        guard MistiaNotificationPreferences.reminderEnabled(.creditCards) else { return }
+
         let existing = (try? modelContext.fetch(
             FetchDescriptor<AppNotificationRecord>(
                 predicate: #Predicate { $0.key == key }
