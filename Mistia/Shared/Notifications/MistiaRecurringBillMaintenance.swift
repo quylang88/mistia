@@ -10,7 +10,7 @@ enum MistiaRecurringBillMaintenance {
         modelContext: ModelContext,
         sessionStore: SessionStore,
         referenceDate: Date = .now,
-        calendar: Calendar = .current
+        calendar: Calendar = MistiaCalendar.current
     ) async {
         let bills = (try? modelContext.fetch(
             FetchDescriptor<RecurringBillPlan>(

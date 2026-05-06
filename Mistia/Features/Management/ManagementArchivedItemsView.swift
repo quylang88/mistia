@@ -487,7 +487,7 @@ struct ManagementArchivedItemsView: View {
         mutations: inout [ArchivedSyncMutation]
     ) throws {
         if action == .restore && isCreditCardPayment(transaction) {
-            let calendar = Calendar.current
+            let calendar = MistiaCalendar.current
             let isDuplicate = activeTransactions.contains { tx in
                 tx.id != transaction.id &&
                 tx.destinationWallet?.id == transaction.destinationWallet?.id &&

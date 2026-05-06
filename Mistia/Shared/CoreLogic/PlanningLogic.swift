@@ -423,7 +423,7 @@ nonisolated enum PlanningLogic {
         records: [TransactionRecordSnapshot],
         selectedMonth: Date,
         referenceDate: Date = .now,
-        calendar: Calendar = .current
+        calendar: Calendar = MistiaCalendar.current
     ) -> [PlanningBudgetRowSnapshot] {
         let monthInterval = calendar.dateInterval(of: .month, for: selectedMonth)
         let spentByCategory = Dictionary(grouping: records.filter { record in
@@ -494,7 +494,7 @@ nonisolated enum PlanningLogic {
         records: [TransactionRecordSnapshot],
         selectedMonth: Date,
         referenceDate: Date = .now,
-        calendar: Calendar = .current
+        calendar: Calendar = MistiaCalendar.current
     ) -> [PlanningBudgetBranchRowSnapshot] {
         let monthInterval = calendar.dateInterval(of: .month, for: selectedMonth)
         let expenseRecordsInMonth = records.filter { record in
@@ -664,7 +664,7 @@ nonisolated enum PlanningLogic {
         monthAnchor: Date,
         plans: [BudgetPlanSnapshot],
         editingBudgetID: UUID? = nil,
-        calendar: Calendar = .current
+        calendar: Calendar = MistiaCalendar.current
     ) -> PlanningBudgetAllocationValidationResult {
         guard let branchCategoryID else {
             return .valid
@@ -713,7 +713,7 @@ nonisolated enum PlanningLogic {
     static func goalRows(
         goals: [SavingsGoalSnapshot],
         selectedMonth: Date,
-        calendar: Calendar = .current
+        calendar: Calendar = MistiaCalendar.current
     ) -> [PlanningGoalRowSnapshot] {
         goals
             .map { goal in
@@ -768,7 +768,7 @@ nonisolated enum PlanningLogic {
         occurrences: [PlanningDueOccurrenceSnapshot],
         selectedMonth: Date,
         referenceDate: Date = .now,
-        calendar: Calendar = .current
+        calendar: Calendar = MistiaCalendar.current
     ) -> [PlanningCreditCardDueSnapshot] {
         creditCardStatementsDue(
             in: selectedMonth,
@@ -805,7 +805,7 @@ nonisolated enum PlanningLogic {
         records: [TransactionRecordSnapshot],
         occurrences: [PlanningDueOccurrenceSnapshot],
         referenceDate: Date = .now,
-        calendar: Calendar = .current
+        calendar: Calendar = MistiaCalendar.current
     ) -> [PlanningCreditCardStatementSnapshot] {
         let selectedMonthStart = startOfMonth(for: selectedMonth, calendar: calendar)
         let candidateMonths = (-2...0).compactMap { offset in
@@ -830,7 +830,7 @@ nonisolated enum PlanningLogic {
         occurrences: [PlanningDueOccurrenceSnapshot],
         statementMonths: [Date],
         referenceDate: Date = .now,
-        calendar: Calendar = .current
+        calendar: Calendar = MistiaCalendar.current
     ) -> [PlanningCreditCardStatementSnapshot] {
         let months = Dictionary(
             grouping: statementMonths.map { startOfMonth(for: $0, calendar: calendar) },
@@ -857,7 +857,7 @@ nonisolated enum PlanningLogic {
     static func creditCardStatementClosingDate(
         statementMonth: Date,
         statementClosingDay: Int,
-        calendar: Calendar = .current
+        calendar: Calendar = MistiaCalendar.current
     ) -> Date {
         let nextMonth = calendar.date(
             byAdding: .month,
@@ -871,7 +871,7 @@ nonisolated enum PlanningLogic {
         statementMonth: Date,
         statementClosingDay: Int,
         paymentDueDay: Int,
-        calendar: Calendar = .current
+        calendar: Calendar = MistiaCalendar.current
     ) -> Date {
         let closingDate = creditCardStatementClosingDate(
             statementMonth: statementMonth,
@@ -897,7 +897,7 @@ nonisolated enum PlanningLogic {
         bills: [PlanningBillSnapshot],
         occurrences: [PlanningDueOccurrenceSnapshot],
         selectedMonth: Date,
-        calendar: Calendar = .current
+        calendar: Calendar = MistiaCalendar.current
     ) -> [PlanningRecurringDueSnapshot] {
         dueItems(
             sourceKind: .recurringBill,
@@ -946,7 +946,7 @@ nonisolated enum PlanningLogic {
         plans: [PlanningInstallmentSnapshot],
         occurrences: [PlanningDueOccurrenceSnapshot],
         selectedMonth: Date,
-        calendar: Calendar = .current
+        calendar: Calendar = MistiaCalendar.current
     ) -> [PlanningRecurringDueSnapshot] {
         dueItems(
             sourceKind: .installment,
@@ -996,7 +996,7 @@ nonisolated enum PlanningLogic {
         recurring: [PlanningRecurringDueSnapshot],
         selectedMonth: Date,
         referenceDate: Date = .now,
-        calendar: Calendar = .current
+        calendar: Calendar = MistiaCalendar.current
     ) -> PlanningDueSummarySnapshot {
         let startOfToday = calendar.startOfDay(for: referenceDate)
         let windowEnd = calendar.date(byAdding: .day, value: 7, to: startOfToday) ?? startOfToday
@@ -1046,7 +1046,7 @@ nonisolated enum PlanningLogic {
         recurring: [PlanningRecurringDueSnapshot],
         selectedMonth: Date,
         referenceDate: Date = .now,
-        calendar: Calendar = .current
+        calendar: Calendar = MistiaCalendar.current
     ) -> PlanningDueSummarySnapshot {
         let statements = creditCards.map { card in
             PlanningCreditCardStatementSnapshot(
@@ -1161,12 +1161,12 @@ nonisolated enum PlanningLogic {
         )
     }
 
-    static func monthKey(for date: Date, calendar: Calendar = .current) -> String {
+    static func monthKey(for date: Date, calendar: Calendar = MistiaCalendar.current) -> String {
         let components = calendar.dateComponents([.year, .month], from: date)
         return String(format: "%04d-%02d", components.year ?? 0, components.month ?? 0)
     }
 
-    static func month(from key: String, calendar: Calendar = .current) -> Date? {
+    static func month(from key: String, calendar: Calendar = MistiaCalendar.current) -> Date? {
         let parts = key.split(separator: "-")
         guard parts.count == 2,
               let year = Int(parts[0]),
@@ -1178,11 +1178,11 @@ nonisolated enum PlanningLogic {
         return calendar.date(from: components)
     }
 
-    static func startOfMonth(for date: Date, calendar: Calendar = .current) -> Date {
+    static func startOfMonth(for date: Date, calendar: Calendar = MistiaCalendar.current) -> Date {
         calendar.dateInterval(of: .month, for: date)?.start ?? calendar.startOfDay(for: date)
     }
 
-    static func endOfMonth(for date: Date, calendar: Calendar = .current) -> Date {
+    static func endOfMonth(for date: Date, calendar: Calendar = MistiaCalendar.current) -> Date {
         guard let interval = calendar.dateInterval(of: .month, for: date) else {
             return date
         }
@@ -1193,7 +1193,7 @@ nonisolated enum PlanningLogic {
     static func scheduledDate(
         dueDay: Int,
         selectedMonth: Date,
-        calendar: Calendar = .current
+        calendar: Calendar = MistiaCalendar.current
     ) -> Date {
         let monthStart = startOfMonth(for: selectedMonth, calendar: calendar)
         let maxDay = calendar.range(of: .day, in: .month, for: monthStart)?.count ?? 28
@@ -1322,7 +1322,7 @@ nonisolated enum PlanningLogic {
         closingDate: Date,
         dueDate: Date,
         referenceDate: Date = .now,
-        calendar: Calendar = .current
+        calendar: Calendar = MistiaCalendar.current
     ) -> PlanningCreditCardStatementState {
         if status == .paid {
             return .paid
@@ -1351,7 +1351,7 @@ nonisolated enum PlanningLogic {
         occurrences: [PlanningDueOccurrenceSnapshot],
         occurredAt: Date,
         referenceDate: Date = .now,
-        calendar: Calendar = .current
+        calendar: Calendar = MistiaCalendar.current
     ) -> PlanningCreditCardStatementSnapshot? {
         let statements = creditCardStatementItems(
             accounts: [account],
@@ -1373,7 +1373,7 @@ nonisolated enum PlanningLogic {
         statement: PlanningCreditCardStatementSnapshot,
         sourceWalletBalanceMinor: Int64?,
         referenceDate: Date = .now,
-        calendar: Calendar = .current
+        calendar: Calendar = MistiaCalendar.current
     ) -> PlanningCreditCardAutoPaymentDecision {
         guard statement.status == .pending, statement.state != .paid, statement.amountMinor > 0 else {
             return .alreadyPaid
@@ -1407,7 +1407,7 @@ nonisolated enum PlanningLogic {
     static func monthsRemaining(
         from selectedMonth: Date,
         to targetDate: Date,
-        calendar: Calendar = .current
+        calendar: Calendar = MistiaCalendar.current
     ) -> Int {
         let start = startOfMonth(for: selectedMonth, calendar: calendar)
         let targetMonth = startOfMonth(for: targetDate, calendar: calendar)

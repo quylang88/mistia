@@ -1247,12 +1247,14 @@ extension ISO8601DateFormatter {
     static var mistiaSyncWithFractionalSeconds: ISO8601DateFormatter {
         let formatter = ISO8601DateFormatter()
         formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        formatter.timeZone = .gmt
         return formatter
     }
 
     static var mistiaSyncWithoutFractionalSeconds: ISO8601DateFormatter {
         let formatter = ISO8601DateFormatter()
         formatter.formatOptions = [.withInternetDateTime]
+        formatter.timeZone = .gmt
         return formatter
     }
 

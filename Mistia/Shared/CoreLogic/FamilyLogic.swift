@@ -245,7 +245,7 @@ enum FamilyLogic {
         visibleMemberIDs: Set<UUID>? = nil,
         memberNames: [UUID: String] = [:],
         referenceDate: Date = .now,
-        calendar: Calendar = .current
+        calendar: Calendar = MistiaCalendar.current
     ) -> FamilyAggregateSummary {
         let visibleWallets = wallets.filter { visibleMemberIDs?.contains($0.ownerUserID) ?? true }
         let intervalTransactions = transactions.filter {

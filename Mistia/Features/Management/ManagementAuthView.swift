@@ -2347,7 +2347,7 @@ private struct ManagementEditProfileView: View {
         self.summary = summary
         self.accent = accent
         _draftDisplayName = State(initialValue: summary.displayName)
-        _birthday = State(initialValue: Calendar.current.date(byAdding: .year, value: -18, to: .now) ?? .now)
+        _birthday = State(initialValue: MistiaCalendar.current.date(byAdding: .year, value: -18, to: .now) ?? .now)
         _hasBirthday = State(initialValue: false)
         _draftAvatarURL = State(initialValue: summary.avatarURL)
     }

@@ -4,6 +4,10 @@ import XCTest
 final class MistiaLocalizationTests: XCTestCase {
     private let referenceDate = Date(timeIntervalSince1970: 1_775_131_200) // 2026-04-02 12:00:00 UTC
 
+    private struct DatePayload: Codable, Equatable {
+        let occurredAt: Date
+    }
+
     private var gregorianCalendar: Calendar {
         var calendar = Calendar(identifier: .gregorian)
         calendar.timeZone = TimeZone(secondsFromGMT: 0) ?? .gmt
@@ -79,6 +83,39 @@ final class MistiaLocalizationTests: XCTestCase {
             MistiaDateFormatting.monthYearString(for: referenceDate, language: .japanese),
             "2026年4月"
         )
+    }
+
+    func testRemoteDateEncodingKeepsUTCInstantWhileFormattingInPhoneTimezone() throws {
+        let japanCalendar = MistiaCalendar.gregorian(
+            locale: Locale(identifier: "ja_JP"),
+            timeZone: TimeZone(identifier: "Asia/Tokyo")!
+        )
+        var components = DateComponents()
+        components.calendar = japanCalendar
+        components.year = 2026
+        components.month = 5
+        components.day = 6
+        components.hour = 18
+        components.minute = 15
+        components.second = 49
+        components.nanosecond = 204_000_000
+
+        let localDate = try XCTUnwrap(japanCalendar.date(from: components))
+        let encoded = try JSONEncoder.mistiaRemoteAPIEncoder.encode(DatePayload(occurredAt: localDate))
+        let payload = try XCTUnwrap(String(data: encoded, encoding: .utf8))
+
+        XCTAssertTrue(payload.contains("\"occurredAt\":\"2026-05-06T09:15:49.204Z\""))
+        XCTAssertEqual(
+            MistiaDateFormatting.fullDateString(
+                for: localDate,
+                language: .japanese,
+                calendar: japanCalendar
+            ),
+            "2026/05/06"
+        )
+
+        let decoded = try JSONDecoder.mistiaRemoteAPIDecoder.decode(DatePayload.self, from: encoded)
+        XCTAssertEqual(decoded.occurredAt, localDate)
     }
 
     func testRelativeLabelsFollowSelectedLanguage() {

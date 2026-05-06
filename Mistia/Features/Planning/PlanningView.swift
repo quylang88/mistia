@@ -1352,10 +1352,10 @@ private struct PlanningDueRow: View {
             return mistiaLocalized(vi: "Hoàn tất", en: "Completed", ja: "完了")
         }
 
-        let dayDelta = Calendar.current.dateComponents(
+        let dayDelta = MistiaCalendar.current.dateComponents(
             [.day],
-            from: Calendar.current.startOfDay(for: referenceDate),
-            to: Calendar.current.startOfDay(for: item.dueDate)
+            from: MistiaCalendar.current.startOfDay(for: referenceDate),
+            to: MistiaCalendar.current.startOfDay(for: item.dueDate)
         ).day ?? 0
 
         if dayDelta < 0 {

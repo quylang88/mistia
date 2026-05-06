@@ -93,7 +93,7 @@ nonisolated extension OverviewLogic {
         transactions: [OverviewTransactionSnapshot],
         currencyCode: String,
         referenceDate: Date = .now,
-        calendar: Calendar = .current
+        calendar: Calendar = MistiaCalendar.current
     ) -> TransactionSummaryStatementSnapshot {
         let statementPeriod = calendar.dateInterval(of: .month, for: referenceDate)
             ?? DateInterval(start: referenceDate, duration: 0)
@@ -113,7 +113,7 @@ nonisolated extension OverviewLogic {
         accounts: [OverviewCreditCardStatementAccountSnapshot],
         transactions: [OverviewTransactionSnapshot],
         referenceDate: Date = .now,
-        calendar: Calendar = .current
+        calendar: Calendar = MistiaCalendar.current
     ) -> TransactionCreditCardStatementSnapshot {
         TransactionLogic.creditCardStatement(
             accounts: accounts,
@@ -180,7 +180,7 @@ nonisolated extension TransactionLogic {
         statementPeriod: DateInterval,
         currencyCode: String,
         referenceDate: Date = .now,
-        calendar: Calendar = .current
+        calendar: Calendar = MistiaCalendar.current
     ) -> TransactionSummaryStatementSnapshot {
         let chartPoints = OverviewLogic.recentSevenDaySpendingChartPoints(
             from: transactionRecords,
@@ -245,7 +245,7 @@ nonisolated extension TransactionLogic {
         accounts: [OverviewCreditCardStatementAccountSnapshot],
         transactions: [OverviewTransactionSnapshot],
         referenceDate: Date = .now,
-        calendar: Calendar = .current
+        calendar: Calendar = MistiaCalendar.current
     ) -> TransactionCreditCardStatementSnapshot {
         let cards = accounts
             .sorted {
@@ -522,7 +522,7 @@ nonisolated extension TransactionLogic {
 
 
     private static func yearMonthToken(for date: Date) -> String {
-        let components = Calendar(identifier: .gregorian).dateComponents([.year, .month], from: date)
+        let components = MistiaCalendar.current.dateComponents([.year, .month], from: date)
         return String(format: "%04d-%02d", components.year ?? 0, components.month ?? 0)
     }
 

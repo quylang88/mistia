@@ -161,7 +161,7 @@ nonisolated enum TransactionLogic {
         selectedKind: TransactionPrimaryKind?,
         filters: TransactionFilterState,
         referenceDate: Date = .now,
-        calendar: Calendar = .current
+        calendar: Calendar = MistiaCalendar.current
     ) -> [TransactionRecordSnapshot] {
         records
             .filter { record in
@@ -204,7 +204,7 @@ nonisolated enum TransactionLogic {
     static func sections(
         from records: [TransactionRecordSnapshot],
         referenceDate: Date = .now,
-        calendar: Calendar = .current
+        calendar: Calendar = MistiaCalendar.current
     ) -> [TransactionSectionSnapshot] {
         var builtSections: [TransactionSectionSnapshot] = []
 
@@ -655,7 +655,7 @@ nonisolated enum TransactionLogic {
     static func isLockedByPaidStatement(
         transaction: TransactionRecordSnapshot,
         allTransactions: [TransactionRecordSnapshot],
-        calendar: Calendar = .current
+        calendar: Calendar = MistiaCalendar.current
     ) -> Bool {
         // Only expenses and internal transfers can be locked by a statement
         guard transaction.primaryKind == .expense || transaction.primaryKind == .transfer else {

@@ -214,7 +214,7 @@ nonisolated enum OverviewLogic {
         recurringDues: [PlanningRecurringDueSnapshot],
         currencyCode: String,
         referenceDate: Date = .now,
-        calendar: Calendar = .current
+        calendar: Calendar = MistiaCalendar.current
     ) -> OverviewDashboardSnapshot {
         OverviewDashboardSnapshot(
             hero: hero(
@@ -252,7 +252,7 @@ nonisolated enum OverviewLogic {
         transactions: [OverviewTransactionSnapshot] = [],
         currencyCode: String,
         referenceDate: Date = .now,
-        calendar: Calendar = .current
+        calendar: Calendar = MistiaCalendar.current
     ) -> OverviewHeroSnapshot {
         let monthInterval = calendar.dateInterval(of: .month, for: referenceDate)
 
@@ -330,7 +330,7 @@ nonisolated enum OverviewLogic {
     static func weeklySpendingPages(
         from transactionRecords: [TransactionRecordSnapshot],
         referenceDate: Date = .now,
-        calendar: Calendar = .current
+        calendar: Calendar = MistiaCalendar.current
     ) -> [OverviewWeekSpendingSnapshot] {
         let currentWeekStart = startOfMondayWeek(containing: referenceDate, calendar: calendar)
         let currentWeekEnd = calendar.date(byAdding: .day, value: 6, to: currentWeekStart) ?? currentWeekStart
@@ -435,7 +435,7 @@ nonisolated enum OverviewLogic {
     static func recentSevenDaySpendingChartPoints(
         from transactionRecords: [TransactionRecordSnapshot],
         referenceDate: Date = .now,
-        calendar: Calendar = .current
+        calendar: Calendar = MistiaCalendar.current
     ) -> [OverviewChartPoint] {
         let startOfToday = calendar.startOfDay(for: referenceDate)
         let days = (0..<7).compactMap { offset in
@@ -478,7 +478,7 @@ nonisolated enum OverviewLogic {
         from transactions: [OverviewTransactionSnapshot],
         currencyCode: String,
         referenceDate: Date = .now,
-        calendar: Calendar = .current
+        calendar: Calendar = MistiaCalendar.current
     ) -> [OverviewCategorySpendingMonthSnapshot] {
         let currentMonthStart = PlanningLogic.startOfMonth(for: referenceDate, calendar: calendar)
         let earliestExpenseMonthStart = transactions
@@ -524,7 +524,7 @@ nonisolated enum OverviewLogic {
         from transactions: [OverviewTransactionSnapshot],
         selectedMonth: Date,
         currencyCode: String,
-        calendar: Calendar = .current
+        calendar: Calendar = MistiaCalendar.current
     ) -> OverviewCategorySpendingMonthSnapshot {
         let monthStart = PlanningLogic.startOfMonth(for: selectedMonth, calendar: calendar)
         let monthInterval = calendar.dateInterval(of: .month, for: monthStart)
@@ -695,7 +695,7 @@ nonisolated enum OverviewLogic {
         budgets: [BudgetPlanSnapshot],
         transactionRecords: [TransactionRecordSnapshot],
         referenceDate: Date = .now,
-        calendar: Calendar = .current,
+        calendar: Calendar = MistiaCalendar.current,
         minimumProgress: Double = 0.5,
         includesMinimumProgress: Bool = false,
         maximumCount: Int? = 3
@@ -747,7 +747,7 @@ nonisolated enum OverviewLogic {
         creditCardDues: [PlanningCreditCardDueSnapshot],
         recurringDues: [PlanningRecurringDueSnapshot],
         referenceDate: Date = .now,
-        calendar: Calendar = .current
+        calendar: Calendar = MistiaCalendar.current
     ) -> [OverviewDueAlertSnapshot] {
         let startOfToday = calendar.startOfDay(for: referenceDate)
 
@@ -838,7 +838,7 @@ nonisolated enum OverviewLogic {
         transactions: [OverviewTransactionSnapshot],
         currencyCode: String,
         referenceDate: Date = .now,
-        calendar: Calendar = .current
+        calendar: Calendar = MistiaCalendar.current
     ) -> [OverviewRecentTransactionSnapshot] {
         transactions
             .filter { $0.entryStatus == .posted && !$0.isArchived }
@@ -867,7 +867,7 @@ nonisolated enum OverviewLogic {
     static func relativeTimeLabel(
         for date: Date,
         referenceDate: Date = .now,
-        calendar: Calendar = .current
+        calendar: Calendar = MistiaCalendar.current
     ) -> String {
         MistiaDateFormatting.relativeTimeLabel(
             for: date,
@@ -879,7 +879,7 @@ nonisolated enum OverviewLogic {
     static func creditCardStatementCycle(
         statementClosingDay: Int,
         referenceDate: Date = .now,
-        calendar: Calendar = .current
+        calendar: Calendar = MistiaCalendar.current
     ) -> DateInterval {
         let startOfToday = calendar.startOfDay(for: referenceDate)
         let currentClosing = closingDate(
@@ -1022,7 +1022,7 @@ nonisolated enum OverviewLogic {
 
     static func startOfMondayWeek(
         containing date: Date,
-        calendar: Calendar = .current
+        calendar: Calendar = MistiaCalendar.current
     ) -> Date {
         let startOfDay = calendar.startOfDay(for: date)
         let weekday = calendar.component(.weekday, from: startOfDay)
@@ -1032,7 +1032,7 @@ nonisolated enum OverviewLogic {
 
     static func weekInterval(
         startingAt weekStart: Date,
-        calendar: Calendar = .current
+        calendar: Calendar = MistiaCalendar.current
     ) -> DateInterval {
         let normalizedWeekStart = calendar.startOfDay(for: weekStart)
         let weekEnd = calendar.date(byAdding: .day, value: 7, to: normalizedWeekStart) ?? normalizedWeekStart
@@ -1042,7 +1042,7 @@ nonisolated enum OverviewLogic {
     static func weekRangeTitle(
         for interval: DateInterval,
         isCurrentWeek: Bool,
-        calendar: Calendar = .current
+        calendar: Calendar = MistiaCalendar.current
     ) -> String {
         let weekEnd = calendar.date(byAdding: .day, value: -1, to: interval.end) ?? interval.start
         return MistiaDateFormatting.weekRangeTitle(

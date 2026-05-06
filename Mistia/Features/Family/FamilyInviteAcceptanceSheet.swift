@@ -38,14 +38,7 @@ struct FamilyInviteAcceptanceScreen: View {
                     signInRequiredContent
                 }
             }
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .principal) {
-                    Text(navigationTitle)
-                        .font(.system(size: 16, weight: .semibold, design: .rounded))
-                        .foregroundStyle(.primary)
-                }
-            }
+            .toolbar(.hidden, for: .navigationBar)
             .task(id: loadKey) {
                 await loadPreviewIfNeeded()
             }
@@ -151,9 +144,9 @@ struct FamilyInviteAcceptanceScreen: View {
         if preview.inviterUserID == sessionStore.signedInUserID {
             unavailableContent(
                 title: mistiaLocalized(
-                    vi: "Link này không dành cho bạn",
-                    en: "This link is not for you",
-                    ja: "このリンクは利用できません"
+                    vi: "Không dành cho bạn",
+                    en: "Not for you",
+                    ja: "利用できません"
                 ),
                 message: mistiaLocalized(
                     vi: "Bạn là người tạo lời mời này.",
@@ -165,7 +158,7 @@ struct FamilyInviteAcceptanceScreen: View {
             )
         } else if preview.alreadyMemberOfFamily {
             unavailableContent(
-                title: mistiaLocalized(vi: "Bạn đã là thành viên", en: "Already a member", ja: "すでにメンバーです"),
+                title: mistiaLocalized(vi: "Đã tham gia", en: "Already joined", ja: "参加済み"),
                 message: mistiaLocalized(
                     vi: "Tài khoản này đã ở trong \(preview.familyName).",
                     en: "This account is already in \(preview.familyName).",
@@ -177,9 +170,9 @@ struct FamilyInviteAcceptanceScreen: View {
         } else if preview.belongsToAnotherFamily {
             unavailableContent(
                 title: mistiaLocalized(
-                    vi: "Đang ở gia đình khác",
-                    en: "Already in another family",
-                    ja: "別の家族に参加中"
+                    vi: "Gia đình khác",
+                    en: "Another family",
+                    ja: "別の家族"
                 ),
                 message: mistiaLocalized(
                     vi: "Tài khoản này đang thuộc một gia đình khác.",
@@ -329,26 +322,6 @@ struct FamilyInviteAcceptanceScreen: View {
         return canRespond(to: preview)
     }
 
-    private var navigationTitle: String {
-        if !sessionStore.isSignedIn {
-            return mistiaLocalized(vi: "Cần đăng nhập", en: "Sign in required", ja: "ログインが必要")
-        }
-
-        if isLoading {
-            return mistiaLocalized(vi: "Lời mời gia đình", en: "Family invite", ja: "家族への招待")
-        }
-
-        if let preview, canRespond(to: preview) {
-            return mistiaLocalized(vi: "Chào mừng", en: "Welcome", ja: "ようこそ")
-        }
-
-        if isOfflineError {
-            return mistiaLocalized(vi: "Lỗi kết nối", en: "Connection error", ja: "接続エラー")
-        }
-
-        return mistiaLocalized(vi: "Lỗi lời mời", en: "Invite error", ja: "招待エラー")
-    }
-
     private var isOfflineError: Bool {
         guard let errorMessage else {
             return sessionStore.isOfflineModeActive
@@ -362,8 +335,8 @@ struct FamilyInviteAcceptanceScreen: View {
 
     private var offlineTitle: String {
         isOfflineError
-            ? mistiaLocalized(vi: "Không có kết nối", en: "No connection", ja: "接続がありません")
-            : mistiaLocalized(vi: "Lời mời không khả dụng", en: "Invite unavailable", ja: "招待を利用できません")
+            ? mistiaLocalized(vi: "Mất kết nối", en: "Offline", ja: "オフライン")
+            : mistiaLocalized(vi: "Không khả dụng", en: "Unavailable", ja: "利用不可")
     }
 
     private var offlineMessage: String {
@@ -455,15 +428,15 @@ struct FamilyInviteAcceptanceScreen: View {
         case .pending:
             return ""
         case .accepted:
-            return mistiaLocalized(vi: "Lời mời đã được dùng", en: "Invite already used", ja: "招待は使用済みです")
+            return mistiaLocalized(vi: "Đã được dùng", en: "Already used", ja: "使用済み")
         case .declined:
-            return mistiaLocalized(vi: "Lời mời đã bị từ chối", en: "Invite declined", ja: "招待は辞退済みです")
+            return mistiaLocalized(vi: "Đã từ chối", en: "Declined", ja: "辞退済み")
         case .expired:
-            return mistiaLocalized(vi: "Lời mời đã hết hạn", en: "Invite expired", ja: "招待の期限が切れました")
+            return mistiaLocalized(vi: "Hết hạn", en: "Expired", ja: "期限切れ")
         case .revoked:
-            return mistiaLocalized(vi: "Lời mời đã bị thu hồi", en: "Invite revoked", ja: "招待は取り消されました")
+            return mistiaLocalized(vi: "Đã thu hồi", en: "Revoked", ja: "取消済み")
         case .invalid:
-            return mistiaLocalized(vi: "Lời mời không hợp lệ", en: "Invite invalid", ja: "招待は無効です")
+            return mistiaLocalized(vi: "Không hợp lệ", en: "Invalid", ja: "無効")
         }
     }
 

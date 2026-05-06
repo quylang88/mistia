@@ -4,6 +4,38 @@ import XCTest
 final class PlanningLogicTests: XCTestCase {
     private let calendar = Calendar(identifier: .gregorian)
 
+    func testMonthKeyAndScheduledDateUseJapanLocalCalendarAtUTCBoundary() throws {
+        let japanCalendar = MistiaCalendar.gregorian(
+            locale: Locale(identifier: "ja_JP"),
+            timeZone: TimeZone(identifier: "Asia/Tokyo")!
+        )
+        let utcCalendar = MistiaCalendar.gregorian(
+            locale: Locale(identifier: "en_US_POSIX"),
+            timeZone: .gmt
+        )
+        let japanJuneInstant = try makeDate(
+            year: 2026,
+            month: 6,
+            day: 1,
+            hour: 0,
+            minute: 30,
+            calendar: japanCalendar
+        )
+
+        XCTAssertEqual(PlanningLogic.monthKey(for: japanJuneInstant, calendar: japanCalendar), "2026-06")
+        XCTAssertEqual(PlanningLogic.monthKey(for: japanJuneInstant, calendar: utcCalendar), "2026-05")
+
+        let dueDate = PlanningLogic.scheduledDate(
+            dueDay: 10,
+            selectedMonth: japanJuneInstant,
+            calendar: japanCalendar
+        )
+        let dueComponents = japanCalendar.dateComponents([.year, .month, .day], from: dueDate)
+        XCTAssertEqual(dueComponents.year, 2026)
+        XCTAssertEqual(dueComponents.month, 6)
+        XCTAssertEqual(dueComponents.day, 10)
+    }
+
     func testBudgetRowsSortByHighestProgressAndSummaryUsesThresholds() {
         let selectedMonth = makeDate(year: 2026, month: 4, day: 1)
         let referenceDate = makeDate(year: 2026, month: 4, day: 10)
@@ -1028,11 +1060,24 @@ final class PlanningLogicTests: XCTestCase {
     }
 
     private func makeDate(year: Int, month: Int, day: Int) -> Date {
+        (try? makeDate(year: year, month: month, day: day, calendar: calendar)) ?? .distantPast
+    }
+
+    private func makeDate(
+        year: Int,
+        month: Int,
+        day: Int,
+        hour: Int = 0,
+        minute: Int = 0,
+        calendar: Calendar
+    ) throws -> Date {
         var components = DateComponents()
         components.calendar = calendar
         components.year = year
         components.month = month
         components.day = day
-        return calendar.date(from: components) ?? .distantPast
+        components.hour = hour
+        components.minute = minute
+        return try XCTUnwrap(calendar.date(from: components))
     }
 }

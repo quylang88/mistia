@@ -561,7 +561,7 @@ struct ManagementWalletEditorSheet: View {
             }
 
             // Also check for any unpaid statements in recent months
-            let calendar = Calendar.current
+            let calendar = MistiaCalendar.current
             let currentMonth = PlanningLogic.startOfMonth(for: .now, calendar: calendar)
             let recentMonths = (0...3).compactMap { calendar.date(byAdding: .month, value: -$0, to: currentMonth) }
 

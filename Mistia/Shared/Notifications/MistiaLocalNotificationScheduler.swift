@@ -4,7 +4,7 @@ import UserNotifications
 
 @MainActor
 enum MistiaLocalNotificationScheduler {
-    private static let calendar = Calendar.current
+    private static var calendar: Calendar { MistiaCalendar.current }
     private static let reminderCategoryID = "mistia.reminders"
 
     static func rescheduleReminders(

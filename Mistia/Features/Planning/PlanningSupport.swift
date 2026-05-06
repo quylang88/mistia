@@ -88,7 +88,7 @@ enum PlanningPersistenceSupport {
         occurrences: [DueOccurrenceRecord],
         modelContext: ModelContext,
         actorUserID: UUID?,
-        calendar: Calendar = .current
+        calendar: Calendar = MistiaCalendar.current
     ) throws -> PlanningSavedDuePayment {
         let now = Date()
         let transaction = LedgerTransaction(
@@ -178,7 +178,7 @@ enum PlanningPersistenceSupport {
         occurrences: [DueOccurrenceRecord],
         modelContext: ModelContext,
         paidAt: Date? = nil,
-        calendar: Calendar = .current
+        calendar: Calendar = MistiaCalendar.current
     ) throws -> DueOccurrenceRecord {
         let monthKey = PlanningLogic.monthKey(for: selectedMonth, calendar: calendar)
         let legacyCreditCardDueMonthKey = sourceKind == .creditCard
@@ -235,7 +235,7 @@ enum PlanningPersistenceSupport {
 }
 
 extension BudgetPlan {
-    func planningSnapshot(calendar: Calendar = .current) -> BudgetPlanSnapshot {
+    func planningSnapshot(calendar: Calendar = MistiaCalendar.current) -> BudgetPlanSnapshot {
         BudgetPlanSnapshot(
             id: id,
             categoryID: category?.id,
@@ -392,7 +392,7 @@ extension LedgerWallet {
 }
 
 extension PlanningCreditCardDueSnapshot {
-    func tone(referenceDate: Date, calendar: Calendar = .current) -> PlanningDueRowTone {
+    func tone(referenceDate: Date, calendar: Calendar = MistiaCalendar.current) -> PlanningDueRowTone {
         if status == .paid { return .paid }
 
         let startOfToday = calendar.startOfDay(for: referenceDate)
@@ -410,7 +410,7 @@ extension PlanningCreditCardDueSnapshot {
 }
 
 extension PlanningRecurringDueSnapshot {
-    func tone(referenceDate: Date, calendar: Calendar = .current) -> PlanningDueRowTone {
+    func tone(referenceDate: Date, calendar: Calendar = MistiaCalendar.current) -> PlanningDueRowTone {
         if status == .paid { return .paid }
 
         let startOfToday = calendar.startOfDay(for: referenceDate)

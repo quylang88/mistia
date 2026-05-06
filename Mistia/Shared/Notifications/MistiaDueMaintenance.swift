@@ -12,7 +12,7 @@ enum MistiaDueMaintenance {
         modelContext: ModelContext,
         sessionStore: SessionStore,
         referenceDate: Date = .now,
-        calendar: Calendar = .current
+        calendar: Calendar = MistiaCalendar.current
     ) async {
         await MistiaCreditCardStatementMaintenance.run(
             modelContext: modelContext,

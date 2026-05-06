@@ -8,7 +8,7 @@ enum MistiaBootstrap {
     ) throws {
         guard sessionStore.canManageSync else { return }
 
-        let thresholdDate = Calendar.current.date(byAdding: .day, value: -30, to: Date()) ?? Date()
+        let thresholdDate = MistiaCalendar.current.date(byAdding: .day, value: -30, to: Date()) ?? Date()
         
         var didDelete = false
         

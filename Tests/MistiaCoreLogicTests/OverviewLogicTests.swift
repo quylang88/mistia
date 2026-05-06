@@ -104,6 +104,34 @@ final class OverviewLogicTests: XCTestCase {
         XCTAssertEqual(points[5].intensity, 1)
     }
 
+    func testRecentSevenDaySpendingGroupsRawUTCInstantByJapanLocalDay() throws {
+        let japanCalendar = MistiaCalendar.gregorian(
+            locale: Locale(identifier: "ja_JP"),
+            timeZone: TimeZone(identifier: "Asia/Tokyo")!
+        )
+        let referenceDate = try makeDate(year: 2026, month: 5, day: 6, hour: 12, calendar: japanCalendar)
+        let utcPreviousDayInstant = try makeDate(year: 2026, month: 5, day: 6, hour: 0, minute: 30, calendar: japanCalendar)
+        let records = [
+            makeTransactionRecord(
+                primaryKind: .expense,
+                amountMinor: 2_500,
+                occurredAt: utcPreviousDayInstant
+            )
+        ]
+
+        let points = OverviewLogic.recentSevenDaySpendingChartPoints(
+            from: records,
+            referenceDate: referenceDate,
+            calendar: japanCalendar
+        )
+
+        XCTAssertEqual(points.map(\.valueMinor), [0, 0, 0, 0, 0, 0, 2_500])
+        XCTAssertEqual(
+            japanCalendar.dateComponents([.year, .month, .day], from: points.last?.date ?? .distantPast).day,
+            6
+        )
+    }
+
     func testWeeklySpendingPagesUseMondayToSundayForCurrentWeek() throws {
         let referenceDate = makeDate(year: 2026, month: 4, day: 9, hour: 12)
         let records = [
@@ -999,6 +1027,17 @@ final class OverviewLogicTests: XCTestCase {
         hour: Int = 0,
         minute: Int = 0
     ) -> Date {
+        (try? makeDate(year: year, month: month, day: day, hour: hour, minute: minute, calendar: calendar)) ?? .distantPast
+    }
+
+    private func makeDate(
+        year: Int,
+        month: Int,
+        day: Int,
+        hour: Int = 0,
+        minute: Int = 0,
+        calendar: Calendar
+    ) throws -> Date {
         var components = DateComponents()
         components.calendar = calendar
         components.year = year
@@ -1006,6 +1045,6 @@ final class OverviewLogicTests: XCTestCase {
         components.day = day
         components.hour = hour
         components.minute = minute
-        return calendar.date(from: components) ?? .distantPast
+        return try XCTUnwrap(calendar.date(from: components))
     }
 }

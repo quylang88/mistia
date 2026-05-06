@@ -26,9 +26,7 @@ nonisolated enum MistiaAppLanguage: String, CaseIterable, Identifiable, Codable 
     }
 
     var calendar: Calendar {
-        var calendar = Calendar(identifier: .gregorian)
-        calendar.locale = locale
-        return calendar
+        MistiaCalendar.gregorian(locale: locale)
     }
 
     var displayName: String {
@@ -143,6 +141,22 @@ nonisolated func mistiaCatalog(
     )
 }
 
+nonisolated enum MistiaCalendar {
+    static var current: Calendar {
+        gregorian(locale: .autoupdatingCurrent)
+    }
+
+    static func gregorian(
+        locale: Locale? = nil,
+        timeZone: TimeZone = .autoupdatingCurrent
+    ) -> Calendar {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.locale = locale ?? .autoupdatingCurrent
+        calendar.timeZone = timeZone
+        return calendar
+    }
+}
+
 nonisolated enum MistiaDateFormatting {
     static func shortDateString(
         for date: Date,
@@ -160,7 +174,14 @@ nonisolated enum MistiaDateFormatting {
         calendar: Calendar? = nil
     ) -> String {
         let f = formatter(language: language, calendar: calendar)
-        f.dateFormat = "dd/MM/yyyy"
+        switch language {
+        case .vietnamese:
+            f.dateFormat = "dd/MM/yyyy"
+        case .english:
+            f.dateFormat = "MM/dd/yyyy"
+        case .japanese:
+            f.dateFormat = "yyyy/MM/dd"
+        }
         return f.string(from: date)
     }
 
@@ -273,7 +294,7 @@ nonisolated enum MistiaDateFormatting {
     static func relativeTimeLabel(
         for date: Date,
         referenceDate: Date = .now,
-        calendar: Calendar = .current,
+        calendar: Calendar = MistiaCalendar.current,
         language: MistiaAppLanguage = .current
     ) -> String {
         let diff = referenceDate.timeIntervalSince(date)
@@ -332,7 +353,9 @@ nonisolated enum MistiaDateFormatting {
     ) -> DateFormatter {
         let formatter = DateFormatter()
         formatter.locale = language.locale
-        formatter.calendar = calendar ?? language.calendar
+        let resolvedCalendar = calendar ?? language.calendar
+        formatter.calendar = resolvedCalendar
+        formatter.timeZone = resolvedCalendar.timeZone
         if let template {
             formatter.setLocalizedDateFormatFromTemplate(template)
         }

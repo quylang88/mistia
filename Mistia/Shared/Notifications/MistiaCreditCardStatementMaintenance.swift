@@ -7,7 +7,7 @@ enum MistiaCreditCardStatementMaintenance {
         modelContext: ModelContext,
         sessionStore: SessionStore,
         referenceDate: Date = .now,
-        calendar: Calendar = .current
+        calendar: Calendar = MistiaCalendar.current
     ) async {
         let wallets = (try? modelContext.fetch(
             FetchDescriptor<LedgerWallet>(

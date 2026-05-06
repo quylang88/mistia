@@ -451,7 +451,7 @@ final class FamilyContextStore {
             let invite = try await service.createInvite(
                 familyID: familyID,
                 defaultRole: defaultRole,
-                expiresAt: Calendar.current.date(byAdding: .day, value: 7, to: .now) ?? .now,
+                expiresAt: MistiaCalendar.current.date(byAdding: .day, value: 7, to: .now) ?? .now,
                 session: session
             )
             upsertInvite(invite)

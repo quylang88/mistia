@@ -401,7 +401,7 @@ private enum MistiaOverviewDebugFixtures {
         let dineOut = try MistiaBootstrap.ensureSystemCategory(.dineOut, modelContext: modelContext)
         let rent = try MistiaBootstrap.ensureSystemCategory(.rent, modelContext: modelContext)
         let medicine = try MistiaBootstrap.ensureSystemCategory(.medicine, modelContext: modelContext)
-        let calendar = Calendar(identifier: .gregorian)
+        let calendar = MistiaCalendar.current
         let currentMonth = PlanningLogic.startOfMonth(for: .now, calendar: calendar)
         let previousMonth = calendar.date(byAdding: .month, value: -1, to: currentMonth) ?? currentMonth
         let existingTransactionIDs = Set(try modelContext.fetch(FetchDescriptor<LedgerTransaction>()).map(\.id))
