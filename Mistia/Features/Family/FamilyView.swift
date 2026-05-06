@@ -2405,7 +2405,7 @@ private struct FamilyInviteManagementScreen: View {
             }
         }
         .sheet(item: $activeShareItem) { item in
-            FamilyInviteActivitySheet(message: item.message, inviteURL: item.inviteURL) {
+            FamilyInviteActivitySheet(message: item.message) {
                 activeShareItem = nil
             }
         }
@@ -2515,8 +2515,7 @@ private struct FamilyInviteManagementScreen: View {
 
     private func shareInvite(_ invite: FamilyInviteRecord) {
         activeShareItem = FamilyInviteShareItem(
-            message: familyContextStore.shareMessage(for: invite),
-            inviteURL: familyContextStore.inviteLink(for: invite)
+            message: familyContextStore.shareMessage(for: invite)
         )
     }
 
@@ -2744,7 +2743,7 @@ private struct FamilyInviteSheet: View {
             }
         }
         .sheet(item: $activeShareItem) { item in
-            FamilyInviteActivitySheet(message: item.message, inviteURL: item.inviteURL) {
+            FamilyInviteActivitySheet(message: item.message) {
                 activeShareItem = nil
                 dismiss()
             }
@@ -2766,8 +2765,7 @@ private struct FamilyInviteSheet: View {
         }
 
         activeShareItem = FamilyInviteShareItem(
-            message: familyContextStore.shareMessage(for: invite),
-            inviteURL: familyContextStore.inviteLink(for: invite)
+            message: familyContextStore.shareMessage(for: invite)
         )
     }
 
@@ -2819,12 +2817,10 @@ private struct FamilyInviteRoleOptionRow: View {
 private struct FamilyInviteShareItem: Identifiable {
     let id = UUID()
     let message: String
-    let inviteURL: URL
 }
 
 private struct FamilyInviteActivitySheet: UIViewControllerRepresentable {
     let message: String
-    let inviteURL: URL
     let onComplete: () -> Void
 
     func makeCoordinator() -> Coordinator {
@@ -2832,7 +2828,7 @@ private struct FamilyInviteActivitySheet: UIViewControllerRepresentable {
     }
 
     func makeUIViewController(context: Context) -> UIActivityViewController {
-        let controller = UIActivityViewController(activityItems: [message, inviteURL], applicationActivities: nil)
+        let controller = UIActivityViewController(activityItems: [message], applicationActivities: nil)
         controller.completionWithItemsHandler = { _, _, _, _ in
             context.coordinator.complete()
         }

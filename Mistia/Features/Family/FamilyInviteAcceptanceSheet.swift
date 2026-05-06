@@ -15,7 +15,7 @@ struct FamilyInviteAcceptanceScreen: View {
     @State private var isDeclining = false
     @State private var isOpeningAccount = false
     @State private var showsAccount = false
-    @State private var showsDeclineCallout = false
+    @State private var pendingResponseAction: FamilyInviteResponseAction?
 
     private var accent: Color {
         colorScheme == .dark ? MistiaAccent.lightPurple.color : MistiaAccent.purple.color
@@ -212,45 +212,56 @@ struct FamilyInviteAcceptanceScreen: View {
     }
 
     private func actionsSection(_ preview: FamilyInvitePreviewRecord) -> some View {
-        VStack(spacing: 12) {
-            if showsDeclineCallout {
-                FamilyInviteDeclineCallout(
-                    isDeclining: isDeclining,
-                    onCancel: {
-                        withAnimation(.snappy) {
-                            showsDeclineCallout = false
-                        }
-                    },
-                    onConfirm: {
-                        Task { await decline() }
-                    }
-                )
-                .transition(.move(edge: .bottom).combined(with: .opacity))
+        HStack(spacing: 12) {
+            FamilyInviteActionButton(
+                title: mistiaLocalized(vi: "Chấp nhận", en: "Accept", ja: "承認"),
+                systemImage: "checkmark",
+                style: .primary(accent),
+                isLoading: isAccepting,
+                isDisabled: isDeclining
+            ) {
+                presentResponseAction(.accept)
             }
 
-            HStack(spacing: 12) {
-                FamilyInviteActionButton(
-                    title: mistiaLocalized(vi: "Chấp nhận", en: "Accept", ja: "承認"),
-                    systemImage: "checkmark",
-                    style: .primary(accent),
-                    isLoading: isAccepting,
-                    isDisabled: isDeclining
-                ) {
-                    Task { await accept(preview) }
-                }
-
-                FamilyInviteActionButton(
-                    title: mistiaLocalized(vi: "Từ chối", en: "Decline", ja: "辞退"),
-                    systemImage: "xmark",
-                    style: .secondary(.red),
-                    isDisabled: isAccepting || isDeclining
-                ) {
-                    withAnimation(.snappy) {
-                        showsDeclineCallout = true
-                    }
-                }
+            FamilyInviteActionButton(
+                title: mistiaLocalized(vi: "Từ chối", en: "Decline", ja: "辞退"),
+                systemImage: "xmark",
+                style: .secondary(.red),
+                isDisabled: isAccepting || isDeclining
+            ) {
+                presentResponseAction(.decline)
             }
         }
+        .overlay {
+            if pendingResponseAction != nil {
+                Color.clear
+                    .contentShape(Rectangle())
+                    .onTapGesture {
+                        dismissResponseMenu()
+                    }
+                    .allowsHitTesting(!isAccepting && !isDeclining)
+            }
+        }
+        .overlay(alignment: .bottom) {
+            if let pendingResponseAction {
+                FamilyInviteResponseMenu(
+                    action: pendingResponseAction,
+                    accent: accent,
+                    isLoading: isAccepting || isDeclining,
+                    onConfirm: {
+                        switch pendingResponseAction {
+                        case .accept:
+                            Task { await accept(preview) }
+                        case .decline:
+                            Task { await decline() }
+                        }
+                    }
+                )
+                .padding(.bottom, 62)
+                .transition(.scale(scale: 0.96, anchor: .bottom).combined(with: .opacity))
+            }
+        }
+        .animation(.snappy, value: pendingResponseAction)
     }
 
     private func unavailableContent(
@@ -360,7 +371,7 @@ struct FamilyInviteAcceptanceScreen: View {
 
         isLoading = true
         errorMessage = nil
-        showsDeclineCallout = false
+        pendingResponseAction = nil
         defer { isLoading = false }
 
         do {
@@ -378,7 +389,7 @@ struct FamilyInviteAcceptanceScreen: View {
         guard !isAccepting else { return }
 
         isAccepting = true
-        showsDeclineCallout = false
+        pendingResponseAction = nil
         defer { isAccepting = false }
 
         let didJoin = await familyContextStore.acceptInvite(
@@ -417,9 +428,23 @@ struct FamilyInviteAcceptanceScreen: View {
         if didDecline {
             dismiss()
         } else {
-            showsDeclineCallout = false
+            pendingResponseAction = nil
             errorMessage = familyContextStore.lastErrorMessage
             await loadPreviewIfNeeded(force: true)
+        }
+    }
+
+    private func presentResponseAction(_ action: FamilyInviteResponseAction) {
+        guard !isAccepting, !isDeclining else { return }
+        withAnimation(.snappy) {
+            pendingResponseAction = pendingResponseAction == action ? nil : action
+        }
+    }
+
+    private func dismissResponseMenu() {
+        guard !isAccepting, !isDeclining else { return }
+        withAnimation(.snappy) {
+            pendingResponseAction = nil
         }
     }
 
@@ -698,6 +723,73 @@ private struct FamilyInviteGlassBackground: View {
     }
 }
 
+private enum FamilyInviteResponseAction: Equatable {
+    case accept
+    case decline
+
+    var title: String {
+        switch self {
+        case .accept:
+            return mistiaLocalized(vi: "Chấp nhận lời mời?", en: "Accept this invite?", ja: "この招待を承認しますか？")
+        case .decline:
+            return mistiaLocalized(vi: "Từ chối lời mời?", en: "Decline this invite?", ja: "この招待を辞退しますか？")
+        }
+    }
+
+    var message: String {
+        switch self {
+        case .accept:
+            return mistiaLocalized(
+                vi: "Bạn sẽ tham gia gia đình này sau khi xác nhận.",
+                en: "You will join this family after confirming.",
+                ja: "確認するとこのファミリーに参加します。"
+            )
+        case .decline:
+            return mistiaLocalized(
+                vi: "Link này sẽ không dùng lại được.",
+                en: "This link cannot be used again.",
+                ja: "このリンクは再利用できません。"
+            )
+        }
+    }
+
+    var confirmTitle: String {
+        switch self {
+        case .accept:
+            return mistiaLocalized(vi: "Chấp nhận", en: "Accept", ja: "承認")
+        case .decline:
+            return mistiaLocalized(vi: "Từ chối", en: "Decline", ja: "辞退")
+        }
+    }
+
+    var systemImage: String {
+        switch self {
+        case .accept:
+            return "checkmark"
+        case .decline:
+            return "xmark"
+        }
+    }
+
+    func tint(accent: Color) -> Color {
+        switch self {
+        case .accept:
+            return accent
+        case .decline:
+            return .red
+        }
+    }
+
+    func buttonStyle(accent: Color) -> FamilyInviteActionButtonStyle {
+        switch self {
+        case .accept:
+            return .primary(accent)
+        case .decline:
+            return .destructive
+        }
+    }
+}
+
 private enum FamilyInviteActionButtonStyle {
     case primary(Color)
     case secondary(Color)
@@ -705,6 +797,8 @@ private enum FamilyInviteActionButtonStyle {
 }
 
 private struct FamilyInviteActionButton: View {
+    @Environment(\.colorScheme) private var colorScheme
+
     let title: String
     let systemImage: String?
     let style: FamilyInviteActionButtonStyle
@@ -753,7 +847,16 @@ private struct FamilyInviteActionButton: View {
             .foregroundStyle(foregroundColor)
             .padding(.vertical, 16)
             .padding(.horizontal, 16)
-            .background(backgroundFill, in: Capsule())
+            .background {
+                Capsule()
+                    .fill(backgroundFill)
+
+                if #available(iOS 26.0, *) {
+                    Capsule()
+                        .fill(.clear)
+                        .glassEffect(nativeGlassStyle, in: .capsule)
+                }
+            }
             .overlay {
                 Capsule()
                     .strokeBorder(borderFill, lineWidth: 0.8)
@@ -795,67 +898,56 @@ private struct FamilyInviteActionButton: View {
             return .white.opacity(0.16)
         }
     }
-}
 
-private struct FamilyInviteDeclineCallout: View {
-    let isDeclining: Bool
-    let onCancel: () -> Void
-    let onConfirm: () -> Void
-
-    var body: some View {
-        VStack(spacing: 0) {
-            FamilyInviteGlassSurface(cornerRadius: 22, tint: Color.red.opacity(0.10), padding: 16) {
-                VStack(alignment: .leading, spacing: 14) {
-                    Label(
-                        mistiaLocalized(vi: "Từ chối lời mời?", en: "Decline this invite?", ja: "この招待を辞退しますか？"),
-                        systemImage: "exclamationmark.triangle.fill"
-                    )
-                    .font(.system(size: 16, weight: .bold, design: .rounded))
-                    .foregroundStyle(.red)
-
-                    Text(mistiaLocalized(
-                        vi: "Link này sẽ không dùng lại được.",
-                        en: "This link cannot be used again.",
-                        ja: "このリンクは再利用できません。"
-                    ))
-                    .font(.system(size: 14, weight: .medium, design: .rounded))
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-
-                    HStack(spacing: 10) {
-                        FamilyInviteActionButton(
-                            title: mistiaLocalized(vi: "Hủy", en: "Cancel", ja: "キャンセル"),
-                            style: .secondary(.secondary),
-                            isDisabled: isDeclining,
-                            action: onCancel
-                        )
-
-                        FamilyInviteActionButton(
-                            title: mistiaLocalized(vi: "Từ chối", en: "Decline", ja: "辞退"),
-                            style: .destructive,
-                            isLoading: isDeclining,
-                            action: onConfirm
-                        )
-                    }
-                }
-            }
-
-            FamilyInviteCalloutArrow()
-                .fill(Color(UIColor.secondarySystemGroupedBackground))
-                .frame(width: 22, height: 11)
-                .padding(.trailing, 54)
-                .frame(maxWidth: .infinity, alignment: .trailing)
+    @available(iOS 26.0, *)
+    private var nativeGlassStyle: Glass {
+        let tintOpacity: Double
+        switch style {
+        case .primary:
+            tintOpacity = colorScheme == .dark ? 0.30 : 0.42
+        case .secondary:
+            tintOpacity = colorScheme == .dark ? 0.16 : 0.22
+        case .destructive:
+            tintOpacity = colorScheme == .dark ? 0.28 : 0.38
         }
+
+        var glass = Glass.regular.tint(backgroundFill.opacity(tintOpacity))
+        if !isDisabled && !isLoading {
+            glass = glass.interactive(true)
+        }
+        return glass
     }
 }
 
-private struct FamilyInviteCalloutArrow: Shape {
-    func path(in rect: CGRect) -> Path {
-        var path = Path()
-        path.move(to: CGPoint(x: rect.midX, y: rect.maxY))
-        path.addLine(to: CGPoint(x: rect.minX, y: rect.minY))
-        path.addLine(to: CGPoint(x: rect.maxX, y: rect.minY))
-        path.closeSubpath()
-        return path
+private struct FamilyInviteResponseMenu: View {
+    let action: FamilyInviteResponseAction
+    let accent: Color
+    let isLoading: Bool
+    let onConfirm: () -> Void
+
+    var body: some View {
+        FamilyInviteGlassSurface(cornerRadius: 22, tint: action.tint(accent: accent).opacity(0.12), padding: 16) {
+            VStack(alignment: .leading, spacing: 14) {
+                VStack(alignment: .leading, spacing: 6) {
+                    Text(action.title)
+                        .font(.system(size: 16, weight: .bold, design: .rounded))
+                        .foregroundStyle(action.tint(accent: accent))
+
+                    Text(action.message)
+                        .font(.system(size: 14, weight: .medium, design: .rounded))
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+
+                FamilyInviteActionButton(
+                    title: action.confirmTitle,
+                    systemImage: action.systemImage,
+                    style: action.buttonStyle(accent: accent),
+                    isLoading: isLoading,
+                    action: onConfirm
+                )
+            }
+        }
+        .frame(maxWidth: .infinity)
     }
 }

@@ -19,7 +19,7 @@ struct PlanningBudgetEditorSheet: View {
 
     @State private var draft: PlanningBudgetDraft
     @State private var alertMessage: String?
-    @State private var showsDeleteConfirmation = false
+    @State private var showsArchiveConfirmation = false
     @State private var showsCategoryPicker = false
 
     init(target: PlanningBudgetEditorTarget) {
@@ -128,8 +128,11 @@ struct PlanningBudgetEditorSheet: View {
 
                 if target.budget != nil {
                     Section {
-                        Button(mistiaLocalized(vi: "Xóa ngân sách", en: "Delete budget", ja: "予算を削除"), role: .destructive) {
-                            showsDeleteConfirmation = true
+                        Button(role: .destructive) {
+                            showsArchiveConfirmation = true
+                        } label: {
+                            Text(mistiaLocalized(vi: "Lưu trữ ngân sách", en: "Archive budget", ja: "予算をアーカイブ"))
+                                .foregroundStyle(Color.red.opacity(0.9))
                         }
                     }
                 }
@@ -166,17 +169,21 @@ struct PlanningBudgetEditorSheet: View {
             }
         }
         .confirmationDialog(
-            mistiaLocalized(vi: "Xóa ngân sách này?", en: "Delete this budget?", ja: "この予算を削除しますか？"),
-            isPresented: $showsDeleteConfirmation,
+            mistiaLocalized(vi: "Lưu trữ ngân sách này?", en: "Archive this budget?", ja: "この予算をアーカイブしますか？"),
+            isPresented: $showsArchiveConfirmation,
             titleVisibility: .visible
         ) {
-            Button(mistiaLocalized(vi: "Xóa", en: "Delete", ja: "削除"), role: .destructive) {
-                deleteBudget()
+            Button(mistiaLocalized(vi: "Lưu trữ", en: "Archive", ja: "アーカイブ"), role: .destructive) {
+                archiveBudget()
             }
 
             Button(mistiaLocalized(vi: "Hủy", en: "Cancel", ja: "キャンセル"), role: .cancel) { }
         } message: {
-            Text(mistiaLocalized(vi: "Ngân sách của danh mục này trong tháng đang xem sẽ bị xóa.", en: "The budget for this category in the current month will be deleted.", ja: "現在表示中の月にあるこのカテゴリの予算が削除されます。"))
+            Text(mistiaLocalized(
+                vi: "Ngân sách lưu trữ sẽ không còn hiện trong tab Kế hoạch.",
+                en: "Archived budgets will no longer appear in Planning.",
+                ja: "アーカイブした予算はプラン画面に表示されなくなります。"
+            ))
         }
     }
 
@@ -369,21 +376,22 @@ struct PlanningBudgetEditorSheet: View {
         }
     }
 
-    private func deleteBudget() {
+    private func archiveBudget() {
         guard let budget = target.budget else { return }
         let now = Date()
-        budget.markDeleted(at: now)
+        budget.isArchived = true
+        budget.updatedAt = now
 
         do {
             try modelContext.save()
-            sessionStore.recordDelete(
+            sessionStore.recordUpsert(
                 entity: .budgetPlan,
                 recordID: budget.id,
                 modifiedAt: now
             )
             dismiss()
         } catch {
-            alertMessage = mistiaLocalized(vi: "Không thể xóa ngân sách lúc này.", en: "Couldn't delete this budget right now.", ja: "現在この予算を削除できません。") + " \(error.localizedDescription)"
+            alertMessage = mistiaLocalized(vi: "Không thể lưu trữ ngân sách lúc này.", en: "Couldn't archive this budget right now.", ja: "現在この予算をアーカイブできません。") + " \(error.localizedDescription)"
         }
     }
 

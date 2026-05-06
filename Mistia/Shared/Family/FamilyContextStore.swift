@@ -658,14 +658,17 @@ final class FamilyContextStore {
     }
 
     func shareMessage(for invite: FamilyInviteRecord) -> String {
+        let inviteLinkText = inviteLink(for: invite).absoluteString
         guard let family else {
-            return inviteLink(for: invite).absoluteString
+            return inviteLinkText
         }
 
         return """
         \(mistiaLocalized(vi: "Bạn đã được mời tham gia gia đình", en: "You've been invited to join the family", ja: "家族への招待が届いています")) \(family.name) \(mistiaLocalized(vi: "trên Mistia.", en: "on Mistia.", ja: "にMistiaで参加できます。"))
 
-        \(mistiaLocalized(vi: "Mở link bên dưới bằng Mistia. App sẽ hiển thị lời mời trước khi bạn xác nhận tham gia.", en: "Open the link below with Mistia. The app will show the invite before you confirm joining.", ja: "下のリンクをMistiaで開いてください。参加を確定する前に招待内容を確認できます。"))
+        \(mistiaLocalized(vi: "Hãy mở link dưới để tham gia ngay!", en: "Open the link below to join now!", ja: "下のリンクを開いて今すぐ参加してください！"))
+
+        \(inviteLinkText)
         """
     }
 
