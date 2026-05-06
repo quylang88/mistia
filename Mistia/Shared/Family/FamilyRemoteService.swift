@@ -19,6 +19,10 @@ protocol FamilyRemoteServicing {
         token: String,
         session: SupabaseAuthSession
     ) async throws -> FamilyStateSnapshot
+    func declineInvite(
+        token: String,
+        session: SupabaseAuthSession
+    ) async throws -> FamilyInviteRecord
     func createInvite(
         familyID: UUID,
         defaultRole: FamilyRole,
@@ -87,6 +91,13 @@ extension FamilyRemoteServicing {
         session: SupabaseAuthSession
     ) async throws -> FamilyStateSnapshot {
         try await joinInvite(code: token, session: session)
+    }
+
+    func declineInvite(
+        token: String,
+        session: SupabaseAuthSession
+    ) async throws -> FamilyInviteRecord {
+        throw SupabaseServiceError.serverMessage("Family invite decline is unavailable.")
     }
 
     func revokeInvite(
@@ -199,6 +210,8 @@ struct FamilyInviteRecord: Codable, Identifiable, Equatable {
     let expiresAt: Date
     let acceptedAt: Date?
     let acceptedByUserID: UUID?
+    let declinedAt: Date?
+    let declinedByUserID: UUID?
     let revokedAt: Date?
     let deletedAt: Date?
     let createdAt: Date
@@ -214,6 +227,8 @@ struct FamilyInviteRecord: Codable, Identifiable, Equatable {
         case expiresAt = "expires_at"
         case acceptedAt = "accepted_at"
         case acceptedByUserID = "accepted_by_user_id"
+        case declinedAt = "declined_at"
+        case declinedByUserID = "declined_by_user_id"
         case revokedAt = "revoked_at"
         case deletedAt = "deleted_at"
         case createdAt = "created_at"
@@ -230,6 +245,9 @@ struct FamilyInviteRecord: Codable, Identifiable, Equatable {
         }
         if acceptedAt != nil {
             return .accepted
+        }
+        if declinedAt != nil {
+            return .declined
         }
         if revokedAt != nil {
             return .revoked
@@ -458,6 +476,17 @@ struct FamilyRemoteService: FamilyRemoteServicing {
             session: session
         )
         return try await fetchState(session: session)
+    }
+
+    func declineInvite(
+        token: String,
+        session: SupabaseAuthSession
+    ) async throws -> FamilyInviteRecord {
+        try await callRPC(
+            functionName: "decline_family_invite",
+            body: DeclineFamilyInviteRPCBody(token: token),
+            session: session
+        )
     }
 
     func createInvite(
@@ -877,7 +906,7 @@ struct FamilyRemoteService: FamilyRemoteServicing {
             ))
         }
 
-        if invite.acceptedAt != nil || invite.revokedAt != nil {
+        if invite.acceptedAt != nil || invite.declinedAt != nil || invite.revokedAt != nil {
             throw SupabaseServiceError.serverMessage(mistiaLocalized(
                 vi: "Mã mời này không còn hiệu lực.",
                 en: "This invite code is no longer valid.",
@@ -1239,6 +1268,14 @@ private struct PreviewFamilyInviteRPCBody: Encodable {
 }
 
 private struct AcceptFamilyInviteRPCBody: Encodable {
+    let token: String
+
+    enum CodingKeys: String, CodingKey {
+        case token = "p_token"
+    }
+}
+
+private struct DeclineFamilyInviteRPCBody: Encodable {
     let token: String
 
     enum CodingKeys: String, CodingKey {

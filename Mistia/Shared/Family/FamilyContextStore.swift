@@ -7,6 +7,12 @@ enum FamilyRefreshSource {
     case postManualSync
 }
 
+struct FamilyOverviewPresentationRoute: Identifiable, Equatable {
+    let familyID: UUID
+
+    var id: UUID { familyID }
+}
+
 @MainActor
 @Observable
 final class FamilyContextStore {
@@ -19,6 +25,7 @@ final class FamilyContextStore {
     var invites: [FamilyInviteRecord] = []
     var walletAccessGrants: [FamilyWalletAccessGrantRecord] = []
     var pendingInviteRoute: FamilyInviteRoute?
+    var pendingFamilyOverviewRoute: FamilyOverviewPresentationRoute?
     var lastErrorMessage: String?
     var isLoading = false
     var isRefreshingLatest = false
@@ -109,6 +116,14 @@ final class FamilyContextStore {
 
     var canInviteMembers: Bool {
         currentRole == .owner
+    }
+
+    var activePendingInviteCount: Int {
+        invites.filter { $0.status == .pending }.count
+    }
+
+    var canCreatePendingInvite: Bool {
+        activePendingInviteCount < 2
     }
 
     var hasCachedRemoteState: Bool {
@@ -353,6 +368,15 @@ final class FamilyContextStore {
         pendingInviteRoute = nil
     }
 
+    func requestFamilyOverviewPresentation(familyID: UUID? = nil) {
+        guard let familyID = familyID ?? family?.id else { return }
+        pendingFamilyOverviewRoute = FamilyOverviewPresentationRoute(familyID: familyID)
+    }
+
+    func clearFamilyOverviewPresentationRequest() {
+        pendingFamilyOverviewRoute = nil
+    }
+
     func previewInvite(
         token: String,
         sessionStore: SessionStore
@@ -387,11 +411,40 @@ final class FamilyContextStore {
         }
     }
 
+    func declineInvite(
+        token: String,
+        sessionStore: SessionStore
+    ) async -> Bool {
+        guard let session = await prepareRemoteSession(using: sessionStore) else { return false }
+
+        isLoading = true
+        defer { isLoading = false }
+
+        do {
+            let declinedInvite = try await service.declineInvite(token: token, session: session)
+            upsertInvite(declinedInvite)
+            lastErrorMessage = nil
+            clearPendingInvite()
+            return true
+        } catch {
+            lastErrorMessage = visibleErrorMessage(for: error, sessionStore: sessionStore)
+            return false
+        }
+    }
+
     func createInvite(
         defaultRole: FamilyRole,
         sessionStore: SessionStore
     ) async -> FamilyInviteRecord? {
         guard let familyID = family?.id else { return nil }
+        guard canCreatePendingInvite else {
+            lastErrorMessage = mistiaLocalized(
+                vi: "Bạn chỉ có thể có tối đa 2 lời mời đang chờ.",
+                en: "You can only have up to 2 pending invites.",
+                ja: "待機中の招待は最大2件までです。"
+            )
+            return nil
+        }
         guard let session = await prepareRemoteSession(using: sessionStore) else { return nil }
 
         do {
@@ -401,7 +454,7 @@ final class FamilyContextStore {
                 expiresAt: Calendar.current.date(byAdding: .day, value: 7, to: .now) ?? .now,
                 session: session
             )
-            invites.insert(invite, at: 0)
+            upsertInvite(invite)
             return invite
         } catch {
             lastErrorMessage = visibleErrorMessage(for: error, sessionStore: sessionStore)
@@ -418,11 +471,7 @@ final class FamilyContextStore {
 
         do {
             let revokedInvite = try await service.revokeInvite(inviteID: invite.id, session: session)
-            if let index = invites.firstIndex(where: { $0.id == revokedInvite.id }) {
-                invites[index] = revokedInvite
-            } else {
-                invites.insert(revokedInvite, at: 0)
-            }
+            upsertInvite(revokedInvite)
             lastErrorMessage = nil
         } catch {
             lastErrorMessage = visibleErrorMessage(for: error, sessionStore: sessionStore)
@@ -826,6 +875,14 @@ final class FamilyContextStore {
         }
 
         return error.localizedDescription
+    }
+
+    private func upsertInvite(_ invite: FamilyInviteRecord) {
+        if let index = invites.firstIndex(where: { $0.id == invite.id }) {
+            invites[index] = invite
+        } else {
+            invites.insert(invite, at: 0)
+        }
     }
 
     private func permissionRequestTitle(

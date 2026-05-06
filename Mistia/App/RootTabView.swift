@@ -181,6 +181,13 @@ struct RootTabView: View {
       .onChange(of: selectedTab) { _, _ in
         dismissQuickCreateMenu()
       }
+      .onChange(of: familyContextStore.pendingFamilyOverviewRoute?.id) { _, familyID in
+        guard familyID != nil else { return }
+        dismissQuickCreateMenu()
+        familyContextStore.activateFamilyHome()
+        activeSheet = .shortcut(.familyOverview)
+        familyContextStore.clearFamilyOverviewPresentationRequest()
+      }
     }
   }
 

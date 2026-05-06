@@ -9,6 +9,7 @@ struct FamilyInviteRoute: Codable, Equatable, Identifiable {
 enum FamilyInviteStatus: String, Codable, CaseIterable {
     case pending
     case accepted
+    case declined
     case expired
     case revoked
     case invalid

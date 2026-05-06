@@ -375,6 +375,7 @@ struct FamilyManagementView: View {
     private var inviteManagementSubtitle: String {
         let pendingCount = familyContextStore.invites.filter { $0.status == .pending }.count
         let acceptedCount = familyContextStore.invites.filter { $0.status == .accepted }.count
+        let declinedCount = familyContextStore.invites.filter { $0.status == .declined }.count
         let expiredCount = familyContextStore.invites.filter { $0.status == .expired }.count
 
         if familyContextStore.invites.isEmpty {
@@ -386,9 +387,9 @@ struct FamilyManagementView: View {
         }
 
         return mistiaLocalized(
-            vi: "\(pendingCount) đang chờ · \(acceptedCount) đã dùng · \(expiredCount) hết hạn",
-            en: "\(pendingCount) pending · \(acceptedCount) used · \(expiredCount) expired",
-            ja: "\(pendingCount)件待機中 · \(acceptedCount)件使用済み · \(expiredCount)件期限切れ"
+            vi: "\(pendingCount) đang chờ · \(acceptedCount) đã dùng · \(declinedCount) đã từ chối · \(expiredCount) hết hạn",
+            en: "\(pendingCount) pending · \(acceptedCount) used · \(declinedCount) declined · \(expiredCount) expired",
+            ja: "\(pendingCount)件待機中 · \(acceptedCount)件使用済み · \(declinedCount)件辞退 · \(expiredCount)件期限切れ"
         )
     }
 
@@ -2374,6 +2375,10 @@ private struct FamilyInviteManagementScreen: View {
         familyContextStore.invites.filter { $0.status == .accepted }.count
     }
 
+    private var declinedCount: Int {
+        familyContextStore.invites.filter { $0.status == .declined }.count
+    }
+
     private var expiredCount: Int {
         familyContextStore.invites.filter { $0.status == .expired }.count
     }
@@ -2417,9 +2422,9 @@ private struct FamilyInviteManagementScreen: View {
                 .foregroundStyle(.primary)
 
                 Text(mistiaLocalized(
-                    vi: "Các link đã tạo sẽ xuất hiện ở đây cùng trạng thái chờ, đã dùng, hết hạn hoặc đã thu hồi.",
-                    en: "Created links will appear here with pending, used, expired, or revoked states.",
-                    ja: "作成済みリンクは、待機中・使用済み・期限切れ・取り消し済みの状態でここに表示されます。"
+                    vi: "Các link đã tạo sẽ xuất hiện ở đây cùng trạng thái chờ, đã dùng, đã từ chối, hết hạn hoặc đã thu hồi.",
+                    en: "Created links will appear here with pending, used, declined, expired, or revoked states.",
+                    ja: "作成済みリンクは、待機中・使用済み・辞退済み・期限切れ・取り消し済みの状態でここに表示されます。"
                 ))
                 .descriptionTextStyle()
                 .fixedSize(horizontal: false, vertical: true)
@@ -2430,19 +2435,22 @@ private struct FamilyInviteManagementScreen: View {
 
     private var inviteSummarySection: some View {
         MistiaGlassCard(cornerRadius: 18, tint: Color(UIColor.secondarySystemGroupedBackground), padding: 16) {
-            HStack(spacing: 12) {
+            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 12), count: 2), spacing: 14) {
                 inviteSummaryMetric(
                     title: mistiaLocalized(vi: "Đang chờ", en: "Pending", ja: "待機中"),
                     count: pendingCount,
                     tint: .orange
                 )
-                Divider().frame(height: 32)
                 inviteSummaryMetric(
                     title: mistiaLocalized(vi: "Đã dùng", en: "Used", ja: "使用済み"),
                     count: acceptedCount,
                     tint: .mint
                 )
-                Divider().frame(height: 32)
+                inviteSummaryMetric(
+                    title: mistiaLocalized(vi: "Đã từ chối", en: "Declined", ja: "辞退済み"),
+                    count: declinedCount,
+                    tint: .red
+                )
                 inviteSummaryMetric(
                     title: mistiaLocalized(vi: "Hết hạn", en: "Expired", ja: "期限切れ"),
                     count: expiredCount,
@@ -2656,6 +2664,21 @@ private struct FamilyInviteSheet: View {
     @State private var isCreatingInvite = false
     @State private var activeShareItem: FamilyInviteShareItem?
 
+    private var isCreateDisabled: Bool {
+        !sessionStore.canPerformRemoteActions
+            || isCreatingInvite
+            || !familyContextStore.canCreatePendingInvite
+    }
+
+    private var inviteLimitMessage: String? {
+        guard !familyContextStore.canCreatePendingInvite else { return nil }
+        return mistiaLocalized(
+            vi: "Bạn đang có 2 lời mời chờ phản hồi. Khi một lời mời hết hạn, bị từ chối, được chấp nhận hoặc thu hồi, bạn có thể tạo link mới.",
+            en: "You already have 2 pending invites. You can create another link after one expires, is declined, accepted, or revoked.",
+            ja: "待機中の招待が2件あります。いずれかが期限切れ、辞退、承認、取り消しになると新しいリンクを作成できます。"
+        )
+    }
+
     var body: some View {
         NavigationStack {
             Form {
@@ -2684,6 +2707,12 @@ private struct FamilyInviteSheet: View {
                     Text(roleDescription(selectedRole))
                         .font(.footnote)
                         .foregroundStyle(.secondary)
+
+                    if let inviteLimitMessage {
+                        Text(inviteLimitMessage)
+                            .font(.footnote.weight(.semibold))
+                            .foregroundStyle(.orange)
+                    }
                 }
             }
             .disabled(!sessionStore.canPerformRemoteActions || isCreatingInvite)
@@ -2710,7 +2739,7 @@ private struct FamilyInviteSheet: View {
                             Text(mistiaLocalized(vi: "Tạo link", en: "Create link", ja: "リンク作成"))
                         }
                     }
-                    .disabled(!sessionStore.canPerformRemoteActions || isCreatingInvite)
+                    .disabled(isCreateDisabled)
                 }
             }
         }
@@ -2724,6 +2753,7 @@ private struct FamilyInviteSheet: View {
 
     private func createInviteAndPresentShareSheet() async {
         guard !isCreatingInvite else { return }
+        guard familyContextStore.canCreatePendingInvite else { return }
 
         isCreatingInvite = true
         defer { isCreatingInvite = false }
@@ -2859,6 +2889,14 @@ private func familyInviteLifecycleText(_ invite: FamilyInviteRecord) -> String {
         )
     }
 
+    if invite.status == .declined, let declinedAt = invite.declinedAt {
+        return mistiaLocalized(
+            vi: "Đã từ chối: \(declinedAt.formatted(date: .abbreviated, time: .shortened))",
+            en: "Declined: \(declinedAt.formatted(date: .abbreviated, time: .shortened))",
+            ja: "辞退: \(declinedAt.formatted(date: .abbreviated, time: .shortened))"
+        )
+    }
+
     return mistiaLocalized(
         vi: "Hết hạn: \(invite.expiresAt.formatted(date: .abbreviated, time: .shortened))",
         en: "Expires: \(invite.expiresAt.formatted(date: .abbreviated, time: .shortened))",
@@ -2872,6 +2910,8 @@ private func familyInviteStatusTitle(_ status: FamilyInviteStatus) -> String {
         return mistiaLocalized(vi: "Đang chờ", en: "Pending", ja: "待機中")
     case .accepted:
         return mistiaLocalized(vi: "Đã dùng", en: "Used", ja: "使用済み")
+    case .declined:
+        return mistiaLocalized(vi: "Đã từ chối", en: "Declined", ja: "辞退済み")
     case .expired:
         return mistiaLocalized(vi: "Hết hạn", en: "Expired", ja: "期限切れ")
     case .revoked:
@@ -2887,6 +2927,8 @@ private func familyInviteStatusTint(_ status: FamilyInviteStatus) -> Color {
         return .orange
     case .accepted:
         return .mint
+    case .declined:
+        return .red
     case .expired:
         return .secondary
     case .revoked, .invalid:
