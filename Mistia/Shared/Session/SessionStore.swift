@@ -910,6 +910,64 @@ final class SessionStore {
         }
     }
 
+    func resetCurrentDeviceLocalData() async throws {
+        guard !isSyncInFlight else {
+            throw MistiaBackupStoreError.syncInProgress
+        }
+
+        isWorking = true
+        lastErrorMessage = nil
+        pauseAutoSyncLoop()
+        cancelQueuedAutoSync()
+        syncCoordinator.clearQueuedMutations()
+        setAutoSyncEnabled(false)
+
+        do {
+            try MistiaSyncLocalStore.clearLocalDeviceLiveData(in: modelContainer)
+            try MistiaBootstrap.seedDefaultCategoriesIfNeeded(modelContext: modelContainer.mainContext)
+            syncCoordinator.clearQueuedMutations()
+            initialSyncPreview = nil
+            pendingInitialSyncChoice = nil
+            possibleDuplicateCount = 0
+            lastSyncAt = nil
+
+            if let activeUserID = summary?.userID ?? currentSession?.user.id,
+               let profile = storedProfile(for: activeUserID) {
+                profile.lastSyncAt = nil
+                try? modelContainer.mainContext.save()
+            }
+
+            if canManageSync {
+                setRequiresManualSyncAfterRestore(true)
+            }
+
+            syncStatusTitle = mistiaLocalized(
+                vi: "Đã xóa dữ liệu local",
+                en: "Local data cleared",
+                ja: "ローカルデータを削除しました"
+            )
+            syncStatusDetail = canManageSync
+                ? mistiaLocalized(
+                    vi: "Dữ liệu trên thiết bị này đã về trạng thái ban đầu. Cloud, đăng nhập và gia đình vẫn được giữ; hãy bấm Đồng bộ ngay nếu muốn tải lại dữ liệu cloud.",
+                    en: "This device is back to a clean local state. Cloud, sign-in, and family are preserved; tap Sync now if you want to load cloud data again.",
+                    ja: "この端末のローカルデータを初期状態に戻しました。クラウド、ログイン、家族は保持されています。クラウドデータを再取得する場合は「今すぐ同期」を押してください。"
+                )
+                : mistiaLocalized(
+                    vi: "Dữ liệu trên thiết bị này đã về trạng thái ban đầu.",
+                    en: "This device is back to a clean local state.",
+                    ja: "この端末のローカルデータを初期状態に戻しました。"
+                )
+            syncStatusSystemImage = "trash.circle"
+            isWorking = false
+            updateAutoSyncLoopState()
+        } catch {
+            isWorking = false
+            lastErrorMessage = error.localizedDescription
+            updateAutoSyncLoopState()
+            throw error
+        }
+    }
+
     func exportBackup(
         appVersion: String,
         appBuild: String

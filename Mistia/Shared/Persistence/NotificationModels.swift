@@ -360,6 +360,16 @@ struct FamilyPermissionRequestInput: Encodable, Equatable {
 }
 
 enum MistiaNotificationStore {
+    @discardableResult
+    static func clearAll(in context: ModelContext) throws -> Int {
+        let rows = try context.fetch(FetchDescriptor<AppNotificationRecord>())
+        for row in rows {
+            context.delete(row)
+        }
+        try context.save()
+        return rows.count
+    }
+
     static func applyRemoteNotifications(
         _ remoteRows: [FamilyNotificationRemoteRecord],
         currentUserID: UUID,

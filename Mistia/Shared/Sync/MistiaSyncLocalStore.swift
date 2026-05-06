@@ -688,6 +688,16 @@ enum MistiaSyncLocalStore {
         try clearAllData(context: context)
     }
 
+    static func clearLocalDeviceLiveData(in container: ModelContainer) throws {
+        let context = ModelContext(container)
+        try clearLocalDeviceLiveData(context: context)
+    }
+
+    static func clearLocalDeviceLiveData(context: ModelContext) throws {
+        try clearAllData(context: context)
+        try MistiaNotificationStore.clearAll(in: context)
+    }
+
     static func clearAllProfileData(in container: ModelContainer) throws {
         let context = ModelContext(container)
         try clearAllBackupRestorableData(context: context)

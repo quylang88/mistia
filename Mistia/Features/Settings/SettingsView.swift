@@ -1,4 +1,5 @@
 import SwiftUI
+import SwiftData
 
 struct SettingsView: View {
     @Environment(\.dismiss) private var dismiss
@@ -175,6 +176,20 @@ struct SettingsView: View {
         )
     }
 
+    private var resetDataSection: SettingsSectionDump {
+        SettingsSectionDump(
+            rows: [
+                SettingsRowDump(
+                    title: mistiaLocalized(vi: "Đặt lại & dữ liệu", en: "Reset & data", ja: "リセットとデータ"),
+                    icon: "arrow.counterclockwise.circle.fill",
+                    accent: .purple,
+                    value: nil,
+                    action: .openResetData
+                )
+            ]
+        )
+    }
+
     var body: some View {
         MistiaPinnedTopBarScaffold(
             tone: .standard,
@@ -223,6 +238,12 @@ struct SettingsView: View {
                 .cardDescriptionStyle()
 
                 SettingsCardSection(
+                    section: resetDataSection,
+                    tint: cardTint,
+                    onTap: handleTap
+                )
+
+                SettingsCardSection(
                     section: feedbackSection,
                     tint: cardTint,
                     onTap: handleTap
@@ -246,6 +267,8 @@ struct SettingsView: View {
                 ManagementArchivedItemsView()
             case .shortcut:
                 MistiaShortcutSettingsView()
+            case .resetData:
+                ResetDataSettingsView()
             }
         }
         .task(id: shortcutNormalizationKey) {
@@ -267,6 +290,8 @@ struct SettingsView: View {
             destination = .archivedItems
         case .openShortcut:
             destination = .shortcut
+        case .openResetData:
+            destination = .resetData
         case .placeholder:
             break
         }
@@ -572,6 +597,232 @@ private struct MistiaShortcutSettingsView: View {
         shortcutKindRawValue = selection.storedKindRawValue
         shortcutMemberUserIDRawValue = selection.storedMemberUserIDRawValue
     }
+}
+
+private struct ResetDataSettingsView: View {
+    @Environment(\.dismiss) private var dismiss
+    @Environment(\.colorScheme) private var colorScheme
+    @Environment(SessionStore.self) private var sessionStore
+
+    @State private var showsResetOptions = false
+    @State private var showsDeleteConfirmation = false
+    @State private var statusAlert: ResetDataStatusAlert?
+    @State private var isWorking = false
+
+    private var cardTint: Color {
+        colorScheme == .dark ? Color(UIColor.secondarySystemGroupedBackground) : .white.opacity(0.22)
+    }
+
+    var body: some View {
+        MistiaPinnedTopBarScaffold(
+            tone: .standard,
+            title: mistiaLocalized(vi: "Đặt lại & dữ liệu", en: "Reset & data", ja: "リセットとデータ"),
+            embedsInNavigationStack: false,
+            showsLeadingAvatar: false,
+            leadingSystemImage: "chevron.left",
+            trailingSystemImage: nil,
+            hidesSystemBackButton: true,
+            onLeadingTap: { dismiss() },
+            contentSpacing: 18
+        ) {
+            MistiaGlassCard(cornerRadius: 22, tint: cardTint, padding: 0) {
+                VStack(spacing: 0) {
+                    ResetDataActionRow(
+                        title: mistiaLocalized(vi: "Reset", en: "Reset", ja: "リセット"),
+                        icon: "arrow.counterclockwise.circle.fill",
+                        accent: .purple,
+                        role: nil,
+                        isDestructive: false,
+                        isWorking: isWorking
+                    ) {
+                        showsResetOptions = true
+                    }
+
+                    Divider()
+                        .padding(.leading, 52)
+                        .padding(.trailing, 0)
+
+                    ResetDataActionRow(
+                        title: mistiaLocalized(vi: "Xóa tất cả dữ liệu", en: "Delete all data", ja: "すべてのデータを削除"),
+                        icon: "trash.fill",
+                        accent: .expense,
+                        role: .destructive,
+                        isDestructive: true,
+                        isWorking: isWorking
+                    ) {
+                        showsDeleteConfirmation = true
+                    }
+                }
+            }
+        }
+        .alert(
+            mistiaLocalized(vi: "Reset", en: "Reset", ja: "リセット"),
+            isPresented: $showsResetOptions
+        ) {
+            Button(mistiaLocalized(vi: "Reset cài đặt", en: "Reset settings", ja: "設定をリセット")) {
+                resetSettings()
+            }
+            Button(mistiaLocalized(vi: "Reset thông báo", en: "Reset notifications", ja: "通知をリセット")) {
+                resetNotifications()
+            }
+            Button(mistiaLocalized(vi: "Hủy", en: "Cancel", ja: "キャンセル"), role: .cancel) { }
+        } message: {
+            Text(
+                mistiaLocalized(
+                    vi: "Chọn phần bạn muốn đưa về trạng thái ban đầu.",
+                    en: "Choose what you want to return to its default state.",
+                    ja: "初期状態に戻す項目を選んでください。"
+                )
+            )
+        }
+        .alert(
+            mistiaLocalized(vi: "Xóa tất cả dữ liệu?", en: "Delete all data?", ja: "すべてのデータを削除しますか？"),
+            isPresented: $showsDeleteConfirmation
+        ) {
+            Button(
+                mistiaLocalized(vi: "Xóa tất cả dữ liệu", en: "Delete all data", ja: "すべてのデータを削除"),
+                role: .destructive
+            ) {
+                deleteAllLocalData()
+            }
+            Button(mistiaLocalized(vi: "Hủy", en: "Cancel", ja: "キャンセル"), role: .cancel) { }
+        } message: {
+            Text(
+                mistiaLocalized(
+                    vi: "Mistia chỉ xóa dữ liệu local trên thiết bị này. Đăng nhập, hồ sơ cloud và gia đình vẫn được giữ.",
+                    en: "Mistia will only clear local data on this device. Sign-in, cloud profile, and family are preserved.",
+                    ja: "この端末のローカルデータのみを削除します。ログイン、クラウドプロフィール、家族は保持されます。"
+                )
+            )
+        }
+        .alert(item: $statusAlert) { alert in
+            Alert(
+                title: Text(alert.title),
+                message: Text(alert.message),
+                dismissButton: .default(Text(mistiaLocalized(vi: "OK", en: "OK", ja: "OK")))
+            )
+        }
+    }
+
+    private func resetSettings() {
+        MistiaSettingsResetSupport.resetAppPreferences()
+        sessionStore.setAutoSyncEnabled(false)
+        statusAlert = ResetDataStatusAlert(
+            title: mistiaLocalized(vi: "Đã reset cài đặt", en: "Settings reset", ja: "設定をリセットしました"),
+            message: mistiaLocalized(
+                vi: "Cài đặt app đã về mặc định. Dữ liệu, đăng nhập và gia đình không bị thay đổi.",
+                en: "App settings are back to defaults. Data, sign-in, and family were not changed.",
+                ja: "アプリ設定を初期状態に戻しました。データ、ログイン、家族は変更していません。"
+            )
+        )
+    }
+
+    private func resetNotifications() {
+        guard !isWorking else { return }
+        isWorking = true
+        Task { @MainActor in
+            do {
+                try MistiaNotificationStore.clearAll(in: sessionStore.currentModelContainer.mainContext)
+                await MistiaLocalNotificationScheduler.clearAllScheduledReminders()
+                statusAlert = ResetDataStatusAlert(
+                    title: mistiaLocalized(vi: "Đã reset thông báo", en: "Notifications reset", ja: "通知をリセットしました"),
+                    message: mistiaLocalized(
+                        vi: "Trung tâm thông báo trên thiết bị này đã về 0 row.",
+                        en: "The notification center on this device is now empty.",
+                        ja: "この端末の通知センターを空にしました。"
+                    )
+                )
+            } catch {
+                statusAlert = ResetDataStatusAlert(
+                    title: mistiaLocalized(vi: "Không thể reset thông báo", en: "Couldn't reset notifications", ja: "通知をリセットできませんでした"),
+                    message: error.localizedDescription
+                )
+            }
+            isWorking = false
+        }
+    }
+
+    private func deleteAllLocalData() {
+        guard !isWorking else { return }
+        isWorking = true
+        Task { @MainActor in
+            do {
+                try await sessionStore.resetCurrentDeviceLocalData()
+                await MistiaLocalNotificationScheduler.clearAllScheduledReminders()
+                statusAlert = ResetDataStatusAlert(
+                    title: mistiaLocalized(vi: "Đã xóa dữ liệu local", en: "Local data deleted", ja: "ローカルデータを削除しました"),
+                    message: mistiaLocalized(
+                        vi: "Thiết bị này đã về trạng thái dữ liệu ban đầu. Cloud, đăng nhập và gia đình vẫn được giữ.",
+                        en: "This device is back to a clean local data state. Cloud, sign-in, and family are preserved.",
+                        ja: "この端末のデータを初期状態に戻しました。クラウド、ログイン、家族は保持されています。"
+                    )
+                )
+            } catch {
+                statusAlert = ResetDataStatusAlert(
+                    title: mistiaLocalized(vi: "Không thể xóa dữ liệu", en: "Couldn't delete data", ja: "データを削除できませんでした"),
+                    message: error.localizedDescription
+                )
+            }
+            isWorking = false
+        }
+    }
+}
+
+private struct ResetDataActionRow: View {
+    let title: String
+    let icon: String
+    let accent: MistiaAccent
+    let role: ButtonRole?
+    let isDestructive: Bool
+    let isWorking: Bool
+    let action: () -> Void
+
+    @Environment(\.colorScheme) private var colorScheme
+
+    var body: some View {
+        Button(role: role, action: action) {
+            HStack(spacing: 12) {
+                SettingsIconTile(iconContent: .system(icon: icon, accent: accent))
+
+                Text(title)
+                    .font(.system(size: 16.5, weight: .semibold, design: .rounded))
+                    .foregroundStyle(titleColor)
+
+                Spacer(minLength: 10)
+
+                if isWorking {
+                    ProgressView()
+                        .controlSize(.small)
+                } else {
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 11, weight: .bold))
+                        .foregroundStyle(valueColor.opacity(0.82))
+                }
+            }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 15)
+        }
+        .buttonStyle(MistiaPressableButtonStyle(cornerRadius: 18, tint: accent.color))
+        .disabled(isWorking)
+        .opacity(isWorking ? 0.62 : 1)
+    }
+
+    private var titleColor: Color {
+        if isDestructive {
+            return MistiaAccent.expense.color
+        }
+        return colorScheme == .dark ? .white.opacity(0.96) : Color.black.opacity(0.82)
+    }
+
+    private var valueColor: Color {
+        colorScheme == .dark ? .white.opacity(0.68) : Color.black.opacity(0.48)
+    }
+}
+
+private struct ResetDataStatusAlert: Identifiable {
+    let id = UUID()
+    let title: String
+    let message: String
 }
 
 private struct MistiaShortcutOptionSectionCard: View {
@@ -908,6 +1159,7 @@ private enum SettingsRowAction {
     case openBackupRestore
     case openArchivedItems
     case openShortcut
+    case openResetData
     case placeholder
 }
 
@@ -918,6 +1170,7 @@ private enum SettingsDestination: String, Identifiable {
     case backupRestore
     case archivedItems
     case shortcut
+    case resetData
 
     var id: String { rawValue }
 }

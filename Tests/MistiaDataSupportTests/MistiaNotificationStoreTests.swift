@@ -262,8 +262,68 @@ final class MistiaNotificationStoreTests: XCTestCase {
         XCTAssertEqual(billFailedRow.topUpTransferDestinationWalletID, linkedWalletID)
     }
 
+    func testClearAllRemovesEveryNotificationRow() throws {
+        let context = ModelContext(try makeContainer())
+        context.insert(AppNotificationRecord(key: "one", title: "One", body: "One", kind: .lowWallet, source: .system))
+        context.insert(AppNotificationRecord(key: "two", title: "Two", body: "Two", kind: .familyActivity, source: .family))
+        try context.save()
+
+        XCTAssertEqual(try MistiaNotificationStore.clearAll(in: context), 2)
+        XCTAssertEqual(try fetchNotifications(in: context).count, 0)
+    }
+
+    func testClearLocalDeviceLiveDataPreservesUserProfileAndClearsFinanceSyncAndNotifications() throws {
+        let container = try makeFullContainer()
+        let context = ModelContext(container)
+        let userID = UUID()
+
+        context.insert(
+            UserAccountProfile(
+                userID: userID,
+                email: "user@example.com",
+                displayName: "User",
+                lastSyncAt: Date(timeIntervalSince1970: 1_700_000_000)
+            )
+        )
+        context.insert(
+            LedgerWallet(
+                name: "Cash",
+                kind: .cash,
+                iconSymbolName: "banknote.fill",
+                iconColorHex: "#2DAA9E"
+            )
+        )
+        context.insert(
+            SyncConflict(
+                entityRawValue: MistiaSyncEntity.wallet.rawValue,
+                recordID: UUID(),
+                conflictKindRawValue: MistiaSyncConflictKind.editEdit.rawValue,
+                localPayloadJSON: "{}",
+                remotePayloadJSON: "{}",
+                baseVersion: 1,
+                remoteVersion: 2
+            )
+        )
+        context.insert(AppNotificationRecord(key: "notice", title: "Notice", body: "Notice", kind: .lowWallet, source: .system))
+        try context.save()
+
+        try MistiaSyncLocalStore.clearLocalDeviceLiveData(in: container)
+
+        let verificationContext = ModelContext(container)
+        XCTAssertEqual(try verificationContext.fetch(FetchDescriptor<UserAccountProfile>()).map(\.userID), [userID])
+        XCTAssertEqual(try verificationContext.fetch(FetchDescriptor<LedgerWallet>()).count, 0)
+        XCTAssertEqual(try verificationContext.fetch(FetchDescriptor<SyncConflict>()).count, 0)
+        XCTAssertEqual(try verificationContext.fetch(FetchDescriptor<AppNotificationRecord>()).count, 0)
+    }
+
     private func makeContainer() throws -> ModelContainer {
         let schema = Schema([AppNotificationRecord.self])
+        let configuration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)
+        return try ModelContainer(for: schema, configurations: [configuration])
+    }
+
+    private func makeFullContainer() throws -> ModelContainer {
+        let schema = Schema(versionedSchema: MistiaSchemaV1.self)
         let configuration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)
         return try ModelContainer(for: schema, configurations: [configuration])
     }
