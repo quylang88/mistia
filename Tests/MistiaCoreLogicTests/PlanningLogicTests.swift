@@ -503,7 +503,7 @@ final class PlanningLogicTests: XCTestCase {
         XCTAssertEqual(afterClosing.first?.state, .payable)
     }
 
-    func testSelectedDueMonthSummaryCountsOnlyClosedCreditStatement() {
+    func testSelectedDueMonthSummaryCountsCreditStatementByDueMonthBeforeClosing() {
         let cardWalletID = UUID()
         let account = makeCreditCardAccount(
             walletID: cardWalletID,
@@ -538,7 +538,7 @@ final class PlanningLogicTests: XCTestCase {
             referenceDate: makeDate(year: 2026, month: 3, day: 9),
             calendar: calendar
         )
-        XCTAssertEqual(beforeSummary.totalDueMinor, 0)
+        XCTAssertEqual(beforeSummary.totalDueMinor, 32_456)
 
         let afterClosingStatements = PlanningLogic.creditCardStatementsDue(
             in: dueMonth,

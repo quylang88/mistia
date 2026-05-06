@@ -1004,7 +1004,6 @@ nonisolated enum PlanningLogic {
 
         let pendingStatements = creditStatements.filter {
             $0.status == .pending
-                && $0.state != .unclosed
                 && $0.amountMinor > 0
                 && isSameMonth($0.dueDate, other: selectedMonthStart, calendar: calendar)
         }
