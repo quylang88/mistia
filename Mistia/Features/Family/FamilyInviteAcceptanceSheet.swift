@@ -1,6 +1,6 @@
 import SwiftUI
 
-struct FamilyInviteAcceptanceSheet: View {
+struct FamilyInviteAcceptanceScreen: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.colorScheme) private var colorScheme
     @Environment(SessionStore.self) private var sessionStore
@@ -22,32 +22,30 @@ struct FamilyInviteAcceptanceSheet: View {
     }
 
     var body: some View {
-        inviteModal
+        inviteScreen
             .interactiveDismissDisabled()
     }
 
-    private var inviteModal: some View {
+    private var inviteScreen: some View {
         NavigationStack {
             ZStack {
-                Color(UIColor.systemGroupedBackground)
+                FamilyInviteScreenBackground(accent: accent, showsWelcome: showsWelcomeBackground)
                     .ignoresSafeArea()
 
-                ScrollView {
-                    VStack(spacing: 18) {
-                        if sessionStore.isSignedIn {
-                            signedInContent
-                        } else {
-                            signInRequiredContent
-                        }
-                    }
-                    .padding(.horizontal, 20)
-                    .padding(.vertical, 28)
-                    .frame(maxWidth: 560)
-                    .frame(maxWidth: .infinity)
+                if sessionStore.isSignedIn {
+                    signedInContent
+                } else {
+                    signInRequiredContent
                 }
             }
             .navigationBarTitleDisplayMode(.inline)
-            .toolbar(.hidden, for: .navigationBar)
+            .toolbar {
+                ToolbarItem(placement: .principal) {
+                    Text(navigationTitle)
+                        .font(.system(size: 16, weight: .semibold, design: .rounded))
+                        .foregroundStyle(.primary)
+                }
+            }
             .task(id: loadKey) {
                 await loadPreviewIfNeeded()
             }
@@ -88,17 +86,19 @@ struct FamilyInviteAcceptanceSheet: View {
     }
 
     private var signInRequiredContent: some View {
-        FamilyInviteGlassSurface(cornerRadius: 30, tint: accent.opacity(0.10), padding: 22) {
-            VStack(spacing: 18) {
-                FamilyInviteSymbol(systemImage: "person.crop.circle.badge.plus", tint: accent)
+        centeredContent(maxWidth: 430) {
+            VStack(spacing: 24) {
+                Spacer(minLength: 36)
 
-                VStack(spacing: 8) {
+                FamilyInviteStatusSymbol(systemImage: "person.crop.circle.badge.plus", tint: accent)
+
+                VStack(spacing: 9) {
                     Text(mistiaLocalized(
                         vi: "Đăng nhập để xem lời mời",
                         en: "Sign in to view this invite",
                         ja: "招待を確認するにはログイン"
                     ))
-                    .font(.system(size: 24, weight: .bold, design: .rounded))
+                    .font(.system(size: 27, weight: .bold, design: .rounded))
                     .multilineTextAlignment(.center)
 
                     Text(mistiaLocalized(
@@ -122,13 +122,17 @@ struct FamilyInviteAcceptanceSheet: View {
                     isOpeningAccount = true
                     showsAccount = true
                 }
+
+                Spacer(minLength: 36)
             }
         }
     }
 
     private var loadingContent: some View {
-        FamilyInviteGlassSurface(cornerRadius: 30, tint: accent.opacity(0.10), padding: 24) {
+        centeredContent(maxWidth: 360) {
             VStack(spacing: 16) {
+                Spacer(minLength: 36)
+
                 ProgressView()
                     .controlSize(.large)
                     .tint(accent)
@@ -136,8 +140,9 @@ struct FamilyInviteAcceptanceSheet: View {
                 Text(mistiaLocalized(vi: "Đang kiểm tra lời mời", en: "Checking invite", ja: "招待を確認中"))
                     .font(.system(size: 16, weight: .semibold, design: .rounded))
                     .foregroundStyle(.secondary)
+
+                Spacer(minLength: 36)
             }
-            .frame(maxWidth: .infinity, minHeight: 260)
         }
     }
 
@@ -151,9 +156,9 @@ struct FamilyInviteAcceptanceSheet: View {
                     ja: "このリンクは利用できません"
                 ),
                 message: mistiaLocalized(
-                    vi: "Bạn là người tạo lời mời này. Hãy gửi link cho thành viên cần tham gia.",
-                    en: "You created this invite. Send the link to the person who should join.",
-                    ja: "この招待を作成したアカウントです。参加する相手にリンクを共有してください。"
+                    vi: "Bạn là người tạo lời mời này.",
+                    en: "You created this invite.",
+                    ja: "この招待を作成したアカウントです。"
                 ),
                 systemImage: "link.badge.plus",
                 tint: .orange
@@ -162,8 +167,8 @@ struct FamilyInviteAcceptanceSheet: View {
             unavailableContent(
                 title: mistiaLocalized(vi: "Bạn đã là thành viên", en: "Already a member", ja: "すでにメンバーです"),
                 message: mistiaLocalized(
-                    vi: "Tài khoản này đã thuộc gia đình \(preview.familyName).",
-                    en: "This account already belongs to \(preview.familyName).",
+                    vi: "Tài khoản này đã ở trong \(preview.familyName).",
+                    en: "This account is already in \(preview.familyName).",
                     ja: "このアカウントはすでに \(preview.familyName) に参加しています。"
                 ),
                 systemImage: "checkmark.circle.fill",
@@ -177,9 +182,9 @@ struct FamilyInviteAcceptanceSheet: View {
                     ja: "別の家族に参加中"
                 ),
                 message: mistiaLocalized(
-                    vi: "Tài khoản này hiện đã thuộc một gia đình khác. Vui lòng rời gia đình hiện tại trước khi tham gia gia đình mới.",
-                    en: "This account currently belongs to another family. Please leave the current family before joining a new one.",
-                    ja: "このアカウントは現在別の家族に参加しています。新しい家族に参加する前に現在の家族から退出してください。"
+                    vi: "Tài khoản này đang thuộc một gia đình khác.",
+                    en: "This account currently belongs to another family.",
+                    ja: "このアカウントは現在別の家族に参加しています。"
                 ),
                 systemImage: "person.2.slash",
                 tint: .orange
@@ -197,107 +202,24 @@ struct FamilyInviteAcceptanceSheet: View {
     }
 
     private func welcomeContent(_ preview: FamilyInvitePreviewRecord) -> some View {
-        VStack(spacing: 14) {
-            FamilyInviteGlassSurface(cornerRadius: 30, tint: accent.opacity(0.10), padding: 22) {
-                VStack(spacing: 18) {
-                    FamilyInviteSymbol(systemImage: "person.3.fill", tint: accent)
+        centeredContent(maxWidth: 520) {
+            VStack(spacing: 28) {
+                Spacer(minLength: 36)
 
-                    VStack(spacing: 8) {
-                        Text(mistiaLocalized(
-                            vi: "Tham gia \(preview.familyName)",
-                            en: "Join \(preview.familyName)",
-                            ja: "\(preview.familyName) に参加"
-                        ))
-                        .font(.system(size: 25, weight: .bold, design: .rounded))
-                        .multilineTextAlignment(.center)
-
-                        Text(mistiaLocalized(
-                            vi: "\(preview.inviterName) đã mời bạn vào gia đình trên Mistia.",
-                            en: "\(preview.inviterName) invited you to join this Mistia family.",
-                            ja: "\(preview.inviterName) さんがMistiaの家族に招待しました。"
-                        ))
-                        .font(.system(size: 15.5, weight: .medium, design: .rounded))
-                        .foregroundStyle(.secondary)
-                        .multilineTextAlignment(.center)
-                        .fixedSize(horizontal: false, vertical: true)
-                    }
-
-                    VStack(spacing: 0) {
-                        FamilyInviteFactRow(
-                            title: mistiaLocalized(vi: "Gia đình", en: "Family", ja: "家族"),
-                            value: preview.familyName,
-                            systemImage: "person.3"
-                        )
-                        Divider().padding(.leading, 54)
-                        FamilyInviteFactRow(
-                            title: mistiaLocalized(vi: "Người mời", en: "Inviter", ja: "招待者"),
-                            value: preview.inviterName,
-                            systemImage: "person.crop.circle"
-                        )
-                        Divider().padding(.leading, 54)
-                        FamilyInviteFactRow(
-                            title: mistiaLocalized(vi: "Vai trò", en: "Role", ja: "役割"),
-                            value: preview.role.inviteTitle,
-                            systemImage: "person.badge.key"
-                        )
-                    }
-                    .background(Color(UIColor.secondarySystemGroupedBackground).opacity(0.72), in: RoundedRectangle(cornerRadius: 20, style: .continuous))
-                }
-            }
-
-            permissionSection(for: preview.role)
-            privacySection(for: preview.role)
-            actionsSection(preview)
-        }
-    }
-
-    private func permissionSection(for role: FamilyRole) -> some View {
-        FamilyInviteGlassSurface(cornerRadius: 24, tint: accent.opacity(0.06), padding: 16) {
-            VStack(alignment: .leading, spacing: 12) {
-                Label(
-                    mistiaLocalized(vi: "Quyền khi tham gia", en: "Access after joining", ja: "参加後の権限"),
-                    systemImage: "checkmark.shield.fill"
+                FamilyInviteWelcomeStage(
+                    familyName: preview.familyName,
+                    accent: accent
                 )
-                .font(.system(size: 16, weight: .bold, design: .rounded))
-                .foregroundStyle(.primary)
 
-                VStack(alignment: .leading, spacing: 9) {
-                    ForEach(role.permissionSummaries, id: \.self) { summary in
-                        Label(summary, systemImage: "checkmark.circle.fill")
-                            .font(.system(size: 14, weight: .medium, design: .rounded))
-                            .foregroundStyle(.secondary)
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
-                }
+                Spacer(minLength: 24)
+
+                actionsSection(preview)
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
-        }
-    }
-
-    private func privacySection(for role: FamilyRole) -> some View {
-        FamilyInviteGlassSurface(cornerRadius: 24, tint: Color.orange.opacity(role == .kid ? 0.14 : 0.08), padding: 16) {
-            VStack(alignment: .leading, spacing: 10) {
-                Label(
-                    mistiaLocalized(vi: "Dữ liệu vẫn theo quyền", en: "Data still follows permissions", ja: "データは権限に従います"),
-                    systemImage: "lock.shield.fill"
-                )
-                .font(.system(size: 16, weight: .bold, design: .rounded))
-
-                Text(mistiaLocalized(
-                    vi: "Tham gia gia đình không đồng nghĩa với toàn quyền xem hay sửa dữ liệu của nhau. Quyền xem và thao tác vẫn do owner cấp rõ ràng.",
-                    en: "Joining a family does not grant full access to everyone's data. View and edit access still depends on explicit owner permissions.",
-                    ja: "家族に参加しても全員のデータを自由に見たり編集したりできるわけではありません。表示と操作の権限は owner が明示的に設定します。"
-                ))
-                .font(.system(size: 14, weight: .medium, design: .rounded))
-                .foregroundStyle(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
         }
     }
 
     private func actionsSection(_ preview: FamilyInvitePreviewRecord) -> some View {
-        VStack(spacing: 10) {
+        VStack(spacing: 12) {
             if showsDeclineCallout {
                 FamilyInviteDeclineCallout(
                     isDeclining: isDeclining,
@@ -313,24 +235,26 @@ struct FamilyInviteAcceptanceSheet: View {
                 .transition(.move(edge: .bottom).combined(with: .opacity))
             }
 
-            FamilyInviteActionButton(
-                title: mistiaLocalized(vi: "Chấp nhận", en: "Accept", ja: "承認"),
-                systemImage: "checkmark",
-                style: .primary(accent),
-                isLoading: isAccepting,
-                isDisabled: isDeclining
-            ) {
-                Task { await accept(preview) }
-            }
+            HStack(spacing: 12) {
+                FamilyInviteActionButton(
+                    title: mistiaLocalized(vi: "Chấp nhận", en: "Accept", ja: "承認"),
+                    systemImage: "checkmark",
+                    style: .primary(accent),
+                    isLoading: isAccepting,
+                    isDisabled: isDeclining
+                ) {
+                    Task { await accept(preview) }
+                }
 
-            FamilyInviteActionButton(
-                title: mistiaLocalized(vi: "Từ chối", en: "Decline", ja: "辞退"),
-                systemImage: "xmark",
-                style: .secondary(.red),
-                isDisabled: isAccepting || isDeclining
-            ) {
-                withAnimation(.snappy) {
-                    showsDeclineCallout = true
+                FamilyInviteActionButton(
+                    title: mistiaLocalized(vi: "Từ chối", en: "Decline", ja: "辞退"),
+                    systemImage: "xmark",
+                    style: .secondary(.red),
+                    isDisabled: isAccepting || isDeclining
+                ) {
+                    withAnimation(.snappy) {
+                        showsDeclineCallout = true
+                    }
                 }
             }
         }
@@ -343,13 +267,15 @@ struct FamilyInviteAcceptanceSheet: View {
         tint: Color,
         clearsPendingInvite: Bool = true
     ) -> some View {
-        FamilyInviteGlassSurface(cornerRadius: 30, tint: tint.opacity(0.10), padding: 22) {
-            VStack(spacing: 18) {
-                FamilyInviteSymbol(systemImage: systemImage, tint: tint)
+        centeredContent(maxWidth: 430) {
+            VStack(spacing: 24) {
+                Spacer(minLength: 36)
 
-                VStack(spacing: 8) {
+                FamilyInviteStatusSymbol(systemImage: systemImage, tint: tint)
+
+                VStack(spacing: 9) {
                     Text(title)
-                        .font(.system(size: 24, weight: .bold, design: .rounded))
+                        .font(.system(size: 27, weight: .bold, design: .rounded))
                         .multilineTextAlignment(.center)
 
                     Text(message)
@@ -371,13 +297,56 @@ struct FamilyInviteAcceptanceSheet: View {
                     }
                     dismiss()
                 }
+
+                Spacer(minLength: 36)
             }
-            .frame(maxWidth: .infinity)
+        }
+    }
+
+    private func centeredContent<Content: View>(
+        maxWidth: CGFloat,
+        @ViewBuilder content: @escaping () -> Content
+    ) -> some View {
+        GeometryReader { proxy in
+            ScrollView {
+                content()
+                    .padding(.horizontal, 24)
+                    .padding(.vertical, 28)
+                    .frame(maxWidth: maxWidth)
+                    .frame(maxWidth: .infinity)
+                    .frame(minHeight: Swift.max(0, proxy.size.height - 32))
+            }
+            .scrollIndicators(.hidden)
         }
     }
 
     private var loadKey: String {
         "\(route.token):\(sessionStore.signedInUserID?.uuidString.lowercased() ?? "guest")"
+    }
+
+    private var showsWelcomeBackground: Bool {
+        guard sessionStore.isSignedIn, !isLoading, let preview else { return false }
+        return canRespond(to: preview)
+    }
+
+    private var navigationTitle: String {
+        if !sessionStore.isSignedIn {
+            return mistiaLocalized(vi: "Cần đăng nhập", en: "Sign in required", ja: "ログインが必要")
+        }
+
+        if isLoading {
+            return mistiaLocalized(vi: "Lời mời gia đình", en: "Family invite", ja: "家族への招待")
+        }
+
+        if let preview, canRespond(to: preview) {
+            return mistiaLocalized(vi: "Chào mừng", en: "Welcome", ja: "ようこそ")
+        }
+
+        if isOfflineError {
+            return mistiaLocalized(vi: "Lỗi kết nối", en: "Connection error", ja: "接続エラー")
+        }
+
+        return mistiaLocalized(vi: "Lỗi lời mời", en: "Invite error", ja: "招待エラー")
     }
 
     private var isOfflineError: Bool {
@@ -403,6 +372,13 @@ struct FamilyInviteAcceptanceSheet: View {
             en: "Mistia can't check this invite right now.",
             ja: "現在この招待を確認できません。"
         )
+    }
+
+    private func canRespond(to preview: FamilyInvitePreviewRecord) -> Bool {
+        preview.status == .pending
+            && preview.inviterUserID != sessionStore.signedInUserID
+            && !preview.alreadyMemberOfFamily
+            && !preview.belongsToAnotherFamily
     }
 
     private func loadPreviewIfNeeded(force: Bool = false) async {
@@ -497,21 +473,21 @@ struct FamilyInviteAcceptanceSheet: View {
             return ""
         case .accepted:
             return mistiaLocalized(
-                vi: "Link này đã được sử dụng. Hãy yêu cầu owner gửi lời mời mới nếu cần.",
-                en: "This link has already been used. Ask the owner for a new invite if needed.",
-                ja: "このリンクはすでに使用されています。必要な場合は owner に新しい招待を依頼してください。"
+                vi: "Link này đã được sử dụng.",
+                en: "This link has already been used.",
+                ja: "このリンクはすでに使用されています。"
             )
         case .declined:
             return mistiaLocalized(
-                vi: "Bạn đã từ chối lời mời này. Owner cần tạo link mới nếu muốn mời lại.",
-                en: "This invite has been declined. The owner needs to create a new link to invite again.",
-                ja: "この招待は辞退されています。再招待するには owner が新しいリンクを作成する必要があります。"
+                vi: "Owner cần tạo link mới nếu muốn mời lại.",
+                en: "The owner needs to create a new link to invite again.",
+                ja: "再招待するには owner が新しいリンクを作成する必要があります。"
             )
         case .expired:
             return mistiaLocalized(
-                vi: "Link này đã hết hạn. Vui lòng yêu cầu người mời gửi lại link mới.",
-                en: "This link has expired. Please ask the inviter to send a new link.",
-                ja: "このリンクは期限切れです。招待者に新しいリンクを送ってもらってください。"
+                vi: "Vui lòng yêu cầu người mời gửi lại link mới.",
+                en: "Please ask the inviter to send a new link.",
+                ja: "招待者に新しいリンクを送ってもらってください。"
             )
         case .revoked:
             return mistiaLocalized(
@@ -555,6 +531,131 @@ struct FamilyInviteAcceptanceSheet: View {
             return .red
         case .expired:
             return .orange
+        }
+    }
+}
+
+private struct FamilyInviteScreenBackground: View {
+    let accent: Color
+    let showsWelcome: Bool
+
+    var body: some View {
+        ZStack {
+            Color(UIColor.systemBackground)
+
+            if showsWelcome {
+                LinearGradient(
+                    colors: [
+                        accent.opacity(0.16),
+                        MistiaAccent.sky.color.opacity(0.12),
+                        MistiaAccent.coral.color.opacity(0.10),
+                        Color(UIColor.systemBackground).opacity(0.0)
+                    ],
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                )
+                .transition(.opacity)
+            }
+        }
+        .animation(.easeInOut(duration: 0.28), value: showsWelcome)
+    }
+}
+
+private struct FamilyInviteWelcomeStage: View {
+    let familyName: String
+    let accent: Color
+
+    var body: some View {
+        VStack(spacing: 22) {
+            FamilyInviteAnimatedGreeting(accent: accent)
+
+            VStack(spacing: 8) {
+                Text(mistiaLocalized(vi: "đến với gia đình", en: "to the family", ja: "ファミリーへ"))
+                    .font(.system(size: 19, weight: .semibold, design: .rounded))
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+
+                Text(familyName)
+                    .font(.system(size: 34, weight: .bold, design: .rounded))
+                    .foregroundStyle(.primary)
+                    .multilineTextAlignment(.center)
+                    .lineLimit(3)
+                    .minimumScaleFactor(0.72)
+            }
+        }
+        .frame(maxWidth: .infinity)
+    }
+}
+
+private struct FamilyInviteAnimatedGreeting: View {
+    let accent: Color
+
+    @State private var greetingIndex = 0
+    @State private var breathes = false
+
+    private let greetings = ["Welcome", "Chào mừng", "ようこそ"]
+
+    var body: some View {
+        Text(greetings[greetingIndex])
+            .font(.system(size: 62, weight: .semibold, design: .rounded))
+            .foregroundStyle(
+                LinearGradient(
+                    colors: [accent, MistiaAccent.sky.color, MistiaAccent.coral.color],
+                    startPoint: .leading,
+                    endPoint: .trailing
+                )
+            )
+            .multilineTextAlignment(.center)
+            .lineLimit(1)
+            .minimumScaleFactor(0.46)
+            .scaleEffect(breathes ? 1.02 : 0.98)
+            .id(greetingIndex)
+            .transition(.asymmetric(
+                insertion: .scale(scale: 0.88).combined(with: .opacity),
+                removal: .scale(scale: 1.08).combined(with: .opacity)
+            ))
+            .animation(.easeInOut(duration: 1.8).repeatForever(autoreverses: true), value: breathes)
+            .task {
+                breathes = true
+                while !Task.isCancelled {
+                    try? await Task.sleep(nanoseconds: 1_650_000_000)
+                    guard !Task.isCancelled else { return }
+                    withAnimation(.spring(response: 0.58, dampingFraction: 0.84)) {
+                        greetingIndex = (greetingIndex + 1) % greetings.count
+                    }
+                }
+            }
+    }
+}
+
+private struct FamilyInviteStatusSymbol: View {
+    @Environment(\.colorScheme) private var colorScheme
+
+    let systemImage: String
+    let tint: Color
+
+    var body: some View {
+        ZStack {
+            Circle()
+                .fill(tint.opacity(colorScheme == .dark ? 0.20 : 0.12))
+
+            if #available(iOS 26.0, *) {
+                Circle()
+                    .fill(.clear)
+                    .glassEffect(
+                        Glass.regular.tint(tint.opacity(0.12)),
+                        in: .circle
+                    )
+            }
+
+            Image(systemName: systemImage)
+                .font(.system(size: 29, weight: .bold))
+                .foregroundStyle(tint)
+        }
+        .frame(width: 78, height: 78)
+        .overlay {
+            Circle()
+                .strokeBorder(.white.opacity(colorScheme == .dark ? 0.10 : 0.46), lineWidth: 0.8)
         }
     }
 }
@@ -616,74 +717,11 @@ private struct FamilyInviteGlassBackground: View {
     private var baseFill: Color {
         colorScheme == .dark
             ? Color(UIColor.secondarySystemGroupedBackground).opacity(0.96)
-            : Color.white.opacity(0.86)
+            : Color.white.opacity(0.88)
     }
 
     private var borderFill: Color {
         colorScheme == .dark ? .white.opacity(0.08) : .white.opacity(0.48)
-    }
-}
-
-private struct FamilyInviteSymbol: View {
-    @Environment(\.colorScheme) private var colorScheme
-
-    let systemImage: String
-    let tint: Color
-
-    var body: some View {
-        ZStack {
-            Circle()
-                .fill(tint.opacity(colorScheme == .dark ? 0.20 : 0.13))
-
-            if #available(iOS 26.0, *) {
-                Circle()
-                    .fill(.clear)
-                    .glassEffect(
-                        Glass.regular.tint(tint.opacity(0.12)),
-                        in: .circle
-                    )
-            }
-
-            Image(systemName: systemImage)
-                .font(.system(size: 28, weight: .bold))
-                .foregroundStyle(tint)
-        }
-        .frame(width: 76, height: 76)
-        .overlay {
-            Circle()
-                .strokeBorder(.white.opacity(colorScheme == .dark ? 0.10 : 0.44), lineWidth: 0.8)
-        }
-    }
-}
-
-private struct FamilyInviteFactRow: View {
-    let title: String
-    let value: String
-    let systemImage: String
-
-    var body: some View {
-        HStack(spacing: 12) {
-            Image(systemName: systemImage)
-                .font(.system(size: 15, weight: .semibold))
-                .foregroundStyle(MistiaAccent.purple.color)
-                .frame(width: 30, height: 30)
-                .background(MistiaAccent.purple.color.opacity(0.10), in: Circle())
-
-            VStack(alignment: .leading, spacing: 3) {
-                Text(title)
-                    .font(.system(size: 12, weight: .medium, design: .rounded))
-                    .foregroundStyle(.secondary)
-
-                Text(value)
-                    .font(.system(size: 15.5, weight: .semibold, design: .rounded))
-                    .foregroundStyle(.primary)
-                    .lineLimit(2)
-            }
-
-            Spacer(minLength: 0)
-        }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 12)
     }
 }
 
@@ -725,8 +763,11 @@ private struct FamilyInviteActionButton: View {
                         Image(systemName: systemImage)
                             .font(.system(size: 14, weight: .bold))
                     }
+
                     Text(title)
                         .font(.system(size: 16, weight: .bold, design: .rounded))
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.72)
                 }
                 .frame(maxWidth: .infinity)
                 .opacity(isLoading ? 0 : 1)
@@ -738,7 +779,7 @@ private struct FamilyInviteActionButton: View {
             }
             .foregroundStyle(foregroundColor)
             .padding(.vertical, 16)
-            .padding(.horizontal, 18)
+            .padding(.horizontal, 16)
             .background(backgroundFill, in: Capsule())
             .overlay {
                 Capsule()
@@ -800,9 +841,9 @@ private struct FamilyInviteDeclineCallout: View {
                     .foregroundStyle(.red)
 
                     Text(mistiaLocalized(
-                        vi: "Sau khi từ chối, link này sẽ không dùng lại được. Owner cần tạo lời mời mới nếu muốn mời lại.",
-                        en: "After declining, this link cannot be used again. The owner needs to create a new invite to invite again.",
-                        ja: "辞退すると、このリンクは再利用できません。再招待するには owner が新しい招待を作成する必要があります。"
+                        vi: "Link này sẽ không dùng lại được.",
+                        en: "This link cannot be used again.",
+                        ja: "このリンクは再利用できません。"
                     ))
                     .font(.system(size: 14, weight: .medium, design: .rounded))
                     .foregroundStyle(.secondary)
@@ -843,41 +884,5 @@ private struct FamilyInviteCalloutArrow: Shape {
         path.addLine(to: CGPoint(x: rect.maxX, y: rect.minY))
         path.closeSubpath()
         return path
-    }
-}
-
-private extension FamilyRole {
-    var inviteTitle: String {
-        switch self {
-        case .owner:
-            return mistiaLocalized(vi: "Chủ sở hữu", en: "Owner", ja: "Owner")
-        case .member:
-            return mistiaLocalized(vi: "Thành viên", en: "Member", ja: "Member")
-        case .kid:
-            return mistiaLocalized(vi: "Trẻ em", en: "Kid", ja: "Kid")
-        }
-    }
-
-    var permissionSummaries: [String] {
-        switch self {
-        case .owner:
-            return [
-                mistiaLocalized(vi: "Có thể quản lý gia đình và lời mời.", en: "Can manage the family and invites.", ja: "家族と招待を管理できます。"),
-                mistiaLocalized(vi: "Có thể quản lý role và quyền của thành viên.", en: "Can manage member roles and permissions.", ja: "メンバーの役割と権限を管理できます。"),
-                mistiaLocalized(vi: "Dữ liệu tài chính vẫn được kiểm tra theo quyền cụ thể.", en: "Financial data still follows explicit permissions.", ja: "金融データは個別の権限に従います。")
-            ]
-        case .member:
-            return [
-                mistiaLocalized(vi: "Có thể dùng không gian gia đình theo quyền được cấp.", en: "Can use the family space based on granted permissions.", ja: "付与された権限に応じて家族スペースを利用できます。"),
-                mistiaLocalized(vi: "Mặc định không xem ví riêng của người khác.", en: "Does not see others' private wallets by default.", ja: "初期状態では他の人の個人ウォレットは表示されません。"),
-                mistiaLocalized(vi: "Có thể được owner cấp thêm quyền cụ thể.", en: "Can receive additional permissions from an owner.", ja: "所有者から追加権限を付与できます。")
-            ]
-        case .kid:
-            return [
-                mistiaLocalized(vi: "Mặc định không xem dữ liệu của thành viên khác.", en: "Cannot view other members' data by default.", ja: "初期状態では他のメンバーのデータを表示できません。"),
-                mistiaLocalized(vi: "Một số thao tác có thể bị giới hạn.", en: "Some actions may be limited.", ja: "一部の操作が制限される場合があります。"),
-                mistiaLocalized(vi: "Phụ huynh hoặc owner có thể quản lý quyền.", en: "A parent or owner can manage permissions.", ja: "保護者または所有者が権限を管理できます。")
-            ]
-        }
     }
 }

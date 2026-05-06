@@ -9,10 +9,8 @@ struct ContentView: View {
         @Bindable var familyContextStore = familyContextStore
 
         RootTabView()
-            .sheet(item: $familyContextStore.pendingInviteRoute) { route in
-                FamilyInviteAcceptanceSheet(route: route)
-                    .presentationDetents([.large])
-                    .presentationDragIndicator(.hidden)
+            .fullScreenCover(item: $familyContextStore.pendingInviteRoute) { route in
+                FamilyInviteAcceptanceScreen(route: route)
             }
             .task(id: familyRefreshToken) {
                 await familyContextStore.refresh(sessionStore: sessionStore)
