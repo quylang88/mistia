@@ -1018,11 +1018,6 @@ private struct OverviewCategorySpendingMonthView: View {
         }
     }
 
-    private var centerTitle: String {
-        selectedCategory?.name
-            ?? mistiaLocalized(vi: "Tất cả", en: "All", ja: "すべて")
-    }
-
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             if let selectedCategory {
@@ -1073,16 +1068,14 @@ private struct OverviewCategorySpendingMonthView: View {
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
-                HStack(alignment: .center, spacing: 12) {
-                    OverviewCategoryDonutChart(
+                HStack(alignment: .top, spacing: 12) {
+                    OverviewCategoryPieChart(
                         slices: visibleSlices,
-                        totalMinor: totalMinor,
-                        currencyCode: month.currencyCode,
-                        centerTitle: centerTitle,
                         onSelectSlice: onSelectSlice
                     )
                     .frame(width: 128, height: 128)
-                    .accessibilityIdentifier("overview.category.donut")
+                    .frame(width: 132)
+                    .accessibilityIdentifier("overview.category.pie")
 
                     OverviewCategoryTopList(
                         slices: Array(visibleSlices.prefix(3)),
@@ -1090,6 +1083,7 @@ private struct OverviewCategorySpendingMonthView: View {
                         currencyCode: month.currencyCode,
                         onSelectSlice: onSelectSlice
                     )
+                    .frame(maxHeight: 150)
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
@@ -1104,57 +1098,63 @@ private struct OverviewCategorySpendingMonthView: View {
     }
 }
 
-private struct OverviewCategoryDonutChart: View {
+private struct OverviewCategoryPieChart: View {
     @Environment(\.colorScheme) private var colorScheme
     @State private var selectedAngle: Double?
 
     let slices: [OverviewCategorySpendingSlice]
-    let totalMinor: Int64
-    let currencyCode: String
-    let centerTitle: String
     let onSelectSlice: (OverviewCategorySpendingSlice) -> Void
+
+    private var prominentSlice: OverviewCategorySpendingSlice? {
+        slices.max { $0.amountMinor < $1.amountMinor }
+    }
+
+    private var prominentColor: Color {
+        Color(hex: prominentSlice?.colorHex ?? "#2DAA9E")
+    }
 
     var body: some View {
         ZStack {
-            Circle()
-                .strokeBorder(Color.primary.opacity(colorScheme == .dark ? 0.12 : 0.07), lineWidth: 18)
+            if slices.count != 1 {
+                Circle()
+                    .fill(Color.primary.opacity(colorScheme == .dark ? 0.08 : 0.045))
+                    .overlay {
+                        Circle()
+                            .strokeBorder(Color.primary.opacity(colorScheme == .dark ? 0.10 : 0.06), lineWidth: 1)
+                    }
+            }
 
-            if slices.isEmpty {
+            if let singleSlice = slices.first, slices.count == 1 {
+                OverviewSingleSliceSemiGauge(tint: Color(hex: singleSlice.colorHex))
+                    .contentShape(Rectangle())
+                    .onTapGesture {
+                        guard singleSlice.canDrillDown else { return }
+                        onSelectSlice(singleSlice)
+                    }
+            } else if slices.isEmpty {
                 Image(systemName: "chart.pie")
                     .font(.system(size: 24, weight: .semibold))
                     .foregroundStyle(.secondary)
             } else {
                 Chart(slices) { slice in
+                    let isProminent = slice.id == prominentSlice?.id
+
                     SectorMark(
                         angle: .value("Chi tiêu", Double(slice.amountMinor)),
-                        innerRadius: .ratio(0.68),
-                        outerRadius: .ratio(0.98),
-                        angularInset: 2.0
+                        innerRadius: .ratio(0.0),
+                        outerRadius: .ratio(isProminent ? 1.0 : 0.92),
+                        angularInset: 1.8
                     )
-                    .cornerRadius(6)
+                    .cornerRadius(isProminent ? 7 : 4)
                     .foregroundStyle(Color(hex: slice.colorHex).gradient)
-                    .opacity(slice.canDrillDown ? 1 : 0.88)
+                    .opacity(isProminent ? 1 : 0.90)
                 }
                 .chartLegend(.hidden)
                 .chartAngleSelection(value: $selectedAngle)
+                .padding(2)
             }
-
-            VStack(spacing: 3) {
-                Text(centerTitle)
-                    .font(.system(size: 10, weight: .semibold, design: .rounded))
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.7)
-
-                Text(totalMinor.formattedCurrency(code: currencyCode))
-                    .font(.system(size: 13, weight: .bold, design: .rounded))
-                    .foregroundStyle(.primary)
-                    .lineLimit(2)
-                    .multilineTextAlignment(.center)
-                    .minimumScaleFactor(0.68)
-            }
-            .padding(.horizontal, 24)
         }
+        .shadow(color: prominentColor.opacity(colorScheme == .dark ? 0.28 : 0.18), radius: 12, y: 5)
         .onChange(of: selectedAngle) { _, value in
             guard let value,
                   let slice = slice(at: value),
@@ -1185,18 +1185,82 @@ private struct OverviewCategoryDonutChart: View {
     }
 }
 
+private struct OverviewSingleSliceSemiGauge: View {
+    @Environment(\.colorScheme) private var colorScheme
+    let tint: Color
+
+    private let lineWidth: CGFloat = 13
+
+    var body: some View {
+        ZStack(alignment: .bottom) {
+            OverviewSingleSliceSemiGaugeArc(progress: 1)
+                .stroke(
+                    colorScheme == .dark ? .white.opacity(0.10) : .black.opacity(0.07),
+                    style: StrokeStyle(lineWidth: lineWidth, lineCap: .round)
+                )
+
+            OverviewSingleSliceSemiGaugeArc(progress: 1)
+                .stroke(
+                    tint,
+                    style: StrokeStyle(lineWidth: lineWidth, lineCap: .round)
+                )
+                .shadow(color: tint.opacity(colorScheme == .dark ? 0.30 : 0.22), radius: 5, y: 2)
+
+            Text("100%")
+                .font(.system(size: 20, weight: .bold, design: .rounded))
+                .foregroundStyle(tint)
+                .lineLimit(1)
+                .minimumScaleFactor(0.72)
+                .padding(.bottom, 2)
+        }
+        .frame(width: 126, height: 72)
+        .frame(width: 128, height: 96, alignment: .center)
+        .accessibilityLabel(mistiaLocalized(vi: "Một danh mục chiếm toàn bộ", en: "Single category fills the chart", ja: "1つのカテゴリが全体を占めています"))
+    }
+}
+
+private struct OverviewSingleSliceSemiGaugeArc: Shape {
+    var progress: Double
+
+    var animatableData: Double {
+        get { progress }
+        set { progress = newValue }
+    }
+
+    func path(in rect: CGRect) -> Path {
+        var path = Path()
+        let clamped = min(max(progress, 0), 1)
+        let radius = min(rect.width / 2, rect.height)
+        let center = CGPoint(x: rect.midX, y: rect.maxY)
+        path.addArc(
+            center: center,
+            radius: radius,
+            startAngle: .degrees(180),
+            endAngle: .degrees(180 + 180 * clamped),
+            clockwise: false
+        )
+        return path
+    }
+}
+
 private struct OverviewCategoryTopList: View {
     let slices: [OverviewCategorySpendingSlice]
     let totalMinor: Int64
     let currencyCode: String
     let onSelectSlice: (OverviewCategorySpendingSlice) -> Void
 
+    private var showsPercentage: Bool {
+        slices.count > 1
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 7) {
-            Text(mistiaLocalized(vi: "Top 3", en: "Top 3", ja: "トップ3"))
-                .font(.system(size: 10, weight: .bold, design: .rounded))
-                .foregroundStyle(.secondary)
-                .textCase(.uppercase)
+            if showsPercentage {
+                Text(mistiaLocalized(vi: "Top 3", en: "Top 3", ja: "トップ3"))
+                    .font(.system(size: 10, weight: .bold, design: .rounded))
+                    .foregroundStyle(.secondary)
+                    .textCase(.uppercase)
+            }
 
             ForEach(slices) { slice in
                 if slice.canDrillDown {
@@ -1206,7 +1270,8 @@ private struct OverviewCategoryTopList: View {
                         OverviewCategoryTopRow(
                             slice: slice,
                             totalMinor: totalMinor,
-                            currencyCode: currencyCode
+                            currencyCode: currencyCode,
+                            showsPercentage: showsPercentage
                         )
                     }
                     .buttonStyle(.plain)
@@ -1215,13 +1280,14 @@ private struct OverviewCategoryTopList: View {
                     OverviewCategoryTopRow(
                         slice: slice,
                         totalMinor: totalMinor,
-                        currencyCode: currencyCode
+                        currencyCode: currencyCode,
+                        showsPercentage: showsPercentage
                     )
                     .accessibilityIdentifier("overview.category.row.\(slice.id)")
                 }
             }
         }
-        .frame(maxWidth: .infinity, maxHeight: 128, alignment: .topLeading)
+        .frame(maxWidth: .infinity, maxHeight: 128, alignment: showsPercentage ? .topLeading : .center)
     }
 }
 
@@ -1231,6 +1297,7 @@ private struct OverviewCategoryTopRow: View {
     let slice: OverviewCategorySpendingSlice
     let totalMinor: Int64
     let currencyCode: String
+    let showsPercentage: Bool
 
     private var percentageText: String {
         guard totalMinor > 0 else { return "0%" }
@@ -1254,9 +1321,11 @@ private struct OverviewCategoryTopRow: View {
                     .lineLimit(1)
                     .minimumScaleFactor(0.7)
 
-                Text(percentageText)
-                    .font(.system(size: 10, weight: .bold, design: .rounded))
-                    .foregroundStyle(.secondary)
+                if showsPercentage {
+                    Text(percentageText)
+                        .font(.system(size: 10, weight: .bold, design: .rounded))
+                        .foregroundStyle(.secondary)
+                }
             }
 
             Spacer(minLength: 6)

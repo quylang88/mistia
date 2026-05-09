@@ -445,6 +445,10 @@ private struct FamilyChartSegment: Identifiable {
     let color: Color
 
     var id: String { label }
+
+    var asDonutSegment: FamilyDonutSegment {
+        FamilyDonutSegment(label: label, valueMinor: valueMinor, colorHex: nil)
+    }
 }
 
 // MARK: - Hero Components
@@ -567,6 +571,28 @@ private struct FamilySpendableWarning: View {
 
 // MARK: - Distribution Components
 
+private struct FamilyOverviewSectionTitleStyle: ViewModifier {
+    @Environment(\.colorScheme) private var colorScheme
+
+    func body(content: Content) -> some View {
+        content
+            .font(.system(size: 13, weight: .bold, design: .rounded))
+            .textCase(.uppercase)
+            .tracking(0.6)
+            .foregroundStyle(titleColor)
+    }
+
+    private var titleColor: Color {
+        colorScheme == .dark ? .white.opacity(0.66) : Color(red: 0.36, green: 0.37, blue: 0.43)
+    }
+}
+
+private extension View {
+    func familyOverviewSectionTitleStyle() -> some View {
+        modifier(FamilyOverviewSectionTitleStyle())
+    }
+}
+
 private struct FamilyDistributionSection: View {
     @Environment(\.colorScheme) private var colorScheme
     let summary: FamilyAggregateSummary
@@ -592,8 +618,7 @@ private struct FamilyDistributionSection: View {
                     VStack(alignment: .leading, spacing: 16) {
                         HStack(alignment: .firstTextBaseline) {
                             Text(mistiaLocalized(vi: "Phân bổ", en: "Distribution", ja: "内訳"))
-                                .font(.system(size: 16, weight: .bold, design: .rounded))
-                                .foregroundStyle(.primary)
+                                .familyOverviewSectionTitleStyle()
 
                             Spacer(minLength: 10)
 
@@ -604,47 +629,28 @@ private struct FamilyDistributionSection: View {
                                 .minimumScaleFactor(0.72)
                         }
 
-                        HStack(spacing: 8) {
+                        Picker("", selection: resolvedModeBinding) {
                             ForEach(availableModes) { m in
-                                Button {
-                                    withAnimation(.snappy) { mode = m }
-                                } label: {
-                                    Text(m.title)
-                                        .font(.system(size: 13, weight: .bold, design: .rounded))
-                                        .padding(.horizontal, 12)
-                                        .padding(.vertical, 6)
-                                        .background {
-                                            if resolvedMode == m {
-                                                Capsule()
-                                                    .fill(MistiaAccent.income.color)
-                                            } else {
-                                                Capsule()
-                                                    .fill(colorScheme == .dark ? .white.opacity(0.05) : .black.opacity(0.05))
-                                            }
-                                        }
-                                        .foregroundStyle(resolvedMode == m ? .white : .secondary)
-                                }
-                                .buttonStyle(.plain)
+                                Text(m.title).tag(m)
                             }
                         }
+                        .pickerStyle(.segmented)
 
-                        VStack(spacing: 12) {
-                            ForEach(chartSegments) { segment in
-                                FamilyRankedBarRow(
-                                    segment: segment,
-                                    totalValueMinor: totalValueMinor,
-                                    maxValueMinor: maxSegmentValueMinor,
-                                    currencyCode: currencyCode
-                                ) {
-                                    onSegmentTap(
-                                        FamilyDonutSegment(
-                                            label: segment.label,
-                                            valueMinor: segment.valueMinor,
-                                            colorHex: nil
-                                        )
-                                    )
-                                }
+                        HStack(alignment: .top, spacing: 14) {
+                            FamilyPieChart(segments: chartSegments) { segment in
+                                onSegmentTap(segment.asDonutSegment)
                             }
+                            .frame(width: 150, height: 150)
+                            .frame(width: 150)
+
+                            FamilyPieLegendList(
+                                segments: chartSegments,
+                                totalValueMinor: totalValueMinor,
+                                currencyCode: currencyCode
+                            ) { segment in
+                                onSegmentTap(segment.asDonutSegment)
+                            }
+                            .frame(maxWidth: .infinity)
                         }
                     }
                 }
@@ -679,6 +685,17 @@ private struct FamilyDistributionSection: View {
 
     private var resolvedMode: FamilyDistributionMode {
         availableModes.contains(mode) ? mode : (availableModes.first ?? mode)
+    }
+
+    private var resolvedModeBinding: Binding<FamilyDistributionMode> {
+        Binding(
+            get: { resolvedMode },
+            set: { selectedMode in
+                withAnimation(.snappy) {
+                    mode = selectedMode
+                }
+            }
+        )
     }
 
     private func baseSegments(for mode: FamilyDistributionMode) -> [FamilyDonutSegment] {
@@ -744,10 +761,6 @@ private struct FamilyDistributionSection: View {
         }
     }
 
-    private var maxSegmentValueMinor: Int64 {
-        max(chartSegments.map(\.valueMinor).max() ?? 0, 1)
-    }
-
     private func chartColor(for index: Int) -> Color {
         let palette: [Color] = [
             Color(hex: "#2DAA9E"),
@@ -795,70 +808,181 @@ private struct FamilyDistributionSection: View {
     }
 }
 
-private struct FamilyRankedBarRow: View {
+private struct FamilyPieChart: View {
+    @Environment(\.colorScheme) private var colorScheme
+    @State private var selectedAngle: Double?
+
+    let segments: [FamilyChartSegment]
+    let onSelectSegment: (FamilyChartSegment) -> Void
+
+    private var prominentSegment: FamilyChartSegment? {
+        segments.max { $0.valueMinor < $1.valueMinor }
+    }
+
+    private var prominentColor: Color {
+        prominentSegment?.color ?? MistiaAccent.income.color
+    }
+
+    var body: some View {
+        ZStack {
+            if segments.count != 1 {
+                Circle()
+                    .fill(Color.primary.opacity(colorScheme == .dark ? 0.08 : 0.045))
+                    .overlay {
+                        Circle()
+                            .strokeBorder(Color.primary.opacity(colorScheme == .dark ? 0.10 : 0.06), lineWidth: 1)
+                    }
+            }
+
+            if let singleSegment = segments.first, segments.count == 1 {
+                FamilySingleSegmentSemiGauge(tint: singleSegment.color)
+                    .contentShape(Rectangle())
+                    .onTapGesture {
+                        onSelectSegment(singleSegment)
+                    }
+            } else {
+                Chart(segments) { segment in
+                    let isProminent = segment.id == prominentSegment?.id
+
+                    SectorMark(
+                        angle: .value("Giá trị", Double(segment.valueMinor)),
+                        innerRadius: .ratio(0.0),
+                        outerRadius: .ratio(isProminent ? 1.0 : 0.92),
+                        angularInset: 1.8
+                    )
+                    .cornerRadius(isProminent ? 7 : 4)
+                    .foregroundStyle(segment.color.gradient)
+                    .opacity(isProminent ? 1 : 0.90)
+                }
+                .chartLegend(.hidden)
+                .chartAngleSelection(value: $selectedAngle)
+                .padding(2)
+            }
+        }
+        .shadow(color: prominentColor.opacity(colorScheme == .dark ? 0.28 : 0.18), radius: 12, y: 5)
+        .onChange(of: selectedAngle) { _, value in
+            guard let value,
+                  let segment = segment(at: value)
+            else {
+                return
+            }
+
+            onSelectSegment(segment)
+            DispatchQueue.main.async {
+                selectedAngle = nil
+            }
+        }
+    }
+
+    private func segment(at selectedValue: Double) -> FamilyChartSegment? {
+        var lowerBound = 0.0
+
+        for segment in segments {
+            let upperBound = lowerBound + Double(segment.valueMinor)
+            if selectedValue >= lowerBound && selectedValue <= upperBound {
+                return segment
+            }
+            lowerBound = upperBound
+        }
+
+        return nil
+    }
+}
+
+private struct FamilySingleSegmentSemiGauge: View {
+    @Environment(\.colorScheme) private var colorScheme
+    let tint: Color
+
+    private let lineWidth: CGFloat = 14
+
+    var body: some View {
+        ZStack(alignment: .bottom) {
+            FamilySingleSegmentSemiGaugeArc(progress: 1)
+                .stroke(
+                    colorScheme == .dark ? .white.opacity(0.10) : .black.opacity(0.07),
+                    style: StrokeStyle(lineWidth: lineWidth, lineCap: .round)
+                )
+
+            FamilySingleSegmentSemiGaugeArc(progress: 1)
+                .stroke(
+                    tint,
+                    style: StrokeStyle(lineWidth: lineWidth, lineCap: .round)
+                )
+                .shadow(color: tint.opacity(colorScheme == .dark ? 0.30 : 0.22), radius: 5, y: 2)
+
+            Text("100%")
+                .font(.system(size: 20, weight: .bold, design: .rounded))
+                .foregroundStyle(tint)
+                .lineLimit(1)
+                .minimumScaleFactor(0.72)
+                .padding(.bottom, 2)
+        }
+        .frame(width: 132, height: 72)
+        .frame(width: 150, height: 104, alignment: .center)
+        .accessibilityLabel(mistiaLocalized(vi: "Một mục chiếm toàn bộ", en: "Single item fills the chart", ja: "1つの項目が全体を占めています"))
+    }
+}
+
+private struct FamilySingleSegmentSemiGaugeArc: Shape {
+    var progress: Double
+
+    var animatableData: Double {
+        get { progress }
+        set { progress = newValue }
+    }
+
+    func path(in rect: CGRect) -> Path {
+        var path = Path()
+        let clamped = min(max(progress, 0), 1)
+        let radius = min(rect.width / 2, rect.height)
+        let center = CGPoint(x: rect.midX, y: rect.maxY)
+        path.addArc(
+            center: center,
+            radius: radius,
+            startAngle: .degrees(180),
+            endAngle: .degrees(180 + 180 * clamped),
+            clockwise: false
+        )
+        return path
+    }
+}
+
+private struct FamilyPieLegendList: View {
+    let segments: [FamilyChartSegment]
+    let totalValueMinor: Int64
+    let currencyCode: String
+    let onSelectSegment: (FamilyChartSegment) -> Void
+
+    private var showsPercentage: Bool {
+        segments.count > 1
+    }
+
+    var body: some View {
+        VStack(spacing: 7) {
+            ForEach(segments) { segment in
+                Button {
+                    onSelectSegment(segment)
+                } label: {
+                    FamilyPieLegendRow(
+                        segment: segment,
+                        totalValueMinor: totalValueMinor,
+                        currencyCode: currencyCode,
+                        showsPercentage: showsPercentage
+                    )
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .frame(maxWidth: .infinity, minHeight: showsPercentage ? nil : 150, alignment: showsPercentage ? .topLeading : .center)
+    }
+}
+
+private struct FamilyPieLegendRow: View {
     @Environment(\.colorScheme) private var colorScheme
     let segment: FamilyChartSegment
     let totalValueMinor: Int64
-    let maxValueMinor: Int64
     let currencyCode: String
-    let onTap: () -> Void
-
-    var body: some View {
-        Button(action: onTap) {
-            VStack(alignment: .leading, spacing: 8) {
-                HStack(alignment: .firstTextBaseline, spacing: 10) {
-                    HStack(spacing: 8) {
-                        Circle()
-                            .fill(segment.color)
-                            .frame(width: 9, height: 9)
-
-                        Text(segment.label)
-                            .font(.system(size: 14.5, weight: .semibold, design: .rounded))
-                            .foregroundStyle(.primary)
-                            .lineLimit(1)
-                    }
-
-                    Spacer(minLength: 8)
-
-                    VStack(alignment: .trailing, spacing: 2) {
-                        Text(segment.valueMinor.formattedCurrency(code: currencyCode))
-                            .font(.system(size: 13, weight: .bold, design: .rounded))
-                            .foregroundStyle(.primary)
-                            .lineLimit(1)
-                            .minimumScaleFactor(0.76)
-
-                        Text(percentageText)
-                            .font(.system(size: 11, weight: .bold, design: .rounded))
-                            .foregroundStyle(.secondary)
-                    }
-                }
-
-                GeometryReader { geometry in
-                    ZStack(alignment: .leading) {
-                        Capsule()
-                            .fill(barTrackColor)
-
-                        Capsule()
-                            .fill(segment.color.gradient)
-                            .frame(width: max(8, geometry.size.width * CGFloat(progress)))
-                    }
-                }
-                .frame(height: 9)
-            }
-            .padding(.horizontal, 14)
-            .padding(.vertical, 12)
-            .background {
-                RoundedRectangle(cornerRadius: 16, style: .continuous)
-                    .fill(colorScheme == .dark ? .white.opacity(0.035) : .white.opacity(0.52))
-            }
-        }
-        .buttonStyle(.plain)
-    }
-
-    private var progress: Double {
-        guard maxValueMinor > 0 else { return 0 }
-        return min(max(Double(segment.valueMinor) / Double(maxValueMinor), 0), 1)
-    }
+    let showsPercentage: Bool
 
     private var percentageText: String {
         guard totalValueMinor > 0 else { return "0%" }
@@ -866,8 +990,41 @@ private struct FamilyRankedBarRow: View {
         return "\(Int(percentage.rounded()))%"
     }
 
-    private var barTrackColor: Color {
-        colorScheme == .dark ? .white.opacity(0.07) : .black.opacity(0.06)
+    var body: some View {
+        HStack(spacing: 8) {
+            Circle()
+                .fill(segment.color)
+                .frame(width: 9, height: 9)
+
+            VStack(alignment: .leading, spacing: 1) {
+                Text(segment.label)
+                    .font(.system(size: 12, weight: .semibold, design: .rounded))
+                    .foregroundStyle(.primary)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.78)
+
+                Text(segment.valueMinor.formattedCurrency(code: currencyCode))
+                    .font(.system(size: 10.5, weight: .semibold, design: .rounded))
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.72)
+            }
+
+            Spacer(minLength: 6)
+
+            if showsPercentage {
+                Text(percentageText)
+                    .font(.system(size: 11, weight: .bold, design: .rounded))
+                    .foregroundStyle(segment.color)
+                    .lineLimit(1)
+            }
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 7)
+        .background {
+            RoundedRectangle(cornerRadius: 13, style: .continuous)
+                .fill(colorScheme == .dark ? .white.opacity(0.035) : .white.opacity(0.50))
+        }
     }
 }
 
@@ -886,7 +1043,7 @@ private struct FamilyMemberComparisonSection: View {
             VStack(alignment: .leading, spacing: 12) {
                 HStack {
                     Text(mistiaLocalized(vi: "So sánh thành viên", en: "Member comparison", ja: "メンバー比較"))
-                        .font(.system(size: 16, weight: .bold, design: .rounded))
+                        .familyOverviewSectionTitleStyle()
 
                     Spacer()
 
@@ -985,7 +1142,7 @@ private struct FamilyAggregateAccountList: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             Text(mistiaLocalized(vi: "Danh sách tài khoản gộp", en: "Merged accounts", ja: "統合口座リスト"))
-                .font(.system(size: 16, weight: .bold, design: .rounded))
+                .familyOverviewSectionTitleStyle()
                 .padding(.horizontal, 4)
 
             MistiaGlassCard(cornerRadius: 24, tint: cardTint, padding: 0) {
@@ -1051,7 +1208,7 @@ private struct FamilyBudgetStatusSection: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             Text(mistiaLocalized(vi: "Ngân sách gia đình", en: "Family budget", ja: "家族の予算"))
-                .font(.system(size: 16, weight: .bold, design: .rounded))
+                .familyOverviewSectionTitleStyle()
                 .padding(.horizontal, 4)
 
             MistiaGlassCard(cornerRadius: 24, tint: cardTint, padding: 0) {
@@ -1103,7 +1260,7 @@ private struct FamilyUpcomingSection: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             Text(mistiaLocalized(vi: "Sắp đến hạn", en: "Upcoming", ja: "間もなく期限"))
-                .font(.system(size: 16, weight: .bold, design: .rounded))
+                .familyOverviewSectionTitleStyle()
                 .padding(.horizontal, 4)
 
             MistiaGlassCard(cornerRadius: 24, tint: cardTint, padding: 0) {
