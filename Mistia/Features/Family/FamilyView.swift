@@ -315,31 +315,8 @@ struct FamilyManagementView: View {
             }
             .cardDescriptionStyle()
 
-            // Overview Block
-            MistiaGlassCard(cornerRadius: 18, tint: cardTint, padding: 0) {
-                FamilySettingsRow(
-                    title: mistiaLocalized(vi: "Tổng quan gia đình", en: "Family overview", ja: "家族の概要"),
-                    subtitle: mistiaLocalized(vi: "Tài sản, công nợ, sắp đến hạn và top chi tiêu của cả nhà.", en: "Assets, debts, upcoming due items, and top spending across the household.", ja: "家計全体の資産・負債・支払予定・支出の要点を確認します。"),
-                    icon: "chart.bar.xaxis",
-                    iconColor: .indigo,
-                    isDisabled: false
-                ) {
-                    destination = .overview
-                }
-            }
-
-            if familyContextStore.canInviteMembers {
-                MistiaGlassCard(cornerRadius: 18, tint: cardTint, padding: 0) {
-                    FamilySettingsRow(
-                        title: mistiaLocalized(vi: "Quản lý lời mời", en: "Manage invites", ja: "招待を管理"),
-                        subtitle: inviteManagementSubtitle,
-                        icon: "link.badge.plus",
-                        iconColor: .cyan,
-                        isDisabled: false
-                    ) {
-                        destination = .inviteManagement
-                    }
-                }
+            FamilyHubRouteSection(rows: familyHubRouteRows, tint: cardTint) { row in
+                destination = row.destination
             }
 
             // Privacy Link
@@ -372,25 +349,28 @@ struct FamilyManagementView: View {
         }
     }
 
-    private var inviteManagementSubtitle: String {
-        let pendingCount = familyContextStore.invites.filter { $0.status == .pending }.count
-        let acceptedCount = familyContextStore.invites.filter { $0.status == .accepted }.count
-        let declinedCount = familyContextStore.invites.filter { $0.status == .declined }.count
-        let expiredCount = familyContextStore.invites.filter { $0.status == .expired }.count
+    private var familyHubRouteRows: [FamilyHubRouteRowItem] {
+        var rows = [
+            FamilyHubRouteRowItem(
+                destination: .overview,
+                title: mistiaLocalized(vi: "Tổng quan gia đình", en: "Family overview", ja: "家族の概要"),
+                icon: "chart.bar.xaxis",
+                iconColor: .indigo
+            )
+        ]
 
-        if familyContextStore.invites.isEmpty {
-            return mistiaLocalized(
-                vi: "Chưa có lời mời nào.",
-                en: "No invites yet.",
-                ja: "招待はまだありません。"
+        if familyContextStore.canInviteMembers {
+            rows.append(
+                FamilyHubRouteRowItem(
+                    destination: .inviteManagement,
+                    title: mistiaLocalized(vi: "Quản lý lời mời", en: "Manage invites", ja: "招待を管理"),
+                    icon: "link.badge.plus",
+                    iconColor: .cyan
+                )
             )
         }
 
-        return mistiaLocalized(
-            vi: "\(pendingCount) đang chờ · \(acceptedCount) đã dùng · \(declinedCount) đã từ chối · \(expiredCount) hết hạn",
-            en: "\(pendingCount) pending · \(acceptedCount) used · \(declinedCount) declined · \(expiredCount) expired",
-            ja: "\(pendingCount)件待機中 · \(acceptedCount)件使用済み · \(declinedCount)件辞退 · \(expiredCount)件期限切れ"
-        )
+        return rows
     }
 
     private func shouldSuppressNoFamilyPermissionError(_ message: String) -> Bool {
@@ -450,6 +430,15 @@ private struct FamilyAggregateWalletRow: Identifiable {
     var id: UUID { wallet.id }
 }
 
+private struct FamilyHubRouteRowItem: Identifiable {
+    let destination: FamilyDestination
+    let title: String
+    let icon: String
+    let iconColor: Color
+
+    var id: FamilyDestination { destination }
+}
+
 private struct FamilyChartSegment: Identifiable {
     let label: String
     let valueMinor: Int64
@@ -463,6 +452,7 @@ private struct FamilyChartSegment: Identifiable {
 private struct FamilyHeroCard: View {
     @Environment(\.colorScheme) private var colorScheme
     let summary: FamilyAggregateSummary
+    let monthlySpendable: FamilyMonthlySpendableSnapshot
     let currencyCode: String
 
     var body: some View {
@@ -488,15 +478,22 @@ private struct FamilyHeroCard: View {
 
                 HStack(spacing: 20) {
                     FamilyMetricCompact(
-                        title: mistiaLocalized(vi: "Công nợ", en: "Debts", ja: "負債"),
+                        title: mistiaLocalized(vi: "Đang nợ", en: "Current debt", ja: "現在の負債"),
                         value: summary.totalDebtMinor.formattedCurrency(code: currencyCode),
                         color: .red
                     )
                     
                     FamilyMetricCompact(
-                        title: mistiaLocalized(vi: "Có thể chi", en: "Spendable", ja: "使える"),
-                        value: summary.spendableMinor.formattedCurrency(code: currencyCode),
-                        color: MistiaAccent.purple.color
+                        title: mistiaLocalized(vi: "Có thể chi tháng này", en: "Spendable this month", ja: "今月使える金額"),
+                        value: monthlySpendable.displayMinor.formattedCurrency(code: currencyCode),
+                        color: MistiaAccent.income.color
+                    )
+                }
+
+                if monthlySpendable.isShortfall {
+                    FamilySpendableWarning(
+                        shortfallMinor: monthlySpendable.shortfallMinor,
+                        currencyCode: currencyCode
                     )
                 }
             }
@@ -518,12 +515,53 @@ private struct FamilyMetricCompact: View {
             Text(title)
                 .font(.system(size: 13, weight: .medium, design: .rounded))
                 .foregroundStyle(.secondary)
+                .lineLimit(2)
             Text(value)
                 .font(.system(size: 17, weight: .bold, design: .rounded))
                 .foregroundStyle(color)
                 .lineLimit(1)
                 .minimumScaleFactor(0.8)
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+}
+
+private struct FamilySpendableWarning: View {
+    @Environment(\.colorScheme) private var colorScheme
+    let shortfallMinor: Int64
+    let currencyCode: String
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 8) {
+            Image(systemName: "exclamationmark.triangle.fill")
+                .font(.system(size: 13, weight: .bold))
+                .foregroundStyle(MistiaAccent.amber.color)
+
+            Text(warningText)
+                .font(.system(size: 12.5, weight: .semibold, design: .rounded))
+                .foregroundStyle(warningForeground)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 9)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background {
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .fill(MistiaAccent.amber.color.opacity(colorScheme == .dark ? 0.14 : 0.12))
+        }
+    }
+
+    private var warningText: String {
+        let amount = shortfallMinor.formattedCurrency(code: currencyCode)
+        return mistiaLocalized(
+            vi: "Cần bù thêm \(amount) trong tháng này.",
+            en: "Need \(amount) more this month.",
+            ja: "今月あと \(amount) 必要です。"
+        )
+    }
+
+    private var warningForeground: Color {
+        colorScheme == .dark ? MistiaAccent.amber.color : Color(red: 0.67, green: 0.32, blue: 0.04)
     }
 }
 
@@ -538,108 +576,92 @@ private struct FamilyDistributionSection: View {
     let onSegmentTap: (FamilyDonutSegment) -> Void
 
     var body: some View {
-        VStack(spacing: 12) {
-            // Timeframe picker (Segmented)
-            Picker("", selection: $timeframe) {
-                ForEach(FamilyTimeframe.allCases) { tf in
-                    Text(tf.title).tag(tf)
-                }
-            }
-            .pickerStyle(.segmented)
-            .padding(.horizontal, 4)
-
-            MistiaGlassCard(cornerRadius: 24, tint: cardTint) {
-                VStack(spacing: 18) {
-                    // Mode picker
-                    HStack(spacing: 8) {
-                        ForEach(FamilyDistributionMode.allCases) { m in
-                            Button {
-                                withAnimation(.snappy) { mode = m }
-                            } label: {
-                                Text(m.title)
-                                    .font(.system(size: 13, weight: .bold, design: .rounded))
-                                    .padding(.horizontal, 12)
-                                    .padding(.vertical, 6)
-                                    .background {
-                                        if mode == m {
-                                            Capsule()
-                                                .fill(MistiaAccent.purple.color)
-                                        } else {
-                                            Capsule()
-                                                .fill(colorScheme == .dark ? .white.opacity(0.05) : .black.opacity(0.05))
-                                        }
-                                    }
-                                    .foregroundStyle(mode == m ? .white : .secondary)
-                            }
-                            .buttonStyle(.plain)
-                        }
+        if availableModes.isEmpty {
+            EmptyView()
+        } else {
+            VStack(spacing: 12) {
+                Picker("", selection: $timeframe) {
+                    ForEach(FamilyTimeframe.allCases) { tf in
+                        Text(tf.title).tag(tf)
                     }
+                }
+                .pickerStyle(.segmented)
+                .padding(.horizontal, 4)
 
-                    if chartSegments.isEmpty {
-                        Text(mistiaLocalized(vi: "Chưa có dữ liệu để hiển thị", en: "No data to display yet", ja: "表示できるデータがまだありません"))
-                            .font(.system(size: 14, weight: .medium, design: .rounded))
-                            .foregroundStyle(.secondary)
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, 36)
-                    } else {
-                        VStack(spacing: 18) {
-                            FamilyDonutChart(
-                                segments: chartSegments,
-                                modeTitle: mode.title,
-                                totalValueMinor: totalValueMinor,
-                                currencyCode: currencyCode
-                            )
-                            .frame(height: 220)
+                MistiaGlassCard(cornerRadius: 24, tint: cardTint) {
+                    VStack(alignment: .leading, spacing: 16) {
+                        HStack(alignment: .firstTextBaseline) {
+                            Text(mistiaLocalized(vi: "Phân bổ", en: "Distribution", ja: "内訳"))
+                                .font(.system(size: 16, weight: .bold, design: .rounded))
+                                .foregroundStyle(.primary)
 
-                            VStack(spacing: 10) {
-                                ForEach(Array(chartSegments.enumerated()), id: \.element.id) { index, segment in
-                                    Button {
-                                        onSegmentTap(FamilyDonutSegment(label: segment.label, valueMinor: segment.valueMinor, colorHex: nil))
-                                    } label: {
-                                        HStack(spacing: 12) {
-                                            Circle()
-                                                .fill(segment.color)
-                                                .frame(width: 10, height: 10)
+                            Spacer(minLength: 10)
 
-                                            VStack(alignment: .leading, spacing: 2) {
-                                                Text(segment.label)
-                                                    .font(.system(size: 14, weight: .semibold, design: .rounded))
-                                                    .foregroundStyle(.primary)
+                            Text(totalValueMinor.formattedCurrency(code: currencyCode))
+                                .font(.system(size: 13, weight: .bold, design: .rounded))
+                                .foregroundStyle(.secondary)
+                                .lineLimit(1)
+                                .minimumScaleFactor(0.72)
+                        }
 
-                                                Text(legendDetailText(for: segment, index: index))
-                                                    .font(.system(size: 12, weight: .medium, design: .rounded))
-                                                    .foregroundStyle(.secondary)
-                                            }
-
-                                            Spacer()
-
-                                            Text(percentageText(for: segment))
-                                                .font(.system(size: 13, weight: .bold, design: .rounded))
-                                                .foregroundStyle(.secondary)
-                                        }
-                                        .padding(.horizontal, 14)
-                                        .padding(.vertical, 10)
+                        HStack(spacing: 8) {
+                            ForEach(availableModes) { m in
+                                Button {
+                                    withAnimation(.snappy) { mode = m }
+                                } label: {
+                                    Text(m.title)
+                                        .font(.system(size: 13, weight: .bold, design: .rounded))
+                                        .padding(.horizontal, 12)
+                                        .padding(.vertical, 6)
                                         .background {
-                                            RoundedRectangle(cornerRadius: 16, style: .continuous)
-                                                .fill(colorScheme == .dark ? .white.opacity(0.03) : .white.opacity(0.54))
+                                            if resolvedMode == m {
+                                                Capsule()
+                                                    .fill(MistiaAccent.income.color)
+                                            } else {
+                                                Capsule()
+                                                    .fill(colorScheme == .dark ? .white.opacity(0.05) : .black.opacity(0.05))
+                                            }
                                         }
-                                    }
-                                    .buttonStyle(.plain)
+                                        .foregroundStyle(resolvedMode == m ? .white : .secondary)
+                                }
+                                .buttonStyle(.plain)
+                            }
+                        }
+
+                        VStack(spacing: 12) {
+                            ForEach(chartSegments) { segment in
+                                FamilyRankedBarRow(
+                                    segment: segment,
+                                    totalValueMinor: totalValueMinor,
+                                    maxValueMinor: maxSegmentValueMinor,
+                                    currencyCode: currencyCode
+                                ) {
+                                    onSegmentTap(
+                                        FamilyDonutSegment(
+                                            label: segment.label,
+                                            valueMinor: segment.valueMinor,
+                                            colorHex: nil
+                                        )
+                                    )
                                 }
                             }
                         }
                     }
                 }
-            }
-            .gesture(
-                DragGesture().onEnded { value in
-                    if value.translation.width > 50 {
-                        switchTimeframe(back: true)
-                    } else if value.translation.width < -50 {
-                        switchTimeframe(back: false)
+                .gesture(
+                    DragGesture().onEnded { value in
+                        if value.translation.width > 50 {
+                            switchTimeframe(back: true)
+                        } else if value.translation.width < -50 {
+                            switchTimeframe(back: false)
+                        }
                     }
-                }
-            )
+                )
+            }
+            .onAppear(perform: normalizeMode)
+            .onChange(of: availableModeKey) { _, _ in
+                normalizeMode()
+            }
         }
     }
 
@@ -647,27 +669,51 @@ private struct FamilyDistributionSection: View {
         colorScheme == .dark ? .white.opacity(0.04) : .white.opacity(0.16)
     }
 
-    private var baseSegments: [FamilyDonutSegment] {
+    private var availableModes: [FamilyDistributionMode] {
+        FamilyDistributionMode.allCases.filter { !chartSegments(for: $0).isEmpty }
+    }
+
+    private var availableModeKey: String {
+        availableModes.map(\.rawValue).joined(separator: "|")
+    }
+
+    private var resolvedMode: FamilyDistributionMode {
+        availableModes.contains(mode) ? mode : (availableModes.first ?? mode)
+    }
+
+    private func baseSegments(for mode: FamilyDistributionMode) -> [FamilyDonutSegment] {
         switch mode {
         case .spending:
             return summary.expenseByCategory
         case .accounts:
-            return summary.balanceByWalletKind.map { FamilyDonutSegment(label: $0.key.rawValue.capitalized, valueMinor: $0.value, colorHex: nil) }.sorted { $0.valueMinor > $1.valueMinor }
+            return summary.balanceByWalletKind
+                .map {
+                    FamilyDonutSegment(
+                        label: walletKindTitle($0.key),
+                        valueMinor: $0.value,
+                        colorHex: nil
+                    )
+                }
+                .sorted { $0.valueMinor > $1.valueMinor }
         case .members:
             return summary.spendingByMember.map { FamilyDonutSegment(label: $0.name, valueMinor: $0.amountMinor, colorHex: nil) }
         }
     }
 
     private var chartSegments: [FamilyChartSegment] {
-        let filtered = baseSegments
+        chartSegments(for: resolvedMode)
+    }
+
+    private func chartSegments(for mode: FamilyDistributionMode) -> [FamilyChartSegment] {
+        let filtered = baseSegments(for: mode)
             .map { FamilyDonutSegment(label: $0.label, valueMinor: max($0.valueMinor, 0), colorHex: $0.colorHex) }
             .filter { $0.valueMinor > 0 }
             .sorted { $0.valueMinor > $1.valueMinor }
 
         guard !filtered.isEmpty else { return [] }
 
-        let leading = Array(filtered.prefix(4))
-        let remainder = filtered.dropFirst(4)
+        let leading = Array(filtered.prefix(5))
+        let remainder = filtered.dropFirst(5)
 
         var displaySegments = leading
         if !remainder.isEmpty {
@@ -698,34 +744,44 @@ private struct FamilyDistributionSection: View {
         }
     }
 
-    private func percentageText(for segment: FamilyChartSegment) -> String {
-        guard totalValueMinor > 0 else { return "0%" }
-        let percentage = (Double(segment.valueMinor) / Double(totalValueMinor)) * 100
-        return "\(Int(percentage.rounded()))%"
-    }
-
-    private func legendDetailText(for segment: FamilyChartSegment, index: Int) -> String {
-        let formattedValue = segment.valueMinor.formattedCurrency(code: currencyCode)
-        if index == 0 {
-            return mistiaLocalized(
-                vi: "Lớn nhất • \(formattedValue)",
-                en: "Largest • \(formattedValue)",
-                ja: "最大 • \(formattedValue)"
-            )
-        }
-        return formattedValue
+    private var maxSegmentValueMinor: Int64 {
+        max(chartSegments.map(\.valueMinor).max() ?? 0, 1)
     }
 
     private func chartColor(for index: Int) -> Color {
         let palette: [Color] = [
-            Color(red: 0.40, green: 0.56, blue: 0.97),
-            Color(red: 0.48, green: 0.75, blue: 0.98),
-            Color(red: 0.45, green: 0.81, blue: 0.75),
-            Color(red: 0.97, green: 0.73, blue: 0.43),
-            Color(red: 0.82, green: 0.84, blue: 0.89)
+            Color(hex: "#2DAA9E"),
+            Color(hex: "#5B7BFF"),
+            Color(hex: "#5FAEFF"),
+            Color(hex: "#F59B3F"),
+            Color(hex: "#F45C7E"),
+            MistiaAccent.slate.color
         ]
 
         return palette[index % palette.count]
+    }
+
+    private func walletKindTitle(_ kind: FamilyAggregateWalletSnapshot.Kind) -> String {
+        switch kind {
+        case .cash:
+            return mistiaLocalized(vi: "Tiền mặt", en: "Cash", ja: "現金")
+        case .bank:
+            return mistiaLocalized(vi: "Ngân hàng", en: "Bank", ja: "銀行")
+        case .ewallet:
+            return mistiaLocalized(vi: "Ví điện tử", en: "E-wallet", ja: "電子ウォレット")
+        case .creditCard:
+            return mistiaLocalized(vi: "Thẻ tín dụng", en: "Credit cards", ja: "クレジットカード")
+        case .other:
+            return mistiaLocalized(vi: "Khác", en: "Other", ja: "その他")
+        }
+    }
+
+    private func normalizeMode() {
+        guard !availableModes.isEmpty, !availableModes.contains(mode), let firstMode = availableModes.first else {
+            return
+        }
+
+        mode = firstMode
     }
 
     private func switchTimeframe(back: Bool) {
@@ -739,6 +795,82 @@ private struct FamilyDistributionSection: View {
     }
 }
 
+private struct FamilyRankedBarRow: View {
+    @Environment(\.colorScheme) private var colorScheme
+    let segment: FamilyChartSegment
+    let totalValueMinor: Int64
+    let maxValueMinor: Int64
+    let currencyCode: String
+    let onTap: () -> Void
+
+    var body: some View {
+        Button(action: onTap) {
+            VStack(alignment: .leading, spacing: 8) {
+                HStack(alignment: .firstTextBaseline, spacing: 10) {
+                    HStack(spacing: 8) {
+                        Circle()
+                            .fill(segment.color)
+                            .frame(width: 9, height: 9)
+
+                        Text(segment.label)
+                            .font(.system(size: 14.5, weight: .semibold, design: .rounded))
+                            .foregroundStyle(.primary)
+                            .lineLimit(1)
+                    }
+
+                    Spacer(minLength: 8)
+
+                    VStack(alignment: .trailing, spacing: 2) {
+                        Text(segment.valueMinor.formattedCurrency(code: currencyCode))
+                            .font(.system(size: 13, weight: .bold, design: .rounded))
+                            .foregroundStyle(.primary)
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.76)
+
+                        Text(percentageText)
+                            .font(.system(size: 11, weight: .bold, design: .rounded))
+                            .foregroundStyle(.secondary)
+                    }
+                }
+
+                GeometryReader { geometry in
+                    ZStack(alignment: .leading) {
+                        Capsule()
+                            .fill(barTrackColor)
+
+                        Capsule()
+                            .fill(segment.color.gradient)
+                            .frame(width: max(8, geometry.size.width * CGFloat(progress)))
+                    }
+                }
+                .frame(height: 9)
+            }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 12)
+            .background {
+                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                    .fill(colorScheme == .dark ? .white.opacity(0.035) : .white.opacity(0.52))
+            }
+        }
+        .buttonStyle(.plain)
+    }
+
+    private var progress: Double {
+        guard maxValueMinor > 0 else { return 0 }
+        return min(max(Double(segment.valueMinor) / Double(maxValueMinor), 0), 1)
+    }
+
+    private var percentageText: String {
+        guard totalValueMinor > 0 else { return "0%" }
+        let percentage = Double(segment.valueMinor) / Double(totalValueMinor) * 100
+        return "\(Int(percentage.rounded()))%"
+    }
+
+    private var barTrackColor: Color {
+        colorScheme == .dark ? .white.opacity(0.07) : .black.opacity(0.06)
+    }
+}
+
 // MARK: - Comparison Components
 
 private struct FamilyMemberComparisonSection: View {
@@ -748,50 +880,60 @@ private struct FamilyMemberComparisonSection: View {
     let currencyCode: String
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack {
-                Text(mistiaLocalized(vi: "So sánh thành viên", en: "Member comparison", ja: "メンバー比較"))
-                    .font(.system(size: 16, weight: .bold, design: .rounded))
-                
-                Spacer()
-                
-                Picker("", selection: $mode) {
-                    ForEach(FamilyComparisonMode.allCases) { m in
-                        Text(m.title).tag(m)
+        if availableModes.isEmpty {
+            EmptyView()
+        } else {
+            VStack(alignment: .leading, spacing: 12) {
+                HStack {
+                    Text(mistiaLocalized(vi: "So sánh thành viên", en: "Member comparison", ja: "メンバー比較"))
+                        .font(.system(size: 16, weight: .bold, design: .rounded))
+
+                    Spacer()
+
+                    if availableModes.count > 1 {
+                        Picker("", selection: $mode) {
+                            ForEach(availableModes) { m in
+                                Text(m.title).tag(m)
+                            }
+                        }
+                        .pickerStyle(.menu)
+                        .labelsHidden()
                     }
                 }
-                .pickerStyle(.menu)
-                .labelsHidden()
-            }
-            .padding(.horizontal, 4)
+                .padding(.horizontal, 4)
 
-            MistiaGlassCard(cornerRadius: 24, tint: cardTint) {
-                VStack(spacing: 20) {
-                    ForEach(members) { m in
-                        VStack(alignment: .leading, spacing: 8) {
-                            HStack {
-                                Text(m.name)
-                                    .font(.system(size: 14, weight: .semibold, design: .rounded))
-                                Spacer()
-                                Text(m.amountMinor.formattedCurrency(code: currencyCode))
-                                    .font(.system(size: 14, weight: .bold, design: .rounded))
-                            }
-                            
-                            GeometryReader { geo in
-                                ZStack(alignment: .leading) {
-                                    Capsule()
-                                        .fill(colorScheme == .dark ? .white.opacity(0.05) : .black.opacity(0.05))
-                                        .frame(height: 10)
-                                    
-                                    Capsule()
-                                        .fill(MistiaAccent.purple.color.gradient)
-                                        .frame(width: geo.size.width * ratio(for: m.amountMinor), height: 10)
+                MistiaGlassCard(cornerRadius: 24, tint: cardTint) {
+                    VStack(spacing: 20) {
+                        ForEach(members) { m in
+                            VStack(alignment: .leading, spacing: 8) {
+                                HStack {
+                                    Text(m.name)
+                                        .font(.system(size: 14, weight: .semibold, design: .rounded))
+                                    Spacer()
+                                    Text(m.amountMinor.formattedCurrency(code: currencyCode))
+                                        .font(.system(size: 14, weight: .bold, design: .rounded))
                                 }
+
+                                GeometryReader { geo in
+                                    ZStack(alignment: .leading) {
+                                        Capsule()
+                                            .fill(colorScheme == .dark ? .white.opacity(0.05) : .black.opacity(0.05))
+                                            .frame(height: 10)
+
+                                        Capsule()
+                                            .fill(MistiaAccent.income.color.gradient)
+                                            .frame(width: geo.size.width * CGFloat(ratio(for: m.amountMinor)), height: 10)
+                                    }
+                                }
+                                .frame(height: 10)
                             }
-                            .frame(height: 10)
                         }
                     }
                 }
+            }
+            .onAppear(perform: normalizeMode)
+            .onChange(of: availableModeKey) { _, _ in
+                normalizeMode()
             }
         }
     }
@@ -800,13 +942,37 @@ private struct FamilyMemberComparisonSection: View {
         colorScheme == .dark ? .white.opacity(0.04) : .white.opacity(0.16)
     }
 
+    private var availableModes: [FamilyComparisonMode] {
+        FamilyComparisonMode.allCases.filter { !members(for: $0).isEmpty }
+    }
+
+    private var availableModeKey: String {
+        availableModes.map(\.rawValue).joined(separator: "|")
+    }
+
+    private var resolvedMode: FamilyComparisonMode {
+        availableModes.contains(mode) ? mode : (availableModes.first ?? mode)
+    }
+
     private var members: [FamilyMemberSpendingSnapshot] {
+        members(for: resolvedMode)
+    }
+
+    private func members(for mode: FamilyComparisonMode) -> [FamilyMemberSpendingSnapshot] {
         mode == .spending ? summary.spendingByMember : summary.incomeByMember
     }
 
     private func ratio(for amount: Int64) -> Double {
         let maxAmount = members.map(\.amountMinor).max() ?? 1
         return Double(max(amount, 0)) / Double(max(maxAmount, 1))
+    }
+
+    private func normalizeMode() {
+        guard !availableModes.isEmpty, !availableModes.contains(mode), let firstMode = availableModes.first else {
+            return
+        }
+
+        mode = firstMode
     }
 }
 
@@ -1028,46 +1194,6 @@ private struct FamilyAIInsightsSection: View {
     }
 }
 
-private struct FamilyDonutChart: View {
-    let segments: [FamilyChartSegment]
-    let modeTitle: String
-    let totalValueMinor: Int64
-    let currencyCode: String
-
-    var body: some View {
-        ZStack {
-            Circle()
-                .strokeBorder(Color.primary.opacity(0.06), lineWidth: 18)
-
-            Chart(segments) { segment in
-                SectorMark(
-                    angle: .value("Value", Double(segment.valueMinor)),
-                    innerRadius: .ratio(0.72),
-                    outerRadius: .ratio(0.98),
-                    angularInset: 2.2
-                )
-                .cornerRadius(6)
-                .foregroundStyle(segment.color.gradient)
-            }
-            .chartLegend(.hidden)
-
-            VStack(spacing: 4) {
-                Text(modeTitle)
-                    .font(.system(size: 12, weight: .semibold, design: .rounded))
-                    .foregroundStyle(.secondary)
-
-                Text(totalValueMinor.formattedCurrency(code: currencyCode))
-                    .font(.system(size: 16, weight: .bold, design: .rounded))
-                    .foregroundStyle(.primary)
-                    .lineLimit(2)
-                    .multilineTextAlignment(.center)
-                    .minimumScaleFactor(0.75)
-            }
-            .padding(.horizontal, 30)
-        }
-    }
-}
-
 private struct FamilyMiniTrendChart: View {
     let points: [FamilyTrendPoint]
 
@@ -1277,6 +1403,73 @@ private struct FamilyAppleHeaderCard: View {
             .frame(maxWidth: .infinity)
             .padding(.vertical, 4)
         }
+    }
+}
+
+private struct FamilyHubRouteSection: View {
+    let rows: [FamilyHubRouteRowItem]
+    let tint: Color
+    let onTap: (FamilyHubRouteRowItem) -> Void
+
+    var body: some View {
+        MistiaGlassCard(cornerRadius: 22, tint: tint, padding: 0) {
+            VStack(spacing: 0) {
+                ForEach(Array(rows.enumerated()), id: \.element.id) { index, row in
+                    FamilyHubRouteRow(row: row) {
+                        onTap(row)
+                    }
+
+                    if index < rows.count - 1 {
+                        Divider()
+                            .padding(.leading, 52)
+                    }
+                }
+            }
+        }
+    }
+}
+
+private struct FamilyHubRouteRow: View {
+    let row: FamilyHubRouteRowItem
+    let action: () -> Void
+
+    @Environment(\.colorScheme) private var colorScheme
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 12) {
+                ZStack {
+                    RoundedRectangle(cornerRadius: 11, style: .continuous)
+                        .fill(row.iconColor.opacity(0.15))
+
+                    Image(systemName: row.icon)
+                        .font(.system(size: 14, weight: .bold))
+                        .foregroundStyle(row.iconColor)
+                }
+                .frame(width: 32, height: 32)
+
+                Text(row.title)
+                    .font(.system(size: 16.5, weight: .semibold, design: .rounded))
+                    .foregroundStyle(titleColor)
+
+                Spacer(minLength: 10)
+
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 11, weight: .bold))
+                    .foregroundStyle(valueColor.opacity(0.82))
+            }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 15)
+        }
+        .buttonStyle(MistiaPressableButtonStyle(cornerRadius: 18, tint: MistiaAccent.purple.color))
+    }
+
+    private var titleColor: Color {
+        colorScheme == .dark ? .white.opacity(0.96) : Color.black.opacity(0.82)
+    }
+
+    private var valueColor: Color {
+        colorScheme == .dark ? .white.opacity(0.68) : Color.black.opacity(0.48)
     }
 }
 
@@ -1539,6 +1732,64 @@ struct FamilyOverviewScreen: View {
         PlanningLogic.startOfMonth(for: .now, calendar: calendar)
     }
 
+    private var occurrenceSnapshots: [PlanningDueOccurrenceSnapshot] {
+        visibleOccurrences.map(\.planningSnapshot)
+    }
+
+    private var planningCreditCardAccounts: [PlanningCreditCardAccountSnapshot] {
+        allWallets.compactMap { $0.planningCreditCardSnapshot(records: transactionRecords) }
+    }
+
+    private var creditCardStatementDueItems: [PlanningCreditCardStatementSnapshot] {
+        PlanningLogic.creditCardStatementsDue(
+            in: currentMonth,
+            accounts: planningCreditCardAccounts,
+            records: transactionRecords,
+            occurrences: occurrenceSnapshots,
+            referenceDate: .now,
+            calendar: calendar
+        )
+    }
+
+    private var creditCardDueItems: [PlanningCreditCardDueSnapshot] {
+        PlanningLogic.creditCardDueItems(
+            accounts: planningCreditCardAccounts,
+            records: transactionRecords,
+            occurrences: occurrenceSnapshots,
+            selectedMonth: currentMonth,
+            referenceDate: .now,
+            calendar: calendar
+        )
+    }
+
+    private var recurringBillDueItems: [PlanningRecurringDueSnapshot] {
+        PlanningLogic.recurringBillDueItems(
+            bills: visibleBills.filter { !$0.isArchived }.map(\.planningSnapshot),
+            occurrences: occurrenceSnapshots,
+            selectedMonth: currentMonth,
+            calendar: calendar
+        )
+    }
+
+    private var installmentDueItems: [PlanningRecurringDueSnapshot] {
+        PlanningLogic.installmentDueItems(
+            plans: visibleInstallments.filter { !$0.isArchived }.map(\.planningSnapshot),
+            occurrences: occurrenceSnapshots,
+            selectedMonth: currentMonth,
+            calendar: calendar
+        )
+    }
+
+    private var monthlyDueSummary: PlanningDueSummarySnapshot {
+        PlanningLogic.dueSummary(
+            creditStatements: creditCardStatementDueItems,
+            recurring: recurringBillDueItems + installmentDueItems,
+            selectedMonth: currentMonth,
+            referenceDate: .now,
+            calendar: calendar
+        )
+    }
+
     private var budgetRows: [OverviewBudgetAlertSnapshot] {
         let activeBudgetPlans = visibleBudgets
             .filter {
@@ -1556,38 +1807,18 @@ struct FamilyOverviewScreen: View {
     }
 
     private var dueAlerts: [OverviewDueAlertSnapshot] {
-        let occurrenceSnapshots = visibleOccurrences.map(\.planningSnapshot)
-        
-        let planningCreditCardAccounts = allWallets.compactMap { $0.planningCreditCardSnapshot(records: transactionRecords) }
-        
-        let creditCardDueItems = PlanningLogic.creditCardDueItems(
-            accounts: planningCreditCardAccounts,
-            records: transactionRecords,
-            occurrences: occurrenceSnapshots,
-            selectedMonth: currentMonth,
-            referenceDate: .now,
-            calendar: calendar
-        )
-
-        let recurringBillDueItems = PlanningLogic.recurringBillDueItems(
-            bills: visibleBills.filter { !$0.isArchived }.map(\.planningSnapshot),
-            occurrences: occurrenceSnapshots,
-            selectedMonth: currentMonth,
-            calendar: calendar
-        )
-
-        let installmentDueItems = PlanningLogic.installmentDueItems(
-            plans: visibleInstallments.filter { !$0.isArchived }.map(\.planningSnapshot),
-            occurrences: occurrenceSnapshots,
-            selectedMonth: currentMonth,
-            calendar: calendar
-        )
-
         return OverviewLogic.dueAlerts(
             creditCardDues: creditCardDueItems,
             recurringDues: recurringBillDueItems + installmentDueItems,
             referenceDate: .now,
             calendar: calendar
+        )
+    }
+
+    private var monthlySpendable: FamilyMonthlySpendableSnapshot {
+        FamilyLogic.monthlySpendable(
+            totalAssetsMinor: summary.totalAssetsMinor,
+            monthlyDueMinor: monthlyDueSummary.totalDueMinor
         )
     }
 
@@ -1667,6 +1898,7 @@ struct FamilyOverviewScreen: View {
 
             FamilyHeroCard(
                 summary: summary,
+                monthlySpendable: monthlySpendable,
                 currencyCode: currencyCode
             )
 
@@ -1686,19 +1918,25 @@ struct FamilyOverviewScreen: View {
                 currencyCode: currencyCode
             )
 
-            FamilyAggregateAccountList(
-                rows: aggregateWalletRows
-            )
+            if !aggregateWalletRows.isEmpty {
+                FamilyAggregateAccountList(
+                    rows: aggregateWalletRows
+                )
+            }
 
-            FamilyBudgetStatusSection(
-                rows: budgetRows,
-                currencyCode: currencyCode
-            )
+            if !budgetRows.isEmpty {
+                FamilyBudgetStatusSection(
+                    rows: budgetRows,
+                    currencyCode: currencyCode
+                )
+            }
 
-            FamilyUpcomingSection(
-                rows: dueAlerts,
-                currencyCode: currencyCode
-            )
+            if !dueAlerts.isEmpty {
+                FamilyUpcomingSection(
+                    rows: dueAlerts,
+                    currencyCode: currencyCode
+                )
+            }
 
             FamilyAIInsightsSection(insights: summary.insights)
         }

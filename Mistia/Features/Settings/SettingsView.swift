@@ -181,8 +181,8 @@ struct SettingsView: View {
             rows: [
                 SettingsRowDump(
                     title: mistiaLocalized(vi: "Đặt lại & dữ liệu", en: "Reset & data", ja: "リセットとデータ"),
-                    icon: "arrow.counterclockwise.circle.fill",
-                    accent: .purple,
+                    icon: "gearshape.2.fill",
+                    accent: .amber,
                     value: nil,
                     action: .openResetData
                 )
@@ -629,8 +629,8 @@ private struct ResetDataSettingsView: View {
                 VStack(spacing: 0) {
                     ResetDataActionRow(
                         title: mistiaLocalized(vi: "Reset", en: "Reset", ja: "リセット"),
-                        icon: "arrow.counterclockwise.circle.fill",
-                        accent: .purple,
+                        icon: "arrow.clockwise.circle.fill",
+                        accent: .sky,
                         role: nil,
                         isDestructive: false,
                         isWorking: isWorking

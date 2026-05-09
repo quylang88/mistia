@@ -42,6 +42,60 @@ final class FamilyLogicTests: XCTestCase {
         XCTAssertEqual(summary.spendableMinor, 130_000)
     }
 
+    func testMonthlySpendableUsesAssetsMinusMonthlyDue() {
+        let snapshot = FamilyLogic.monthlySpendable(
+            totalAssetsMinor: 250_000,
+            monthlyDueMinor: 80_000
+        )
+
+        XCTAssertEqual(snapshot.rawMinor, 170_000)
+        XCTAssertEqual(snapshot.displayMinor, 170_000)
+        XCTAssertEqual(snapshot.shortfallMinor, 0)
+        XCTAssertFalse(snapshot.isShortfall)
+    }
+
+    func testMonthlySpendableClampsNegativeResultToZero() {
+        let snapshot = FamilyLogic.monthlySpendable(
+            totalAssetsMinor: 60_000,
+            monthlyDueMinor: 95_000
+        )
+
+        XCTAssertEqual(snapshot.rawMinor, -35_000)
+        XCTAssertEqual(snapshot.displayMinor, 0)
+        XCTAssertEqual(snapshot.shortfallMinor, 35_000)
+        XCTAssertTrue(snapshot.isShortfall)
+    }
+
+    func testMonthlySpendableDoesNotUseAggregateTotalDebt() {
+        let memberA = UUID()
+        let memberB = UUID()
+        let interval = DateInterval(
+            start: makeDate(year: 2026, month: 4, day: 1),
+            end: makeDate(year: 2026, month: 5, day: 1)
+        )
+
+        let summary = FamilyLogic.aggregateSummary(
+            wallets: [
+                FamilyAggregateWalletSnapshot(ownerUserID: memberA, kind: .bank, balanceMinor: 120_000, debtMinor: 0),
+                FamilyAggregateWalletSnapshot(ownerUserID: memberB, kind: .creditCard, balanceMinor: 0, debtMinor: 90_000)
+            ],
+            transactions: [],
+            selectedInterval: interval,
+            visibleMemberIDs: [memberA, memberB],
+            memberNames: [memberA: "A", memberB: "B"],
+            referenceDate: makeDate(year: 2026, month: 4, day: 15),
+            calendar: calendar
+        )
+
+        let snapshot = FamilyLogic.monthlySpendable(
+            totalAssetsMinor: summary.totalAssetsMinor,
+            monthlyDueMinor: 25_000
+        )
+
+        XCTAssertEqual(summary.totalDebtMinor, 90_000)
+        XCTAssertEqual(snapshot.displayMinor, 95_000)
+    }
+
     func testOwnerAndMemberCanViewOthersButCannotEditWithoutPermission() {
         let ownerAccess = FamilyLogic.access(
             viewerRole: .owner,

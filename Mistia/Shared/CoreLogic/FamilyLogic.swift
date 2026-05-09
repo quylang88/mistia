@@ -192,7 +192,31 @@ struct FamilyAggregateSummary: Equatable {
     var insights: [FamilyInsight]
 }
 
+struct FamilyMonthlySpendableSnapshot: Equatable {
+    let rawMinor: Int64
+    let displayMinor: Int64
+    let shortfallMinor: Int64
+
+    var isShortfall: Bool {
+        shortfallMinor > 0
+    }
+}
+
 enum FamilyLogic {
+    static func monthlySpendable(
+        totalAssetsMinor: Int64,
+        monthlyDueMinor: Int64
+    ) -> FamilyMonthlySpendableSnapshot {
+        let normalizedMonthlyDueMinor = max(monthlyDueMinor, 0)
+        let rawMinor = totalAssetsMinor - normalizedMonthlyDueMinor
+
+        return FamilyMonthlySpendableSnapshot(
+            rawMinor: rawMinor,
+            displayMinor: max(rawMinor, 0),
+            shortfallMinor: max(-rawMinor, 0)
+        )
+    }
+
     static func access(
         viewerRole: FamilyRole,
         viewerPolicy: FamilyPermissionPolicy,
