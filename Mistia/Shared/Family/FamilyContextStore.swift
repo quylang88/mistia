@@ -4,6 +4,7 @@ import SwiftData
 
 enum FamilyRefreshSource {
     case enterFamily
+    case userInitiated
     case postManualSync
 }
 
@@ -43,6 +44,7 @@ final class FamilyContextStore {
     @ObservationIgnored private let service: any FamilyRemoteServicing
     @ObservationIgnored private let launchState: MistiaDataStack.LaunchState?
     @ObservationIgnored private var modelContainer: ModelContainer
+    @ObservationIgnored private var lastLatestRefreshCompletedAt: Date?
     private var pendingPermissionRequestKeys: Set<FamilyPendingPermissionRequestKey> = []
 
     init(
@@ -258,29 +260,58 @@ final class FamilyContextStore {
         switch source {
         case .enterFamily:
             guard sessionStore.isAutoSyncEnabled else { return }
-            guard !isRefreshingLatest else { return }
-            guard sessionStore.canPerformRemoteActions else {
-                lastErrorMessage = sessionStore.remoteUnavailableReason
-                return
-            }
-
-            isRefreshingLatest = true
-            defer { isRefreshingLatest = false }
-
-            let didSync = await sessionStore.syncNow(isManual: false)
-            if !didSync && sessionStore.isAnySyncInProgress {
-                while sessionStore.isAnySyncInProgress {
-                    guard !Task.isCancelled else { return }
-                    try? await Task.sleep(for: .milliseconds(150))
-                }
-            }
-
-            guard !Task.isCancelled else { return }
-            await refresh(sessionStore: sessionStore)
-
+            guard !didCompleteLatestRefreshRecently else { return }
+            await refreshWithLatestSync(
+                sessionStore: sessionStore,
+                isManualSync: false
+            )
+        case .userInitiated:
+            await refreshWithLatestSync(
+                sessionStore: sessionStore,
+                isManualSync: true
+            )
         case .postManualSync:
             await refresh(sessionStore: sessionStore)
+            lastLatestRefreshCompletedAt = Date()
         }
+    }
+
+    private var didCompleteLatestRefreshRecently: Bool {
+        guard let lastLatestRefreshCompletedAt else { return false }
+        return Date().timeIntervalSince(lastLatestRefreshCompletedAt) < 2
+    }
+
+    private func didCompleteLatestRefresh(after startDate: Date) -> Bool {
+        guard let lastLatestRefreshCompletedAt else { return false }
+        return lastLatestRefreshCompletedAt >= startDate
+    }
+
+    private func refreshWithLatestSync(
+        sessionStore: SessionStore,
+        isManualSync: Bool
+    ) async {
+        guard !isRefreshingLatest else { return }
+        guard sessionStore.canPerformRemoteActions else {
+            lastErrorMessage = sessionStore.remoteUnavailableReason
+            return
+        }
+
+        isRefreshingLatest = true
+        defer { isRefreshingLatest = false }
+
+        let refreshStartedAt = Date()
+        let didSync = await sessionStore.syncNow(isManual: isManualSync)
+        if !didSync && sessionStore.isAnySyncInProgress {
+            while sessionStore.isAnySyncInProgress {
+                guard !Task.isCancelled else { return }
+                try? await Task.sleep(for: .milliseconds(150))
+            }
+        }
+
+        guard !didCompleteLatestRefresh(after: refreshStartedAt) else { return }
+        guard !Task.isCancelled else { return }
+        await refresh(sessionStore: sessionStore)
+        lastLatestRefreshCompletedAt = Date()
     }
 
     func refreshAccessibleFinance(sessionStore: SessionStore) async {

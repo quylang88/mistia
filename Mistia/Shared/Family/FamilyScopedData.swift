@@ -105,6 +105,10 @@ struct FamilyContextChipBar: View {
     @Environment(FamilyContextStore.self) private var familyContextStore
     @Environment(\.colorScheme) private var colorScheme
 
+    private var accent: Color {
+        colorScheme == .dark ? MistiaAccent.lightPurple.color : MistiaAccent.purple.color
+    }
+
     var body: some View {
         if familyContextStore.isViewingOtherMemberContext, let viewedMember = familyContextStore.viewedMember {
             Button {
@@ -112,39 +116,47 @@ struct FamilyContextChipBar: View {
                     familyContextStore.returnToSelf()
                 }
             } label: {
-                HStack(spacing: 8) {
+                HStack(spacing: 7) {
                     MistiaAvatarBadge(
                         initials: String(viewedMember.displayName.prefix(2)).uppercased(),
                         avatarURL: viewedMember.avatarURL,
-                        size: 20,
+                        size: 22,
                         showsStatus: false
                     )
+                    .overlay {
+                        Circle()
+                            .strokeBorder(accent.opacity(colorScheme == .dark ? 0.42 : 0.28), lineWidth: 1)
+                    }
 
-                    Text(mistiaLocalized(
-                        vi: "Đang xem: \(viewedMember.displayName)",
-                        en: "Viewing: \(viewedMember.displayName)",
-                        ja: "表示中: \(viewedMember.displayName)"
-                    ))
-                    .font(.system(size: 12, weight: .bold, design: .rounded))
+                    HStack(spacing: 4) {
+                        Text(mistiaLocalized(vi: "Đang xem", en: "Viewing", ja: "表示中"))
+                            .foregroundStyle(.secondary)
+
+                        Text(viewedMember.displayName)
+                            .foregroundStyle(.primary)
+                            .lineLimit(1)
+                    }
+                    .font(.system(size: 12.5, weight: .semibold, design: .rounded))
                     
                     Image(systemName: "xmark.circle.fill")
                         .font(.system(size: 14, weight: .semibold))
-                        .foregroundStyle(.secondary)
+                        .symbolRenderingMode(.hierarchical)
+                        .foregroundStyle(.tertiary)
                 }
                 .padding(.leading, 6)
-                .padding(.trailing, 10)
-                .padding(.vertical, 6)
+                .padding(.trailing, 9)
+                .padding(.vertical, 5)
                 .background {
                     Capsule()
-                        .fill(Color(red: 0.43, green: 0.23, blue: 0.76).opacity(colorScheme == .dark ? 0.24 : 0.12))
+                        .fill(Color(UIColor.secondarySystemGroupedBackground).opacity(colorScheme == .dark ? 0.86 : 0.72))
                 }
                 .overlay {
                     Capsule()
-                        .strokeBorder(Color(red: 0.43, green: 0.23, blue: 0.76).opacity(0.2), lineWidth: 1)
+                        .strokeBorder(accent.opacity(colorScheme == .dark ? 0.28 : 0.16), lineWidth: 0.8)
                 }
             }
             .buttonStyle(.plain)
-            .foregroundStyle(Color(red: 0.43, green: 0.23, blue: 0.76))
+            .accessibilityLabel(Text(familyContextStore.contextChipTitle ?? viewedMember.displayName))
             .transition(.asymmetric(insertion: .scale.combined(with: .opacity), removal: .opacity))
             .padding(.bottom, 4)
         }

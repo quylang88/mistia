@@ -504,4 +504,62 @@ final class CreditCardStatementTests: XCTestCase {
             "Chi tiêu thứ 3 phải bị khóa"
         )
     }
+
+    func testPaymentInDueMonthLocksStatementMonthOnly() {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(secondsFromGMT: 0)!
+
+        let creditCardID = UUID()
+        let cashWalletID = UUID()
+        let marchChargeDate = calendar.date(from: DateComponents(year: 2025, month: 3, day: 12))!
+        let aprilChargeDate = calendar.date(from: DateComponents(year: 2025, month: 4, day: 8))!
+        let aprilPaymentDate = calendar.date(from: DateComponents(year: 2025, month: 4, day: 10))!
+
+        let marchExpense = makeRecord(
+            primaryKind: .expense,
+            amountMinor: 300_000,
+            occurredAt: marchChargeDate,
+            sourceWalletID: creditCardID,
+            sourceWalletKind: .creditCard
+        )
+
+        let aprilExpense = makeRecord(
+            primaryKind: .expense,
+            amountMinor: 200_000,
+            occurredAt: aprilChargeDate,
+            sourceWalletID: creditCardID,
+            sourceWalletKind: .creditCard
+        )
+
+        let paymentTx = makeRecord(
+            primaryKind: .transfer,
+            transferSubtype: .internalTransfer,
+            title: "Thanh toán thẻ tháng 3/2025",
+            amountMinor: 300_000,
+            occurredAt: aprilPaymentDate,
+            sourceWalletID: cashWalletID,
+            sourceWalletKind: .cash,
+            destinationWalletID: creditCardID,
+            destinationWalletKind: .creditCard
+        )
+
+        let allTransactions = [marchExpense, aprilExpense, paymentTx]
+
+        XCTAssertTrue(
+            TransactionLogic.isLockedByPaidStatement(
+                transaction: marchExpense,
+                allTransactions: allTransactions,
+                calendar: calendar
+            ),
+            "Sao kê tháng 3 đã thanh toán thì giao dịch tháng 3 phải bị khóa"
+        )
+        XCTAssertFalse(
+            TransactionLogic.isLockedByPaidStatement(
+                transaction: aprilExpense,
+                allTransactions: allTransactions,
+                calendar: calendar
+            ),
+            "Thanh toán sao kê tháng 3 trong tháng 4 không được khóa giao dịch thẻ của tháng 4"
+        )
+    }
 }

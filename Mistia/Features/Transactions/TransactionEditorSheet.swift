@@ -108,11 +108,20 @@ struct TransactionEditorSheet: View {
 
     private var isLockedByStatement: Bool {
         guard let transaction = target.transaction else { return false }
+        if isLinkedToPaidCreditCardStatement(transaction) {
+            return true
+        }
+
         if transaction.primaryKind == .expense,
            let sourceWallet = transaction.sourceWallet,
-           sourceWallet.kind == .creditCard,
-           paidCreditCardStatement(for: sourceWallet, occurredAt: transaction.occurredAt) != nil {
-            return true
+           sourceWallet.kind == .creditCard {
+            if paidCreditCardStatement(for: sourceWallet, occurredAt: transaction.occurredAt) != nil {
+                return true
+            }
+
+            if hasCreditCardStatementOccurrences(for: sourceWallet.id) {
+                return false
+            }
         }
 
         return TransactionLogic.isLockedByPaidStatement(
@@ -988,6 +997,21 @@ struct TransactionEditorSheet: View {
             referenceDate: .now,
             calendar: calendar
         )
+    }
+
+    private func isLinkedToPaidCreditCardStatement(_ transaction: LedgerTransaction) -> Bool {
+        storedDueOccurrences.contains { occurrence in
+            occurrence.sourceKind == .creditCard &&
+                occurrence.status == .paid &&
+                occurrence.linkedTransactionID == transaction.id
+        }
+    }
+
+    private func hasCreditCardStatementOccurrences(for walletID: UUID) -> Bool {
+        storedDueOccurrences.contains { occurrence in
+            occurrence.sourceKind == .creditCard &&
+                occurrence.sourceID == walletID
+        }
     }
 
     private func paidStatementExpenseAlertMessage(

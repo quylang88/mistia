@@ -97,6 +97,12 @@ struct FamilyManagementView: View {
             onTrailingTap: {
                 activeSheet = .invite
             },
+            onRefresh: {
+                await familyContextStore.refreshLatest(
+                    sessionStore: sessionStore,
+                    source: .userInitiated
+                )
+            },
             contentSpacing: 22
         ) {
             if let remoteUnavailableReason = sessionStore.remoteUnavailableReason {
@@ -2050,6 +2056,12 @@ struct FamilyOverviewScreen: View {
             trailingSystemImage: nil,
             hidesSystemBackButton: true,
             onLeadingTap: { dismiss() },
+            onRefresh: {
+                await familyContextStore.refreshLatest(
+                    sessionStore: sessionStore,
+                    source: .userInitiated
+                )
+            },
             contentSpacing: 18,
             titleDisplayMode: .large
         ) {

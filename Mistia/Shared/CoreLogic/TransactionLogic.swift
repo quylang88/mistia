@@ -678,18 +678,143 @@ nonisolated enum TransactionLogic {
         
         guard let walletID = creditCardWalletID else { return false }
         
-        // Check if there's a payment transaction for this wallet and month
-        // We use the same logic as in ManagementCreditCardStatementView
         return allTransactions.contains { tx in
             tx.destinationWalletID == walletID &&
             tx.primaryKind == .transfer &&
             tx.transferSubtype == .internalTransfer &&
-            calendar.isDate(tx.occurredAt, equalTo: transaction.occurredAt, toGranularity: .month) &&
+            tx.entryStatus == .posted &&
+            !tx.isArchived &&
+            isCreditCardStatementPaymentTitle(tx.title) &&
             (
-                tx.title.localizedStandardContains("thanh toán thẻ") ||
-                tx.title.localizedStandardContains("card payment") ||
-                tx.title.localizedStandardContains("カード支払い")
+                paidStatementMonth(for: tx, calendar: calendar)
+                    .map { calendar.isDate($0, equalTo: transaction.occurredAt, toGranularity: .month) }
+                    ?? false
             )
+        }
+    }
+
+    private static func isCreditCardStatementPaymentTitle(_ title: String) -> Bool {
+        title.localizedStandardContains("thanh toán thẻ") ||
+            title.localizedStandardContains("card payment") ||
+            title.localizedStandardContains("カード支払い")
+    }
+
+    private static func paidStatementMonth(
+        for payment: TransactionRecordSnapshot,
+        calendar: Calendar
+    ) -> Date? {
+        explicitStatementMonth(in: payment.title, calendar: calendar)
+            ?? calendar.dateInterval(of: .month, for: payment.occurredAt)?.start
+    }
+
+    private static func explicitStatementMonth(
+        in title: String,
+        calendar: Calendar
+    ) -> Date? {
+        let foldedTitle = title.folding(
+            options: [.diacriticInsensitive, .caseInsensitive, .widthInsensitive],
+            locale: Locale(identifier: "en_US_POSIX")
+        )
+
+        if let captures = capturedGroups(matching: #"(?:thang|month)?\s*(\d{1,2})\s*/\s*(\d{4})"#, in: foldedTitle),
+           let month = Int(captures[0]),
+           let year = Int(captures[1]) {
+            return statementMonth(month: month, year: year, calendar: calendar)
+        }
+
+        if let captures = capturedGroups(matching: #"thang\s*(\d{1,2})\s*(?:nam)?\s*(\d{4})"#, in: foldedTitle),
+           let month = Int(captures[0]),
+           let year = Int(captures[1]) {
+            return statementMonth(month: month, year: year, calendar: calendar)
+        }
+
+        if let captures = capturedGroups(matching: #"(\d{4})\s*年\s*(\d{1,2})\s*月"#, in: title),
+           let year = Int(captures[0]),
+           let month = Int(captures[1]) {
+            return statementMonth(month: month, year: year, calendar: calendar)
+        }
+
+        if let captures = capturedGroups(
+            matching: #"\b(january|jan|february|feb|march|mar|april|apr|may|june|jun|july|jul|august|aug|september|sep|october|oct|november|nov|december|dec)\s+(\d{4})\b"#,
+            in: foldedTitle
+        ),
+           let month = englishMonthNumber(captures[0]),
+           let year = Int(captures[1]) {
+            return statementMonth(month: month, year: year, calendar: calendar)
+        }
+
+        return nil
+    }
+
+    private static func capturedGroups(
+        matching pattern: String,
+        in text: String
+    ) -> [String]? {
+        guard let expression = try? NSRegularExpression(pattern: pattern) else {
+            return nil
+        }
+
+        let fullRange = NSRange(text.startIndex..<text.endIndex, in: text)
+        guard let match = expression.firstMatch(in: text, range: fullRange),
+              match.numberOfRanges > 1 else {
+            return nil
+        }
+
+        return (1..<match.numberOfRanges).compactMap { index in
+            Range(match.range(at: index), in: text).map { String(text[$0]) }
+        }
+    }
+
+    private static func statementMonth(
+        month: Int,
+        year: Int,
+        calendar: Calendar
+    ) -> Date? {
+        guard (1...12).contains(month), (1900...9999).contains(year) else {
+            return nil
+        }
+
+        var components = DateComponents()
+        components.calendar = calendar
+        components.timeZone = calendar.timeZone
+        components.year = year
+        components.month = month
+        components.day = 1
+
+        guard let date = calendar.date(from: components) else {
+            return nil
+        }
+        return calendar.dateInterval(of: .month, for: date)?.start ?? date
+    }
+
+    private static func englishMonthNumber(_ month: String) -> Int? {
+        switch month {
+        case "january", "jan":
+            return 1
+        case "february", "feb":
+            return 2
+        case "march", "mar":
+            return 3
+        case "april", "apr":
+            return 4
+        case "may":
+            return 5
+        case "june", "jun":
+            return 6
+        case "july", "jul":
+            return 7
+        case "august", "aug":
+            return 8
+        case "september", "sep":
+            return 9
+        case "october", "oct":
+            return 10
+        case "november", "nov":
+            return 11
+        case "december", "dec":
+            return 12
+        default:
+            return nil
         }
     }
 }
