@@ -31,7 +31,6 @@ final class FamilyContextStore {
     var currentMembership: FamilyMembershipRecord?
     var members: [FamilyMember] = []
     var invites: [FamilyInviteRecord] = []
-    var walletAccessGrants: [FamilyWalletAccessGrantRecord] = []
     var permissionGrants: [FamilyPermissionGrantRecord] = []
     var pendingInviteRoute: FamilyInviteRoute?
     var pendingFamilyOverviewRoute: FamilyOverviewPresentationRoute?
@@ -142,7 +141,7 @@ final class FamilyContextStore {
             || currentMembership != nil
             || !members.isEmpty
             || !invites.isEmpty
-            || !walletAccessGrants.isEmpty
+            || !permissionGrants.isEmpty
     }
 
     var operableTargetUserIDs: Set<UUID> {
@@ -527,7 +526,6 @@ final class FamilyContextStore {
         _ member: FamilyMember,
         role: FamilyRole,
         policy: FamilyPermissionPolicy,
-        grantedTargetUserIDs: Set<UUID>? = nil,
         sessionStore: SessionStore
     ) async {
         guard let session = await prepareRemoteSession(using: sessionStore) else { return }
@@ -539,15 +537,6 @@ final class FamilyContextStore {
                 policy: policy,
                 session: session
             )
-            if let familyID = family?.id,
-               let grantedTargetUserIDs {
-                try await service.syncWalletAccessGrants(
-                    familyID: familyID,
-                    granteeUserID: member.userID,
-                    targetUserIDs: grantedTargetUserIDs,
-                    session: session
-                )
-            }
             await refresh(sessionStore: sessionStore)
         } catch {
             lastErrorMessage = visibleErrorMessage(for: error, sessionStore: sessionStore)
@@ -873,7 +862,6 @@ final class FamilyContextStore {
         currentMembership = nil
         members = []
         invites = []
-        walletAccessGrants = []
         permissionGrants = []
         pendingPermissionRequestKeys = []
         lastErrorMessage = nil
@@ -885,7 +873,6 @@ final class FamilyContextStore {
         currentMembership = snapshot.currentMembership
         members = snapshot.members
         invites = snapshot.invites
-        walletAccessGrants = snapshot.walletAccessGrants
         permissionGrants = snapshot.permissionGrants
         removeGrantedPendingPermissionRequests()
     }

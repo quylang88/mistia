@@ -641,7 +641,6 @@ final class SessionStoreOfflineTests: XCTestCase {
             ),
             members: members,
             invites: [],
-            walletAccessGrants: [],
             permissionGrants: permissionGrants
         )
     }
@@ -865,15 +864,6 @@ private final class FamilyRemoteServiceSpy: FamilyRemoteServicing {
         fatalError("Unused in tests")
     }
 
-    func syncWalletAccessGrants(
-        familyID: UUID,
-        granteeUserID: UUID,
-        targetUserIDs: Set<UUID>,
-        session: SupabaseAuthSession
-    ) async throws {
-        fatalError("Unused in tests")
-    }
-
     func removeMember(
         membershipID: UUID,
         session: SupabaseAuthSession
@@ -910,6 +900,6 @@ private extension FamilyStateSnapshot {
         currentMembership: nil,
         members: [],
         invites: [],
-        walletAccessGrants: []
+        permissionGrants: []
     )
 }

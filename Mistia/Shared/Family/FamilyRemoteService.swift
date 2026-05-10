@@ -39,12 +39,6 @@ protocol FamilyRemoteServicing {
         policy: FamilyPermissionPolicy,
         session: SupabaseAuthSession
     ) async throws
-    func syncWalletAccessGrants(
-        familyID: UUID,
-        granteeUserID: UUID,
-        targetUserIDs: Set<UUID>,
-        session: SupabaseAuthSession
-    ) async throws
     func setPermissionGrant(
         familyID: UUID,
         granteeUserID: UUID,
@@ -296,28 +290,6 @@ struct FamilyUserProfileRecord: Codable, Identifiable, Equatable {
     var id: UUID { userID }
 }
 
-struct FamilyWalletAccessGrantRecord: Codable, Identifiable, Equatable {
-    let id: UUID
-    let familyID: UUID
-    let granteeUserID: UUID
-    let targetUserID: UUID
-    let grantedByUserID: UUID
-    let createdAt: Date
-    let updatedAt: Date
-    let revokedAt: Date?
-
-    enum CodingKeys: String, CodingKey {
-        case id
-        case familyID = "family_id"
-        case granteeUserID = "grantee_user_id"
-        case targetUserID = "target_user_id"
-        case grantedByUserID = "granted_by_user_id"
-        case createdAt = "created_at"
-        case updatedAt = "updated_at"
-        case revokedAt = "revoked_at"
-    }
-}
-
 struct FamilyPermissionGrantRecord: Codable, Identifiable, Equatable {
     let id: UUID
     let familyID: UUID
@@ -419,22 +391,27 @@ struct FamilyStateSnapshot: Codable, Equatable {
     var currentMembership: FamilyMembershipRecord?
     var members: [FamilyMember]
     var invites: [FamilyInviteRecord]
-    var walletAccessGrants: [FamilyWalletAccessGrantRecord]
     var permissionGrants: [FamilyPermissionGrantRecord] = []
+
+    enum CodingKeys: String, CodingKey {
+        case family
+        case currentMembership
+        case members
+        case invites
+        case permissionGrants
+    }
 
     init(
         family: FamilyGroupRecord?,
         currentMembership: FamilyMembershipRecord?,
         members: [FamilyMember],
         invites: [FamilyInviteRecord],
-        walletAccessGrants: [FamilyWalletAccessGrantRecord],
         permissionGrants: [FamilyPermissionGrantRecord] = []
     ) {
         self.family = family
         self.currentMembership = currentMembership
         self.members = members
         self.invites = invites
-        self.walletAccessGrants = walletAccessGrants
         self.permissionGrants = permissionGrants
     }
 
@@ -444,7 +421,6 @@ struct FamilyStateSnapshot: Codable, Equatable {
         currentMembership = try container.decodeIfPresent(FamilyMembershipRecord.self, forKey: .currentMembership)
         members = try container.decodeIfPresent([FamilyMember].self, forKey: .members) ?? []
         invites = try container.decodeIfPresent([FamilyInviteRecord].self, forKey: .invites) ?? []
-        walletAccessGrants = try container.decodeIfPresent([FamilyWalletAccessGrantRecord].self, forKey: .walletAccessGrants) ?? []
         permissionGrants = try container.decodeIfPresent([FamilyPermissionGrantRecord].self, forKey: .permissionGrants) ?? []
     }
 }
@@ -467,7 +443,6 @@ struct FamilyRemoteService: FamilyRemoteServicing {
                 currentMembership: nil,
                 members: [],
                 invites: [],
-                walletAccessGrants: [],
                 permissionGrants: []
             )
         }
@@ -495,11 +470,6 @@ struct FamilyRemoteService: FamilyRemoteServicing {
         let invites = currentMembership.role == .owner
             ? try await fetchInvites(familyID: currentMembership.familyID, session: session)
             : []
-        let walletAccessGrants = try await fetchWalletAccessGrants(
-            familyID: currentMembership.familyID,
-            session: session,
-            granteeUserID: currentMembership.role == .owner ? nil : session.user.id
-        )
         let permissionGrants = try await fetchPermissionGrants(
             familyID: currentMembership.familyID,
             session: session,
@@ -511,7 +481,6 @@ struct FamilyRemoteService: FamilyRemoteServicing {
             currentMembership: currentMembership,
             members: members,
             invites: invites,
-            walletAccessGrants: walletAccessGrants,
             permissionGrants: permissionGrants
         )
     }
@@ -665,53 +634,6 @@ struct FamilyRemoteService: FamilyRemoteServicing {
             body: payload,
             session: session
         ) as [FamilyMembershipRecord]
-    }
-
-    func syncWalletAccessGrants(
-        familyID: UUID,
-        granteeUserID: UUID,
-        targetUserIDs: Set<UUID>,
-        session: SupabaseAuthSession
-    ) async throws {
-        let currentGrants = try await fetchWalletAccessGrants(
-            familyID: familyID,
-            session: session,
-            granteeUserID: granteeUserID
-        )
-        let currentTargetUserIDs = Set(currentGrants.map(\.targetUserID))
-        let desiredTargetUserIDs = Set(targetUserIDs.filter { $0 != granteeUserID })
-
-        let grantsToInsert = desiredTargetUserIDs.subtracting(currentTargetUserIDs).map {
-            FamilyWalletAccessGrantInsertPayload(
-                familyID: familyID,
-                granteeUserID: granteeUserID,
-                targetUserID: $0,
-                grantedByUserID: session.user.id
-            )
-        }
-
-        if !grantsToInsert.isEmpty {
-            _ = try await insertRows(
-                path: "family_wallet_access_grants",
-                body: grantsToInsert,
-                session: session
-            ) as [FamilyWalletAccessGrantRecord]
-        }
-
-        let grantsToRevoke = currentTargetUserIDs.subtracting(desiredTargetUserIDs)
-        guard !grantsToRevoke.isEmpty else { return }
-
-        _ = try await patchRows(
-            path: "family_wallet_access_grants",
-            filters: [
-                URLQueryItem(name: "family_id", value: "eq.\(familyID.uuidString.lowercased())"),
-                URLQueryItem(name: "grantee_user_id", value: "eq.\(granteeUserID.uuidString.lowercased())"),
-                URLQueryItem(name: "target_user_id", value: inFilter(for: Array(grantsToRevoke))),
-                URLQueryItem(name: "revoked_at", value: "is.null")
-            ],
-            body: FamilyWalletAccessGrantRevokePayload(revokedAt: .now),
-            session: session
-        ) as [FamilyWalletAccessGrantRecord]
     }
 
     func setPermissionGrant(
@@ -976,31 +898,6 @@ struct FamilyRemoteService: FamilyRemoteServicing {
                 URLQueryItem(name: "deleted_at", value: "is.null"),
                 URLQueryItem(name: "order", value: "created_at.desc")
             ],
-            session: session
-        )
-    }
-
-    private func fetchWalletAccessGrants(
-        familyID: UUID,
-        session: SupabaseAuthSession,
-        granteeUserID: UUID? = nil
-    ) async throws -> [FamilyWalletAccessGrantRecord] {
-        var filters = [
-            URLQueryItem(name: "select", value: "*"),
-            URLQueryItem(name: "family_id", value: "eq.\(familyID.uuidString.lowercased())"),
-            URLQueryItem(name: "revoked_at", value: "is.null"),
-            URLQueryItem(name: "order", value: "created_at.asc")
-        ]
-
-        if let granteeUserID {
-            filters.append(
-                URLQueryItem(name: "grantee_user_id", value: "eq.\(granteeUserID.uuidString.lowercased())")
-            )
-        }
-
-        return try await fetchRows(
-            path: "family_wallet_access_grants",
-            filters: filters,
             session: session
         )
     }
@@ -1496,28 +1393,6 @@ private struct FamilyMembershipUpdatePayload: Encodable {
         case canViewDebts = "can_view_debts"
         case canViewKids = "can_view_kids"
         case canEditKids = "can_edit_kids"
-    }
-}
-
-private struct FamilyWalletAccessGrantInsertPayload: Encodable {
-    let familyID: UUID
-    let granteeUserID: UUID
-    let targetUserID: UUID
-    let grantedByUserID: UUID
-
-    enum CodingKeys: String, CodingKey {
-        case familyID = "family_id"
-        case granteeUserID = "grantee_user_id"
-        case targetUserID = "target_user_id"
-        case grantedByUserID = "granted_by_user_id"
-    }
-}
-
-private struct FamilyWalletAccessGrantRevokePayload: Encodable {
-    let revokedAt: Date
-
-    enum CodingKeys: String, CodingKey {
-        case revokedAt = "revoked_at"
     }
 }
 
