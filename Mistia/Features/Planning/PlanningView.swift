@@ -89,6 +89,38 @@ private struct PlanningWalletPermissionPrompt: Identifiable {
     let message: String
 }
 
+private enum PlanningAlertPresentation: Identifiable {
+    case permission(PlanningPermissionPrompt)
+    case wallet(PlanningWalletPermissionPrompt)
+
+    var id: UUID {
+        switch self {
+        case .permission(let prompt):
+            prompt.id
+        case .wallet(let prompt):
+            prompt.id
+        }
+    }
+
+    var title: String {
+        switch self {
+        case .permission(let prompt):
+            prompt.title
+        case .wallet(let prompt):
+            prompt.title
+        }
+    }
+
+    var message: String {
+        switch self {
+        case .permission(let prompt):
+            prompt.message
+        case .wallet(let prompt):
+            prompt.message
+        }
+    }
+}
+
 struct PlanningView: View {
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.calendar) private var calendar
@@ -138,6 +170,16 @@ struct PlanningView: View {
 
     private var occurrenceSnapshots: [PlanningDueOccurrenceSnapshot] {
         visibleOccurrences.map(\.planningSnapshot)
+    }
+
+    private var activeAlert: PlanningAlertPresentation? {
+        if let walletPermissionPrompt {
+            return .wallet(walletPermissionPrompt)
+        }
+        if let permissionPrompt {
+            return .permission(permissionPrompt)
+        }
+        return nil
     }
 
     private var activeBudgetPlans: [BudgetPlanSnapshot] {
@@ -485,37 +527,36 @@ struct PlanningView: View {
             DuePaymentSheet(target: target)
                 .presentationDragIndicator(.hidden)
         }
-        .alert(item: $permissionPrompt) { prompt in
-            Alert(
-                title: Text(prompt.title),
-                message: Text(prompt.message),
-                primaryButton: .default(Text(prompt.actionTitle)) {
-                    prompt.action()
-                },
-                secondaryButton: .cancel(Text(mistiaLocalized(vi: "Hủy", en: "Cancel", ja: "キャンセル")))
-            )
-        }
         .alert(
-            walletPermissionPrompt?.title ?? mistiaLocalized(vi: "Chưa có quyền thao tác ví", en: "No wallet access", ja: "ウォレット権限がありません"),
+            activeAlert?.title ?? "",
             isPresented: Binding(
-                get: { walletPermissionPrompt != nil },
+                get: { activeAlert != nil },
                 set: { isPresented in
                     if !isPresented {
                         walletPermissionPrompt = nil
+                        permissionPrompt = nil
                     }
                 }
             ),
-            presenting: walletPermissionPrompt
-        ) { prompt in
-            Button(walletPermissionActionTitle(for: prompt, scope: .use)) {
-                requestWalletPermission(prompt, scope: .use)
+            presenting: activeAlert
+        ) { alert in
+            switch alert {
+            case .permission(let prompt):
+                Button(prompt.actionTitle) {
+                    prompt.action()
+                }
+                Button(mistiaLocalized(vi: "Hủy", en: "Cancel", ja: "キャンセル"), role: .cancel) {}
+            case .wallet(let prompt):
+                Button(walletPermissionActionTitle(for: prompt, scope: .use)) {
+                    requestWalletPermission(prompt, scope: .use)
+                }
+                Button(walletPermissionActionTitle(for: prompt, scope: .edit)) {
+                    requestWalletPermission(prompt, scope: .edit)
+                }
+                Button(mistiaLocalized(vi: "Hủy", en: "Cancel", ja: "キャンセル"), role: .cancel) {}
             }
-            Button(walletPermissionActionTitle(for: prompt, scope: .edit)) {
-                requestWalletPermission(prompt, scope: .edit)
-            }
-            Button(mistiaLocalized(vi: "Hủy", en: "Cancel", ja: "キャンセル"), role: .cancel) {}
-        } message: { prompt in
-            Text(prompt.message)
+        } message: { alert in
+            Text(alert.message)
         }
         .sheet(isPresented: $isMonthPickerPresented) {
             PlanningMonthPickerSheet(selection: $selectedMonth, calendar: calendar)
@@ -617,8 +658,8 @@ struct PlanningView: View {
 
     private func openBillAddIfAllowed() {
         let ownerUserID = selectedSubjectUserID
-        guard canCreate(ownerUserID: ownerUserID, resourceType: .due) else {
-            presentCreatePermissionPrompt(ownerUserID: ownerUserID, resourceType: .due, resourceName: mistiaLocalized(vi: "kế hoạch đến hạn", en: "due plans", ja: "支払予定"))
+        guard canCreate(ownerUserID: ownerUserID, resourceType: .bill) else {
+            presentCreatePermissionPrompt(ownerUserID: ownerUserID, resourceType: .bill, resourceName: mistiaLocalized(vi: "hóa đơn", en: "bills", ja: "請求書"))
             return
         }
         billEditorTarget = PlanningBillEditorTarget(plan: nil, dueItem: nil, selectedMonth: selectedMonth)
@@ -626,8 +667,8 @@ struct PlanningView: View {
 
     private func openBillEditorIfAllowed(plan: RecurringBillPlan?, dueItem: PlanningRecurringDueSnapshot?) {
         let ownerUserID = plan.flatMap { billOwnerMap[$0.id] } ?? selectedSubjectUserID
-        guard canEdit(ownerUserID: ownerUserID, resourceType: .due) else {
-            presentEditPermissionPrompt(ownerUserID: ownerUserID, resourceType: .due, resourceName: mistiaLocalized(vi: "kế hoạch đến hạn", en: "due plans", ja: "支払予定"))
+        guard canEdit(ownerUserID: ownerUserID, resourceType: .bill) else {
+            presentEditPermissionPrompt(ownerUserID: ownerUserID, resourceType: .bill, resourceName: mistiaLocalized(vi: "hóa đơn", en: "bills", ja: "請求書"))
             return
         }
         billEditorTarget = PlanningBillEditorTarget(plan: plan, dueItem: dueItem, selectedMonth: selectedMonth)
@@ -635,8 +676,8 @@ struct PlanningView: View {
 
     private func openInstallmentAddIfAllowed() {
         let ownerUserID = selectedSubjectUserID
-        guard canCreate(ownerUserID: ownerUserID, resourceType: .due) else {
-            presentCreatePermissionPrompt(ownerUserID: ownerUserID, resourceType: .due, resourceName: mistiaLocalized(vi: "kế hoạch đến hạn", en: "due plans", ja: "支払予定"))
+        guard canCreate(ownerUserID: ownerUserID, resourceType: .installment) else {
+            presentCreatePermissionPrompt(ownerUserID: ownerUserID, resourceType: .installment, resourceName: mistiaLocalized(vi: "trả góp / vay", en: "installments / loans", ja: "分割払い・借入"))
             return
         }
         installmentEditorTarget = PlanningInstallmentEditorTarget(plan: nil, dueItem: nil, selectedMonth: selectedMonth)
@@ -644,8 +685,8 @@ struct PlanningView: View {
 
     private func openInstallmentEditorIfAllowed(plan: InstallmentPlan?, dueItem: PlanningRecurringDueSnapshot?) {
         let ownerUserID = plan.flatMap { installmentOwnerMap[$0.id] } ?? selectedSubjectUserID
-        guard canEdit(ownerUserID: ownerUserID, resourceType: .due) else {
-            presentEditPermissionPrompt(ownerUserID: ownerUserID, resourceType: .due, resourceName: mistiaLocalized(vi: "kế hoạch đến hạn", en: "due plans", ja: "支払予定"))
+        guard canEdit(ownerUserID: ownerUserID, resourceType: .installment) else {
+            presentEditPermissionPrompt(ownerUserID: ownerUserID, resourceType: .installment, resourceName: mistiaLocalized(vi: "trả góp / vay", en: "installments / loans", ja: "分割払い・借入"))
             return
         }
         installmentEditorTarget = PlanningInstallmentEditorTarget(plan: plan, dueItem: dueItem, selectedMonth: selectedMonth)
@@ -653,8 +694,9 @@ struct PlanningView: View {
 
     private func openDuePaymentIfAllowed(_ item: PlanningRecurringDueSnapshot) {
         let ownerUserID = dueOwnerUserID(for: item)
-        guard canEdit(ownerUserID: ownerUserID, resourceType: .due) else {
-            presentEditPermissionPrompt(ownerUserID: ownerUserID, resourceType: .due, resourceName: mistiaLocalized(vi: "kế hoạch đến hạn", en: "due plans", ja: "支払予定"))
+        let resource = duePermissionResource(for: item)
+        guard canEdit(ownerUserID: ownerUserID, resourceType: resource.type, resourceID: resource.resourceID) else {
+            presentEditPermissionPrompt(ownerUserID: ownerUserID, resourceType: resource.type, resourceID: resource.resourceID, resourceName: resource.name)
             return
         }
         duePaymentTarget = DuePaymentSheetTarget(
@@ -676,6 +718,19 @@ struct PlanningView: View {
             return installmentOwnerMap[item.sourceID] ?? selectedSubjectUserID
         case .creditCard:
             return walletOwnerMap[item.sourceID] ?? selectedSubjectUserID
+        }
+    }
+
+    private func duePermissionResource(
+        for item: PlanningRecurringDueSnapshot
+    ) -> (type: MistiaFamilyNotificationResourceType, resourceID: UUID?, name: String) {
+        switch item.sourceKind {
+        case .creditCard:
+            return (.wallet, item.sourceID, mistiaLocalized(vi: "ví / thẻ", en: "wallets / cards", ja: "ウォレット・カード"))
+        case .recurringBill:
+            return (.bill, nil, mistiaLocalized(vi: "hóa đơn", en: "bills", ja: "請求書"))
+        case .installment:
+            return (.installment, nil, mistiaLocalized(vi: "trả góp / vay", en: "installments / loans", ja: "分割払い・借入"))
         }
     }
 

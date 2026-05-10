@@ -735,6 +735,7 @@ struct TransactionsView: View {
         transactionOwnerMap[transaction.id]
             ?? ownerUserID(forWalletID: transaction.sourceWallet?.id)
             ?? ownerUserID(forWalletID: transaction.destinationWallet?.id)
+            ?? familyContextStore.selectedSubjectUserID
             ?? sessionStore.activeLocalProfileUserID
     }
 

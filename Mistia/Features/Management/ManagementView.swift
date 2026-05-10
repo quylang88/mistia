@@ -32,6 +32,45 @@ private struct ManagementWalletPermissionPrompt: Identifiable {
     let message: String
 }
 
+private enum ManagementAlertPresentation: Identifiable {
+    case info(ManagementInfoAlert)
+    case permission(ManagementPermissionPrompt)
+    case wallet(ManagementWalletPermissionPrompt)
+
+    var id: UUID {
+        switch self {
+        case .info(let alert):
+            alert.id
+        case .permission(let prompt):
+            prompt.id
+        case .wallet(let prompt):
+            prompt.id
+        }
+    }
+
+    var title: String {
+        switch self {
+        case .info(let alert):
+            alert.title
+        case .permission(let prompt):
+            prompt.title
+        case .wallet(let prompt):
+            prompt.title
+        }
+    }
+
+    var message: String {
+        switch self {
+        case .info(let alert):
+            alert.message
+        case .permission(let prompt):
+            prompt.message
+        case .wallet(let prompt):
+            prompt.message
+        }
+    }
+}
+
 struct ManagementView: View {
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.modelContext) private var modelContext
@@ -141,6 +180,19 @@ struct ManagementView: View {
         familyContextStore.selectedSubjectUserID ?? sessionStore.activeLocalProfileUserID
     }
 
+    private var activeAlert: ManagementAlertPresentation? {
+        if let walletPermissionPrompt {
+            return .wallet(walletPermissionPrompt)
+        }
+        if let permissionPrompt {
+            return .permission(permissionPrompt)
+        }
+        if let infoAlert {
+            return .info(infoAlert)
+        }
+        return nil
+    }
+
     var body: some View {
         NavigationStack {
             MistiaPinnedTopBarScaffold(
@@ -177,37 +229,39 @@ struct ManagementView: View {
             ManagementCategoryEditorSheet(target: target)
                 .presentationDragIndicator(.hidden)
         }
-        .alert(item: $permissionPrompt) { prompt in
-            Alert(
-                title: Text(prompt.title),
-                message: Text(prompt.message),
-                primaryButton: .default(Text(prompt.actionTitle)) {
-                    prompt.action()
-                },
-                secondaryButton: .cancel(Text(mistiaLocalized(vi: "Hủy", en: "Cancel", ja: "キャンセル")))
-            )
-        }
         .alert(
-            walletPermissionPrompt?.title ?? mistiaLocalized(vi: "Chưa có quyền thao tác ví", en: "No wallet access", ja: "ウォレット権限がありません"),
+            activeAlert?.title ?? "",
             isPresented: Binding(
-                get: { walletPermissionPrompt != nil },
+                get: { activeAlert != nil },
                 set: { isPresented in
                     if !isPresented {
                         walletPermissionPrompt = nil
+                        permissionPrompt = nil
+                        infoAlert = nil
                     }
                 }
             ),
-            presenting: walletPermissionPrompt
-        ) { prompt in
-            Button(walletPermissionActionTitle(for: prompt, scope: .use)) {
-                requestWalletPermission(prompt, scope: .use)
+            presenting: activeAlert
+        ) { alert in
+            switch alert {
+            case .info:
+                Button(mistiaLocalized(vi: "OK", en: "OK", ja: "OK")) {}
+            case .permission(let prompt):
+                Button(prompt.actionTitle) {
+                    prompt.action()
+                }
+                Button(mistiaLocalized(vi: "Hủy", en: "Cancel", ja: "キャンセル"), role: .cancel) {}
+            case .wallet(let prompt):
+                Button(walletPermissionActionTitle(for: prompt, scope: .use)) {
+                    requestWalletPermission(prompt, scope: .use)
+                }
+                Button(walletPermissionActionTitle(for: prompt, scope: .edit)) {
+                    requestWalletPermission(prompt, scope: .edit)
+                }
+                Button(mistiaLocalized(vi: "Hủy", en: "Cancel", ja: "キャンセル"), role: .cancel) {}
             }
-            Button(walletPermissionActionTitle(for: prompt, scope: .edit)) {
-                requestWalletPermission(prompt, scope: .edit)
-            }
-            Button(mistiaLocalized(vi: "Hủy", en: "Cancel", ja: "キャンセル"), role: .cancel) {}
-        } message: { prompt in
-            Text(prompt.message)
+        } message: { alert in
+            Text(alert.message)
         }
         .task {
             do {
@@ -230,13 +284,6 @@ struct ManagementView: View {
         }
         .onDisappear {
             hideQuickCreate = false
-        }
-        .alert(item: $infoAlert) { alert in
-            Alert(
-                title: Text(mistiaCatalog(alert.title)),
-                message: Text(mistiaCatalog(alert.message)),
-                dismissButton: .default(Text(mistiaLocalized(vi: "OK", en: "OK", ja: "OK")))
-            )
         }
     }
 
@@ -369,8 +416,8 @@ struct ManagementView: View {
                         } else {
                             presentCreatePermissionPrompt(
                                 resourceType: .wallet,
-                                resourceName: mistiaLocalized(vi: "ví", en: "wallets", ja: "ウォレット"),
-                                actionTitle: mistiaLocalized(vi: "Yêu cầu thêm mới ví", en: "Request wallet creation", ja: "ウォレット作成をリクエスト")
+                                resourceName: mistiaLocalized(vi: "ví / thẻ", en: "wallets / cards", ja: "ウォレット・カード"),
+                                actionTitle: mistiaLocalized(vi: "Yêu cầu thêm mới ví / thẻ", en: "Request wallet / card creation", ja: "ウォレット・カード作成をリクエスト")
                             )
                         }
                     }
@@ -408,8 +455,8 @@ struct ManagementView: View {
                             } else {
                                 presentCreatePermissionPrompt(
                                     resourceType: .wallet,
-                                    resourceName: mistiaLocalized(vi: "ví", en: "wallets", ja: "ウォレット"),
-                                    actionTitle: mistiaLocalized(vi: "Yêu cầu thêm mới ví", en: "Request wallet creation", ja: "ウォレット作成をリクエスト")
+                                    resourceName: mistiaLocalized(vi: "ví / thẻ", en: "wallets / cards", ja: "ウォレット・カード"),
+                                    actionTitle: mistiaLocalized(vi: "Yêu cầu thêm mới ví / thẻ", en: "Request wallet / card creation", ja: "ウォレット・カード作成をリクエスト")
                                 )
                             }
                         }
@@ -428,7 +475,7 @@ struct ManagementView: View {
     }
 
     private func walletOwnerUserID(for wallet: LedgerWallet) -> UUID? {
-        walletOwnerMap[wallet.id] ?? sessionStore.activeLocalProfileUserID
+        walletOwnerMap[wallet.id] ?? selectedSubjectUserID ?? sessionStore.activeLocalProfileUserID
     }
 
     private func canOpenWalletEditor(_ wallet: LedgerWallet) -> Bool {
@@ -721,7 +768,7 @@ struct ManagementView: View {
     }
 
     private func categoryOwnerUserID(for category: TransactionCategory) -> UUID? {
-        categoryOwnerMap[category.id] ?? sessionStore.activeLocalProfileUserID
+        categoryOwnerMap[category.id] ?? selectedSubjectUserID ?? sessionStore.activeLocalProfileUserID
     }
 
     private func categoryCreateOwnerUserID(preferredParentCategoryID: UUID?) -> UUID? {

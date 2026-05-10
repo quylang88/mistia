@@ -27,6 +27,16 @@ private enum FamilyMemberDestructiveAction: String, Identifiable {
     var id: String { rawValue }
 }
 
+private enum FamilyMemberProfileAction: String, Identifiable {
+    case sharing
+    case permissions
+    case transferOwner
+    case viewData
+    case destructive
+
+    var id: String { rawValue }
+}
+
 struct FamilyManagementView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.colorScheme) private var colorScheme
@@ -2260,222 +2270,8 @@ private struct FamilyMemberProfileScreen: View {
                 FamilyAlertBanner(message: remoteUnavailableReason)
             }
 
-            if !isMe {
-                VStack(alignment: .leading, spacing: 0) {
-                    MistiaGlassCard(cornerRadius: 18, tint: Color(UIColor.secondarySystemGroupedBackground), padding: 0) {
-                        Button {
-                            showsSharingSheet = true
-                        } label: {
-                            HStack(spacing: 14) {
-                                Image(systemName: "checklist.checked")
-                                    .font(.system(size: 16, weight: .semibold))
-                                    .foregroundStyle(MistiaAccent.purple.color)
-                                    .frame(width: 32)
-
-                                Text(mistiaLocalized(vi: "Đang chia sẻ", en: "Sharing", ja: "共有中"))
-                                    .font(.system(size: 17, weight: .semibold, design: .rounded))
-                                    .foregroundStyle(.primary)
-
-                                Spacer()
-
-                                Image(systemName: "chevron.right")
-                                    .font(.system(size: 12, weight: .semibold))
-                                    .foregroundStyle(.tertiary)
-                            }
-                            .padding(.horizontal, 16)
-                            .padding(.vertical, 16)
-                        }
-                        .buttonStyle(MistiaPressableButtonStyle(cornerRadius: 18))
-                        .disabled(remoteActionsDisabled)
-                        .opacity(remoteActionsDisabled ? 0.55 : 1)
-                    }
-                }
-
-                // Roles & Permissions Card (Moved to First position)
-                if isOwner && member.role != .owner {
-                    VStack(alignment: .leading, spacing: 0) {
-                        MistiaGlassCard(cornerRadius: 18, tint: Color(UIColor.secondarySystemGroupedBackground), padding: 0) {
-                            Button {
-                                showsPermissionsSheet = true
-                            } label: {
-                                HStack(spacing: 14) {
-                                    Image(systemName: "person.badge.key.fill")
-                                        .font(.system(size: 16, weight: .semibold))
-                                        .foregroundStyle(.orange)
-                                        .frame(width: 32)
-
-                                    Text(mistiaLocalized(vi: "Role & Quyền hạn", en: "Role & Permissions", ja: "役割と権限"))
-                                        .font(.system(size: 17, weight: .semibold, design: .rounded))
-                                        .foregroundStyle(.primary)
-
-                                    Spacer()
-
-                                    Image(systemName: "chevron.right")
-                                        .font(.system(size: 12, weight: .semibold))
-                                        .foregroundStyle(.tertiary)
-                                }
-                                .padding(.horizontal, 16)
-                                .padding(.vertical, 16)
-                            }
-                            .buttonStyle(MistiaPressableButtonStyle(cornerRadius: 18))
-                            .disabled(remoteActionsDisabled)
-                            .opacity(remoteActionsDisabled ? 0.55 : 1)
-                        }
-
-                        memberDetailText(mistiaLocalized(
-                            vi: "Thiết lập quyền xem hoặc chỉnh sửa dữ liệu cho thành viên này trong gia đình.",
-                            en: "Configure viewing or editing permissions for this member.",
-                            ja: "このメンバーの閲覧・編集権限を設定します。"
-                        ))
-                    }
-                }
-
-                if isOwner && member.role == .member {
-                    VStack(alignment: .leading, spacing: 0) {
-                        MistiaGlassCard(cornerRadius: 18, tint: Color(UIColor.secondarySystemGroupedBackground), padding: 0) {
-                            Button {
-                                confirmsTransferOwner = true
-                            } label: {
-                                HStack(spacing: 14) {
-                                    Image(systemName: "crown.fill")
-                                        .font(.system(size: 16, weight: .semibold))
-                                        .foregroundStyle(.orange)
-                                        .frame(width: 32)
-
-                                    Text(mistiaLocalized(
-                                        vi: "Nhượng quyền owner",
-                                        en: "Transfer owner",
-                                        ja: "owner を譲渡"
-                                    ))
-                                    .font(.system(size: 17, weight: .semibold, design: .rounded))
-                                    .foregroundStyle(.primary)
-
-                                    Spacer()
-
-                                    Image(systemName: "chevron.right")
-                                        .font(.system(size: 12, weight: .semibold))
-                                        .foregroundStyle(.tertiary)
-                                }
-                                .padding(.horizontal, 16)
-                                .padding(.vertical, 16)
-                            }
-                            .buttonStyle(MistiaPressableButtonStyle(cornerRadius: 18))
-                            .disabled(remoteActionsDisabled)
-                            .opacity(remoteActionsDisabled ? 0.55 : 1)
-                        }
-
-                        memberDetailText(mistiaLocalized(
-                            vi: "\(member.displayName) sẽ trở thành owner duy nhất. Bạn sẽ chuyển về vai trò thành viên.",
-                            en: "\(member.displayName) will become the only owner. You will become a member.",
-                            ja: "\(member.displayName) が唯一の owner になり、あなたはメンバーになります。"
-                        ))
-                    }
-                }
-
-                // View Data Card (Moved to Second position)
-                let capabilities = familyContextStore.capabilities(for: member)
-                if capabilities.canViewTarget {
-                    VStack(alignment: .leading, spacing: 0) {
-                        MistiaGlassCard(cornerRadius: 18, tint: Color(UIColor.secondarySystemGroupedBackground), padding: 0) {
-                            Button {
-                                familyContextStore.activateMemberView(member)
-                                dismiss()
-                            } label: {
-                                HStack(spacing: 14) {
-                                    if familyContextStore.isSwitchingContext {
-                                        ProgressView()
-                                            .frame(width: 32)
-                                    } else {
-                                        Image(systemName: "eye.fill")
-                                            .font(.system(size: 16, weight: .semibold))
-                                            .foregroundStyle(MistiaAccent.purple.color)
-                                            .frame(width: 32)
-                                    }
-
-                                    Text(mistiaLocalized(
-                                        vi: "Xem dữ liệu của \(member.displayName)",
-                                        en: "View \(member.displayName)'s data",
-                                        ja: "\(member.displayName)のデータを見る"
-                                    ))
-                                    .font(.system(size: 17, weight: .semibold, design: .rounded))
-                                    .foregroundStyle(.primary)
-
-                                    Spacer()
-                                }
-                                .padding(.horizontal, 16)
-                                .padding(.vertical, 16)
-                            }
-                            .buttonStyle(MistiaPressableButtonStyle(cornerRadius: 18))
-                            .disabled(familyContextStore.isSwitchingContext)
-                        }
-
-                        memberDetailText(mistiaLocalized(
-                            vi: "Xem các giao dịch, ví và ngân sách mà \(member.displayName) đã chia sẻ với gia đình.",
-                            en: "View transactions, wallets, and budgets shared by \(member.displayName).",
-                            ja: "\(member.displayName)が共有した履歴やウォレットを確認します。"
-                        ))
-                    }
-                }
-            }
-
-            // Destructive Actions
-            if isMe || isOwner {
-                VStack(alignment: .leading, spacing: 0) {
-                    MistiaGlassCard(cornerRadius: 18, tint: Color(UIColor.secondarySystemGroupedBackground), padding: 0) {
-                        Button {
-                            destructiveAction = isMe ? (isOwner ? .deleteFamily : .leaveFamily) : .removeMember
-                        } label: {
-                            HStack(spacing: 14) {
-                                Image(systemName: isMe && isOwner ? "trash.fill" : "person.badge.minus.fill")
-                                    .font(.system(size: 16, weight: .semibold))
-                                    .foregroundStyle(.red)
-                                    .frame(width: 32)
-
-                                Text(
-                                    isMe
-                                        ? (isOwner
-                                           ? mistiaLocalized(vi: "Xóa gia đình", en: "Delete family", ja: "家族を削除")
-                                           : mistiaLocalized(vi: "Rời khỏi gia đình", en: "Leave family", ja: "家族を退会"))
-                                        : (isOwner
-                                           ? mistiaLocalized(vi: "Xóa \(member.displayName) khỏi gia đình", en: "Remove \(member.displayName)", ja: "\(member.displayName)を削除")
-                                           : "")
-                                )
-                                .font(.system(size: 17, weight: .semibold, design: .rounded))
-                                .foregroundStyle(.red)
-
-                                Spacer()
-                            }
-                            .padding(.horizontal, 16)
-                            .padding(.vertical, 16)
-                        }
-                        .buttonStyle(MistiaPressableButtonStyle(cornerRadius: 18))
-                        .disabled(remoteActionsDisabled)
-                        .opacity(remoteActionsDisabled ? 0.55 : 1)
-                    }
-
-                    memberDetailText(
-                        isMe
-                            ? (isOwner
-                               ? mistiaLocalized(
-                                    vi: "Tất cả dữ liệu chia sẻ và kết nối gia đình sẽ bị xóa vĩnh viễn. Hành động này không thể hoàn tác.",
-                                    en: "All shared data and family connections will be permanently deleted. This cannot be undone.",
-                                    ja: "共有データと家族のつながりはすべて完全に削除されます。この操作は取り消せません。"
-                               )
-                               : mistiaLocalized(
-                                    vi: "Bạn sẽ không còn quyền truy cập vào dữ liệu chung của gia đình này nữa.",
-                                    en: "You will no longer have access to this family's shared data.",
-                                    ja: "この家族の共有データにアクセスできなくなります。"
-                               ))
-                            : (isOwner
-                               ? mistiaLocalized(
-                                    vi: "Thành viên này sẽ bị xóa khỏi gia đình và không còn quyền truy cập dữ liệu chung.",
-                                    en: "This member will be removed and lose access to shared data.",
-                                    ja: "このメンバーは家族から削除され、共有データにアクセスできなくなります。"
-                               )
-                               : "")
-                    )
-                }
-            }
+            memberActionBlock
+            memberDestructiveActionBlock
         }
         .sheet(isPresented: $showsSharingSheet) {
             FamilySharingSheet(member: member)
@@ -2483,63 +2279,246 @@ private struct FamilyMemberProfileScreen: View {
         .sheet(isPresented: $showsPermissionsSheet) {
             FamilyPermissionsSheet(member: member)
         }
-        .confirmationDialog(
-            destructiveActionTitle,
-            isPresented: Binding(
-                get: { destructiveAction != nil },
-                set: { if !$0 { destructiveAction = nil } }
-            ),
-            titleVisibility: .visible
-        ) {
-            Button(destructiveActionButtonTitle, role: .destructive) {
-                let action = destructiveAction
-                destructiveAction = nil
-                Task {
-                    switch action {
-                    case .deleteFamily:
-                        await familyContextStore.deleteFamily(sessionStore: sessionStore)
-                    case .leaveFamily, .removeMember:
-                        await familyContextStore.removeMember(member, sessionStore: sessionStore)
-                    case nil:
-                        break
-                    }
-                    dismiss()
-                }
-            }
-            
-            Button(mistiaLocalized(vi: "Hủy", en: "Cancel", ja: "キャンセル"), role: .cancel) {
-                destructiveAction = nil
-            }
-        } message: {
-            Text(destructiveActionMessage)
-        }
-        .confirmationDialog(
-            mistiaLocalized(vi: "Nhượng quyền owner?", en: "Transfer owner?", ja: "owner を譲渡しますか？"),
-            isPresented: $confirmsTransferOwner,
-            titleVisibility: .visible
-        ) {
-            Button(mistiaLocalized(vi: "Nhượng quyền owner", en: "Transfer owner", ja: "owner を譲渡"), role: .destructive) {
-                Task {
-                    await familyContextStore.transferOwner(to: member, sessionStore: sessionStore)
-                    dismiss()
-                }
-            }
+    }
 
-            Button(mistiaLocalized(vi: "Hủy", en: "Cancel", ja: "キャンセル"), role: .cancel) {}
-        } message: {
-            Text(mistiaLocalized(
-                vi: "\(member.displayName) sẽ là owner duy nhất của gia đình này. Bạn sẽ không còn quyền quản lý thành viên sau khi chuyển.",
-                en: "\(member.displayName) will be the only owner of this family. You will no longer manage members after transfer.",
-                ja: "\(member.displayName) がこの家族の唯一の owner になります。譲渡後、あなたはメンバー管理ができません。"
-            ))
+    private var memberActions: [FamilyMemberProfileAction] {
+        var actions: [FamilyMemberProfileAction] = []
+
+        if !isMe {
+            actions.append(.sharing)
+        }
+
+        if !isMe && isOwner && member.role != .owner {
+            actions.append(.permissions)
+        }
+
+        if !isMe && isOwner && member.role == .member {
+            actions.append(.transferOwner)
+        }
+
+        if !isMe && familyContextStore.capabilities(for: member).canViewTarget {
+            actions.append(.viewData)
+        }
+
+        return actions
+    }
+
+    @ViewBuilder
+    private var memberActionBlock: some View {
+        let actions = memberActions
+
+        if !actions.isEmpty {
+            MistiaGlassCard(cornerRadius: 18, tint: Color(UIColor.secondarySystemGroupedBackground), padding: 0) {
+                VStack(spacing: 0) {
+                    ForEach(Array(actions.enumerated()), id: \.element.id) { index, action in
+                        memberActionButton(action)
+
+                        if index < actions.count - 1 {
+                            Divider()
+                                .padding(.leading, 62)
+                        }
+                    }
+                }
+            }
         }
     }
 
-    private func memberDetailText(_ text: String) -> some View {
-        Text(text)
-            .descriptionTextStyle()
-            .cardDescriptionStyle()
-            .fixedSize(horizontal: false, vertical: true)
+    @ViewBuilder
+    private var memberDestructiveActionBlock: some View {
+        if isMe || isOwner {
+            MistiaGlassCard(cornerRadius: 18, tint: Color(UIColor.secondarySystemGroupedBackground), padding: 0) {
+                memberActionButton(.destructive)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func memberActionButton(_ action: FamilyMemberProfileAction) -> some View {
+        switch action {
+        case .sharing:
+            Button {
+                showsSharingSheet = true
+            } label: {
+                memberActionRowContent(action)
+            }
+            .buttonStyle(MistiaPressableButtonStyle(cornerRadius: 0))
+            .disabled(remoteActionsDisabled)
+            .opacity(remoteActionsDisabled ? 0.55 : 1)
+
+        case .permissions:
+            Button {
+                showsPermissionsSheet = true
+            } label: {
+                memberActionRowContent(action)
+            }
+            .buttonStyle(MistiaPressableButtonStyle(cornerRadius: 0))
+            .disabled(remoteActionsDisabled)
+            .opacity(remoteActionsDisabled ? 0.55 : 1)
+
+        case .transferOwner:
+            Button {
+                confirmsTransferOwner = true
+            } label: {
+                memberActionRowContent(action)
+            }
+            .buttonStyle(MistiaPressableButtonStyle(cornerRadius: 0))
+            .disabled(remoteActionsDisabled)
+            .opacity(remoteActionsDisabled ? 0.55 : 1)
+            .confirmationDialog(
+                mistiaLocalized(vi: "Nhượng quyền owner?", en: "Transfer owner?", ja: "owner を譲渡しますか？"),
+                isPresented: $confirmsTransferOwner,
+                titleVisibility: .visible
+            ) {
+                Button(mistiaLocalized(vi: "Nhượng quyền owner", en: "Transfer owner", ja: "owner を譲渡"), role: .destructive) {
+                    Task {
+                        await familyContextStore.transferOwner(to: member, sessionStore: sessionStore)
+                        dismiss()
+                    }
+                }
+
+                Button(mistiaLocalized(vi: "Hủy", en: "Cancel", ja: "キャンセル"), role: .cancel) {}
+            } message: {
+                Text(mistiaLocalized(
+                    vi: "\(member.displayName) sẽ là owner duy nhất của gia đình này. Bạn sẽ không còn quyền quản lý thành viên sau khi chuyển.",
+                    en: "\(member.displayName) will be the only owner of this family. You will no longer manage members after transfer.",
+                    ja: "\(member.displayName) がこの家族の唯一の owner になります。譲渡後、あなたはメンバー管理ができません。"
+                ))
+            }
+
+        case .viewData:
+            Button {
+                familyContextStore.activateMemberView(member)
+                dismiss()
+            } label: {
+                memberActionRowContent(action)
+            }
+            .buttonStyle(MistiaPressableButtonStyle(cornerRadius: 0))
+            .disabled(familyContextStore.isSwitchingContext)
+
+        case .destructive:
+            Button(role: .destructive) {
+                destructiveAction = isMe ? (isOwner ? .deleteFamily : .leaveFamily) : .removeMember
+            } label: {
+                memberActionRowContent(action)
+            }
+            .buttonStyle(MistiaPressableButtonStyle(cornerRadius: 0))
+            .disabled(remoteActionsDisabled)
+            .opacity(remoteActionsDisabled ? 0.55 : 1)
+            .confirmationDialog(
+                destructiveActionTitle,
+                isPresented: Binding(
+                    get: { destructiveAction != nil },
+                    set: { if !$0 { destructiveAction = nil } }
+                ),
+                titleVisibility: .visible
+            ) {
+                Button(destructiveActionButtonTitle, role: .destructive) {
+                    let action = destructiveAction
+                    destructiveAction = nil
+                    Task {
+                        switch action {
+                        case .deleteFamily:
+                            await familyContextStore.deleteFamily(sessionStore: sessionStore)
+                        case .leaveFamily, .removeMember:
+                            await familyContextStore.removeMember(member, sessionStore: sessionStore)
+                        case nil:
+                            break
+                        }
+                        dismiss()
+                    }
+                }
+
+                Button(mistiaLocalized(vi: "Hủy", en: "Cancel", ja: "キャンセル"), role: .cancel) {
+                    destructiveAction = nil
+                }
+            } message: {
+                Text(destructiveActionMessage)
+            }
+        }
+    }
+
+    private func memberActionRowContent(_ action: FamilyMemberProfileAction) -> some View {
+        HStack(spacing: 14) {
+            if action == .viewData && familyContextStore.isSwitchingContext {
+                ProgressView()
+                    .frame(width: 32)
+            } else {
+                Image(systemName: memberActionIcon(action))
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundStyle(memberActionTint(action))
+                    .frame(width: 32)
+            }
+
+            Text(memberActionTitle(action))
+                .font(.system(size: 17, weight: .semibold, design: .rounded))
+                .foregroundStyle(action == .destructive ? .red : .primary)
+
+            Spacer()
+
+            if action != .destructive {
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(.tertiary)
+            }
+        }
+        .contentShape(Rectangle())
+        .padding(.horizontal, 16)
+        .padding(.vertical, 16)
+    }
+
+    private func memberActionTitle(_ action: FamilyMemberProfileAction) -> String {
+        switch action {
+        case .sharing:
+            return mistiaLocalized(vi: "Đang chia sẻ", en: "Sharing", ja: "共有中")
+        case .permissions:
+            return mistiaLocalized(vi: "Quyền hạn", en: "Permissions", ja: "権限")
+        case .transferOwner:
+            return mistiaLocalized(vi: "Nhượng quyền owner", en: "Transfer owner", ja: "owner を譲渡")
+        case .viewData:
+            return mistiaLocalized(
+                vi: "Xem dữ liệu của \(member.displayName)",
+                en: "View \(member.displayName)'s data",
+                ja: "\(member.displayName)のデータを見る"
+            )
+        case .destructive:
+            if isMe {
+                return isOwner
+                    ? mistiaLocalized(vi: "Xóa gia đình", en: "Delete family", ja: "家族を削除")
+                    : mistiaLocalized(vi: "Rời khỏi gia đình", en: "Leave family", ja: "家族を退会")
+            }
+
+            return mistiaLocalized(
+                vi: "Xóa \(member.displayName) khỏi gia đình",
+                en: "Remove \(member.displayName)",
+                ja: "\(member.displayName)を削除"
+            )
+        }
+    }
+
+    private func memberActionIcon(_ action: FamilyMemberProfileAction) -> String {
+        switch action {
+        case .sharing:
+            return "square.and.arrow.up.fill"
+        case .permissions:
+            return "person.badge.key.fill"
+        case .transferOwner:
+            return "crown.fill"
+        case .viewData:
+            return "eye.fill"
+        case .destructive:
+            return isMe && isOwner ? "trash.fill" : "person.badge.minus.fill"
+        }
+    }
+
+    private func memberActionTint(_ action: FamilyMemberProfileAction) -> Color {
+        switch action {
+        case .sharing, .viewData:
+            return action == .sharing ? .blue : MistiaAccent.purple.color
+        case .permissions, .transferOwner:
+            return .orange
+        case .destructive:
+            return .red
+        }
     }
 
     private var destructiveActionTitle: String {
@@ -3438,8 +3417,14 @@ private struct FamilySharingSheet: View {
                         scope: .edit
                     )
                     sharingToggle(
-                        title: mistiaLocalized(vi: "Đến hạn", en: "Due plans", ja: "支払予定"),
-                        resourceType: .due,
+                        title: mistiaLocalized(vi: "Hóa đơn", en: "Bills", ja: "請求書"),
+                        resourceType: .bill,
+                        resourceID: nil,
+                        scope: .edit
+                    )
+                    sharingToggle(
+                        title: mistiaLocalized(vi: "Trả góp / vay", en: "Installments / loans", ja: "分割払い・借入"),
+                        resourceType: .installment,
                         resourceID: nil,
                         scope: .edit
                     )
@@ -3477,8 +3462,14 @@ private struct FamilySharingSheet: View {
                         scope: .create
                     )
                     sharingToggle(
-                        title: mistiaLocalized(vi: "Đến hạn", en: "Due plans", ja: "支払予定"),
-                        resourceType: .due,
+                        title: mistiaLocalized(vi: "Hóa đơn", en: "Bills", ja: "請求書"),
+                        resourceType: .bill,
+                        resourceID: nil,
+                        scope: .create
+                    )
+                    sharingToggle(
+                        title: mistiaLocalized(vi: "Trả góp / vay", en: "Installments / loans", ja: "分割払い・借入"),
+                        resourceType: .installment,
                         resourceID: nil,
                         scope: .create
                     )

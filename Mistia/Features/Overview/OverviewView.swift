@@ -38,6 +38,14 @@ private struct OverviewCategoryDrilldownSelection: Identifiable, Equatable {
     let colorHex: String
 }
 
+private struct OverviewPermissionPrompt: Identifiable {
+    let id = UUID()
+    let title: String
+    let message: String
+    let actionTitle: String
+    let action: () -> Void
+}
+
 struct OverviewView: View {
     @Environment(\.calendar) private var calendar
     @Environment(\.modelContext) private var modelContext
@@ -70,6 +78,7 @@ struct OverviewView: View {
     @State private var destination: OverviewNavigationDestination?
     @State private var statementTarget: StatementTarget?
     @State private var duePaymentTarget: DuePaymentSheetTarget?
+    @State private var permissionPrompt: OverviewPermissionPrompt?
 
     private var currentMonth: Date {
         PlanningLogic.startOfMonth(for: .now, calendar: calendar)
@@ -81,6 +90,10 @@ struct OverviewView: View {
                 .filter { $0.deletedAt == nil && !$0.isArchived }
                 .map { ($0.id, $0) }
         )
+    }
+
+    private var transactionOwnerMap: [UUID: UUID] {
+        MistiaRecordOwnershipStore.ownerMap(from: ownershipScopes, entity: .transaction)
     }
 
     private var transactionRecords: [TransactionRecordSnapshot] {
@@ -302,6 +315,16 @@ struct OverviewView: View {
             DuePaymentSheet(target: target)
                 .presentationDragIndicator(.hidden)
         }
+        .alert(item: $permissionPrompt) { prompt in
+            Alert(
+                title: Text(prompt.title),
+                message: Text(prompt.message),
+                primaryButton: .default(Text(prompt.actionTitle)) {
+                    prompt.action()
+                },
+                secondaryButton: .cancel(Text(mistiaLocalized(vi: "Hủy", en: "Cancel", ja: "キャンセル")))
+            )
+        }
         .task {
             try? MistiaBootstrap.seedDefaultCategoriesIfNeeded(
                 modelContext: modelContext,
@@ -325,6 +348,10 @@ struct OverviewView: View {
     }
 
     private func presentEditor(for transaction: LedgerTransaction) {
+        guard canEditTransaction(transaction) else {
+            presentTransactionEditPermissionPrompt(transaction)
+            return
+        }
         editorTarget = TransactionEditorTarget(transaction: transaction)
     }
 
@@ -332,7 +359,64 @@ struct OverviewView: View {
         selectedExpenseDay = nil
 
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.18) {
-            editorTarget = TransactionEditorTarget(transaction: transaction)
+            if canEditTransaction(transaction) {
+                editorTarget = TransactionEditorTarget(transaction: transaction)
+            } else {
+                presentTransactionEditPermissionPrompt(transaction)
+            }
+        }
+    }
+
+    private func transactionOwnerUserID(for transaction: LedgerTransaction) -> UUID? {
+        transactionOwnerMap[transaction.id]
+            ?? familyContextStore.selectedSubjectUserID
+            ?? sessionStore.activeLocalProfileUserID
+    }
+
+    private func canEditTransaction(_ transaction: LedgerTransaction) -> Bool {
+        guard let ownerUserID = transactionOwnerUserID(for: transaction) else { return false }
+        return ownerUserID == sessionStore.activeLocalProfileUserID
+            || familyContextStore.canEdit(ownerUserID: ownerUserID, resourceType: .transaction)
+    }
+
+    private func presentTransactionEditPermissionPrompt(_ transaction: LedgerTransaction) {
+        guard let ownerUserID = transactionOwnerUserID(for: transaction),
+              ownerUserID != sessionStore.activeLocalProfileUserID else { return }
+        permissionPrompt = OverviewPermissionPrompt(
+            title: mistiaLocalized(vi: "Chưa có quyền chỉnh sửa giao dịch", en: "No transaction edit access", ja: "取引編集権限がありません"),
+            message: mistiaLocalized(
+                vi: "Bạn chưa có quyền chỉnh sửa giao dịch của thành viên này.",
+                en: "You do not have permission to edit this member's transactions.",
+                ja: "このメンバーの取引を編集する権限がありません。"
+            ),
+            actionTitle: mistiaLocalized(vi: "Yêu cầu quyền chỉnh sửa", en: "Request edit access", ja: "編集権限をリクエスト")
+        ) {
+            sendPermissionRequest(
+                resourceType: .transaction,
+                resourceID: nil,
+                ownerUserID: ownerUserID,
+                scope: .edit,
+                resourceName: mistiaLocalized(vi: "giao dịch", en: "transactions", ja: "取引")
+            )
+        }
+    }
+
+    private func sendPermissionRequest(
+        resourceType: MistiaFamilyNotificationResourceType,
+        resourceID: UUID?,
+        ownerUserID: UUID,
+        scope: MistiaFamilyPermissionScope,
+        resourceName: String
+    ) {
+        Task { @MainActor in
+            _ = await familyContextStore.requestPermission(
+                resourceType: resourceType,
+                resourceID: resourceID,
+                ownerUserID: ownerUserID,
+                scope: scope,
+                resourceName: resourceName,
+                sessionStore: sessionStore
+            )
         }
     }
 
