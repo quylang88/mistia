@@ -45,6 +45,16 @@ protocol FamilyRemoteServicing {
         targetUserIDs: Set<UUID>,
         session: SupabaseAuthSession
     ) async throws
+    func setPermissionGrant(
+        familyID: UUID,
+        granteeUserID: UUID,
+        ownerUserID: UUID,
+        resourceType: MistiaFamilyNotificationResourceType,
+        resourceID: UUID?,
+        scope: MistiaFamilyPermissionScope,
+        isGranted: Bool,
+        session: SupabaseAuthSession
+    ) async throws -> FamilyPermissionGrantRecord
     func removeMember(
         membershipID: UUID,
         session: SupabaseAuthSession
@@ -130,6 +140,19 @@ extension FamilyRemoteServicing {
         ids: [UUID],
         session: SupabaseAuthSession
     ) async throws {}
+
+    func setPermissionGrant(
+        familyID: UUID,
+        granteeUserID: UUID,
+        ownerUserID: UUID,
+        resourceType: MistiaFamilyNotificationResourceType,
+        resourceID: UUID?,
+        scope: MistiaFamilyPermissionScope,
+        isGranted: Bool,
+        session: SupabaseAuthSession
+    ) async throws -> FamilyPermissionGrantRecord {
+        throw SupabaseServiceError.serverMessage("Family permission grants are unavailable.")
+    }
 }
 
 struct FamilyGroupRecord: Codable, Identifiable, Equatable {
@@ -295,6 +318,46 @@ struct FamilyWalletAccessGrantRecord: Codable, Identifiable, Equatable {
     }
 }
 
+struct FamilyPermissionGrantRecord: Codable, Identifiable, Equatable {
+    let id: UUID
+    let familyID: UUID
+    let granteeUserID: UUID
+    let ownerUserID: UUID
+    let resourceTypeRawValue: String
+    let resourceID: UUID?
+    let permissionScopeRawValue: String
+    let grantedByUserID: UUID
+    let createdAt: Date
+    let updatedAt: Date
+    let revokedAt: Date?
+
+    enum CodingKeys: String, CodingKey {
+        case id
+        case familyID = "family_id"
+        case granteeUserID = "grantee_user_id"
+        case ownerUserID = "owner_user_id"
+        case resourceTypeRawValue = "resource_type"
+        case resourceID = "resource_id"
+        case permissionScopeRawValue = "permission_scope"
+        case grantedByUserID = "granted_by_user_id"
+        case createdAt = "created_at"
+        case updatedAt = "updated_at"
+        case revokedAt = "revoked_at"
+    }
+
+    var resourceType: MistiaFamilyNotificationResourceType? {
+        MistiaFamilyNotificationResourceType(rawValue: resourceTypeRawValue)
+    }
+
+    var permissionScope: MistiaFamilyPermissionScope? {
+        MistiaFamilyPermissionScope(rawValue: permissionScopeRawValue)
+    }
+
+    var isActive: Bool {
+        revokedAt == nil
+    }
+}
+
 struct FamilyMember: Codable, Identifiable, Equatable {
     let membershipID: UUID
     let familyID: UUID
@@ -357,6 +420,33 @@ struct FamilyStateSnapshot: Codable, Equatable {
     var members: [FamilyMember]
     var invites: [FamilyInviteRecord]
     var walletAccessGrants: [FamilyWalletAccessGrantRecord]
+    var permissionGrants: [FamilyPermissionGrantRecord] = []
+
+    init(
+        family: FamilyGroupRecord?,
+        currentMembership: FamilyMembershipRecord?,
+        members: [FamilyMember],
+        invites: [FamilyInviteRecord],
+        walletAccessGrants: [FamilyWalletAccessGrantRecord],
+        permissionGrants: [FamilyPermissionGrantRecord] = []
+    ) {
+        self.family = family
+        self.currentMembership = currentMembership
+        self.members = members
+        self.invites = invites
+        self.walletAccessGrants = walletAccessGrants
+        self.permissionGrants = permissionGrants
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        family = try container.decodeIfPresent(FamilyGroupRecord.self, forKey: .family)
+        currentMembership = try container.decodeIfPresent(FamilyMembershipRecord.self, forKey: .currentMembership)
+        members = try container.decodeIfPresent([FamilyMember].self, forKey: .members) ?? []
+        invites = try container.decodeIfPresent([FamilyInviteRecord].self, forKey: .invites) ?? []
+        walletAccessGrants = try container.decodeIfPresent([FamilyWalletAccessGrantRecord].self, forKey: .walletAccessGrants) ?? []
+        permissionGrants = try container.decodeIfPresent([FamilyPermissionGrantRecord].self, forKey: .permissionGrants) ?? []
+    }
 }
 
 @MainActor
@@ -377,7 +467,8 @@ struct FamilyRemoteService: FamilyRemoteServicing {
                 currentMembership: nil,
                 members: [],
                 invites: [],
-                walletAccessGrants: []
+                walletAccessGrants: [],
+                permissionGrants: []
             )
         }
 
@@ -409,13 +500,19 @@ struct FamilyRemoteService: FamilyRemoteServicing {
             session: session,
             granteeUserID: currentMembership.role == .owner ? nil : session.user.id
         )
+        let permissionGrants = try await fetchPermissionGrants(
+            familyID: currentMembership.familyID,
+            session: session,
+            userID: currentMembership.role == .owner ? nil : session.user.id
+        )
 
         return FamilyStateSnapshot(
             family: family,
             currentMembership: currentMembership,
             members: members,
             invites: invites,
-            walletAccessGrants: walletAccessGrants
+            walletAccessGrants: walletAccessGrants,
+            permissionGrants: permissionGrants
         )
     }
 
@@ -615,6 +712,31 @@ struct FamilyRemoteService: FamilyRemoteServicing {
             body: FamilyWalletAccessGrantRevokePayload(revokedAt: .now),
             session: session
         ) as [FamilyWalletAccessGrantRecord]
+    }
+
+    func setPermissionGrant(
+        familyID: UUID,
+        granteeUserID: UUID,
+        ownerUserID: UUID,
+        resourceType: MistiaFamilyNotificationResourceType,
+        resourceID: UUID?,
+        scope: MistiaFamilyPermissionScope,
+        isGranted: Bool,
+        session: SupabaseAuthSession
+    ) async throws -> FamilyPermissionGrantRecord {
+        try await callRPC(
+            functionName: "set_family_permission_grant",
+            body: SetFamilyPermissionGrantRPCBody(
+                familyID: familyID,
+                granteeUserID: granteeUserID,
+                ownerUserID: ownerUserID,
+                resourceType: resourceType,
+                resourceID: resourceID,
+                permissionScope: scope,
+                isGranted: isGranted
+            ),
+            session: session
+        )
     }
 
     func removeMember(
@@ -878,6 +1000,34 @@ struct FamilyRemoteService: FamilyRemoteServicing {
 
         return try await fetchRows(
             path: "family_wallet_access_grants",
+            filters: filters,
+            session: session
+        )
+    }
+
+    private func fetchPermissionGrants(
+        familyID: UUID,
+        session: SupabaseAuthSession,
+        userID: UUID? = nil
+    ) async throws -> [FamilyPermissionGrantRecord] {
+        var filters = [
+            URLQueryItem(name: "select", value: "*"),
+            URLQueryItem(name: "family_id", value: "eq.\(familyID.uuidString.lowercased())"),
+            URLQueryItem(name: "revoked_at", value: "is.null"),
+            URLQueryItem(name: "order", value: "created_at.asc")
+        ]
+
+        if let userID {
+            filters.append(
+                URLQueryItem(
+                    name: "or",
+                    value: "(grantee_user_id.eq.\(userID.uuidString.lowercased()),owner_user_id.eq.\(userID.uuidString.lowercased()))"
+                )
+            )
+        }
+
+        return try await fetchRows(
+            path: "family_permission_grants",
             filters: filters,
             session: session
         )
@@ -1371,11 +1521,49 @@ private struct FamilyWalletAccessGrantRevokePayload: Encodable {
     }
 }
 
+private struct SetFamilyPermissionGrantRPCBody: Encodable {
+    let familyID: UUID
+    let granteeUserID: UUID
+    let ownerUserID: UUID
+    let resourceType: String
+    let resourceID: UUID?
+    let permissionScope: String
+    let isGranted: Bool
+
+    init(
+        familyID: UUID,
+        granteeUserID: UUID,
+        ownerUserID: UUID,
+        resourceType: MistiaFamilyNotificationResourceType,
+        resourceID: UUID?,
+        permissionScope: MistiaFamilyPermissionScope,
+        isGranted: Bool
+    ) {
+        self.familyID = familyID
+        self.granteeUserID = granteeUserID
+        self.ownerUserID = ownerUserID
+        self.resourceType = resourceType.rawValue
+        self.resourceID = resourceID
+        self.permissionScope = permissionScope.rawValue
+        self.isGranted = isGranted
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case familyID = "p_family_id"
+        case granteeUserID = "p_grantee_user_id"
+        case ownerUserID = "p_owner_user_id"
+        case resourceType = "p_resource_type"
+        case resourceID = "p_resource_id"
+        case permissionScope = "p_permission_scope"
+        case isGranted = "p_is_granted"
+    }
+}
+
 private struct CreateFamilyPermissionRequestRPCBody: Encodable {
     let familyID: UUID
     let recipientUserID: UUID
     let resourceType: String
-    let resourceID: UUID
+    let resourceID: UUID?
     let permissionScope: String
     let title: String
     let body: String

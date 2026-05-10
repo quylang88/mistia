@@ -28,11 +28,13 @@ enum MistiaDueMaintenance {
         )
         MistiaBudgetReminderMaintenance.run(
             modelContext: modelContext,
+            sessionStore: sessionStore,
             referenceDate: referenceDate,
             calendar: calendar
         )
         await MistiaLocalNotificationScheduler.rescheduleReminders(
             modelContext: modelContext,
+            recipientUserID: sessionStore.activeLocalProfileUserID,
             referenceDate: referenceDate
         )
     }
@@ -42,23 +44,34 @@ enum MistiaDueMaintenance {
 private enum MistiaBudgetReminderMaintenance {
     static func run(
         modelContext: ModelContext,
+        sessionStore: SessionStore,
         referenceDate: Date,
         calendar: Calendar
     ) {
         guard MistiaNotificationPreferences.reminderEnabled(.budget) else { return }
+        guard let recipientUserID = sessionStore.activeLocalProfileUserID else { return }
 
-        let budgets = (try? modelContext.fetch(
+        let storedBudgets = (try? modelContext.fetch(
             FetchDescriptor<BudgetPlan>(
                 predicate: #Predicate { $0.deletedAt == nil && !$0.isArchived }
             )
         )) ?? []
+        let scopes = (try? modelContext.fetch(FetchDescriptor<OwnedRecordScope>())) ?? []
+        let budgetOwnerMap = MistiaRecordOwnershipStore.ownerMap(from: scopes, entity: .budgetPlan)
+        let budgets = storedBudgets.filter {
+            (budgetOwnerMap[$0.id] ?? recipientUserID) == recipientUserID
+        }
         guard !budgets.isEmpty else { return }
 
-        let transactions = (try? modelContext.fetch(
+        let storedTransactions = (try? modelContext.fetch(
             FetchDescriptor<LedgerTransaction>(
                 predicate: #Predicate { $0.deletedAt == nil && !$0.isArchived }
             )
         )) ?? []
+        let transactionOwnerMap = MistiaRecordOwnershipStore.ownerMap(from: scopes, entity: .transaction)
+        let transactions = storedTransactions.filter {
+            (transactionOwnerMap[$0.id] ?? recipientUserID) == recipientUserID
+        }
 
         let selectedMonth = PlanningLogic.startOfMonth(for: referenceDate, calendar: calendar)
         let alerts = OverviewLogic.budgetAlerts(
@@ -80,6 +93,7 @@ private enum MistiaBudgetReminderMaintenance {
             upsertBudgetWarning(
                 alert,
                 monthKey: monthKey,
+                recipientUserID: recipientUserID,
                 modelContext: modelContext
             )
         }
@@ -88,6 +102,7 @@ private enum MistiaBudgetReminderMaintenance {
     private static func upsertBudgetWarning(
         _ alert: OverviewBudgetAlertSnapshot,
         monthKey: String,
+        recipientUserID: UUID,
         modelContext: ModelContext
     ) {
         let key = "mistia.budget.warning.\(alert.id.uuidString.lowercased()).\(monthKey)"
@@ -111,6 +126,7 @@ private enum MistiaBudgetReminderMaintenance {
             existing.body = body
             existing.kind = .budgetWarning
             existing.source = .system
+            existing.recipientUserID = recipientUserID
             existing.resourceType = .category
             existing.resourceID = alert.id
             existing.updatedAt = .now
@@ -124,6 +140,7 @@ private enum MistiaBudgetReminderMaintenance {
                 kind: .budgetWarning,
                 source: .system,
                 isRead: false,
+                recipientUserID: recipientUserID,
                 resourceType: .category,
                 resourceID: alert.id
             ))

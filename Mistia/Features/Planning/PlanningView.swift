@@ -72,6 +72,23 @@ private enum PlanningNavigationDestination: Identifiable, Equatable, Hashable {
     }
 }
 
+private struct PlanningPermissionPrompt: Identifiable {
+    let id = UUID()
+    let title: String
+    let message: String
+    let actionTitle: String
+    let action: () -> Void
+}
+
+private struct PlanningWalletPermissionPrompt: Identifiable {
+    let id = UUID()
+    let walletID: UUID
+    let walletName: String
+    let ownerUserID: UUID
+    let title: String
+    let message: String
+}
+
 struct PlanningView: View {
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.calendar) private var calendar
@@ -108,6 +125,8 @@ struct PlanningView: View {
     @State private var creditCardEditorTarget: PlanningCreditCardEditorTarget?
     @State private var duePaymentTarget: DuePaymentSheetTarget?
     @State private var destination: PlanningNavigationDestination?
+    @State private var permissionPrompt: PlanningPermissionPrompt?
+    @State private var walletPermissionPrompt: PlanningWalletPermissionPrompt?
 
     private var cardTint: Color {
         colorScheme == .dark ? .white.opacity(0.022) : .white.opacity(0.14)
@@ -296,6 +315,30 @@ struct PlanningView: View {
         )
     }
 
+    private var selectedSubjectUserID: UUID? {
+        familyContextStore.selectedSubjectUserID ?? sessionStore.activeLocalProfileUserID
+    }
+
+    private var walletOwnerMap: [UUID: UUID] {
+        MistiaRecordOwnershipStore.ownerMap(from: ownershipScopes, entity: .wallet)
+    }
+
+    private var budgetOwnerMap: [UUID: UUID] {
+        MistiaRecordOwnershipStore.ownerMap(from: ownershipScopes, entity: .budgetPlan)
+    }
+
+    private var goalOwnerMap: [UUID: UUID] {
+        MistiaRecordOwnershipStore.ownerMap(from: ownershipScopes, entity: .savingsGoal)
+    }
+
+    private var billOwnerMap: [UUID: UUID] {
+        MistiaRecordOwnershipStore.ownerMap(from: ownershipScopes, entity: .recurringBillPlan)
+    }
+
+    private var installmentOwnerMap: [UUID: UUID] {
+        MistiaRecordOwnershipStore.ownerMap(from: ownershipScopes, entity: .installmentPlan)
+    }
+
     private var dueSummary: PlanningDueSummarySnapshot {
         PlanningLogic.dueSummary(
             creditStatements: creditCardStatementDueItems,
@@ -335,26 +378,20 @@ struct PlanningView: View {
                         rows: budgetRows,
                         referenceDate: .now,
                         onAdd: {
-                            budgetEditorTarget = PlanningBudgetEditorTarget(
-                                budget: nil,
-                                selectedMonth: selectedMonth,
-                                preferredParentCategoryID: nil
-                            )
+                            openBudgetAddIfAllowed()
                         },
                         onEditPrimary: { row in
                             guard let budgetID = row.primaryBudgetID else { return }
                             let budget = storedBudgets.first(where: { $0.id == budgetID })
-                            budgetEditorTarget = PlanningBudgetEditorTarget(
+                            openBudgetEditorIfAllowed(
                                 budget: budget,
-                                selectedMonth: selectedMonth,
                                 preferredParentCategoryID: row.parentCategoryID
                             )
                         },
                         onEditChild: { row in
                             let budget = storedBudgets.first(where: { $0.id == row.id })
-                            budgetEditorTarget = PlanningBudgetEditorTarget(
+                            openBudgetEditorIfAllowed(
                                 budget: budget,
-                                selectedMonth: selectedMonth,
                                 preferredParentCategoryID: nil
                             )
                         }
@@ -365,10 +402,10 @@ struct PlanningView: View {
                         currencyCode: currencyCode,
                         rows: goalRows,
                         onAdd: {
-                            goalEditorTarget = PlanningGoalEditorTarget(goal: nil)
+                            openGoalAddIfAllowed()
                         },
                         onEdit: { row in
-                            goalEditorTarget = PlanningGoalEditorTarget(
+                            openGoalEditorIfAllowed(
                                 goal: storedGoals.first(where: { $0.id == row.id })
                             )
                         }
@@ -383,57 +420,34 @@ struct PlanningView: View {
                         installments: installmentDueItems,
                         referenceDate: .now,
                         onAddCreditCard: {
-                            creditCardEditorTarget = PlanningCreditCardEditorTarget(
-                                wallet: nil,
-                                dueItem: nil,
-                                selectedMonth: selectedMonth
-                            )
+                            openCreditCardAddIfAllowed()
                         },
                         onEditCreditCard: { item in
-                            creditCardEditorTarget = PlanningCreditCardEditorTarget(
+                            openCreditCardEditorIfAllowed(
                                 wallet: storedWallets.first(where: { $0.id == item.walletID }),
-                                dueItem: nil,
-                                selectedMonth: selectedMonth
+                                dueItem: nil
                             )
                         },
                         onAddBill: {
-                            billEditorTarget = PlanningBillEditorTarget(
-                                plan: nil,
-                                dueItem: nil,
-                                selectedMonth: selectedMonth
-                            )
+                            openBillAddIfAllowed()
                         },
                         onEditBill: { item in
-                            billEditorTarget = PlanningBillEditorTarget(
+                            openBillEditorIfAllowed(
                                 plan: storedBills.first(where: { $0.id == item.sourceID }),
-                                dueItem: item,
-                                selectedMonth: selectedMonth
+                                dueItem: item
                             )
                         },
                         onAddInstallment: {
-                            installmentEditorTarget = PlanningInstallmentEditorTarget(
-                                plan: nil,
-                                dueItem: nil,
-                                selectedMonth: selectedMonth
-                            )
+                            openInstallmentAddIfAllowed()
                         },
                         onEditInstallment: { item in
-                            installmentEditorTarget = PlanningInstallmentEditorTarget(
+                            openInstallmentEditorIfAllowed(
                                 plan: storedInstallments.first(where: { $0.id == item.sourceID }),
-                                dueItem: item,
-                                selectedMonth: selectedMonth
+                                dueItem: item
                             )
                         },
                         onPayBill: { item in
-                            duePaymentTarget = DuePaymentSheetTarget(
-                                sourceKind: .recurringBill,
-                                sourceID: item.sourceID,
-                                dueMonthKey: PlanningLogic.monthKey(for: selectedMonth),
-                                dueDate: item.dueDate,
-                                requiresAmountInput: item.amountMinor == nil,
-                                currencyCode: item.currencyCode,
-                                name: item.name
-                            )
+                            openDuePaymentIfAllowed(item)
                         }
                     )
                 }
@@ -471,6 +485,38 @@ struct PlanningView: View {
             DuePaymentSheet(target: target)
                 .presentationDragIndicator(.hidden)
         }
+        .alert(item: $permissionPrompt) { prompt in
+            Alert(
+                title: Text(prompt.title),
+                message: Text(prompt.message),
+                primaryButton: .default(Text(prompt.actionTitle)) {
+                    prompt.action()
+                },
+                secondaryButton: .cancel(Text(mistiaLocalized(vi: "Hủy", en: "Cancel", ja: "キャンセル")))
+            )
+        }
+        .alert(
+            walletPermissionPrompt?.title ?? mistiaLocalized(vi: "Chưa có quyền thao tác ví", en: "No wallet access", ja: "ウォレット権限がありません"),
+            isPresented: Binding(
+                get: { walletPermissionPrompt != nil },
+                set: { isPresented in
+                    if !isPresented {
+                        walletPermissionPrompt = nil
+                    }
+                }
+            ),
+            presenting: walletPermissionPrompt
+        ) { prompt in
+            Button(walletPermissionActionTitle(for: prompt, scope: .use)) {
+                requestWalletPermission(prompt, scope: .use)
+            }
+            Button(walletPermissionActionTitle(for: prompt, scope: .edit)) {
+                requestWalletPermission(prompt, scope: .edit)
+            }
+            Button(mistiaLocalized(vi: "Hủy", en: "Cancel", ja: "キャンセル"), role: .cancel) {}
+        } message: { prompt in
+            Text(prompt.message)
+        }
         .sheet(isPresented: $isMonthPickerPresented) {
             PlanningMonthPickerSheet(selection: $selectedMonth, calendar: calendar)
                 .presentationDetents([.medium])
@@ -487,6 +533,318 @@ struct PlanningView: View {
                let wallet = storedWallets.first(where: { $0.id == walletID }) {
                 destination = .creditCardStatement(wallet)
             }
+        }
+    }
+
+    private func openBudgetAddIfAllowed() {
+        let ownerUserID = selectedSubjectUserID
+        guard canCreate(ownerUserID: ownerUserID, resourceType: .budget) else {
+            presentCreatePermissionPrompt(ownerUserID: ownerUserID, resourceType: .budget, resourceName: mistiaLocalized(vi: "ngân sách", en: "budgets", ja: "予算"))
+            return
+        }
+        budgetEditorTarget = PlanningBudgetEditorTarget(
+            budget: nil,
+            selectedMonth: selectedMonth,
+            preferredParentCategoryID: nil
+        )
+    }
+
+    private func openBudgetEditorIfAllowed(budget: BudgetPlan?, preferredParentCategoryID: UUID?) {
+        let ownerUserID = budget.flatMap { budgetOwnerMap[$0.id] } ?? selectedSubjectUserID
+        guard canEdit(ownerUserID: ownerUserID, resourceType: .budget) else {
+            presentEditPermissionPrompt(ownerUserID: ownerUserID, resourceType: .budget, resourceName: mistiaLocalized(vi: "ngân sách", en: "budgets", ja: "予算"))
+            return
+        }
+        budgetEditorTarget = PlanningBudgetEditorTarget(
+            budget: budget,
+            selectedMonth: selectedMonth,
+            preferredParentCategoryID: preferredParentCategoryID
+        )
+    }
+
+    private func openGoalAddIfAllowed() {
+        let ownerUserID = selectedSubjectUserID
+        guard canCreate(ownerUserID: ownerUserID, resourceType: .goal) else {
+            presentCreatePermissionPrompt(ownerUserID: ownerUserID, resourceType: .goal, resourceName: mistiaLocalized(vi: "mục tiêu", en: "goals", ja: "目標"))
+            return
+        }
+        goalEditorTarget = PlanningGoalEditorTarget(goal: nil)
+    }
+
+    private func openGoalEditorIfAllowed(goal: SavingsGoal?) {
+        let ownerUserID = goal.flatMap { goalOwnerMap[$0.id] } ?? selectedSubjectUserID
+        guard canEdit(ownerUserID: ownerUserID, resourceType: .goal) else {
+            presentEditPermissionPrompt(ownerUserID: ownerUserID, resourceType: .goal, resourceName: mistiaLocalized(vi: "mục tiêu", en: "goals", ja: "目標"))
+            return
+        }
+        goalEditorTarget = PlanningGoalEditorTarget(goal: goal)
+    }
+
+    private func openCreditCardAddIfAllowed() {
+        let ownerUserID = selectedSubjectUserID
+        guard canCreate(ownerUserID: ownerUserID, resourceType: .wallet) else {
+            presentCreatePermissionPrompt(ownerUserID: ownerUserID, resourceType: .wallet, resourceName: mistiaLocalized(vi: "ví / thẻ", en: "wallets / cards", ja: "ウォレット・カード"))
+            return
+        }
+        creditCardEditorTarget = PlanningCreditCardEditorTarget(
+            wallet: nil,
+            dueItem: nil,
+            selectedMonth: selectedMonth
+        )
+    }
+
+    private func openCreditCardEditorIfAllowed(wallet: LedgerWallet?, dueItem: PlanningCreditCardDueSnapshot?) {
+        let walletID = wallet?.id ?? dueItem?.walletID
+        let ownerUserID = walletID.flatMap { walletOwnerMap[$0] } ?? selectedSubjectUserID
+        guard canOpenCreditCardEditor(walletID: walletID, ownerUserID: ownerUserID) else {
+            if let walletID, let ownerUserID {
+                presentCreditCardWalletPermissionPrompt(
+                    walletID: walletID,
+                    walletName: wallet?.name ?? dueItem?.walletName ?? mistiaLocalized(vi: "thẻ tín dụng", en: "credit card", ja: "クレジットカード"),
+                    ownerUserID: ownerUserID
+                )
+            } else {
+                presentEditPermissionPrompt(ownerUserID: ownerUserID, resourceType: .wallet, resourceID: walletID, resourceName: mistiaLocalized(vi: "ví / thẻ", en: "wallets / cards", ja: "ウォレット・カード"))
+            }
+            return
+        }
+        creditCardEditorTarget = PlanningCreditCardEditorTarget(
+            wallet: wallet,
+            dueItem: dueItem,
+            selectedMonth: selectedMonth
+        )
+    }
+
+    private func openBillAddIfAllowed() {
+        let ownerUserID = selectedSubjectUserID
+        guard canCreate(ownerUserID: ownerUserID, resourceType: .due) else {
+            presentCreatePermissionPrompt(ownerUserID: ownerUserID, resourceType: .due, resourceName: mistiaLocalized(vi: "kế hoạch đến hạn", en: "due plans", ja: "支払予定"))
+            return
+        }
+        billEditorTarget = PlanningBillEditorTarget(plan: nil, dueItem: nil, selectedMonth: selectedMonth)
+    }
+
+    private func openBillEditorIfAllowed(plan: RecurringBillPlan?, dueItem: PlanningRecurringDueSnapshot?) {
+        let ownerUserID = plan.flatMap { billOwnerMap[$0.id] } ?? selectedSubjectUserID
+        guard canEdit(ownerUserID: ownerUserID, resourceType: .due) else {
+            presentEditPermissionPrompt(ownerUserID: ownerUserID, resourceType: .due, resourceName: mistiaLocalized(vi: "kế hoạch đến hạn", en: "due plans", ja: "支払予定"))
+            return
+        }
+        billEditorTarget = PlanningBillEditorTarget(plan: plan, dueItem: dueItem, selectedMonth: selectedMonth)
+    }
+
+    private func openInstallmentAddIfAllowed() {
+        let ownerUserID = selectedSubjectUserID
+        guard canCreate(ownerUserID: ownerUserID, resourceType: .due) else {
+            presentCreatePermissionPrompt(ownerUserID: ownerUserID, resourceType: .due, resourceName: mistiaLocalized(vi: "kế hoạch đến hạn", en: "due plans", ja: "支払予定"))
+            return
+        }
+        installmentEditorTarget = PlanningInstallmentEditorTarget(plan: nil, dueItem: nil, selectedMonth: selectedMonth)
+    }
+
+    private func openInstallmentEditorIfAllowed(plan: InstallmentPlan?, dueItem: PlanningRecurringDueSnapshot?) {
+        let ownerUserID = plan.flatMap { installmentOwnerMap[$0.id] } ?? selectedSubjectUserID
+        guard canEdit(ownerUserID: ownerUserID, resourceType: .due) else {
+            presentEditPermissionPrompt(ownerUserID: ownerUserID, resourceType: .due, resourceName: mistiaLocalized(vi: "kế hoạch đến hạn", en: "due plans", ja: "支払予定"))
+            return
+        }
+        installmentEditorTarget = PlanningInstallmentEditorTarget(plan: plan, dueItem: dueItem, selectedMonth: selectedMonth)
+    }
+
+    private func openDuePaymentIfAllowed(_ item: PlanningRecurringDueSnapshot) {
+        let ownerUserID = dueOwnerUserID(for: item)
+        guard canEdit(ownerUserID: ownerUserID, resourceType: .due) else {
+            presentEditPermissionPrompt(ownerUserID: ownerUserID, resourceType: .due, resourceName: mistiaLocalized(vi: "kế hoạch đến hạn", en: "due plans", ja: "支払予定"))
+            return
+        }
+        duePaymentTarget = DuePaymentSheetTarget(
+            sourceKind: item.sourceKind,
+            sourceID: item.sourceID,
+            dueMonthKey: PlanningLogic.monthKey(for: selectedMonth),
+            dueDate: item.dueDate,
+            requiresAmountInput: item.amountMinor == nil,
+            currencyCode: item.currencyCode,
+            name: item.name
+        )
+    }
+
+    private func dueOwnerUserID(for item: PlanningRecurringDueSnapshot) -> UUID? {
+        switch item.sourceKind {
+        case .recurringBill:
+            return billOwnerMap[item.sourceID] ?? selectedSubjectUserID
+        case .installment:
+            return installmentOwnerMap[item.sourceID] ?? selectedSubjectUserID
+        case .creditCard:
+            return walletOwnerMap[item.sourceID] ?? selectedSubjectUserID
+        }
+    }
+
+    private func canEdit(ownerUserID: UUID?, resourceType: MistiaFamilyNotificationResourceType, resourceID: UUID? = nil) -> Bool {
+        guard let ownerUserID else { return false }
+        return ownerUserID == sessionStore.activeLocalProfileUserID
+            || familyContextStore.canEdit(ownerUserID: ownerUserID, resourceType: resourceType, resourceID: resourceID)
+    }
+
+    private func canCreate(ownerUserID: UUID?, resourceType: MistiaFamilyNotificationResourceType) -> Bool {
+        guard let ownerUserID else { return false }
+        return ownerUserID == sessionStore.activeLocalProfileUserID
+            || familyContextStore.canCreate(ownerUserID: ownerUserID, resourceType: resourceType)
+    }
+
+    private func canOpenCreditCardEditor(walletID: UUID?, ownerUserID: UUID?) -> Bool {
+        guard let ownerUserID else { return false }
+        if ownerUserID == sessionStore.activeLocalProfileUserID {
+            return true
+        }
+        guard let walletID else { return false }
+        return familyContextStore.canUseWallet(walletID: walletID, ownerUserID: ownerUserID)
+            && familyContextStore.canEdit(ownerUserID: ownerUserID, resourceType: .wallet, resourceID: walletID)
+    }
+
+    private func presentCreditCardWalletPermissionPrompt(
+        walletID: UUID,
+        walletName: String,
+        ownerUserID: UUID
+    ) {
+        guard ownerUserID != sessionStore.activeLocalProfileUserID else { return }
+        walletPermissionPrompt = PlanningWalletPermissionPrompt(
+            walletID: walletID,
+            walletName: walletName,
+            ownerUserID: ownerUserID,
+            title: mistiaLocalized(vi: "Chưa có quyền thao tác ví", en: "No wallet access", ja: "ウォレット権限がありません"),
+            message: mistiaLocalized(
+                vi: "Bạn chưa có đủ quyền với \(walletName).",
+                en: "You do not have enough access for \(walletName).",
+                ja: "\(walletName) の権限が不足しています。"
+            )
+        )
+    }
+
+    private func walletPermissionActionTitle(
+        for prompt: PlanningWalletPermissionPrompt,
+        scope: MistiaFamilyPermissionScope
+    ) -> String {
+        if familyContextStore.hasPendingPermissionRequest(
+            ownerUserID: prompt.ownerUserID,
+            resourceType: .wallet,
+            resourceID: prompt.walletID,
+            scope: scope
+        ) {
+            switch scope {
+            case .use:
+                return mistiaLocalized(vi: "Đã yêu cầu sử dụng", en: "Use requested", ja: "使用権限をリクエスト済み")
+            case .edit:
+                return mistiaLocalized(vi: "Đã yêu cầu chỉnh sửa", en: "Edit requested", ja: "編集権限をリクエスト済み")
+            case .create:
+                return mistiaLocalized(vi: "Đã yêu cầu thêm mới", en: "Create requested", ja: "作成権限をリクエスト済み")
+            case .view:
+                return mistiaLocalized(vi: "Đã yêu cầu quyền", en: "Access requested", ja: "権限をリクエスト済み")
+            }
+        }
+
+        switch scope {
+        case .use:
+            return mistiaLocalized(vi: "Yêu cầu sử dụng", en: "Request use", ja: "使用をリクエスト")
+        case .edit:
+            return mistiaLocalized(vi: "Yêu cầu chỉnh sửa", en: "Request edit", ja: "編集をリクエスト")
+        case .create:
+            return mistiaLocalized(vi: "Yêu cầu thêm mới", en: "Request create", ja: "作成をリクエスト")
+        case .view:
+            return mistiaLocalized(vi: "Yêu cầu quyền", en: "Request access", ja: "権限をリクエスト")
+        }
+    }
+
+    private func requestWalletPermission(
+        _ prompt: PlanningWalletPermissionPrompt,
+        scope: MistiaFamilyPermissionScope
+    ) {
+        guard !familyContextStore.hasPendingPermissionRequest(
+            ownerUserID: prompt.ownerUserID,
+            resourceType: .wallet,
+            resourceID: prompt.walletID,
+            scope: scope
+        ) else {
+            return
+        }
+
+        sendPermissionRequest(
+            resourceType: .wallet,
+            resourceID: prompt.walletID,
+            ownerUserID: prompt.ownerUserID,
+            scope: scope,
+            resourceName: prompt.walletName
+        )
+    }
+
+    private func presentEditPermissionPrompt(
+        ownerUserID: UUID?,
+        resourceType: MistiaFamilyNotificationResourceType,
+        resourceID: UUID? = nil,
+        resourceName: String
+    ) {
+        guard let ownerUserID,
+              ownerUserID != sessionStore.activeLocalProfileUserID else { return }
+        permissionPrompt = PlanningPermissionPrompt(
+            title: mistiaLocalized(vi: "Chưa có quyền chỉnh sửa", en: "No edit access", ja: "編集権限がありません"),
+            message: mistiaLocalized(
+                vi: "Bạn chưa có quyền chỉnh sửa \(resourceName) của thành viên này.",
+                en: "You do not have permission to edit this member's \(resourceName).",
+                ja: "このメンバーの\(resourceName)を編集する権限がありません。"
+            ),
+            actionTitle: mistiaLocalized(vi: "Yêu cầu quyền chỉnh sửa", en: "Request edit access", ja: "編集権限をリクエスト")
+        ) {
+            sendPermissionRequest(
+                resourceType: resourceType,
+                resourceID: resourceID,
+                ownerUserID: ownerUserID,
+                scope: .edit,
+                resourceName: resourceName
+            )
+        }
+    }
+
+    private func presentCreatePermissionPrompt(
+        ownerUserID: UUID?,
+        resourceType: MistiaFamilyNotificationResourceType,
+        resourceName: String
+    ) {
+        guard let ownerUserID,
+              ownerUserID != sessionStore.activeLocalProfileUserID else { return }
+        permissionPrompt = PlanningPermissionPrompt(
+            title: mistiaLocalized(vi: "Chưa có quyền thêm mới", en: "No create access", ja: "作成権限がありません"),
+            message: mistiaLocalized(
+                vi: "Bạn chưa có quyền thêm mới \(resourceName) cho thành viên này.",
+                en: "You do not have permission to create \(resourceName) for this member.",
+                ja: "このメンバーの\(resourceName)を作成する権限がありません。"
+            ),
+            actionTitle: mistiaLocalized(vi: "Yêu cầu quyền thêm mới", en: "Request create access", ja: "作成権限をリクエスト")
+        ) {
+            sendPermissionRequest(
+                resourceType: resourceType,
+                resourceID: nil,
+                ownerUserID: ownerUserID,
+                scope: .create,
+                resourceName: resourceName
+            )
+        }
+    }
+
+    private func sendPermissionRequest(
+        resourceType: MistiaFamilyNotificationResourceType,
+        resourceID: UUID?,
+        ownerUserID: UUID,
+        scope: MistiaFamilyPermissionScope,
+        resourceName: String
+    ) {
+        Task { @MainActor in
+            _ = await familyContextStore.requestPermission(
+                resourceType: resourceType,
+                resourceID: resourceID,
+                ownerUserID: ownerUserID,
+                scope: scope,
+                resourceName: resourceName,
+                sessionStore: sessionStore
+            )
         }
     }
 }

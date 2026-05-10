@@ -44,6 +44,14 @@ private enum TransactionsNavigationDestination: String, Identifiable {
     var id: String { rawValue }
 }
 
+private struct TransactionsPermissionPrompt: Identifiable {
+    let id = UUID()
+    let title: String
+    let message: String
+    let actionTitle: String
+    let action: () -> Void
+}
+
 struct TransactionsView: View {
     @Environment(\.calendar) private var calendar
     @Environment(\.colorScheme) private var colorScheme
@@ -66,6 +74,7 @@ struct TransactionsView: View {
     @State private var shareItem: TransactionShareItem?
     @State private var exportErrorMessage: String?
     @State private var destination: TransactionsNavigationDestination?
+    @State private var permissionPrompt: TransactionsPermissionPrompt?
 
     private var activeTransactions: [LedgerTransaction] {
         visibleTransactions
@@ -391,6 +400,16 @@ struct TransactionsView: View {
                 .presentationDetents(target.quickCapture ? [.medium, .large] : [.large])
                 .presentationDragIndicator(.hidden)
         }
+        .alert(item: $permissionPrompt) { prompt in
+            Alert(
+                title: Text(prompt.title),
+                message: Text(prompt.message),
+                primaryButton: .default(Text(prompt.actionTitle)) {
+                    prompt.action()
+                },
+                secondaryButton: .cancel(Text(mistiaLocalized(vi: "Hủy", en: "Cancel", ja: "キャンセル")))
+            )
+        }
         .alert(
             mistiaLocalized(vi: "Không thể xuất sao kê", en: "Couldn't export statement", ja: "明細を出力できませんでした"),
             isPresented: Binding(
@@ -690,8 +709,61 @@ struct TransactionsView: View {
                     walletOwnerMap: walletOwnerMap,
                     transactionOwnerMap: transactionOwnerMap
                 ) { transaction in
-                    editorTarget = TransactionEditorTarget(transaction: transaction)
+                    openTransactionEditorIfAllowed(transaction)
                 }
+            }
+        }
+    }
+
+    private func openTransactionEditorIfAllowed(_ transaction: LedgerTransaction) {
+        guard let ownerUserID = transactionOwnerUserID(for: transaction) else {
+            editorTarget = TransactionEditorTarget(transaction: transaction)
+            return
+        }
+        guard ownerUserID != sessionStore.activeLocalProfileUserID else {
+            editorTarget = TransactionEditorTarget(transaction: transaction)
+            return
+        }
+        guard familyContextStore.canEdit(ownerUserID: ownerUserID, resourceType: .transaction) else {
+            presentTransactionEditPermissionPrompt(transaction, ownerUserID: ownerUserID)
+            return
+        }
+        editorTarget = TransactionEditorTarget(transaction: transaction)
+    }
+
+    private func transactionOwnerUserID(for transaction: LedgerTransaction) -> UUID? {
+        transactionOwnerMap[transaction.id]
+            ?? ownerUserID(forWalletID: transaction.sourceWallet?.id)
+            ?? ownerUserID(forWalletID: transaction.destinationWallet?.id)
+            ?? sessionStore.activeLocalProfileUserID
+    }
+
+    private func ownerUserID(forWalletID walletID: UUID?) -> UUID? {
+        guard let walletID else { return nil }
+        return walletOwnerMap[walletID]
+    }
+
+    private func presentTransactionEditPermissionPrompt(_ transaction: LedgerTransaction, ownerUserID: UUID) {
+        let resourceName = transaction.title.nilIfBlank
+            ?? mistiaLocalized(vi: "giao dịch", en: "transaction", ja: "取引")
+        permissionPrompt = TransactionsPermissionPrompt(
+            title: mistiaLocalized(vi: "Chưa có quyền chỉnh sửa giao dịch", en: "No transaction edit access", ja: "取引編集権限がありません"),
+            message: mistiaLocalized(
+                vi: "Bạn chưa có quyền chỉnh sửa giao dịch của thành viên này.",
+                en: "You do not have permission to edit this member's transactions.",
+                ja: "このメンバーの取引を編集する権限がありません。"
+            ),
+            actionTitle: mistiaLocalized(vi: "Yêu cầu quyền chỉnh sửa", en: "Request edit access", ja: "編集権限をリクエスト")
+        ) {
+            Task { @MainActor in
+                _ = await familyContextStore.requestPermission(
+                    resourceType: .transaction,
+                    resourceID: nil,
+                    ownerUserID: ownerUserID,
+                    scope: .edit,
+                    resourceName: resourceName,
+                    sessionStore: sessionStore
+                )
             }
         }
     }

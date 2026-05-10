@@ -2208,6 +2208,7 @@ private struct FamilyMemberProfileScreen: View {
 
     let member: FamilyMember
 
+    @State private var showsSharingSheet = false
     @State private var showsPermissionsSheet = false
     @State private var destructiveAction: FamilyMemberDestructiveAction?
     @State private var confirmsTransferOwner = false
@@ -2260,6 +2261,36 @@ private struct FamilyMemberProfileScreen: View {
             }
 
             if !isMe {
+                VStack(alignment: .leading, spacing: 0) {
+                    MistiaGlassCard(cornerRadius: 18, tint: Color(UIColor.secondarySystemGroupedBackground), padding: 0) {
+                        Button {
+                            showsSharingSheet = true
+                        } label: {
+                            HStack(spacing: 14) {
+                                Image(systemName: "checklist.checked")
+                                    .font(.system(size: 16, weight: .semibold))
+                                    .foregroundStyle(MistiaAccent.purple.color)
+                                    .frame(width: 32)
+
+                                Text(mistiaLocalized(vi: "Đang chia sẻ", en: "Sharing", ja: "共有中"))
+                                    .font(.system(size: 17, weight: .semibold, design: .rounded))
+                                    .foregroundStyle(.primary)
+
+                                Spacer()
+
+                                Image(systemName: "chevron.right")
+                                    .font(.system(size: 12, weight: .semibold))
+                                    .foregroundStyle(.tertiary)
+                            }
+                            .padding(.horizontal, 16)
+                            .padding(.vertical, 16)
+                        }
+                        .buttonStyle(MistiaPressableButtonStyle(cornerRadius: 18))
+                        .disabled(remoteActionsDisabled)
+                        .opacity(remoteActionsDisabled ? 0.55 : 1)
+                    }
+                }
+
                 // Roles & Permissions Card (Moved to First position)
                 if isOwner && member.role != .owner {
                     VStack(alignment: .leading, spacing: 0) {
@@ -2445,6 +2476,9 @@ private struct FamilyMemberProfileScreen: View {
                     )
                 }
             }
+        }
+        .sheet(isPresented: $showsSharingSheet) {
+            FamilySharingSheet(member: member)
         }
         .sheet(isPresented: $showsPermissionsSheet) {
             FamilyPermissionsSheet(member: member)
@@ -3327,6 +3361,283 @@ private func familyInviteStatusTint(_ status: FamilyInviteStatus) -> Color {
     }
 }
 
+// MARK: - Sharing Sheet
+
+private struct FamilySharingChange: Identifiable {
+    let id = UUID()
+    let granteeUserID: UUID
+    let ownerUserID: UUID
+    let resourceType: MistiaFamilyNotificationResourceType
+    let resourceID: UUID?
+    let scope: MistiaFamilyPermissionScope
+    let isGranted: Bool
+    let title: String
+}
+
+private struct FamilySharingSheet: View {
+    @Environment(\.dismiss) private var dismiss
+    @Environment(SessionStore.self) private var sessionStore
+    @Environment(FamilyContextStore.self) private var familyContextStore
+
+    @Query(filter: #Predicate<LedgerWallet> { $0.deletedAt == nil })
+    private var storedWallets: [LedgerWallet]
+    @Query private var ownershipScopes: [OwnedRecordScope]
+
+    let member: FamilyMember
+
+    @State private var pendingChange: FamilySharingChange?
+
+    private var ownerUserID: UUID? {
+        sessionStore.activeLocalProfileUserID ?? sessionStore.signedInUserID
+    }
+
+    private var walletOwnerMap: [UUID: UUID] {
+        MistiaRecordOwnershipStore.ownerMap(from: ownershipScopes, entity: .wallet)
+    }
+
+    private var ownWallets: [LedgerWallet] {
+        guard let ownerUserID else { return [] }
+        return storedWallets
+            .filter { !$0.isArchived && (walletOwnerMap[$0.id] ?? ownerUserID) == ownerUserID }
+            .sorted {
+                if $0.sortOrder != $1.sortOrder {
+                    return $0.sortOrder < $1.sortOrder
+                }
+                return $0.createdAt < $1.createdAt
+            }
+    }
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                if let remoteUnavailableReason = sessionStore.remoteUnavailableReason {
+                    Section {
+                        Text(remoteUnavailableReason)
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+
+                Section(mistiaLocalized(vi: "Quyền chỉnh sửa", en: "Edit access", ja: "編集権限")) {
+                    sharingToggle(
+                        title: mistiaLocalized(vi: "Giao dịch", en: "Transactions", ja: "取引"),
+                        resourceType: .transaction,
+                        resourceID: nil,
+                        scope: .edit
+                    )
+                    sharingToggle(
+                        title: mistiaLocalized(vi: "Danh mục", en: "Categories", ja: "カテゴリ"),
+                        resourceType: .category,
+                        resourceID: nil,
+                        scope: .edit
+                    )
+                    sharingToggle(
+                        title: mistiaLocalized(vi: "Ngân sách", en: "Budgets", ja: "予算"),
+                        resourceType: .budget,
+                        resourceID: nil,
+                        scope: .edit
+                    )
+                    sharingToggle(
+                        title: mistiaLocalized(vi: "Đến hạn", en: "Due plans", ja: "支払予定"),
+                        resourceType: .due,
+                        resourceID: nil,
+                        scope: .edit
+                    )
+                    sharingToggle(
+                        title: mistiaLocalized(vi: "Mục tiêu", en: "Goals", ja: "目標"),
+                        resourceType: .goal,
+                        resourceID: nil,
+                        scope: .edit
+                    )
+                }
+
+                Section(mistiaLocalized(vi: "Quyền thêm mới", en: "Create access", ja: "作成権限")) {
+                    sharingToggle(
+                        title: mistiaLocalized(vi: "Ví / thẻ", en: "Wallets / cards", ja: "ウォレット・カード"),
+                        resourceType: .wallet,
+                        resourceID: nil,
+                        scope: .create
+                    )
+                    sharingToggle(
+                        title: mistiaLocalized(vi: "Giao dịch", en: "Transactions", ja: "取引"),
+                        resourceType: .transaction,
+                        resourceID: nil,
+                        scope: .create
+                    )
+                    sharingToggle(
+                        title: mistiaLocalized(vi: "Danh mục", en: "Categories", ja: "カテゴリ"),
+                        resourceType: .category,
+                        resourceID: nil,
+                        scope: .create
+                    )
+                    sharingToggle(
+                        title: mistiaLocalized(vi: "Ngân sách", en: "Budgets", ja: "予算"),
+                        resourceType: .budget,
+                        resourceID: nil,
+                        scope: .create
+                    )
+                    sharingToggle(
+                        title: mistiaLocalized(vi: "Đến hạn", en: "Due plans", ja: "支払予定"),
+                        resourceType: .due,
+                        resourceID: nil,
+                        scope: .create
+                    )
+                    sharingToggle(
+                        title: mistiaLocalized(vi: "Mục tiêu", en: "Goals", ja: "目標"),
+                        resourceType: .goal,
+                        resourceID: nil,
+                        scope: .create
+                    )
+                }
+
+                Section(mistiaLocalized(vi: "Quyền sử dụng ví", en: "Wallet use access", ja: "ウォレット使用権限")) {
+                    if ownWallets.isEmpty {
+                        Text(mistiaLocalized(vi: "Bạn chưa có ví nào để chia sẻ quyền sử dụng.", en: "You do not have wallets to share use access for yet.", ja: "使用権限を共有できるウォレットはまだありません。"))
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                    } else {
+                        ForEach(ownWallets, id: \.id) { wallet in
+                            sharingToggle(
+                                title: wallet.name,
+                                resourceType: .wallet,
+                                resourceID: wallet.id,
+                                scope: .use
+                            )
+                        }
+                    }
+                }
+
+                Section(mistiaLocalized(vi: "Quyền chỉnh sửa ví", en: "Wallet edit access", ja: "ウォレット編集権限")) {
+                    if ownWallets.isEmpty {
+                        Text(mistiaLocalized(vi: "Bạn chưa có ví nào để chia sẻ quyền chỉnh sửa.", en: "You do not have wallets to share edit access for yet.", ja: "編集権限を共有できるウォレットはまだありません。"))
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                    } else {
+                        ForEach(ownWallets, id: \.id) { wallet in
+                            sharingToggle(
+                                title: wallet.name,
+                                resourceType: .wallet,
+                                resourceID: wallet.id,
+                                scope: .edit
+                            )
+                        }
+                    }
+                }
+            }
+            .disabled(!sessionStore.canPerformRemoteActions || ownerUserID == nil)
+            .navigationTitle(mistiaLocalized(vi: "Đang chia sẻ", en: "Sharing", ja: "共有中"))
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    Button {
+                        dismiss()
+                    } label: {
+                        Image(systemName: "xmark")
+                    }
+                    .accessibilityLabel(mistiaLocalized(vi: "Đóng", en: "Close", ja: "閉じる"))
+                }
+
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button {
+                        dismiss()
+                    } label: {
+                        Image(systemName: "checkmark")
+                    }
+                    .accessibilityLabel(mistiaLocalized(vi: "Xong", en: "Done", ja: "完了"))
+                }
+            }
+        }
+        .alert(item: $pendingChange) { change in
+            let title = change.isGranted
+                ? mistiaLocalized(vi: "Chia sẻ quyền?", en: "Share access?", ja: "権限を共有しますか？")
+                : mistiaLocalized(vi: "Thu hồi quyền?", en: "Revoke access?", ja: "権限を取り消しますか？")
+            let message = change.isGranted
+                ? mistiaLocalized(
+                    vi: "Bạn sẽ chia sẻ quyền \(change.title) với \(member.displayName).",
+                    en: "You will share \(change.title) access with \(member.displayName).",
+                    ja: "\(member.displayName)に\(change.title)の権限を共有します。"
+                )
+                : mistiaLocalized(
+                    vi: "Bạn sẽ thu hồi quyền \(change.title) với \(member.displayName).",
+                    en: "You will revoke \(change.title) access from \(member.displayName).",
+                    ja: "\(member.displayName)から\(change.title)の権限を取り消します。"
+                )
+
+            if change.isGranted {
+                return Alert(
+                    title: Text(title),
+                    message: Text(message),
+                    primaryButton: .default(Text(mistiaLocalized(vi: "Đồng ý", en: "Confirm", ja: "確認"))) {
+                        applySharingChange(change)
+                    },
+                    secondaryButton: .cancel(Text(mistiaLocalized(vi: "Hủy", en: "Cancel", ja: "キャンセル")))
+                )
+            }
+
+            return Alert(
+                title: Text(title),
+                message: Text(message),
+                primaryButton: .destructive(Text(mistiaLocalized(vi: "Đồng ý", en: "Confirm", ja: "確認"))) {
+                        applySharingChange(change)
+                },
+                secondaryButton: .cancel(Text(mistiaLocalized(vi: "Hủy", en: "Cancel", ja: "キャンセル")))
+            )
+        }
+    }
+
+    @ViewBuilder
+    private func sharingToggle(
+        title: String,
+        resourceType: MistiaFamilyNotificationResourceType,
+        resourceID: UUID?,
+        scope: MistiaFamilyPermissionScope
+    ) -> some View {
+        if let ownerUserID {
+            Toggle(
+                title,
+                isOn: Binding(
+                    get: {
+                        familyContextStore.hasPermission(
+                            granteeUserID: member.userID,
+                            ownerUserID: ownerUserID,
+                            resourceType: resourceType,
+                            resourceID: resourceID,
+                            scope: scope
+                        )
+                    },
+                    set: { isGranted in
+                        pendingChange = FamilySharingChange(
+                            granteeUserID: member.userID,
+                            ownerUserID: ownerUserID,
+                            resourceType: resourceType,
+                            resourceID: resourceID,
+                            scope: scope,
+                            isGranted: isGranted,
+                            title: title
+                        )
+                    }
+                )
+            )
+            .tint(MistiaAccent.purple.color)
+            .toggleStyle(.switch)
+        }
+    }
+
+    private func applySharingChange(_ change: FamilySharingChange) {
+        Task { @MainActor in
+            await familyContextStore.setPermissionGrant(
+                granteeUserID: change.granteeUserID,
+                ownerUserID: change.ownerUserID,
+                resourceType: change.resourceType,
+                resourceID: change.resourceID,
+                scope: change.scope,
+                isGranted: change.isGranted,
+                sessionStore: sessionStore
+            )
+        }
+    }
+}
+
 // MARK: - Permissions Sheet
 
 private struct FamilyPermissionsSheet: View {
@@ -3338,13 +3649,11 @@ private struct FamilyPermissionsSheet: View {
 
     @State private var role: FamilyRole
     @State private var policy: FamilyPermissionPolicy
-    @State private var grantedTargetUserIDs: Set<UUID>
 
     init(member: FamilyMember) {
         self.member = member
         _role = State(initialValue: member.role)
         _policy = State(initialValue: member.policy)
-        _grantedTargetUserIDs = State(initialValue: [])
     }
 
     var body: some View {
@@ -3391,33 +3700,6 @@ private struct FamilyPermissionsSheet: View {
                     .toggleStyle(.switch)
                 }
 
-                if familyContextStore.currentRole == .owner {
-                    Section(mistiaLocalized(vi: "Có thể dùng ví của ai", en: "Can use whose wallets", ja: "誰のウォレットを使えるか")) {
-                        ForEach(grantTargets, id: \.membershipID) { target in
-                            Toggle(
-                                target.displayName,
-                                isOn: Binding(
-                                    get: { grantedTargetUserIDs.contains(target.userID) },
-                                    set: { isEnabled in
-                                        if isEnabled {
-                                            grantedTargetUserIDs.insert(target.userID)
-                                        } else {
-                                            grantedTargetUserIDs.remove(target.userID)
-                                        }
-                                    }
-                                )
-                            )
-                            .tint(MistiaAccent.purple.color)
-                            .toggleStyle(.switch)
-                        }
-
-                        if grantTargets.isEmpty {
-                            Text(mistiaLocalized(vi: "Không còn thành viên nào khác để cấp quyền.", en: "There are no other members to grant access to.", ja: "アクセス権を付与できる他のメンバーはいません。"))
-                                .font(.footnote)
-                                .foregroundStyle(.secondary)
-                        }
-                    }
-                }
             }
             .disabled(!sessionStore.canPerformRemoteActions)
             .dismissKeyboardOnTap()
@@ -3437,7 +3719,6 @@ private struct FamilyPermissionsSheet: View {
                                 member,
                                 role: role,
                                 policy: policy,
-                                grantedTargetUserIDs: grantedTargetUserIDs,
                                 sessionStore: sessionStore
                             )
                             dismiss()
@@ -3450,13 +3731,6 @@ private struct FamilyPermissionsSheet: View {
         .onChange(of: role) { _, newRole in
             policy = FamilyPermissionPolicy.preset(for: newRole)
         }
-        .task {
-            grantedTargetUserIDs = familyContextStore.walletAccessTargetUserIDs(for: member)
-        }
-    }
-
-    private var grantTargets: [FamilyMember] {
-        familyContextStore.members.filter { $0.userID != member.userID }
     }
 }
 

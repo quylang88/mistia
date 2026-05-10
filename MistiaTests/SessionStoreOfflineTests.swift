@@ -194,6 +194,131 @@ final class SessionStoreOfflineTests: XCTestCase {
         XCTAssertEqual(familyStore.lastErrorMessage, store.remoteUnavailableReason)
     }
 
+    func testFamilyGranularPermissionGrantsSeparateUseEditAndCreate() async throws {
+        let currentUserID = UUID()
+        let ownerUserID = UUID()
+        let usableWalletID = UUID()
+        let editableWalletID = UUID()
+        let session = makeSession(userID: currentUserID)
+        let authService = SessionAuthServiceSpy(
+            persistedSession: session,
+            refreshResult: .success(session)
+        )
+        let store = try makeSessionStore(
+            authService: authService,
+            userProfileStore: UserProfileStoreSpy(),
+            networkStatus: .connected
+        )
+        let snapshot = makeFamilySnapshot(
+            userID: currentUserID,
+            ownerUserID: ownerUserID,
+            permissionGrants: [
+                makePermissionGrant(
+                    granteeUserID: currentUserID,
+                    ownerUserID: ownerUserID,
+                    resourceType: .wallet,
+                    resourceID: usableWalletID,
+                    scope: .use
+                ),
+                makePermissionGrant(
+                    granteeUserID: currentUserID,
+                    ownerUserID: ownerUserID,
+                    resourceType: .wallet,
+                    resourceID: editableWalletID,
+                    scope: .edit
+                ),
+                makePermissionGrant(
+                    granteeUserID: currentUserID,
+                    ownerUserID: ownerUserID,
+                    resourceType: .transaction,
+                    resourceID: nil,
+                    scope: .create
+                )
+            ]
+        )
+        let familyStore = FamilyContextStore(
+            modelContainer: try storeTestContainer(),
+            service: FamilyRemoteServiceSpy(snapshot: snapshot)
+        )
+
+        await store.bootstrapIfNeeded()
+        await familyStore.refresh(sessionStore: store)
+
+        XCTAssertTrue(familyStore.canUseWallet(walletID: usableWalletID, ownerUserID: ownerUserID))
+        XCTAssertFalse(familyStore.canEdit(ownerUserID: ownerUserID, resourceType: .wallet, resourceID: usableWalletID))
+        XCTAssertTrue(familyStore.canEdit(ownerUserID: ownerUserID, resourceType: .wallet, resourceID: editableWalletID))
+        XCTAssertFalse(familyStore.canUseWallet(walletID: editableWalletID, ownerUserID: ownerUserID))
+        XCTAssertTrue(familyStore.canCreate(ownerUserID: ownerUserID, resourceType: .transaction))
+        XCTAssertFalse(familyStore.canEdit(ownerUserID: ownerUserID, resourceType: .transaction))
+        XCTAssertFalse(familyStore.canCreate(ownerUserID: ownerUserID, resourceType: .category))
+    }
+
+    func testLocalAndSystemNotificationsAreRecipientScoped() {
+        let currentUserID = UUID()
+        let otherUserID = UUID()
+        let referenceDate = Date()
+        let currentLocal = AppNotificationRecord(
+            key: "current.local",
+            createdAt: referenceDate,
+            updatedAt: referenceDate,
+            title: "Current",
+            body: "Current",
+            kind: .budgetWarning,
+            source: .localReminder,
+            recipientUserID: currentUserID
+        )
+        let otherLocal = AppNotificationRecord(
+            key: "other.local",
+            createdAt: referenceDate,
+            updatedAt: referenceDate,
+            title: "Other",
+            body: "Other",
+            kind: .budgetWarning,
+            source: .localReminder,
+            recipientUserID: otherUserID
+        )
+        let legacyUnscopedSystem = AppNotificationRecord(
+            key: "legacy.system",
+            createdAt: referenceDate,
+            updatedAt: referenceDate,
+            title: "Legacy",
+            body: "Legacy",
+            kind: .lowWallet,
+            source: .system
+        )
+        let currentSystem = AppNotificationRecord(
+            key: "current.system",
+            createdAt: referenceDate,
+            updatedAt: referenceDate,
+            title: "System",
+            body: "System",
+            kind: .lowWallet,
+            source: .system,
+            recipientUserID: currentUserID
+        )
+        let familyForOther = AppNotificationRecord(
+            key: "family.other",
+            createdAt: referenceDate,
+            updatedAt: referenceDate,
+            title: "Family",
+            body: "Family",
+            kind: .permissionRequestApproved,
+            source: .family,
+            recipientUserID: otherUserID
+        )
+
+        let rows = [currentLocal, otherLocal, legacyUnscopedSystem, currentSystem, familyForOther]
+
+        XCTAssertEqual(
+            MistiaNotificationStore.visibleRows(rows, userID: currentUserID, referenceDate: referenceDate).map(\.key),
+            ["current.local", "current.system"]
+        )
+        XCTAssertEqual(
+            MistiaNotificationStore.visibleRows(rows, userID: otherUserID, referenceDate: referenceDate).map(\.key),
+            ["other.local", "family.other"]
+        )
+    }
+
     func testSignOutKeepsPreviousAccountAsEditableLocalProfile() async throws {
         let session = makeSession()
         let authService = SessionAuthServiceSpy(persistedSession: session)
@@ -451,15 +576,49 @@ final class SessionStoreOfflineTests: XCTestCase {
         )
     }
 
-    private func makeFamilySnapshot(userID: UUID) -> FamilyStateSnapshot {
+    private func makeFamilySnapshot(
+        userID: UUID,
+        ownerUserID: UUID? = nil,
+        permissionGrants: [FamilyPermissionGrantRecord] = []
+    ) -> FamilyStateSnapshot {
         let familyID = UUID()
         let membershipID = UUID()
+        let resolvedOwnerUserID = ownerUserID ?? userID
         let now = Date()
+        let currentRole: FamilyRole = resolvedOwnerUserID == userID ? .owner : .member
+        var members = [
+            FamilyMember(
+                membershipID: membershipID,
+                familyID: familyID,
+                userID: userID,
+                displayName: "Taylor Offline",
+                avatarURL: nil,
+                role: currentRole,
+                policy: .preset(for: currentRole),
+                isCurrentUser: true
+            )
+        ]
+        if resolvedOwnerUserID != userID {
+            members.insert(
+                FamilyMember(
+                    membershipID: UUID(),
+                    familyID: familyID,
+                    userID: resolvedOwnerUserID,
+                    displayName: "Owner",
+                    avatarURL: nil,
+                    role: .owner,
+                    policy: .preset(for: .owner),
+                    isCurrentUser: false
+                ),
+                at: 0
+            )
+        }
+
         return FamilyStateSnapshot(
             family: FamilyGroupRecord(
                 id: familyID,
                 name: "Offline Family",
-                ownerUserID: userID,
+                ownerUserID: resolvedOwnerUserID,
                 deletedAt: nil,
                 createdAt: now,
                 updatedAt: now
@@ -468,32 +627,46 @@ final class SessionStoreOfflineTests: XCTestCase {
                 id: membershipID,
                 familyID: familyID,
                 userID: userID,
-                roleRawValue: FamilyRole.owner.rawValue,
-                canViewFamilyDashboard: true,
-                canViewOthers: true,
-                canEditOthers: true,
-                canViewWallets: true,
-                canViewDebts: true,
-                canViewKids: true,
-                canEditKids: true,
+                roleRawValue: currentRole.rawValue,
+                canViewFamilyDashboard: currentRole == .owner,
+                canViewOthers: currentRole == .owner,
+                canEditOthers: currentRole == .owner,
+                canViewWallets: currentRole == .owner,
+                canViewDebts: currentRole == .owner,
+                canViewKids: currentRole == .owner,
+                canEditKids: currentRole == .owner,
                 deletedAt: nil,
                 createdAt: now,
                 updatedAt: now
             ),
-            members: [
-                FamilyMember(
-                    membershipID: membershipID,
-                    familyID: familyID,
-                    userID: userID,
-                    displayName: "Taylor Offline",
-                    avatarURL: nil,
-                    role: .owner,
-                    policy: .preset(for: .owner),
-                    isCurrentUser: true
-                )
-            ],
+            members: members,
             invites: [],
-            walletAccessGrants: []
+            walletAccessGrants: [],
+            permissionGrants: permissionGrants
+        )
+    }
+
+    private func makePermissionGrant(
+        granteeUserID: UUID,
+        ownerUserID: UUID,
+        resourceType: MistiaFamilyNotificationResourceType,
+        resourceID: UUID?,
+        scope: MistiaFamilyPermissionScope,
+        revokedAt: Date? = nil
+    ) -> FamilyPermissionGrantRecord {
+        let now = Date()
+        return FamilyPermissionGrantRecord(
+            id: UUID(),
+            familyID: UUID(),
+            granteeUserID: granteeUserID,
+            ownerUserID: ownerUserID,
+            resourceTypeRawValue: resourceType.rawValue,
+            resourceID: resourceID,
+            permissionScopeRawValue: scope.rawValue,
+            grantedByUserID: ownerUserID,
+            createdAt: now,
+            updatedAt: now,
+            revokedAt: revokedAt
         )
     }
 

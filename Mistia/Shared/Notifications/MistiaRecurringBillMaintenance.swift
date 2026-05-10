@@ -98,6 +98,7 @@ enum MistiaRecurringBillMaintenance {
                         bill: bill,
                         dueItem: dueItem,
                         monthKey: monthKey,
+                        recipientUserID: sessionStore.activeLocalProfileUserID,
                         modelContext: modelContext
                     )
                 }
@@ -115,6 +116,7 @@ enum MistiaRecurringBillMaintenance {
                     bill: bill,
                     dueItem: dueItem,
                     monthKey: monthKey,
+                    recipientUserID: sessionStore.activeLocalProfileUserID,
                     modelContext: modelContext
                 )
             }
@@ -133,6 +135,7 @@ enum MistiaRecurringBillMaintenance {
                     bill: bill,
                     dueItem: dueItem,
                     monthKey: monthKey,
+                    recipientUserID: sessionStore.activeLocalProfileUserID,
                     modelContext: modelContext,
                     forceUnread: true
                 )
@@ -225,6 +228,7 @@ enum MistiaRecurringBillMaintenance {
                 bill: bill,
                 dueItem: dueItem,
                 monthKey: monthKey,
+                recipientUserID: sessionStore.activeLocalProfileUserID,
                 modelContext: modelContext
             )
         } catch {
@@ -240,6 +244,7 @@ enum MistiaRecurringBillMaintenance {
                 bill: bill,
                 dueItem: dueItem,
                 monthKey: monthKey,
+                recipientUserID: sessionStore.activeLocalProfileUserID,
                 modelContext: modelContext
             )
         }
@@ -277,10 +282,12 @@ enum MistiaRecurringBillMaintenance {
         bill: RecurringBillPlan,
         dueItem: PlanningRecurringDueSnapshot,
         monthKey: String,
+        recipientUserID: UUID?,
         modelContext: ModelContext,
         forceUnread: Bool = false
     ) {
         guard MistiaNotificationPreferences.reminderEnabled(.bills) else { return }
+        guard let recipientUserID else { return }
 
         let payload = DueNotificationActionPayload(
             sourceKind: PlanningDueSourceKind.recurringBill.rawValue,
@@ -308,6 +315,7 @@ enum MistiaRecurringBillMaintenance {
             existing.body = body
             existing.kind = kind
             existing.source = .system
+            existing.recipientUserID = recipientUserID
             existing.resourceType = .bill
             existing.resourceID = bill.id
             existing.metadataJSON = metadataJSON
@@ -327,6 +335,7 @@ enum MistiaRecurringBillMaintenance {
                 kind: kind,
                 source: .system,
                 isRead: false,
+                recipientUserID: recipientUserID,
                 resourceType: .bill,
                 resourceID: bill.id,
                 metadataJSON: metadataJSON

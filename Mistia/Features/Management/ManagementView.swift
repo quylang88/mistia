@@ -15,6 +15,23 @@ private struct ManagementInfoAlert: Identifiable {
     let message: String
 }
 
+private struct ManagementPermissionPrompt: Identifiable {
+    let id = UUID()
+    let title: String
+    let message: String
+    let actionTitle: String
+    let action: () -> Void
+}
+
+private struct ManagementWalletPermissionPrompt: Identifiable {
+    let id = UUID()
+    let walletID: UUID
+    let walletName: String
+    let ownerUserID: UUID
+    let title: String
+    let message: String
+}
+
 struct ManagementView: View {
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.modelContext) private var modelContext
@@ -40,6 +57,8 @@ struct ManagementView: View {
     @State private var selectedCategoryKind: TransactionCategoryKind = .expense
     @State private var expandedCategoryParentIDs: Set<UUID> = []
     @State private var infoAlert: ManagementInfoAlert?
+    @State private var permissionPrompt: ManagementPermissionPrompt?
+    @State private var walletPermissionPrompt: ManagementWalletPermissionPrompt?
 
     private var cardTint: Color {
         colorScheme == .dark ? .white.opacity(0.018) : .white.opacity(0.12)
@@ -114,8 +133,12 @@ struct ManagementView: View {
         MistiaRecordOwnershipStore.ownerMap(from: ownershipScopes, entity: .wallet)
     }
 
-    private var shouldRequestWalletEditPermission: Bool {
-        familyContextStore.isViewingMemberContext && !familyContextStore.canEditSelectedSubject
+    private var categoryOwnerMap: [UUID: UUID] {
+        MistiaRecordOwnershipStore.ownerMap(from: ownershipScopes, entity: .category)
+    }
+
+    private var selectedSubjectUserID: UUID? {
+        familyContextStore.selectedSubjectUserID ?? sessionStore.activeLocalProfileUserID
     }
 
     var body: some View {
@@ -134,7 +157,6 @@ struct ManagementView: View {
                 profileSection
                 walletsSection
                 categoriesSection
-                    .disabled(familyContextStore.isViewingMemberContext && !familyContextStore.canEditSelectedSubject)
             }
             .navigationDestination(item: $destination) { route in
                 switch route {
@@ -154,6 +176,38 @@ struct ManagementView: View {
         .sheet(item: $categoryEditorTarget) { target in
             ManagementCategoryEditorSheet(target: target)
                 .presentationDragIndicator(.hidden)
+        }
+        .alert(item: $permissionPrompt) { prompt in
+            Alert(
+                title: Text(prompt.title),
+                message: Text(prompt.message),
+                primaryButton: .default(Text(prompt.actionTitle)) {
+                    prompt.action()
+                },
+                secondaryButton: .cancel(Text(mistiaLocalized(vi: "Hủy", en: "Cancel", ja: "キャンセル")))
+            )
+        }
+        .alert(
+            walletPermissionPrompt?.title ?? mistiaLocalized(vi: "Chưa có quyền thao tác ví", en: "No wallet access", ja: "ウォレット権限がありません"),
+            isPresented: Binding(
+                get: { walletPermissionPrompt != nil },
+                set: { isPresented in
+                    if !isPresented {
+                        walletPermissionPrompt = nil
+                    }
+                }
+            ),
+            presenting: walletPermissionPrompt
+        ) { prompt in
+            Button(walletPermissionActionTitle(for: prompt, scope: .use)) {
+                requestWalletPermission(prompt, scope: .use)
+            }
+            Button(walletPermissionActionTitle(for: prompt, scope: .edit)) {
+                requestWalletPermission(prompt, scope: .edit)
+            }
+            Button(mistiaLocalized(vi: "Hủy", en: "Cancel", ja: "キャンセル"), role: .cancel) {}
+        } message: { prompt in
+            Text(prompt.message)
         }
         .task {
             do {
@@ -310,8 +364,14 @@ struct ManagementView: View {
                         accent: accentPurple,
                         symbols: ["banknote.fill", "wallet.pass.fill", "building.columns.fill", "creditcard.fill"]
                     ) {
-                        if !shouldRequestWalletEditPermission {
+                        if canCreateWallet {
                             walletEditorTarget = ManagementWalletEditorTarget(wallet: nil, defaultKind: .cash)
+                        } else {
+                            presentCreatePermissionPrompt(
+                                resourceType: .wallet,
+                                resourceName: mistiaLocalized(vi: "ví", en: "wallets", ja: "ウォレット"),
+                                actionTitle: mistiaLocalized(vi: "Yêu cầu thêm mới ví", en: "Request wallet creation", ja: "ウォレット作成をリクエスト")
+                            )
                         }
                     }
                 } else {
@@ -321,10 +381,10 @@ struct ManagementView: View {
                                 wallet: wallet,
                                 transactions: visiblePostedTransactions
                             ) {
-                                if shouldRequestWalletEditPermission {
-                                    requestWalletEditPermission(wallet)
-                                } else {
+                                if canOpenWalletEditor(wallet) {
                                     walletEditorTarget = ManagementWalletEditorTarget(wallet: wallet, defaultKind: wallet.kind)
+                                } else {
+                                    presentWalletPermissionPrompt(wallet)
                                 }
                             }
 
@@ -339,47 +399,140 @@ struct ManagementView: View {
                                 .padding(.leading, 52)
                                 .padding(.trailing, 0)
 
-                        if shouldRequestWalletEditPermission, let firstWallet = activeWallets.first {
-                            ManagementFooterAddButton(
-                                title: mistiaLocalized(vi: "Yêu cầu quyền chỉnh sửa", en: "Request edit access", ja: "編集権限をリクエスト"),
-                                accent: accentPurple
-                            ) {
-                                requestWalletEditPermission(firstWallet)
-                            }
-                            .padding(.horizontal, 14)
-                            .padding(.vertical, 14)
-                        } else {
-                            ManagementFooterAddButton(
-                                title: mistiaLocalized(vi: "Thêm ví", en: "Add wallet", ja: "ウォレットを追加"),
-                                accent: accentPurple
-                            ) {
+                        ManagementFooterAddButton(
+                            title: mistiaLocalized(vi: "Thêm ví", en: "Add wallet", ja: "ウォレットを追加"),
+                            accent: accentPurple
+                        ) {
+                            if canCreateWallet {
                                 walletEditorTarget = ManagementWalletEditorTarget(wallet: nil, defaultKind: .cash)
+                            } else {
+                                presentCreatePermissionPrompt(
+                                    resourceType: .wallet,
+                                    resourceName: mistiaLocalized(vi: "ví", en: "wallets", ja: "ウォレット"),
+                                    actionTitle: mistiaLocalized(vi: "Yêu cầu thêm mới ví", en: "Request wallet creation", ja: "ウォレット作成をリクエスト")
+                                )
                             }
-                            .padding(.horizontal, 14)
-                            .padding(.vertical, 14)
                         }
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 14)
                     }
                 }
             }
         }
     }
 
+    private var canCreateWallet: Bool {
+        guard let ownerUserID = selectedSubjectUserID else { return false }
+        return ownerUserID == sessionStore.activeLocalProfileUserID
+            || familyContextStore.canCreate(ownerUserID: ownerUserID, resourceType: .wallet)
+    }
+
     private func walletOwnerUserID(for wallet: LedgerWallet) -> UUID? {
         walletOwnerMap[wallet.id] ?? sessionStore.activeLocalProfileUserID
     }
 
-    private func requestWalletEditPermission(_ wallet: LedgerWallet) {
-        guard let ownerUserID = walletOwnerUserID(for: wallet) else { return }
-        let walletID = wallet.id
-        let walletName = wallet.name
+    private func canOpenWalletEditor(_ wallet: LedgerWallet) -> Bool {
+        guard let ownerUserID = walletOwnerUserID(for: wallet) else { return false }
+        if ownerUserID == sessionStore.activeLocalProfileUserID {
+            return true
+        }
+        return familyContextStore.canUseWallet(walletID: wallet.id, ownerUserID: ownerUserID)
+            && familyContextStore.canEdit(ownerUserID: ownerUserID, resourceType: .wallet, resourceID: wallet.id)
+    }
 
+    private func presentWalletPermissionPrompt(_ wallet: LedgerWallet) {
+        guard let ownerUserID = walletOwnerUserID(for: wallet) else { return }
+        walletPermissionPrompt = ManagementWalletPermissionPrompt(
+            walletID: wallet.id,
+            walletName: wallet.name,
+            ownerUserID: ownerUserID,
+            title: mistiaLocalized(vi: "Chưa có quyền thao tác ví", en: "No wallet access", ja: "ウォレット権限がありません"),
+            message: mistiaLocalized(
+                vi: "Bạn chưa có đủ quyền với \(wallet.name).",
+                en: "You do not have enough access for \(wallet.name).",
+                ja: "\(wallet.name) の権限が不足しています。"
+            )
+        )
+    }
+
+    private func walletPermissionActionTitle(
+        for prompt: ManagementWalletPermissionPrompt,
+        scope: MistiaFamilyPermissionScope
+    ) -> String {
+        if familyContextStore.hasPendingPermissionRequest(
+            ownerUserID: prompt.ownerUserID,
+            resourceType: .wallet,
+            resourceID: prompt.walletID,
+            scope: scope
+        ) {
+            switch scope {
+            case .use:
+                return mistiaLocalized(vi: "Đã yêu cầu sử dụng", en: "Use requested", ja: "使用権限をリクエスト済み")
+            case .edit:
+                return mistiaLocalized(vi: "Đã yêu cầu chỉnh sửa", en: "Edit requested", ja: "編集権限をリクエスト済み")
+            case .create:
+                return mistiaLocalized(vi: "Đã yêu cầu thêm mới", en: "Create requested", ja: "作成権限をリクエスト済み")
+            case .view:
+                return mistiaLocalized(vi: "Đã yêu cầu quyền", en: "Access requested", ja: "権限をリクエスト済み")
+            }
+        }
+
+        switch scope {
+        case .use:
+            return mistiaLocalized(vi: "Yêu cầu sử dụng", en: "Request use", ja: "使用をリクエスト")
+        case .edit:
+            return mistiaLocalized(vi: "Yêu cầu chỉnh sửa", en: "Request edit", ja: "編集をリクエスト")
+        case .create:
+            return mistiaLocalized(vi: "Yêu cầu thêm mới", en: "Request create", ja: "作成をリクエスト")
+        case .view:
+            return mistiaLocalized(vi: "Yêu cầu quyền", en: "Request access", ja: "権限をリクエスト")
+        }
+    }
+
+    private func requestWalletPermission(
+        _ prompt: ManagementWalletPermissionPrompt,
+        scope: MistiaFamilyPermissionScope
+    ) {
+        guard !familyContextStore.hasPendingPermissionRequest(
+            ownerUserID: prompt.ownerUserID,
+            resourceType: .wallet,
+            resourceID: prompt.walletID,
+            scope: scope
+        ) else {
+            infoAlert = ManagementInfoAlert(
+                title: mistiaLocalized(vi: "Đã yêu cầu quyền", en: "Access already requested", ja: "権限はリクエスト済みです"),
+                message: mistiaLocalized(
+                    vi: "Yêu cầu đang chờ chủ dữ liệu phản hồi.",
+                    en: "The request is waiting for the data owner.",
+                    ja: "リクエストはデータ所有者の返答待ちです。"
+                )
+            )
+            return
+        }
+
+        sendPermissionRequest(
+            resourceType: .wallet,
+            resourceID: prompt.walletID,
+            ownerUserID: prompt.ownerUserID,
+            scope: scope,
+            resourceName: prompt.walletName
+        )
+    }
+
+    private func sendPermissionRequest(
+        resourceType: MistiaFamilyNotificationResourceType,
+        resourceID: UUID?,
+        ownerUserID: UUID,
+        scope: MistiaFamilyPermissionScope,
+        resourceName: String
+    ) {
         Task { @MainActor in
             let didSend = await familyContextStore.requestPermission(
-                resourceType: .wallet,
-                resourceID: walletID,
+                resourceType: resourceType,
+                resourceID: resourceID,
                 ownerUserID: ownerUserID,
-                scope: .edit,
-                resourceName: walletName,
+                scope: scope,
+                resourceName: resourceName,
                 sessionStore: sessionStore
             )
 
@@ -389,15 +542,43 @@ struct ManagementView: View {
                     : mistiaLocalized(vi: "Chưa thể gửi", en: "Couldn't send", ja: "送信できませんでした"),
                 message: didSend
                     ? mistiaLocalized(
-                        vi: "Yêu cầu quyền chỉnh sửa đã được gửi tới chủ ví.",
-                        en: "The edit access request was sent to the wallet owner.",
-                        ja: "編集権限のリクエストをウォレット所有者へ送信しました。"
+                        vi: "Yêu cầu quyền đã được gửi tới chủ dữ liệu.",
+                        en: "The permission request was sent to the data owner.",
+                        ja: "権限リクエストをデータ所有者へ送信しました。"
                     )
                     : (familyContextStore.lastErrorMessage ?? mistiaLocalized(
                         vi: "Không thể gửi yêu cầu lúc này.",
                         en: "Couldn't send the request right now.",
                         ja: "現在リクエストは送信できません。"
                     ))
+            )
+        }
+    }
+
+    private func presentCreatePermissionPrompt(
+        resourceType: MistiaFamilyNotificationResourceType,
+        resourceName: String,
+        actionTitle: String
+    ) {
+        guard let ownerUserID = selectedSubjectUserID,
+              ownerUserID != sessionStore.activeLocalProfileUserID else {
+            return
+        }
+        permissionPrompt = ManagementPermissionPrompt(
+            title: mistiaLocalized(vi: "Chưa có quyền thêm mới", en: "No create access", ja: "作成権限がありません"),
+            message: mistiaLocalized(
+                vi: "Bạn chưa có quyền thêm mới \(resourceName) cho thành viên này.",
+                en: "You do not have permission to create \(resourceName) for this member.",
+                ja: "このメンバーの\(resourceName)を作成する権限がありません。"
+            ),
+            actionTitle: actionTitle
+        ) {
+            sendPermissionRequest(
+                resourceType: resourceType,
+                resourceID: nil,
+                ownerUserID: ownerUserID,
+                scope: .create,
+                resourceName: resourceName
             )
         }
     }
@@ -430,7 +611,7 @@ struct ManagementView: View {
                                 ? ["fork.knife", "bag.fill", "airplane", "plus"]
                                 : ["briefcase.fill", "gift.fill", "chart.line.uptrend.xyaxis", "plus"]
                         ) {
-                            categoryEditorTarget = ManagementCategoryEditorTarget(
+                            openCategoryEditorIfAllowed(
                                 category: nil,
                                 defaultKind: selectedCategoryKind,
                                 preferredParentCategoryID: nil
@@ -453,24 +634,28 @@ struct ManagementView: View {
                                         }
                                     ),
                                     onEditParent: {
-                                        categoryEditorTarget = ManagementCategoryEditorTarget(
+                                        openCategoryEditorIfAllowed(
                                             category: section.parent,
                                             defaultKind: section.parent.kind,
                                             preferredParentCategoryID: nil
                                         )
                                     },
                                     onEditChild: { category in
-                                        categoryEditorTarget = ManagementCategoryEditorTarget(
+                                        openCategoryEditorIfAllowed(
                                             category: category,
                                             defaultKind: category.kind,
                                             preferredParentCategoryID: category.parentCategory?.id
                                         )
                                     },
                                     onToggleFavorite: { category in
-                                        toggleFavorite(for: category)
+                                        if canEditCategory(category) {
+                                            toggleFavorite(for: category)
+                                        } else {
+                                            presentCategoryEditPermissionPrompt(category)
+                                        }
                                     },
                                     onAddChild: {
-                                        categoryEditorTarget = ManagementCategoryEditorTarget(
+                                        openCategoryEditorIfAllowed(
                                             category: nil,
                                             defaultKind: section.parent.kind,
                                             preferredParentCategoryID: section.parent.id
@@ -495,7 +680,7 @@ struct ManagementView: View {
                                 title: mistiaLocalized(vi: "Thêm danh mục cha", en: "Add parent category", ja: "親カテゴリを追加"),
                                 accent: accentPurple
                             ) {
-                                categoryEditorTarget = ManagementCategoryEditorTarget(
+                                openCategoryEditorIfAllowed(
                                     category: nil,
                                     defaultKind: selectedCategoryKind,
                                     preferredParentCategoryID: nil
@@ -507,6 +692,99 @@ struct ManagementView: View {
                     }
                 }
             }
+        }
+    }
+
+    private func openCategoryEditorIfAllowed(
+        category: TransactionCategory?,
+        defaultKind: TransactionCategoryKind,
+        preferredParentCategoryID: UUID?
+    ) {
+        if let category {
+            guard canEditCategory(category) else {
+                presentCategoryEditPermissionPrompt(category)
+                return
+            }
+        } else {
+            let ownerUserID = categoryCreateOwnerUserID(preferredParentCategoryID: preferredParentCategoryID)
+            guard canCreateCategory(ownerUserID: ownerUserID) else {
+                presentCategoryCreatePermissionPrompt(ownerUserID: ownerUserID)
+                return
+            }
+        }
+
+        categoryEditorTarget = ManagementCategoryEditorTarget(
+            category: category,
+            defaultKind: defaultKind,
+            preferredParentCategoryID: preferredParentCategoryID
+        )
+    }
+
+    private func categoryOwnerUserID(for category: TransactionCategory) -> UUID? {
+        categoryOwnerMap[category.id] ?? sessionStore.activeLocalProfileUserID
+    }
+
+    private func categoryCreateOwnerUserID(preferredParentCategoryID: UUID?) -> UUID? {
+        if let preferredParentCategoryID,
+           let parent = storedCategories.first(where: { $0.id == preferredParentCategoryID }) {
+            return categoryOwnerUserID(for: parent)
+        }
+        return selectedSubjectUserID
+    }
+
+    private func canEditCategory(_ category: TransactionCategory) -> Bool {
+        guard let ownerUserID = categoryOwnerUserID(for: category) else { return false }
+        return ownerUserID == sessionStore.activeLocalProfileUserID
+            || familyContextStore.canEdit(ownerUserID: ownerUserID, resourceType: .category)
+    }
+
+    private func canCreateCategory(ownerUserID: UUID?) -> Bool {
+        guard let ownerUserID else { return false }
+        return ownerUserID == sessionStore.activeLocalProfileUserID
+            || familyContextStore.canCreate(ownerUserID: ownerUserID, resourceType: .category)
+    }
+
+    private func presentCategoryEditPermissionPrompt(_ category: TransactionCategory) {
+        guard let ownerUserID = categoryOwnerUserID(for: category),
+              ownerUserID != sessionStore.activeLocalProfileUserID else { return }
+        permissionPrompt = ManagementPermissionPrompt(
+            title: mistiaLocalized(vi: "Chưa có quyền chỉnh sửa danh mục", en: "No category edit access", ja: "カテゴリ編集権限がありません"),
+            message: mistiaLocalized(
+                vi: "Bạn chưa có quyền chỉnh sửa danh mục của thành viên này.",
+                en: "You do not have permission to edit this member's categories.",
+                ja: "このメンバーのカテゴリを編集する権限がありません。"
+            ),
+            actionTitle: mistiaLocalized(vi: "Yêu cầu quyền chỉnh sửa", en: "Request edit access", ja: "編集権限をリクエスト")
+        ) {
+            sendPermissionRequest(
+                resourceType: .category,
+                resourceID: nil,
+                ownerUserID: ownerUserID,
+                scope: .edit,
+                resourceName: mistiaLocalized(vi: "danh mục", en: "categories", ja: "カテゴリ")
+            )
+        }
+    }
+
+    private func presentCategoryCreatePermissionPrompt(ownerUserID: UUID?) {
+        guard let ownerUserID,
+              ownerUserID != sessionStore.activeLocalProfileUserID else { return }
+        permissionPrompt = ManagementPermissionPrompt(
+            title: mistiaLocalized(vi: "Chưa có quyền thêm mới danh mục", en: "No category create access", ja: "カテゴリ作成権限がありません"),
+            message: mistiaLocalized(
+                vi: "Bạn chưa có quyền thêm mới danh mục cho thành viên này.",
+                en: "You do not have permission to create categories for this member.",
+                ja: "このメンバーのカテゴリを作成する権限がありません。"
+            ),
+            actionTitle: mistiaLocalized(vi: "Yêu cầu thêm mới danh mục", en: "Request category creation", ja: "カテゴリ作成をリクエスト")
+        ) {
+            sendPermissionRequest(
+                resourceType: .category,
+                resourceID: nil,
+                ownerUserID: ownerUserID,
+                scope: .create,
+                resourceName: mistiaLocalized(vi: "danh mục", en: "categories", ja: "カテゴリ")
+            )
         }
     }
 

@@ -13,6 +13,13 @@ struct FamilyOverviewPresentationRoute: Identifiable, Equatable {
     var id: UUID { familyID }
 }
 
+private struct FamilyPendingPermissionRequestKey: Hashable {
+    let ownerUserID: UUID
+    let resourceTypeRawValue: String
+    let resourceID: UUID?
+    let scopeRawValue: String
+}
+
 @MainActor
 @Observable
 final class FamilyContextStore {
@@ -24,6 +31,7 @@ final class FamilyContextStore {
     var members: [FamilyMember] = []
     var invites: [FamilyInviteRecord] = []
     var walletAccessGrants: [FamilyWalletAccessGrantRecord] = []
+    var permissionGrants: [FamilyPermissionGrantRecord] = []
     var pendingInviteRoute: FamilyInviteRoute?
     var pendingFamilyOverviewRoute: FamilyOverviewPresentationRoute?
     var lastErrorMessage: String?
@@ -35,6 +43,7 @@ final class FamilyContextStore {
     @ObservationIgnored private let service: any FamilyRemoteServicing
     @ObservationIgnored private let launchState: MistiaDataStack.LaunchState?
     @ObservationIgnored private var modelContainer: ModelContainer
+    private var pendingPermissionRequestKeys: Set<FamilyPendingPermissionRequestKey> = []
 
     init(
         modelContainer: ModelContainer,
@@ -137,9 +146,14 @@ final class FamilyContextStore {
     var operableTargetUserIDs: Set<UUID> {
         guard let currentUserID else { return [] }
 
-        let grantedTargetUserIDs = walletAccessGrants
-            .filter { $0.granteeUserID == currentUserID && $0.revokedAt == nil }
-            .map(\.targetUserID)
+        let grantedTargetUserIDs = permissionGrants
+            .filter {
+                $0.granteeUserID == currentUserID
+                    && $0.revokedAt == nil
+                    && $0.resourceType == .wallet
+                    && $0.permissionScope == .use
+            }
+            .map(\.ownerUserID)
         return Set(grantedTargetUserIDs).union([currentUserID])
     }
 
@@ -512,7 +526,7 @@ final class FamilyContextStore {
     @discardableResult
     func requestPermission(
         resourceType: MistiaFamilyNotificationResourceType,
-        resourceID: UUID,
+        resourceID: UUID?,
         ownerUserID: UUID,
         scope: MistiaFamilyPermissionScope,
         resourceName: String,
@@ -546,7 +560,49 @@ final class FamilyContextStore {
 
         do {
             _ = try await service.createFamilyPermissionRequest(input: input, session: session)
+            pendingPermissionRequestKeys.insert(
+                permissionRequestKey(
+                    ownerUserID: ownerUserID,
+                    resourceType: resourceType,
+                    resourceID: resourceID,
+                    scope: scope
+                )
+            )
             lastErrorMessage = nil
+            return true
+        } catch {
+            lastErrorMessage = visibleErrorMessage(for: error, sessionStore: sessionStore)
+            return false
+        }
+    }
+
+    @discardableResult
+    func setPermissionGrant(
+        granteeUserID: UUID,
+        ownerUserID: UUID,
+        resourceType: MistiaFamilyNotificationResourceType,
+        resourceID: UUID?,
+        scope: MistiaFamilyPermissionScope,
+        isGranted: Bool,
+        sessionStore: SessionStore
+    ) async -> Bool {
+        guard let familyID = family?.id else { return false }
+        guard let session = await prepareRemoteSession(using: sessionStore) else { return false }
+
+        do {
+            let grant = try await service.setPermissionGrant(
+                familyID: familyID,
+                granteeUserID: granteeUserID,
+                ownerUserID: ownerUserID,
+                resourceType: resourceType,
+                resourceID: resourceID,
+                scope: scope,
+                isGranted: isGranted,
+                session: session
+            )
+            upsertPermissionGrant(grant)
+            lastErrorMessage = nil
+            await refresh(sessionStore: sessionStore)
             return true
         } catch {
             lastErrorMessage = visibleErrorMessage(for: error, sessionStore: sessionStore)
@@ -686,9 +742,92 @@ final class FamilyContextStore {
 
     func walletAccessTargetUserIDs(for member: FamilyMember) -> Set<UUID> {
         Set(
-            walletAccessGrants
-                .filter { $0.granteeUserID == member.userID && $0.revokedAt == nil }
-                .map(\.targetUserID)
+            permissionGrants
+                .filter {
+                    $0.granteeUserID == member.userID
+                        && $0.revokedAt == nil
+                        && $0.resourceType == .wallet
+                        && $0.permissionScope == .use
+                }
+                .map(\.ownerUserID)
+        )
+    }
+
+    func hasPermission(
+        granteeUserID: UUID? = nil,
+        ownerUserID: UUID?,
+        resourceType: MistiaFamilyNotificationResourceType,
+        resourceID: UUID?,
+        scope: MistiaFamilyPermissionScope
+    ) -> Bool {
+        guard let ownerUserID else { return false }
+        let resolvedGranteeUserID = granteeUserID ?? currentUserID
+        guard let resolvedGranteeUserID else { return false }
+        if resolvedGranteeUserID == ownerUserID {
+            return true
+        }
+
+        return permissionGrants.contains {
+            $0.revokedAt == nil
+                && $0.granteeUserID == resolvedGranteeUserID
+                && $0.ownerUserID == ownerUserID
+                && $0.resourceType == resourceType
+                && $0.permissionScope == scope
+                && $0.resourceID == resourceID
+        }
+    }
+
+    func canUseWallet(
+        walletID: UUID,
+        ownerUserID: UUID?
+    ) -> Bool {
+        hasPermission(
+            ownerUserID: ownerUserID,
+            resourceType: .wallet,
+            resourceID: walletID,
+            scope: .use
+        )
+    }
+
+    func canEdit(
+        ownerUserID: UUID?,
+        resourceType: MistiaFamilyNotificationResourceType,
+        resourceID: UUID? = nil
+    ) -> Bool {
+        hasPermission(
+            ownerUserID: ownerUserID,
+            resourceType: resourceType,
+            resourceID: resourceID,
+            scope: .edit
+        )
+    }
+
+    func canCreate(
+        ownerUserID: UUID?,
+        resourceType: MistiaFamilyNotificationResourceType
+    ) -> Bool {
+        hasPermission(
+            ownerUserID: ownerUserID,
+            resourceType: resourceType,
+            resourceID: nil,
+            scope: .create
+        )
+    }
+
+    func hasPendingPermissionRequest(
+        ownerUserID: UUID?,
+        resourceType: MistiaFamilyNotificationResourceType,
+        resourceID: UUID?,
+        scope: MistiaFamilyPermissionScope
+    ) -> Bool {
+        guard let ownerUserID else { return false }
+        return pendingPermissionRequestKeys.contains(
+            permissionRequestKey(
+                ownerUserID: ownerUserID,
+                resourceType: resourceType,
+                resourceID: resourceID,
+                scope: scope
+            )
         )
     }
 
@@ -704,6 +843,8 @@ final class FamilyContextStore {
         members = []
         invites = []
         walletAccessGrants = []
+        permissionGrants = []
+        pendingPermissionRequestKeys = []
         lastErrorMessage = nil
         isRefreshingLatest = false
     }
@@ -714,6 +855,8 @@ final class FamilyContextStore {
         members = snapshot.members
         invites = snapshot.invites
         walletAccessGrants = snapshot.walletAccessGrants
+        permissionGrants = snapshot.permissionGrants
+        removeGrantedPendingPermissionRequests()
     }
 
     private func restoreSignedOutLocalState(sessionStore: SessionStore) {
@@ -888,6 +1031,45 @@ final class FamilyContextStore {
         }
     }
 
+    private func upsertPermissionGrant(_ grant: FamilyPermissionGrantRecord) {
+        if let index = permissionGrants.firstIndex(where: { $0.id == grant.id }) {
+            permissionGrants[index] = grant
+        } else if grant.revokedAt == nil {
+            permissionGrants.append(grant)
+        }
+        removeGrantedPendingPermissionRequests()
+    }
+
+    private func permissionRequestKey(
+        ownerUserID: UUID,
+        resourceType: MistiaFamilyNotificationResourceType,
+        resourceID: UUID?,
+        scope: MistiaFamilyPermissionScope
+    ) -> FamilyPendingPermissionRequestKey {
+        FamilyPendingPermissionRequestKey(
+            ownerUserID: ownerUserID,
+            resourceTypeRawValue: resourceType.rawValue,
+            resourceID: resourceID,
+            scopeRawValue: scope.rawValue
+        )
+    }
+
+    private func removeGrantedPendingPermissionRequests() {
+        guard let currentUserID else { return }
+        for grant in permissionGrants where grant.revokedAt == nil && grant.granteeUserID == currentUserID {
+            guard let resourceType = grant.resourceType,
+                  let scope = grant.permissionScope else { continue }
+            pendingPermissionRequestKeys.remove(
+                permissionRequestKey(
+                    ownerUserID: grant.ownerUserID,
+                    resourceType: resourceType,
+                    resourceID: grant.resourceID,
+                    scope: scope
+                )
+            )
+        }
+    }
+
     private func permissionRequestTitle(
         requesterName: String,
         scope: MistiaFamilyPermissionScope,
@@ -905,6 +1087,12 @@ final class FamilyContextStore {
                 vi: "\(requesterName) xin quyền chỉnh sửa",
                 en: "\(requesterName) requests edit access",
                 ja: "\(requesterName) が編集権限をリクエスト"
+            )
+        case .create:
+            return mistiaLocalized(
+                vi: "\(requesterName) xin quyền thêm mới",
+                en: "\(requesterName) requests create access",
+                ja: "\(requesterName) が作成権限をリクエスト"
             )
         case .view:
             return mistiaLocalized(
@@ -932,6 +1120,12 @@ final class FamilyContextStore {
                 vi: "\(requesterName) muốn chỉnh sửa \(resourceName) của bạn.",
                 en: "\(requesterName) wants to edit your \(resourceName).",
                 ja: "\(requesterName) があなたの\(resourceName)を編集したいとリクエストしています。"
+            )
+        case .create:
+            return mistiaLocalized(
+                vi: "\(requesterName) muốn thêm mới \(resourceName) của bạn.",
+                en: "\(requesterName) wants to create \(resourceName) for you.",
+                ja: "\(requesterName) があなたの\(resourceName)を作成したいとリクエストしています。"
             )
         case .view:
             return mistiaLocalized(

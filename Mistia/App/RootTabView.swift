@@ -78,6 +78,9 @@ struct RootTabView: View {
   @Environment(SessionStore.self) private var sessionStore
   @Environment(FamilyContextStore.self) private var familyContextStore
   @Environment(MistiaUIState.self) private var uiState
+  @Query(filter: #Predicate<LedgerWallet> { $0.deletedAt == nil && !$0.isArchived })
+  private var storedWallets: [LedgerWallet]
+  @Query private var ownershipScopes: [OwnedRecordScope]
   @AppStorage(MistiaAppStorageKey.appearanceMode) private var appearanceModeRawValue =
     MistiaAppearanceMode.automatic.rawValue
   @AppStorage(MistiaAppStorageKey.appLanguage) private var appLanguageRawValue = ""
@@ -95,6 +98,7 @@ struct RootTabView: View {
   @State private var quickCreateDragOffset: CGFloat = 0
   @State private var isDraggingQuickCreate = false
   @State private var isSyncingShortcut = false
+  @State private var quickCreateAccessAlert: RootQuickCreateAccessAlert?
 
   private let quickCreateMenuAnimation = Animation.spring(response: 0.34, dampingFraction: 0.84)
   private let quickCreateMenuDuration = 0.28
@@ -187,6 +191,13 @@ struct RootTabView: View {
         familyContextStore.activateFamilyHome()
         activeSheet = .shortcut(.familyOverview)
         familyContextStore.clearFamilyOverviewPresentationRequest()
+      }
+      .alert(item: $quickCreateAccessAlert) { alert in
+        Alert(
+          title: Text(alert.title),
+          message: Text(alert.message),
+          dismissButton: .default(Text(mistiaLocalized(vi: "OK", en: "OK", ja: "OK")))
+        )
       }
     }
   }
@@ -292,6 +303,21 @@ struct RootTabView: View {
   private func presentQuickCreateMenu() {
     guard !hideQuickCreate else { return }
     guard quickCreateButtonFrame.width > 0 else { return }
+    if familyContextStore.isViewingOtherMemberContext && !hasUsableWalletForQuickCreateSubject {
+      quickCreateAccessAlert = RootQuickCreateAccessAlert(
+        title: mistiaLocalized(
+          vi: "Chưa có quyền sử dụng ví",
+          en: "No wallet use access",
+          ja: "ウォレット使用権限がありません"
+        ),
+        message: mistiaLocalized(
+          vi: "Bạn chưa có quyền sử dụng ví của thành viên này.",
+          en: "You do not have use access to this member's wallets.",
+          ja: "このメンバーのウォレットを使用する権限がありません。"
+        )
+      )
+      return
+    }
 
     quickCreateAnchorFrame = quickCreateButtonFrame
     isQuickCreateMenuVisible = true
@@ -360,15 +386,36 @@ struct RootTabView: View {
   }
 
   private func quickCreateTarget(for destination: MistiaQuickCreateDestination) -> TransactionEditorTarget {
+    let subjectUserID = quickCreateSubjectUserID
     switch destination {
     case .expense:
-      TransactionEditorTarget(initialKind: .expense)
+      return TransactionEditorTarget(initialKind: .expense, subjectUserIDOverride: subjectUserID)
     case .income:
-      TransactionEditorTarget(initialKind: .income)
+      return TransactionEditorTarget(initialKind: .income, subjectUserIDOverride: subjectUserID)
     case .transfer:
-      TransactionEditorTarget(initialKind: .transfer)
+      return TransactionEditorTarget(initialKind: .transfer, subjectUserIDOverride: subjectUserID)
     case .note:
-      TransactionEditorTarget(initialKind: .expense, quickCapture: true)
+      return TransactionEditorTarget(initialKind: .expense, quickCapture: true, subjectUserIDOverride: subjectUserID)
+    }
+  }
+
+  private var quickCreateSubjectUserID: UUID? {
+    if familyContextStore.isViewingOtherMemberContext {
+      return familyContextStore.selectedSubjectUserID
+    }
+    return sessionStore.activeLocalProfileUserID
+  }
+
+  private var hasUsableWalletForQuickCreateSubject: Bool {
+    guard let subjectUserID = quickCreateSubjectUserID else { return false }
+    let ownerMap = MistiaRecordOwnershipStore.ownerMap(from: ownershipScopes, entity: .wallet)
+    return storedWallets.contains { wallet in
+      let ownerUserID = ownerMap[wallet.id] ?? sessionStore.activeLocalProfileUserID
+      guard ownerUserID == subjectUserID else { return false }
+      if ownerUserID == sessionStore.activeLocalProfileUserID {
+        return true
+      }
+      return familyContextStore.canUseWallet(walletID: wallet.id, ownerUserID: ownerUserID)
     }
   }
 
@@ -402,6 +449,12 @@ private enum RootSheet: Identifiable {
       "quick-create-\(destination.rawValue)"
     }
   }
+}
+
+private struct RootQuickCreateAccessAlert: Identifiable {
+  let id = UUID()
+  let title: String
+  let message: String
 }
 
 private enum RootShortcutDestination: String, Identifiable {

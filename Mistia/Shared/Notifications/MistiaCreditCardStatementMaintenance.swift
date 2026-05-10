@@ -58,6 +58,7 @@ enum MistiaCreditCardStatementMaintenance {
                 upsertStatementReadyNotification(
                     statement,
                     modelContext: modelContext,
+                    recipientUserID: sessionStore.activeLocalProfileUserID,
                     calendar: calendar
                 )
 
@@ -81,6 +82,7 @@ enum MistiaCreditCardStatementMaintenance {
                         statement,
                         reason: mistiaLocalized(vi: "chưa thiết lập ví liên kết", en: "no linked wallet is set", ja: "連携ウォレットが未設定です"),
                         modelContext: modelContext,
+                        recipientUserID: sessionStore.activeLocalProfileUserID,
                         calendar: calendar
                     )
                 case .insufficientFunds:
@@ -88,6 +90,7 @@ enum MistiaCreditCardStatementMaintenance {
                         statement,
                         reason: mistiaLocalized(vi: "ví liên kết không đủ số dư", en: "the linked wallet has insufficient funds", ja: "連携ウォレットの残高が不足しています"),
                         modelContext: modelContext,
+                        recipientUserID: sessionStore.activeLocalProfileUserID,
                         calendar: calendar
                     )
                 case .payable:
@@ -218,6 +221,7 @@ enum MistiaCreditCardStatementMaintenance {
                 statement,
                 reason: mistiaLocalized(vi: "chưa thiết lập ví liên kết", en: "no linked wallet is set", ja: "連携ウォレットが未設定です"),
                 modelContext: modelContext,
+                recipientUserID: sessionStore.activeLocalProfileUserID,
                 calendar: calendar
             )
             return
@@ -236,6 +240,7 @@ enum MistiaCreditCardStatementMaintenance {
                 statement,
                 reason: mistiaLocalized(vi: "ví liên kết không đủ số dư", en: "the linked wallet has insufficient funds", ja: "連携ウォレットの残高が不足しています"),
                 modelContext: modelContext,
+                recipientUserID: sessionStore.activeLocalProfileUserID,
                 calendar: calendar
             )
             return
@@ -295,6 +300,7 @@ enum MistiaCreditCardStatementMaintenance {
                 statement,
                 modelContext: modelContext,
                 calendar: calendar,
+                recipientUserID: sessionStore.activeLocalProfileUserID,
                 createdAt: paymentTx.updatedAt
             )
         } catch {
@@ -302,6 +308,7 @@ enum MistiaCreditCardStatementMaintenance {
                 statement,
                 reason: error.localizedDescription,
                 modelContext: modelContext,
+                recipientUserID: sessionStore.activeLocalProfileUserID,
                 calendar: calendar
             )
         }
@@ -342,6 +349,7 @@ enum MistiaCreditCardStatementMaintenance {
     private static func upsertStatementReadyNotification(
         _ statement: PlanningCreditCardStatementSnapshot,
         modelContext: ModelContext,
+        recipientUserID: UUID?,
         calendar: Calendar
     ) {
         let statementMonthString = MistiaDateFormatting.statementMonthYearString(
@@ -360,6 +368,7 @@ enum MistiaCreditCardStatementMaintenance {
             resourceID: statement.walletID,
             modelContext: modelContext,
             createdAt: statement.closingDate,
+            recipientUserID: recipientUserID,
             metadataJSON: creditCardMetadataJSON(
                 actionKind: .statementReady,
                 statement: statement,
@@ -372,6 +381,7 @@ enum MistiaCreditCardStatementMaintenance {
         _ statement: PlanningCreditCardStatementSnapshot,
         modelContext: ModelContext,
         calendar: Calendar,
+        recipientUserID: UUID?,
         createdAt: Date
     ) {
         upsertNotification(
@@ -386,6 +396,7 @@ enum MistiaCreditCardStatementMaintenance {
             resourceID: statement.walletID,
             modelContext: modelContext,
             createdAt: createdAt,
+            recipientUserID: recipientUserID,
             metadataJSON: creditCardMetadataJSON(
                 actionKind: .autoPaymentSucceeded,
                 statement: statement,
@@ -398,6 +409,7 @@ enum MistiaCreditCardStatementMaintenance {
         _ statement: PlanningCreditCardStatementSnapshot,
         reason: String,
         modelContext: ModelContext,
+        recipientUserID: UUID?,
         calendar: Calendar
     ) {
         let statementMonthString = MistiaDateFormatting.statementMonthYearString(
@@ -416,6 +428,7 @@ enum MistiaCreditCardStatementMaintenance {
             resourceID: statement.walletID,
             modelContext: modelContext,
             createdAt: Date(),
+            recipientUserID: recipientUserID,
             metadataJSON: creditCardMetadataJSON(
                 actionKind: .autoPaymentFailed,
                 statement: statement,
@@ -432,9 +445,11 @@ enum MistiaCreditCardStatementMaintenance {
         resourceID: UUID,
         modelContext: ModelContext,
         createdAt: Date,
+        recipientUserID: UUID?,
         metadataJSON: String?
     ) {
         guard MistiaNotificationPreferences.reminderEnabled(.creditCards) else { return }
+        guard let recipientUserID else { return }
 
         let existing = (try? modelContext.fetch(
             FetchDescriptor<AppNotificationRecord>(
@@ -447,6 +462,7 @@ enum MistiaCreditCardStatementMaintenance {
             existing.body = body
             existing.kind = kind
             existing.source = .system
+            existing.recipientUserID = recipientUserID
             existing.resourceType = .card
             existing.resourceID = resourceID
             existing.metadataJSON = metadataJSON
@@ -461,6 +477,7 @@ enum MistiaCreditCardStatementMaintenance {
                 kind: kind,
                 source: .system,
                 isRead: false,
+                recipientUserID: recipientUserID,
                 resourceType: .card,
                 resourceID: resourceID,
                 metadataJSON: metadataJSON

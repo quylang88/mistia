@@ -23,23 +23,27 @@ struct TransactionEditorTarget: Identifiable {
     let initialKind: TransactionPrimaryKind
     let quickCapture: Bool
     let transferPreset: TransactionTransferPreset?
+    let subjectUserIDOverride: UUID?
 
     init(transaction: LedgerTransaction) {
         self.transaction = transaction
         self.initialKind = transaction.primaryKind
         self.quickCapture = false
         self.transferPreset = nil
+        self.subjectUserIDOverride = nil
     }
 
     init(
         initialKind: TransactionPrimaryKind,
         quickCapture: Bool = false,
-        transferPreset: TransactionTransferPreset? = nil
+        transferPreset: TransactionTransferPreset? = nil,
+        subjectUserIDOverride: UUID? = nil
     ) {
         self.transaction = nil
         self.initialKind = initialKind
         self.quickCapture = quickCapture
         self.transferPreset = transferPreset
+        self.subjectUserIDOverride = subjectUserIDOverride
     }
 }
 
@@ -307,32 +311,7 @@ struct TransactionEditorSheet: View {
                 }
             }
 
-            if shouldShowWalletPermissionRequestState {
-                Section {
-                    VStack(alignment: .leading, spacing: 10) {
-                        Text(mistiaLocalized(
-                            vi: "Bạn đang xem ví gia đình nhưng chưa có quyền sử dụng.",
-                            en: "You can view this family wallet, but you do not have use access yet.",
-                            ja: "この家族ウォレットは表示できますが、まだ使用権限がありません。"
-                        ))
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
-
-                        Button {
-                            requestWalletUsePermission()
-                        } label: {
-                            Label(
-                                mistiaLocalized(vi: "Yêu cầu quyền sử dụng", en: "Request use access", ja: "使用権限をリクエスト"),
-                                systemImage: "person.badge.key.fill"
-                            )
-                        }
-                        .buttonStyle(.borderedProminent)
-                        .controlSize(.small)
-                        .tint(MistiaAccent.purple.color)
-                    }
-                    .padding(.vertical, 4)
-                }
-            } else if shouldShowMissingWalletsState {
+            if shouldShowMissingWalletsState {
                 Section {
                     Text(mistiaLocalized(
                         vi: "Bạn cần thêm ít nhất một ví trong tab Quản lý trước khi ghi nhận giao dịch hoàn chỉnh.",
@@ -513,14 +492,23 @@ struct TransactionEditorSheet: View {
             target.transaction?.sourceWallet?.id,
             target.transaction?.destinationWallet?.id
         ].compactMap { $0 })
-        let operableTargetUserIDs = effectiveOperableTargetUserIDs
+        let editorSubjectUserID = target.transaction == nil
+            ? (target.subjectUserIDOverride ?? familyContextStore.selectedSubjectUserID ?? sessionStore.activeLocalProfileUserID)
+            : nil
 
         return storedWallets
             .filter {
                 guard let ownerUserID = walletOwnerUserID(for: $0) else {
                     return preferredWalletIDs.contains($0.id)
                 }
-                return operableTargetUserIDs.contains(ownerUserID) || preferredWalletIDs.contains($0.id)
+                if let editorSubjectUserID, ownerUserID != editorSubjectUserID {
+                    return preferredWalletIDs.contains($0.id)
+                }
+                if ownerUserID == sessionStore.activeLocalProfileUserID {
+                    return true
+                }
+                return familyContextStore.canUseWallet(walletID: $0.id, ownerUserID: ownerUserID)
+                    || preferredWalletIDs.contains($0.id)
             }
             .filter { ($0.deletedAt == nil && !$0.isArchived) || preferredWalletIDs.contains($0.id) }
             .filter { wallet in
@@ -550,28 +538,6 @@ struct TransactionEditorSheet: View {
     private var availableDestinationWalletsForTransfer: [LedgerWallet] {
         // All wallets can receive transfers (including credit cards for payment)
         availableWallets
-    }
-
-    private var lockedViewableWallets: [LedgerWallet] {
-        let operableTargetUserIDs = effectiveOperableTargetUserIDs
-        let viewableTargetUserIDs = effectiveViewableTargetUserIDs
-
-        return storedWallets
-            .filter {
-                guard let ownerUserID = walletOwnerUserID(for: $0) else {
-                    return false
-                }
-                return viewableTargetUserIDs.contains(ownerUserID)
-                    && !operableTargetUserIDs.contains(ownerUserID)
-                    && $0.deletedAt == nil
-                    && !$0.isArchived
-            }
-            .sorted {
-                if $0.sortOrder != $1.sortOrder {
-                    return $0.sortOrder < $1.sortOrder
-                }
-                return $0.createdAt < $1.createdAt
-            }
     }
 
     private var availableCategories: [TransactionCategory] {
@@ -714,13 +680,7 @@ struct TransactionEditorSheet: View {
     }
 
     private var shouldShowMissingWalletsState: Bool {
-        !target.quickCapture && availableWallets.isEmpty && lockedViewableWallets.isEmpty
-    }
-
-    private var shouldShowWalletPermissionRequestState: Bool {
-        !target.quickCapture
-            && familyContextStore.isViewingOtherMemberContext
-            && !lockedViewableWallets.isEmpty
+        !target.quickCapture && availableWallets.isEmpty
     }
 
     private var saveButtonTitle: String {
@@ -1093,6 +1053,10 @@ struct TransactionEditorSheet: View {
     }
 
     private var effectiveOperableTargetUserIDs: Set<UUID> {
+        if target.transaction == nil,
+           let subjectUserID = target.subjectUserIDOverride ?? familyContextStore.selectedSubjectUserID ?? sessionStore.activeLocalProfileUserID {
+            return [subjectUserID]
+        }
         let operable = familyContextStore.operableTargetUserIDs
         if operable.isEmpty, let activeLocalProfileUserID = sessionStore.activeLocalProfileUserID {
             return [activeLocalProfileUserID]
@@ -1144,37 +1108,6 @@ struct TransactionEditorSheet: View {
             return wallet.name
         }
         return "\(wallet.name) • \(ownerName)"
-    }
-
-    private func requestWalletUsePermission() {
-        guard let wallet = lockedViewableWallets.first,
-              let ownerUserID = walletOwnerUserID(for: wallet) else {
-            return
-        }
-        let walletID = wallet.id
-        let walletName = wallet.name
-
-        Task { @MainActor in
-            let didSend = await familyContextStore.requestPermission(
-                resourceType: .wallet,
-                resourceID: walletID,
-                ownerUserID: ownerUserID,
-                scope: .use,
-                resourceName: walletName,
-                sessionStore: sessionStore
-            )
-            alertMessage = didSend
-                ? mistiaLocalized(
-                    vi: "Đã gửi yêu cầu quyền sử dụng.",
-                    en: "Use access request sent.",
-                    ja: "使用権限のリクエストを送信しました。"
-                )
-                : (familyContextStore.lastErrorMessage ?? mistiaLocalized(
-                    vi: "Không thể gửi yêu cầu lúc này.",
-                    en: "Couldn't send the request right now.",
-                    ja: "現在リクエストを送信できません。"
-                ))
-        }
     }
 
     private func applyTitleSuggestion(_ suggestion: TransactionTitleSuggestion) {

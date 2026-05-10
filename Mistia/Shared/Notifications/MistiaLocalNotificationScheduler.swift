@@ -9,31 +9,43 @@ enum MistiaLocalNotificationScheduler {
 
     static func rescheduleReminders(
         modelContext: ModelContext,
+        recipientUserID: UUID?,
         referenceDate: Date = .now
     ) async {
         await clearScheduledRemindersOnly()
         removeObsoleteDueSoonInboxRecords(modelContext: modelContext)
         guard MistiaNotificationPreferences.reminderEnabled(.wallets) else { return }
+        guard let recipientUserID else { return }
 
         await requestAuthorizationIfNeeded()
 
-        let wallets = (try? modelContext.fetch(
+        let storedWallets = (try? modelContext.fetch(
             FetchDescriptor<LedgerWallet>(
                 predicate: #Predicate { $0.deletedAt == nil && !$0.isArchived }
             )
         )) ?? []
+        let scopes = (try? modelContext.fetch(FetchDescriptor<OwnedRecordScope>())) ?? []
+        let walletOwnerMap = MistiaRecordOwnershipStore.ownerMap(from: scopes, entity: .wallet)
+        let wallets = storedWallets.filter {
+            (walletOwnerMap[$0.id] ?? recipientUserID) == recipientUserID
+        }
 
-        let transactions = (try? modelContext.fetch(
+        let storedTransactions = (try? modelContext.fetch(
             FetchDescriptor<LedgerTransaction>(
                 predicate: #Predicate { $0.deletedAt == nil && !$0.isArchived }
             )
         )) ?? []
+        let transactionOwnerMap = MistiaRecordOwnershipStore.ownerMap(from: scopes, entity: .transaction)
+        let transactions = storedTransactions.filter {
+            (transactionOwnerMap[$0.id] ?? recipientUserID) == recipientUserID
+        }
 
         let transactionRecords = transactions.map { $0.planningRecordSnapshot }
         await scheduleLowWalletAlerts(
             wallets: wallets,
             transactionRecords: transactionRecords,
             referenceDate: referenceDate,
+            recipientUserID: recipientUserID,
             modelContext: modelContext
         )
     }
@@ -78,6 +90,7 @@ enum MistiaLocalNotificationScheduler {
         wallets: [LedgerWallet],
         transactionRecords: [TransactionRecordSnapshot],
         referenceDate: Date,
+        recipientUserID: UUID,
         modelContext: ModelContext
     ) async {
         // Phase 1 heuristic: only notify when a cash wallet balance is <= 0.
@@ -127,7 +140,8 @@ enum MistiaLocalNotificationScheduler {
                 title: content.title,
                 body: content.body,
                 kind: .lowWallet,
-                source: .localReminder
+                source: .localReminder,
+                recipientUserID: recipientUserID
             )
         }
     }
@@ -156,6 +170,7 @@ enum MistiaLocalNotificationScheduler {
         body: String,
         kind: MistiaAppNotificationKind,
         source: MistiaAppNotificationSource,
+        recipientUserID: UUID,
         resourceType: MistiaFamilyNotificationResourceType? = nil,
         resourceID: UUID? = nil,
         metadataJSON: String? = nil
@@ -173,6 +188,7 @@ enum MistiaLocalNotificationScheduler {
             existing.body = body
             existing.kind = kind
             existing.source = source
+            existing.recipientUserID = recipientUserID
             existing.resourceType = resourceType
             existing.resourceID = resourceID
             existing.metadataJSON = metadataJSON
@@ -187,6 +203,7 @@ enum MistiaLocalNotificationScheduler {
                 source: source,
                 isRead: false,
                 actionRoute: nil,
+                recipientUserID: recipientUserID,
                 resourceType: resourceType,
                 resourceID: resourceID,
                 metadataJSON: metadataJSON

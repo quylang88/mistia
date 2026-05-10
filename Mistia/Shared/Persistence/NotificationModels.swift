@@ -32,17 +32,21 @@ enum MistiaAppNotificationKind: String, Codable, CaseIterable {
 enum MistiaFamilyNotificationResourceType: String, Codable, CaseIterable {
     case wallet
     case category
+    case budget
     case goal
     case card
     case debt
     case transaction
     case permission
     case bill
+    case due
+    case installment
 }
 
 enum MistiaFamilyPermissionScope: String, Codable, CaseIterable {
     case use
     case edit
+    case create
     case view
 }
 
@@ -322,7 +326,7 @@ struct FamilyPermissionRequestRemoteRecord: Codable, Identifiable, Equatable {
     let requesterUserID: UUID
     let recipientUserID: UUID
     let resourceTypeRawValue: String
-    let resourceID: UUID
+    let resourceID: UUID?
     let permissionScopeRawValue: String
     let statusRawValue: String
     let message: String?
@@ -352,7 +356,7 @@ struct FamilyPermissionRequestInput: Encodable, Equatable {
     let familyID: UUID
     let recipientUserID: UUID
     let resourceType: MistiaFamilyNotificationResourceType
-    let resourceID: UUID
+    let resourceID: UUID?
     let permissionScope: MistiaFamilyPermissionScope
     let title: String
     let body: String
@@ -512,6 +516,13 @@ enum MistiaNotificationStore {
 
         if (row.source == .localReminder || row.source == .system), row.createdAt > referenceDate {
             return false
+        }
+
+        if row.source == .localReminder || row.source == .system {
+            guard let recipientUserID = row.recipientUserID else {
+                return false
+            }
+            return recipientUserID == userID
         }
 
         guard let recipientUserID = row.recipientUserID else {
