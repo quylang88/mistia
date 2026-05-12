@@ -288,6 +288,32 @@ nonisolated enum MistiaSystemCategoryParentKey: String, CaseIterable, Codable, I
         let aliases: [String]
     }
 
+    private static let localizedDefaultTitles: [Self: (english: String, japanese: String)] = [
+        .livingExpense: ("Living", "生活費"),
+        .mobilityTravel: ("Mobility & trips", "移動・旅行"),
+        .personalLifestyle: ("Personal & lifestyle", "個人・ライフスタイル"),
+        .expenseFood: ("Essentials", "生活費"),
+        .expenseCostOfGoods: ("Cost of goods", "仕入れ"),
+        .expenseHomeBills: ("Housing & bills", "住居・請求"),
+        .expenseFamilyChildren: ("Children", "子ども"),
+        .expenseTransportVehicle: ("Transport & vehicle", "交通・車"),
+        .expensePersonalShopping: ("Shopping", "買い物"),
+        .expenseHealth: ("Health", "健康"),
+        .expenseFamilyRelations: ("Family & relationships", "家族・交際"),
+        .expenseEntertainmentSocial: ("Entertainment", "娯楽"),
+        .expenseWorkStudy: ("Study & work", "学習・仕事"),
+        .expenseFinancialObligations: ("Finance & obligations", "金融・支払い"),
+        .expensePetCare: ("Pets", "ペット"),
+        .expenseOther: ("Other expenses", "その他支出"),
+        .incomeSalaryWork: ("Salary & work", "給与・仕事"),
+        .incomeBusiness: ("Business", "事業"),
+        .incomeInvestmentFinance: ("Investment & finance", "投資・金融"),
+        .incomeRefundAdjustment: ("Refunds & reimbursements", "返金・調整"),
+        .incomeSupportGift: ("Support & benefits", "支援・手当"),
+        .incomeLiquidation: ("Liquidation", "売却"),
+        .incomeOther: ("Other income", "その他収入")
+    ]
+
     private static let metadata: [Self: Meta] = [
         .livingExpense: .init(kind: .expense, title: "Sinh hoạt", iconToken: "mistia.category.parent.legacy.living", fallbackSystemName: "house.fill", iconColorHex: "#FF9F1C", group: .home, activeDefault: false, aliases: []),
         .mobilityTravel: .init(kind: .expense, title: "Di chuyển & chuyến đi", iconToken: "mistia.category.parent.legacy.mobility_travel", fallbackSystemName: "airplane", iconColorHex: "#5B7BFF", group: .mobility, activeDefault: false, aliases: []),
@@ -360,11 +386,18 @@ nonisolated enum MistiaSystemCategoryParentKey: String, CaseIterable, Codable, I
     }
 
     func knownDefaultNames() -> [String] {
-        Array(Set([meta.title] + meta.aliases))
+        let localizedTitles = Self.localizedDefaultTitles[self].map { [$0.english, $0.japanese] } ?? []
+        return Array(Set([meta.title] + localizedTitles + meta.aliases))
     }
 
     func localizedTitle(for language: MistiaAppLanguage) -> String {
-        mistiaLocalized(vi: meta.title, en: meta.title, ja: meta.title, language: language)
+        let localizedTitle = Self.localizedDefaultTitles[self]
+        return mistiaLocalized(
+            vi: meta.title,
+            en: localizedTitle?.english ?? meta.title,
+            ja: localizedTitle?.japanese ?? meta.title,
+            language: language
+        )
     }
 }
 
@@ -544,6 +577,147 @@ nonisolated enum MistiaSystemCategoryKey: String, CaseIterable, Codable, Identif
             self.aliases = aliases
         }
     }
+
+    private static let localizedDefaultTitles: [Self: (english: String, japanese: String)] = [
+        .food: ("Food & drinks", "食費"),
+        .entertainment: ("Entertainment", "娯楽"),
+        .shopping: ("Shopping", "買い物"),
+        .transportation: ("Transport", "交通"),
+        .housing: ("Housing", "住居"),
+        .billing: ("Bills", "請求"),
+        .health: ("Health", "健康"),
+        .education: ("Education", "教育"),
+        .investment: ("Investment", "投資"),
+        .grocery: ("Groceries", "食料品"),
+        .dailySupplies: ("Daily supplies", "日用品"),
+        .dineOut: ("Dining out", "外食"),
+        .businessMeals: ("Business meals", "会食"),
+        .cafeTea: ("Cafe / milk tea", "カフェ・ミルクティー"),
+        .foodDelivery: ("Food delivery", "フードデリバリー"),
+        .snacks: ("Snacks", "おやつ"),
+        .smallAppliances: ("Small home goods", "小型家電"),
+        .importGoods: ("Inventory purchases", "仕入れ"),
+        .goodsSourcing: ("Sourcing costs", "仕入れ費用"),
+        .shippingFee: ("Shipping fees", "配送料"),
+        .packaging: ("Packaging", "梱包材"),
+        .platformFee: ("Platform fees", "プラットフォーム手数料"),
+        .marketingAds: ("Marketing / ads", "マーケティング・広告"),
+        .otherSalesCost: ("Other selling costs", "その他販売費"),
+        .rent: ("Rent", "家賃"),
+        .electricity: ("Electricity", "電気"),
+        .water: ("Water", "水道"),
+        .internet: ("Internet", "インターネット"),
+        .phone: ("Phone", "携帯・電話"),
+        .gas: ("Gas", "ガス"),
+        .mortgageInstallment: ("Mortgage installment", "住宅ローン"),
+        .condoFee: ("Condo / management fee", "管理費"),
+        .homeRepair: ("Home repairs", "住居修理"),
+        .furnitureAppliance: ("Furniture / appliances", "家具・家電"),
+        .diapersMilk: ("Diapers / milk", "おむつ・ミルク"),
+        .babyFood: ("Milk / baby food", "ミルク・離乳食"),
+        .childSupplies: ("Baby clothes / supplies", "子ども用品"),
+        .childToys: ("Toys", "おもちゃ"),
+        .childTuition: ("Tuition / childcare", "学費・保育料"),
+        .schoolBooksSupplies: ("School books / supplies", "教材・学用品"),
+        .childExtracurricular: ("Extracurricular activities", "習い事・課外活動"),
+        .childcare: ("Babysitting", "保育・ベビーシッター"),
+        .childMedical: ("Child doctor visits", "子どもの通院"),
+        .childMedicine: ("Child medicine / vitamins", "子どもの薬・ビタミン"),
+        .babyGear: ("Stroller / crib / baby gear", "ベビーカー・ベビー用品"),
+        .familyOther: ("Other child expenses", "その他子ども費"),
+        .fuel: ("Fuel", "ガソリン"),
+        .parking: ("Parking", "駐車場"),
+        .grabTaxi: ("Rideshare / taxi", "配車・タクシー"),
+        .publicTransport: ("Bus / train / tickets", "バス・電車・乗車券"),
+        .vehicleMaintenance: ("Vehicle maintenance", "車両メンテナンス"),
+        .vehicleRepair: ("Vehicle repairs", "車両修理"),
+        .carWash: ("Car wash", "洗車"),
+        .tolls: ("Tolls", "高速料金"),
+        .vehicleInsurance: ("Vehicle insurance", "自動車保険"),
+        .vehicleRegistration: ("Vehicle registration", "車検・登録"),
+        .clothes: ("Clothing", "衣類"),
+        .footwear: ("Footwear", "靴"),
+        .cosmeticsSkincare: ("Cosmetics / skincare", "コスメ・スキンケア"),
+        .personalCare: ("Personal care", "パーソナルケア"),
+        .accessories: ("Accessories", "アクセサリー"),
+        .personalSupplies: ("Personal supplies", "個人用品"),
+        .medicalCheckup: ("Medical checkup", "健康診断"),
+        .medicine: ("Medicine", "薬"),
+        .labTests: ("Lab tests", "検査"),
+        .dental: ("Dental", "歯科"),
+        .hospital: ("Hospital", "病院"),
+        .healthInsurance: ("Health insurance", "健康保険"),
+        .fitnessGym: ("Fitness / gym", "ジム・フィットネス"),
+        .supplements: ("Supplements", "サプリメント"),
+        .moviesLeisure: ("Movies / leisure", "映画・レジャー"),
+        .travel: ("Travel", "旅行"),
+        .gamesApps: ("Games / apps", "ゲーム・アプリ"),
+        .booksMusic: ("Books / music", "本・音楽"),
+        .partiesGatherings: ("Parties / gatherings", "パーティー・集まり"),
+        .giftsCeremonies: ("Gifts / ceremonies", "贈り物・冠婚葬祭"),
+        .relationshipGifts: ("Relationship gifts", "交際ギフト"),
+        .parentsSupportExpense: ("Parents / grandparents support", "親・祖父母への支援"),
+        .familySupportExpense: ("Family support", "親族支援"),
+        .charity: ("Charity", "チャリティー"),
+        .subscriptions: ("Entertainment subscriptions", "娯楽サブスク"),
+        .hobbies: ("Hobbies", "趣味"),
+        .coffeeFriends: ("Coffee with friends", "友人とのカフェ"),
+        .workTools: ("Study / work tools", "学習・仕事道具"),
+        .workSoftwareSubscriptions: ("Software / subscriptions", "ソフトウェア・サブスク"),
+        .clientEntertainment: ("Client entertainment", "接待・取引先"),
+        .businessTravel: ("Business travel", "出張・移動"),
+        .courses: ("Courses", "講座"),
+        .professionalBooks: ("Professional books", "専門書・資料"),
+        .examsCertificates: ("Exams / certificates", "試験・資格"),
+        .insurance: ("Life insurance", "生命保険"),
+        .taxesFees: ("Taxes / fees", "税金・手数料"),
+        .bankingFees: ("Bank fees", "銀行手数料"),
+        .loanInterest: ("Loan interest", "借入利息"),
+        .loanRepayment: ("Installment repayment", "ローン返済"),
+        .finesFees: ("Fines / charges", "罰金・諸費用"),
+        .otherObligations: ("Other financial obligations", "その他金融支払い"),
+        .petFood: ("Pet food", "ペットフード"),
+        .petMedical: ("Pet medical", "ペット医療"),
+        .petSupplies: ("Pet supplies", "ペット用品"),
+        .petGrooming: ("Pet grooming", "ペットトリミング"),
+        .petOther: ("Other pet expenses", "その他ペット費"),
+        .otherExpense: ("Other expenses", "その他支出"),
+        .balanceAdjustmentExpense: ("Balance adjustment", "残高調整"),
+        .salary: ("Main salary", "主給与"),
+        .sideSalary: ("Side salary", "副収入"),
+        .bonus: ("Bonus", "ボーナス"),
+        .allowance: ("Allowance", "手当"),
+        .commission: ("Commission", "コミッション"),
+        .freelance: ("Side work / freelance", "副業・フリーランス"),
+        .overtime: ("Overtime", "残業代"),
+        .sales: ("Sales revenue", "売上"),
+        .serviceRevenue: ("Service revenue", "サービス収入"),
+        .businessProfit: ("Business profit", "事業利益"),
+        .onlineCollaboratorIncome: ("Online income", "オンライン収入"),
+        .otherBusinessIncome: ("Other business income", "その他事業収入"),
+        .bankInterest: ("Bank interest", "銀行利息"),
+        .dividends: ("Dividends", "配当"),
+        .investmentGain: ("Investment gains", "投資利益"),
+        .loanInterestReceived: ("Loan interest received", "貸付利息"),
+        .otherFinancialIncome: ("Other financial income", "その他金融収入"),
+        .refund: ("Purchase refund", "購入返金"),
+        .cashback: ("Cashback", "キャッシュバック"),
+        .reimbursement: ("Reimbursement", "立替精算"),
+        .peopleRepayment: ("Repayment from others", "返済受取"),
+        .expenseRecovery: ("Expense recovery", "立替回収"),
+        .insurancePayout: ("Insurance payout / refund", "保険金・返金"),
+        .gift: ("Gift received", "贈与"),
+        .supportReceived: ("Scholarship / study support", "奨学金・学習支援"),
+        .subsidy: ("Social subsidy", "社会手当"),
+        .childAllowance: ("Child allowance", "児童手当"),
+        .maternityAllowance: ("Maternity allowance", "出産・育児手当"),
+        .familySupport: ("Family support received", "家族からの支援"),
+        .sellUsedItems: ("Used item sales", "不用品売却"),
+        .liquidateHousehold: ("Household liquidation", "家財売却"),
+        .otherLiquidationIncome: ("Other liquidation income", "その他売却収入"),
+        .otherIncome: ("Other income", "その他収入"),
+        .balanceAdjustmentIncome: ("Balance adjustment", "残高調整")
+    ]
 
     private static let metadata: [Self: Meta] = [
         .food: .init(title: "Ăn uống", englishTitle: "Food & drinks", japaneseTitle: "食費", parentKey: .livingExpense, iconToken: "mistia.category.legacy.food", fallbackSystemName: "fork.knife", iconColorHex: "#FF9F1C", group: .food, activeDefault: false, aliases: []),
@@ -745,17 +919,27 @@ nonisolated enum MistiaSystemCategoryKey: String, CaseIterable, Codable, Identif
     var kind: TransactionCategoryKind { meta.parentKey?.kind ?? .expense }
 
     func knownDefaultNames() -> [String] {
-        Array(Set([meta.title, meta.englishTitle, meta.japaneseTitle].compactMap { $0 } + meta.aliases))
+        let localizedTitle = Self.localizedDefaultTitles[self]
+        return Array(Set(
+            [
+                meta.title,
+                meta.englishTitle,
+                meta.japaneseTitle,
+                localizedTitle?.english,
+                localizedTitle?.japanese
+            ].compactMap { $0 } + meta.aliases
+        ))
     }
 
     func localizedTitle(for language: MistiaAppLanguage) -> String {
+        let localizedTitle = Self.localizedDefaultTitles[self]
         switch language {
         case .vietnamese:
             return meta.title
         case .english:
-            return meta.englishTitle ?? meta.title
+            return localizedTitle?.english ?? meta.englishTitle ?? meta.title
         case .japanese:
-            return meta.japaneseTitle ?? meta.title
+            return localizedTitle?.japanese ?? meta.japaneseTitle ?? meta.title
         }
     }
 }

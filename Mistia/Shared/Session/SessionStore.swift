@@ -923,8 +923,9 @@ final class SessionStore {
         setAutoSyncEnabled(false)
 
         do {
-            try MistiaSyncLocalStore.clearLocalDeviceLiveData(in: modelContainer)
-            try MistiaBootstrap.seedDefaultCategoriesIfNeeded(modelContext: modelContainer.mainContext)
+            let context = modelContainer.mainContext
+            try MistiaSyncLocalStore.clearLocalDeviceLiveData(context: context)
+            try MistiaBootstrap.resetCategoriesToSystemDefaults(modelContext: context)
             syncCoordinator.clearQueuedMutations()
             initialSyncPreview = nil
             pendingInitialSyncChoice = nil

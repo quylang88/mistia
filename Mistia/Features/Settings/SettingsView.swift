@@ -605,6 +605,7 @@ private struct ResetDataSettingsView: View {
     @Environment(SessionStore.self) private var sessionStore
 
     @State private var showsResetOptions = false
+    @State private var showsResetCategoriesConfirmation = false
     @State private var showsDeleteConfirmation = false
     @State private var statusAlert: ResetDataStatusAlert?
     @State private var isWorking = false
@@ -665,6 +666,12 @@ private struct ResetDataSettingsView: View {
             Button(mistiaLocalized(vi: "Reset thông báo", en: "Reset notifications", ja: "通知をリセット")) {
                 resetNotifications()
             }
+            Button(
+                mistiaLocalized(vi: "Reset danh mục", en: "Reset categories", ja: "カテゴリをリセット"),
+                role: .destructive
+            ) {
+                showsResetCategoriesConfirmation = true
+            }
             Button(mistiaLocalized(vi: "Hủy", en: "Cancel", ja: "キャンセル"), role: .cancel) { }
         } message: {
             Text(
@@ -672,6 +679,26 @@ private struct ResetDataSettingsView: View {
                     vi: "Chọn phần bạn muốn đưa về trạng thái ban đầu.",
                     en: "Choose what you want to return to its default state.",
                     ja: "初期状態に戻す項目を選んでください。"
+                )
+            )
+        }
+        .alert(
+            mistiaLocalized(vi: "Reset danh mục?", en: "Reset categories?", ja: "カテゴリをリセットしますか？"),
+            isPresented: $showsResetCategoriesConfirmation
+        ) {
+            Button(
+                mistiaLocalized(vi: "Reset danh mục", en: "Reset categories", ja: "カテゴリをリセット"),
+                role: .destructive
+            ) {
+                resetCategories()
+            }
+            Button(mistiaLocalized(vi: "Hủy", en: "Cancel", ja: "キャンセル"), role: .cancel) { }
+        } message: {
+            Text(
+                mistiaLocalized(
+                    vi: "Danh mục system sẽ về mặc định. Danh mục tự tạo được chuyển vào lưu trữ.",
+                    en: "System categories return to defaults. Custom categories move to archived items.",
+                    ja: "システムカテゴリを初期状態に戻し、作成したカテゴリはアーカイブに移動します。"
                 )
             )
         }
@@ -740,6 +767,43 @@ private struct ResetDataSettingsView: View {
             }
             isWorking = false
         }
+    }
+
+    private func resetCategories() {
+        guard !isWorking else { return }
+        isWorking = true
+        Task { @MainActor in
+            do {
+                let result = try MistiaBootstrap.resetCategoriesToSystemDefaults(
+                    modelContext: sessionStore.currentModelContainer.mainContext
+                )
+                statusAlert = ResetDataStatusAlert(
+                    title: mistiaLocalized(vi: "Đã reset danh mục", en: "Categories reset", ja: "カテゴリをリセットしました"),
+                    message: resetCategoriesSuccessMessage(result)
+                )
+            } catch {
+                statusAlert = ResetDataStatusAlert(
+                    title: mistiaLocalized(vi: "Không thể reset danh mục", en: "Couldn't reset categories", ja: "カテゴリをリセットできませんでした"),
+                    message: error.localizedDescription
+                )
+            }
+            isWorking = false
+        }
+    }
+
+    private func resetCategoriesSuccessMessage(_ result: MistiaCategoryResetResult) -> String {
+        let base = mistiaLocalized(
+            vi: "Danh mục system trên thiết bị này đã về trạng thái ban đầu.",
+            en: "System categories on this device are back to defaults.",
+            ja: "この端末のシステムカテゴリを初期状態に戻しました。"
+        )
+        guard result.archivedCustomCategoryCount > 0 else { return base }
+        let archivedText = mistiaLocalized(
+            vi: "\(result.archivedCustomCategoryCount) danh mục tự tạo đã được lưu trữ.",
+            en: "\(result.archivedCustomCategoryCount) custom categories were archived.",
+            ja: "作成したカテゴリ \(result.archivedCustomCategoryCount) 件をアーカイブしました。"
+        )
+        return "\(base) \(archivedText)"
     }
 
     private func deleteAllLocalData() {

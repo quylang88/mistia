@@ -1,6 +1,11 @@
 import Foundation
 import SwiftData
 
+struct MistiaCategoryResetResult {
+    let restoredSystemCategoryCount: Int
+    let archivedCustomCategoryCount: Int
+}
+
 enum MistiaBootstrap {
     static func cleanupExpiredArchivedData(
         modelContext: ModelContext,
@@ -151,6 +156,147 @@ enum MistiaBootstrap {
         }
     }
 
+    @discardableResult
+    static func resetCategoriesToSystemDefaults(
+        modelContext: ModelContext
+    ) throws -> MistiaCategoryResetResult {
+        var categories = try modelContext.fetch(FetchDescriptor<TransactionCategory>())
+        let now = Date()
+        var didMutate = false
+        var restoredSystemCategoryIDs: Set<UUID> = []
+        var archivedCustomCategoryCount = 0
+        var parentByKey: [MistiaSystemCategoryParentKey: TransactionCategory] = [:]
+
+        for (index, seed) in ManagementPresetData.defaultCategoryParentSeeds.enumerated() {
+            let (category, didCreate) = defaultSystemCategory(
+                rawSystemKey: seed.systemKey.rawValue,
+                canonicalID: MistiaSystemCategoryIdentity.canonicalID(for: seed.systemKey),
+                create: {
+                    TransactionCategory(
+                        id: MistiaSystemCategoryIdentity.canonicalID(for: seed.systemKey),
+                        name: seed.name,
+                        kind: seed.kind,
+                        iconSymbolName: seed.iconSymbolName,
+                        iconColorHex: seed.iconColorHex,
+                        hierarchyRole: .parent,
+                        systemKey: seed.systemKey.rawValue,
+                        isSystem: true,
+                        cloudSyncEnabled: false,
+                        sortOrder: index
+                    )
+                },
+                categories: &categories,
+                modelContext: modelContext
+            )
+
+            if didCreate {
+                didMutate = true
+                restoredSystemCategoryIDs.insert(category.id)
+            }
+            if resetParentCategory(category, with: seed, sortOrder: index, now: now) {
+                didMutate = true
+                restoredSystemCategoryIDs.insert(category.id)
+            }
+            parentByKey[seed.systemKey] = category
+        }
+
+        let childSortOrders = Dictionary(
+            grouping: ManagementPresetData.defaultCategorySeeds,
+            by: { (seed: ManagementCategorySeed) -> MistiaSystemCategoryParentKey? in
+                guard let systemKey = seed.systemKey else { return nil }
+                return systemKey.parentKey ?? MistiaCategoryHierarchy.uncategorizedParentKey(for: systemKey.kind)
+            }
+        )
+
+        for seed in ManagementPresetData.defaultCategorySeeds {
+            guard let systemKey = seed.systemKey else { continue }
+            let parentKey = MistiaCategoryHierarchy.defaultParentKey(for: systemKey)
+            let parentCategory = parentByKey[parentKey]
+            let siblingSeeds = childSortOrders[parentKey] ?? []
+            let sortOrder = siblingSeeds.firstIndex(where: { $0.systemKey == systemKey }) ?? 0
+
+            let (category, didCreate) = defaultSystemCategory(
+                rawSystemKey: systemKey.rawValue,
+                canonicalID: MistiaSystemCategoryIdentity.canonicalID(for: systemKey),
+                create: {
+                    TransactionCategory(
+                        id: MistiaSystemCategoryIdentity.canonicalID(for: systemKey),
+                        name: seed.name,
+                        kind: seed.kind,
+                        iconSymbolName: seed.iconSymbolName,
+                        iconColorHex: seed.iconColorHex,
+                        parentCategory: parentCategory,
+                        hierarchyRole: .child,
+                        systemKey: systemKey.rawValue,
+                        isSystem: true,
+                        cloudSyncEnabled: false,
+                        sortOrder: sortOrder,
+                        isArchived: seed.startsArchived,
+                        archivedAt: seed.startsArchived ? now : nil
+                    )
+                },
+                categories: &categories,
+                modelContext: modelContext
+            )
+
+            if didCreate {
+                didMutate = true
+                restoredSystemCategoryIDs.insert(category.id)
+            }
+            if resetLeafCategory(
+                category,
+                with: seed,
+                parentCategory: parentCategory,
+                sortOrder: sortOrder,
+                now: now
+            ) {
+                didMutate = true
+                restoredSystemCategoryIDs.insert(category.id)
+            }
+        }
+
+        let activeParentKeys = Set(ManagementPresetData.defaultCategoryParentSeeds.map(\.systemKey.rawValue))
+        let activeLeafKeys = Set(ManagementPresetData.defaultCategorySeeds.compactMap(\.systemKey?.rawValue))
+        let activeSystemKeys = activeParentKeys.union(activeLeafKeys)
+
+        for category in categories where category.deletedAt == nil {
+            if category.isSystem, let systemKey = category.systemKey, !activeSystemKeys.contains(systemKey) {
+                if !category.isArchived {
+                    category.isArchived = true
+                    category.archivedAt = category.archivedAt ?? now
+                    category.updatedAt = now
+                    didMutate = true
+                    restoredSystemCategoryIDs.insert(category.id)
+                }
+                continue
+            }
+
+            guard !category.isSystem, !category.isArchived else { continue }
+            category.isArchived = true
+            category.archivedAt = category.archivedAt ?? now
+            category.updatedAt = now
+            archivedCustomCategoryCount += 1
+            didMutate = true
+        }
+
+        if didMutate {
+            try modelContext.save()
+        }
+
+        var repairResult = try MistiaSystemCategorySyncSupport.reconcileDuplicateSystemCategories(
+            modelContext: modelContext
+        )
+        try MistiaSystemCategorySyncSupport.refreshCategorySyncEligibility(
+            modelContext: modelContext,
+            repairResult: &repairResult
+        )
+
+        return MistiaCategoryResetResult(
+            restoredSystemCategoryCount: restoredSystemCategoryIDs.count,
+            archivedCustomCategoryCount: archivedCustomCategoryCount
+        )
+    }
+
     static func ensureSystemCategory(
         _ systemKey: MistiaSystemCategoryKey,
         modelContext: ModelContext
@@ -187,6 +333,111 @@ enum MistiaBootstrap {
         modelContext.insert(category)
         try modelContext.save()
         return category
+    }
+
+    private static func defaultSystemCategory(
+        rawSystemKey: String,
+        canonicalID: UUID,
+        create: () -> TransactionCategory,
+        categories: inout [TransactionCategory],
+        modelContext: ModelContext
+    ) -> (TransactionCategory, Bool) {
+        if let existing = categories.first(where: { $0.id == canonicalID })
+            ?? categories.first(where: { $0.systemKey == rawSystemKey }) {
+            return (existing, false)
+        }
+
+        let category = create()
+        modelContext.insert(category)
+        categories.append(category)
+        return (category, true)
+    }
+
+    private static func resetParentCategory(
+        _ category: TransactionCategory,
+        with seed: ManagementCategoryParentSeed,
+        sortOrder: Int,
+        now: Date
+    ) -> Bool {
+        var didMutate = false
+
+        didMutate = assignIfNeeded(&category.name, seed.name) || didMutate
+        didMutate = assignIfNeeded(&category.kindRawValue, seed.kind.rawValue) || didMutate
+        didMutate = assignIfNeeded(&category.iconSymbolName, seed.iconSymbolName) || didMutate
+        didMutate = assignIfNeeded(&category.iconColorHex, seed.iconColorHex) || didMutate
+        didMutate = assignIfNeeded(&category.hierarchyRoleRawValue, TransactionCategoryHierarchyRole.parent.rawValue) || didMutate
+        if category.parentCategory != nil {
+            category.parentCategory = nil
+            didMutate = true
+        }
+        didMutate = assignIfNeeded(&category.systemKey, seed.systemKey.rawValue) || didMutate
+        didMutate = assignIfNeeded(&category.isSystem, true) || didMutate
+        didMutate = assignIfNeeded(&category.cloudSyncEnabled, false) || didMutate
+        didMutate = assignIfNeeded(&category.sortOrder, sortOrder) || didMutate
+        didMutate = assignIfNeeded(&category.favoriteRawValue, Optional(false)) || didMutate
+        didMutate = assignIfNeeded(&category.isArchived, false) || didMutate
+        if category.archivedAt != nil {
+            category.archivedAt = nil
+            didMutate = true
+        }
+        if category.deletedAt != nil {
+            category.deletedAt = nil
+            didMutate = true
+        }
+
+        if didMutate {
+            category.updatedAt = now
+        }
+        return didMutate
+    }
+
+    private static func resetLeafCategory(
+        _ category: TransactionCategory,
+        with seed: ManagementCategorySeed,
+        parentCategory: TransactionCategory?,
+        sortOrder: Int,
+        now: Date
+    ) -> Bool {
+        var didMutate = false
+
+        didMutate = assignIfNeeded(&category.name, seed.name) || didMutate
+        didMutate = assignIfNeeded(&category.kindRawValue, seed.kind.rawValue) || didMutate
+        didMutate = assignIfNeeded(&category.iconSymbolName, seed.iconSymbolName) || didMutate
+        didMutate = assignIfNeeded(&category.iconColorHex, seed.iconColorHex) || didMutate
+        didMutate = assignIfNeeded(&category.hierarchyRoleRawValue, TransactionCategoryHierarchyRole.child.rawValue) || didMutate
+        if category.parentCategory?.id != parentCategory?.id {
+            category.parentCategory = parentCategory
+            didMutate = true
+        }
+        didMutate = assignIfNeeded(&category.systemKey, seed.systemKey?.rawValue) || didMutate
+        didMutate = assignIfNeeded(&category.isSystem, true) || didMutate
+        didMutate = assignIfNeeded(&category.cloudSyncEnabled, false) || didMutate
+        didMutate = assignIfNeeded(&category.sortOrder, sortOrder) || didMutate
+        didMutate = assignIfNeeded(&category.favoriteRawValue, Optional(false)) || didMutate
+        didMutate = assignIfNeeded(&category.isArchived, seed.startsArchived) || didMutate
+        let desiredArchivedAt = seed.startsArchived ? (category.archivedAt ?? now) : nil
+        if category.archivedAt != desiredArchivedAt {
+            category.archivedAt = desiredArchivedAt
+            didMutate = true
+        }
+        if category.deletedAt != nil {
+            category.deletedAt = nil
+            didMutate = true
+        }
+
+        if didMutate {
+            category.updatedAt = now
+        }
+        return didMutate
+    }
+
+    private static func assignIfNeeded<Value: Equatable>(
+        _ value: inout Value,
+        _ nextValue: Value
+    ) -> Bool {
+        guard value != nextValue else { return false }
+        value = nextValue
+        return true
     }
 
     private static func ensureDefaultParentCategories(

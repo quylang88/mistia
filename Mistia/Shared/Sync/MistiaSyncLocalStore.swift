@@ -1116,6 +1116,11 @@ enum MistiaSyncLocalStore {
         context: ModelContext,
         categoryByID: inout [UUID: TransactionCategory]
     ) throws {
+        if let existing = categoryByID[row.id],
+           shouldPreserveLocalActiveSystemCategory(existing, over: row) {
+            return
+        }
+
         let category = categoryByID[row.id] ?? TransactionCategory(
             id: row.id,
             name: row.name,
@@ -1164,6 +1169,23 @@ enum MistiaSyncLocalStore {
             updatedAt: row.updatedAt,
             context: context
         )
+    }
+
+    private static func shouldPreserveLocalActiveSystemCategory(
+        _ category: TransactionCategory,
+        over row: RemoteTransactionCategory
+    ) -> Bool {
+        guard category.isSystem || row.isSystem else { return false }
+        guard category.deletedAt == nil else { return false }
+        guard category.updatedAt > row.updatedAt else { return false }
+        return isActiveSystemDefaultCategory(rawSystemKey: category.systemKey ?? row.systemKey)
+    }
+
+    private static func isActiveSystemDefaultCategory(rawSystemKey: String?) -> Bool {
+        guard let descriptor = MistiaSystemCategoryIdentity.descriptor(for: rawSystemKey) else {
+            return false
+        }
+        return descriptor.sortOrder != nil && !descriptor.startsArchived
     }
 
     private static func applyCategoryHierarchy(

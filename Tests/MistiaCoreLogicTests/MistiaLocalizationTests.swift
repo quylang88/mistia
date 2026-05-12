@@ -175,6 +175,45 @@ final class MistiaLocalizationTests: XCTestCase {
         XCTAssertTrue(knownNames.contains("食費"))
     }
 
+    func testActiveSystemCategoryDefaultsHaveLanguageSpecificTitles() {
+        for parentKey in MistiaSystemCategoryParentKey.activeDefaults {
+            let knownNames = Set(parentKey.knownDefaultNames())
+
+            XCTAssertTrue(knownNames.contains(parentKey.localizedTitle(for: .english)), parentKey.rawValue)
+            XCTAssertTrue(knownNames.contains(parentKey.localizedTitle(for: .japanese)), parentKey.rawValue)
+            XCTAssertNotEqual(
+                parentKey.localizedTitle(for: .english),
+                parentKey.localizedTitle(for: .vietnamese),
+                parentKey.rawValue
+            )
+            XCTAssertNotEqual(
+                parentKey.localizedTitle(for: .japanese),
+                parentKey.localizedTitle(for: .vietnamese),
+                parentKey.rawValue
+            )
+        }
+
+        let englishMatchesVietnamese: Set<MistiaSystemCategoryKey> = [.internet, .gas, .cashback]
+        for systemKey in MistiaSystemCategoryKey.activeDefaults {
+            let knownNames = Set(systemKey.knownDefaultNames())
+
+            XCTAssertTrue(knownNames.contains(systemKey.localizedTitle(for: .english)), systemKey.rawValue)
+            XCTAssertTrue(knownNames.contains(systemKey.localizedTitle(for: .japanese)), systemKey.rawValue)
+            if !englishMatchesVietnamese.contains(systemKey) {
+                XCTAssertNotEqual(
+                    systemKey.localizedTitle(for: .english),
+                    systemKey.localizedTitle(for: .vietnamese),
+                    systemKey.rawValue
+                )
+            }
+            XCTAssertNotEqual(
+                systemKey.localizedTitle(for: .japanese),
+                systemKey.localizedTitle(for: .vietnamese),
+                systemKey.rawValue
+            )
+        }
+    }
+
     func testCurrencyFormattingDoesNotChangeWhenAppLanguageChanges() {
         MistiaAppLanguage.persist(.vietnamese)
         let vietnameseJPY = Int64(123_456).formattedCurrency(code: "JPY")
