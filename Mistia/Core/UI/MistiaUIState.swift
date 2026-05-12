@@ -5,6 +5,7 @@ import Observation
 final class MistiaUIState {
     var isTabBarHidden: Bool = false
     var isQuickCreateHidden: Bool = false
+    var quickCreateMenuRequestID: UUID?
     
     // Support for multiple requests to hide (e.g. nested screens)
     private var hideRequests: Set<UUID> = []
@@ -26,5 +27,9 @@ final class MistiaUIState {
             quickCreateHideRequests.remove(id)
         }
         isQuickCreateHidden = !quickCreateHideRequests.isEmpty
+    }
+
+    func requestQuickCreateMenuPresentation() {
+        quickCreateMenuRequestID = UUID()
     }
 }

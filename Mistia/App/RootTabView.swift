@@ -98,6 +98,7 @@ struct RootTabView: View {
   @State private var quickCreateDragOffset: CGFloat = 0
   @State private var isDraggingQuickCreate = false
   @State private var isSyncingShortcut = false
+  @State private var isRefreshingQuickCreateAccess = false
   @State private var quickCreateAccessAlert: RootQuickCreateAccessAlert?
 
   private let quickCreateMenuAnimation = Animation.spring(response: 0.34, dampingFraction: 0.84)
@@ -191,6 +192,10 @@ struct RootTabView: View {
         familyContextStore.activateFamilyHome()
         activeSheet = .shortcut(.familyOverview)
         familyContextStore.clearFamilyOverviewPresentationRequest()
+      }
+      .onChange(of: uiState.quickCreateMenuRequestID) { _, requestID in
+        guard requestID != nil else { return }
+        presentQuickCreateMenu()
       }
       .alert(item: $quickCreateAccessAlert) { alert in
         Alert(
@@ -301,6 +306,40 @@ struct RootTabView: View {
   }
 
   private func presentQuickCreateMenu() {
+    guard !hideQuickCreate else { return }
+    guard quickCreateButtonFrame.width > 0 else { return }
+    if familyContextStore.isViewingOtherMemberContext && !hasUsableWalletForQuickCreateSubject {
+      guard !isRefreshingQuickCreateAccess else { return }
+      isRefreshingQuickCreateAccess = true
+      Task { @MainActor in
+        let didRefresh = await familyContextStore.refresh(sessionStore: sessionStore)
+        await Task.yield()
+        isRefreshingQuickCreateAccess = false
+        if didRefresh && hasUsableWalletForQuickCreateSubject {
+          openQuickCreateMenu()
+          return
+        }
+
+        quickCreateAccessAlert = RootQuickCreateAccessAlert(
+          title: mistiaLocalized(
+            vi: "Chưa có quyền sử dụng ví",
+            en: "No wallet use access",
+            ja: "ウォレット使用権限がありません"
+          ),
+          message: familyContextStore.lastErrorMessage ?? mistiaLocalized(
+            vi: "Bạn chưa có quyền sử dụng ví của thành viên này.",
+            en: "You do not have use access to this member's wallets.",
+            ja: "このメンバーのウォレットを使用する権限がありません。"
+          )
+        )
+      }
+      return
+    }
+
+    openQuickCreateMenu()
+  }
+
+  private func openQuickCreateMenu() {
     guard !hideQuickCreate else { return }
     guard quickCreateButtonFrame.width > 0 else { return }
     if familyContextStore.isViewingOtherMemberContext && !hasUsableWalletForQuickCreateSubject {

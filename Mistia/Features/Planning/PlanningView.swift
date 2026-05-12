@@ -127,6 +127,7 @@ struct PlanningView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(SessionStore.self) private var sessionStore
     @Environment(FamilyContextStore.self) private var familyContextStore
+    @Environment(MistiaUIState.self) private var uiState
     @Query(filter: #Predicate<BudgetPlan> { $0.deletedAt == nil })
     private var storedBudgets: [BudgetPlan]
     @Query(filter: #Predicate<SavingsGoal> { $0.deletedAt == nil })
@@ -547,11 +548,15 @@ struct PlanningView: View {
                 }
                 Button(mistiaLocalized(vi: "Hủy", en: "Cancel", ja: "キャンセル"), role: .cancel) {}
             case .wallet(let prompt):
-                Button(walletPermissionActionTitle(for: prompt, scope: .use)) {
-                    requestWalletPermission(prompt, scope: .use)
+                if shouldShowWalletPermissionAction(for: prompt, scope: .use) {
+                    Button(walletPermissionActionTitle(for: prompt, scope: .use)) {
+                        requestWalletPermission(prompt, scope: .use)
+                    }
                 }
-                Button(walletPermissionActionTitle(for: prompt, scope: .edit)) {
-                    requestWalletPermission(prompt, scope: .edit)
+                if shouldShowWalletPermissionAction(for: prompt, scope: .edit) {
+                    Button(walletPermissionActionTitle(for: prompt, scope: .edit)) {
+                        requestWalletPermission(prompt, scope: .edit)
+                    }
                 }
                 Button(mistiaLocalized(vi: "Hủy", en: "Cancel", ja: "キャンセル"), role: .cancel) {}
             }
@@ -580,7 +585,13 @@ struct PlanningView: View {
     private func openBudgetAddIfAllowed() {
         let ownerUserID = selectedSubjectUserID
         guard canCreate(ownerUserID: ownerUserID, resourceType: .budget) else {
-            presentCreatePermissionPrompt(ownerUserID: ownerUserID, resourceType: .budget, resourceName: mistiaLocalized(vi: "ngân sách", en: "budgets", ja: "予算"))
+            presentCreatePermissionPrompt(
+                ownerUserID: ownerUserID,
+                resourceType: .budget,
+                resourceName: mistiaLocalized(vi: "ngân sách", en: "budgets", ja: "予算")
+            ) {
+                openBudgetAddIfAllowed()
+            }
             return
         }
         budgetEditorTarget = PlanningBudgetEditorTarget(
@@ -593,7 +604,13 @@ struct PlanningView: View {
     private func openBudgetEditorIfAllowed(budget: BudgetPlan?, preferredParentCategoryID: UUID?) {
         let ownerUserID = budget.flatMap { budgetOwnerMap[$0.id] } ?? selectedSubjectUserID
         guard canEdit(ownerUserID: ownerUserID, resourceType: .budget) else {
-            presentEditPermissionPrompt(ownerUserID: ownerUserID, resourceType: .budget, resourceName: mistiaLocalized(vi: "ngân sách", en: "budgets", ja: "予算"))
+            presentEditPermissionPrompt(
+                ownerUserID: ownerUserID,
+                resourceType: .budget,
+                resourceName: mistiaLocalized(vi: "ngân sách", en: "budgets", ja: "予算")
+            ) {
+                openBudgetEditorIfAllowed(budget: budget, preferredParentCategoryID: preferredParentCategoryID)
+            }
             return
         }
         budgetEditorTarget = PlanningBudgetEditorTarget(
@@ -606,7 +623,13 @@ struct PlanningView: View {
     private func openGoalAddIfAllowed() {
         let ownerUserID = selectedSubjectUserID
         guard canCreate(ownerUserID: ownerUserID, resourceType: .goal) else {
-            presentCreatePermissionPrompt(ownerUserID: ownerUserID, resourceType: .goal, resourceName: mistiaLocalized(vi: "mục tiêu", en: "goals", ja: "目標"))
+            presentCreatePermissionPrompt(
+                ownerUserID: ownerUserID,
+                resourceType: .goal,
+                resourceName: mistiaLocalized(vi: "mục tiêu", en: "goals", ja: "目標")
+            ) {
+                openGoalAddIfAllowed()
+            }
             return
         }
         goalEditorTarget = PlanningGoalEditorTarget(goal: nil)
@@ -615,7 +638,13 @@ struct PlanningView: View {
     private func openGoalEditorIfAllowed(goal: SavingsGoal?) {
         let ownerUserID = goal.flatMap { goalOwnerMap[$0.id] } ?? selectedSubjectUserID
         guard canEdit(ownerUserID: ownerUserID, resourceType: .goal) else {
-            presentEditPermissionPrompt(ownerUserID: ownerUserID, resourceType: .goal, resourceName: mistiaLocalized(vi: "mục tiêu", en: "goals", ja: "目標"))
+            presentEditPermissionPrompt(
+                ownerUserID: ownerUserID,
+                resourceType: .goal,
+                resourceName: mistiaLocalized(vi: "mục tiêu", en: "goals", ja: "目標")
+            ) {
+                openGoalEditorIfAllowed(goal: goal)
+            }
             return
         }
         goalEditorTarget = PlanningGoalEditorTarget(goal: goal)
@@ -624,7 +653,13 @@ struct PlanningView: View {
     private func openCreditCardAddIfAllowed() {
         let ownerUserID = selectedSubjectUserID
         guard canCreate(ownerUserID: ownerUserID, resourceType: .wallet) else {
-            presentCreatePermissionPrompt(ownerUserID: ownerUserID, resourceType: .wallet, resourceName: mistiaLocalized(vi: "ví / thẻ", en: "wallets / cards", ja: "ウォレット・カード"))
+            presentCreatePermissionPrompt(
+                ownerUserID: ownerUserID,
+                resourceType: .wallet,
+                resourceName: mistiaLocalized(vi: "ví / thẻ", en: "wallets / cards", ja: "ウォレット・カード")
+            ) {
+                openCreditCardAddIfAllowed()
+            }
             return
         }
         creditCardEditorTarget = PlanningCreditCardEditorTarget(
@@ -645,7 +680,14 @@ struct PlanningView: View {
                     ownerUserID: ownerUserID
                 )
             } else {
-                presentEditPermissionPrompt(ownerUserID: ownerUserID, resourceType: .wallet, resourceID: walletID, resourceName: mistiaLocalized(vi: "ví / thẻ", en: "wallets / cards", ja: "ウォレット・カード"))
+                presentEditPermissionPrompt(
+                    ownerUserID: ownerUserID,
+                    resourceType: .wallet,
+                    resourceID: walletID,
+                    resourceName: mistiaLocalized(vi: "ví / thẻ", en: "wallets / cards", ja: "ウォレット・カード")
+                ) {
+                    openCreditCardEditorIfAllowed(wallet: wallet, dueItem: dueItem)
+                }
             }
             return
         }
@@ -659,7 +701,13 @@ struct PlanningView: View {
     private func openBillAddIfAllowed() {
         let ownerUserID = selectedSubjectUserID
         guard canCreate(ownerUserID: ownerUserID, resourceType: .bill) else {
-            presentCreatePermissionPrompt(ownerUserID: ownerUserID, resourceType: .bill, resourceName: mistiaLocalized(vi: "hóa đơn", en: "bills", ja: "請求書"))
+            presentCreatePermissionPrompt(
+                ownerUserID: ownerUserID,
+                resourceType: .bill,
+                resourceName: mistiaLocalized(vi: "hóa đơn", en: "bills", ja: "請求書")
+            ) {
+                openBillAddIfAllowed()
+            }
             return
         }
         billEditorTarget = PlanningBillEditorTarget(plan: nil, dueItem: nil, selectedMonth: selectedMonth)
@@ -668,7 +716,13 @@ struct PlanningView: View {
     private func openBillEditorIfAllowed(plan: RecurringBillPlan?, dueItem: PlanningRecurringDueSnapshot?) {
         let ownerUserID = plan.flatMap { billOwnerMap[$0.id] } ?? selectedSubjectUserID
         guard canEdit(ownerUserID: ownerUserID, resourceType: .bill) else {
-            presentEditPermissionPrompt(ownerUserID: ownerUserID, resourceType: .bill, resourceName: mistiaLocalized(vi: "hóa đơn", en: "bills", ja: "請求書"))
+            presentEditPermissionPrompt(
+                ownerUserID: ownerUserID,
+                resourceType: .bill,
+                resourceName: mistiaLocalized(vi: "hóa đơn", en: "bills", ja: "請求書")
+            ) {
+                openBillEditorIfAllowed(plan: plan, dueItem: dueItem)
+            }
             return
         }
         billEditorTarget = PlanningBillEditorTarget(plan: plan, dueItem: dueItem, selectedMonth: selectedMonth)
@@ -677,7 +731,13 @@ struct PlanningView: View {
     private func openInstallmentAddIfAllowed() {
         let ownerUserID = selectedSubjectUserID
         guard canCreate(ownerUserID: ownerUserID, resourceType: .installment) else {
-            presentCreatePermissionPrompt(ownerUserID: ownerUserID, resourceType: .installment, resourceName: mistiaLocalized(vi: "trả góp / vay", en: "installments / loans", ja: "分割払い・借入"))
+            presentCreatePermissionPrompt(
+                ownerUserID: ownerUserID,
+                resourceType: .installment,
+                resourceName: mistiaLocalized(vi: "trả góp / vay", en: "installments / loans", ja: "分割払い・借入")
+            ) {
+                openInstallmentAddIfAllowed()
+            }
             return
         }
         installmentEditorTarget = PlanningInstallmentEditorTarget(plan: nil, dueItem: nil, selectedMonth: selectedMonth)
@@ -686,7 +746,13 @@ struct PlanningView: View {
     private func openInstallmentEditorIfAllowed(plan: InstallmentPlan?, dueItem: PlanningRecurringDueSnapshot?) {
         let ownerUserID = plan.flatMap { installmentOwnerMap[$0.id] } ?? selectedSubjectUserID
         guard canEdit(ownerUserID: ownerUserID, resourceType: .installment) else {
-            presentEditPermissionPrompt(ownerUserID: ownerUserID, resourceType: .installment, resourceName: mistiaLocalized(vi: "trả góp / vay", en: "installments / loans", ja: "分割払い・借入"))
+            presentEditPermissionPrompt(
+                ownerUserID: ownerUserID,
+                resourceType: .installment,
+                resourceName: mistiaLocalized(vi: "trả góp / vay", en: "installments / loans", ja: "分割払い・借入")
+            ) {
+                openInstallmentEditorIfAllowed(plan: plan, dueItem: dueItem)
+            }
             return
         }
         installmentEditorTarget = PlanningInstallmentEditorTarget(plan: plan, dueItem: dueItem, selectedMonth: selectedMonth)
@@ -696,7 +762,14 @@ struct PlanningView: View {
         let ownerUserID = dueOwnerUserID(for: item)
         let resource = duePermissionResource(for: item)
         guard canEdit(ownerUserID: ownerUserID, resourceType: resource.type, resourceID: resource.resourceID) else {
-            presentEditPermissionPrompt(ownerUserID: ownerUserID, resourceType: resource.type, resourceID: resource.resourceID, resourceName: resource.name)
+            presentEditPermissionPrompt(
+                ownerUserID: ownerUserID,
+                resourceType: resource.type,
+                resourceID: resource.resourceID,
+                resourceName: resource.name
+            ) {
+                openDuePaymentIfAllowed(item)
+            }
             return
         }
         duePaymentTarget = DuePaymentSheetTarget(
@@ -779,6 +852,19 @@ struct PlanningView: View {
         for prompt: PlanningWalletPermissionPrompt,
         scope: MistiaFamilyPermissionScope
     ) -> String {
+        if isWalletPermissionGranted(for: prompt, scope: scope) {
+            switch scope {
+            case .use:
+                return mistiaLocalized(vi: "Đã chấp nhận yêu cầu sử dụng", en: "Use request approved", ja: "使用リクエストが承認済み")
+            case .edit:
+                return mistiaLocalized(vi: "Đã chấp nhận yêu cầu chỉnh sửa", en: "Edit request approved", ja: "編集リクエストが承認済み")
+            case .create:
+                return mistiaLocalized(vi: "Đã chấp nhận yêu cầu thêm mới", en: "Create request approved", ja: "作成リクエストが承認済み")
+            case .view:
+                return mistiaLocalized(vi: "Đã chấp nhận yêu cầu", en: "Request approved", ja: "リクエストが承認済み")
+            }
+        }
+
         if familyContextStore.hasPendingPermissionRequest(
             ownerUserID: prompt.ownerUserID,
             resourceType: .wallet,
@@ -809,16 +895,41 @@ struct PlanningView: View {
         }
     }
 
+    private func isWalletPermissionGranted(
+        for prompt: PlanningWalletPermissionPrompt,
+        scope: MistiaFamilyPermissionScope
+    ) -> Bool {
+        familyContextStore.hasPermission(
+            ownerUserID: prompt.ownerUserID,
+            resourceType: .wallet,
+            resourceID: prompt.walletID,
+            scope: scope
+        )
+    }
+
+    private func shouldShowWalletPermissionAction(
+        for prompt: PlanningWalletPermissionPrompt,
+        scope: MistiaFamilyPermissionScope
+    ) -> Bool {
+        !isWalletPermissionGranted(for: prompt, scope: scope)
+    }
+
     private func requestWalletPermission(
         _ prompt: PlanningWalletPermissionPrompt,
         scope: MistiaFamilyPermissionScope
     ) {
+        guard !isWalletPermissionGranted(for: prompt, scope: scope) else {
+            performApprovedWalletPermissionAction(prompt, scope: scope)
+            return
+        }
+
         guard !familyContextStore.hasPendingPermissionRequest(
             ownerUserID: prompt.ownerUserID,
             resourceType: .wallet,
             resourceID: prompt.walletID,
             scope: scope
         ) else {
+            refreshPendingWalletPermission(prompt, scope: scope)
             return
         }
 
@@ -831,14 +942,61 @@ struct PlanningView: View {
         )
     }
 
+    private func refreshPendingWalletPermission(
+        _ prompt: PlanningWalletPermissionPrompt,
+        scope: MistiaFamilyPermissionScope
+    ) {
+        Task { @MainActor in
+            let isApproved = await familyContextStore.refreshPermissionGrant(
+                ownerUserID: prompt.ownerUserID,
+                resourceType: .wallet,
+                resourceID: prompt.walletID,
+                scope: scope,
+                sessionStore: sessionStore
+            )
+
+            if isApproved {
+                performApprovedWalletPermissionAction(prompt, scope: scope)
+            }
+        }
+    }
+
+    private func performApprovedWalletPermissionAction(
+        _ prompt: PlanningWalletPermissionPrompt,
+        scope: MistiaFamilyPermissionScope
+    ) {
+        walletPermissionPrompt = nil
+
+        switch scope {
+        case .use:
+            uiState.requestQuickCreateMenuPresentation()
+        case .edit:
+            guard let wallet = storedWallets.first(where: { $0.id == prompt.walletID }) else { return }
+            creditCardEditorTarget = PlanningCreditCardEditorTarget(
+                wallet: wallet,
+                dueItem: nil,
+                selectedMonth: selectedMonth
+            )
+        case .create, .view:
+            break
+        }
+    }
+
     private func presentEditPermissionPrompt(
         ownerUserID: UUID?,
         resourceType: MistiaFamilyNotificationResourceType,
         resourceID: UUID? = nil,
-        resourceName: String
+        resourceName: String,
+        onGranted: @escaping () -> Void = {}
     ) {
         guard let ownerUserID,
               ownerUserID != sessionStore.activeLocalProfileUserID else { return }
+        let isPending = familyContextStore.hasPendingPermissionRequest(
+            ownerUserID: ownerUserID,
+            resourceType: resourceType,
+            resourceID: resourceID,
+            scope: .edit
+        )
         permissionPrompt = PlanningPermissionPrompt(
             title: mistiaLocalized(vi: "Chưa có quyền chỉnh sửa", en: "No edit access", ja: "編集権限がありません"),
             message: mistiaLocalized(
@@ -846,14 +1004,18 @@ struct PlanningView: View {
                 en: "You do not have permission to edit this member's \(resourceName).",
                 ja: "このメンバーの\(resourceName)を編集する権限がありません。"
             ),
-            actionTitle: mistiaLocalized(vi: "Yêu cầu quyền chỉnh sửa", en: "Request edit access", ja: "編集権限をリクエスト")
+            actionTitle: isPending
+                ? mistiaLocalized(vi: "Đã gửi yêu cầu chỉnh sửa", en: "Edit request sent", ja: "編集リクエスト送信済み")
+                : mistiaLocalized(vi: "Yêu cầu quyền chỉnh sửa", en: "Request edit access", ja: "編集権限をリクエスト")
         ) {
-            sendPermissionRequest(
+            resolvePermissionPromptAction(
                 resourceType: resourceType,
                 resourceID: resourceID,
                 ownerUserID: ownerUserID,
                 scope: .edit,
-                resourceName: resourceName
+                resourceName: resourceName,
+                wasPending: isPending,
+                onGranted: onGranted
             )
         }
     }
@@ -861,10 +1023,17 @@ struct PlanningView: View {
     private func presentCreatePermissionPrompt(
         ownerUserID: UUID?,
         resourceType: MistiaFamilyNotificationResourceType,
-        resourceName: String
+        resourceName: String,
+        onGranted: @escaping () -> Void = {}
     ) {
         guard let ownerUserID,
               ownerUserID != sessionStore.activeLocalProfileUserID else { return }
+        let isPending = familyContextStore.hasPendingPermissionRequest(
+            ownerUserID: ownerUserID,
+            resourceType: resourceType,
+            resourceID: nil,
+            scope: .create
+        )
         permissionPrompt = PlanningPermissionPrompt(
             title: mistiaLocalized(vi: "Chưa có quyền thêm mới", en: "No create access", ja: "作成権限がありません"),
             message: mistiaLocalized(
@@ -872,14 +1041,54 @@ struct PlanningView: View {
                 en: "You do not have permission to create \(resourceName) for this member.",
                 ja: "このメンバーの\(resourceName)を作成する権限がありません。"
             ),
-            actionTitle: mistiaLocalized(vi: "Yêu cầu quyền thêm mới", en: "Request create access", ja: "作成権限をリクエスト")
+            actionTitle: isPending
+                ? mistiaLocalized(vi: "Đã gửi yêu cầu thêm mới", en: "Create request sent", ja: "作成リクエスト送信済み")
+                : mistiaLocalized(vi: "Yêu cầu quyền thêm mới", en: "Request create access", ja: "作成権限をリクエスト")
         ) {
-            sendPermissionRequest(
+            resolvePermissionPromptAction(
                 resourceType: resourceType,
                 resourceID: nil,
                 ownerUserID: ownerUserID,
                 scope: .create,
-                resourceName: resourceName
+                resourceName: resourceName,
+                wasPending: isPending,
+                onGranted: onGranted
+            )
+        }
+    }
+
+    private func resolvePermissionPromptAction(
+        resourceType: MistiaFamilyNotificationResourceType,
+        resourceID: UUID?,
+        ownerUserID: UUID,
+        scope: MistiaFamilyPermissionScope,
+        resourceName: String,
+        wasPending: Bool,
+        onGranted: @escaping () -> Void
+    ) {
+        Task { @MainActor in
+            let isApproved = await familyContextStore.refreshPermissionGrant(
+                ownerUserID: ownerUserID,
+                resourceType: resourceType,
+                resourceID: resourceID,
+                scope: scope,
+                sessionStore: sessionStore
+            )
+
+            if isApproved {
+                permissionPrompt = nil
+                onGranted()
+                return
+            }
+
+            guard !wasPending else { return }
+            _ = await familyContextStore.requestPermission(
+                resourceType: resourceType,
+                resourceID: resourceID,
+                ownerUserID: ownerUserID,
+                scope: scope,
+                resourceName: resourceName,
+                sessionStore: sessionStore
             )
         }
     }

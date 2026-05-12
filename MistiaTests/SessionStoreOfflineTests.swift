@@ -253,6 +253,99 @@ final class SessionStoreOfflineTests: XCTestCase {
         XCTAssertFalse(familyStore.canCreate(ownerUserID: ownerUserID, resourceType: .category))
     }
 
+    func testFamilyRefreshClearsPendingWalletUseRequestAfterGrantArrives() async throws {
+        let currentUserID = UUID()
+        let ownerUserID = UUID()
+        let walletID = UUID()
+        let session = makeSession(userID: currentUserID)
+        let authService = SessionAuthServiceSpy(
+            persistedSession: session,
+            refreshResult: .success(session)
+        )
+        let store = try makeSessionStore(
+            authService: authService,
+            userProfileStore: UserProfileStoreSpy(),
+            networkStatus: .connected
+        )
+        let restrictedPolicy = FamilyPermissionPolicy(
+            canViewFamilyDashboard: false,
+            canViewOthers: false,
+            canEditOthers: false,
+            canViewWallets: false,
+            canViewDebts: false,
+            canViewKids: false,
+            canEditKids: false
+        )
+        let initialSnapshot = makeFamilySnapshot(
+            userID: currentUserID,
+            ownerUserID: ownerUserID,
+            currentPolicy: restrictedPolicy
+        )
+        let familyService = FamilyRemoteServiceSpy(snapshot: initialSnapshot)
+        let familyStore = FamilyContextStore(
+            modelContainer: try storeTestContainer(),
+            service: familyService
+        )
+
+        await store.bootstrapIfNeeded()
+        let didInitialRefresh = await familyStore.refresh(sessionStore: store)
+        XCTAssertTrue(didInitialRefresh)
+
+        let didRequestPermission = await familyStore.requestPermission(
+            resourceType: .wallet,
+            resourceID: walletID,
+            ownerUserID: ownerUserID,
+            scope: .use,
+            resourceName: "Shared Wallet",
+            sessionStore: store
+        )
+        XCTAssertTrue(didRequestPermission)
+        XCTAssertTrue(
+            familyStore.hasPendingPermissionRequest(
+                ownerUserID: ownerUserID,
+                resourceType: .wallet,
+                resourceID: walletID,
+                scope: .use
+            )
+        )
+
+        familyService.setSnapshot(
+            makeFamilySnapshot(
+                userID: currentUserID,
+                ownerUserID: ownerUserID,
+                currentPolicy: restrictedPolicy,
+                permissionGrants: [
+                    makePermissionGrant(
+                        granteeUserID: currentUserID,
+                        ownerUserID: ownerUserID,
+                        resourceType: .wallet,
+                        resourceID: walletID,
+                        scope: .use
+                    )
+                ]
+            )
+        )
+
+        let didRefreshGrantedState = await familyStore.refreshPermissionGrant(
+            ownerUserID: ownerUserID,
+            resourceType: .wallet,
+            resourceID: walletID,
+            scope: .use,
+            sessionStore: store
+        )
+        XCTAssertTrue(didRefreshGrantedState)
+        XCTAssertTrue(familyStore.canUseWallet(walletID: walletID, ownerUserID: ownerUserID))
+        XCTAssertTrue(familyService.accessibleFinanceUserIDBatches.contains { Set($0).contains(ownerUserID) })
+        XCTAssertFalse(
+            familyStore.hasPendingPermissionRequest(
+                ownerUserID: ownerUserID,
+                resourceType: .wallet,
+                resourceID: walletID,
+                scope: .use
+            )
+        )
+    }
+
     func testLocalAndSystemNotificationsAreRecipientScoped() {
         let currentUserID = UUID()
         let otherUserID = UUID()
@@ -579,6 +672,7 @@ final class SessionStoreOfflineTests: XCTestCase {
     private func makeFamilySnapshot(
         userID: UUID,
         ownerUserID: UUID? = nil,
+        currentPolicy: FamilyPermissionPolicy? = nil,
         permissionGrants: [FamilyPermissionGrantRecord] = []
     ) -> FamilyStateSnapshot {
         let familyID = UUID()
@@ -586,6 +680,7 @@ final class SessionStoreOfflineTests: XCTestCase {
         let resolvedOwnerUserID = ownerUserID ?? userID
         let now = Date()
         let currentRole: FamilyRole = resolvedOwnerUserID == userID ? .owner : .member
+        let resolvedCurrentPolicy = currentPolicy ?? .preset(for: currentRole)
         var members = [
             FamilyMember(
                 membershipID: membershipID,
@@ -594,7 +689,7 @@ final class SessionStoreOfflineTests: XCTestCase {
                 displayName: "Taylor Offline",
                 avatarURL: nil,
                 role: currentRole,
-                policy: .preset(for: currentRole),
+                policy: resolvedCurrentPolicy,
                 isCurrentUser: true
             )
         ]
@@ -628,13 +723,13 @@ final class SessionStoreOfflineTests: XCTestCase {
                 familyID: familyID,
                 userID: userID,
                 roleRawValue: currentRole.rawValue,
-                canViewFamilyDashboard: currentRole == .owner,
-                canViewOthers: currentRole == .owner,
-                canEditOthers: currentRole == .owner,
-                canViewWallets: currentRole == .owner,
-                canViewDebts: currentRole == .owner,
-                canViewKids: currentRole == .owner,
-                canEditKids: currentRole == .owner,
+                canViewFamilyDashboard: resolvedCurrentPolicy.canViewFamilyDashboard,
+                canViewOthers: resolvedCurrentPolicy.canViewOthers,
+                canEditOthers: resolvedCurrentPolicy.canEditOthers,
+                canViewWallets: resolvedCurrentPolicy.canViewWallets,
+                canViewDebts: resolvedCurrentPolicy.canViewDebts,
+                canViewKids: resolvedCurrentPolicy.canViewKids,
+                canEditKids: resolvedCurrentPolicy.canEditKids,
                 deletedAt: nil,
                 createdAt: now,
                 updatedAt: now
@@ -819,11 +914,17 @@ private final class UserProfileStoreSpy: UserProfileRemoteStoring {
 
 @MainActor
 private final class FamilyRemoteServiceSpy: FamilyRemoteServicing {
-    private let snapshot: FamilyStateSnapshot
+    private var snapshot: FamilyStateSnapshot
 
     private(set) var fetchStateCallCount = 0
+    private(set) var createPermissionRequestCallCount = 0
+    private(set) var accessibleFinanceUserIDBatches: [[UUID]] = []
 
     init(snapshot: FamilyStateSnapshot) {
+        self.snapshot = snapshot
+    }
+
+    func setSnapshot(_ snapshot: FamilyStateSnapshot) {
         self.snapshot = snapshot
     }
 
@@ -890,7 +991,31 @@ private final class FamilyRemoteServiceSpy: FamilyRemoteServicing {
         userIDs: [UUID],
         session: SupabaseAuthSession
     ) async throws -> MistiaRemoteSnapshot {
-        .empty
+        accessibleFinanceUserIDBatches.append(userIDs)
+        return .empty
+    }
+
+    func createFamilyPermissionRequest(
+        input: FamilyPermissionRequestInput,
+        session: SupabaseAuthSession
+    ) async throws -> FamilyPermissionRequestRemoteRecord {
+        createPermissionRequestCallCount += 1
+        let now = Date()
+        return FamilyPermissionRequestRemoteRecord(
+            id: UUID(),
+            familyID: input.familyID,
+            requesterUserID: session.user.id,
+            recipientUserID: input.recipientUserID,
+            resourceTypeRawValue: input.resourceType.rawValue,
+            resourceID: input.resourceID,
+            permissionScopeRawValue: input.permissionScope.rawValue,
+            statusRawValue: "pending",
+            message: input.message,
+            respondedByUserID: nil,
+            respondedAt: nil,
+            createdAt: now,
+            updatedAt: now
+        )
     }
 }
 

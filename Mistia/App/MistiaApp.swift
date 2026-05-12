@@ -76,6 +76,7 @@ struct MistiaApp: App {
                     case .active:
                         sessionStore.handleSceneDidBecomeActive()
                         Task {
+                            await familyContextStore.refresh(sessionStore: sessionStore)
                             await runDueMaintenance()
                         }
                     case .background:

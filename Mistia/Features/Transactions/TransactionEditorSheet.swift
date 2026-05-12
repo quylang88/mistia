@@ -222,6 +222,9 @@ struct TransactionEditorSheet: View {
                 draft.categoryID = category.id
             }
         }
+        .onChange(of: draft.sourceWalletID) { _, _ in
+            clearMismatchedCategoryForSelectedWallet()
+        }
     }
     private func archiveTransaction() {
         guard let transaction = target.transaction else { return }
@@ -501,8 +504,8 @@ struct TransactionEditorSheet: View {
             target.transaction?.sourceWallet?.id,
             target.transaction?.destinationWallet?.id
         ].compactMap { $0 })
-        let editorSubjectUserID = target.transaction == nil
-            ? (target.subjectUserIDOverride ?? familyContextStore.selectedSubjectUserID ?? sessionStore.activeLocalProfileUserID)
+        let allowedOwnerUserIDs = target.transaction == nil
+            ? newTransactionWalletOwnerUserIDs
             : nil
 
         return storedWallets
@@ -510,7 +513,7 @@ struct TransactionEditorSheet: View {
                 guard let ownerUserID = walletOwnerUserID(for: $0) else {
                     return preferredWalletIDs.contains($0.id)
                 }
-                if let editorSubjectUserID, ownerUserID != editorSubjectUserID {
+                if let allowedOwnerUserIDs, !allowedOwnerUserIDs.contains(ownerUserID) {
                     return preferredWalletIDs.contains($0.id)
                 }
                 if ownerUserID == sessionStore.activeLocalProfileUserID {
@@ -1077,15 +1080,28 @@ struct TransactionEditorSheet: View {
     }
 
     private var effectiveOperableTargetUserIDs: Set<UUID> {
-        if target.transaction == nil,
-           let subjectUserID = target.subjectUserIDOverride ?? familyContextStore.selectedSubjectUserID ?? sessionStore.activeLocalProfileUserID {
-            return [subjectUserID]
+        if target.transaction == nil {
+            return newTransactionWalletOwnerUserIDs
         }
         let operable = familyContextStore.operableTargetUserIDs
         if operable.isEmpty, let activeLocalProfileUserID = sessionStore.activeLocalProfileUserID {
             return [activeLocalProfileUserID]
         }
         return operable
+    }
+
+    private var newTransactionWalletOwnerUserIDs: Set<UUID> {
+        guard let subjectUserID = target.subjectUserIDOverride
+            ?? familyContextStore.selectedSubjectUserID
+            ?? sessionStore.activeLocalProfileUserID else {
+            return []
+        }
+
+        guard subjectUserID == sessionStore.activeLocalProfileUserID else {
+            return [subjectUserID]
+        }
+
+        return familyContextStore.operableTargetUserIDs.union([subjectUserID])
     }
 
     private var effectiveViewableTargetUserIDs: Set<UUID> {
@@ -1132,6 +1148,17 @@ struct TransactionEditorSheet: View {
             return wallet.name
         }
         return "\(wallet.name) • \(ownerName)"
+    }
+
+    private func clearMismatchedCategoryForSelectedWallet() {
+        guard let category = selectedCategory,
+              let selectedSourceWallet,
+              let categoryOwnerUserID = categoryOwnerUserID(for: category),
+              let walletOwnerUserID = walletOwnerUserID(for: selectedSourceWallet),
+              categoryOwnerUserID != walletOwnerUserID else {
+            return
+        }
+        draft.categoryID = nil
     }
 
     private func applyTitleSuggestion(_ suggestion: TransactionTitleSuggestion) {

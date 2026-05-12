@@ -198,17 +198,18 @@ final class FamilyContextStore {
         self.modelContainer = modelContainer
     }
 
-    func refresh(sessionStore: SessionStore) async {
+    @discardableResult
+    func refresh(sessionStore: SessionStore) async -> Bool {
         setModelContainer(sessionStore.currentModelContainer)
         restoreCachedStateIfAvailable(sessionStore: sessionStore)
 
         guard sessionStore.isSignedIn else {
             restoreSignedOutLocalState(sessionStore: sessionStore)
-            return
+            return false
         }
 
         guard let session = await prepareRemoteSession(using: sessionStore) else {
-            return
+            return false
         }
 
         isLoading = true
@@ -229,8 +230,10 @@ final class FamilyContextStore {
             )
             try await refreshFamilyNotifications(session: session)
             try await pushPendingNotificationReadState(session: session)
+            return true
         } catch {
             lastErrorMessage = visibleErrorMessage(for: error, sessionStore: sessionStore)
+            return false
         }
     }
 
@@ -839,6 +842,36 @@ final class FamilyContextStore {
         )
     }
 
+    @discardableResult
+    func refreshPermissionGrant(
+        ownerUserID: UUID?,
+        resourceType: MistiaFamilyNotificationResourceType,
+        resourceID: UUID?,
+        scope: MistiaFamilyPermissionScope,
+        sessionStore: SessionStore
+    ) async -> Bool {
+        guard let ownerUserID else { return false }
+        if hasPermission(
+            ownerUserID: ownerUserID,
+            resourceType: resourceType,
+            resourceID: resourceID,
+            scope: scope
+        ) {
+            return true
+        }
+
+        guard await refresh(sessionStore: sessionStore) else {
+            return false
+        }
+
+        return hasPermission(
+            ownerUserID: ownerUserID,
+            resourceType: resourceType,
+            resourceID: resourceID,
+            scope: scope
+        )
+    }
+
     func hasPendingPermissionRequest(
         ownerUserID: UUID?,
         resourceType: MistiaFamilyNotificationResourceType,
@@ -846,6 +879,14 @@ final class FamilyContextStore {
         scope: MistiaFamilyPermissionScope
     ) -> Bool {
         guard let ownerUserID else { return false }
+        if hasPermission(
+            ownerUserID: ownerUserID,
+            resourceType: resourceType,
+            resourceID: resourceID,
+            scope: scope
+        ) {
+            return false
+        }
         return pendingPermissionRequestKeys.contains(
             permissionRequestKey(
                 ownerUserID: ownerUserID,
@@ -1014,7 +1055,7 @@ final class FamilyContextStore {
         sessionStore: SessionStore,
         session: SupabaseAuthSession
     ) async throws {
-        let accessibleUserIDs = Array(viewableTargetUserIDs)
+        let accessibleUserIDs = Array(viewableTargetUserIDs.union(operableTargetUserIDs))
         guard !accessibleUserIDs.isEmpty else { return }
 
         let financeSnapshot = try await service.fetchAccessibleFinanceSnapshot(
