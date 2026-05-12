@@ -538,20 +538,31 @@ nonisolated enum OverviewLogic {
             return monthInterval.contains(transaction.occurredAt)
         }
 
-        let groupedByBranch = Dictionary(grouping: transactionsInMonth) { transaction in
-            categoryBranchKey(for: transaction)
-        }
-        let slices = groupedByBranch
-            .map { _, branchTransactions in
-                categoryBranchSlice(from: branchTransactions)
-            }
-            .sorted(by: categorySliceSort)
-
         return OverviewCategorySpendingMonthSnapshot(
             monthStart: monthStart,
             title: MistiaDateFormatting.monthYearString(for: monthStart, calendar: calendar),
             currencyCode: currencyCode,
-            slices: slices
+            slices: categorySpendingSlices(from: transactionsInMonth)
+        )
+    }
+
+    static func categorySpendingInterval(
+        from transactions: [OverviewTransactionSnapshot],
+        interval: DateInterval,
+        title: String,
+        currencyCode: String,
+        calendar: Calendar = MistiaCalendar.current
+    ) -> OverviewCategorySpendingMonthSnapshot {
+        let intervalTransactions = transactions.filter { transaction in
+            isCategorySpendingTransaction(transaction)
+                && interval.contains(transaction.occurredAt)
+        }
+
+        return OverviewCategorySpendingMonthSnapshot(
+            monthStart: PlanningLogic.startOfMonth(for: interval.start, calendar: calendar),
+            title: title,
+            currencyCode: currencyCode,
+            slices: categorySpendingSlices(from: intervalTransactions)
         )
     }
 
@@ -606,6 +617,20 @@ nonisolated enum OverviewLogic {
         }
 
         return categorySliceID(for: categoryID)
+    }
+
+    private static func categorySpendingSlices(
+        from transactions: [OverviewTransactionSnapshot]
+    ) -> [OverviewCategorySpendingSlice] {
+        let groupedByBranch = Dictionary(grouping: transactions) { transaction in
+            categoryBranchKey(for: transaction)
+        }
+
+        return groupedByBranch
+            .map { _, branchTransactions in
+                categoryBranchSlice(from: branchTransactions)
+            }
+            .sorted(by: categorySliceSort)
     }
 
     private static func categoryBranchSlice(

@@ -31,13 +31,6 @@ private enum OverviewHeroChartMode: String, CaseIterable, Identifiable {
     }
 }
 
-private struct OverviewCategoryDrilldownSelection: Identifiable, Equatable {
-    let id: UUID
-    let name: String
-    let iconSymbolName: String
-    let colorHex: String
-}
-
 private struct OverviewPermissionPrompt: Identifiable {
     let id = UUID()
     let title: String
@@ -608,9 +601,8 @@ private struct OverviewHeroCard: View {
     @State private var selectedWeekStart: Date
     @State private var selectedCategoryMonth: Date
     @State private var chartMode: OverviewHeroChartMode
-    @State private var selectedCategory: OverviewCategoryDrilldownSelection?
-    @State private var didApplyDebugDrilldown = false
     @State private var chartDismissToken: Int = 0
+    @State private var categoryChartHeight: CGFloat
 
     let snapshot: OverviewHeroSnapshot
     let isSheetPresented: Bool
@@ -630,6 +622,7 @@ private struct OverviewHeroCard: View {
                 ?? PlanningLogic.startOfMonth(for: .now)
         )
         _chartMode = State(initialValue: MistiaOverviewDebugFixtures.startsInCategoryMode ? .category : .day)
+        _categoryChartHeight = State(initialValue: MistiaCategorySpendingChartView.estimatedHeight(visibleSliceCount: 3))
     }
 
     private var cardTint: Color {
@@ -769,18 +762,24 @@ private struct OverviewHeroCard: View {
                     } else {
                         TabView(selection: $selectedCategoryMonth) {
                             ForEach(snapshot.categoryMonthPages) { month in
-                                OverviewCategorySpendingMonthView(
-                                    month: month,
-                                    selectedCategory: selectedCategory,
-                                    insetSurface: insetSurface,
-                                    onSelectSlice: openCategorySlice,
-                                    onBack: clearSelectedCategory
+                                MistiaCategorySpendingChartView(
+                                    snapshot: month,
+                                    resetKey: "overview-\(month.id)",
+                                    startsInFirstDrilldown: MistiaOverviewDebugFixtures.startsInFirstCategoryDrilldown,
+                                    accessibilityPrefix: "overview.category",
+                                    onPreferredHeightChange: { height in
+                                        guard month.monthStart == selectedCategoryMonth else { return }
+
+                                        withAnimation(.snappy(duration: 0.18)) {
+                                            categoryChartHeight = height
+                                        }
+                                    }
                                 )
                                 .tag(month.monthStart)
                             }
                         }
                         .tabViewStyle(.page(indexDisplayMode: .never))
-                        .frame(height: 188)
+                        .frame(height: categoryChartHeight)
                         .transition(.opacity.combined(with: .move(edge: .trailing)))
                     }
                 }
@@ -795,65 +794,15 @@ private struct OverviewHeroCard: View {
             if !monthStarts.contains(selectedCategoryMonth) {
                 selectedCategoryMonth = snapshot.categoryMonthPages.last?.monthStart
                     ?? PlanningLogic.startOfMonth(for: .now, calendar: calendar)
-                selectedCategory = nil
             }
         }
-        .onChange(of: chartMode) { _, mode in
+        .onChange(of: chartMode) { _, _ in
             dismissChartSelection()
-            if mode == .day {
-                selectedCategory = nil
-            }
-        }
-        .onAppear {
-            applyDebugDrilldownIfNeeded()
-        }
-        .onChange(of: activeCategoryMonth.slices.map(\.id)) { _, _ in
-            applyDebugDrilldownIfNeeded()
         }
     }
 
     private func dismissChartSelection() {
         chartDismissToken += 1
-    }
-
-    private func openCategorySlice(_ slice: OverviewCategorySpendingSlice) {
-        guard slice.canDrillDown, let categoryID = slice.categoryID else { return }
-
-        UIImpactFeedbackGenerator(style: .light).impactOccurred()
-        withAnimation(.snappy) {
-            selectedCategory = OverviewCategoryDrilldownSelection(
-                id: categoryID,
-                name: slice.name,
-                iconSymbolName: slice.iconSymbolName,
-                colorHex: slice.colorHex
-            )
-        }
-    }
-
-    private func clearSelectedCategory() {
-        withAnimation(.snappy) {
-            selectedCategory = nil
-        }
-    }
-
-    private func applyDebugDrilldownIfNeeded() {
-        guard MistiaOverviewDebugFixtures.startsInFirstCategoryDrilldown,
-              !didApplyDebugDrilldown,
-              chartMode == .category,
-              selectedCategory == nil,
-              let slice = activeCategoryMonth.slices.first(where: \.canDrillDown),
-              let categoryID = slice.categoryID
-        else {
-            return
-        }
-
-        didApplyDebugDrilldown = true
-        selectedCategory = OverviewCategoryDrilldownSelection(
-            id: categoryID,
-            name: slice.name,
-            iconSymbolName: slice.iconSymbolName,
-            colorHex: slice.colorHex
-        )
     }
 }
 
@@ -1076,357 +1025,6 @@ private struct OverviewWeekSpendingChart: View {
         } else {
             selectedDate = nil
         }
-    }
-}
-
-private struct OverviewCategorySpendingMonthView: View {
-    @Environment(\.colorScheme) private var colorScheme
-
-    let month: OverviewCategorySpendingMonthSnapshot
-    let selectedCategory: OverviewCategoryDrilldownSelection?
-    let insetSurface: Color
-    let onSelectSlice: (OverviewCategorySpendingSlice) -> Void
-    let onBack: () -> Void
-
-    private var visibleSlices: [OverviewCategorySpendingSlice] {
-        guard let selectedCategory else {
-            return month.slices
-        }
-
-        return month.drilldownSlices(for: selectedCategory.id)
-    }
-
-    private var totalMinor: Int64 {
-        visibleSlices.reduce(into: Int64.zero) { partialResult, slice in
-            partialResult += slice.amountMinor
-        }
-    }
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            if let selectedCategory {
-                Button(action: onBack) {
-                    HStack(spacing: 7) {
-                        Image(systemName: "chevron.left")
-                            .font(.system(size: 11, weight: .bold))
-
-                        MistiaFinanceIconView(
-                            icon: selectedCategory.iconSymbolName,
-                            fallbackColor: Color(hex: selectedCategory.colorHex),
-                            size: 18
-                        )
-
-                        Text(selectedCategory.name)
-                            .lineLimit(1)
-                    }
-                    .font(.system(size: 12, weight: .bold, design: .rounded))
-                    .foregroundStyle(.secondary)
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 6)
-                    .background {
-                        Capsule(style: .continuous)
-                            .fill(colorScheme == .dark ? .white.opacity(0.05) : .white.opacity(0.62))
-                    }
-                }
-                .buttonStyle(.plain)
-                .accessibilityIdentifier("overview.category.back")
-            }
-
-            if visibleSlices.isEmpty {
-                VStack(spacing: 8) {
-                    Image(systemName: "chart.pie.fill")
-                        .font(.system(size: 32, weight: .semibold))
-                        .foregroundStyle(.secondary.opacity(0.6))
-
-                    VStack(spacing: 4) {
-                        Text(mistiaLocalized(vi: "Chưa có chi tiêu", en: "No spending yet", ja: "支出はまだありません"))
-                            .font(.system(size: 15, weight: .bold, design: .rounded))
-                            .foregroundStyle(.primary)
-
-                        Text(mistiaLocalized(vi: "Vuốt để xem tháng khác.", en: "Swipe to another month.", ja: "スワイプして別の月を表示します。"))
-                            .font(.system(size: 12, weight: .medium, design: .rounded))
-                            .foregroundStyle(.secondary)
-                            .lineLimit(2)
-                            .multilineTextAlignment(.center)
-                    }
-                }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-            } else {
-                HStack(alignment: .top, spacing: 12) {
-                    OverviewCategoryPieChart(
-                        slices: visibleSlices,
-                        onSelectSlice: onSelectSlice
-                    )
-                    .frame(width: 128, height: 128)
-                    .frame(width: 132)
-                    .accessibilityIdentifier("overview.category.pie")
-
-                    OverviewCategoryTopList(
-                        slices: Array(visibleSlices.prefix(3)),
-                        totalMinor: totalMinor,
-                        currencyCode: month.currencyCode,
-                        onSelectSlice: onSelectSlice
-                    )
-                    .frame(maxHeight: 150)
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
-            }
-        }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 10)
-        .frame(maxHeight: .infinity, alignment: .center)
-        .background {
-            RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .fill(insetSurface)
-        }
-    }
-}
-
-private struct OverviewCategoryPieChart: View {
-    @Environment(\.colorScheme) private var colorScheme
-    @State private var selectedAngle: Double?
-
-    let slices: [OverviewCategorySpendingSlice]
-    let onSelectSlice: (OverviewCategorySpendingSlice) -> Void
-
-    private var prominentSlice: OverviewCategorySpendingSlice? {
-        slices.max { $0.amountMinor < $1.amountMinor }
-    }
-
-    private var prominentColor: Color {
-        Color(hex: prominentSlice?.colorHex ?? "#2DAA9E")
-    }
-
-    var body: some View {
-        ZStack {
-            if slices.count != 1 {
-                Circle()
-                    .fill(Color.primary.opacity(colorScheme == .dark ? 0.08 : 0.045))
-                    .overlay {
-                        Circle()
-                            .strokeBorder(Color.primary.opacity(colorScheme == .dark ? 0.10 : 0.06), lineWidth: 1)
-                    }
-            }
-
-            if let singleSlice = slices.first, slices.count == 1 {
-                OverviewSingleSliceSemiGauge(tint: Color(hex: singleSlice.colorHex))
-                    .contentShape(Rectangle())
-                    .onTapGesture {
-                        guard singleSlice.canDrillDown else { return }
-                        onSelectSlice(singleSlice)
-                    }
-            } else if slices.isEmpty {
-                Image(systemName: "chart.pie")
-                    .font(.system(size: 24, weight: .semibold))
-                    .foregroundStyle(.secondary)
-            } else {
-                Chart(slices) { slice in
-                    let isProminent = slice.id == prominentSlice?.id
-
-                    SectorMark(
-                        angle: .value("Chi tiêu", Double(slice.amountMinor)),
-                        innerRadius: .ratio(0.0),
-                        outerRadius: .ratio(isProminent ? 1.0 : 0.92),
-                        angularInset: 1.8
-                    )
-                    .cornerRadius(isProminent ? 7 : 4)
-                    .foregroundStyle(Color(hex: slice.colorHex).gradient)
-                    .opacity(isProminent ? 1 : 0.90)
-                }
-                .chartLegend(.hidden)
-                .chartAngleSelection(value: $selectedAngle)
-                .padding(2)
-            }
-        }
-        .shadow(color: prominentColor.opacity(colorScheme == .dark ? 0.28 : 0.18), radius: 12, y: 5)
-        .onChange(of: selectedAngle) { _, value in
-            guard let value,
-                  let slice = slice(at: value),
-                  slice.canDrillDown
-            else {
-                return
-            }
-
-            onSelectSlice(slice)
-            DispatchQueue.main.async {
-                selectedAngle = nil
-            }
-        }
-    }
-
-    private func slice(at selectedValue: Double) -> OverviewCategorySpendingSlice? {
-        var lowerBound = 0.0
-
-        for slice in slices {
-            let upperBound = lowerBound + Double(slice.amountMinor)
-            if selectedValue >= lowerBound && selectedValue <= upperBound {
-                return slice
-            }
-            lowerBound = upperBound
-        }
-
-        return nil
-    }
-}
-
-private struct OverviewSingleSliceSemiGauge: View {
-    @Environment(\.colorScheme) private var colorScheme
-    let tint: Color
-
-    private let lineWidth: CGFloat = 13
-
-    var body: some View {
-        ZStack(alignment: .bottom) {
-            OverviewSingleSliceSemiGaugeArc(progress: 1)
-                .stroke(
-                    colorScheme == .dark ? .white.opacity(0.10) : .black.opacity(0.07),
-                    style: StrokeStyle(lineWidth: lineWidth, lineCap: .round)
-                )
-
-            OverviewSingleSliceSemiGaugeArc(progress: 1)
-                .stroke(
-                    tint,
-                    style: StrokeStyle(lineWidth: lineWidth, lineCap: .round)
-                )
-                .shadow(color: tint.opacity(colorScheme == .dark ? 0.30 : 0.22), radius: 5, y: 2)
-
-            Text("100%")
-                .font(.system(size: 20, weight: .bold, design: .rounded))
-                .foregroundStyle(tint)
-                .lineLimit(1)
-                .minimumScaleFactor(0.72)
-                .padding(.bottom, 2)
-        }
-        .frame(width: 126, height: 72)
-        .frame(width: 128, height: 96, alignment: .center)
-        .accessibilityLabel(mistiaLocalized(vi: "Một danh mục chiếm toàn bộ", en: "Single category fills the chart", ja: "1つのカテゴリが全体を占めています"))
-    }
-}
-
-private struct OverviewSingleSliceSemiGaugeArc: Shape {
-    var progress: Double
-
-    var animatableData: Double {
-        get { progress }
-        set { progress = newValue }
-    }
-
-    func path(in rect: CGRect) -> Path {
-        var path = Path()
-        let clamped = min(max(progress, 0), 1)
-        let radius = min(rect.width / 2, rect.height)
-        let center = CGPoint(x: rect.midX, y: rect.maxY)
-        path.addArc(
-            center: center,
-            radius: radius,
-            startAngle: .degrees(180),
-            endAngle: .degrees(180 + 180 * clamped),
-            clockwise: false
-        )
-        return path
-    }
-}
-
-private struct OverviewCategoryTopList: View {
-    let slices: [OverviewCategorySpendingSlice]
-    let totalMinor: Int64
-    let currencyCode: String
-    let onSelectSlice: (OverviewCategorySpendingSlice) -> Void
-
-    private var showsPercentage: Bool {
-        slices.count > 1
-    }
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 7) {
-            if showsPercentage {
-                Text(mistiaLocalized(vi: "Top 3", en: "Top 3", ja: "トップ3"))
-                    .font(.system(size: 10, weight: .bold, design: .rounded))
-                    .foregroundStyle(.secondary)
-                    .textCase(.uppercase)
-            }
-
-            ForEach(slices) { slice in
-                if slice.canDrillDown {
-                    Button {
-                        onSelectSlice(slice)
-                    } label: {
-                        OverviewCategoryTopRow(
-                            slice: slice,
-                            totalMinor: totalMinor,
-                            currencyCode: currencyCode,
-                            showsPercentage: showsPercentage
-                        )
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityIdentifier("overview.category.row.\(slice.id)")
-                } else {
-                    OverviewCategoryTopRow(
-                        slice: slice,
-                        totalMinor: totalMinor,
-                        currencyCode: currencyCode,
-                        showsPercentage: showsPercentage
-                    )
-                    .accessibilityIdentifier("overview.category.row.\(slice.id)")
-                }
-            }
-        }
-        .frame(maxWidth: .infinity, maxHeight: 128, alignment: showsPercentage ? .topLeading : .center)
-    }
-}
-
-private struct OverviewCategoryTopRow: View {
-    @Environment(\.colorScheme) private var colorScheme
-
-    let slice: OverviewCategorySpendingSlice
-    let totalMinor: Int64
-    let currencyCode: String
-    let showsPercentage: Bool
-
-    private var percentageText: String {
-        guard totalMinor > 0 else { return "0%" }
-
-        let percentage = Double(slice.amountMinor) / Double(totalMinor) * 100
-        return "\(Int(percentage.rounded()))%"
-    }
-
-    var body: some View {
-        HStack(spacing: 8) {
-            MistiaFinanceIconView(
-                icon: slice.iconSymbolName,
-                fallbackColor: Color(hex: slice.colorHex),
-                size: 26
-            )
-
-            VStack(alignment: .leading, spacing: 1) {
-                Text(slice.name)
-                    .font(.system(size: 12, weight: .semibold, design: .rounded))
-                    .foregroundStyle(.primary)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.7)
-
-                if showsPercentage {
-                    Text(percentageText)
-                        .font(.system(size: 10, weight: .bold, design: .rounded))
-                        .foregroundStyle(.secondary)
-                }
-            }
-
-            Spacer(minLength: 6)
-
-            Text(slice.amountMinor.formattedCurrency(code: currencyCode))
-                .font(.system(size: 11, weight: .bold, design: .rounded))
-                .foregroundStyle(Color(hex: slice.colorHex))
-                .lineLimit(1)
-                .minimumScaleFactor(0.62)
-        }
-        .padding(.horizontal, 8)
-        .padding(.vertical, 6)
-        .background {
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .fill(colorScheme == .dark ? .white.opacity(0.035) : .white.opacity(0.58))
-        }
-        .contentShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
     }
 }
 

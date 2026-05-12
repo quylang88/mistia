@@ -144,9 +144,15 @@ struct NotificationCenterView: View {
     @ViewBuilder
     private func notificationRow(_ row: AppNotificationRecord) -> some View {
         HStack(alignment: .top, spacing: 14) {
-            notificationIcon(row)
-                .frame(width: 32, height: 32)
-                .padding(.top, 2)
+            ZStack(alignment: .bottom) {
+                notificationIcon(row)
+                    .frame(width: 32, height: 32)
+                    .padding(.bottom, 8)
+
+                unreadDot(for: row)
+            }
+            .frame(width: 32, height: 42)
+            .padding(.top, 1)
 
             VStack(alignment: .leading, spacing: 4) {
                 HStack(alignment: .firstTextBaseline, spacing: 8) {
@@ -203,10 +209,6 @@ struct NotificationCenterView: View {
                     }
                     .padding(.top, 4)
                 }
-            }
-            .overlay(alignment: .topLeading) {
-                unreadDot(for: row)
-                    .offset(x: -14, y: 4)
             }
         }
         .padding(.horizontal, 16)

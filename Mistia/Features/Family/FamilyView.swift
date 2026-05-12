@@ -612,6 +612,7 @@ private extension View {
 private struct FamilyDistributionSection: View {
     @Environment(\.colorScheme) private var colorScheme
     let summary: FamilyAggregateSummary
+    let categorySpendingSnapshot: OverviewCategorySpendingMonthSnapshot
     @Binding var timeframe: FamilyTimeframe
     @Binding var mode: FamilyDistributionMode
     let currencyCode: String
@@ -652,21 +653,29 @@ private struct FamilyDistributionSection: View {
                         }
                         .pickerStyle(.segmented)
 
-                        HStack(alignment: .top, spacing: 14) {
-                            FamilyPieChart(segments: chartSegments) { segment in
-                                onSegmentTap(segment.asDonutSegment)
-                            }
-                            .frame(width: 150, height: 150)
-                            .frame(width: 150)
+                        if resolvedMode == .spending {
+                            MistiaCategorySpendingChartView(
+                                snapshot: categorySpendingSnapshot,
+                                resetKey: "family-\(timeframe.rawValue)-\(categorySpendingSignature)",
+                                accessibilityPrefix: "family.category"
+                            )
+                        } else {
+                            HStack(alignment: .top, spacing: 14) {
+                                FamilyPieChart(segments: chartSegments) { segment in
+                                    onSegmentTap(segment.asDonutSegment)
+                                }
+                                .frame(width: 150, height: 150)
+                                .frame(width: 150)
 
-                            FamilyPieLegendList(
-                                segments: chartSegments,
-                                totalValueMinor: totalValueMinor,
-                                currencyCode: currencyCode
-                            ) { segment in
-                                onSegmentTap(segment.asDonutSegment)
+                                FamilyPieLegendList(
+                                    segments: chartSegments,
+                                    totalValueMinor: totalValueMinor,
+                                    currencyCode: currencyCode
+                                ) { segment in
+                                    onSegmentTap(segment.asDonutSegment)
+                                }
+                                .frame(maxWidth: .infinity)
                             }
-                            .frame(maxWidth: .infinity)
                         }
                     }
                 }
@@ -692,11 +701,24 @@ private struct FamilyDistributionSection: View {
     }
 
     private var availableModes: [FamilyDistributionMode] {
-        FamilyDistributionMode.allCases.filter { !chartSegments(for: $0).isEmpty }
+        FamilyDistributionMode.allCases.filter { mode in
+            switch mode {
+            case .spending:
+                return !categorySpendingSnapshot.slices.isEmpty
+            case .accounts, .members:
+                return !chartSegments(for: mode).isEmpty
+            }
+        }
     }
 
     private var availableModeKey: String {
-        availableModes.map(\.rawValue).joined(separator: "|")
+        "\(availableModes.map(\.rawValue).joined(separator: "|"))-\(categorySpendingSignature)"
+    }
+
+    private var categorySpendingSignature: String {
+        categorySpendingSnapshot.slices
+            .map { "\($0.id):\($0.amountMinor):\($0.childSlices.map(\.id).joined(separator: ","))" }
+            .joined(separator: "|")
     }
 
     private var resolvedMode: FamilyDistributionMode {
@@ -772,7 +794,11 @@ private struct FamilyDistributionSection: View {
     }
 
     private var totalValueMinor: Int64 {
-        chartSegments.reduce(into: Int64.zero) { partial, segment in
+        if resolvedMode == .spending {
+            return categorySpendingSnapshot.totalExpenseMinor
+        }
+
+        return chartSegments.reduce(into: Int64.zero) { partial, segment in
             partial += segment.valueMinor
         }
     }
@@ -1995,18 +2021,29 @@ struct FamilyOverviewScreen: View {
         )
     }
 
-    private var summary: FamilyAggregateSummary {
-        let transactionOwnerMap = MistiaRecordOwnershipStore.ownerMap(from: ownershipScopes, entity: .transaction)
-        
-        let interval: DateInterval
+    private var selectedInterval: DateInterval {
         switch timeframe {
         case .week:
-            interval = calendar.dateInterval(of: .weekOfYear, for: .now) ?? DateInterval(start: .now, duration: 3600*24*7)
+            return calendar.dateInterval(of: .weekOfYear, for: .now) ?? DateInterval(start: .now, duration: 3600*24*7)
         case .month:
-            interval = calendar.dateInterval(of: .month, for: .now) ?? DateInterval(start: .now, duration: 3600*24*30)
+            return calendar.dateInterval(of: .month, for: .now) ?? DateInterval(start: .now, duration: 3600*24*30)
         case .year:
-            interval = calendar.dateInterval(of: .year, for: .now) ?? DateInterval(start: .now, duration: 3600*24*365)
+            return calendar.dateInterval(of: .year, for: .now) ?? DateInterval(start: .now, duration: 3600*24*365)
         }
+    }
+
+    private var categorySpendingSnapshot: OverviewCategorySpendingMonthSnapshot {
+        OverviewLogic.categorySpendingInterval(
+            from: allTransactions.map(\.overviewSnapshot),
+            interval: selectedInterval,
+            title: timeframe.title,
+            currencyCode: currencyCode,
+            calendar: calendar
+        )
+    }
+
+    private var summary: FamilyAggregateSummary {
+        let transactionOwnerMap = MistiaRecordOwnershipStore.ownerMap(from: ownershipScopes, entity: .transaction)
 
         let memberNames = Dictionary(uniqueKeysWithValues: familyContextStore.members.map { ($0.userID, $0.displayName) })
 
@@ -2037,7 +2074,7 @@ struct FamilyOverviewScreen: View {
                     isCreditCardPayment: TransactionLogic.isCreditCardPayment(transaction.snapshot)
                 )
             },
-            selectedInterval: interval,
+            selectedInterval: selectedInterval,
             visibleMemberIDs: familyMemberIDs,
             memberNames: memberNames,
             calendar: calendar
@@ -2084,6 +2121,7 @@ struct FamilyOverviewScreen: View {
 
             FamilyDistributionSection(
                 summary: summary,
+                categorySpendingSnapshot: categorySpendingSnapshot,
                 timeframe: $timeframe,
                 mode: $distributionMode,
                 currencyCode: currencyCode,

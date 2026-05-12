@@ -402,6 +402,52 @@ final class OverviewLogicTests: XCTestCase {
         XCTAssertEqual(page.topSlices.map(\.name), ["Gamma", "Delta", "Alpha"])
     }
 
+    func testCategorySpendingIntervalUsesSameParentChildRollup() {
+        let foodParent = UUID()
+        let grocery = UUID()
+        let dineOut = UUID()
+        let interval = DateInterval(
+            start: makeDate(year: 2026, month: 4, day: 7),
+            end: makeDate(year: 2026, month: 4, day: 14)
+        )
+
+        let page = OverviewLogic.categorySpendingInterval(
+            from: [
+                makeOverviewExpense(
+                    amountMinor: 6_000,
+                    occurredAt: makeDate(year: 2026, month: 4, day: 7),
+                    categoryID: grocery,
+                    categoryName: "Đi chợ",
+                    categoryParentID: foodParent,
+                    categoryParentName: "Ăn uống"
+                ),
+                makeOverviewExpense(
+                    amountMinor: 4_000,
+                    occurredAt: makeDate(year: 2026, month: 4, day: 10),
+                    categoryID: dineOut,
+                    categoryName: "Ăn ngoài",
+                    categoryParentID: foodParent,
+                    categoryParentName: "Ăn uống"
+                ),
+                makeOverviewExpense(
+                    amountMinor: 9_000,
+                    occurredAt: makeDate(year: 2026, month: 4, day: 15),
+                    categoryID: UUID(),
+                    categoryName: "Excluded"
+                )
+            ],
+            interval: interval,
+            title: "Tuần",
+            currencyCode: "JPY",
+            calendar: calendar
+        )
+
+        XCTAssertEqual(page.title, "Tuần")
+        XCTAssertEqual(page.totalExpenseMinor, 10_000)
+        XCTAssertEqual(page.slices.map(\.name), ["Ăn uống"])
+        XCTAssertEqual(page.slices.first?.childSlices.map(\.name), ["Đi chợ", "Ăn ngoài"])
+    }
+
     func testBudgetAlertsFilterOverFiftyPercentSortDescendingAndApplyThresholds() {
         let selectedMonth = makeDate(year: 2026, month: 4, day: 1)
         let referenceDate = makeDate(year: 2026, month: 4, day: 24)
