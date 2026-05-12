@@ -1026,6 +1026,10 @@ private struct TransactionRow: View {
     }
 
     private var cashflowColor: Color {
+        if TransactionLogic.isCreditCardPayment(record) {
+            return .white
+        }
+
         switch record.primaryKind {
         case .expense:
             return MistiaAccent.expense.color
@@ -1038,6 +1042,10 @@ private struct TransactionRow: View {
 
     private var displayAmount: String {
         let raw = record.amountMinor.formattedCurrency(code: "JPY")
+
+        if TransactionLogic.isCreditCardPayment(record) {
+            return raw
+        }
 
         switch record.primaryKind {
         case .expense:

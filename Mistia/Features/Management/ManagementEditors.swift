@@ -567,15 +567,9 @@ struct ManagementWalletEditorSheet: View {
 
             for month in recentMonths {
                 let hasPayment = allTransactions.contains { tx in
-                    tx.destinationWallet?.id == wallet.id &&
-                    tx.primaryKind == .transfer &&
-                    tx.transferSubtype == .internalTransfer &&
-                    calendar.isDate(tx.occurredAt, equalTo: month, toGranularity: .month) &&
-                    (
-                        tx.title.localizedStandardContains("thanh toán thẻ") ||
-                        tx.title.localizedStandardContains("card payment") ||
-                        tx.title.localizedStandardContains("カード支払い")
-                    )
+                    tx.destinationWallet?.id == wallet.id
+                        && calendar.isDate(tx.occurredAt, equalTo: month, toGranularity: .month)
+                        && TransactionLogic.isCreditCardPayment(tx.snapshot)
                 }
 
                 let hasExpenses = allTransactions.contains { tx in

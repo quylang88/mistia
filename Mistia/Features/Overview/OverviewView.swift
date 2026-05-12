@@ -237,7 +237,7 @@ struct OverviewView: View {
                 transaction.deletedAt == nil
                     && !transaction.isArchived
                     && transaction.entryStatus == .posted
-                    && transaction.primaryKind == .expense
+                    && TransactionLogic.isExpenseSpending(transaction.planningRecordSnapshot)
             },
             by: { calendar.startOfDay(for: $0.occurredAt) }
         )

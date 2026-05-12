@@ -274,7 +274,7 @@ nonisolated enum OverviewLogic {
         let expenseThisMonth = transactionRecords
             .filter { record in
                 guard record.entryStatus == .posted,
-                      record.primaryKind == .expense,
+                      TransactionLogic.isExpenseSpending(record),
                       let monthInterval
                 else {
                     return false
@@ -336,7 +336,7 @@ nonisolated enum OverviewLogic {
         let currentWeekEnd = calendar.date(byAdding: .day, value: 6, to: currentWeekStart) ?? currentWeekStart
 
         let earliestExpenseWeekStart = transactionRecords
-            .filter { $0.entryStatus == .posted && $0.primaryKind == .expense }
+            .filter { $0.entryStatus == .posted && TransactionLogic.isExpenseSpending($0) }
             .map { startOfMondayWeek(containing: $0.occurredAt, calendar: calendar) }
             .min()
 
@@ -356,7 +356,7 @@ nonisolated enum OverviewLogic {
                 let total = transactionRecords
                     .filter { record in
                         record.entryStatus == .posted
-                            && record.primaryKind == .expense
+                            && TransactionLogic.isExpenseSpending(record)
                             && record.occurredAt >= day
                             && record.occurredAt < nextDay
                     }
@@ -447,7 +447,7 @@ nonisolated enum OverviewLogic {
             let total = transactionRecords
                 .filter { record in
                     record.entryStatus == .posted
-                        && record.primaryKind == .expense
+                        && TransactionLogic.isExpenseSpending(record)
                         && record.occurredAt >= day
                         && record.occurredAt < nextDay
                 }
@@ -569,7 +569,23 @@ nonisolated enum OverviewLogic {
     ) -> Bool {
         transaction.entryStatus == .posted
             && transaction.primaryKind == .expense
+            && !isCreditCardPayment(transaction)
             && !transaction.isArchived
+    }
+
+    private static func isCreditCardPayment(
+        _ transaction: OverviewTransactionSnapshot
+    ) -> Bool {
+        let titleLooksLikeCardPayment = TransactionLogic.isCreditCardPaymentTitle(transaction.title)
+        if transaction.primaryKind == .transfer {
+            guard transaction.transferSubtype == .internalTransfer else { return false }
+            return transaction.destinationWalletKind == .creditCard
+                || (transaction.destinationWalletID != nil && titleLooksLikeCardPayment)
+        }
+
+        return transaction.primaryKind == .expense
+            && transaction.sourceWalletKind != .creditCard
+            && titleLooksLikeCardPayment
     }
 
     private static func categoryBranchKey(

@@ -428,7 +428,7 @@ nonisolated enum PlanningLogic {
         let monthInterval = calendar.dateInterval(of: .month, for: selectedMonth)
         let spentByCategory = Dictionary(grouping: records.filter { record in
             guard record.entryStatus == .posted,
-                  record.primaryKind == .expense,
+                  TransactionLogic.isExpenseSpending(record),
                   record.categoryID != nil,
                   let monthInterval
             else {
@@ -499,7 +499,7 @@ nonisolated enum PlanningLogic {
         let monthInterval = calendar.dateInterval(of: .month, for: selectedMonth)
         let expenseRecordsInMonth = records.filter { record in
             guard record.entryStatus == .posted,
-                  record.primaryKind == .expense,
+                  TransactionLogic.isExpenseSpending(record),
                   let monthInterval
             else {
                 return false
@@ -1303,7 +1303,7 @@ nonisolated enum PlanningLogic {
         return records.reduce(into: Int64.zero) { partial, record in
             guard record.entryStatus == .posted,
                   !record.isArchived,
-                  record.primaryKind == .expense,
+                  TransactionLogic.isExpenseSpending(record),
                   record.sourceWalletID == walletID,
                   record.occurredAt >= monthInterval.start,
                   record.occurredAt < monthInterval.end

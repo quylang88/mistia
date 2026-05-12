@@ -236,6 +236,14 @@ final class FamilyLogicTests: XCTestCase {
                     occurredAt: makeDate(year: 2026, month: 4, day: 8),
                     kind: .expense,
                     amountMinor: 35_000
+                ),
+                FamilyAggregateTransactionSnapshot(
+                    ownerUserID: memberA,
+                    categoryName: "Thanh toán thẻ",
+                    occurredAt: makeDate(year: 2026, month: 4, day: 12),
+                    kind: .expense,
+                    amountMinor: 100_000,
+                    isCreditCardPayment: true
                 )
             ],
             selectedInterval: interval,
@@ -247,6 +255,8 @@ final class FamilyLogicTests: XCTestCase {
 
         XCTAssertEqual(summary.spendingByMember.map(\.name), ["Binh", "An"])
         XCTAssertEqual(summary.spendingByMember.map(\.amountMinor), [35_000, 20_000])
+        XCTAssertEqual(summary.expenseByCategory.map(\.label), ["Shopping", "Food"])
+        XCTAssertEqual(summary.expenseByCategory.map(\.valueMinor), [35_000, 20_000])
         XCTAssertEqual(summary.incomeByMember.map(\.name), ["Binh"])
         XCTAssertEqual(summary.incomeByMember.map(\.amountMinor), [50_000])
     }

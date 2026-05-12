@@ -153,6 +153,23 @@ struct FamilyAggregateTransactionSnapshot: Equatable {
     let occurredAt: Date
     let kind: Kind
     let amountMinor: Int64
+    let isCreditCardPayment: Bool
+
+    init(
+        ownerUserID: UUID,
+        categoryName: String?,
+        occurredAt: Date,
+        kind: Kind,
+        amountMinor: Int64,
+        isCreditCardPayment: Bool = false
+    ) {
+        self.ownerUserID = ownerUserID
+        self.categoryName = categoryName
+        self.occurredAt = occurredAt
+        self.kind = kind
+        self.amountMinor = amountMinor
+        self.isCreditCardPayment = isCreditCardPayment
+    }
 }
 
 struct FamilyTrendPoint: Equatable, Identifiable {
@@ -298,7 +315,7 @@ enum FamilyLogic {
             // Asset = CurrentAsset - Sum(Income after date) + Sum(Expense after date)
             // This is a simplification.
             let incomeAfter = transactionsAfterDate.filter { $0.kind == .income }.reduce(0) { $0 + $1.amountMinor }
-            let expenseAfter = transactionsAfterDate.filter { $0.kind == .expense }.reduce(0) { $0 + $1.amountMinor }
+            let expenseAfter = transactionsAfterDate.filter(isExpenseSpending).reduce(0) { $0 + $1.amountMinor }
             
             let historicalSpendable = spendableMinor - incomeAfter + expenseAfter
             return FamilyTrendPoint(date: date, valueMinor: historicalSpendable)
@@ -312,7 +329,7 @@ enum FamilyLogic {
         }
 
         let expenseMap = intervalTransactions.reduce(into: [String: Int64]()) { partial, transaction in
-            guard transaction.kind == .expense else { return }
+            guard isExpenseSpending(transaction) else { return }
             partial[transaction.categoryName ?? "Other", default: 0] += transaction.amountMinor
         }
         let expenseByCategory = expenseMap.map { FamilyDonutSegment(label: $0.key, valueMinor: $0.value, colorHex: nil) }
@@ -320,7 +337,7 @@ enum FamilyLogic {
 
         // 4. Member Comparison
         let memberSpendingMap = intervalTransactions.reduce(into: [UUID: Int64]()) { partial, transaction in
-            guard transaction.kind == .expense else { return }
+            guard isExpenseSpending(transaction) else { return }
             partial[transaction.ownerUserID, default: 0] += transaction.amountMinor
         }
         let spendingByMember = memberSpendingMap.map { 
@@ -347,8 +364,8 @@ enum FamilyLogic {
         let previousTransactions = transactions.filter {
             (visibleMemberIDs?.contains($0.ownerUserID) ?? true) && previousInterval.contains($0.occurredAt)
         }
-        let currentSpending = intervalTransactions.filter { $0.kind == .expense }.reduce(0) { $0 + $1.amountMinor }
-        let previousSpending = previousTransactions.filter { $0.kind == .expense }.reduce(0) { $0 + $1.amountMinor }
+        let currentSpending = intervalTransactions.filter(isExpenseSpending).reduce(0) { $0 + $1.amountMinor }
+        let previousSpending = previousTransactions.filter(isExpenseSpending).reduce(0) { $0 + $1.amountMinor }
         
         if previousSpending > 0 {
             let diff = Double(currentSpending - previousSpending) / Double(previousSpending)
@@ -401,5 +418,9 @@ enum FamilyLogic {
             incomeByMember: incomeByMember,
             insights: insights
         )
+    }
+
+    nonisolated private static func isExpenseSpending(_ transaction: FamilyAggregateTransactionSnapshot) -> Bool {
+        transaction.kind == .expense && !transaction.isCreditCardPayment
     }
 }

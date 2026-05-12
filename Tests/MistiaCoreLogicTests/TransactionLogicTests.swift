@@ -202,6 +202,50 @@ final class TransactionLogicTests: XCTestCase {
         XCTAssertEqual(sections.first?.rows.count, 1)
     }
 
+    func testCreditCardPaymentsDoNotCountAsExpenseSpending() {
+        let bankID = UUID()
+        let cardID = UUID()
+        let categoryID = UUID()
+        let now = Date(timeIntervalSince1970: 1_742_646_400)
+
+        let grocery = makeRecord(
+            primaryKind: .expense,
+            title: "Grocery",
+            amountMinor: 4_000,
+            occurredAt: now,
+            sourceWalletID: bankID,
+            sourceWalletKind: .bank,
+            categoryID: categoryID
+        )
+        let cardPayment = makeRecord(
+            primaryKind: .transfer,
+            transferSubtype: .internalTransfer,
+            title: "Thanh toán thẻ Visa",
+            amountMinor: 12_000,
+            occurredAt: now.addingTimeInterval(60),
+            sourceWalletID: bankID,
+            sourceWalletKind: .bank,
+            destinationWalletID: cardID,
+            destinationWalletKind: .creditCard
+        )
+        let legacyExpensePayment = makeRecord(
+            primaryKind: .expense,
+            title: "Thanh toan the legacy",
+            amountMinor: 8_000,
+            occurredAt: now.addingTimeInterval(120),
+            sourceWalletID: bankID,
+            sourceWalletKind: .bank,
+            categoryID: categoryID
+        )
+
+        let summary = TransactionLogic.summary(for: [grocery, cardPayment, legacyExpensePayment])
+
+        XCTAssertTrue(TransactionLogic.isCreditCardPayment(cardPayment))
+        XCTAssertTrue(TransactionLogic.isCreditCardPayment(legacyExpensePayment))
+        XCTAssertEqual(summary.expenseMinor, 4_000)
+        XCTAssertEqual(summary.incomeMinor, 0)
+    }
+
     func testExpenseFiltersCombineTypeTimeWalletCategoryAmountStatusAndSearch() {
         let walletID = UUID()
         let otherWalletID = UUID()

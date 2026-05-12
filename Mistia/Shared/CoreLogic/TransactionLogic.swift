@@ -156,6 +156,30 @@ nonisolated enum TransactionLogic {
         record.categoryID == MistiaSystemCategoryIdentity.balanceAdjustmentIncomeID
     }
 
+    static func isCreditCardPayment(_ record: TransactionRecordSnapshot) -> Bool {
+        let titleLooksLikeCardPayment = isCreditCardPaymentTitle(record.title)
+        if record.primaryKind == .transfer {
+            guard record.transferSubtype == .internalTransfer else { return false }
+            return record.destinationWalletKind == .creditCard
+                || (record.destinationWalletID != nil && titleLooksLikeCardPayment)
+        }
+
+        return record.primaryKind == .expense
+            && record.sourceWalletKind != .creditCard
+            && titleLooksLikeCardPayment
+    }
+
+    static func isExpenseSpending(_ record: TransactionRecordSnapshot) -> Bool {
+        record.primaryKind == .expense && !isCreditCardPayment(record)
+    }
+
+    static func isCreditCardPaymentTitle(_ title: String) -> Bool {
+        title.localizedStandardContains("thanh toán thẻ") ||
+            title.localizedStandardContains("thanh toan the") ||
+            title.localizedStandardContains("card payment") ||
+            title.localizedStandardContains("カード支払い")
+    }
+
     static func visibleRecords(
         from records: [TransactionRecordSnapshot],
         selectedKind: TransactionPrimaryKind?,
@@ -183,7 +207,7 @@ nonisolated enum TransactionLogic {
     static func summary(for records: [TransactionRecordSnapshot]) -> TransactionSummarySnapshot {
         let posted = records.filter { $0.entryStatus == .posted }
         let expenseMinor = posted
-            .filter { $0.primaryKind == .expense }
+            .filter(isExpenseSpending)
             .reduce(into: Int64.zero) { partialResult, record in
                 partialResult += record.amountMinor
             }
@@ -684,19 +708,13 @@ nonisolated enum TransactionLogic {
             tx.transferSubtype == .internalTransfer &&
             tx.entryStatus == .posted &&
             !tx.isArchived &&
-            isCreditCardStatementPaymentTitle(tx.title) &&
+            isCreditCardPaymentTitle(tx.title) &&
             (
                 paidStatementMonth(for: tx, calendar: calendar)
                     .map { calendar.isDate($0, equalTo: transaction.occurredAt, toGranularity: .month) }
                     ?? false
             )
         }
-    }
-
-    private static func isCreditCardStatementPaymentTitle(_ title: String) -> Bool {
-        title.localizedStandardContains("thanh toán thẻ") ||
-            title.localizedStandardContains("card payment") ||
-            title.localizedStandardContains("カード支払い")
     }
 
     private static func paidStatementMonth(

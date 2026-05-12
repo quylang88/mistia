@@ -447,8 +447,18 @@ struct FamilyRemoteService: FamilyRemoteServicing {
             )
         }
 
-        let family = try await fetchFamily(id: currentMembership.familyID, session: session)
-        let membershipRows = try await fetchMemberships(familyID: currentMembership.familyID, session: session)
+        async let family = fetchFamily(id: currentMembership.familyID, session: session)
+        async let membershipRowsTask = fetchMemberships(familyID: currentMembership.familyID, session: session)
+        async let invitesTask: [FamilyInviteRecord] = currentMembership.role == .owner
+            ? fetchInvites(familyID: currentMembership.familyID, session: session)
+            : []
+        async let permissionGrantsTask = fetchPermissionGrants(
+            familyID: currentMembership.familyID,
+            session: session,
+            userID: currentMembership.role == .owner ? nil : session.user.id
+        )
+
+        let membershipRows = try await membershipRowsTask
         let profileRows = try await fetchProfiles(
             userIDs: membershipRows.map(\.userID),
             session: session
@@ -467,17 +477,12 @@ struct FamilyRemoteService: FamilyRemoteServicing {
                 isCurrentUser: row.userID == session.user.id
             )
         }
-        let invites = currentMembership.role == .owner
-            ? try await fetchInvites(familyID: currentMembership.familyID, session: session)
-            : []
-        let permissionGrants = try await fetchPermissionGrants(
-            familyID: currentMembership.familyID,
-            session: session,
-            userID: currentMembership.role == .owner ? nil : session.user.id
-        )
+        let resolvedFamily = try await family
+        let invites = try await invitesTask
+        let permissionGrants = try await permissionGrantsTask
 
         return FamilyStateSnapshot(
-            family: family,
+            family: resolvedFamily,
             currentMembership: currentMembership,
             members: members,
             invites: invites,

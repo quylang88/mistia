@@ -2033,7 +2033,8 @@ struct FamilyOverviewScreen: View {
                     categoryName: transaction.category?.localizedDisplayName,
                     occurredAt: transaction.occurredAt,
                     kind: transaction.primaryKind.familyAggregateKind,
-                    amountMinor: abs(transaction.amountMinor)
+                    amountMinor: abs(transaction.amountMinor),
+                    isCreditCardPayment: TransactionLogic.isCreditCardPayment(transaction.snapshot)
                 )
             },
             selectedInterval: interval,

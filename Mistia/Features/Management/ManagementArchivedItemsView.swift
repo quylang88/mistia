@@ -491,10 +491,8 @@ struct ManagementArchivedItemsView: View {
             let isDuplicate = activeTransactions.contains { tx in
                 tx.id != transaction.id &&
                 tx.destinationWallet?.id == transaction.destinationWallet?.id &&
-                tx.primaryKind == .transfer &&
-                tx.transferSubtype == .internalTransfer &&
                 calendar.isDate(tx.occurredAt, equalTo: transaction.occurredAt, toGranularity: .month) &&
-                tx.title.localizedStandardContains(mistiaLocalized(vi: "thanh toán thẻ", en: "card payment", ja: "カード支払い"))
+                TransactionLogic.isCreditCardPayment(tx.snapshot)
             }
 
             if isDuplicate {
@@ -588,10 +586,7 @@ struct ManagementArchivedItemsView: View {
     }
 
     private func isCreditCardPayment(_ transaction: LedgerTransaction) -> Bool {
-        transaction.primaryKind == .transfer &&
-        transaction.transferSubtype == .internalTransfer &&
-        transaction.destinationWallet?.kind == .creditCard &&
-        transaction.title.localizedStandardContains(mistiaLocalized(vi: "thanh toán thẻ", en: "card payment", ja: "カード支払い"))
+        TransactionLogic.isCreditCardPayment(transaction.snapshot)
     }
 
     private func transactionOwnerUserID(for transaction: LedgerTransaction) -> UUID? {

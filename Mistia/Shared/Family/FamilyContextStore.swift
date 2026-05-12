@@ -25,6 +25,7 @@ private struct FamilyPendingPermissionRequestKey: Hashable {
 @Observable
 final class FamilyContextStore {
     private static let pendingInviteTokenKey = "Mistia.pendingFamilyInviteToken"
+    private static let latestRefreshCooldown: TimeInterval = 45
 
     var activeContext: FamilyContext = .personalSelf
     var family: FamilyGroupRecord?
@@ -44,6 +45,7 @@ final class FamilyContextStore {
     @ObservationIgnored private let launchState: MistiaDataStack.LaunchState?
     @ObservationIgnored private var modelContainer: ModelContainer
     @ObservationIgnored private var lastLatestRefreshCompletedAt: Date?
+    @ObservationIgnored private var avatarHydrationTask: Task<Void, Never>?
     private var pendingPermissionRequestKeys: Set<FamilyPendingPermissionRequestKey> = []
 
     init(
@@ -198,6 +200,7 @@ final class FamilyContextStore {
 
     func refresh(sessionStore: SessionStore) async {
         setModelContainer(sessionStore.currentModelContainer)
+        restoreCachedStateIfAvailable(sessionStore: sessionStore)
 
         guard sessionStore.isSignedIn else {
             restoreSignedOutLocalState(sessionStore: sessionStore)
@@ -214,7 +217,8 @@ final class FamilyContextStore {
         do {
             let snapshot = try await service.fetchState(session: session)
             apply(snapshot: snapshot)
-            persistCachedState(snapshot)
+            persistCachedState(currentSnapshot)
+            hydrateFamilyAvatars(from: snapshot.members)
             lastErrorMessage = nil
 
             normalizeActiveContextAfterStateLoad()
@@ -277,7 +281,7 @@ final class FamilyContextStore {
 
     private var didCompleteLatestRefreshRecently: Bool {
         guard let lastLatestRefreshCompletedAt else { return false }
-        return Date().timeIntervalSince(lastLatestRefreshCompletedAt) < 2
+        return Date().timeIntervalSince(lastLatestRefreshCompletedAt) < Self.latestRefreshCooldown
     }
 
     private func didCompleteLatestRefresh(after startDate: Date) -> Bool {
@@ -441,7 +445,8 @@ final class FamilyContextStore {
         do {
             let snapshot = try await service.acceptInvite(token: token, session: session)
             apply(snapshot: snapshot)
-            persistCachedState(snapshot)
+            persistCachedState(currentSnapshot)
+            hydrateFamilyAvatars(from: snapshot.members)
             lastErrorMessage = nil
             if let familyID = snapshot.family?.id {
                 activeContext = FamilyContext(scope: .familyHome(familyID: familyID))
@@ -866,12 +871,14 @@ final class FamilyContextStore {
         pendingPermissionRequestKeys = []
         lastErrorMessage = nil
         isRefreshingLatest = false
+        avatarHydrationTask?.cancel()
+        avatarHydrationTask = nil
     }
 
     private func apply(snapshot: FamilyStateSnapshot) {
         family = snapshot.family
         currentMembership = snapshot.currentMembership
-        members = snapshot.members
+        members = snapshot.members.map(memberWithCachedAvatar)
         invites = snapshot.invites
         permissionGrants = snapshot.permissionGrants
         removeGrantedPendingPermissionRequests()
@@ -888,6 +895,15 @@ final class FamilyContextStore {
         case .guestUnbound, .authenticated, nil:
             clear()
         }
+    }
+
+    private func restoreCachedStateIfAvailable(sessionStore: SessionStore) {
+        guard !hasCachedRemoteState,
+              let profileID = sessionStore.activeLocalProfileID else {
+            return
+        }
+
+        _ = restoreCachedState(profileID: profileID)
     }
 
     private func normalizeActiveContextAfterStateLoad() {
@@ -910,6 +926,61 @@ final class FamilyContextStore {
         } catch {
             return
         }
+    }
+
+    private var currentSnapshot: FamilyStateSnapshot {
+        FamilyStateSnapshot(
+            family: family,
+            currentMembership: currentMembership,
+            members: members,
+            invites: invites,
+            permissionGrants: permissionGrants
+        )
+    }
+
+    private func memberWithCachedAvatar(_ member: FamilyMember) -> FamilyMember {
+        var resolvedMember = member
+        if let cachedAvatarURL = MistiaProfileAvatarCache.cachedAvatarURL(for: member.userID) {
+            resolvedMember.avatarURL = cachedAvatarURL
+        } else if member.avatarURL?.isFileURL == true,
+                  let avatarURL = member.avatarURL,
+                  !FileManager.default.fileExists(atPath: avatarURL.path) {
+            resolvedMember.avatarURL = nil
+        }
+        return resolvedMember
+    }
+
+    private func hydrateFamilyAvatars(from remoteMembers: [FamilyMember]) {
+        let membersToCache = remoteMembers.filter { member in
+            guard let avatarURL = member.avatarURL else { return false }
+            return !avatarURL.isFileURL
+        }
+        guard !membersToCache.isEmpty else { return }
+
+        avatarHydrationTask?.cancel()
+        avatarHydrationTask = Task { [weak self] in
+            for member in membersToCache {
+                guard !Task.isCancelled else { return }
+                guard let cachedURL = await MistiaProfileAvatarCache.cacheRemoteAvatarIfNeeded(
+                    from: member.avatarURL,
+                    for: member.userID
+                ) else {
+                    continue
+                }
+                guard !Task.isCancelled else { return }
+                self?.updateCachedAvatar(cachedURL, for: member.userID)
+            }
+        }
+    }
+
+    private func updateCachedAvatar(_ avatarURL: URL, for userID: UUID) {
+        guard let memberIndex = members.firstIndex(where: { $0.userID == userID }),
+              members[memberIndex].avatarURL?.absoluteString != avatarURL.absoluteString else {
+            return
+        }
+
+        members[memberIndex].avatarURL = avatarURL
+        persistCachedState(currentSnapshot)
     }
 
     private func restoreCachedState(profileID: UUID) -> Bool {
