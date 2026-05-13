@@ -84,7 +84,6 @@ struct TransactionEditorSheet: View {
 
     @State private var draft: TransactionFormDraft
     @State private var alertMessage: String?
-
     private var isAdjustment: Bool {
         if let transaction = target.transaction {
             return transaction.category?.id == MistiaSystemCategoryIdentity.balanceAdjustmentExpenseID ||
@@ -555,17 +554,13 @@ struct TransactionEditorSheet: View {
     private var availableCategories: [TransactionCategory] {
         let desiredKind: TransactionCategoryKind = draft.primaryKind == .income ? .income : .expense
         let preferredID = target.transaction?.category?.id
-        let allowedOwnerUserIDs = effectiveCategoryOwnerUserIDs
 
         return storedCategories
             .filter {
-                guard let ownerUserID = categoryOwnerUserID(for: $0) else {
-                    return false
-                }
                 return ($0.kind == desiredKind)
                     && $0.isChildCategory
                     && !$0.isBalanceAdjustmentSystemCategory
-                    && allowedOwnerUserIDs.contains(ownerUserID)
+                    && shouldShowCategory($0)
                     && (($0.deletedAt == nil && !$0.isArchived) || $0.id == preferredID)
             }
             .sorted {
@@ -626,15 +621,10 @@ struct TransactionEditorSheet: View {
     private var categorySections: [TransactionCategoryGroupSection] {
         let desiredKind: TransactionCategoryKind = draft.primaryKind == .income ? .income : .expense
         let preferredID = target.transaction?.category?.id
-        let allowedOwnerUserIDs = effectiveCategoryOwnerUserIDs
         let relevantCategories = storedCategories.filter { category in
-            guard let ownerUserID = categoryOwnerUserID(for: category) else {
-                return false
-            }
-
             return !category.isBalanceAdjustmentSystemCategory
                 && category.kind == desiredKind
-                && allowedOwnerUserIDs.contains(ownerUserID)
+                && shouldShowCategory(category)
                 && category.deletedAt == nil
                 && (!category.isArchived || category.id == preferredID || category.parentCategory?.id == target.transaction?.category?.parentCategory?.id)
         }
@@ -651,8 +641,7 @@ struct TransactionEditorSheet: View {
         let desiredKind: TransactionCategoryKind = draft.primaryKind == .income ? .income : .expense
         return MistiaCategoryPickerSupport.favoriteCategories(
             from: storedCategories.filter {
-                guard let ownerUserID = categoryOwnerUserID(for: $0) else { return false }
-                return !$0.isBalanceAdjustmentSystemCategory && effectiveCategoryOwnerUserIDs.contains(ownerUserID)
+                !$0.isBalanceAdjustmentSystemCategory && shouldShowCategory($0)
             },
             kind: desiredKind
         )
@@ -660,11 +649,15 @@ struct TransactionEditorSheet: View {
 
     private var recentCategories: [TransactionCategory] {
         let desiredKind: TransactionCategoryKind = draft.primaryKind == .income ? .income : .expense
+        let ownerUserIDs = recentCategoryOwnerUserIDs
         return MistiaCategoryPickerSupport.recentCategories(
-            from: postedTransactions,
+            from: postedTransactions.filter {
+                guard let ownerUserID = transactionOwnerUserID(for: $0) else { return false }
+                return ownerUserIDs.contains(ownerUserID)
+            },
             categories: storedCategories.filter {
-                guard let ownerUserID = categoryOwnerUserID(for: $0) else { return false }
-                return !$0.isBalanceAdjustmentSystemCategory && effectiveCategoryOwnerUserIDs.contains(ownerUserID)
+                !$0.isBalanceAdjustmentSystemCategory
+                    && categoryMatchesOwnerScope($0, ownerUserIDs: ownerUserIDs)
             },
             kind: desiredKind
         )
@@ -901,6 +894,16 @@ struct TransactionEditorSheet: View {
                 return
             }
 
+            let walletOwnerUserID = walletOwnerUserID(for: sourceWallet)
+            guard categoryOwnerUserID(for: category) == walletOwnerUserID else {
+                alertMessage = mistiaLocalized(
+                    vi: "Ví gia đình phải dùng danh mục đã có trên cloud của chủ ví.",
+                    en: "Family wallets must use a category from the wallet owner's cloud catalog.",
+                    ja: "家族ウォレットでは、ウォレット所有者のクラウドカテゴリを使う必要があります。"
+                )
+                return
+            }
+
             transaction.title = draft.title.nilIfBlank ?? ""
             transaction.sourceWallet = sourceWallet
             transaction.destinationWallet = nil
@@ -1120,12 +1123,35 @@ struct TransactionEditorSheet: View {
         MistiaRecordOwnershipStore.ownerMap(from: ownershipScopes, entity: .category)
     }
 
+    private var transactionOwnerMap: [UUID: UUID] {
+        MistiaRecordOwnershipStore.ownerMap(from: ownershipScopes, entity: .transaction)
+    }
+
     private var effectiveCategoryOwnerUserIDs: Set<UUID> {
         if let selectedSourceWallet,
            let ownerUserID = walletOwnerUserID(for: selectedSourceWallet) {
             return [ownerUserID]
         }
         return effectiveOperableTargetUserIDs
+    }
+
+    private var categoryPickerOwnerUserIDs: Set<UUID> {
+        if let selectedSourceWallet,
+           let ownerUserID = walletOwnerUserID(for: selectedSourceWallet) {
+            return [ownerUserID]
+        }
+        return effectiveCategoryOwnerUserIDs
+    }
+
+    private var recentCategoryOwnerUserIDs: Set<UUID> {
+        if familyContextStore.isViewingOtherMemberContext,
+           let viewedMember = familyContextStore.viewedMember {
+            return [viewedMember.userID]
+        }
+        if let activeLocalProfileUserID = sessionStore.activeLocalProfileUserID {
+            return [activeLocalProfileUserID]
+        }
+        return effectiveCategoryOwnerUserIDs
     }
 
     private func walletOwnerUserID(for wallet: LedgerWallet?) -> UUID? {
@@ -1142,6 +1168,68 @@ struct TransactionEditorSheet: View {
         categoryOwnerMap[category.id] ?? sessionStore.activeLocalProfileUserID
     }
 
+    private func transactionOwnerUserID(for transaction: LedgerTransaction) -> UUID? {
+        transactionOwnerMap[transaction.id]
+            ?? walletOwnerUserID(for: transaction.sourceWallet)
+            ?? sessionStore.activeLocalProfileUserID
+    }
+
+    private func shouldShowCategory(_ category: TransactionCategory) -> Bool {
+        categoryMatchesOwnerScope(category, ownerUserIDs: categoryPickerOwnerUserIDs)
+    }
+
+    private func categoryMatchesOwnerScope(
+        _ category: TransactionCategory,
+        ownerUserIDs: Set<UUID>
+    ) -> Bool {
+        guard let ownerUserID = categoryOwnerUserID(for: category) else { return false }
+        return ownerUserIDs.contains(ownerUserID)
+    }
+
+    private func isActiveSystemDefaultCategory(rawSystemKey: String?) -> Bool {
+        guard let descriptor = MistiaSystemCategoryIdentity.descriptor(for: rawSystemKey) else {
+            return false
+        }
+        return descriptor.sortOrder != nil && !descriptor.startsArchived
+    }
+
+    private func categoriesMatchForOwnerUse(
+        selected: TransactionCategory,
+        candidate: TransactionCategory
+    ) -> Bool {
+        if selected.isSystem || candidate.isSystem {
+            guard let selectedSystemKey = selected.systemKey,
+                  let candidateSystemKey = candidate.systemKey else { return false }
+            return selectedSystemKey == candidateSystemKey
+                || selected.id == candidate.id
+        }
+
+        return selected.kind == candidate.kind
+            && selected.hierarchyRole == candidate.hierarchyRole
+            && normalizedCategoryName(selected.name) == normalizedCategoryName(candidate.name)
+            && normalizedParentMatch(selected.parentCategory, candidate.parentCategory)
+    }
+
+    private func normalizedParentMatch(
+        _ lhs: TransactionCategory?,
+        _ rhs: TransactionCategory?
+    ) -> Bool {
+        if lhs?.id == rhs?.id {
+            return true
+        }
+        if let lhsSystemKey = lhs?.systemKey,
+           let rhsSystemKey = rhs?.systemKey {
+            return lhsSystemKey == rhsSystemKey
+        }
+        return normalizedCategoryName(lhs?.name ?? "") == normalizedCategoryName(rhs?.name ?? "")
+    }
+
+    private func normalizedCategoryName(_ value: String) -> String {
+        value
+            .folding(options: [.diacriticInsensitive, .caseInsensitive], locale: .current)
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
     private func walletPickerTitle(for wallet: LedgerWallet) -> String {
         guard let ownerName = familyContextStore.displayName(for: walletOwnerUserID(for: wallet)),
               familyContextStore.family != nil else {
@@ -1151,11 +1239,8 @@ struct TransactionEditorSheet: View {
     }
 
     private func clearMismatchedCategoryForSelectedWallet() {
-        guard let category = selectedCategory,
-              let selectedSourceWallet,
-              let categoryOwnerUserID = categoryOwnerUserID(for: category),
-              let walletOwnerUserID = walletOwnerUserID(for: selectedSourceWallet),
-              categoryOwnerUserID != walletOwnerUserID else {
+        guard let category = storedCategories.first(where: { $0.id == draft.categoryID }),
+              !shouldShowCategory(category) else {
             return
         }
         draft.categoryID = nil

@@ -21,6 +21,28 @@ private struct FamilyPendingPermissionRequestKey: Hashable {
     let scopeRawValue: String
 }
 
+private enum FamilyCategoryUseApprovalError: LocalizedError {
+    case missingLocalSystemCategory
+    case syncFailed
+
+    var errorDescription: String? {
+        switch self {
+        case .missingLocalSystemCategory:
+            mistiaLocalized(
+                vi: "Không tìm thấy danh mục hệ thống này trên máy của bạn.",
+                en: "This system category wasn't found on your device.",
+                ja: "このシステムカテゴリがこのデバイスに見つかりません。"
+            )
+        case .syncFailed:
+            mistiaLocalized(
+                vi: "Chưa thể đồng bộ danh mục này lên cloud.",
+                en: "Couldn't sync this category to the cloud yet.",
+                ja: "このカテゴリをまだクラウドへ同期できません。"
+            )
+        }
+    }
+}
+
 @MainActor
 @Observable
 final class FamilyContextStore {
@@ -562,6 +584,16 @@ final class FamilyContextStore {
     ) async -> Bool {
         guard let familyID = family?.id else { return false }
         guard let session = await prepareRemoteSession(using: sessionStore) else { return false }
+        if resourceType == .category,
+           scope == .use,
+           !isCategoryCatalogReady(ownerUserID: ownerUserID) {
+            lastErrorMessage = mistiaLocalized(
+                vi: "Thành viên này cần đồng bộ danh mục lên cloud trước khi bạn yêu cầu dùng danh mục hệ thống của họ.",
+                en: "This member needs to sync their category catalog to the cloud before you request one of their system categories.",
+                ja: "このメンバーのシステムカテゴリをリクエストする前に、相手にカテゴリをクラウドへ同期してもらう必要があります。"
+            )
+            return false
+        }
 
         let requesterName = sessionStore.summary?.displayName
             ?? displayName(for: session.user.id)
@@ -647,6 +679,13 @@ final class FamilyContextStore {
         guard let session = await prepareRemoteSession(using: sessionStore) else { return }
 
         do {
+            if approve {
+                try await prepareCategoryUseApprovalIfNeeded(
+                    notification,
+                    sessionStore: sessionStore,
+                    currentUserID: session.user.id
+                )
+            }
             _ = try await service.respondFamilyPermissionRequest(
                 requestID: requestID,
                 approve: approve,
@@ -663,6 +702,39 @@ final class FamilyContextStore {
             await refresh(sessionStore: sessionStore)
         } catch {
             lastErrorMessage = visibleErrorMessage(for: error, sessionStore: sessionStore)
+        }
+    }
+
+    private func prepareCategoryUseApprovalIfNeeded(
+        _ notification: AppNotificationRecord,
+        sessionStore: SessionStore,
+        currentUserID: UUID
+    ) async throws {
+        guard notification.resourceType == .category,
+              notification.permissionScope == .use,
+              let categoryID = notification.resourceID else {
+            return
+        }
+
+        let promotedCategoryRecords = try MistiaSyncLocalStore.promoteSystemCategoryForFamilyUse(
+            categoryID: categoryID,
+            in: modelContainer
+        )
+        guard !promotedCategoryRecords.isEmpty else {
+            throw FamilyCategoryUseApprovalError.missingLocalSystemCategory
+        }
+
+        for categoryRecord in promotedCategoryRecords {
+            sessionStore.recordUpsert(
+                entity: .category,
+                recordID: categoryRecord.id,
+                modifiedAt: categoryRecord.updatedAt,
+                subjectUserIDOverride: currentUserID
+            )
+        }
+
+        guard await sessionStore.syncNow(isManual: false) else {
+            throw FamilyCategoryUseApprovalError.syncFailed
         }
     }
 
@@ -902,6 +974,14 @@ final class FamilyContextStore {
         return members.first(where: { $0.userID == userID })?.displayName
     }
 
+    func isCategoryCatalogReady(ownerUserID: UUID?) -> Bool {
+        guard let ownerUserID else { return false }
+        if ownerUserID == currentUserID {
+            return true
+        }
+        return members.first(where: { $0.userID == ownerUserID })?.categoryCatalogSyncedAt != nil
+    }
+
     func clear() {
         activeContext = .personalSelf
         family = nil
@@ -1080,11 +1160,13 @@ final class FamilyContextStore {
             nonTransactionSnapshot,
             shouldPruneMissing: false,
             protectedRecordIDs: protectedRecordIDs,
+            familyCategoryScopedTo: session.user.id,
             in: modelContainer
         )
         try MistiaSyncLocalStore.mergeAccessibleTransactions(
             financeSnapshot.transactions,
             protectedRecordIDs: protectedRecordIDs,
+            familyCategoryScopedTo: session.user.id,
             in: modelContainer
         )
     }

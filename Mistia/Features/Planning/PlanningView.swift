@@ -80,6 +80,12 @@ private struct PlanningPermissionPrompt: Identifiable {
     let action: () -> Void
 }
 
+private struct PlanningInfoAlert: Identifiable {
+    let id = UUID()
+    let title: String
+    let message: String
+}
+
 private struct PlanningWalletPermissionPrompt: Identifiable {
     let id = UUID()
     let walletID: UUID
@@ -92,6 +98,7 @@ private struct PlanningWalletPermissionPrompt: Identifiable {
 private enum PlanningAlertPresentation: Identifiable {
     case permission(PlanningPermissionPrompt)
     case wallet(PlanningWalletPermissionPrompt)
+    case info(PlanningInfoAlert)
 
     var id: UUID {
         switch self {
@@ -99,6 +106,8 @@ private enum PlanningAlertPresentation: Identifiable {
             prompt.id
         case .wallet(let prompt):
             prompt.id
+        case .info(let alert):
+            alert.id
         }
     }
 
@@ -108,6 +117,8 @@ private enum PlanningAlertPresentation: Identifiable {
             prompt.title
         case .wallet(let prompt):
             prompt.title
+        case .info(let alert):
+            alert.title
         }
     }
 
@@ -117,6 +128,8 @@ private enum PlanningAlertPresentation: Identifiable {
             prompt.message
         case .wallet(let prompt):
             prompt.message
+        case .info(let alert):
+            alert.message
         }
     }
 }
@@ -160,6 +173,7 @@ struct PlanningView: View {
     @State private var destination: PlanningNavigationDestination?
     @State private var permissionPrompt: PlanningPermissionPrompt?
     @State private var walletPermissionPrompt: PlanningWalletPermissionPrompt?
+    @State private var infoAlert: PlanningInfoAlert?
 
     private var cardTint: Color {
         colorScheme == .dark ? .white.opacity(0.022) : .white.opacity(0.14)
@@ -179,6 +193,9 @@ struct PlanningView: View {
         }
         if let permissionPrompt {
             return .permission(permissionPrompt)
+        }
+        if let infoAlert {
+            return .info(infoAlert)
         }
         return nil
     }
@@ -536,12 +553,15 @@ struct PlanningView: View {
                     if !isPresented {
                         walletPermissionPrompt = nil
                         permissionPrompt = nil
+                        infoAlert = nil
                     }
                 }
             ),
             presenting: activeAlert
         ) { alert in
             switch alert {
+            case .info:
+                Button(mistiaLocalized(vi: "OK", en: "OK", ja: "OK")) {}
             case .permission(let prompt):
                 Button(prompt.actionTitle) {
                     prompt.action()
@@ -957,6 +977,16 @@ struct PlanningView: View {
 
             if isApproved {
                 performApprovedWalletPermissionAction(prompt, scope: scope)
+            } else {
+                walletPermissionPrompt = nil
+                infoAlert = PlanningInfoAlert(
+                    title: mistiaLocalized(vi: "Đã gửi yêu cầu", en: "Request sent", ja: "リクエスト送信済み"),
+                    message: familyContextStore.lastErrorMessage ?? mistiaLocalized(
+                        vi: "Yêu cầu đang chờ chủ dữ liệu phản hồi.",
+                        en: "The request is waiting for the data owner.",
+                        ja: "リクエストはデータ所有者の返答待ちです。"
+                    )
+                )
             }
         }
     }
@@ -1081,14 +1111,44 @@ struct PlanningView: View {
                 return
             }
 
-            guard !wasPending else { return }
-            _ = await familyContextStore.requestPermission(
+            guard !wasPending else {
+                permissionPrompt = nil
+                infoAlert = PlanningInfoAlert(
+                    title: mistiaLocalized(vi: "Đã gửi yêu cầu", en: "Request sent", ja: "リクエスト送信済み"),
+                    message: familyContextStore.lastErrorMessage ?? mistiaLocalized(
+                        vi: "Yêu cầu đang chờ chủ dữ liệu phản hồi.",
+                        en: "The request is waiting for the data owner.",
+                        ja: "リクエストはデータ所有者の返答待ちです。"
+                    )
+                )
+                return
+            }
+
+            let didSend = await familyContextStore.requestPermission(
                 resourceType: resourceType,
                 resourceID: resourceID,
                 ownerUserID: ownerUserID,
                 scope: scope,
                 resourceName: resourceName,
                 sessionStore: sessionStore
+            )
+
+            permissionPrompt = nil
+            infoAlert = PlanningInfoAlert(
+                title: didSend
+                    ? mistiaLocalized(vi: "Đã gửi yêu cầu", en: "Request sent", ja: "リクエストを送信しました")
+                    : mistiaLocalized(vi: "Chưa thể gửi", en: "Couldn't send", ja: "送信できませんでした"),
+                message: didSend
+                    ? mistiaLocalized(
+                        vi: "Yêu cầu quyền đã được gửi tới chủ dữ liệu.",
+                        en: "The permission request was sent to the data owner.",
+                        ja: "権限リクエストをデータ所有者へ送信しました。"
+                    )
+                    : (familyContextStore.lastErrorMessage ?? mistiaLocalized(
+                        vi: "Không thể gửi yêu cầu lúc này.",
+                        en: "Couldn't send the request right now.",
+                        ja: "現在リクエストは送信できません。"
+                    ))
             )
         }
     }
@@ -1101,13 +1161,32 @@ struct PlanningView: View {
         resourceName: String
     ) {
         Task { @MainActor in
-            _ = await familyContextStore.requestPermission(
+            let didSend = await familyContextStore.requestPermission(
                 resourceType: resourceType,
                 resourceID: resourceID,
                 ownerUserID: ownerUserID,
                 scope: scope,
                 resourceName: resourceName,
                 sessionStore: sessionStore
+            )
+
+            walletPermissionPrompt = nil
+            permissionPrompt = nil
+            infoAlert = PlanningInfoAlert(
+                title: didSend
+                    ? mistiaLocalized(vi: "Đã gửi yêu cầu", en: "Request sent", ja: "リクエストを送信しました")
+                    : mistiaLocalized(vi: "Chưa thể gửi", en: "Couldn't send", ja: "送信できませんでした"),
+                message: didSend
+                    ? mistiaLocalized(
+                        vi: "Yêu cầu quyền đã được gửi tới chủ dữ liệu.",
+                        en: "The permission request was sent to the data owner.",
+                        ja: "権限リクエストをデータ所有者へ送信しました。"
+                    )
+                    : (familyContextStore.lastErrorMessage ?? mistiaLocalized(
+                        vi: "Không thể gửi yêu cầu lúc này.",
+                        en: "Couldn't send the request right now.",
+                        ja: "現在リクエストは送信できません。"
+                    ))
             )
         }
     }

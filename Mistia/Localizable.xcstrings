@@ -4,6 +4,9 @@
     "" : {
 
     },
+    "—" : {
+
+    },
     "%@ / %@" : {
       "localizations" : {
         "en" : {
@@ -86,6 +89,15 @@
         }
       }
     },
+    "%lld%%" : {
+
+    },
+    "•" : {
+
+    },
+    "+%lld%%" : {
+
+    },
     "4 số cuối" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -102,6 +114,9 @@
           }
         }
       }
+    },
+    "100%" : {
+
     },
     "Bạn vẫn có thể khôi phục sau khi nối thêm màn hình archive." : {
       "extractionState" : "stale",
@@ -153,6 +168,9 @@
           }
         }
       }
+    },
+    "Chi tiêu" : {
+
     },
     "Chi tiêu theo ngày" : {
       "extractionState" : "stale",
@@ -391,6 +409,9 @@
           }
         }
       }
+    },
+    "Date" : {
+
     },
     "Đổi icon và màu cho danh mục" : {
       "extractionState" : "stale",
@@ -751,23 +772,6 @@
         }
       }
     },
-    "Ví, danh mục và giao dịch của bạn đã sẵn sàng cho backup, khôi phục và đồng bộ giữa các thiết bị." : {
-      "extractionState" : "stale",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Your wallets, categories, and transactions are ready for backup, restore, and sync across devices."
-          }
-        },
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "ウォレット、カテゴリ、取引はバックアップ、復元、端末間同期に対応しています。"
-          }
-        }
-      }
-    },
     "Lưu trữ" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -919,6 +923,9 @@
           }
         }
       }
+    },
+    "mistia://family-invite/..." : {
+
     },
     "Mistia/MistiaSyncConfig.plist" : {
 
@@ -1845,6 +1852,9 @@
         }
       }
     },
+    "Value" : {
+
+    },
     "version 16.09 powered by Quý Lăng" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -1909,6 +1919,23 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "支払いウォレット"
+          }
+        }
+      }
+    },
+    "Ví, danh mục và giao dịch của bạn đã sẵn sàng cho backup, khôi phục và đồng bộ giữa các thiết bị." : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Your wallets, categories, and transactions are ready for backup, restore, and sync across devices."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ウォレット、カテゴリ、取引はバックアップ、復元、端末間同期に対応しています。"
           }
         }
       }

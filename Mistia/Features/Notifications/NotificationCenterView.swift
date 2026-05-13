@@ -182,7 +182,7 @@ struct NotificationCenterView: View {
                         .padding(.top, 2)
                 }
 
-                if row.kind == .permissionRequestReceived, row.actionState == .pending {
+                if row.isRespondableFamilyRequest {
                     HStack(spacing: 10) {
                         Button {
                             respond(to: row, approve: true)
@@ -317,9 +317,14 @@ struct NotificationCenterView: View {
             return IconConfig(systemImage: "checkmark.circle.fill", color: .green)
         case .lowWallet:
             return IconConfig(systemImage: "tray.and.arrow.down.fill", color: .orange)
-        case .permissionRequestReceived:
+        case .permissionRequestReceived, .familyTransactionRequestReceived:
             return IconConfig(systemImage: "person.badge.key.fill", color: notificationPurpleAccent)
-        case .permissionRequestApproved, .permissionRequestRejected, .permissionRevoked, .permissionPolicyChanged:
+        case .permissionRequestApproved,
+             .permissionRequestRejected,
+             .permissionRevoked,
+             .permissionPolicyChanged,
+             .familyTransactionRequestApproved,
+             .familyTransactionRequestRejected:
             return IconConfig(systemImage: "shield.fill", color: notificationPurpleAccent)
         case .familyActivity:
             return IconConfig(systemImage: "person.2.fill", color: .blue)
@@ -333,7 +338,7 @@ struct NotificationCenterView: View {
     private func handleRowTap(_ row: AppNotificationRecord) {
         markAsRead(row)
 
-        if row.kind == .permissionRequestReceived, row.actionState == .pending {
+        if row.isRespondableFamilyRequest {
             // Wait for user to tap specific action buttons
             return
         }
@@ -555,5 +560,14 @@ private extension AppNotificationRecord {
 
     var opensTopUpTransfer: Bool {
         topUpTransferDestinationWalletID != nil
+    }
+
+    var isRespondableFamilyRequest: Bool {
+        switch kind {
+        case .permissionRequestReceived:
+            return actionState == .pending
+        default:
+            return false
+        }
     }
 }

@@ -209,7 +209,7 @@ enum MistiaSystemCategorySyncSupport {
         category.cloudSyncEnabled
     }
 
-    static func isCustomizedSystemCategory(_ category: TransactionCategory) -> Bool {
+    nonisolated static func isCustomizedSystemCategory(_ category: TransactionCategory) -> Bool {
         guard category.isSystem else { return false }
         let parentSystemKey = category.parentCategory?.systemKey
         return !isDefaultSystemCategoryState(
@@ -546,7 +546,7 @@ enum MistiaSystemCategorySyncSupport {
         return expandedCategoryDependencyIDs(baseCategoryIDs: ids, categoriesByID: categoryByID)
     }
 
-    private static func isDefaultSystemCategoryState(
+    nonisolated private static func isDefaultSystemCategoryState(
         rawSystemKey: String?,
         name: String,
         iconSymbolName: String,

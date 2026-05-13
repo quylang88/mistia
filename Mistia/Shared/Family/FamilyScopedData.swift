@@ -9,6 +9,7 @@ enum FamilyScopedData {
         sessionStore: SessionStore
     ) -> [Record] {
         let ownerMap = MistiaRecordOwnershipStore.ownerMap(from: scopes, entity: entity)
+
         return MistiaRecordOwnershipStore.visibleRecords(
             records,
             entity: entity,
@@ -99,6 +100,7 @@ enum FamilyScopedData {
         guard let walletID else { return nil }
         return ownerMap[walletID]
     }
+
 }
 
 struct FamilyContextChipBar: View {

@@ -21,6 +21,9 @@ enum MistiaAppNotificationKind: String, Codable, CaseIterable {
     case permissionRequestRejected
     case permissionRevoked
     case permissionPolicyChanged
+    case familyTransactionRequestReceived
+    case familyTransactionRequestApproved
+    case familyTransactionRequestRejected
     case familyActivity
     case accessIssue
     case billPaymentRequired
@@ -298,6 +301,12 @@ struct FamilyNotificationRemoteRecord: Codable, Identifiable, Equatable {
             return .permissionRevoked
         case "permission_policy_changed":
             return .permissionPolicyChanged
+        case "transaction_request_received":
+            return .familyTransactionRequestReceived
+        case "transaction_request_approved":
+            return .familyTransactionRequestApproved
+        case "transaction_request_rejected":
+            return .familyTransactionRequestRejected
         case "family_activity":
             return .familyActivity
         case "access_issue":

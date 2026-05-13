@@ -49,6 +49,148 @@ final class MistiaSystemCategoryRemoteApplyTests: XCTestCase {
         XCTAssertEqual(category.updatedAt.timeIntervalSince1970, localUpdatedAt.timeIntervalSince1970, accuracy: 0.001)
     }
 
+    func testStaleRemoteSystemGuardStillImportsMemberCustomCategories() throws {
+        let localUserID = UUID()
+        let memberUserID = UUID()
+        let categoryKey = MistiaSystemCategoryParentKey.expenseFood
+        let categoryID = MistiaSystemCategoryIdentity.canonicalID(for: categoryKey)
+        let customCategoryID = UUID()
+        let remoteUpdatedAt = Date(timeIntervalSince1970: 1_770_000_000)
+        let localUpdatedAt = remoteUpdatedAt.addingTimeInterval(3_600)
+        let container = try makeContainer()
+        let remoteContainer = try makeContainer()
+
+        try insertSystemCategory(
+            key: categoryKey,
+            id: categoryID,
+            name: "Sinh hoạt",
+            updatedAt: localUpdatedAt,
+            isArchived: false,
+            cloudSyncEnabled: false,
+            remoteVersion: 7,
+            in: container
+        )
+        try insertSystemCategory(
+            key: categoryKey,
+            id: categoryID,
+            name: "Archived Sinh hoạt",
+            updatedAt: remoteUpdatedAt,
+            isArchived: true,
+            cloudSyncEnabled: true,
+            remoteVersion: 8,
+            in: remoteContainer
+        )
+        try insertCustomCategory(
+            id: customCategoryID,
+            name: "Ăn sáng",
+            kind: .expense,
+            updatedAt: remoteUpdatedAt,
+            in: remoteContainer
+        )
+
+        let remoteSnapshot = try MistiaSyncLocalStore.exportSnapshot(
+            for: memberUserID,
+            from: remoteContainer
+        )
+        XCTAssertEqual(remoteSnapshot.categories.count, 2)
+
+        try MistiaSyncLocalStore.applySnapshotIncrementally(
+            remoteSnapshot,
+            shouldPruneMissing: false,
+            protectedRecordIDs: [],
+            familyCategoryScopedTo: localUserID,
+            in: container
+        )
+
+        let memberRemoteSystemCategoryID = MistiaSystemCategoryIdentity.cloudScopedID(
+            canonicalCategoryID: categoryID,
+            ownerUserID: memberUserID
+        )
+        let memberSystemCategoryID = MistiaSystemCategoryIdentity.familyScopedID(
+            remoteCategoryID: memberRemoteSystemCategoryID,
+            ownerUserID: memberUserID
+        )
+        let systemCategory = try fetchCategory(id: categoryID, in: container)
+        let memberSystemCategory = try fetchCategory(id: memberSystemCategoryID, in: container)
+        let customCategory = try fetchCategory(id: customCategoryID, in: container)
+        let systemOwnerUserID = try fetchCategoryOwner(id: categoryID, in: container)
+        let memberSystemOwnerUserID = try fetchCategoryOwner(id: memberSystemCategoryID, in: container)
+        let customOwnerUserID = try fetchCategoryOwner(id: customCategoryID, in: container)
+        XCTAssertEqual(systemCategory.name, "Sinh hoạt")
+        XCTAssertFalse(systemCategory.isArchived)
+        XCTAssertNil(systemOwnerUserID)
+        XCTAssertEqual(memberSystemCategory.name, "Archived Sinh hoạt")
+        XCTAssertTrue(memberSystemCategory.isArchived)
+        XCTAssertEqual(memberSystemOwnerUserID, memberUserID)
+        XCTAssertEqual(customCategory.name, "Ăn sáng")
+        XCTAssertFalse(customCategory.isSystem)
+        XCTAssertEqual(customOwnerUserID, memberUserID)
+        XCTAssertEqual(customCategory.updatedAt.timeIntervalSince1970, remoteUpdatedAt.timeIntervalSince1970, accuracy: 0.001)
+    }
+
+    func testFamilyImportKeepsMemberSystemCategorySeparateFromLocalSystemCategory() throws {
+        let localUserID = UUID()
+        let memberUserID = UUID()
+        let categoryKey = MistiaSystemCategoryParentKey.expenseFood
+        let categoryID = MistiaSystemCategoryIdentity.canonicalID(for: categoryKey)
+        let remoteUpdatedAt = Date(timeIntervalSince1970: 1_770_000_000)
+        let localUpdatedAt = remoteUpdatedAt.addingTimeInterval(3_600)
+        let container = try makeContainer()
+
+        try insertSystemCategory(
+            key: categoryKey,
+            id: categoryID,
+            name: "Sinh hoạt",
+            updatedAt: localUpdatedAt,
+            isArchived: false,
+            cloudSyncEnabled: false,
+            remoteVersion: 7,
+            in: container
+        )
+        try MistiaRecordOwnershipStore.upsert(
+            entity: .category,
+            recordID: categoryID,
+            ownerUserID: localUserID,
+            updatedAt: localUpdatedAt,
+            in: container
+        )
+
+        let memberSnapshot = try makeRemoteSnapshot(
+            userID: memberUserID,
+            key: categoryKey,
+            id: categoryID,
+            name: "Member Sinh hoạt",
+            updatedAt: remoteUpdatedAt.addingTimeInterval(7_200),
+            isArchived: false,
+            remoteVersion: 12
+        )
+
+        try MistiaSyncLocalStore.applySnapshotIncrementally(
+            memberSnapshot,
+            shouldPruneMissing: false,
+            protectedRecordIDs: [],
+            familyCategoryScopedTo: localUserID,
+            in: container
+        )
+
+        let memberRemoteCategoryID = MistiaSystemCategoryIdentity.cloudScopedID(
+            canonicalCategoryID: categoryID,
+            ownerUserID: memberUserID
+        )
+        let memberCategoryID = MistiaSystemCategoryIdentity.familyScopedID(
+            remoteCategoryID: memberRemoteCategoryID,
+            ownerUserID: memberUserID
+        )
+        let category = try fetchCategory(id: categoryID, in: container)
+        let memberCategory = try fetchCategory(id: memberCategoryID, in: container)
+        let ownerUserID = try fetchCategoryOwner(id: categoryID, in: container)
+        let memberOwnerUserID = try fetchCategoryOwner(id: memberCategoryID, in: container)
+        XCTAssertEqual(category.name, "Sinh hoạt")
+        XCTAssertEqual(ownerUserID, localUserID)
+        XCTAssertEqual(memberCategory.name, "Member Sinh hoạt")
+        XCTAssertEqual(memberOwnerUserID, memberUserID)
+    }
+
     func testNewerRemoteArchiveCanStillApplyToSystemCategory() throws {
         let userID = UUID()
         let categoryKey = MistiaSystemCategoryParentKey.expenseFood
@@ -156,9 +298,43 @@ final class MistiaSystemCategoryRemoteApplyTests: XCTestCase {
         return snapshot
     }
 
+    private func insertCustomCategory(
+        id: UUID,
+        name: String,
+        kind: TransactionCategoryKind,
+        updatedAt: Date,
+        in container: ModelContainer
+    ) throws {
+        let context = ModelContext(container)
+        let category = TransactionCategory(
+            id: id,
+            name: name,
+            kind: kind,
+            iconSymbolName: "fork.knife",
+            iconColorHex: "#FF8A00",
+            isFavorite: true,
+            hierarchyRole: .child,
+            isSystem: false,
+            cloudSyncEnabled: true,
+            sortOrder: 20,
+            createdAt: Date(timeIntervalSince1970: 1_760_000_000),
+            updatedAt: updatedAt
+        )
+        context.insert(category)
+        try context.save()
+    }
+
     private func fetchCategory(id: UUID, in container: ModelContainer) throws -> TransactionCategory {
         let context = ModelContext(container)
         let categories = try context.fetch(FetchDescriptor<TransactionCategory>())
         return try XCTUnwrap(categories.first { $0.id == id })
+    }
+
+    private func fetchCategoryOwner(id: UUID, in container: ModelContainer) throws -> UUID? {
+        try MistiaRecordOwnershipStore.ownerUserID(
+            entity: .category,
+            recordID: id,
+            in: container
+        )
     }
 }

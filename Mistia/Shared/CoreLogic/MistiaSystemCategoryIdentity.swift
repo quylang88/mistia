@@ -29,6 +29,24 @@ nonisolated enum MistiaSystemCategoryIdentity {
         canonicalID(for: parentKey.rawValue)
     }
 
+    static func familyScopedID(
+        remoteCategoryID: UUID,
+        ownerUserID: UUID
+    ) -> UUID {
+        stableUUID(
+            for: "\(namespace).family.\(ownerUserID.uuidString.lowercased()).\(remoteCategoryID.uuidString.lowercased())"
+        )
+    }
+
+    static func cloudScopedID(
+        canonicalCategoryID: UUID,
+        ownerUserID: UUID
+    ) -> UUID {
+        stableUUID(
+            for: "\(namespace).cloud.\(ownerUserID.uuidString.lowercased()).\(canonicalCategoryID.uuidString.lowercased())"
+        )
+    }
+
     static var balanceAdjustmentExpenseID: UUID {
         canonicalID(for: .balanceAdjustmentExpense)
     }

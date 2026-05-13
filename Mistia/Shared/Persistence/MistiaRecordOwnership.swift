@@ -119,9 +119,17 @@ enum MistiaRecordOwnershipStore {
         in container: ModelContainer
     ) throws {
         let context = ModelContext(container)
+        try remove(entity: entity, recordID: recordID, context: context)
+        try context.save()
+    }
+
+    static func remove(
+        entity: MistiaSyncEntity,
+        recordID: UUID,
+        context: ModelContext
+    ) throws {
         if let existing = try scope(entity: entity, recordID: recordID, in: context) {
             context.delete(existing)
-            try context.save()
         }
     }
 

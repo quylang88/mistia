@@ -182,7 +182,7 @@ struct MistiaCategoryPickerSheet: View {
     let featuredSubtitle: ((TransactionCategory) -> String?)?
     let onSelect: (TransactionCategory) -> Void
 
-    @State private var mode: MistiaCategoryPickerMode = .recent
+    @State private var mode: MistiaCategoryPickerMode
     @State private var searchText = ""
     @State private var expandedSectionIDs: Set<UUID> = []
     @FocusState private var isSearchFieldFocused: Bool
@@ -195,6 +195,7 @@ struct MistiaCategoryPickerSheet: View {
         favoriteCategories: [TransactionCategory],
         featuredSectionTitle: String? = nil,
         featuredCategories: [TransactionCategory] = [],
+        initialMode: MistiaCategoryPickerMode = .recent,
         allowsParentSelectionInAll: Bool,
         allModeSubtitle: @escaping (TransactionCategory) -> String?,
         quickModeSubtitle: @escaping (TransactionCategory) -> String?,
@@ -213,6 +214,7 @@ struct MistiaCategoryPickerSheet: View {
         self.quickModeSubtitle = quickModeSubtitle
         self.featuredSubtitle = featuredSubtitle
         self.onSelect = onSelect
+        _mode = State(initialValue: initialMode)
     }
 
     private var accent: Color {

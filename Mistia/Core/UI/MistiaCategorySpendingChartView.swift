@@ -118,7 +118,6 @@ struct MistiaCategorySpendingChartView: View {
                 .frame(maxWidth: .infinity, minHeight: Self.chartSize, alignment: .leading)
             }
         }
-        .padding(.horizontal, 12)
         .padding(.vertical, 10)
         .frame(maxWidth: .infinity, alignment: .leading)
         .onAppear {
@@ -462,8 +461,10 @@ private struct MistiaCategoryLegendRow: View {
                 Text(percentageText)
                     .font(.system(size: 11, weight: .bold, design: .rounded))
                     .foregroundStyle(Color(hex: slice.colorHex))
+                    .frame(minWidth: 34, alignment: .trailing)
                     .lineLimit(1)
                     .minimumScaleFactor(0.82)
+                    .layoutPriority(2)
             }
         }
         .padding(.horizontal, 10)

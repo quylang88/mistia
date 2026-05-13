@@ -280,11 +280,13 @@ struct FamilyUserProfileRecord: Codable, Identifiable, Equatable {
     let userID: UUID
     var displayName: String
     var avatarURL: String?
+    var categoryCatalogSyncedAt: Date?
 
     enum CodingKeys: String, CodingKey {
         case userID = "user_id"
         case displayName = "display_name"
         case avatarURL = "avatar_url"
+        case categoryCatalogSyncedAt = "category_catalog_synced_at"
     }
 
     var id: UUID { userID }
@@ -336,6 +338,7 @@ struct FamilyMember: Codable, Identifiable, Equatable {
     let userID: UUID
     var displayName: String
     var avatarURL: URL?
+    var categoryCatalogSyncedAt: Date? = nil
     var role: FamilyRole
     var policy: FamilyPermissionPolicy
     var isCurrentUser: Bool
@@ -472,6 +475,7 @@ struct FamilyRemoteService: FamilyRemoteServicing {
                 userID: row.userID,
                 displayName: profile?.displayName ?? "Mistia",
                 avatarURL: profile?.avatarURL.flatMap(URL.init(string:)),
+                categoryCatalogSyncedAt: profile?.categoryCatalogSyncedAt,
                 role: row.role,
                 policy: row.policy,
                 isCurrentUser: row.userID == session.user.id
@@ -884,7 +888,7 @@ struct FamilyRemoteService: FamilyRemoteServicing {
         try await fetchRows(
             path: "user_profiles",
             filters: [
-                URLQueryItem(name: "select", value: "user_id,display_name,avatar_url"),
+                URLQueryItem(name: "select", value: "user_id,display_name,avatar_url,category_catalog_synced_at"),
                 URLQueryItem(name: "user_id", value: inFilter(for: userIDs))
             ],
             session: session

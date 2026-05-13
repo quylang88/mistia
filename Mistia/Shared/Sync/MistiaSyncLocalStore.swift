@@ -128,7 +128,7 @@ enum MistiaSyncLocalStore {
                 RemoteRecurringBillPlan(
                     local: $0,
                     userID: userID,
-                    categoryID: recurringBillCategoryID(for: $0, categories: allCategories)
+                    categoryID: recurringBillCategoryID(for: $0, userID: userID, categories: allCategories)
                 )
             },
             installmentPlans: installmentPlans.map { RemoteInstallmentPlan(local: $0, userID: userID) },
@@ -221,7 +221,7 @@ enum MistiaSyncLocalStore {
                 RemoteRecurringBillPlan(
                     local: plan,
                     userID: subjectUserID,
-                    categoryID: recurringBillCategoryID(for: plan, categories: categories)
+                    categoryID: recurringBillCategoryID(for: plan, userID: subjectUserID, categories: categories)
                 )
             )
         case .installmentPlan:
@@ -287,9 +287,33 @@ enum MistiaSyncLocalStore {
         _ snapshot: MistiaRemoteSnapshot,
         shouldPruneMissing: Bool,
         protectedRecordIDs: Set<String>,
+        familyCategoryScopedTo localUserID: UUID? = nil,
         in container: ModelContainer
     ) throws {
         let context = ModelContext(container)
+        let categoryIDMap = scopedCategoryIDMap(
+            snapshot.categories,
+            localUserID: localUserID
+        )
+        let categoryRows = scopedCategoryRows(
+            snapshot.categories,
+            categoryIDMap: categoryIDMap
+        )
+        let transactionRows = scopedTransactionRows(
+            snapshot.transactions,
+            categoryIDMap: categoryIDMap,
+            localUserID: localUserID
+        )
+        let budgetRows = scopedBudgetRows(
+            snapshot.budgetPlans,
+            categoryIDMap: categoryIDMap,
+            localUserID: localUserID
+        )
+        let recurringRows = scopedRecurringBillRows(
+            snapshot.recurringBillPlans,
+            categoryIDMap: categoryIDMap,
+            localUserID: localUserID
+        )
 
         let wallets = try fetchWallets(context)
         let creditProfiles = try fetchCreditCardProfiles(context)
@@ -314,11 +338,15 @@ enum MistiaSyncLocalStore {
             try upsertWallet(row, context: context, walletByID: &walletByID)
         }
 
-        for row in snapshot.categories {
-            try upsertCategory(row, context: context, categoryByID: &categoryByID)
+        for row in categoryRows {
+            try upsertCategory(
+                row,
+                context: context,
+                categoryByID: &categoryByID
+            )
         }
 
-        for row in snapshot.categories {
+        for row in categoryRows {
             applyCategoryHierarchy(row, categoryByID: categoryByID)
         }
 
@@ -331,7 +359,7 @@ enum MistiaSyncLocalStore {
             )
         }
 
-        for row in snapshot.transactions {
+        for row in transactionRows {
             try upsertTransaction(
                 row,
                 context: context,
@@ -341,7 +369,7 @@ enum MistiaSyncLocalStore {
             )
         }
 
-        for row in snapshot.budgetPlans {
+        for row in budgetRows {
             try upsertBudget(row, context: context, categoryByID: categoryByID, budgetByID: &budgetByID)
         }
 
@@ -349,7 +377,7 @@ enum MistiaSyncLocalStore {
             try upsertGoal(row, context: context, walletByID: walletByID, goalByID: &goalByID)
         }
 
-        for row in snapshot.recurringBillPlans {
+        for row in recurringRows {
             try upsertRecurringBill(
                 row,
                 context: context,
@@ -382,19 +410,19 @@ enum MistiaSyncLocalStore {
             )
             pruneRecordsMissingFromRemote(
                 existing: categories,
-                remoteIDs: Set(snapshot.categories.map(\.id)),
+                remoteIDs: Set(categoryRows.map(\.id)),
                 protectedRecordIDs: protectedRecordIDs,
                 context: context
             )
             pruneRecordsMissingFromRemote(
                 existing: transactions,
-                remoteIDs: Set(snapshot.transactions.map(\.id)),
+                remoteIDs: Set(transactionRows.map(\.id)),
                 protectedRecordIDs: protectedRecordIDs,
                 context: context
             )
             pruneRecordsMissingFromRemote(
                 existing: budgetPlans,
-                remoteIDs: Set(snapshot.budgetPlans.map(\.id)),
+                remoteIDs: Set(budgetRows.map(\.id)),
                 protectedRecordIDs: protectedRecordIDs,
                 context: context
             )
@@ -406,7 +434,7 @@ enum MistiaSyncLocalStore {
             )
             pruneRecordsMissingFromRemote(
                 existing: recurringBillPlans,
-                remoteIDs: Set(snapshot.recurringBillPlans.map(\.id)),
+                remoteIDs: Set(recurringRows.map(\.id)),
                 protectedRecordIDs: protectedRecordIDs,
                 context: context
             )
@@ -427,6 +455,87 @@ enum MistiaSyncLocalStore {
         try context.save()
     }
 
+    @discardableResult
+    static func promoteSystemCategoryForFamilyUse(
+        categoryID: UUID,
+        in container: ModelContainer
+    ) throws -> [(id: UUID, updatedAt: Date)] {
+        let context = ModelContext(container)
+        guard let systemKey = MistiaSystemCategoryKey.activeDefaults.first(where: {
+            MistiaSystemCategoryIdentity.canonicalID(for: $0) == categoryID
+        }) else {
+            return []
+        }
+
+        let category = try ensureSystemCategoryForSync(systemKey, context: context)
+        var promotedCategories = [category]
+        if let parent = category.parentCategory {
+            promotedCategories.insert(parent, at: 0)
+        }
+
+        let now = Date()
+        var didMutate = false
+        for promotedCategory in promotedCategories {
+            if promotedCategory.cloudSyncEnabled == false {
+                promotedCategory.cloudSyncEnabled = true
+                didMutate = true
+            }
+            if promotedCategory.updatedAt < now {
+                promotedCategory.updatedAt = now
+                didMutate = true
+            }
+        }
+
+        if didMutate {
+            try context.save()
+        }
+
+        return promotedCategories.map { ($0.id, $0.updatedAt) }
+    }
+
+    private static func ensureSystemCategoryForSync(
+        _ systemKey: MistiaSystemCategoryKey,
+        context: ModelContext
+    ) throws -> TransactionCategory {
+        let categories = try fetchCategories(context).filter { $0.deletedAt == nil }
+        if let existing = categories.first(where: { $0.systemKey == systemKey.rawValue }) {
+            return existing
+        }
+
+        let parentKey = MistiaCategoryHierarchy.defaultParentKey(for: systemKey)
+        let parent = categories.first(where: { $0.systemKey == parentKey.rawValue }) ?? {
+            let parentCategory = TransactionCategory(
+                id: MistiaSystemCategoryIdentity.canonicalID(for: parentKey),
+                name: parentKey.title,
+                kind: parentKey.kind,
+                iconSymbolName: parentKey.iconSymbolName,
+                iconColorHex: MistiaIconColorPalette.presetHex(forDefault: parentKey.iconColorHex),
+                hierarchyRole: .parent,
+                systemKey: parentKey.rawValue,
+                isSystem: true,
+                sortOrder: MistiaSystemCategoryParentKey.activeDefaults.firstIndex(of: parentKey) ?? 0
+            )
+            context.insert(parentCategory)
+            return parentCategory
+        }()
+
+        let category = TransactionCategory(
+            id: MistiaSystemCategoryIdentity.canonicalID(for: systemKey),
+            name: systemKey.title,
+            kind: systemKey.kind,
+            iconSymbolName: systemKey.iconSymbolName,
+            iconColorHex: MistiaIconColorPalette.presetHex(forDefault: systemKey.iconColorHex),
+            parentCategory: parent,
+            hierarchyRole: .child,
+            systemKey: systemKey.rawValue,
+            isSystem: true,
+            sortOrder: MistiaSystemCategoryKey.activeDefaults.firstIndex(of: systemKey) ?? 0,
+            isArchived: !systemKey.isActiveDefault
+        )
+        context.insert(category)
+        return category
+    }
+
     static func applyRemoteRecord(
         _ record: MistiaSyncUploadRecord,
         in container: ModelContainer
@@ -434,6 +543,11 @@ enum MistiaSyncLocalStore {
         let context = ModelContext(container)
         let wallets = try fetchWallets(context)
         let categories = try fetchCategories(context)
+        let ownershipScopes = try context.fetch(FetchDescriptor<OwnedRecordScope>())
+        let categoryRemoteIDMap = remoteCategoryIDMap(
+            categories: categories,
+            ownerMap: MistiaRecordOwnershipStore.ownerMap(from: ownershipScopes, entity: .category)
+        )
         var walletByID = Dictionary(uniqueKeysWithValues: wallets.map { ($0.id, $0) })
         var categoryByID = Dictionary(uniqueKeysWithValues: categories.map { ($0.id, $0) })
 
@@ -444,12 +558,19 @@ enum MistiaSyncLocalStore {
             var profileByID = Dictionary(uniqueKeysWithValues: try fetchCreditCardProfiles(context).map { ($0.id, $0) })
             try upsertCreditProfile(row, context: context, walletByID: walletByID, profileByID: &profileByID)
         case .category(let row):
-            try upsertCategory(row, context: context, categoryByID: &categoryByID)
-            applyCategoryHierarchy(row, categoryByID: categoryByID)
+            let categoryIDMap = scopedCategoryIDMap([row], localUserID: row.userID)
+            guard let scopedRow = scopedCategoryRows([row], categoryIDMap: categoryIDMap).first else { return }
+            try upsertCategory(scopedRow, context: context, categoryByID: &categoryByID)
+            applyCategoryHierarchy(scopedRow, categoryByID: categoryByID)
         case .transaction(let row):
             var transactionByID = Dictionary(uniqueKeysWithValues: try fetchTransactions(context).map { ($0.id, $0) })
+            let scopedRow = scopedTransactionRows(
+                [row],
+                categoryIDMap: categoryRemoteIDMap,
+                localUserID: row.userID
+            ).first ?? row
             try upsertTransaction(
-                row,
+                scopedRow,
                 context: context,
                 walletByID: walletByID,
                 categoryByID: categoryByID,
@@ -457,14 +578,24 @@ enum MistiaSyncLocalStore {
             )
         case .budgetPlan(let row):
             var budgetByID = Dictionary(uniqueKeysWithValues: try fetchBudgetPlans(context).map { ($0.id, $0) })
-            try upsertBudget(row, context: context, categoryByID: categoryByID, budgetByID: &budgetByID)
+            let scopedRow = scopedBudgetRows(
+                [row],
+                categoryIDMap: categoryRemoteIDMap,
+                localUserID: row.userID
+            ).first ?? row
+            try upsertBudget(scopedRow, context: context, categoryByID: categoryByID, budgetByID: &budgetByID)
         case .savingsGoal(let row):
             var goalByID = Dictionary(uniqueKeysWithValues: try fetchSavingsGoals(context).map { ($0.id, $0) })
             try upsertGoal(row, context: context, walletByID: walletByID, goalByID: &goalByID)
         case .recurringBillPlan(let row):
             var recurringByID = Dictionary(uniqueKeysWithValues: try fetchRecurringBillPlans(context).map { ($0.id, $0) })
+            let scopedRow = scopedRecurringBillRows(
+                [row],
+                categoryIDMap: categoryRemoteIDMap,
+                localUserID: row.userID
+            ).first ?? row
             try upsertRecurringBill(
-                row,
+                scopedRow,
                 context: context,
                 walletByID: walletByID,
                 categoryByID: categoryByID,
@@ -484,6 +615,7 @@ enum MistiaSyncLocalStore {
     static func mergeAccessibleTransactions(
         _ rows: [RemoteLedgerTransaction],
         protectedRecordIDs: Set<String>,
+        familyCategoryScopedTo localUserID: UUID? = nil,
         in container: ModelContainer
     ) throws {
         let context = ModelContext(container)
@@ -493,12 +625,21 @@ enum MistiaSyncLocalStore {
         let ownershipScopes = try context.fetch(FetchDescriptor<OwnedRecordScope>())
         let audits = try TransactionAuditStore.auditMap(from: fetchTransactionAudits(context))
         let walletOwnerMap = MistiaRecordOwnershipStore.ownerMap(from: ownershipScopes, entity: .wallet)
+        let categoryOwnerMap = MistiaRecordOwnershipStore.ownerMap(from: ownershipScopes, entity: .category)
         let transactionOwnerMap = MistiaRecordOwnershipStore.ownerMap(from: ownershipScopes, entity: .transaction)
+        let transactionRows = scopedTransactionRows(
+            rows,
+            categoryIDMap: remoteCategoryIDMap(
+                categories: categories,
+                ownerMap: categoryOwnerMap
+            ),
+            localUserID: localUserID
+        )
         let walletByID = Dictionary(uniqueKeysWithValues: wallets.map { ($0.id, $0) })
         let categoryByID = Dictionary(uniqueKeysWithValues: categories.map { ($0.id, $0) })
         var transactionByID = Dictionary(uniqueKeysWithValues: transactions.map { ($0.id, $0) })
 
-        for row in rows {
+        for row in transactionRows {
             let storageKey = canonicalStorageKey(entity: .transaction, recordID: row.id)
             guard !protectedRecordIDs.contains(storageKey) else { continue }
 
@@ -789,7 +930,11 @@ enum MistiaSyncLocalStore {
                 var row = RemoteRecurringBillPlan(
                     local: recurring,
                     userID: recurringOwnerMap[recurring.id] ?? fallbackOwnerUserID,
-                    categoryID: recurringBillCategoryID(for: recurring, categories: categories)
+                    categoryID: recurringBillCategoryID(
+                        for: recurring,
+                        userID: recurringOwnerMap[recurring.id] ?? fallbackOwnerUserID,
+                        categories: categories
+                    )
                 )
                 row.syncVersion = recurring.remoteVersion
                 return row
@@ -1162,12 +1307,136 @@ enum MistiaSyncLocalStore {
         category.updatedAt = row.updatedAt
         category.deletedAt = row.deletedAt
         category.remoteVersion = row.syncVersion
+
         try MistiaRecordOwnershipStore.upsert(
             entity: .category,
             recordID: row.id,
             ownerUserID: row.userID,
             updatedAt: row.updatedAt,
             context: context
+        )
+    }
+
+    private static func scopedCategoryRows(
+        _ rows: [RemoteTransactionCategory],
+        categoryIDMap: [UUID: UUID]
+    ) -> [RemoteTransactionCategory] {
+        rows.map { row in
+            var scopedRow = row
+            scopedRow.id = categoryIDMap[row.id] ?? row.id
+            scopedRow.parentCategoryID = row.parentCategoryID.flatMap { categoryIDMap[$0] ?? $0 }
+            return scopedRow
+        }
+    }
+
+    private static func scopedTransactionRows(
+        _ rows: [RemoteLedgerTransaction],
+        categoryIDMap: [UUID: UUID],
+        localUserID: UUID?
+    ) -> [RemoteLedgerTransaction] {
+        rows.map { row in
+            var scopedRow = row
+            scopedRow.categoryID = scopedCategoryID(
+                row.categoryID,
+                ownerUserID: row.userID,
+                categoryIDMap: categoryIDMap,
+                localUserID: localUserID
+            )
+            return scopedRow
+        }
+    }
+
+    private static func scopedBudgetRows(
+        _ rows: [RemoteBudgetPlan],
+        categoryIDMap: [UUID: UUID],
+        localUserID: UUID?
+    ) -> [RemoteBudgetPlan] {
+        rows.map { row in
+            var scopedRow = row
+            scopedRow.categoryID = scopedCategoryID(
+                row.categoryID,
+                ownerUserID: row.userID,
+                categoryIDMap: categoryIDMap,
+                localUserID: localUserID
+            )
+            return scopedRow
+        }
+    }
+
+    private static func scopedRecurringBillRows(
+        _ rows: [RemoteRecurringBillPlan],
+        categoryIDMap: [UUID: UUID],
+        localUserID: UUID?
+    ) -> [RemoteRecurringBillPlan] {
+        rows.map { row in
+            var scopedRow = row
+            scopedRow.categoryID = scopedCategoryID(
+                row.categoryID,
+                ownerUserID: row.userID,
+                categoryIDMap: categoryIDMap,
+                localUserID: localUserID
+            )
+            return scopedRow
+        }
+    }
+
+    private static func scopedCategoryIDMap(
+        _ rows: [RemoteTransactionCategory],
+        localUserID: UUID?
+    ) -> [UUID: UUID] {
+        Dictionary(uniqueKeysWithValues: rows.map { row in
+            let localID: UUID
+            if row.isSystem,
+               let systemKey = row.systemKey,
+               (localUserID == nil || row.userID == localUserID) {
+                localID = MistiaSystemCategoryIdentity.canonicalID(for: systemKey)
+            } else if let localUserID, row.userID != localUserID, row.isSystem {
+                localID = MistiaSystemCategoryIdentity.familyScopedID(
+                    remoteCategoryID: row.id,
+                    ownerUserID: row.userID
+                )
+            } else {
+                localID = row.id
+            }
+            return (row.id, localID)
+        })
+    }
+
+    private static func remoteCategoryIDMap(
+        categories: [TransactionCategory],
+        ownerMap: [UUID: UUID]
+    ) -> [UUID: UUID] {
+        Dictionary(uniqueKeysWithValues: categories.map { category in
+            let ownerUserID = ownerMap[category.id]
+            let remoteID: UUID
+            if category.isSystem,
+               let systemKey = category.systemKey,
+               let ownerUserID {
+                remoteID = MistiaSystemCategoryIdentity.cloudScopedID(
+                    canonicalCategoryID: MistiaSystemCategoryIdentity.canonicalID(for: systemKey),
+                    ownerUserID: ownerUserID
+                )
+            } else {
+                remoteID = category.id
+            }
+            return (remoteID, category.id)
+        })
+    }
+
+    private static func scopedCategoryID(
+        _ remoteCategoryID: UUID?,
+        ownerUserID: UUID,
+        categoryIDMap: [UUID: UUID],
+        localUserID: UUID?
+    ) -> UUID? {
+        guard let remoteCategoryID else { return nil }
+        if let mappedID = categoryIDMap[remoteCategoryID] {
+            return mappedID
+        }
+        guard let localUserID, ownerUserID != localUserID else { return remoteCategoryID }
+        return MistiaSystemCategoryIdentity.familyScopedID(
+            remoteCategoryID: remoteCategoryID,
+            ownerUserID: ownerUserID
         )
     }
 
@@ -1593,10 +1862,11 @@ enum MistiaSyncLocalStore {
 
     private static func recurringBillCategoryID(
         for plan: RecurringBillPlan,
+        userID: UUID,
         categories: [TransactionCategory]
     ) -> UUID? {
-        if let categoryID = plan.category?.id {
-            return categoryID
+        if let category = plan.category {
+            return mistiaCloudCategoryID(for: category, userID: userID)
         }
 
         guard let systemKey = MistiaSystemCategoryKey.allCases.first(where: {
@@ -1609,7 +1879,7 @@ enum MistiaSyncLocalStore {
             guard category.deletedAt == nil else { return false }
             return category.systemKey == systemKey.rawValue
         }
-        return matchingCategory?.id
+        return mistiaCloudCategoryID(for: matchingCategory, userID: userID)
     }
 
     private static func supplementalCategoriesForUpload(
@@ -1619,7 +1889,12 @@ enum MistiaSyncLocalStore {
     ) throws -> [RemoteTransactionCategory] {
         let context = ModelContext(container)
         let categories = try fetchCategories(context)
-        let categoryByID = Dictionary(uniqueKeysWithValues: categories.map { ($0.id, $0) })
+        let categoryByRemoteID = Dictionary(
+            uniqueKeysWithValues: categories.compactMap { category -> (UUID, TransactionCategory)? in
+                guard let remoteID = mistiaCloudCategoryID(for: category, userID: userID) else { return nil }
+                return (remoteID, category)
+            }
+        )
 
         var includedIDs = Set(baseSnapshot.categories.map(\.id))
         var queuedIDs: Set<UUID> = []
@@ -1655,14 +1930,14 @@ enum MistiaSyncLocalStore {
             let categoryID = pendingIDs[index]
             index += 1
 
-            guard let category = categoryByID[categoryID] else { continue }
+            guard let category = categoryByRemoteID[categoryID] else { continue }
             guard category.deletedAt == nil else {
                 continue
             }
 
             includedIDs.insert(categoryID)
             supplemental.append(RemoteTransactionCategory(local: category, userID: userID))
-            queueCategoryID(category.parentCategory?.id)
+            queueCategoryID(mistiaCloudCategoryID(for: category.parentCategory, userID: userID))
         }
 
         return supplemental
@@ -1694,6 +1969,20 @@ enum MistiaSyncLocalStore {
         guard let walletID else { return nil }
         return ownerMap[walletID]
     }
+}
+
+private func mistiaCloudCategoryID(
+    for category: TransactionCategory?,
+    userID: UUID
+) -> UUID? {
+    guard let category else { return nil }
+    guard category.isSystem, let systemKey = category.systemKey else {
+        return category.id
+    }
+    return MistiaSystemCategoryIdentity.cloudScopedID(
+        canonicalCategoryID: MistiaSystemCategoryIdentity.canonicalID(for: systemKey),
+        ownerUserID: userID
+    )
 }
 
 private extension RemoteLedgerWallet {
@@ -1747,13 +2036,13 @@ private extension RemoteCreditCardProfile {
 private extension RemoteTransactionCategory {
     init(local category: TransactionCategory, userID: UUID) {
         self.userID = userID
-        self.id = category.id
+        self.id = mistiaCloudCategoryID(for: category, userID: userID) ?? category.id
         self.name = category.name
         self.kindRawValue = category.kindRawValue
         self.iconSymbolName = category.iconSymbolName
         self.iconColorHex = category.iconColorHex
         self.isFavorite = category.isFavorite
-        self.parentCategoryID = category.parentCategory?.id
+        self.parentCategoryID = mistiaCloudCategoryID(for: category.parentCategory, userID: userID)
         self.hierarchyRoleRawValue = category.hierarchyRoleRawValue
         self.systemKey = category.systemKey
         self.isSystem = category.isSystem
@@ -1793,7 +2082,7 @@ private extension RemoteLedgerTransaction {
         self.normalizedCounterpartyKey = transaction.normalizedCounterpartyKey
         self.sourceWalletID = transaction.sourceWallet?.id
         self.destinationWalletID = transaction.destinationWallet?.id
-        self.categoryID = transaction.category?.id
+        self.categoryID = mistiaCloudCategoryID(for: transaction.category, userID: userID)
         self.deletedAt = transaction.deletedAt
         self.isArchived = transaction.isArchived
         self.archivedAt = transaction.archivedAt
@@ -1807,7 +2096,7 @@ private extension RemoteBudgetPlan {
         self.init(
             userID: userID,
             id: plan.id,
-            categoryID: plan.category?.id,
+            categoryID: mistiaCloudCategoryID(for: plan.category, userID: userID),
             monthAnchor: plan.monthAnchor,
             limitMinor: plan.limitMinor,
             rolloverEnabled: plan.rolloverEnabled,

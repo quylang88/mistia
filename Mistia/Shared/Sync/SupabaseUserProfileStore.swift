@@ -8,6 +8,7 @@ protocol UserProfileRemoteStoring {
         birthday: Date?,
         session: SupabaseAuthSession
     ) async throws -> RemoteUserProfile
+    func markCategoryCatalogReady(session: SupabaseAuthSession) async throws -> RemoteUserProfile
     func uploadAvatarImageData(
         _ data: Data,
         session: SupabaseAuthSession
@@ -19,6 +20,7 @@ struct RemoteUserProfile: Decodable {
     let displayName: String
     let avatarURL: URL?
     let birthday: Date?
+    let categoryCatalogSyncedAt: Date?
     let createdAt: Date
     let updatedAt: Date
 
@@ -27,6 +29,7 @@ struct RemoteUserProfile: Decodable {
         case displayName = "display_name"
         case avatarURL = "avatar_url"
         case birthday
+        case categoryCatalogSyncedAt = "category_catalog_synced_at"
         case createdAt = "created_at"
         case updatedAt = "updated_at"
     }
@@ -36,6 +39,7 @@ struct RemoteUserProfile: Decodable {
         displayName: String,
         avatarURL: URL?,
         birthday: Date?,
+        categoryCatalogSyncedAt: Date? = nil,
         createdAt: Date,
         updatedAt: Date
     ) {
@@ -43,6 +47,7 @@ struct RemoteUserProfile: Decodable {
         self.displayName = displayName
         self.avatarURL = avatarURL
         self.birthday = birthday
+        self.categoryCatalogSyncedAt = categoryCatalogSyncedAt
         self.createdAt = createdAt
         self.updatedAt = updatedAt
     }
@@ -66,6 +71,7 @@ struct RemoteUserProfile: Decodable {
             birthday = nil
         }
 
+        categoryCatalogSyncedAt = try container.decodeIfPresent(Date.self, forKey: .categoryCatalogSyncedAt)
         createdAt = try container.decode(Date.self, forKey: .createdAt)
         updatedAt = try container.decode(Date.self, forKey: .updatedAt)
     }
@@ -205,6 +211,18 @@ struct SupabaseUserProfileStore: UserProfileRemoteStoring {
         return publicURL
     }
 
+    func markCategoryCatalogReady(session: SupabaseAuthSession) async throws -> RemoteUserProfile {
+        let configuration = try configuration()
+        let url = configuration.restBaseURL
+            .appending(path: "rpc")
+            .appending(path: "mark_category_catalog_ready")
+        var request = authorizedJSONRequest(url: url, session: session)
+        request.httpMethod = "POST"
+        request.httpBody = try encoder.encode(EmptyRPCBody())
+
+        return try await performRequest(request: request)
+    }
+
     private func configuration() throws -> MistiaSyncConfiguration {
         guard let configuration = configurationProvider() else {
             throw SupabaseServiceError.configurationMissing
@@ -285,6 +303,8 @@ struct SupabaseUserProfileStore: UserProfileRemoteStoring {
         return "Mistia"
     }
 }
+
+private struct EmptyRPCBody: Encodable {}
 
 private struct UserProfileUpsertPayload: Encodable {
     let userID: UUID

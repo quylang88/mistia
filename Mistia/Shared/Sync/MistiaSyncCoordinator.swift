@@ -348,7 +348,7 @@ final class SyncCoordinator {
 
         let remoteRecord = try await remoteStore.fetchRecord(
             entity: mutation.entity,
-            recordID: mutation.recordID,
+            recordID: localRecord.id,
             subjectUserID: mutation.subjectUserID,
             session: session
         )
@@ -455,7 +455,7 @@ final class SyncCoordinator {
 
         let latestRemote = try await remoteStore.fetchRecord(
             entity: mutation.entity,
-            recordID: mutation.recordID,
+            recordID: localRecord.id,
             subjectUserID: mutation.subjectUserID,
             session: session
         ) ?? synthesizedDeletedRecord(from: localRecord, remoteVersion: mutation.baseVersion + 1)
@@ -489,7 +489,7 @@ final class SyncCoordinator {
 
         let remoteRecord = try await remoteStore.fetchRecord(
             entity: mutation.entity,
-            recordID: mutation.recordID,
+            recordID: localRecord.id,
             subjectUserID: mutation.subjectUserID,
             session: session
         )
@@ -523,7 +523,7 @@ final class SyncCoordinator {
 
         if let deletedRecord = try await remoteStore.conditionalDelete(
             entity: mutation.entity,
-            recordID: mutation.recordID,
+            recordID: localRecord.id,
             subjectUserID: mutation.subjectUserID,
             expectedVersion: mutation.baseVersion,
             modifiedAt: mutation.modifiedAt,
@@ -543,7 +543,7 @@ final class SyncCoordinator {
 
         let latestRemote = try await remoteStore.fetchRecord(
             entity: mutation.entity,
-            recordID: mutation.recordID,
+            recordID: localRecord.id,
             subjectUserID: mutation.subjectUserID,
             session: session
         ) ?? synthesizedDeletedRecord(from: localRecord, remoteVersion: mutation.baseVersion + 1)
