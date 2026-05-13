@@ -49,7 +49,7 @@ enum FamilyScopedData {
 
     static func visibleTransactionsForHistory(
         _ transactions: [LedgerTransaction],
-        audits: [TransactionAuditRecord],
+        audits _: [TransactionAuditRecord],
         scopes: [OwnedRecordScope],
         familyContextStore: FamilyContextStore,
         sessionStore: SessionStore
@@ -58,20 +58,15 @@ enum FamilyScopedData {
             return transactions
         }
 
-        let auditMap = TransactionAuditStore.auditMap(from: audits)
         let walletOwnerMap = MistiaRecordOwnershipStore.ownerMap(from: scopes, entity: .wallet)
         let transactionOwnerMap = MistiaRecordOwnershipStore.ownerMap(from: scopes, entity: .transaction)
 
         return transactions.filter { transaction in
-            let sourceOwnerUserID = ownerUserID(forWalletID: transaction.sourceWallet?.id, ownerMap: walletOwnerMap)
-            let destinationOwnerUserID = ownerUserID(forWalletID: transaction.destinationWallet?.id, ownerMap: walletOwnerMap)
-            let canonicalOwnerUserID = transactionOwnerMap[transaction.id] ?? sourceOwnerUserID
-            let createdByUserID = auditMap[transaction.id]?.createdByUserID ?? canonicalOwnerUserID
-
-            return canonicalOwnerUserID == subjectUserID
-                || createdByUserID == subjectUserID
-                || sourceOwnerUserID == subjectUserID
-                || destinationOwnerUserID == subjectUserID
+            transactionOwnerUserID(
+                for: transaction,
+                transactionOwnerMap: transactionOwnerMap,
+                walletOwnerMap: walletOwnerMap
+            ) == subjectUserID
         }
     }
 
@@ -86,11 +81,25 @@ enum FamilyScopedData {
         }
 
         let walletOwnerMap = MistiaRecordOwnershipStore.ownerMap(from: scopes, entity: .wallet)
+        let transactionOwnerMap = MistiaRecordOwnershipStore.ownerMap(from: scopes, entity: .transaction)
 
         return transactions.filter { transaction in
-            ownerUserID(forWalletID: transaction.sourceWallet?.id, ownerMap: walletOwnerMap) == subjectUserID
-                || ownerUserID(forWalletID: transaction.destinationWallet?.id, ownerMap: walletOwnerMap) == subjectUserID
+            transactionOwnerUserID(
+                for: transaction,
+                transactionOwnerMap: transactionOwnerMap,
+                walletOwnerMap: walletOwnerMap
+            ) == subjectUserID
         }
+    }
+
+    private static func transactionOwnerUserID(
+        for transaction: LedgerTransaction,
+        transactionOwnerMap: [UUID: UUID],
+        walletOwnerMap: [UUID: UUID]
+    ) -> UUID? {
+        transactionOwnerMap[transaction.id]
+            ?? ownerUserID(forWalletID: transaction.sourceWallet?.id, ownerMap: walletOwnerMap)
+            ?? ownerUserID(forWalletID: transaction.destinationWallet?.id, ownerMap: walletOwnerMap)
     }
 
     private static func ownerUserID(

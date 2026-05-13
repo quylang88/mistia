@@ -56,6 +56,11 @@ private enum TransactionEditorFocusedField: Hashable {
     case title
 }
 
+private struct TransactionSystemCategoryUseRequestTarget: Identifiable {
+    let id = UUID()
+    let ownerUserID: UUID
+}
+
 struct TransactionEditorSheet: View {
     @Environment(\.calendar) private var calendar
     @Environment(\.dismiss) private var dismiss
@@ -92,6 +97,7 @@ struct TransactionEditorSheet: View {
         return false
     }
     @State private var showsCategoryPicker = false
+    @State private var systemCategoryUseRequestTarget: TransactionSystemCategoryUseRequestTarget?
     @State private var suppressTitleSuggestions = false
     @State private var isApplyingTitleSuggestion = false
     @FocusState private var focusedField: TransactionEditorFocusedField?
@@ -221,7 +227,38 @@ struct TransactionEditorSheet: View {
                 draft.categoryID = category.id
             }
         }
+        .sheet(item: $systemCategoryUseRequestTarget) { target in
+            MistiaCategoryPickerSheet(
+                title: mistiaLocalized(
+                    vi: "Yêu cầu sử dụng danh mục",
+                    en: "Request category use",
+                    ja: "カテゴリ利用をリクエスト"
+                ),
+                selectedCategoryID: nil,
+                sections: missingSystemCategorySections(
+                    ownerUserID: target.ownerUserID,
+                    kind: selectedCategoryKind
+                ),
+                recentCategories: [],
+                favoriteCategories: [],
+                initialMode: .all,
+                allowsParentSelectionInAll: false,
+                allModeSubtitle: { category in
+                    category.parentCategory?.localizedDisplayName
+                },
+                quickModeSubtitle: { category in
+                    category.parentCategory?.localizedDisplayName
+                }
+            ) { category in
+                systemCategoryUseRequestTarget = nil
+                requestSystemCategoryUse(category, ownerUserID: target.ownerUserID)
+            }
+        }
         .onChange(of: draft.sourceWalletID) { _, _ in
+            clearMismatchedCategoryForSelectedWallet()
+        }
+        .onChange(of: familyContextStore.selectedSubjectUserID) { _, _ in
+            clearMismatchedWalletsForCurrentSubject()
             clearMismatchedCategoryForSelectedWallet()
         }
     }
@@ -395,6 +432,29 @@ struct TransactionEditorSheet: View {
                         }
                     }
                     .buttonStyle(MistiaPressableButtonStyle(cornerRadius: 20))
+
+                    if shouldShowSystemCategoryUseRequestButton {
+                        Button {
+                            openSystemCategoryUseRequestPicker()
+                        } label: {
+                            HStack(spacing: 10) {
+                                Image(systemName: "plus.circle.fill")
+                                    .font(.system(size: 16, weight: .semibold))
+                                    .foregroundStyle(MistiaAccent.purple.color)
+                                Text(mistiaLocalized(
+                                    vi: "Yêu cầu danh mục hệ thống",
+                                    en: "Request system category",
+                                    ja: "システムカテゴリをリクエスト"
+                                ))
+                                .foregroundStyle(.primary)
+                                Spacer()
+                                Image(systemName: "chevron.right")
+                                    .font(.system(size: 11, weight: .bold))
+                                    .foregroundStyle(.tertiary)
+                            }
+                        }
+                        .buttonStyle(MistiaPressableButtonStyle(cornerRadius: 20))
+                    }
                 }
             case .transfer:
                 if draft.transferSubtype == .internalTransfer {
@@ -552,12 +612,11 @@ struct TransactionEditorSheet: View {
     }
 
     private var availableCategories: [TransactionCategory] {
-        let desiredKind: TransactionCategoryKind = draft.primaryKind == .income ? .income : .expense
         let preferredID = target.transaction?.category?.id
 
         return storedCategories
             .filter {
-                return ($0.kind == desiredKind)
+                return ($0.kind == selectedCategoryKind)
                     && $0.isChildCategory
                     && !$0.isBalanceAdjustmentSystemCategory
                     && shouldShowCategory($0)
@@ -619,11 +678,10 @@ struct TransactionEditorSheet: View {
     }
 
     private var categorySections: [TransactionCategoryGroupSection] {
-        let desiredKind: TransactionCategoryKind = draft.primaryKind == .income ? .income : .expense
         let preferredID = target.transaction?.category?.id
         let relevantCategories = storedCategories.filter { category in
             return !category.isBalanceAdjustmentSystemCategory
-                && category.kind == desiredKind
+                && category.kind == selectedCategoryKind
                 && shouldShowCategory(category)
                 && category.deletedAt == nil
                 && (!category.isArchived || category.id == preferredID || category.parentCategory?.id == target.transaction?.category?.parentCategory?.id)
@@ -631,24 +689,22 @@ struct TransactionEditorSheet: View {
 
         return MistiaCategoryHierarchy.groupedSections(
             from: relevantCategories,
-            kind: desiredKind,
+            kind: selectedCategoryKind,
             includeArchived: true,
             includeEmptyParents: false
         )
     }
 
     private var favoriteCategories: [TransactionCategory] {
-        let desiredKind: TransactionCategoryKind = draft.primaryKind == .income ? .income : .expense
         return MistiaCategoryPickerSupport.favoriteCategories(
             from: storedCategories.filter {
                 !$0.isBalanceAdjustmentSystemCategory && shouldShowCategory($0)
             },
-            kind: desiredKind
+            kind: selectedCategoryKind
         )
     }
 
     private var recentCategories: [TransactionCategory] {
-        let desiredKind: TransactionCategoryKind = draft.primaryKind == .income ? .income : .expense
         let ownerUserIDs = recentCategoryOwnerUserIDs
         return MistiaCategoryPickerSupport.recentCategories(
             from: postedTransactions.filter {
@@ -659,8 +715,12 @@ struct TransactionEditorSheet: View {
                 !$0.isBalanceAdjustmentSystemCategory
                     && categoryMatchesOwnerScope($0, ownerUserIDs: ownerUserIDs)
             },
-            kind: desiredKind
+            kind: selectedCategoryKind
         )
+    }
+
+    private var selectedCategoryKind: TransactionCategoryKind {
+        draft.primaryKind == .income ? .income : .expense
     }
 
     private var selectedSourceWallet: LedgerWallet? {
@@ -1087,8 +1147,8 @@ struct TransactionEditorSheet: View {
             return newTransactionWalletOwnerUserIDs
         }
         let operable = familyContextStore.operableTargetUserIDs
-        if operable.isEmpty, let activeLocalProfileUserID = sessionStore.activeLocalProfileUserID {
-            return [activeLocalProfileUserID]
+        if operable.isEmpty, let currentSelfUserID {
+            return [currentSelfUserID]
         }
         return operable
     }
@@ -1096,21 +1156,16 @@ struct TransactionEditorSheet: View {
     private var newTransactionWalletOwnerUserIDs: Set<UUID> {
         guard let subjectUserID = target.subjectUserIDOverride
             ?? familyContextStore.selectedSubjectUserID
-            ?? sessionStore.activeLocalProfileUserID else {
+            ?? currentSelfUserID else {
             return []
         }
-
-        guard subjectUserID == sessionStore.activeLocalProfileUserID else {
-            return [subjectUserID]
-        }
-
-        return familyContextStore.operableTargetUserIDs.union([subjectUserID])
+        return [subjectUserID]
     }
 
     private var effectiveViewableTargetUserIDs: Set<UUID> {
         let viewable = familyContextStore.viewableTargetUserIDs
-        if viewable.isEmpty, let activeLocalProfileUserID = sessionStore.activeLocalProfileUserID {
-            return [activeLocalProfileUserID]
+        if viewable.isEmpty, let currentSelfUserID {
+            return [currentSelfUserID]
         }
         return viewable
     }
@@ -1127,10 +1182,25 @@ struct TransactionEditorSheet: View {
         MistiaRecordOwnershipStore.ownerMap(from: ownershipScopes, entity: .transaction)
     }
 
+    private var currentSelfUserID: UUID? {
+        sessionStore.activeLocalProfileUserID
+            ?? familyContextStore.currentUserID
+            ?? sessionStore.signedInUserID
+    }
+
     private var effectiveCategoryOwnerUserIDs: Set<UUID> {
         if let selectedSourceWallet,
            let ownerUserID = walletOwnerUserID(for: selectedSourceWallet) {
             return [ownerUserID]
+        }
+        if let transaction = target.transaction,
+           let ownerUserID = transactionOwnerUserID(for: transaction) {
+            return [ownerUserID]
+        }
+        if let subjectUserID = target.subjectUserIDOverride
+            ?? familyContextStore.selectedSubjectUserID
+            ?? currentSelfUserID {
+            return [subjectUserID]
         }
         return effectiveOperableTargetUserIDs
     }
@@ -1144,38 +1214,142 @@ struct TransactionEditorSheet: View {
     }
 
     private var recentCategoryOwnerUserIDs: Set<UUID> {
-        if familyContextStore.isViewingOtherMemberContext,
-           let viewedMember = familyContextStore.viewedMember {
-            return [viewedMember.userID]
+        if let selectedSourceWallet,
+           let ownerUserID = walletOwnerUserID(for: selectedSourceWallet) {
+            return [ownerUserID]
         }
-        if let activeLocalProfileUserID = sessionStore.activeLocalProfileUserID {
-            return [activeLocalProfileUserID]
+        if let transaction = target.transaction,
+           let ownerUserID = transactionOwnerUserID(for: transaction) {
+            return [ownerUserID]
         }
-        return effectiveCategoryOwnerUserIDs
+        if let subjectUserID = target.subjectUserIDOverride
+            ?? familyContextStore.selectedSubjectUserID
+            ?? currentSelfUserID {
+            return [subjectUserID]
+        }
+        return []
+    }
+
+    private var systemCategoryUseRequestOwnerID: UUID? {
+        guard target.transaction == nil else { return nil }
+        let ownerUserID = selectedSourceWallet.flatMap { walletOwnerUserID(for: $0) }
+            ?? (familyContextStore.isViewingOtherMemberContext ? familyContextStore.selectedSubjectUserID : nil)
+        guard let ownerUserID,
+              ownerUserID != currentSelfUserID else {
+            return nil
+        }
+        return ownerUserID
+    }
+
+    private var shouldShowSystemCategoryUseRequestButton: Bool {
+        guard let ownerUserID = systemCategoryUseRequestOwnerID else { return false }
+        return !missingSystemCategorySections(
+            ownerUserID: ownerUserID,
+            kind: selectedCategoryKind
+        ).isEmpty
     }
 
     private func walletOwnerUserID(for wallet: LedgerWallet?) -> UUID? {
         guard let wallet else { return nil }
-        return walletOwnerMap[wallet.id] ?? sessionStore.activeLocalProfileUserID
+        return walletOwnerMap[wallet.id] ?? currentSelfUserID
     }
 
     private func walletOwnerUserID(for walletID: UUID?) -> UUID? {
         guard let walletID else { return nil }
-        return walletOwnerMap[walletID] ?? sessionStore.activeLocalProfileUserID
+        return walletOwnerMap[walletID] ?? currentSelfUserID
     }
 
     private func categoryOwnerUserID(for category: TransactionCategory) -> UUID? {
-        categoryOwnerMap[category.id] ?? sessionStore.activeLocalProfileUserID
+        categoryOwnerMap[category.id] ?? currentSelfUserID
     }
 
     private func transactionOwnerUserID(for transaction: LedgerTransaction) -> UUID? {
         transactionOwnerMap[transaction.id]
             ?? walletOwnerUserID(for: transaction.sourceWallet)
-            ?? sessionStore.activeLocalProfileUserID
+            ?? walletOwnerUserID(for: transaction.destinationWallet)
+            ?? currentSelfUserID
     }
 
     private func shouldShowCategory(_ category: TransactionCategory) -> Bool {
         categoryMatchesOwnerScope(category, ownerUserIDs: categoryPickerOwnerUserIDs)
+    }
+
+    private func openSystemCategoryUseRequestPicker() {
+        guard let ownerUserID = systemCategoryUseRequestOwnerID else { return }
+        guard familyContextStore.isCategoryCatalogReady(ownerUserID: ownerUserID) else {
+            alertMessage = mistiaLocalized(
+                vi: "Thành viên này cần đồng bộ danh mục lên cloud trước khi bạn yêu cầu dùng danh mục hệ thống của họ.",
+                en: "This member needs to sync their category catalog to the cloud before you request one of their system categories.",
+                ja: "このメンバーのシステムカテゴリをリクエストする前に、相手にカテゴリをクラウドへ同期してもらう必要があります。"
+            )
+            return
+        }
+        guard !missingSystemCategorySections(ownerUserID: ownerUserID, kind: selectedCategoryKind).isEmpty else {
+            alertMessage = mistiaLocalized(
+                vi: "Thành viên này đã có đủ danh mục hệ thống trong nhóm đang chọn.",
+                en: "This member already has every system category in the current group.",
+                ja: "このメンバーには、現在のグループのシステムカテゴリがすべてあります。"
+            )
+            return
+        }
+        systemCategoryUseRequestTarget = TransactionSystemCategoryUseRequestTarget(ownerUserID: ownerUserID)
+    }
+
+    private func requestSystemCategoryUse(
+        _ category: TransactionCategory,
+        ownerUserID: UUID
+    ) {
+        guard let systemKey = category.mistiaSystemCategoryKey else { return }
+        let resourceID = MistiaSystemCategoryIdentity.canonicalID(for: systemKey)
+        let isPending = familyContextStore.hasPendingPermissionRequest(
+            ownerUserID: ownerUserID,
+            resourceType: .category,
+            resourceID: resourceID,
+            scope: .use
+        )
+
+        guard !isPending else {
+            alertMessage = mistiaLocalized(
+                vi: "Yêu cầu sử dụng danh mục này đang chờ thành viên phản hồi.",
+                en: "The request to use this category is waiting for the member.",
+                ja: "このカテゴリの利用リクエストはメンバーの返答待ちです。"
+            )
+            return
+        }
+
+        Task { @MainActor in
+            let didSend = await familyContextStore.requestPermission(
+                resourceType: .category,
+                resourceID: resourceID,
+                ownerUserID: ownerUserID,
+                scope: .use,
+                resourceName: category.localizedDisplayName,
+                sessionStore: sessionStore
+            )
+            alertMessage = didSend
+                ? mistiaLocalized(
+                    vi: "Đã gửi yêu cầu. Khi thành viên đồng ý, danh mục này sẽ được đồng bộ lên cloud của họ để bạn chọn trong giao dịch.",
+                    en: "Request sent. When the member approves, this category will sync to their cloud catalog so you can use it in transactions.",
+                    ja: "リクエストを送信しました。メンバーが承認すると、このカテゴリが相手のクラウドカテゴリに同期され、取引で選べるようになります。"
+                )
+                : (familyContextStore.lastErrorMessage ?? mistiaLocalized(
+                    vi: "Không thể gửi yêu cầu lúc này.",
+                    en: "Couldn't send the request right now.",
+                    ja: "現在リクエストは送信できません。"
+                ))
+        }
+    }
+
+    private func missingSystemCategorySections(
+        ownerUserID: UUID,
+        kind: TransactionCategoryKind
+    ) -> [TransactionCategoryGroupSection] {
+        MistiaSystemCategoryRequestSupport.missingSections(
+            ownerUserID: ownerUserID,
+            kind: kind,
+            categories: storedCategories,
+            categoryOwnerMap: categoryOwnerMap
+        )
     }
 
     private func categoryMatchesOwnerScope(
@@ -1244,6 +1418,19 @@ struct TransactionEditorSheet: View {
             return
         }
         draft.categoryID = nil
+    }
+
+    private func clearMismatchedWalletsForCurrentSubject() {
+        let availableWalletIDs = Set(availableWallets.map(\.id))
+        if let sourceWalletID = draft.sourceWalletID,
+           !availableWalletIDs.contains(sourceWalletID) {
+            draft.sourceWalletID = nil
+            draft.categoryID = nil
+        }
+        if let destinationWalletID = draft.destinationWalletID,
+           !availableWalletIDs.contains(destinationWalletID) {
+            draft.destinationWalletID = nil
+        }
     }
 
     private func applyTitleSuggestion(_ suggestion: TransactionTitleSuggestion) {

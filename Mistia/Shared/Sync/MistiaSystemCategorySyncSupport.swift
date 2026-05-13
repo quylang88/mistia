@@ -201,12 +201,18 @@ enum MistiaSystemCategorySyncSupport {
 
     static func shouldQueueCategoryMutation(_ category: TransactionCategory) -> Bool {
         if category.cloudSyncEnabled { return true }
-        if category.isSystem && isCustomizedSystemCategory(category) { return true }
+        if isSystemCategoryCloudSyncRequired(category) { return true }
         return false
     }
 
     nonisolated static func shouldExportCategory(_ category: TransactionCategory) -> Bool {
-        category.cloudSyncEnabled
+        category.cloudSyncEnabled || isSystemCategoryCloudSyncRequired(category)
+    }
+
+    nonisolated static func isSystemCategoryCloudSyncRequired(_ category: TransactionCategory) -> Bool {
+        guard category.isSystem else { return false }
+        if category.deletedAt != nil { return true }
+        return isCustomizedSystemCategory(category)
     }
 
     nonisolated static func isCustomizedSystemCategory(_ category: TransactionCategory) -> Bool {
@@ -584,11 +590,11 @@ enum MistiaSystemCategorySyncSupport {
 
         guard !isFavorite else { return false }
         guard normalizedRole == descriptor.hierarchyRole else { return false }
+        if let defaultSortOrder = descriptor.sortOrder {
+            guard sortOrder == defaultSortOrder else { return false }
+        }
 
-        // We no longer strictly check 'isArchived' because some categories start archived 
-        // by default and users shouldn't be forced to sync them just because they stay archived.
-        // Also, archiving/unarchiving doesn't necessarily mean it's "customized" in a way that requires sync
-        // unless it's also used in transactions.
+        guard isArchived == descriptor.startsArchived else { return false }
 
         switch descriptor.hierarchyRole {
         case .parent:

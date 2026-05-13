@@ -234,10 +234,125 @@ final class MistiaSystemCategoryRemoteApplyTests: XCTestCase {
         XCTAssertEqual(category.updatedAt.timeIntervalSince1970, remoteUpdatedAt.timeIntervalSince1970, accuracy: 0.001)
     }
 
+    func testSystemCategoryArchiveDeleteAndCustomChangesAreSyncEligible() {
+        let categoryKey = MistiaSystemCategoryParentKey.expenseFood
+        let defaultCategory = makeSystemCategory(key: categoryKey)
+        XCTAssertFalse(MistiaSystemCategorySyncSupport.shouldQueueCategoryMutation(defaultCategory))
+        XCTAssertFalse(MistiaSystemCategorySyncSupport.shouldExportCategory(defaultCategory))
+
+        let archivedCategory = makeSystemCategory(
+            key: categoryKey,
+            isArchived: true,
+            archivedAt: Date(timeIntervalSince1970: 1_770_000_000)
+        )
+        XCTAssertTrue(MistiaSystemCategorySyncSupport.shouldQueueCategoryMutation(archivedCategory))
+        XCTAssertTrue(MistiaSystemCategorySyncSupport.shouldExportCategory(archivedCategory))
+
+        let deletedCategory = makeSystemCategory(
+            key: categoryKey,
+            deletedAt: Date(timeIntervalSince1970: 1_770_000_000)
+        )
+        XCTAssertTrue(MistiaSystemCategorySyncSupport.shouldQueueCategoryMutation(deletedCategory))
+        XCTAssertTrue(MistiaSystemCategorySyncSupport.shouldExportCategory(deletedCategory))
+
+        let renamedCategory = makeSystemCategory(key: categoryKey, name: "Sinh hoạt tuỳ chỉnh")
+        XCTAssertTrue(MistiaSystemCategorySyncSupport.shouldQueueCategoryMutation(renamedCategory))
+
+        let retintedCategory = makeSystemCategory(key: categoryKey, iconColorHex: "#123456")
+        XCTAssertTrue(MistiaSystemCategorySyncSupport.shouldExportCategory(retintedCategory))
+
+        let favoriteCategory = makeSystemCategory(key: categoryKey, isFavorite: true)
+        XCTAssertTrue(MistiaSystemCategorySyncSupport.shouldExportCategory(favoriteCategory))
+
+        let reorderedCategory = makeSystemCategory(key: categoryKey, sortOrder: 999)
+        XCTAssertTrue(MistiaSystemCategorySyncSupport.shouldExportCategory(reorderedCategory))
+
+        let childCategory = makeSystemCategory(key: MistiaSystemCategoryKey.dineOut)
+        XCTAssertFalse(MistiaSystemCategorySyncSupport.shouldExportCategory(childCategory))
+
+        let reparentedChildCategory = makeSystemCategory(
+            key: MistiaSystemCategoryKey.dineOut,
+            parentKey: .expenseOther
+        )
+        XCTAssertTrue(MistiaSystemCategorySyncSupport.shouldExportCategory(reparentedChildCategory))
+
+        let reorderedChildCategory = makeSystemCategory(
+            key: MistiaSystemCategoryKey.dineOut,
+            sortOrder: 999
+        )
+        XCTAssertTrue(MistiaSystemCategorySyncSupport.shouldExportCategory(reorderedChildCategory))
+    }
+
     private func makeContainer() throws -> ModelContainer {
         let schema = Schema(versionedSchema: MistiaSchemaV1.self)
         let configuration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)
         return try ModelContainer(for: schema, configurations: [configuration])
+    }
+
+    private func makeSystemCategory(
+        key: MistiaSystemCategoryParentKey,
+        name: String? = nil,
+        iconColorHex: String? = nil,
+        isFavorite: Bool = false,
+        sortOrder: Int? = nil,
+        isArchived: Bool = false,
+        archivedAt: Date? = nil,
+        deletedAt: Date? = nil
+    ) -> TransactionCategory {
+        TransactionCategory(
+            id: MistiaSystemCategoryIdentity.canonicalID(for: key),
+            name: name ?? key.title,
+            kind: key.kind,
+            iconSymbolName: key.iconSymbolName,
+            iconColorHex: iconColorHex ?? key.iconColorHex,
+            isFavorite: isFavorite,
+            hierarchyRole: .parent,
+            systemKey: key.rawValue,
+            isSystem: true,
+            cloudSyncEnabled: false,
+            sortOrder: sortOrder ?? MistiaSystemCategoryParentKey.activeDefaults.firstIndex(of: key) ?? 0,
+            isArchived: isArchived,
+            archivedAt: archivedAt,
+            createdAt: Date(timeIntervalSince1970: 1_760_000_000),
+            updatedAt: Date(timeIntervalSince1970: 1_770_000_000),
+            deletedAt: deletedAt
+        )
+    }
+
+    private func makeSystemCategory(
+        key: MistiaSystemCategoryKey,
+        name: String? = nil,
+        iconColorHex: String? = nil,
+        isFavorite: Bool = false,
+        parentKey: MistiaSystemCategoryParentKey? = nil,
+        sortOrder: Int? = nil,
+        isArchived: Bool? = nil,
+        archivedAt: Date? = nil,
+        deletedAt: Date? = nil
+    ) -> TransactionCategory {
+        let defaultParentKey = MistiaCategoryHierarchy.defaultParentKey(for: key)
+        let resolvedParentKey = parentKey ?? defaultParentKey
+        let parent = makeSystemCategory(key: resolvedParentKey)
+
+        return TransactionCategory(
+            id: MistiaSystemCategoryIdentity.canonicalID(for: key),
+            name: name ?? key.title,
+            kind: key.kind,
+            iconSymbolName: key.iconSymbolName,
+            iconColorHex: iconColorHex ?? key.iconColorHex,
+            isFavorite: isFavorite,
+            parentCategory: parent,
+            hierarchyRole: .child,
+            systemKey: key.rawValue,
+            isSystem: true,
+            cloudSyncEnabled: false,
+            sortOrder: sortOrder ?? MistiaSystemCategoryKey.activeDefaults.firstIndex(of: key) ?? 0,
+            isArchived: isArchived ?? !key.isActiveDefault,
+            archivedAt: archivedAt,
+            createdAt: Date(timeIntervalSince1970: 1_760_000_000),
+            updatedAt: Date(timeIntervalSince1970: 1_770_000_000),
+            deletedAt: deletedAt
+        )
     }
 
     private func insertSystemCategory(

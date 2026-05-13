@@ -1108,78 +1108,12 @@ struct ManagementView: View {
         ownerUserID: UUID,
         kind: TransactionCategoryKind
     ) -> [TransactionCategoryGroupSection] {
-        let existingSystemKeys = Set(
-            storedCategories.compactMap { category -> String? in
-                guard categoryOwnerMap[category.id] == ownerUserID,
-                      category.deletedAt == nil,
-                      category.isSystem else {
-                    return nil
-                }
-                return category.systemKey
-            }
+        MistiaSystemCategoryRequestSupport.missingSections(
+            ownerUserID: ownerUserID,
+            kind: kind,
+            categories: storedCategories,
+            categoryOwnerMap: categoryOwnerMap
         )
-        let childKeys = MistiaSystemCategoryKey.activeDefaults.filter { systemKey in
-            systemKey.kind == kind
-                && systemKey != .balanceAdjustmentExpense
-                && systemKey != .balanceAdjustmentIncome
-                && !existingSystemKeys.contains(systemKey.rawValue)
-        }
-        guard !childKeys.isEmpty else { return [] }
-
-        var parentByKey: [MistiaSystemCategoryParentKey: TransactionCategory] = [:]
-        var childrenByParentKey: [MistiaSystemCategoryParentKey: [TransactionCategory]] = [:]
-        let now = Date(timeIntervalSince1970: 0)
-
-        for systemKey in childKeys {
-            let parentKey = MistiaCategoryHierarchy.defaultParentKey(for: systemKey)
-            let parent = parentByKey[parentKey] ?? TransactionCategory(
-                id: MistiaSystemCategoryIdentity.canonicalID(for: parentKey),
-                name: parentKey.title,
-                kind: parentKey.kind,
-                iconSymbolName: parentKey.iconSymbolName,
-                iconColorHex: MistiaIconColorPalette.presetHex(forDefault: parentKey.iconColorHex),
-                hierarchyRole: .parent,
-                systemKey: parentKey.rawValue,
-                isSystem: true,
-                sortOrder: MistiaSystemCategoryParentKey.activeDefaults.firstIndex(of: parentKey) ?? 0,
-                createdAt: now,
-                updatedAt: now
-            )
-            parentByKey[parentKey] = parent
-
-            let child = TransactionCategory(
-                id: MistiaSystemCategoryIdentity.canonicalID(for: systemKey),
-                name: systemKey.title,
-                kind: systemKey.kind,
-                iconSymbolName: systemKey.iconSymbolName,
-                iconColorHex: MistiaIconColorPalette.presetHex(forDefault: systemKey.iconColorHex),
-                parentCategory: parent,
-                hierarchyRole: .child,
-                systemKey: systemKey.rawValue,
-                isSystem: true,
-                sortOrder: MistiaSystemCategoryKey.activeDefaults.firstIndex(of: systemKey) ?? 0,
-                createdAt: now,
-                updatedAt: now
-            )
-            childrenByParentKey[parentKey, default: []].append(child)
-        }
-
-        return MistiaSystemCategoryParentKey.activeDefaults.compactMap { parentKey in
-            guard let parent = parentByKey[parentKey],
-                  let children = childrenByParentKey[parentKey],
-                  !children.isEmpty else {
-                return nil
-            }
-            return TransactionCategoryGroupSection(
-                parent: parent,
-                children: children.sorted { lhs, rhs in
-                    if lhs.sortOrder != rhs.sortOrder {
-                        return lhs.sortOrder < rhs.sortOrder
-                    }
-                    return lhs.createdAt < rhs.createdAt
-                }
-            )
-        }
     }
 
     private func openCategoryEditorIfAllowed(

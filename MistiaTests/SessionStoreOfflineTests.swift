@@ -904,6 +904,18 @@ private final class UserProfileStoreSpy: UserProfileRemoteStoring {
         )
     }
 
+    func markCategoryCatalogReady(session: SupabaseAuthSession) async throws -> RemoteUserProfile {
+        RemoteUserProfile(
+            userID: session.user.id,
+            displayName: session.user.userMetadata?.displayName ?? session.user.email ?? "Mistia",
+            avatarURL: nil,
+            birthday: nil,
+            categoryCatalogSyncedAt: .now,
+            createdAt: .now,
+            updatedAt: .now
+        )
+    }
+
     func uploadAvatarImageData(
         _ data: Data,
         session: SupabaseAuthSession
