@@ -102,6 +102,34 @@ final class FamilyScopedDataTests: XCTestCase {
         )
     }
 
+    func testCategoryUseRequestRequiresBothRequesterAndOwnerCloudSyncHistory() throws {
+        let selfUserID = UUID()
+        let memberUserID = UUID()
+        let container = try makeContainer()
+        let familyContextStore = makeFamilyContextStore(container: container, currentUserID: selfUserID)
+        let familyID = try XCTUnwrap(familyContextStore.currentMembership?.familyID)
+
+        familyContextStore.members = [
+            makeMember(familyID: familyID, userID: selfUserID, hasSyncedCloudData: false, isCurrentUser: true),
+            makeMember(familyID: familyID, userID: memberUserID, hasSyncedCloudData: true, isCurrentUser: false)
+        ]
+        XCTAssertFalse(familyContextStore.hasSyncedCloudData(userID: selfUserID))
+        XCTAssertFalse(familyContextStore.canRequestSystemCategoryUse(ownerUserID: memberUserID))
+
+        familyContextStore.members = [
+            makeMember(familyID: familyID, userID: selfUserID, hasSyncedCloudData: true, isCurrentUser: true),
+            makeMember(familyID: familyID, userID: memberUserID, hasSyncedCloudData: false, isCurrentUser: false)
+        ]
+        XCTAssertTrue(familyContextStore.hasSyncedCloudData(userID: selfUserID))
+        XCTAssertFalse(familyContextStore.canRequestSystemCategoryUse(ownerUserID: memberUserID))
+
+        familyContextStore.members = [
+            makeMember(familyID: familyID, userID: selfUserID, hasSyncedCloudData: true, isCurrentUser: true),
+            makeMember(familyID: familyID, userID: memberUserID, hasSyncedCloudData: true, isCurrentUser: false)
+        ]
+        XCTAssertTrue(familyContextStore.canRequestSystemCategoryUse(ownerUserID: memberUserID))
+    }
+
     private func visibleHistoryIDs(
         _ transactions: [LedgerTransaction],
         audits: [TransactionAuditRecord],
@@ -147,6 +175,26 @@ final class FamilyScopedDataTests: XCTestCase {
             title: title,
             amountMinor: 1_000,
             sourceWallet: wallet
+        )
+    }
+
+    private func makeMember(
+        familyID: UUID,
+        userID: UUID,
+        hasSyncedCloudData: Bool,
+        isCurrentUser: Bool
+    ) -> FamilyMember {
+        let role: FamilyRole = isCurrentUser ? .owner : .member
+        return FamilyMember(
+            membershipID: UUID(),
+            familyID: familyID,
+            userID: userID,
+            displayName: isCurrentUser ? "Self" : "Member",
+            avatarURL: nil,
+            hasSyncedCloudData: hasSyncedCloudData,
+            role: role,
+            policy: .preset(for: role),
+            isCurrentUser: isCurrentUser
         )
     }
 

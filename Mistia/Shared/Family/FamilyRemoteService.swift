@@ -280,16 +280,24 @@ struct FamilyUserProfileRecord: Codable, Identifiable, Equatable {
     let userID: UUID
     var displayName: String
     var avatarURL: String?
-    var categoryCatalogSyncedAt: Date?
 
     enum CodingKeys: String, CodingKey {
         case userID = "user_id"
         case displayName = "display_name"
         case avatarURL = "avatar_url"
-        case categoryCatalogSyncedAt = "category_catalog_synced_at"
     }
 
     var id: UUID { userID }
+}
+
+struct FamilySyncStatusRecord: Codable, Equatable {
+    let userID: UUID
+    let hasSyncedCloudData: Bool
+
+    enum CodingKeys: String, CodingKey {
+        case userID = "user_id"
+        case hasSyncedCloudData = "has_synced_cloud_data"
+    }
 }
 
 struct FamilyPermissionGrantRecord: Codable, Identifiable, Equatable {
@@ -338,7 +346,7 @@ struct FamilyMember: Codable, Identifiable, Equatable {
     let userID: UUID
     var displayName: String
     var avatarURL: URL?
-    var categoryCatalogSyncedAt: Date? = nil
+    var hasSyncedCloudData: Bool = false
     var role: FamilyRole
     var policy: FamilyPermissionPolicy
     var isCurrentUser: Bool
@@ -460,13 +468,21 @@ struct FamilyRemoteService: FamilyRemoteServicing {
             session: session,
             userID: currentMembership.role == .owner ? nil : session.user.id
         )
+        async let syncStatusRowsTask = fetchCloudSyncStatuses(
+            familyID: currentMembership.familyID,
+            session: session
+        )
 
         let membershipRows = try await membershipRowsTask
         let profileRows = try await fetchProfiles(
             userIDs: membershipRows.map(\.userID),
             session: session
         )
+        let syncStatusRows = (try? await syncStatusRowsTask) ?? []
         let profileByUserID = Dictionary(uniqueKeysWithValues: profileRows.map { ($0.userID, $0) })
+        let hasSyncedCloudDataByUserID = Dictionary(
+            uniqueKeysWithValues: syncStatusRows.map { ($0.userID, $0.hasSyncedCloudData) }
+        )
         let members = membershipRows.map { row in
             let profile = profileByUserID[row.userID]
             return FamilyMember(
@@ -475,7 +491,7 @@ struct FamilyRemoteService: FamilyRemoteServicing {
                 userID: row.userID,
                 displayName: profile?.displayName ?? "Mistia",
                 avatarURL: profile?.avatarURL.flatMap(URL.init(string:)),
-                categoryCatalogSyncedAt: profile?.categoryCatalogSyncedAt,
+                hasSyncedCloudData: hasSyncedCloudDataByUserID[row.userID] ?? false,
                 role: row.role,
                 policy: row.policy,
                 isCurrentUser: row.userID == session.user.id
@@ -888,9 +904,20 @@ struct FamilyRemoteService: FamilyRemoteServicing {
         try await fetchRows(
             path: "user_profiles",
             filters: [
-                URLQueryItem(name: "select", value: "user_id,display_name,avatar_url,category_catalog_synced_at"),
+                URLQueryItem(name: "select", value: "user_id,display_name,avatar_url"),
                 URLQueryItem(name: "user_id", value: inFilter(for: userIDs))
             ],
+            session: session
+        )
+    }
+
+    private func fetchCloudSyncStatuses(
+        familyID: UUID,
+        session: SupabaseAuthSession
+    ) async throws -> [FamilySyncStatusRecord] {
+        try await callRPC(
+            functionName: "family_cloud_sync_status",
+            body: FamilyCloudSyncStatusRPCBody(familyID: familyID),
             session: session
         )
     }
@@ -1366,6 +1393,14 @@ private struct TransferFamilyOwnerRPCBody: Encodable {
 }
 
 private struct DeleteFamilyRPCBody: Encodable {
+    let familyID: UUID
+
+    enum CodingKeys: String, CodingKey {
+        case familyID = "p_family_id"
+    }
+}
+
+private struct FamilyCloudSyncStatusRPCBody: Encodable {
     let familyID: UUID
 
     enum CodingKeys: String, CodingKey {

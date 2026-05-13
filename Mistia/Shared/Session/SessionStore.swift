@@ -2434,7 +2434,6 @@ final class SessionStore {
             let validSession = try await prepareRemoteSession()
             try normalizeCategoryHierarchyIfNeeded()
             let result = try await syncCoordinator.sync(session: validSession)
-            _ = try? await userProfileStore.markCategoryCatalogReady(session: validSession)
             lastSyncAt = .now
             lastErrorMessage = nil
             possibleDuplicateCount = ((try? MistiaSyncLocalStore.possibleDuplicateTransactions(
@@ -2588,7 +2587,6 @@ final class SessionStore {
             }
 
             try normalizeCategoryHierarchyIfNeeded()
-            _ = try? await userProfileStore.markCategoryCatalogReady(session: validSession)
             lastSyncAt = .now
             lastErrorMessage = nil
             possibleDuplicateCount = ((try? MistiaSyncLocalStore.possibleDuplicateTransactions(

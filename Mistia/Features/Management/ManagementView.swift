@@ -1021,7 +1021,7 @@ struct ManagementView: View {
 
     private func openSystemCategoryUseRequestPicker() {
         guard let ownerUserID = systemCategoryUseRequestOwnerID else { return }
-        guard familyContextStore.isCategoryCatalogReady(ownerUserID: ownerUserID) else {
+        guard familyContextStore.canRequestSystemCategoryUse(ownerUserID: ownerUserID) else {
             infoAlert = ManagementInfoAlert(
                 title: mistiaLocalized(
                     vi: "Cần đồng bộ trước",
@@ -1029,9 +1029,9 @@ struct ManagementView: View {
                     ja: "先に同期が必要です"
                 ),
                 message: mistiaLocalized(
-                    vi: "Thành viên này cần đồng bộ danh mục lên cloud trước khi bạn yêu cầu dùng danh mục hệ thống của họ.",
-                    en: "This member needs to sync their category catalog to the cloud before you request one of their system categories.",
-                    ja: "このメンバーのシステムカテゴリをリクエストする前に、相手にカテゴリをクラウドへ同期してもらう必要があります。"
+                    vi: "Bạn và thành viên này đều cần đồng bộ dữ liệu lên cloud ít nhất một lần trước khi yêu cầu dùng danh mục hệ thống.",
+                    en: "Both you and this member need to sync data to the cloud at least once before requesting a system category.",
+                    ja: "システムカテゴリをリクエストするには、あなたとこのメンバーの両方が一度データをクラウド同期している必要があります。"
                 )
             )
             return

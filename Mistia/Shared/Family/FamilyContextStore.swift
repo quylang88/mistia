@@ -584,15 +584,19 @@ final class FamilyContextStore {
     ) async -> Bool {
         guard let familyID = family?.id else { return false }
         guard let session = await prepareRemoteSession(using: sessionStore) else { return false }
-        if resourceType == .category,
-           scope == .use,
-           !isCategoryCatalogReady(ownerUserID: ownerUserID) {
-            lastErrorMessage = mistiaLocalized(
-                vi: "Thành viên này cần đồng bộ danh mục lên cloud trước khi bạn yêu cầu dùng danh mục hệ thống của họ.",
-                en: "This member needs to sync their category catalog to the cloud before you request one of their system categories.",
-                ja: "このメンバーのシステムカテゴリをリクエストする前に、相手にカテゴリをクラウドへ同期してもらう必要があります。"
-            )
-            return false
+        if resourceType == .category, scope == .use {
+            if !canRequestSystemCategoryUse(ownerUserID: ownerUserID, requesterUserID: session.user.id) {
+                _ = await refresh(sessionStore: sessionStore)
+            }
+
+            guard canRequestSystemCategoryUse(ownerUserID: ownerUserID, requesterUserID: session.user.id) else {
+                lastErrorMessage = mistiaLocalized(
+                    vi: "Bạn và thành viên này đều cần đồng bộ dữ liệu lên cloud ít nhất một lần trước khi yêu cầu dùng danh mục hệ thống.",
+                    en: "Both you and this member need to sync data to the cloud at least once before requesting a system category.",
+                    ja: "システムカテゴリをリクエストするには、あなたとこのメンバーの両方が一度データをクラウド同期している必要があります。"
+                )
+                return false
+            }
         }
 
         let requesterName = sessionStore.summary?.displayName
@@ -974,12 +978,22 @@ final class FamilyContextStore {
         return members.first(where: { $0.userID == userID })?.displayName
     }
 
-    func isCategoryCatalogReady(ownerUserID: UUID?) -> Bool {
-        guard let ownerUserID else { return false }
-        if ownerUserID == currentUserID {
-            return true
+    func hasSyncedCloudData(userID: UUID?) -> Bool {
+        guard let userID else { return false }
+        return members.first(where: { $0.userID == userID })?.hasSyncedCloudData == true
+    }
+
+    func canRequestSystemCategoryUse(
+        ownerUserID: UUID?,
+        requesterUserID: UUID? = nil
+    ) -> Bool {
+        guard let ownerUserID,
+              let requesterUserID = requesterUserID ?? currentUserID else {
+            return false
         }
-        return members.first(where: { $0.userID == ownerUserID })?.categoryCatalogSyncedAt != nil
+
+        return hasSyncedCloudData(userID: requesterUserID)
+            && hasSyncedCloudData(userID: ownerUserID)
     }
 
     func clear() {
