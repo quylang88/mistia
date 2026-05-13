@@ -86,8 +86,16 @@ enum MistiaBootstrap {
         var repairResult = try MistiaSystemCategorySyncSupport.reconcileDuplicateSystemCategories(
             modelContext: modelContext
         )
+        let ownershipScopes = try modelContext.fetch(FetchDescriptor<OwnedRecordScope>())
+        let categoryOwnerMap = MistiaRecordOwnershipStore.ownerMap(from: ownershipScopes, entity: .category)
         var existingCategories = try modelContext.fetch(FetchDescriptor<TransactionCategory>())
-            .filter { $0.deletedAt == nil }
+            .filter {
+                $0.deletedAt == nil
+                    && !MistiaSystemCategorySyncSupport.isFamilyScopedSystemCategory(
+                        $0,
+                        categoryOwnerMap: categoryOwnerMap
+                    )
+            }
         var didMutate = false
         var categoriesNeedingSync: [TransactionCategory] = []
 

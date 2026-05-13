@@ -191,6 +191,62 @@ final class MistiaSystemCategoryRemoteApplyTests: XCTestCase {
         XCTAssertEqual(memberOwnerUserID, memberUserID)
     }
 
+    func testSystemCategoryReconcileKeepsFamilyScopedMemberCategorySeparate() throws {
+        let memberUserID = UUID()
+        let categoryKey = MistiaSystemCategoryParentKey.expenseFood
+        let categoryID = MistiaSystemCategoryIdentity.canonicalID(for: categoryKey)
+        let memberRemoteCategoryID = MistiaSystemCategoryIdentity.cloudScopedID(
+            canonicalCategoryID: categoryID,
+            ownerUserID: memberUserID
+        )
+        let memberCategoryID = MistiaSystemCategoryIdentity.familyScopedID(
+            remoteCategoryID: memberRemoteCategoryID,
+            ownerUserID: memberUserID
+        )
+        let updatedAt = Date(timeIntervalSince1970: 1_770_000_000)
+        let container = try makeContainer()
+
+        try insertSystemCategory(
+            key: categoryKey,
+            id: categoryID,
+            name: "Sinh hoạt",
+            updatedAt: updatedAt,
+            isArchived: false,
+            cloudSyncEnabled: false,
+            remoteVersion: 0,
+            in: container
+        )
+        try insertSystemCategory(
+            key: categoryKey,
+            id: memberCategoryID,
+            name: "Member Sinh hoạt",
+            updatedAt: updatedAt.addingTimeInterval(600),
+            isArchived: true,
+            cloudSyncEnabled: true,
+            remoteVersion: 8,
+            in: container
+        )
+        try MistiaRecordOwnershipStore.upsert(
+            entity: .category,
+            recordID: memberCategoryID,
+            ownerUserID: memberUserID,
+            updatedAt: updatedAt,
+            in: container
+        )
+
+        _ = try MistiaSystemCategorySyncSupport.reconcileDuplicateSystemCategories(
+            modelContext: ModelContext(container)
+        )
+
+        let category = try fetchCategory(id: categoryID, in: container)
+        let memberCategory = try fetchCategory(id: memberCategoryID, in: container)
+        let memberOwnerUserID = try fetchCategoryOwner(id: memberCategoryID, in: container)
+        XCTAssertEqual(category.name, "Sinh hoạt")
+        XCTAssertEqual(memberCategory.name, "Member Sinh hoạt")
+        XCTAssertTrue(memberCategory.isArchived)
+        XCTAssertEqual(memberOwnerUserID, memberUserID)
+    }
+
     func testNewerRemoteArchiveCanStillApplyToSystemCategory() throws {
         let userID = UUID()
         let categoryKey = MistiaSystemCategoryParentKey.expenseFood

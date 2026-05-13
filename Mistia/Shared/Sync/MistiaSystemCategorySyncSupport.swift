@@ -28,12 +28,14 @@ enum MistiaSystemCategorySyncSupport {
         let budgets = try modelContext.fetch(FetchDescriptor<BudgetPlan>())
         let recurringBills = try modelContext.fetch(FetchDescriptor<RecurringBillPlan>())
         let ownershipScopes = try modelContext.fetch(FetchDescriptor<OwnedRecordScope>())
+        let categoryOwnerMap = MistiaRecordOwnershipStore.ownerMap(from: ownershipScopes, entity: .category)
         let conflicts = try modelContext.fetch(FetchDescriptor<SyncConflict>())
         let outbox = MistiaSyncOutbox()
         var didMutate = false
 
         let activeSystemCategories = categories.filter {
             $0.deletedAt == nil && $0.isSystem && $0.systemKey != nil
+                && !isFamilyScopedSystemCategory($0, categoryOwnerMap: categoryOwnerMap)
         }
         let groupedBySystemKey = Dictionary(grouping: activeSystemCategories) { $0.systemKey ?? "" }
 
@@ -105,10 +107,15 @@ enum MistiaSystemCategorySyncSupport {
         let budgets = try modelContext.fetch(FetchDescriptor<BudgetPlan>())
         let recurringBills = try modelContext.fetch(FetchDescriptor<RecurringBillPlan>())
         let conflicts = try modelContext.fetch(FetchDescriptor<SyncConflict>())
+        let ownershipScopes = try modelContext.fetch(FetchDescriptor<OwnedRecordScope>())
+        let categoryOwnerMap = MistiaRecordOwnershipStore.ownerMap(from: ownershipScopes, entity: .category)
         let outbox = MistiaSyncOutbox()
         var didMutate = false
 
-        let activeCategories = categories.filter { $0.deletedAt == nil }
+        let activeCategories = categories.filter {
+            $0.deletedAt == nil
+                && !isFamilyScopedSystemCategory($0, categoryOwnerMap: categoryOwnerMap)
+        }
         let categoriesByID = Dictionary(uniqueKeysWithValues: categories.map { ($0.id, $0) })
         let baseReferencedCategoryIDs = collectReferencedCategoryIDs(
             transactions: transactions,
@@ -207,6 +214,18 @@ enum MistiaSystemCategorySyncSupport {
 
     nonisolated static func shouldExportCategory(_ category: TransactionCategory) -> Bool {
         category.cloudSyncEnabled || isSystemCategoryCloudSyncRequired(category)
+    }
+
+    static func isFamilyScopedSystemCategory(
+        _ category: TransactionCategory,
+        categoryOwnerMap: [UUID: UUID]
+    ) -> Bool {
+        guard category.isSystem,
+              let rawSystemKey = category.systemKey,
+              categoryOwnerMap[category.id] != nil else {
+            return false
+        }
+        return category.id != MistiaSystemCategoryIdentity.canonicalID(for: rawSystemKey)
     }
 
     nonisolated static func isSystemCategoryCloudSyncRequired(_ category: TransactionCategory) -> Bool {
