@@ -1001,14 +1001,13 @@ private struct TransactionRow: View {
         var parts: [String] = []
 
         if let createdByUserID,
-           createdByUserID != canonicalOwnerUserID,
-           let createdByName = familyContextStore.displayName(for: createdByUserID) {
-            parts.append(
-                mistiaLocalized(
-                    vi: "Tạo bởi \(createdByName)",
-                    en: "Created by \(createdByName)",
-                    ja: "\(createdByName) が作成"
-                )
+           createdByUserID != canonicalOwnerUserID {
+            let createdByName = familyContextStore.displayName(for: createdByUserID)
+                ?? mistiaLocalized(vi: "thành viên", en: "a family member", ja: "家族メンバー")
+            return mistiaLocalized(
+                vi: "Tạo bởi \(createdByName)",
+                en: "Created by \(createdByName)",
+                ja: "\(createdByName) が作成"
             )
         }
 

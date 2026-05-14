@@ -17,12 +17,23 @@ struct MistiaManagementNavigationRequest: Identifiable, Equatable {
     }
 }
 
+struct MistiaTabSelectionRequest: Identifiable, Equatable {
+    let id: UUID
+    let tab: MistiaTab
+
+    init(tab: MistiaTab) {
+        self.id = UUID()
+        self.tab = tab
+    }
+}
+
 @Observable
 final class MistiaUIState {
     var isTabBarHidden: Bool = false
     var isQuickCreateHidden: Bool = false
     var quickCreateMenuRequestID: UUID?
     var managementNavigationRequest: MistiaManagementNavigationRequest?
+    var tabSelectionRequest: MistiaTabSelectionRequest?
     
     // Support for multiple requests to hide (e.g. nested screens)
     private var hideRequests: Set<UUID> = []
@@ -57,5 +68,14 @@ final class MistiaUIState {
     func clearManagementNavigationRequest(id: UUID) {
         guard managementNavigationRequest?.id == id else { return }
         managementNavigationRequest = nil
+    }
+
+    func requestTabSelection(_ tab: MistiaTab) {
+        tabSelectionRequest = MistiaTabSelectionRequest(tab: tab)
+    }
+
+    func clearTabSelectionRequest(id: UUID) {
+        guard tabSelectionRequest?.id == id else { return }
+        tabSelectionRequest = nil
     }
 }

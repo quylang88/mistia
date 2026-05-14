@@ -1132,9 +1132,16 @@ final class SyncCoordinator {
         switch (record, action) {
         case (.transaction(let row), .created):
             let label = row.title.isEmpty ? mistiaLocalized(vi: "một giao dịch", en: "a transaction", ja: "取引") : row.title
+            if let walletName = familyActivityWalletName(for: row.sourceWalletID) {
+                return mistiaLocalized(
+                    vi: "\(actorName) vừa sử dụng ví \(walletName) của bạn để tạo \(label).",
+                    en: "\(actorName) used your \(walletName) wallet to create \(label).",
+                    ja: "\(actorName)があなたの\(walletName)ウォレットで\(label)を作成しました。"
+                )
+            }
             return mistiaLocalized(
-                vi: "\(actorName) vừa tạo \(label) trên ví của bạn.",
-                en: "\(actorName) created \(label) on your wallet.",
+                vi: "\(actorName) vừa sử dụng ví của bạn để tạo \(label).",
+                en: "\(actorName) used your wallet to create \(label).",
                 ja: "\(actorName)があなたのウォレットで\(label)を作成しました。"
             )
         case (.transaction(let row), .updated):
@@ -1200,6 +1207,22 @@ final class SyncCoordinator {
         }
 
         return metadata.filter { !$0.value.isEmpty }
+    }
+
+    private func familyActivityWalletName(for walletID: UUID?) -> String? {
+        guard let walletID else {
+            return nil
+        }
+
+        let context = modelContainer.mainContext
+        let descriptor = FetchDescriptor<LedgerWallet>(
+            predicate: #Predicate { $0.id == walletID }
+        )
+        guard let wallet = try? context.fetch(descriptor).first else {
+            return nil
+        }
+        let name = wallet.name.trimmingCharacters(in: .whitespacesAndNewlines)
+        return name.isEmpty ? nil : name
     }
 
     private func preferredAuthority(

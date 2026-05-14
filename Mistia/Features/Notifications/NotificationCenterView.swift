@@ -352,6 +352,10 @@ struct NotificationCenterView: View {
             return
         }
 
+        if handleFamilyActivityTap(row) {
+            return
+        }
+
         if let transferTarget = makeTransferTarget(for: row) {
             self.transferTarget = transferTarget
             return
@@ -380,6 +384,21 @@ struct NotificationCenterView: View {
                 )
             }
         }
+    }
+
+    private func handleFamilyActivityTap(_ row: AppNotificationRecord) -> Bool {
+        guard row.kind == .familyActivity,
+              row.resourceType == .transaction else {
+            return false
+        }
+
+        familyContextStore.activateSelfView()
+        uiState.requestTabSelection(.transactions)
+        dismiss()
+        Task { @MainActor in
+            _ = await sessionStore.syncFamilyActivityChanges()
+        }
+        return true
     }
 
     private func markAsRead(_ row: AppNotificationRecord) {

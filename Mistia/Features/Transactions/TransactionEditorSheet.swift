@@ -1209,6 +1209,11 @@ struct TransactionEditorSheet: View {
                     modifiedAt: transaction.updatedAt,
                     subjectUserIDOverride: subjectUserIDOverride
                 )
+                if subjectUserIDOverride != sessionStore.activeLocalProfileUserID {
+                    Task { @MainActor in
+                        _ = await sessionStore.syncFamilyActivityChanges()
+                    }
+                }
             }
             onComplete(completion)
             dismiss()

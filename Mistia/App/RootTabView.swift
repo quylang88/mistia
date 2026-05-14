@@ -187,6 +187,12 @@ struct RootTabView: View {
         openManagementRoute(.familyOverview)
         familyContextStore.clearFamilyOverviewPresentationRequest()
       }
+      .onChange(of: uiState.tabSelectionRequest?.id) { _, requestID in
+        guard requestID != nil, let request = uiState.tabSelectionRequest else { return }
+        dismissQuickCreateMenu()
+        selectedTab = request.tab
+        uiState.clearTabSelectionRequest(id: request.id)
+      }
       .onChange(of: uiState.quickCreateMenuRequestID) { _, requestID in
         guard requestID != nil else { return }
         presentQuickCreateMenu()

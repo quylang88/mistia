@@ -817,6 +817,19 @@ final class SessionStore {
         )
     }
 
+    func syncFamilyActivityChanges() async -> Bool {
+        guard currentSession != nil, !isSyncInFlight else { return false }
+
+        if requiresInitialSync {
+            return await syncNow(isManual: true)
+        }
+
+        return await runMergeSync(
+            trigger: .manual,
+            showProgress: false
+        )
+    }
+
     func startInitialSync(with choice: MistiaInitialSyncChoice) async {
         guard currentSession != nil, !isSyncInFlight else { return }
         pendingInitialSyncChoice = choice
