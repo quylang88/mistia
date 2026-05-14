@@ -30,6 +30,7 @@ struct NotificationCenterView: View {
     @State private var duePaymentTarget: DuePaymentSheetTarget?
     @State private var duePaymentOriginRow: AppNotificationRecord?
     @State private var transferTarget: TransactionEditorTarget?
+    @State private var responseErrorAlert: NotificationResponseErrorAlert?
 
     private var visibleRows: [AppNotificationRecord] {
         MistiaNotificationStore.visibleRows(
@@ -78,6 +79,13 @@ struct NotificationCenterView: View {
             TransactionEditorSheet(target: target)
                 .presentationDetents([.large])
                 .presentationDragIndicator(.hidden)
+        }
+        .alert(item: $responseErrorAlert) { alert in
+            Alert(
+                title: Text(alert.title),
+                message: Text(alert.message),
+                dismissButton: .default(Text(mistiaLocalized(vi: "OK", en: "OK", ja: "OK")))
+            )
         }
     }
 
@@ -156,7 +164,7 @@ struct NotificationCenterView: View {
 
             VStack(alignment: .leading, spacing: 4) {
                 HStack(alignment: .firstTextBaseline, spacing: 8) {
-                    Text(row.title)
+                    Text(notificationTitle(for: row))
                         .font(.system(size: 15, weight: .semibold, design: .rounded))
                         .foregroundStyle(.primary)
 
@@ -167,7 +175,7 @@ struct NotificationCenterView: View {
                         .foregroundStyle(.secondary)
                 }
 
-                Text(row.body)
+                Text(notificationBody(for: row))
                     .font(.system(size: 14, weight: row.isRead ? .regular : .medium, design: .rounded))
                     .foregroundStyle(row.isRead ? .secondary : .primary)
                     .fixedSize(horizontal: false, vertical: true)
@@ -396,13 +404,108 @@ struct NotificationCenterView: View {
     }
 
     private func respond(to row: AppNotificationRecord, approve: Bool) {
+        let snapshot = NotificationResponseSnapshot(row: row)
+        applyImmediatePermissionResponse(to: row, approve: approve)
+
         Task {
-            await familyContextStore.respondToPermissionNotification(
+            let didRespond = await familyContextStore.respondToPermissionNotification(
                 row,
                 approve: approve,
                 sessionStore: sessionStore
             )
+            guard !didRespond else { return }
+
+            await MainActor.run {
+                snapshot.restore(row)
+                try? modelContext.save()
+                responseErrorAlert = NotificationResponseErrorAlert(
+                    title: mistiaLocalized(
+                        vi: "Chưa thể phản hồi",
+                        en: "Couldn't respond",
+                        ja: "返信できませんでした"
+                    ),
+                    message: familyContextStore.lastErrorMessage ?? mistiaLocalized(
+                        vi: "Mistia chưa gửi được phản hồi. Hãy thử lại sau khi đồng bộ ổn định.",
+                        en: "Mistia couldn't send this response yet. Try again when sync is stable.",
+                        ja: "まだ返信を送信できません。同期が安定してからもう一度お試しください。"
+                    )
+                )
+            }
         }
+    }
+
+    private func applyImmediatePermissionResponse(to row: AppNotificationRecord, approve: Bool) {
+        row.title = resolvedPermissionRequestTitle(for: row, approve: approve)
+        row.body = resolvedPermissionRequestBody(approve: approve)
+        row.actionState = approve ? .approved : .rejected
+        row.isRead = true
+        row.readAt = row.readAt ?? .now
+        row.updatedAt = .now
+        if row.source == .family {
+            row.needsReadSync = true
+        }
+        try? modelContext.save()
+        UIImpactFeedbackGenerator(style: approve ? .light : .soft).impactOccurred()
+    }
+
+    private func notificationTitle(for row: AppNotificationRecord) -> String {
+        guard row.kind == .permissionRequestReceived else { return row.title }
+        switch row.actionState {
+        case .approved:
+            return resolvedPermissionRequestTitle(for: row, approve: true)
+        case .rejected:
+            return resolvedPermissionRequestTitle(for: row, approve: false)
+        default:
+            return row.title
+        }
+    }
+
+    private func notificationBody(for row: AppNotificationRecord) -> String {
+        guard row.kind == .permissionRequestReceived else { return row.body }
+        switch row.actionState {
+        case .approved:
+            return resolvedPermissionRequestBody(approve: true)
+        case .rejected:
+            return resolvedPermissionRequestBody(approve: false)
+        default:
+            return row.body
+        }
+    }
+
+    private func resolvedPermissionRequestTitle(for row: AppNotificationRecord, approve: Bool) -> String {
+        let name = permissionRequesterName(for: row)
+        if approve {
+            return mistiaLocalized(
+                vi: "Đã chấp thuận yêu cầu của \(name)",
+                en: "Approved \(name)'s request",
+                ja: "\(name)さんのリクエストを承認しました"
+            )
+        }
+
+        return mistiaLocalized(
+            vi: "Đã từ chối yêu cầu của \(name)",
+            en: "Rejected \(name)'s request",
+            ja: "\(name)さんのリクエストを拒否しました"
+        )
+    }
+
+    private func resolvedPermissionRequestBody(approve: Bool) -> String {
+        approve
+            ? mistiaLocalized(
+                vi: "Mistia sẽ âm thầm đồng bộ thay đổi lên cloud.",
+                en: "Mistia will sync the change to cloud in the background.",
+                ja: "Mistia がバックグラウンドでクラウドへ同期します。"
+            )
+            : mistiaLocalized(
+                vi: "Không có thay đổi nào được đẩy lên cloud.",
+                en: "No change will be pushed to cloud.",
+                ja: "クラウドへ変更は送信されません。"
+            )
+    }
+
+    private func permissionRequesterName(for row: AppNotificationRecord) -> String {
+        familyContextStore.displayName(for: row.actorUserID)
+            ?? mistiaLocalized(vi: "thành viên", en: "this member", ja: "このメンバー")
     }
 
     private func actionHint(for row: AppNotificationRecord) -> String? {
@@ -537,6 +640,42 @@ struct MistiaNotificationBellButton: View {
 
     private var badgeText: String {
         unreadCount > 99 ? "99+" : "\(unreadCount)"
+    }
+}
+
+private struct NotificationResponseErrorAlert: Identifiable {
+    let id = UUID()
+    let title: String
+    let message: String
+}
+
+private struct NotificationResponseSnapshot {
+    let title: String
+    let body: String
+    let actionState: MistiaNotificationActionState
+    let isRead: Bool
+    let readAt: Date?
+    let updatedAt: Date
+    let needsReadSync: Bool
+
+    init(row: AppNotificationRecord) {
+        title = row.title
+        body = row.body
+        actionState = row.actionState
+        isRead = row.isRead
+        readAt = row.readAt
+        updatedAt = row.updatedAt
+        needsReadSync = row.needsReadSync
+    }
+
+    func restore(_ row: AppNotificationRecord) {
+        row.title = title
+        row.body = body
+        row.actionState = actionState
+        row.isRead = isRead
+        row.readAt = readAt
+        row.updatedAt = updatedAt
+        row.needsReadSync = needsReadSync
     }
 }
 

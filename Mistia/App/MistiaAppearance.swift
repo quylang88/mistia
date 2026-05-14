@@ -57,6 +57,13 @@ enum MistiaNotificationPreferences {
             && defaults.bool(forKey: MistiaAppStorageKey.notificationsGroupFamilyEnabled)
     }
 
+    static func familyInboxSyncEnabled(defaults: UserDefaults = .standard) -> Bool {
+        guard defaults.object(forKey: MistiaAppStorageKey.notificationsGroupFamilyEnabled) != nil else {
+            return true
+        }
+        return defaults.bool(forKey: MistiaAppStorageKey.notificationsGroupFamilyEnabled)
+    }
+
     static func remindersEnabled(defaults: UserDefaults = .standard) -> Bool {
         notificationsEnabled(defaults: defaults)
             && defaults.bool(forKey: MistiaAppStorageKey.notificationsGroupRemindersEnabled)

@@ -674,22 +674,16 @@ final class FamilyContextStore {
         }
     }
 
+    @discardableResult
     func respondToPermissionNotification(
         _ notification: AppNotificationRecord,
         approve: Bool,
         sessionStore: SessionStore
-    ) async {
-        guard let requestID = notification.permissionRequestID else { return }
-        guard let session = await prepareRemoteSession(using: sessionStore) else { return }
+    ) async -> Bool {
+        guard let requestID = notification.permissionRequestID else { return false }
+        guard let session = await prepareRemoteSession(using: sessionStore) else { return false }
 
         do {
-            if approve {
-                try await prepareCategoryUseApprovalIfNeeded(
-                    notification,
-                    sessionStore: sessionStore,
-                    currentUserID: session.user.id
-                )
-            }
             _ = try await service.respondFamilyPermissionRequest(
                 requestID: requestID,
                 approve: approve,
@@ -703,9 +697,18 @@ final class FamilyContextStore {
                 notification.needsReadSync = true
             }
             try? modelContainer.mainContext.save()
+            if approve {
+                try await prepareCategoryUseApprovalIfNeeded(
+                    notification,
+                    sessionStore: sessionStore,
+                    currentUserID: session.user.id
+                )
+            }
             await refresh(sessionStore: sessionStore)
+            return true
         } catch {
             lastErrorMessage = visibleErrorMessage(for: error, sessionStore: sessionStore)
+            return false
         }
     }
 
@@ -1209,7 +1212,7 @@ final class FamilyContextStore {
     }
 
     private func refreshFamilyNotifications(session: SupabaseAuthSession) async throws {
-        guard MistiaNotificationPreferences.familyEnabled() else { return }
+        guard MistiaNotificationPreferences.familyInboxSyncEnabled() else { return }
 
         let remoteRows = try await service.fetchFamilyNotifications(session: session)
         try MistiaNotificationStore.applyRemoteNotifications(

@@ -535,9 +535,7 @@ enum MistiaNotificationStore {
         }
 
         if row.source == .localReminder || row.source == .system {
-            guard let recipientUserID = row.recipientUserID else {
-                return false
-            }
+            guard let recipientUserID = row.recipientUserID else { return true }
             return recipientUserID == userID
         }
 
