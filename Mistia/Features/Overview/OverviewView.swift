@@ -241,6 +241,10 @@ struct OverviewView: View {
     }
 
     var body: some View {
+        let dashboardSnapshot = self.dashboardSnapshot
+        let transactionsByID = self.transactionsByID
+        let postedExpenseTransactionsByDay = self.postedExpenseTransactionsByDay
+
         NavigationStack {
             MistiaPinnedTopBarScaffold(
                 tone: .standard,
@@ -263,7 +267,9 @@ struct OverviewView: View {
                 OverviewHeroCard(
                     snapshot: dashboardSnapshot.hero,
                     isSheetPresented: selectedExpenseDay != nil,
-                    onOpenExpenseDay: openExpenseDay
+                    onOpenExpenseDay: { date in
+                        openExpenseDay(date, transactionsByDay: postedExpenseTransactionsByDay)
+                    }
                 )
                 if !dashboardSnapshot.budgetAlerts.isEmpty {
                     BudgetFocusSection(rows: dashboardSnapshot.budgetAlerts)
@@ -320,10 +326,6 @@ struct OverviewView: View {
             )
         }
         .task {
-            try? MistiaBootstrap.seedDefaultCategoriesIfNeeded(
-                modelContext: modelContext,
-                sessionStore: sessionStore
-            )
             try? MistiaOverviewDebugFixtures.seedCategoryChartDataIfNeeded(
                 modelContext: modelContext,
                 sessionStore: sessionStore
@@ -331,10 +333,13 @@ struct OverviewView: View {
         }
     }
 
-    private func openExpenseDay(_ date: Date) {
+    private func openExpenseDay(
+        _ date: Date,
+        transactionsByDay: [Date: [LedgerTransaction]]
+    ) {
         let day = calendar.startOfDay(for: date)
 
-        guard let transactions = postedExpenseTransactionsByDay[day], !transactions.isEmpty else {
+        guard let transactions = transactionsByDay[day], !transactions.isEmpty else {
             return
         }
 

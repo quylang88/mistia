@@ -116,6 +116,7 @@ final class MistiaNativeTabBarController: UITabBarController, UITabBarController
     action: .backupRestore
   )
   private var isCurrentShortcutSyncing = false
+  private var currentSelectedMistiaTab: MistiaTab?
   private var spinnerActivityIndicatorView: UIActivityIndicatorView?
 
   private lazy var quickCreateController = UIHostingController(
@@ -174,20 +175,40 @@ final class MistiaNativeTabBarController: UITabBarController, UITabBarController
     showsShortcutTab: Bool
   )
   {
-    configureTabsIfNeeded()
-    configureQuickCreateButtonIfNeeded()
+    let isFirstRender = currentSelectedMistiaTab == nil
+    let didChangeAppearance = currentAppearanceMode != appearanceMode
+    let didChangeLanguage = currentAppLanguage != appLanguage
+    let didChangeShortcutContent =
+      currentShortcutPresentation != shortcutPresentation
+      || isCurrentShortcutSyncing != isShortcutSyncing
+    let didChangeSelectedTab = currentSelectedMistiaTab != selectedTab
+
     currentAppearanceMode = appearanceMode
     currentAppLanguage = appLanguage
     currentShortcutPresentation = shortcutPresentation
     isCurrentShortcutSyncing = isShortcutSyncing
     overrideUserInterfaceStyle = appearanceMode.interfaceStyle
-    refreshLocalizedContent()
-    applyChromeAppearance()
+
+    configureTabsIfNeeded()
+    configureQuickCreateButtonIfNeeded()
+
+    if didChangeLanguage {
+      refreshLocalizedContent()
+    } else if didChangeShortcutContent {
+      refreshShortcutTabContent()
+    }
+
+    if isFirstRender || didChangeAppearance {
+      applyChromeAppearance()
+    }
+
     updateShortcutTabVisibilityIfNeeded(showsShortcutTab: showsShortcutTab)
-    refreshShortcutTabContent()
     updateQuickCreateVisibility(isHidden: hidesQuickCreate || hidesTabBar)
     updateTabBarVisibility(isHidden: hidesTabBar)
-    syncTabSymbols(selectedTab: selectedTab)
+    if isFirstRender || didChangeSelectedTab || didChangeAppearance {
+      syncTabSymbols(selectedTab: selectedTab)
+    }
+    currentSelectedMistiaTab = selectedTab
 
     guard #available(iOS 18.0, *) else { return }
     let identifier = selectedTab.tabIdentifier
@@ -573,6 +594,15 @@ final class MistiaNativeTabBarController: UITabBarController, UITabBarController
   private func updateTabBarVisibility(isHidden: Bool) {
     let targetAlpha: CGFloat = isHidden ? 0 : 1
     let targetTranslation: CGFloat = isHidden ? (tabBar.frame.height > 0 ? tabBar.frame.height : 100) : 0
+    let targetSafeAreaBottom = isHidden ? -tabBar.frame.height : 0
+
+    let alreadyAtTarget =
+      tabBar.isHidden == isHidden
+      && abs(tabBar.alpha - targetAlpha) < 0.01
+      && abs(tabBar.transform.ty - targetTranslation) < 0.5
+      && abs(additionalSafeAreaInsets.bottom - targetSafeAreaBottom) < 0.5
+
+    guard !alreadyAtTarget else { return }
     
     if !isHidden {
       tabBar.isHidden = false
@@ -583,7 +613,7 @@ final class MistiaNativeTabBarController: UITabBarController, UITabBarController
       self.tabBar.transform = CGAffineTransform(translationX: 0, y: targetTranslation)
       
       // Triệt tiêu vùng Safe Area của TabBar để View con tràn xuống đáy
-      self.additionalSafeAreaInsets.bottom = isHidden ? -self.tabBar.frame.height : 0
+      self.additionalSafeAreaInsets.bottom = targetSafeAreaBottom
       
       self.view.setNeedsLayout()
       self.view.layoutIfNeeded()

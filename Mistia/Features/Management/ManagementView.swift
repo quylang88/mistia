@@ -321,19 +321,6 @@ struct ManagementView: View {
         } message: { alert in
             Text(alert.message)
         }
-        .task {
-            do {
-                try MistiaBootstrap.seedDefaultCategoriesIfNeeded(
-                    modelContext: modelContext,
-                    sessionStore: sessionStore
-                )
-            } catch {
-                infoAlert = ManagementInfoAlert(
-                    title: mistiaLocalized(vi: "Không thể khởi tạo danh mục", en: "Couldn't initialize categories", ja: "カテゴリを初期化できませんでした"),
-                    message: error.localizedDescription
-                )
-            }
-        }
         .onAppear {
             hideQuickCreate = destination != nil
         }

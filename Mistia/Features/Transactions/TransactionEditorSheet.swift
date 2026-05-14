@@ -98,6 +98,8 @@ struct TransactionEditorSheet: View {
     }
     @State private var showsCategoryPicker = false
     @State private var systemCategoryUseRequestTarget: TransactionSystemCategoryUseRequestTarget?
+    @State private var cachedTitleSuggestions: [TransactionTitleSuggestion] = []
+    @State private var titleSuggestionRefreshTask: Task<Void, Never>?
     @State private var suppressTitleSuggestions = false
     @State private var isApplyingTitleSuggestion = false
     @FocusState private var focusedField: TransactionEditorFocusedField?
@@ -136,6 +138,8 @@ struct TransactionEditorSheet: View {
     }
 
     var body: some View {
+        let isLockedByStatement = self.isLockedByStatement
+
         NavigationStack {
             Form {
                 if isLockedByStatement {
@@ -257,9 +261,23 @@ struct TransactionEditorSheet: View {
         .onChange(of: draft.sourceWalletID) { _, _ in
             clearMismatchedCategoryForSelectedWallet()
         }
+        .onChange(of: draft.primaryKind) { _, _ in
+            scheduleTitleSuggestionsRefresh()
+            clearMismatchedCategoryForSelectedWallet()
+        }
+        .onChange(of: draft.transferSubtype) { _, _ in
+            scheduleTitleSuggestionsRefresh()
+        }
         .onChange(of: familyContextStore.selectedSubjectUserID) { _, _ in
             clearMismatchedWalletsForCurrentSubject()
             clearMismatchedCategoryForSelectedWallet()
+        }
+        .onAppear {
+            scheduleTitleSuggestionsRefresh()
+        }
+        .onDisappear {
+            titleSuggestionRefreshTask?.cancel()
+            titleSuggestionRefreshTask = nil
         }
     }
     private func archiveTransaction() {
@@ -382,12 +400,15 @@ struct TransactionEditorSheet: View {
                                 if newValue == .title {
                                     suppressTitleSuggestions = false
                                 }
+                                scheduleTitleSuggestionsRefresh()
                             }
                             .onChange(of: bindableDraft.title) { _, _ in
                                 if isApplyingTitleSuggestion {
                                     isApplyingTitleSuggestion = false
+                                    cachedTitleSuggestions = []
                                 } else {
                                     suppressTitleSuggestions = false
+                                    scheduleTitleSuggestionsRefresh()
                                 }
                             }
 
@@ -566,20 +587,22 @@ struct TransactionEditorSheet: View {
         let allowedOwnerUserIDs = target.transaction == nil
             ? newTransactionWalletOwnerUserIDs
             : nil
+        let walletOwnerMap = self.walletOwnerMap
+        let currentSelfUserID = self.currentSelfUserID
 
         return storedWallets
-            .filter {
-                guard let ownerUserID = walletOwnerUserID(for: $0) else {
-                    return preferredWalletIDs.contains($0.id)
+            .filter { wallet in
+                guard let ownerUserID = walletOwnerMap[wallet.id] ?? currentSelfUserID else {
+                    return preferredWalletIDs.contains(wallet.id)
                 }
                 if let allowedOwnerUserIDs, !allowedOwnerUserIDs.contains(ownerUserID) {
-                    return preferredWalletIDs.contains($0.id)
+                    return preferredWalletIDs.contains(wallet.id)
                 }
                 if ownerUserID == sessionStore.activeLocalProfileUserID {
                     return true
                 }
-                return familyContextStore.canUseWallet(walletID: $0.id, ownerUserID: ownerUserID)
-                    || preferredWalletIDs.contains($0.id)
+                return familyContextStore.canUseWallet(walletID: wallet.id, ownerUserID: ownerUserID)
+                    || preferredWalletIDs.contains(wallet.id)
             }
             .filter { ($0.deletedAt == nil && !$0.isArchived) || preferredWalletIDs.contains($0.id) }
             .filter { wallet in
@@ -613,14 +636,20 @@ struct TransactionEditorSheet: View {
 
     private var availableCategories: [TransactionCategory] {
         let preferredID = target.transaction?.category?.id
+        let ownerUserIDs = categoryPickerOwnerUserIDs
+        let categoryOwnerMap = self.categoryOwnerMap
+        let currentSelfUserID = self.currentSelfUserID
 
         return storedCategories
-            .filter {
-                return ($0.kind == selectedCategoryKind)
-                    && $0.isChildCategory
-                    && !$0.isBalanceAdjustmentSystemCategory
-                    && shouldShowCategory($0)
-                    && (($0.deletedAt == nil && !$0.isArchived) || $0.id == preferredID)
+            .filter { category in
+                guard let ownerUserID = categoryOwnerMap[category.id] ?? currentSelfUserID,
+                      ownerUserIDs.contains(ownerUserID) else {
+                    return false
+                }
+                return category.kind == selectedCategoryKind
+                    && category.isChildCategory
+                    && !category.isBalanceAdjustmentSystemCategory
+                    && ((category.deletedAt == nil && !category.isArchived) || category.id == preferredID)
             }
             .sorted {
                 if $0.sortOrder != $1.sortOrder {
@@ -659,11 +688,31 @@ struct TransactionEditorSheet: View {
     }
 
     private var titleSuggestions: [TransactionTitleSuggestion] {
-        guard titleFieldPlaceholder != nil else {
-            return []
+        cachedTitleSuggestions
+    }
+
+    private var shouldShowTitleSuggestions: Bool {
+        focusedField == .title && !suppressTitleSuggestions && !cachedTitleSuggestions.isEmpty
+    }
+
+    private func scheduleTitleSuggestionsRefresh() {
+        titleSuggestionRefreshTask?.cancel()
+        titleSuggestionRefreshTask = Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(120))
+            guard !Task.isCancelled else { return }
+            refreshTitleSuggestionsNow()
+        }
+    }
+
+    private func refreshTitleSuggestionsNow() {
+        guard titleFieldPlaceholder != nil,
+              focusedField == .title,
+              !suppressTitleSuggestions else {
+            cachedTitleSuggestions = []
+            return
         }
 
-        return TransactionLogic.titleSuggestions(
+        cachedTitleSuggestions = TransactionLogic.titleSuggestions(
             from: visiblePostedTransactions.map(\.snapshot),
             query: draft.title,
             primaryKind: draft.primaryKind,
@@ -673,16 +722,18 @@ struct TransactionEditorSheet: View {
         )
     }
 
-    private var shouldShowTitleSuggestions: Bool {
-        focusedField == .title && !suppressTitleSuggestions && !titleSuggestions.isEmpty
-    }
-
     private var categorySections: [TransactionCategoryGroupSection] {
         let preferredID = target.transaction?.category?.id
+        let ownerUserIDs = categoryPickerOwnerUserIDs
+        let categoryOwnerMap = self.categoryOwnerMap
+        let currentSelfUserID = self.currentSelfUserID
         let relevantCategories = storedCategories.filter { category in
+            guard let ownerUserID = categoryOwnerMap[category.id] ?? currentSelfUserID,
+                  ownerUserIDs.contains(ownerUserID) else {
+                return false
+            }
             return !category.isBalanceAdjustmentSystemCategory
                 && category.kind == selectedCategoryKind
-                && shouldShowCategory(category)
                 && category.deletedAt == nil
                 && (!category.isArchived || category.id == preferredID || category.parentCategory?.id == target.transaction?.category?.parentCategory?.id)
         }
@@ -696,9 +747,16 @@ struct TransactionEditorSheet: View {
     }
 
     private var favoriteCategories: [TransactionCategory] {
+        let ownerUserIDs = categoryPickerOwnerUserIDs
+        let categoryOwnerMap = self.categoryOwnerMap
+        let currentSelfUserID = self.currentSelfUserID
         return MistiaCategoryPickerSupport.favoriteCategories(
-            from: storedCategories.filter {
-                !$0.isBalanceAdjustmentSystemCategory && shouldShowCategory($0)
+            from: storedCategories.filter { category in
+                guard let ownerUserID = categoryOwnerMap[category.id] ?? currentSelfUserID else {
+                    return false
+                }
+                return !category.isBalanceAdjustmentSystemCategory
+                    && ownerUserIDs.contains(ownerUserID)
             },
             kind: selectedCategoryKind
         )
@@ -706,14 +764,31 @@ struct TransactionEditorSheet: View {
 
     private var recentCategories: [TransactionCategory] {
         let ownerUserIDs = recentCategoryOwnerUserIDs
+        let categoryOwnerMap = self.categoryOwnerMap
+        let transactionOwnerMap = self.transactionOwnerMap
+        let walletOwnerMap = self.walletOwnerMap
+        let currentSelfUserID = self.currentSelfUserID
+
+        func ownerUserIDForWallet(_ wallet: LedgerWallet?) -> UUID? {
+            guard let wallet else { return nil }
+            return walletOwnerMap[wallet.id] ?? currentSelfUserID
+        }
+
         return MistiaCategoryPickerSupport.recentCategories(
-            from: postedTransactions.filter {
-                guard let ownerUserID = transactionOwnerUserID(for: $0) else { return false }
+            from: postedTransactions.filter { transaction in
+                let ownerUserID = transactionOwnerMap[transaction.id]
+                    ?? ownerUserIDForWallet(transaction.sourceWallet)
+                    ?? ownerUserIDForWallet(transaction.destinationWallet)
+                    ?? currentSelfUserID
+                guard let ownerUserID else { return false }
                 return ownerUserIDs.contains(ownerUserID)
             },
-            categories: storedCategories.filter {
-                !$0.isBalanceAdjustmentSystemCategory
-                    && categoryMatchesOwnerScope($0, ownerUserIDs: ownerUserIDs)
+            categories: storedCategories.filter { category in
+                guard let ownerUserID = categoryOwnerMap[category.id] ?? currentSelfUserID else {
+                    return false
+                }
+                return !category.isBalanceAdjustmentSystemCategory
+                    && ownerUserIDs.contains(ownerUserID)
             },
             kind: selectedCategoryKind
         )

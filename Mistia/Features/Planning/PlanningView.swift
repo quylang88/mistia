@@ -588,12 +588,6 @@ struct PlanningView: View {
                 .presentationDetents([.medium])
                 .presentationDragIndicator(.hidden)
         }
-        .task {
-            try? MistiaBootstrap.seedDefaultCategoriesIfNeeded(
-                modelContext: modelContext,
-                sessionStore: sessionStore
-            )
-        }
         .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("MistiaOpenCreditCardStatementFromPlanning"))) { notification in
             if let walletID = notification.object as? UUID,
                let wallet = storedWallets.first(where: { $0.id == walletID }) {

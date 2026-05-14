@@ -430,12 +430,6 @@ struct TransactionsView: View {
         } message: {
             Text(mistiaCatalog(exportErrorMessage ?? ""))
         }
-        .task {
-            try? MistiaBootstrap.seedDefaultCategoriesIfNeeded(
-                modelContext: modelContext,
-                sessionStore: sessionStore
-            )
-        }
     }
 
     private var transactionsStatementMenuButton: some View {
