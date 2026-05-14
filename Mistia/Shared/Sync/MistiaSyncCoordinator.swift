@@ -50,6 +50,11 @@ private enum FamilyActivityNotificationAction: String {
     case deleted
 }
 
+private nonisolated struct SyncRemoteSystemCategoryKey: Hashable {
+    let userID: UUID
+    let systemKey: String
+}
+
 @MainActor
 final class SyncCoordinator {
     private let modelContainer: ModelContainer
@@ -136,7 +141,7 @@ final class SyncCoordinator {
             from: modelContainer
         )
         onProgressUpdate?(0.1)
-        let rawRemoteSnapshot = try await fetchRawSnapshot(session: session)
+        let rawRemoteSnapshot = try await fetchReconciledSnapshot(session: session)
         let remoteSnapshot = rawRemoteSnapshot
         onProgressUpdate?(0.2)
 
@@ -251,7 +256,7 @@ final class SyncCoordinator {
             for: session.user.id,
             from: modelContainer
         )
-        var rawRemoteSnapshot = try await fetchRawSnapshot(session: session)
+        var rawRemoteSnapshot = try await fetchReconciledSnapshot(session: session)
         let remoteWasEmpty = rawRemoteSnapshot.activeRowCount == 0
 
         if shouldUploadLocalOnlyRows(localSnapshot: localSnapshot, remoteSnapshot: rawRemoteSnapshot) {
@@ -263,7 +268,7 @@ final class SyncCoordinator {
                 progressEnd: 0.8
             )
             seededMissingRows = true
-            rawRemoteSnapshot = try await fetchRawSnapshot(session: session)
+            rawRemoteSnapshot = try await fetchReconciledSnapshot(session: session)
         } else {
             onProgressUpdate?(0.8)
         }
@@ -276,7 +281,7 @@ final class SyncCoordinator {
             progressEnd: 0.85
         ) {
             pushedMutations = true
-            rawRemoteSnapshot = try await fetchRawSnapshot(session: session)
+            rawRemoteSnapshot = try await fetchReconciledSnapshot(session: session)
         }
 
         let snapshot = rawRemoteSnapshot
@@ -709,7 +714,200 @@ final class SyncCoordinator {
     private func fetchReconciledSnapshot(
         session: SupabaseAuthSession
     ) async throws -> MistiaRemoteSnapshot {
-        try await fetchRawSnapshot(session: session)
+        let rawSnapshot = try await fetchRawSnapshot(session: session)
+        if try await reconcileOwnedRemoteSystemCategories(rawSnapshot, session: session) {
+            return MistiaSystemCategorySyncSupport.deduplicatingRemoteSystemCategories(
+                try await fetchRawSnapshot(session: session),
+                preferCloudScopedIDs: true
+            )
+        }
+
+        return MistiaSystemCategorySyncSupport.deduplicatingRemoteSystemCategories(
+            rawSnapshot,
+            preferCloudScopedIDs: true
+        )
+    }
+
+    private func reconcileOwnedRemoteSystemCategories(
+        _ snapshot: MistiaRemoteSnapshot,
+        session: SupabaseAuthSession
+    ) async throws -> Bool {
+        let ownerUserID = session.user.id
+        let ownedSystemRows = snapshot.categories.filter {
+            $0.userID == ownerUserID
+                && $0.isSystem
+                && $0.systemKey != nil
+                && $0.deletedAt == nil
+        }
+        guard !ownedSystemRows.isEmpty else { return false }
+
+        let categoryByID = Dictionary(
+            snapshot.categories.map { ($0.id, $0) },
+            uniquingKeysWith: preferredRemoteCategory
+        )
+        let groupedRows = Dictionary(grouping: ownedSystemRows) { row in
+            SyncRemoteSystemCategoryKey(userID: row.userID, systemKey: row.systemKey ?? "")
+        }
+
+        var replacementByID: [UUID: UUID] = [:]
+        var duplicateRows: [RemoteTransactionCategory] = []
+        var preferredCategoryRecords: [MistiaSyncUploadRecord] = []
+
+        for (key, group) in groupedRows where !key.systemKey.isEmpty {
+            let cloudScopedID = MistiaSystemCategoryIdentity.cloudScopedID(
+                canonicalCategoryID: MistiaSystemCategoryIdentity.canonicalID(for: key.systemKey),
+                ownerUserID: key.userID
+            )
+            let needsRepair = group.count > 1 || group.first?.id != cloudScopedID
+            guard needsRepair else { continue }
+            guard let source = group.max(by: { remoteCategoryScore($0) < remoteCategoryScore($1) }) else {
+                continue
+            }
+
+            var repairedRow = source
+            repairedRow.id = cloudScopedID
+            repairedRow.parentCategoryID = repairedParentCategoryID(
+                source.parentCategoryID,
+                ownerUserID: key.userID,
+                categoryByID: categoryByID
+            )
+            repairedRow.deletedAt = nil
+
+            let nextVersion = (group.map(\.syncVersion).max() ?? repairedRow.syncVersion) + 1
+            preferredCategoryRecords.append(
+                MistiaSyncUploadRecord
+                    .category(repairedRow)
+                    .preparedForMutation(nextVersion: nextVersion, deviceID: deviceID)
+            )
+
+            for row in group where row.id != cloudScopedID {
+                replacementByID[row.id] = cloudScopedID
+                duplicateRows.append(row)
+            }
+        }
+
+        guard !preferredCategoryRecords.isEmpty || !replacementByID.isEmpty else {
+            return false
+        }
+
+        for record in hierarchicalSorted(preferredCategoryRecords) {
+            _ = try await remoteStore.forceUpsert(
+                record,
+                subjectUserID: ownerUserID,
+                session: session
+            )
+        }
+
+        let duplicateIDs = Set(duplicateRows.map(\.id))
+        let referenceRepairRecords = remoteRecordsNeedingCategoryReferenceRepair(
+            snapshot: snapshot,
+            ownerUserID: ownerUserID,
+            duplicateIDs: duplicateIDs,
+            replacementByID: replacementByID
+        )
+
+        for record in hierarchicalSorted(referenceRepairRecords) {
+            _ = try await remoteStore.forceUpsert(
+                record,
+                subjectUserID: ownerUserID,
+                session: session
+            )
+        }
+
+        for row in duplicateRows {
+            _ = try await remoteStore.conditionalDelete(
+                entity: .category,
+                recordID: row.id,
+                subjectUserID: ownerUserID,
+                expectedVersion: row.syncVersion,
+                modifiedAt: Date(),
+                deviceID: deviceID,
+                session: session
+            )
+        }
+
+        return true
+    }
+
+    private func remoteRecordsNeedingCategoryReferenceRepair(
+        snapshot: MistiaRemoteSnapshot,
+        ownerUserID: UUID,
+        duplicateIDs: Set<UUID>,
+        replacementByID: [UUID: UUID]
+    ) -> [MistiaSyncUploadRecord] {
+        guard !replacementByID.isEmpty else { return [] }
+
+        var records: [MistiaSyncUploadRecord] = []
+
+        for row in snapshot.categories where row.userID == ownerUserID && !duplicateIDs.contains(row.id) {
+            appendRepairedRecord(.category(row), replacementByID: replacementByID, to: &records)
+        }
+        for row in snapshot.transactions where row.userID == ownerUserID {
+            appendRepairedRecord(.transaction(row), replacementByID: replacementByID, to: &records)
+        }
+        for row in snapshot.budgetPlans where row.userID == ownerUserID {
+            appendRepairedRecord(.budgetPlan(row), replacementByID: replacementByID, to: &records)
+        }
+        for row in snapshot.recurringBillPlans where row.userID == ownerUserID {
+            appendRepairedRecord(.recurringBillPlan(row), replacementByID: replacementByID, to: &records)
+        }
+
+        return records
+    }
+
+    private func appendRepairedRecord(
+        _ record: MistiaSyncUploadRecord,
+        replacementByID: [UUID: UUID],
+        to records: inout [MistiaSyncUploadRecord]
+    ) {
+        let repaired = record.remappingCategoryReferences(replacementByID)
+        guard repaired.payloadFingerprint != record.payloadFingerprint else { return }
+        let nextVersion = max(record.syncVersion, 0) + 1
+        records.append(
+            repaired.preparedForMutation(nextVersion: nextVersion, deviceID: deviceID)
+        )
+    }
+
+    private func repairedParentCategoryID(
+        _ parentCategoryID: UUID?,
+        ownerUserID: UUID,
+        categoryByID: [UUID: RemoteTransactionCategory]
+    ) -> UUID? {
+        guard let parentCategoryID,
+              let parentRow = categoryByID[parentCategoryID],
+              parentRow.userID == ownerUserID,
+              parentRow.isSystem,
+              let parentSystemKey = parentRow.systemKey else {
+            return parentCategoryID
+        }
+
+        return MistiaSystemCategoryIdentity.cloudScopedID(
+            canonicalCategoryID: MistiaSystemCategoryIdentity.canonicalID(for: parentSystemKey),
+            ownerUserID: ownerUserID
+        )
+    }
+
+    private func preferredRemoteCategory(
+        _ lhs: RemoteTransactionCategory,
+        _ rhs: RemoteTransactionCategory
+    ) -> RemoteTransactionCategory {
+        remoteCategoryScore(lhs) >= remoteCategoryScore(rhs) ? lhs : rhs
+    }
+
+    private func remoteCategoryScore(_ row: RemoteTransactionCategory) -> Int {
+        var score = Int(row.updatedAt.timeIntervalSince1970)
+        if row.deletedAt == nil {
+            score += 1_000_000_000
+        }
+        if row.isSystem,
+           let systemKey = row.systemKey,
+           row.id == MistiaSystemCategoryIdentity.cloudScopedID(
+               canonicalCategoryID: MistiaSystemCategoryIdentity.canonicalID(for: systemKey),
+               ownerUserID: row.userID
+           ) {
+            score += 1_000
+        }
+        return score
     }
 
     private func pushLocallyNewerRows(
@@ -1155,7 +1353,7 @@ private extension MistiaRemoteSnapshot {
     }
 
     var recordsByKey: [String: MistiaSyncUploadRecord] {
-        Dictionary(uniqueKeysWithValues: allRecords.map { ($0.storageKey, $0) })
+        Dictionary(allRecords.map { ($0.storageKey, $0) }, uniquingKeysWith: { _, latest in latest })
     }
 }
 

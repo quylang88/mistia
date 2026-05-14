@@ -2045,7 +2045,10 @@ struct FamilyOverviewScreen: View {
     private var summary: FamilyAggregateSummary {
         let transactionOwnerMap = MistiaRecordOwnershipStore.ownerMap(from: ownershipScopes, entity: .transaction)
 
-        let memberNames = Dictionary(uniqueKeysWithValues: familyContextStore.members.map { ($0.userID, $0.displayName) })
+        let memberNames = Dictionary(
+            familyContextStore.members.map { ($0.userID, $0.displayName) },
+            uniquingKeysWith: { _, latest in latest }
+        )
 
         return FamilyLogic.aggregateSummary(
             wallets: aggregateWalletRows.map { row in

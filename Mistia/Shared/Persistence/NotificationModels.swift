@@ -389,8 +389,8 @@ enum MistiaNotificationStore {
         in context: ModelContext
     ) throws {
         let existingRows = try context.fetch(FetchDescriptor<AppNotificationRecord>())
-        var existingByID = Dictionary(uniqueKeysWithValues: existingRows.map { ($0.id, $0) })
-        var existingByKey = Dictionary(uniqueKeysWithValues: existingRows.map { ($0.key, $0) })
+        var existingByID = Dictionary(existingRows.map { ($0.id, $0) }, uniquingKeysWith: latestNotification)
+        var existingByKey = Dictionary(existingRows.map { ($0.key, $0) }, uniquingKeysWith: latestNotification)
 
         for remote in remoteRows where remote.userID == currentUserID {
             let row = existingByID[remote.id] ?? existingByKey[remote.sourceEventKey] ?? AppNotificationRecord(
@@ -441,6 +441,13 @@ enum MistiaNotificationStore {
         }
 
         try context.save()
+    }
+
+    nonisolated private static func latestNotification(
+        _ lhs: AppNotificationRecord,
+        _ rhs: AppNotificationRecord
+    ) -> AppNotificationRecord {
+        lhs.updatedAt >= rhs.updatedAt ? lhs : rhs
     }
 
     static func markAllAsRead(

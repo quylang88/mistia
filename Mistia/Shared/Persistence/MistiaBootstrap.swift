@@ -766,7 +766,10 @@ enum MistiaBootstrap {
     ) {
         guard sessionStore.canManageSync else { return }
 
-        let uniqueCategories = Dictionary(uniqueKeysWithValues: categories.map { ($0.id, $0) }).values
+        let uniqueCategories = Dictionary(
+            categories.map { ($0.id, $0) },
+            uniquingKeysWith: { lhs, rhs in lhs.updatedAt >= rhs.updatedAt ? lhs : rhs }
+        ).values
         for category in uniqueCategories {
             sessionStore.recordUpsert(
                 entity: .category,
@@ -812,7 +815,7 @@ enum MistiaBootstrap {
     ) where Record: AnyObject {
         guard sessionStore.canManageSync else { return }
 
-        let uniqueRecords = Dictionary(uniqueKeysWithValues: records.compactMap { record in
+        let uniqueRecords = Dictionary(records.compactMap { record in
             switch record {
             case let goal as SavingsGoal:
                 (goal.id, goal.updatedAt)
@@ -823,7 +826,7 @@ enum MistiaBootstrap {
             default:
                 nil
             }
-        })
+        }, uniquingKeysWith: max)
 
         for (recordID, updatedAt) in uniqueRecords {
             sessionStore.recordUpsert(

@@ -80,7 +80,10 @@ enum MistiaCategoryPickerSupport {
                 && $0.isChildCategory
                 && !$0.isBalanceAdjustmentSystemCategory
         }
-        let allowedByID = Dictionary(uniqueKeysWithValues: allowedCategories.map { ($0.id, $0) })
+        let allowedByID = Dictionary(
+            allowedCategories.map { ($0.id, $0) },
+            uniquingKeysWith: { lhs, rhs in lhs.updatedAt >= rhs.updatedAt ? lhs : rhs }
+        )
 
         struct Usage {
             var count: Int
@@ -128,16 +131,17 @@ enum MistiaCategoryPickerSupport {
         from categories: [TransactionCategory]
     ) -> [TransactionCategory] {
         let categoriesByKey = Dictionary(
-            uniqueKeysWithValues: categories
-                .filter {
-                    $0.deletedAt == nil
-                        && !$0.isArchived
-                        && $0.kind == .expense
-                        && $0.isChildCategory
-                }
-                .compactMap { category in
-                    category.mistiaSystemCategoryKey.map { ($0, category) }
-                }
+            categories
+            .filter {
+                $0.deletedAt == nil
+                    && !$0.isArchived
+                    && $0.kind == .expense
+                    && $0.isChildCategory
+            }
+            .compactMap { category in
+                category.mistiaSystemCategoryKey.map { ($0, category) }
+            },
+            uniquingKeysWith: { lhs, rhs in lhs.updatedAt >= rhs.updatedAt ? lhs : rhs }
         )
 
         return MistiaSystemCategoryKey.recurringBillQuickPickDefaults.compactMap { key in

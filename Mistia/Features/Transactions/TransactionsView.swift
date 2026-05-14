@@ -166,7 +166,10 @@ struct TransactionsView: View {
     }
 
     private var transactionsByID: [UUID: LedgerTransaction] {
-        Dictionary(uniqueKeysWithValues: activeTransactions.map { ($0.id, $0) })
+        Dictionary(
+            activeTransactions.map { ($0.id, $0) },
+            uniquingKeysWith: { lhs, rhs in lhs.updatedAt >= rhs.updatedAt ? lhs : rhs }
+        )
     }
 
     private var transactionAuditMap: [UUID: TransactionAuditRecord] {

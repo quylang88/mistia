@@ -79,9 +79,10 @@ struct OverviewView: View {
 
     private var transactionsByID: [UUID: LedgerTransaction] {
         Dictionary(
-            uniqueKeysWithValues: visibleTransactions
+            visibleTransactions
                 .filter { $0.deletedAt == nil && !$0.isArchived }
-                .map { ($0.id, $0) }
+                .map { ($0.id, $0) },
+            uniquingKeysWith: { lhs, rhs in lhs.updatedAt >= rhs.updatedAt ? lhs : rhs }
         )
     }
 

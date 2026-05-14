@@ -127,6 +127,48 @@ struct RemoteTransactionCategory: MistiaRemoteRow {
     var syncVersion: Int64
     var lastModifiedByDeviceID: UUID?
 
+    init(
+        userID: UUID,
+        id: UUID,
+        name: String,
+        kindRawValue: String,
+        iconSymbolName: String,
+        iconColorHex: String,
+        isFavorite: Bool,
+        parentCategoryID: UUID?,
+        hierarchyRoleRawValue: String?,
+        systemKey: String?,
+        isSystem: Bool,
+        sortOrder: Int,
+        isArchived: Bool,
+        archivedAt: Date?,
+        createdAt: Date,
+        updatedAt: Date,
+        deletedAt: Date?,
+        syncVersion: Int64,
+        lastModifiedByDeviceID: UUID?
+    ) {
+        self.userID = userID
+        self.id = id
+        self.name = name
+        self.kindRawValue = kindRawValue
+        self.iconSymbolName = iconSymbolName
+        self.iconColorHex = iconColorHex
+        self.isFavorite = isFavorite
+        self.parentCategoryID = parentCategoryID
+        self.hierarchyRoleRawValue = hierarchyRoleRawValue
+        self.systemKey = systemKey
+        self.isSystem = isSystem
+        self.sortOrder = sortOrder
+        self.isArchived = isArchived
+        self.archivedAt = archivedAt
+        self.createdAt = createdAt
+        self.updatedAt = updatedAt
+        self.deletedAt = deletedAt
+        self.syncVersion = syncVersion
+        self.lastModifiedByDeviceID = lastModifiedByDeviceID
+    }
+
     enum CodingKeys: String, CodingKey {
         case userID = "user_id"
         case id

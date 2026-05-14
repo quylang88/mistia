@@ -1156,18 +1156,21 @@ final class FamilyContextStore {
             userIDs: accessibleUserIDs,
             session: session
         )
+        let reconciledFinanceSnapshot = MistiaSystemCategorySyncSupport.deduplicatingRemoteSystemCategories(
+            financeSnapshot
+        )
         let protectedRecordIDs = sessionStore.protectedQueuedRecordIDs()
 
         let nonTransactionSnapshot = MistiaRemoteSnapshot(
-            wallets: financeSnapshot.wallets,
-            creditCardProfiles: financeSnapshot.creditCardProfiles,
-            categories: financeSnapshot.categories,
+            wallets: reconciledFinanceSnapshot.wallets,
+            creditCardProfiles: reconciledFinanceSnapshot.creditCardProfiles,
+            categories: reconciledFinanceSnapshot.categories,
             transactions: [],
-            budgetPlans: financeSnapshot.budgetPlans,
-            savingsGoals: financeSnapshot.savingsGoals,
-            recurringBillPlans: financeSnapshot.recurringBillPlans,
-            installmentPlans: financeSnapshot.installmentPlans,
-            dueOccurrences: financeSnapshot.dueOccurrences
+            budgetPlans: reconciledFinanceSnapshot.budgetPlans,
+            savingsGoals: reconciledFinanceSnapshot.savingsGoals,
+            recurringBillPlans: reconciledFinanceSnapshot.recurringBillPlans,
+            installmentPlans: reconciledFinanceSnapshot.installmentPlans,
+            dueOccurrences: reconciledFinanceSnapshot.dueOccurrences
         )
 
         try MistiaSyncLocalStore.applySnapshotIncrementally(
@@ -1175,10 +1178,11 @@ final class FamilyContextStore {
             shouldPruneMissing: false,
             protectedRecordIDs: protectedRecordIDs,
             familyCategoryScopedTo: session.user.id,
+            familyCategoryPruneOwnerIDs: Set(accessibleUserIDs).subtracting([session.user.id]),
             in: modelContainer
         )
         try MistiaSyncLocalStore.mergeAccessibleTransactions(
-            financeSnapshot.transactions,
+            reconciledFinanceSnapshot.transactions,
             protectedRecordIDs: protectedRecordIDs,
             familyCategoryScopedTo: session.user.id,
             in: modelContainer

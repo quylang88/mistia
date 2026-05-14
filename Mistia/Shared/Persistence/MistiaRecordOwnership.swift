@@ -50,11 +50,51 @@ enum MistiaRecordOwnershipStore {
         from scopes: [OwnedRecordScope],
         entity: MistiaSyncEntity
     ) -> [UUID: UUID] {
-        Dictionary(
-            uniqueKeysWithValues: scopes
-                .filter { $0.entity == entity }
-                .map { ($0.recordID, $0.ownerUserID) }
-        )
+        var ownersByRecordID: [UUID: (ownerUserID: UUID, updatedAt: Date)] = [:]
+        for scope in scopes where scope.entity == entity {
+            if let existing = ownersByRecordID[scope.recordID],
+               existing.updatedAt > scope.updatedAt {
+                continue
+            }
+            ownersByRecordID[scope.recordID] = (scope.ownerUserID, scope.updatedAt)
+        }
+        return ownersByRecordID.mapValues(\.ownerUserID)
+    }
+
+    @discardableResult
+    static func reconcileDuplicateScopes(
+        in context: ModelContext
+    ) throws -> Bool {
+        let scopes = try context.fetch(FetchDescriptor<OwnedRecordScope>())
+        let groupedScopes = Dictionary(grouping: scopes) { scope in
+            OwnedRecordScope.scopeID(entity: scope.entity, recordID: scope.recordID)
+        }
+        var didMutate = false
+
+        for (scopeID, group) in groupedScopes where group.count > 1 {
+            let preferred = group.max { lhs, rhs in
+                if lhs.updatedAt != rhs.updatedAt {
+                    return lhs.updatedAt < rhs.updatedAt
+                }
+                return lhs.id < rhs.id
+            } ?? group[0]
+
+            if preferred.id != scopeID {
+                preferred.id = scopeID
+                didMutate = true
+            }
+
+            for duplicate in group where duplicate !== preferred {
+                context.delete(duplicate)
+                didMutate = true
+            }
+        }
+
+        if didMutate {
+            try context.save()
+        }
+
+        return didMutate
     }
 
     static func ownerUserID(

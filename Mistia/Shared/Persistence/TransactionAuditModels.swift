@@ -25,7 +25,14 @@ enum TransactionAuditStore {
     static func auditMap(
         from records: [TransactionAuditRecord]
     ) -> [UUID: TransactionAuditRecord] {
-        Dictionary(uniqueKeysWithValues: records.map { ($0.transactionID, $0) })
+        Dictionary(records.map { ($0.transactionID, $0) }, uniquingKeysWith: latestAuditRecord)
+    }
+
+    nonisolated private static func latestAuditRecord(
+        _ lhs: TransactionAuditRecord,
+        _ rhs: TransactionAuditRecord
+    ) -> TransactionAuditRecord {
+        lhs.updatedAt >= rhs.updatedAt ? lhs : rhs
     }
 
     static func fetch(

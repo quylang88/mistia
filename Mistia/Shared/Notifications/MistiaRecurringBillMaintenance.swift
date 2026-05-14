@@ -40,7 +40,7 @@ enum MistiaRecurringBillMaintenance {
 
         let transactionRecords = transactions.map(\.snapshot)
         let occurrenceSnaps = occurrences.map(\.planningSnapshot)
-        let walletByID = Dictionary(uniqueKeysWithValues: wallets.map { ($0.id, $0) })
+        let walletByID = Dictionary(wallets.map { ($0.id, $0) }, uniquingKeysWith: latestWallet)
         let selectedMonth = PlanningLogic.startOfMonth(for: referenceDate, calendar: calendar)
         let startOfToday = calendar.startOfDay(for: referenceDate)
         let monthKey = PlanningLogic.monthKey(for: referenceDate, calendar: calendar)
@@ -141,6 +141,10 @@ enum MistiaRecurringBillMaintenance {
                 )
             }
         }
+    }
+
+    private static func latestWallet(_ lhs: LedgerWallet, _ rhs: LedgerWallet) -> LedgerWallet {
+        lhs.updatedAt >= rhs.updatedAt ? lhs : rhs
     }
 
     // MARK: - Auto-pay

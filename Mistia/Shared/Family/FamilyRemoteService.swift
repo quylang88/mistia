@@ -479,9 +479,10 @@ struct FamilyRemoteService: FamilyRemoteServicing {
             session: session
         )
         let syncStatusRows = (try? await syncStatusRowsTask) ?? []
-        let profileByUserID = Dictionary(uniqueKeysWithValues: profileRows.map { ($0.userID, $0) })
+        let profileByUserID = Dictionary(profileRows.map { ($0.userID, $0) }, uniquingKeysWith: { _, latest in latest })
         let hasSyncedCloudDataByUserID = Dictionary(
-            uniqueKeysWithValues: syncStatusRows.map { ($0.userID, $0.hasSyncedCloudData) }
+            syncStatusRows.map { ($0.userID, $0.hasSyncedCloudData) },
+            uniquingKeysWith: { lhs, rhs in lhs || rhs }
         )
         let members = membershipRows.map { row in
             let profile = profileByUserID[row.userID]

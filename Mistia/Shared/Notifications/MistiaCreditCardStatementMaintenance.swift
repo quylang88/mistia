@@ -33,7 +33,7 @@ enum MistiaCreditCardStatementMaintenance {
         let statementMonths = (0...24).compactMap { offset in
             calendar.date(byAdding: .month, value: -offset, to: currentMonth)
         }
-        let walletByID = Dictionary(uniqueKeysWithValues: wallets.map { ($0.id, $0) })
+        let walletByID = Dictionary(wallets.map { ($0.id, $0) }, uniquingKeysWith: latestWallet)
 
         for account in accounts {
             let statements = PlanningLogic.creditCardStatementItems(
@@ -107,6 +107,10 @@ enum MistiaCreditCardStatementMaintenance {
                 }
             }
         }
+    }
+
+    private static func latestWallet(_ lhs: LedgerWallet, _ rhs: LedgerWallet) -> LedgerWallet {
+        lhs.updatedAt >= rhs.updatedAt ? lhs : rhs
     }
 
     @discardableResult
