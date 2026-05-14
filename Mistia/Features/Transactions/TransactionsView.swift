@@ -744,6 +744,12 @@ struct TransactionsView: View {
     private func presentTransactionEditPermissionPrompt(_ transaction: LedgerTransaction, ownerUserID: UUID) {
         let resourceName = transaction.title.nilIfBlank
             ?? mistiaLocalized(vi: "giao dịch", en: "transaction", ja: "取引")
+        let isPending = familyContextStore.hasPendingPermissionRequest(
+            ownerUserID: ownerUserID,
+            resourceType: .transaction,
+            resourceID: nil,
+            scope: .edit
+        )
         permissionPrompt = TransactionsPermissionPrompt(
             title: mistiaLocalized(vi: "Chưa có quyền chỉnh sửa giao dịch", en: "No transaction edit access", ja: "取引編集権限がありません"),
             message: mistiaLocalized(
@@ -751,9 +757,26 @@ struct TransactionsView: View {
                 en: "You do not have permission to edit this member's transactions.",
                 ja: "このメンバーの取引を編集する権限がありません。"
             ),
-            actionTitle: mistiaLocalized(vi: "Yêu cầu quyền chỉnh sửa", en: "Request edit access", ja: "編集権限をリクエスト")
+            actionTitle: isPending
+                ? mistiaLocalized(vi: "Đã gửi yêu cầu chỉnh sửa", en: "Edit request sent", ja: "編集リクエスト送信済み")
+                : mistiaLocalized(vi: "Yêu cầu quyền chỉnh sửa", en: "Request edit access", ja: "編集権限をリクエスト")
         ) {
             Task { @MainActor in
+                if isPending {
+                    let isApproved = await familyContextStore.refreshPermissionGrant(
+                        ownerUserID: ownerUserID,
+                        resourceType: .transaction,
+                        resourceID: nil,
+                        scope: .edit,
+                        sessionStore: sessionStore
+                    )
+                    if isApproved {
+                        permissionPrompt = nil
+                        editorTarget = TransactionEditorTarget(transaction: transaction)
+                    }
+                    return
+                }
+
                 _ = await familyContextStore.requestPermission(
                     resourceType: .transaction,
                     resourceID: nil,

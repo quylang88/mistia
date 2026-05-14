@@ -1091,21 +1091,21 @@ struct PlanningView: View {
         onGranted: @escaping () -> Void
     ) {
         Task { @MainActor in
-            let isApproved = await familyContextStore.refreshPermissionGrant(
-                ownerUserID: ownerUserID,
-                resourceType: resourceType,
-                resourceID: resourceID,
-                scope: scope,
-                sessionStore: sessionStore
-            )
+            if wasPending {
+                let isApproved = await familyContextStore.refreshPermissionGrant(
+                    ownerUserID: ownerUserID,
+                    resourceType: resourceType,
+                    resourceID: resourceID,
+                    scope: scope,
+                    sessionStore: sessionStore
+                )
 
-            if isApproved {
-                permissionPrompt = nil
-                onGranted()
-                return
-            }
+                if isApproved {
+                    permissionPrompt = nil
+                    onGranted()
+                    return
+                }
 
-            guard !wasPending else {
                 permissionPrompt = nil
                 infoAlert = PlanningInfoAlert(
                     title: mistiaLocalized(vi: "Đã gửi yêu cầu", en: "Request sent", ja: "リクエスト送信済み"),

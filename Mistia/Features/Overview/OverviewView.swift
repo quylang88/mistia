@@ -381,6 +381,12 @@ struct OverviewView: View {
     private func presentTransactionEditPermissionPrompt(_ transaction: LedgerTransaction) {
         guard let ownerUserID = transactionOwnerUserID(for: transaction),
               ownerUserID != sessionStore.activeLocalProfileUserID else { return }
+        let isPending = familyContextStore.hasPendingPermissionRequest(
+            ownerUserID: ownerUserID,
+            resourceType: .transaction,
+            resourceID: nil,
+            scope: .edit
+        )
         permissionPrompt = OverviewPermissionPrompt(
             title: mistiaLocalized(vi: "Chưa có quyền chỉnh sửa giao dịch", en: "No transaction edit access", ja: "取引編集権限がありません"),
             message: mistiaLocalized(
@@ -388,8 +394,18 @@ struct OverviewView: View {
                 en: "You do not have permission to edit this member's transactions.",
                 ja: "このメンバーの取引を編集する権限がありません。"
             ),
-            actionTitle: mistiaLocalized(vi: "Yêu cầu quyền chỉnh sửa", en: "Request edit access", ja: "編集権限をリクエスト")
+            actionTitle: isPending
+                ? mistiaLocalized(vi: "Đã gửi yêu cầu chỉnh sửa", en: "Edit request sent", ja: "編集リクエスト送信済み")
+                : mistiaLocalized(vi: "Yêu cầu quyền chỉnh sửa", en: "Request edit access", ja: "編集権限をリクエスト")
         ) {
+            if isPending {
+                refreshTransactionEditPermission(
+                    transaction,
+                    ownerUserID: ownerUserID
+                )
+                return
+            }
+
             sendPermissionRequest(
                 resourceType: .transaction,
                 resourceID: nil,
@@ -397,6 +413,25 @@ struct OverviewView: View {
                 scope: .edit,
                 resourceName: mistiaLocalized(vi: "giao dịch", en: "transactions", ja: "取引")
             )
+        }
+    }
+
+    private func refreshTransactionEditPermission(
+        _ transaction: LedgerTransaction,
+        ownerUserID: UUID
+    ) {
+        Task { @MainActor in
+            let isApproved = await familyContextStore.refreshPermissionGrant(
+                ownerUserID: ownerUserID,
+                resourceType: .transaction,
+                resourceID: nil,
+                scope: .edit,
+                sessionStore: sessionStore
+            )
+            if isApproved {
+                permissionPrompt = nil
+                editorTarget = TransactionEditorTarget(transaction: transaction)
+            }
         }
     }
 
