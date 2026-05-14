@@ -801,6 +801,22 @@ final class SessionStore {
         return didSync
     }
 
+    func syncPermissionApprovalChanges() async -> Bool {
+        guard currentSession != nil, !isSyncInFlight else { return false }
+
+        if requiresInitialSync {
+            return await syncNow(isManual: true)
+        }
+
+        // Category-use approval must push the explicitly granted system category before
+        // normal eligibility repair can prune unused default categories from the outbox.
+        return await runMergeSync(
+            trigger: .manual,
+            showProgress: false,
+            normalizesBeforeSync: false
+        )
+    }
+
     func startInitialSync(with choice: MistiaInitialSyncChoice) async {
         guard currentSession != nil, !isSyncInFlight else { return }
         pendingInitialSyncChoice = choice
@@ -2401,7 +2417,8 @@ final class SessionStore {
 
     private func runMergeSync(
         trigger: SessionSyncTrigger,
-        showProgress: Bool = true
+        showProgress: Bool = true,
+        normalizesBeforeSync: Bool = true
     ) async -> Bool {
         guard currentSession != nil, !isSyncInFlight else { return false }
         if trigger != .manual {
@@ -2432,7 +2449,9 @@ final class SessionStore {
 
         do {
             let validSession = try await prepareRemoteSession()
-            try normalizeCategoryHierarchyIfNeeded()
+            if normalizesBeforeSync {
+                try normalizeCategoryHierarchyIfNeeded()
+            }
             let result = try await syncCoordinator.sync(session: validSession)
             lastSyncAt = .now
             lastErrorMessage = nil

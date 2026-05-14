@@ -5,6 +5,9 @@ private enum ManagementNavigationDestination: String, Identifiable {
     case authPlaceholder
     case settings
     case family
+    case backupRestore
+    case archivedItems
+    case familyOverview
 
     var id: String { rawValue }
 }
@@ -246,6 +249,12 @@ struct ManagementView: View {
                     SettingsView()
                 case .family:
                     FamilyManagementView()
+                case .backupRestore:
+                    ManagementBackupRestoreView()
+                case .archivedItems:
+                    ManagementArchivedItemsView()
+                case .familyOverview:
+                    FamilyOverviewScreen()
                 }
             }
         }
@@ -327,9 +336,28 @@ struct ManagementView: View {
         .onChange(of: destination, initial: true) { _, newValue in
             hideQuickCreate = newValue != nil
         }
+        .onChange(of: uiState.managementNavigationRequest?.id, initial: true) { _, _ in
+            handleManagementNavigationRequest()
+        }
         .onDisappear {
             hideQuickCreate = false
         }
+    }
+
+    private func handleManagementNavigationRequest() {
+        guard let request = uiState.managementNavigationRequest else { return }
+
+        switch request.destination {
+        case .backupRestore:
+            destination = .backupRestore
+        case .archivedItems:
+            destination = .archivedItems
+        case .familyOverview:
+            familyContextStore.activateFamilyHome()
+            destination = .familyOverview
+        }
+
+        uiState.clearManagementNavigationRequest(id: request.id)
     }
 
     private var profileSection: some View {

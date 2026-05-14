@@ -227,6 +227,7 @@ struct NotificationCenterView: View {
             Circle()
                 .fill(notificationPurpleAccent)
                 .frame(width: 8, height: 8)
+                .offset(y: 2)
         }
     }
 

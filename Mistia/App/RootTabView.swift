@@ -153,12 +153,6 @@ struct RootTabView: View {
       }
       .sheet(item: $activeSheet) { sheet in
         switch sheet {
-        case .shortcut(let destination):
-          NavigationStack {
-            shortcutSheetView(for: destination)
-          }
-            .presentationDetents([.large])
-            .presentationDragIndicator(.hidden)
         case .quickCreate(let destination):
           TransactionEditorSheet(target: quickCreateTarget(for: destination)) { completion in
             if completion == .savedDraft {
@@ -190,7 +184,7 @@ struct RootTabView: View {
         guard familyID != nil else { return }
         dismissQuickCreateMenu()
         familyContextStore.activateFamilyHome()
-        activeSheet = .shortcut(.familyOverview)
+        openManagementRoute(.familyOverview)
         familyContextStore.clearFamilyOverviewPresentationRequest()
       }
       .onChange(of: uiState.quickCreateMenuRequestID) { _, requestID in
@@ -374,18 +368,27 @@ struct RootTabView: View {
 
     switch shortcutResolution.presentation.action {
     case .backupRestore:
-      activeSheet = .shortcut(.backupRestore)
+      openManagementRoute(.backupRestore)
 
     case .archivedItems:
-      activeSheet = .shortcut(.archivedItems)
+      openManagementRoute(.archivedItems)
 
     case .familyOverview:
-      familyContextStore.activateFamilyHome()
-      activeSheet = .shortcut(.familyOverview)
+      guard !isSyncingShortcut else { return }
+      isSyncingShortcut = true
+      Task { @MainActor in
+        familyContextStore.activateFamilyHome()
+        await familyContextStore.refreshLatest(
+          sessionStore: sessionStore,
+          source: .userInitiated
+        )
+        isSyncingShortcut = false
+        openManagementRoute(.familyOverview)
+      }
 
     case .memberOverview(let userID):
       guard let member = familyContextStore.members.first(where: { $0.userID == userID }) else {
-        activeSheet = .shortcut(.backupRestore)
+        openManagementRoute(.backupRestore)
         return
       }
 
@@ -395,10 +398,18 @@ struct RootTabView: View {
     case .syncNow:
       guard !isSyncingShortcut else { return }
       isSyncingShortcut = true
-      Task {
+      Task { @MainActor in
         let _ = await sessionStore.syncNow(isManual: true)
         isSyncingShortcut = false
       }
+    }
+  }
+
+  private func openManagementRoute(_ destination: MistiaManagementNavigationDestination) {
+    selectedTab = .settings
+    Task { @MainActor in
+      await Task.yield()
+      uiState.requestManagementNavigation(destination)
     }
   }
 
@@ -410,18 +421,6 @@ struct RootTabView: View {
 
     shortcutKindRawValue = selection.storedKindRawValue
     shortcutMemberUserIDRawValue = selection.storedMemberUserIDRawValue
-  }
-
-  @ViewBuilder
-  private func shortcutSheetView(for destination: RootShortcutDestination) -> some View {
-    switch destination {
-    case .backupRestore:
-      ManagementBackupRestoreView()
-    case .archivedItems:
-      ManagementArchivedItemsView()
-    case .familyOverview:
-      FamilyOverviewScreen()
-    }
   }
 
   private func quickCreateTarget(for destination: MistiaQuickCreateDestination) -> TransactionEditorTarget {
@@ -477,13 +476,10 @@ struct RootTabView: View {
 }
 
 private enum RootSheet: Identifiable {
-  case shortcut(RootShortcutDestination)
   case quickCreate(MistiaQuickCreateDestination)
 
   var id: String {
     switch self {
-    case .shortcut(let destination):
-      "shortcut-\(destination.rawValue)"
     case .quickCreate(let destination):
       "quick-create-\(destination.rawValue)"
     }
@@ -494,14 +490,6 @@ private struct RootQuickCreateAccessAlert: Identifiable {
   let id = UUID()
   let title: String
   let message: String
-}
-
-private enum RootShortcutDestination: String, Identifiable {
-  case backupRestore
-  case archivedItems
-  case familyOverview
-
-  var id: String { rawValue }
 }
 
 private enum MistiaQuickCreateDestination: String, CaseIterable, Identifiable {

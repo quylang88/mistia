@@ -2161,13 +2161,6 @@ struct FamilyOverviewScreen: View {
 
             FamilyAIInsightsSection(insights: summary.insights)
         }
-        .overlay(alignment: .topTrailing) {
-            if familyContextStore.isRefreshingLatest {
-                FamilySyncOverlayIndicator()
-                    .padding(.top, 12)
-                    .padding(.trailing, 18)
-            }
-        }
         .sheet(item: $activeSheet) { sheet in
             switch sheet {
             case .invite:
@@ -2180,12 +2173,6 @@ struct FamilyOverviewScreen: View {
             if !familyContextStore.isViewingOtherMemberContext {
                 familyContextStore.activateFamilyHome()
             }
-        }
-        .task {
-            await familyContextStore.refreshLatest(
-                sessionStore: sessionStore,
-                source: .enterFamily
-            )
         }
     }
 

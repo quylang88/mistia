@@ -737,9 +737,28 @@ final class FamilyContextStore {
             )
         }
 
-        guard await sessionStore.syncNow(isManual: false) else {
+        guard await pushCategoryApprovalChanges(sessionStore: sessionStore) else {
             throw FamilyCategoryUseApprovalError.syncFailed
         }
+    }
+
+    private func pushCategoryApprovalChanges(sessionStore: SessionStore) async -> Bool {
+        for _ in 0..<2 {
+            if await sessionStore.syncPermissionApprovalChanges() {
+                return true
+            }
+
+            guard sessionStore.isAnySyncInProgress else {
+                return false
+            }
+
+            while sessionStore.isAnySyncInProgress {
+                guard !Task.isCancelled else { return false }
+                try? await Task.sleep(for: .milliseconds(150))
+            }
+        }
+
+        return false
     }
 
     func removeMember(

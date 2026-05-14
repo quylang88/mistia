@@ -308,7 +308,7 @@ final class MistiaNativeTabBarController: UITabBarController, UITabBarController
     shortcutAvatarTask = nil
     stopSpinnerAnimation()
 
-    if isCurrentShortcutSyncing && currentShortcutPresentation.action == MistiaShortcutResolvedAction.syncNow {
+    if isCurrentShortcutSyncing {
       currentShortcutImageKey = "syncing_spinner"
       startSpinnerAnimation()
       return
@@ -752,7 +752,7 @@ final class MistiaNativeTabBarController: UITabBarController, UITabBarController
   {
     guard let shortcutTab, tab === shortcutTab else { return true }
     // Block interaction while syncing
-    if isCurrentShortcutSyncing && currentShortcutPresentation.action == MistiaShortcutResolvedAction.syncNow {
+    if isCurrentShortcutSyncing {
       return false
     }
     chromeDelegate?.nativeTabBarControllerDidTapShortcut(self)

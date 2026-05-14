@@ -65,7 +65,6 @@ struct MistiaSyncMutation: Codable, Hashable, Identifiable {
     }
 }
 
-@MainActor
 final class MistiaSyncOutbox {
     private let defaults: UserDefaults
     private let key: String
