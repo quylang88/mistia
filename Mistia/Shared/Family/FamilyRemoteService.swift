@@ -1510,6 +1510,26 @@ private struct CreateFamilyPermissionRequestRPCBody: Encodable {
         case body = "p_body"
         case message = "p_message"
     }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(familyID, forKey: .familyID)
+        try container.encode(recipientUserID, forKey: .recipientUserID)
+        try container.encode(resourceType, forKey: .resourceType)
+        if let resourceID {
+            try container.encode(resourceID, forKey: .resourceID)
+        } else {
+            try container.encodeNil(forKey: .resourceID)
+        }
+        try container.encode(permissionScope, forKey: .permissionScope)
+        try container.encode(title, forKey: .title)
+        try container.encode(body, forKey: .body)
+        if let message {
+            try container.encode(message, forKey: .message)
+        } else {
+            try container.encodeNil(forKey: .message)
+        }
+    }
 }
 
 private struct RespondFamilyPermissionRequestRPCBody: Encodable {
