@@ -582,8 +582,22 @@ final class FamilyContextStore {
         resourceName: String,
         sessionStore: SessionStore
     ) async -> Bool {
-        guard let familyID = family?.id else { return false }
-        guard let session = await prepareRemoteSession(using: sessionStore) else { return false }
+        guard let familyID = family?.id else {
+            lastErrorMessage = mistiaLocalized(
+                vi: "Chưa tải được thông tin gia đình. Vui lòng đồng bộ lại rồi thử lần nữa.",
+                en: "Family data has not loaded yet. Sync again and try once more.",
+                ja: "ファミリー情報がまだ読み込まれていません。同期してからもう一度お試しください。"
+            )
+            return false
+        }
+        guard let session = await prepareRemoteSession(using: sessionStore) else {
+            lastErrorMessage = mistiaLocalized(
+                vi: "Bạn cần đăng nhập và bật cloud sync để gửi yêu cầu quyền.",
+                en: "Sign in and enable cloud sync to send permission requests.",
+                ja: "権限リクエストを送るには、サインインしてクラウド同期を有効にしてください。"
+            )
+            return false
+        }
         if resourceType == .category, scope == .use {
             if !canRequestSystemCategoryUse(ownerUserID: ownerUserID, requesterUserID: session.user.id) {
                 _ = await refresh(sessionStore: sessionStore)

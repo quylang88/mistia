@@ -52,6 +52,44 @@ private struct TransactionsPermissionPrompt: Identifiable {
     let action: () -> Void
 }
 
+private struct TransactionsInfoAlert: Identifiable {
+    let id = UUID()
+    let title: String
+    let message: String
+}
+
+private enum TransactionsAlertPresentation: Identifiable {
+    case info(TransactionsInfoAlert)
+    case permission(TransactionsPermissionPrompt)
+
+    var id: UUID {
+        switch self {
+        case .info(let alert):
+            alert.id
+        case .permission(let prompt):
+            prompt.id
+        }
+    }
+
+    var title: String {
+        switch self {
+        case .info(let alert):
+            alert.title
+        case .permission(let prompt):
+            prompt.title
+        }
+    }
+
+    var message: String {
+        switch self {
+        case .info(let alert):
+            alert.message
+        case .permission(let prompt):
+            prompt.message
+        }
+    }
+}
+
 struct TransactionsView: View {
     @Environment(\.calendar) private var calendar
     @Environment(\.colorScheme) private var colorScheme
@@ -75,6 +113,7 @@ struct TransactionsView: View {
     @State private var exportErrorMessage: String?
     @State private var destination: TransactionsNavigationDestination?
     @State private var permissionPrompt: TransactionsPermissionPrompt?
+    @State private var infoAlert: TransactionsInfoAlert?
 
     private var activeTransactions: [LedgerTransaction] {
         visibleTransactions
@@ -96,6 +135,16 @@ struct TransactionsView: View {
                 }
                 return $0.createdAt < $1.createdAt
             }
+    }
+
+    private var activeAlert: TransactionsAlertPresentation? {
+        if let permissionPrompt {
+            return .permission(permissionPrompt)
+        }
+        if let infoAlert {
+            return .info(infoAlert)
+        }
+        return nil
     }
 
     private var activeCategorySections: [TransactionCategoryGroupSection] {
@@ -403,15 +452,30 @@ struct TransactionsView: View {
                 .presentationDetents(target.quickCapture ? [.medium, .large] : [.large])
                 .presentationDragIndicator(.hidden)
         }
-        .alert(item: $permissionPrompt) { prompt in
-            Alert(
-                title: Text(prompt.title),
-                message: Text(prompt.message),
-                primaryButton: .default(Text(prompt.actionTitle)) {
+        .alert(
+            activeAlert?.title ?? "",
+            isPresented: Binding(
+                get: { activeAlert != nil },
+                set: { isPresented in
+                    if !isPresented {
+                        permissionPrompt = nil
+                        infoAlert = nil
+                    }
+                }
+            ),
+            presenting: activeAlert
+        ) { alert in
+            switch alert {
+            case .info:
+                Button(mistiaLocalized(vi: "OK", en: "OK", ja: "OK")) {}
+            case .permission(let prompt):
+                Button(prompt.actionTitle) {
                     prompt.action()
-                },
-                secondaryButton: .cancel(Text(mistiaLocalized(vi: "Hủy", en: "Cancel", ja: "キャンセル")))
-            )
+                }
+                Button(mistiaLocalized(vi: "Hủy", en: "Cancel", ja: "キャンセル"), role: .cancel) {}
+            }
+        } message: { alert in
+            Text(alert.message)
         }
         .alert(
             mistiaLocalized(vi: "Không thể xuất sao kê", en: "Couldn't export statement", ja: "明細を出力できませんでした"),
@@ -777,13 +841,31 @@ struct TransactionsView: View {
                     return
                 }
 
-                _ = await familyContextStore.requestPermission(
+                let didSend = await familyContextStore.requestPermission(
                     resourceType: .transaction,
                     resourceID: nil,
                     ownerUserID: ownerUserID,
                     scope: .edit,
                     resourceName: resourceName,
                     sessionStore: sessionStore
+                )
+                permissionPrompt = nil
+                try? await Task.sleep(nanoseconds: 150_000_000)
+                infoAlert = TransactionsInfoAlert(
+                    title: didSend
+                        ? mistiaLocalized(vi: "Đã gửi yêu cầu", en: "Request sent", ja: "リクエストを送信しました")
+                        : mistiaLocalized(vi: "Chưa thể gửi", en: "Couldn't send", ja: "送信できませんでした"),
+                    message: didSend
+                        ? mistiaLocalized(
+                            vi: "Yêu cầu quyền đã được gửi tới chủ dữ liệu.",
+                            en: "The permission request was sent to the data owner.",
+                            ja: "権限リクエストをデータ所有者へ送信しました。"
+                        )
+                        : (familyContextStore.lastErrorMessage ?? mistiaLocalized(
+                            vi: "Không thể gửi yêu cầu lúc này.",
+                            en: "Couldn't send the request right now.",
+                            ja: "現在リクエストは送信できません。"
+                        ))
                 )
             }
         }

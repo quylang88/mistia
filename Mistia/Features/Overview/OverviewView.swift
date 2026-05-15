@@ -39,6 +39,44 @@ private struct OverviewPermissionPrompt: Identifiable {
     let action: () -> Void
 }
 
+private struct OverviewInfoAlert: Identifiable {
+    let id = UUID()
+    let title: String
+    let message: String
+}
+
+private enum OverviewAlertPresentation: Identifiable {
+    case info(OverviewInfoAlert)
+    case permission(OverviewPermissionPrompt)
+
+    var id: UUID {
+        switch self {
+        case .info(let alert):
+            alert.id
+        case .permission(let prompt):
+            prompt.id
+        }
+    }
+
+    var title: String {
+        switch self {
+        case .info(let alert):
+            alert.title
+        case .permission(let prompt):
+            prompt.title
+        }
+    }
+
+    var message: String {
+        switch self {
+        case .info(let alert):
+            alert.message
+        case .permission(let prompt):
+            prompt.message
+        }
+    }
+}
+
 struct OverviewView: View {
     @Environment(\.calendar) private var calendar
     @Environment(\.modelContext) private var modelContext
@@ -72,6 +110,7 @@ struct OverviewView: View {
     @State private var statementTarget: StatementTarget?
     @State private var duePaymentTarget: DuePaymentSheetTarget?
     @State private var permissionPrompt: OverviewPermissionPrompt?
+    @State private var infoAlert: OverviewInfoAlert?
 
     private var currentMonth: Date {
         PlanningLogic.startOfMonth(for: .now, calendar: calendar)
@@ -88,6 +127,16 @@ struct OverviewView: View {
 
     private var transactionOwnerMap: [UUID: UUID] {
         MistiaRecordOwnershipStore.ownerMap(from: ownershipScopes, entity: .transaction)
+    }
+
+    private var activeAlert: OverviewAlertPresentation? {
+        if let permissionPrompt {
+            return .permission(permissionPrompt)
+        }
+        if let infoAlert {
+            return .info(infoAlert)
+        }
+        return nil
     }
 
     private var transactionRecords: [TransactionRecordSnapshot] {
@@ -315,15 +364,30 @@ struct OverviewView: View {
             DuePaymentSheet(target: target)
                 .presentationDragIndicator(.hidden)
         }
-        .alert(item: $permissionPrompt) { prompt in
-            Alert(
-                title: Text(prompt.title),
-                message: Text(prompt.message),
-                primaryButton: .default(Text(prompt.actionTitle)) {
+        .alert(
+            activeAlert?.title ?? "",
+            isPresented: Binding(
+                get: { activeAlert != nil },
+                set: { isPresented in
+                    if !isPresented {
+                        permissionPrompt = nil
+                        infoAlert = nil
+                    }
+                }
+            ),
+            presenting: activeAlert
+        ) { alert in
+            switch alert {
+            case .info:
+                Button(mistiaLocalized(vi: "OK", en: "OK", ja: "OK")) {}
+            case .permission(let prompt):
+                Button(prompt.actionTitle) {
                     prompt.action()
-                },
-                secondaryButton: .cancel(Text(mistiaLocalized(vi: "Hủy", en: "Cancel", ja: "キャンセル")))
-            )
+                }
+                Button(mistiaLocalized(vi: "Hủy", en: "Cancel", ja: "キャンセル"), role: .cancel) {}
+            }
+        } message: { alert in
+            Text(alert.message)
         }
         .task {
             try? MistiaOverviewDebugFixtures.seedCategoryChartDataIfNeeded(
@@ -443,13 +507,31 @@ struct OverviewView: View {
         resourceName: String
     ) {
         Task { @MainActor in
-            _ = await familyContextStore.requestPermission(
+            let didSend = await familyContextStore.requestPermission(
                 resourceType: resourceType,
                 resourceID: resourceID,
                 ownerUserID: ownerUserID,
                 scope: scope,
                 resourceName: resourceName,
                 sessionStore: sessionStore
+            )
+            permissionPrompt = nil
+            try? await Task.sleep(nanoseconds: 150_000_000)
+            infoAlert = OverviewInfoAlert(
+                title: didSend
+                    ? mistiaLocalized(vi: "Đã gửi yêu cầu", en: "Request sent", ja: "リクエストを送信しました")
+                    : mistiaLocalized(vi: "Chưa thể gửi", en: "Couldn't send", ja: "送信できませんでした"),
+                message: didSend
+                    ? mistiaLocalized(
+                        vi: "Yêu cầu quyền đã được gửi tới chủ dữ liệu.",
+                        en: "The permission request was sent to the data owner.",
+                        ja: "権限リクエストをデータ所有者へ送信しました。"
+                    )
+                    : (familyContextStore.lastErrorMessage ?? mistiaLocalized(
+                        vi: "Không thể gửi yêu cầu lúc này.",
+                        en: "Couldn't send the request right now.",
+                        ja: "現在リクエストは送信できません。"
+                    ))
             )
         }
     }
