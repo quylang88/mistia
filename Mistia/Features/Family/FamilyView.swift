@@ -446,6 +446,15 @@ private struct FamilyAggregateWalletRow: Identifiable {
     var id: UUID { wallet.id }
 }
 
+private struct FamilyOverviewDerivedData {
+    let walletRows: [FamilyAggregateWalletRow]
+    let summary: FamilyAggregateSummary
+    let monthlySpendable: FamilyMonthlySpendableSnapshot
+    let categorySpendingSnapshot: OverviewCategorySpendingMonthSnapshot
+    let budgetRows: [OverviewBudgetAlertSnapshot]
+    let dueAlerts: [OverviewDueAlertSnapshot]
+}
+
 private struct FamilyHubRouteRowItem: Identifiable {
     let destination: FamilyDestination
     let title: String
@@ -1816,86 +1825,56 @@ struct FamilyOverviewScreen: View {
     private var storedOccurrences: [DueOccurrenceRecord]
     @Query private var ownershipScopes: [OwnedRecordScope]
 
-    private var familyMemberIDs: Set<UUID> {
-        var ids = Set(familyContextStore.members.map(\.userID))
-        if let currentUserID = familyContextStore.currentUserID {
-            ids.insert(currentUserID)
-        }
-        return ids
-    }
-
-    private var allWallets: [LedgerWallet] {
-        FamilyScopedData.visibleForFamilyOverview(
+    private var overviewData: FamilyOverviewDerivedData {
+        let now = Date.now
+        let currentMonth = PlanningLogic.startOfMonth(for: now, calendar: calendar)
+        let interval = selectedInterval(for: timeframe, now: now)
+        let familyMemberUserIDs = familyMemberIDs
+        let walletOwnerMap = MistiaRecordOwnershipStore.ownerMap(from: ownershipScopes, entity: .wallet)
+        let transactionOwnerMap = MistiaRecordOwnershipStore.ownerMap(from: ownershipScopes, entity: .transaction)
+        let budgetOwnerMap = MistiaRecordOwnershipStore.ownerMap(from: ownershipScopes, entity: .budgetPlan)
+        let billOwnerMap = MistiaRecordOwnershipStore.ownerMap(from: ownershipScopes, entity: .recurringBillPlan)
+        let installmentOwnerMap = MistiaRecordOwnershipStore.ownerMap(from: ownershipScopes, entity: .installmentPlan)
+        let occurrenceOwnerMap = MistiaRecordOwnershipStore.ownerMap(from: ownershipScopes, entity: .dueOccurrenceRecord)
+        let visibleWallets = visibleForFamilyOverview(
             storedWallets,
             entity: .wallet,
-            scopes: ownershipScopes,
-            familyMemberUserIDs: familyMemberIDs,
-            familyContextStore: familyContextStore,
-            sessionStore: sessionStore
+            ownerMap: walletOwnerMap,
+            familyMemberUserIDs: familyMemberUserIDs
         )
-    }
-
-    private var allTransactions: [LedgerTransaction] {
-        FamilyScopedData.visibleForFamilyOverview(
+        let visibleTransactions = visibleForFamilyOverview(
             storedTransactions,
             entity: .transaction,
-            scopes: ownershipScopes,
-            familyMemberUserIDs: familyMemberIDs,
-            familyContextStore: familyContextStore,
-            sessionStore: sessionStore
+            ownerMap: transactionOwnerMap,
+            familyMemberUserIDs: familyMemberUserIDs
         )
-    }
-
-    private var visibleBudgets: [BudgetPlan] {
-        FamilyScopedData.visibleForFamilyOverview(
+        let visibleBudgets = visibleForFamilyOverview(
             storedBudgets,
             entity: .budgetPlan,
-            scopes: ownershipScopes,
-            familyMemberUserIDs: familyMemberIDs,
-            familyContextStore: familyContextStore,
-            sessionStore: sessionStore
+            ownerMap: budgetOwnerMap,
+            familyMemberUserIDs: familyMemberUserIDs
         )
-    }
-
-    private var visibleBills: [RecurringBillPlan] {
-        FamilyScopedData.visibleForFamilyOverview(
+        let visibleBills = visibleForFamilyOverview(
             storedBills,
             entity: .recurringBillPlan,
-            scopes: ownershipScopes,
-            familyMemberUserIDs: familyMemberIDs,
-            familyContextStore: familyContextStore,
-            sessionStore: sessionStore
+            ownerMap: billOwnerMap,
+            familyMemberUserIDs: familyMemberUserIDs
         )
-    }
-
-    private var visibleInstallments: [InstallmentPlan] {
-        FamilyScopedData.visibleForFamilyOverview(
+        let visibleInstallments = visibleForFamilyOverview(
             storedInstallments,
             entity: .installmentPlan,
-            scopes: ownershipScopes,
-            familyMemberUserIDs: familyMemberIDs,
-            familyContextStore: familyContextStore,
-            sessionStore: sessionStore
+            ownerMap: installmentOwnerMap,
+            familyMemberUserIDs: familyMemberUserIDs
         )
-    }
-
-    private var visibleOccurrences: [DueOccurrenceRecord] {
-        FamilyScopedData.visibleForFamilyOverview(
+        let visibleOccurrences = visibleForFamilyOverview(
             storedOccurrences,
             entity: .dueOccurrenceRecord,
-            scopes: ownershipScopes,
-            familyMemberUserIDs: familyMemberIDs,
-            familyContextStore: familyContextStore,
-            sessionStore: sessionStore
+            ownerMap: occurrenceOwnerMap,
+            familyMemberUserIDs: familyMemberUserIDs
         )
-    }
-
-    private var transactionRecords: [TransactionRecordSnapshot] {
-        allTransactions.map(\.planningRecordSnapshot)
-    }
-
-    private var aggregateWalletRows: [FamilyAggregateWalletRow] {
-        allWallets
+        let transactionRecords = visibleTransactions.map(\.planningRecordSnapshot)
+        let occurrenceSnapshots = visibleOccurrences.map(\.planningSnapshot)
+        let walletRows = visibleWallets
             .sorted {
                 if $0.sortOrder != $1.sortOrder {
                     return $0.sortOrder < $1.sortOrder
@@ -1911,163 +1890,96 @@ struct FamilyOverviewScreen: View {
                     ),
                     records: transactionRecords
                 )
-                
-                // For credit cards, calculate available credit (limit - debt)
-                let balanceForDisplay: Int64
+
+                let displayBalance: Int64
                 if wallet.kind == .creditCard, let profile = wallet.creditCardProfile {
-                    balanceForDisplay = max(profile.creditLimitMinor - debt, 0)
+                    displayBalance = max(profile.creditLimitMinor - debt, 0)
                 } else {
-                    balanceForDisplay = debt
+                    displayBalance = debt
                 }
-                
+
                 return FamilyAggregateWalletRow(
                     wallet: wallet,
-                    currentBalanceMinor: balanceForDisplay
+                    currentBalanceMinor: displayBalance
                 )
             }
-    }
-
-    private var currentMonth: Date {
-        PlanningLogic.startOfMonth(for: .now, calendar: calendar)
-    }
-
-    private var occurrenceSnapshots: [PlanningDueOccurrenceSnapshot] {
-        visibleOccurrences.map(\.planningSnapshot)
-    }
-
-    private var planningCreditCardAccounts: [PlanningCreditCardAccountSnapshot] {
-        allWallets.compactMap { $0.planningCreditCardSnapshot(records: transactionRecords) }
-    }
-
-    private var creditCardStatementDueItems: [PlanningCreditCardStatementSnapshot] {
-        PlanningLogic.creditCardStatementsDue(
+        let creditCardAccounts = visibleWallets.compactMap {
+            $0.planningCreditCardSnapshot(records: transactionRecords)
+        }
+        let creditCardStatementDueItems = PlanningLogic.creditCardStatementsDue(
             in: currentMonth,
-            accounts: planningCreditCardAccounts,
+            accounts: creditCardAccounts,
             records: transactionRecords,
             occurrences: occurrenceSnapshots,
-            referenceDate: .now,
+            referenceDate: now,
             calendar: calendar
         )
-    }
-
-    private var creditCardDueItems: [PlanningCreditCardDueSnapshot] {
-        PlanningLogic.creditCardDueItems(
-            accounts: planningCreditCardAccounts,
+        let creditCardDueItems = PlanningLogic.creditCardDueItems(
+            accounts: creditCardAccounts,
             records: transactionRecords,
             occurrences: occurrenceSnapshots,
             selectedMonth: currentMonth,
-            referenceDate: .now,
+            referenceDate: now,
             calendar: calendar
         )
-    }
-
-    private var recurringBillDueItems: [PlanningRecurringDueSnapshot] {
-        PlanningLogic.recurringBillDueItems(
+        let recurringBillDueItems = PlanningLogic.recurringBillDueItems(
             bills: visibleBills.filter { !$0.isArchived }.map(\.planningSnapshot),
             occurrences: occurrenceSnapshots,
             selectedMonth: currentMonth,
             calendar: calendar
         )
-    }
-
-    private var installmentDueItems: [PlanningRecurringDueSnapshot] {
-        PlanningLogic.installmentDueItems(
+        let installmentDueItems = PlanningLogic.installmentDueItems(
             plans: visibleInstallments.filter { !$0.isArchived }.map(\.planningSnapshot),
             occurrences: occurrenceSnapshots,
             selectedMonth: currentMonth,
             calendar: calendar
         )
-    }
-
-    private var monthlyDueSummary: PlanningDueSummarySnapshot {
-        PlanningLogic.dueSummary(
+        let monthlyDueSummary = PlanningLogic.dueSummary(
             creditStatements: creditCardStatementDueItems,
             recurring: recurringBillDueItems + installmentDueItems,
             selectedMonth: currentMonth,
-            referenceDate: .now,
+            referenceDate: now,
             calendar: calendar
         )
-    }
-
-    private var budgetRows: [OverviewBudgetAlertSnapshot] {
         let activeBudgetPlans = visibleBudgets
             .filter {
                 !$0.isArchived
                     && PlanningLogic.startOfMonth(for: $0.monthAnchor, calendar: calendar) == currentMonth
             }
             .map { $0.planningSnapshot(calendar: calendar) }
-
-        return OverviewLogic.budgetAlerts(
+        let budgetRows = OverviewLogic.budgetAlerts(
             budgets: activeBudgetPlans,
             transactionRecords: transactionRecords,
-            referenceDate: .now,
+            referenceDate: now,
             calendar: calendar
         )
-    }
-
-    private var dueAlerts: [OverviewDueAlertSnapshot] {
-        return OverviewLogic.dueAlerts(
+        let dueAlerts = OverviewLogic.dueAlerts(
             creditCardDues: creditCardDueItems,
             recurringDues: recurringBillDueItems + installmentDueItems,
-            referenceDate: .now,
+            referenceDate: now,
             calendar: calendar
         )
-    }
-
-    private var monthlySpendable: FamilyMonthlySpendableSnapshot {
-        FamilyLogic.monthlySpendable(
-            totalAssetsMinor: summary.totalAssetsMinor,
-            monthlyDueMinor: monthlyDueSummary.totalDueMinor
-        )
-    }
-
-    private var selectedInterval: DateInterval {
-        switch timeframe {
-        case .week:
-            return calendar.dateInterval(of: .weekOfYear, for: .now) ?? DateInterval(start: .now, duration: 3600*24*7)
-        case .month:
-            return calendar.dateInterval(of: .month, for: .now) ?? DateInterval(start: .now, duration: 3600*24*30)
-        case .year:
-            return calendar.dateInterval(of: .year, for: .now) ?? DateInterval(start: .now, duration: 3600*24*365)
-        }
-    }
-
-    private var categorySpendingSnapshot: OverviewCategorySpendingMonthSnapshot {
-        OverviewLogic.categorySpendingInterval(
-            from: allTransactions.map(\.overviewSnapshot),
-            interval: selectedInterval,
-            title: timeframe.title,
-            currencyCode: currencyCode,
-            calendar: calendar
-        )
-    }
-
-    private var summary: FamilyAggregateSummary {
-        let transactionOwnerMap = MistiaRecordOwnershipStore.ownerMap(from: ownershipScopes, entity: .transaction)
-
         let memberNames = Dictionary(
             familyContextStore.members.map { ($0.userID, $0.displayName) },
             uniquingKeysWith: { _, latest in latest }
         )
-
-        return FamilyLogic.aggregateSummary(
-            wallets: aggregateWalletRows.map { row in
-                // Calculate actual debt for credit cards
+        let summary = FamilyLogic.aggregateSummary(
+            wallets: walletRows.map { row in
                 let debt: Int64
                 if row.wallet.kind == .creditCard, let profile = row.wallet.creditCardProfile {
                     debt = max(profile.creditLimitMinor - row.currentBalanceMinor, 0)
                 } else {
                     debt = 0
                 }
-                
+
                 return FamilyAggregateWalletSnapshot(
-                    ownerUserID: familyOwnerUserID(for: row.wallet.id, entity: .wallet),
+                    ownerUserID: walletOwnerMap[row.wallet.id] ?? sessionStore.signedInUserID ?? UUID(),
                     kind: row.wallet.kind.familyAggregateKind,
                     balanceMinor: row.wallet.kind == .creditCard ? 0 : row.currentBalanceMinor,
                     debtMinor: debt
                 )
             },
-            transactions: allTransactions.map { transaction in
+            transactions: visibleTransactions.map { transaction in
                 FamilyAggregateTransactionSnapshot(
                     ownerUserID: transactionOwnerMap[transaction.id] ?? sessionStore.signedInUserID ?? UUID(),
                     categoryName: transaction.category?.localizedDisplayName,
@@ -2077,11 +1989,74 @@ struct FamilyOverviewScreen: View {
                     isCreditCardPayment: TransactionLogic.isCreditCardPayment(transaction.snapshot)
                 )
             },
-            selectedInterval: selectedInterval,
-            visibleMemberIDs: familyMemberIDs,
+            selectedInterval: interval,
+            visibleMemberIDs: familyMemberUserIDs,
             memberNames: memberNames,
             calendar: calendar
         )
+        let categorySpendingSnapshot = OverviewLogic.categorySpendingInterval(
+            from: visibleTransactions.map(\.overviewSnapshot),
+            interval: interval,
+            title: timeframe.title,
+            currencyCode: currencyCode,
+            calendar: calendar
+        )
+        let monthlySpendable = FamilyLogic.monthlySpendable(
+            totalAssetsMinor: summary.totalAssetsMinor,
+            monthlyDueMinor: monthlyDueSummary.totalDueMinor
+        )
+
+        return FamilyOverviewDerivedData(
+            walletRows: walletRows,
+            summary: summary,
+            monthlySpendable: monthlySpendable,
+            categorySpendingSnapshot: categorySpendingSnapshot,
+            budgetRows: budgetRows,
+            dueAlerts: dueAlerts
+        )
+    }
+
+    private var familyMemberIDs: Set<UUID> {
+        var ids = Set(familyContextStore.members.map(\.userID))
+        if let currentUserID = familyContextStore.currentUserID {
+            ids.insert(currentUserID)
+        }
+        return ids
+    }
+
+    private func visibleForFamilyOverview<Record: MistiaOwnedRecord>(
+        _ records: [Record],
+        entity: MistiaSyncEntity,
+        ownerMap: [UUID: UUID],
+        familyMemberUserIDs: Set<UUID>
+    ) -> [Record] {
+        switch familyContextStore.activeContext.scope {
+        case .familyHome:
+            return records.filter { record in
+                let ownerUserID = ownerMap[record.id] ?? sessionStore.activeLocalProfileUserID
+                guard let ownerUserID else { return false }
+                return familyMemberUserIDs.contains(ownerUserID)
+            }
+        case .personalSelf, .member:
+            return MistiaRecordOwnershipStore.visibleRecords(
+                records,
+                entity: entity,
+                ownerMap: ownerMap,
+                subjectUserID: familyContextStore.selectedSubjectUserID ?? sessionStore.activeLocalProfileUserID,
+                signedInUserID: sessionStore.activeLocalProfileUserID
+            )
+        }
+    }
+
+    private func selectedInterval(for timeframe: FamilyTimeframe, now: Date) -> DateInterval {
+        switch timeframe {
+        case .week:
+            return calendar.dateInterval(of: .weekOfYear, for: now) ?? DateInterval(start: now, duration: 3600*24*7)
+        case .month:
+            return calendar.dateInterval(of: .month, for: now) ?? DateInterval(start: now, duration: 3600*24*30)
+        case .year:
+            return calendar.dateInterval(of: .year, for: now) ?? DateInterval(start: now, duration: 3600*24*365)
+        }
     }
 
     @State private var timeframe: FamilyTimeframe = .month
@@ -2090,6 +2065,8 @@ struct FamilyOverviewScreen: View {
     @State private var activeSheet: FamilyOverviewSheet?
 
     var body: some View {
+        let data = overviewData
+
         MistiaPinnedTopBarScaffold(
             tone: .standard,
             title: familyContextStore.family?.name ?? mistiaLocalized(vi: "Gia đình", en: "Family", ja: "家族"),
@@ -2107,9 +2084,9 @@ struct FamilyOverviewScreen: View {
             titleDisplayMode: .large
         ) {
             FamilyContextChipBar()
-            
+
             FamilyOverviewHeader(
-                walletRows: aggregateWalletRows,
+                walletRows: data.walletRows,
                 signedInUserID: sessionStore.signedInUserID,
                 canInviteMembers: familyContextStore.canInviteMembers,
                 onInviteTap: { activeSheet = .invite }
@@ -2117,14 +2094,14 @@ struct FamilyOverviewScreen: View {
             .padding(.top, 8)
 
             FamilyHeroCard(
-                summary: summary,
-                monthlySpendable: monthlySpendable,
+                summary: data.summary,
+                monthlySpendable: data.monthlySpendable,
                 currencyCode: currencyCode
             )
 
             FamilyDistributionSection(
-                summary: summary,
-                categorySpendingSnapshot: categorySpendingSnapshot,
+                summary: data.summary,
+                categorySpendingSnapshot: data.categorySpendingSnapshot,
                 timeframe: $timeframe,
                 mode: $distributionMode,
                 currencyCode: currencyCode,
@@ -2134,32 +2111,32 @@ struct FamilyOverviewScreen: View {
             )
 
             FamilyMemberComparisonSection(
-                summary: summary,
+                summary: data.summary,
                 mode: $comparisonMode,
                 currencyCode: currencyCode
             )
 
-            if !aggregateWalletRows.isEmpty {
+            if !data.walletRows.isEmpty {
                 FamilyAggregateAccountList(
-                    rows: aggregateWalletRows
+                    rows: data.walletRows
                 )
             }
 
-            if !budgetRows.isEmpty {
+            if !data.budgetRows.isEmpty {
                 FamilyBudgetStatusSection(
-                    rows: budgetRows,
+                    rows: data.budgetRows,
                     currencyCode: currencyCode
                 )
             }
 
-            if !dueAlerts.isEmpty {
+            if !data.dueAlerts.isEmpty {
                 FamilyUpcomingSection(
-                    rows: dueAlerts,
+                    rows: data.dueAlerts,
                     currencyCode: currencyCode
                 )
             }
 
-            FamilyAIInsightsSection(insights: summary.insights)
+            FamilyAIInsightsSection(insights: data.summary.insights)
         }
         .sheet(item: $activeSheet) { sheet in
             switch sheet {
@@ -2176,10 +2153,6 @@ struct FamilyOverviewScreen: View {
         }
     }
 
-    private func familyOwnerUserID(for recordID: UUID, entity: MistiaSyncEntity) -> UUID {
-        let ownerMap = MistiaRecordOwnershipStore.ownerMap(from: ownershipScopes, entity: entity)
-        return ownerMap[recordID] ?? sessionStore.signedInUserID ?? UUID()
-    }
 }
 
 // MARK: - Stat Card

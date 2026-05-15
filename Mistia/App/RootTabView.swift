@@ -380,16 +380,13 @@ struct RootTabView: View {
       openManagementRoute(.archivedItems)
 
     case .familyOverview:
-      guard !isSyncingShortcut else { return }
-      isSyncingShortcut = true
       familyContextStore.activateFamilyHome()
       openManagementRoute(.familyOverview)
       Task { @MainActor in
         await familyContextStore.refreshLatest(
           sessionStore: sessionStore,
-          source: .userInitiated
+          source: .enterFamily
         )
-        isSyncingShortcut = false
       }
 
     case .memberOverview(let userID):

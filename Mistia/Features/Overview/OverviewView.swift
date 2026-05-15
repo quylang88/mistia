@@ -165,7 +165,7 @@ struct OverviewView: View {
     }
 
     private var planningCreditCardAccounts: [PlanningCreditCardAccountSnapshot] {
-        storedWallets.compactMap { $0.planningCreditCardSnapshot(records: transactionRecords) }
+        visibleWallets.compactMap { $0.planningCreditCardSnapshot(records: transactionRecords) }
     }
 
     private var creditCardDueItems: [PlanningCreditCardDueSnapshot] {
