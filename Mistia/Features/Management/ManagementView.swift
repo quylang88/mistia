@@ -483,13 +483,13 @@ struct ManagementView: View {
 
         guard !isOpeningFamily else { return }
         isOpeningFamily = true
+        destination = .family
 
         Task { @MainActor in
             await familyContextStore.refreshLatest(
                 sessionStore: sessionStore,
                 source: .userInitiated
             )
-            destination = .family
             isOpeningFamily = false
         }
     }

@@ -742,58 +742,58 @@ struct FamilyRemoteService: FamilyRemoteServicing {
             )
         }
 
-        let wallets: [RemoteLedgerWallet] = try await fetchFinanceRows(
+        async let wallets: [RemoteLedgerWallet] = fetchFinanceRows(
             path: MistiaSyncEntity.wallet.tableName,
             userIDs: userIDs,
             session: session
         )
-        let profiles: [RemoteCreditCardProfile] = try await fetchFinanceRows(
+        async let profiles: [RemoteCreditCardProfile] = fetchFinanceRows(
             path: MistiaSyncEntity.creditCardProfile.tableName,
             userIDs: userIDs,
             session: session
         )
-        let categories: [RemoteTransactionCategory] = try await fetchFinanceRows(
+        async let categories: [RemoteTransactionCategory] = fetchFinanceRows(
             path: MistiaSyncEntity.category.tableName,
             userIDs: userIDs,
             session: session
         )
-        let transactions: [RemoteLedgerTransaction] = try await fetchAccessibleTransactionRows(session: session)
-        let budgets: [RemoteBudgetPlan] = try await fetchFinanceRows(
+        async let transactions: [RemoteLedgerTransaction] = fetchAccessibleTransactionRows(session: session)
+        async let budgets: [RemoteBudgetPlan] = fetchFinanceRows(
             path: MistiaSyncEntity.budgetPlan.tableName,
             userIDs: userIDs,
             session: session
         )
-        let goals: [RemoteSavingsGoal] = try await fetchFinanceRows(
+        async let goals: [RemoteSavingsGoal] = fetchFinanceRows(
             path: MistiaSyncEntity.savingsGoal.tableName,
             userIDs: userIDs,
             session: session
         )
-        let bills: [RemoteRecurringBillPlan] = try await fetchFinanceRows(
+        async let bills: [RemoteRecurringBillPlan] = fetchFinanceRows(
             path: MistiaSyncEntity.recurringBillPlan.tableName,
             userIDs: userIDs,
             session: session
         )
-        let installments: [RemoteInstallmentPlan] = try await fetchFinanceRows(
+        async let installments: [RemoteInstallmentPlan] = fetchFinanceRows(
             path: MistiaSyncEntity.installmentPlan.tableName,
             userIDs: userIDs,
             session: session
         )
-        let dueOccurrences: [RemoteDueOccurrenceRecord] = try await fetchFinanceRows(
+        async let dueOccurrences: [RemoteDueOccurrenceRecord] = fetchFinanceRows(
             path: MistiaSyncEntity.dueOccurrenceRecord.tableName,
             userIDs: userIDs,
             session: session
         )
 
         return MistiaRemoteSnapshot(
-            wallets: wallets,
-            creditCardProfiles: profiles,
-            categories: categories,
-            transactions: transactions,
-            budgetPlans: budgets,
-            savingsGoals: goals,
-            recurringBillPlans: bills,
-            installmentPlans: installments,
-            dueOccurrences: dueOccurrences
+            wallets: try await wallets,
+            creditCardProfiles: try await profiles,
+            categories: try await categories,
+            transactions: try await transactions,
+            budgetPlans: try await budgets,
+            savingsGoals: try await goals,
+            recurringBillPlans: try await bills,
+            installmentPlans: try await installments,
+            dueOccurrences: try await dueOccurrences
         )
     }
 
