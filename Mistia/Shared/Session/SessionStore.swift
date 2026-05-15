@@ -818,7 +818,19 @@ final class SessionStore {
     }
 
     func syncFamilyActivityChanges() async -> Bool {
-        guard currentSession != nil, !isSyncInFlight else { return false }
+        guard currentSession != nil else { return false }
+
+        if isSyncInFlight {
+            for _ in 0..<20 {
+                try? await Task.sleep(for: .milliseconds(250))
+                guard currentSession != nil else { return false }
+                if !isSyncInFlight {
+                    break
+                }
+            }
+        }
+
+        guard !isSyncInFlight else { return false }
 
         if requiresInitialSync {
             return await syncNow(isManual: true)
@@ -828,6 +840,75 @@ final class SessionStore {
             trigger: .manual,
             showProgress: false
         )
+    }
+
+    func pushFamilyTransactionToOwnerCloud(
+        recordID: UUID,
+        ownerUserID: UUID,
+        modifiedAt: Date
+    ) async -> Bool {
+        guard currentSession != nil else { return false }
+
+        if isSyncInFlight {
+            for _ in 0..<20 {
+                try? await Task.sleep(for: .milliseconds(250))
+                guard currentSession != nil else { return false }
+                if !isSyncInFlight {
+                    break
+                }
+            }
+        }
+
+        guard !isSyncInFlight else {
+            lastErrorMessage = mistiaLocalized(
+                vi: "Mistia đang xử lý một lần đồng bộ khác. Thử lưu lại sau vài giây nhé.",
+                en: "Mistia is finishing another sync. Try saving again in a few seconds.",
+                ja: "Mistia は別の同期を処理中です。数秒後にもう一度保存してください。"
+            )
+            return false
+        }
+
+        isSyncInFlight = true
+        defer {
+            isSyncInFlight = false
+            updateAutoSyncLoopState()
+        }
+
+        do {
+            let validSession = try await prepareRemoteSession()
+            let mutation = MistiaSyncMutation(
+                entity: .transaction,
+                recordID: recordID,
+                subjectUserID: ownerUserID,
+                kind: .upsert,
+                modifiedAt: modifiedAt,
+                baseVersion: currentRemoteVersion(
+                    for: .transaction,
+                    recordID: recordID,
+                    fallback: 0
+                ),
+                deviceID: MistiaSyncDeviceIdentity.current()
+            )
+
+            try? MistiaRecordOwnershipStore.upsert(
+                entity: .transaction,
+                recordID: recordID,
+                ownerUserID: ownerUserID,
+                updatedAt: modifiedAt,
+                in: modelContainer
+            )
+            syncCoordinator.queue(mutation)
+            _ = try await syncCoordinator.pushQueuedMutationsOnly(
+                [mutation],
+                session: validSession
+            )
+            lastSyncAt = .now
+            lastErrorMessage = nil
+            return true
+        } catch {
+            applySyncErrorState(error)
+            return false
+        }
     }
 
     func startInitialSync(with choice: MistiaInitialSyncChoice) async {

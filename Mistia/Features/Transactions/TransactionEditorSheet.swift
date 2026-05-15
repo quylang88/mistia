@@ -102,6 +102,7 @@ struct TransactionEditorSheet: View {
     @State private var titleSuggestionRefreshTask: Task<Void, Never>?
     @State private var suppressTitleSuggestions = false
     @State private var isApplyingTitleSuggestion = false
+    @State private var isSaving = false
     @FocusState private var focusedField: TransactionEditorFocusedField?
 
     init(
@@ -173,7 +174,7 @@ struct TransactionEditorSheet: View {
             .dismissKeyboardOnTap()
             .navigationTitle(navigationTitle)
             .navigationBarTitleDisplayMode(.inline)
-            .disabled(isLockedByStatement)
+            .disabled(isLockedByStatement || isSaving)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
                     Button {
@@ -183,6 +184,7 @@ struct TransactionEditorSheet: View {
                             .font(.system(size: 16, weight: .semibold))
                             .foregroundStyle(.secondary)
                     }
+                    .disabled(isSaving)
                 }
 
                 ToolbarItem(placement: .topBarTrailing) {
@@ -190,14 +192,22 @@ struct TransactionEditorSheet: View {
                         Button {
                             save()
                         } label: {
-                            Image(systemName: "checkmark")
-                                .font(.system(size: 14, weight: .bold))
-                                .foregroundStyle(Color(red: 0.88, green: 0.78, blue: 1.0))
-                                .frame(width: 30, height: 30)
+                            if isSaving {
+                                ProgressView()
+                                    .controlSize(.small)
+                                    .tint(Color(red: 0.88, green: 0.78, blue: 1.0))
+                                    .frame(width: 30, height: 30)
+                            } else {
+                                Image(systemName: "checkmark")
+                                    .font(.system(size: 14, weight: .bold))
+                                    .foregroundStyle(Color(red: 0.88, green: 0.78, blue: 1.0))
+                                    .frame(width: 30, height: 30)
+                            }
                         }
                         .buttonStyle(.glassProminent)
                         .buttonBorderShape(.circle)
                         .tint(Color(red: 0.43, green: 0.23, blue: 0.76))
+                        .disabled(isSaving)
                     }
                 }
             }
@@ -587,12 +597,9 @@ struct TransactionEditorSheet: View {
         let allowedOwnerUserIDs = target.transaction == nil
             ? newTransactionWalletOwnerUserIDs
             : nil
-        let walletOwnerMap = self.walletOwnerMap
-        let currentSelfUserID = self.currentSelfUserID
-
         return storedWallets
             .filter { wallet in
-                guard let ownerUserID = walletOwnerMap[wallet.id] ?? currentSelfUserID else {
+                guard let ownerUserID = walletOwnerUserID(for: wallet) else {
                     return preferredWalletIDs.contains(wallet.id)
                 }
                 if let allowedOwnerUserIDs, !allowedOwnerUserIDs.contains(ownerUserID) {
@@ -832,6 +839,7 @@ struct TransactionEditorSheet: View {
     }
 
     private func save() {
+        guard !isSaving else { return }
         if target.quickCapture && target.transaction == nil {
             saveQuickCapture()
         } else {
@@ -1203,23 +1211,49 @@ struct TransactionEditorSheet: View {
 
             try modelContext.save()
             if let subjectUserIDOverride {
+                if subjectUserIDOverride != sessionStore.activeLocalProfileUserID {
+                    isSaving = true
+                    let recordID = transaction.id
+                    let modifiedAt = transaction.updatedAt
+                    Task { @MainActor in
+                        let didSync = await sessionStore.pushFamilyTransactionToOwnerCloud(
+                            recordID: recordID,
+                            ownerUserID: subjectUserIDOverride,
+                            modifiedAt: modifiedAt
+                        )
+                        isSaving = false
+                        guard didSync else {
+                            alertMessage = familyCloudPushFailedMessage()
+                            return
+                        }
+                        onComplete(completion)
+                        dismiss()
+                    }
+                    return
+                }
                 sessionStore.recordUpsert(
                     entity: .transaction,
                     recordID: transaction.id,
                     modifiedAt: transaction.updatedAt,
                     subjectUserIDOverride: subjectUserIDOverride
                 )
-                if subjectUserIDOverride != sessionStore.activeLocalProfileUserID {
-                    Task { @MainActor in
-                        _ = await sessionStore.syncFamilyActivityChanges()
-                    }
-                }
             }
             onComplete(completion)
             dismiss()
         } catch {
             alertMessage = mistiaLocalized(vi: "Không thể lưu giao dịch lúc này.", en: "Couldn't save this transaction right now.", ja: "現在この取引を保存できません。") + " \(error.localizedDescription)"
         }
+    }
+
+    private func familyCloudPushFailedMessage() -> String {
+        let detail = sessionStore.lastErrorMessage?.nilIfBlank
+        let base = mistiaLocalized(
+            vi: "Giao dịch đã lưu trên máy này nhưng chưa đẩy được lên cloud của chủ ví.",
+            en: "The transaction was saved on this device but couldn't be pushed to the wallet owner's cloud yet.",
+            ja: "この端末には保存されましたが、ウォレット所有者のクラウドにはまだ送信できませんでした。"
+        )
+        guard let detail else { return base }
+        return "\(base) \(detail)"
     }
 
     private var effectiveOperableTargetUserIDs: Set<UUID> {
@@ -1331,12 +1365,27 @@ struct TransactionEditorSheet: View {
 
     private func walletOwnerUserID(for wallet: LedgerWallet?) -> UUID? {
         guard let wallet else { return nil }
-        return walletOwnerMap[wallet.id] ?? currentSelfUserID
+        return walletOwnerMap[wallet.id]
+            ?? walletUseGrantOwnerUserID(for: wallet.id)
+            ?? currentSelfUserID
     }
 
     private func walletOwnerUserID(for walletID: UUID?) -> UUID? {
         guard let walletID else { return nil }
-        return walletOwnerMap[walletID] ?? currentSelfUserID
+        return walletOwnerMap[walletID]
+            ?? walletUseGrantOwnerUserID(for: walletID)
+            ?? currentSelfUserID
+    }
+
+    private func walletUseGrantOwnerUserID(for walletID: UUID) -> UUID? {
+        guard let currentSelfUserID else { return nil }
+        return familyContextStore.permissionGrants.first {
+            $0.revokedAt == nil
+                && $0.granteeUserID == currentSelfUserID
+                && $0.resourceType == .wallet
+                && $0.permissionScope == .use
+                && $0.resourceID == walletID
+        }?.ownerUserID
     }
 
     private func categoryOwnerUserID(for category: TransactionCategory) -> UUID? {

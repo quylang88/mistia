@@ -392,11 +392,11 @@ struct NotificationCenterView: View {
             return false
         }
 
-        familyContextStore.activateSelfView()
-        uiState.requestTabSelection(.transactions)
-        dismiss()
         Task { @MainActor in
             _ = await sessionStore.syncFamilyActivityChanges()
+            familyContextStore.activateSelfView()
+            uiState.requestTabSelection(.transactions)
+            dismiss()
         }
         return true
     }

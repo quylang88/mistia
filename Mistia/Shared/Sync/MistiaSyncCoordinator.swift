@@ -217,23 +217,7 @@ final class SyncCoordinator {
         let mutations = outbox.allMutations
         let mutationCount = mutations.count
 
-        let sortedMutations = mutations.sorted { a, b in
-            if a.entity.pushPriority != b.entity.pushPriority {
-                return a.entity.pushPriority < b.entity.pushPriority
-            }
-
-            if a.entity == .category && b.entity == .category {
-                let aRecord = try? MistiaSyncLocalStore.exportRecord(for: a, from: modelContainer)
-                let bRecord = try? MistiaSyncLocalStore.exportRecord(for: b, from: modelContainer)
-                let aParent = aRecord?.parentID
-                let bParent = bRecord?.parentID
-
-                if aParent == nil && bParent != nil { return true }
-                if aParent != nil && bParent == nil { return false }
-            }
-
-            return a.modifiedAt < b.modifiedAt
-        }
+        let sortedMutations = sortedMutationsForPush(mutations)
 
         for (index, mutation) in sortedMutations.enumerated() {
             let progress = 0.05 + (Double(index) / Double(max(1, mutationCount))) * 0.45
@@ -300,6 +284,49 @@ final class SyncCoordinator {
         return (pushedMutations || seededMissingRows) ? .pushedOnly : .idle
     }
 
+    private func sortedMutationsForPush(_ mutations: [MistiaSyncMutation]) -> [MistiaSyncMutation] {
+        mutations.sorted { a, b in
+            if a.entity.pushPriority != b.entity.pushPriority {
+                return a.entity.pushPriority < b.entity.pushPriority
+            }
+
+            if a.entity == .category && b.entity == .category {
+                let aRecord = try? MistiaSyncLocalStore.exportRecord(for: a, from: modelContainer)
+                let bRecord = try? MistiaSyncLocalStore.exportRecord(for: b, from: modelContainer)
+                let aParent = aRecord?.parentID
+                let bParent = bRecord?.parentID
+
+                if aParent == nil && bParent != nil { return true }
+                if aParent != nil && bParent == nil { return false }
+            }
+
+            return a.modifiedAt < b.modifiedAt
+        }
+    }
+
+    func pushQueuedMutationsOnly(
+        _ mutations: [MistiaSyncMutation],
+        session: SupabaseAuthSession
+    ) async throws -> Bool {
+        var pushedMutations = false
+        let sortedMutations = sortedMutationsForPush(mutations)
+
+        for mutation in sortedMutations {
+            switch mutation.kind {
+            case .upsert:
+                if try await processUpsertMutation(mutation, session: session) {
+                    pushedMutations = true
+                }
+            case .delete:
+                if try await processDeleteMutation(mutation, session: session) {
+                    pushedMutations = true
+                }
+            }
+        }
+
+        return pushedMutations
+    }
+
     func resolveConflict(
         id: UUID,
         resolution: MistiaSyncConflictResolution,
@@ -360,6 +387,14 @@ final class SyncCoordinator {
 
         if let remoteRecord, remoteRecord.payloadFingerprint == localRecord.payloadFingerprint {
             try MistiaSyncLocalStore.applyRemoteRecord(remoteRecord, in: modelContainer)
+            try await createFamilyActivityNotificationIfNeeded(
+                for: remoteRecord,
+                subjectUserID: mutation.subjectUserID,
+                action: remoteRecord.deletedAt == nil
+                    ? (mutation.baseVersion == 0 ? .created : .updated)
+                    : .deleted,
+                session: session
+            )
             outbox.remove(mutation)
             return false
         }
@@ -388,7 +423,7 @@ final class SyncCoordinator {
                 session: session
             )
             try MistiaSyncLocalStore.applyRemoteRecord(created, in: modelContainer)
-            await createFamilyActivityNotificationIfNeeded(
+            try await createFamilyActivityNotificationIfNeeded(
                 for: created,
                 subjectUserID: mutation.subjectUserID,
                 action: .created,
@@ -448,7 +483,7 @@ final class SyncCoordinator {
             session: session
         ) {
             try MistiaSyncLocalStore.applyRemoteRecord(updated, in: modelContainer)
-            await createFamilyActivityNotificationIfNeeded(
+            try await createFamilyActivityNotificationIfNeeded(
                 for: updated,
                 subjectUserID: mutation.subjectUserID,
                 action: .updated,
@@ -536,7 +571,7 @@ final class SyncCoordinator {
             session: session
         ) {
             try MistiaSyncLocalStore.applyRemoteRecord(deletedRecord, in: modelContainer)
-            await createFamilyActivityNotificationIfNeeded(
+            try await createFamilyActivityNotificationIfNeeded(
                 for: deletedRecord,
                 subjectUserID: mutation.subjectUserID,
                 action: .deleted,
@@ -1017,7 +1052,7 @@ final class SyncCoordinator {
             session: session
         )
         try MistiaSyncLocalStore.applyRemoteRecord(pushedRecord, in: modelContainer)
-        await createFamilyActivityNotificationIfNeeded(
+        try await createFamilyActivityNotificationIfNeeded(
             for: pushedRecord,
             subjectUserID: subjectUserID,
             action: pushedRecord.deletedAt == nil ? .updated : .deleted,
@@ -1031,7 +1066,7 @@ final class SyncCoordinator {
         subjectUserID: UUID,
         action: FamilyActivityNotificationAction,
         session: SupabaseAuthSession
-    ) async {
+    ) async throws {
         guard session.user.id != subjectUserID else { return }
 
         guard let resourceType = familyNotificationResourceType(for: record.entity) else {
@@ -1058,7 +1093,12 @@ final class SyncCoordinator {
             metadata: familyActivityMetadata(record: record, action: action, actorName: actorName)
         )
 
-        try? await remoteStore.createFamilyActivityNotification(event, session: session)
+        do {
+            try await remoteStore.createFamilyActivityNotification(event, session: session)
+        } catch {
+            guard record.entity == .transaction else { return }
+            throw error
+        }
     }
 
     private func familyActivityActorName(session: SupabaseAuthSession) -> String {
