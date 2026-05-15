@@ -339,6 +339,98 @@ final class MistiaSystemCategoryRemoteApplyTests: XCTestCase {
         XCTAssertTrue(MistiaSystemCategorySyncSupport.shouldExportCategory(reorderedChildCategory))
     }
 
+    func testUploadSnapshotDoesNotExportStaleCloudSyncedDefaultSystemCategory() throws {
+        let userID = UUID()
+        let categoryKey = MistiaSystemCategoryParentKey.expenseFood
+        let categoryID = MistiaSystemCategoryIdentity.canonicalID(for: categoryKey)
+        let container = try makeContainer()
+
+        try insertSystemCategory(
+            key: categoryKey,
+            id: categoryID,
+            name: categoryKey.title,
+            updatedAt: Date(timeIntervalSince1970: 1_770_000_000),
+            isArchived: false,
+            cloudSyncEnabled: true,
+            remoteVersion: 4,
+            in: container
+        )
+
+        let snapshot = try MistiaSyncLocalStore.exportSnapshotForUpload(
+            for: userID,
+            from: container
+        )
+
+        XCTAssertTrue(snapshot.categories.isEmpty)
+    }
+
+    func testUploadSnapshotStillExportsReferencedDefaultSystemCategoryDependencies() throws {
+        let userID = UUID()
+        let parentKey = MistiaSystemCategoryParentKey.expenseFood
+        let childKey = MistiaSystemCategoryKey.dineOut
+        let parent = makeSystemCategory(key: parentKey)
+        let child = makeSystemCategory(key: childKey)
+        child.parentCategory = parent
+        child.cloudSyncEnabled = false
+        parent.cloudSyncEnabled = false
+        let transaction = LedgerTransaction(
+            primaryKind: .expense,
+            title: "Team lunch",
+            amountMinor: 100_000,
+            updatedAt: Date(timeIntervalSince1970: 1_770_000_000),
+            category: child
+        )
+        let container = try makeContainer()
+        let context = ModelContext(container)
+        context.insert(parent)
+        context.insert(child)
+        context.insert(transaction)
+        try context.save()
+
+        let snapshot = try MistiaSyncLocalStore.exportSnapshotForUpload(
+            for: userID,
+            from: container
+        )
+        let categoryIDs = Set(snapshot.categories.map(\.id))
+
+        XCTAssertEqual(categoryIDs, [
+            MistiaSystemCategoryIdentity.cloudScopedID(
+                canonicalCategoryID: MistiaSystemCategoryIdentity.canonicalID(for: parentKey),
+                ownerUserID: userID
+            ),
+            MistiaSystemCategoryIdentity.cloudScopedID(
+                canonicalCategoryID: MistiaSystemCategoryIdentity.canonicalID(for: childKey),
+                ownerUserID: userID
+            )
+        ])
+    }
+
+    func testUploadSnapshotExportsLocallyPromotedSystemCategoryBeforeFirstRemoteVersion() throws {
+        let userID = UUID()
+        let categoryKey = MistiaSystemCategoryKey.dineOut
+        let category = makeSystemCategory(key: categoryKey)
+        category.cloudSyncEnabled = true
+        category.remoteVersion = 0
+        let container = try makeContainer()
+        let context = ModelContext(container)
+        context.insert(category.parentCategory!)
+        context.insert(category)
+        try context.save()
+
+        let snapshot = try MistiaSyncLocalStore.exportSnapshotForUpload(
+            for: userID,
+            from: container
+        )
+        let categoryIDs = Set(snapshot.categories.map(\.id))
+
+        XCTAssertTrue(categoryIDs.contains(
+            MistiaSystemCategoryIdentity.cloudScopedID(
+                canonicalCategoryID: MistiaSystemCategoryIdentity.canonicalID(for: categoryKey),
+                ownerUserID: userID
+            )
+        ))
+    }
+
     private func makeContainer() throws -> ModelContainer {
         let schema = Schema(versionedSchema: MistiaSchemaV1.self)
         let configuration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)

@@ -144,13 +144,10 @@ enum MistiaSyncLocalStore {
         let recurringOwnerMap = MistiaRecordOwnershipStore.ownerMap(from: ownershipScopes, entity: .recurringBillPlan)
         let installmentOwnerMap = MistiaRecordOwnershipStore.ownerMap(from: ownershipScopes, entity: .installmentPlan)
         let occurrenceOwnerMap = MistiaRecordOwnershipStore.ownerMap(from: ownershipScopes, entity: .dueOccurrenceRecord)
-        let allCategories = try fetchCategories(context)
-            .filter { categoryOwnerMap[$0.id] == nil || categoryOwnerMap[$0.id] == userID }
         let wallets = try fetchWallets(context)
             .filter { walletOwnerMap[$0.id] == nil || walletOwnerMap[$0.id] == userID }
         let creditCardProfiles = try fetchCreditCardProfiles(context)
             .filter { profileOwnerMap[$0.id] == nil || profileOwnerMap[$0.id] == userID }
-        let categories = allCategories.filter(MistiaSystemCategorySyncSupport.shouldExportCategory)
         let transactions = try fetchTransactions(context)
             .filter { transactionOwnerMap[$0.id] == nil || transactionOwnerMap[$0.id] == userID }
         let budgetPlans = try fetchBudgetPlans(context)
@@ -163,6 +160,17 @@ enum MistiaSyncLocalStore {
             .filter { installmentOwnerMap[$0.id] == nil || installmentOwnerMap[$0.id] == userID }
         let dueOccurrences = try fetchDueOccurrences(context)
             .filter { occurrenceOwnerMap[$0.id] == nil || occurrenceOwnerMap[$0.id] == userID }
+        let allCategories = try fetchCategories(context)
+            .filter { categoryOwnerMap[$0.id] == nil || categoryOwnerMap[$0.id] == userID }
+        let requiredSystemCategoryIDs = systemCategoryDependencyIDs(
+            categories: allCategories,
+            transactions: transactions,
+            budgetPlans: budgetPlans,
+            recurringBillPlans: recurringBillPlans
+        )
+        let categories = allCategories.filter {
+            shouldExportCategory($0, requiredSystemCategoryIDs: requiredSystemCategoryIDs)
+        }
 
         return MistiaRemoteSnapshot(
             wallets: wallets.map { RemoteLedgerWallet(local: $0, userID: userID) },
@@ -240,7 +248,8 @@ enum MistiaSyncLocalStore {
             guard let category = try fetchCategories(context).first(where: { $0.id == mutation.recordID }) else {
                 return nil
             }
-            guard MistiaSystemCategorySyncSupport.shouldExportCategory(category) else {
+            let requiredSystemCategoryIDs = try systemCategoryDependencyIDs(context: context)
+            guard shouldExportCategory(category, requiredSystemCategoryIDs: requiredSystemCategoryIDs) else {
                 return nil
             }
             return .category(RemoteTransactionCategory(local: category, userID: subjectUserID))
@@ -2081,6 +2090,79 @@ enum MistiaSyncLocalStore {
 
     private static func fetchTransactionAudits(_ context: ModelContext) throws -> [TransactionAuditRecord] {
         try context.fetch(FetchDescriptor<TransactionAuditRecord>())
+    }
+
+    private static func shouldExportCategory(
+        _ category: TransactionCategory,
+        requiredSystemCategoryIDs: Set<UUID>
+    ) -> Bool {
+        guard category.isSystem else {
+            return category.cloudSyncEnabled
+        }
+
+        if MistiaSystemCategorySyncSupport.isSystemCategoryCloudSyncRequired(category) {
+            return true
+        }
+
+        if category.deletedAt == nil,
+           requiredSystemCategoryIDs.contains(category.id) {
+            return true
+        }
+
+        return category.cloudSyncEnabled && category.remoteVersion == 0
+    }
+
+    private static func systemCategoryDependencyIDs(context: ModelContext) throws -> Set<UUID> {
+        try systemCategoryDependencyIDs(
+            categories: fetchCategories(context),
+            transactions: fetchTransactions(context),
+            budgetPlans: fetchBudgetPlans(context),
+            recurringBillPlans: fetchRecurringBillPlans(context)
+        )
+    }
+
+    private static func systemCategoryDependencyIDs(
+        categories: [TransactionCategory],
+        transactions: [LedgerTransaction],
+        budgetPlans: [BudgetPlan],
+        recurringBillPlans: [RecurringBillPlan]
+    ) -> Set<UUID> {
+        let categoriesByID = Dictionary(categories.map { ($0.id, $0) }, uniquingKeysWith: latestCategory)
+        var requiredIDs: Set<UUID> = []
+
+        func collect(_ category: TransactionCategory?) {
+            guard let category else { return }
+            requiredIDs.insert(category.id)
+            var currentParent = category.parentCategory
+            while let parent = currentParent {
+                guard requiredIDs.insert(parent.id).inserted else { break }
+                currentParent = parent.parentCategory
+            }
+        }
+
+        for transaction in transactions where transaction.deletedAt == nil {
+            collect(transaction.category)
+        }
+
+        for budget in budgetPlans where budget.deletedAt == nil {
+            collect(budget.category)
+        }
+
+        for plan in recurringBillPlans where plan.deletedAt == nil {
+            if let category = plan.category {
+                collect(category)
+                continue
+            }
+
+            guard let systemKey = MistiaSystemCategoryKey.allCases.first(where: {
+                $0.iconSymbolName == plan.iconSymbolName
+            }) else {
+                continue
+            }
+            collect(categoriesByID[MistiaSystemCategoryIdentity.canonicalID(for: systemKey)])
+        }
+
+        return requiredIDs
     }
 
     private static func fetchBudgetPlans(_ context: ModelContext) throws -> [BudgetPlan] {
