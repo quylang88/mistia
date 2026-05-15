@@ -387,18 +387,32 @@ struct NotificationCenterView: View {
     }
 
     private func handleFamilyActivityTap(_ row: AppNotificationRecord) -> Bool {
-        guard row.kind == .familyActivity,
-              row.resourceType == .transaction else {
+        guard row.kind == .familyActivity else {
             return false
         }
 
         Task { @MainActor in
             _ = await sessionStore.syncFamilyActivityChanges()
             familyContextStore.activateSelfView()
-            uiState.requestTabSelection(.transactions)
+            uiState.requestTabSelection(familyActivityTargetTab(for: row.resourceType))
             dismiss()
         }
         return true
+    }
+
+    private func familyActivityTargetTab(
+        for resourceType: MistiaFamilyNotificationResourceType?
+    ) -> MistiaTab {
+        switch resourceType {
+        case .transaction:
+            return .transactions
+        case .wallet, .category:
+            return .settings
+        case .budget, .goal, .card, .debt, .bill, .due, .installment:
+            return .planning
+        case .permission, nil:
+            return .settings
+        }
     }
 
     private func markAsRead(_ row: AppNotificationRecord) {

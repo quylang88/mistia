@@ -1100,7 +1100,6 @@ final class SyncCoordinator {
         do {
             try await remoteStore.createFamilyActivityNotification(event, session: session)
         } catch {
-            guard record.entity == .transaction else { return }
             throw error
         }
     }
@@ -1125,8 +1124,18 @@ final class SyncCoordinator {
         switch entity {
         case .wallet:
             return .wallet
+        case .category:
+            return .category
         case .transaction:
             return .transaction
+        case .budgetPlan:
+            return .budget
+        case .savingsGoal:
+            return .goal
+        case .recurringBillPlan:
+            return .bill
+        case .installmentPlan:
+            return .installment
         default:
             return nil
         }
@@ -1158,10 +1167,30 @@ final class SyncCoordinator {
             return mistiaLocalized(vi: "Giao dịch đã cập nhật", en: "Transaction updated", ja: "取引が更新されました")
         case (.transaction, .deleted):
             return mistiaLocalized(vi: "Giao dịch đã xóa", en: "Transaction deleted", ja: "取引が削除されました")
+        case (.category, .updated), (.category, .created):
+            return mistiaLocalized(vi: "Danh mục đã cập nhật", en: "Category updated", ja: "カテゴリが更新されました")
+        case (.category, .deleted):
+            return mistiaLocalized(vi: "Danh mục đã xóa", en: "Category deleted", ja: "カテゴリが削除されました")
         case (.wallet, .updated), (.wallet, .created):
             return mistiaLocalized(vi: "Ví đã cập nhật", en: "Wallet updated", ja: "ウォレットが更新されました")
         case (.wallet, .deleted):
             return mistiaLocalized(vi: "Ví đã xóa", en: "Wallet deleted", ja: "ウォレットが削除されました")
+        case (.budget, .updated), (.budget, .created):
+            return mistiaLocalized(vi: "Ngân sách đã cập nhật", en: "Budget updated", ja: "予算が更新されました")
+        case (.budget, .deleted):
+            return mistiaLocalized(vi: "Ngân sách đã xóa", en: "Budget deleted", ja: "予算が削除されました")
+        case (.goal, .updated), (.goal, .created):
+            return mistiaLocalized(vi: "Mục tiêu đã cập nhật", en: "Goal updated", ja: "目標が更新されました")
+        case (.goal, .deleted):
+            return mistiaLocalized(vi: "Mục tiêu đã xóa", en: "Goal deleted", ja: "目標が削除されました")
+        case (.bill, .updated), (.bill, .created):
+            return mistiaLocalized(vi: "Hóa đơn đã cập nhật", en: "Bill updated", ja: "請求が更新されました")
+        case (.bill, .deleted):
+            return mistiaLocalized(vi: "Hóa đơn đã xóa", en: "Bill deleted", ja: "請求が削除されました")
+        case (.installment, .updated), (.installment, .created):
+            return mistiaLocalized(vi: "Trả góp đã cập nhật", en: "Installment updated", ja: "分割払いが更新されました")
+        case (.installment, .deleted):
+            return mistiaLocalized(vi: "Trả góp đã xóa", en: "Installment deleted", ja: "分割払いが削除されました")
         default:
             return mistiaLocalized(vi: "Hoạt động gia đình", en: "Family activity", ja: "家族のアクティビティ")
         }
@@ -1208,6 +1237,36 @@ final class SyncCoordinator {
                 en: "\(actorName) updated your \(row.name) wallet.",
                 ja: "\(actorName)があなたの\(row.name)ウォレットを更新しました。"
             )
+        case (.category(let row), _):
+            return mistiaLocalized(
+                vi: "\(actorName) vừa cập nhật danh mục \(row.name) của bạn.",
+                en: "\(actorName) updated your \(row.name) category.",
+                ja: "\(actorName)があなたのカテゴリ\(row.name)を更新しました。"
+            )
+        case (.budgetPlan(_), _):
+            return mistiaLocalized(
+                vi: "\(actorName) vừa cập nhật ngân sách của bạn.",
+                en: "\(actorName) updated your budget.",
+                ja: "\(actorName)があなたの予算を更新しました。"
+            )
+        case (.savingsGoal(let row), _):
+            return mistiaLocalized(
+                vi: "\(actorName) vừa cập nhật mục tiêu \(row.name) của bạn.",
+                en: "\(actorName) updated your \(row.name) goal.",
+                ja: "\(actorName)があなたの目標\(row.name)を更新しました。"
+            )
+        case (.recurringBillPlan(let row), _):
+            return mistiaLocalized(
+                vi: "\(actorName) vừa cập nhật hóa đơn \(row.name) của bạn.",
+                en: "\(actorName) updated your \(row.name) bill.",
+                ja: "\(actorName)があなたの請求\(row.name)を更新しました。"
+            )
+        case (.installmentPlan(let row), _):
+            return mistiaLocalized(
+                vi: "\(actorName) vừa cập nhật trả góp \(row.name) của bạn.",
+                en: "\(actorName) updated your \(row.name) installment.",
+                ja: "\(actorName)があなたの分割払い\(row.name)を更新しました。"
+            )
         default:
             switch resourceType {
             case .transaction:
@@ -1246,6 +1305,14 @@ final class SyncCoordinator {
             metadata["destination_wallet_id"] = row.destinationWalletID?.uuidString.lowercased()
         case .wallet(let row):
             metadata["wallet_name"] = row.name
+        case .category(let row):
+            metadata["category_name"] = row.name
+        case .savingsGoal(let row):
+            metadata["goal_name"] = row.name
+        case .recurringBillPlan(let row):
+            metadata["bill_name"] = row.name
+        case .installmentPlan(let row):
+            metadata["installment_name"] = row.name
         default:
             break
         }

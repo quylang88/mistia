@@ -51,15 +51,18 @@ struct ManagementArchivedItemsView: View {
     @Query(filter: #Predicate<TransactionCategory> { $0.isArchived == true && $0.deletedAt == nil })
     private var archivedCategories: [TransactionCategory]
 
+    @Query
+    private var ownershipScopes: [OwnedRecordScope]
+
     @State private var isSelecting = false
     @State private var selectedItems: Set<ArchivedItemSelection> = []
     @State private var viewID = UUID()
     @State private var alertMessage: String?
 
     private var availableSelections: Set<ArchivedItemSelection> {
-        Set(archivedTransactions.map { .transaction($0.id) })
-            .union(archivedWallets.map { .wallet($0.id) })
-            .union(archivedCategories.map { .category($0.id) })
+        Set(ownArchivedTransactions.map { .transaction($0.id) })
+            .union(ownArchivedWallets.map { .wallet($0.id) })
+            .union(ownArchivedCategories.map { .category($0.id) })
     }
 
     private var hasArchivedItems: Bool {
@@ -72,6 +75,62 @@ struct ManagementArchivedItemsView: View {
 
     private var navigationTitle: String {
         mistiaLocalized(vi: "Mục đã lưu trữ", en: "Archived items", ja: "アーカイブ済みアイテム")
+    }
+
+    private var selfUserID: UUID? {
+        sessionStore.activeLocalProfileUserID ?? sessionStore.signedInUserID
+    }
+
+    private var transactionOwnerMap: [UUID: UUID] {
+        MistiaRecordOwnershipStore.ownerMap(from: ownershipScopes, entity: .transaction)
+    }
+
+    private var walletOwnerMap: [UUID: UUID] {
+        MistiaRecordOwnershipStore.ownerMap(from: ownershipScopes, entity: .wallet)
+    }
+
+    private var categoryOwnerMap: [UUID: UUID] {
+        MistiaRecordOwnershipStore.ownerMap(from: ownershipScopes, entity: .category)
+    }
+
+    private var ownActiveTransactions: [LedgerTransaction] {
+        MistiaRecordOwnershipStore.visibleRecords(
+            activeTransactions,
+            entity: .transaction,
+            ownerMap: transactionOwnerMap,
+            subjectUserID: selfUserID,
+            signedInUserID: sessionStore.signedInUserID
+        )
+    }
+
+    private var ownArchivedTransactions: [LedgerTransaction] {
+        MistiaRecordOwnershipStore.visibleRecords(
+            archivedTransactions,
+            entity: .transaction,
+            ownerMap: transactionOwnerMap,
+            subjectUserID: selfUserID,
+            signedInUserID: sessionStore.signedInUserID
+        )
+    }
+
+    private var ownArchivedWallets: [LedgerWallet] {
+        MistiaRecordOwnershipStore.visibleRecords(
+            archivedWallets,
+            entity: .wallet,
+            ownerMap: walletOwnerMap,
+            subjectUserID: selfUserID,
+            signedInUserID: sessionStore.signedInUserID
+        )
+    }
+
+    private var ownArchivedCategories: [TransactionCategory] {
+        MistiaRecordOwnershipStore.visibleRecords(
+            archivedCategories,
+            entity: .category,
+            ownerMap: categoryOwnerMap,
+            subjectUserID: selfUserID,
+            signedInUserID: sessionStore.signedInUserID
+        )
     }
 
     var body: some View {
@@ -168,12 +227,12 @@ struct ManagementArchivedItemsView: View {
                 .padding(.horizontal, 32)
             }
         } else {
-            if !archivedTransactions.isEmpty {
+            if !ownArchivedTransactions.isEmpty {
                 ManagementSection(
                     title: mistiaLocalized(vi: "Giao dịch", en: "Transactions", ja: "取引"),
                     titleColor: sectionLabelColor
                 ) {
-                    ForEach(archivedTransactions) { transaction in
+                    ForEach(ownArchivedTransactions) { transaction in
                         ArchivedTransactionRow(
                             descriptor: descriptor(for: transaction),
                             isSelecting: isSelecting,
@@ -186,12 +245,12 @@ struct ManagementArchivedItemsView: View {
                 }
             }
 
-            if !archivedWallets.isEmpty {
+            if !ownArchivedWallets.isEmpty {
                 ManagementSection(
                     title: mistiaLocalized(vi: "Ví", en: "Wallets", ja: "ウォレット"),
                     titleColor: sectionLabelColor
                 ) {
-                    ForEach(archivedWallets) { wallet in
+                    ForEach(ownArchivedWallets) { wallet in
                         ArchivedDetailRow(
                             title: wallet.name,
                             subtitle: "\(wallet.kind.title) • \(wallet.currencyCode)",
@@ -207,12 +266,12 @@ struct ManagementArchivedItemsView: View {
                 }
             }
 
-            if !archivedCategories.isEmpty {
+            if !ownArchivedCategories.isEmpty {
                 ManagementSection(
                     title: mistiaLocalized(vi: "Danh mục", en: "Categories", ja: "カテゴリ"),
                     titleColor: sectionLabelColor
                 ) {
-                    ForEach(archivedCategories) { category in
+                    ForEach(ownArchivedCategories) { category in
                         ArchivedDetailRow(
                             title: category.name,
                             subtitle: categorySubtitle(for: category),
@@ -436,7 +495,7 @@ struct ManagementArchivedItemsView: View {
             for selection in selections {
                 switch selection {
                 case .transaction(let id):
-                    guard let transaction = archivedTransactions.first(where: { $0.id == id }) else { continue }
+                    guard let transaction = ownArchivedTransactions.first(where: { $0.id == id }) else { continue }
                     try prepareTransactionMutation(
                         transaction,
                         action: action,
@@ -444,10 +503,10 @@ struct ManagementArchivedItemsView: View {
                         mutations: &mutations
                     )
                 case .wallet(let id):
-                    guard let wallet = archivedWallets.first(where: { $0.id == id }) else { continue }
+                    guard let wallet = ownArchivedWallets.first(where: { $0.id == id }) else { continue }
                     prepareWalletMutation(wallet, action: action, at: now, mutations: &mutations)
                 case .category(let id):
-                    guard let category = archivedCategories.first(where: { $0.id == id }) else { continue }
+                    guard let category = ownArchivedCategories.first(where: { $0.id == id }) else { continue }
                     prepareCategoryMutation(category, action: action, at: now, mutations: &mutations)
                 }
             }
@@ -488,7 +547,7 @@ struct ManagementArchivedItemsView: View {
     ) throws {
         if action == .restore && isCreditCardPayment(transaction) {
             let calendar = MistiaCalendar.current
-            let isDuplicate = activeTransactions.contains { tx in
+            let isDuplicate = ownActiveTransactions.contains { tx in
                 tx.id != transaction.id &&
                 tx.destinationWallet?.id == transaction.destinationWallet?.id &&
                 calendar.isDate(tx.occurredAt, equalTo: transaction.occurredAt, toGranularity: .month) &&
@@ -555,7 +614,7 @@ struct ManagementArchivedItemsView: View {
                 entity: .wallet,
                 id: wallet.id,
                 updatedAt: wallet.updatedAt,
-                subjectUserIDOverride: nil
+                subjectUserIDOverride: walletOwnerUserID(for: wallet)
             )
         )
     }
@@ -580,7 +639,7 @@ struct ManagementArchivedItemsView: View {
                 entity: .category,
                 id: category.id,
                 updatedAt: category.updatedAt,
-                subjectUserIDOverride: nil
+                subjectUserIDOverride: categoryOwnerUserID(for: category)
             )
         )
     }
@@ -590,15 +649,18 @@ struct ManagementArchivedItemsView: View {
     }
 
     private func transactionOwnerUserID(for transaction: LedgerTransaction) -> UUID? {
-        guard let walletID = transaction.sourceWallet?.id else {
-            return nil
-        }
+        transactionOwnerMap[transaction.id]
+            ?? transaction.sourceWallet.flatMap(walletOwnerUserID(for:))
+            ?? transaction.destinationWallet.flatMap(walletOwnerUserID(for:))
+            ?? selfUserID
+    }
 
-        return try? MistiaRecordOwnershipStore.ownerUserID(
-            entity: .wallet,
-            recordID: walletID,
-            in: MistiaDataStack.sharedModelContainer
-        )
+    private func walletOwnerUserID(for wallet: LedgerWallet) -> UUID? {
+        walletOwnerMap[wallet.id] ?? selfUserID
+    }
+
+    private func categoryOwnerUserID(for category: TransactionCategory) -> UUID? {
+        categoryOwnerMap[category.id] ?? selfUserID
     }
 }
 
