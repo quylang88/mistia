@@ -364,6 +364,59 @@ final class MistiaSystemCategoryRemoteApplyTests: XCTestCase {
         XCTAssertTrue(snapshot.categories.isEmpty)
     }
 
+    func testCategoryMutationSkipsStaleCloudSyncedDefaultChildCategory() throws {
+        let userID = UUID()
+        let childKey = MistiaSystemCategoryKey.dineOut
+        let child = makeSystemCategory(key: childKey)
+        let parent = try XCTUnwrap(child.parentCategory)
+        child.cloudSyncEnabled = true
+        child.remoteVersion = 1
+        parent.cloudSyncEnabled = true
+        parent.remoteVersion = 1
+        let container = try makeContainer()
+        let context = ModelContext(container)
+        context.insert(parent)
+        context.insert(child)
+        try context.save()
+
+        let mutation = MistiaSyncMutation(
+            entity: .category,
+            recordID: child.id,
+            subjectUserID: userID,
+            kind: .upsert,
+            modifiedAt: child.updatedAt,
+            baseVersion: child.remoteVersion
+        )
+
+        let record = try MistiaSyncLocalStore.exportRecord(for: mutation, from: container)
+
+        XCTAssertNil(record)
+    }
+
+    func testExportCategoryRecordSynthesizesMissingSystemParent() throws {
+        let userID = UUID()
+        let parentKey = MistiaSystemCategoryParentKey.expenseFood
+        let remoteParentID = MistiaSystemCategoryIdentity.cloudScopedID(
+            canonicalCategoryID: MistiaSystemCategoryIdentity.canonicalID(for: parentKey),
+            ownerUserID: userID
+        )
+
+        let record = try MistiaSyncLocalStore.exportCategoryRecord(
+            remoteCategoryID: remoteParentID,
+            subjectUserID: userID,
+            from: try makeContainer()
+        )
+
+        guard case .category(let row) = record else {
+            return XCTFail("Expected synthesized parent category")
+        }
+
+        XCTAssertEqual(row.id, remoteParentID)
+        XCTAssertEqual(row.systemKey, parentKey.rawValue)
+        XCTAssertNil(row.parentCategoryID)
+        XCTAssertNil(row.deletedAt)
+    }
+
     func testUploadSnapshotStillExportsReferencedDefaultSystemCategoryDependencies() throws {
         let userID = UUID()
         let parentKey = MistiaSystemCategoryParentKey.expenseFood

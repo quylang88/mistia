@@ -381,6 +381,11 @@ final class SyncCoordinator {
             outbox.remove(mutation)
             return false
         }
+        try await ensureRemoteCategoryParentsExistIfNeeded(
+            for: localRecord,
+            subjectUserID: mutation.subjectUserID,
+            session: session
+        )
 
         let remoteRecord = try await remoteStore.fetchRecord(
             entity: mutation.entity,
@@ -726,12 +731,63 @@ final class SyncCoordinator {
             let progress = progressStart + (Double(index) / Double(max(1, total))) * (progressEnd - progressStart)
             onProgressUpdate?(progress)
 
+            try await ensureRemoteCategoryParentsExistIfNeeded(
+                for: localRecord,
+                subjectUserID: localRecord.userID,
+                session: session
+            )
             _ = try await remoteStore.create(
                 localRecord.preparedForCreate(deviceID: deviceID),
                 subjectUserID: localRecord.userID,
                 session: session
             )
         }
+    }
+
+    private func ensureRemoteCategoryParentsExistIfNeeded(
+        for record: MistiaSyncUploadRecord,
+        subjectUserID: UUID,
+        session: SupabaseAuthSession,
+        visitedParentIDs: Set<UUID> = []
+    ) async throws {
+        guard record.entity == .category,
+              let parentID = record.parentID,
+              !visitedParentIDs.contains(parentID) else {
+            return
+        }
+
+        let remoteParent = try await remoteStore.fetchRecord(
+            entity: .category,
+            recordID: parentID,
+            subjectUserID: subjectUserID,
+            session: session
+        )
+        if let remoteParent, remoteParent.deletedAt == nil {
+            return
+        }
+
+        guard let parentRecord = try MistiaSyncLocalStore.exportCategoryRecord(
+            remoteCategoryID: parentID,
+            subjectUserID: subjectUserID,
+            from: modelContainer
+        ) else {
+            return
+        }
+
+        try await ensureRemoteCategoryParentsExistIfNeeded(
+            for: parentRecord,
+            subjectUserID: subjectUserID,
+            session: session,
+            visitedParentIDs: visitedParentIDs.union([parentID])
+        )
+
+        let nextVersion = max((remoteParent?.syncVersion ?? parentRecord.syncVersion) + 1, 1)
+        let upsertedParent = try await remoteStore.forceUpsert(
+            parentRecord.preparedForMutation(nextVersion: nextVersion, deviceID: deviceID),
+            subjectUserID: subjectUserID,
+            session: session
+        )
+        try MistiaSyncLocalStore.applyRemoteRecord(upsertedParent, in: modelContainer)
     }
 
     private func shouldUploadLocalOnlyRows(

@@ -299,6 +299,69 @@ enum MistiaSyncLocalStore {
         }
     }
 
+    static func exportCategoryRecord(
+        remoteCategoryID: UUID,
+        subjectUserID: UUID,
+        from container: ModelContainer
+    ) throws -> MistiaSyncUploadRecord? {
+        let context = ModelContext(container)
+        let categories = try fetchCategories(context)
+        guard let category = categories.first(where: { category in
+            mistiaCloudCategoryID(for: category, userID: subjectUserID) == remoteCategoryID
+                || category.id == remoteCategoryID
+        }) else {
+            return synthesizedSystemParentCategoryRecord(
+                remoteCategoryID: remoteCategoryID,
+                subjectUserID: subjectUserID
+            )
+        }
+        guard category.deletedAt == nil else { return nil }
+        return .category(RemoteTransactionCategory(local: category, userID: subjectUserID))
+    }
+
+    private static func synthesizedSystemParentCategoryRecord(
+        remoteCategoryID: UUID,
+        subjectUserID: UUID
+    ) -> MistiaSyncUploadRecord? {
+        guard let parentKey = MistiaSystemCategoryParentKey.allCases.first(where: { key in
+            let canonicalID = MistiaSystemCategoryIdentity.canonicalID(for: key)
+            return MistiaSystemCategoryIdentity.cloudScopedID(
+                canonicalCategoryID: canonicalID,
+                ownerUserID: subjectUserID
+            ) == remoteCategoryID || canonicalID == remoteCategoryID
+        }) else {
+            return nil
+        }
+
+        let now = Date()
+        return .category(
+            RemoteTransactionCategory(
+                userID: subjectUserID,
+                id: MistiaSystemCategoryIdentity.cloudScopedID(
+                    canonicalCategoryID: MistiaSystemCategoryIdentity.canonicalID(for: parentKey),
+                    ownerUserID: subjectUserID
+                ),
+                name: parentKey.title,
+                kindRawValue: parentKey.kind.rawValue,
+                iconSymbolName: parentKey.iconSymbolName,
+                iconColorHex: MistiaIconColorPalette.presetHex(forDefault: parentKey.iconColorHex),
+                isFavorite: false,
+                parentCategoryID: nil,
+                hierarchyRoleRawValue: TransactionCategoryHierarchyRole.parent.rawValue,
+                systemKey: parentKey.rawValue,
+                isSystem: true,
+                sortOrder: MistiaSystemCategoryParentKey.activeDefaults.firstIndex(of: parentKey) ?? 0,
+                isArchived: !parentKey.isActiveDefault,
+                archivedAt: parentKey.isActiveDefault ? nil : now,
+                createdAt: now,
+                updatedAt: now,
+                deletedAt: nil,
+                syncVersion: 1,
+                lastModifiedByDeviceID: nil
+            )
+        )
+    }
+
     static func currentRemoteVersion(
         for entity: MistiaSyncEntity,
         recordID: UUID,
