@@ -688,6 +688,33 @@ final class FamilyContextStore {
     }
 
     @discardableResult
+    func setFamilyPlanningManager(
+        resourceType: MistiaFamilyNotificationResourceType,
+        managerUserID: UUID?,
+        sessionStore: SessionStore
+    ) async -> Bool {
+        guard let familyID = family?.id else { return false }
+        guard resourceType == .budget || resourceType == .goal else { return false }
+        guard let session = await prepareRemoteSession(using: sessionStore) else { return false }
+
+        do {
+            let updatedFamily = try await service.setFamilyPlanningManager(
+                familyID: familyID,
+                resourceType: resourceType,
+                managerUserID: managerUserID,
+                session: session
+            )
+            family = updatedFamily
+            lastErrorMessage = nil
+            await refresh(sessionStore: sessionStore)
+            return true
+        } catch {
+            lastErrorMessage = visibleErrorMessage(for: error, sessionStore: sessionStore)
+            return false
+        }
+    }
+
+    @discardableResult
     func respondToPermissionNotification(
         _ notification: AppNotificationRecord,
         approve: Bool,

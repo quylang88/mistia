@@ -261,6 +261,181 @@ final class FamilyLogicTests: XCTestCase {
         XCTAssertEqual(summary.incomeByMember.map(\.amountMinor), [50_000])
     }
 
+    func testAggregateWalletsByNameSumsMatchingVisibleNames() {
+        let memberA = UUID()
+        let memberB = UUID()
+        let createdAt = makeDate(year: 2026, month: 4, day: 1)
+        let rows = FamilyLogic.aggregateWalletsByName([
+            FamilyWalletAggregateSnapshot(
+                id: "a",
+                ownerUserID: memberA,
+                name: "Main Cash",
+                kind: .cash,
+                currentBalanceMinor: 120_000,
+                debtMinor: 0,
+                currencyCode: "JPY",
+                sortOrder: 1,
+                createdAt: createdAt
+            ),
+            FamilyWalletAggregateSnapshot(
+                id: "b",
+                ownerUserID: memberB,
+                name: " main   cash ",
+                kind: .bank,
+                currentBalanceMinor: 80_000,
+                debtMinor: 0,
+                currencyCode: "JPY",
+                sortOrder: 2,
+                createdAt: createdAt
+            )
+        ])
+
+        XCTAssertEqual(rows.count, 1)
+        XCTAssertEqual(rows.first?.name, "Main Cash")
+        XCTAssertEqual(rows.first?.currentBalanceMinor, 200_000)
+
+        let summary = FamilyLogic.aggregateSummary(
+            wallets: rows.map {
+                FamilyAggregateWalletSnapshot(
+                    ownerUserID: $0.ownerUserID,
+                    kind: .cash,
+                    balanceMinor: $0.currentBalanceMinor,
+                    debtMinor: $0.debtMinor,
+                    name: $0.name
+                )
+            },
+            transactions: [],
+            selectedInterval: DateInterval(
+                start: makeDate(year: 2026, month: 4, day: 1),
+                end: makeDate(year: 2026, month: 5, day: 1)
+            ),
+            visibleMemberIDs: [memberA, memberB],
+            referenceDate: makeDate(year: 2026, month: 4, day: 15),
+            calendar: calendar
+        )
+
+        XCTAssertEqual(summary.balanceByWalletName.map(\.label), ["Main Cash"])
+        XCTAssertEqual(summary.balanceByWalletName.map(\.valueMinor), [200_000])
+    }
+
+    func testFamilyBudgetRowsSumSameNamedCategorySpendingAcrossMembers() {
+        let memberA = UUID()
+        let memberB = UUID()
+        let selectedMonth = makeDate(year: 2026, month: 4, day: 1)
+
+        let rows = FamilyLogic.familyBudgetRows(
+            plans: [
+                makeBudget(ownerUserID: memberA, categoryName: "Ăn ngoài", limitMinor: 100_000, monthAnchor: selectedMonth)
+            ],
+            transactions: [
+                makeFamilyTransaction(ownerUserID: memberA, categoryName: "Ăn ngoài", amountMinor: 40_000),
+                makeFamilyTransaction(ownerUserID: memberB, categoryName: " ăn   ngoài ", amountMinor: 35_000),
+                makeFamilyTransaction(
+                    ownerUserID: memberB,
+                    categoryName: "Ăn ngoài",
+                    amountMinor: 200_000,
+                    isCreditCardPayment: true
+                )
+            ],
+            selectedMonth: selectedMonth,
+            ownerUserID: memberA,
+            budgetManagerUserID: nil,
+            memberOrder: [memberA, memberB],
+            referenceDate: makeDate(year: 2026, month: 4, day: 15),
+            calendar: calendar,
+            minimumProgress: 0,
+            includesMinimumProgress: true,
+            maximumCount: nil
+        )
+
+        XCTAssertEqual(rows.count, 1)
+        XCTAssertEqual(rows.first?.spentMinor, 75_000)
+        XCTAssertEqual(rows.first?.limitMinor, 100_000)
+    }
+
+    func testFamilyBudgetRowsPrioritizeOwnerBudgetThenManager() {
+        let owner = UUID()
+        let memberA = UUID()
+        let memberB = UUID()
+        let selectedMonth = makeDate(year: 2026, month: 4, day: 1)
+
+        let ownerRows = FamilyLogic.familyBudgetRows(
+            plans: [
+                makeBudget(ownerUserID: memberA, categoryName: "Ăn ngoài", limitMinor: 100_000, monthAnchor: selectedMonth),
+                makeBudget(ownerUserID: owner, categoryName: "Ăn ngoài", limitMinor: 250_000, monthAnchor: selectedMonth)
+            ],
+            transactions: [makeFamilyTransaction(ownerUserID: memberA, categoryName: "Ăn ngoài", amountMinor: 50_000)],
+            selectedMonth: selectedMonth,
+            ownerUserID: owner,
+            budgetManagerUserID: memberA,
+            memberOrder: [owner, memberA, memberB],
+            referenceDate: makeDate(year: 2026, month: 4, day: 15),
+            calendar: calendar,
+            minimumProgress: 0,
+            includesMinimumProgress: true,
+            maximumCount: nil
+        )
+
+        XCTAssertEqual(ownerRows.first?.sourceOwnerUserID, owner)
+        XCTAssertEqual(ownerRows.first?.limitMinor, 250_000)
+
+        let managerRows = FamilyLogic.familyBudgetRows(
+            plans: [
+                makeBudget(ownerUserID: memberA, categoryName: "Ăn ngoài", limitMinor: 100_000, monthAnchor: selectedMonth),
+                makeBudget(ownerUserID: memberB, categoryName: "Ăn ngoài", limitMinor: 300_000, monthAnchor: selectedMonth)
+            ],
+            transactions: [makeFamilyTransaction(ownerUserID: memberA, categoryName: "Ăn ngoài", amountMinor: 50_000)],
+            selectedMonth: selectedMonth,
+            ownerUserID: owner,
+            budgetManagerUserID: memberB,
+            memberOrder: [owner, memberA, memberB],
+            referenceDate: makeDate(year: 2026, month: 4, day: 15),
+            calendar: calendar,
+            minimumProgress: 0,
+            includesMinimumProgress: true,
+            maximumCount: nil
+        )
+
+        XCTAssertEqual(managerRows.first?.sourceOwnerUserID, memberB)
+        XCTAssertEqual(managerRows.first?.limitMinor, 300_000)
+    }
+
+    func testFamilyGoalRowsAggregateByNameAndPrioritizeOwnerThenManagerTarget() {
+        let owner = UUID()
+        let memberA = UUID()
+        let memberB = UUID()
+        let targetDate = makeDate(year: 2026, month: 12, day: 31)
+
+        let ownerRows = FamilyLogic.familyGoalRows(
+            goals: [
+                makeGoal(ownerUserID: owner, name: "Du lịch", targetMinor: 500_000, savedMinor: 120_000, targetDate: targetDate),
+                makeGoal(ownerUserID: memberA, name: " du   lịch ", targetMinor: 900_000, savedMinor: 80_000, targetDate: targetDate)
+            ],
+            ownerUserID: owner,
+            goalManagerUserID: memberA,
+            memberOrder: [owner, memberA, memberB]
+        )
+
+        XCTAssertEqual(ownerRows.count, 1)
+        XCTAssertEqual(ownerRows.first?.sourceOwnerUserID, owner)
+        XCTAssertEqual(ownerRows.first?.targetMinor, 500_000)
+        XCTAssertEqual(ownerRows.first?.currentSavedMinor, 200_000)
+
+        let managerRows = FamilyLogic.familyGoalRows(
+            goals: [
+                makeGoal(ownerUserID: memberA, name: "Du lịch", targetMinor: 500_000, savedMinor: 120_000, targetDate: targetDate),
+                makeGoal(ownerUserID: memberB, name: "Du lịch", targetMinor: 900_000, savedMinor: 80_000, targetDate: targetDate)
+            ],
+            ownerUserID: owner,
+            goalManagerUserID: memberB,
+            memberOrder: [owner, memberA, memberB]
+        )
+
+        XCTAssertEqual(managerRows.first?.sourceOwnerUserID, memberB)
+        XCTAssertEqual(managerRows.first?.targetMinor, 900_000)
+        XCTAssertEqual(managerRows.first?.currentSavedMinor, 200_000)
+    }
+
     private func makeDate(
         year: Int,
         month: Int,
@@ -273,5 +448,59 @@ final class FamilyLogicTests: XCTestCase {
         components.month = month
         components.day = day
         return calendar.date(from: components) ?? .distantPast
+    }
+
+    private func makeBudget(
+        ownerUserID: UUID,
+        categoryName: String,
+        limitMinor: Int64,
+        monthAnchor: Date
+    ) -> FamilyBudgetPlanSnapshot {
+        FamilyBudgetPlanSnapshot(
+            id: UUID(),
+            ownerUserID: ownerUserID,
+            categoryName: categoryName,
+            iconSymbolName: "fork.knife",
+            colorHex: "#9B5CF6",
+            limitMinor: limitMinor,
+            currencyCode: "JPY",
+            monthAnchor: monthAnchor
+        )
+    }
+
+    private func makeGoal(
+        ownerUserID: UUID,
+        name: String,
+        targetMinor: Int64,
+        savedMinor: Int64,
+        targetDate: Date
+    ) -> FamilyGoalSnapshot {
+        FamilyGoalSnapshot(
+            id: UUID(),
+            ownerUserID: ownerUserID,
+            name: name,
+            iconSymbolName: "target",
+            targetMinor: targetMinor,
+            currentSavedMinor: savedMinor,
+            targetDate: targetDate,
+            currencyCode: "JPY",
+            sortOrder: 0
+        )
+    }
+
+    private func makeFamilyTransaction(
+        ownerUserID: UUID,
+        categoryName: String,
+        amountMinor: Int64,
+        isCreditCardPayment: Bool = false
+    ) -> FamilyAggregateTransactionSnapshot {
+        FamilyAggregateTransactionSnapshot(
+            ownerUserID: ownerUserID,
+            categoryName: categoryName,
+            occurredAt: makeDate(year: 2026, month: 4, day: 10),
+            kind: .expense,
+            amountMinor: amountMinor,
+            isCreditCardPayment: isCreditCardPayment
+        )
     }
 }

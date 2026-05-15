@@ -49,6 +49,12 @@ protocol FamilyRemoteServicing {
         isGranted: Bool,
         session: SupabaseAuthSession
     ) async throws -> FamilyPermissionGrantRecord
+    func setFamilyPlanningManager(
+        familyID: UUID,
+        resourceType: MistiaFamilyNotificationResourceType,
+        managerUserID: UUID?,
+        session: SupabaseAuthSession
+    ) async throws -> FamilyGroupRecord
     func removeMember(
         membershipID: UUID,
         session: SupabaseAuthSession
@@ -147,12 +153,23 @@ extension FamilyRemoteServicing {
     ) async throws -> FamilyPermissionGrantRecord {
         throw SupabaseServiceError.serverMessage("Family permission grants are unavailable.")
     }
+
+    func setFamilyPlanningManager(
+        familyID: UUID,
+        resourceType: MistiaFamilyNotificationResourceType,
+        managerUserID: UUID?,
+        session: SupabaseAuthSession
+    ) async throws -> FamilyGroupRecord {
+        throw SupabaseServiceError.serverMessage("Family planning managers are unavailable.")
+    }
 }
 
 struct FamilyGroupRecord: Codable, Identifiable, Equatable {
     let id: UUID
     var name: String
     let ownerUserID: UUID
+    var budgetManagerUserID: UUID? = nil
+    var goalManagerUserID: UUID? = nil
     let deletedAt: Date?
     let createdAt: Date
     let updatedAt: Date
@@ -161,6 +178,8 @@ struct FamilyGroupRecord: Codable, Identifiable, Equatable {
         case id
         case name
         case ownerUserID = "owner_user_id"
+        case budgetManagerUserID = "budget_manager_user_id"
+        case goalManagerUserID = "goal_manager_user_id"
         case deletedAt = "deleted_at"
         case createdAt = "created_at"
         case updatedAt = "updated_at"
@@ -682,6 +701,23 @@ struct FamilyRemoteService: FamilyRemoteServicing {
                 resourceID: resourceID,
                 permissionScope: scope,
                 isGranted: isGranted
+            ),
+            session: session
+        )
+    }
+
+    func setFamilyPlanningManager(
+        familyID: UUID,
+        resourceType: MistiaFamilyNotificationResourceType,
+        managerUserID: UUID?,
+        session: SupabaseAuthSession
+    ) async throws -> FamilyGroupRecord {
+        try await callRPC(
+            functionName: "set_family_planning_manager",
+            body: SetFamilyPlanningManagerRPCBody(
+                familyID: familyID,
+                resourceType: resourceType,
+                managerUserID: managerUserID
             ),
             session: session
         )
@@ -1476,6 +1512,28 @@ private struct SetFamilyPermissionGrantRPCBody: Encodable {
         case resourceID = "p_resource_id"
         case permissionScope = "p_permission_scope"
         case isGranted = "p_is_granted"
+    }
+}
+
+private struct SetFamilyPlanningManagerRPCBody: Encodable {
+    let familyID: UUID
+    let resourceType: String
+    let managerUserID: UUID?
+
+    init(
+        familyID: UUID,
+        resourceType: MistiaFamilyNotificationResourceType,
+        managerUserID: UUID?
+    ) {
+        self.familyID = familyID
+        self.resourceType = resourceType.rawValue
+        self.managerUserID = managerUserID
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case familyID = "p_family_id"
+        case resourceType = "p_resource_type"
+        case managerUserID = "p_manager_user_id"
     }
 }
 

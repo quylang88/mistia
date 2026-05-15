@@ -139,6 +139,99 @@ struct FamilyAggregateWalletSnapshot: Equatable {
     let kind: Kind
     let balanceMinor: Int64
     let debtMinor: Int64
+    let name: String?
+
+    init(
+        ownerUserID: UUID,
+        kind: Kind,
+        balanceMinor: Int64,
+        debtMinor: Int64,
+        name: String? = nil
+    ) {
+        self.ownerUserID = ownerUserID
+        self.kind = kind
+        self.balanceMinor = balanceMinor
+        self.debtMinor = debtMinor
+        self.name = name
+    }
+}
+
+struct FamilyWalletAggregateSnapshot: Equatable, Identifiable {
+    let id: String
+    let ownerUserID: UUID
+    let name: String
+    let kind: LedgerWalletKind
+    let currentBalanceMinor: Int64
+    let debtMinor: Int64
+    let currencyCode: String
+    let sortOrder: Int
+    let createdAt: Date
+}
+
+struct FamilyBudgetPlanSnapshot: Equatable, Identifiable {
+    let id: UUID
+    let ownerUserID: UUID
+    let categoryName: String
+    let iconSymbolName: String
+    let colorHex: String
+    let limitMinor: Int64
+    let currencyCode: String
+    let monthAnchor: Date
+}
+
+struct FamilyBudgetAggregateSnapshot: Equatable, Identifiable {
+    let id: String
+    let sourceBudgetID: UUID
+    let sourceOwnerUserID: UUID
+    let name: String
+    let iconSymbolName: String
+    let colorHex: String
+    let spentMinor: Int64
+    let limitMinor: Int64
+    let currencyCode: String
+    let daysRemaining: Int
+
+    nonisolated var progress: Double {
+        guard limitMinor > 0 else { return 0 }
+        return Double(spentMinor) / Double(limitMinor)
+    }
+
+    nonisolated var progressPercentText: String {
+        "\(Int((progress * 100).rounded()))%"
+    }
+}
+
+struct FamilyGoalSnapshot: Equatable, Identifiable {
+    let id: UUID
+    let ownerUserID: UUID
+    let name: String
+    let iconSymbolName: String
+    let targetMinor: Int64
+    let currentSavedMinor: Int64
+    let targetDate: Date
+    let currencyCode: String
+    let sortOrder: Int
+}
+
+struct FamilyGoalAggregateSnapshot: Equatable, Identifiable {
+    let id: String
+    let sourceGoalID: UUID
+    let sourceOwnerUserID: UUID
+    let name: String
+    let iconSymbolName: String
+    let targetMinor: Int64
+    let currentSavedMinor: Int64
+    let targetDate: Date
+    let currencyCode: String
+
+    nonisolated var progress: Double {
+        guard targetMinor > 0 else { return 0 }
+        return Double(currentSavedMinor) / Double(targetMinor)
+    }
+
+    nonisolated var progressPercentText: String {
+        "\(Int((progress * 100).rounded()))%"
+    }
 }
 
 struct FamilyAggregateTransactionSnapshot: Equatable {
@@ -150,6 +243,7 @@ struct FamilyAggregateTransactionSnapshot: Equatable {
 
     let ownerUserID: UUID
     let categoryName: String?
+    let categoryParentName: String?
     let occurredAt: Date
     let kind: Kind
     let amountMinor: Int64
@@ -158,6 +252,7 @@ struct FamilyAggregateTransactionSnapshot: Equatable {
     init(
         ownerUserID: UUID,
         categoryName: String?,
+        categoryParentName: String? = nil,
         occurredAt: Date,
         kind: Kind,
         amountMinor: Int64,
@@ -165,6 +260,7 @@ struct FamilyAggregateTransactionSnapshot: Equatable {
     ) {
         self.ownerUserID = ownerUserID
         self.categoryName = categoryName
+        self.categoryParentName = categoryParentName
         self.occurredAt = occurredAt
         self.kind = kind
         self.amountMinor = amountMinor
@@ -203,6 +299,7 @@ struct FamilyAggregateSummary: Equatable {
     var spendableMinor: Int64
     var assetTrend: [FamilyTrendPoint]
     var balanceByWalletKind: [FamilyAggregateWalletSnapshot.Kind: Int64]
+    var balanceByWalletName: [FamilyDonutSegment]
     var expenseByCategory: [FamilyDonutSegment]
     var spendingByMember: [FamilyMemberSpendingSnapshot]
     var incomeByMember: [FamilyMemberSpendingSnapshot]
@@ -220,6 +317,176 @@ struct FamilyMonthlySpendableSnapshot: Equatable {
 }
 
 enum FamilyLogic {
+    nonisolated static func normalizedFamilyGroupingName(_ name: String) -> String {
+        name
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .split(whereSeparator: \.isWhitespace)
+            .joined(separator: " ")
+            .lowercased()
+    }
+
+    nonisolated static func aggregateWalletsByName(
+        _ wallets: [FamilyWalletAggregateSnapshot]
+    ) -> [FamilyWalletAggregateSnapshot] {
+        Dictionary(grouping: wallets) { wallet in
+            normalizedFamilyGroupingName(wallet.name)
+        }
+        .compactMap { key, groupedWallets in
+            guard !key.isEmpty,
+                  let representative = groupedWallets.sorted(by: walletAggregateSort).first else {
+                return nil
+            }
+
+            let currentBalance = groupedWallets.reduce(into: Int64.zero) { partial, wallet in
+                partial += wallet.currentBalanceMinor
+            }
+            let debt = groupedWallets.reduce(into: Int64.zero) { partial, wallet in
+                partial += wallet.debtMinor
+            }
+
+            return FamilyWalletAggregateSnapshot(
+                id: "wallet-name-\(key)",
+                ownerUserID: representative.ownerUserID,
+                name: representative.name,
+                kind: representative.kind,
+                currentBalanceMinor: currentBalance,
+                debtMinor: debt,
+                currencyCode: representative.currencyCode,
+                sortOrder: representative.sortOrder,
+                createdAt: representative.createdAt
+            )
+        }
+        .sorted(by: walletAggregateSort)
+    }
+
+    nonisolated static func familyBudgetRows(
+        plans: [FamilyBudgetPlanSnapshot],
+        transactions: [FamilyAggregateTransactionSnapshot],
+        selectedMonth: Date,
+        ownerUserID: UUID?,
+        budgetManagerUserID: UUID?,
+        memberOrder: [UUID],
+        referenceDate: Date = .now,
+        calendar: Calendar = MistiaCalendar.current,
+        minimumProgress: Double = 0.5,
+        includesMinimumProgress: Bool = false,
+        maximumCount: Int? = 3
+    ) -> [FamilyBudgetAggregateSnapshot] {
+        let monthStart = PlanningLogic.startOfMonth(for: selectedMonth, calendar: calendar)
+        let monthInterval = calendar.dateInterval(of: .month, for: monthStart)
+        let groupedPlans = Dictionary(grouping: plans.filter { plan in
+            !normalizedFamilyGroupingName(plan.categoryName).isEmpty
+                && PlanningLogic.startOfMonth(for: plan.monthAnchor, calendar: calendar) == monthStart
+        }) { plan in
+            normalizedFamilyGroupingName(plan.categoryName)
+        }
+
+        let daysRemaining = daysRemainingInMonth(
+            for: monthStart,
+            referenceDate: referenceDate,
+            calendar: calendar
+        )
+
+        let rows = groupedPlans.compactMap { key, groupedPlans -> FamilyBudgetAggregateSnapshot? in
+            guard let selectedPlan = prioritizedPlan(
+                groupedPlans,
+                ownerUserID: ownerUserID,
+                managerUserID: budgetManagerUserID,
+                memberOrder: memberOrder
+            ) else {
+                return nil
+            }
+
+            let spent = transactions.reduce(into: Int64.zero) { partial, transaction in
+                guard isExpenseSpending(transaction),
+                      monthInterval?.contains(transaction.occurredAt) == true,
+                      transaction.matchesCategoryGroupingKey(key)
+                else {
+                    return
+                }
+
+                partial += transaction.amountMinor
+            }
+
+            return FamilyBudgetAggregateSnapshot(
+                id: "budget-category-\(key)",
+                sourceBudgetID: selectedPlan.id,
+                sourceOwnerUserID: selectedPlan.ownerUserID,
+                name: selectedPlan.categoryName,
+                iconSymbolName: selectedPlan.iconSymbolName,
+                colorHex: selectedPlan.colorHex,
+                spentMinor: spent,
+                limitMinor: selectedPlan.limitMinor,
+                currencyCode: selectedPlan.currencyCode,
+                daysRemaining: daysRemaining
+            )
+        }
+
+        let sortedRows = rows
+            .filter { row in
+                includesMinimumProgress
+                    ? row.progress >= minimumProgress
+                    : row.progress > minimumProgress
+            }
+            .sorted { lhs, rhs in
+                if lhs.progress != rhs.progress {
+                    return lhs.progress > rhs.progress
+                }
+                if lhs.daysRemaining != rhs.daysRemaining {
+                    return lhs.daysRemaining < rhs.daysRemaining
+                }
+                return lhs.name.localizedCaseInsensitiveCompare(rhs.name) == .orderedAscending
+            }
+
+        return maximumCount.map { Array(sortedRows.prefix($0)) } ?? sortedRows
+    }
+
+    nonisolated static func familyGoalRows(
+        goals: [FamilyGoalSnapshot],
+        ownerUserID: UUID?,
+        goalManagerUserID: UUID?,
+        memberOrder: [UUID]
+    ) -> [FamilyGoalAggregateSnapshot] {
+        Dictionary(grouping: goals.filter { !$0.name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }) { goal in
+            normalizedFamilyGroupingName(goal.name)
+        }
+        .compactMap { key, groupedGoals -> FamilyGoalAggregateSnapshot? in
+            guard let selectedGoal = prioritizedGoal(
+                groupedGoals,
+                ownerUserID: ownerUserID,
+                managerUserID: goalManagerUserID,
+                memberOrder: memberOrder
+            ) else {
+                return nil
+            }
+
+            let saved = groupedGoals.reduce(into: Int64.zero) { partial, goal in
+                partial += goal.currentSavedMinor
+            }
+
+            return FamilyGoalAggregateSnapshot(
+                id: "goal-name-\(key)",
+                sourceGoalID: selectedGoal.id,
+                sourceOwnerUserID: selectedGoal.ownerUserID,
+                name: selectedGoal.name,
+                iconSymbolName: selectedGoal.iconSymbolName,
+                targetMinor: selectedGoal.targetMinor,
+                currentSavedMinor: saved,
+                targetDate: selectedGoal.targetDate,
+                currencyCode: selectedGoal.currencyCode
+            )
+        }
+        .sorted { lhs, rhs in
+            if lhs.progress != rhs.progress {
+                return lhs.progress > rhs.progress
+            }
+            if lhs.targetDate != rhs.targetDate {
+                return lhs.targetDate < rhs.targetDate
+            }
+            return lhs.name.localizedCaseInsensitiveCompare(rhs.name) == .orderedAscending
+        }
+    }
+
     static func monthlySpendable(
         totalAssetsMinor: Int64,
         monthlyDueMinor: Int64
@@ -328,6 +595,26 @@ enum FamilyLogic {
             partial[wallet.kind, default: 0] += wallet.balanceMinor - wallet.debtMinor
         }
 
+        let balanceByWalletNameMap = visibleWallets.reduce(into: [String: (name: String, value: Int64)]()) { partial, wallet in
+            guard let name = wallet.name?.trimmingCharacters(in: .whitespacesAndNewlines),
+                  !name.isEmpty else {
+                return
+            }
+            let key = normalizedFamilyGroupingName(name)
+            let current = partial[key] ?? (name: name, value: 0)
+            partial[key] = (name: current.name, value: current.value + wallet.balanceMinor - wallet.debtMinor)
+        }
+        let balanceByWalletName = balanceByWalletNameMap
+            .map { key, value in
+                FamilyDonutSegment(label: value.name, valueMinor: value.value, colorHex: nil)
+            }
+            .sorted { lhs, rhs in
+                if lhs.valueMinor != rhs.valueMinor {
+                    return lhs.valueMinor > rhs.valueMinor
+                }
+                return lhs.label.localizedCaseInsensitiveCompare(rhs.label) == .orderedAscending
+            }
+
         let expenseMap = intervalTransactions.reduce(into: [String: Int64]()) { partial, transaction in
             guard isExpenseSpending(transaction) else { return }
             partial[transaction.categoryName ?? "Other", default: 0] += transaction.amountMinor
@@ -413,6 +700,7 @@ enum FamilyLogic {
             spendableMinor: spendableMinor,
             assetTrend: reversedTrend,
             balanceByWalletKind: balanceByWalletKind,
+            balanceByWalletName: balanceByWalletName,
             expenseByCategory: expenseByCategory,
             spendingByMember: spendingByMember,
             incomeByMember: incomeByMember,
@@ -422,5 +710,135 @@ enum FamilyLogic {
 
     nonisolated private static func isExpenseSpending(_ transaction: FamilyAggregateTransactionSnapshot) -> Bool {
         transaction.kind == .expense && !transaction.isCreditCardPayment
+    }
+
+    nonisolated private static func walletAggregateSort(
+        lhs: FamilyWalletAggregateSnapshot,
+        rhs: FamilyWalletAggregateSnapshot
+    ) -> Bool {
+        if lhs.sortOrder != rhs.sortOrder {
+            return lhs.sortOrder < rhs.sortOrder
+        }
+        if lhs.createdAt != rhs.createdAt {
+            return lhs.createdAt < rhs.createdAt
+        }
+        let nameComparison = lhs.name.localizedCaseInsensitiveCompare(rhs.name)
+        if nameComparison != .orderedSame {
+            return nameComparison == .orderedAscending
+        }
+        return lhs.id < rhs.id
+    }
+
+    nonisolated private static func prioritizedPlan(
+        _ plans: [FamilyBudgetPlanSnapshot],
+        ownerUserID: UUID?,
+        managerUserID: UUID?,
+        memberOrder: [UUID]
+    ) -> FamilyBudgetPlanSnapshot? {
+        prioritizedItem(
+            plans,
+            ownerUserID: ownerUserID,
+            managerUserID: managerUserID,
+            memberOrder: memberOrder,
+            owner: \.ownerUserID,
+            fallbackSort: budgetPlanSort
+        )
+    }
+
+    nonisolated private static func prioritizedGoal(
+        _ goals: [FamilyGoalSnapshot],
+        ownerUserID: UUID?,
+        managerUserID: UUID?,
+        memberOrder: [UUID]
+    ) -> FamilyGoalSnapshot? {
+        prioritizedItem(
+            goals,
+            ownerUserID: ownerUserID,
+            managerUserID: managerUserID,
+            memberOrder: memberOrder,
+            owner: \.ownerUserID,
+            fallbackSort: goalSort
+        )
+    }
+
+    nonisolated private static func prioritizedItem<T>(
+        _ items: [T],
+        ownerUserID: UUID?,
+        managerUserID: UUID?,
+        memberOrder: [UUID],
+        owner: KeyPath<T, UUID>,
+        fallbackSort: (T, T) -> Bool
+    ) -> T? {
+        let sortedItems = items.sorted(by: fallbackSort)
+        if let ownerUserID,
+           let ownerItem = sortedItems.first(where: { $0[keyPath: owner] == ownerUserID }) {
+            return ownerItem
+        }
+        if let managerUserID,
+           let managerItem = sortedItems.first(where: { $0[keyPath: owner] == managerUserID }) {
+            return managerItem
+        }
+        if sortedItems.count == 1 {
+            return sortedItems.first
+        }
+        for memberID in memberOrder {
+            if let memberItem = sortedItems.first(where: { $0[keyPath: owner] == memberID }) {
+                return memberItem
+            }
+        }
+        return sortedItems.first
+    }
+
+    nonisolated private static func budgetPlanSort(
+        lhs: FamilyBudgetPlanSnapshot,
+        rhs: FamilyBudgetPlanSnapshot
+    ) -> Bool {
+        if lhs.categoryName.localizedCaseInsensitiveCompare(rhs.categoryName) != .orderedSame {
+            return lhs.categoryName.localizedCaseInsensitiveCompare(rhs.categoryName) == .orderedAscending
+        }
+        return lhs.id.uuidString < rhs.id.uuidString
+    }
+
+    nonisolated private static func goalSort(
+        lhs: FamilyGoalSnapshot,
+        rhs: FamilyGoalSnapshot
+    ) -> Bool {
+        if lhs.sortOrder != rhs.sortOrder {
+            return lhs.sortOrder < rhs.sortOrder
+        }
+        if lhs.targetDate != rhs.targetDate {
+            return lhs.targetDate < rhs.targetDate
+        }
+        return lhs.id.uuidString < rhs.id.uuidString
+    }
+
+    nonisolated private static func daysRemainingInMonth(
+        for selectedMonth: Date,
+        referenceDate: Date,
+        calendar: Calendar
+    ) -> Int {
+        let monthStart = PlanningLogic.startOfMonth(for: selectedMonth, calendar: calendar)
+        let referenceMonth = PlanningLogic.startOfMonth(for: referenceDate, calendar: calendar)
+        guard let monthInterval = calendar.dateInterval(of: .month, for: monthStart),
+              let monthEnd = calendar.date(byAdding: .day, value: -1, to: monthInterval.end) else {
+            return 0
+        }
+
+        if monthStart < referenceMonth {
+            return 0
+        }
+        if monthStart == referenceMonth {
+            let start = calendar.startOfDay(for: referenceDate)
+            return max((calendar.dateComponents([.day], from: start, to: monthEnd).day ?? 0) + 1, 0)
+        }
+        return (calendar.dateComponents([.day], from: monthStart, to: monthEnd).day ?? 0) + 1
+    }
+}
+
+private extension FamilyAggregateTransactionSnapshot {
+    nonisolated func matchesCategoryGroupingKey(_ key: String) -> Bool {
+        let categoryKey = categoryName.map(FamilyLogic.normalizedFamilyGroupingName)
+        let parentKey = categoryParentName.map(FamilyLogic.normalizedFamilyGroupingName)
+        return categoryKey == key || parentKey == key
     }
 }

@@ -439,19 +439,13 @@ private enum FamilyOverviewSheet: String, Identifiable {
     var id: String { rawValue }
 }
 
-private struct FamilyAggregateWalletRow: Identifiable {
-    let wallet: LedgerWallet
-    let currentBalanceMinor: Int64
-
-    var id: UUID { wallet.id }
-}
-
 private struct FamilyOverviewDerivedData {
-    let walletRows: [FamilyAggregateWalletRow]
+    let walletRows: [FamilyWalletAggregateSnapshot]
     let summary: FamilyAggregateSummary
     let monthlySpendable: FamilyMonthlySpendableSnapshot
     let categorySpendingSnapshot: OverviewCategorySpendingMonthSnapshot
-    let budgetRows: [OverviewBudgetAlertSnapshot]
+    let budgetRows: [FamilyBudgetAggregateSnapshot]
+    let goalRows: [FamilyGoalAggregateSnapshot]
     let dueAlerts: [OverviewDueAlertSnapshot]
 }
 
@@ -624,6 +618,7 @@ private struct FamilyDistributionSection: View {
     let categorySpendingSnapshot: OverviewCategorySpendingMonthSnapshot
     @Binding var timeframe: FamilyTimeframe
     @Binding var mode: FamilyDistributionMode
+    let accountSegments: [FamilyDonutSegment]
     let currencyCode: String
     let onSegmentTap: (FamilyDonutSegment) -> Void
 
@@ -688,15 +683,6 @@ private struct FamilyDistributionSection: View {
                         }
                     }
                 }
-                .gesture(
-                    DragGesture().onEnded { value in
-                        if value.translation.width > 50 {
-                            switchTimeframe(back: true)
-                        } else if value.translation.width < -50 {
-                            switchTimeframe(back: false)
-                        }
-                    }
-                )
             }
             .onAppear(perform: normalizeMode)
             .onChange(of: availableModeKey) { _, _ in
@@ -750,15 +736,7 @@ private struct FamilyDistributionSection: View {
         case .spending:
             return summary.expenseByCategory
         case .accounts:
-            return summary.balanceByWalletKind
-                .map {
-                    FamilyDonutSegment(
-                        label: walletKindTitle($0.key),
-                        valueMinor: $0.value,
-                        colorHex: nil
-                    )
-                }
-                .sorted { $0.valueMinor > $1.valueMinor }
+            return accountSegments
         case .members:
             return summary.spendingByMember.map { FamilyDonutSegment(label: $0.name, valueMinor: $0.amountMinor, colorHex: nil) }
         }
@@ -825,21 +803,6 @@ private struct FamilyDistributionSection: View {
         return palette[index % palette.count]
     }
 
-    private func walletKindTitle(_ kind: FamilyAggregateWalletSnapshot.Kind) -> String {
-        switch kind {
-        case .cash:
-            return mistiaLocalized(vi: "Tiền mặt", en: "Cash", ja: "現金")
-        case .bank:
-            return mistiaLocalized(vi: "Ngân hàng", en: "Bank", ja: "銀行")
-        case .ewallet:
-            return mistiaLocalized(vi: "Ví điện tử", en: "E-wallet", ja: "電子ウォレット")
-        case .creditCard:
-            return mistiaLocalized(vi: "Thẻ tín dụng", en: "Credit cards", ja: "クレジットカード")
-        case .other:
-            return mistiaLocalized(vi: "Khác", en: "Other", ja: "その他")
-        }
-    }
-
     private func normalizeMode() {
         guard !availableModes.isEmpty, !availableModes.contains(mode), let firstMode = availableModes.first else {
             return
@@ -848,15 +811,6 @@ private struct FamilyDistributionSection: View {
         mode = firstMode
     }
 
-    private func switchTimeframe(back: Bool) {
-        let all = FamilyTimeframe.allCases
-        if let currentIdx = all.firstIndex(of: timeframe) {
-            let nextIdx = back ? max(0, currentIdx - 1) : min(all.count - 1, currentIdx + 1)
-            withAnimation(.snappy) {
-                timeframe = all[nextIdx]
-            }
-        }
-    }
 }
 
 private struct FamilyPieChart: View {
@@ -1188,7 +1142,7 @@ private struct FamilyMemberComparisonSection: View {
 
 private struct FamilyAggregateAccountList: View {
     @Environment(\.colorScheme) private var colorScheme
-    let rows: [FamilyAggregateWalletRow]
+    let rows: [FamilyWalletAggregateSnapshot]
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -1200,14 +1154,14 @@ private struct FamilyAggregateAccountList: View {
                 VStack(spacing: 0) {
                     ForEach(Array(rows.enumerated()), id: \.element.id) { index, row in
                         HStack(spacing: 12) {
-                            MistiaFinanceIconView(icon: row.wallet.kind.defaultIconSymbolName, fallbackColor: MistiaAccent.purple.color, size: 32)
+                            MistiaFinanceIconView(icon: row.kind.defaultIconSymbolName, fallbackColor: MistiaAccent.purple.color, size: 32)
                             
                             VStack(alignment: .leading, spacing: 2) {
-                                Text(row.wallet.name)
+                                Text(row.name)
                                     .font(.system(size: 15, weight: .semibold, design: .rounded))
                                     .foregroundStyle(.primary)
                                 
-                                if row.wallet.kind == .creditCard {
+                                if row.kind == .creditCard {
                                     Text(mistiaLocalized(vi: "Sắp đến hạn", en: "Upcoming", ja: "間もなく期限"))
                                         .font(.system(size: 11, weight: .medium, design: .rounded))
                                         .foregroundStyle(.orange)
@@ -1216,7 +1170,7 @@ private struct FamilyAggregateAccountList: View {
                             
                             Spacer()
                             
-                            Text(row.currentBalanceMinor.formattedCurrency(code: row.wallet.currencyCode))
+                            Text(row.currentBalanceMinor.formattedCurrency(code: row.currencyCode))
                                 .font(.system(size: 15, weight: .bold, design: .rounded))
                                 .foregroundStyle(amountColor(for: row))
                         }
@@ -1237,8 +1191,8 @@ private struct FamilyAggregateAccountList: View {
         colorScheme == .dark ? .white.opacity(0.04) : .white.opacity(0.16)
     }
 
-    private func amountColor(for row: FamilyAggregateWalletRow) -> Color {
-        if row.wallet.kind == .creditCard {
+    private func amountColor(for row: FamilyWalletAggregateSnapshot) -> Color {
+        if row.kind == .creditCard {
             // For credit cards, show available credit in green (positive)
             return MistiaAccent.income.color
         }
@@ -1253,7 +1207,7 @@ private struct FamilyAggregateAccountList: View {
 
 private struct FamilyBudgetStatusSection: View {
     @Environment(\.colorScheme) private var colorScheme
-    let rows: [OverviewBudgetAlertSnapshot]
+    let rows: [FamilyBudgetAggregateSnapshot]
     let currencyCode: String
 
     var body: some View {
@@ -1300,6 +1254,69 @@ private struct FamilyBudgetStatusSection: View {
 
     private var cardTint: Color {
         colorScheme == .dark ? .white.opacity(0.04) : .white.opacity(0.16)
+    }
+}
+
+private struct FamilyGoalStatusSection: View {
+    @Environment(\.colorScheme) private var colorScheme
+    let rows: [FamilyGoalAggregateSnapshot]
+    let currencyCode: String
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text(mistiaLocalized(vi: "Mục tiêu gia đình", en: "Family goals", ja: "家族の目標"))
+                .familyOverviewSectionTitleStyle()
+                .padding(.horizontal, 4)
+
+            MistiaGlassCard(cornerRadius: 24, tint: cardTint, padding: 0) {
+                VStack(spacing: 0) {
+                    ForEach(Array(rows.enumerated()), id: \.element.id) { index, row in
+                        VStack(alignment: .leading, spacing: 8) {
+                            HStack(spacing: 10) {
+                                Image(systemName: row.iconSymbolName)
+                                    .font(.system(size: 14, weight: .bold))
+                                    .foregroundStyle(MistiaAccent.income.color)
+                                    .frame(width: 20)
+
+                                Text(row.name)
+                                    .font(.system(size: 14, weight: .semibold, design: .rounded))
+
+                                Spacer()
+
+                                Text(row.progressPercentText)
+                                    .font(.system(size: 13, weight: .bold, design: .rounded))
+                                    .foregroundStyle(MistiaAccent.income.color)
+                            }
+
+                            ProgressView(value: min(max(row.progress, 0), 1))
+                                .tint(MistiaAccent.income.color)
+
+                            Text(goalAmountText(for: row))
+                                .font(.system(size: 11.5, weight: .semibold, design: .rounded))
+                                .foregroundStyle(.secondary)
+                                .lineLimit(1)
+                                .minimumScaleFactor(0.78)
+                        }
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 16)
+
+                        if index < rows.count - 1 {
+                            Divider()
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    private var cardTint: Color {
+        colorScheme == .dark ? .white.opacity(0.04) : .white.opacity(0.16)
+    }
+
+    private func goalAmountText(for row: FamilyGoalAggregateSnapshot) -> String {
+        let saved = row.currentSavedMinor.formattedCurrency(code: row.currencyCode)
+        let target = row.targetMinor.formattedCurrency(code: row.currencyCode)
+        return "\(saved) / \(target)"
     }
 }
 
@@ -1425,7 +1442,7 @@ private struct FamilyMiniTrendChart: View {
 
 private struct FamilyOverviewHeader: View {
     @Environment(FamilyContextStore.self) private var familyContextStore
-    let walletRows: [FamilyAggregateWalletRow]
+    let walletRows: [FamilyWalletAggregateSnapshot]
     let signedInUserID: UUID?
     let canInviteMembers: Bool
     let onInviteTap: () -> Void
@@ -1493,10 +1510,10 @@ private struct FamilyOverviewHeader: View {
                                 ForEach(walletRows.prefix(3)) { row in
                                     Button {} label: {
                                         HStack {
-                                            Image(systemName: row.wallet.kind.defaultIconSymbolName)
-                                            Text(row.wallet.name)
+                                            Image(systemName: row.kind.defaultIconSymbolName)
+                                            Text(row.name)
                                             Spacer()
-                                            Text(row.currentBalanceMinor.formattedCurrency(code: row.wallet.currencyCode))
+                                            Text(row.currentBalanceMinor.formattedCurrency(code: row.currencyCode))
                                         }
                                     }
                                 }
@@ -1817,6 +1834,8 @@ struct FamilyOverviewScreen: View {
     private var storedTransactions: [LedgerTransaction]
     @Query(filter: #Predicate<BudgetPlan> { $0.deletedAt == nil })
     private var storedBudgets: [BudgetPlan]
+    @Query(filter: #Predicate<SavingsGoal> { $0.deletedAt == nil })
+    private var storedGoals: [SavingsGoal]
     @Query(filter: #Predicate<RecurringBillPlan> { $0.deletedAt == nil })
     private var storedBills: [RecurringBillPlan]
     @Query(filter: #Predicate<InstallmentPlan> { $0.deletedAt == nil })
@@ -1833,6 +1852,7 @@ struct FamilyOverviewScreen: View {
         let walletOwnerMap = MistiaRecordOwnershipStore.ownerMap(from: ownershipScopes, entity: .wallet)
         let transactionOwnerMap = MistiaRecordOwnershipStore.ownerMap(from: ownershipScopes, entity: .transaction)
         let budgetOwnerMap = MistiaRecordOwnershipStore.ownerMap(from: ownershipScopes, entity: .budgetPlan)
+        let goalOwnerMap = MistiaRecordOwnershipStore.ownerMap(from: ownershipScopes, entity: .savingsGoal)
         let billOwnerMap = MistiaRecordOwnershipStore.ownerMap(from: ownershipScopes, entity: .recurringBillPlan)
         let installmentOwnerMap = MistiaRecordOwnershipStore.ownerMap(from: ownershipScopes, entity: .installmentPlan)
         let occurrenceOwnerMap = MistiaRecordOwnershipStore.ownerMap(from: ownershipScopes, entity: .dueOccurrenceRecord)
@@ -1852,6 +1872,12 @@ struct FamilyOverviewScreen: View {
             storedBudgets,
             entity: .budgetPlan,
             ownerMap: budgetOwnerMap,
+            familyMemberUserIDs: familyMemberUserIDs
+        )
+        let visibleGoals = visibleForFamilyOverview(
+            storedGoals,
+            entity: .savingsGoal,
+            ownerMap: goalOwnerMap,
             familyMemberUserIDs: familyMemberUserIDs
         )
         let visibleBills = visibleForFamilyOverview(
@@ -1874,7 +1900,7 @@ struct FamilyOverviewScreen: View {
         )
         let transactionRecords = visibleTransactions.map(\.planningRecordSnapshot)
         let occurrenceSnapshots = visibleOccurrences.map(\.planningSnapshot)
-        let walletRows = visibleWallets
+        let walletRows = FamilyLogic.aggregateWalletsByName(visibleWallets
             .sorted {
                 if $0.sortOrder != $1.sortOrder {
                     return $0.sortOrder < $1.sortOrder
@@ -1898,11 +1924,25 @@ struct FamilyOverviewScreen: View {
                     displayBalance = debt
                 }
 
-                return FamilyAggregateWalletRow(
-                    wallet: wallet,
-                    currentBalanceMinor: displayBalance
+                let creditCardDebt: Int64
+                if wallet.kind == .creditCard, let profile = wallet.creditCardProfile {
+                    creditCardDebt = max(profile.creditLimitMinor - displayBalance, 0)
+                } else {
+                    creditCardDebt = 0
+                }
+
+                return FamilyWalletAggregateSnapshot(
+                    id: wallet.id.uuidString,
+                    ownerUserID: walletOwnerMap[wallet.id] ?? sessionStore.signedInUserID ?? UUID(),
+                    name: wallet.name,
+                    kind: wallet.kind,
+                    currentBalanceMinor: displayBalance,
+                    debtMinor: creditCardDebt,
+                    currencyCode: wallet.currencyCode,
+                    sortOrder: wallet.sortOrder,
+                    createdAt: wallet.createdAt
                 )
-            }
+            })
         let creditCardAccounts = visibleWallets.compactMap {
             $0.planningCreditCardSnapshot(records: transactionRecords)
         }
@@ -1947,11 +1987,59 @@ struct FamilyOverviewScreen: View {
                     && PlanningLogic.startOfMonth(for: $0.monthAnchor, calendar: calendar) == currentMonth
             }
             .map { $0.planningSnapshot(calendar: calendar) }
-        let budgetRows = OverviewLogic.budgetAlerts(
-            budgets: activeBudgetPlans,
-            transactionRecords: transactionRecords,
+        let familyTransactions = visibleTransactions.map { transaction in
+            FamilyAggregateTransactionSnapshot(
+                ownerUserID: transactionOwnerMap[transaction.id] ?? sessionStore.signedInUserID ?? UUID(),
+                categoryName: transaction.category?.localizedDisplayName,
+                categoryParentName: transaction.category?.parentCategory?.localizedDisplayName,
+                occurredAt: transaction.occurredAt,
+                kind: transaction.primaryKind.familyAggregateKind,
+                amountMinor: abs(transaction.amountMinor),
+                isCreditCardPayment: TransactionLogic.isCreditCardPayment(transaction.snapshot)
+            )
+        }
+        let memberOrder = familyMemberOrder
+        let budgetRows = FamilyLogic.familyBudgetRows(
+            plans: activeBudgetPlans.map { plan in
+                FamilyBudgetPlanSnapshot(
+                    id: plan.id,
+                    ownerUserID: budgetOwnerMap[plan.id] ?? sessionStore.signedInUserID ?? UUID(),
+                    categoryName: plan.categoryName,
+                    iconSymbolName: plan.categoryIconSymbolName,
+                    colorHex: plan.categoryColorHex,
+                    limitMinor: plan.limitMinor,
+                    currencyCode: plan.currencyCode,
+                    monthAnchor: plan.monthAnchor
+                )
+            },
+            transactions: familyTransactions,
+            selectedMonth: currentMonth,
+            ownerUserID: familyContextStore.family?.ownerUserID,
+            budgetManagerUserID: familyContextStore.family?.budgetManagerUserID,
+            memberOrder: memberOrder,
             referenceDate: now,
             calendar: calendar
+        )
+        let goalRows = FamilyLogic.familyGoalRows(
+            goals: visibleGoals
+                .filter { !$0.isArchived }
+                .map { goal in
+                    let snapshot = goal.planningSnapshot
+                    return FamilyGoalSnapshot(
+                        id: snapshot.id,
+                        ownerUserID: goalOwnerMap[goal.id] ?? sessionStore.signedInUserID ?? UUID(),
+                        name: snapshot.name,
+                        iconSymbolName: snapshot.iconSymbolName,
+                        targetMinor: snapshot.targetMinor,
+                        currentSavedMinor: snapshot.currentSavedMinor,
+                        targetDate: snapshot.targetDate,
+                        currencyCode: snapshot.currencyCode,
+                        sortOrder: snapshot.sortOrder
+                    )
+                },
+            ownerUserID: familyContextStore.family?.ownerUserID,
+            goalManagerUserID: familyContextStore.family?.goalManagerUserID,
+            memberOrder: memberOrder
         )
         let dueAlerts = OverviewLogic.dueAlerts(
             creditCardDues: creditCardDueItems,
@@ -1965,30 +2053,15 @@ struct FamilyOverviewScreen: View {
         )
         let summary = FamilyLogic.aggregateSummary(
             wallets: walletRows.map { row in
-                let debt: Int64
-                if row.wallet.kind == .creditCard, let profile = row.wallet.creditCardProfile {
-                    debt = max(profile.creditLimitMinor - row.currentBalanceMinor, 0)
-                } else {
-                    debt = 0
-                }
-
                 return FamilyAggregateWalletSnapshot(
-                    ownerUserID: walletOwnerMap[row.wallet.id] ?? sessionStore.signedInUserID ?? UUID(),
-                    kind: row.wallet.kind.familyAggregateKind,
-                    balanceMinor: row.wallet.kind == .creditCard ? 0 : row.currentBalanceMinor,
-                    debtMinor: debt
+                    ownerUserID: row.ownerUserID,
+                    kind: row.kind.familyAggregateKind,
+                    balanceMinor: row.kind == .creditCard ? 0 : row.currentBalanceMinor,
+                    debtMinor: row.debtMinor,
+                    name: row.name
                 )
             },
-            transactions: visibleTransactions.map { transaction in
-                FamilyAggregateTransactionSnapshot(
-                    ownerUserID: transactionOwnerMap[transaction.id] ?? sessionStore.signedInUserID ?? UUID(),
-                    categoryName: transaction.category?.localizedDisplayName,
-                    occurredAt: transaction.occurredAt,
-                    kind: transaction.primaryKind.familyAggregateKind,
-                    amountMinor: abs(transaction.amountMinor),
-                    isCreditCardPayment: TransactionLogic.isCreditCardPayment(transaction.snapshot)
-                )
-            },
+            transactions: familyTransactions,
             selectedInterval: interval,
             visibleMemberIDs: familyMemberUserIDs,
             memberNames: memberNames,
@@ -2012,6 +2085,7 @@ struct FamilyOverviewScreen: View {
             monthlySpendable: monthlySpendable,
             categorySpendingSnapshot: categorySpendingSnapshot,
             budgetRows: budgetRows,
+            goalRows: goalRows,
             dueAlerts: dueAlerts
         )
     }
@@ -2022,6 +2096,12 @@ struct FamilyOverviewScreen: View {
             ids.insert(currentUserID)
         }
         return ids
+    }
+
+    private var familyMemberOrder: [UUID] {
+        var seen = Set<UUID>()
+        return ([familyContextStore.family?.ownerUserID].compactMap { $0 } + familyContextStore.members.map(\.userID))
+            .filter { seen.insert($0).inserted }
     }
 
     private func visibleForFamilyOverview<Record: MistiaOwnedRecord>(
@@ -2104,6 +2184,7 @@ struct FamilyOverviewScreen: View {
                 categorySpendingSnapshot: data.categorySpendingSnapshot,
                 timeframe: $timeframe,
                 mode: $distributionMode,
+                accountSegments: data.summary.balanceByWalletName,
                 currencyCode: currencyCode,
                 onSegmentTap: { segment in
                     activeSheet = .filterTransactions
@@ -2125,6 +2206,13 @@ struct FamilyOverviewScreen: View {
             if !data.budgetRows.isEmpty {
                 FamilyBudgetStatusSection(
                     rows: data.budgetRows,
+                    currencyCode: currencyCode
+                )
+            }
+
+            if !data.goalRows.isEmpty {
+                FamilyGoalStatusSection(
+                    rows: data.goalRows,
                     currencyCode: currencyCode
                 )
             }
@@ -3379,6 +3467,7 @@ private struct FamilySharingSheet: View {
     let member: FamilyMember
 
     @State private var pendingChange: FamilySharingChange?
+    @State private var updatingPlanningManager: MistiaFamilyNotificationResourceType?
 
     private var ownerUserID: UUID? {
         sessionStore.activeLocalProfileUserID ?? sessionStore.signedInUserID
@@ -3408,6 +3497,19 @@ private struct FamilySharingSheet: View {
                         Text(remoteUnavailableReason)
                             .font(.footnote)
                             .foregroundStyle(.secondary)
+                    }
+                }
+
+                if familyContextStore.currentRole == .owner {
+                    Section(mistiaLocalized(vi: "Quản lý tổng quan gia đình", en: "Family overview managers", ja: "家族概要の管理者")) {
+                        planningManagerToggle(
+                            title: mistiaLocalized(vi: "Quản lý ngân sách gia đình", en: "Manage family budgets", ja: "家族予算を管理"),
+                            resourceType: .budget
+                        )
+                        planningManagerToggle(
+                            title: mistiaLocalized(vi: "Quản lý mục tiêu gia đình", en: "Manage family goals", ja: "家族目標を管理"),
+                            resourceType: .goal
+                        )
                     }
                 }
 
@@ -3591,6 +3693,29 @@ private struct FamilySharingSheet: View {
     }
 
     @ViewBuilder
+    private func planningManagerToggle(
+        title: String,
+        resourceType: MistiaFamilyNotificationResourceType
+    ) -> some View {
+        if let family = familyContextStore.family {
+            Toggle(
+                title,
+                isOn: Binding(
+                    get: {
+                        resolvedPlanningManagerUserID(for: resourceType, family: family) == member.userID
+                    },
+                    set: { isManager in
+                        setPlanningManager(resourceType: resourceType, isManager: isManager)
+                    }
+                )
+            )
+            .tint(MistiaAccent.purple.color)
+            .toggleStyle(.switch)
+            .disabled(updatingPlanningManager != nil)
+        }
+    }
+
+    @ViewBuilder
     private func sharingToggle(
         title: String,
         resourceType: MistiaFamilyNotificationResourceType,
@@ -3625,6 +3750,42 @@ private struct FamilySharingSheet: View {
             )
             .tint(MistiaAccent.purple.color)
             .toggleStyle(.switch)
+        }
+    }
+
+    private func resolvedPlanningManagerUserID(
+        for resourceType: MistiaFamilyNotificationResourceType,
+        family: FamilyGroupRecord
+    ) -> UUID {
+        switch resourceType {
+        case .budget:
+            return family.budgetManagerUserID ?? family.ownerUserID
+        case .goal:
+            return family.goalManagerUserID ?? family.ownerUserID
+        default:
+            return family.ownerUserID
+        }
+    }
+
+    private func setPlanningManager(
+        resourceType: MistiaFamilyNotificationResourceType,
+        isManager: Bool
+    ) {
+        guard let family = familyContextStore.family else { return }
+        let currentManagerUserID = resolvedPlanningManagerUserID(for: resourceType, family: family)
+        guard isManager || currentManagerUserID == member.userID else { return }
+        let nextManagerUserID = isManager
+            ? (member.userID == family.ownerUserID ? nil : member.userID)
+            : nil
+
+        Task { @MainActor in
+            updatingPlanningManager = resourceType
+            await familyContextStore.setFamilyPlanningManager(
+                resourceType: resourceType,
+                managerUserID: nextManagerUserID,
+                sessionStore: sessionStore
+            )
+            updatingPlanningManager = nil
         }
     }
 
