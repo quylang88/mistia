@@ -844,73 +844,8 @@ final class SessionStore {
         )
     }
 
-    func pushFamilyTransactionToOwnerCloud(
-        recordID: UUID,
-        ownerUserID: UUID,
-        modifiedAt: Date
-    ) async -> Bool {
-        guard currentSession != nil else { return false }
-
-        if isSyncInFlight {
-            for _ in 0..<20 {
-                try? await Task.sleep(for: .milliseconds(250))
-                guard currentSession != nil else { return false }
-                if !isSyncInFlight {
-                    break
-                }
-            }
-        }
-
-        guard !isSyncInFlight else {
-            lastErrorMessage = mistiaLocalized(
-                vi: "Mistia đang xử lý một lần đồng bộ khác. Thử lưu lại sau vài giây nhé.",
-                en: "Mistia is finishing another sync. Try saving again in a few seconds.",
-                ja: "Mistia は別の同期を処理中です。数秒後にもう一度保存してください。"
-            )
-            return false
-        }
-
-        isSyncInFlight = true
-        defer {
-            isSyncInFlight = false
-            updateAutoSyncLoopState()
-        }
-
-        do {
-            let validSession = try await prepareRemoteSession()
-            let mutation = MistiaSyncMutation(
-                entity: .transaction,
-                recordID: recordID,
-                subjectUserID: ownerUserID,
-                kind: .upsert,
-                modifiedAt: modifiedAt,
-                baseVersion: currentRemoteVersion(
-                    for: .transaction,
-                    recordID: recordID,
-                    fallback: 0
-                ),
-                deviceID: MistiaSyncDeviceIdentity.current()
-            )
-
-            try? MistiaRecordOwnershipStore.upsert(
-                entity: .transaction,
-                recordID: recordID,
-                ownerUserID: ownerUserID,
-                updatedAt: modifiedAt,
-                in: modelContainer
-            )
-            syncCoordinator.queue(mutation)
-            _ = try await syncCoordinator.pushQueuedMutationsOnly(
-                [mutation],
-                session: validSession
-            )
-            lastSyncAt = .now
-            lastErrorMessage = nil
-            return true
-        } catch {
-            applySyncErrorState(error)
-            return false
-        }
+    func pushQueuedFamilyOwnerChangesNow() async -> Bool {
+        await flushQueuedFamilyOwnerPushIfAllowed()
     }
 
     func startInitialSync(with choice: MistiaInitialSyncChoice) async {
@@ -2999,24 +2934,24 @@ final class SessionStore {
         queuedFamilyOwnerPushTask?.cancel()
         queuedFamilyOwnerPushTask = Task { [weak self] in
             try? await Task.sleep(for: Self.QUEUED_AUTO_SYNC_DEBOUNCE)
-            await self?.flushQueuedFamilyOwnerPushIfAllowed()
+            _ = await self?.flushQueuedFamilyOwnerPushIfAllowed()
         }
     }
 
-    private func flushQueuedFamilyOwnerPushIfAllowed() async {
-        guard pendingFamilyOwnerPush else { return }
+    private func flushQueuedFamilyOwnerPushIfAllowed() async -> Bool {
+        guard pendingFamilyOwnerPush else { return false }
         guard currentSession != nil, isConfigured else {
             cancelQueuedFamilyOwnerPush()
-            return
+            return false
         }
 
         guard !isSyncInFlight else {
             queuedFamilyOwnerPushTask?.cancel()
             queuedFamilyOwnerPushTask = Task { [weak self] in
                 try? await Task.sleep(for: Self.QUEUED_AUTO_SYNC_DEBOUNCE)
-                await self?.flushQueuedFamilyOwnerPushIfAllowed()
+                _ = await self?.flushQueuedFamilyOwnerPushIfAllowed()
             }
-            return
+            return false
         }
 
         let activeUserID = activeLocalProfileUserID ?? currentSession?.user.id
@@ -3026,7 +2961,7 @@ final class SessionStore {
         }
         guard !mutations.isEmpty else {
             cancelQueuedFamilyOwnerPush()
-            return
+            return true
         }
 
         pendingFamilyOwnerPush = false
@@ -3045,8 +2980,10 @@ final class SessionStore {
             )
             lastSyncAt = .now
             lastErrorMessage = nil
+            return true
         } catch {
             applySyncErrorState(error)
+            return false
         }
     }
 

@@ -1211,16 +1211,16 @@ struct TransactionEditorSheet: View {
 
             try modelContext.save()
             if let subjectUserIDOverride {
+                sessionStore.recordUpsert(
+                    entity: .transaction,
+                    recordID: transaction.id,
+                    modifiedAt: transaction.updatedAt,
+                    subjectUserIDOverride: subjectUserIDOverride
+                )
                 if subjectUserIDOverride != sessionStore.activeLocalProfileUserID {
                     isSaving = true
-                    let recordID = transaction.id
-                    let modifiedAt = transaction.updatedAt
                     Task { @MainActor in
-                        let didSync = await sessionStore.pushFamilyTransactionToOwnerCloud(
-                            recordID: recordID,
-                            ownerUserID: subjectUserIDOverride,
-                            modifiedAt: modifiedAt
-                        )
+                        let didSync = await sessionStore.pushQueuedFamilyOwnerChangesNow()
                         isSaving = false
                         guard didSync else {
                             alertMessage = familyCloudPushFailedMessage()
@@ -1231,12 +1231,6 @@ struct TransactionEditorSheet: View {
                     }
                     return
                 }
-                sessionStore.recordUpsert(
-                    entity: .transaction,
-                    recordID: transaction.id,
-                    modifiedAt: transaction.updatedAt,
-                    subjectUserIDOverride: subjectUserIDOverride
-                )
             }
             onComplete(completion)
             dismiss()
