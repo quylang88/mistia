@@ -158,6 +158,8 @@ final class SessionStore {
     @ObservationIgnored private var postSyncRefreshHandler: (() async -> Void)?
     @ObservationIgnored private var queuedAutoSyncTask: Task<Void, Never>?
     @ObservationIgnored private var pendingQueuedAutoSync = false
+    @ObservationIgnored private var queuedFamilyOwnerPushTask: Task<Void, Never>?
+    @ObservationIgnored private var pendingFamilyOwnerPush = false
     @ObservationIgnored private var reconnectValidationTask: Task<Void, Never>?
     @ObservationIgnored private var pendingAuthenticationState: PendingAuthenticationState?
 
@@ -1245,7 +1247,7 @@ final class SessionStore {
         )
         guard !queuedMutations.isEmpty else { return }
         syncCoordinator.queue(queuedMutations)
-        scheduleQueuedSyncIfAllowed()
+        schedulePush(for: queuedMutations)
     }
 
     func recordDelete(
@@ -1282,7 +1284,7 @@ final class SessionStore {
         )
         guard !queuedMutations.isEmpty else { return }
         syncCoordinator.queue(queuedMutations)
-        scheduleQueuedSyncIfAllowed()
+        schedulePush(for: queuedMutations)
     }
 
     func recordMutations(_ mutations: [MistiaSyncMutation]) {
@@ -1290,7 +1292,7 @@ final class SessionStore {
         let queuedMutations = queueReadyMutations(for: mutations)
         guard !queuedMutations.isEmpty else { return }
         syncCoordinator.queue(queuedMutations)
-        scheduleQueuedSyncIfAllowed()
+        schedulePush(for: queuedMutations)
     }
 
     func protectedQueuedRecordIDs() -> Set<String> {
@@ -2934,6 +2936,25 @@ final class SessionStore {
         return lhs.baseVersion >= rhs.baseVersion ? lhs : rhs
     }
 
+    private func schedulePush(for mutations: [MistiaSyncMutation]) {
+        let activeUserID = activeLocalProfileUserID ?? currentSession?.user.id
+        let hasFamilyOwnerMutations = mutations.contains { mutation in
+            guard let activeUserID else { return false }
+            return mutation.subjectUserID != activeUserID
+        }
+        let hasOwnMutations = mutations.contains { mutation in
+            guard let activeUserID else { return true }
+            return mutation.subjectUserID == activeUserID
+        }
+
+        if hasFamilyOwnerMutations {
+            scheduleQueuedFamilyOwnerPushIfAllowed()
+        }
+        if hasOwnMutations {
+            scheduleQueuedSyncIfAllowed()
+        }
+    }
+
     private func scheduleQueuedSyncIfAllowed() {
         guard isAutoSyncEnabled, canManageSync, !requiresInitialSync, !requiresManualSyncAfterRestore else {
             return
@@ -2969,14 +2990,81 @@ final class SessionStore {
         _ = await syncNow(isManual: false)
     }
 
+    private func scheduleQueuedFamilyOwnerPushIfAllowed() {
+        guard currentSession != nil, isConfigured else {
+            return
+        }
+
+        pendingFamilyOwnerPush = true
+        queuedFamilyOwnerPushTask?.cancel()
+        queuedFamilyOwnerPushTask = Task { [weak self] in
+            try? await Task.sleep(for: Self.QUEUED_AUTO_SYNC_DEBOUNCE)
+            await self?.flushQueuedFamilyOwnerPushIfAllowed()
+        }
+    }
+
+    private func flushQueuedFamilyOwnerPushIfAllowed() async {
+        guard pendingFamilyOwnerPush else { return }
+        guard currentSession != nil, isConfigured else {
+            cancelQueuedFamilyOwnerPush()
+            return
+        }
+
+        guard !isSyncInFlight else {
+            queuedFamilyOwnerPushTask?.cancel()
+            queuedFamilyOwnerPushTask = Task { [weak self] in
+                try? await Task.sleep(for: Self.QUEUED_AUTO_SYNC_DEBOUNCE)
+                await self?.flushQueuedFamilyOwnerPushIfAllowed()
+            }
+            return
+        }
+
+        let activeUserID = activeLocalProfileUserID ?? currentSession?.user.id
+        let mutations = syncCoordinator.queuedMutations().filter { mutation in
+            guard let activeUserID else { return false }
+            return mutation.subjectUserID != activeUserID
+        }
+        guard !mutations.isEmpty else {
+            cancelQueuedFamilyOwnerPush()
+            return
+        }
+
+        pendingFamilyOwnerPush = false
+        queuedFamilyOwnerPushTask = nil
+        isSyncInFlight = true
+        defer {
+            isSyncInFlight = false
+            updateAutoSyncLoopState()
+        }
+
+        do {
+            let validSession = try await prepareRemoteSession()
+            _ = try await syncCoordinator.pushQueuedMutationsOnly(
+                mutations,
+                session: validSession
+            )
+            lastSyncAt = .now
+            lastErrorMessage = nil
+        } catch {
+            applySyncErrorState(error)
+        }
+    }
+
     private func cancelQueuedAutoSync() {
         pendingQueuedAutoSync = false
         queuedAutoSyncTask?.cancel()
         queuedAutoSyncTask = nil
     }
 
+    private func cancelQueuedFamilyOwnerPush() {
+        pendingFamilyOwnerPush = false
+        queuedFamilyOwnerPushTask?.cancel()
+        queuedFamilyOwnerPushTask = nil
+    }
+
     private func clearSessionRuntimeState() {
         cancelQueuedAutoSync()
+        cancelQueuedFamilyOwnerPush()
         reconnectValidationTask?.cancel()
         reconnectValidationTask = nil
         currentSession = nil

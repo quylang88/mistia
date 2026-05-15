@@ -93,6 +93,10 @@ final class SyncCoordinator {
         Set(outbox.allMutations.map(\.id))
     }
 
+    func queuedMutations() -> [MistiaSyncMutation] {
+        outbox.allMutations
+    }
+
     func clearQueuedMutations() {
         outbox.clear()
     }
