@@ -624,9 +624,8 @@ final class FamilyContextStore {
             resourceID: resourceID,
             permissionScope: scope,
             title: permissionRequestTitle(
-                requesterName: requesterName,
-                scope: scope,
-                resourceName: resourceName
+                resourceType: resourceType,
+                scope: scope
             ),
             body: permissionRequestBody(
                 requesterName: requesterName,
@@ -1337,36 +1336,17 @@ final class FamilyContextStore {
     }
 
     private func permissionRequestTitle(
-        requesterName: String,
-        scope: MistiaFamilyPermissionScope,
-        resourceName: String
+        resourceType: MistiaFamilyNotificationResourceType,
+        scope: MistiaFamilyPermissionScope
     ) -> String {
-        switch scope {
-        case .use:
-            return mistiaLocalized(
-                vi: "\(requesterName) xin quyền sử dụng",
-                en: "\(requesterName) requests use access",
-                ja: "\(requesterName) が使用権限をリクエスト"
-            )
-        case .edit:
-            return mistiaLocalized(
-                vi: "\(requesterName) xin quyền chỉnh sửa",
-                en: "\(requesterName) requests edit access",
-                ja: "\(requesterName) が編集権限をリクエスト"
-            )
-        case .create:
-            return mistiaLocalized(
-                vi: "\(requesterName) xin quyền thêm mới",
-                en: "\(requesterName) requests create access",
-                ja: "\(requesterName) が作成権限をリクエスト"
-            )
-        case .view:
-            return mistiaLocalized(
-                vi: "\(requesterName) xin quyền xem",
-                en: "\(requesterName) requests view access",
-                ja: "\(requesterName) が閲覧権限をリクエスト"
-            )
-        }
+        let action = scope.localizedActionName
+        let resource = resourceType.localizedName
+        
+        return mistiaLocalized(
+            vi: "Yêu cầu \(action) \(resource)",
+            en: "Request to \(action) \(resource)",
+            ja: "\(resource)の\(action)リクエスト"
+        )
     }
 
     private func permissionRequestBody(
@@ -1374,31 +1354,12 @@ final class FamilyContextStore {
         scope: MistiaFamilyPermissionScope,
         resourceName: String
     ) -> String {
-        switch scope {
-        case .use:
-            return mistiaLocalized(
-                vi: "\(requesterName) muốn sử dụng \(resourceName) của bạn.",
-                en: "\(requesterName) wants to use your \(resourceName).",
-                ja: "\(requesterName) があなたの\(resourceName)を使用したいとリクエストしています。"
-            )
-        case .edit:
-            return mistiaLocalized(
-                vi: "\(requesterName) muốn chỉnh sửa \(resourceName) của bạn.",
-                en: "\(requesterName) wants to edit your \(resourceName).",
-                ja: "\(requesterName) があなたの\(resourceName)を編集したいとリクエストしています。"
-            )
-        case .create:
-            return mistiaLocalized(
-                vi: "\(requesterName) muốn thêm mới \(resourceName) của bạn.",
-                en: "\(requesterName) wants to create \(resourceName) for you.",
-                ja: "\(requesterName) があなたの\(resourceName)を作成したいとリクエストしています。"
-            )
-        case .view:
-            return mistiaLocalized(
-                vi: "\(requesterName) muốn xem \(resourceName) của bạn.",
-                en: "\(requesterName) wants to view your \(resourceName).",
-                ja: "\(requesterName) があなたの\(resourceName)を見たいとリクエストしています。"
-            )
-        }
+        let action = scope.localizedActionName
+        
+        return mistiaLocalized(
+            vi: "\(requesterName) muốn \(action) \(resourceName) của bạn.",
+            en: "\(requesterName) wants to \(action) your \(resourceName).",
+            ja: "\(requesterName) があなたの\(resourceName)を\(action)したいとリクエストしています。"
+        )
     }
 }

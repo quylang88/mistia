@@ -267,9 +267,17 @@ struct NotificationCenterView: View {
                 Circle()
                     .fill(config.color.opacity(0.12))
 
-                Image(systemName: config.systemImage)
-                    .font(.system(size: 14, weight: .bold))
-                    .foregroundStyle(config.color)
+                if let assetName = config.assetName {
+                    Image(assetName)
+                        .resizable()
+                        .aspectRatio(contentMode: .fit)
+                        .frame(width: 16, height: 16)
+                        .foregroundStyle(config.color)
+                } else {
+                    Image(systemName: config.systemImage ?? "bell.fill")
+                        .font(.system(size: 14, weight: .bold))
+                        .foregroundStyle(config.color)
+                }
             }
         }
     }
@@ -308,8 +316,15 @@ struct NotificationCenterView: View {
     }
 
     private struct IconConfig {
-        let systemImage: String
+        let systemImage: String?
+        let assetName: String?
         let color: Color
+
+        init(systemImage: String? = nil, assetName: String? = nil, color: Color) {
+            self.systemImage = systemImage
+            self.assetName = assetName
+            self.color = color
+        }
     }
 
     private func iconConfig(for row: AppNotificationRecord) -> IconConfig {
@@ -327,16 +342,18 @@ struct NotificationCenterView: View {
         case .lowWallet:
             return IconConfig(systemImage: "tray.and.arrow.down.fill", color: .orange)
         case .permissionRequestReceived, .familyTransactionRequestReceived:
-            return IconConfig(systemImage: "person.badge.key.fill", color: notificationPurpleAccent)
+            return IconConfig(assetName: "ic_fluent_shield_checkmark_24_color", color: notificationPurpleAccent)
         case .permissionRequestApproved,
-             .permissionRequestRejected,
-             .permissionRevoked,
-             .permissionPolicyChanged,
-             .familyTransactionRequestApproved,
+             .familyTransactionRequestApproved:
+            return IconConfig(assetName: "ic_fluent_checkmark_circle_24_color", color: .green)
+        case .permissionRequestRejected,
              .familyTransactionRequestRejected:
-            return IconConfig(systemImage: "shield.fill", color: notificationPurpleAccent)
+            return IconConfig(systemImage: "xmark.circle.fill", color: .red)
+        case .permissionRevoked,
+             .permissionPolicyChanged:
+            return IconConfig(assetName: "ic_fluent_lock_shield_24_color", color: notificationPurpleAccent)
         case .familyActivity:
-            return IconConfig(systemImage: "person.2.fill", color: .blue)
+            return IconConfig(assetName: "ic_fluent_people_team_24_color", color: .blue)
         case .accessIssue:
             return IconConfig(systemImage: "lock.fill", color: .red)
         case .familyPlaceholder:
@@ -482,43 +499,220 @@ struct NotificationCenterView: View {
     }
 
     private func notificationTitle(for row: AppNotificationRecord) -> String {
-        guard row.kind == .permissionRequestReceived else { return row.title }
-        switch row.actionState {
-        case .approved:
-            return resolvedPermissionRequestTitle(for: row, approve: true)
-        case .rejected:
-            return resolvedPermissionRequestTitle(for: row, approve: false)
+        switch row.kind {
+        case .permissionRequestReceived, .familyTransactionRequestReceived:
+            if row.actionState == .approved {
+                return resolvedPermissionRequestTitle(for: row, approve: true)
+            } else if row.actionState == .rejected {
+                return resolvedPermissionRequestTitle(for: row, approve: false)
+            }
+            return row.title
+            
+        case .permissionRequestApproved, .familyTransactionRequestApproved:
+            let resource = row.resourceType?.localizedName ?? mistiaLocalized(vi: "truy cập", en: "access", ja: "アクセス")
+            let scope = row.permissionScope?.localizedActionName ?? ""
+            let action = mistiaLocalized(vi: "đã được chấp thuận", en: "approved", ja: "が承認されました")
+            
+            if !scope.isEmpty {
+                return mistiaLocalized(
+                    vi: "Yêu cầu \(scope) \(resource) \(action)",
+                    en: "\(resource) \(scope) request \(action)",
+                    ja: "\(resource)の\(scope)リクエスト\(action)"
+                )
+            }
+            return mistiaLocalized(
+                vi: "Yêu cầu \(resource) \(action)",
+                en: "\(resource) request \(action)",
+                ja: "\(resource)のリクエスト\(action)"
+            )
+            
+        case .permissionRequestRejected, .familyTransactionRequestRejected:
+            let resource = row.resourceType?.localizedName ?? mistiaLocalized(vi: "truy cập", en: "access", ja: "アクセス")
+            let scope = row.permissionScope?.localizedActionName ?? ""
+            let action = mistiaLocalized(vi: "bị từ chối", en: "rejected", ja: "が拒否されました")
+            
+            if !scope.isEmpty {
+                return mistiaLocalized(
+                    vi: "Yêu cầu \(scope) \(resource) \(action)",
+                    en: "\(resource) \(scope) request \(action)",
+                    ja: "\(resource)の\(scope)リクエスト\(action)"
+                )
+            }
+            return mistiaLocalized(
+                vi: "Yêu cầu \(resource) \(action)",
+                en: "\(resource) request \(action)",
+                ja: "\(resource)のリクエスト\(action)"
+            )
+            
+        case .permissionRevoked:
+            let resource = row.resourceType?.localizedName ?? mistiaLocalized(vi: "truy cập", en: "access", ja: "アクセス")
+            return mistiaLocalized(
+                vi: "Đã thu hồi quyền \(resource)",
+                en: "Revoked \(resource) access",
+                ja: "\(resource)の権限が取り消されました"
+            )
+            
+        case .familyActivity:
+            if let metadataJSON = row.metadataJSON,
+               let data = metadataJSON.data(using: .utf8),
+               let dict = try? JSONSerialization.jsonObject(with: data) as? [String: String],
+               dict["joined_user_id"] != nil || dict["invite_id"] != nil {
+                return mistiaLocalized(vi: "Thành viên mới", en: "New member", ja: "新しいメンバー")
+            }
+            return row.title
+
         default:
             return row.title
         }
     }
 
     private func notificationBody(for row: AppNotificationRecord) -> String {
-        guard row.kind == .permissionRequestReceived else { return row.body }
-        switch row.actionState {
-        case .approved:
-            return resolvedPermissionRequestBody(approve: true)
-        case .rejected:
-            return resolvedPermissionRequestBody(approve: false)
+        switch row.kind {
+        case .permissionRequestReceived, .familyTransactionRequestReceived:
+            if row.actionState == .approved {
+                return resolvedPermissionRequestBody(approve: true)
+            } else if row.actionState == .rejected {
+                return resolvedPermissionRequestBody(approve: false)
+            }
+            return row.body
+            
+        case .permissionRequestApproved, .permissionRequestRejected,
+             .familyTransactionRequestApproved, .familyTransactionRequestRejected:
+            let actorName = familyContextStore.displayName(for: row.actorUserID)
+                ?? mistiaLocalized(vi: "Thành viên", en: "Member", ja: "メンバー")
+            
+            let isApproved = row.kind == .permissionRequestApproved || row.kind == .familyTransactionRequestApproved
+            let action = isApproved
+                ? mistiaLocalized(vi: "đã chấp thuận", en: "approved", ja: "が承認しました")
+                : mistiaLocalized(vi: "đã từ chối", en: "rejected", ja: "が拒否しました")
+            
+            let scope = row.permissionScope?.localizedActionName ?? ""
+            let resourceType = row.resourceType?.localizedName ?? ""
+            let resourceName = resolvedResourceName(for: row) ?? ""
+            let resourceDetail = resourceName.isEmpty ? resourceType : "\(resourceType) (\(resourceName))"
+            
+            if !scope.isEmpty {
+                return mistiaLocalized(
+                    vi: "\(actorName) \(action) yêu cầu \(scope) \(resourceDetail) của bạn.",
+                    en: "\(actorName) \(action) your \(scope) \(resourceDetail) request.",
+                    ja: "\(actorName)があなたの\(scope) \(resourceDetail)のリクエスト\(action)。"
+                )
+            }
+            return mistiaLocalized(
+                vi: "\(actorName) \(action) yêu cầu \(resourceDetail) của bạn.",
+                en: "\(actorName) \(action) your \(resourceDetail) request.",
+                ja: "\(actorName)があなたの\(resourceDetail)のリクエスト\(action)。"
+            )
+            
+        case .permissionRevoked:
+            let actorName = familyContextStore.displayName(for: row.actorUserID)
+                ?? mistiaLocalized(vi: "Chủ sở hữu", en: "The owner", ja: "所有者")
+            let resourceType = row.resourceType?.localizedName ?? ""
+            if let resourceName = resolvedResourceName(for: row) {
+                return mistiaLocalized(
+                    vi: "\(actorName) đã thu hồi quyền sử dụng \(resourceType) (\(resourceName)) của bạn.",
+                    en: "\(actorName) revoked your access to \(resourceType) (\(resourceName)).",
+                    ja: "\(actorName)があなたの\(resourceType) (\(resourceName)) の使用権限を取り消しました。"
+                )
+            }
+            return row.body
+            
+        case .familyActivity:
+            let actorName = familyContextStore.displayName(for: row.actorUserID)
+                ?? mistiaLocalized(vi: "Một thành viên", en: "A member", ja: "メンバー")
+            
+            if let metadataJSON = row.metadataJSON,
+               let data = metadataJSON.data(using: .utf8),
+               let dict = try? JSONSerialization.jsonObject(with: data) as? [String: String] {
+                
+                if dict["joined_user_id"] != nil || dict["invite_id"] != nil {
+                    // This is a join notification. Use backend body which is already good.
+                    return row.body
+                }
+                
+                if let actionRaw = dict["action"] {
+                    let actionLabel: String
+                    switch actionRaw {
+                    case "created": actionLabel = mistiaLocalized(vi: "vừa tạo mới", en: "created", ja: "作成")
+                    case "updated": actionLabel = mistiaLocalized(vi: "vừa cập nhật", en: "updated", ja: "更新")
+                    case "deleted": actionLabel = mistiaLocalized(vi: "vừa xóa", en: "deleted", ja: "削除")
+                    default: actionLabel = mistiaLocalized(vi: "vừa thay đổi", en: "changed", ja: "変更")
+                    }
+                    
+                    let resourceType = row.resourceType?.localizedName ?? ""
+                    let resourceName = resolvedResourceName(for: row) ?? ""
+                    let resourceDetail = resourceName.isEmpty ? resourceType : "\(resourceType) (\(resourceName))"
+                    
+                    if let amountMinorStr = dict["amount_minor"],
+                       let amountMinor = Int64(amountMinorStr),
+                       let currencyCode = dict["currency_code"] {
+                        let amountText = amountMinor.formattedCurrency(code: currencyCode)
+                        return mistiaLocalized(
+                            vi: "\(actorName) \(actionLabel) \(resourceDetail) trị giá \(amountText).",
+                            en: "\(actorName) \(actionLabel) \(resourceDetail) worth \(amountText).",
+                            ja: "\(actorName)が \(amountText) の \(resourceDetail) を\(actionLabel)しました。"
+                        )
+                    }
+                    
+                    return mistiaLocalized(
+                        vi: "\(actorName) \(actionLabel) \(resourceDetail) của bạn.",
+                        en: "\(actorName) \(actionLabel) your \(resourceDetail).",
+                        ja: "\(actorName)があなたの \(resourceDetail) を\(actionLabel)しました。"
+                    )
+                }
+            }
+            return row.body
+
         default:
             return row.body
         }
     }
 
+    private func resolvedResourceName(for row: AppNotificationRecord) -> String? {
+        if let wallet = walletResource(for: row) {
+            return wallet.name
+        }
+        if let category = categoryResource(for: row) {
+            return category.name
+        }
+        if let bill = billPlan(for: row) {
+            return bill.name
+        }
+        
+        if let metadataJSON = row.metadataJSON,
+           let data = metadataJSON.data(using: .utf8),
+           let dict = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
+            return dict["wallet_name"] as? String
+                ?? dict["category_name"] as? String
+                ?? dict["bill_name"] as? String
+                ?? dict["transaction_title"] as? String
+                ?? dict["goal_name"] as? String
+                ?? dict["installment_name"] as? String
+        }
+        
+        return nil
+    }
+
     private func resolvedPermissionRequestTitle(for row: AppNotificationRecord, approve: Bool) -> String {
         let name = permissionRequesterName(for: row)
-        if approve {
+        let action = approve
+            ? mistiaLocalized(vi: "Đã chấp thuận", en: "Approved", ja: "承認済み")
+            : mistiaLocalized(vi: "Đã từ chối", en: "Rejected", ja: "拒否済み")
+        let resource = row.resourceType?.localizedName ?? mistiaLocalized(vi: "truy cập", en: "access", ja: "アクセス")
+        let scope = row.permissionScope?.localizedActionName ?? ""
+        
+        if !scope.isEmpty {
             return mistiaLocalized(
-                vi: "Đã chấp thuận yêu cầu của \(name)",
-                en: "Approved \(name)'s request",
-                ja: "\(name)さんのリクエストを承認しました"
+                vi: "\(action) yêu cầu \(scope) \(resource) của \(name)",
+                en: "\(action) \(name)'s \(scope) \(resource) request",
+                ja: "\(name)さんの\(resource)の\(scope)リクエストを\(action)しました"
             )
         }
-
+        
         return mistiaLocalized(
-            vi: "Đã từ chối yêu cầu của \(name)",
-            en: "Rejected \(name)'s request",
-            ja: "\(name)さんのリクエストを拒否しました"
+            vi: "\(action) yêu cầu \(resource) của \(name)",
+            en: "\(action) \(name)'s \(resource) request",
+            ja: "\(name)さんの\(resource)のリクエストを\(action)しました"
         )
     }
 
@@ -605,8 +799,7 @@ struct NotificationCenterView: View {
     }
 
     private func categoryResource(for row: AppNotificationRecord) -> TransactionCategory? {
-        guard row.kind == .budgetWarning,
-              row.resourceType == .category,
+        guard row.resourceType == .category,
               let resourceID = row.resourceID else {
             return nil
         }

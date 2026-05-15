@@ -61,6 +61,8 @@ enum MistiaRecurringBillMaintenance {
             let requiresAmountInput = dueItem.amountMinor == nil
             let hasSufficientSetup = dueItem.amountMinor != nil && snap.paymentWalletID != nil
 
+            let amountText = dueItem.amountMinor.map { $0.formattedCurrency(code: snap.currencyCode) }
+
             if hasSufficientSetup,
                let amount = dueItem.amountMinor,
                let walletID = snap.paymentWalletID,
@@ -92,7 +94,7 @@ enum MistiaRecurringBillMaintenance {
                         body: mistiaLocalized(
                             vi: "Ví không đủ số dư để thanh toán \(bill.name). Vui lòng nạp thêm hoặc thanh toán thủ công.",
                             en: "Insufficient balance to auto-pay \(bill.name). Please top up or pay manually.",
-                            ja: "\(bill.name) の自動支払いに必要な残高がありません。入金するか手動で支払ってください。"
+                            ja: "\(bill.name) の自動支払いに必要な残高がありません。入金するか手 động で支払ってください。"
                         ),
                         kind: .billAutoPaymentFailed,
                         bill: bill,
@@ -104,14 +106,25 @@ enum MistiaRecurringBillMaintenance {
                 }
             } else if requiresAmountInput || snap.paymentWalletID == nil {
                 // Variable-amount bill or no payment wallet — needs user action
-                upsertNotification(
-                    key: "mistia.bill.payment.required.\(bill.id.uuidString.lowercased()).\(monthKey)",
-                    title: mistiaLocalized(vi: "Hóa đơn sắp đến hạn", en: "Bill due soon", ja: "請求の支払い期限が近づいています"),
-                    body: mistiaLocalized(
+                let body: String
+                if let amountText {
+                    body = mistiaLocalized(
+                        vi: "\(bill.name) (\(amountText)) cần được thanh toán trước \(MistiaDateFormatting.shortDateString(for: dueItem.dueDate)).",
+                        en: "\(bill.name) (\(amountText)) is due by \(MistiaDateFormatting.shortDateString(for: dueItem.dueDate)).",
+                        ja: "\(bill.name) (\(amountText)) は \(MistiaDateFormatting.shortDateString(for: dueItem.dueDate)) までに支払いが必要です。"
+                    )
+                } else {
+                    body = mistiaLocalized(
                         vi: "\(bill.name) cần được thanh toán trước \(MistiaDateFormatting.shortDateString(for: dueItem.dueDate)).",
                         en: "\(bill.name) is due by \(MistiaDateFormatting.shortDateString(for: dueItem.dueDate)).",
                         ja: "\(bill.name) は \(MistiaDateFormatting.shortDateString(for: dueItem.dueDate)) までに支払いが必要です。"
-                    ),
+                    )
+                }
+
+                upsertNotification(
+                    key: "mistia.bill.payment.required.\(bill.id.uuidString.lowercased()).\(monthKey)",
+                    title: mistiaLocalized(vi: "Hóa đơn sắp đến hạn", en: "Bill due soon", ja: "請求の支払い期限が近づいています"),
+                    body: body,
                     kind: .billPaymentRequired,
                     bill: bill,
                     dueItem: dueItem,
@@ -123,14 +136,25 @@ enum MistiaRecurringBillMaintenance {
 
             // Overdue handling — resurface daily until paid
             if dueItem.dueDate < startOfToday {
-                upsertNotification(
-                    key: "mistia.bill.overdue.\(bill.id.uuidString.lowercased()).\(monthKey)",
-                    title: mistiaLocalized(vi: "Hóa đơn quá hạn", en: "Bill overdue", ja: "請求が延滞しています"),
-                    body: mistiaLocalized(
+                let body: String
+                if let amountText {
+                    body = mistiaLocalized(
+                        vi: "\(bill.name) (\(amountText)) đã quá hạn thanh toán.",
+                        en: "\(bill.name) (\(amountText)) is past its due date.",
+                        ja: "\(bill.name) (\(amountText)) の支払い期限を過ぎています。"
+                    )
+                } else {
+                    body = mistiaLocalized(
                         vi: "\(bill.name) đã quá hạn thanh toán.",
                         en: "\(bill.name) is past its due date.",
                         ja: "\(bill.name) の支払い期限を過ぎています。"
-                    ),
+                    )
+                }
+
+                upsertNotification(
+                    key: "mistia.bill.overdue.\(bill.id.uuidString.lowercased()).\(monthKey)",
+                    title: mistiaLocalized(vi: "Hóa đơn quá hạn", en: "Bill overdue", ja: "請求が延滞しています"),
+                    body: body,
                     kind: .billOverdue,
                     bill: bill,
                     dueItem: dueItem,

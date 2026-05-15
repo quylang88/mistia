@@ -44,6 +44,33 @@ enum MistiaFamilyNotificationResourceType: String, Codable, CaseIterable {
     case bill
     case due
     case installment
+
+    var localizedName: String {
+        switch self {
+        case .wallet:
+            return mistiaLocalized(vi: "Ví", en: "Wallet", ja: "ウォレット")
+        case .category:
+            return mistiaLocalized(vi: "Danh mục", en: "Category", ja: "カテゴリ")
+        case .budget:
+            return mistiaLocalized(vi: "Ngân sách", en: "Budget", ja: "予算")
+        case .goal:
+            return mistiaLocalized(vi: "Mục tiêu", en: "Goal", ja: "目標")
+        case .card:
+            return mistiaLocalized(vi: "Thẻ", en: "Card", ja: "カード")
+        case .debt:
+            return mistiaLocalized(vi: "Khoản nợ", en: "Debt", ja: "借金")
+        case .transaction:
+            return mistiaLocalized(vi: "Giao dịch", en: "Transaction", ja: "取引")
+        case .permission:
+            return mistiaLocalized(vi: "Quyền hạn", en: "Permission", ja: "権限")
+        case .bill:
+            return mistiaLocalized(vi: "Hóa đơn", en: "Bill", ja: "請求書")
+        case .due:
+            return mistiaLocalized(vi: "Kế hoạch chi", en: "Payment plan", ja: "支払いプラン")
+        case .installment:
+            return mistiaLocalized(vi: "Trả góp", en: "Installment", ja: "分割払い")
+        }
+    }
 }
 
 enum MistiaFamilyPermissionScope: String, Codable, CaseIterable {
@@ -51,6 +78,19 @@ enum MistiaFamilyPermissionScope: String, Codable, CaseIterable {
     case edit
     case create
     case view
+
+    var localizedActionName: String {
+        switch self {
+        case .use:
+            return mistiaLocalized(vi: "sử dụng", en: "use", ja: "使用")
+        case .edit:
+            return mistiaLocalized(vi: "chỉnh sửa", en: "edit", ja: "編集")
+        case .create:
+            return mistiaLocalized(vi: "thêm mới", en: "create", ja: "作成")
+        case .view:
+            return mistiaLocalized(vi: "xem", en: "view", ja: "閲覧")
+        }
+    }
 }
 
 enum MistiaNotificationActionState: String, Codable, CaseIterable {
