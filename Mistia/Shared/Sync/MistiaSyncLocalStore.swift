@@ -591,86 +591,6 @@ enum MistiaSyncLocalStore {
         try context.save()
     }
 
-    @discardableResult
-    static func promoteSystemCategoryForFamilyUse(
-        categoryID: UUID,
-        in container: ModelContainer
-    ) throws -> [(id: UUID, updatedAt: Date)] {
-        let context = ModelContext(container)
-        guard let systemKey = MistiaSystemCategoryKey.activeDefaults.first(where: {
-            MistiaSystemCategoryIdentity.canonicalID(for: $0) == categoryID
-        }) else {
-            return []
-        }
-
-        let category = try ensureSystemCategoryForSync(systemKey, context: context)
-        var promotedCategories = [category]
-        if let parent = category.parentCategory {
-            promotedCategories.insert(parent, at: 0)
-        }
-
-        let now = Date()
-        var didMutate = false
-        for promotedCategory in promotedCategories {
-            if promotedCategory.cloudSyncEnabled == false {
-                promotedCategory.cloudSyncEnabled = true
-                didMutate = true
-            }
-            if promotedCategory.updatedAt < now {
-                promotedCategory.updatedAt = now
-                didMutate = true
-            }
-        }
-
-        if didMutate {
-            try context.save()
-        }
-
-        return promotedCategories.map { ($0.id, $0.updatedAt) }
-    }
-
-    private static func ensureSystemCategoryForSync(
-        _ systemKey: MistiaSystemCategoryKey,
-        context: ModelContext
-    ) throws -> TransactionCategory {
-        let categories = try fetchCategories(context).filter { $0.deletedAt == nil }
-        if let existing = categories.first(where: { $0.systemKey == systemKey.rawValue }) {
-            return existing
-        }
-
-        let parentKey = MistiaCategoryHierarchy.defaultParentKey(for: systemKey)
-        let parent = categories.first(where: { $0.systemKey == parentKey.rawValue }) ?? {
-            let parentCategory = TransactionCategory(
-                id: MistiaSystemCategoryIdentity.canonicalID(for: parentKey),
-                name: parentKey.title,
-                kind: parentKey.kind,
-                iconSymbolName: parentKey.iconSymbolName,
-                iconColorHex: MistiaIconColorPalette.presetHex(forDefault: parentKey.iconColorHex),
-                hierarchyRole: .parent,
-                systemKey: parentKey.rawValue,
-                isSystem: true,
-                sortOrder: MistiaSystemCategoryParentKey.activeDefaults.firstIndex(of: parentKey) ?? 0
-            )
-            context.insert(parentCategory)
-            return parentCategory
-        }()
-
-        let category = TransactionCategory(
-            id: MistiaSystemCategoryIdentity.canonicalID(for: systemKey),
-            name: systemKey.title,
-            kind: systemKey.kind,
-            iconSymbolName: systemKey.iconSymbolName,
-            iconColorHex: MistiaIconColorPalette.presetHex(forDefault: systemKey.iconColorHex),
-            parentCategory: parent,
-            hierarchyRole: .child,
-            systemKey: systemKey.rawValue,
-            isSystem: true,
-            sortOrder: MistiaSystemCategoryKey.activeDefaults.firstIndex(of: systemKey) ?? 0,
-            isArchived: !systemKey.isActiveDefault
-        )
-        context.insert(category)
-        return category
-    }
 
     static func applyRemoteRecord(
         _ record: MistiaSyncUploadRecord,
@@ -2159,20 +2079,7 @@ enum MistiaSyncLocalStore {
         _ category: TransactionCategory,
         requiredSystemCategoryIDs: Set<UUID>
     ) -> Bool {
-        guard category.isSystem else {
-            return category.cloudSyncEnabled
-        }
-
-        if MistiaSystemCategorySyncSupport.isSystemCategoryCloudSyncRequired(category) {
-            return true
-        }
-
-        if category.deletedAt == nil,
-           requiredSystemCategoryIDs.contains(category.id) {
-            return true
-        }
-
-        return category.cloudSyncEnabled && category.remoteVersion == 0
+        true
     }
 
     private static func systemCategoryDependencyIDs(context: ModelContext) throws -> Set<UUID> {

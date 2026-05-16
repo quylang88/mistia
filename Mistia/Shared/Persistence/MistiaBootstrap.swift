@@ -189,7 +189,7 @@ enum MistiaBootstrap {
                         hierarchyRole: .parent,
                         systemKey: seed.systemKey.rawValue,
                         isSystem: true,
-                        cloudSyncEnabled: false,
+                        cloudSyncEnabled: true,
                         sortOrder: index
                     )
                 },
@@ -237,7 +237,7 @@ enum MistiaBootstrap {
                         hierarchyRole: .child,
                         systemKey: systemKey.rawValue,
                         isSystem: true,
-                        cloudSyncEnabled: false,
+                        cloudSyncEnabled: true,
                         sortOrder: sortOrder,
                         isArchived: seed.startsArchived,
                         archivedAt: seed.startsArchived ? now : nil
@@ -330,7 +330,7 @@ enum MistiaBootstrap {
             hierarchyRole: .child,
             systemKey: systemKey.rawValue,
             isSystem: true,
-            cloudSyncEnabled: false,
+            cloudSyncEnabled: true,
             sortOrder: nextChildSortOrder(
                 for: seed?.kind ?? systemKey.kind,
                 parentID: parentCategory?.id,
@@ -380,7 +380,7 @@ enum MistiaBootstrap {
         }
         didMutate = assignIfNeeded(&category.systemKey, seed.systemKey.rawValue) || didMutate
         didMutate = assignIfNeeded(&category.isSystem, true) || didMutate
-        didMutate = assignIfNeeded(&category.cloudSyncEnabled, false) || didMutate
+        didMutate = assignIfNeeded(&category.cloudSyncEnabled, true) || didMutate
         didMutate = assignIfNeeded(&category.sortOrder, sortOrder) || didMutate
         didMutate = assignIfNeeded(&category.favoriteRawValue, Optional(false)) || didMutate
         didMutate = assignIfNeeded(&category.isArchived, false) || didMutate
@@ -419,7 +419,7 @@ enum MistiaBootstrap {
         }
         didMutate = assignIfNeeded(&category.systemKey, seed.systemKey?.rawValue) || didMutate
         didMutate = assignIfNeeded(&category.isSystem, true) || didMutate
-        didMutate = assignIfNeeded(&category.cloudSyncEnabled, false) || didMutate
+        didMutate = assignIfNeeded(&category.cloudSyncEnabled, true) || didMutate
         didMutate = assignIfNeeded(&category.sortOrder, sortOrder) || didMutate
         didMutate = assignIfNeeded(&category.favoriteRawValue, Optional(false)) || didMutate
         didMutate = assignIfNeeded(&category.isArchived, seed.startsArchived) || didMutate
@@ -476,7 +476,7 @@ enum MistiaBootstrap {
                 hierarchyRole: .parent,
                 systemKey: seed.systemKey.rawValue,
                 isSystem: true,
-                cloudSyncEnabled: false,
+                cloudSyncEnabled: true,
                 sortOrder: index
             )
             modelContext.insert(category)
@@ -536,7 +536,7 @@ enum MistiaBootstrap {
                 hierarchyRole: .child,
                 systemKey: systemKey.rawValue,
                 isSystem: true,
-                cloudSyncEnabled: false,
+                cloudSyncEnabled: true,
                 sortOrder: sortOrder,
                 isArchived: seed.startsArchived
             )

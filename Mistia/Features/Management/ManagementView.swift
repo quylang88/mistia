@@ -107,7 +107,6 @@ struct ManagementView: View {
     @State private var infoAlert: ManagementInfoAlert?
     @State private var permissionPrompt: ManagementPermissionPrompt?
     @State private var walletPermissionPrompt: ManagementWalletPermissionPrompt?
-    @State private var systemCategoryUseRequestTarget: ManagementSystemCategoryUseRequestTarget?
     @State private var isOpeningFamily = false
 
     private var cardTint: Color {
@@ -195,21 +194,6 @@ struct ManagementView: View {
         familyContextStore.selectedSubjectUserID ?? sessionStore.activeLocalProfileUserID
     }
 
-    private var systemCategoryUseRequestOwnerID: UUID? {
-        guard let selectedSubjectUserID,
-              selectedSubjectUserID != sessionStore.activeLocalProfileUserID else {
-            return nil
-        }
-        return selectedSubjectUserID
-    }
-
-    private var shouldShowSystemCategoryUseRequestButton: Bool {
-        guard let ownerUserID = systemCategoryUseRequestOwnerID else { return false }
-        return !missingSystemCategorySections(
-            ownerUserID: ownerUserID,
-            kind: selectedCategoryKind
-        ).isEmpty
-    }
 
     private var activeAlert: ManagementAlertPresentation? {
         if let walletPermissionPrompt {
@@ -265,32 +249,6 @@ struct ManagementView: View {
         .sheet(item: $categoryEditorTarget) { target in
             ManagementCategoryEditorSheet(target: target)
                 .presentationDragIndicator(.hidden)
-        }
-        .sheet(item: $systemCategoryUseRequestTarget) { target in
-            MistiaCategoryPickerSheet(
-                title: mistiaLocalized(
-                    vi: "Yêu cầu sử dụng danh mục",
-                    en: "Request category use",
-                    ja: "カテゴリ利用をリクエスト"
-                ),
-                selectedCategoryID: nil,
-                sections: missingSystemCategorySections(
-                    ownerUserID: target.ownerUserID,
-                    kind: selectedCategoryKind
-                ),
-                recentCategories: [],
-                favoriteCategories: [],
-                initialMode: .all,
-                allowsParentSelectionInAll: false,
-                allModeSubtitle: { category in
-                    category.parentCategory?.localizedDisplayName
-                },
-                quickModeSubtitle: { category in
-                    category.parentCategory?.localizedDisplayName
-                }
-            ) { category in
-                requestSystemCategoryUse(category, ownerUserID: target.ownerUserID)
-            }
         }
         .alert(
             activeAlert?.title ?? "",
@@ -922,14 +880,6 @@ struct ManagementView: View {
                                 )
                             }
 
-                            if shouldShowSystemCategoryUseRequestButton {
-                                Divider()
-                                    .padding(.leading, 52)
-
-                                systemCategoryUseRequestButton
-                                    .padding(.horizontal, 14)
-                                    .padding(.vertical, 14)
-                            }
                         }
                     } else {
                         VStack(spacing: 0) {
@@ -1005,130 +955,11 @@ struct ManagementView: View {
                             .padding(.horizontal, 14)
                             .padding(.vertical, 14)
 
-                            if shouldShowSystemCategoryUseRequestButton {
-                                Divider()
-                                    .padding(.leading, 52)
-                                    .padding(.trailing, 0)
-
-                                systemCategoryUseRequestButton
-                                    .padding(.horizontal, 14)
-                                    .padding(.vertical, 14)
-                            }
                         }
                     }
                 }
             }
         }
-    }
-
-    private var systemCategoryUseRequestButton: some View {
-        ManagementFooterAddButton(
-            title: mistiaLocalized(
-                vi: "Yêu cầu quyền sử dụng",
-                en: "Request use access",
-                ja: "利用権限をリクエスト"
-            ),
-            accent: accentPurple
-        ) {
-            openSystemCategoryUseRequestPicker()
-        }
-    }
-
-    private func openSystemCategoryUseRequestPicker() {
-        guard let ownerUserID = systemCategoryUseRequestOwnerID else { return }
-        guard familyContextStore.canRequestSystemCategoryUse(ownerUserID: ownerUserID) else {
-            infoAlert = ManagementInfoAlert(
-                title: mistiaLocalized(
-                    vi: "Cần đồng bộ trước",
-                    en: "Sync required first",
-                    ja: "先に同期が必要です"
-                ),
-                message: mistiaLocalized(
-                    vi: "Bạn và thành viên này đều cần đồng bộ dữ liệu lên cloud ít nhất một lần trước khi yêu cầu dùng danh mục hệ thống.",
-                    en: "Both you and this member need to sync data to the cloud at least once before requesting a system category.",
-                    ja: "システムカテゴリをリクエストするには、あなたとこのメンバーの両方が一度データをクラウド同期している必要があります。"
-                )
-            )
-            return
-        }
-        guard !missingSystemCategorySections(ownerUserID: ownerUserID, kind: selectedCategoryKind).isEmpty else {
-            infoAlert = ManagementInfoAlert(
-                title: mistiaLocalized(vi: "Không còn danh mục thiếu", en: "No missing categories", ja: "不足しているカテゴリはありません"),
-                message: mistiaLocalized(
-                    vi: "Thành viên này đã có đủ danh mục hệ thống trong nhóm đang xem.",
-                    en: "This member already has every system category in the current group.",
-                    ja: "このメンバーには、現在のグループのシステムカテゴリがすべてあります。"
-                )
-            )
-            return
-        }
-        systemCategoryUseRequestTarget = ManagementSystemCategoryUseRequestTarget(ownerUserID: ownerUserID)
-    }
-
-    private func requestSystemCategoryUse(
-        _ category: TransactionCategory,
-        ownerUserID: UUID
-    ) {
-        guard let systemKey = category.mistiaSystemCategoryKey else { return }
-        let resourceID = MistiaSystemCategoryIdentity.canonicalID(for: systemKey)
-        let resourceName = category.localizedDisplayName
-        let isPending = familyContextStore.hasPendingPermissionRequest(
-            ownerUserID: ownerUserID,
-            resourceType: .category,
-            resourceID: resourceID,
-            scope: .use
-        )
-
-        guard !isPending else {
-            infoAlert = ManagementInfoAlert(
-                title: mistiaLocalized(vi: "Đã gửi yêu cầu", en: "Request sent", ja: "リクエスト送信済み"),
-                message: mistiaLocalized(
-                    vi: "Yêu cầu sử dụng danh mục này đang chờ thành viên phản hồi.",
-                    en: "The request to use this category is waiting for the member.",
-                    ja: "このカテゴリの利用リクエストはメンバーの返答待ちです。"
-                )
-            )
-            return
-        }
-
-        Task { @MainActor in
-            let didSend = await familyContextStore.requestPermission(
-                resourceType: .category,
-                resourceID: resourceID,
-                ownerUserID: ownerUserID,
-                scope: .use,
-                resourceName: resourceName,
-                sessionStore: sessionStore
-            )
-            infoAlert = ManagementInfoAlert(
-                title: didSend
-                    ? mistiaLocalized(vi: "Đã gửi yêu cầu", en: "Request sent", ja: "リクエストを送信しました")
-                    : mistiaLocalized(vi: "Chưa thể gửi", en: "Couldn't send", ja: "送信できませんでした"),
-                message: didSend
-                    ? mistiaLocalized(
-                        vi: "Khi thành viên đồng ý, danh mục này sẽ được đồng bộ lên cloud của họ để bạn chọn trong giao dịch.",
-                        en: "When the member approves, this category will sync to their cloud catalog so you can use it in transactions.",
-                        ja: "メンバーが承認すると、このカテゴリが相手のクラウドカテゴリに同期され、取引で選べるようになります。"
-                    )
-                    : (familyContextStore.lastErrorMessage ?? mistiaLocalized(
-                        vi: "Không thể gửi yêu cầu lúc này.",
-                        en: "Couldn't send the request right now.",
-                        ja: "現在リクエストは送信できません。"
-                    ))
-            )
-        }
-    }
-
-    private func missingSystemCategorySections(
-        ownerUserID: UUID,
-        kind: TransactionCategoryKind
-    ) -> [TransactionCategoryGroupSection] {
-        MistiaSystemCategoryRequestSupport.missingSections(
-            ownerUserID: ownerUserID,
-            kind: kind,
-            categories: storedCategories,
-            categoryOwnerMap: categoryOwnerMap
-        )
     }
 
     private func openCategoryEditorIfAllowed(
