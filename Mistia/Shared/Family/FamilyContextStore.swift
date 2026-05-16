@@ -951,6 +951,12 @@ final class FamilyContextStore {
         return members.first(where: { $0.userID == userID })?.hasSyncedCloudData == true
     }
 
+    func canRequestSystemCategoryUse(ownerUserID: UUID?) -> Bool {
+        guard let currentUserID else { return false }
+        return hasSyncedCloudData(userID: currentUserID)
+            && hasSyncedCloudData(userID: ownerUserID)
+    }
+
 
     func clear() {
         activeContext = .personalSelf
@@ -1133,6 +1139,7 @@ final class FamilyContextStore {
             nonTransactionSnapshot,
             shouldPruneMissing: false,
             protectedRecordIDs: protectedRecordIDs,
+            preserveLocalNewerRows: true,
             familyCategoryScopedTo: session.user.id,
             familyCategoryPruneOwnerIDs: Set(accessibleUserIDs).subtracting([session.user.id]),
             in: modelContainer

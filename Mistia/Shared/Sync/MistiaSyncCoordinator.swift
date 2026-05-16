@@ -90,7 +90,7 @@ final class SyncCoordinator {
     }
 
     func queuedMutationIDs() -> Set<String> {
-        Set(outbox.allMutations.map(\.id))
+        Set(outbox.allMutations.map { $0.id.lowercased() })
     }
 
     func queuedMutations() -> [MistiaSyncMutation] {

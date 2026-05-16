@@ -102,6 +102,52 @@ final class FamilyScopedDataTests: XCTestCase {
         )
     }
 
+    func testTransactionVisibilityExcludesArchivedAndDeletedRows() throws {
+        let selfUserID = UUID()
+        let memberUserID = UUID()
+        let container = try makeContainer()
+        let sessionStore = makeSessionStore(container: container, userID: selfUserID)
+        let familyContextStore = makeFamilyContextStore(container: container, currentUserID: selfUserID)
+
+        let memberWallet = makeWallet(name: "Member cash")
+        let active = makeTransaction(title: "Active", wallet: memberWallet)
+        let archived = makeTransaction(title: "Archived", wallet: memberWallet)
+        archived.isArchived = true
+        archived.archivedAt = Date(timeIntervalSince1970: 1_770_000_100)
+        let deleted = makeTransaction(title: "Deleted", wallet: memberWallet)
+        deleted.deletedAt = Date(timeIntervalSince1970: 1_770_000_200)
+
+        let scopes = [
+            OwnedRecordScope(entity: .wallet, recordID: memberWallet.id, ownerUserID: memberUserID),
+            OwnedRecordScope(entity: .transaction, recordID: active.id, ownerUserID: memberUserID),
+            OwnedRecordScope(entity: .transaction, recordID: archived.id, ownerUserID: memberUserID),
+            OwnedRecordScope(entity: .transaction, recordID: deleted.id, ownerUserID: memberUserID)
+        ]
+        let transactions = [active, archived, deleted]
+
+        familyContextStore.activeContext = FamilyContext(scope: .member(userID: memberUserID))
+
+        XCTAssertEqual(
+            visibleHistoryIDs(
+                transactions,
+                audits: [],
+                scopes: scopes,
+                familyContextStore: familyContextStore,
+                sessionStore: sessionStore
+            ),
+            [active.id]
+        )
+        XCTAssertEqual(
+            visibleFinancialIDs(
+                transactions,
+                scopes: scopes,
+                familyContextStore: familyContextStore,
+                sessionStore: sessionStore
+            ),
+            [active.id]
+        )
+    }
+
     func testCategoryUseRequestRequiresBothRequesterAndOwnerCloudSyncHistory() throws {
         let selfUserID = UUID()
         let memberUserID = UUID()

@@ -378,6 +378,7 @@ enum MistiaSyncLocalStore {
         _ snapshot: MistiaRemoteSnapshot,
         shouldPruneMissing: Bool,
         protectedRecordIDs: Set<String>,
+        preserveLocalNewerRows: Bool = false,
         familyCategoryScopedTo localUserID: UUID? = nil,
         familyCategoryPruneOwnerIDs: Set<UUID> = [],
         in container: ModelContainer
@@ -427,10 +428,24 @@ enum MistiaSyncLocalStore {
         var occurrenceByID = Dictionary(dueOccurrences.map { ($0.id, $0) }, uniquingKeysWith: latestOccurrence)
 
         for row in snapshot.wallets {
+            guard shouldApplyRemoteRow(
+                row,
+                entity: .wallet,
+                existing: walletByID[row.id],
+                protectedRecordIDs: protectedRecordIDs,
+                preserveLocalNewerRows: preserveLocalNewerRows
+            ) else { continue }
             try upsertWallet(row, context: context, walletByID: &walletByID)
         }
 
         for row in categoryRows {
+            guard shouldApplyRemoteRow(
+                row,
+                entity: .category,
+                existing: categoryByID[row.id],
+                protectedRecordIDs: protectedRecordIDs,
+                preserveLocalNewerRows: preserveLocalNewerRows
+            ) else { continue }
             try upsertCategory(
                 row,
                 context: context,
@@ -453,6 +468,13 @@ enum MistiaSyncLocalStore {
         }
 
         for row in snapshot.creditCardProfiles {
+            guard shouldApplyRemoteRow(
+                row,
+                entity: .creditCardProfile,
+                existing: profileByID[row.id],
+                protectedRecordIDs: protectedRecordIDs,
+                preserveLocalNewerRows: preserveLocalNewerRows
+            ) else { continue }
             try upsertCreditProfile(
                 row,
                 context: context,
@@ -462,6 +484,13 @@ enum MistiaSyncLocalStore {
         }
 
         for row in transactionRows {
+            guard shouldApplyRemoteRow(
+                row,
+                entity: .transaction,
+                existing: transactionByID[row.id],
+                protectedRecordIDs: protectedRecordIDs,
+                preserveLocalNewerRows: preserveLocalNewerRows
+            ) else { continue }
             try upsertTransaction(
                 row,
                 context: context,
@@ -472,14 +501,35 @@ enum MistiaSyncLocalStore {
         }
 
         for row in budgetRows {
+            guard shouldApplyRemoteRow(
+                row,
+                entity: .budgetPlan,
+                existing: budgetByID[row.id],
+                protectedRecordIDs: protectedRecordIDs,
+                preserveLocalNewerRows: preserveLocalNewerRows
+            ) else { continue }
             try upsertBudget(row, context: context, categoryByID: categoryByID, budgetByID: &budgetByID)
         }
 
         for row in snapshot.savingsGoals {
+            guard shouldApplyRemoteRow(
+                row,
+                entity: .savingsGoal,
+                existing: goalByID[row.id],
+                protectedRecordIDs: protectedRecordIDs,
+                preserveLocalNewerRows: preserveLocalNewerRows
+            ) else { continue }
             try upsertGoal(row, context: context, walletByID: walletByID, goalByID: &goalByID)
         }
 
         for row in recurringRows {
+            guard shouldApplyRemoteRow(
+                row,
+                entity: .recurringBillPlan,
+                existing: recurringByID[row.id],
+                protectedRecordIDs: protectedRecordIDs,
+                preserveLocalNewerRows: preserveLocalNewerRows
+            ) else { continue }
             try upsertRecurringBill(
                 row,
                 context: context,
@@ -490,10 +540,24 @@ enum MistiaSyncLocalStore {
         }
 
         for row in snapshot.installmentPlans {
+            guard shouldApplyRemoteRow(
+                row,
+                entity: .installmentPlan,
+                existing: installmentByID[row.id],
+                protectedRecordIDs: protectedRecordIDs,
+                preserveLocalNewerRows: preserveLocalNewerRows
+            ) else { continue }
             try upsertInstallment(row, context: context, walletByID: walletByID, installmentByID: &installmentByID)
         }
 
         for row in snapshot.dueOccurrences {
+            guard shouldApplyRemoteRow(
+                row,
+                entity: .dueOccurrenceRecord,
+                existing: occurrenceByID[row.id],
+                protectedRecordIDs: protectedRecordIDs,
+                preserveLocalNewerRows: preserveLocalNewerRows
+            ) else { continue }
             try upsertDueOccurrence(row, context: context, occurrenceByID: &occurrenceByID)
         }
 
@@ -735,6 +799,9 @@ enum MistiaSyncLocalStore {
                     remoteVersion: row.syncVersion,
                     in: container
                 )
+                if localTransaction.deletedAt != nil, row.deletedAt == nil {
+                    continue
+                }
             }
 
             try upsertTransaction(
@@ -1243,10 +1310,35 @@ enum MistiaSyncLocalStore {
     ) {
         for record in existing {
             guard !remoteIDs.contains(record.id) else { continue }
-            let key = "\(Record.syncEntity.rawValue):\(record.id.uuidString)"
+            let key = canonicalStorageKey(entity: Record.syncEntity, recordID: record.id)
             guard !protectedRecordIDs.contains(key) else { continue }
             context.delete(record)
         }
+    }
+
+    private static func shouldApplyRemoteRow<Row: MistiaRemoteRow, Record: MistiaSyncLocalRecord>(
+        _ row: Row,
+        entity: MistiaSyncEntity,
+        existing record: Record?,
+        protectedRecordIDs: Set<String>,
+        preserveLocalNewerRows: Bool
+    ) -> Bool {
+        let storageKey = canonicalStorageKey(entity: entity, recordID: row.id)
+        guard !protectedRecordIDs.contains(storageKey) else {
+            return false
+        }
+
+        guard
+            preserveLocalNewerRows,
+            let record,
+            record.deletedAt != nil,
+            row.deletedAt == nil,
+            record.updatedAt > row.updatedAt
+        else {
+            return true
+        }
+
+        return false
     }
 
     private static func upsertWallet(

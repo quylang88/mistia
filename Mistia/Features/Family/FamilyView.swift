@@ -1862,36 +1862,42 @@ struct FamilyOverviewScreen: View {
             ownerMap: walletOwnerMap,
             familyMemberUserIDs: familyMemberUserIDs
         )
+        .filter { !$0.isArchived }
         let visibleTransactions = visibleForFamilyOverview(
             storedTransactions,
             entity: .transaction,
             ownerMap: transactionOwnerMap,
             familyMemberUserIDs: familyMemberUserIDs
         )
+        .filter { !$0.isArchived }
         let visibleBudgets = visibleForFamilyOverview(
             storedBudgets,
             entity: .budgetPlan,
             ownerMap: budgetOwnerMap,
             familyMemberUserIDs: familyMemberUserIDs
         )
+        .filter { !$0.isArchived }
         let visibleGoals = visibleForFamilyOverview(
             storedGoals,
             entity: .savingsGoal,
             ownerMap: goalOwnerMap,
             familyMemberUserIDs: familyMemberUserIDs
         )
+        .filter { !$0.isArchived }
         let visibleBills = visibleForFamilyOverview(
             storedBills,
             entity: .recurringBillPlan,
             ownerMap: billOwnerMap,
             familyMemberUserIDs: familyMemberUserIDs
         )
+        .filter { !$0.isArchived }
         let visibleInstallments = visibleForFamilyOverview(
             storedInstallments,
             entity: .installmentPlan,
             ownerMap: installmentOwnerMap,
             familyMemberUserIDs: familyMemberUserIDs
         )
+        .filter { !$0.isArchived }
         let visibleOccurrences = visibleForFamilyOverview(
             storedOccurrences,
             entity: .dueOccurrenceRecord,
@@ -1963,13 +1969,13 @@ struct FamilyOverviewScreen: View {
             calendar: calendar
         )
         let recurringBillDueItems = PlanningLogic.recurringBillDueItems(
-            bills: visibleBills.filter { !$0.isArchived }.map(\.planningSnapshot),
+            bills: visibleBills.map(\.planningSnapshot),
             occurrences: occurrenceSnapshots,
             selectedMonth: currentMonth,
             calendar: calendar
         )
         let installmentDueItems = PlanningLogic.installmentDueItems(
-            plans: visibleInstallments.filter { !$0.isArchived }.map(\.planningSnapshot),
+            plans: visibleInstallments.map(\.planningSnapshot),
             occurrences: occurrenceSnapshots,
             selectedMonth: currentMonth,
             calendar: calendar
@@ -1983,8 +1989,7 @@ struct FamilyOverviewScreen: View {
         )
         let activeBudgetPlans = visibleBudgets
             .filter {
-                !$0.isArchived
-                    && PlanningLogic.startOfMonth(for: $0.monthAnchor, calendar: calendar) == currentMonth
+                PlanningLogic.startOfMonth(for: $0.monthAnchor, calendar: calendar) == currentMonth
             }
             .map { $0.planningSnapshot(calendar: calendar) }
         let familyTransactions = visibleTransactions.map { transaction in
@@ -2022,7 +2027,6 @@ struct FamilyOverviewScreen: View {
         )
         let goalRows = FamilyLogic.familyGoalRows(
             goals: visibleGoals
-                .filter { !$0.isArchived }
                 .map { goal in
                     let snapshot = goal.planningSnapshot
                     return FamilyGoalSnapshot(

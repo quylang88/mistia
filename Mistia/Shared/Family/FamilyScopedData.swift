@@ -62,7 +62,10 @@ enum FamilyScopedData {
         let transactionOwnerMap = MistiaRecordOwnershipStore.ownerMap(from: scopes, entity: .transaction)
 
         return transactions.filter { transaction in
-            transactionOwnerUserID(
+            guard transaction.deletedAt == nil, !transaction.isArchived else {
+                return false
+            }
+            return transactionOwnerUserID(
                 for: transaction,
                 transactionOwnerMap: transactionOwnerMap,
                 walletOwnerMap: walletOwnerMap
@@ -84,7 +87,10 @@ enum FamilyScopedData {
         let transactionOwnerMap = MistiaRecordOwnershipStore.ownerMap(from: scopes, entity: .transaction)
 
         return transactions.filter { transaction in
-            transactionOwnerUserID(
+            guard transaction.deletedAt == nil, !transaction.isArchived else {
+                return false
+            }
+            return transactionOwnerUserID(
                 for: transaction,
                 transactionOwnerMap: transactionOwnerMap,
                 walletOwnerMap: walletOwnerMap
