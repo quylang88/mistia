@@ -290,56 +290,7 @@ final class MistiaSystemCategoryRemoteApplyTests: XCTestCase {
         XCTAssertEqual(category.updatedAt.timeIntervalSince1970, remoteUpdatedAt.timeIntervalSince1970, accuracy: 0.001)
     }
 
-    func testSystemCategoryArchiveDeleteAndCustomChangesAreSyncEligible() {
-        let categoryKey = MistiaSystemCategoryParentKey.expenseFood
-        let defaultCategory = makeSystemCategory(key: categoryKey)
-        XCTAssertFalse(MistiaSystemCategorySyncSupport.shouldQueueCategoryMutation(defaultCategory))
-        XCTAssertFalse(MistiaSystemCategorySyncSupport.shouldExportCategory(defaultCategory))
-
-        let archivedCategory = makeSystemCategory(
-            key: categoryKey,
-            isArchived: true,
-            archivedAt: Date(timeIntervalSince1970: 1_770_000_000)
-        )
-        XCTAssertTrue(MistiaSystemCategorySyncSupport.shouldQueueCategoryMutation(archivedCategory))
-        XCTAssertTrue(MistiaSystemCategorySyncSupport.shouldExportCategory(archivedCategory))
-
-        let deletedCategory = makeSystemCategory(
-            key: categoryKey,
-            deletedAt: Date(timeIntervalSince1970: 1_770_000_000)
-        )
-        XCTAssertTrue(MistiaSystemCategorySyncSupport.shouldQueueCategoryMutation(deletedCategory))
-        XCTAssertTrue(MistiaSystemCategorySyncSupport.shouldExportCategory(deletedCategory))
-
-        let renamedCategory = makeSystemCategory(key: categoryKey, name: "Sinh hoạt tuỳ chỉnh")
-        XCTAssertTrue(MistiaSystemCategorySyncSupport.shouldQueueCategoryMutation(renamedCategory))
-
-        let retintedCategory = makeSystemCategory(key: categoryKey, iconColorHex: "#123456")
-        XCTAssertTrue(MistiaSystemCategorySyncSupport.shouldExportCategory(retintedCategory))
-
-        let favoriteCategory = makeSystemCategory(key: categoryKey, isFavorite: true)
-        XCTAssertTrue(MistiaSystemCategorySyncSupport.shouldExportCategory(favoriteCategory))
-
-        let reorderedCategory = makeSystemCategory(key: categoryKey, sortOrder: 999)
-        XCTAssertTrue(MistiaSystemCategorySyncSupport.shouldExportCategory(reorderedCategory))
-
-        let childCategory = makeSystemCategory(key: MistiaSystemCategoryKey.dineOut)
-        XCTAssertFalse(MistiaSystemCategorySyncSupport.shouldExportCategory(childCategory))
-
-        let reparentedChildCategory = makeSystemCategory(
-            key: MistiaSystemCategoryKey.dineOut,
-            parentKey: .expenseOther
-        )
-        XCTAssertTrue(MistiaSystemCategorySyncSupport.shouldExportCategory(reparentedChildCategory))
-
-        let reorderedChildCategory = makeSystemCategory(
-            key: MistiaSystemCategoryKey.dineOut,
-            sortOrder: 999
-        )
-        XCTAssertTrue(MistiaSystemCategorySyncSupport.shouldExportCategory(reorderedChildCategory))
-    }
-
-    func testUploadSnapshotDoesNotExportStaleCloudSyncedDefaultSystemCategory() throws {
+    func testUploadSnapshotExportsDefaultSystemCategory() throws {
         let userID = UUID()
         let categoryKey = MistiaSystemCategoryParentKey.expenseFood
         let categoryID = MistiaSystemCategoryIdentity.canonicalID(for: categoryKey)
@@ -361,10 +312,15 @@ final class MistiaSystemCategoryRemoteApplyTests: XCTestCase {
             from: container
         )
 
-        XCTAssertTrue(snapshot.categories.isEmpty)
+        XCTAssertEqual(snapshot.categories.map(\.id), [
+            MistiaSystemCategoryIdentity.cloudScopedID(
+                canonicalCategoryID: categoryID,
+                ownerUserID: userID
+            )
+        ])
     }
 
-    func testCategoryMutationSkipsStaleCloudSyncedDefaultChildCategory() throws {
+    func testCategoryMutationExportsDefaultChildCategory() throws {
         let userID = UUID()
         let childKey = MistiaSystemCategoryKey.dineOut
         let child = makeSystemCategory(key: childKey)
@@ -390,7 +346,16 @@ final class MistiaSystemCategoryRemoteApplyTests: XCTestCase {
 
         let record = try MistiaSyncLocalStore.exportRecord(for: mutation, from: container)
 
-        XCTAssertNil(record)
+        guard case .category(let row) = record else {
+            return XCTFail("Expected exported category")
+        }
+        XCTAssertEqual(
+            row.id,
+            MistiaSystemCategoryIdentity.cloudScopedID(
+                canonicalCategoryID: MistiaSystemCategoryIdentity.canonicalID(for: childKey),
+                ownerUserID: userID
+            )
+        )
     }
 
     func testExportCategoryRecordSynthesizesMissingSystemParent() throws {

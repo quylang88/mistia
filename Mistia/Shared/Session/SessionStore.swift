@@ -2093,8 +2093,7 @@ final class SessionStore {
         let message = errorMessage(for: error)
         return message.contains("provider is not enabled")
             || message.contains("unsupported provider")
-            || message.contains("client id")
-            || message.contains("callback")
+            || isGoogleOAuthConfigurationMessage(message)
     }
 
     private func googleSetupErrorMessage(for error: Error) -> String {
@@ -2198,10 +2197,18 @@ final class SessionStore {
         }
 
         if message.contains("400") || message.contains("bad request") {
+            if isGoogleOAuthConfigurationMessage(message) {
+                return mistiaLocalized(
+                    vi: "Yêu cầu đăng nhập Google không hợp lệ (Lỗi 400). Kiểm tra lại Client ID và URL Scheme của Google nhé.",
+                    en: "Google sign-in request is invalid (Error 400). Please check your Google Client ID and URL Scheme configuration.",
+                    ja: "Google ログインのリクエストが不正です (Error 400)。Google の Client ID と URL スキームの設定を確認してください。"
+                )
+            }
+
             return mistiaLocalized(
-                vi: "Yêu cầu không hợp lệ (Lỗi 400). Kiểm tra lại cấu hình Client ID và URL Scheme của Google nhé.",
-                en: "Bad request (Error 400). Please check your Google Client ID and URL Scheme configuration.",
-                ja: "不正なリクエストです (Error 400)。Google の Client ID と URL スキームの設定を確認してください。"
+                vi: "Yêu cầu sync không hợp lệ (Lỗi 400). Chi tiết: \(rawMessage)",
+                en: "Sync request is invalid (Error 400). Details: \(rawMessage)",
+                ja: "同期リクエストが不正です (Error 400)。詳細: \(rawMessage)"
             )
         }
 
@@ -2222,6 +2229,19 @@ final class SessionStore {
         }
 
         return rawMessage
+    }
+
+    private func isGoogleOAuthConfigurationMessage(_ message: String) -> Bool {
+        let normalized = message.lowercased()
+        let mentionsGoogle = normalized.contains("google")
+            || normalized.contains("oauth")
+            || normalized.contains("oidc")
+            || normalized.contains("provider")
+        let mentionsConfiguration = normalized.contains("client id")
+            || normalized.contains("callback")
+            || normalized.contains("redirect")
+            || normalized.contains("url scheme")
+        return mentionsGoogle && mentionsConfiguration
     }
 
     private func localizedDecodingErrorMessage(_ error: DecodingError) -> String {
@@ -2741,17 +2761,6 @@ final class SessionStore {
             return []
         }
 
-        let baseDeviceID = mutation.deviceID
-        let dependencyMutations = promotedCategoryMutationsRequiredForSync(
-            for: mutation,
-            subjectUserID: subjectUserID,
-            deviceID: baseDeviceID
-        )
-
-        guard shouldQueueMutation(entity: mutation.entity, recordID: mutation.recordID) else {
-            return dependencyMutations
-        }
-
         try? MistiaRecordOwnershipStore.upsert(
             entity: mutation.entity,
             recordID: mutation.recordID,
@@ -2760,7 +2769,7 @@ final class SessionStore {
             in: modelContainer
         )
 
-        return dependencyMutations + [
+        return [
             MistiaSyncMutation(
                 entity: mutation.entity,
                 recordID: mutation.recordID,
@@ -2772,68 +2781,9 @@ final class SessionStore {
                     recordID: mutation.recordID,
                     fallback: mutation.baseVersion
                 ),
-                deviceID: baseDeviceID
+                deviceID: mutation.deviceID
             )
         ]
-    }
-
-    private func promotedCategoryMutationsRequiredForSync(
-        for mutation: MistiaSyncMutation,
-        subjectUserID: UUID,
-        deviceID: UUID
-    ) -> [MistiaSyncMutation] {
-        guard mutation.kind == .upsert else { return [] }
-
-        let promotedCategories = (try? MistiaSystemCategorySyncSupport.promoteCategoriesRequiredForSync(
-            entity: mutation.entity,
-            recordID: mutation.recordID,
-            modifiedAt: mutation.modifiedAt,
-            in: modelContainer
-        )) ?? []
-
-        return promotedCategories.compactMap { category in
-            guard let categorySubjectUserID = resolvedSubjectUserID(
-                entity: .category,
-                recordID: category.id,
-                fallbackSubjectUserID: subjectUserID
-            ) else {
-                return nil
-            }
-
-            try? MistiaRecordOwnershipStore.upsert(
-                entity: .category,
-                recordID: category.id,
-                ownerUserID: categorySubjectUserID,
-                updatedAt: mutation.modifiedAt,
-                in: modelContainer
-            )
-
-            let effectiveModifiedAt = category.updatedAt > mutation.modifiedAt
-                ? category.updatedAt
-                : mutation.modifiedAt
-
-            return MistiaSyncMutation(
-                entity: .category,
-                recordID: category.id,
-                subjectUserID: categorySubjectUserID,
-                kind: .upsert,
-                modifiedAt: effectiveModifiedAt,
-                baseVersion: currentRemoteVersion(
-                    for: .category,
-                    recordID: category.id,
-                    fallback: 0
-                ),
-                deviceID: deviceID
-            )
-        }
-    }
-
-    private func shouldQueueMutation(entity: MistiaSyncEntity, recordID: UUID) -> Bool {
-        guard entity == .category else { return true }
-        guard let category = categoryRecord(for: recordID) else {
-            return currentRemoteVersion(for: entity, recordID: recordID, fallback: 0) > 0
-        }
-        return MistiaSystemCategorySyncSupport.shouldQueueCategoryMutation(category)
     }
 
     private func categoryRecord(for recordID: UUID) -> TransactionCategory? {

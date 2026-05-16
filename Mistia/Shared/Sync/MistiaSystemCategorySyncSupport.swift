@@ -296,117 +296,26 @@ enum MistiaSystemCategorySyncSupport {
         repairResult: inout MistiaSystemCategoryRepairResult
     ) throws {
         let categories = try modelContext.fetch(FetchDescriptor<TransactionCategory>())
-        let transactions = try modelContext.fetch(FetchDescriptor<LedgerTransaction>())
-        let budgets = try modelContext.fetch(FetchDescriptor<BudgetPlan>())
-        let recurringBills = try modelContext.fetch(FetchDescriptor<RecurringBillPlan>())
-        let conflicts = try modelContext.fetch(FetchDescriptor<SyncConflict>())
         let ownershipScopes = try modelContext.fetch(FetchDescriptor<OwnedRecordScope>())
         let categoryOwnerMap = MistiaRecordOwnershipStore.ownerMap(from: ownershipScopes, entity: .category)
-        let outbox = MistiaSyncOutbox()
         var didMutate = false
 
         let activeCategories = categories.filter {
             $0.deletedAt == nil
                 && !isFamilyScopedSystemCategory($0, categoryOwnerMap: categoryOwnerMap)
         }
-        let categoriesByID = Dictionary(categories.map { ($0.id, $0) }, uniquingKeysWith: preferredCategory)
-        let baseReferencedCategoryIDs = collectReferencedCategoryIDs(
-            transactions: transactions,
-            budgets: budgets,
-            recurringBills: recurringBills
-        )
-        let referencedCategoryIDs = expandedCategoryDependencyIDs(
-            baseCategoryIDs: baseReferencedCategoryIDs,
-            categoriesByID: categoriesByID
-        )
-        let conflictCategoryIDs = Set(
-            conflicts
-                .filter { $0.entity == .category }
-                .map(\.recordID)
-        )
 
         for category in activeCategories {
-            let previousValue = category.cloudSyncEnabled
-            let isReferenced = referencedCategoryIDs.contains(category.id)
-            let isConflicted = conflictCategoryIDs.contains(category.id)
-            let isCustomized = isCustomizedSystemCategory(category)
-
-            let nextValue = isReferenced || isConflicted || isCustomized
-
-            if previousValue != nextValue {
-                category.cloudSyncEnabled = nextValue
+            if !category.cloudSyncEnabled {
+                category.cloudSyncEnabled = true
                 didMutate = true
-                if nextValue {
-                    repairResult.categoryIDsNeedingSync.insert(category.id)
-                } else {
-                    // When disabling sync for a category, we must also remove any pending 
-                    // mutations for it from the outbox to prevent it from being pushed.
-                    outbox.remove(entity: .category, recordID: category.id)
-                }
+                repairResult.categoryIDsNeedingSync.insert(category.id)
             }
         }
 
         if didMutate {
             try modelContext.save()
         }
-    }
-
-    static func promoteCategoriesRequiredForSync(
-        entity: MistiaSyncEntity,
-        recordID: UUID,
-        modifiedAt: Date,
-        in container: ModelContainer
-    ) throws -> [TransactionCategory] {
-        let context = ModelContext(container)
-        let categories = try context.fetch(FetchDescriptor<TransactionCategory>())
-        let categoryByID = Dictionary(categories.map { ($0.id, $0) }, uniquingKeysWith: preferredCategory)
-        let requiredIDs = try requiredCategoryIDsForSync(
-            entity: entity,
-            recordID: recordID,
-            context: context,
-            categoryByID: categoryByID
-        )
-
-        guard !requiredIDs.isEmpty else { return [] }
-
-        var promoted: [TransactionCategory] = []
-        var didMutate = false
-
-        for categoryID in requiredIDs {
-            guard let category = categoryByID[categoryID] else { continue }
-            guard !category.cloudSyncEnabled else { continue }
-
-            category.cloudSyncEnabled = true
-            if category.updatedAt < modifiedAt {
-                category.updatedAt = modifiedAt
-            }
-            promoted.append(category)
-            didMutate = true
-        }
-
-        if didMutate {
-            try context.save()
-        }
-
-        return promoted.sorted { lhs, rhs in
-            if lhs.hierarchyRole != rhs.hierarchyRole {
-                return lhs.hierarchyRole == .parent
-            }
-            if lhs.sortOrder != rhs.sortOrder {
-                return lhs.sortOrder < rhs.sortOrder
-            }
-            return lhs.createdAt < rhs.createdAt
-        }
-    }
-
-    static func shouldQueueCategoryMutation(_ category: TransactionCategory) -> Bool {
-        if category.cloudSyncEnabled { return true }
-        if isSystemCategoryCloudSyncRequired(category) { return true }
-        return false
-    }
-
-    nonisolated static func shouldExportCategory(_ category: TransactionCategory) -> Bool {
-        category.cloudSyncEnabled || isSystemCategoryCloudSyncRequired(category)
     }
 
     static func isFamilyScopedSystemCategory(
@@ -419,46 +328,6 @@ enum MistiaSystemCategorySyncSupport {
             return false
         }
         return category.id != MistiaSystemCategoryIdentity.canonicalID(for: rawSystemKey)
-    }
-
-    nonisolated static func isSystemCategoryCloudSyncRequired(_ category: TransactionCategory) -> Bool {
-        guard category.isSystem else { return false }
-        if category.deletedAt != nil { return true }
-        return isCustomizedSystemCategory(category)
-    }
-
-    nonisolated static func isCustomizedSystemCategory(_ category: TransactionCategory) -> Bool {
-        guard category.isSystem else { return false }
-        let parentSystemKey = category.parentCategory?.systemKey
-        return !isDefaultSystemCategoryState(
-            rawSystemKey: category.systemKey,
-            name: category.name,
-            iconSymbolName: category.iconSymbolName,
-            iconColorHex: category.iconColorHex,
-            isFavorite: category.isFavorite,
-            hierarchyRoleRawValue: category.hierarchyRoleRawValue,
-            sortOrder: category.sortOrder,
-            isArchived: category.isArchived,
-            parentSystemKey: parentSystemKey
-        )
-    }
-
-    static func isCustomizedRemoteSystemCategory(
-        _ row: RemoteTransactionCategory,
-        parentSystemKey: String?
-    ) -> Bool {
-        guard row.isSystem else { return false }
-        return !isDefaultSystemCategoryState(
-            rawSystemKey: row.systemKey,
-            name: row.name,
-            iconSymbolName: row.iconSymbolName,
-            iconColorHex: row.iconColorHex,
-            isFavorite: row.isFavorite,
-            hierarchyRoleRawValue: row.hierarchyRoleRawValue,
-            sortOrder: row.sortOrder,
-            isArchived: row.isArchived,
-            parentSystemKey: parentSystemKey
-        )
     }
 
     static func canonicalizedSystemCategoryRow(
@@ -488,9 +357,6 @@ enum MistiaSystemCategorySyncSupport {
         }
         if category.remoteVersion > 0 {
             score += 32
-        }
-        if isCustomizedSystemCategory(category) {
-            score += 64
         }
         return score
     }
@@ -717,166 +583,6 @@ enum MistiaSystemCategorySyncSupport {
             ) {
                 conflict.remotePayloadJSON = rewrittenRemote
             }
-        }
-    }
-
-    private static func collectReferencedCategoryIDs(
-        transactions: [LedgerTransaction],
-        budgets: [BudgetPlan],
-        recurringBills: [RecurringBillPlan]
-    ) -> Set<UUID> {
-        var ids: Set<UUID> = []
-
-        for transaction in transactions where transaction.deletedAt == nil {
-            if let categoryID = transaction.category?.id {
-                ids.insert(categoryID)
-            }
-        }
-
-        for budget in budgets where budget.deletedAt == nil {
-            if let categoryID = budget.category?.id {
-                ids.insert(categoryID)
-            }
-        }
-
-        for recurringBill in recurringBills where recurringBill.deletedAt == nil {
-            if let categoryID = recurringBill.category?.id {
-                ids.insert(categoryID)
-            }
-        }
-
-        return ids
-    }
-
-    private static func expandedCategoryDependencyIDs(
-        baseCategoryIDs: Set<UUID>,
-        categoriesByID: [UUID: TransactionCategory]
-    ) -> Set<UUID> {
-        var expanded = baseCategoryIDs
-        var didAdd = true
-
-        while didAdd {
-            didAdd = false
-            for categoryID in Array(expanded) {
-                guard let category = categoriesByID[categoryID],
-                      let parentID = category.parentCategory?.id,
-                      !expanded.contains(parentID) else {
-                    continue
-                }
-                expanded.insert(parentID)
-                didAdd = true
-            }
-        }
-
-        return expanded
-    }
-
-    private static func requiredCategoryIDsForSync(
-        entity: MistiaSyncEntity,
-        recordID: UUID,
-        context: ModelContext,
-        categoryByID: [UUID: TransactionCategory]
-    ) throws -> Set<UUID> {
-        var ids: Set<UUID> = []
-
-        switch entity {
-        case .transaction:
-            let descriptor = FetchDescriptor<LedgerTransaction>(
-                predicate: #Predicate<LedgerTransaction> { transaction in
-                    transaction.id == recordID
-                }
-            )
-            if let transaction = try context.fetch(descriptor).first,
-               let categoryID = transaction.category?.id {
-                ids.insert(categoryID)
-            }
-        case .budgetPlan:
-            let descriptor = FetchDescriptor<BudgetPlan>(
-                predicate: #Predicate<BudgetPlan> { budget in
-                    budget.id == recordID
-                }
-            )
-            if let budget = try context.fetch(descriptor).first,
-               let categoryID = budget.category?.id {
-                ids.insert(categoryID)
-            }
-        case .recurringBillPlan:
-            let descriptor = FetchDescriptor<RecurringBillPlan>(
-                predicate: #Predicate<RecurringBillPlan> { plan in
-                    plan.id == recordID
-                }
-            )
-            if let plan = try context.fetch(descriptor).first,
-               let categoryID = plan.category?.id {
-                ids.insert(categoryID)
-            }
-        case .category:
-            if let category = categoryByID[recordID] {
-                ids.insert(category.id)
-            }
-        case .wallet, .creditCardProfile, .savingsGoal, .installmentPlan, .dueOccurrenceRecord:
-            break
-        }
-
-        return expandedCategoryDependencyIDs(baseCategoryIDs: ids, categoriesByID: categoryByID)
-    }
-
-    nonisolated private static func isDefaultSystemCategoryState(
-        rawSystemKey: String?,
-        name: String,
-        iconSymbolName: String,
-        iconColorHex: String,
-        isFavorite: Bool,
-        hierarchyRoleRawValue: String?,
-        sortOrder: Int,
-        isArchived: Bool,
-        parentSystemKey: String?
-    ) -> Bool {
-        guard let descriptor = MistiaSystemCategoryIdentity.descriptor(for: rawSystemKey) else {
-            return false
-        }
-
-        let normalizedName = name.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-        let normalizedRole = hierarchyRoleRawValue.flatMap(TransactionCategoryHierarchyRole.init(rawValue:))
-            ?? descriptor.hierarchyRole
-
-        // We check against all known localized names and aliases to avoid marking default categories as customized
-        let knownNames = descriptor.knownNames.map { $0.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() }
-        guard knownNames.contains(normalizedName) else { return false }
-
-        if iconSymbolName != descriptor.iconSymbolName {
-            if let fallback = descriptor.fallbackIconSymbolName {
-                guard iconSymbolName == fallback else { return false }
-            } else {
-                return false
-            }
-        }
-
-        // We normalize the stored color to its nearest preset and compare with the default preset for this category
-        let normalizedStoredHex = MistiaIconColorPalette.normalizedHex(iconColorHex)
-        let presetStoredHex = MistiaIconColorPalette.presetHex(forDefault: normalizedStoredHex)
-        guard presetStoredHex == descriptor.iconColorHex else { return false }
-
-        guard !isFavorite else { return false }
-        guard normalizedRole == descriptor.hierarchyRole else { return false }
-        if let defaultSortOrder = descriptor.sortOrder {
-            guard sortOrder == defaultSortOrder else { return false }
-        }
-
-        guard isArchived == descriptor.startsArchived else { return false }
-
-        switch descriptor.hierarchyRole {
-        case .parent:
-            return parentSystemKey == nil
-        case .child:
-            // For children, we are lenient: if it has no parent but should have one, it might be a 
-            // transient state during bootstrap, so we don't necessarily mark it customized 
-            // if everything else is default. However, to be safe and avoid syncing 100+ categories,
-            // we should ensure parents are correctly linked before this check.
-            guard let parentSystemKey else { 
-                return descriptor.defaultParentSystemKey == nil 
-            }
-            return parentSystemKey == descriptor.defaultParentSystemKey
         }
     }
 

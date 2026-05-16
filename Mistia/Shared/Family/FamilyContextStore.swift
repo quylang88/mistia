@@ -21,28 +21,6 @@ private struct FamilyPendingPermissionRequestKey: Hashable {
     let scopeRawValue: String
 }
 
-private enum FamilyCategoryUseApprovalError: LocalizedError {
-    case missingLocalSystemCategory
-    case syncFailed
-
-    var errorDescription: String? {
-        switch self {
-        case .missingLocalSystemCategory:
-            mistiaLocalized(
-                vi: "Không tìm thấy danh mục hệ thống này trên máy của bạn.",
-                en: "This system category wasn't found on your device.",
-                ja: "このシステムカテゴリがこのデバイスに見つかりません。"
-            )
-        case .syncFailed:
-            mistiaLocalized(
-                vi: "Chưa thể đồng bộ danh mục này lên cloud.",
-                en: "Couldn't sync this category to the cloud yet.",
-                ja: "このカテゴリをまだクラウドへ同期できません。"
-            )
-        }
-    }
-}
-
 @MainActor
 @Observable
 final class FamilyContextStore {
@@ -598,20 +576,6 @@ final class FamilyContextStore {
             )
             return false
         }
-        if resourceType == .category, scope == .use {
-            if !canRequestSystemCategoryUse(ownerUserID: ownerUserID, requesterUserID: session.user.id) {
-                _ = await refresh(sessionStore: sessionStore)
-            }
-
-            guard canRequestSystemCategoryUse(ownerUserID: ownerUserID, requesterUserID: session.user.id) else {
-                lastErrorMessage = mistiaLocalized(
-                    vi: "Bạn và thành viên này đều cần đồng bộ dữ liệu lên cloud ít nhất một lần trước khi yêu cầu dùng danh mục hệ thống.",
-                    en: "Both you and this member need to sync data to the cloud at least once before requesting a system category.",
-                    ja: "システムカテゴリをリクエストするには、あなたとこのメンバーの両方が一度データをクラウド同期している必要があります。"
-                )
-                return false
-            }
-        }
 
         let requesterName = sessionStore.summary?.displayName
             ?? displayName(for: session.user.id)
@@ -737,13 +701,6 @@ final class FamilyContextStore {
                 notification.needsReadSync = true
             }
             try? modelContainer.mainContext.save()
-            if approve {
-                try await prepareCategoryUseApprovalIfNeeded(
-                    notification,
-                    sessionStore: sessionStore,
-                    currentUserID: session.user.id
-                )
-            }
             await refresh(sessionStore: sessionStore)
             return true
         } catch {
@@ -752,57 +709,6 @@ final class FamilyContextStore {
         }
     }
 
-    private func prepareCategoryUseApprovalIfNeeded(
-        _ notification: AppNotificationRecord,
-        sessionStore: SessionStore,
-        currentUserID: UUID
-    ) async throws {
-        guard notification.resourceType == .category,
-              notification.permissionScope == .use,
-              let categoryID = notification.resourceID else {
-            return
-        }
-
-        let promotedCategoryRecords = try MistiaSyncLocalStore.promoteSystemCategoryForFamilyUse(
-            categoryID: categoryID,
-            in: modelContainer
-        )
-        guard !promotedCategoryRecords.isEmpty else {
-            throw FamilyCategoryUseApprovalError.missingLocalSystemCategory
-        }
-
-        for categoryRecord in promotedCategoryRecords {
-            sessionStore.recordUpsert(
-                entity: .category,
-                recordID: categoryRecord.id,
-                modifiedAt: categoryRecord.updatedAt,
-                subjectUserIDOverride: currentUserID
-            )
-        }
-
-        guard await pushCategoryApprovalChanges(sessionStore: sessionStore) else {
-            throw FamilyCategoryUseApprovalError.syncFailed
-        }
-    }
-
-    private func pushCategoryApprovalChanges(sessionStore: SessionStore) async -> Bool {
-        for _ in 0..<2 {
-            if await sessionStore.syncPermissionApprovalChanges() {
-                return true
-            }
-
-            guard sessionStore.isAnySyncInProgress else {
-                return false
-            }
-
-            while sessionStore.isAnySyncInProgress {
-                guard !Task.isCancelled else { return false }
-                try? await Task.sleep(for: .milliseconds(150))
-            }
-        }
-
-        return false
-    }
 
     func removeMember(
         _ member: FamilyMember,
@@ -1045,18 +951,6 @@ final class FamilyContextStore {
         return members.first(where: { $0.userID == userID })?.hasSyncedCloudData == true
     }
 
-    func canRequestSystemCategoryUse(
-        ownerUserID: UUID?,
-        requesterUserID: UUID? = nil
-    ) -> Bool {
-        guard let ownerUserID,
-              let requesterUserID = requesterUserID ?? currentUserID else {
-            return false
-        }
-
-        return hasSyncedCloudData(userID: requesterUserID)
-            && hasSyncedCloudData(userID: ownerUserID)
-    }
 
     func clear() {
         activeContext = .personalSelf

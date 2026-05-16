@@ -56,11 +56,6 @@ private enum TransactionEditorFocusedField: Hashable {
     case title
 }
 
-private struct TransactionSystemCategoryUseRequestTarget: Identifiable {
-    let id = UUID()
-    let ownerUserID: UUID
-}
-
 struct TransactionEditorSheet: View {
     @Environment(\.calendar) private var calendar
     @Environment(\.dismiss) private var dismiss
@@ -97,7 +92,6 @@ struct TransactionEditorSheet: View {
         return false
     }
     @State private var showsCategoryPicker = false
-    @State private var systemCategoryUseRequestTarget: TransactionSystemCategoryUseRequestTarget?
     @State private var cachedTitleSuggestions: [TransactionTitleSuggestion] = []
     @State private var titleSuggestionRefreshTask: Task<Void, Never>?
     @State private var suppressTitleSuggestions = false
@@ -239,33 +233,6 @@ struct TransactionEditorSheet: View {
                 }
             ) { category in
                 draft.categoryID = category.id
-            }
-        }
-        .sheet(item: $systemCategoryUseRequestTarget) { target in
-            MistiaCategoryPickerSheet(
-                title: mistiaLocalized(
-                    vi: "Yêu cầu sử dụng danh mục",
-                    en: "Request category use",
-                    ja: "カテゴリ利用をリクエスト"
-                ),
-                selectedCategoryID: nil,
-                sections: missingSystemCategorySections(
-                    ownerUserID: target.ownerUserID,
-                    kind: selectedCategoryKind
-                ),
-                recentCategories: [],
-                favoriteCategories: [],
-                initialMode: .all,
-                allowsParentSelectionInAll: false,
-                allModeSubtitle: { category in
-                    category.parentCategory?.localizedDisplayName
-                },
-                quickModeSubtitle: { category in
-                    category.parentCategory?.localizedDisplayName
-                }
-            ) { category in
-                systemCategoryUseRequestTarget = nil
-                requestSystemCategoryUse(category, ownerUserID: target.ownerUserID)
             }
         }
         .onChange(of: draft.sourceWalletID) { _, _ in
@@ -464,28 +431,6 @@ struct TransactionEditorSheet: View {
                     }
                     .buttonStyle(MistiaPressableButtonStyle(cornerRadius: 20))
 
-                    if shouldShowSystemCategoryUseRequestButton {
-                        Button {
-                            openSystemCategoryUseRequestPicker()
-                        } label: {
-                            HStack(spacing: 10) {
-                                Image(systemName: "plus.circle.fill")
-                                    .font(.system(size: 16, weight: .semibold))
-                                    .foregroundStyle(MistiaAccent.purple.color)
-                                Text(mistiaLocalized(
-                                    vi: "Yêu cầu danh mục hệ thống",
-                                    en: "Request system category",
-                                    ja: "システムカテゴリをリクエスト"
-                                ))
-                                .foregroundStyle(.primary)
-                                Spacer()
-                                Image(systemName: "chevron.right")
-                                    .font(.system(size: 11, weight: .bold))
-                                    .foregroundStyle(.tertiary)
-                            }
-                        }
-                        .buttonStyle(MistiaPressableButtonStyle(cornerRadius: 20))
-                    }
                 }
             case .transfer:
                 if draft.transferSubtype == .internalTransfer {
@@ -1338,25 +1283,6 @@ struct TransactionEditorSheet: View {
         return []
     }
 
-    private var systemCategoryUseRequestOwnerID: UUID? {
-        guard target.transaction == nil else { return nil }
-        let ownerUserID = selectedSourceWallet.flatMap { walletOwnerUserID(for: $0) }
-            ?? (familyContextStore.isViewingOtherMemberContext ? familyContextStore.selectedSubjectUserID : nil)
-        guard let ownerUserID,
-              ownerUserID != currentSelfUserID else {
-            return nil
-        }
-        return ownerUserID
-    }
-
-    private var shouldShowSystemCategoryUseRequestButton: Bool {
-        guard let ownerUserID = systemCategoryUseRequestOwnerID else { return false }
-        return !missingSystemCategorySections(
-            ownerUserID: ownerUserID,
-            kind: selectedCategoryKind
-        ).isEmpty
-    }
-
     private func walletOwnerUserID(for wallet: LedgerWallet?) -> UUID? {
         guard let wallet else { return nil }
         return walletOwnerMap[wallet.id]
@@ -1395,84 +1321,6 @@ struct TransactionEditorSheet: View {
 
     private func shouldShowCategory(_ category: TransactionCategory) -> Bool {
         categoryMatchesOwnerScope(category, ownerUserIDs: categoryPickerOwnerUserIDs)
-    }
-
-    private func openSystemCategoryUseRequestPicker() {
-        guard let ownerUserID = systemCategoryUseRequestOwnerID else { return }
-        guard familyContextStore.canRequestSystemCategoryUse(ownerUserID: ownerUserID) else {
-            alertMessage = mistiaLocalized(
-                vi: "Bạn và thành viên này đều cần đồng bộ dữ liệu lên cloud ít nhất một lần trước khi yêu cầu dùng danh mục hệ thống.",
-                en: "Both you and this member need to sync data to the cloud at least once before requesting a system category.",
-                ja: "システムカテゴリをリクエストするには、あなたとこのメンバーの両方が一度データをクラウド同期している必要があります。"
-            )
-            return
-        }
-        guard !missingSystemCategorySections(ownerUserID: ownerUserID, kind: selectedCategoryKind).isEmpty else {
-            alertMessage = mistiaLocalized(
-                vi: "Thành viên này đã có đủ danh mục hệ thống trong nhóm đang chọn.",
-                en: "This member already has every system category in the current group.",
-                ja: "このメンバーには、現在のグループのシステムカテゴリがすべてあります。"
-            )
-            return
-        }
-        systemCategoryUseRequestTarget = TransactionSystemCategoryUseRequestTarget(ownerUserID: ownerUserID)
-    }
-
-    private func requestSystemCategoryUse(
-        _ category: TransactionCategory,
-        ownerUserID: UUID
-    ) {
-        guard let systemKey = category.mistiaSystemCategoryKey else { return }
-        let resourceID = MistiaSystemCategoryIdentity.canonicalID(for: systemKey)
-        let isPending = familyContextStore.hasPendingPermissionRequest(
-            ownerUserID: ownerUserID,
-            resourceType: .category,
-            resourceID: resourceID,
-            scope: .use
-        )
-
-        guard !isPending else {
-            alertMessage = mistiaLocalized(
-                vi: "Yêu cầu sử dụng danh mục này đang chờ thành viên phản hồi.",
-                en: "The request to use this category is waiting for the member.",
-                ja: "このカテゴリの利用リクエストはメンバーの返答待ちです。"
-            )
-            return
-        }
-
-        Task { @MainActor in
-            let didSend = await familyContextStore.requestPermission(
-                resourceType: .category,
-                resourceID: resourceID,
-                ownerUserID: ownerUserID,
-                scope: .use,
-                resourceName: category.localizedDisplayName,
-                sessionStore: sessionStore
-            )
-            alertMessage = didSend
-                ? mistiaLocalized(
-                    vi: "Đã gửi yêu cầu. Khi thành viên đồng ý, danh mục này sẽ được đồng bộ lên cloud của họ để bạn chọn trong giao dịch.",
-                    en: "Request sent. When the member approves, this category will sync to their cloud catalog so you can use it in transactions.",
-                    ja: "リクエストを送信しました。メンバーが承認すると、このカテゴリが相手のクラウドカテゴリに同期され、取引で選べるようになります。"
-                )
-                : (familyContextStore.lastErrorMessage ?? mistiaLocalized(
-                    vi: "Không thể gửi yêu cầu lúc này.",
-                    en: "Couldn't send the request right now.",
-                    ja: "現在リクエストは送信できません。"
-                ))
-        }
-    }
-
-    private func missingSystemCategorySections(
-        ownerUserID: UUID,
-        kind: TransactionCategoryKind
-    ) -> [TransactionCategoryGroupSection] {
-        MistiaSystemCategoryRequestSupport.missingSections(
-            ownerUserID: ownerUserID,
-            kind: kind,
-            categories: storedCategories,
-            categoryOwnerMap: categoryOwnerMap
-        )
     }
 
     private func categoryMatchesOwnerScope(

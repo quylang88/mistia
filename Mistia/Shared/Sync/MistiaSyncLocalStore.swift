@@ -160,17 +160,8 @@ enum MistiaSyncLocalStore {
             .filter { installmentOwnerMap[$0.id] == nil || installmentOwnerMap[$0.id] == userID }
         let dueOccurrences = try fetchDueOccurrences(context)
             .filter { occurrenceOwnerMap[$0.id] == nil || occurrenceOwnerMap[$0.id] == userID }
-        let allCategories = try fetchCategories(context)
+        let categories = try fetchCategories(context)
             .filter { categoryOwnerMap[$0.id] == nil || categoryOwnerMap[$0.id] == userID }
-        let requiredSystemCategoryIDs = systemCategoryDependencyIDs(
-            categories: allCategories,
-            transactions: transactions,
-            budgetPlans: budgetPlans,
-            recurringBillPlans: recurringBillPlans
-        )
-        let categories = allCategories.filter {
-            shouldExportCategory($0, requiredSystemCategoryIDs: requiredSystemCategoryIDs)
-        }
 
         return MistiaRemoteSnapshot(
             wallets: wallets.map { RemoteLedgerWallet(local: $0, userID: userID) },
@@ -189,7 +180,7 @@ enum MistiaSyncLocalStore {
                 RemoteRecurringBillPlan(
                     local: $0,
                     userID: userID,
-                    categoryID: recurringBillCategoryID(for: $0, userID: userID, categories: allCategories)
+                    categoryID: recurringBillCategoryID(for: $0, userID: userID, categories: categories)
                 )
             },
             installmentPlans: installmentPlans.map { RemoteInstallmentPlan(local: $0, userID: userID) },
@@ -201,28 +192,7 @@ enum MistiaSyncLocalStore {
         for userID: UUID,
         from container: ModelContainer
     ) throws -> MistiaRemoteSnapshot {
-        let baseSnapshot = try exportSnapshot(for: userID, from: container)
-        let supplementalCategories = try supplementalCategoriesForUpload(
-            userID: userID,
-            baseSnapshot: baseSnapshot,
-            from: container
-        )
-
-        guard !supplementalCategories.isEmpty else {
-            return baseSnapshot
-        }
-
-        return MistiaRemoteSnapshot(
-            wallets: baseSnapshot.wallets,
-            creditCardProfiles: baseSnapshot.creditCardProfiles,
-            categories: baseSnapshot.categories + supplementalCategories,
-            transactions: baseSnapshot.transactions,
-            budgetPlans: baseSnapshot.budgetPlans,
-            savingsGoals: baseSnapshot.savingsGoals,
-            recurringBillPlans: baseSnapshot.recurringBillPlans,
-            installmentPlans: baseSnapshot.installmentPlans,
-            dueOccurrences: baseSnapshot.dueOccurrences
-        )
+        try exportSnapshot(for: userID, from: container)
     }
 
     static func exportRecord(
@@ -246,10 +216,6 @@ enum MistiaSyncLocalStore {
             return .creditCardProfile(RemoteCreditCardProfile(local: profile, userID: subjectUserID))
         case .category:
             guard let category = try fetchCategories(context).first(where: { $0.id == mutation.recordID }) else {
-                return nil
-            }
-            let requiredSystemCategoryIDs = try systemCategoryDependencyIDs(context: context)
-            guard shouldExportCategory(category, requiredSystemCategoryIDs: requiredSystemCategoryIDs) else {
                 return nil
             }
             return .category(RemoteTransactionCategory(local: category, userID: subjectUserID))
@@ -591,86 +557,6 @@ enum MistiaSyncLocalStore {
         try context.save()
     }
 
-    @discardableResult
-    static func promoteSystemCategoryForFamilyUse(
-        categoryID: UUID,
-        in container: ModelContainer
-    ) throws -> [(id: UUID, updatedAt: Date)] {
-        let context = ModelContext(container)
-        guard let systemKey = MistiaSystemCategoryKey.activeDefaults.first(where: {
-            MistiaSystemCategoryIdentity.canonicalID(for: $0) == categoryID
-        }) else {
-            return []
-        }
-
-        let category = try ensureSystemCategoryForSync(systemKey, context: context)
-        var promotedCategories = [category]
-        if let parent = category.parentCategory {
-            promotedCategories.insert(parent, at: 0)
-        }
-
-        let now = Date()
-        var didMutate = false
-        for promotedCategory in promotedCategories {
-            if promotedCategory.cloudSyncEnabled == false {
-                promotedCategory.cloudSyncEnabled = true
-                didMutate = true
-            }
-            if promotedCategory.updatedAt < now {
-                promotedCategory.updatedAt = now
-                didMutate = true
-            }
-        }
-
-        if didMutate {
-            try context.save()
-        }
-
-        return promotedCategories.map { ($0.id, $0.updatedAt) }
-    }
-
-    private static func ensureSystemCategoryForSync(
-        _ systemKey: MistiaSystemCategoryKey,
-        context: ModelContext
-    ) throws -> TransactionCategory {
-        let categories = try fetchCategories(context).filter { $0.deletedAt == nil }
-        if let existing = categories.first(where: { $0.systemKey == systemKey.rawValue }) {
-            return existing
-        }
-
-        let parentKey = MistiaCategoryHierarchy.defaultParentKey(for: systemKey)
-        let parent = categories.first(where: { $0.systemKey == parentKey.rawValue }) ?? {
-            let parentCategory = TransactionCategory(
-                id: MistiaSystemCategoryIdentity.canonicalID(for: parentKey),
-                name: parentKey.title,
-                kind: parentKey.kind,
-                iconSymbolName: parentKey.iconSymbolName,
-                iconColorHex: MistiaIconColorPalette.presetHex(forDefault: parentKey.iconColorHex),
-                hierarchyRole: .parent,
-                systemKey: parentKey.rawValue,
-                isSystem: true,
-                sortOrder: MistiaSystemCategoryParentKey.activeDefaults.firstIndex(of: parentKey) ?? 0
-            )
-            context.insert(parentCategory)
-            return parentCategory
-        }()
-
-        let category = TransactionCategory(
-            id: MistiaSystemCategoryIdentity.canonicalID(for: systemKey),
-            name: systemKey.title,
-            kind: systemKey.kind,
-            iconSymbolName: systemKey.iconSymbolName,
-            iconColorHex: MistiaIconColorPalette.presetHex(forDefault: systemKey.iconColorHex),
-            parentCategory: parent,
-            hierarchyRole: .child,
-            systemKey: systemKey.rawValue,
-            isSystem: true,
-            sortOrder: MistiaSystemCategoryKey.activeDefaults.firstIndex(of: systemKey) ?? 0,
-            isArchived: !systemKey.isActiveDefault
-        )
-        context.insert(category)
-        return category
-    }
 
     static func applyRemoteRecord(
         _ record: MistiaSyncUploadRecord,
@@ -2155,79 +2041,6 @@ enum MistiaSyncLocalStore {
         try context.fetch(FetchDescriptor<TransactionAuditRecord>())
     }
 
-    private static func shouldExportCategory(
-        _ category: TransactionCategory,
-        requiredSystemCategoryIDs: Set<UUID>
-    ) -> Bool {
-        guard category.isSystem else {
-            return category.cloudSyncEnabled
-        }
-
-        if MistiaSystemCategorySyncSupport.isSystemCategoryCloudSyncRequired(category) {
-            return true
-        }
-
-        if category.deletedAt == nil,
-           requiredSystemCategoryIDs.contains(category.id) {
-            return true
-        }
-
-        return category.cloudSyncEnabled && category.remoteVersion == 0
-    }
-
-    private static func systemCategoryDependencyIDs(context: ModelContext) throws -> Set<UUID> {
-        try systemCategoryDependencyIDs(
-            categories: fetchCategories(context),
-            transactions: fetchTransactions(context),
-            budgetPlans: fetchBudgetPlans(context),
-            recurringBillPlans: fetchRecurringBillPlans(context)
-        )
-    }
-
-    private static func systemCategoryDependencyIDs(
-        categories: [TransactionCategory],
-        transactions: [LedgerTransaction],
-        budgetPlans: [BudgetPlan],
-        recurringBillPlans: [RecurringBillPlan]
-    ) -> Set<UUID> {
-        let categoriesByID = Dictionary(categories.map { ($0.id, $0) }, uniquingKeysWith: latestCategory)
-        var requiredIDs: Set<UUID> = []
-
-        func collect(_ category: TransactionCategory?) {
-            guard let category else { return }
-            requiredIDs.insert(category.id)
-            var currentParent = category.parentCategory
-            while let parent = currentParent {
-                guard requiredIDs.insert(parent.id).inserted else { break }
-                currentParent = parent.parentCategory
-            }
-        }
-
-        for transaction in transactions where transaction.deletedAt == nil {
-            collect(transaction.category)
-        }
-
-        for budget in budgetPlans where budget.deletedAt == nil {
-            collect(budget.category)
-        }
-
-        for plan in recurringBillPlans where plan.deletedAt == nil {
-            if let category = plan.category {
-                collect(category)
-                continue
-            }
-
-            guard let systemKey = MistiaSystemCategoryKey.allCases.first(where: {
-                $0.iconSymbolName == plan.iconSymbolName
-            }) else {
-                continue
-            }
-            collect(categoriesByID[MistiaSystemCategoryIdentity.canonicalID(for: systemKey)])
-        }
-
-        return requiredIDs
-    }
-
     private static func fetchBudgetPlans(_ context: ModelContext) throws -> [BudgetPlan] {
         try context.fetch(FetchDescriptor<BudgetPlan>())
     }
@@ -2260,68 +2073,6 @@ enum MistiaSyncLocalStore {
             return category.systemKey == systemKey.rawValue
         }
         return mistiaCloudCategoryID(for: matchingCategory, userID: userID)
-    }
-
-    private static func supplementalCategoriesForUpload(
-        userID: UUID,
-        baseSnapshot: MistiaRemoteSnapshot,
-        from container: ModelContainer
-    ) throws -> [RemoteTransactionCategory] {
-        let context = ModelContext(container)
-        let categories = try fetchCategories(context)
-        let categoryByRemoteID = Dictionary(
-            categories.compactMap { category -> (UUID, TransactionCategory)? in
-                guard let remoteID = mistiaCloudCategoryID(for: category, userID: userID) else { return nil }
-                return (remoteID, category)
-            },
-            uniquingKeysWith: latestCategory
-        )
-
-        var includedIDs = Set(baseSnapshot.categories.map(\.id))
-        var queuedIDs: Set<UUID> = []
-        var pendingIDs: [UUID] = []
-
-        func queueCategoryID(_ id: UUID?) {
-            guard let id else { return }
-            guard !includedIDs.contains(id), !queuedIDs.contains(id) else { return }
-            queuedIDs.insert(id)
-            pendingIDs.append(id)
-        }
-
-        for row in baseSnapshot.transactions where row.deletedAt == nil {
-            queueCategoryID(row.categoryID)
-        }
-
-        for row in baseSnapshot.budgetPlans where row.deletedAt == nil {
-            queueCategoryID(row.categoryID)
-        }
-
-        for row in baseSnapshot.recurringBillPlans where row.deletedAt == nil {
-            queueCategoryID(row.categoryID)
-        }
-
-        for row in baseSnapshot.categories where row.deletedAt == nil {
-            queueCategoryID(row.parentCategoryID)
-        }
-
-        var supplemental: [RemoteTransactionCategory] = []
-        var index = 0
-
-        while index < pendingIDs.count {
-            let categoryID = pendingIDs[index]
-            index += 1
-
-            guard let category = categoryByRemoteID[categoryID] else { continue }
-            guard category.deletedAt == nil else {
-                continue
-            }
-
-            includedIDs.insert(categoryID)
-            supplemental.append(RemoteTransactionCategory(local: category, userID: userID))
-            queueCategoryID(mistiaCloudCategoryID(for: category.parentCategory, userID: userID))
-        }
-
-        return supplemental
     }
 
     private static func fetchInstallmentPlans(_ context: ModelContext) throws -> [InstallmentPlan] {
