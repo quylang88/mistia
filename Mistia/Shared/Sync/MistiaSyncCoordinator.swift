@@ -353,20 +353,13 @@ final class SyncCoordinator {
                 entity: conflict.entity,
                 jsonString: conflict.localPayloadJSON
             )
-            try MistiaSyncLocalStore.applyRemoteRecord(localRecord, in: modelContainer)
-            outbox.enqueue(
-                MistiaSyncMutation(
-                    entity: conflict.entity,
-                    recordID: conflict.recordID,
-                    subjectUserID: localRecord.userID,
-                    kind: localRecord.deletedAt == nil ? .upsert : .delete,
-                    modifiedAt: localRecord.updatedAt,
-                    baseVersion: conflict.remoteVersion,
-                    deviceID: deviceID
-                )
+            _ = try await forcePushLocalRecord(
+                localRecord,
+                subjectUserID: localRecord.userID,
+                remoteVersion: conflict.remoteVersion,
+                session: session
             )
             try MistiaSyncLocalStore.removeConflict(id: id, from: modelContainer)
-            _ = try await sync(session: session)
         }
     }
 
@@ -1101,6 +1094,11 @@ final class SyncCoordinator {
         remoteVersion: Int64,
         session: SupabaseAuthSession
     ) async throws -> MistiaSyncUploadRecord {
+        try await ensureRemoteCategoryParentsExistIfNeeded(
+            for: localRecord,
+            subjectUserID: subjectUserID,
+            session: session
+        )
         let nextVersion = max(max(remoteVersion, localRecord.syncVersion), 0) + 1
         let authoritativeRecord = localRecord.preparedForMutation(
             nextVersion: nextVersion,
