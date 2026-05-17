@@ -106,10 +106,7 @@ final class MistiaSystemCategoryRemoteApplyTests: XCTestCase {
             canonicalCategoryID: categoryID,
             ownerUserID: memberUserID
         )
-        let memberSystemCategoryID = MistiaSystemCategoryIdentity.familyScopedID(
-            remoteCategoryID: memberRemoteSystemCategoryID,
-            ownerUserID: memberUserID
-        )
+        let memberSystemCategoryID = memberRemoteSystemCategoryID
         let systemCategory = try fetchCategory(id: categoryID, in: container)
         let memberSystemCategory = try fetchCategory(id: memberSystemCategoryID, in: container)
         let customCategory = try fetchCategory(id: customCategoryID, in: container)
@@ -177,10 +174,7 @@ final class MistiaSystemCategoryRemoteApplyTests: XCTestCase {
             canonicalCategoryID: categoryID,
             ownerUserID: memberUserID
         )
-        let memberCategoryID = MistiaSystemCategoryIdentity.familyScopedID(
-            remoteCategoryID: memberRemoteCategoryID,
-            ownerUserID: memberUserID
-        )
+        let memberCategoryID = memberRemoteCategoryID
         let category = try fetchCategory(id: categoryID, in: container)
         let memberCategory = try fetchCategory(id: memberCategoryID, in: container)
         let ownerUserID = try fetchCategoryOwner(id: categoryID, in: container)
@@ -245,6 +239,204 @@ final class MistiaSystemCategoryRemoteApplyTests: XCTestCase {
         XCTAssertEqual(memberCategory.name, "Member Sinh hoạt")
         XCTAssertTrue(memberCategory.isArchived)
         XCTAssertEqual(memberOwnerUserID, memberUserID)
+    }
+
+    func testFamilyImportKeepsMemberCustomCategorySeparateWhenNameAndKindMatchLocalCategory() throws {
+        let localUserID = UUID()
+        let memberUserID = UUID()
+        let localCategoryID = UUID()
+        let memberCategoryID = UUID()
+        let updatedAt = Date(timeIntervalSince1970: 1_770_000_000)
+        let container = try makeContainer()
+        let remoteContainer = try makeContainer()
+
+        try insertCustomCategory(
+            id: localCategoryID,
+            name: "Ăn sáng",
+            kind: .expense,
+            updatedAt: updatedAt,
+            in: container
+        )
+        try MistiaRecordOwnershipStore.upsert(
+            entity: .category,
+            recordID: localCategoryID,
+            ownerUserID: localUserID,
+            updatedAt: updatedAt,
+            in: container
+        )
+        try insertCustomCategory(
+            id: memberCategoryID,
+            name: "Ăn sáng",
+            kind: .expense,
+            updatedAt: updatedAt.addingTimeInterval(600),
+            in: remoteContainer
+        )
+
+        let remoteSnapshot = try MistiaSyncLocalStore.exportSnapshot(for: memberUserID, from: remoteContainer)
+        try MistiaSyncLocalStore.applySnapshotIncrementally(
+            remoteSnapshot,
+            shouldPruneMissing: false,
+            protectedRecordIDs: [],
+            familyCategoryScopedTo: localUserID,
+            familyCategoryPruneOwnerIDs: [memberUserID],
+            in: container
+        )
+
+        let localCategory = try fetchCategory(id: localCategoryID, in: container)
+        let memberCategory = try fetchCategory(id: memberCategoryID, in: container)
+        XCTAssertEqual(localCategory.name, "Ăn sáng")
+        XCTAssertEqual(memberCategory.name, "Ăn sáng")
+        XCTAssertFalse(memberCategory.isSystem)
+        XCTAssertEqual(try fetchCategoryOwner(id: localCategoryID, in: container), localUserID)
+        XCTAssertEqual(try fetchCategoryOwner(id: memberCategoryID, in: container), memberUserID)
+        XCTAssertNotEqual(localCategory.id, memberCategory.id)
+    }
+
+    func testFamilyImportRepointsLegacyFamilyScopedSystemCategoryToCloudID() throws {
+        let localUserID = UUID()
+        let memberUserID = UUID()
+        let categoryKey = MistiaSystemCategoryParentKey.expenseFood
+        let canonicalID = MistiaSystemCategoryIdentity.canonicalID(for: categoryKey)
+        let memberRemoteCategoryID = MistiaSystemCategoryIdentity.cloudScopedID(
+            canonicalCategoryID: canonicalID,
+            ownerUserID: memberUserID
+        )
+        let legacyCategoryID = MistiaSystemCategoryIdentity.familyScopedID(
+            remoteCategoryID: memberRemoteCategoryID,
+            ownerUserID: memberUserID
+        )
+        let transactionID = UUID()
+        let updatedAt = Date(timeIntervalSince1970: 1_770_000_000)
+        let container = try makeContainer()
+
+        try insertSystemCategory(
+            key: categoryKey,
+            id: legacyCategoryID,
+            name: "Legacy Member Sinh hoạt",
+            updatedAt: updatedAt,
+            isArchived: false,
+            cloudSyncEnabled: true,
+            remoteVersion: 7,
+            in: container
+        )
+        try MistiaRecordOwnershipStore.upsert(
+            entity: .category,
+            recordID: legacyCategoryID,
+            ownerUserID: memberUserID,
+            updatedAt: updatedAt,
+            in: container
+        )
+        try insertTransaction(
+            id: transactionID,
+            title: "Member lunch",
+            categoryID: legacyCategoryID,
+            ownerUserID: memberUserID,
+            updatedAt: updatedAt,
+            in: container
+        )
+
+        let memberSnapshot = try makeRemoteSnapshot(
+            userID: memberUserID,
+            key: categoryKey,
+            id: canonicalID,
+            name: "Member Sinh hoạt",
+            updatedAt: updatedAt.addingTimeInterval(600),
+            isArchived: false,
+            remoteVersion: 8
+        )
+        try MistiaSyncLocalStore.applySnapshotIncrementally(
+            memberSnapshot,
+            shouldPruneMissing: false,
+            protectedRecordIDs: [],
+            familyCategoryScopedTo: localUserID,
+            familyCategoryPruneOwnerIDs: [memberUserID],
+            in: container
+        )
+
+        let memberCategory = try fetchCategory(id: memberRemoteCategoryID, in: container)
+        let legacyCategory = try fetchCategory(id: legacyCategoryID, in: container)
+        let transaction = try fetchTransaction(id: transactionID, in: container)
+        XCTAssertEqual(memberCategory.name, "Member Sinh hoạt")
+        XCTAssertEqual(try fetchCategoryOwner(id: memberRemoteCategoryID, in: container), memberUserID)
+        XCTAssertEqual(transaction.category?.id, memberRemoteCategoryID)
+        XCTAssertNotNil(legacyCategory.deletedAt)
+        XCTAssertFalse(legacyCategory.cloudSyncEnabled)
+    }
+
+    func testFamilyImportRepointsOnlyMemberReferencesWhenLegacyCategoryUsedCanonicalID() throws {
+        let localUserID = UUID()
+        let memberUserID = UUID()
+        let categoryKey = MistiaSystemCategoryParentKey.expenseFood
+        let canonicalID = MistiaSystemCategoryIdentity.canonicalID(for: categoryKey)
+        let memberRemoteCategoryID = MistiaSystemCategoryIdentity.cloudScopedID(
+            canonicalCategoryID: canonicalID,
+            ownerUserID: memberUserID
+        )
+        let selfTransactionID = UUID()
+        let memberTransactionID = UUID()
+        let updatedAt = Date(timeIntervalSince1970: 1_770_000_000)
+        let container = try makeContainer()
+
+        try insertSystemCategory(
+            key: categoryKey,
+            id: canonicalID,
+            name: "Sinh hoạt",
+            updatedAt: updatedAt,
+            isArchived: false,
+            cloudSyncEnabled: false,
+            remoteVersion: 0,
+            in: container
+        )
+        try MistiaRecordOwnershipStore.upsert(
+            entity: .category,
+            recordID: canonicalID,
+            ownerUserID: memberUserID,
+            updatedAt: updatedAt,
+            in: container
+        )
+        try insertTransaction(
+            id: selfTransactionID,
+            title: "Self lunch",
+            categoryID: canonicalID,
+            ownerUserID: localUserID,
+            updatedAt: updatedAt,
+            in: container
+        )
+        try insertTransaction(
+            id: memberTransactionID,
+            title: "Member lunch",
+            categoryID: canonicalID,
+            ownerUserID: memberUserID,
+            updatedAt: updatedAt,
+            in: container
+        )
+
+        let memberSnapshot = try makeRemoteSnapshot(
+            userID: memberUserID,
+            key: categoryKey,
+            id: canonicalID,
+            name: "Member Sinh hoạt",
+            updatedAt: updatedAt.addingTimeInterval(600),
+            isArchived: false,
+            remoteVersion: 8
+        )
+        try MistiaSyncLocalStore.applySnapshotIncrementally(
+            memberSnapshot,
+            shouldPruneMissing: false,
+            protectedRecordIDs: [],
+            familyCategoryScopedTo: localUserID,
+            familyCategoryPruneOwnerIDs: [memberUserID],
+            in: container
+        )
+
+        let selfTransaction = try fetchTransaction(id: selfTransactionID, in: container)
+        let memberTransaction = try fetchTransaction(id: memberTransactionID, in: container)
+        let canonicalCategory = try fetchCategory(id: canonicalID, in: container)
+        XCTAssertEqual(selfTransaction.category?.id, canonicalID)
+        XCTAssertEqual(memberTransaction.category?.id, memberRemoteCategoryID)
+        XCTAssertNil(canonicalCategory.deletedAt)
+        XCTAssertNil(try fetchCategoryOwner(id: canonicalID, in: container))
+        XCTAssertEqual(try fetchCategoryOwner(id: memberRemoteCategoryID, in: container), memberUserID)
     }
 
     func testNewerRemoteArchiveCanStillApplyToSystemCategory() throws {
@@ -617,5 +809,35 @@ final class MistiaSystemCategoryRemoteApplyTests: XCTestCase {
             recordID: id,
             in: container
         )
+    }
+
+    private func insertTransaction(
+        id: UUID,
+        title: String,
+        categoryID: UUID,
+        ownerUserID: UUID,
+        updatedAt: Date,
+        in container: ModelContainer
+    ) throws {
+        let context = ModelContext(container)
+        let categories = try context.fetch(FetchDescriptor<TransactionCategory>())
+        let category = try XCTUnwrap(categories.first { $0.id == categoryID })
+        let transaction = LedgerTransaction(
+            id: id,
+            primaryKind: .expense,
+            title: title,
+            amountMinor: 100_000,
+            updatedAt: updatedAt,
+            category: category
+        )
+        context.insert(transaction)
+        context.insert(OwnedRecordScope(entity: .transaction, recordID: id, ownerUserID: ownerUserID, updatedAt: updatedAt))
+        try context.save()
+    }
+
+    private func fetchTransaction(id: UUID, in container: ModelContainer) throws -> LedgerTransaction {
+        let context = ModelContext(container)
+        let transactions = try context.fetch(FetchDescriptor<LedgerTransaction>())
+        return try XCTUnwrap(transactions.first { $0.id == id })
     }
 }

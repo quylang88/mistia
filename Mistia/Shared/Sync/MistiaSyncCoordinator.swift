@@ -50,6 +50,18 @@ private enum FamilyActivityNotificationAction: String {
     case deleted
 }
 
+enum MistiaFamilyCloudFirstPushError: LocalizedError {
+    case remoteChanged
+
+    var errorDescription: String? {
+        mistiaLocalized(
+            vi: "Dữ liệu hiện tại đã thay đổi trên cloud. Vui lòng làm mới rồi thử lại.",
+            en: "This data changed in the cloud. Refresh and try again.",
+            ja: "このデータはクラウドで変更されました。更新してからもう一度お試しください。"
+        )
+    }
+}
+
 private nonisolated struct SyncRemoteSystemCategoryKey: Hashable {
     let userID: UUID
     let systemKey: String
@@ -218,7 +230,7 @@ final class SyncCoordinator {
         var pushedMutations = false
         var seededMissingRows = false
 
-        let mutations = outbox.allMutations
+        let mutations = outbox.allMutations.filter { $0.subjectUserID == session.user.id }
         let mutationCount = mutations.count
 
         let sortedMutations = sortedMutationsForPush(mutations)
@@ -326,6 +338,42 @@ final class SyncCoordinator {
                     pushedMutations = true
                 }
             }
+        }
+
+        return pushedMutations
+    }
+
+    func pushQueuedFamilyOwnerMutationsCloudFirst(
+        _ mutations: [MistiaSyncMutation],
+        session: SupabaseAuthSession
+    ) async throws -> Bool {
+        let familyMutations = mutations.filter { $0.subjectUserID != session.user.id }
+        guard !familyMutations.isEmpty else { return false }
+
+        var pushedMutations = false
+        let groupedByOwner = Dictionary(grouping: familyMutations, by: \.subjectUserID)
+        let ownerIDs = groupedByOwner.keys.sorted { $0.uuidString < $1.uuidString }
+
+        for ownerID in ownerIDs {
+            let ownerMutations = groupedByOwner[ownerID] ?? []
+            let initialSnapshot = try await fetchReconciledSnapshot(session: session, subjectUserID: ownerID)
+            try applyFamilyOwnerSnapshot(initialSnapshot, ownerUserID: ownerID, viewerUserID: session.user.id)
+
+            for mutation in sortedMutationsForPush(ownerMutations) {
+                switch mutation.kind {
+                case .upsert:
+                    if try await processFamilyOwnerUpsertMutation(mutation, session: session) {
+                        pushedMutations = true
+                    }
+                case .delete:
+                    if try await processFamilyOwnerDeleteMutation(mutation, session: session) {
+                        pushedMutations = true
+                    }
+                }
+            }
+
+            let latestSnapshot = try await fetchReconciledSnapshot(session: session, subjectUserID: ownerID)
+            try applyFamilyOwnerSnapshot(latestSnapshot, ownerUserID: ownerID, viewerUserID: session.user.id)
         }
 
         return pushedMutations
@@ -611,6 +659,155 @@ final class SyncCoordinator {
         return resolvedLocally
     }
 
+    private func processFamilyOwnerUpsertMutation(
+        _ mutation: MistiaSyncMutation,
+        session: SupabaseAuthSession
+    ) async throws -> Bool {
+        guard let localRecord = try MistiaSyncLocalStore.exportRecord(
+            for: mutation,
+            from: modelContainer
+        ) else {
+            outbox.remove(mutation)
+            return false
+        }
+
+        let remoteRecord = try await remoteStore.fetchRecord(
+            entity: mutation.entity,
+            recordID: localRecord.id,
+            subjectUserID: mutation.subjectUserID,
+            session: session
+        )
+
+        if let remoteRecord, remoteRecord.payloadFingerprint == localRecord.payloadFingerprint {
+            try MistiaSyncLocalStore.applyRemoteRecord(
+                remoteRecord,
+                localUserID: session.user.id,
+                in: modelContainer
+            )
+            outbox.remove(mutation)
+            return false
+        }
+
+        if mutation.baseVersion == 0 {
+            guard remoteRecord == nil else {
+                throw MistiaFamilyCloudFirstPushError.remoteChanged
+            }
+
+            let created = try await remoteStore.create(
+                localRecord.preparedForCreate(deviceID: deviceID),
+                subjectUserID: mutation.subjectUserID,
+                session: session
+            )
+            try MistiaSyncLocalStore.applyRemoteRecord(
+                created,
+                localUserID: session.user.id,
+                in: modelContainer
+            )
+            try await createFamilyActivityNotificationIfNeeded(
+                for: created,
+                subjectUserID: mutation.subjectUserID,
+                action: .created,
+                session: session
+            )
+            outbox.remove(mutation)
+            return true
+        }
+
+        guard let remoteRecord, remoteRecord.deletedAt == nil else {
+            throw MistiaFamilyCloudFirstPushError.remoteChanged
+        }
+
+        guard remoteRecord.syncVersion == mutation.baseVersion else {
+            throw MistiaFamilyCloudFirstPushError.remoteChanged
+        }
+
+        guard let updated = try await remoteStore.conditionalUpdate(
+            localRecord.preparedForMutation(nextVersion: mutation.baseVersion + 1, deviceID: deviceID),
+            expectedVersion: mutation.baseVersion,
+            subjectUserID: mutation.subjectUserID,
+            session: session
+        ) else {
+            throw MistiaFamilyCloudFirstPushError.remoteChanged
+        }
+
+        try MistiaSyncLocalStore.applyRemoteRecord(
+            updated,
+            localUserID: session.user.id,
+            in: modelContainer
+        )
+        try await createFamilyActivityNotificationIfNeeded(
+            for: updated,
+            subjectUserID: mutation.subjectUserID,
+            action: .updated,
+            session: session
+        )
+        outbox.remove(mutation)
+        return true
+    }
+
+    private func processFamilyOwnerDeleteMutation(
+        _ mutation: MistiaSyncMutation,
+        session: SupabaseAuthSession
+    ) async throws -> Bool {
+        guard let localRecord = try MistiaSyncLocalStore.exportRecord(
+            for: mutation,
+            from: modelContainer
+        ) else {
+            outbox.remove(mutation)
+            return false
+        }
+
+        guard let remoteRecord = try await remoteStore.fetchRecord(
+            entity: mutation.entity,
+            recordID: localRecord.id,
+            subjectUserID: mutation.subjectUserID,
+            session: session
+        ) else {
+            outbox.remove(mutation)
+            return false
+        }
+
+        if remoteRecord.deletedAt != nil {
+            try MistiaSyncLocalStore.applyRemoteRecord(
+                remoteRecord,
+                localUserID: session.user.id,
+                in: modelContainer
+            )
+            outbox.remove(mutation)
+            return false
+        }
+
+        guard remoteRecord.syncVersion == mutation.baseVersion else {
+            throw MistiaFamilyCloudFirstPushError.remoteChanged
+        }
+
+        guard let deletedRecord = try await remoteStore.conditionalDelete(
+            entity: mutation.entity,
+            recordID: localRecord.id,
+            subjectUserID: mutation.subjectUserID,
+            expectedVersion: mutation.baseVersion,
+            modifiedAt: mutation.modifiedAt,
+            deviceID: deviceID,
+            session: session
+        ) else {
+            throw MistiaFamilyCloudFirstPushError.remoteChanged
+        }
+
+        try MistiaSyncLocalStore.applyRemoteRecord(
+            deletedRecord,
+            localUserID: session.user.id,
+            in: modelContainer
+        )
+        try await createFamilyActivityNotificationIfNeeded(
+            for: deletedRecord,
+            subjectUserID: mutation.subjectUserID,
+            action: .deleted,
+            session: session
+        )
+        outbox.remove(mutation)
+        return true
+    }
+
     private func mergeInitialSnapshots(
         localSnapshot: MistiaRemoteSnapshot,
         remoteSnapshot: MistiaRemoteSnapshot,
@@ -794,18 +991,20 @@ final class SyncCoordinator {
     }
 
     private func fetchRawSnapshot(
-        session: SupabaseAuthSession
+        session: SupabaseAuthSession,
+        subjectUserID: UUID? = nil
     ) async throws -> MistiaRemoteSnapshot {
-        try await remoteStore.fetchSnapshot(session: session)
+        try await remoteStore.fetchSnapshot(session: session, subjectUserID: subjectUserID)
     }
 
     private func fetchReconciledSnapshot(
-        session: SupabaseAuthSession
+        session: SupabaseAuthSession,
+        subjectUserID: UUID? = nil
     ) async throws -> MistiaRemoteSnapshot {
-        let rawSnapshot = try await fetchRawSnapshot(session: session)
+        let rawSnapshot = try await fetchRawSnapshot(session: session, subjectUserID: subjectUserID)
         if try await reconcileOwnedRemoteSystemCategories(rawSnapshot, session: session) {
             return MistiaSystemCategorySyncSupport.deduplicatingRemoteSystemCategories(
-                try await fetchRawSnapshot(session: session),
+                try await fetchRawSnapshot(session: session, subjectUserID: subjectUserID),
                 preferCloudScopedIDs: true
             )
         }
@@ -1049,6 +1248,21 @@ final class SyncCoordinator {
             in: modelContainer
         )
         lastSnapshotFingerprint = snapshot.fingerprint
+    }
+
+    private func applyFamilyOwnerSnapshot(
+        _ snapshot: MistiaRemoteSnapshot,
+        ownerUserID: UUID,
+        viewerUserID: UUID
+    ) throws {
+        try MistiaSyncLocalStore.applySnapshotIncrementally(
+            snapshot,
+            shouldPruneMissing: false,
+            protectedRecordIDs: queuedMutationIDs(),
+            familyCategoryScopedTo: viewerUserID,
+            familyCategoryPruneOwnerIDs: [ownerUserID],
+            in: modelContainer
+        )
     }
 
     private func resolveConflictingRecords(

@@ -384,10 +384,9 @@ enum MistiaSyncLocalStore {
         in container: ModelContainer
     ) throws {
         let context = ModelContext(container)
-        let categoryIDMap = scopedCategoryIDMap(
-            snapshot.categories,
-            localUserID: localUserID
-        )
+
+        let categories = try fetchCategories(context)
+        let categoryIDMap = scopedCategoryIDMap(snapshot.categories, localUserID: localUserID)
         let categoryRows = scopedCategoryRows(
             snapshot.categories,
             categoryIDMap: categoryIDMap
@@ -410,7 +409,6 @@ enum MistiaSyncLocalStore {
 
         let wallets = try fetchWallets(context)
         let creditProfiles = try fetchCreditCardProfiles(context)
-        let categories = try fetchCategories(context)
         let transactions = try fetchTransactions(context)
         let budgetPlans = try fetchBudgetPlans(context)
         let savingsGoals = try fetchSavingsGoals(context)
@@ -624,6 +622,7 @@ enum MistiaSyncLocalStore {
 
     static func applyRemoteRecord(
         _ record: MistiaSyncUploadRecord,
+        localUserID: UUID? = nil,
         in container: ModelContainer
     ) throws {
         let context = ModelContext(container)
@@ -647,7 +646,7 @@ enum MistiaSyncLocalStore {
             )
             try upsertCreditProfile(row, context: context, walletByID: walletByID, profileByID: &profileByID)
         case .category(let row):
-            let categoryIDMap = scopedCategoryIDMap([row], localUserID: row.userID)
+            let categoryIDMap = scopedCategoryIDMap([row], localUserID: localUserID)
             guard let scopedRow = scopedCategoryRows([row], categoryIDMap: categoryIDMap).first else { return }
             try upsertCategory(scopedRow, context: context, categoryByID: &categoryByID)
             applyCategoryHierarchy(scopedRow, categoryByID: categoryByID)
@@ -1524,15 +1523,10 @@ enum MistiaSyncLocalStore {
     ) -> [UUID: UUID] {
         Dictionary(rows.map { row in
             let localID: UUID
-            if row.isSystem,
-               let systemKey = row.systemKey,
-               (localUserID == nil || row.userID == localUserID) {
+            if (localUserID == nil || row.userID == localUserID),
+               row.isSystem,
+               let systemKey = row.systemKey {
                 localID = MistiaSystemCategoryIdentity.canonicalID(for: systemKey)
-            } else if let localUserID, row.userID != localUserID, row.isSystem {
-                localID = MistiaSystemCategoryIdentity.familyScopedID(
-                    remoteCategoryID: row.id,
-                    ownerUserID: row.userID
-                )
             } else {
                 localID = row.id
             }
@@ -1544,21 +1538,21 @@ enum MistiaSyncLocalStore {
         categories: [TransactionCategory],
         ownerMap: [UUID: UUID]
     ) -> [UUID: UUID] {
-        Dictionary(categories.map { category in
+        var mapping: [UUID: UUID] = [:]
+        for category in categories {
+            mapping[category.id] = category.id
             let ownerUserID = ownerMap[category.id]
-            let remoteID: UUID
             if category.isSystem,
                let systemKey = category.systemKey,
                let ownerUserID {
-                remoteID = MistiaSystemCategoryIdentity.cloudScopedID(
+                let remoteID = MistiaSystemCategoryIdentity.cloudScopedID(
                     canonicalCategoryID: MistiaSystemCategoryIdentity.canonicalID(for: systemKey),
                     ownerUserID: ownerUserID
                 )
-            } else {
-                remoteID = category.id
+                mapping[remoteID] = category.id
             }
-            return (remoteID, category.id)
-        }, uniquingKeysWith: { _, latest in latest })
+        }
+        return mapping
     }
 
     private static func scopedCategoryID(
@@ -1571,11 +1565,7 @@ enum MistiaSyncLocalStore {
         if let mappedID = categoryIDMap[remoteCategoryID] {
             return mappedID
         }
-        guard let localUserID, ownerUserID != localUserID else { return remoteCategoryID }
-        return MistiaSystemCategoryIdentity.familyScopedID(
-            remoteCategoryID: remoteCategoryID,
-            ownerUserID: ownerUserID
-        )
+        return remoteCategoryID
     }
 
     private static func shouldPreserveLocalActiveSystemCategory(
@@ -1584,12 +1574,16 @@ enum MistiaSyncLocalStore {
     ) -> Bool {
         guard category.isSystem || row.isSystem else { return false }
         guard category.deletedAt == nil else { return false }
+        guard let rawSystemKey = category.systemKey ?? row.systemKey,
+              category.id == MistiaSystemCategoryIdentity.canonicalID(for: rawSystemKey) else {
+            return false
+        }
         if row.deletedAt != nil,
-           isActiveSystemDefaultCategory(rawSystemKey: category.systemKey ?? row.systemKey) {
+           isActiveSystemDefaultCategory(rawSystemKey: rawSystemKey) {
             return true
         }
         guard category.updatedAt > row.updatedAt else { return false }
-        return isActiveSystemDefaultCategory(rawSystemKey: category.systemKey ?? row.systemKey)
+        return isActiveSystemDefaultCategory(rawSystemKey: rawSystemKey)
     }
 
     private static func pruneStaleFamilyScopedCategories(
@@ -1619,6 +1613,11 @@ enum MistiaSyncLocalStore {
             repointFamilyScopedCategoryReferences(
                 replacementByID: replacementByID,
                 categoryByID: categoryByID,
+                ownerUserIDs: ownerUserIDs,
+                transactionOwnerMap: MistiaRecordOwnershipStore.ownerMap(from: scopes, entity: .transaction),
+                budgetOwnerMap: MistiaRecordOwnershipStore.ownerMap(from: scopes, entity: .budgetPlan),
+                recurringOwnerMap: MistiaRecordOwnershipStore.ownerMap(from: scopes, entity: .recurringBillPlan),
+                categoryOwnerMap: ownerMap,
                 transactions: transactions,
                 budgets: budgets,
                 recurringBills: recurringBills,
@@ -1630,11 +1629,20 @@ enum MistiaSyncLocalStore {
         let outbox = MistiaSyncOutbox()
         for category in categories {
             guard category.deletedAt == nil,
-                  category.isSystem,
                   !keepCategoryIDs.contains(category.id),
                   let ownerUserID = ownerMap[category.id],
                   ownerUserID != localUserID,
                   ownerUserIDs.contains(ownerUserID) else {
+                continue
+            }
+
+            if isCanonicalSystemCategory(category) {
+                for scope in scopes where scope.entity == .category
+                    && scope.recordID == category.id
+                    && ownerUserIDs.contains(scope.ownerUserID) {
+                    context.delete(scope)
+                }
+                outbox.remove(entity: .category, recordID: category.id)
                 continue
             }
 
@@ -1688,6 +1696,11 @@ enum MistiaSyncLocalStore {
     private static func repointFamilyScopedCategoryReferences(
         replacementByID: [UUID: UUID],
         categoryByID: [UUID: TransactionCategory],
+        ownerUserIDs: Set<UUID>,
+        transactionOwnerMap: [UUID: UUID],
+        budgetOwnerMap: [UUID: UUID],
+        recurringOwnerMap: [UUID: UUID],
+        categoryOwnerMap: [UUID: UUID],
         transactions: [LedgerTransaction],
         budgets: [BudgetPlan],
         recurringBills: [RecurringBillPlan],
@@ -1696,6 +1709,7 @@ enum MistiaSyncLocalStore {
     ) {
         for transaction in transactions {
             guard let categoryID = transaction.category?.id,
+                  transactionOwnerMap[transaction.id].map(ownerUserIDs.contains) == true,
                   let replacementID = replacementByID[categoryID],
                   let replacement = categoryByID[replacementID] else {
                 continue
@@ -1706,6 +1720,7 @@ enum MistiaSyncLocalStore {
 
         for budget in budgets {
             guard let categoryID = budget.category?.id,
+                  budgetOwnerMap[budget.id].map(ownerUserIDs.contains) == true,
                   let replacementID = replacementByID[categoryID],
                   let replacement = categoryByID[replacementID] else {
                 continue
@@ -1716,6 +1731,7 @@ enum MistiaSyncLocalStore {
 
         for recurringBill in recurringBills {
             guard let categoryID = recurringBill.category?.id,
+                  recurringOwnerMap[recurringBill.id].map(ownerUserIDs.contains) == true,
                   let replacementID = replacementByID[categoryID],
                   let replacement = categoryByID[replacementID] else {
                 continue
@@ -1726,6 +1742,7 @@ enum MistiaSyncLocalStore {
 
         for category in categories {
             guard let parentID = category.parentCategory?.id,
+                  categoryOwnerMap[category.id].map(ownerUserIDs.contains) == true,
                   let replacementID = replacementByID[parentID],
                   let replacement = categoryByID[replacementID] else {
                 continue
@@ -1733,6 +1750,11 @@ enum MistiaSyncLocalStore {
             category.parentCategory = replacement
             category.updatedAt = max(category.updatedAt, now)
         }
+    }
+
+    private static func isCanonicalSystemCategory(_ category: TransactionCategory) -> Bool {
+        guard category.isSystem, let systemKey = category.systemKey else { return false }
+        return category.id == MistiaSystemCategoryIdentity.canonicalID(for: systemKey)
     }
 
     private static func isActiveSystemDefaultCategory(rawSystemKey: String?) -> Bool {

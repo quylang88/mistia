@@ -11,7 +11,7 @@ struct RemoteFamilyActivityNotificationEvent: Equatable {
 }
 
 protocol MistiaRemoteStore {
-    func fetchSnapshot(session: SupabaseAuthSession) async throws -> MistiaRemoteSnapshot
+    func fetchSnapshot(session: SupabaseAuthSession, subjectUserID: UUID?) async throws -> MistiaRemoteSnapshot
     func fetchRecord(
         entity: MistiaSyncEntity,
         recordID: UUID,
@@ -58,16 +58,16 @@ struct SupabaseRemoteStore: MistiaRemoteStore {
         self.configurationProvider = configurationProvider
     }
 
-    func fetchSnapshot(session: SupabaseAuthSession) async throws -> MistiaRemoteSnapshot {
-        let wallets: [RemoteLedgerWallet] = try await fetchRows(entity: .wallet, session: session)
-        let profiles: [RemoteCreditCardProfile] = try await fetchRows(entity: .creditCardProfile, session: session)
-        let categories: [RemoteTransactionCategory] = try await fetchRows(entity: .category, session: session)
-        let transactions: [RemoteLedgerTransaction] = try await fetchRows(entity: .transaction, session: session)
-        let budgetPlans: [RemoteBudgetPlan] = try await fetchRows(entity: .budgetPlan, session: session)
-        let savingsGoals: [RemoteSavingsGoal] = try await fetchRows(entity: .savingsGoal, session: session)
-        let recurringBillPlans: [RemoteRecurringBillPlan] = try await fetchRows(entity: .recurringBillPlan, session: session)
-        let installmentPlans: [RemoteInstallmentPlan] = try await fetchRows(entity: .installmentPlan, session: session)
-        let dueOccurrences: [RemoteDueOccurrenceRecord] = try await fetchRows(entity: .dueOccurrenceRecord, session: session)
+    func fetchSnapshot(session: SupabaseAuthSession, subjectUserID: UUID? = nil) async throws -> MistiaRemoteSnapshot {
+        let wallets: [RemoteLedgerWallet] = try await fetchRows(entity: .wallet, subjectUserID: subjectUserID, session: session)
+        let profiles: [RemoteCreditCardProfile] = try await fetchRows(entity: .creditCardProfile, subjectUserID: subjectUserID, session: session)
+        let categories: [RemoteTransactionCategory] = try await fetchRows(entity: .category, subjectUserID: subjectUserID, session: session)
+        let transactions: [RemoteLedgerTransaction] = try await fetchRows(entity: .transaction, subjectUserID: subjectUserID, session: session)
+        let budgetPlans: [RemoteBudgetPlan] = try await fetchRows(entity: .budgetPlan, subjectUserID: subjectUserID, session: session)
+        let savingsGoals: [RemoteSavingsGoal] = try await fetchRows(entity: .savingsGoal, subjectUserID: subjectUserID, session: session)
+        let recurringBillPlans: [RemoteRecurringBillPlan] = try await fetchRows(entity: .recurringBillPlan, subjectUserID: subjectUserID, session: session)
+        let installmentPlans: [RemoteInstallmentPlan] = try await fetchRows(entity: .installmentPlan, subjectUserID: subjectUserID, session: session)
+        let dueOccurrences: [RemoteDueOccurrenceRecord] = try await fetchRows(entity: .dueOccurrenceRecord, subjectUserID: subjectUserID, session: session)
 
         return MistiaRemoteSnapshot(
             wallets: wallets,
@@ -297,6 +297,7 @@ struct SupabaseRemoteStore: MistiaRemoteStore {
 
     private func fetchRows<Row: MistiaRemoteRow>(
         entity: MistiaSyncEntity,
+        subjectUserID: UUID?,
         session: SupabaseAuthSession
     ) async throws -> [Row] {
         let configuration = try configuration()
@@ -307,11 +308,13 @@ struct SupabaseRemoteStore: MistiaRemoteStore {
             throw SupabaseServiceError.invalidURL
         }
 
-        components.queryItems = [
+        let effectiveUserID = subjectUserID ?? session.user.id
+        let queryItems = [
             URLQueryItem(name: "select", value: "*"),
-            URLQueryItem(name: "user_id", value: "eq.\(session.user.id.uuidString.lowercased())"),
+            URLQueryItem(name: "user_id", value: "eq.\(effectiveUserID.uuidString.lowercased())"),
             URLQueryItem(name: "order", value: "updated_at.asc")
         ]
+        components.queryItems = queryItems
 
         guard let url = components.url else {
             throw SupabaseServiceError.invalidURL

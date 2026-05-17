@@ -845,7 +845,7 @@ final class SessionStore {
     }
 
     func pushQueuedFamilyOwnerChangesNow() async -> Bool {
-        await flushQueuedFamilyOwnerPushIfAllowed()
+        return await flushQueuedFamilyOwnerPushIfAllowed()
     }
 
     func startInitialSync(with choice: MistiaInitialSyncChoice) async {
@@ -2924,7 +2924,7 @@ final class SessionStore {
 
         do {
             let validSession = try await prepareRemoteSession()
-            _ = try await syncCoordinator.pushQueuedMutationsOnly(
+            _ = try await syncCoordinator.pushQueuedFamilyOwnerMutationsCloudFirst(
                 mutations,
                 session: validSession
             )
@@ -2932,6 +2932,11 @@ final class SessionStore {
             lastErrorMessage = nil
             return true
         } catch {
+            let remainingFamilyMutations = syncCoordinator.queuedMutations().contains { mutation in
+                guard let activeUserID else { return false }
+                return mutation.subjectUserID != activeUserID
+            }
+            pendingFamilyOwnerPush = remainingFamilyMutations
             applySyncErrorState(error)
             return false
         }
