@@ -5,6 +5,41 @@ import XCTest
 
 @MainActor
 final class MistiaSystemCategoryRemoteApplyTests: XCTestCase {
+    func testSyncUploadRecordDecodeReadsSnakeCaseUserIDPayload() throws {
+        let userID = UUID()
+        let walletID = UUID()
+        let now = Date(timeIntervalSince1970: 1_770_000_000)
+        let row = RemoteLedgerWallet(
+            userID: userID,
+            id: walletID,
+            name: "Cloud wallet",
+            kindRawValue: LedgerWalletKind.cash.rawValue,
+            iconSymbolName: "wallet.pass.fill",
+            iconColorHex: "#6E3BC2",
+            currencyCode: "JPY",
+            openingBalanceMinor: 2_000,
+            institutionDisplayName: nil,
+            institutionPresetKey: nil,
+            sortOrder: 1,
+            isArchived: false,
+            archivedAt: nil,
+            createdAt: now,
+            updatedAt: now,
+            deletedAt: nil,
+            syncVersion: 4,
+            lastModifiedByDeviceID: UUID()
+        )
+
+        let json = try MistiaSyncUploadRecord.wallet(row).asJSONString()
+        XCTAssertTrue(json.contains("user_id"))
+
+        guard case .wallet(let decoded) = try MistiaSyncUploadRecord.decode(entity: .wallet, jsonString: json) else {
+            return XCTFail("Expected wallet payload")
+        }
+        XCTAssertEqual(decoded.userID, userID)
+        XCTAssertEqual(decoded.name, "Cloud wallet")
+    }
+
     func testStaleRemoteArchiveDoesNotHideNewerLocalDefaultSystemCategory() throws {
         let userID = UUID()
         let categoryKey = MistiaSystemCategoryParentKey.expenseFood
@@ -47,6 +82,51 @@ final class MistiaSystemCategoryRemoteApplyTests: XCTestCase {
         XCTAssertNil(category.archivedAt)
         XCTAssertNil(category.deletedAt)
         XCTAssertEqual(category.updatedAt.timeIntervalSince1970, localUpdatedAt.timeIntervalSince1970, accuracy: 0.001)
+    }
+
+    func testExplicitCloudConflictResolutionCanOverwriteNewerLocalSystemCategory() throws {
+        let userID = UUID()
+        let categoryKey = MistiaSystemCategoryParentKey.expenseFood
+        let categoryID = MistiaSystemCategoryIdentity.canonicalID(for: categoryKey)
+        let remoteUpdatedAt = Date(timeIntervalSince1970: 1_770_000_000)
+        let localUpdatedAt = remoteUpdatedAt.addingTimeInterval(3_600)
+        let container = try makeContainer()
+
+        try insertSystemCategory(
+            key: categoryKey,
+            id: categoryID,
+            name: "Local active",
+            updatedAt: localUpdatedAt,
+            isArchived: false,
+            cloudSyncEnabled: false,
+            remoteVersion: 7,
+            in: container
+        )
+
+        let remoteSnapshot = try makeRemoteSnapshot(
+            userID: userID,
+            key: categoryKey,
+            id: categoryID,
+            name: "Cloud archived",
+            updatedAt: remoteUpdatedAt,
+            isArchived: true,
+            remoteVersion: 8
+        )
+        guard let remoteCategory = remoteSnapshot.categories.first else {
+            return XCTFail("Expected remote category")
+        }
+
+        try MistiaSyncLocalStore.applyRemoteRecord(
+            .category(remoteCategory),
+            preservesLocalSystemDefaults: false,
+            in: container
+        )
+
+        let category = try fetchCategory(id: categoryID, in: container)
+        XCTAssertEqual(category.name, "Cloud archived")
+        XCTAssertTrue(category.isArchived)
+        XCTAssertEqual(category.remoteVersion, 8)
+        XCTAssertEqual(category.updatedAt.timeIntervalSince1970, remoteUpdatedAt.timeIntervalSince1970, accuracy: 0.001)
     }
 
     func testStaleRemoteSystemGuardStillImportsMemberCustomCategories() throws {

@@ -394,7 +394,11 @@ final class SyncCoordinator {
                 entity: conflict.entity,
                 jsonString: conflict.remotePayloadJSON
             )
-            try MistiaSyncLocalStore.applyRemoteRecord(remoteRecord, in: modelContainer)
+            try MistiaSyncLocalStore.applyRemoteRecord(
+                remoteRecord,
+                preservesLocalSystemDefaults: false,
+                in: modelContainer
+            )
             try MistiaSyncLocalStore.removeConflict(id: id, from: modelContainer)
         case .useLocal:
             let localRecord = try MistiaSyncUploadRecord.decode(

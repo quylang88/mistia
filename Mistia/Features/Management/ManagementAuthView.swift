@@ -2251,6 +2251,15 @@ private struct ManagementSyncConflictSection: Identifiable {
 
 private struct ManagementSyncConflictCard: View {
     @Environment(\.colorScheme) private var colorScheme
+    @Query private var storedWallets: [LedgerWallet]
+    @Query private var storedCreditCardProfiles: [CreditCardProfile]
+    @Query private var storedCategories: [TransactionCategory]
+    @Query private var storedTransactions: [LedgerTransaction]
+    @Query private var storedBudgetPlans: [BudgetPlan]
+    @Query private var storedSavingsGoals: [SavingsGoal]
+    @Query private var storedRecurringBillPlans: [RecurringBillPlan]
+    @Query private var storedInstallmentPlans: [InstallmentPlan]
+    @Query private var storedDueOccurrences: [DueOccurrenceRecord]
 
     let conflict: SyncConflict
     let accent: Color
@@ -2259,6 +2268,24 @@ private struct ManagementSyncConflictCard: View {
 
     private var differences: [MistiaSyncConflictDifference] {
         conflict.conflictDifferences
+    }
+
+    private var friendlyDifferences: [MistiaSyncConflictDifference] {
+        differences.map { referenceResolver.resolving($0) }
+    }
+
+    private var referenceResolver: ManagementConflictReferenceResolver {
+        ManagementConflictReferenceResolver(
+            wallets: storedWallets,
+            creditCardProfiles: storedCreditCardProfiles,
+            categories: storedCategories,
+            transactions: storedTransactions,
+            budgetPlans: storedBudgetPlans,
+            savingsGoals: storedSavingsGoals,
+            recurringBillPlans: storedRecurringBillPlans,
+            installmentPlans: storedInstallmentPlans,
+            dueOccurrences: storedDueOccurrences
+        )
     }
 
     var body: some View {
@@ -2328,7 +2355,7 @@ private struct ManagementSyncConflictCard: View {
                         .font(.system(size: 13, weight: .bold, design: .rounded))
                         .foregroundStyle(.secondary)
 
-                    if differences.isEmpty {
+                    if friendlyDifferences.isEmpty {
                         Text(
                             mistiaLocalized(
                                 vi: "Hai payload giống nhau ở các field Mistia đang theo dõi. Bạn có thể chọn bản mới hơn theo thông tin cập nhật ở trên.",
@@ -2344,7 +2371,7 @@ private struct ManagementSyncConflictCard: View {
                         .background(Color(UIColor.tertiarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
                     } else {
                         VStack(spacing: 8) {
-                            ForEach(differences) { difference in
+                            ForEach(friendlyDifferences) { difference in
                                 ManagementConflictDifferenceRow(
                                     difference: difference,
                                     accent: accent
@@ -2401,6 +2428,178 @@ private struct ManagementSyncConflictCard: View {
         colorScheme == .dark
             ? Color(UIColor.secondarySystemGroupedBackground).opacity(0.96)
             : accent.opacity(0.10)
+    }
+}
+
+private struct ManagementConflictReferenceResolver {
+    let wallets: [LedgerWallet]
+    let creditCardProfiles: [CreditCardProfile]
+    let categories: [TransactionCategory]
+    let transactions: [LedgerTransaction]
+    let budgetPlans: [BudgetPlan]
+    let savingsGoals: [SavingsGoal]
+    let recurringBillPlans: [RecurringBillPlan]
+    let installmentPlans: [InstallmentPlan]
+    let dueOccurrences: [DueOccurrenceRecord]
+
+    func resolving(_ difference: MistiaSyncConflictDifference) -> MistiaSyncConflictDifference {
+        MistiaSyncConflictDifference(
+            id: difference.id,
+            fieldTitle: difference.fieldTitle,
+            localValue: resolvedValue(for: difference.id, rawValue: difference.localRawValue, fallback: difference.localValue),
+            remoteValue: resolvedValue(for: difference.id, rawValue: difference.remoteRawValue, fallback: difference.remoteValue),
+            localRawValue: difference.localRawValue,
+            remoteRawValue: difference.remoteRawValue
+        )
+    }
+
+    private func resolvedValue(for fieldID: String, rawValue: String?, fallback: String) -> String {
+        guard let rawValue, let uuid = UUID(uuidString: rawValue) else {
+            return fallback
+        }
+
+        switch fieldID {
+        case "wallet",
+             "walletID",
+             "walletId",
+             "wallet_id",
+             "sourceWallet",
+             "sourceWalletID",
+             "sourceWalletId",
+             "source_wallet_id",
+             "destinationWallet",
+             "destinationWalletID",
+             "destinationWalletId",
+             "destination_wallet_id",
+             "paymentWallet",
+             "paymentWalletID",
+             "paymentWalletId",
+             "payment_wallet_id",
+             "linkedWallet",
+             "linkedWalletID",
+             "linkedWalletId",
+             "linked_wallet_id":
+            return walletName(for: uuid) ?? shortID(uuid)
+        case "category",
+             "categoryID",
+             "categoryId",
+             "category_id",
+             "parent",
+             "parentCategoryID",
+             "parentCategoryId",
+             "parent_category_id":
+            return categoryName(for: uuid) ?? shortID(uuid)
+        case "transaction",
+             "transactionID",
+             "transactionId",
+             "transaction_id",
+             "linkedTransactionID",
+             "linkedTransactionId",
+             "linked_transaction_id":
+            return transactionName(for: uuid) ?? shortID(uuid)
+        case "source", "sourceID", "sourceId", "source_id":
+            return sourceName(for: uuid) ?? shortID(uuid)
+        default:
+            return genericName(for: uuid) ?? fallback
+        }
+    }
+
+    private func walletName(for id: UUID) -> String? {
+        wallets.first { $0.id == id }.map { wallet in
+            compactConflictName(wallet.name, wallet.currencyCode)
+        }
+    }
+
+    private func categoryName(for id: UUID) -> String? {
+        categories.first { $0.id == id }.map { category in
+            if let parent = category.parentCategory {
+                return "\(parent.localizedDisplayName) / \(category.localizedDisplayName)"
+            }
+            return category.localizedDisplayName
+        }
+    }
+
+    private func transactionName(for id: UUID) -> String? {
+        transactions.first { $0.id == id }.map { transaction in
+            let title = transaction.title.isEmpty
+                ? mistiaLocalized(vi: "Giao dịch không tên", en: "Unnamed transaction", ja: "無名取引")
+                : transaction.title
+            let currencyCode = transaction.sourceWallet?.currencyCode ?? transaction.destinationWallet?.currencyCode ?? "JPY"
+            return compactConflictName(title, transaction.amountMinor.formattedCurrency(code: currencyCode))
+        }
+    }
+
+    private func creditCardName(for id: UUID) -> String? {
+        creditCardProfiles.first { $0.id == id }.map { profile in
+            profile.issuerName.isEmpty ? profile.last4 : compactConflictName(profile.issuerName, profile.last4)
+        }
+    }
+
+    private func budgetName(for id: UUID) -> String? {
+        budgetPlans.first { $0.id == id }.map { plan in
+            compactConflictName(
+                plan.category?.localizedDisplayName ?? mistiaLocalized(vi: "Ngân sách", en: "Budget", ja: "予算"),
+                plan.limitMinor.formattedCurrency(code: plan.currencyCode)
+            )
+        }
+    }
+
+    private func goalName(for id: UUID) -> String? {
+        savingsGoals.first { $0.id == id }?.name
+    }
+
+    private func recurringBillName(for id: UUID) -> String? {
+        recurringBillPlans.first { $0.id == id }?.name
+    }
+
+    private func installmentName(for id: UUID) -> String? {
+        installmentPlans.first { $0.id == id }?.name
+    }
+
+    private func dueOccurrenceName(for id: UUID) -> String? {
+        dueOccurrences.first { $0.id == id }.map { due in
+            compactConflictName(
+                mistiaLocalized(vi: "Kỳ đến hạn", en: "Due occurrence", ja: "支払予定"),
+                due.selectedMonthKey
+            )
+        }
+    }
+
+    private func sourceName(for id: UUID) -> String? {
+        recurringBillName(for: id)
+            ?? installmentName(for: id)
+            ?? budgetName(for: id)
+            ?? goalName(for: id)
+            ?? creditCardName(for: id)
+            ?? transactionName(for: id)
+            ?? walletName(for: id)
+            ?? categoryName(for: id)
+    }
+
+    private func genericName(for id: UUID) -> String? {
+        walletName(for: id)
+            ?? categoryName(for: id)
+            ?? transactionName(for: id)
+            ?? creditCardName(for: id)
+            ?? budgetName(for: id)
+            ?? goalName(for: id)
+            ?? recurringBillName(for: id)
+            ?? installmentName(for: id)
+            ?? dueOccurrenceName(for: id)
+    }
+
+    private func shortID(_ id: UUID) -> String {
+        "ID \(String(id.uuidString.lowercased().prefix(8)))"
+    }
+
+    private func compactConflictName(_ values: String?...) -> String {
+        values
+            .compactMap { value -> String? in
+                guard let value else { return nil }
+                let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+                return trimmed.isEmpty ? nil : trimmed
+            }
+            .joined(separator: " • ")
     }
 }
 

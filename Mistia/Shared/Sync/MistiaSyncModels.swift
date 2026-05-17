@@ -1075,7 +1075,7 @@ enum MistiaSyncUploadRecord {
     }
 
     static func decode(entity: MistiaSyncEntity, jsonString: String) throws -> MistiaSyncUploadRecord {
-        let decoder = JSONDecoder.mistiaSyncDecoder
+        let decoder = JSONDecoder.mistiaRemoteAPIDecoder
         guard let data = jsonString.data(using: .utf8) else {
             throw MistiaSyncSerializationError.invalidResponse
         }

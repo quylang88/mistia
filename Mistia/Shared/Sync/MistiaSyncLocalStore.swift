@@ -623,6 +623,7 @@ enum MistiaSyncLocalStore {
     static func applyRemoteRecord(
         _ record: MistiaSyncUploadRecord,
         localUserID: UUID? = nil,
+        preservesLocalSystemDefaults: Bool = true,
         in container: ModelContainer
     ) throws {
         let context = ModelContext(container)
@@ -648,7 +649,12 @@ enum MistiaSyncLocalStore {
         case .category(let row):
             let categoryIDMap = scopedCategoryIDMap([row], localUserID: localUserID)
             guard let scopedRow = scopedCategoryRows([row], categoryIDMap: categoryIDMap).first else { return }
-            try upsertCategory(scopedRow, context: context, categoryByID: &categoryByID)
+            try upsertCategory(
+                scopedRow,
+                context: context,
+                categoryByID: &categoryByID,
+                preservesLocalSystemDefaults: preservesLocalSystemDefaults
+            )
             applyCategoryHierarchy(scopedRow, categoryByID: categoryByID)
         case .transaction(let row):
             var transactionByID = Dictionary(
@@ -1396,9 +1402,11 @@ enum MistiaSyncLocalStore {
     private static func upsertCategory(
         _ row: RemoteTransactionCategory,
         context: ModelContext,
-        categoryByID: inout [UUID: TransactionCategory]
+        categoryByID: inout [UUID: TransactionCategory],
+        preservesLocalSystemDefaults: Bool = true
     ) throws {
-        if let existing = categoryByID[row.id],
+        if preservesLocalSystemDefaults,
+           let existing = categoryByID[row.id],
            shouldPreserveLocalActiveSystemCategory(existing, over: row) {
             return
         }

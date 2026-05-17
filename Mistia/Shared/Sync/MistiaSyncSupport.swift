@@ -44,6 +44,8 @@ struct MistiaSyncConflictDifference: Identifiable, Equatable {
     let fieldTitle: String
     let localValue: String
     let remoteValue: String
+    let localRawValue: String?
+    let remoteRawValue: String?
 }
 
 struct MistiaSyncConflictRecordSummary: Equatable {
@@ -549,7 +551,9 @@ private func field(
             id: id,
             fieldTitle: title,
             localValue: local,
-            remoteValue: remote
+            remoteValue: remote,
+            localRawValue: localValue,
+            remoteRawValue: remoteValue
         )
     ]
 }
@@ -557,6 +561,9 @@ private func field(
 private func displayValue(_ value: String?) -> String {
     guard let value, !value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
         return mistiaLocalized(vi: "Chưa có", en: "None", ja: "なし")
+    }
+    if let uuid = UUID(uuidString: value) {
+        return "ID \(String(uuid.uuidString.lowercased().prefix(8)))"
     }
     return value
 }
@@ -650,7 +657,9 @@ private func rawPayloadDifferences(
             id: key,
             fieldTitle: readableFieldName(key),
             localValue: local,
-            remoteValue: remote
+            remoteValue: remote,
+            localRawValue: localFields[key],
+            remoteRawValue: remoteFields[key]
         )
     }
 }
