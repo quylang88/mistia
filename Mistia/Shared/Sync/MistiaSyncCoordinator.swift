@@ -357,7 +357,14 @@ final class SyncCoordinator {
         for ownerID in ownerIDs {
             let ownerMutations = groupedByOwner[ownerID] ?? []
             let initialSnapshot = try await fetchReconciledSnapshot(session: session, subjectUserID: ownerID)
-            try applyFamilyOwnerSnapshot(initialSnapshot, ownerUserID: ownerID, viewerUserID: session.user.id)
+            // Keep cached category dependencies alive until queued family mutations have
+            // a chance to seed or validate them against the owner's cloud.
+            try applyFamilyOwnerSnapshot(
+                initialSnapshot,
+                ownerUserID: ownerID,
+                viewerUserID: session.user.id,
+                prunesStaleCategories: false
+            )
 
             for mutation in sortedMutationsForPush(ownerMutations) {
                 switch mutation.kind {
@@ -426,7 +433,7 @@ final class SyncCoordinator {
             outbox.remove(mutation)
             return false
         }
-        try await ensureRemoteCategoryParentsExistIfNeeded(
+        try await ensureRemoteCategoryDependenciesExistIfNeeded(
             for: localRecord,
             subjectUserID: mutation.subjectUserID,
             session: session
@@ -674,6 +681,12 @@ final class SyncCoordinator {
             outbox.remove(mutation)
             return false
         }
+        try await ensureRemoteCategoryDependenciesExistIfNeeded(
+            for: localRecord,
+            subjectUserID: mutation.subjectUserID,
+            session: session,
+            localUserID: session.user.id
+        )
 
         let remoteRecord = try await remoteStore.fetchRecord(
             entity: mutation.entity,
@@ -925,7 +938,7 @@ final class SyncCoordinator {
             let progress = progressStart + (Double(index) / Double(max(1, total))) * (progressEnd - progressStart)
             onProgressUpdate?(progress)
 
-            try await ensureRemoteCategoryParentsExistIfNeeded(
+            try await ensureRemoteCategoryDependenciesExistIfNeeded(
                 for: localRecord,
                 subjectUserID: localRecord.userID,
                 session: session
@@ -938,10 +951,77 @@ final class SyncCoordinator {
         }
     }
 
+    private func ensureRemoteCategoryDependenciesExistIfNeeded(
+        for record: MistiaSyncUploadRecord,
+        subjectUserID: UUID,
+        session: SupabaseAuthSession,
+        localUserID: UUID? = nil,
+        visitedCategoryIDs: Set<UUID> = []
+    ) async throws {
+        try await ensureRemoteCategoryParentsExistIfNeeded(
+            for: record,
+            subjectUserID: subjectUserID,
+            session: session,
+            localUserID: localUserID
+        )
+
+        guard let categoryID = categoryReferenceID(for: record),
+              !visitedCategoryIDs.contains(categoryID) else {
+            return
+        }
+
+        let remoteCategory = try await remoteStore.fetchRecord(
+            entity: .category,
+            recordID: categoryID,
+            subjectUserID: subjectUserID,
+            session: session
+        )
+
+        if let remoteCategory, remoteCategory.deletedAt == nil {
+            try await ensureRemoteCategoryParentsExistIfNeeded(
+                for: remoteCategory,
+                subjectUserID: subjectUserID,
+                session: session,
+                localUserID: localUserID,
+                visitedParentIDs: visitedCategoryIDs.union([categoryID])
+            )
+            return
+        }
+
+        guard let categoryRecord = try MistiaSyncLocalStore.exportCategoryRecord(
+            remoteCategoryID: categoryID,
+            subjectUserID: subjectUserID,
+            from: modelContainer
+        ) else {
+            return
+        }
+
+        try await ensureRemoteCategoryDependenciesExistIfNeeded(
+            for: categoryRecord,
+            subjectUserID: subjectUserID,
+            session: session,
+            localUserID: localUserID,
+            visitedCategoryIDs: visitedCategoryIDs.union([categoryID])
+        )
+
+        let nextVersion = max((remoteCategory?.syncVersion ?? categoryRecord.syncVersion) + 1, 1)
+        let upsertedCategory = try await remoteStore.forceUpsert(
+            categoryRecord.preparedForMutation(nextVersion: nextVersion, deviceID: deviceID),
+            subjectUserID: subjectUserID,
+            session: session
+        )
+        try MistiaSyncLocalStore.applyRemoteRecord(
+            upsertedCategory,
+            localUserID: localUserID,
+            in: modelContainer
+        )
+    }
+
     private func ensureRemoteCategoryParentsExistIfNeeded(
         for record: MistiaSyncUploadRecord,
         subjectUserID: UUID,
         session: SupabaseAuthSession,
+        localUserID: UUID? = nil,
         visitedParentIDs: Set<UUID> = []
     ) async throws {
         guard record.entity == .category,
@@ -957,6 +1037,13 @@ final class SyncCoordinator {
             session: session
         )
         if let remoteParent, remoteParent.deletedAt == nil {
+            try await ensureRemoteCategoryParentsExistIfNeeded(
+                for: remoteParent,
+                subjectUserID: subjectUserID,
+                session: session,
+                localUserID: localUserID,
+                visitedParentIDs: visitedParentIDs.union([parentID])
+            )
             return
         }
 
@@ -972,6 +1059,7 @@ final class SyncCoordinator {
             for: parentRecord,
             subjectUserID: subjectUserID,
             session: session,
+            localUserID: localUserID,
             visitedParentIDs: visitedParentIDs.union([parentID])
         )
 
@@ -981,7 +1069,24 @@ final class SyncCoordinator {
             subjectUserID: subjectUserID,
             session: session
         )
-        try MistiaSyncLocalStore.applyRemoteRecord(upsertedParent, in: modelContainer)
+        try MistiaSyncLocalStore.applyRemoteRecord(
+            upsertedParent,
+            localUserID: localUserID,
+            in: modelContainer
+        )
+    }
+
+    private func categoryReferenceID(for record: MistiaSyncUploadRecord) -> UUID? {
+        switch record {
+        case .transaction(let row):
+            row.categoryID
+        case .budgetPlan(let row):
+            row.categoryID
+        case .recurringBillPlan(let row):
+            row.categoryID
+        case .wallet, .creditCardProfile, .category, .savingsGoal, .installmentPlan, .dueOccurrence:
+            nil
+        }
     }
 
     private func shouldUploadLocalOnlyRows(
@@ -1257,14 +1362,15 @@ final class SyncCoordinator {
     private func applyFamilyOwnerSnapshot(
         _ snapshot: MistiaRemoteSnapshot,
         ownerUserID: UUID,
-        viewerUserID: UUID
+        viewerUserID: UUID,
+        prunesStaleCategories: Bool = true
     ) throws {
         try MistiaSyncLocalStore.applySnapshotIncrementally(
             snapshot,
             shouldPruneMissing: false,
             protectedRecordIDs: queuedMutationIDs(),
             familyCategoryScopedTo: viewerUserID,
-            familyCategoryPruneOwnerIDs: [ownerUserID],
+            familyCategoryPruneOwnerIDs: prunesStaleCategories ? [ownerUserID] : [],
             in: modelContainer
         )
     }
@@ -1312,7 +1418,7 @@ final class SyncCoordinator {
         remoteVersion: Int64,
         session: SupabaseAuthSession
     ) async throws -> MistiaSyncUploadRecord {
-        try await ensureRemoteCategoryParentsExistIfNeeded(
+        try await ensureRemoteCategoryDependenciesExistIfNeeded(
             for: localRecord,
             subjectUserID: subjectUserID,
             session: session
