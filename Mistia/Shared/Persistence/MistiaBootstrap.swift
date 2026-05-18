@@ -30,6 +30,11 @@ enum MistiaBootstrap {
                     )
                     didDelete = true
                 } else if sessionStore.canHardPurge(entity: .transaction, recordID: transaction.id) {
+                    try TransactionReceiptImageStore().deleteReceipt(
+                        for: transaction.id,
+                        context: modelContext,
+                        saveContext: false
+                    )
                     modelContext.delete(transaction)
                     didDelete = true
                 }

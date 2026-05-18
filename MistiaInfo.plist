@@ -52,6 +52,10 @@
 	<string>741455632256-bi55tot7hie9rtdpru0de2f4hts3m6l4.apps.googleusercontent.com</string>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
+	<key>NSCameraUsageDescription</key>
+	<string>Mistia dùng camera để chụp ảnh bill gắn vào giao dịch.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Mistia dùng quyền ảnh để bạn chọn bill gắn vào giao dịch.</string>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>

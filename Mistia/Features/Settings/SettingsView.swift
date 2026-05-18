@@ -458,6 +458,7 @@ private struct MistiaShortcutSettingsView: View {
 
         let utilitySelections: [MistiaShortcutSelection] = {
             var selections: [MistiaShortcutSelection] = [
+                .receiptScan,
                 .backupRestore,
                 .archivedItems
             ]
@@ -577,6 +578,13 @@ private struct MistiaShortcutSettingsView: View {
                 vi: "Chuyển ngay sang chế độ xem dữ liệu của thành viên này trong tab Tổng quan.",
                 en: "Jump straight into this member's data in Overview.",
                 ja: "概要タブでこのメンバーのデータへすぐ移動します。"
+            )
+
+        case .receiptScan:
+            return mistiaLocalized(
+                vi: "Mở nhanh camera/chọn ảnh bill để AI điền giao dịch.",
+                en: "Open receipt capture quickly so AI can fill the transaction.",
+                ja: "レシートの撮影/選択をすばやく開き、AIで取引を入力します。"
             )
 
         case .syncNow:
@@ -1321,6 +1329,8 @@ private extension MistiaShortcutPresentation {
             .indigo
         case .memberOverview:
             .rose
+        case .receiptScan:
+            .purple
         case .syncNow:
             .sky
         }

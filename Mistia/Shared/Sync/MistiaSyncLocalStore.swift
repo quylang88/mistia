@@ -1152,6 +1152,8 @@ enum MistiaSyncLocalStore {
     }
 
     private static func clearAllData(context: ModelContext) throws {
+        try TransactionReceiptImageStore().deleteAll(context: context, saveContext: false)
+
         for record in try fetchConflicts(context) {
             context.delete(record)
         }

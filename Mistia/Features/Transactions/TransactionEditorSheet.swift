@@ -1,5 +1,6 @@
 import SwiftData
 import SwiftUI
+import UIKit
 
 struct TransactionTransferPreset: Equatable {
     let transferSubtype: TransactionTransferSubtype
@@ -24,6 +25,7 @@ struct TransactionEditorTarget: Identifiable {
     let quickCapture: Bool
     let transferPreset: TransactionTransferPreset?
     let subjectUserIDOverride: UUID?
+    let startsReceiptScan: Bool
 
     init(transaction: LedgerTransaction) {
         self.transaction = transaction
@@ -31,19 +33,22 @@ struct TransactionEditorTarget: Identifiable {
         self.quickCapture = false
         self.transferPreset = nil
         self.subjectUserIDOverride = nil
+        self.startsReceiptScan = false
     }
 
     init(
         initialKind: TransactionPrimaryKind,
         quickCapture: Bool = false,
         transferPreset: TransactionTransferPreset? = nil,
-        subjectUserIDOverride: UUID? = nil
+        subjectUserIDOverride: UUID? = nil,
+        startsReceiptScan: Bool = false
     ) {
         self.transaction = nil
         self.initialKind = initialKind
         self.quickCapture = quickCapture
         self.transferPreset = transferPreset
         self.subjectUserIDOverride = subjectUserIDOverride
+        self.startsReceiptScan = startsReceiptScan
     }
 }
 
@@ -97,6 +102,14 @@ struct TransactionEditorSheet: View {
     @State private var suppressTitleSuggestions = false
     @State private var isApplyingTitleSuggestion = false
     @State private var isSaving = false
+    @State private var receiptDraft: TransactionReceiptDraft?
+    @State private var shouldDeleteReceiptOnSave = false
+    @State private var receiptImageSource: TransactionReceiptImageSource?
+    @State private var receiptPreview: TransactionReceiptPreviewItem?
+    @State private var isAnalyzingReceipt = false
+    @State private var receiptAnalysisQuota: ReceiptAnalysisQuota?
+    @State private var didLoadReceiptDraft = false
+    @State private var didAutoPresentReceiptScanner = false
     @FocusState private var focusedField: TransactionEditorFocusedField?
 
     init(
@@ -235,6 +248,36 @@ struct TransactionEditorSheet: View {
                 draft.categoryID = category.id
             }
         }
+        .sheet(item: $receiptImageSource) { source in
+            TransactionReceiptImagePicker(sourceType: source.uiImagePickerSourceType) { image in
+                handlePickedReceiptImage(image)
+            }
+        }
+        .sheet(item: $receiptPreview) { preview in
+            NavigationStack {
+                ZStack {
+                    Color(UIColor.systemBackground)
+                        .ignoresSafeArea()
+
+                    Image(uiImage: preview.image)
+                        .resizable()
+                        .scaledToFit()
+                        .padding()
+                }
+                .navigationTitle(mistiaLocalized(vi: "Ảnh bill", en: "Receipt image", ja: "レシート画像"))
+                .navigationBarTitleDisplayMode(.inline)
+                .toolbar {
+                    ToolbarItem(placement: .topBarLeading) {
+                        Button {
+                            receiptPreview = nil
+                        } label: {
+                            Image(systemName: "xmark")
+                                .font(.system(size: 16, weight: .semibold))
+                        }
+                    }
+                }
+            }
+        }
         .onChange(of: draft.sourceWalletID) { _, _ in
             clearMismatchedCategoryForSelectedWallet()
         }
@@ -250,7 +293,9 @@ struct TransactionEditorSheet: View {
             clearMismatchedCategoryForSelectedWallet()
         }
         .onAppear {
+            loadReceiptDraftIfNeeded()
             scheduleTitleSuggestionsRefresh()
+            presentInitialReceiptScannerIfNeeded()
         }
         .onDisappear {
             titleSuggestionRefreshTask?.cancel()
@@ -472,6 +517,10 @@ struct TransactionEditorSheet: View {
             Section(mistiaLocalized(vi: "Ghi chú", en: "Notes", ja: "メモ")) {
                 TextField(mistiaLocalized(vi: "Thêm ghi chú nếu cần", en: "Add a note if needed", ja: "必要ならメモを追加"), text: $bindableDraft.note, axis: .vertical)
                     .lineLimit(3...5)
+            }
+
+            if shouldShowReceiptSection {
+                receiptSection
             }
 
             if let transaction = target.transaction, !transaction.isArchived {
@@ -771,6 +820,112 @@ struct TransactionEditorSheet: View {
         return "\(parentName) / \(selectedCategory.localizedDisplayName)"
     }
 
+    private var shouldShowReceiptSection: Bool {
+        draft.primaryKind == .expense || draft.primaryKind == .income
+    }
+
+    private var receiptSection: some View {
+        Section(mistiaLocalized(vi: "Ảnh", en: "Image", ja: "画像")) {
+            if let receiptDraft {
+                HStack(spacing: 12) {
+                    Button {
+                        receiptPreview = TransactionReceiptPreviewItem(image: receiptDraft.previewImage)
+                    } label: {
+                        HStack(spacing: 12) {
+                            Image(uiImage: receiptDraft.thumbnailImage)
+                                .resizable()
+                                .scaledToFill()
+                                .frame(width: 54, height: 54)
+                                .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+
+                            VStack(alignment: .leading, spacing: 3) {
+                                Text(mistiaLocalized(vi: "Ảnh bill", en: "Receipt image", ja: "レシート画像"))
+                                    .foregroundStyle(.primary)
+
+                                Text(receiptFileSizeText(for: receiptDraft.imageData.count))
+                                    .font(.footnote)
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+                    }
+                    .buttonStyle(.plain)
+
+                    Spacer()
+
+                    Button(role: .destructive) {
+                        removeReceiptDraft()
+                    } label: {
+                        Image(systemName: "trash")
+                            .font(.system(size: 16, weight: .semibold))
+                            .foregroundStyle(.red)
+                            .frame(width: 36, height: 36)
+                    }
+                    .buttonStyle(.borderless)
+                    .accessibilityLabel(mistiaLocalized(vi: "Xóa ảnh", en: "Remove image", ja: "画像を削除"))
+                }
+
+                if isAnalyzingReceipt {
+                    HStack(spacing: 10) {
+                        ProgressView()
+                            .controlSize(.small)
+                        Text(mistiaLocalized(vi: "Đang phân tích bill", en: "Analyzing receipt", ja: "レシートを解析中"))
+                            .foregroundStyle(.secondary)
+                    }
+                }
+
+                if let receiptAnalysisQuota {
+                    HStack(spacing: 10) {
+                        Image(systemName: "gauge.medium")
+                            .foregroundStyle(.secondary)
+                        Text(receiptQuotaStatusText(for: receiptAnalysisQuota))
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+
+            } else {
+                Menu {
+                    receiptImageSourceMenuButtons()
+                } label: {
+                    Label(
+                        mistiaLocalized(vi: "Thêm ảnh bill", en: "Add receipt image", ja: "レシート画像を追加"),
+                        systemImage: "camera"
+                    )
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func receiptImageSourceMenuButtons() -> some View {
+        if UIImagePickerController.isSourceTypeAvailable(.camera) {
+            Button {
+                receiptImageSource = .camera
+            } label: {
+                Label(
+                    mistiaLocalized(vi: "Chụp ảnh", en: "Take photo", ja: "写真を撮る"),
+                    systemImage: "camera"
+                )
+            }
+        }
+
+        Button {
+            receiptImageSource = .photoLibrary
+        } label: {
+            Label(
+                mistiaLocalized(vi: "Chọn từ ảnh", en: "Choose from Photos", ja: "写真から選択"),
+                systemImage: "photo"
+            )
+        }
+    }
+
+    private func receiptFileSizeText(for byteCount: Int) -> String {
+        let formatter = ByteCountFormatter()
+        formatter.allowedUnits = [.useKB, .useMB]
+        formatter.countStyle = .file
+        return formatter.string(fromByteCount: Int64(byteCount))
+    }
+
     private var shouldShowMissingWalletsState: Bool {
         !target.quickCapture && availableWallets.isEmpty
     }
@@ -826,6 +981,220 @@ struct TransactionEditorSheet: View {
         }
 
         persist(transaction: transaction, completion: .savedDraft)
+    }
+
+    private func loadReceiptDraftIfNeeded() {
+        guard !didLoadReceiptDraft else { return }
+        didLoadReceiptDraft = true
+
+        guard let transaction = target.transaction else { return }
+
+        do {
+            let store = TransactionReceiptImageStore()
+            guard let receipt = try store.receipt(for: transaction.id, context: modelContext) else { return }
+            let imageData = try store.imageData(for: receipt)
+            let thumbnailData = try store.thumbnailData(for: receipt)
+            guard
+                let previewImage = UIImage(data: imageData),
+                let thumbnailImage = UIImage(data: thumbnailData)
+            else {
+                return
+            }
+
+            receiptDraft = TransactionReceiptDraft(
+                imageData: imageData,
+                thumbnailData: thumbnailData,
+                contentType: receipt.contentType,
+                previewImage: previewImage,
+                thumbnailImage: thumbnailImage,
+                isChanged: false
+            )
+            shouldDeleteReceiptOnSave = false
+        } catch {
+            alertMessage = mistiaLocalized(
+                vi: "Không thể mở ảnh bill đã lưu.",
+                en: "Couldn't load the saved receipt image.",
+                ja: "保存済みのレシート画像を読み込めません。"
+            ) + " \(error.localizedDescription)"
+        }
+    }
+
+    private func presentInitialReceiptScannerIfNeeded() {
+        guard target.startsReceiptScan,
+              target.transaction == nil,
+              !didAutoPresentReceiptScanner else {
+            return
+        }
+
+        didAutoPresentReceiptScanner = true
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
+            receiptImageSource = UIImagePickerController.isSourceTypeAvailable(.camera)
+                ? .camera
+                : .photoLibrary
+        }
+    }
+
+    private func handlePickedReceiptImage(_ image: UIImage) {
+        guard let draft = TransactionReceiptImageProcessor.makeDraft(from: image) else {
+            alertMessage = mistiaLocalized(
+                vi: "Không thể xử lý ảnh bill này.",
+                en: "Couldn't process this receipt image.",
+                ja: "このレシート画像を処理できません。"
+            )
+            return
+        }
+
+        receiptDraft = draft
+        receiptAnalysisQuota = nil
+        shouldDeleteReceiptOnSave = false
+        analyzeCurrentReceiptDraft()
+    }
+
+    private func removeReceiptDraft() {
+        receiptDraft = nil
+        receiptAnalysisQuota = nil
+        shouldDeleteReceiptOnSave = target.transaction != nil
+    }
+
+    private func analyzeCurrentReceiptDraft() {
+        guard !isAnalyzingReceipt, let receiptDraft else { return }
+
+        guard sessionStore.canPerformRemoteActions else {
+            alertMessage = mistiaLocalized(
+                vi: "AI cần đăng nhập và kết nối mạng để phân tích bill. Ảnh vẫn được giữ trong modal để bạn nhập thủ công.",
+                en: "Receipt AI needs sign-in and network access. The image stays in the modal so you can fill the transaction manually.",
+                ja: "レシートAIにはサインインとネットワーク接続が必要です。画像はモーダルに残るため手入力できます。"
+            )
+            return
+        }
+
+        guard !availableCategories.isEmpty else {
+            alertMessage = mistiaLocalized(
+                vi: "Bạn cần có danh mục phù hợp trước khi AI có thể chọn danh mục cho bill.",
+                en: "You need available categories before AI can choose one for the receipt.",
+                ja: "AIがカテゴリを選ぶには利用可能なカテゴリが必要です。"
+            )
+            return
+        }
+
+        isAnalyzingReceipt = true
+        Task { @MainActor in
+            defer { isAnalyzingReceipt = false }
+
+            do {
+                let session = try await sessionStore.prepareRemoteSession()
+                let payload = receiptAnalysisPayload(for: receiptDraft)
+                let result = try await ReceiptAnalysisService().analyzeReceipt(
+                    payload: payload,
+                    session: session
+                )
+                receiptAnalysisQuota = result.quota
+                applyReceiptAnalysisResult(result)
+            } catch {
+                if case let ReceiptAnalysisServiceError.dailyLimitReached(quota) = error {
+                    receiptAnalysisQuota = quota
+                }
+                alertMessage = receiptAnalysisErrorMessage(for: error)
+            }
+        }
+    }
+
+    private func receiptAnalysisPayload(for receiptDraft: TransactionReceiptDraft) -> ReceiptAnalysisRequestPayload {
+        let categories = availableCategories.map { category in
+            ReceiptAnalysisCategoryCandidate(
+                id: category.id,
+                name: category.localizedDisplayName,
+                parentName: category.parentCategory?.localizedDisplayName,
+                kindRawValue: category.kind.rawValue
+            )
+        }
+        let wallets = availableWallets.map { wallet in
+            ReceiptAnalysisWalletCandidate(
+                id: wallet.id,
+                name: wallet.name,
+                kindRawValue: wallet.kind.rawValue,
+                currencyCode: wallet.currencyCode,
+                institutionDisplayName: wallet.institutionDisplayName
+            )
+        }
+        let currencyCode = selectedSourceWallet?.currencyCode
+            ?? availableWallets.first?.currencyCode
+            ?? "JPY"
+
+        return ReceiptAnalysisRequestPayload(
+            imageBase64: receiptDraft.imageData.base64EncodedString(),
+            mimeType: receiptDraft.contentType,
+            localeIdentifier: Locale.current.identifier,
+            currencyCode: currencyCode,
+            categories: categories,
+            wallets: wallets
+        )
+    }
+
+    private func applyReceiptAnalysisResult(_ result: ReceiptAnalysisResult) {
+        let validated = result.validated(
+            categoryIDs: Set(availableCategories.map(\.id)),
+            walletIDs: Set(availableWallets.map(\.id))
+        )
+
+        if let merchantName = validated.merchantName?.nilIfBlank {
+            draft.title = merchantName
+            suppressTitleSuggestions = true
+            cachedTitleSuggestions = []
+        }
+
+        if let totalMinor = validated.totalMinor, totalMinor > 0 {
+            draft.amountText = "\(totalMinor)"
+        }
+
+        if let occurredAt = validated.occurredAt {
+            draft.occurredAt = occurredAt
+        }
+
+        if let walletID = validated.walletID,
+           availableWallets.contains(where: { $0.id == walletID }) {
+            draft.sourceWalletID = walletID
+        }
+
+        clearMismatchedCategoryForSelectedWallet()
+
+        if let categoryID = validated.categoryID,
+           let category = storedCategories.first(where: { $0.id == categoryID }),
+           shouldShowCategory(category),
+           category.isChildCategory,
+           category.kind == selectedCategoryKind {
+            draft.categoryID = categoryID
+        }
+    }
+
+    private func receiptAnalysisErrorMessage(for error: Error) -> String {
+        if let localizedError = error as? LocalizedError,
+           let message = localizedError.errorDescription?.nilIfBlank {
+            return message
+        }
+
+        let detail = error.localizedDescription
+        return mistiaLocalized(
+            vi: "Không thể phân tích bill lúc này.",
+            en: "Couldn't analyze this receipt right now.",
+            ja: "現在レシートを解析できません。"
+        ) + " \(detail)"
+    }
+
+    private func receiptQuotaStatusText(for quota: ReceiptAnalysisQuota) -> String {
+        if quota.limitCount <= 0 {
+            return mistiaLocalized(
+                vi: "AI quét bill đang tạm tắt hôm nay.",
+                en: "Receipt AI is temporarily disabled today.",
+                ja: "本日のレシートAIは一時的に無効です。"
+            )
+        }
+
+        return mistiaLocalized(
+            vi: "Đã dùng \(quota.usedCount)/\(quota.limitCount) lượt quét bill hôm nay.",
+            en: "Used \(quota.usedCount)/\(quota.limitCount) receipt scans today.",
+            ja: "本日のレシート読み取りは \(quota.usedCount)/\(quota.limitCount) 回使用済みです。"
+        )
     }
 
     private func saveFullTransaction() {
@@ -1059,12 +1428,46 @@ struct TransactionEditorSheet: View {
             modelContext.insert(transaction)
         }
 
+        do {
+            try persistReceiptDraftIfNeeded(for: transaction)
+        } catch {
+            alertMessage = mistiaLocalized(
+                vi: "Không thể lưu ảnh bill.",
+                en: "Couldn't save the receipt image.",
+                ja: "レシート画像を保存できません。"
+            ) + " \(error.localizedDescription)"
+            return
+        }
+
         let canonicalOwnerUserID = walletOwnerUserID(for: transaction.sourceWallet)
         persist(
             transaction: transaction,
             completion: .savedTransaction,
             subjectUserIDOverride: canonicalOwnerUserID
         )
+    }
+
+    private func persistReceiptDraftIfNeeded(for transaction: LedgerTransaction) throws {
+        guard shouldShowReceiptSection else { return }
+
+        let store = TransactionReceiptImageStore()
+        if let receiptDraft {
+            guard receiptDraft.isChanged else { return }
+            _ = try store.replaceReceipt(
+                for: transaction.id,
+                imageData: receiptDraft.imageData,
+                thumbnailData: receiptDraft.thumbnailData,
+                contentType: receiptDraft.contentType,
+                context: modelContext,
+                saveContext: false
+            )
+        } else if shouldDeleteReceiptOnSave {
+            try store.deleteReceipt(
+                for: transaction.id,
+                context: modelContext,
+                saveContext: false
+            )
+        }
     }
 
     private var transactionRecordSnapshots: [TransactionRecordSnapshot] {
@@ -1472,6 +1875,137 @@ struct TransactionEditorSheet: View {
             y: 4
         )
         .contentShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+    }
+}
+
+private enum TransactionReceiptImageSource: String, Identifiable {
+    case camera
+    case photoLibrary
+
+    var id: String { rawValue }
+
+    var uiImagePickerSourceType: UIImagePickerController.SourceType {
+        switch self {
+        case .camera:
+            .camera
+        case .photoLibrary:
+            .photoLibrary
+        }
+    }
+}
+
+private struct TransactionReceiptDraft {
+    let imageData: Data
+    let thumbnailData: Data
+    let contentType: String
+    let previewImage: UIImage
+    let thumbnailImage: UIImage
+    let isChanged: Bool
+}
+
+private struct TransactionReceiptPreviewItem: Identifiable {
+    let id = UUID()
+    let image: UIImage
+}
+
+private enum TransactionReceiptImageProcessor {
+    static func makeDraft(from image: UIImage) -> TransactionReceiptDraft? {
+        let previewImage = scaledImage(image, maxDimension: 1_800)
+        let thumbnailImage = scaledImage(image, maxDimension: 240)
+
+        guard
+            let imageData = compressedJPEGData(for: previewImage),
+            let thumbnailData = thumbnailImage.jpegData(compressionQuality: 0.68)
+        else {
+            return nil
+        }
+
+        return TransactionReceiptDraft(
+            imageData: imageData,
+            thumbnailData: thumbnailData,
+            contentType: "image/jpeg",
+            previewImage: previewImage,
+            thumbnailImage: thumbnailImage,
+            isChanged: true
+        )
+    }
+
+    private static func compressedJPEGData(for image: UIImage) -> Data? {
+        var quality: CGFloat = 0.74
+        var data = image.jpegData(compressionQuality: quality)
+
+        while let current = data, current.count > 3_800_000, quality > 0.42 {
+            quality -= 0.08
+            data = image.jpegData(compressionQuality: quality)
+        }
+
+        return data
+    }
+
+    private static func scaledImage(_ image: UIImage, maxDimension: CGFloat) -> UIImage {
+        let size = image.size
+        let largestDimension = max(size.width, size.height)
+        guard largestDimension > 0 else { return image }
+
+        let scale = min(1, maxDimension / largestDimension)
+        let targetSize = CGSize(width: size.width * scale, height: size.height * scale)
+
+        let rendererFormat = UIGraphicsImageRendererFormat()
+        rendererFormat.scale = 1
+        rendererFormat.opaque = true
+
+        return UIGraphicsImageRenderer(size: targetSize, format: rendererFormat).image { _ in
+            UIColor.white.setFill()
+            UIBezierPath(rect: CGRect(origin: .zero, size: targetSize)).fill()
+            image.draw(in: CGRect(origin: .zero, size: targetSize))
+        }
+    }
+}
+
+private struct TransactionReceiptImagePicker: UIViewControllerRepresentable {
+    let sourceType: UIImagePickerController.SourceType
+    let onImagePicked: (UIImage) -> Void
+
+    @Environment(\.dismiss) private var dismiss
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator(dismiss: dismiss, onImagePicked: onImagePicked)
+    }
+
+    func makeUIViewController(context: Context) -> UIImagePickerController {
+        let picker = UIImagePickerController()
+        picker.sourceType = sourceType
+        picker.mediaTypes = ["public.image"]
+        picker.allowsEditing = false
+        picker.delegate = context.coordinator
+        return picker
+    }
+
+    func updateUIViewController(_ uiViewController: UIImagePickerController, context: Context) { }
+
+    final class Coordinator: NSObject, UINavigationControllerDelegate, UIImagePickerControllerDelegate {
+        private let dismiss: DismissAction
+        private let onImagePicked: (UIImage) -> Void
+
+        init(dismiss: DismissAction, onImagePicked: @escaping (UIImage) -> Void) {
+            self.dismiss = dismiss
+            self.onImagePicked = onImagePicked
+        }
+
+        func imagePickerControllerDidCancel(_ picker: UIImagePickerController) {
+            dismiss()
+        }
+
+        func imagePickerController(
+            _ picker: UIImagePickerController,
+            didFinishPickingMediaWithInfo info: [UIImagePickerController.InfoKey: Any]
+        ) {
+            let image = info[.originalImage] as? UIImage
+            dismiss()
+            if let image {
+                onImagePicked(image)
+            }
+        }
     }
 }
 

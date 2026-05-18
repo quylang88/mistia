@@ -32,7 +32,7 @@ enum MistiaDataStack {
             userDefaults: UserDefaults = .standard,
             fileManager: FileManager = .default
         ) throws {
-            self.schema = Schema(versionedSchema: MistiaSchemaV1.self)
+            self.schema = Schema(versionedSchema: MistiaSchemaV2.self)
             self.userDefaults = userDefaults
             self.fileManager = fileManager
 
@@ -53,7 +53,7 @@ enum MistiaDataStack {
             userDefaults: UserDefaults = .standard,
             fileManager: FileManager = .default
         ) {
-            self.schema = Schema(versionedSchema: MistiaSchemaV1.self)
+            self.schema = Schema(versionedSchema: MistiaSchemaV2.self)
             self.userDefaults = userDefaults
             self.fileManager = fileManager
             self.modelContainer = fallbackContainer
@@ -305,6 +305,7 @@ enum MistiaDataStack {
             do {
                 return try ModelContainer(
                     for: schema,
+                    migrationPlan: MistiaMigrationPlan.self,
                     configurations: [configuration]
                 )
             } catch {
@@ -472,7 +473,11 @@ enum MistiaDataStack {
 
                 // Try to infer owner from the store
                 let configuration = ModelConfiguration("inference", schema: schema, url: storeURL)
-                guard let container = try? ModelContainer(for: schema, configurations: [configuration]) else { continue }
+                guard let container = try? ModelContainer(
+                    for: schema,
+                    migrationPlan: MistiaMigrationPlan.self,
+                    configurations: [configuration]
+                ) else { continue }
                 let context = ModelContext(container)
                 let profile = (try? context.fetch(FetchDescriptor<UserAccountProfile>()))?.first
 
@@ -532,10 +537,11 @@ enum MistiaDataStack {
         do {
             return try LaunchState()
         } catch {
-            let schema = Schema(versionedSchema: MistiaSchemaV1.self)
+            let schema = Schema(versionedSchema: MistiaSchemaV2.self)
             let fallbackConfiguration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)
             let fallbackContainer = try! ModelContainer(
                 for: schema,
+                migrationPlan: MistiaMigrationPlan.self,
                 configurations: [fallbackConfiguration]
             )
             let launchIssue: LaunchIssue

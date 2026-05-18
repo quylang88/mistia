@@ -398,6 +398,9 @@ struct RootTabView: View {
       familyContextStore.activateMemberView(member)
       selectedTab = .overview
 
+    case .receiptScan:
+      activeSheet = .quickCreate(.receipt)
+
     case .syncNow:
       guard !isSyncingShortcut else { return }
       isSyncingShortcut = true
@@ -435,6 +438,12 @@ struct RootTabView: View {
       return TransactionEditorTarget(initialKind: .income, subjectUserIDOverride: subjectUserID)
     case .transfer:
       return TransactionEditorTarget(initialKind: .transfer, subjectUserIDOverride: subjectUserID)
+    case .receipt:
+      return TransactionEditorTarget(
+        initialKind: .expense,
+        subjectUserIDOverride: subjectUserID,
+        startsReceiptScan: true
+      )
     case .note:
       return TransactionEditorTarget(initialKind: .expense, quickCapture: true, subjectUserIDOverride: subjectUserID)
     }
@@ -499,6 +508,7 @@ private enum MistiaQuickCreateDestination: String, CaseIterable, Identifiable {
   case expense
   case income
   case transfer
+  case receipt
   case note
 
   var id: String { rawValue }
@@ -511,6 +521,8 @@ private enum MistiaQuickCreateDestination: String, CaseIterable, Identifiable {
       mistiaLocalized(vi: "Thu nhập", en: "Income", ja: "収入")
     case .transfer:
       mistiaLocalized(vi: "Chuyển tiền", en: "Transfer", ja: "振替")
+    case .receipt:
+      mistiaLocalized(vi: "Quét bill", en: "Scan receipt", ja: "レシート読取")
     case .note:
       mistiaLocalized(vi: "Ghi nhanh", en: "Quick note", ja: "クイック入力")
     }
@@ -524,6 +536,8 @@ private enum MistiaQuickCreateDestination: String, CaseIterable, Identifiable {
       mistiaLocalized(vi: "Ghi nhận nguồn thu để cập nhật số dư.", en: "Record income to update your balance.", ja: "残高を更新するための収入を記録します。")
     case .transfer:
       mistiaLocalized(vi: "Chuyển nội bộ hoặc theo dõi công nợ.", en: "Move money internally or track debt.", ja: "内部振替や貸し借りを記録します。")
+    case .receipt:
+      mistiaLocalized(vi: "Chụp bill để AI điền giao dịch.", en: "Use AI to fill a transaction from a receipt.", ja: "AIでレシートから取引を入力します。")
     case .note:
       mistiaLocalized(vi: "Chỉ nhập số tiền và loại để hoàn thiện sau.", en: "Capture amount and type first, then complete later.", ja: "金額と種類だけ先に入れて、あとで詳細を整えます。")
     }
@@ -537,6 +551,8 @@ private enum MistiaQuickCreateDestination: String, CaseIterable, Identifiable {
       mistiaLocalized(vi: "Flow thêm thu nhập sẽ nối từ menu này. Hiện tại đang giữ chỗ bằng sheet riêng để state không phải làm lại.", en: "The income flow will connect from this menu. A separate placeholder sheet keeps the state wiring stable for now.", ja: "収入追加フローはこのメニューから接続されます。今は状態管理を崩さないためにプレースホルダーのシートを使っています。")
     case .transfer:
       mistiaLocalized(vi: "Flow chuyển tiền giữa các nguồn sẽ được nối tại đây sau. Menu popout mới đã tách sẵn action riêng cho màn này.", en: "Transfers between sources will be connected here next. The new popout menu already separates the action for this screen.", ja: "資金移動フローはここに後で接続されます。この画面用のアクションは新しいポップアウトメニューですでに分かれています。")
+    case .receipt:
+      mistiaLocalized(vi: "Quét bill sẽ mở modal giao dịch và tự điền thông tin đọc được từ ảnh.", en: "Receipt scan opens the transaction modal and fills details from the image.", ja: "レシート読取は取引モーダルを開き、画像から読み取った内容を入力します。")
     case .note:
       mistiaLocalized(vi: "Ghi nhanh sẽ dùng cho những entry cần capture thật gọn. Trước mắt đây là placeholder để bạn duyệt layout và nhịp mở menu.", en: "Quick capture is for ultra-light entries. For now this is a placeholder so you can review layout and menu timing.", ja: "クイック入力は最小限の記録向けです。今はレイアウトとメニューの開き方を確認するためのプレースホルダーです。")
     }
@@ -550,6 +566,8 @@ private enum MistiaQuickCreateDestination: String, CaseIterable, Identifiable {
       "arrow.down.left"
     case .transfer:
       "arrow.left.arrow.right"
+    case .receipt:
+      "doc.viewfinder"
     case .note:
       "square.and.pencil"
     }
@@ -562,7 +580,7 @@ private enum MistiaQuickCreateDestination: String, CaseIterable, Identifiable {
 
 private struct MistiaQuickCreateMenu: View {
   static let collapsedSize: CGFloat = 44
-  static let expandedHeight: CGFloat = 260 // Matched to menuHeight
+  static let expandedHeight: CGFloat = 318 // Matched to menuHeight
 
   @Environment(\.colorScheme) private var colorScheme
   let isExpanded: Bool
@@ -581,7 +599,7 @@ private struct MistiaQuickCreateMenu: View {
   }
 
   private var menuHeight: CGFloat {
-    isExpanded ? 260 : Self.collapsedSize // Slightly more compact
+    isExpanded ? Self.expandedHeight : Self.collapsedSize
   }
 
   private var appPurple: Color {
@@ -596,9 +614,9 @@ private struct MistiaQuickCreateMenu: View {
     ZStack(alignment: .bottomTrailing) {
       if isExpanded {
         VStack(spacing: 0) {
-          // Top section: Expense, Income, Transfer
+          // Top section: Expense, Income, Transfer, Receipt
           VStack(spacing: 0) {
-            ForEach([MistiaQuickCreateDestination.expense, .income, .transfer]) { destination in
+            ForEach([MistiaQuickCreateDestination.expense, .income, .transfer, .receipt]) { destination in
               Button {
                 onSelect(destination)
               } label: {
@@ -607,7 +625,7 @@ private struct MistiaQuickCreateMenu: View {
               }
               .buttonStyle(PlainButtonStyle())
               
-              if destination != .transfer {
+              if destination != .receipt {
                 Divider()
                   .background(Color.white.opacity(0.06))
                   .padding(.leading, 68)

@@ -25,6 +25,18 @@ final class MistiaShortcutLogicTests: XCTestCase {
         XCTAssertEqual(resolution.presentation.action, .backupRestore)
     }
 
+    func testResolveKeepsReceiptScanSelection() {
+        let resolution = MistiaShortcutLogic.resolve(
+            selection: .receiptScan,
+            input: makeInput()
+        )
+
+        XCTAssertEqual(resolution.selection, .receiptScan)
+        XCTAssertEqual(resolution.presentation.title, "Quét bill")
+        XCTAssertEqual(resolution.presentation.icon, .systemImage("doc.viewfinder"))
+        XCTAssertEqual(resolution.presentation.action, .receiptScan)
+    }
+
     func testResolveFallsBackToProfileWhenFamilyOverviewIsUnavailable() {
         let resolution = MistiaShortcutLogic.resolve(
             selection: .familyOverview,

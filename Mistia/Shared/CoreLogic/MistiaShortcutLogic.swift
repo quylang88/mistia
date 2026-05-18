@@ -5,6 +5,7 @@ enum MistiaShortcutKind: String, CaseIterable, Codable, Identifiable {
     case archivedItems
     case familyOverview
     case familyMember
+    case receiptScan
     case syncNow
 
     var id: String { rawValue }
@@ -35,6 +36,7 @@ struct MistiaShortcutSelection: Equatable, Codable {
     static let backupRestore = MistiaShortcutSelection(kind: .backupRestore)
     static let archivedItems = MistiaShortcutSelection(kind: .archivedItems)
     static let familyOverview = MistiaShortcutSelection(kind: .familyOverview)
+    static let receiptScan = MistiaShortcutSelection(kind: .receiptScan)
     static let syncNow = MistiaShortcutSelection(kind: .syncNow)
 
     var storedKindRawValue: String {
@@ -75,6 +77,7 @@ enum MistiaShortcutResolvedAction: Equatable {
     case archivedItems
     case familyOverview(familyID: UUID)
     case memberOverview(userID: UUID)
+    case receiptScan
     case syncNow
 }
 
@@ -163,6 +166,17 @@ enum MistiaShortcutLogic {
                     ),
                     icon: .memberAvatar(initials: member.initials, avatarURL: member.avatarURL),
                     action: .memberOverview(userID: member.userID)
+                )
+            )
+
+        case .receiptScan:
+            return MistiaShortcutResolution(
+                selection: .receiptScan,
+                presentation: MistiaShortcutPresentation(
+                    title: mistiaLocalized(vi: "Quét bill", en: "Scan receipt", ja: "レシート読取"),
+                    accessibilityLabel: mistiaLocalized(vi: "Mở quét bill", en: "Open receipt scan", ja: "レシート読取を開く"),
+                    icon: .systemImage("doc.viewfinder"),
+                    action: .receiptScan
                 )
             )
 

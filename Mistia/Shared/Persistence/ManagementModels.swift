@@ -310,3 +310,35 @@ final class LedgerTransaction {
         set { entryStatusRawValue = newValue.rawValue }
     }
 }
+
+@Model
+final class TransactionReceiptImage {
+    @Attribute(.unique) var id: UUID
+    var transactionID: UUID
+    var imageFileName: String
+    var thumbnailFileName: String
+    var contentType: String
+    var byteCount: Int
+    var createdAt: Date
+    var updatedAt: Date
+
+    init(
+        id: UUID = UUID(),
+        transactionID: UUID,
+        imageFileName: String,
+        thumbnailFileName: String,
+        contentType: String = "image/jpeg",
+        byteCount: Int,
+        createdAt: Date = .now,
+        updatedAt: Date = .now
+    ) {
+        self.id = id
+        self.transactionID = transactionID
+        self.imageFileName = imageFileName
+        self.thumbnailFileName = thumbnailFileName
+        self.contentType = contentType
+        self.byteCount = byteCount
+        self.createdAt = createdAt
+        self.updatedAt = updatedAt
+    }
+}

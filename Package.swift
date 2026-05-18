@@ -35,6 +35,7 @@ let package = Package(
                 "Sync/MistiaSyncBackgroundScheduler.swift",
                 "Sync/MistiaSyncConfiguration.swift",
                 "Sync/MistiaSyncCoordinator.swift",
+                "Sync/ReceiptAnalysisService.swift",
                 "Sync/SupabaseAuthService.swift",
                 "Sync/SupabaseRemoteStore.swift",
                 "Sync/SupabaseUserProfileStore.swift"
@@ -49,6 +50,7 @@ let package = Package(
                 "CoreLogic/MistiaSystemCategoryIdentity.swift",
                 "CoreLogic/OverviewLogic.swift",
                 "CoreLogic/PlanningLogic.swift",
+                "CoreLogic/ReceiptAnalysisModels.swift",
                 "CoreLogic/TransactionLogic.swift",
                 "CoreLogic/TransactionLogic+Statement.swift",
                 "Persistence/CategoryHierarchySupport.swift",
@@ -57,6 +59,7 @@ let package = Package(
                 "Persistence/MistiaLocalProfiles.swift",
                 "Persistence/MistiaMigration.swift",
                 "Persistence/NotificationModels.swift",
+                "Persistence/TransactionReceiptImageStore.swift",
                 "Persistence/MistiaRecordOwnership.swift",
                 "Persistence/PlanningModels.swift",
                 "Persistence/SyncConflictModel.swift",
