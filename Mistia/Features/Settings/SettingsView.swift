@@ -582,9 +582,9 @@ private struct MistiaShortcutSettingsView: View {
 
         case .receiptScan:
             return mistiaLocalized(
-                vi: "Mở nhanh camera/chọn ảnh bill để AI điền giao dịch.",
-                en: "Open receipt capture quickly so AI can fill the transaction.",
-                ja: "レシートの撮影/選択をすばやく開き、AIで取引を入力します。"
+                vi: "Mở camera chụp bill ngay để AI điền giao dịch.",
+                en: "Open the camera immediately so AI can fill the transaction.",
+                ja: "カメラをすぐ開き、AIで取引を入力します。"
             )
 
         case .syncNow:
@@ -1330,7 +1330,7 @@ private extension MistiaShortcutPresentation {
         case .memberOverview:
             .rose
         case .receiptScan:
-            .purple
+            .amber
         case .syncNow:
             .sky
         }

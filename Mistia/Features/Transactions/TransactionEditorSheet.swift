@@ -2,6 +2,12 @@ import SwiftData
 import SwiftUI
 import UIKit
 
+enum TransactionReceiptInitialSource: String, Equatable {
+    case cameraPreferred
+    case camera
+    case photoLibrary
+}
+
 struct TransactionTransferPreset: Equatable {
     let transferSubtype: TransactionTransferSubtype
     let sourceWalletID: UUID?
@@ -26,6 +32,7 @@ struct TransactionEditorTarget: Identifiable {
     let transferPreset: TransactionTransferPreset?
     let subjectUserIDOverride: UUID?
     let startsReceiptScan: Bool
+    let receiptInitialSource: TransactionReceiptInitialSource?
 
     init(transaction: LedgerTransaction) {
         self.transaction = transaction
@@ -34,6 +41,7 @@ struct TransactionEditorTarget: Identifiable {
         self.transferPreset = nil
         self.subjectUserIDOverride = nil
         self.startsReceiptScan = false
+        self.receiptInitialSource = nil
     }
 
     init(
@@ -41,14 +49,16 @@ struct TransactionEditorTarget: Identifiable {
         quickCapture: Bool = false,
         transferPreset: TransactionTransferPreset? = nil,
         subjectUserIDOverride: UUID? = nil,
-        startsReceiptScan: Bool = false
+        startsReceiptScan: Bool = false,
+        receiptInitialSource: TransactionReceiptInitialSource? = nil
     ) {
         self.transaction = nil
         self.initialKind = initialKind
         self.quickCapture = quickCapture
         self.transferPreset = transferPreset
         self.subjectUserIDOverride = subjectUserIDOverride
-        self.startsReceiptScan = startsReceiptScan
+        self.startsReceiptScan = startsReceiptScan || receiptInitialSource != nil
+        self.receiptInitialSource = receiptInitialSource ?? (startsReceiptScan ? .cameraPreferred : nil)
     }
 }
 
@@ -1021,6 +1031,7 @@ struct TransactionEditorSheet: View {
 
     private func presentInitialReceiptScannerIfNeeded() {
         guard target.startsReceiptScan,
+              let receiptInitialSource = target.receiptInitialSource,
               target.transaction == nil,
               !didAutoPresentReceiptScanner else {
             return
@@ -1028,9 +1039,18 @@ struct TransactionEditorSheet: View {
 
         didAutoPresentReceiptScanner = true
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
-            receiptImageSource = UIImagePickerController.isSourceTypeAvailable(.camera)
-                ? .camera
-                : .photoLibrary
+            switch receiptInitialSource {
+            case .cameraPreferred:
+                receiptImageSource = UIImagePickerController.isSourceTypeAvailable(.camera)
+                    ? .camera
+                    : .photoLibrary
+            case .camera:
+                receiptImageSource = UIImagePickerController.isSourceTypeAvailable(.camera)
+                    ? .camera
+                    : .photoLibrary
+            case .photoLibrary:
+                receiptImageSource = .photoLibrary
+            }
         }
     }
 

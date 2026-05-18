@@ -1,5 +1,6 @@
 import SwiftUI
 import SwiftData
+import UIKit
 
 enum MistiaTab: String, CaseIterable, Hashable {
   case overview
@@ -100,6 +101,7 @@ struct RootTabView: View {
   @State private var isSyncingShortcut = false
   @State private var isRefreshingQuickCreateAccess = false
   @State private var quickCreateAccessAlert: RootQuickCreateAccessAlert?
+  @State private var showsReceiptSourceDialog = false
 
   private let quickCreateMenuAnimation = Animation.spring(response: 0.34, dampingFraction: 0.84)
   private let quickCreateMenuDuration = 0.28
@@ -153,8 +155,8 @@ struct RootTabView: View {
       }
       .sheet(item: $activeSheet) { sheet in
         switch sheet {
-        case .quickCreate(let destination):
-          TransactionEditorSheet(target: quickCreateTarget(for: destination)) { completion in
+        case .quickCreate(let destination, let receiptInitialSource):
+          TransactionEditorSheet(target: quickCreateTarget(for: destination, receiptInitialSource: receiptInitialSource)) { completion in
             if completion == .savedDraft {
               self.selectedTab = .transactions
             }
@@ -203,6 +205,29 @@ struct RootTabView: View {
           message: Text(alert.message),
           dismissButton: .default(Text(mistiaLocalized(vi: "OK", en: "OK", ja: "OK")))
         )
+      }
+      .confirmationDialog(
+        mistiaLocalized(vi: "Quét bill", en: "Scan receipt", ja: "レシート読取"),
+        isPresented: $showsReceiptSourceDialog,
+        titleVisibility: .visible
+      ) {
+        if UIImagePickerController.isSourceTypeAvailable(.camera) {
+          Button(mistiaLocalized(vi: "Chụp ảnh", en: "Take photo", ja: "写真を撮る")) {
+            activeSheet = .quickCreate(.receipt, .camera)
+          }
+        }
+
+        Button(mistiaLocalized(vi: "Chọn từ ảnh", en: "Choose from Photos", ja: "写真から選択")) {
+          activeSheet = .quickCreate(.receipt, .photoLibrary)
+        }
+
+        Button(mistiaLocalized(vi: "Hủy", en: "Cancel", ja: "キャンセル"), role: .cancel) {}
+      } message: {
+        Text(mistiaLocalized(
+          vi: "Chọn nguồn ảnh bill để AI phân tích.",
+          en: "Choose a receipt image source for AI analysis.",
+          ja: "AI解析に使うレシート画像の取得方法を選択します。"
+        ))
       }
     }
   }
@@ -301,7 +326,11 @@ struct RootTabView: View {
   private func presentQuickCreateSheet(for destination: MistiaQuickCreateDestination) {
     dismissQuickCreateMenu()
     DispatchQueue.main.asyncAfter(deadline: .now() + quickCreateMenuDuration) {
-      activeSheet = .quickCreate(destination)
+      if destination == .receipt {
+        showsReceiptSourceDialog = true
+      } else {
+        activeSheet = .quickCreate(destination, nil)
+      }
     }
   }
 
@@ -399,7 +428,7 @@ struct RootTabView: View {
       selectedTab = .overview
 
     case .receiptScan:
-      activeSheet = .quickCreate(.receipt)
+      activeSheet = .quickCreate(.receipt, .cameraPreferred)
 
     case .syncNow:
       guard !isSyncingShortcut else { return }
@@ -429,7 +458,10 @@ struct RootTabView: View {
     shortcutMemberUserIDRawValue = selection.storedMemberUserIDRawValue
   }
 
-  private func quickCreateTarget(for destination: MistiaQuickCreateDestination) -> TransactionEditorTarget {
+  private func quickCreateTarget(
+    for destination: MistiaQuickCreateDestination,
+    receiptInitialSource: TransactionReceiptInitialSource?
+  ) -> TransactionEditorTarget {
     let subjectUserID = quickCreateSubjectUserID
     switch destination {
     case .expense:
@@ -442,7 +474,7 @@ struct RootTabView: View {
       return TransactionEditorTarget(
         initialKind: .expense,
         subjectUserIDOverride: subjectUserID,
-        startsReceiptScan: true
+        receiptInitialSource: receiptInitialSource
       )
     case .note:
       return TransactionEditorTarget(initialKind: .expense, quickCapture: true, subjectUserIDOverride: subjectUserID)
@@ -488,12 +520,12 @@ struct RootTabView: View {
 }
 
 private enum RootSheet: Identifiable {
-  case quickCreate(MistiaQuickCreateDestination)
+  case quickCreate(MistiaQuickCreateDestination, TransactionReceiptInitialSource?)
 
   var id: String {
     switch self {
-    case .quickCreate(let destination):
-      "quick-create-\(destination.rawValue)"
+    case .quickCreate(let destination, let receiptInitialSource):
+      "quick-create-\(destination.rawValue)-\(receiptInitialSource?.rawValue ?? "none")"
     }
   }
 }
@@ -537,7 +569,7 @@ private enum MistiaQuickCreateDestination: String, CaseIterable, Identifiable {
     case .transfer:
       mistiaLocalized(vi: "Chuyển nội bộ hoặc theo dõi công nợ.", en: "Move money internally or track debt.", ja: "内部振替や貸し借りを記録します。")
     case .receipt:
-      mistiaLocalized(vi: "Chụp bill để AI điền giao dịch.", en: "Use AI to fill a transaction from a receipt.", ja: "AIでレシートから取引を入力します。")
+      mistiaLocalized(vi: "Chọn chụp hoặc tải ảnh bill để AI điền giao dịch.", en: "Choose camera or photo upload for AI receipt fill.", ja: "撮影または写真選択でAIが取引を入力します。")
     case .note:
       mistiaLocalized(vi: "Chỉ nhập số tiền và loại để hoàn thiện sau.", en: "Capture amount and type first, then complete later.", ja: "金額と種類だけ先に入れて、あとで詳細を整えます。")
     }

@@ -393,8 +393,20 @@ final class MistiaNativeTabBarController: UITabBarController, UITabBarController
 
   private func shortcutSystemImage(_ systemName: String) -> UIImage? {
     let config = UIImage.SymbolConfiguration(pointSize: 22, weight: .medium)
-    return UIImage(systemName: systemName, withConfiguration: config)?
-      .withRenderingMode(.alwaysTemplate)
+    let image = UIImage(systemName: systemName, withConfiguration: config)
+    if currentShortcutPresentation.action == .receiptScan {
+      return image?.mistiaRasterized(with: currentReceiptShortcutTint)
+    }
+    return image?.withRenderingMode(.alwaysTemplate)
+  }
+
+  private var currentReceiptShortcutTint: UIColor {
+    let usesDarkTint =
+      currentAppearanceMode == .dark
+      || (currentAppearanceMode == .automatic && traitCollection.userInterfaceStyle == .dark)
+    return usesDarkTint
+      ? UIColor(red: 1.0, green: 0.72, blue: 0.28, alpha: 1.0)
+      : UIColor(red: 0.93, green: 0.52, blue: 0.16, alpha: 1.0)
   }
 
   private func findSearchTabButton() -> UIView? {
