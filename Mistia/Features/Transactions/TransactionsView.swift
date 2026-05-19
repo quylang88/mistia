@@ -90,6 +90,27 @@ private enum TransactionsAlertPresentation: Identifiable {
     }
 }
 
+private enum TransactionsListPaging {
+    static let initialLimit = 60
+    static let increment = 40
+}
+
+private struct TransactionsListSnapshot {
+    let activeTransactionCount: Int
+    let visibleRecordCount: Int
+    let displayedRecordCount: Int
+    let openDebtPositions: [CounterpartyDebtSnapshot]
+    let sections: [TransactionSectionSnapshot]
+    let transactionsByID: [UUID: LedgerTransaction]
+    let transactionAuditMap: [UUID: TransactionAuditRecord]
+    let walletOwnerMap: [UUID: UUID]
+    let transactionOwnerMap: [UUID: UUID]
+
+    var hasMoreRows: Bool {
+        displayedRecordCount < visibleRecordCount
+    }
+}
+
 struct TransactionsView: View {
     @Environment(\.calendar) private var calendar
     @Environment(\.colorScheme) private var colorScheme
@@ -98,7 +119,8 @@ struct TransactionsView: View {
     @Environment(FamilyContextStore.self) private var familyContextStore
     @AppStorage(MistiaAppStorageKey.currencyCode) private var currencyCode = "JPY"
 
-    @Query private var storedTransactions: [LedgerTransaction]
+    @Query(filter: #Predicate<LedgerTransaction> { $0.deletedAt == nil && !$0.isArchived }, sort: \LedgerTransaction.occurredAt, order: .reverse)
+    private var storedTransactions: [LedgerTransaction]
     @Query private var storedWallets: [LedgerWallet]
     @Query private var storedCategories: [TransactionCategory]
     @Query private var ownershipScopes: [OwnedRecordScope]
@@ -114,6 +136,7 @@ struct TransactionsView: View {
     @State private var destination: TransactionsNavigationDestination?
     @State private var permissionPrompt: TransactionsPermissionPrompt?
     @State private var infoAlert: TransactionsInfoAlert?
+    @State private var visibleTransactionLimit = TransactionsListPaging.initialLimit
 
     private var activeTransactions: [LedgerTransaction] {
         visibleTransactions
@@ -214,15 +237,38 @@ struct TransactionsView: View {
         )
     }
 
-    private var transactionsByID: [UUID: LedgerTransaction] {
-        Dictionary(
-            activeTransactions.map { ($0.id, $0) },
-            uniquingKeysWith: { lhs, rhs in lhs.updatedAt >= rhs.updatedAt ? lhs : rhs }
-        )
-    }
-
     private var transactionAuditMap: [UUID: TransactionAuditRecord] {
         TransactionAuditStore.auditMap(from: transactionAuditRecords)
+    }
+
+    private var transactionListSnapshot: TransactionsListSnapshot {
+        let activeTransactions = self.activeTransactions
+        let records = activeTransactions.map(\.snapshot)
+        let visibleRecords = TransactionLogic.visibleRecords(
+            from: records,
+            selectedKind: selectedSegment?.kind,
+            filters: effectiveFilters,
+            calendar: calendar
+        )
+        let displayedRecords = Array(visibleRecords.prefix(visibleTransactionLimit))
+        let openDebtPositions = TransactionLogic.openDebtPositions(
+            from: debtRecords(from: records)
+        )
+
+        return TransactionsListSnapshot(
+            activeTransactionCount: activeTransactions.count,
+            visibleRecordCount: visibleRecords.count,
+            displayedRecordCount: displayedRecords.count,
+            openDebtPositions: openDebtPositions,
+            sections: TransactionLogic.sections(from: displayedRecords, calendar: calendar),
+            transactionsByID: Dictionary(
+                activeTransactions.map { ($0.id, $0) },
+                uniquingKeysWith: { lhs, rhs in lhs.updatedAt >= rhs.updatedAt ? lhs : rhs }
+            ),
+            transactionAuditMap: transactionAuditMap,
+            walletOwnerMap: walletOwnerMap,
+            transactionOwnerMap: transactionOwnerMap
+        )
     }
 
     private var walletOwnerMap: [UUID: UUID] {
@@ -334,24 +380,8 @@ struct TransactionsView: View {
         return effective
     }
 
-    private var visibleRecords: [TransactionRecordSnapshot] {
-        TransactionLogic.visibleRecords(
-            from: snapshotRecords,
-            selectedKind: selectedSegment?.kind ?? nil,
-            filters: effectiveFilters
-        )
-    }
-
-    private var summary: TransactionSummarySnapshot {
-        TransactionLogic.summary(for: visibleRecords)
-    }
-
-    private var sections: [TransactionSectionSnapshot] {
-        TransactionLogic.sections(from: visibleRecords)
-    }
-
-    private var openDebtPositions: [CounterpartyDebtSnapshot] {
-        let debtRecords = snapshotRecords.filter { record in
+    private func debtRecords(from records: [TransactionRecordSnapshot]) -> [TransactionRecordSnapshot] {
+        records.filter { record in
             guard record.primaryKind == .transfer, record.transferSubtype == .debt else {
                 return false
             }
@@ -362,8 +392,6 @@ struct TransactionsView: View {
 
             return true
         }
-
-        return TransactionLogic.openDebtPositions(from: debtRecords)
     }
 
     private var hasAdjustments: Bool {
@@ -400,6 +428,8 @@ struct TransactionsView: View {
     }
 
     var body: some View {
+        let listSnapshot = transactionListSnapshot
+
         NavigationStack {
             MistiaPinnedTopBarScaffold(
                 tone: .standard,
@@ -425,10 +455,10 @@ struct TransactionsView: View {
                         .padding(.trailing, -12)
                 }
             ) {
-                if !openDebtPositions.isEmpty {
-                    outstandingDebtSection
+                if !listSnapshot.openDebtPositions.isEmpty {
+                    outstandingDebtSection(listSnapshot.openDebtPositions)
                 }
-                transactionsContent
+                transactionsContent(listSnapshot)
             }
             .searchable(
                 text: $searchText,
@@ -493,6 +523,18 @@ struct TransactionsView: View {
             }
         } message: {
             Text(mistiaCatalog(exportErrorMessage ?? ""))
+        }
+        .onChange(of: selectedSegment) { _, _ in
+            resetTransactionPage()
+        }
+        .onChange(of: filterState) { _, _ in
+            resetTransactionPage()
+        }
+        .onChange(of: searchText) { _, _ in
+            resetTransactionPage()
+        }
+        .onChange(of: familyContextStore.selectedSubjectUserID) { _, _ in
+            resetTransactionPage()
         }
     }
 
@@ -721,7 +763,7 @@ struct TransactionsView: View {
         }
     }
 
-    private var outstandingDebtSection: some View {
+    private func outstandingDebtSection(_ positions: [CounterpartyDebtSnapshot]) -> some View {
         VStack(alignment: .leading, spacing: 10) {
             Text(mistiaLocalized(vi: "Công nợ đang mở", en: "Open debts", ja: "未解決の貸し借り"))
                 .font(.system(size: 13, weight: .bold, design: .rounded))
@@ -732,7 +774,7 @@ struct TransactionsView: View {
 
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 10) {
-                    ForEach(openDebtPositions) { position in
+                    ForEach(positions) { position in
                         OutstandingDebtChip(position: position)
                     }
                 }
@@ -742,8 +784,8 @@ struct TransactionsView: View {
     }
 
     @ViewBuilder
-    private var transactionsContent: some View {
-        if activeTransactions.isEmpty {
+    private func transactionsContent(_ snapshot: TransactionsListSnapshot) -> some View {
+        if snapshot.activeTransactionCount == 0 {
             TransactionsPlaceholderCard(
                 title: mistiaLocalized(vi: "Chưa có giao dịch nào", en: "No transactions yet", ja: "取引はまだありません"),
                 message: mistiaLocalized(
@@ -752,7 +794,7 @@ struct TransactionsView: View {
                     ja: "支出、収入、振替、またはプラスボタンからクイック記録を追加すると、ここに履歴が表示されます。"
                 )
             )
-        } else if sections.isEmpty {
+        } else if snapshot.sections.isEmpty {
             TransactionsPlaceholderCard(
                 title: mistiaLocalized(vi: "Không có kết quả phù hợp", en: "No matching results", ja: "一致する結果はありません"),
                 message: mistiaLocalized(
@@ -762,18 +804,38 @@ struct TransactionsView: View {
                 )
             )
         } else {
-            ForEach(sections) { section in
+            ForEach(snapshot.sections) { section in
                 TransactionSectionCard(
                     section: section,
-                    transactionsByID: transactionsByID,
-                    transactionAuditMap: transactionAuditMap,
-                    walletOwnerMap: walletOwnerMap,
-                    transactionOwnerMap: transactionOwnerMap
+                    transactionsByID: snapshot.transactionsByID,
+                    transactionAuditMap: snapshot.transactionAuditMap,
+                    walletOwnerMap: snapshot.walletOwnerMap,
+                    transactionOwnerMap: snapshot.transactionOwnerMap
                 ) { transaction in
                     openTransactionEditorIfAllowed(transaction)
                 }
             }
+
+            if snapshot.hasMoreRows {
+                TransactionListPagingSentinel()
+                    .onAppear {
+                        loadMoreTransactionsIfNeeded(totalVisibleCount: snapshot.visibleRecordCount)
+                    }
+            }
         }
+    }
+
+    private func resetTransactionPage() {
+        guard visibleTransactionLimit != TransactionsListPaging.initialLimit else { return }
+        visibleTransactionLimit = TransactionsListPaging.initialLimit
+    }
+
+    private func loadMoreTransactionsIfNeeded(totalVisibleCount: Int) {
+        guard visibleTransactionLimit < totalVisibleCount else { return }
+        visibleTransactionLimit = min(
+            visibleTransactionLimit + TransactionsListPaging.increment,
+            totalVisibleCount
+        )
     }
 
     private func openTransactionEditorIfAllowed(_ transaction: LedgerTransaction) {
@@ -922,6 +984,16 @@ private struct TransactionLiveSummaryCard: View {
                 }
             }
         }
+    }
+}
+
+private struct TransactionListPagingSentinel: View {
+    var body: some View {
+        ProgressView()
+            .controlSize(.small)
+            .frame(maxWidth: .infinity)
+            .frame(height: 34)
+            .accessibilityLabel(mistiaLocalized(vi: "Đang tải thêm giao dịch", en: "Loading more transactions", ja: "さらに取引を読み込み中"))
     }
 }
 

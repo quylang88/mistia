@@ -89,7 +89,7 @@ struct TransactionEditorSheet: View {
     private var transactionAuditRecords: [TransactionAuditRecord]
     @Query(filter: #Predicate<LedgerTransaction> {
         $0.entryStatusRawValue == "posted" && !$0.isArchived && $0.deletedAt == nil
-    })
+    }, sort: \LedgerTransaction.occurredAt, order: .reverse)
     private var postedTransactions: [LedgerTransaction]
     @Query(filter: #Predicate<DueOccurrenceRecord> { $0.deletedAt == nil })
     private var storedDueOccurrences: [DueOccurrenceRecord]
@@ -116,6 +116,7 @@ struct TransactionEditorSheet: View {
     @State private var shouldDeleteReceiptOnSave = false
     @State private var receiptImageSource: TransactionReceiptImageSource?
     @State private var receiptPreview: TransactionReceiptPreviewItem?
+    @State private var receiptLoadTask: Task<Void, Never>?
     @State private var isAnalyzingReceipt = false
     @State private var receiptAnalysisQuota: ReceiptAnalysisQuota?
     @State private var didLoadReceiptDraft = false
@@ -303,13 +304,18 @@ struct TransactionEditorSheet: View {
             clearMismatchedCategoryForSelectedWallet()
         }
         .onAppear {
-            loadReceiptDraftIfNeeded()
-            scheduleTitleSuggestionsRefresh()
-            presentInitialReceiptScannerIfNeeded()
+            Task { @MainActor in
+                await Task.yield()
+                loadReceiptDraftIfNeeded()
+                scheduleTitleSuggestionsRefresh()
+                presentInitialReceiptScannerIfNeeded()
+            }
         }
         .onDisappear {
             titleSuggestionRefreshTask?.cancel()
             titleSuggestionRefreshTask = nil
+            receiptLoadTask?.cancel()
+            receiptLoadTask = nil
         }
     }
     private func archiveTransaction() {
@@ -718,13 +724,14 @@ struct TransactionEditorSheet: View {
     private func refreshTitleSuggestionsNow() {
         guard titleFieldPlaceholder != nil,
               focusedField == .title,
-              !suppressTitleSuggestions else {
+              !suppressTitleSuggestions,
+              draft.title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false else {
             cachedTitleSuggestions = []
             return
         }
 
         cachedTitleSuggestions = TransactionLogic.titleSuggestions(
-            from: visiblePostedTransactions.map(\.snapshot),
+            from: visiblePostedTransactions.prefix(500).map(\.snapshot),
             query: draft.title,
             primaryKind: draft.primaryKind,
             transferSubtype: draft.primaryKind == .transfer ? draft.transferSubtype : nil,
@@ -1002,24 +1009,53 @@ struct TransactionEditorSheet: View {
         do {
             let store = TransactionReceiptImageStore()
             guard let receipt = try store.receipt(for: transaction.id, context: modelContext) else { return }
-            let imageData = try store.imageData(for: receipt)
-            let thumbnailData = try store.thumbnailData(for: receipt)
-            guard
-                let previewImage = UIImage(data: imageData),
-                let thumbnailImage = UIImage(data: thumbnailData)
-            else {
-                return
-            }
+            let imageURL = store.url(forFileName: receipt.imageFileName)
+            let thumbnailURL = store.url(forFileName: receipt.thumbnailFileName)
+            let contentType = receipt.contentType
 
-            receiptDraft = TransactionReceiptDraft(
-                imageData: imageData,
-                thumbnailData: thumbnailData,
-                contentType: receipt.contentType,
-                previewImage: previewImage,
-                thumbnailImage: thumbnailImage,
-                isChanged: false
-            )
-            shouldDeleteReceiptOnSave = false
+            receiptLoadTask?.cancel()
+            receiptLoadTask = Task { @MainActor in
+                let dataResult = await Task.detached(priority: .utility) {
+                    do {
+                        return Result<(Data, Data), Error>.success((
+                            try Data(contentsOf: imageURL),
+                            try Data(contentsOf: thumbnailURL)
+                        ))
+                    } catch {
+                        return Result<(Data, Data), Error>.failure(error)
+                    }
+                }.value
+
+                guard !Task.isCancelled else { return }
+                receiptLoadTask = nil
+
+                switch dataResult {
+                case .success(let payload):
+                    let (imageData, thumbnailData) = payload
+                    guard
+                        let previewImage = UIImage(data: imageData),
+                        let thumbnailImage = UIImage(data: thumbnailData)
+                    else {
+                        return
+                    }
+
+                    receiptDraft = TransactionReceiptDraft(
+                        imageData: imageData,
+                        thumbnailData: thumbnailData,
+                        contentType: contentType,
+                        previewImage: previewImage,
+                        thumbnailImage: thumbnailImage,
+                        isChanged: false
+                    )
+                    shouldDeleteReceiptOnSave = false
+                case .failure(let error):
+                    alertMessage = mistiaLocalized(
+                        vi: "Không thể mở ảnh bill đã lưu.",
+                        en: "Couldn't load the saved receipt image.",
+                        ja: "保存済みのレシート画像を読み込めません。"
+                    ) + " \(error.localizedDescription)"
+                }
+            }
         } catch {
             alertMessage = mistiaLocalized(
                 vi: "Không thể mở ảnh bill đã lưu.",

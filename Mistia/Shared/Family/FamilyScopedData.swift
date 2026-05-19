@@ -1,6 +1,38 @@
 import SwiftUI
 
 enum FamilyScopedData {
+    struct ScopeSnapshot {
+        let subjectUserID: UUID?
+        let signedInUserID: UUID?
+        private let ownersByEntity: [MistiaSyncEntity: [UUID: UUID]]
+
+        init(
+            scopes: [OwnedRecordScope],
+            familyContextStore: FamilyContextStore,
+            sessionStore: SessionStore
+        ) {
+            self.subjectUserID = familyContextStore.selectedSubjectUserID ?? sessionStore.activeLocalProfileUserID
+            self.signedInUserID = sessionStore.activeLocalProfileUserID
+
+            var latestOwners: [MistiaSyncEntity: [UUID: (ownerUserID: UUID, updatedAt: Date)]] = [:]
+            for scope in scopes {
+                let entity = scope.entity
+                if let existing = latestOwners[entity]?[scope.recordID],
+                   existing.updatedAt > scope.updatedAt {
+                    continue
+                }
+                latestOwners[entity, default: [:]][scope.recordID] = (scope.ownerUserID, scope.updatedAt)
+            }
+            self.ownersByEntity = latestOwners.mapValues { owners in
+                owners.mapValues(\.ownerUserID)
+            }
+        }
+
+        func ownerMap(for entity: MistiaSyncEntity) -> [UUID: UUID] {
+            ownersByEntity[entity] ?? [:]
+        }
+    }
+
     static func visible<Record: MistiaOwnedRecord>(
         _ records: [Record],
         entity: MistiaSyncEntity,
@@ -8,14 +40,30 @@ enum FamilyScopedData {
         familyContextStore: FamilyContextStore,
         sessionStore: SessionStore
     ) -> [Record] {
-        let ownerMap = MistiaRecordOwnershipStore.ownerMap(from: scopes, entity: entity)
+        visible(
+            records,
+            entity: entity,
+            scopeSnapshot: ScopeSnapshot(
+                scopes: scopes,
+                familyContextStore: familyContextStore,
+                sessionStore: sessionStore
+            )
+        )
+    }
+
+    static func visible<Record: MistiaOwnedRecord>(
+        _ records: [Record],
+        entity: MistiaSyncEntity,
+        scopeSnapshot: ScopeSnapshot
+    ) -> [Record] {
+        let ownerMap = scopeSnapshot.ownerMap(for: entity)
 
         return MistiaRecordOwnershipStore.visibleRecords(
             records,
             entity: entity,
             ownerMap: ownerMap,
-            subjectUserID: familyContextStore.selectedSubjectUserID ?? sessionStore.activeLocalProfileUserID,
-            signedInUserID: sessionStore.activeLocalProfileUserID
+            subjectUserID: scopeSnapshot.subjectUserID,
+            signedInUserID: scopeSnapshot.signedInUserID
         )
     }
 
@@ -49,18 +97,33 @@ enum FamilyScopedData {
 
     static func visibleTransactionsForHistory(
         _ transactions: [LedgerTransaction],
-        audits _: [TransactionAuditRecord],
+        audits: [TransactionAuditRecord],
         scopes: [OwnedRecordScope],
         familyContextStore: FamilyContextStore,
         sessionStore: SessionStore
     ) -> [LedgerTransaction] {
-        guard let subjectUserID = familyContextStore.selectedSubjectUserID ?? sessionStore.activeLocalProfileUserID else {
+        visibleTransactionsForHistory(
+            transactions,
+            audits: audits,
+            scopeSnapshot: ScopeSnapshot(
+                scopes: scopes,
+                familyContextStore: familyContextStore,
+                sessionStore: sessionStore
+            )
+        )
+    }
+
+    static func visibleTransactionsForHistory(
+        _ transactions: [LedgerTransaction],
+        audits _: [TransactionAuditRecord],
+        scopeSnapshot: ScopeSnapshot
+    ) -> [LedgerTransaction] {
+        guard let subjectUserID = scopeSnapshot.subjectUserID else {
             return transactions
         }
 
-        let walletOwnerMap = MistiaRecordOwnershipStore.ownerMap(from: scopes, entity: .wallet)
-        let transactionOwnerMap = MistiaRecordOwnershipStore.ownerMap(from: scopes, entity: .transaction)
-
+        let walletOwnerMap = scopeSnapshot.ownerMap(for: .wallet)
+        let transactionOwnerMap = scopeSnapshot.ownerMap(for: .transaction)
         return transactions.filter { transaction in
             guard transaction.deletedAt == nil, !transaction.isArchived else {
                 return false
@@ -79,13 +142,26 @@ enum FamilyScopedData {
         familyContextStore: FamilyContextStore,
         sessionStore: SessionStore
     ) -> [LedgerTransaction] {
-        guard let subjectUserID = familyContextStore.selectedSubjectUserID ?? sessionStore.activeLocalProfileUserID else {
+        visibleTransactionsForFinancial(
+            transactions,
+            scopeSnapshot: ScopeSnapshot(
+                scopes: scopes,
+                familyContextStore: familyContextStore,
+                sessionStore: sessionStore
+            )
+        )
+    }
+
+    static func visibleTransactionsForFinancial(
+        _ transactions: [LedgerTransaction],
+        scopeSnapshot: ScopeSnapshot
+    ) -> [LedgerTransaction] {
+        guard let subjectUserID = scopeSnapshot.subjectUserID else {
             return transactions
         }
 
-        let walletOwnerMap = MistiaRecordOwnershipStore.ownerMap(from: scopes, entity: .wallet)
-        let transactionOwnerMap = MistiaRecordOwnershipStore.ownerMap(from: scopes, entity: .transaction)
-
+        let walletOwnerMap = scopeSnapshot.ownerMap(for: .wallet)
+        let transactionOwnerMap = scopeSnapshot.ownerMap(for: .transaction)
         return transactions.filter { transaction in
             guard transaction.deletedAt == nil, !transaction.isArchived else {
                 return false

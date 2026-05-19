@@ -77,6 +77,12 @@ private enum OverviewAlertPresentation: Identifiable {
     }
 }
 
+private struct OverviewRenderSnapshot {
+    let dashboard: OverviewDashboardSnapshot
+    let transactionsByID: [UUID: LedgerTransaction]
+    let postedExpenseTransactionsByDay: [Date: [LedgerTransaction]]
+}
+
 struct OverviewView: View {
     @Environment(\.calendar) private var calendar
     @Environment(\.modelContext) private var modelContext
@@ -94,7 +100,7 @@ struct OverviewView: View {
     private var storedOccurrences: [DueOccurrenceRecord]
     @Query(filter: #Predicate<LedgerWallet> { $0.deletedAt == nil })
     private var storedWallets: [LedgerWallet]
-    @Query(filter: #Predicate<LedgerTransaction> { $0.deletedAt == nil })
+    @Query(filter: #Predicate<LedgerTransaction> { $0.deletedAt == nil && !$0.isArchived })
     private var storedTransactions: [LedgerTransaction]
     @Query private var ownershipScopes: [OwnedRecordScope]
 
@@ -114,6 +120,112 @@ struct OverviewView: View {
 
     private var currentMonth: Date {
         PlanningLogic.startOfMonth(for: .now, calendar: calendar)
+    }
+
+    private var renderSnapshot: OverviewRenderSnapshot {
+        let scopeSnapshot = FamilyScopedData.ScopeSnapshot(
+            scopes: ownershipScopes,
+            familyContextStore: familyContextStore,
+            sessionStore: sessionStore
+        )
+        let visibleTransactions = FamilyScopedData.visibleTransactionsForFinancial(
+            storedTransactions,
+            scopeSnapshot: scopeSnapshot
+        )
+        let visibleWallets = FamilyScopedData.visible(
+            storedWallets,
+            entity: .wallet,
+            scopeSnapshot: scopeSnapshot
+        )
+        let visibleBudgets = FamilyScopedData.visible(
+            storedBudgets,
+            entity: .budgetPlan,
+            scopeSnapshot: scopeSnapshot
+        )
+        let visibleBills = FamilyScopedData.visible(
+            storedBills,
+            entity: .recurringBillPlan,
+            scopeSnapshot: scopeSnapshot
+        )
+        let visibleInstallments = FamilyScopedData.visible(
+            storedInstallments,
+            entity: .installmentPlan,
+            scopeSnapshot: scopeSnapshot
+        )
+        let visibleOccurrences = FamilyScopedData.visible(
+            storedOccurrences,
+            entity: .dueOccurrenceRecord,
+            scopeSnapshot: scopeSnapshot
+        )
+
+        let transactionRecords = visibleTransactions.map(\.planningRecordSnapshot)
+        let overviewTransactions = visibleTransactions.map(\.overviewSnapshot)
+        let occurrenceSnapshots = visibleOccurrences.map(\.planningSnapshot)
+        let creditCardAccounts = visibleWallets.compactMap {
+            $0.planningCreditCardSnapshot(records: transactionRecords)
+        }
+        let month = currentMonth
+        let activeBudgets = visibleBudgets
+            .filter {
+                !$0.isArchived
+                    && PlanningLogic.startOfMonth(for: $0.monthAnchor, calendar: calendar) == month
+            }
+            .map { $0.planningSnapshot(calendar: calendar) }
+        let creditCardDueItems = PlanningLogic.creditCardDueItems(
+            accounts: creditCardAccounts,
+            records: transactionRecords,
+            occurrences: occurrenceSnapshots,
+            selectedMonth: month,
+            referenceDate: .now,
+            calendar: calendar
+        )
+        let recurringDueItems = PlanningLogic.recurringBillDueItems(
+            bills: visibleBills
+                .filter { !$0.isArchived }
+                .map(\.planningSnapshot),
+            occurrences: occurrenceSnapshots,
+            selectedMonth: month,
+            calendar: calendar
+        )
+        let installmentDueItems = PlanningLogic.installmentDueItems(
+            plans: visibleInstallments
+                .filter { !$0.isArchived }
+                .map(\.planningSnapshot),
+            occurrences: occurrenceSnapshots,
+            selectedMonth: month,
+            calendar: calendar
+        )
+        let dashboard = OverviewLogic.dashboard(
+            wallets: visibleWallets.compactMap(\.overviewWalletSnapshot),
+            transactionRecords: transactionRecords,
+            transactions: overviewTransactions,
+            budgets: activeBudgets,
+            creditCardDues: creditCardDueItems,
+            recurringDues: recurringDueItems + installmentDueItems,
+            currencyCode: currencyCode,
+            referenceDate: .now,
+            calendar: calendar
+        )
+        let transactionsByID = Dictionary(
+            visibleTransactions.map { ($0.id, $0) },
+            uniquingKeysWith: { lhs, rhs in lhs.updatedAt >= rhs.updatedAt ? lhs : rhs }
+        )
+        let expenseTransactionsByDay = Dictionary(
+            grouping: visibleTransactions.filter { transaction in
+                transaction.entryStatus == .posted
+                    && TransactionLogic.isExpenseSpending(transaction.planningRecordSnapshot)
+            },
+            by: { calendar.startOfDay(for: $0.occurredAt) }
+        )
+        .mapValues { transactions in
+            transactions.sorted(by: sortTransactionsByRecency)
+        }
+
+        return OverviewRenderSnapshot(
+            dashboard: dashboard,
+            transactionsByID: transactionsByID,
+            postedExpenseTransactionsByDay: expenseTransactionsByDay
+        )
     }
 
     private var transactionsByID: [UUID: LedgerTransaction] {
@@ -290,9 +402,7 @@ struct OverviewView: View {
     }
 
     var body: some View {
-        let dashboardSnapshot = self.dashboardSnapshot
-        let transactionsByID = self.transactionsByID
-        let postedExpenseTransactionsByDay = self.postedExpenseTransactionsByDay
+        let renderSnapshot = self.renderSnapshot
 
         NavigationStack {
             MistiaPinnedTopBarScaffold(
@@ -314,22 +424,22 @@ struct OverviewView: View {
             ) {
                 FamilyContextChipBar()
                 OverviewHeroCard(
-                    snapshot: dashboardSnapshot.hero,
+                    snapshot: renderSnapshot.dashboard.hero,
                     isSheetPresented: selectedExpenseDay != nil,
                     onOpenExpenseDay: { date in
-                        openExpenseDay(date, transactionsByDay: postedExpenseTransactionsByDay)
+                        openExpenseDay(date, transactionsByDay: renderSnapshot.postedExpenseTransactionsByDay)
                     }
                 )
-                if !dashboardSnapshot.budgetAlerts.isEmpty {
-                    BudgetFocusSection(rows: dashboardSnapshot.budgetAlerts)
+                if !renderSnapshot.dashboard.budgetAlerts.isEmpty {
+                    BudgetFocusSection(rows: renderSnapshot.dashboard.budgetAlerts)
                 }
-                if !dashboardSnapshot.dueAlerts.isEmpty {
-                    UpcomingBillsSection(rows: dashboardSnapshot.dueAlerts) { row in
+                if !renderSnapshot.dashboard.dueAlerts.isEmpty {
+                    UpcomingBillsSection(rows: renderSnapshot.dashboard.dueAlerts) { row in
                         routeDueAlertTap(row)
                     }
                 }
-                RecentTransactionsSection(rows: dashboardSnapshot.recentTransactions) { row in
-                    guard let transaction = transactionsByID[row.id] else { return }
+                RecentTransactionsSection(rows: renderSnapshot.dashboard.recentTransactions) { row in
+                    guard let transaction = renderSnapshot.transactionsByID[row.id] else { return }
                     presentEditor(for: transaction)
                 }
             }
@@ -348,7 +458,7 @@ struct OverviewView: View {
         .sheet(item: $selectedExpenseDay) { selection in
             OverviewDayTransactionsSheet(
                 day: selection.date,
-                transactions: postedExpenseTransactionsByDay[selection.date] ?? [],
+                transactions: renderSnapshot.postedExpenseTransactionsByDay[selection.date] ?? [],
                 currencyCode: currencyCode,
                 onSelectTransaction: presentEditorFromDaySheet
             )

@@ -79,6 +79,12 @@ private enum ManagementAlertPresentation: Identifiable {
     }
 }
 
+private struct ManagementRenderSnapshot {
+    let activeWallets: [LedgerWallet]
+    let visiblePostedTransactions: [LedgerTransaction]
+    let visibleCategorySections: [TransactionCategoryGroupSection]
+}
+
 struct ManagementView: View {
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.modelContext) private var modelContext
@@ -123,6 +129,48 @@ struct ManagementView: View {
 
     private let profileLeadingVisualWidth: CGFloat = 50
     private let profileRowSpacing: CGFloat = 20
+
+    private var renderSnapshot: ManagementRenderSnapshot {
+        let scopeSnapshot = FamilyScopedData.ScopeSnapshot(
+            scopes: ownershipScopes,
+            familyContextStore: familyContextStore,
+            sessionStore: sessionStore
+        )
+        let visibleWallets = FamilyScopedData.visible(
+            storedWallets,
+            entity: .wallet,
+            scopeSnapshot: scopeSnapshot
+        )
+        let visibleCategories = FamilyScopedData.visible(
+            storedCategories,
+            entity: .category,
+            scopeSnapshot: scopeSnapshot
+        )
+        let visiblePostedTransactions = FamilyScopedData.visibleTransactionsForHistory(
+            postedTransactions,
+            audits: transactionAuditRecords,
+            scopeSnapshot: scopeSnapshot
+        )
+        let activeWallets = visibleWallets
+            .filter { !$0.isArchived }
+            .sorted {
+                if $0.sortOrder != $1.sortOrder {
+                    return $0.sortOrder < $1.sortOrder
+                }
+                return $0.createdAt < $1.createdAt
+            }
+
+        return ManagementRenderSnapshot(
+            activeWallets: activeWallets,
+            visiblePostedTransactions: visiblePostedTransactions,
+            visibleCategorySections: MistiaCategoryHierarchy.groupedSections(
+                from: visibleCategories,
+                kind: selectedCategoryKind,
+                includeArchived: false,
+                includeEmptyParents: true
+            )
+        )
+    }
 
     private var hasFamilyProfile: Bool {
         familyContextStore.family != nil && !familyContextStore.members.isEmpty
@@ -209,6 +257,8 @@ struct ManagementView: View {
     }
 
     var body: some View {
+        let renderSnapshot = self.renderSnapshot
+
         NavigationStack {
             MistiaPinnedTopBarScaffold(
                 tone: .muted,
@@ -222,8 +272,11 @@ struct ManagementView: View {
             ) {
                 FamilyContextChipBar()
                 profileSection
-                walletsSection
-                categoriesSection
+                walletsSection(
+                    activeWallets: renderSnapshot.activeWallets,
+                    visiblePostedTransactions: renderSnapshot.visiblePostedTransactions
+                )
+                categoriesSection(visibleCategorySections: renderSnapshot.visibleCategorySections)
             }
             .navigationDestination(item: $destination) { route in
                 switch route {
@@ -452,7 +505,10 @@ struct ManagementView: View {
         }
     }
 
-    private var walletsSection: some View {
+    private func walletsSection(
+        activeWallets: [LedgerWallet],
+        visiblePostedTransactions: [LedgerTransaction]
+    ) -> some View {
         ManagementSection(title: mistiaLocalized(vi: "Ví", en: "Wallets", ja: "ウォレット"), titleColor: sectionLabelColor) {
             ManagementCard(tint: cardTint) {
                 if activeWallets.isEmpty {
@@ -844,7 +900,9 @@ struct ManagementView: View {
         }
     }
 
-    private var categoriesSection: some View {
+    private func categoriesSection(
+        visibleCategorySections: [TransactionCategoryGroupSection]
+    ) -> some View {
         ManagementSection(title: mistiaLocalized(vi: "Danh mục", en: "Categories", ja: "カテゴリ"), titleColor: sectionLabelColor) {
             VStack(alignment: .leading, spacing: 12) {
                 ManagementCategoryKindPicker(selection: $selectedCategoryKind)

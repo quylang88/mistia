@@ -134,6 +134,23 @@ private enum PlanningAlertPresentation: Identifiable {
     }
 }
 
+private struct PlanningBudgetRenderSnapshot {
+    let summary: PlanningBudgetSummarySnapshot
+    let rows: [PlanningBudgetBranchRowSnapshot]
+}
+
+private struct PlanningGoalRenderSnapshot {
+    let summary: PlanningGoalSummarySnapshot
+    let rows: [PlanningGoalRowSnapshot]
+}
+
+private struct PlanningDueRenderSnapshot {
+    let summary: PlanningDueSummarySnapshot
+    let creditCards: [PlanningCreditCardAccountSnapshot]
+    let bills: [PlanningRecurringDueSnapshot]
+    let installments: [PlanningRecurringDueSnapshot]
+}
+
 struct PlanningView: View {
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.calendar) private var calendar
@@ -155,7 +172,7 @@ struct PlanningView: View {
     private var storedWallets: [LedgerWallet]
     @Query(filter: #Predicate<TransactionCategory> { $0.deletedAt == nil })
     private var storedCategories: [TransactionCategory]
-    @Query(filter: #Predicate<LedgerTransaction> { $0.deletedAt == nil })
+    @Query(filter: #Predicate<LedgerTransaction> { $0.deletedAt == nil && !$0.isArchived })
     private var storedTransactions: [LedgerTransaction]
     @Query private var ownershipScopes: [OwnedRecordScope]
     @AppStorage(MistiaAppStorageKey.currencyCode) private var currencyCode = "JPY"
@@ -198,6 +215,134 @@ struct PlanningView: View {
             return .info(infoAlert)
         }
         return nil
+    }
+
+    private func makeScopeSnapshot() -> FamilyScopedData.ScopeSnapshot {
+        FamilyScopedData.ScopeSnapshot(
+            scopes: ownershipScopes,
+            familyContextStore: familyContextStore,
+            sessionStore: sessionStore
+        )
+    }
+
+    private func budgetRenderSnapshot() -> PlanningBudgetRenderSnapshot {
+        let scopeSnapshot = makeScopeSnapshot()
+        let visibleBudgets = FamilyScopedData.visible(
+            storedBudgets,
+            entity: .budgetPlan,
+            scopeSnapshot: scopeSnapshot
+        )
+        let visibleTransactions = FamilyScopedData.visibleTransactionsForFinancial(
+            storedTransactions,
+            scopeSnapshot: scopeSnapshot
+        )
+        let transactionSnapshots = visibleTransactions.map(\.planningRecordSnapshot)
+        let activeBudgetPlans = visibleBudgets
+            .filter { !$0.isArchived && PlanningLogic.startOfMonth(for: $0.monthAnchor, calendar: calendar) == selectedMonth }
+            .map { $0.planningSnapshot(calendar: calendar) }
+        let rows = PlanningLogic.budgetBranchRows(
+            plans: activeBudgetPlans,
+            records: transactionSnapshots,
+            selectedMonth: selectedMonth,
+            referenceDate: .now,
+            calendar: calendar
+        )
+
+        return PlanningBudgetRenderSnapshot(
+            summary: PlanningLogic.budgetSummary(from: rows),
+            rows: rows
+        )
+    }
+
+    private func goalRenderSnapshot() -> PlanningGoalRenderSnapshot {
+        let scopeSnapshot = makeScopeSnapshot()
+        let visibleGoals = FamilyScopedData.visible(
+            storedGoals,
+            entity: .savingsGoal,
+            scopeSnapshot: scopeSnapshot
+        )
+        let rows = PlanningLogic.goalRows(
+            goals: visibleGoals
+                .filter { !$0.isArchived }
+                .map(\.planningSnapshot),
+            selectedMonth: selectedMonth,
+            calendar: calendar
+        )
+
+        return PlanningGoalRenderSnapshot(
+            summary: PlanningLogic.goalSummary(from: rows),
+            rows: rows
+        )
+    }
+
+    private func dueRenderSnapshot() -> PlanningDueRenderSnapshot {
+        let scopeSnapshot = makeScopeSnapshot()
+        let visibleTransactions = FamilyScopedData.visibleTransactionsForFinancial(
+            storedTransactions,
+            scopeSnapshot: scopeSnapshot
+        )
+        let visibleOccurrences = FamilyScopedData.visible(
+            storedOccurrences,
+            entity: .dueOccurrenceRecord,
+            scopeSnapshot: scopeSnapshot
+        )
+        let visibleWallets = FamilyScopedData.visible(
+            storedWallets,
+            entity: .wallet,
+            scopeSnapshot: scopeSnapshot
+        )
+        let visibleBills = FamilyScopedData.visible(
+            storedBills,
+            entity: .recurringBillPlan,
+            scopeSnapshot: scopeSnapshot
+        )
+        let visibleInstallments = FamilyScopedData.visible(
+            storedInstallments,
+            entity: .installmentPlan,
+            scopeSnapshot: scopeSnapshot
+        )
+        let transactionSnapshots = visibleTransactions.map(\.planningRecordSnapshot)
+        let occurrenceSnapshots = visibleOccurrences.map(\.planningSnapshot)
+        let creditCardAccounts = visibleWallets.compactMap {
+            $0.planningCreditCardSnapshot(records: transactionSnapshots)
+        }
+        let creditCardStatements = PlanningLogic.creditCardStatementsDue(
+            in: selectedMonth,
+            accounts: creditCardAccounts,
+            records: transactionSnapshots,
+            occurrences: occurrenceSnapshots,
+            referenceDate: .now,
+            calendar: calendar
+        )
+        let recurringBillDueItems = PlanningLogic.recurringBillDueItems(
+            bills: visibleBills
+                .filter { !$0.isArchived }
+                .map(\.planningSnapshot),
+            occurrences: occurrenceSnapshots,
+            selectedMonth: selectedMonth,
+            calendar: calendar
+        )
+        let installmentDueItems = PlanningLogic.installmentDueItems(
+            plans: visibleInstallments
+                .filter { !$0.isArchived }
+                .map(\.planningSnapshot),
+            occurrences: occurrenceSnapshots,
+            selectedMonth: selectedMonth,
+            calendar: calendar
+        )
+
+        return PlanningDueRenderSnapshot(
+            summary: PlanningLogic.dueSummary(
+                creditStatements: creditCardStatements,
+                recurring: recurringBillDueItems + installmentDueItems,
+                selectedMonth: selectedMonth,
+                referenceDate: .now,
+                calendar: calendar
+            ),
+            creditCards: creditCardAccounts,
+            bills: recurringBillDueItems,
+            installments: installmentDueItems
+        )
     }
 
     private var activeBudgetPlans: [BudgetPlanSnapshot] {
@@ -432,10 +577,11 @@ struct PlanningView: View {
             ) {
                 switch selectedMode {
                 case .budget:
+                    let tabSnapshot = budgetRenderSnapshot()
                     BudgetTabContent(
-                        summary: budgetSummary,
+                        summary: tabSnapshot.summary,
                         currencyCode: currencyCode,
-                        rows: budgetRows,
+                        rows: tabSnapshot.rows,
                         referenceDate: .now,
                         onAdd: {
                             openBudgetAddIfAllowed()
@@ -457,10 +603,11 @@ struct PlanningView: View {
                         }
                     )
                 case .goals:
+                    let tabSnapshot = goalRenderSnapshot()
                     GoalsTabContent(
-                        summary: goalSummary,
+                        summary: tabSnapshot.summary,
                         currencyCode: currencyCode,
-                        rows: goalRows,
+                        rows: tabSnapshot.rows,
                         onAdd: {
                             openGoalAddIfAllowed()
                         },
@@ -471,13 +618,14 @@ struct PlanningView: View {
                         }
                     )
                 case .due:
+                    let tabSnapshot = dueRenderSnapshot()
                     DueTabContent(
                         selectedMode: $selectedDueMode,
-                        summary: dueSummary,
+                        summary: tabSnapshot.summary,
                         currencyCode: currencyCode,
-                        creditCards: creditCardAccounts,
-                        bills: recurringBillDueItems,
-                        installments: installmentDueItems,
+                        creditCards: tabSnapshot.creditCards,
+                        bills: tabSnapshot.bills,
+                        installments: tabSnapshot.installments,
                         referenceDate: .now,
                         onAddCreditCard: {
                             openCreditCardAddIfAllowed()

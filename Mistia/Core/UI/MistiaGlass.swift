@@ -477,7 +477,7 @@ struct MistiaPinnedTopBarScaffold<PinnedHeader: View, Content: View, TrailingAcc
 
     private var baseScrollableContent: some View {
         ScrollView(.vertical, showsIndicators: false) {
-            VStack(spacing: contentSpacing) {
+            LazyVStack(spacing: contentSpacing) {
                 content
             }
             .frame(maxWidth: .infinity)
