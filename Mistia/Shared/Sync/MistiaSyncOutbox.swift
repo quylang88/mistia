@@ -63,6 +63,16 @@ struct MistiaSyncMutation: Codable, Hashable, Identifiable {
     var id: String {
         "\(entity.rawValue):\(recordID.uuidString)"
     }
+
+    private enum CodingKeys: String, CodingKey {
+        case entity
+        case recordID = "recordId"
+        case subjectUserID = "subjectUserId"
+        case kind
+        case modifiedAt
+        case baseVersion
+        case deviceID = "deviceId"
+    }
 }
 
 final class MistiaSyncOutbox {

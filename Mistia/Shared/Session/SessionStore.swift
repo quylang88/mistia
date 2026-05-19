@@ -425,6 +425,7 @@ final class SessionStore {
             pendingInitialSyncChoice = nil
         }
         updateAutoSyncLoopState()
+        scheduleFamilyOwnerOutboxRecoveryIfNeeded()
 
         guard shouldRunForegroundCatchUp() else { return }
         Task {
@@ -437,6 +438,9 @@ final class SessionStore {
     }
 
     func handleBackgroundRefresh() async -> Bool {
+        if hasQueuedFamilyOwnerMutations() {
+            _ = await flushQueuedFamilyOwnerPushIfAllowed()
+        }
         guard isReadyForAutomaticSync, !isSyncInFlight else { return false }
         return await runMergeSync(trigger: .backgroundRefresh, showProgress: false)
     }
@@ -822,15 +826,7 @@ final class SessionStore {
     func syncFamilyActivityChanges() async -> Bool {
         guard currentSession != nil else { return false }
 
-        if isSyncInFlight {
-            for _ in 0..<20 {
-                try? await Task.sleep(for: .milliseconds(250))
-                guard currentSession != nil else { return false }
-                if !isSyncInFlight {
-                    break
-                }
-            }
-        }
+        await waitForCurrentSyncToFinish()
 
         guard !isSyncInFlight else { return false }
 
@@ -845,6 +841,9 @@ final class SessionStore {
     }
 
     func pushQueuedFamilyOwnerChangesNow() async -> Bool {
+        guard currentSession != nil else { return false }
+        await waitForCurrentSyncToFinish()
+        guard !isSyncInFlight else { return false }
         return await flushQueuedFamilyOwnerPushIfAllowed()
     }
 
@@ -1052,6 +1051,7 @@ final class SessionStore {
             updateAutoSyncLoopState()
         case .connected:
             updateAutoSyncLoopState()
+            scheduleFamilyOwnerOutboxRecoveryIfNeeded()
             guard wasOffline, currentSession != nil else { return }
 
             reconnectValidationTask?.cancel()
@@ -1683,6 +1683,7 @@ final class SessionStore {
         guard canPerformRemoteActions else {
             applySignedInOfflineState()
             updateAutoSyncLoopState()
+            scheduleFamilyOwnerOutboxRecoveryIfNeeded()
             return
         }
 
@@ -1803,6 +1804,7 @@ final class SessionStore {
         )
         syncStatusSystemImage = "checkmark.circle"
         updateAutoSyncLoopState()
+        scheduleFamilyOwnerOutboxRecoveryIfNeeded()
     }
 
     private func applySignedInOfflineState() {
@@ -2500,6 +2502,9 @@ final class SessionStore {
 
         do {
             let validSession = try await prepareRemoteSession()
+            let pushedFamilyOwnerMutations = try await pushQueuedFamilyOwnerMutations(
+                session: validSession
+            )
             if normalizesBeforeSync {
                 try normalizeCategoryHierarchyIfNeeded()
             }
@@ -2528,7 +2533,13 @@ final class SessionStore {
                         ja: "重複の可能性がある取引を \(possibleDuplicateCount) 件検出したため, 両方のレコードを安全に保持しています。"
                     )
                 } else {
-                    syncStatusDetail = result.statusMessage
+                    syncStatusDetail = pushedFamilyOwnerMutations
+                        ? mistiaLocalized(
+                            vi: "Đã đẩy thay đổi ví thành viên lên cloud. \(result.statusMessage)",
+                            en: "Pushed member wallet changes to cloud. \(result.statusMessage)",
+                            ja: "メンバーのウォレット変更をクラウドへ反映しました。\(result.statusMessage)"
+                        )
+                        : result.statusMessage
                 }
                 syncStatusSystemImage = "checkmark.icloud"
             }
@@ -2584,6 +2595,9 @@ final class SessionStore {
 
         do {
             let validSession = try await prepareRemoteSession()
+            let pushedFamilyOwnerMutations = try await pushQueuedFamilyOwnerMutations(
+                session: validSession
+            )
             try normalizeCategoryHierarchyIfNeeded()
             let result: MistiaSyncResult
 
@@ -2676,7 +2690,13 @@ final class SessionStore {
                         ja: "重複の可能性がある取引を \(possibleDuplicateCount) 件検出したため, 両方のレコードを安全に保持しています。"
                     )
                 } else {
-                    syncStatusDetail = result.statusMessage
+                    syncStatusDetail = pushedFamilyOwnerMutations
+                        ? mistiaLocalized(
+                            vi: "Đã đẩy thay đổi ví thành viên lên cloud. \(result.statusMessage)",
+                            en: "Pushed member wallet changes to cloud. \(result.statusMessage)",
+                            ja: "メンバーのウォレット変更をクラウドへ反映しました。\(result.statusMessage)"
+                        )
+                        : result.statusMessage
                 }
                 syncStatusSystemImage = "checkmark.icloud"
             }
@@ -2840,6 +2860,29 @@ final class SessionStore {
         }
     }
 
+    private func waitForCurrentSyncToFinish() async {
+        guard isSyncInFlight else { return }
+        for _ in 0..<20 {
+            try? await Task.sleep(for: .milliseconds(250))
+            guard currentSession != nil else { return }
+            if !isSyncInFlight {
+                break
+            }
+        }
+    }
+
+    private func scheduleFamilyOwnerOutboxRecoveryIfNeeded() {
+        guard currentSession != nil,
+              isConfigured,
+              networkStatus != .disconnected,
+              !requiresInitialSync,
+              !requiresManualSyncAfterRestore,
+              hasQueuedFamilyOwnerMutations() else {
+            return
+        }
+        scheduleQueuedFamilyOwnerPushIfAllowed()
+    }
+
     private func scheduleQueuedSyncIfAllowed() {
         guard isAutoSyncEnabled, canManageSync, !requiresInitialSync, !requiresManualSyncAfterRestore else {
             return
@@ -2889,7 +2932,6 @@ final class SessionStore {
     }
 
     private func flushQueuedFamilyOwnerPushIfAllowed() async -> Bool {
-        guard pendingFamilyOwnerPush else { return false }
         guard currentSession != nil, isConfigured else {
             cancelQueuedFamilyOwnerPush()
             return false
@@ -2904,14 +2946,10 @@ final class SessionStore {
             return false
         }
 
-        let activeUserID = activeLocalProfileUserID ?? currentSession?.user.id
-        let mutations = syncCoordinator.queuedMutations().filter { mutation in
-            guard let activeUserID else { return false }
-            return mutation.subjectUserID != activeUserID
-        }
-        guard !mutations.isEmpty else {
+        guard hasQueuedFamilyOwnerMutations() else {
+            let wasPending = pendingFamilyOwnerPush
             cancelQueuedFamilyOwnerPush()
-            return true
+            return wasPending
         }
 
         pendingFamilyOwnerPush = false
@@ -2924,21 +2962,54 @@ final class SessionStore {
 
         do {
             let validSession = try await prepareRemoteSession()
-            _ = try await syncCoordinator.pushQueuedFamilyOwnerMutationsCloudFirst(
-                mutations,
-                session: validSession
-            )
+            _ = try await pushQueuedFamilyOwnerMutations(session: validSession)
             lastSyncAt = .now
             lastErrorMessage = nil
             return true
         } catch {
-            let remainingFamilyMutations = syncCoordinator.queuedMutations().contains { mutation in
-                guard let activeUserID else { return false }
-                return mutation.subjectUserID != activeUserID
-            }
-            pendingFamilyOwnerPush = remainingFamilyMutations
+            pendingFamilyOwnerPush = hasQueuedFamilyOwnerMutations()
             applySyncErrorState(error)
             return false
+        }
+    }
+
+    private func queuedFamilyOwnerMutations(
+        activeUserID: UUID? = nil
+    ) -> [MistiaSyncMutation] {
+        let resolvedActiveUserID = activeUserID ?? activeLocalProfileUserID ?? currentSession?.user.id
+        guard let resolvedActiveUserID else { return [] }
+        return syncCoordinator.queuedMutations().filter { mutation in
+            mutation.subjectUserID != resolvedActiveUserID
+        }
+    }
+
+    private func hasQueuedFamilyOwnerMutations(
+        activeUserID: UUID? = nil
+    ) -> Bool {
+        !queuedFamilyOwnerMutations(activeUserID: activeUserID).isEmpty
+    }
+
+    private func pushQueuedFamilyOwnerMutations(
+        session: SupabaseAuthSession
+    ) async throws -> Bool {
+        let mutations = queuedFamilyOwnerMutations(activeUserID: session.user.id)
+        guard !mutations.isEmpty else {
+            cancelQueuedFamilyOwnerPush()
+            return false
+        }
+
+        pendingFamilyOwnerPush = false
+        queuedFamilyOwnerPushTask = nil
+        do {
+            _ = try await syncCoordinator.pushQueuedFamilyOwnerMutationsCloudFirst(
+                mutations,
+                session: session
+            )
+            pendingFamilyOwnerPush = hasQueuedFamilyOwnerMutations(activeUserID: session.user.id)
+            return true
+        } catch {
+            pendingFamilyOwnerPush = hasQueuedFamilyOwnerMutations(activeUserID: session.user.id)
+            throw error
         }
     }
 

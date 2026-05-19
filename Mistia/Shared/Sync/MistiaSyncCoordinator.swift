@@ -356,16 +356,6 @@ final class SyncCoordinator {
 
         for ownerID in ownerIDs {
             let ownerMutations = groupedByOwner[ownerID] ?? []
-            let initialSnapshot = try await fetchReconciledSnapshot(session: session, subjectUserID: ownerID)
-            // Keep cached category dependencies alive until queued family mutations have
-            // a chance to seed or validate them against the owner's cloud.
-            try applyFamilyOwnerSnapshot(
-                initialSnapshot,
-                ownerUserID: ownerID,
-                viewerUserID: session.user.id,
-                prunesStaleCategories: false
-            )
-
             for mutation in sortedMutationsForPush(ownerMutations) {
                 switch mutation.kind {
                 case .upsert:
@@ -378,9 +368,6 @@ final class SyncCoordinator {
                     }
                 }
             }
-
-            let latestSnapshot = try await fetchReconciledSnapshot(session: session, subjectUserID: ownerID)
-            try applyFamilyOwnerSnapshot(latestSnapshot, ownerUserID: ownerID, viewerUserID: session.user.id)
         }
 
         return pushedMutations
@@ -681,13 +668,6 @@ final class SyncCoordinator {
             outbox.remove(mutation)
             return false
         }
-        try await ensureRemoteCategoryDependenciesExistIfNeeded(
-            for: localRecord,
-            subjectUserID: mutation.subjectUserID,
-            session: session,
-            localUserID: session.user.id
-        )
-
         let remoteRecord = try await remoteStore.fetchRecord(
             entity: mutation.entity,
             recordID: localRecord.id,
@@ -1357,22 +1337,6 @@ final class SyncCoordinator {
             in: modelContainer
         )
         lastSnapshotFingerprint = snapshot.fingerprint
-    }
-
-    private func applyFamilyOwnerSnapshot(
-        _ snapshot: MistiaRemoteSnapshot,
-        ownerUserID: UUID,
-        viewerUserID: UUID,
-        prunesStaleCategories: Bool = true
-    ) throws {
-        try MistiaSyncLocalStore.applySnapshotIncrementally(
-            snapshot,
-            shouldPruneMissing: false,
-            protectedRecordIDs: queuedMutationIDs(),
-            familyCategoryScopedTo: viewerUserID,
-            familyCategoryPruneOwnerIDs: prunesStaleCategories ? [ownerUserID] : [],
-            in: modelContainer
-        )
     }
 
     private func resolveConflictingRecords(
