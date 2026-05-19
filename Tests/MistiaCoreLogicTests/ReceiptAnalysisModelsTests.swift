@@ -86,6 +86,26 @@ final class ReceiptAnalysisModelsTests: XCTestCase {
         XCTAssertEqual(result.missingFields, ["categoryID"])
     }
 
+    func testDecodesReceiptDateWithHourAndMinute() throws {
+        let result = try decode("""
+        {
+          "merchant_name": "Lawson",
+          "total_minor": 980,
+          "currency_code": "JPY",
+          "occurred_at": "2026-05-19T21:34",
+          "category_id": null,
+          "wallet_id": null,
+          "confidence": 0.82,
+          "missing_fields": ["categoryID", "walletID"],
+          "raw_text": "2026年5月19日 21:34"
+        }
+        """)
+
+        let components = Calendar.current.dateComponents([.hour, .minute], from: try XCTUnwrap(result.occurredAt))
+        XCTAssertEqual(components.hour, 21)
+        XCTAssertEqual(components.minute, 34)
+    }
+
     func testValidationRemovesIDsOutsideCandidateLists() throws {
         let unknownCategoryID = UUID(uuidString: "33333333-3333-3333-3333-333333333333")!
         let unknownWalletID = UUID(uuidString: "44444444-4444-4444-4444-444444444444")!

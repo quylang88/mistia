@@ -1145,6 +1145,7 @@ struct TransactionEditorSheet: View {
             imageBase64: receiptDraft.imageData.base64EncodedString(),
             mimeType: receiptDraft.contentType,
             localeIdentifier: Locale.current.identifier,
+            timeZoneIdentifier: TimeZone.autoupdatingCurrent.identifier,
             currencyCode: currencyCode,
             categories: categories,
             wallets: wallets

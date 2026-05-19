@@ -34,6 +34,7 @@ struct ReceiptAnalysisRequestPayload: Codable, Equatable {
     let imageBase64: String
     let mimeType: String
     let localeIdentifier: String
+    let timeZoneIdentifier: String
     let currencyCode: String
     let categories: [ReceiptAnalysisCategoryCandidate]
     let wallets: [ReceiptAnalysisWalletCandidate]
@@ -42,6 +43,7 @@ struct ReceiptAnalysisRequestPayload: Codable, Equatable {
         case imageBase64 = "image_base64"
         case mimeType = "mime_type"
         case localeIdentifier = "locale_identifier"
+        case timeZoneIdentifier = "time_zone_identifier"
         case currencyCode = "currency_code"
         case categories
         case wallets
@@ -264,6 +266,18 @@ private extension KeyedDecodingContainer where K == ReceiptAnalysisResult.Coding
         if let date = ISO8601DateFormatter.mistiaSyncWithFractionalSeconds.date(from: value)
             ?? ISO8601DateFormatter.mistiaSyncWithoutFractionalSeconds.date(from: value) {
             return date
+        }
+
+        let dateTimeFormatter = DateFormatter()
+        dateTimeFormatter.calendar = Calendar(identifier: .gregorian)
+        dateTimeFormatter.locale = Locale(identifier: "en_US_POSIX")
+        dateTimeFormatter.timeZone = .current
+
+        for format in ["yyyy-MM-dd'T'HH:mm:ss", "yyyy-MM-dd'T'HH:mm", "yyyy-MM-dd HH:mm:ss", "yyyy-MM-dd HH:mm"] {
+            dateTimeFormatter.dateFormat = format
+            if let date = dateTimeFormatter.date(from: value) {
+                return date
+            }
         }
 
         let dateOnlyFormatter = DateFormatter()

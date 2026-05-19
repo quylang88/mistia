@@ -19,6 +19,7 @@ type ReceiptRequest = {
   image_base64?: string
   mime_type?: string
   locale_identifier?: string
+  time_zone_identifier?: string
   currency_code?: string
   categories?: Candidate[]
   wallets?: Candidate[]
@@ -32,6 +33,46 @@ type ReceiptQuota = {
   usage_date?: string
   reset_time_zone?: string
   retry_after?: string
+}
+
+const receiptResponseSchema = {
+  type: "OBJECT",
+  properties: {
+    merchant_name: { type: "STRING", nullable: true },
+    total_minor: { type: "INTEGER", nullable: true },
+    currency_code: { type: "STRING", nullable: true },
+    occurred_at: { type: "STRING", nullable: true },
+    category_id: { type: "STRING", nullable: true },
+    wallet_id: { type: "STRING", nullable: true },
+    confidence: { type: "NUMBER" },
+    missing_fields: {
+      type: "ARRAY",
+      items: { type: "STRING" },
+    },
+    raw_text: { type: "STRING", nullable: true },
+  },
+  required: [
+    "merchant_name",
+    "total_minor",
+    "currency_code",
+    "occurred_at",
+    "category_id",
+    "wallet_id",
+    "confidence",
+    "missing_fields",
+    "raw_text",
+  ],
+  propertyOrdering: [
+    "merchant_name",
+    "total_minor",
+    "currency_code",
+    "occurred_at",
+    "category_id",
+    "wallet_id",
+    "confidence",
+    "missing_fields",
+    "raw_text",
+  ],
 }
 
 function jsonResponse(payload: Record<string, unknown>, status = 200): Response {
@@ -90,6 +131,15 @@ function trimmedString(value: unknown): string | null {
   return trimmed.length > 0 ? trimmed : null
 }
 
+function valueFor(raw: Record<string, unknown>, ...keys: string[]): unknown {
+  for (const key of keys) {
+    if (Object.prototype.hasOwnProperty.call(raw, key)) {
+      return raw[key]
+    }
+  }
+  return undefined
+}
+
 function optionalID(value: unknown, allowedIDs: Set<string>): string | null {
   const id = trimmedString(value)
   if (!id || !allowedIDs.has(id)) return null
@@ -118,8 +168,9 @@ function optionalConfidence(value: unknown): number {
 }
 
 function missingFieldsFor(result: Record<string, unknown>): string[] {
-  const modelMissing = Array.isArray(result.missing_fields)
-    ? result.missing_fields
+  const missingValue = valueFor(result, "missing_fields", "missingFields")
+  const modelMissing = Array.isArray(missingValue)
+    ? missingValue
         .filter((field) => typeof field === "string")
         .map((field) => field.trim())
         .filter(Boolean)
@@ -159,7 +210,16 @@ function parseModelJSON(text: string): Record<string, unknown> {
     .replace(/^```\s*/i, "")
     .replace(/\s*```$/i, "")
     .trim()
-  return JSON.parse(trimmed) as Record<string, unknown>
+  try {
+    return JSON.parse(trimmed) as Record<string, unknown>
+  } catch {
+    const start = trimmed.indexOf("{")
+    const end = trimmed.lastIndexOf("}")
+    if (start >= 0 && end > start) {
+      return JSON.parse(trimmed.slice(start, end + 1)) as Record<string, unknown>
+    }
+    throw new Error("Model response did not contain a JSON object.")
+  }
 }
 
 function sanitizeAnalysis(
@@ -170,19 +230,34 @@ function sanitizeAnalysis(
   const categoryIDs = candidateIDSet(requestPayload.categories ?? [])
   const walletIDs = candidateIDSet(requestPayload.wallets ?? [])
   const result: Record<string, unknown> = {
-    merchant_name: trimmedString(modelResult.merchant_name),
-    total_minor: optionalTotalMinor(modelResult.total_minor),
-    currency_code: trimmedString(modelResult.currency_code)?.toUpperCase() ?? trimmedString(requestPayload.currency_code)?.toUpperCase() ?? null,
-    occurred_at: trimmedString(modelResult.occurred_at),
-    category_id: optionalID(modelResult.category_id, categoryIDs),
-    wallet_id: optionalID(modelResult.wallet_id, walletIDs),
-    confidence: optionalConfidence(modelResult.confidence),
-    raw_text: trimmedString(modelResult.raw_text)?.slice(0, 12000) ?? null,
+    merchant_name: trimmedString(valueFor(modelResult, "merchant_name", "merchantName")),
+    total_minor: optionalTotalMinor(valueFor(modelResult, "total_minor", "totalMinor", "total", "amount")),
+    currency_code: trimmedString(valueFor(modelResult, "currency_code", "currencyCode"))?.toUpperCase() ?? trimmedString(requestPayload.currency_code)?.toUpperCase() ?? null,
+    occurred_at: trimmedString(valueFor(modelResult, "occurred_at", "occurredAt", "date", "receipt_date")),
+    category_id: optionalID(valueFor(modelResult, "category_id", "categoryID", "categoryId"), categoryIDs),
+    wallet_id: optionalID(valueFor(modelResult, "wallet_id", "walletID", "walletId"), walletIDs),
+    confidence: optionalConfidence(valueFor(modelResult, "confidence", "score")),
+    raw_text: trimmedString(valueFor(modelResult, "raw_text", "rawText", "ocr_text", "ocrText"))?.slice(0, 12000) ?? null,
   }
 
   result.missing_fields = missingFieldsFor(result)
   result.quota = quota
   return result
+}
+
+function emptyAnalysis(requestPayload: ReceiptRequest, quota: ReceiptQuota, rawText: string | null = null): Record<string, unknown> {
+  return {
+    merchant_name: null,
+    total_minor: null,
+    currency_code: trimmedString(requestPayload.currency_code)?.toUpperCase() ?? "JPY",
+    occurred_at: null,
+    category_id: null,
+    wallet_id: null,
+    confidence: 0,
+    missing_fields: ["categoryID", "merchantName", "totalMinor", "walletID"],
+    raw_text: rawText,
+    quota,
+  }
 }
 
 function buildPrompt(payload: ReceiptRequest): string {
@@ -203,12 +278,26 @@ function buildPrompt(payload: ReceiptRequest): string {
   return [
     "You analyze a receipt image for a personal finance app.",
     "Return only JSON with snake_case keys: merchant_name, total_minor, currency_code, occurred_at, category_id, wallet_id, confidence, missing_fields, raw_text.",
+    "The receipt may be Japanese. Carefully read Japanese store names, dates, and totals.",
+    "The receipt may also be Vietnamese. Carefully read Vietnamese store names, dates, and totals.",
+    "For Japanese receipts, merchant_name is often near the top and may contain 店, 株式会社, コンビニ, スーパー, レストラン, カフェ, or brand text.",
+    "For Vietnamese receipts, merchant_name is often near the top and totals may be labeled Tổng cộng, Tổng thanh toán, Thành tiền, Tiền hàng, Thanh toán, or Khách phải trả.",
+    "For Japanese totals, prefer the final customer-paid amount labeled 合計, 税込合計, お買上計, 総合計, お支払金額, 領収金額, クレジット売上, or PayPay/電子マネー支払.",
+    "Do not use お預り, お釣り, 釣銭, 内税, 消費税, 小計, 値引, points, item count, or change as total_minor.",
+    "Do not use Tiền khách đưa, Tiền thừa, Thuế/VAT, Giảm giá, Tạm tính, điểm, item count, or change as total_minor.",
     "merchant_name must be the store or merchant name, not a generic item name.",
+    "Never translate, romanize, or localize merchant_name. Preserve the exact script printed on the receipt: Japanese stays Japanese, Vietnamese stays Vietnamese, Latin brand text stays Latin.",
+    "The user locale is only for date/time context and app display preferences; it must not change merchant_name.",
     "total_minor is the final payable total in minor units. For JPY, minor units are yen.",
-    "occurred_at must be ISO 8601 or yyyy-MM-dd if a receipt date is visible. Use null if unclear.",
+    "occurred_at must be machine-readable, not localized display text. The app will localize display using the user's device language.",
+    "If receipt date and time are visible, occurred_at must include the exact hour and minute: yyyy-MM-dd'T'HH:mm:ss±HH:mm. Use the user's time zone offset.",
+    "If seconds are not visible, use :00 seconds. If only a date is visible, use yyyy-MM-dd. Use null if unclear.",
+    "Japanese dates/times like 2026年5月19日 21時34分, 26/05/19 21:34, 2026/5/19 9:34午後 must be normalized.",
+    "Vietnamese dates/times like 19/05/2026 21:34, 19-05-26 9:34 CH, Ngày 19 tháng 5 năm 2026 must be normalized.",
     "category_id and wallet_id must be selected only from the candidate IDs below. Return null if there is not a confident match.",
+    "If the image is blurry or incomplete, return null for uncertain fields, confidence 0-0.4, and include missing field names. Do not fail or return prose.",
     "Do not invent IDs, wallets, categories, dates, or totals.",
-    `Locale: ${payload.locale_identifier ?? "unknown"}. Preferred currency: ${payload.currency_code ?? "JPY"}.`,
+    `User device locale: ${payload.locale_identifier ?? "unknown"}. User time zone: ${payload.time_zone_identifier ?? "Asia/Tokyo"}. Preferred currency: ${payload.currency_code ?? "JPY"}.`,
     `Category candidates: ${JSON.stringify(categories)}`,
     `Wallet candidates: ${JSON.stringify(wallets)}`,
   ].join("\n")
@@ -335,6 +424,7 @@ Deno.serve(async (request) => {
         generationConfig: {
           temperature: 0,
           responseMimeType: "application/json",
+          responseSchema: receiptResponseSchema,
         },
       }),
     }
@@ -353,15 +443,12 @@ Deno.serve(async (request) => {
 
   try {
     const modelText = extractModelText(geminiBody as Record<string, unknown>)
+    if (!modelText) {
+      return jsonResponse(emptyAnalysis(payload, quotaPayload))
+    }
     const modelResult = parseModelJSON(modelText)
     return jsonResponse(sanitizeAnalysis(modelResult, payload, quotaPayload))
   } catch (error) {
-    return jsonResponse(
-      {
-        message: "Gemini returned an invalid receipt analysis response.",
-        detail: error instanceof Error ? error.message : String(error),
-      },
-      502
-    )
+    return jsonResponse(emptyAnalysis(payload, quotaPayload, error instanceof Error ? error.message : String(error)))
   }
 })
