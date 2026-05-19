@@ -462,7 +462,7 @@ private extension MistiaSyncUploadRecord {
         case (.dueOccurrence(let local), .dueOccurrence(let remote)):
             return MistiaSyncConflictDifferenceBuilder.build {
                 field("sourceKind", mistiaLocalized(vi: "Nguồn", en: "Source", ja: "ソース"), local.sourceKindRawValue, remote.sourceKindRawValue)
-                field("source", mistiaLocalized(vi: "ID nguồn", en: "Source ID", ja: "ソースID"), uuid(local.sourceID), uuid(remote.sourceID))
+                field("source", mistiaLocalized(vi: "Nguồn", en: "Source", ja: "ソース"), uuid(local.sourceID), uuid(remote.sourceID))
                 field("month", mistiaLocalized(vi: "Tháng", en: "Month", ja: "月"), local.selectedMonthKey, remote.selectedMonthKey)
                 field("scheduled", mistiaLocalized(vi: "Ngày dự kiến", en: "Scheduled date", ja: "予定日"), date(local.scheduledDate), date(remote.scheduledDate))
                 field("amount", mistiaLocalized(vi: "Số tiền", en: "Amount", ja: "金額"), local.amountMinorSnapshot.map(number), remote.amountMinorSnapshot.map(number))
@@ -562,8 +562,12 @@ private func displayValue(_ value: String?) -> String {
     guard let value, !value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
         return mistiaLocalized(vi: "Chưa có", en: "None", ja: "なし")
     }
-    if let uuid = UUID(uuidString: value) {
-        return "ID \(String(uuid.uuidString.lowercased().prefix(8)))"
+    if UUID(uuidString: value) != nil {
+        return mistiaLocalized(
+            vi: "Không tìm thấy tên",
+            en: "Name unavailable",
+            ja: "名前なし"
+        )
     }
     return value
 }
@@ -687,8 +691,32 @@ private func rawPayloadFields(_ json: String) -> [String: String] {
 }
 
 private func readableFieldName(_ key: String) -> String {
-    key
+    switch key.lowercased() {
+    case "wallet_id":
+        return mistiaLocalized(vi: "Ví", en: "Wallet", ja: "ウォレット")
+    case "source_wallet_id":
+        return mistiaLocalized(vi: "Ví nguồn", en: "Source wallet", ja: "出金ウォレット")
+    case "destination_wallet_id":
+        return mistiaLocalized(vi: "Ví đích", en: "Destination wallet", ja: "入金ウォレット")
+    case "payment_wallet_id":
+        return mistiaLocalized(vi: "Ví thanh toán", en: "Payment wallet", ja: "支払いウォレット")
+    case "linked_wallet_id":
+        return mistiaLocalized(vi: "Ví liên kết", en: "Linked wallet", ja: "リンク済みウォレット")
+    case "category_id":
+        return mistiaLocalized(vi: "Danh mục", en: "Category", ja: "カテゴリ")
+    case "parent_category_id":
+        return mistiaLocalized(vi: "Danh mục cha", en: "Parent category", ja: "親カテゴリ")
+    case "transaction_id", "linked_transaction_id":
+        return mistiaLocalized(vi: "Giao dịch", en: "Transaction", ja: "取引")
+    case "source_id":
+        return mistiaLocalized(vi: "Nguồn", en: "Source", ja: "ソース")
+    default:
+        break
+    }
+
+    return key
         .split(separator: "_")
+        .filter { $0.lowercased() != "id" && $0.lowercased() != "uid" }
         .map { $0.prefix(1).uppercased() + $0.dropFirst() }
         .joined(separator: " ")
 }

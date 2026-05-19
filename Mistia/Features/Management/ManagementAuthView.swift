@@ -2226,7 +2226,13 @@ private struct ManagementSyncConflictSection: Identifiable {
     var title: String { entity.displayTitle }
 
     var systemImage: String {
-        switch entity {
+        entity.managementConflictSystemImageName
+    }
+}
+
+private extension MistiaSyncEntity {
+    var managementConflictSystemImageName: String {
+        switch self {
         case .wallet:
             return "wallet.pass.fill"
         case .creditCardProfile:
@@ -2274,6 +2280,36 @@ private struct ManagementSyncConflictCard: View {
         differences.map { referenceResolver.resolving($0) }
     }
 
+    private var visibleDifferences: [MistiaSyncConflictDifference] {
+        let userFacingDifferences = friendlyDifferences.filter { !isInternalConflictField($0.id) }
+        let semanticDifferences = userFacingDifferences.filter { !isMetadataConflictField($0.id) }
+        if !semanticDifferences.isEmpty {
+            return Array(semanticDifferences.prefix(3))
+        }
+        if !userFacingDifferences.isEmpty {
+            return Array(userFacingDifferences.prefix(2))
+        }
+        return []
+    }
+
+    private var recordTitle: String {
+        let localTitle = conflict.localRecordSummary.title.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !localTitle.isEmpty, localTitle != conflict.entity.displayTitle {
+            return localTitle
+        }
+
+        let remoteTitle = conflict.remoteRecordSummary.title.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !remoteTitle.isEmpty {
+            return remoteTitle
+        }
+
+        return conflict.entity.displayTitle
+    }
+
+    private var recordSubtitle: String {
+        conflict.entity.displayTitle
+    }
+
     private var referenceResolver: ManagementConflictReferenceResolver {
         ManagementConflictReferenceResolver(
             wallets: storedWallets,
@@ -2289,97 +2325,61 @@ private struct ManagementSyncConflictCard: View {
     }
 
     var body: some View {
-        MistiaGlassCard(cornerRadius: 24, tint: cardTint) {
-            VStack(alignment: .leading, spacing: 16) {
-                HStack(alignment: .top, spacing: 12) {
+        MistiaGlassCard(cornerRadius: 22, tint: cardTint) {
+            VStack(alignment: .leading, spacing: 14) {
+                HStack(alignment: .center, spacing: 12) {
                     ZStack {
                         Circle()
                             .fill(accent.opacity(colorScheme == .dark ? 0.20 : 0.13))
 
-                        Image(systemName: "arrow.triangle.2.circlepath.icloud.fill")
-                            .font(.system(size: 17, weight: .bold))
+                        Image(systemName: conflict.entity.managementConflictSystemImageName)
+                            .font(.system(size: 16, weight: .bold))
                             .foregroundStyle(accent)
                     }
-                    .frame(width: 38, height: 38)
+                    .frame(width: 36, height: 36)
 
-                    VStack(alignment: .leading, spacing: 6) {
-                        HStack(spacing: 8) {
-                            Text(conflict.conflictKind.localizedTitle)
-                                .font(.system(size: 15.5, weight: .bold, design: .rounded))
-                                .foregroundStyle(.primary)
-                                .fixedSize(horizontal: false, vertical: true)
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text(recordTitle)
+                            .font(.system(size: 16, weight: .semibold, design: .rounded))
+                            .foregroundStyle(.primary)
+                            .lineLimit(2)
+                            .fixedSize(horizontal: false, vertical: true)
 
-                            Spacer(minLength: 8)
-
-                            Text("#\(String(conflict.recordID.uuidString.prefix(6)).lowercased())")
-                                .font(.system(size: 11.5, weight: .bold, design: .rounded))
-                                .foregroundStyle(accent)
-                                .padding(.horizontal, 8)
-                                .padding(.vertical, 4)
-                                .background(accent.opacity(0.12), in: Capsule())
-                        }
-
-                        Text(
-                            mistiaLocalized(
-                                vi: "Chọn Local sẽ đẩy bản trên máy lên cloud. Chọn Cloud sẽ kéo bản cloud về máy.",
-                                en: "Choosing Local pushes this device's record to cloud. Choosing Cloud pulls the cloud record to this device.",
-                                ja: "Local を選ぶとこの端末の内容をクラウドへ反映します。Cloud を選ぶとクラウドの内容をこの端末へ反映します。"
-                            )
-                        )
-                        .font(.system(size: 12.5, weight: .medium, design: .rounded))
-                        .foregroundStyle(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
+                        Text(recordSubtitle)
+                            .font(.system(size: 12.5, weight: .medium, design: .rounded))
+                            .foregroundStyle(.secondary)
                     }
+
+                    Spacer(minLength: 8)
                 }
 
-                HStack(spacing: 10) {
-                    ManagementConflictEndpointPreview(
-                        title: mistiaLocalized(vi: "Local", en: "Local", ja: "Local"),
-                        summary: conflict.localRecordSummary,
-                        systemImage: "iphone",
-                        accent: accent,
-                        isProminent: true
-                    )
-
-                    ManagementConflictEndpointPreview(
-                        title: mistiaLocalized(vi: "Cloud", en: "Cloud", ja: "Cloud"),
-                        summary: conflict.remoteRecordSummary,
-                        systemImage: "icloud.fill",
-                        accent: accent,
-                        isProminent: false
-                    )
-                }
-
-                VStack(alignment: .leading, spacing: 10) {
-                    Text(mistiaLocalized(vi: "Cloud khác local ở", en: "Cloud differs from local in", ja: "Cloud と Local の差分"))
-                        .font(.system(size: 13, weight: .bold, design: .rounded))
-                        .foregroundStyle(.secondary)
-
-                    if friendlyDifferences.isEmpty {
+                VStack(spacing: 0) {
+                    if visibleDifferences.isEmpty {
                         Text(
                             mistiaLocalized(
-                                vi: "Hai payload giống nhau ở các field Mistia đang theo dõi. Bạn có thể chọn bản mới hơn theo thông tin cập nhật ở trên.",
-                                en: "The tracked fields match. Use the record details above to choose the newer version.",
-                                ja: "追跡対象のフィールドは一致しています。上のレコード情報で新しい方を選択してください。"
+                                vi: "Conflict ở thời điểm cập nhật.",
+                                en: "Conflict in update timing.",
+                                ja: "更新タイミングで競合しています。"
                             )
                         )
                         .font(.system(size: 13, weight: .medium, design: .rounded))
                         .foregroundStyle(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                        .padding(12)
                         .frame(maxWidth: .infinity, alignment: .leading)
-                        .background(Color(UIColor.tertiarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+                        .padding(.vertical, 10)
                     } else {
-                        VStack(spacing: 8) {
-                            ForEach(friendlyDifferences) { difference in
-                                ManagementConflictDifferenceRow(
-                                    difference: difference,
-                                    accent: accent
-                                )
+                        ForEach(Array(visibleDifferences.enumerated()), id: \.element.id) { index, difference in
+                            ManagementConflictCompactDifferenceRow(difference: difference)
+
+                            if index < visibleDifferences.count - 1 {
+                                Divider()
+                                    .padding(.leading, 92)
                             }
                         }
                     }
                 }
+                .padding(.horizontal, 12)
+                .padding(.vertical, 4)
+                .background(Color(UIColor.tertiarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
 
                 ViewThatFits(in: .horizontal) {
                     HStack(spacing: 10) {
@@ -2401,7 +2401,7 @@ private struct ManagementSyncConflictCard: View {
             onResolve(.useLocal)
         } label: {
             Label(
-                mistiaLocalized(vi: "Đẩy local lên cloud", en: "Push local to cloud", ja: "Local を Cloud へ反映"),
+                mistiaLocalized(vi: "Dùng local", en: "Use local", ja: "Local を使用"),
                 systemImage: "icloud.and.arrow.up.fill"
             )
             .frame(maxWidth: .infinity)
@@ -2414,7 +2414,7 @@ private struct ManagementSyncConflictCard: View {
             onResolve(.useRemote)
         } label: {
             Label(
-                mistiaLocalized(vi: "Lấy cloud về máy", en: "Pull cloud to device", ja: "Cloud を端末へ反映"),
+                mistiaLocalized(vi: "Dùng cloud", en: "Use cloud", ja: "Cloud を使用"),
                 systemImage: "icloud.and.arrow.down.fill"
             )
             .frame(maxWidth: .infinity)
@@ -2428,6 +2428,35 @@ private struct ManagementSyncConflictCard: View {
         colorScheme == .dark
             ? Color(UIColor.secondarySystemGroupedBackground).opacity(0.96)
             : accent.opacity(0.10)
+    }
+
+    private func isInternalConflictField(_ id: String) -> Bool {
+        let normalized = id
+            .replacingOccurrences(of: "_", with: "")
+            .replacingOccurrences(of: "-", with: "")
+            .lowercased()
+        return normalized == "id"
+            || normalized == "uid"
+            || normalized == "recordid"
+            || normalized.hasSuffix("userid")
+            || normalized.hasSuffix("deviceid")
+            || normalized == "device"
+            || normalized.contains("device")
+            || normalized == "systemkey"
+            || normalized == "synckey"
+            || normalized == "syncversion"
+            || normalized == "version"
+    }
+
+    private func isMetadataConflictField(_ id: String) -> Bool {
+        let normalized = id
+            .replacingOccurrences(of: "_", with: "")
+            .replacingOccurrences(of: "-", with: "")
+            .lowercased()
+        return normalized == "updatedat"
+            || normalized == "deletedat"
+            || normalized == "createdat"
+            || normalized == "archivedat"
     }
 }
 
@@ -2479,7 +2508,7 @@ private struct ManagementConflictReferenceResolver {
              "linkedWalletID",
              "linkedWalletId",
              "linked_wallet_id":
-            return walletName(for: uuid) ?? shortID(uuid)
+            return walletName(for: uuid) ?? unavailableName
         case "category",
              "categoryID",
              "categoryId",
@@ -2488,7 +2517,7 @@ private struct ManagementConflictReferenceResolver {
              "parentCategoryID",
              "parentCategoryId",
              "parent_category_id":
-            return categoryName(for: uuid) ?? shortID(uuid)
+            return categoryName(for: uuid) ?? unavailableName
         case "transaction",
              "transactionID",
              "transactionId",
@@ -2496,11 +2525,11 @@ private struct ManagementConflictReferenceResolver {
              "linkedTransactionID",
              "linkedTransactionId",
              "linked_transaction_id":
-            return transactionName(for: uuid) ?? shortID(uuid)
+            return transactionName(for: uuid) ?? unavailableName
         case "source", "sourceID", "sourceId", "source_id":
-            return sourceName(for: uuid) ?? shortID(uuid)
+            return sourceName(for: uuid) ?? unavailableName
         default:
-            return genericName(for: uuid) ?? fallback
+            return genericName(for: uuid) ?? unavailableName
         }
     }
 
@@ -2588,8 +2617,12 @@ private struct ManagementConflictReferenceResolver {
             ?? dueOccurrenceName(for: id)
     }
 
-    private func shortID(_ id: UUID) -> String {
-        "ID \(String(id.uuidString.lowercased().prefix(8)))"
+    private var unavailableName: String {
+        mistiaLocalized(
+            vi: "Không tìm thấy tên",
+            en: "Name unavailable",
+            ja: "名前なし"
+        )
     }
 
     private func compactConflictName(_ values: String?...) -> String {
@@ -2603,93 +2636,52 @@ private struct ManagementConflictReferenceResolver {
     }
 }
 
-private struct ManagementConflictEndpointPreview: View {
-    let title: String
-    let summary: MistiaSyncConflictRecordSummary
-    let systemImage: String
-    let accent: Color
-    let isProminent: Bool
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Label(title, systemImage: systemImage)
-                .font(.system(size: 12, weight: .bold, design: .rounded))
-                .foregroundStyle(isProminent ? accent : .secondary)
-
-            Text(summary.title)
-                .font(.system(size: 13.5, weight: .semibold, design: .rounded))
-                .foregroundStyle(.primary)
-                .lineLimit(2)
-                .fixedSize(horizontal: false, vertical: true)
-
-            if !summary.detail.isEmpty {
-                Text(summary.detail)
-                    .font(.system(size: 12, weight: .medium, design: .rounded))
-                    .foregroundStyle(.secondary)
-                    .lineLimit(3)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(12)
-        .background(
-            (isProminent ? accent.opacity(0.12) : Color(UIColor.tertiarySystemGroupedBackground)),
-            in: RoundedRectangle(cornerRadius: 16, style: .continuous)
-        )
-    }
-}
-
-private struct ManagementConflictDifferenceRow: View {
+private struct ManagementConflictCompactDifferenceRow: View {
     let difference: MistiaSyncConflictDifference
-    let accent: Color
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        HStack(alignment: .firstTextBaseline, spacing: 12) {
             Text(difference.fieldTitle)
-                .font(.system(size: 13.5, weight: .bold, design: .rounded))
+                .font(.system(size: 13, weight: .semibold, design: .rounded))
                 .foregroundStyle(.primary)
+                .frame(width: 78, alignment: .leading)
+                .lineLimit(2)
 
-            VStack(spacing: 6) {
-                ManagementConflictValuePill(
+            VStack(alignment: .leading, spacing: 3) {
+                ManagementConflictCompactValueLine(
                     title: mistiaLocalized(vi: "Local", en: "Local", ja: "Local"),
-                    value: difference.localValue,
-                    tint: accent
+                    value: difference.localValue
                 )
 
-                ManagementConflictValuePill(
+                ManagementConflictCompactValueLine(
                     title: mistiaLocalized(vi: "Cloud", en: "Cloud", ja: "Cloud"),
-                    value: difference.remoteValue,
-                    tint: MistiaAccent.slate.color
+                    value: difference.remoteValue
                 )
             }
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .padding(12)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Color(UIColor.tertiarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .padding(.vertical, 9)
     }
 }
 
-private struct ManagementConflictValuePill: View {
+private struct ManagementConflictCompactValueLine: View {
     let title: String
     let value: String
-    let tint: Color
 
     var body: some View {
-        HStack(alignment: .firstTextBaseline, spacing: 8) {
+        HStack(alignment: .firstTextBaseline, spacing: 6) {
             Text(title)
                 .font(.system(size: 11.5, weight: .bold, design: .rounded))
-                .foregroundStyle(tint)
-                .frame(width: 46, alignment: .leading)
+                .foregroundStyle(.secondary)
+                .frame(width: 34, alignment: .leading)
 
             Text(value)
                 .font(.system(size: 12.5, weight: .medium, design: .rounded))
                 .foregroundStyle(.primary)
+                .lineLimit(2)
                 .fixedSize(horizontal: false, vertical: true)
                 .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .padding(.horizontal, 10)
-        .padding(.vertical, 8)
-        .background(tint.opacity(0.09), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
     }
 }
 
@@ -2717,45 +2709,6 @@ private struct ManagementConflictSectionHeader: View {
                 .padding(.horizontal, 9)
                 .padding(.vertical, 4)
                 .background(MistiaAccent.purple.color, in: Capsule())
-        }
-    }
-}
-
-private struct ManagementConflictSummaryCard: View {
-    let conflictCount: Int
-    let sectionCount: Int
-    let accent: Color
-
-    var body: some View {
-        MistiaGlassCard(cornerRadius: 24, tint: accent.opacity(0.12)) {
-            HStack(spacing: 14) {
-                ZStack {
-                    Circle()
-                        .fill(accent.opacity(0.16))
-
-                    Image(systemName: "arrow.triangle.2.circlepath.icloud.fill")
-                        .font(.system(size: 20, weight: .bold))
-                        .foregroundStyle(accent)
-                }
-                .frame(width: 46, height: 46)
-
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(mistiaLocalized(vi: "Cần chọn nguồn đúng", en: "Choose the correct source", ja: "正しいソースを選択"))
-                        .font(.system(size: 16.5, weight: .bold, design: .rounded))
-                        .foregroundStyle(.primary)
-
-                    Text(
-                        mistiaLocalized(
-                            vi: "\(conflictCount) record conflict trong \(sectionCount) mục dữ liệu.",
-                            en: "\(conflictCount) conflicting records across \(sectionCount) data groups.",
-                            ja: "\(sectionCount) 件のデータグループに \(conflictCount) 件の競合があります。"
-                        )
-                    )
-                    .font(.system(size: 13.5, weight: .medium, design: .rounded))
-                    .foregroundStyle(.secondary)
-                }
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
         }
     }
 }
@@ -2831,13 +2784,7 @@ private struct ManagementDataConflictsView: View {
                     accent: accent
                 )
             } else {
-                VStack(spacing: 18) {
-                    ManagementConflictSummaryCard(
-                        conflictCount: activeConflicts.count,
-                        sectionCount: conflictSections.count,
-                        accent: accent
-                    )
-
+                VStack(spacing: 20) {
                     ForEach(conflictSections) { section in
                         VStack(alignment: .leading, spacing: 12) {
                             ManagementConflictSectionHeader(section: section, accent: accent)
