@@ -130,6 +130,8 @@ struct TransactionsView: View {
     @State private var editorTarget: TransactionEditorTarget?
     @State private var filterState = TransactionFilterState(timeScope: .allTime, statusScope: .all)
     @State private var searchText = ""
+    @State private var debouncedSearchText = ""
+    @State private var searchDebounceTask: Task<Void, Never>?
     @State private var isSearchPresented = false
     @State private var shareItem: TransactionShareItem?
     @State private var exportErrorMessage: String?
@@ -244,25 +246,30 @@ struct TransactionsView: View {
     private var transactionListSnapshot: TransactionsListSnapshot {
         let activeTransactions = self.activeTransactions
         let records = activeTransactions.map(\.snapshot)
-        let visibleRecords = TransactionLogic.visibleRecords(
+        let page = TransactionLogic.visibleRecordsPage(
             from: records,
             selectedKind: selectedSegment?.kind,
             filters: effectiveFilters,
+            limit: visibleTransactionLimit,
+            assumesSortedByRecency: true,
             calendar: calendar
         )
-        let displayedRecords = Array(visibleRecords.prefix(visibleTransactionLimit))
+        let displayedRecords = page.displayedRecords
+        let displayedRecordIDs = Set(displayedRecords.map(\.id))
         let openDebtPositions = TransactionLogic.openDebtPositions(
             from: debtRecords(from: records)
         )
 
         return TransactionsListSnapshot(
             activeTransactionCount: activeTransactions.count,
-            visibleRecordCount: visibleRecords.count,
+            visibleRecordCount: page.totalCount,
             displayedRecordCount: displayedRecords.count,
             openDebtPositions: openDebtPositions,
             sections: TransactionLogic.sections(from: displayedRecords, calendar: calendar),
             transactionsByID: Dictionary(
-                activeTransactions.map { ($0.id, $0) },
+                activeTransactions
+                    .filter { displayedRecordIDs.contains($0.id) }
+                    .map { ($0.id, $0) },
                 uniquingKeysWith: { lhs, rhs in lhs.updatedAt >= rhs.updatedAt ? lhs : rhs }
             ),
             transactionAuditMap: transactionAuditMap,
@@ -302,7 +309,17 @@ struct TransactionsView: View {
         } else {
             filteredWallets = activeWallets
         }
-        return filteredWallets.compactMap { $0.overviewCreditCardStatementAccountSnapshot(records: transactionRecords) }
+        let balanceIndex = TransactionLogic.walletBalanceIndex(
+            wallets: activeWallets.map {
+                TransactionWalletSnapshot(
+                    id: $0.id,
+                    kind: $0.kind,
+                    openingBalanceMinor: $0.openingBalanceMinor
+                )
+            },
+            records: transactionRecords
+        )
+        return filteredWallets.compactMap { $0.overviewCreditCardStatementAccountSnapshot(balanceIndex: balanceIndex) }
     }
 
     private var statementPeriod: DateInterval {
@@ -375,7 +392,7 @@ struct TransactionsView: View {
 
     private var effectiveFilters: TransactionFilterState {
         var effective = filterState
-        effective.searchText = searchText
+        effective.searchText = debouncedSearchText
         effective.isAdjustmentOnly = selectedSegment == .adjustment
         return effective
     }
@@ -530,11 +547,15 @@ struct TransactionsView: View {
         .onChange(of: filterState) { _, _ in
             resetTransactionPage()
         }
-        .onChange(of: searchText) { _, _ in
-            resetTransactionPage()
+        .onChange(of: searchText) { _, newValue in
+            scheduleSearchDebounce(newValue)
         }
         .onChange(of: familyContextStore.selectedSubjectUserID) { _, _ in
             resetTransactionPage()
+        }
+        .onDisappear {
+            searchDebounceTask?.cancel()
+            searchDebounceTask = nil
         }
     }
 
@@ -836,6 +857,23 @@ struct TransactionsView: View {
             visibleTransactionLimit + TransactionsListPaging.increment,
             totalVisibleCount
         )
+    }
+
+    private func scheduleSearchDebounce(_ value: String) {
+        searchDebounceTask?.cancel()
+
+        if value.isEmpty {
+            debouncedSearchText = ""
+            resetTransactionPage()
+            return
+        }
+
+        searchDebounceTask = Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(220))
+            guard !Task.isCancelled else { return }
+            debouncedSearchText = value
+            resetTransactionPage()
+        }
     }
 
     private func openTransactionEditorIfAllowed(_ transaction: LedgerTransaction) {

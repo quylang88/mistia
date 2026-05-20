@@ -213,6 +213,7 @@ nonisolated enum OverviewLogic {
         creditCardDues: [PlanningCreditCardDueSnapshot],
         recurringDues: [PlanningRecurringDueSnapshot],
         currencyCode: String,
+        balanceIndex: TransactionWalletBalanceIndex? = nil,
         referenceDate: Date = .now,
         calendar: Calendar = MistiaCalendar.current
     ) -> OverviewDashboardSnapshot {
@@ -222,6 +223,7 @@ nonisolated enum OverviewLogic {
                 transactionRecords: transactionRecords,
                 transactions: transactions,
                 currencyCode: currencyCode,
+                balanceIndex: balanceIndex,
                 referenceDate: referenceDate,
                 calendar: calendar
             ),
@@ -251,6 +253,7 @@ nonisolated enum OverviewLogic {
         transactionRecords: [TransactionRecordSnapshot],
         transactions: [OverviewTransactionSnapshot] = [],
         currencyCode: String,
+        balanceIndex: TransactionWalletBalanceIndex? = nil,
         referenceDate: Date = .now,
         calendar: Calendar = MistiaCalendar.current
     ) -> OverviewHeroSnapshot {
@@ -289,7 +292,8 @@ nonisolated enum OverviewLogic {
         return OverviewHeroSnapshot(
             totalAssetBalanceMinor: totalAssetBalance(
                 wallets: wallets,
-                transactionRecords: transactionRecords
+                transactionRecords: transactionRecords,
+                balanceIndex: balanceIndex
             ),
             incomeThisMonthMinor: incomeThisMonth,
             expenseThisMonthMinor: expenseThisMonth,
@@ -311,18 +315,29 @@ nonisolated enum OverviewLogic {
 
     static func totalAssetBalance(
         wallets: [OverviewWalletSnapshot],
-        transactionRecords: [TransactionRecordSnapshot]
+        transactionRecords: [TransactionRecordSnapshot],
+        balanceIndex: TransactionWalletBalanceIndex? = nil
     ) -> Int64 {
-        wallets
+        let resolvedBalanceIndex = balanceIndex ?? TransactionLogic.walletBalanceIndex(
+            wallets: wallets.map {
+                TransactionWalletSnapshot(
+                    id: $0.id,
+                    kind: $0.kind,
+                    openingBalanceMinor: $0.openingBalanceMinor
+                )
+            },
+            records: transactionRecords
+        )
+
+        return wallets
             .filter { $0.kind != .creditCard }
             .reduce(into: Int64.zero) { partialResult, wallet in
-                partialResult += TransactionLogic.effectiveBalance(
+                partialResult += resolvedBalanceIndex.balance(
                     for: TransactionWalletSnapshot(
                         id: wallet.id,
                         kind: wallet.kind,
                         openingBalanceMinor: wallet.openingBalanceMinor
-                    ),
-                    records: transactionRecords
+                    )
                 )
             }
     }

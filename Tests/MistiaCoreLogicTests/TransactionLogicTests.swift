@@ -100,6 +100,82 @@ final class TransactionLogicTests: XCTestCase {
         XCTAssertEqual(TransactionLogic.effectiveBalance(for: creditCard, records: records), 13_000)
     }
 
+    func testWalletBalanceIndexMatchesEffectiveBalanceForMixedWallets() {
+        let cash = TransactionWalletSnapshot(
+            id: UUID(),
+            kind: .cash,
+            openingBalanceMinor: 10_000
+        )
+        let bank = TransactionWalletSnapshot(
+            id: UUID(),
+            kind: .bank,
+            openingBalanceMinor: 20_000
+        )
+        let creditCard = TransactionWalletSnapshot(
+            id: UUID(),
+            kind: .creditCard,
+            openingBalanceMinor: 0
+        )
+        let now = Date(timeIntervalSince1970: 1_742_646_400)
+        let records = [
+            makeRecord(
+                primaryKind: .income,
+                amountMinor: 7_000,
+                occurredAt: now,
+                sourceWalletID: bank.id,
+                sourceWalletKind: bank.kind,
+                categoryID: UUID()
+            ),
+            makeRecord(
+                primaryKind: .expense,
+                amountMinor: 1_500,
+                occurredAt: now.addingTimeInterval(-60),
+                sourceWalletID: cash.id,
+                sourceWalletKind: cash.kind,
+                categoryID: UUID()
+            ),
+            makeRecord(
+                primaryKind: .transfer,
+                transferSubtype: .internalTransfer,
+                amountMinor: 2_000,
+                occurredAt: now.addingTimeInterval(-120),
+                sourceWalletID: bank.id,
+                sourceWalletKind: bank.kind,
+                destinationWalletID: creditCard.id,
+                destinationWalletKind: creditCard.kind
+            ),
+            makeRecord(
+                primaryKind: .transfer,
+                transferSubtype: .debt,
+                debtIntent: .lend,
+                amountMinor: 500,
+                occurredAt: now.addingTimeInterval(-180),
+                sourceWalletID: cash.id,
+                sourceWalletKind: cash.kind,
+                counterpartyName: "Lan"
+            ),
+            makeRecord(
+                primaryKind: .expense,
+                entryStatus: .draft,
+                amountMinor: 99_999,
+                occurredAt: now.addingTimeInterval(-240),
+                sourceWalletID: cash.id,
+                sourceWalletKind: cash.kind,
+                categoryID: UUID()
+            )
+        ]
+
+        let wallets = [cash, bank, creditCard]
+        let index = TransactionLogic.walletBalanceIndex(wallets: wallets, records: records)
+
+        for wallet in wallets {
+            XCTAssertEqual(
+                index.balance(for: wallet),
+                TransactionLogic.effectiveBalance(for: wallet, records: records)
+            )
+        }
+    }
+
     func testDebtAggregationTracksBothDirectionsWithNormalizedNames() {
         let walletID = UUID()
         let now = Date(timeIntervalSince1970: 1_742_646_400)

@@ -81,7 +81,7 @@ private enum ManagementAlertPresentation: Identifiable {
 
 private struct ManagementRenderSnapshot {
     let activeWallets: [LedgerWallet]
-    let visiblePostedTransactions: [LedgerTransaction]
+    let walletBalancesByID: [UUID: Int64]
     let visibleCategorySections: [TransactionCategoryGroupSection]
 }
 
@@ -159,10 +159,34 @@ struct ManagementView: View {
                 }
                 return $0.createdAt < $1.createdAt
             }
+        let transactionSnapshots = visiblePostedTransactions.map(\.planningRecordSnapshot)
+        let balanceIndex = TransactionLogic.walletBalanceIndex(
+            wallets: activeWallets.map {
+                TransactionWalletSnapshot(
+                    id: $0.id,
+                    kind: $0.kind,
+                    openingBalanceMinor: $0.openingBalanceMinor
+                )
+            },
+            records: transactionSnapshots
+        )
 
         return ManagementRenderSnapshot(
             activeWallets: activeWallets,
-            visiblePostedTransactions: visiblePostedTransactions,
+            walletBalancesByID: Dictionary(
+                uniqueKeysWithValues: activeWallets.map {
+                    (
+                        $0.id,
+                        balanceIndex.balance(
+                            for: TransactionWalletSnapshot(
+                                id: $0.id,
+                                kind: $0.kind,
+                                openingBalanceMinor: $0.openingBalanceMinor
+                            )
+                        )
+                    )
+                }
+            ),
             visibleCategorySections: MistiaCategoryHierarchy.groupedSections(
                 from: visibleCategories,
                 kind: selectedCategoryKind,
@@ -274,7 +298,7 @@ struct ManagementView: View {
                 profileSection
                 walletsSection(
                     activeWallets: renderSnapshot.activeWallets,
-                    visiblePostedTransactions: renderSnapshot.visiblePostedTransactions
+                    walletBalancesByID: renderSnapshot.walletBalancesByID
                 )
                 categoriesSection(visibleCategorySections: renderSnapshot.visibleCategorySections)
             }
@@ -507,7 +531,7 @@ struct ManagementView: View {
 
     private func walletsSection(
         activeWallets: [LedgerWallet],
-        visiblePostedTransactions: [LedgerTransaction]
+        walletBalancesByID: [UUID: Int64]
     ) -> some View {
         ManagementSection(title: mistiaLocalized(vi: "Ví", en: "Wallets", ja: "ウォレット"), titleColor: sectionLabelColor) {
             ManagementCard(tint: cardTint) {
@@ -540,7 +564,7 @@ struct ManagementView: View {
                         ForEach(Array(activeWallets.enumerated()), id: \.element.id) { index, wallet in
                             ManagementWalletRow(
                                 wallet: wallet,
-                                transactions: visiblePostedTransactions
+                                currentBalanceMinor: walletBalancesByID[wallet.id] ?? wallet.openingBalanceMinor
                             ) {
                                 if canOpenWalletEditor(wallet) {
                                     walletEditorTarget = ManagementWalletEditorTarget(wallet: wallet, defaultKind: wallet.kind)
@@ -1291,41 +1315,8 @@ private struct ManagementSignedOutCard: View {
 
 private struct ManagementWalletRow: View {
     let wallet: LedgerWallet
-    let transactions: [LedgerTransaction]
+    let currentBalanceMinor: Int64
     let action: () -> Void
-
-    private var currentBalanceMinor: Int64 {
-        let snapshot = TransactionWalletSnapshot(
-            id: wallet.id,
-            kind: wallet.kind,
-            openingBalanceMinor: wallet.openingBalanceMinor
-        )
-
-        let snapshots = transactions.map {
-            TransactionRecordSnapshot(
-                id: $0.id,
-                primaryKind: $0.primaryKind,
-                transferSubtype: $0.transferSubtype,
-                debtIntent: $0.debtIntent,
-                entryStatus: $0.entryStatus,
-                title: $0.title,
-                note: $0.note,
-                amountMinor: $0.amountMinor,
-                isArchived: $0.isArchived,
-                occurredAt: $0.occurredAt,
-                createdAt: $0.createdAt,
-                sourceWalletID: $0.sourceWallet?.id,
-                sourceWalletKind: $0.sourceWallet?.kind,
-                destinationWalletID: $0.destinationWallet?.id,
-                destinationWalletKind: $0.destinationWallet?.kind,
-                categoryID: $0.category?.id,
-                counterpartyName: $0.counterpartyName,
-                normalizedCounterpartyKey: $0.normalizedCounterpartyKey
-            )
-        }
-
-        return TransactionLogic.effectiveBalance(for: snapshot, records: snapshots)
-    }
     
     private var availableCreditMinor: Int64? {
         guard wallet.kind == .creditCard,

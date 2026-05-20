@@ -13,7 +13,7 @@ struct ContentView: View {
                 FamilyInviteAcceptanceScreen(route: route)
             }
             .task(id: familyRefreshToken) {
-                await familyContextStore.refresh(sessionStore: sessionStore)
+                await familyContextStore.refreshIfStale(sessionStore: sessionStore)
             }
     }
 

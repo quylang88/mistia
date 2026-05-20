@@ -1287,6 +1287,20 @@ struct TransactionEditorSheet: View {
             return
         }
 
+        let validationRecordSnapshots = postedTransactions
+            .filter { $0.id != target.transaction?.id }
+            .map(\.snapshot)
+        let validationBalanceIndex = TransactionLogic.walletBalanceIndex(
+            wallets: storedWallets.map {
+                TransactionWalletSnapshot(
+                    id: $0.id,
+                    kind: $0.kind,
+                    openingBalanceMinor: $0.openingBalanceMinor
+                )
+            },
+            records: validationRecordSnapshots
+        )
+
         switch draft.primaryKind {
         case .expense:
             guard let sourceWallet = selectedSourceWallet else {
@@ -1300,12 +1314,16 @@ struct TransactionEditorSheet: View {
                 openingBalanceMinor: sourceWallet.openingBalanceMinor
             )
 
-            let snapshots = postedTransactions.filter { $0.id != target.transaction?.id }.map { $0.snapshot }
-            let currentBalance = TransactionLogic.effectiveBalance(for: snapshot, records: snapshots)
+            let currentBalance = validationBalanceIndex.balance(for: snapshot)
 
             // For credit cards, check available credit (limit - debt), not debt itself
             if sourceWallet.kind == .creditCard {
-                if let paidStatement = paidCreditCardStatement(for: sourceWallet, occurredAt: draft.occurredAt) {
+                if let paidStatement = paidCreditCardStatement(
+                    for: sourceWallet,
+                    occurredAt: draft.occurredAt,
+                    transactionRecords: validationRecordSnapshots,
+                    balanceIndex: validationBalanceIndex
+                ) {
                     alertMessage = paidStatementExpenseAlertMessage(for: paidStatement)
                     return
                 }
@@ -1339,8 +1357,7 @@ struct TransactionEditorSheet: View {
                     openingBalanceMinor: sourceWallet.openingBalanceMinor
                 )
                 
-                let snapshots = postedTransactions.filter { $0.id != target.transaction?.id }.map { $0.snapshot }
-                let currentBalance = TransactionLogic.effectiveBalance(for: snapshot, records: snapshots)
+                let currentBalance = validationBalanceIndex.balance(for: snapshot)
                 
                 if currentBalance - amountMinor < 0 {
                     alertMessage = mistiaLocalized(vi: "Số dư ví không đủ để thực hiện giao dịch.", en: "Insufficient wallet balance to perform the transaction.", ja: "取引を実行するためのウォレット残高が不足しています。")
@@ -1360,8 +1377,7 @@ struct TransactionEditorSheet: View {
                         openingBalanceMinor: sourceWallet.openingBalanceMinor
                     )
                     
-                    let snapshots = postedTransactions.filter { $0.id != target.transaction?.id }.map { $0.snapshot }
-                    let currentBalance = TransactionLogic.effectiveBalance(for: snapshot, records: snapshots)
+                    let currentBalance = validationBalanceIndex.balance(for: snapshot)
                     
                     if currentBalance - amountMinor < 0 {
                         alertMessage = mistiaLocalized(vi: "Số dư ví không đủ để thực hiện giao dịch.", en: "Insufficient wallet balance to perform the transaction.", ja: "取引を実行するためのウォレット残高が不足しています。")
@@ -1537,15 +1553,29 @@ struct TransactionEditorSheet: View {
 
     private func paidCreditCardStatement(
         for wallet: LedgerWallet,
-        occurredAt: Date
+        occurredAt: Date,
+        transactionRecords: [TransactionRecordSnapshot]? = nil,
+        balanceIndex: TransactionWalletBalanceIndex? = nil
     ) -> PlanningCreditCardStatementSnapshot? {
-        guard let account = wallet.planningCreditCardSnapshot(records: transactionRecordSnapshots) else {
+        let records = transactionRecords ?? transactionRecordSnapshots
+        let resolvedBalanceIndex = balanceIndex ?? TransactionLogic.walletBalanceIndex(
+            wallets: [
+                TransactionWalletSnapshot(
+                    id: wallet.id,
+                    kind: wallet.kind,
+                    openingBalanceMinor: wallet.openingBalanceMinor
+                )
+            ],
+            records: records
+        )
+
+        guard let account = wallet.planningCreditCardSnapshot(balanceIndex: resolvedBalanceIndex) else {
             return nil
         }
 
         return PlanningLogic.paidCreditCardStatementForExpense(
             account: account,
-            records: transactionRecordSnapshots,
+            records: records,
             occurrences: dueOccurrenceSnapshots,
             occurredAt: occurredAt,
             referenceDate: .now,

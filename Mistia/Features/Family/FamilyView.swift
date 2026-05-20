@@ -449,6 +449,34 @@ private struct FamilyOverviewDerivedData {
     let dueAlerts: [OverviewDueAlertSnapshot]
 }
 
+private struct FamilyOverviewDataCache {
+    let key: FamilyOverviewDataCacheKey
+    let data: FamilyOverviewDerivedData
+}
+
+private struct FamilyOverviewDataCacheKey: Hashable {
+    let timeframeRawValue: String
+    let activeScope: FamilyContext.Scope
+    let familyID: UUID?
+    let ownerUserID: UUID?
+    let budgetManagerUserID: UUID?
+    let goalManagerUserID: UUID?
+    let currentUserID: UUID?
+    let activeLocalProfileUserID: UUID?
+    let currencyCode: String
+    let referenceDayStart: TimeInterval
+    let membersSignature: Int
+    let walletsSignature: Int
+    let transactionsSignature: Int
+    let budgetsSignature: Int
+    let goalsSignature: Int
+    let billsSignature: Int
+    let installmentsSignature: Int
+    let occurrencesSignature: Int
+    let ownershipSignature: Int
+    let auditSignature: Int
+}
+
 private struct FamilyHubRouteRowItem: Identifiable {
     let destination: FamilyDestination
     let title: String
@@ -1845,7 +1873,7 @@ struct FamilyOverviewScreen: View {
     @Query private var ownershipScopes: [OwnedRecordScope]
     @Query private var transactionAuditRecords: [TransactionAuditRecord]
 
-    private var overviewData: FamilyOverviewDerivedData {
+    private func makeOverviewData() -> FamilyOverviewDerivedData {
         let now = Date.now
         let currentMonth = PlanningLogic.startOfMonth(for: now, calendar: calendar)
         let interval = selectedInterval(for: timeframe, now: now)
@@ -1908,6 +1936,16 @@ struct FamilyOverviewScreen: View {
         )
         let transactionRecords = visibleTransactions.map(\.planningRecordSnapshot)
         let occurrenceSnapshots = visibleOccurrences.map(\.planningSnapshot)
+        let walletBalanceIndex = TransactionLogic.walletBalanceIndex(
+            wallets: visibleWallets.map {
+                TransactionWalletSnapshot(
+                    id: $0.id,
+                    kind: $0.kind,
+                    openingBalanceMinor: $0.openingBalanceMinor
+                )
+            },
+            records: transactionRecords
+        )
         let walletRows = FamilyLogic.aggregateWalletsByName(visibleWallets
             .sorted {
                 if $0.sortOrder != $1.sortOrder {
@@ -1916,13 +1954,12 @@ struct FamilyOverviewScreen: View {
                 return $0.createdAt < $1.createdAt
             }
             .map { wallet in
-                let debt = TransactionLogic.effectiveBalance(
+                let debt = walletBalanceIndex.balance(
                     for: TransactionWalletSnapshot(
                         id: wallet.id,
                         kind: wallet.kind,
                         openingBalanceMinor: wallet.openingBalanceMinor
-                    ),
-                    records: transactionRecords
+                    )
                 )
 
                 let displayBalance: Int64
@@ -1952,7 +1989,7 @@ struct FamilyOverviewScreen: View {
                 )
             })
         let creditCardAccounts = visibleWallets.compactMap {
-            $0.planningCreditCardSnapshot(records: transactionRecords)
+            $0.planningCreditCardSnapshot(balanceIndex: walletBalanceIndex)
         }
         let creditCardStatementDueItems = PlanningLogic.creditCardStatementsDue(
             in: currentMonth,
@@ -2100,6 +2137,150 @@ struct FamilyOverviewScreen: View {
         )
     }
 
+    private func cachedOverviewData(for key: FamilyOverviewDataCacheKey) -> FamilyOverviewDerivedData {
+        if let overviewDataCache, overviewDataCache.key == key {
+            return overviewDataCache.data
+        }
+
+        return makeOverviewData()
+    }
+
+    private func refreshOverviewDataCache(for key: FamilyOverviewDataCacheKey) {
+        overviewDataCache = FamilyOverviewDataCache(
+            key: key,
+            data: makeOverviewData()
+        )
+    }
+
+    private var overviewDataCacheKey: FamilyOverviewDataCacheKey {
+        FamilyOverviewDataCacheKey(
+            timeframeRawValue: timeframe.rawValue,
+            activeScope: familyContextStore.activeContext.scope,
+            familyID: familyContextStore.family?.id,
+            ownerUserID: familyContextStore.family?.ownerUserID,
+            budgetManagerUserID: familyContextStore.family?.budgetManagerUserID,
+            goalManagerUserID: familyContextStore.family?.goalManagerUserID,
+            currentUserID: familyContextStore.currentUserID,
+            activeLocalProfileUserID: sessionStore.activeLocalProfileUserID,
+            currencyCode: currencyCode,
+            referenceDayStart: calendar.startOfDay(for: .now).timeIntervalSince1970,
+            membersSignature: membersSignature,
+            walletsSignature: recordsSignature(
+                storedWallets,
+                id: \.id,
+                updatedAt: \.updatedAt,
+                deletedAt: \.deletedAt,
+                isArchived: \.isArchived
+            ),
+            transactionsSignature: recordsSignature(
+                storedTransactions,
+                id: \.id,
+                updatedAt: \.updatedAt,
+                deletedAt: \.deletedAt,
+                isArchived: \.isArchived
+            ),
+            budgetsSignature: recordsSignature(
+                storedBudgets,
+                id: \.id,
+                updatedAt: \.updatedAt,
+                deletedAt: \.deletedAt,
+                isArchived: \.isArchived
+            ),
+            goalsSignature: recordsSignature(
+                storedGoals,
+                id: \.id,
+                updatedAt: \.updatedAt,
+                deletedAt: \.deletedAt,
+                isArchived: \.isArchived
+            ),
+            billsSignature: recordsSignature(
+                storedBills,
+                id: \.id,
+                updatedAt: \.updatedAt,
+                deletedAt: \.deletedAt,
+                isArchived: \.isArchived
+            ),
+            installmentsSignature: recordsSignature(
+                storedInstallments,
+                id: \.id,
+                updatedAt: \.updatedAt,
+                deletedAt: \.deletedAt,
+                isArchived: \.isArchived
+            ),
+            occurrencesSignature: recordsSignature(
+                storedOccurrences,
+                id: \.id,
+                updatedAt: \.updatedAt,
+                deletedAt: \.deletedAt
+            ),
+            ownershipSignature: recordsSignature(
+                ownershipScopes,
+                id: \.recordID,
+                updatedAt: \.updatedAt,
+                deletedAt: { _ in nil }
+            ),
+            auditSignature: recordsSignature(
+                transactionAuditRecords,
+                id: \.transactionID,
+                updatedAt: \.updatedAt,
+                deletedAt: { _ in nil }
+            )
+        )
+    }
+
+    private var membersSignature: Int {
+        var hasher = Hasher()
+        hasher.combine(familyContextStore.members.count)
+        for member in familyContextStore.members {
+            hasher.combine(member.membershipID)
+            hasher.combine(member.userID)
+            hasher.combine(member.displayName)
+            hasher.combine(member.role.rawValue)
+            hasher.combine(member.hasSyncedCloudData)
+        }
+        return hasher.finalize()
+    }
+
+    private func recordsSignature<Record>(
+        _ records: [Record],
+        id: KeyPath<Record, UUID>,
+        updatedAt: KeyPath<Record, Date>,
+        deletedAt: KeyPath<Record, Date?>,
+        isArchived: KeyPath<Record, Bool>? = nil
+    ) -> Int {
+        var hasher = Hasher()
+        hasher.combine(records.count)
+
+        for record in records {
+            hasher.combine(record[keyPath: id])
+            hasher.combine(record[keyPath: updatedAt].timeIntervalSince1970)
+            hasher.combine(record[keyPath: deletedAt]?.timeIntervalSince1970)
+            if let isArchived {
+                hasher.combine(record[keyPath: isArchived])
+            }
+        }
+
+        return hasher.finalize()
+    }
+
+    private func recordsSignature<Record>(
+        _ records: [Record],
+        id: KeyPath<Record, UUID>,
+        updatedAt: KeyPath<Record, Date>,
+        deletedAt: (Record) -> Date?
+    ) -> Int {
+        var hasher = Hasher()
+        hasher.combine(records.count)
+
+        for record in records {
+            hasher.combine(record[keyPath: id])
+            hasher.combine(record[keyPath: updatedAt].timeIntervalSince1970)
+            hasher.combine(deletedAt(record)?.timeIntervalSince1970)
+        }
+
+        return hasher.finalize()
+    }
+
     private var familyMemberIDs: Set<UUID> {
         var ids = Set(familyContextStore.members.map(\.userID))
         if let currentUserID = familyContextStore.currentUserID {
@@ -2153,9 +2334,11 @@ struct FamilyOverviewScreen: View {
     @State private var distributionMode: FamilyDistributionMode = .spending
     @State private var comparisonMode: FamilyComparisonMode = .spending
     @State private var activeSheet: FamilyOverviewSheet?
+    @State private var overviewDataCache: FamilyOverviewDataCache?
 
     var body: some View {
-        let data = overviewData
+        let dataKey = overviewDataCacheKey
+        let data = cachedOverviewData(for: dataKey)
 
         MistiaPinnedTopBarScaffold(
             tone: .standard,
@@ -2248,6 +2431,9 @@ struct FamilyOverviewScreen: View {
             if !familyContextStore.isViewingOtherMemberContext {
                 familyContextStore.activateFamilyHome()
             }
+        }
+        .task(id: dataKey) {
+            refreshOverviewDataCache(for: dataKey)
         }
     }
 

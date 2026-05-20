@@ -161,8 +161,19 @@ struct OverviewView: View {
         let transactionRecords = visibleTransactions.map(\.planningRecordSnapshot)
         let overviewTransactions = visibleTransactions.map(\.overviewSnapshot)
         let occurrenceSnapshots = visibleOccurrences.map(\.planningSnapshot)
+        let walletSnapshots = visibleWallets.compactMap(\.overviewWalletSnapshot)
+        let balanceIndex = TransactionLogic.walletBalanceIndex(
+            wallets: walletSnapshots.map {
+                TransactionWalletSnapshot(
+                    id: $0.id,
+                    kind: $0.kind,
+                    openingBalanceMinor: $0.openingBalanceMinor
+                )
+            },
+            records: transactionRecords
+        )
         let creditCardAccounts = visibleWallets.compactMap {
-            $0.planningCreditCardSnapshot(records: transactionRecords)
+            $0.planningCreditCardSnapshot(balanceIndex: balanceIndex)
         }
         let month = currentMonth
         let activeBudgets = visibleBudgets
@@ -196,13 +207,14 @@ struct OverviewView: View {
             calendar: calendar
         )
         let dashboard = OverviewLogic.dashboard(
-            wallets: visibleWallets.compactMap(\.overviewWalletSnapshot),
+            wallets: walletSnapshots,
             transactionRecords: transactionRecords,
             transactions: overviewTransactions,
             budgets: activeBudgets,
             creditCardDues: creditCardDueItems,
             recurringDues: recurringDueItems + installmentDueItems,
             currencyCode: currencyCode,
+            balanceIndex: balanceIndex,
             referenceDate: .now,
             calendar: calendar
         )
@@ -277,7 +289,17 @@ struct OverviewView: View {
     }
 
     private var planningCreditCardAccounts: [PlanningCreditCardAccountSnapshot] {
-        visibleWallets.compactMap { $0.planningCreditCardSnapshot(records: transactionRecords) }
+        let balanceIndex = TransactionLogic.walletBalanceIndex(
+            wallets: walletSnapshots.map {
+                TransactionWalletSnapshot(
+                    id: $0.id,
+                    kind: $0.kind,
+                    openingBalanceMinor: $0.openingBalanceMinor
+                )
+            },
+            records: transactionRecords
+        )
+        return visibleWallets.compactMap { $0.planningCreditCardSnapshot(balanceIndex: balanceIndex) }
     }
 
     private var creditCardDueItems: [PlanningCreditCardDueSnapshot] {

@@ -303,8 +303,18 @@ struct PlanningView: View {
         )
         let transactionSnapshots = visibleTransactions.map(\.planningRecordSnapshot)
         let occurrenceSnapshots = visibleOccurrences.map(\.planningSnapshot)
+        let balanceIndex = TransactionLogic.walletBalanceIndex(
+            wallets: visibleWallets.map {
+                TransactionWalletSnapshot(
+                    id: $0.id,
+                    kind: $0.kind,
+                    openingBalanceMinor: $0.openingBalanceMinor
+                )
+            },
+            records: transactionSnapshots
+        )
         let creditCardAccounts = visibleWallets.compactMap {
-            $0.planningCreditCardSnapshot(records: transactionSnapshots)
+            $0.planningCreditCardSnapshot(balanceIndex: balanceIndex)
         }
         let creditCardStatements = PlanningLogic.creditCardStatementsDue(
             in: selectedMonth,
@@ -384,7 +394,17 @@ struct PlanningView: View {
     }
 
     private var creditCardAccounts: [PlanningCreditCardAccountSnapshot] {
-        visibleWallets.compactMap { $0.planningCreditCardSnapshot(records: transactionSnapshots) }
+        let balanceIndex = TransactionLogic.walletBalanceIndex(
+            wallets: visibleWallets.map {
+                TransactionWalletSnapshot(
+                    id: $0.id,
+                    kind: $0.kind,
+                    openingBalanceMinor: $0.openingBalanceMinor
+                )
+            },
+            records: transactionSnapshots
+        )
+        return visibleWallets.compactMap { $0.planningCreditCardSnapshot(balanceIndex: balanceIndex) }
     }
 
     private var creditCardDueItems: [PlanningCreditCardDueSnapshot] {

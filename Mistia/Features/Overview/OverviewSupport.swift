@@ -56,18 +56,33 @@ extension LedgerWallet {
     func overviewCreditCardStatementAccountSnapshot(
         records: [TransactionRecordSnapshot]
     ) -> OverviewCreditCardStatementAccountSnapshot? {
+        let balanceIndex = TransactionLogic.walletBalanceIndex(
+            wallets: [
+                TransactionWalletSnapshot(
+                    id: id,
+                    kind: kind,
+                    openingBalanceMinor: openingBalanceMinor
+                )
+            ],
+            records: records
+        )
+        return overviewCreditCardStatementAccountSnapshot(balanceIndex: balanceIndex)
+    }
+
+    func overviewCreditCardStatementAccountSnapshot(
+        balanceIndex: TransactionWalletBalanceIndex
+    ) -> OverviewCreditCardStatementAccountSnapshot? {
         guard kind == .creditCard, !isArchived, let profile = creditCardProfile else {
             return nil
         }
 
         let debt = max(
-            TransactionLogic.effectiveBalance(
+            balanceIndex.balance(
                 for: TransactionWalletSnapshot(
                     id: id,
-                    kind: .creditCard,
+                    kind: kind,
                     openingBalanceMinor: openingBalanceMinor
-                ),
-                records: records
+                )
             ),
             0
         )

@@ -6,6 +6,22 @@ struct TransactionWalletSnapshot: Equatable, Identifiable {
     let openingBalanceMinor: Int64
 }
 
+nonisolated struct TransactionWalletBalanceIndex: Equatable {
+    private let balancesByWalletID: [UUID: Int64]
+
+    init(balancesByWalletID: [UUID: Int64]) {
+        self.balancesByWalletID = balancesByWalletID
+    }
+
+    func balance(for wallet: TransactionWalletSnapshot) -> Int64 {
+        balancesByWalletID[wallet.id] ?? wallet.openingBalanceMinor
+    }
+
+    func balance(for walletID: UUID, default defaultBalance: Int64 = 0) -> Int64 {
+        balancesByWalletID[walletID] ?? defaultBalance
+    }
+}
+
 struct TransactionRecordSnapshot: Equatable, Identifiable {
     let id: UUID
     let primaryKind: TransactionPrimaryKind
@@ -94,6 +110,11 @@ struct TransactionSectionSnapshot: Equatable, Identifiable {
     let title: String
     let rows: [TransactionRecordSnapshot]
     let isDraftSection: Bool
+}
+
+struct TransactionVisibleRecordsPage: Equatable {
+    let totalCount: Int
+    let displayedRecords: [TransactionRecordSnapshot]
 }
 
 struct CounterpartyDebtSnapshot: Equatable, Identifiable {
@@ -195,20 +216,50 @@ nonisolated enum TransactionLogic {
         calendar: Calendar = MistiaCalendar.current
     ) -> [TransactionRecordSnapshot] {
         records
-            .filter { record in
-                if filters.isAdjustmentOnly {
-                    guard isAdjustment(record) else { return false }
-                } else if selectedKind != nil, isAdjustment(record) {
-                    return false
-                }
-
-                guard selectedKind == nil || record.primaryKind == selectedKind else {
-                    return false
-                }
-
-                return matches(record, filters: filters, referenceDate: referenceDate, calendar: calendar)
+            .filter {
+                matchesVisibleRecord(
+                    $0,
+                    selectedKind: selectedKind,
+                    filters: filters,
+                    referenceDate: referenceDate,
+                    calendar: calendar
+                )
             }
             .sorted(by: recordSort)
+    }
+
+    static func visibleRecordsPage(
+        from records: [TransactionRecordSnapshot],
+        selectedKind: TransactionPrimaryKind?,
+        filters: TransactionFilterState,
+        limit: Int,
+        assumesSortedByRecency: Bool = false,
+        referenceDate: Date = .now,
+        calendar: Calendar = MistiaCalendar.current
+    ) -> TransactionVisibleRecordsPage {
+        let source = assumesSortedByRecency ? records : records.sorted(by: recordSort)
+        let limit = max(limit, 0)
+        var totalCount = 0
+        var displayedRecords: [TransactionRecordSnapshot] = []
+        displayedRecords.reserveCapacity(min(limit, source.count))
+
+        for record in source where matchesVisibleRecord(
+            record,
+            selectedKind: selectedKind,
+            filters: filters,
+            referenceDate: referenceDate,
+            calendar: calendar
+        ) {
+            totalCount += 1
+            if displayedRecords.count < limit {
+                displayedRecords.append(record)
+            }
+        }
+
+        return TransactionVisibleRecordsPage(
+            totalCount: totalCount,
+            displayedRecords: displayedRecords
+        )
     }
 
     static func summary(for records: [TransactionRecordSnapshot]) -> TransactionSummarySnapshot {
@@ -434,6 +485,91 @@ nonisolated enum TransactionLogic {
             }
     }
 
+    static func walletBalanceIndex(
+        wallets: [TransactionWalletSnapshot],
+        records: [TransactionRecordSnapshot]
+    ) -> TransactionWalletBalanceIndex {
+        var balancesByWalletID: [UUID: Int64] = [:]
+        var kindByWalletID: [UUID: LedgerWalletKind] = [:]
+
+        for wallet in wallets {
+            balancesByWalletID[wallet.id] = wallet.openingBalanceMinor
+            kindByWalletID[wallet.id] = wallet.kind
+        }
+
+        func applyDelta(
+            walletID: UUID?,
+            explicitKind: LedgerWalletKind?,
+            amount: Int64,
+            delta: (LedgerWalletKind, Int64) -> Int64
+        ) {
+            guard let walletID,
+                  let walletKind = explicitKind ?? kindByWalletID[walletID] else {
+                return
+            }
+
+            balancesByWalletID[walletID, default: 0] += delta(walletKind, amount)
+        }
+
+        for record in records where record.entryStatus == .posted && !record.isArchived {
+            switch record.primaryKind {
+            case .expense:
+                applyDelta(
+                    walletID: record.sourceWalletID,
+                    explicitKind: record.sourceWalletKind,
+                    amount: record.amountMinor,
+                    delta: { kind, amount in outgoingDelta(for: kind, amount: amount) }
+                )
+            case .income:
+                applyDelta(
+                    walletID: record.sourceWalletID,
+                    explicitKind: record.sourceWalletKind,
+                    amount: record.amountMinor,
+                    delta: { kind, amount in incomingDelta(for: kind, amount: amount) }
+                )
+            case .transfer:
+                switch record.transferSubtype {
+                case .internalTransfer:
+                    applyDelta(
+                        walletID: record.sourceWalletID,
+                        explicitKind: record.sourceWalletKind,
+                        amount: record.amountMinor,
+                        delta: { kind, amount in outgoingDelta(for: kind, amount: amount) }
+                    )
+                    applyDelta(
+                        walletID: record.destinationWalletID,
+                        explicitKind: record.destinationWalletKind,
+                        amount: record.amountMinor,
+                        delta: { kind, amount in incomingDelta(for: kind, amount: amount) }
+                    )
+                case .debt:
+                    switch record.debtIntent {
+                    case .lend, .repay:
+                        applyDelta(
+                            walletID: record.sourceWalletID,
+                            explicitKind: record.sourceWalletKind,
+                            amount: record.amountMinor,
+                            delta: { kind, amount in outgoingDelta(for: kind, amount: amount) }
+                        )
+                    case .collect, .borrow:
+                        applyDelta(
+                            walletID: record.sourceWalletID,
+                            explicitKind: record.sourceWalletKind,
+                            amount: record.amountMinor,
+                            delta: { kind, amount in incomingDelta(for: kind, amount: amount) }
+                        )
+                    case nil:
+                        break
+                    }
+                case nil:
+                    break
+                }
+            }
+        }
+
+        return TransactionWalletBalanceIndex(balancesByWalletID: balancesByWalletID)
+    }
+
     static func cashflowAmount(for record: TransactionRecordSnapshot) -> Int64 {
         switch record.primaryKind {
         case .expense:
@@ -542,6 +678,26 @@ nonisolated enum TransactionLogic {
             guard let field else { return false }
             return field.contains(query)
         }
+    }
+
+    private static func matchesVisibleRecord(
+        _ record: TransactionRecordSnapshot,
+        selectedKind: TransactionPrimaryKind?,
+        filters: TransactionFilterState,
+        referenceDate: Date,
+        calendar: Calendar
+    ) -> Bool {
+        if filters.isAdjustmentOnly {
+            guard isAdjustment(record) else { return false }
+        } else if selectedKind != nil, isAdjustment(record) {
+            return false
+        }
+
+        guard selectedKind == nil || record.primaryKind == selectedKind else {
+            return false
+        }
+
+        return matches(record, filters: filters, referenceDate: referenceDate, calendar: calendar)
     }
 
     private static func matchesTime(

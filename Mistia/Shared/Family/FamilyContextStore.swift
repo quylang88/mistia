@@ -26,6 +26,7 @@ private struct FamilyPendingPermissionRequestKey: Hashable {
 final class FamilyContextStore {
     private static let pendingInviteTokenKey = "Mistia.pendingFamilyInviteToken"
     private static let latestRefreshCooldown: TimeInterval = 45
+    private static let passiveRefreshCooldown: TimeInterval = 45
 
     var activeContext: FamilyContext = .personalSelf
     var family: FamilyGroupRecord?
@@ -44,6 +45,8 @@ final class FamilyContextStore {
     @ObservationIgnored private let service: any FamilyRemoteServicing
     @ObservationIgnored private let launchState: MistiaDataStack.LaunchState?
     @ObservationIgnored private var modelContainer: ModelContainer
+    @ObservationIgnored private var refreshTask: Task<Bool, Never>?
+    @ObservationIgnored private var lastPassiveRefreshCompletedAt: Date?
     @ObservationIgnored private var lastLatestRefreshCompletedAt: Date?
     @ObservationIgnored private var avatarHydrationTask: Task<Void, Never>?
     private var pendingPermissionRequestKeys: Set<FamilyPendingPermissionRequestKey> = []
@@ -191,7 +194,7 @@ final class FamilyContextStore {
     func bootstrapIfNeeded(sessionStore: SessionStore) async {
         guard !didBootstrap else { return }
         didBootstrap = true
-        await refresh(sessionStore: sessionStore)
+        await refreshIfStale(sessionStore: sessionStore)
     }
 
     func setModelContainer(_ modelContainer: ModelContainer) {
@@ -200,6 +203,46 @@ final class FamilyContextStore {
 
     @discardableResult
     func refresh(sessionStore: SessionStore) async -> Bool {
+        if let refreshTask {
+            return await refreshTask.value
+        }
+
+        let task = Task { @MainActor [weak self] in
+            guard let self else { return false }
+            return await self.performRefresh(sessionStore: sessionStore)
+        }
+        refreshTask = task
+
+        let didRefresh = await task.value
+        refreshTask = nil
+        if didRefresh {
+            lastPassiveRefreshCompletedAt = Date()
+        }
+        return didRefresh
+    }
+
+    @discardableResult
+    func refreshIfStale(sessionStore: SessionStore) async -> Bool {
+        setModelContainer(sessionStore.currentModelContainer)
+        restoreCachedStateIfAvailable(sessionStore: sessionStore)
+
+        if let refreshTask {
+            return await refreshTask.value
+        }
+
+        if didCompletePassiveRefreshRecently {
+            return sessionStore.isSignedIn ? hasCachedRemoteState || family != nil : true
+        }
+
+        return await refresh(sessionStore: sessionStore)
+    }
+
+    private var didCompletePassiveRefreshRecently: Bool {
+        guard let lastPassiveRefreshCompletedAt else { return false }
+        return Date().timeIntervalSince(lastPassiveRefreshCompletedAt) < Self.passiveRefreshCooldown
+    }
+
+    private func performRefresh(sessionStore: SessionStore) async -> Bool {
         setModelContainer(sessionStore.currentModelContainer)
         restoreCachedStateIfAvailable(sessionStore: sessionStore)
 
