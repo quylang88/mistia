@@ -12,6 +12,16 @@ final class SessionStoreOfflineTests: XCTestCase {
         MistiaAppLanguage.persist(.english)
     }
 
+    override func setUp() {
+        super.setUp()
+        clearProfileArtifacts()
+    }
+
+    override func tearDown() {
+        clearProfileArtifacts()
+        super.tearDown()
+    }
+
     func testBootstrapOfflineRestoresPersistedSessionWithoutRefreshingRemoteState() async throws {
         let session = makeSession()
         let authService = SessionAuthServiceSpy(persistedSession: session)
@@ -106,7 +116,7 @@ final class SessionStoreOfflineTests: XCTestCase {
         XCTAssertEqual(userProfileStore.fetchProfileCallCount, 1)
     }
 
-    func testReconnectWithInvalidRefreshTokenSignsOutAndShowsExpiredBanner() async throws {
+    func testReconnectWithInvalidRefreshTokenKeepsAccountSignedIn() async throws {
         let session = makeSession(expiresAt: .now.addingTimeInterval(-600))
         let authService = SessionAuthServiceSpy(
             persistedSession: session,
@@ -122,19 +132,61 @@ final class SessionStoreOfflineTests: XCTestCase {
 
         await store.bootstrapIfNeeded()
         store.handleConnectivityChanged(.connected)
-        await waitUntil("session invalidates after reconnect") {
-            authService.clearPersistedSessionCallCount == 1 && !store.isSignedIn
+        await waitUntil("session stays signed in after reconnect refresh failure") {
+            authService.refreshSessionCallCount == 1 && store.remoteUnavailableReason != nil
         }
 
-        XCTAssertFalse(store.isSignedIn)
-        XCTAssertNil(store.summary)
+        XCTAssertTrue(store.isSignedIn)
+        XCTAssertEqual(store.summary?.userID, session.user.id)
         XCTAssertEqual(authService.refreshSessionCallCount, 1)
-        XCTAssertEqual(authService.clearPersistedSessionCallCount, 1)
-        XCTAssertEqual(store.authBanner?.title, "Session expired after reconnect")
+        XCTAssertEqual(authService.clearPersistedSessionCallCount, 0)
+        XCTAssertNil(store.authBanner)
+        XCTAssertEqual(store.syncStatusTitle, "The session was kept on this device")
         XCTAssertEqual(
-            store.authBanner?.message,
-            "Session expired or invalid. Please try signing in again."
+            store.remoteUnavailableReason,
+            "The cloud session needs to reconnect. The account is still kept signed in on this device."
         )
+    }
+
+    func testBootstrapWithoutPersistedSessionRestoresPreservedCloudProfileLocally() async throws {
+        let userID = UUID()
+        let userDefaults = UserDefaults(suiteName: "MistiaTests.\(UUID().uuidString)") ?? .standard
+        let launchState = try MistiaDataStack.LaunchState(userDefaults: userDefaults)
+        _ = try launchState.ensureCloudProfile(for: userID, activate: true)
+        userDefaults.set(
+            userID.uuidString.lowercased(),
+            forKey: MistiaAppStorageKey.authPreservedSignedInUserID
+        )
+
+        let profile = UserAccountProfile(
+            userID: userID,
+            email: "preserved@example.com",
+            displayName: "Preserved User"
+        )
+        launchState.modelContainer.mainContext.insert(profile)
+        try launchState.modelContainer.mainContext.save()
+
+        let authService = SessionAuthServiceSpy(persistedSession: nil)
+        let store = SessionStore(
+            modelContainer: launchState.modelContainer,
+            launchState: launchState,
+            userDefaults: userDefaults,
+            authService: authService,
+            userProfileStore: UserProfileStoreSpy(),
+            connectivityMonitor: SessionConnectivityMonitor(initialStatus: .connected),
+            registerBackgroundRefresh: false
+        )
+
+        await store.bootstrapIfNeeded()
+
+        XCTAssertTrue(store.isSignedIn)
+        XCTAssertFalse(store.canManageSync)
+        XCTAssertEqual(store.summary?.userID, userID)
+        XCTAssertEqual(store.summary?.email, "preserved@example.com")
+        XCTAssertEqual(store.summary?.displayName, "Preserved User")
+        XCTAssertEqual(store.syncStatusTitle, "Signed in on this device")
+        XCTAssertEqual(authService.loadPersistedSessionCallCount, 1)
+        XCTAssertEqual(authService.clearPersistedSessionCallCount, 0)
     }
 
     func testFamilyRefreshKeepsCachedSnapshotWhenOffline() async throws {
@@ -814,6 +866,15 @@ final class SessionStoreOfflineTests: XCTestCase {
         let schema = Schema(versionedSchema: MistiaSchemaV1.self)
         let configuration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)
         return try ModelContainer(for: schema, configurations: [configuration])
+    }
+
+    private func clearProfileArtifacts() {
+        let applicationSupportURL = FileManager.default.urls(
+            for: .applicationSupportDirectory,
+            in: .userDomainMask
+        ).first ?? FileManager.default.temporaryDirectory
+        let profilesRootURL = applicationSupportURL.appendingPathComponent("profiles", isDirectory: true)
+        try? FileManager.default.removeItem(at: profilesRootURL)
     }
 
     private func makeSession(

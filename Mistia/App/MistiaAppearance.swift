@@ -16,6 +16,7 @@ enum MistiaAppStorageKey {
     static let localProfileDescriptors = "mistia.local-profile.descriptors"
     static let activeLocalProfileID = "mistia.local-profile.active-id"
     static let pendingSignupEmail = "mistia.auth.pending-signup-email"
+    static let authPreservedSignedInUserID = "mistia.auth.preserved-signed-in-user-id"
 
     static let notificationsEnabled = "mistia.notifications.enabled"
     static let notificationsHadAnyGroupOn = "mistia.notifications.hadAnyGroupOn"

@@ -109,7 +109,6 @@ final class SessionStore {
     // MARK: - Auto-sync Configuration
     private static let AUTOMATIC_SYNC_INTERVAL: TimeInterval = 1800 // 30 minutes in seconds
     private static let QUEUED_AUTO_SYNC_DEBOUNCE: Duration = .milliseconds(600)
-
     var summary: SessionSummary?
     var isWorking = false
     var isManualSyncInProgress = false
@@ -280,7 +279,7 @@ final class SessionStore {
             switch descriptor.kind {
             case .cloudUser:
                 guard let cloudUserID = descriptor.cloudUserID else { return nil }
-                if signedInUserID == cloudUserID && currentSession != nil {
+                if signedInUserID == cloudUserID {
                     return .authenticated(profileID: descriptor.id, cloudUserID: cloudUserID)
                 }
                 return .guestAttached(profileID: descriptor.id, cloudUserID: cloudUserID)
@@ -494,7 +493,9 @@ final class SessionStore {
         do {
             guard let restoredSession = try authService.loadPersistedSession() else {
                 if summary == nil {
-                    applySignedOutState()
+                    if !restorePreservedSignedInProfile(reason: nil) {
+                        applySignedOutState()
+                    }
                 }
                 return
             }
@@ -511,16 +512,18 @@ final class SessionStore {
         } catch {
             lastErrorMessage = friendlyErrorMessage(for: error)
             if summary == nil {
-                applySignedOutState(preservingBanner: true)
-                authBanner = SessionAuthBanner(
-                    title: mistiaLocalized(
-                        vi: "Chưa thể đọc phiên đã lưu",
-                        en: "Couldn't read the saved session",
-                        ja: "保存済みセッションを読み取れませんでした"
-                    ),
-                    message: friendlyErrorMessage(for: error),
-                    style: .error
-                )
+                if !restorePreservedSignedInProfile(reason: error) {
+                    applySignedOutState(preservingBanner: true)
+                    authBanner = SessionAuthBanner(
+                        title: mistiaLocalized(
+                            vi: "Chưa thể đọc phiên đã lưu",
+                            en: "Couldn't read the saved session",
+                            ja: "保存済みセッションを読み取れませんでした"
+                        ),
+                        message: friendlyErrorMessage(for: error),
+                        style: .error
+                    )
+                }
             }
         }
     }
@@ -678,6 +681,7 @@ final class SessionStore {
         let activeSession = currentSession
 
         disableShortcutIfNeededOnLogout()
+        clearPreservedSignedInUserID()
 
         await beginAuthTransition()
         defer { endAuthTransition() }
@@ -689,7 +693,7 @@ final class SessionStore {
         }
 
         if launchState == nil {
-            setLocalModeProfileUserID(activeSession?.user.id)
+            setLocalModeProfileUserID(activeSession?.user.id ?? summary?.userID ?? activeLocalProfileUserID)
         }
         clearSessionRuntimeState()
         isWorking = false
@@ -704,6 +708,7 @@ final class SessionStore {
         let currentDescriptor = launchState?.activeProfileDescriptor
 
         disableShortcutIfNeededOnLogout()
+        clearPreservedSignedInUserID()
 
         await beginAuthTransition()
         defer { endAuthTransition() }
@@ -749,6 +754,7 @@ final class SessionStore {
             } else {
                 setLocalModeProfileUserID(activeSession.user.id)
             }
+            clearPreservedSignedInUserID()
             clearSessionRuntimeState()
             applySignedOutState(preservingBanner: true)
             authBanner = SessionAuthBanner(
@@ -1083,13 +1089,10 @@ final class SessionStore {
         do {
             let validSession = try await authService.refreshSessionIfNeeded(currentSession)
             self.currentSession = validSession
+            setPreservedSignedInUserID(validSession.user.id)
             remoteUnavailableReason = nil
             return validSession
         } catch {
-            if invalidateSessionIfNeeded(for: error) {
-                throw error
-            }
-
             if isSignedIn {
                 applyRemoteUnavailableState(error, restoringExistingSession: true)
             }
@@ -1694,10 +1697,6 @@ final class SessionStore {
                 restoringExistingSession: restoringExistingSession
             )
         } catch {
-            if invalidateSessionIfNeeded(for: error) {
-                throw error
-            }
-
             if isSignedIn {
                 applyRemoteUnavailableState(
                     error,
@@ -1715,6 +1714,7 @@ final class SessionStore {
         restoringExistingSession: Bool
     ) throws {
         currentSession = session
+        setPreservedSignedInUserID(session.user.id)
         setLocalModeProfileUserID(nil)
 
         let baseSummary = SessionSummary(user: session.user)
@@ -1872,56 +1872,69 @@ final class SessionStore {
         }
     }
 
-    private func invalidateSessionIfNeeded(for error: Error) -> Bool {
-        guard isSessionInvalidationError(error) else { return false }
+    private func restorePreservedSignedInProfile(reason: Error?) -> Bool {
+        guard let userID = preservedSignedInUserID() else { return false }
 
-        try? authService.clearPersistedSession()
-        if launchState == nil {
-            setLocalModeProfileUserID(activeLocalProfileUserID ?? currentSession?.user.id)
-        }
-        clearSessionRuntimeState()
-        applySignedOutState(preservingBanner: true)
-        authBanner = SessionAuthBanner(
-            title: mistiaLocalized(
-                vi: "Phiên đã hết hạn sau khi kết nối lại",
-                en: "Session expired after reconnect",
-                ja: "再接続後にセッションの期限が切れました"
-            ),
-            message: friendlyErrorMessage(for: error),
-            style: .error
-        )
-        return true
-    }
-
-    private func isSessionInvalidationError(_ error: Error) -> Bool {
-        if let serviceError = error as? SupabaseServiceError {
-            switch serviceError {
-            case .missingRefreshToken:
-                return true
-            case .serverMessage(let message):
-                let normalized = message.lowercased()
-                return normalized.contains("401")
-                    || normalized.contains("unauthorized")
-                    || normalized.contains("jwt")
-                    || normalized.contains("refresh token")
-            case .configurationMissing,
-                    .invalidURL,
-                    .invalidResponse,
-                    .missingSession,
-                    .oauthCancelled,
-                    .googleClientIDMissing,
-                    .googleServerClientIDMissing,
-                    .googleCallbackSchemeMissing,
-                    .googlePresentationContextMissing,
-                    .googleTokensMissing:
+        if let launchState {
+            guard
+                let activeDescriptor = launchState.activeProfileDescriptor,
+                activeDescriptor.kind == .cloudUser,
+                activeDescriptor.cloudUserID == userID
+            else {
                 return false
             }
         }
 
-        let message = errorMessage(for: error)
-        return message.contains("401")
-            || message.contains("unauthorized")
-            || message.contains("jwt")
+        let baseSummary = SessionSummary(
+            userID: userID,
+            displayName: "Mistia",
+            email: "",
+            avatarURL: nil
+        )
+        let profile = storedProfile(for: userID)
+        currentSession = nil
+        summary = applyStoredProfile(profile, to: baseSummary)
+        lastSyncAt = profile?.lastSyncAt
+        lastErrorMessage = reason.map { friendlyErrorMessage(for: $0) }
+        authBanner = nil
+        authFieldErrors = [:]
+        authPendingEmail = nil
+        authPhase = .signIn
+        activeAuthAction = nil
+        requiresInitialSync = false
+        initialSyncPreview = nil
+        pendingInitialSyncChoice = nil
+
+        let detail = reason.map { friendlyErrorMessage(for: $0) } ?? mistiaLocalized(
+            vi: "Mistia không thấy phiên cloud đã lưu, nhưng tài khoản vẫn được giữ đăng nhập trên thiết bị này.",
+            en: "Mistia couldn't find the saved cloud session, but the account is still kept signed in on this device.",
+            ja: "保存済みのクラウドセッションは見つかりませんでしたが、この端末ではアカウントをログイン状態のまま保持しています。"
+        )
+        remoteUnavailableReason = detail
+        syncStatusTitle = mistiaLocalized(
+            vi: "Đã giữ đăng nhập trên máy này",
+            en: "Signed in on this device",
+            ja: "この端末ではログイン済みです"
+        )
+        syncStatusDetail = detail
+        syncStatusSystemImage = reason.map { syncErrorSystemImage(for: $0) } ?? "person.crop.circle.badge.checkmark"
+        updateAutoSyncLoopState()
+        return true
+    }
+
+    private func setPreservedSignedInUserID(_ userID: UUID) {
+        userDefaults.set(userID.uuidString.lowercased(), forKey: MistiaAppStorageKey.authPreservedSignedInUserID)
+    }
+
+    private func clearPreservedSignedInUserID() {
+        userDefaults.removeObject(forKey: MistiaAppStorageKey.authPreservedSignedInUserID)
+    }
+
+    private func preservedSignedInUserID() -> UUID? {
+        guard let rawValue = userDefaults.string(forKey: MistiaAppStorageKey.authPreservedSignedInUserID) else {
+            return nil
+        }
+        return UUID(uuidString: rawValue)
     }
 
     private func applyConfigurationMissingState() {
@@ -2176,9 +2189,9 @@ final class SessionStore {
 
         if message.contains("401") || message.contains("unauthorized") || message.contains("jwt") {
             return mistiaLocalized(
-                vi: "Phiên đăng nhập hết hạn hoặc không hợp lệ. Thử đăng nhập lại nhé.",
-                en: "Session expired or invalid. Please try signing in again.",
-                ja: "セッションの期限が切れたか無効です。もう一度ログインをお試しください。"
+                vi: "Phiên cloud cần xác thực lại. Tài khoản vẫn được giữ đăng nhập trên thiết bị này.",
+                en: "The cloud session needs to reconnect. The account is still kept signed in on this device.",
+                ja: "クラウドセッションの再接続が必要です。この端末ではアカウントをログイン状態のまま保持しています。"
             )
         }
 
