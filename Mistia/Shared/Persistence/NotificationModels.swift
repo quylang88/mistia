@@ -428,9 +428,10 @@ enum MistiaNotificationStore {
         currentUserID: UUID,
         in context: ModelContext
     ) throws {
-        let existingRows = try context.fetch(FetchDescriptor<AppNotificationRecord>())
-        var existingByID = Dictionary(existingRows.map { ($0.id, $0) }, uniquingKeysWith: latestNotification)
-        var existingByKey = Dictionary(existingRows.map { ($0.key, $0) }, uniquingKeysWith: latestNotification)
+        let existingFamilyRows = try context.fetch(FetchDescriptor<AppNotificationRecord>())
+            .filter { $0.source == .family }
+        var existingByID = Dictionary(existingFamilyRows.map { ($0.id, $0) }, uniquingKeysWith: latestNotification)
+        var existingByKey = Dictionary(existingFamilyRows.map { ($0.key, $0) }, uniquingKeysWith: latestNotification)
 
         for remote in remoteRows where remote.userID == currentUserID {
             let row = existingByID[remote.id] ?? existingByKey[remote.sourceEventKey] ?? AppNotificationRecord(
@@ -575,13 +576,13 @@ enum MistiaNotificationStore {
         }
 
         if row.source == .localReminder || row.source == .system {
-            guard let recipientUserID = row.recipientUserID else { return true }
+            guard let recipientUserID = row.recipientUserID else {
+                return userID == nil
+            }
             return recipientUserID == userID
         }
 
-        guard let recipientUserID = row.recipientUserID else {
-            return true
-        }
+        guard let recipientUserID = row.recipientUserID else { return false }
         return recipientUserID == userID
     }
 

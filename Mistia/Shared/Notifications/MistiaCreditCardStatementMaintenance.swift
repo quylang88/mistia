@@ -9,21 +9,46 @@ enum MistiaCreditCardStatementMaintenance {
         referenceDate: Date = .now,
         calendar: Calendar = MistiaCalendar.current
     ) async {
-        let wallets = (try? modelContext.fetch(
+        guard let activeUserID = sessionStore.activeLocalProfileUserID else { return }
+
+        let storedWallets = (try? modelContext.fetch(
             FetchDescriptor<LedgerWallet>(
                 predicate: #Predicate { $0.deletedAt == nil && !$0.isArchived }
             )
         )) ?? []
-        let transactions = (try? modelContext.fetch(
+        let storedTransactions = (try? modelContext.fetch(
             FetchDescriptor<LedgerTransaction>(
                 predicate: #Predicate { $0.deletedAt == nil && !$0.isArchived }
             )
         )) ?? []
-        var occurrences = (try? modelContext.fetch(
+        let storedOccurrences = (try? modelContext.fetch(
             FetchDescriptor<DueOccurrenceRecord>(
                 predicate: #Predicate { $0.deletedAt == nil }
             )
         )) ?? []
+
+        let scopes = (try? modelContext.fetch(FetchDescriptor<OwnedRecordScope>())) ?? []
+        let walletOwnerMap = MistiaRecordOwnershipStore.ownerMap(from: scopes, entity: .wallet)
+        let transactionOwnerMap = MistiaRecordOwnershipStore.ownerMap(from: scopes, entity: .transaction)
+        let occurrenceOwnerMap = MistiaRecordOwnershipStore.ownerMap(from: scopes, entity: .dueOccurrenceRecord)
+        removeStaleCreditCardNotifications(
+            walletOwnerMap: walletOwnerMap,
+            activeUserID: activeUserID,
+            modelContext: modelContext
+        )
+
+        let wallets = storedWallets.filter {
+            (walletOwnerMap[$0.id] ?? activeUserID) == activeUserID
+        }
+        let transactions = storedTransactions.filter {
+            let walletOwnerUserID = $0.sourceWallet.flatMap { walletOwnerMap[$0.id] }
+                ?? $0.destinationWallet.flatMap { walletOwnerMap[$0.id] }
+            let ownerUserID = transactionOwnerMap[$0.id] ?? walletOwnerUserID ?? activeUserID
+            return ownerUserID == activeUserID
+        }
+        var occurrences = storedOccurrences.filter {
+            (occurrenceOwnerMap[$0.id] ?? activeUserID) == activeUserID
+        }
 
         let transactionRecords = transactions.map(\.planningRecordSnapshot)
         let accounts = wallets.compactMap { $0.planningCreditCardSnapshot(records: transactionRecords) }
@@ -489,6 +514,37 @@ enum MistiaCreditCardStatementMaintenance {
         }
 
         try? modelContext.save()
+    }
+
+    private static func removeStaleCreditCardNotifications(
+        walletOwnerMap: [UUID: UUID],
+        activeUserID: UUID,
+        modelContext: ModelContext
+    ) {
+        let rows = (try? modelContext.fetch(FetchDescriptor<AppNotificationRecord>())) ?? []
+        let creditKinds: Set<MistiaAppNotificationKind> = [
+            .creditCardStatementReady,
+            .creditCardAutoPaymentSucceeded,
+            .creditCardAutoPaymentFailed
+        ]
+        var didDelete = false
+
+        for row in rows
+            where (row.source == .system || row.source == .localReminder)
+            && row.resourceType == .card
+            && creditKinds.contains(row.kind) {
+            guard let resourceID = row.resourceID,
+                  let ownerUserID = walletOwnerMap[resourceID],
+                  ownerUserID != activeUserID else {
+                continue
+            }
+            modelContext.delete(row)
+            didDelete = true
+        }
+
+        if didDelete {
+            try? modelContext.save()
+        }
     }
 
     private static func creditCardMetadataJSON(

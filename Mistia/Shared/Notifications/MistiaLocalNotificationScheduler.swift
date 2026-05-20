@@ -29,6 +29,12 @@ enum MistiaLocalNotificationScheduler {
         let wallets = storedWallets.filter {
             (walletOwnerMap[$0.id] ?? recipientUserID) == recipientUserID
         }
+        removeStaleWalletReminderInboxRecords(
+            activeWalletIDs: Set(wallets.map(\.id)),
+            walletOwnerMap: walletOwnerMap,
+            recipientUserID: recipientUserID,
+            modelContext: modelContext
+        )
 
         let storedTransactions = (try? modelContext.fetch(
             FetchDescriptor<LedgerTransaction>(
@@ -37,7 +43,10 @@ enum MistiaLocalNotificationScheduler {
         )) ?? []
         let transactionOwnerMap = MistiaRecordOwnershipStore.ownerMap(from: scopes, entity: .transaction)
         let transactions = storedTransactions.filter {
-            (transactionOwnerMap[$0.id] ?? recipientUserID) == recipientUserID
+            let walletOwnerUserID = $0.sourceWallet.flatMap { walletOwnerMap[$0.id] }
+                ?? $0.destinationWallet.flatMap { walletOwnerMap[$0.id] }
+            let ownerUserID = transactionOwnerMap[$0.id] ?? walletOwnerUserID ?? recipientUserID
+            return ownerUserID == recipientUserID
         }
 
         let transactionRecords = transactions.map { $0.planningRecordSnapshot }
@@ -141,9 +150,41 @@ enum MistiaLocalNotificationScheduler {
                 body: content.body,
                 kind: .lowWallet,
                 source: .localReminder,
-                recipientUserID: recipientUserID
+                recipientUserID: recipientUserID,
+                resourceType: .wallet,
+                resourceID: wallet.id
             )
         }
+    }
+
+    private static func removeStaleWalletReminderInboxRecords(
+        activeWalletIDs: Set<UUID>,
+        walletOwnerMap: [UUID: UUID],
+        recipientUserID: UUID,
+        modelContext: ModelContext
+    ) {
+        let rows = (try? modelContext.fetch(FetchDescriptor<AppNotificationRecord>())) ?? []
+        var didDelete = false
+
+        for row in rows where row.kind == .lowWallet && (row.source == .system || row.source == .localReminder) {
+            let walletID = row.resourceID ?? walletIDFromReminderKey(row.key)
+            guard let walletID else { continue }
+            let belongsToOtherUser = walletOwnerMap[walletID].map { $0 != recipientUserID } ?? false
+            if belongsToOtherUser || !activeWalletIDs.contains(walletID) {
+                modelContext.delete(row)
+                didDelete = true
+            }
+        }
+
+        if didDelete {
+            try? modelContext.save()
+        }
+    }
+
+    private static func walletIDFromReminderKey(_ key: String) -> UUID? {
+        let prefix = "mistia.reminder.wallet."
+        guard key.hasPrefix(prefix) else { return nil }
+        return UUID(uuidString: String(key.dropFirst(prefix.count)))
     }
 
     private static func nextLocalMorning(

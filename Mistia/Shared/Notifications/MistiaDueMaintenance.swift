@@ -69,8 +69,12 @@ private enum MistiaBudgetReminderMaintenance {
             )
         )) ?? []
         let transactionOwnerMap = MistiaRecordOwnershipStore.ownerMap(from: scopes, entity: .transaction)
+        let walletOwnerMap = MistiaRecordOwnershipStore.ownerMap(from: scopes, entity: .wallet)
         let transactions = storedTransactions.filter {
-            (transactionOwnerMap[$0.id] ?? recipientUserID) == recipientUserID
+            let walletOwnerUserID = $0.sourceWallet.flatMap { walletOwnerMap[$0.id] }
+                ?? $0.destinationWallet.flatMap { walletOwnerMap[$0.id] }
+            let ownerUserID = transactionOwnerMap[$0.id] ?? walletOwnerUserID ?? recipientUserID
+            return ownerUserID == recipientUserID
         }
 
         let selectedMonth = PlanningLogic.startOfMonth(for: referenceDate, calendar: calendar)

@@ -141,6 +141,69 @@ final class MistiaNotificationStoreTests: XCTestCase {
         XCTAssertEqual(MistiaNotificationStore.unreadCount(rows: rows, userID: otherUserID), 1)
     }
 
+    func testVisibleRowsDoNotLeakUnscopedNotificationsAcrossProfiles() {
+        let currentUserID = UUID()
+        let otherUserID = UUID()
+        let referenceDate = Date(timeIntervalSince1970: 1_777_800_000)
+        let unscopedLocal = AppNotificationRecord(
+            key: "legacy.local",
+            createdAt: referenceDate,
+            title: "Legacy local",
+            body: "Legacy local",
+            kind: .lowWallet,
+            source: .system
+        )
+        let currentLocal = AppNotificationRecord(
+            key: "current.local",
+            createdAt: referenceDate,
+            title: "Current local",
+            body: "Current local",
+            kind: .budgetWarning,
+            source: .localReminder,
+            recipientUserID: currentUserID
+        )
+        let otherLocal = AppNotificationRecord(
+            key: "other.local",
+            createdAt: referenceDate,
+            title: "Other local",
+            body: "Other local",
+            kind: .budgetWarning,
+            source: .system,
+            recipientUserID: otherUserID
+        )
+        let unscopedFamily = AppNotificationRecord(
+            key: "legacy.family",
+            createdAt: referenceDate,
+            title: "Legacy family",
+            body: "Legacy family",
+            kind: .familyActivity,
+            source: .family
+        )
+        let currentFamily = AppNotificationRecord(
+            key: "current.family",
+            createdAt: referenceDate,
+            title: "Current family",
+            body: "Current family",
+            kind: .familyActivity,
+            source: .family,
+            recipientUserID: currentUserID
+        )
+        let rows = [unscopedLocal, currentLocal, otherLocal, unscopedFamily, currentFamily]
+
+        XCTAssertEqual(
+            MistiaNotificationStore.visibleRows(rows, userID: currentUserID, referenceDate: referenceDate).map(\.key),
+            ["current.local", "current.family"]
+        )
+        XCTAssertEqual(
+            MistiaNotificationStore.visibleRows(rows, userID: otherUserID, referenceDate: referenceDate).map(\.key),
+            ["other.local"]
+        )
+        XCTAssertEqual(
+            MistiaNotificationStore.visibleRows(rows, userID: nil, referenceDate: referenceDate).map(\.key),
+            ["legacy.local"]
+        )
+    }
+
     func testVisibleRowsExcludeFutureLocalRowsAndLegacyDueSoon() {
         let referenceDate = Date(timeIntervalSince1970: 1_777_800_000)
         let visibleRow = AppNotificationRecord(

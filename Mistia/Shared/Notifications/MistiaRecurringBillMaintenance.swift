@@ -12,31 +12,70 @@ enum MistiaRecurringBillMaintenance {
         referenceDate: Date = .now,
         calendar: Calendar = MistiaCalendar.current
     ) async {
-        let bills = (try? modelContext.fetch(
+        guard let activeUserID = sessionStore.activeLocalProfileUserID else { return }
+
+        let storedBills = (try? modelContext.fetch(
             FetchDescriptor<RecurringBillPlan>(
                 predicate: #Predicate { $0.deletedAt == nil && !$0.isArchived }
             )
         )) ?? []
 
-        guard !bills.isEmpty else { return }
+        guard !storedBills.isEmpty else { return }
 
-        let wallets = (try? modelContext.fetch(
+        let storedWallets = (try? modelContext.fetch(
             FetchDescriptor<LedgerWallet>(
                 predicate: #Predicate { $0.deletedAt == nil && !$0.isArchived }
             )
         )) ?? []
 
-        let transactions = (try? modelContext.fetch(
+        let storedTransactions = (try? modelContext.fetch(
             FetchDescriptor<LedgerTransaction>(
                 predicate: #Predicate { $0.deletedAt == nil && !$0.isArchived }
             )
         )) ?? []
 
-        let occurrences = (try? modelContext.fetch(
+        let storedOccurrences = (try? modelContext.fetch(
             FetchDescriptor<DueOccurrenceRecord>(
                 predicate: #Predicate { $0.deletedAt == nil }
             )
         )) ?? []
+
+        let scopes = (try? modelContext.fetch(FetchDescriptor<OwnedRecordScope>())) ?? []
+        let billOwnerMap = MistiaRecordOwnershipStore.ownerMap(from: scopes, entity: .recurringBillPlan)
+        let walletOwnerMap = MistiaRecordOwnershipStore.ownerMap(from: scopes, entity: .wallet)
+        let transactionOwnerMap = MistiaRecordOwnershipStore.ownerMap(from: scopes, entity: .transaction)
+        let occurrenceOwnerMap = MistiaRecordOwnershipStore.ownerMap(from: scopes, entity: .dueOccurrenceRecord)
+        removeStaleBillNotifications(
+            billOwnerMap: billOwnerMap,
+            activeUserID: activeUserID,
+            modelContext: modelContext
+        )
+
+        let bills = storedBills.filter {
+            (billOwnerMap[$0.id] ?? activeUserID) == activeUserID
+        }
+        guard !bills.isEmpty else { return }
+
+        let wallets = storedWallets.filter {
+            (walletOwnerMap[$0.id] ?? activeUserID) == activeUserID
+        }
+        let transactions = storedTransactions.filter {
+            let walletOwnerUserID = $0.sourceWallet.flatMap { walletOwnerMap[$0.id] }
+                ?? $0.destinationWallet.flatMap { walletOwnerMap[$0.id] }
+            let ownerUserID = transactionOwnerMap[$0.id] ?? walletOwnerUserID ?? activeUserID
+            return ownerUserID == activeUserID
+        }
+        let occurrences = storedOccurrences.filter {
+            let sourceOwnerUserID: UUID?
+            switch $0.sourceKind {
+            case .recurringBill:
+                sourceOwnerUserID = billOwnerMap[$0.sourceID]
+            case .creditCard, .installment:
+                sourceOwnerUserID = nil
+            }
+            let ownerUserID = occurrenceOwnerMap[$0.id] ?? sourceOwnerUserID ?? activeUserID
+            return ownerUserID == activeUserID
+        }
 
         let transactionRecords = transactions.map(\.snapshot)
         let occurrenceSnaps = occurrences.map(\.planningSnapshot)
@@ -100,7 +139,7 @@ enum MistiaRecurringBillMaintenance {
                         bill: bill,
                         dueItem: dueItem,
                         monthKey: monthKey,
-                        recipientUserID: sessionStore.activeLocalProfileUserID,
+                        recipientUserID: activeUserID,
                         modelContext: modelContext
                     )
                 }
@@ -129,7 +168,7 @@ enum MistiaRecurringBillMaintenance {
                     bill: bill,
                     dueItem: dueItem,
                     monthKey: monthKey,
-                    recipientUserID: sessionStore.activeLocalProfileUserID,
+                    recipientUserID: activeUserID,
                     modelContext: modelContext
                 )
             }
@@ -159,7 +198,7 @@ enum MistiaRecurringBillMaintenance {
                     bill: bill,
                     dueItem: dueItem,
                     monthKey: monthKey,
-                    recipientUserID: sessionStore.activeLocalProfileUserID,
+                    recipientUserID: activeUserID,
                     modelContext: modelContext,
                     forceUnread: true
                 )
@@ -211,7 +250,7 @@ enum MistiaRecurringBillMaintenance {
         let selectedMonth = PlanningLogic.startOfMonth(for: dueItem.dueDate)
 
         do {
-            _ = try PlanningPersistenceSupport.upsertOccurrence(
+            let occurrence = try PlanningPersistenceSupport.upsertOccurrence(
                 sourceKind: .recurringBill,
                 sourceID: bill.id,
                 selectedMonth: selectedMonth,
@@ -230,6 +269,13 @@ enum MistiaRecurringBillMaintenance {
                 actorUserID: sessionStore.activeLocalProfileUserID,
                 modelContext: modelContext
             )
+            try recordOwnership(
+                entity: .dueOccurrenceRecord,
+                recordID: occurrence.id,
+                ownerUserID: subjectUserID,
+                updatedAt: occurrence.updatedAt,
+                modelContext: modelContext
+            )
 
             try modelContext.save()
             sessionStore.recordUpsert(
@@ -240,8 +286,9 @@ enum MistiaRecurringBillMaintenance {
             )
             sessionStore.recordUpsert(
                 entity: .dueOccurrenceRecord,
-                recordID: tx.id,  // occurrence ID resolved in upsert
-                modifiedAt: tx.updatedAt
+                recordID: occurrence.id,
+                modifiedAt: occurrence.updatedAt,
+                subjectUserIDOverride: subjectUserID
             )
 
             upsertNotification(
@@ -439,5 +486,54 @@ enum MistiaRecurringBillMaintenance {
             )
         }
         return subjectUserID
+    }
+
+    private static func recordOwnership(
+        entity: MistiaSyncEntity,
+        recordID: UUID,
+        ownerUserID: UUID?,
+        updatedAt: Date,
+        modelContext: ModelContext
+    ) throws {
+        guard let ownerUserID else { return }
+        try MistiaRecordOwnershipStore.upsert(
+            entity: entity,
+            recordID: recordID,
+            ownerUserID: ownerUserID,
+            updatedAt: updatedAt,
+            context: modelContext
+        )
+    }
+
+    private static func removeStaleBillNotifications(
+        billOwnerMap: [UUID: UUID],
+        activeUserID: UUID,
+        modelContext: ModelContext
+    ) {
+        let rows = (try? modelContext.fetch(FetchDescriptor<AppNotificationRecord>())) ?? []
+        let billKinds: Set<MistiaAppNotificationKind> = [
+            .billPaymentRequired,
+            .billAutoPaymentSucceeded,
+            .billAutoPaymentFailed,
+            .billOverdue
+        ]
+        var didDelete = false
+
+        for row in rows
+            where (row.source == .system || row.source == .localReminder)
+            && row.resourceType == .bill
+            && billKinds.contains(row.kind) {
+            guard let resourceID = row.resourceID,
+                  let ownerUserID = billOwnerMap[resourceID],
+                  ownerUserID != activeUserID else {
+                continue
+            }
+            modelContext.delete(row)
+            didDelete = true
+        }
+
+        if didDelete {
+            try? modelContext.save()
+        }
     }
 }

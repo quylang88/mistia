@@ -204,6 +204,10 @@ final class SyncCoordinatorFamilyCloudFirstTests: XCTestCase {
         XCTAssertEqual(createdTransaction?.userID, memberUserID)
         XCTAssertEqual(createdTransaction?.createdByUserID, viewerUserID)
         XCTAssertEqual(createdTransaction?.categoryID, categoryID)
+        XCTAssertEqual(remoteStore.familyNotificationEvents.count, 1)
+        XCTAssertEqual(remoteStore.familyNotificationEvents.first?.recipientUserID, memberUserID)
+        XCTAssertEqual(remoteStore.familyNotificationEvents.first?.resourceType, .transaction)
+        XCTAssertEqual(remoteStore.familyNotificationEvents.first?.resourceID, transactionID)
         XCTAssertFalse(outbox.contains(entity: .transaction, recordID: transactionID))
     }
 
@@ -272,6 +276,7 @@ private final class FamilyConflictRemoteStore: MistiaRemoteStore {
     var fetchSnapshotCallCount = 0
     var fetchedEntities: [MistiaSyncEntity] = []
     var createdRecords: [MistiaSyncUploadRecord] = []
+    var familyNotificationEvents: [RemoteFamilyActivityNotificationEvent] = []
 
     init(
         snapshot: MistiaRemoteSnapshot = MistiaRemoteSnapshot(
@@ -350,5 +355,7 @@ private final class FamilyConflictRemoteStore: MistiaRemoteStore {
     func createFamilyActivityNotification(
         _ event: RemoteFamilyActivityNotificationEvent,
         session: SupabaseAuthSession
-    ) async throws {}
+    ) async throws {
+        familyNotificationEvents.append(event)
+    }
 }

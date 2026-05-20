@@ -412,6 +412,180 @@ final class SessionStoreOfflineTests: XCTestCase {
         )
     }
 
+    func testCreditCardStatementMaintenanceIgnoresFamilyMemberCards() async throws {
+        let currentUserID = UUID()
+        let memberUserID = UUID()
+        let session = makeSession(userID: currentUserID)
+        let store = try makeSessionStore(
+            authService: SessionAuthServiceSpy(persistedSession: session),
+            userProfileStore: UserProfileStoreSpy(),
+            networkStatus: .disconnected
+        )
+        await store.bootstrapIfNeeded()
+        XCTAssertEqual(store.activeLocalProfileUserID, currentUserID)
+
+        let defaults = UserDefaults.standard
+        let changedKeys = [
+            MistiaAppStorageKey.notificationsEnabled,
+            MistiaAppStorageKey.notificationsGroupRemindersEnabled,
+            MistiaAppStorageKey.notificationsReminderCreditCardsEnabled
+        ]
+        let previousValues = Dictionary(
+            uniqueKeysWithValues: changedKeys.compactMap { key in
+                defaults.object(forKey: key).map { (key, $0) }
+            }
+        )
+        changedKeys.forEach { defaults.set(true, forKey: $0) }
+        defer {
+            for key in changedKeys {
+                if let previousValue = previousValues[key] {
+                    defaults.set(previousValue, forKey: key)
+                } else {
+                    defaults.removeObject(forKey: key)
+                }
+            }
+        }
+
+        let calendar = Calendar(identifier: .gregorian)
+        let referenceDate = try XCTUnwrap(calendar.date(from: DateComponents(year: 2026, month: 3, day: 10, hour: 12)))
+        let transactionDate = try XCTUnwrap(calendar.date(from: DateComponents(year: 2026, month: 2, day: 12, hour: 12)))
+        let updatedAt = try XCTUnwrap(calendar.date(from: DateComponents(year: 2026, month: 1, day: 1)))
+        let memberCard = LedgerWallet(
+            name: "Mercard",
+            kind: .creditCard,
+            iconSymbolName: "creditcard.fill",
+            iconColorHex: "#E5484D",
+            openingBalanceMinor: 0,
+            createdAt: updatedAt,
+            updatedAt: updatedAt
+        )
+        let memberProfile = CreditCardProfile(
+            issuerName: "Mercard",
+            creditLimitMinor: 100_000,
+            statementClosingDay: 10,
+            paymentDueDay: 26,
+            createdAt: updatedAt,
+            updatedAt: updatedAt,
+            wallet: memberCard
+        )
+        memberCard.creditCardProfile = memberProfile
+        let memberExpense = LedgerTransaction(
+            primaryKind: .expense,
+            title: "Member card charge",
+            amountMinor: 32_456,
+            occurredAt: transactionDate,
+            createdAt: transactionDate,
+            updatedAt: transactionDate,
+            sourceWallet: memberCard
+        )
+
+        let context = store.currentModelContainer.mainContext
+        context.insert(memberCard)
+        context.insert(memberProfile)
+        context.insert(memberExpense)
+        context.insert(OwnedRecordScope(entity: .wallet, recordID: memberCard.id, ownerUserID: memberUserID, updatedAt: updatedAt))
+        context.insert(OwnedRecordScope(entity: .creditCardProfile, recordID: memberProfile.id, ownerUserID: memberUserID, updatedAt: updatedAt))
+        context.insert(OwnedRecordScope(entity: .transaction, recordID: memberExpense.id, ownerUserID: memberUserID, updatedAt: transactionDate))
+        context.insert(AppNotificationRecord(
+            key: "mistia.credit.statement.ready.\(memberCard.id.uuidString.lowercased()).2026-02",
+            title: "Statement ready",
+            body: "Mercard stale statement",
+            kind: .creditCardStatementReady,
+            source: .system,
+            recipientUserID: currentUserID,
+            resourceType: .card,
+            resourceID: memberCard.id
+        ))
+        try context.save()
+
+        await MistiaCreditCardStatementMaintenance.run(
+            modelContext: context,
+            sessionStore: store,
+            referenceDate: referenceDate,
+            calendar: calendar
+        )
+
+        let rows = try context.fetch(FetchDescriptor<AppNotificationRecord>())
+        XCTAssertFalse(rows.contains { $0.kind == .creditCardStatementReady })
+        XCTAssertFalse(rows.contains { $0.body.localizedCaseInsensitiveContains("Mercard") })
+    }
+
+    func testRecurringBillMaintenanceIgnoresFamilyMemberBills() async throws {
+        let currentUserID = UUID()
+        let memberUserID = UUID()
+        let session = makeSession(userID: currentUserID)
+        let store = try makeSessionStore(
+            authService: SessionAuthServiceSpy(persistedSession: session),
+            userProfileStore: UserProfileStoreSpy(),
+            networkStatus: .disconnected
+        )
+        await store.bootstrapIfNeeded()
+        XCTAssertEqual(store.activeLocalProfileUserID, currentUserID)
+
+        let defaults = UserDefaults.standard
+        let changedKeys = [
+            MistiaAppStorageKey.notificationsEnabled,
+            MistiaAppStorageKey.notificationsGroupRemindersEnabled,
+            MistiaAppStorageKey.notificationsReminderBillsEnabled
+        ]
+        let previousValues = Dictionary(
+            uniqueKeysWithValues: changedKeys.compactMap { key in
+                defaults.object(forKey: key).map { (key, $0) }
+            }
+        )
+        changedKeys.forEach { defaults.set(true, forKey: $0) }
+        defer {
+            for key in changedKeys {
+                if let previousValue = previousValues[key] {
+                    defaults.set(previousValue, forKey: key)
+                } else {
+                    defaults.removeObject(forKey: key)
+                }
+            }
+        }
+
+        let calendar = Calendar(identifier: .gregorian)
+        let referenceDate = try XCTUnwrap(calendar.date(from: DateComponents(year: 2026, month: 3, day: 10, hour: 12)))
+        let updatedAt = try XCTUnwrap(calendar.date(from: DateComponents(year: 2026, month: 1, day: 1)))
+        let memberBill = RecurringBillPlan(
+            name: "Member electricity",
+            iconSymbolName: "bolt.fill",
+            amountMinor: nil,
+            dueDay: 5,
+            paymentWallet: nil,
+            currencyCode: "JPY",
+            createdAt: updatedAt,
+            updatedAt: updatedAt
+        )
+
+        let context = store.currentModelContainer.mainContext
+        context.insert(memberBill)
+        context.insert(OwnedRecordScope(entity: .recurringBillPlan, recordID: memberBill.id, ownerUserID: memberUserID, updatedAt: updatedAt))
+        context.insert(AppNotificationRecord(
+            key: "mistia.bill.payment.required.\(memberBill.id.uuidString.lowercased()).2026-03",
+            title: "Bill due soon",
+            body: "Member electricity stale bill",
+            kind: .billPaymentRequired,
+            source: .system,
+            recipientUserID: currentUserID,
+            resourceType: .bill,
+            resourceID: memberBill.id
+        ))
+        try context.save()
+
+        await MistiaRecurringBillMaintenance.run(
+            modelContext: context,
+            sessionStore: store,
+            referenceDate: referenceDate,
+            calendar: calendar
+        )
+
+        let rows = try context.fetch(FetchDescriptor<AppNotificationRecord>())
+        XCTAssertFalse(rows.contains { $0.kind == .billPaymentRequired })
+        XCTAssertFalse(rows.contains { $0.kind == .billOverdue })
+        XCTAssertFalse(rows.contains { $0.body.localizedCaseInsensitiveContains("Member electricity") })
+    }
+
     func testSignOutKeepsPreviousAccountAsEditableLocalProfile() async throws {
         let session = makeSession()
         let authService = SessionAuthServiceSpy(persistedSession: session)
