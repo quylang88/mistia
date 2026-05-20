@@ -205,7 +205,7 @@ final class FamilyLogicTests: XCTestCase {
         XCTAssertEqual(summary.spendableMinor, 120_000)
     }
 
-    func testAggregateSummaryBuildsMemberComparisonFromVisibleTransactions() {
+    func testAggregateSummaryBuildsMemberComparisonFromCreatorsAndVisibleTransactions() {
         let memberA = UUID()
         let memberB = UUID()
         let interval = DateInterval(
@@ -218,6 +218,7 @@ final class FamilyLogicTests: XCTestCase {
             transactions: [
                 FamilyAggregateTransactionSnapshot(
                     ownerUserID: memberA,
+                    createdByUserID: memberA,
                     categoryName: "Food",
                     occurredAt: makeDate(year: 2026, month: 4, day: 3),
                     kind: .expense,
@@ -231,7 +232,8 @@ final class FamilyLogicTests: XCTestCase {
                     amountMinor: 50_000
                 ),
                 FamilyAggregateTransactionSnapshot(
-                    ownerUserID: memberB,
+                    ownerUserID: memberA,
+                    createdByUserID: memberB,
                     categoryName: "Shopping",
                     occurredAt: makeDate(year: 2026, month: 4, day: 8),
                     kind: .expense,
@@ -244,6 +246,24 @@ final class FamilyLogicTests: XCTestCase {
                     kind: .expense,
                     amountMinor: 100_000,
                     isCreditCardPayment: true
+                ),
+                FamilyAggregateTransactionSnapshot(
+                    ownerUserID: memberA,
+                    createdByUserID: memberB,
+                    categoryName: "Adjustment",
+                    occurredAt: makeDate(year: 2026, month: 4, day: 13),
+                    kind: .expense,
+                    amountMinor: 70_000,
+                    isAdjustment: true
+                ),
+                FamilyAggregateTransactionSnapshot(
+                    ownerUserID: memberB,
+                    createdByUserID: memberB,
+                    categoryName: "Installment",
+                    occurredAt: makeDate(year: 2026, month: 4, day: 14),
+                    kind: .expense,
+                    amountMinor: 90_000,
+                    isInstallmentPayment: true
                 )
             ],
             selectedInterval: interval,

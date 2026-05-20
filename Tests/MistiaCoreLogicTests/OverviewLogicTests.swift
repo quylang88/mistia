@@ -281,6 +281,46 @@ final class OverviewLogicTests: XCTestCase {
         XCTAssertEqual(page.slices[0].childSlices.map(\.amountMinor), [5_000, 3_000])
     }
 
+    func testCategorySpendingExcludesNonSpendingExpenseLikePayments() {
+        let grocery = UUID()
+
+        let page = OverviewLogic.categorySpendingMonth(
+            from: [
+                makeOverviewExpense(
+                    amountMinor: 5_000,
+                    occurredAt: makeDate(year: 2026, month: 4, day: 2),
+                    categoryID: grocery,
+                    categoryName: "Đi chợ"
+                ),
+                makeOverviewExpense(
+                    amountMinor: 7_000,
+                    occurredAt: makeDate(year: 2026, month: 4, day: 3),
+                    categoryID: MistiaSystemCategoryIdentity.balanceAdjustmentExpenseID,
+                    categoryName: "Điều chỉnh số dư"
+                ),
+                makeOverviewExpense(
+                    amountMinor: 9_000,
+                    occurredAt: makeDate(year: 2026, month: 4, day: 4),
+                    categoryID: MistiaSystemCategoryIdentity.canonicalID(for: .loanRepayment),
+                    categoryName: "Trả góp"
+                ),
+                makeOverviewTransaction(
+                    primaryKind: .transfer,
+                    transferSubtype: .internalTransfer,
+                    title: "Chuyển tiền",
+                    amountMinor: 11_000,
+                    occurredAt: makeDate(year: 2026, month: 4, day: 5)
+                )
+            ],
+            selectedMonth: makeDate(year: 2026, month: 4, day: 15),
+            currencyCode: "JPY",
+            calendar: calendar
+        )
+
+        XCTAssertEqual(page.totalExpenseMinor, 5_000)
+        XCTAssertEqual(page.slices.map(\.name), ["Đi chợ"])
+    }
+
     func testCategorySpendingDrilldownIncludesChildAndDirectParentTransactions() {
         let foodParent = UUID()
         let grocery = UUID()

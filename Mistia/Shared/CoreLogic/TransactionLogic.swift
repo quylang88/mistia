@@ -156,6 +156,10 @@ nonisolated enum TransactionLogic {
         record.categoryID == MistiaSystemCategoryIdentity.balanceAdjustmentIncomeID
     }
 
+    static func isInstallmentPayment(_ record: TransactionRecordSnapshot) -> Bool {
+        record.categoryID == MistiaSystemCategoryIdentity.canonicalID(for: .loanRepayment)
+    }
+
     static func isCreditCardPayment(_ record: TransactionRecordSnapshot) -> Bool {
         let titleLooksLikeCardPayment = isCreditCardPaymentTitle(record.title)
         if record.primaryKind == .transfer {
@@ -170,7 +174,10 @@ nonisolated enum TransactionLogic {
     }
 
     static func isExpenseSpending(_ record: TransactionRecordSnapshot) -> Bool {
-        record.primaryKind == .expense && !isCreditCardPayment(record)
+        record.primaryKind == .expense
+            && !isAdjustment(record)
+            && !isCreditCardPayment(record)
+            && !isInstallmentPayment(record)
     }
 
     static func isCreditCardPaymentTitle(_ title: String) -> Bool {

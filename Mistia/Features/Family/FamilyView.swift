@@ -1843,6 +1843,7 @@ struct FamilyOverviewScreen: View {
     @Query(filter: #Predicate<DueOccurrenceRecord> { $0.deletedAt == nil })
     private var storedOccurrences: [DueOccurrenceRecord]
     @Query private var ownershipScopes: [OwnedRecordScope]
+    @Query private var transactionAuditRecords: [TransactionAuditRecord]
 
     private var overviewData: FamilyOverviewDerivedData {
         let now = Date.now
@@ -1856,6 +1857,7 @@ struct FamilyOverviewScreen: View {
         let billOwnerMap = MistiaRecordOwnershipStore.ownerMap(from: ownershipScopes, entity: .recurringBillPlan)
         let installmentOwnerMap = MistiaRecordOwnershipStore.ownerMap(from: ownershipScopes, entity: .installmentPlan)
         let occurrenceOwnerMap = MistiaRecordOwnershipStore.ownerMap(from: ownershipScopes, entity: .dueOccurrenceRecord)
+        let transactionAuditMap = TransactionAuditStore.auditMap(from: transactionAuditRecords)
         let visibleWallets = visibleForFamilyOverview(
             storedWallets,
             entity: .wallet,
@@ -1993,14 +1995,18 @@ struct FamilyOverviewScreen: View {
             }
             .map { $0.planningSnapshot(calendar: calendar) }
         let familyTransactions = visibleTransactions.map { transaction in
-            FamilyAggregateTransactionSnapshot(
+            let record = transaction.planningRecordSnapshot
+            return FamilyAggregateTransactionSnapshot(
                 ownerUserID: transactionOwnerMap[transaction.id] ?? sessionStore.signedInUserID ?? UUID(),
+                createdByUserID: transactionAuditMap[transaction.id]?.createdByUserID,
                 categoryName: transaction.category?.localizedDisplayName,
                 categoryParentName: transaction.category?.parentCategory?.localizedDisplayName,
                 occurredAt: transaction.occurredAt,
                 kind: transaction.primaryKind.familyAggregateKind,
                 amountMinor: abs(transaction.amountMinor),
-                isCreditCardPayment: TransactionLogic.isCreditCardPayment(transaction.snapshot)
+                isCreditCardPayment: TransactionLogic.isCreditCardPayment(record),
+                isAdjustment: TransactionLogic.isAdjustment(record),
+                isInstallmentPayment: TransactionLogic.isInstallmentPayment(record)
             )
         }
         let memberOrder = familyMemberOrder

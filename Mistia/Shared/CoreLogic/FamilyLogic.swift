@@ -242,29 +242,38 @@ struct FamilyAggregateTransactionSnapshot: Equatable {
     }
 
     let ownerUserID: UUID
+    let createdByUserID: UUID?
     let categoryName: String?
     let categoryParentName: String?
     let occurredAt: Date
     let kind: Kind
     let amountMinor: Int64
     let isCreditCardPayment: Bool
+    let isAdjustment: Bool
+    let isInstallmentPayment: Bool
 
     init(
         ownerUserID: UUID,
+        createdByUserID: UUID? = nil,
         categoryName: String?,
         categoryParentName: String? = nil,
         occurredAt: Date,
         kind: Kind,
         amountMinor: Int64,
-        isCreditCardPayment: Bool = false
+        isCreditCardPayment: Bool = false,
+        isAdjustment: Bool = false,
+        isInstallmentPayment: Bool = false
     ) {
         self.ownerUserID = ownerUserID
+        self.createdByUserID = createdByUserID
         self.categoryName = categoryName
         self.categoryParentName = categoryParentName
         self.occurredAt = occurredAt
         self.kind = kind
         self.amountMinor = amountMinor
         self.isCreditCardPayment = isCreditCardPayment
+        self.isAdjustment = isAdjustment
+        self.isInstallmentPayment = isInstallmentPayment
     }
 }
 
@@ -625,7 +634,9 @@ enum FamilyLogic {
         // 4. Member Comparison
         let memberSpendingMap = intervalTransactions.reduce(into: [UUID: Int64]()) { partial, transaction in
             guard isExpenseSpending(transaction) else { return }
-            partial[transaction.ownerUserID, default: 0] += transaction.amountMinor
+            let spendingUserID = transaction.createdByUserID ?? transaction.ownerUserID
+            guard visibleMemberIDs?.contains(spendingUserID) ?? true else { return }
+            partial[spendingUserID, default: 0] += transaction.amountMinor
         }
         let spendingByMember = memberSpendingMap.map { 
             FamilyMemberSpendingSnapshot(userID: $0.key, name: memberNames[$0.key] ?? "Unknown", amountMinor: $0.value)
@@ -709,7 +720,10 @@ enum FamilyLogic {
     }
 
     nonisolated private static func isExpenseSpending(_ transaction: FamilyAggregateTransactionSnapshot) -> Bool {
-        transaction.kind == .expense && !transaction.isCreditCardPayment
+        transaction.kind == .expense
+            && !transaction.isAdjustment
+            && !transaction.isCreditCardPayment
+            && !transaction.isInstallmentPayment
     }
 
     nonisolated private static func walletAggregateSort(

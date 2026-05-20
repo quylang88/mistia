@@ -202,7 +202,7 @@ final class TransactionLogicTests: XCTestCase {
         XCTAssertEqual(sections.first?.rows.count, 1)
     }
 
-    func testCreditCardPaymentsDoNotCountAsExpenseSpending() {
+    func testNonSpendingExpenseLikePaymentsDoNotCountAsExpenseSpending() {
         let bankID = UUID()
         let cardID = UUID()
         let categoryID = UUID()
@@ -216,6 +216,15 @@ final class TransactionLogicTests: XCTestCase {
             sourceWalletID: bankID,
             sourceWalletKind: .bank,
             categoryID: categoryID
+        )
+        let adjustment = makeRecord(
+            primaryKind: .expense,
+            title: "Điều chỉnh số dư",
+            amountMinor: 2_000,
+            occurredAt: now.addingTimeInterval(30),
+            sourceWalletID: bankID,
+            sourceWalletKind: .bank,
+            categoryID: MistiaSystemCategoryIdentity.balanceAdjustmentExpenseID
         )
         let cardPayment = makeRecord(
             primaryKind: .transfer,
@@ -237,11 +246,28 @@ final class TransactionLogicTests: XCTestCase {
             sourceWalletKind: .bank,
             categoryID: categoryID
         )
+        let installmentPayment = makeRecord(
+            primaryKind: .expense,
+            title: "Laptop",
+            amountMinor: 6_000,
+            occurredAt: now.addingTimeInterval(180),
+            sourceWalletID: bankID,
+            sourceWalletKind: .bank,
+            categoryID: MistiaSystemCategoryIdentity.canonicalID(for: .loanRepayment)
+        )
 
-        let summary = TransactionLogic.summary(for: [grocery, cardPayment, legacyExpensePayment])
+        let summary = TransactionLogic.summary(for: [
+            grocery,
+            adjustment,
+            cardPayment,
+            legacyExpensePayment,
+            installmentPayment
+        ])
 
         XCTAssertTrue(TransactionLogic.isCreditCardPayment(cardPayment))
         XCTAssertTrue(TransactionLogic.isCreditCardPayment(legacyExpensePayment))
+        XCTAssertTrue(TransactionLogic.isAdjustment(adjustment))
+        XCTAssertTrue(TransactionLogic.isInstallmentPayment(installmentPayment))
         XCTAssertEqual(summary.expenseMinor, 4_000)
         XCTAssertEqual(summary.incomeMinor, 0)
     }

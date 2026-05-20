@@ -580,8 +580,23 @@ nonisolated enum OverviewLogic {
     ) -> Bool {
         transaction.entryStatus == .posted
             && transaction.primaryKind == .expense
+            && !isAdjustment(transaction)
             && !isCreditCardPayment(transaction)
+            && !isInstallmentPayment(transaction)
             && !transaction.isArchived
+    }
+
+    private static func isAdjustment(
+        _ transaction: OverviewTransactionSnapshot
+    ) -> Bool {
+        transaction.categoryID == MistiaSystemCategoryIdentity.balanceAdjustmentExpenseID
+            || transaction.categoryID == MistiaSystemCategoryIdentity.balanceAdjustmentIncomeID
+    }
+
+    private static func isInstallmentPayment(
+        _ transaction: OverviewTransactionSnapshot
+    ) -> Bool {
+        transaction.categoryID == MistiaSystemCategoryIdentity.canonicalID(for: .loanRepayment)
     }
 
     private static func isCreditCardPayment(
