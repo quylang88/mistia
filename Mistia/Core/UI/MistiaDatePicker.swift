@@ -163,12 +163,7 @@ private struct MistiaDatePickerPanel: View {
                     .foregroundStyle(.secondary)
             }
             .foregroundStyle(.primary)
-            .padding(.horizontal, 12)
             .frame(height: 34)
-            .background(
-                Capsule(style: .continuous)
-                    .fill(Color(UIColor.secondarySystemGroupedBackground))
-            )
         }
         .buttonStyle(.plain)
         .popover(isPresented: $isMonthYearPickerPresented) {

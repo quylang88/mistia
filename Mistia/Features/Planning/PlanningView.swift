@@ -2718,8 +2718,12 @@ private struct PlanningMonthPickerSheet: View {
             .padding(.horizontal, 20)
             .padding(.top, 16)
             .padding(.bottom, 20)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+            .background(groupedBackground)
             .navigationTitle(mistiaLocalized(vi: "Chọn tháng", en: "Choose month", ja: "月を選択"))
             .navigationBarTitleDisplayMode(.inline)
+            .toolbarBackground(groupedBackground, for: .navigationBar)
+            .toolbarBackground(.visible, for: .navigationBar)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
                     Button {
@@ -2746,6 +2750,11 @@ private struct PlanningMonthPickerSheet: View {
                 }
             }
         }
+        .presentationBackground(groupedBackground)
+    }
+
+    private var groupedBackground: Color {
+        Color(UIColor.systemGroupedBackground)
     }
 
     private var allowedMonths: [Int] {
