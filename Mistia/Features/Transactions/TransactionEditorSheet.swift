@@ -461,8 +461,11 @@ struct TransactionEditorSheet: View {
                 TextField(mistiaLocalized(vi: "Số tiền", en: "Amount", ja: "金額"), text: $bindableDraft.amountText)
                     .keyboardType(.numberPad)
 
-                DatePicker(mistiaLocalized(vi: "Thời gian", en: "Date & time", ja: "日時"), selection: $bindableDraft.occurredAt, displayedComponents: [.date, .hourAndMinute])
-                    .datePickerStyle(.compact)
+                MistiaDatePickerRow(
+                    title: mistiaLocalized(vi: "Thời gian", en: "Date & time", ja: "日時"),
+                    selection: $bindableDraft.occurredAt,
+                    mode: .dateAndTime
+                )
             }
 
             switch draft.primaryKind {

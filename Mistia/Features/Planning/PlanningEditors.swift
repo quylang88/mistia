@@ -513,7 +513,11 @@ struct PlanningGoalEditorSheet: View {
                         .keyboardType(.numberPad)
                     TextField(mistiaLocalized(vi: "Số tiền hiện tại", en: "Current amount", ja: "現在額"), text: $draft.currentText)
                         .keyboardType(.numberPad)
-                    DatePicker(mistiaLocalized(vi: "Ngày mục tiêu", en: "Target date", ja: "目標日"), selection: $draft.targetDate, displayedComponents: [.date])
+                    MistiaDatePickerRow(
+                        title: mistiaLocalized(vi: "Ngày mục tiêu", en: "Target date", ja: "目標日"),
+                        selection: $draft.targetDate,
+                        mode: .date
+                    )
 
                     Picker(mistiaLocalized(vi: "Ví liên kết", en: "Linked wallet", ja: "連携ウォレット"), selection: $draft.linkedWalletID) {
                         Text(mistiaLocalized(vi: "Không liên kết", en: "Not linked", ja: "未連携")).tag(Optional<UUID>.none)
