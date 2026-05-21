@@ -151,20 +151,32 @@ extension TransactionCategory {
 
 private extension TransactionCategory {
     var mistiaHierarchyDisplayName: String {
-        let trimmedName = name.trimmingCharacters(in: .whitespacesAndNewlines)
-
-        if let systemKey,
-           let parentKey = MistiaSystemCategoryParentKey(rawValue: systemKey),
-           Set(parentKey.knownDefaultNames()).contains(trimmedName) {
-            return parentKey.localizedTitle(for: .current)
+        switch MistiaAppLanguage.current {
+        case .vietnamese:
+            return name
+        case .english:
+            return nonBlank(nameEnglish) ?? fallbackLocalizedSystemName(for: .english)
+        case .japanese:
+            return nonBlank(nameJapanese) ?? fallbackLocalizedSystemName(for: .japanese)
         }
+    }
 
+    private func fallbackLocalizedSystemName(for language: MistiaAppLanguage) -> String {
         if let systemKey,
-           let categoryKey = MistiaSystemCategoryKey(rawValue: systemKey),
-           Set(categoryKey.knownDefaultNames()).contains(trimmedName) {
-            return categoryKey.localizedTitle(for: .current)
+           let parentKey = MistiaSystemCategoryParentKey(rawValue: systemKey) {
+            return parentKey.localizedTitle(for: language)
         }
-
+        if let systemKey,
+           let categoryKey = MistiaSystemCategoryKey(rawValue: systemKey) {
+            return categoryKey.localizedTitle(for: language)
+        }
         return name
+    }
+
+    private func nonBlank(_ value: String?) -> String? {
+        guard let trimmed = value?.trimmingCharacters(in: .whitespacesAndNewlines), !trimmed.isEmpty else {
+            return nil
+        }
+        return trimmed
     }
 }

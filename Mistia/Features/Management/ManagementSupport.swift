@@ -4,6 +4,8 @@ import UIKit
 
 struct ManagementCategorySeed {
     let name: String
+    let nameEnglish: String?
+    let nameJapanese: String?
     let kind: TransactionCategoryKind
     let iconSymbolName: String
     let fallbackSystemName: String
@@ -14,6 +16,8 @@ struct ManagementCategorySeed {
 
     init(
         name: String,
+        nameEnglish: String? = nil,
+        nameJapanese: String? = nil,
         kind: TransactionCategoryKind,
         iconSymbolName: String,
         fallbackSystemName: String,
@@ -23,6 +27,8 @@ struct ManagementCategorySeed {
         startsArchived: Bool = false
     ) {
         self.name = name
+        self.nameEnglish = nameEnglish
+        self.nameJapanese = nameJapanese
         self.kind = kind
         self.iconSymbolName = iconSymbolName
         self.fallbackSystemName = fallbackSystemName
@@ -35,6 +41,8 @@ struct ManagementCategorySeed {
 
 struct ManagementCategoryParentSeed {
     let name: String
+    let nameEnglish: String?
+    let nameJapanese: String?
     let kind: TransactionCategoryKind
     let iconSymbolName: String
     let fallbackSystemName: String
@@ -123,7 +131,9 @@ enum ManagementPresetData {
     static let defaultCategoryParentSeeds: [ManagementCategoryParentSeed] =
         MistiaSystemCategoryParentKey.activeDefaults.map { systemKey in
             ManagementCategoryParentSeed(
-                name: systemKey.title,
+                name: systemKey.legacyVietnameseName,
+                nameEnglish: systemKey.englishTitle,
+                nameJapanese: systemKey.japaneseTitle,
                 kind: systemKey.kind,
                 iconSymbolName: systemKey.iconSymbolName,
                 fallbackSystemName: systemKey.fallbackSystemName,
@@ -136,7 +146,9 @@ enum ManagementPresetData {
     static let defaultCategorySeeds: [ManagementCategorySeed] =
         MistiaSystemCategoryKey.activeDefaults.map { systemKey in
             ManagementCategorySeed(
-                name: systemKey.title,
+                name: systemKey.legacyVietnameseName,
+                nameEnglish: systemKey.englishTitle,
+                nameJapanese: systemKey.japaneseTitle,
                 kind: systemKey.kind,
                 iconSymbolName: systemKey.iconSymbolName,
                 fallbackSystemName: systemKey.fallbackSystemName,
@@ -196,19 +208,31 @@ extension TransactionCategory {
     }
 
     var localizedDisplayName: String {
-        if let mistiaSystemCategoryParentKey {
-            let trimmedName = name.trimmingCharacters(in: .whitespacesAndNewlines)
-            let knownDefaultNames = Set(mistiaSystemCategoryParentKey.knownDefaultNames())
-            if knownDefaultNames.contains(trimmedName) {
-                return mistiaSystemCategoryParentKey.localizedTitle(for: .current)
-            }
+        switch MistiaAppLanguage.current {
+        case .vietnamese:
+            return name
+        case .english:
+            return nonBlank(nameEnglish) ?? fallbackLocalizedSystemName(for: .english)
+        case .japanese:
+            return nonBlank(nameJapanese) ?? fallbackLocalizedSystemName(for: .japanese)
         }
+    }
 
-        guard let mistiaSystemCategoryKey else { return name }
-        let trimmedName = name.trimmingCharacters(in: .whitespacesAndNewlines)
-        let knownDefaultNames = Set(mistiaSystemCategoryKey.knownDefaultNames())
-        guard knownDefaultNames.contains(trimmedName) else { return name }
-        return mistiaSystemCategoryKey.localizedTitle(for: .current)
+    private func fallbackLocalizedSystemName(for language: MistiaAppLanguage) -> String {
+        if let mistiaSystemCategoryParentKey {
+            return mistiaSystemCategoryParentKey.localizedTitle(for: language)
+        }
+        if let mistiaSystemCategoryKey {
+            return mistiaSystemCategoryKey.localizedTitle(for: language)
+        }
+        return name
+    }
+
+    private func nonBlank(_ value: String?) -> String? {
+        guard let trimmed = value?.trimmingCharacters(in: .whitespacesAndNewlines), !trimmed.isEmpty else {
+            return nil
+        }
+        return trimmed
     }
 }
 

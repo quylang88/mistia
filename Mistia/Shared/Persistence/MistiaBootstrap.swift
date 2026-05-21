@@ -188,6 +188,8 @@ enum MistiaBootstrap {
                     TransactionCategory(
                         id: MistiaSystemCategoryIdentity.canonicalID(for: seed.systemKey),
                         name: seed.name,
+                        nameEnglish: seed.nameEnglish,
+                        nameJapanese: seed.nameJapanese,
                         kind: seed.kind,
                         iconSymbolName: seed.iconSymbolName,
                         iconColorHex: seed.iconColorHex,
@@ -235,6 +237,8 @@ enum MistiaBootstrap {
                     TransactionCategory(
                         id: MistiaSystemCategoryIdentity.canonicalID(for: systemKey),
                         name: seed.name,
+                        nameEnglish: seed.nameEnglish,
+                        nameJapanese: seed.nameJapanese,
                         kind: seed.kind,
                         iconSymbolName: seed.iconSymbolName,
                         iconColorHex: seed.iconColorHex,
@@ -327,7 +331,9 @@ enum MistiaBootstrap {
 
         let category = TransactionCategory(
             id: MistiaSystemCategoryIdentity.canonicalID(for: systemKey),
-            name: seed?.name ?? systemKey.title,
+            name: seed?.name ?? systemKey.legacyVietnameseName,
+            nameEnglish: seed?.nameEnglish ?? systemKey.englishTitle,
+            nameJapanese: seed?.nameJapanese ?? systemKey.japaneseTitle,
             kind: seed?.kind ?? systemKey.kind,
             iconSymbolName: seed?.iconSymbolName ?? systemKey.iconSymbolName,
             iconColorHex: seed?.iconColorHex ?? systemKey.iconColorHex,
@@ -375,6 +381,8 @@ enum MistiaBootstrap {
         var didMutate = false
 
         didMutate = assignIfNeeded(&category.name, seed.name) || didMutate
+        didMutate = assignIfNeeded(&category.nameEnglish, seed.nameEnglish) || didMutate
+        didMutate = assignIfNeeded(&category.nameJapanese, seed.nameJapanese) || didMutate
         didMutate = assignIfNeeded(&category.kindRawValue, seed.kind.rawValue) || didMutate
         didMutate = assignIfNeeded(&category.iconSymbolName, seed.iconSymbolName) || didMutate
         didMutate = assignIfNeeded(&category.iconColorHex, seed.iconColorHex) || didMutate
@@ -414,6 +422,8 @@ enum MistiaBootstrap {
         var didMutate = false
 
         didMutate = assignIfNeeded(&category.name, seed.name) || didMutate
+        didMutate = assignIfNeeded(&category.nameEnglish, seed.nameEnglish) || didMutate
+        didMutate = assignIfNeeded(&category.nameJapanese, seed.nameJapanese) || didMutate
         didMutate = assignIfNeeded(&category.kindRawValue, seed.kind.rawValue) || didMutate
         didMutate = assignIfNeeded(&category.iconSymbolName, seed.iconSymbolName) || didMutate
         didMutate = assignIfNeeded(&category.iconColorHex, seed.iconColorHex) || didMutate
@@ -475,6 +485,8 @@ enum MistiaBootstrap {
             let category = TransactionCategory(
                 id: MistiaSystemCategoryIdentity.canonicalID(for: seed.systemKey),
                 name: seed.name,
+                nameEnglish: seed.nameEnglish,
+                nameJapanese: seed.nameJapanese,
                 kind: seed.kind,
                 iconSymbolName: seed.iconSymbolName,
                 iconColorHex: seed.iconColorHex,
@@ -534,6 +546,8 @@ enum MistiaBootstrap {
             let category = TransactionCategory(
                 id: MistiaSystemCategoryIdentity.canonicalID(for: systemKey),
                 name: seed.name,
+                nameEnglish: seed.nameEnglish,
+                nameJapanese: seed.nameJapanese,
                 kind: seed.kind,
                 iconSymbolName: seed.iconSymbolName,
                 iconColorHex: seed.iconColorHex,
@@ -646,7 +660,12 @@ enum MistiaBootstrap {
         var didMutate = false
         let now = Date()
 
-        // Removed forced overrides for name, kind, iconSymbolName, and iconColorHex
+        if Set(seed.systemKey.knownDefaultNames()).contains(category.name.trimmingCharacters(in: .whitespacesAndNewlines)) {
+            didMutate = assignIfNeeded(&category.name, seed.name) || didMutate
+        }
+        didMutate = assignIfNeeded(&category.nameEnglish, seed.nameEnglish) || didMutate
+        didMutate = assignIfNeeded(&category.nameJapanese, seed.nameJapanese) || didMutate
+        // Removed forced overrides for kind, iconSymbolName, and iconColorHex
         // to allow users to customize system parent categories freely.
         if category.hierarchyRole != .parent {
             category.hierarchyRole = .parent
@@ -685,7 +704,13 @@ enum MistiaBootstrap {
         var didMutate = false
         let now = Date()
 
-        // Removed forced overrides for name, iconSymbolName, and iconColorHex
+        if let systemKey = seed.systemKey,
+           Set(systemKey.knownDefaultNames()).contains(category.name.trimmingCharacters(in: .whitespacesAndNewlines)) {
+            didMutate = assignIfNeeded(&category.name, seed.name) || didMutate
+        }
+        didMutate = assignIfNeeded(&category.nameEnglish, seed.nameEnglish) || didMutate
+        didMutate = assignIfNeeded(&category.nameJapanese, seed.nameJapanese) || didMutate
+        // Removed forced overrides for iconSymbolName, and iconColorHex
         // to allow users to customize system child categories freely.
         if category.parentCategory?.id != parentCategory?.id {
             category.parentCategory = parentCategory

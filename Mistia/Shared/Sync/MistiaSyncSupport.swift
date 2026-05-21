@@ -369,6 +369,8 @@ private extension MistiaSyncUploadRecord {
         case (.category(let local), .category(let remote)):
             return MistiaSyncConflictDifferenceBuilder.build {
                 field("name", mistiaLocalized(vi: "Tên", en: "Name", ja: "名前"), local.name, remote.name)
+                field("nameEnglish", mistiaLocalized(vi: "Tên tiếng Anh", en: "English name", ja: "英語名"), local.nameEnglish, remote.nameEnglish)
+                field("nameJapanese", mistiaLocalized(vi: "Tên tiếng Nhật", en: "Japanese name", ja: "日本語名"), local.nameJapanese, remote.nameJapanese)
                 field("kind", mistiaLocalized(vi: "Loại", en: "Kind", ja: "種別"), local.kindRawValue, remote.kindRawValue)
                 field("icon", mistiaLocalized(vi: "Icon", en: "Icon", ja: "アイコン"), local.iconSymbolName, remote.iconSymbolName)
                 field("color", mistiaLocalized(vi: "Màu", en: "Color", ja: "色"), local.iconColorHex, remote.iconColorHex)

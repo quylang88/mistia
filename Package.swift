@@ -30,6 +30,7 @@ let package = Package(
                 "Styles",
                 "Persistence/MistiaBootstrap.swift",
                 "Persistence/MistiaLegacyStoreRecovery.swift",
+                "Sync/CategoryNameTranslationService.swift",
                 "Sync/KeychainStore.swift",
                 "Sync/MistiaGoogleSignInConfiguration.swift",
                 "Sync/MistiaSyncBackgroundScheduler.swift",

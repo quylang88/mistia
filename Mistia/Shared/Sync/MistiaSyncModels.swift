@@ -110,6 +110,8 @@ struct RemoteTransactionCategory: MistiaRemoteRow {
     var userID: UUID
     var id: UUID
     var name: String
+    var nameEnglish: String?
+    var nameJapanese: String?
     var kindRawValue: String
     var iconSymbolName: String
     var iconColorHex: String
@@ -131,6 +133,8 @@ struct RemoteTransactionCategory: MistiaRemoteRow {
         userID: UUID,
         id: UUID,
         name: String,
+        nameEnglish: String? = nil,
+        nameJapanese: String? = nil,
         kindRawValue: String,
         iconSymbolName: String,
         iconColorHex: String,
@@ -151,6 +155,8 @@ struct RemoteTransactionCategory: MistiaRemoteRow {
         self.userID = userID
         self.id = id
         self.name = name
+        self.nameEnglish = nameEnglish
+        self.nameJapanese = nameJapanese
         self.kindRawValue = kindRawValue
         self.iconSymbolName = iconSymbolName
         self.iconColorHex = iconColorHex
@@ -173,6 +179,8 @@ struct RemoteTransactionCategory: MistiaRemoteRow {
         case userID = "user_id"
         case id
         case name
+        case nameEnglish = "name_english"
+        case nameJapanese = "name_japanese"
         case kindRawValue = "kind_raw_value"
         case iconSymbolName = "icon_symbol_name"
         case iconColorHex = "icon_color_hex"
@@ -196,6 +204,8 @@ struct RemoteTransactionCategory: MistiaRemoteRow {
         userID = try container.decode(UUID.self, forKey: .userID)
         id = try container.decode(UUID.self, forKey: .id)
         name = try container.decode(String.self, forKey: .name)
+        nameEnglish = try container.decodeIfPresent(String.self, forKey: .nameEnglish)
+        nameJapanese = try container.decodeIfPresent(String.self, forKey: .nameJapanese)
         kindRawValue = try container.decode(String.self, forKey: .kindRawValue)
         iconSymbolName = try container.decode(String.self, forKey: .iconSymbolName)
         iconColorHex = try container.decode(String.self, forKey: .iconColorHex)
@@ -830,6 +840,8 @@ enum MistiaSyncUploadRecord {
             return [
                 entity.rawValue,
                 row.name,
+                row.nameEnglish ?? "",
+                row.nameJapanese ?? "",
                 row.kindRawValue,
                 row.iconSymbolName,
                 row.iconColorHex,

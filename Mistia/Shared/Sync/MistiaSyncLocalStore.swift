@@ -307,7 +307,9 @@ enum MistiaSyncLocalStore {
                     canonicalCategoryID: MistiaSystemCategoryIdentity.canonicalID(for: parentKey),
                     ownerUserID: subjectUserID
                 ),
-                name: parentKey.title,
+                name: parentKey.legacyVietnameseName,
+                nameEnglish: parentKey.englishTitle,
+                nameJapanese: parentKey.japaneseTitle,
                 kindRawValue: parentKey.kind.rawValue,
                 iconSymbolName: parentKey.iconSymbolName,
                 iconColorHex: MistiaIconColorPalette.presetHex(forDefault: parentKey.iconColorHex),
@@ -1407,6 +1409,7 @@ enum MistiaSyncLocalStore {
         categoryByID: inout [UUID: TransactionCategory],
         preservesLocalSystemDefaults: Bool = true
     ) throws {
+        let resolvedNames = resolvedCategoryNames(for: row)
         if preservesLocalSystemDefaults,
            let existing = categoryByID[row.id],
            shouldPreserveLocalActiveSystemCategory(existing, over: row) {
@@ -1415,7 +1418,9 @@ enum MistiaSyncLocalStore {
 
         let category = categoryByID[row.id] ?? TransactionCategory(
             id: row.id,
-            name: row.name,
+            name: resolvedNames.name,
+            nameEnglish: resolvedNames.nameEnglish,
+            nameJapanese: resolvedNames.nameJapanese,
             kind: TransactionCategoryKind(rawValue: row.kindRawValue) ?? .expense,
             iconSymbolName: row.iconSymbolName,
             iconColorHex: row.iconColorHex,
@@ -1438,7 +1443,9 @@ enum MistiaSyncLocalStore {
             categoryByID[row.id] = category
         }
 
-        category.name = row.name
+        category.name = resolvedNames.name
+        category.nameEnglish = resolvedNames.nameEnglish
+        category.nameJapanese = resolvedNames.nameJapanese
         category.kind = TransactionCategoryKind(rawValue: row.kindRawValue) ?? .expense
         category.iconSymbolName = row.iconSymbolName
         category.iconColorHex = row.iconColorHex
@@ -1462,6 +1469,40 @@ enum MistiaSyncLocalStore {
             updatedAt: row.updatedAt,
             context: context
         )
+    }
+
+    private static func resolvedCategoryNames(
+        for row: RemoteTransactionCategory
+    ) -> (name: String, nameEnglish: String?, nameJapanese: String?) {
+        let trimmedName = row.name.trimmingCharacters(in: .whitespacesAndNewlines)
+        if let rawSystemKey = row.systemKey,
+           let parentKey = MistiaSystemCategoryParentKey(rawValue: rawSystemKey),
+           Set(parentKey.knownDefaultNames()).contains(trimmedName) {
+            return (
+                parentKey.legacyVietnameseName,
+                nonBlank(row.nameEnglish) ?? parentKey.englishTitle,
+                nonBlank(row.nameJapanese) ?? parentKey.japaneseTitle
+            )
+        }
+
+        if let rawSystemKey = row.systemKey,
+           let categoryKey = MistiaSystemCategoryKey(rawValue: rawSystemKey),
+           Set(categoryKey.knownDefaultNames()).contains(trimmedName) {
+            return (
+                categoryKey.legacyVietnameseName,
+                nonBlank(row.nameEnglish) ?? categoryKey.englishTitle,
+                nonBlank(row.nameJapanese) ?? categoryKey.japaneseTitle
+            )
+        }
+
+        return (row.name, row.nameEnglish, row.nameJapanese)
+    }
+
+    private static func nonBlank(_ value: String?) -> String? {
+        guard let trimmed = value?.trimmingCharacters(in: .whitespacesAndNewlines), !trimmed.isEmpty else {
+            return nil
+        }
+        return trimmed
     }
 
     private static func scopedCategoryRows(
@@ -2291,9 +2332,12 @@ private extension RemoteCreditCardProfile {
 
 private extension RemoteTransactionCategory {
     init(local category: TransactionCategory, userID: UUID) {
+        let names = category.syncNameFields
         self.userID = userID
         self.id = mistiaCloudCategoryID(for: category, userID: userID) ?? category.id
-        self.name = category.name
+        self.name = names.name
+        self.nameEnglish = names.nameEnglish
+        self.nameJapanese = names.nameJapanese
         self.kindRawValue = category.kindRawValue
         self.iconSymbolName = category.iconSymbolName
         self.iconColorHex = category.iconColorHex
@@ -2310,6 +2354,40 @@ private extension RemoteTransactionCategory {
         self.deletedAt = category.deletedAt
         self.syncVersion = max(category.remoteVersion, 1)
         self.lastModifiedByDeviceID = nil
+    }
+}
+
+private extension TransactionCategory {
+    var syncNameFields: (name: String, nameEnglish: String?, nameJapanese: String?) {
+        let trimmedName = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        if let systemKey,
+           let parentKey = MistiaSystemCategoryParentKey(rawValue: systemKey),
+           Set(parentKey.knownDefaultNames()).contains(trimmedName) {
+            return (
+                parentKey.legacyVietnameseName,
+                nonBlank(nameEnglish) ?? parentKey.englishTitle,
+                nonBlank(nameJapanese) ?? parentKey.japaneseTitle
+            )
+        }
+
+        if let systemKey,
+           let categoryKey = MistiaSystemCategoryKey(rawValue: systemKey),
+           Set(categoryKey.knownDefaultNames()).contains(trimmedName) {
+            return (
+                categoryKey.legacyVietnameseName,
+                nonBlank(nameEnglish) ?? categoryKey.englishTitle,
+                nonBlank(nameJapanese) ?? categoryKey.japaneseTitle
+            )
+        }
+
+        return (name, nameEnglish, nameJapanese)
+    }
+
+    private func nonBlank(_ value: String?) -> String? {
+        guard let trimmed = value?.trimmingCharacters(in: .whitespacesAndNewlines), !trimmed.isEmpty else {
+            return nil
+        }
+        return trimmed
     }
 }
 

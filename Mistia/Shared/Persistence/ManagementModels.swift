@@ -130,6 +130,8 @@ final class CreditCardProfile {
 final class TransactionCategory {
     @Attribute(.unique) var id: UUID
     var name: String
+    var nameEnglish: String?
+    var nameJapanese: String?
     var kindRawValue: String
     var iconSymbolName: String
     var iconColorHex: String
@@ -151,6 +153,8 @@ final class TransactionCategory {
     init(
         id: UUID = UUID(),
         name: String,
+        nameEnglish: String? = nil,
+        nameJapanese: String? = nil,
         kind: TransactionCategoryKind,
         iconSymbolName: String,
         iconColorHex: String,
@@ -170,6 +174,8 @@ final class TransactionCategory {
     ) {
         self.id = id
         self.name = name
+        self.nameEnglish = nameEnglish
+        self.nameJapanese = nameJapanese
         self.kindRawValue = kind.rawValue
         self.iconSymbolName = iconSymbolName
         self.iconColorHex = iconColorHex

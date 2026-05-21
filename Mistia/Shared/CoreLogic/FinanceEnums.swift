@@ -371,6 +371,8 @@ nonisolated enum MistiaSystemCategoryParentKey: String, CaseIterable, Codable, I
     var kind: TransactionCategoryKind { meta.kind }
     var title: String { localizedTitle(for: .current) }
     var legacyVietnameseName: String { meta.title }
+    var englishTitle: String { Self.localizedDefaultTitles[self]?.english ?? meta.title }
+    var japaneseTitle: String { Self.localizedDefaultTitles[self]?.japanese ?? meta.title }
     var fallbackSystemName: String { meta.fallbackSystemName }
     var iconSymbolName: String { meta.iconToken }
     var iconColorHex: String { meta.iconColorHex }
@@ -910,6 +912,8 @@ nonisolated enum MistiaSystemCategoryKey: String, CaseIterable, Codable, Identif
     var id: String { rawValue }
     var title: String { localizedTitle(for: .current) }
     var legacyVietnameseName: String { meta.title }
+    var englishTitle: String { Self.localizedDefaultTitles[self]?.english ?? meta.englishTitle ?? meta.title }
+    var japaneseTitle: String { Self.localizedDefaultTitles[self]?.japanese ?? meta.japaneseTitle ?? meta.title }
     var parentKey: MistiaSystemCategoryParentKey? { meta.parentKey }
     var fallbackSystemName: String { meta.fallbackSystemName }
     var iconSymbolName: String { meta.iconToken }

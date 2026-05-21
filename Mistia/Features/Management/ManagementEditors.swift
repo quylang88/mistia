@@ -627,6 +627,7 @@ struct ManagementCategoryEditorSheet: View {
     @State private var showsIconPicker = false
     @State private var showsParentPicker = false
     @State private var alertMessage: String?
+    @State private var isSaving = false
 
     init(target: ManagementCategoryEditorTarget) {
         self.target = target
@@ -780,16 +781,26 @@ struct ManagementCategoryEditorSheet: View {
 
                 ToolbarItem(placement: .topBarTrailing) {
                     Button {
-                        save()
+                        Task {
+                            await save()
+                        }
                     } label: {
-                        Image(systemName: "checkmark")
-                            .font(.system(size: 14, weight: .bold))
-                            .foregroundStyle(Color(red: 0.88, green: 0.78, blue: 1.0))
-                            .frame(width: 30, height: 30)
+                        if isSaving {
+                            ProgressView()
+                                .controlSize(.small)
+                                .tint(Color(red: 0.88, green: 0.78, blue: 1.0))
+                                .frame(width: 30, height: 30)
+                        } else {
+                            Image(systemName: "checkmark")
+                                .font(.system(size: 14, weight: .bold))
+                                .foregroundStyle(Color(red: 0.88, green: 0.78, blue: 1.0))
+                                .frame(width: 30, height: 30)
+                        }
                     }
                     .buttonStyle(.glassProminent)
                     .buttonBorderShape(.circle)
                     .tint(Color(red: 0.43, green: 0.23, blue: 0.76))
+                    .disabled(isSaving)
                 }
             }
         }
@@ -838,7 +849,9 @@ struct ManagementCategoryEditorSheet: View {
         }
     }
 
-    private func save() {
+    @MainActor
+    private func save() async {
+        guard !isSaving else { return }
         guard let trimmedName = draft.name.nilIfBlank else {
             alertMessage = mistiaLocalized(vi: "Nhập tên danh mục trước khi lưu.", en: "Enter a category name before saving.", ja: "保存する前にカテゴリ名を入力してください。")
             return
@@ -853,15 +866,21 @@ struct ManagementCategoryEditorSheet: View {
             return
         }
 
+        isSaving = true
+        defer { isSaving = false }
+
         let now = Date()
         let selectedParentCategory = draft.hierarchyRole == .child ? selectedParentCategory : nil
+        let translatedName = await translatedCategoryName(for: trimmedName)
         let categoryForSync: TransactionCategory
 
         if let category = target.category {
             let previousKind = category.kind
             let previousParentID = category.parentCategory?.id
             let previousRole = category.hierarchyRole
-            category.name = trimmedName
+            category.name = translatedName.name
+            category.nameEnglish = translatedName.nameEnglish
+            category.nameJapanese = translatedName.nameJapanese
             category.kind = draft.kind
             category.iconSymbolName = draft.iconSymbolName
             category.iconColorHex = draft.iconColorHex
@@ -880,7 +899,9 @@ struct ManagementCategoryEditorSheet: View {
             categoryForSync = category
         } else {
             let category = TransactionCategory(
-                name: trimmedName,
+                name: translatedName.name,
+                nameEnglish: translatedName.nameEnglish,
+                nameJapanese: translatedName.nameJapanese,
                 kind: draft.kind,
                 iconSymbolName: draft.iconSymbolName,
                 iconColorHex: draft.iconColorHex,
@@ -909,6 +930,32 @@ struct ManagementCategoryEditorSheet: View {
             dismiss()
         } catch {
             alertMessage = mistiaLocalized(vi: "Không thể lưu danh mục lúc này.", en: "Couldn't save this category right now.", ja: "現在このカテゴリを保存できません。") + " \(error.localizedDescription)"
+        }
+    }
+
+    @MainActor
+    private func translatedCategoryName(for inputName: String) async -> CategoryNameTranslations {
+        let sourceLanguage = MistiaAppLanguage.current
+        let fallback = CategoryNameTranslations.fallback(
+            inputName: inputName,
+            sourceLanguage: sourceLanguage,
+            existingCategory: target.category
+        )
+
+        do {
+            let session = try await sessionStore.prepareRemoteSession()
+            let translated = try await CategoryNameTranslationService().translateCategoryName(
+                inputName: inputName,
+                sourceLanguage: sourceLanguage,
+                session: session
+            )
+            return CategoryNameTranslations(
+                name: translated.name.nilIfBlank ?? fallback.name,
+                nameEnglish: translated.nameEnglish ?? fallback.nameEnglish,
+                nameJapanese: translated.nameJapanese ?? fallback.nameJapanese
+            )
+        } catch {
+            return fallback
         }
     }
 
@@ -1345,7 +1392,7 @@ private struct CategoryDraft {
                 colorHex: category.iconColorHex
             )
 
-            self.name = category.name
+            self.name = category.localizedDisplayName
             self.kind = category.kind
             self.hierarchyRole = category.hierarchyRole
             self.parentCategoryID = category.parentCategory?.id

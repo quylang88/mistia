@@ -40,6 +40,88 @@ final class MistiaSystemCategoryRemoteApplyTests: XCTestCase {
         XCTAssertEqual(decoded.name, "Cloud wallet")
     }
 
+    func testSystemCategoryExportKeepsOneRecordWithLocalizedNameColumns() throws {
+        let userID = UUID()
+        let categoryKey = MistiaSystemCategoryParentKey.expenseFood
+        let container = try makeContainer()
+        let context = ModelContext(container)
+        context.insert(
+            TransactionCategory(
+                id: MistiaSystemCategoryIdentity.canonicalID(for: categoryKey),
+                name: categoryKey.japaneseTitle,
+                kind: categoryKey.kind,
+                iconSymbolName: categoryKey.iconSymbolName,
+                iconColorHex: categoryKey.iconColorHex,
+                hierarchyRole: .parent,
+                systemKey: categoryKey.rawValue,
+                isSystem: true,
+                cloudSyncEnabled: true,
+                sortOrder: 0
+            )
+        )
+        try context.save()
+
+        let snapshot = try MistiaSyncLocalStore.exportSnapshot(for: userID, from: container)
+
+        XCTAssertEqual(snapshot.categories.count, 1)
+        XCTAssertEqual(snapshot.categories.first?.name, categoryKey.legacyVietnameseName)
+        XCTAssertEqual(snapshot.categories.first?.nameEnglish, categoryKey.englishTitle)
+        XCTAssertEqual(snapshot.categories.first?.nameJapanese, categoryKey.japaneseTitle)
+    }
+
+    func testRemoteSystemCategoryApplyNormalizesLocalizedNameColumns() throws {
+        let userID = UUID()
+        let categoryKey = MistiaSystemCategoryParentKey.expenseFood
+        let categoryID = MistiaSystemCategoryIdentity.canonicalID(for: categoryKey)
+        let now = Date(timeIntervalSince1970: 1_770_000_000)
+        let container = try makeContainer()
+        let remoteSnapshot = MistiaRemoteSnapshot(
+            wallets: [],
+            creditCardProfiles: [],
+            categories: [
+                RemoteTransactionCategory(
+                    userID: userID,
+                    id: categoryID,
+                    name: categoryKey.englishTitle,
+                    kindRawValue: categoryKey.kind.rawValue,
+                    iconSymbolName: categoryKey.iconSymbolName,
+                    iconColorHex: categoryKey.iconColorHex,
+                    isFavorite: false,
+                    parentCategoryID: nil,
+                    hierarchyRoleRawValue: TransactionCategoryHierarchyRole.parent.rawValue,
+                    systemKey: categoryKey.rawValue,
+                    isSystem: true,
+                    sortOrder: 0,
+                    isArchived: false,
+                    archivedAt: nil,
+                    createdAt: now,
+                    updatedAt: now,
+                    deletedAt: nil,
+                    syncVersion: 1,
+                    lastModifiedByDeviceID: nil
+                )
+            ],
+            transactions: [],
+            budgetPlans: [],
+            savingsGoals: [],
+            recurringBillPlans: [],
+            installmentPlans: [],
+            dueOccurrences: []
+        )
+
+        try MistiaSyncLocalStore.applySnapshotIncrementally(
+            remoteSnapshot,
+            shouldPruneMissing: false,
+            protectedRecordIDs: [],
+            in: container
+        )
+
+        let category = try fetchCategory(id: categoryID, in: container)
+        XCTAssertEqual(category.name, categoryKey.legacyVietnameseName)
+        XCTAssertEqual(category.nameEnglish, categoryKey.englishTitle)
+        XCTAssertEqual(category.nameJapanese, categoryKey.japaneseTitle)
+    }
+
     func testStaleRemoteArchiveDoesNotHideNewerLocalDefaultSystemCategory() throws {
         let userID = UUID()
         let categoryKey = MistiaSystemCategoryParentKey.expenseFood
@@ -722,7 +804,7 @@ final class MistiaSystemCategoryRemoteApplyTests: XCTestCase {
     }
 
     private func makeContainer() throws -> ModelContainer {
-        let schema = Schema(versionedSchema: MistiaSchemaV2.self)
+        let schema = Schema(versionedSchema: MistiaSchemaV3.self)
         let configuration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)
         return try ModelContainer(for: schema, configurations: [configuration])
     }
