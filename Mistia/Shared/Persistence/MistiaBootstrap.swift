@@ -93,16 +93,23 @@ enum MistiaBootstrap {
         )
         let ownershipScopes = try modelContext.fetch(FetchDescriptor<OwnedRecordScope>())
         let categoryOwnerMap = MistiaRecordOwnershipStore.ownerMap(from: ownershipScopes, entity: .category)
-        var existingCategories = try modelContext.fetch(FetchDescriptor<TransactionCategory>())
-            .filter {
-                $0.deletedAt == nil
-                    && !MistiaSystemCategorySyncSupport.isFamilyScopedSystemCategory(
-                        $0,
-                        categoryOwnerMap: categoryOwnerMap
-                    )
-            }
+        let allCategories = try modelContext.fetch(FetchDescriptor<TransactionCategory>())
+        let localizedNameCategoryIDs = normalizeLocalizedSystemCategoryNames(allCategories)
+        var existingCategories = allCategories.filter {
+            $0.deletedAt == nil
+                && !MistiaSystemCategorySyncSupport.isFamilyScopedSystemCategory(
+                    $0,
+                    categoryOwnerMap: categoryOwnerMap
+                )
+        }
         var didMutate = false
         var categoriesNeedingSync: [TransactionCategory] = []
+        if !localizedNameCategoryIDs.isEmpty {
+            didMutate = true
+            categoriesNeedingSync.append(
+                contentsOf: existingCategories.filter { localizedNameCategoryIDs.contains($0.id) }
+            )
+        }
 
         let (parentByKey, didSeedParents) = ensureDefaultParentCategories(
             modelContext: modelContext,
@@ -461,6 +468,39 @@ enum MistiaBootstrap {
         guard value != nextValue else { return false }
         value = nextValue
         return true
+    }
+
+    private static func normalizeLocalizedSystemCategoryNames(
+        _ categories: [TransactionCategory]
+    ) -> Set<UUID> {
+        var mutatedCategoryIDs: Set<UUID> = []
+        let now = Date()
+
+        for category in categories where category.deletedAt == nil && category.isSystem {
+            let trimmedName = category.name.trimmingCharacters(in: .whitespacesAndNewlines)
+            var didMutate = false
+
+            if let systemKey = category.systemKey,
+               let parentKey = MistiaSystemCategoryParentKey(rawValue: systemKey),
+               Set(parentKey.knownDefaultNames()).contains(trimmedName) {
+                didMutate = assignIfNeeded(&category.name, parentKey.legacyVietnameseName) || didMutate
+                didMutate = assignIfNeeded(&category.nameEnglish, parentKey.englishTitle) || didMutate
+                didMutate = assignIfNeeded(&category.nameJapanese, parentKey.japaneseTitle) || didMutate
+            } else if let systemKey = category.systemKey,
+                      let categoryKey = MistiaSystemCategoryKey(rawValue: systemKey),
+                      Set(categoryKey.knownDefaultNames()).contains(trimmedName) {
+                didMutate = assignIfNeeded(&category.name, categoryKey.legacyVietnameseName) || didMutate
+                didMutate = assignIfNeeded(&category.nameEnglish, categoryKey.englishTitle) || didMutate
+                didMutate = assignIfNeeded(&category.nameJapanese, categoryKey.japaneseTitle) || didMutate
+            }
+
+            if didMutate {
+                category.updatedAt = now
+                mutatedCategoryIDs.insert(category.id)
+            }
+        }
+
+        return mutatedCategoryIDs
     }
 
     private static func ensureDefaultParentCategories(
