@@ -828,6 +828,7 @@ nonisolated enum OverviewLogic {
             let iconSymbolName: String
             let amountMinor: Int64?
             let dueDate: Date
+            let alertDate: Date
             let currencyCode: String
             let sourceKind: PlanningDueSourceKind
             let sourceID: UUID?
@@ -844,6 +845,7 @@ nonisolated enum OverviewLogic {
                     iconSymbolName: LedgerWalletKind.creditCard.defaultIconSymbolName,
                     amountMinor: $0.amountMinor,
                     dueDate: $0.dueDate,
+                    alertDate: $0.dueDate,
                     currencyCode: $0.currencyCode,
                     sourceKind: .creditCard,
                     sourceID: $0.walletID,
@@ -860,10 +862,11 @@ nonisolated enum OverviewLogic {
                     iconSymbolName: $0.iconSymbolName,
                     amountMinor: $0.amountMinor,
                     dueDate: $0.dueDate,
+                    alertDate: startOfToday < calendar.startOfDay(for: $0.paymentStartDate) ? $0.paymentStartDate : $0.dueDate,
                     currencyCode: $0.currencyCode,
                     sourceKind: $0.sourceKind,
                     sourceID: $0.sourceID,
-                    dueMonthKey: PlanningLogic.monthKey(for: $0.dueDate, calendar: calendar),
+                    dueMonthKey: PlanningLogic.monthKey(for: $0.paymentStartDate, calendar: calendar),
                     requiresAmountInput: $0.amountMinor == nil
                 )
             }
@@ -873,7 +876,7 @@ nonisolated enum OverviewLogic {
                 let dayDelta = calendar.dateComponents(
                     [.day],
                     from: startOfToday,
-                    to: calendar.startOfDay(for: item.dueDate)
+                    to: calendar.startOfDay(for: item.alertDate)
                 ).day ?? 0
 
                 guard (0...7).contains(dayDelta) else {
@@ -885,7 +888,7 @@ nonisolated enum OverviewLogic {
                     name: item.name,
                     iconSymbolName: item.iconSymbolName,
                     amountMinor: item.amountMinor,
-                    dueDate: item.dueDate,
+                    dueDate: item.alertDate,
                     dayDelta: dayDelta,
                     currencyCode: item.currencyCode,
                     tint: dayDelta <= 3 ? .red : .blue,

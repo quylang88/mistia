@@ -142,11 +142,6 @@ struct OverviewView: View {
             entity: .budgetPlan,
             scopeSnapshot: scopeSnapshot
         )
-        let visibleBills = FamilyScopedData.visible(
-            storedBills,
-            entity: .recurringBillPlan,
-            scopeSnapshot: scopeSnapshot
-        )
         let visibleInstallments = FamilyScopedData.visible(
             storedInstallments,
             entity: .installmentPlan,
@@ -190,14 +185,7 @@ struct OverviewView: View {
             referenceDate: .now,
             calendar: calendar
         )
-        let recurringDueItems = PlanningLogic.recurringBillDueItems(
-            bills: visibleBills
-                .filter { !$0.isArchived }
-                .map(\.planningSnapshot),
-            occurrences: occurrenceSnapshots,
-            selectedMonth: month,
-            calendar: calendar
-        )
+        let recurringDueItems = recurringBillDueItems(around: month)
         let installmentDueItems = PlanningLogic.installmentDueItems(
             plans: visibleInstallments
                 .filter { !$0.isArchived }
@@ -314,14 +302,23 @@ struct OverviewView: View {
     }
 
     private var recurringBillDueItems: [PlanningRecurringDueSnapshot] {
-        PlanningLogic.recurringBillDueItems(
-            bills: visibleBills
-                .filter { !$0.isArchived }
-                .map(\.planningSnapshot),
-            occurrences: occurrenceSnapshots,
-            selectedMonth: currentMonth,
-            calendar: calendar
-        )
+        recurringBillDueItems(around: currentMonth)
+    }
+
+    private func recurringBillDueItems(around month: Date) -> [PlanningRecurringDueSnapshot] {
+        let previousMonth = calendar.date(byAdding: .month, value: -1, to: month) ?? month
+        let billSnapshots = visibleBills
+            .filter { !$0.isArchived }
+            .map(\.planningSnapshot)
+        return [previousMonth, month]
+            .flatMap { selectedMonth in
+                PlanningLogic.recurringBillDueItems(
+                    bills: billSnapshots,
+                    occurrences: occurrenceSnapshots,
+                    selectedMonth: selectedMonth,
+                    calendar: calendar
+                )
+            }
     }
 
     private var installmentDueItems: [PlanningRecurringDueSnapshot] {

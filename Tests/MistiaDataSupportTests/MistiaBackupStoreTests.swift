@@ -122,6 +122,11 @@ final class MistiaBackupStoreTests: XCTestCase {
         let recurringBills = try fetchAll(RecurringBillPlan.self, in: targetContainer)
         XCTAssertEqual(recurringBills.count, 1)
         XCTAssertEqual(recurringBills.first?.category?.id, fixture.childCategoryID)
+        XCTAssertEqual(recurringBills.first?.resolvedPaymentStartDay, 25)
+        XCTAssertEqual(recurringBills.first?.dueDay, 10)
+        XCTAssertEqual(recurringBills.first?.resolvedHasExplicitDueDate, true)
+        XCTAssertEqual(recurringBills.first?.autoPayEnabled, true)
+        XCTAssertEqual(recurringBills.first?.autoPayDay, 28)
 
         let installments = try fetchAll(InstallmentPlan.self, in: targetContainer)
         XCTAssertEqual(installments.count, 1)
@@ -415,7 +420,12 @@ final class MistiaBackupStoreTests: XCTestCase {
             iconSymbolName: "mistia.plan.bill",
             category: childCategory,
             amountMinor: 35_000,
-            dueDay: 5,
+            dueDay: 10,
+            scheduleKind: .recurring,
+            paymentStartDay: 25,
+            hasExplicitDueDate: true,
+            autoPayEnabled: true,
+            autoPayDay: 28,
             paymentWallet: cashWallet,
             createdAt: now,
             updatedAt: now
@@ -436,7 +446,7 @@ final class MistiaBackupStoreTests: XCTestCase {
             sourceKind: .recurringBill,
             sourceID: recurringBill.id,
             selectedMonthKey: "2026-04",
-            scheduledDate: makeDate(year: 2026, month: 4, day: 5),
+            scheduledDate: makeDate(year: 2026, month: 5, day: 10),
             amountMinorSnapshot: recurringBill.amountMinor,
             status: .paid,
             paidAt: now,

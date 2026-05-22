@@ -956,6 +956,13 @@ nonisolated enum PlanningDueSourceKind: String, CaseIterable, Codable, Identifia
     var id: String { rawValue }
 }
 
+nonisolated enum PlanningBillScheduleKind: String, CaseIterable, Codable, Identifiable {
+    case recurring
+    case oneTime
+
+    var id: String { rawValue }
+}
+
 nonisolated enum PlanningDueOccurrenceStatus: String, CaseIterable, Codable, Identifiable {
     case pending
     case paid

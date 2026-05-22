@@ -2162,7 +2162,7 @@ private struct PlanningDueRow: View {
             }
 
             HStack {
-                Text(item.dueDate.shortDisplayText)
+                Text(dateWindowText)
                     .font(.system(size: 12.5, weight: .semibold, design: .rounded))
                     .foregroundStyle(.secondary)
 
@@ -2215,10 +2215,11 @@ private struct PlanningDueRow: View {
             return mistiaLocalized(vi: "Hoàn tất", en: "Completed", ja: "完了")
         }
 
+        let comparisonDate = currentComparisonDate
         let dayDelta = MistiaCalendar.current.dateComponents(
             [.day],
             from: MistiaCalendar.current.startOfDay(for: referenceDate),
-            to: MistiaCalendar.current.startOfDay(for: item.dueDate)
+            to: MistiaCalendar.current.startOfDay(for: comparisonDate)
         ).day ?? 0
 
         if dayDelta < 0 {
@@ -2236,6 +2237,22 @@ private struct PlanningDueRow: View {
             en: "\(dayDelta) days left",
             ja: "あと \(dayDelta) 日"
         )
+    }
+
+    private var dateWindowText: String {
+        if item.hasExplicitDueDate {
+            return "\(item.paymentStartDate.shortDisplayText) - \(item.dueDate.shortDisplayText)"
+        }
+        return item.paymentStartDate.shortDisplayText
+    }
+
+    private var currentComparisonDate: Date {
+        let today = MistiaCalendar.current.startOfDay(for: referenceDate)
+        let paymentStart = MistiaCalendar.current.startOfDay(for: item.paymentStartDate)
+        if today < paymentStart {
+            return item.paymentStartDate
+        }
+        return item.dueDate
     }
 }
 

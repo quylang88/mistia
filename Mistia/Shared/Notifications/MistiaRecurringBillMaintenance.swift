@@ -81,127 +81,169 @@ enum MistiaRecurringBillMaintenance {
         let occurrenceSnaps = occurrences.map(\.planningSnapshot)
         let walletByID = Dictionary(wallets.map { ($0.id, $0) }, uniquingKeysWith: latestWallet)
         let selectedMonth = PlanningLogic.startOfMonth(for: referenceDate, calendar: calendar)
+        let previousMonth = calendar.date(byAdding: .month, value: -1, to: selectedMonth) ?? selectedMonth
         let startOfToday = calendar.startOfDay(for: referenceDate)
-        let monthKey = PlanningLogic.monthKey(for: referenceDate, calendar: calendar)
 
         for bill in bills {
             let snap = bill.planningSnapshot
-            let dueItems = PlanningLogic.recurringBillDueItems(
-                bills: [snap],
-                occurrences: occurrenceSnaps,
-                selectedMonth: selectedMonth,
-                calendar: calendar
-            )
-            guard let dueItem = dueItems.first, dueItem.status == .pending else { continue }
-            guard PlanningLogic.startOfMonth(for: dueItem.dueDate, calendar: calendar) == selectedMonth else {
-                continue
-            }
-
-            let requiresAmountInput = dueItem.amountMinor == nil
-            let hasSufficientSetup = dueItem.amountMinor != nil && snap.paymentWalletID != nil
-
-            let amountText = dueItem.amountMinor.map { $0.formattedCurrency(code: snap.currencyCode) }
-
-            if hasSufficientSetup,
-               let amount = dueItem.amountMinor,
-               let walletID = snap.paymentWalletID,
-               let paymentWallet = walletByID[walletID] {
-
-                let canPay = balanceSufficientToCover(
-                    amount: amount,
-                    wallet: paymentWallet,
-                    records: transactionRecords
-                )
-
-                if canPay {
-                    await attemptAutoPay(
-                        bill: bill,
-                        dueItem: dueItem,
-                        paymentWallet: paymentWallet,
-                        amount: amount,
-                        monthKey: monthKey,
-                        wallets: wallets,
-                        occurrences: occurrences,
-                        modelContext: modelContext,
-                        sessionStore: sessionStore,
-                        referenceDate: referenceDate
+            let dueItems = [previousMonth, selectedMonth]
+                .flatMap { month in
+                    PlanningLogic.recurringBillDueItems(
+                        bills: [snap],
+                        occurrences: occurrenceSnaps,
+                        selectedMonth: month,
+                        calendar: calendar
                     )
-                } else {
+                }
+                .filter { $0.status == .pending }
+
+            for dueItem in dueItems {
+                let cycleMonthKey = PlanningLogic.monthKey(for: dueItem.paymentStartDate, calendar: calendar)
+                let paymentStartDay = calendar.startOfDay(for: dueItem.paymentStartDate)
+                let dueDay = calendar.startOfDay(for: dueItem.dueDate)
+                let autoPayDay = dueItem.autoPayDate.map { calendar.startOfDay(for: $0) }
+                let isPaymentStartToday = paymentStartDay == startOfToday
+                let isDeadlineToday = dueItem.hasExplicitDueDate && dueDay == startOfToday
+                let isAutoPayToday = dueItem.autoPayEnabled && autoPayDay == startOfToday
+                let isOverdue = dueDay < startOfToday
+
+                let amountText = dueItem.amountMinor.map { $0.formattedCurrency(code: snap.currencyCode) }
+
+                if isAutoPayToday,
+                   let amount = dueItem.amountMinor,
+                   let walletID = snap.paymentWalletID,
+                   let paymentWallet = walletByID[walletID] {
+
+                    let canPay = balanceSufficientToCover(
+                        amount: amount,
+                        wallet: paymentWallet,
+                        records: transactionRecords
+                    )
+
+                    if canPay {
+                        await attemptAutoPay(
+                            bill: bill,
+                            dueItem: dueItem,
+                            paymentWallet: paymentWallet,
+                            amount: amount,
+                            monthKey: cycleMonthKey,
+                            wallets: wallets,
+                            occurrences: occurrences,
+                            modelContext: modelContext,
+                            sessionStore: sessionStore,
+                            referenceDate: referenceDate
+                        )
+                        continue
+                    } else {
+                        upsertNotification(
+                            key: "mistia.bill.autopay.failed.\(bill.id.uuidString.lowercased()).\(cycleMonthKey)",
+                            title: mistiaLocalized(vi: "Không thể tự động thanh toán", en: "Auto payment failed", ja: "自動支払いに失敗しました"),
+                            body: mistiaLocalized(
+                                vi: "Ví không đủ số dư để thanh toán \(bill.name). Vui lòng nạp thêm hoặc thanh toán thủ công.",
+                                en: "Insufficient balance to auto-pay \(bill.name). Please top up or pay manually.",
+                                ja: "\(bill.name) の自動支払いに必要な残高がありません。入金するか手動で支払ってください。"
+                            ),
+                            kind: .billAutoPaymentFailed,
+                            bill: bill,
+                            dueItem: dueItem,
+                            monthKey: cycleMonthKey,
+                            recipientUserID: activeUserID,
+                            modelContext: modelContext
+                        )
+                    }
+                } else if isAutoPayToday && dueItem.autoPayEnabled {
                     upsertNotification(
-                        key: "mistia.bill.autopay.failed.\(bill.id.uuidString.lowercased()).\(monthKey)",
+                        key: "mistia.bill.autopay.failed.\(bill.id.uuidString.lowercased()).\(cycleMonthKey)",
                         title: mistiaLocalized(vi: "Không thể tự động thanh toán", en: "Auto payment failed", ja: "自動支払いに失敗しました"),
                         body: mistiaLocalized(
-                            vi: "Ví không đủ số dư để thanh toán \(bill.name). Vui lòng nạp thêm hoặc thanh toán thủ công.",
-                            en: "Insufficient balance to auto-pay \(bill.name). Please top up or pay manually.",
-                            ja: "\(bill.name) の自動支払いに必要な残高がありません。入金するか手 động で支払ってください。"
+                            vi: "\(bill.name) thiếu số tiền hoặc ví thanh toán để tự động thanh toán.",
+                            en: "\(bill.name) is missing an amount or payment wallet for auto payment.",
+                            ja: "\(bill.name) の自動支払いに必要な金額またはウォレットが不足しています。"
                         ),
                         kind: .billAutoPaymentFailed,
                         bill: bill,
                         dueItem: dueItem,
-                        monthKey: monthKey,
+                        monthKey: cycleMonthKey,
                         recipientUserID: activeUserID,
                         modelContext: modelContext
                     )
                 }
-            } else if requiresAmountInput || snap.paymentWalletID == nil {
-                // Variable-amount bill or no payment wallet — needs user action
-                let body: String
-                if let amountText {
-                    body = mistiaLocalized(
-                        vi: "\(bill.name) (\(amountText)) cần được thanh toán trước \(MistiaDateFormatting.shortDateString(for: dueItem.dueDate)).",
-                        en: "\(bill.name) (\(amountText)) is due by \(MistiaDateFormatting.shortDateString(for: dueItem.dueDate)).",
-                        ja: "\(bill.name) (\(amountText)) は \(MistiaDateFormatting.shortDateString(for: dueItem.dueDate)) までに支払いが必要です。"
-                    )
-                } else {
-                    body = mistiaLocalized(
-                        vi: "\(bill.name) cần được thanh toán trước \(MistiaDateFormatting.shortDateString(for: dueItem.dueDate)).",
-                        en: "\(bill.name) is due by \(MistiaDateFormatting.shortDateString(for: dueItem.dueDate)).",
-                        ja: "\(bill.name) は \(MistiaDateFormatting.shortDateString(for: dueItem.dueDate)) までに支払いが必要です。"
+
+                if isPaymentStartToday || isDeadlineToday {
+                    let keyPhase = isDeadlineToday ? "deadline" : "start"
+                    let title = isDeadlineToday
+                        ? mistiaLocalized(vi: "Hóa đơn đến hạn hôm nay", en: "Bill due today", ja: "請求の支払期限日です")
+                        : mistiaLocalized(vi: "Đến ngày thanh toán", en: "Payment date", ja: "支払開始日です")
+                    let body: String
+                    if let amountText {
+                        body = dueItem.hasExplicitDueDate
+                            ? mistiaLocalized(
+                                vi: "\(bill.name) (\(amountText)) cần được thanh toán trước \(MistiaDateFormatting.shortDateString(for: dueItem.dueDate)).",
+                                en: "\(bill.name) (\(amountText)) is due by \(MistiaDateFormatting.shortDateString(for: dueItem.dueDate)).",
+                                ja: "\(bill.name) は \(MistiaDateFormatting.shortDateString(for: dueItem.dueDate)) までに \(amountText) の支払いが必要です。"
+                            )
+                            : mistiaLocalized(
+                                vi: "\(bill.name) (\(amountText)) cần được thanh toán hôm nay.",
+                                en: "\(bill.name) (\(amountText)) is ready to pay today.",
+                                ja: "\(bill.name) は本日 \(amountText) の支払いが必要です。"
+                            )
+                    } else {
+                        body = dueItem.hasExplicitDueDate
+                            ? mistiaLocalized(
+                                vi: "\(bill.name) cần được thanh toán trước \(MistiaDateFormatting.shortDateString(for: dueItem.dueDate)).",
+                                en: "\(bill.name) is due by \(MistiaDateFormatting.shortDateString(for: dueItem.dueDate)).",
+                                ja: "\(bill.name) は \(MistiaDateFormatting.shortDateString(for: dueItem.dueDate)) までに支払いが必要です。"
+                            )
+                            : mistiaLocalized(
+                                vi: "\(bill.name) cần được thanh toán hôm nay.",
+                                en: "\(bill.name) is ready to pay today.",
+                                ja: "\(bill.name) は本日支払いが必要です。"
+                            )
+                    }
+
+                    upsertNotification(
+                        key: "mistia.bill.payment.\(keyPhase).\(bill.id.uuidString.lowercased()).\(cycleMonthKey)",
+                        title: title,
+                        body: body,
+                        kind: .billPaymentRequired,
+                        bill: bill,
+                        dueItem: dueItem,
+                        monthKey: cycleMonthKey,
+                        recipientUserID: activeUserID,
+                        modelContext: modelContext
                     )
                 }
 
-                upsertNotification(
-                    key: "mistia.bill.payment.required.\(bill.id.uuidString.lowercased()).\(monthKey)",
-                    title: mistiaLocalized(vi: "Hóa đơn sắp đến hạn", en: "Bill due soon", ja: "請求の支払い期限が近づいています"),
-                    body: body,
-                    kind: .billPaymentRequired,
-                    bill: bill,
-                    dueItem: dueItem,
-                    monthKey: monthKey,
-                    recipientUserID: activeUserID,
-                    modelContext: modelContext
-                )
-            }
+                // Overdue handling — resurface daily until paid
+                if isOverdue {
+                    let body: String
+                    if let amountText {
+                        body = mistiaLocalized(
+                            vi: "\(bill.name) (\(amountText)) đã quá hạn thanh toán.",
+                            en: "\(bill.name) (\(amountText)) is past its due date.",
+                            ja: "\(bill.name) (\(amountText)) の支払い期限を過ぎています。"
+                        )
+                    } else {
+                        body = mistiaLocalized(
+                            vi: "\(bill.name) đã quá hạn thanh toán.",
+                            en: "\(bill.name) is past its due date.",
+                            ja: "\(bill.name) の支払い期限を過ぎています。"
+                        )
+                    }
 
-            // Overdue handling — resurface daily until paid
-            if dueItem.dueDate < startOfToday {
-                let body: String
-                if let amountText {
-                    body = mistiaLocalized(
-                        vi: "\(bill.name) (\(amountText)) đã quá hạn thanh toán.",
-                        en: "\(bill.name) (\(amountText)) is past its due date.",
-                        ja: "\(bill.name) (\(amountText)) の支払い期限を過ぎています。"
-                    )
-                } else {
-                    body = mistiaLocalized(
-                        vi: "\(bill.name) đã quá hạn thanh toán.",
-                        en: "\(bill.name) is past its due date.",
-                        ja: "\(bill.name) の支払い期限を過ぎています。"
+                    upsertNotification(
+                        key: "mistia.bill.overdue.\(bill.id.uuidString.lowercased()).\(cycleMonthKey)",
+                        title: mistiaLocalized(vi: "Hóa đơn quá hạn", en: "Bill overdue", ja: "請求が延滞しています"),
+                        body: body,
+                        kind: .billOverdue,
+                        bill: bill,
+                        dueItem: dueItem,
+                        monthKey: cycleMonthKey,
+                        recipientUserID: activeUserID,
+                        modelContext: modelContext,
+                        forceUnread: true
                     )
                 }
-
-                upsertNotification(
-                    key: "mistia.bill.overdue.\(bill.id.uuidString.lowercased()).\(monthKey)",
-                    title: mistiaLocalized(vi: "Hóa đơn quá hạn", en: "Bill overdue", ja: "請求が延滞しています"),
-                    body: body,
-                    kind: .billOverdue,
-                    bill: bill,
-                    dueItem: dueItem,
-                    monthKey: monthKey,
-                    recipientUserID: activeUserID,
-                    modelContext: modelContext,
-                    forceUnread: true
-                )
             }
         }
     }
@@ -234,7 +276,7 @@ enum MistiaRecurringBillMaintenance {
             primaryKind: .expense,
             title: title,
             amountMinor: amount,
-            occurredAt: dueItem.dueDate,
+            occurredAt: referenceDate,
             sourceWallet: paymentWallet
         )
         tx.updatedAt = now
@@ -247,7 +289,7 @@ enum MistiaRecurringBillMaintenance {
         modelContext.insert(tx)
 
         // Mark occurrence paid
-        let selectedMonth = PlanningLogic.startOfMonth(for: dueItem.dueDate)
+        let selectedMonth = PlanningLogic.startOfMonth(for: dueItem.paymentStartDate)
 
         do {
             let occurrence = try PlanningPersistenceSupport.upsertOccurrence(

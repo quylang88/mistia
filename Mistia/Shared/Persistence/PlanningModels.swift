@@ -100,6 +100,14 @@ final class RecurringBillPlan {
     @Relationship(deleteRule: .nullify) var category: TransactionCategory?
     var amountMinor: Int64?
     var dueDay: Int
+    var scheduleKindRawValue: String?
+    var paymentStartDay: Int?
+    var paymentStartDate: Date?
+    var hasExplicitDueDate: Bool?
+    var dueDate: Date?
+    var autoPayEnabled: Bool = false
+    var autoPayDay: Int?
+    var autoPayDate: Date?
     var frequencyMonths: Int
     @Relationship(deleteRule: .nullify) var paymentWallet: LedgerWallet?
     var currencyCode: String
@@ -116,6 +124,14 @@ final class RecurringBillPlan {
         category: TransactionCategory? = nil,
         amountMinor: Int64? = nil,
         dueDay: Int,
+        scheduleKind: PlanningBillScheduleKind = .recurring,
+        paymentStartDay: Int? = nil,
+        paymentStartDate: Date? = nil,
+        hasExplicitDueDate: Bool? = nil,
+        dueDate: Date? = nil,
+        autoPayEnabled: Bool = false,
+        autoPayDay: Int? = nil,
+        autoPayDate: Date? = nil,
         frequencyMonths: Int = 1,
         paymentWallet: LedgerWallet? = nil,
         currencyCode: String = "JPY",
@@ -131,6 +147,14 @@ final class RecurringBillPlan {
         self.category = category
         self.amountMinor = amountMinor
         self.dueDay = dueDay
+        self.scheduleKindRawValue = scheduleKind.rawValue
+        self.paymentStartDay = paymentStartDay ?? dueDay
+        self.paymentStartDate = paymentStartDate
+        self.hasExplicitDueDate = hasExplicitDueDate ?? false
+        self.dueDate = dueDate
+        self.autoPayEnabled = autoPayEnabled
+        self.autoPayDay = autoPayDay
+        self.autoPayDate = autoPayDate
         self.frequencyMonths = frequencyMonths
         self.paymentWallet = paymentWallet
         self.currencyCode = currencyCode
@@ -139,6 +163,26 @@ final class RecurringBillPlan {
         self.updatedAt = updatedAt
         self.deletedAt = deletedAt
         self.remoteVersion = remoteVersion
+    }
+
+    var scheduleKind: PlanningBillScheduleKind {
+        get { PlanningBillScheduleKind(rawValue: scheduleKindRawValue ?? "") ?? .recurring }
+        set { scheduleKindRawValue = newValue.rawValue }
+    }
+
+    var resolvedPaymentStartDay: Int {
+        paymentStartDay ?? dueDay
+    }
+
+    var resolvedHasExplicitDueDate: Bool {
+        guard hasExplicitDueDate == true else { return false }
+        if scheduleKind == .recurring {
+            return dueDay != resolvedPaymentStartDay
+        }
+        guard let dueDate, let paymentStartDate else { return false }
+        let dueDay = MistiaCalendar.current.startOfDay(for: dueDate)
+        let paymentDay = MistiaCalendar.current.startOfDay(for: paymentStartDate)
+        return dueDay != paymentDay && dueDay >= paymentDay
     }
 }
 

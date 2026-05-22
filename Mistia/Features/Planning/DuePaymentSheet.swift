@@ -198,7 +198,7 @@ struct DuePaymentSheet: View {
                         VStack(alignment: .leading, spacing: 3) {
                             Text(target.name)
                                 .font(.system(size: 17, weight: .semibold, design: .rounded))
-                            Text(MistiaDateFormatting.shortDateString(for: target.dueDate))
+                            Text(paymentWindowText)
                                 .font(.system(size: 13, weight: .medium, design: .rounded))
                                 .foregroundStyle(.secondary)
                         }
@@ -303,6 +303,16 @@ struct DuePaymentSheet: View {
             }
         }
         .pickerStyle(.menu)
+    }
+
+    private var paymentWindowText: String {
+        guard let item = resolvedDueItem else {
+            return MistiaDateFormatting.shortDateString(for: target.dueDate)
+        }
+        if item.hasExplicitDueDate {
+            return "\(MistiaDateFormatting.shortDateString(for: item.paymentStartDate)) - \(MistiaDateFormatting.shortDateString(for: item.dueDate))"
+        }
+        return MistiaDateFormatting.shortDateString(for: item.paymentStartDate)
     }
 
     // MARK: - Pay

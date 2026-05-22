@@ -106,19 +106,23 @@ enum MistiaSchemaV4: VersionedSchema {
 
 enum MistiaMigrationPlan: SchemaMigrationPlan {
     static var schemas: [any VersionedSchema.Type] {
+        // Older schema declarations in this file reuse the app's live @Model types.
+        // Once those types drift, SwiftData can calculate the same checksum for
+        // multiple historical versions and crash with "Duplicate version checksums
+        // detected" before the store opens.
+        //
+        // Keep only the current persisted schema in the active plan until a future
+        // release introduces properly frozen version-specific model types. Do not
+        // add MistiaSchemaV5 for data-only cleanup or a version-label bump.
         [
-            MistiaSchemaV1.self,
-            MistiaSchemaV2.self,
-            MistiaSchemaV3.self,
             MistiaSchemaV4.self
         ]
     }
 
     static var stages: [MigrationStage] {
-        [
-            .lightweight(fromVersion: MistiaSchemaV1.self, toVersion: MistiaSchemaV2.self),
-            .lightweight(fromVersion: MistiaSchemaV2.self, toVersion: MistiaSchemaV3.self),
-            .lightweight(fromVersion: MistiaSchemaV3.self, toVersion: MistiaSchemaV4.self)
-        ]
+        // No staged migration is required for current V4 stores. If a future V5 is
+        // needed, add it only with a real, distinct SwiftData checksum and a
+        // regression test that opens a V4 store without duplicate checksum failure.
+        []
     }
 }

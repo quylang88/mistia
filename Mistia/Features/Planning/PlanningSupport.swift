@@ -287,7 +287,15 @@ extension RecurringBillPlan {
             frequencyMonths: frequencyMonths,
             paymentWalletID: paymentWallet?.id,
             currencyCode: currencyCode,
-            createdAt: createdAt
+            createdAt: createdAt,
+            scheduleKind: scheduleKind,
+            paymentStartDay: resolvedPaymentStartDay,
+            paymentStartDate: paymentStartDate,
+            hasExplicitDueDate: resolvedHasExplicitDueDate,
+            dueDate: dueDate,
+            autoPayEnabled: autoPayEnabled,
+            autoPayDay: autoPayDay,
+            autoPayDate: autoPayDate
         )
     }
 }
@@ -411,7 +419,7 @@ extension PlanningCreditCardDueSnapshot {
         if status == .paid { return .paid }
 
         let startOfToday = calendar.startOfDay(for: referenceDate)
-        if dueDate < startOfToday {
+        if calendar.startOfDay(for: dueDate) < startOfToday {
             return .overdue
         }
 
@@ -429,12 +437,15 @@ extension PlanningRecurringDueSnapshot {
         if status == .paid { return .paid }
 
         let startOfToday = calendar.startOfDay(for: referenceDate)
-        if dueDate < startOfToday {
+        if calendar.startOfDay(for: dueDate) < startOfToday {
             return .overdue
         }
 
+        let comparisonDate = startOfToday < calendar.startOfDay(for: paymentStartDate)
+            ? paymentStartDate
+            : dueDate
         let warningDate = calendar.date(byAdding: .day, value: 3, to: startOfToday) ?? startOfToday
-        if dueDate <= warningDate {
+        if comparisonDate <= warningDate {
             return .warning
         }
 

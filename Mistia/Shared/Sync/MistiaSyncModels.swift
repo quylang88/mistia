@@ -393,6 +393,14 @@ struct RemoteRecurringBillPlan: MistiaRemoteRow {
     var categoryID: UUID?
     var amountMinor: Int64?
     var dueDay: Int
+    var scheduleKindRawValue: String?
+    var paymentStartDay: Int?
+    var paymentStartDate: Date?
+    var hasExplicitDueDate: Bool?
+    var dueDate: Date?
+    var autoPayEnabled: Bool?
+    var autoPayDay: Int?
+    var autoPayDate: Date?
     var frequencyMonths: Int
     var paymentWalletID: UUID?
     var currencyCode: String
@@ -411,6 +419,14 @@ struct RemoteRecurringBillPlan: MistiaRemoteRow {
         case categoryID = "category_id"
         case amountMinor = "amount_minor"
         case dueDay = "due_day"
+        case scheduleKindRawValue = "schedule_kind_raw_value"
+        case paymentStartDay = "payment_start_day"
+        case paymentStartDate = "payment_start_date"
+        case hasExplicitDueDate = "has_explicit_due_date"
+        case dueDate = "due_date"
+        case autoPayEnabled = "auto_pay_enabled"
+        case autoPayDay = "auto_pay_day"
+        case autoPayDate = "auto_pay_date"
         case frequencyMonths = "frequency_months"
         case paymentWalletID = "payment_wallet_id"
         case currencyCode = "currency_code"

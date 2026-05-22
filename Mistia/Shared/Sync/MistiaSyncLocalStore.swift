@@ -2052,6 +2052,14 @@ enum MistiaSyncLocalStore {
             category: resolvedCategory,
             amountMinor: row.amountMinor,
             dueDay: row.dueDay,
+            scheduleKind: PlanningBillScheduleKind(rawValue: row.scheduleKindRawValue ?? "") ?? .recurring,
+            paymentStartDay: row.paymentStartDay,
+            paymentStartDate: row.paymentStartDate,
+            hasExplicitDueDate: row.hasExplicitDueDate,
+            dueDate: row.dueDate,
+            autoPayEnabled: row.autoPayEnabled ?? false,
+            autoPayDay: row.autoPayDay,
+            autoPayDate: row.autoPayDate,
             frequencyMonths: row.frequencyMonths,
             paymentWallet: row.paymentWalletID.flatMap { walletByID[$0] },
             currencyCode: row.currencyCode,
@@ -2072,6 +2080,14 @@ enum MistiaSyncLocalStore {
         plan.category = resolvedCategory
         plan.amountMinor = row.amountMinor
         plan.dueDay = row.dueDay
+        plan.scheduleKind = PlanningBillScheduleKind(rawValue: row.scheduleKindRawValue ?? "") ?? .recurring
+        plan.paymentStartDay = row.paymentStartDay ?? row.dueDay
+        plan.paymentStartDate = row.paymentStartDate
+        plan.hasExplicitDueDate = row.hasExplicitDueDate ?? false
+        plan.dueDate = row.dueDate
+        plan.autoPayEnabled = row.autoPayEnabled ?? false
+        plan.autoPayDay = row.autoPayDay
+        plan.autoPayDate = row.autoPayDate
         plan.frequencyMonths = row.frequencyMonths
         plan.paymentWallet = row.paymentWalletID.flatMap { walletByID[$0] }
         plan.currencyCode = row.currencyCode
@@ -2478,6 +2494,14 @@ private extension RemoteRecurringBillPlan {
             categoryID: categoryID,
             amountMinor: plan.amountMinor,
             dueDay: plan.dueDay,
+            scheduleKindRawValue: plan.scheduleKind.rawValue,
+            paymentStartDay: plan.resolvedPaymentStartDay,
+            paymentStartDate: plan.paymentStartDate,
+            hasExplicitDueDate: plan.resolvedHasExplicitDueDate,
+            dueDate: plan.dueDate,
+            autoPayEnabled: plan.autoPayEnabled,
+            autoPayDay: plan.autoPayDay,
+            autoPayDate: plan.autoPayDate,
             frequencyMonths: plan.frequencyMonths,
             paymentWalletID: plan.paymentWallet?.id,
             currencyCode: plan.currencyCode,

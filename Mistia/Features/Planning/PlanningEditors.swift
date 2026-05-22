@@ -653,6 +653,7 @@ struct PlanningGoalEditorSheet: View {
 struct PlanningBillEditorSheet: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
+    @Environment(\.calendar) private var calendar
     @Environment(SessionStore.self) private var sessionStore
     @AppStorage(MistiaAppStorageKey.currencyCode) private var currencyCode = "JPY"
     @Query(filter: #Predicate<TransactionCategory> { $0.deletedAt == nil })
@@ -668,7 +669,12 @@ struct PlanningBillEditorSheet: View {
 
     init(target: PlanningBillEditorTarget) {
         self.target = target
-        let initialDraft = PlanningBillDraft(plan: target.plan)
+        var initialDraft = PlanningBillDraft(plan: target.plan)
+        if target.plan == nil {
+            initialDraft.paymentStartDate = target.selectedMonth
+            initialDraft.dueDate = target.selectedMonth
+            initialDraft.autoPayDate = target.selectedMonth
+        }
         _draft = State(initialValue: initialDraft)
     }
 
@@ -706,7 +712,7 @@ struct PlanningBillEditorSheet: View {
     var body: some View {
         NavigationStack {
             Form {
-                Section(mistiaLocalized(vi: "Hóa đơn định kỳ", en: "Recurring bill", ja: "定期請求")) {
+                Section(mistiaLocalized(vi: "Hóa đơn", en: "Bill", ja: "請求")) {
                     Button {
                         showsCategoryPicker = true
                     } label: {
@@ -736,21 +742,17 @@ struct PlanningBillEditorSheet: View {
                     TextField(mistiaLocalized(vi: "Tên hóa đơn", en: "Bill name", ja: "請求名"), text: $draft.name)
                     TextField(mistiaLocalized(vi: "Số tiền (có thể để trống)", en: "Amount (optional)", ja: "金額（任意）"), text: $draft.amountText)
                         .keyboardType(.numberPad)
-                    Picker(mistiaLocalized(vi: "Ngày đến hạn", en: "Due day", ja: "支払日"), selection: $draft.dueDay) {
-                        ForEach(1...31, id: \.self) { day in
-                            Text(mistiaLocalized(vi: "Ngày \(day)", en: "Day \(day)", ja: "\(day) 日")).tag(day)
+
+                    Picker(mistiaLocalized(vi: "Loại hóa đơn", en: "Bill type", ja: "請求タイプ"), selection: $draft.scheduleKind) {
+                        ForEach(PlanningBillScheduleKind.allCases) { kind in
+                            Text(kind.editorTitle).tag(kind)
                         }
                     }
                     .pickerStyle(.menu)
-                    Stepper(
-                        mistiaLocalized(
-                            vi: "Tần suất: \(draft.frequencyMonths) tháng",
-                            en: "Frequency: every \(draft.frequencyMonths) month(s)",
-                            ja: "頻度: \(draft.frequencyMonths) か月ごと"
-                        ),
-                        value: $draft.frequencyMonths,
-                        in: 1...12
-                    )
+
+                    billWindowFields
+                    autoPayFields
+
                     Picker(mistiaLocalized(vi: "Ví thanh toán", en: "Payment wallet", ja: "支払いウォレット"), selection: $draft.paymentWalletID) {
                         Text(mistiaLocalized(vi: "Chọn ví", en: "Choose wallet", ja: "ウォレットを選択")).tag(Optional<UUID>.none)
                         ForEach(availableWallets) { wallet in
@@ -802,7 +804,106 @@ struct PlanningBillEditorSheet: View {
                 draft.iconColorHex = category.iconColorHex
             }
         }
-        .planningAlert(message: $alertMessage)
+            .planningAlert(message: $alertMessage)
+            .onChange(of: draft.scheduleKind) { _, _ in
+                normalizeAutoPayDraft()
+            }
+            .onChange(of: draft.paymentStartDay) { _, _ in
+                normalizeAutoPayDraft()
+            }
+            .onChange(of: draft.dueDay) { _, _ in
+                normalizeAutoPayDraft()
+            }
+            .onChange(of: draft.hasDeadline) { _, _ in
+                normalizeAutoPayDraft()
+            }
+            .onChange(of: draft.paymentStartDate) { _, _ in
+                normalizeAutoPayDraft()
+            }
+            .onChange(of: draft.dueDate) { _, _ in
+                normalizeAutoPayDraft()
+            }
+    }
+
+    @ViewBuilder
+    private var billWindowFields: some View {
+        switch draft.scheduleKind {
+        case .recurring:
+            Picker(mistiaLocalized(vi: "Ngày thanh toán", en: "Payment day", ja: "支払開始日"), selection: $draft.paymentStartDay) {
+                ForEach(1...31, id: \.self) { day in
+                    Text(mistiaLocalized(vi: "Ngày \(day)", en: "Day \(day)", ja: "\(day) 日")).tag(day)
+                }
+            }
+            .pickerStyle(.menu)
+
+            Toggle(mistiaLocalized(vi: "Có hạn cuối", en: "Has deadline", ja: "期限日あり"), isOn: $draft.hasDeadline)
+                .tint(MistiaAccent.purple.color)
+                .toggleStyle(.switch)
+
+            if draft.hasDeadline {
+                Picker(mistiaLocalized(vi: "Hạn cuối", en: "Deadline", ja: "期限日"), selection: $draft.dueDay) {
+                    ForEach(1...31, id: \.self) { day in
+                        Text(mistiaLocalized(vi: "Ngày \(day)", en: "Day \(day)", ja: "\(day) 日")).tag(day)
+                    }
+                }
+                .pickerStyle(.menu)
+            }
+
+            Stepper(
+                mistiaLocalized(
+                    vi: "Tần suất: \(draft.frequencyMonths) tháng",
+                    en: "Frequency: every \(draft.frequencyMonths) month(s)",
+                    ja: "頻度: \(draft.frequencyMonths) か月ごと"
+                ),
+                value: $draft.frequencyMonths,
+                in: 1...12
+            )
+
+        case .oneTime:
+            DatePicker(
+                mistiaLocalized(vi: "Ngày thanh toán", en: "Payment date", ja: "支払開始日"),
+                selection: $draft.paymentStartDate,
+                displayedComponents: .date
+            )
+
+            Toggle(mistiaLocalized(vi: "Có hạn cuối", en: "Has deadline", ja: "期限日あり"), isOn: $draft.hasDeadline)
+                .tint(MistiaAccent.purple.color)
+                .toggleStyle(.switch)
+
+            if draft.hasDeadline {
+                DatePicker(
+                    mistiaLocalized(vi: "Hạn cuối", en: "Deadline", ja: "期限日"),
+                    selection: $draft.dueDate,
+                    displayedComponents: .date
+                )
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var autoPayFields: some View {
+        Toggle(mistiaLocalized(vi: "Tự thanh toán", en: "Auto pay", ja: "自動支払い"), isOn: $draft.autoPayEnabled)
+            .tint(MistiaAccent.purple.color)
+            .toggleStyle(.switch)
+
+        if draft.autoPayEnabled {
+            switch draft.scheduleKind {
+            case .recurring:
+                Picker(mistiaLocalized(vi: "Ngày tự thanh toán", en: "Auto-pay day", ja: "自動支払日"), selection: $draft.autoPayDay) {
+                    ForEach(draft.recurringAutoPayDayOptions, id: \.self) { day in
+                        Text(recurringAutoPayDayLabel(day)).tag(day)
+                    }
+                }
+                .pickerStyle(.menu)
+            case .oneTime:
+                DatePicker(
+                    mistiaLocalized(vi: "Ngày tự thanh toán", en: "Auto-pay date", ja: "自動支払日"),
+                    selection: $draft.autoPayDate,
+                    in: draft.oneTimePaymentWindow,
+                    displayedComponents: .date
+                )
+            }
+        }
     }
 
     private func save() {
@@ -821,7 +922,19 @@ struct PlanningBillEditorSheet: View {
             return
         }
 
+        if draft.scheduleKind == .oneTime,
+           draft.hasDeadline,
+           calendar.startOfDay(for: draft.dueDate) < calendar.startOfDay(for: draft.paymentStartDate) {
+            alertMessage = mistiaLocalized(
+                vi: "Hạn cuối không được trước ngày thanh toán.",
+                en: "Deadline cannot be before the payment date.",
+                ja: "期限日は支払開始日より前にできません。"
+            )
+            return
+        }
+
         let amountMinor = draft.amountText.nilIfBlank?.currencyInputToMinorUnits(currencyCode: activeCurrencyCode)
+        let normalized = normalizedBillSchedule()
         let now = Date()
         let planForSync: RecurringBillPlan
 
@@ -830,8 +943,16 @@ struct PlanningBillEditorSheet: View {
             plan.iconSymbolName = selectedCategory.iconSymbolName
             plan.category = selectedCategory
             plan.amountMinor = amountMinor
-            plan.dueDay = draft.dueDay
-            plan.frequencyMonths = draft.frequencyMonths
+            plan.dueDay = normalized.dueDay
+            plan.scheduleKind = draft.scheduleKind
+            plan.paymentStartDay = normalized.paymentStartDay
+            plan.paymentStartDate = normalized.paymentStartDate
+            plan.hasExplicitDueDate = normalized.hasExplicitDueDate
+            plan.dueDate = normalized.dueDate
+            plan.autoPayEnabled = normalized.autoPayEnabled
+            plan.autoPayDay = normalized.autoPayDay
+            plan.autoPayDate = normalized.autoPayDate
+            plan.frequencyMonths = normalized.frequencyMonths
             plan.paymentWallet = wallet
             plan.updatedAt = now
             planForSync = plan
@@ -841,8 +962,16 @@ struct PlanningBillEditorSheet: View {
                 iconSymbolName: selectedCategory.iconSymbolName,
                 category: selectedCategory,
                 amountMinor: amountMinor,
-                dueDay: draft.dueDay,
-                frequencyMonths: draft.frequencyMonths,
+                dueDay: normalized.dueDay,
+                scheduleKind: draft.scheduleKind,
+                paymentStartDay: normalized.paymentStartDay,
+                paymentStartDate: normalized.paymentStartDate,
+                hasExplicitDueDate: normalized.hasExplicitDueDate,
+                dueDate: normalized.dueDate,
+                autoPayEnabled: normalized.autoPayEnabled,
+                autoPayDay: normalized.autoPayDay,
+                autoPayDate: normalized.autoPayDate,
+                frequencyMonths: normalized.frequencyMonths,
                 paymentWallet: wallet,
                 currencyCode: activeCurrencyCode,
                 createdAt: now,
@@ -862,6 +991,82 @@ struct PlanningBillEditorSheet: View {
             dismiss()
         } catch {
             alertMessage = mistiaLocalized(vi: "Không thể lưu hóa đơn lúc này.", en: "Couldn't save this bill right now.", ja: "現在この請求を保存できません。") + " \(error.localizedDescription)"
+        }
+    }
+
+    private func normalizedBillSchedule() -> (
+        dueDay: Int,
+        paymentStartDay: Int,
+        paymentStartDate: Date?,
+        hasExplicitDueDate: Bool,
+        dueDate: Date?,
+        autoPayEnabled: Bool,
+        autoPayDay: Int?,
+        autoPayDate: Date?,
+        frequencyMonths: Int
+    ) {
+        switch draft.scheduleKind {
+        case .recurring:
+            let hasExplicitDueDate = draft.hasDeadline && draft.dueDay != draft.paymentStartDay
+            let dueDay = hasExplicitDueDate ? draft.dueDay : draft.paymentStartDay
+            let autoPayDay = draft.autoPayEnabled
+                ? (draft.recurringAutoPayDayOptions.contains(draft.autoPayDay) ? draft.autoPayDay : draft.paymentStartDay)
+                : nil
+            return (
+                dueDay,
+                draft.paymentStartDay,
+                nil,
+                hasExplicitDueDate,
+                nil,
+                draft.autoPayEnabled,
+                autoPayDay,
+                nil,
+                draft.frequencyMonths
+            )
+
+        case .oneTime:
+            let paymentStartDate = calendar.startOfDay(for: draft.paymentStartDate)
+            let rawDueDate = calendar.startOfDay(for: draft.dueDate)
+            let hasExplicitDueDate = draft.hasDeadline && rawDueDate != paymentStartDate && rawDueDate >= paymentStartDate
+            let dueDate = hasExplicitDueDate ? rawDueDate : nil
+            let effectiveDueDate = dueDate ?? paymentStartDate
+            let autoPayDate = draft.autoPayEnabled
+                ? PlanningBillDraft.clampedDate(
+                    calendar.startOfDay(for: draft.autoPayDate),
+                    start: paymentStartDate,
+                    end: effectiveDueDate
+                )
+                : nil
+            return (
+                calendar.component(.day, from: effectiveDueDate),
+                calendar.component(.day, from: paymentStartDate),
+                paymentStartDate,
+                hasExplicitDueDate,
+                dueDate,
+                draft.autoPayEnabled,
+                nil,
+                autoPayDate,
+                1
+            )
+        }
+    }
+
+    private func recurringAutoPayDayLabel(_ day: Int) -> String {
+        guard draft.hasDeadline, draft.dueDay < draft.paymentStartDay, day < draft.paymentStartDay else {
+            return mistiaLocalized(vi: "Ngày \(day)", en: "Day \(day)", ja: "\(day) 日")
+        }
+        return mistiaLocalized(vi: "Ngày \(day) tháng sau", en: "Day \(day) next month", ja: "翌月 \(day) 日")
+    }
+
+    private func normalizeAutoPayDraft() {
+        switch draft.scheduleKind {
+        case .recurring:
+            if !draft.recurringAutoPayDayOptions.contains(draft.autoPayDay) {
+                draft.autoPayDay = draft.paymentStartDay
+            }
+        case .oneTime:
+            let window = draft.oneTimePaymentWindow
+            draft.autoPayDate = PlanningBillDraft.clampedDate(draft.autoPayDate, start: window.lowerBound, end: window.upperBound)
         }
     }
 
@@ -1622,7 +1827,15 @@ private struct PlanningGoalDraft {
 private struct PlanningBillDraft {
     var name: String
     var amountText: String
+    var scheduleKind: PlanningBillScheduleKind
+    var paymentStartDay: Int
+    var paymentStartDate: Date
+    var hasDeadline: Bool
     var dueDay: Int
+    var dueDate: Date
+    var autoPayEnabled: Bool
+    var autoPayDay: Int
+    var autoPayDate: Date
     var frequencyMonths: Int
     var paymentWalletID: UUID?
     var categoryID: UUID?
@@ -1632,12 +1845,56 @@ private struct PlanningBillDraft {
     init(plan: RecurringBillPlan?) {
         name = plan?.name ?? ""
         amountText = plan?.amountMinor.map(String.init) ?? ""
-        dueDay = plan?.dueDay ?? 10
+        scheduleKind = plan?.scheduleKind ?? .recurring
+        paymentStartDay = plan?.resolvedPaymentStartDay ?? plan?.dueDay ?? 10
+        paymentStartDate = plan?.paymentStartDate ?? .now
+        hasDeadline = plan?.resolvedHasExplicitDueDate ?? false
+        dueDay = plan?.dueDay ?? paymentStartDay
+        dueDate = plan?.dueDate ?? plan?.paymentStartDate ?? .now
+        autoPayEnabled = plan?.autoPayEnabled ?? false
+        autoPayDay = plan?.autoPayDay ?? paymentStartDay
+        autoPayDate = plan?.autoPayDate ?? plan?.paymentStartDate ?? .now
         frequencyMonths = max(plan?.frequencyMonths ?? 1, 1)
         paymentWalletID = plan?.paymentWallet?.id
         categoryID = plan?.category?.id
         iconSymbolName = plan?.category?.iconSymbolName ?? plan?.iconSymbolName ?? "mistia.plan.bill"
         iconColorHex = MistiaFinanceIconRegistry.defaultColorHex(for: iconSymbolName)
+    }
+
+    var recurringAutoPayDayOptions: [Int] {
+        guard hasDeadline, dueDay != paymentStartDay else {
+            return [paymentStartDay]
+        }
+
+        if dueDay > paymentStartDay {
+            return Array(paymentStartDay...dueDay)
+        }
+
+        return Array(paymentStartDay...31) + Array(1...dueDay)
+    }
+
+    var oneTimePaymentWindow: ClosedRange<Date> {
+        let start = MistiaCalendar.current.startOfDay(for: paymentStartDate)
+        let rawDue = MistiaCalendar.current.startOfDay(for: dueDate)
+        let end = hasDeadline && rawDue >= start ? rawDue : start
+        return start...end
+    }
+
+    static func clampedDate(_ date: Date, start: Date, end: Date) -> Date {
+        if date < start { return start }
+        if date > end { return end }
+        return date
+    }
+}
+
+private extension PlanningBillScheduleKind {
+    var editorTitle: String {
+        switch self {
+        case .recurring:
+            mistiaLocalized(vi: "Định kỳ", en: "Recurring", ja: "定期")
+        case .oneTime:
+            mistiaLocalized(vi: "Thanh toán 1 lần", en: "One-time", ja: "1回のみ")
+        }
     }
 }
 

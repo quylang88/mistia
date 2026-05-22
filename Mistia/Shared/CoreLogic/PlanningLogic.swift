@@ -287,6 +287,54 @@ nonisolated struct PlanningBillSnapshot: Equatable, Identifiable {
     let paymentWalletID: UUID?
     let currencyCode: String
     let createdAt: Date
+    let scheduleKind: PlanningBillScheduleKind
+    let paymentStartDay: Int
+    let paymentStartDate: Date?
+    let hasExplicitDueDate: Bool
+    let dueDate: Date?
+    let autoPayEnabled: Bool
+    let autoPayDay: Int?
+    let autoPayDate: Date?
+
+    init(
+        id: UUID,
+        name: String,
+        iconSymbolName: String,
+        categorySystemKey: MistiaSystemCategoryKey?,
+        amountMinor: Int64?,
+        dueDay: Int,
+        frequencyMonths: Int,
+        paymentWalletID: UUID?,
+        currencyCode: String,
+        createdAt: Date,
+        scheduleKind: PlanningBillScheduleKind = .recurring,
+        paymentStartDay: Int? = nil,
+        paymentStartDate: Date? = nil,
+        hasExplicitDueDate: Bool = false,
+        dueDate: Date? = nil,
+        autoPayEnabled: Bool = false,
+        autoPayDay: Int? = nil,
+        autoPayDate: Date? = nil
+    ) {
+        self.id = id
+        self.name = name
+        self.iconSymbolName = iconSymbolName
+        self.categorySystemKey = categorySystemKey
+        self.amountMinor = amountMinor
+        self.dueDay = dueDay
+        self.frequencyMonths = frequencyMonths
+        self.paymentWalletID = paymentWalletID
+        self.currencyCode = currencyCode
+        self.createdAt = createdAt
+        self.scheduleKind = scheduleKind
+        self.paymentStartDay = paymentStartDay ?? dueDay
+        self.paymentStartDate = paymentStartDate
+        self.hasExplicitDueDate = hasExplicitDueDate
+        self.dueDate = dueDate
+        self.autoPayEnabled = autoPayEnabled
+        self.autoPayDay = autoPayDay
+        self.autoPayDate = autoPayDate
+    }
 }
 
 nonisolated struct PlanningInstallmentSnapshot: Equatable, Identifiable {
@@ -337,13 +385,60 @@ nonisolated struct PlanningRecurringDueSnapshot: Equatable, Identifiable {
     let iconSymbolName: String
     let categorySystemKey: MistiaSystemCategoryKey?
     let amountMinor: Int64?
+    let paymentStartDate: Date
     let dueDate: Date
+    let hasExplicitDueDate: Bool
+    let scheduleKind: PlanningBillScheduleKind
     let frequencyMonths: Int
     let totalCycles: Int?
     let paymentWalletID: UUID?
     let currencyCode: String
     let status: PlanningDueOccurrenceStatus
     let linkedTransactionID: UUID?
+    let autoPayEnabled: Bool
+    let autoPayDate: Date?
+
+    init(
+        id: UUID,
+        sourceKind: PlanningDueSourceKind,
+        sourceID: UUID,
+        name: String,
+        iconSymbolName: String,
+        categorySystemKey: MistiaSystemCategoryKey?,
+        amountMinor: Int64?,
+        paymentStartDate: Date? = nil,
+        dueDate: Date,
+        hasExplicitDueDate: Bool = true,
+        scheduleKind: PlanningBillScheduleKind = .recurring,
+        frequencyMonths: Int,
+        totalCycles: Int?,
+        paymentWalletID: UUID?,
+        currencyCode: String,
+        status: PlanningDueOccurrenceStatus,
+        linkedTransactionID: UUID?,
+        autoPayEnabled: Bool = false,
+        autoPayDate: Date? = nil
+    ) {
+        self.id = id
+        self.sourceKind = sourceKind
+        self.sourceID = sourceID
+        self.name = name
+        self.iconSymbolName = iconSymbolName
+        self.categorySystemKey = categorySystemKey
+        self.amountMinor = amountMinor
+        self.paymentStartDate = paymentStartDate ?? dueDate
+        self.dueDate = dueDate
+        self.hasExplicitDueDate = hasExplicitDueDate && (paymentStartDate ?? dueDate) != dueDate
+        self.scheduleKind = scheduleKind
+        self.frequencyMonths = frequencyMonths
+        self.totalCycles = totalCycles
+        self.paymentWalletID = paymentWalletID
+        self.currencyCode = currencyCode
+        self.status = status
+        self.linkedTransactionID = linkedTransactionID
+        self.autoPayEnabled = autoPayEnabled
+        self.autoPayDate = autoPayDate
+    }
 }
 
 nonisolated struct PlanningDueSummarySnapshot: Equatable {
@@ -905,15 +1000,12 @@ nonisolated enum PlanningLogic {
             calendar: calendar
         ) { monthKey in
             bills.compactMap { bill in
-                guard isScheduledMonth(
+                let window = recurringBillWindow(
+                    for: bill,
                     selectedMonth: selectedMonth,
-                    anchorDate: bill.createdAt,
-                    frequencyMonths: bill.frequencyMonths,
-                    totalCycles: nil,
                     calendar: calendar
-                ) else {
-                    return nil
-                }
+                )
+                guard let window else { return nil }
 
                 let occurrence = occurrenceRecord(
                     for: .recurringBill,
@@ -930,13 +1022,18 @@ nonisolated enum PlanningLogic {
                     iconSymbolName: bill.iconSymbolName,
                     categorySystemKey: bill.categorySystemKey,
                     amountMinor: occurrence?.amountMinorSnapshot ?? bill.amountMinor,
-                    dueDate: scheduledDate(dueDay: bill.dueDay, selectedMonth: selectedMonth, calendar: calendar),
+                    paymentStartDate: window.paymentStartDate,
+                    dueDate: window.dueDate,
+                    hasExplicitDueDate: window.hasExplicitDueDate,
+                    scheduleKind: bill.scheduleKind,
                     frequencyMonths: bill.frequencyMonths,
                     totalCycles: nil,
                     paymentWalletID: bill.paymentWalletID,
                     currencyCode: bill.currencyCode,
                     status: occurrence?.status ?? .pending,
-                    linkedTransactionID: occurrence?.linkedTransactionID
+                    linkedTransactionID: occurrence?.linkedTransactionID,
+                    autoPayEnabled: bill.autoPayEnabled,
+                    autoPayDate: window.autoPayDate
                 )
             }
         }
@@ -1009,12 +1106,15 @@ nonisolated enum PlanningLogic {
         }
         let pendingRecurring = recurring.filter {
             $0.status == .pending
-                && isSameMonth($0.dueDate, other: selectedMonthStart, calendar: calendar)
+                && isSameMonth($0.paymentStartDate, other: selectedMonthStart, calendar: calendar)
         }
 
         // Sắp đến hạn: Trong vòng 7 ngày tới
         let upcomingCards = pendingStatements.filter { $0.dueDate >= startOfToday && $0.dueDate <= windowEnd }
-        let upcomingRecurring = pendingRecurring.filter { $0.dueDate >= startOfToday && $0.dueDate <= windowEnd }
+        let upcomingRecurring = pendingRecurring.filter {
+            ($0.paymentStartDate >= startOfToday && $0.paymentStartDate <= windowEnd)
+                || ($0.hasExplicitDueDate && $0.dueDate >= startOfToday && $0.dueDate <= windowEnd)
+        }
         let upcomingCount = upcomingCards.count + upcomingRecurring.count
 
         let totalDueCards = pendingStatements.reduce(into: Int64.zero) { $0 += $1.amountMinor }
@@ -1199,6 +1299,122 @@ nonisolated enum PlanningLogic {
         let clampedDay = min(max(dueDay, 1), maxDay)
 
         return calendar.date(byAdding: .day, value: clampedDay - 1, to: monthStart) ?? monthStart
+    }
+
+    private struct RecurringBillWindow {
+        let paymentStartDate: Date
+        let dueDate: Date
+        let hasExplicitDueDate: Bool
+        let autoPayDate: Date?
+    }
+
+    private static func recurringBillWindow(
+        for bill: PlanningBillSnapshot,
+        selectedMonth: Date,
+        calendar: Calendar
+    ) -> RecurringBillWindow? {
+        switch bill.scheduleKind {
+        case .recurring:
+            guard isScheduledMonth(
+                selectedMonth: selectedMonth,
+                anchorDate: bill.createdAt,
+                frequencyMonths: bill.frequencyMonths,
+                totalCycles: nil,
+                calendar: calendar
+            ) else {
+                return nil
+            }
+
+            let paymentStartDate = scheduledDate(
+                dueDay: bill.paymentStartDay,
+                selectedMonth: selectedMonth,
+                calendar: calendar
+            )
+            let hasExplicitDueDate = bill.hasExplicitDueDate && bill.dueDay != bill.paymentStartDay
+            let dueDate: Date
+            if hasExplicitDueDate {
+                let dueMonth = bill.dueDay < bill.paymentStartDay
+                    ? calendar.date(byAdding: .month, value: 1, to: selectedMonth) ?? selectedMonth
+                    : selectedMonth
+                dueDate = scheduledDate(dueDay: bill.dueDay, selectedMonth: dueMonth, calendar: calendar)
+            } else {
+                dueDate = paymentStartDate
+            }
+
+            return RecurringBillWindow(
+                paymentStartDate: paymentStartDate,
+                dueDate: dueDate,
+                hasExplicitDueDate: hasExplicitDueDate,
+                autoPayDate: autoPayDate(
+                    enabled: bill.autoPayEnabled,
+                    autoPayDay: bill.autoPayDay,
+                    paymentStartDay: bill.paymentStartDay,
+                    paymentStartDate: paymentStartDate,
+                    dueDay: bill.dueDay,
+                    dueDate: dueDate,
+                    hasExplicitDueDate: hasExplicitDueDate,
+                    selectedMonth: selectedMonth,
+                    calendar: calendar
+                )
+            )
+
+        case .oneTime:
+            guard let paymentStartDate = bill.paymentStartDate else { return nil }
+            guard isSameMonth(paymentStartDate, other: selectedMonth, calendar: calendar) else { return nil }
+
+            let hasExplicitDueDate = bill.hasExplicitDueDate
+                && bill.dueDate != nil
+                && calendar.startOfDay(for: bill.dueDate ?? paymentStartDate) != calendar.startOfDay(for: paymentStartDate)
+                && calendar.startOfDay(for: bill.dueDate ?? paymentStartDate) >= calendar.startOfDay(for: paymentStartDate)
+            let dueDate = hasExplicitDueDate ? (bill.dueDate ?? paymentStartDate) : paymentStartDate
+            let autoPayDate = bill.autoPayEnabled
+                ? normalizedAutoPayDate(bill.autoPayDate, paymentStartDate: paymentStartDate, dueDate: dueDate, calendar: calendar)
+                : nil
+
+            return RecurringBillWindow(
+                paymentStartDate: paymentStartDate,
+                dueDate: dueDate,
+                hasExplicitDueDate: hasExplicitDueDate,
+                autoPayDate: autoPayDate
+            )
+        }
+    }
+
+    private static func autoPayDate(
+        enabled: Bool,
+        autoPayDay: Int?,
+        paymentStartDay: Int,
+        paymentStartDate: Date,
+        dueDay: Int,
+        dueDate: Date,
+        hasExplicitDueDate: Bool,
+        selectedMonth: Date,
+        calendar: Calendar
+    ) -> Date? {
+        guard enabled else { return nil }
+        guard hasExplicitDueDate, let autoPayDay else {
+            return paymentStartDate
+        }
+
+        let autoPayMonth = dueDay < paymentStartDay && autoPayDay < paymentStartDay
+            ? calendar.date(byAdding: .month, value: 1, to: selectedMonth) ?? selectedMonth
+            : selectedMonth
+        let candidate = scheduledDate(dueDay: autoPayDay, selectedMonth: autoPayMonth, calendar: calendar)
+        return normalizedAutoPayDate(candidate, paymentStartDate: paymentStartDate, dueDate: dueDate, calendar: calendar)
+    }
+
+    private static func normalizedAutoPayDate(
+        _ candidate: Date?,
+        paymentStartDate: Date,
+        dueDate: Date,
+        calendar: Calendar
+    ) -> Date {
+        guard let candidate else { return paymentStartDate }
+        let day = calendar.startOfDay(for: candidate)
+        let start = calendar.startOfDay(for: paymentStartDate)
+        let due = calendar.startOfDay(for: dueDate)
+        guard day >= start, day <= due else { return paymentStartDate }
+        return day
     }
 
     private static func creditCardStatementItem(
