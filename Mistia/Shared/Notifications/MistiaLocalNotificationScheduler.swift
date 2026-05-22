@@ -8,6 +8,7 @@ enum MistiaLocalNotificationScheduler {
     private static let reminderCategoryID = "mistia.reminders"
 
     static func rescheduleReminders(
+        snapshot: MistiaDueMaintenanceSnapshot,
         modelContext: ModelContext,
         recipientUserID: UUID?,
         referenceDate: Date = .now
@@ -18,41 +19,15 @@ enum MistiaLocalNotificationScheduler {
         guard let recipientUserID else { return }
 
         await requestAuthorizationIfNeeded()
-
-        let storedWallets = (try? modelContext.fetch(
-            FetchDescriptor<LedgerWallet>(
-                predicate: #Predicate { $0.deletedAt == nil && !$0.isArchived }
-            )
-        )) ?? []
-        let scopes = (try? modelContext.fetch(FetchDescriptor<OwnedRecordScope>())) ?? []
-        let walletOwnerMap = MistiaRecordOwnershipStore.ownerMap(from: scopes, entity: .wallet)
-        let wallets = storedWallets.filter {
-            (walletOwnerMap[$0.id] ?? recipientUserID) == recipientUserID
-        }
         removeStaleWalletReminderInboxRecords(
-            activeWalletIDs: Set(wallets.map(\.id)),
-            walletOwnerMap: walletOwnerMap,
+            activeWalletIDs: Set(snapshot.activeWallets.map(\.id)),
+            walletOwnerMap: snapshot.walletOwnerMap,
             recipientUserID: recipientUserID,
             modelContext: modelContext
         )
-
-        let storedTransactions = (try? modelContext.fetch(
-            FetchDescriptor<LedgerTransaction>(
-                predicate: #Predicate { $0.deletedAt == nil && !$0.isArchived }
-            )
-        )) ?? []
-        let transactionOwnerMap = MistiaRecordOwnershipStore.ownerMap(from: scopes, entity: .transaction)
-        let transactions = storedTransactions.filter {
-            let walletOwnerUserID = $0.sourceWallet.flatMap { walletOwnerMap[$0.id] }
-                ?? $0.destinationWallet.flatMap { walletOwnerMap[$0.id] }
-            let ownerUserID = transactionOwnerMap[$0.id] ?? walletOwnerUserID ?? recipientUserID
-            return ownerUserID == recipientUserID
-        }
-
-        let transactionRecords = transactions.map { $0.planningRecordSnapshot }
         await scheduleLowWalletAlerts(
-            wallets: wallets,
-            transactionRecords: transactionRecords,
+            wallets: snapshot.activeWallets,
+            balanceIndex: snapshot.balanceIndex,
             referenceDate: referenceDate,
             recipientUserID: recipientUserID,
             modelContext: modelContext
@@ -97,7 +72,7 @@ enum MistiaLocalNotificationScheduler {
 
     private static func scheduleLowWalletAlerts(
         wallets: [LedgerWallet],
-        transactionRecords: [TransactionRecordSnapshot],
+        balanceIndex: TransactionWalletBalanceIndex,
         referenceDate: Date,
         recipientUserID: UUID,
         modelContext: ModelContext
@@ -109,13 +84,12 @@ enum MistiaLocalNotificationScheduler {
         let nextMorning = nextLocalMorning(after: referenceDate, hour: 9, minute: 0)
 
         for wallet in cashWallets {
-            let balance = TransactionLogic.effectiveBalance(
+            let balance = balanceIndex.balance(
                 for: TransactionWalletSnapshot(
                     id: wallet.id,
                     kind: wallet.kind,
                     openingBalanceMinor: wallet.openingBalanceMinor
-                ),
-                records: transactionRecords
+                )
             )
 
             guard balance <= 0 else { continue }

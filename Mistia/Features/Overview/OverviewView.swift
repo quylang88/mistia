@@ -147,6 +147,11 @@ struct OverviewView: View {
             entity: .installmentPlan,
             scopeSnapshot: scopeSnapshot
         )
+        let visibleBills = FamilyScopedData.visible(
+            storedBills,
+            entity: .recurringBillPlan,
+            scopeSnapshot: scopeSnapshot
+        )
         let visibleOccurrences = FamilyScopedData.visible(
             storedOccurrences,
             entity: .dueOccurrenceRecord,
@@ -177,6 +182,9 @@ struct OverviewView: View {
                     && PlanningLogic.startOfMonth(for: $0.monthAnchor, calendar: calendar) == month
             }
             .map { $0.planningSnapshot(calendar: calendar) }
+        let billSnapshots = visibleBills
+            .filter { !$0.isArchived }
+            .map(\.planningSnapshot)
         let creditCardDueItems = PlanningLogic.creditCardDueItems(
             accounts: creditCardAccounts,
             records: transactionRecords,
@@ -185,7 +193,11 @@ struct OverviewView: View {
             referenceDate: .now,
             calendar: calendar
         )
-        let recurringDueItems = recurringBillDueItems(around: month)
+        let recurringDueItems = recurringBillDueItems(
+            around: month,
+            billSnapshots: billSnapshots,
+            occurrenceSnapshots: occurrenceSnapshots
+        )
         let installmentDueItems = PlanningLogic.installmentDueItems(
             plans: visibleInstallments
                 .filter { !$0.isArchived }
@@ -306,10 +318,22 @@ struct OverviewView: View {
     }
 
     private func recurringBillDueItems(around month: Date) -> [PlanningRecurringDueSnapshot] {
-        let previousMonth = calendar.date(byAdding: .month, value: -1, to: month) ?? month
         let billSnapshots = visibleBills
             .filter { !$0.isArchived }
             .map(\.planningSnapshot)
+        return recurringBillDueItems(
+            around: month,
+            billSnapshots: billSnapshots,
+            occurrenceSnapshots: occurrenceSnapshots
+        )
+    }
+
+    private func recurringBillDueItems(
+        around month: Date,
+        billSnapshots: [PlanningBillSnapshot],
+        occurrenceSnapshots: [PlanningDueOccurrenceSnapshot]
+    ) -> [PlanningRecurringDueSnapshot] {
+        let previousMonth = calendar.date(byAdding: .month, value: -1, to: month) ?? month
         return [previousMonth, month]
             .flatMap { selectedMonth in
                 PlanningLogic.recurringBillDueItems(

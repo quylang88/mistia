@@ -9,61 +9,48 @@ enum MistiaCreditCardStatementMaintenance {
         referenceDate: Date = .now,
         calendar: Calendar = MistiaCalendar.current
     ) async {
-        guard let activeUserID = sessionStore.activeLocalProfileUserID else { return }
+        guard let snapshot = MistiaDueMaintenanceSnapshot.make(
+            modelContext: modelContext,
+            sessionStore: sessionStore
+        ) else { return }
 
-        let storedWallets = (try? modelContext.fetch(
-            FetchDescriptor<LedgerWallet>(
-                predicate: #Predicate { $0.deletedAt == nil && !$0.isArchived }
-            )
-        )) ?? []
-        let storedTransactions = (try? modelContext.fetch(
-            FetchDescriptor<LedgerTransaction>(
-                predicate: #Predicate { $0.deletedAt == nil && !$0.isArchived }
-            )
-        )) ?? []
-        let storedOccurrences = (try? modelContext.fetch(
-            FetchDescriptor<DueOccurrenceRecord>(
-                predicate: #Predicate { $0.deletedAt == nil }
-            )
-        )) ?? []
+        await run(
+            snapshot: snapshot,
+            modelContext: modelContext,
+            sessionStore: sessionStore,
+            referenceDate: referenceDate,
+            calendar: calendar
+        )
+    }
 
-        let scopes = (try? modelContext.fetch(FetchDescriptor<OwnedRecordScope>())) ?? []
-        let walletOwnerMap = MistiaRecordOwnershipStore.ownerMap(from: scopes, entity: .wallet)
-        let transactionOwnerMap = MistiaRecordOwnershipStore.ownerMap(from: scopes, entity: .transaction)
-        let occurrenceOwnerMap = MistiaRecordOwnershipStore.ownerMap(from: scopes, entity: .dueOccurrenceRecord)
+    static func run(
+        snapshot: MistiaDueMaintenanceSnapshot,
+        modelContext: ModelContext,
+        sessionStore: SessionStore,
+        referenceDate: Date = .now,
+        calendar: Calendar = MistiaCalendar.current
+    ) async {
         removeStaleCreditCardNotifications(
-            walletOwnerMap: walletOwnerMap,
-            activeUserID: activeUserID,
+            walletOwnerMap: snapshot.walletOwnerMap,
+            activeUserID: snapshot.activeUserID,
             modelContext: modelContext
         )
 
-        let wallets = storedWallets.filter {
-            (walletOwnerMap[$0.id] ?? activeUserID) == activeUserID
+        let accounts = snapshot.activeWallets.compactMap {
+            $0.planningCreditCardSnapshot(balanceIndex: snapshot.balanceIndex)
         }
-        let transactions = storedTransactions.filter {
-            let walletOwnerUserID = $0.sourceWallet.flatMap { walletOwnerMap[$0.id] }
-                ?? $0.destinationWallet.flatMap { walletOwnerMap[$0.id] }
-            let ownerUserID = transactionOwnerMap[$0.id] ?? walletOwnerUserID ?? activeUserID
-            return ownerUserID == activeUserID
-        }
-        var occurrences = storedOccurrences.filter {
-            (occurrenceOwnerMap[$0.id] ?? activeUserID) == activeUserID
-        }
-
-        let transactionRecords = transactions.map(\.planningRecordSnapshot)
-        let accounts = wallets.compactMap { $0.planningCreditCardSnapshot(records: transactionRecords) }
         guard !accounts.isEmpty else { return }
 
         let currentMonth = PlanningLogic.startOfMonth(for: referenceDate, calendar: calendar)
         let statementMonths = (0...24).compactMap { offset in
             calendar.date(byAdding: .month, value: -offset, to: currentMonth)
         }
-        let walletByID = Dictionary(wallets.map { ($0.id, $0) }, uniquingKeysWith: latestWallet)
+        var occurrences = snapshot.activeOccurrences
 
         for account in accounts {
             let statements = PlanningLogic.creditCardStatementItems(
                 accounts: [account],
-                records: transactionRecords,
+                records: snapshot.activeTransactionRecords,
                 occurrences: occurrences.map(\.planningSnapshot),
                 statementMonths: statementMonths,
                 referenceDate: referenceDate,
@@ -89,8 +76,8 @@ enum MistiaCreditCardStatementMaintenance {
 
                 let sourceBalanceMinor = paymentSourceBalance(
                     for: statement,
-                    walletByID: walletByID,
-                    transactions: transactions
+                    walletByID: snapshot.walletByID,
+                    balanceIndex: snapshot.balanceIndex
                 )
                 let autoPaymentDecision = PlanningLogic.creditCardAutoPaymentDecision(
                     statement: statement,
@@ -122,9 +109,9 @@ enum MistiaCreditCardStatementMaintenance {
                     await attemptAutoPayment(
                         statement,
                         occurrence: occurrence,
-                        wallets: wallets,
-                        walletByID: walletByID,
-                        transactions: transactions,
+                        walletByID: snapshot.walletByID,
+                        balanceIndex: snapshot.balanceIndex,
+                        ownershipScopes: snapshot.ownershipScopes,
                         modelContext: modelContext,
                         sessionStore: sessionStore,
                         calendar: calendar
@@ -216,29 +203,28 @@ enum MistiaCreditCardStatementMaintenance {
     private static func paymentSourceBalance(
         for statement: PlanningCreditCardStatementSnapshot,
         walletByID: [UUID: LedgerWallet],
-        transactions: [LedgerTransaction]
+        balanceIndex: TransactionWalletBalanceIndex
     ) -> Int64? {
         guard let sourceWalletID = statement.paymentSourceWalletID,
               let sourceWallet = walletByID[sourceWalletID] else {
             return nil
         }
 
-        return TransactionLogic.effectiveBalance(
+        return balanceIndex.balance(
             for: TransactionWalletSnapshot(
                 id: sourceWallet.id,
                 kind: sourceWallet.kind,
                 openingBalanceMinor: sourceWallet.openingBalanceMinor
-            ),
-            records: transactions.map(\.snapshot)
+            )
         )
     }
 
     private static func attemptAutoPayment(
         _ statement: PlanningCreditCardStatementSnapshot,
         occurrence: DueOccurrenceRecord,
-        wallets: [LedgerWallet],
         walletByID: [UUID: LedgerWallet],
-        transactions: [LedgerTransaction],
+        balanceIndex: TransactionWalletBalanceIndex,
+        ownershipScopes: [OwnedRecordScope],
         modelContext: ModelContext,
         sessionStore: SessionStore,
         calendar: Calendar
@@ -256,13 +242,12 @@ enum MistiaCreditCardStatementMaintenance {
             return
         }
 
-        let sourceBalanceMinor = TransactionLogic.effectiveBalance(
+        let sourceBalanceMinor = balanceIndex.balance(
             for: TransactionWalletSnapshot(
                 id: sourceWallet.id,
                 kind: sourceWallet.kind,
                 openingBalanceMinor: sourceWallet.openingBalanceMinor
-            ),
-            records: transactions.map(\.snapshot)
+            )
         )
         guard sourceBalanceMinor >= statement.amountMinor else {
             upsertAutoPaymentFailureNotification(
@@ -306,6 +291,7 @@ enum MistiaCreditCardStatementMaintenance {
                 transaction: paymentTx,
                 sourceWalletID: sourceWallet.id,
                 actorUserID: sessionStore.activeLocalProfileUserID,
+                ownershipScopes: ownershipScopes,
                 modelContext: modelContext
             )
         } catch {
@@ -347,9 +333,9 @@ enum MistiaCreditCardStatementMaintenance {
         transaction: LedgerTransaction,
         sourceWalletID: UUID,
         actorUserID: UUID?,
+        ownershipScopes: [OwnedRecordScope],
         modelContext: ModelContext
     ) throws -> UUID? {
-        let ownershipScopes = try modelContext.fetch(FetchDescriptor<OwnedRecordScope>())
         let subjectUserID = TransactionAuditStore.resolveOwnerUserID(
             forWalletID: sourceWalletID,
             ownershipScopes: ownershipScopes

@@ -12,85 +12,46 @@ enum MistiaRecurringBillMaintenance {
         referenceDate: Date = .now,
         calendar: Calendar = MistiaCalendar.current
     ) async {
-        guard let activeUserID = sessionStore.activeLocalProfileUserID else { return }
+        guard let snapshot = MistiaDueMaintenanceSnapshot.make(
+            modelContext: modelContext,
+            sessionStore: sessionStore
+        ) else { return }
 
-        let storedBills = (try? modelContext.fetch(
-            FetchDescriptor<RecurringBillPlan>(
-                predicate: #Predicate { $0.deletedAt == nil && !$0.isArchived }
-            )
-        )) ?? []
+        await run(
+            snapshot: snapshot,
+            modelContext: modelContext,
+            sessionStore: sessionStore,
+            referenceDate: referenceDate,
+            calendar: calendar
+        )
+    }
 
-        guard !storedBills.isEmpty else { return }
-
-        let storedWallets = (try? modelContext.fetch(
-            FetchDescriptor<LedgerWallet>(
-                predicate: #Predicate { $0.deletedAt == nil && !$0.isArchived }
-            )
-        )) ?? []
-
-        let storedTransactions = (try? modelContext.fetch(
-            FetchDescriptor<LedgerTransaction>(
-                predicate: #Predicate { $0.deletedAt == nil && !$0.isArchived }
-            )
-        )) ?? []
-
-        let storedOccurrences = (try? modelContext.fetch(
-            FetchDescriptor<DueOccurrenceRecord>(
-                predicate: #Predicate { $0.deletedAt == nil }
-            )
-        )) ?? []
-
-        let scopes = (try? modelContext.fetch(FetchDescriptor<OwnedRecordScope>())) ?? []
-        let billOwnerMap = MistiaRecordOwnershipStore.ownerMap(from: scopes, entity: .recurringBillPlan)
-        let walletOwnerMap = MistiaRecordOwnershipStore.ownerMap(from: scopes, entity: .wallet)
-        let transactionOwnerMap = MistiaRecordOwnershipStore.ownerMap(from: scopes, entity: .transaction)
-        let occurrenceOwnerMap = MistiaRecordOwnershipStore.ownerMap(from: scopes, entity: .dueOccurrenceRecord)
+    static func run(
+        snapshot: MistiaDueMaintenanceSnapshot,
+        modelContext: ModelContext,
+        sessionStore: SessionStore,
+        referenceDate: Date = .now,
+        calendar: Calendar = MistiaCalendar.current
+    ) async {
         removeStaleBillNotifications(
-            billOwnerMap: billOwnerMap,
-            activeUserID: activeUserID,
+            billOwnerMap: snapshot.billOwnerMap,
+            activeUserID: snapshot.activeUserID,
             modelContext: modelContext
         )
 
-        let bills = storedBills.filter {
-            (billOwnerMap[$0.id] ?? activeUserID) == activeUserID
-        }
-        guard !bills.isEmpty else { return }
+        guard !snapshot.activeBills.isEmpty else { return }
 
-        let wallets = storedWallets.filter {
-            (walletOwnerMap[$0.id] ?? activeUserID) == activeUserID
-        }
-        let transactions = storedTransactions.filter {
-            let walletOwnerUserID = $0.sourceWallet.flatMap { walletOwnerMap[$0.id] }
-                ?? $0.destinationWallet.flatMap { walletOwnerMap[$0.id] }
-            let ownerUserID = transactionOwnerMap[$0.id] ?? walletOwnerUserID ?? activeUserID
-            return ownerUserID == activeUserID
-        }
-        let occurrences = storedOccurrences.filter {
-            let sourceOwnerUserID: UUID?
-            switch $0.sourceKind {
-            case .recurringBill:
-                sourceOwnerUserID = billOwnerMap[$0.sourceID]
-            case .creditCard, .installment:
-                sourceOwnerUserID = nil
-            }
-            let ownerUserID = occurrenceOwnerMap[$0.id] ?? sourceOwnerUserID ?? activeUserID
-            return ownerUserID == activeUserID
-        }
-
-        let transactionRecords = transactions.map(\.snapshot)
-        let occurrenceSnaps = occurrences.map(\.planningSnapshot)
-        let walletByID = Dictionary(wallets.map { ($0.id, $0) }, uniquingKeysWith: latestWallet)
         let selectedMonth = PlanningLogic.startOfMonth(for: referenceDate, calendar: calendar)
         let previousMonth = calendar.date(byAdding: .month, value: -1, to: selectedMonth) ?? selectedMonth
         let startOfToday = calendar.startOfDay(for: referenceDate)
 
-        for bill in bills {
+        for bill in snapshot.activeBills {
             let snap = bill.planningSnapshot
             let dueItems = [previousMonth, selectedMonth]
                 .flatMap { month in
                     PlanningLogic.recurringBillDueItems(
                         bills: [snap],
-                        occurrences: occurrenceSnaps,
+                        occurrences: snapshot.activeOccurrenceSnapshots,
                         selectedMonth: month,
                         calendar: calendar
                     )
@@ -112,12 +73,12 @@ enum MistiaRecurringBillMaintenance {
                 if isAutoPayToday,
                    let amount = dueItem.amountMinor,
                    let walletID = snap.paymentWalletID,
-                   let paymentWallet = walletByID[walletID] {
+                   let paymentWallet = snapshot.walletByID[walletID] {
 
                     let canPay = balanceSufficientToCover(
                         amount: amount,
                         wallet: paymentWallet,
-                        records: transactionRecords
+                        balanceIndex: snapshot.balanceIndex
                     )
 
                     if canPay {
@@ -127,8 +88,8 @@ enum MistiaRecurringBillMaintenance {
                             paymentWallet: paymentWallet,
                             amount: amount,
                             monthKey: cycleMonthKey,
-                            wallets: wallets,
-                            occurrences: occurrences,
+                            occurrences: snapshot.activeOccurrences,
+                            ownershipScopes: snapshot.ownershipScopes,
                             modelContext: modelContext,
                             sessionStore: sessionStore,
                             referenceDate: referenceDate
@@ -147,7 +108,7 @@ enum MistiaRecurringBillMaintenance {
                             bill: bill,
                             dueItem: dueItem,
                             monthKey: cycleMonthKey,
-                            recipientUserID: activeUserID,
+                            recipientUserID: snapshot.activeUserID,
                             modelContext: modelContext
                         )
                     }
@@ -164,7 +125,7 @@ enum MistiaRecurringBillMaintenance {
                         bill: bill,
                         dueItem: dueItem,
                         monthKey: cycleMonthKey,
-                        recipientUserID: activeUserID,
+                        recipientUserID: snapshot.activeUserID,
                         modelContext: modelContext
                     )
                 }
@@ -209,7 +170,7 @@ enum MistiaRecurringBillMaintenance {
                         bill: bill,
                         dueItem: dueItem,
                         monthKey: cycleMonthKey,
-                        recipientUserID: activeUserID,
+                        recipientUserID: snapshot.activeUserID,
                         modelContext: modelContext
                     )
                 }
@@ -239,17 +200,13 @@ enum MistiaRecurringBillMaintenance {
                         bill: bill,
                         dueItem: dueItem,
                         monthKey: cycleMonthKey,
-                        recipientUserID: activeUserID,
+                        recipientUserID: snapshot.activeUserID,
                         modelContext: modelContext,
                         forceUnread: true
                     )
                 }
             }
         }
-    }
-
-    private static func latestWallet(_ lhs: LedgerWallet, _ rhs: LedgerWallet) -> LedgerWallet {
-        lhs.updatedAt >= rhs.updatedAt ? lhs : rhs
     }
 
     // MARK: - Auto-pay
@@ -260,8 +217,8 @@ enum MistiaRecurringBillMaintenance {
         paymentWallet: LedgerWallet,
         amount: Int64,
         monthKey: String,
-        wallets: [LedgerWallet],
         occurrences: [DueOccurrenceRecord],
+        ownershipScopes: [OwnedRecordScope],
         modelContext: ModelContext,
         sessionStore: SessionStore,
         referenceDate: Date
@@ -309,6 +266,7 @@ enum MistiaRecurringBillMaintenance {
                 transaction: tx,
                 sourceWalletID: paymentWallet.id,
                 actorUserID: sessionStore.activeLocalProfileUserID,
+                ownershipScopes: ownershipScopes,
                 modelContext: modelContext
             )
             try recordOwnership(
@@ -467,30 +425,28 @@ enum MistiaRecurringBillMaintenance {
     private static func balanceSufficientToCover(
         amount: Int64,
         wallet: LedgerWallet,
-        records: [TransactionRecordSnapshot]
+        balanceIndex: TransactionWalletBalanceIndex
     ) -> Bool {
         if wallet.kind == .creditCard {
             guard let profile = wallet.creditCardProfile else { return false }
             let debt = max(
-                TransactionLogic.effectiveBalance(
+                balanceIndex.balance(
                     for: TransactionWalletSnapshot(
                         id: wallet.id,
                         kind: .creditCard,
                         openingBalanceMinor: wallet.openingBalanceMinor
-                    ),
-                    records: records
+                    )
                 ),
                 0
             )
             return (profile.creditLimitMinor - debt) >= amount
         } else {
-            let balance = TransactionLogic.effectiveBalance(
+            let balance = balanceIndex.balance(
                 for: TransactionWalletSnapshot(
                     id: wallet.id,
                     kind: wallet.kind,
                     openingBalanceMinor: wallet.openingBalanceMinor
-                ),
-                records: records
+                )
             )
             return balance >= amount
         }
@@ -502,9 +458,9 @@ enum MistiaRecurringBillMaintenance {
         transaction: LedgerTransaction,
         sourceWalletID: UUID,
         actorUserID: UUID?,
+        ownershipScopes: [OwnedRecordScope],
         modelContext: ModelContext
     ) throws -> UUID? {
-        let ownershipScopes = try modelContext.fetch(FetchDescriptor<OwnedRecordScope>())
         let subjectUserID = TransactionAuditStore.resolveOwnerUserID(
             forWalletID: sourceWalletID,
             ownershipScopes: ownershipScopes

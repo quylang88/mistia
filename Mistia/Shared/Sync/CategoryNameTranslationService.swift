@@ -195,34 +195,63 @@ struct CategoryNameTranslationResolver {
 
 @MainActor
 enum CategoryNameTranslationMaintenance {
+    private static let cooldownInterval: TimeInterval = 5 * 60
+    private static let deferredStartNanoseconds: UInt64 = 750_000_000
+    private static let batchSize = 16
+    private static var inFlightTask: Task<Void, Never>?
+    private static var lastCompletedAt: Date?
+
     static func run(
         modelContext: ModelContext,
         sessionStore: SessionStore,
         limit: Int = 200
     ) async {
-        var descriptor = FetchDescriptor<TransactionCategory>(
-            predicate: #Predicate { category in
-                category.deletedAt == nil
-                    && category.isArchived == false
-                    && category.isSystem == false
-            },
-            sortBy: [SortDescriptor(\.updatedAt, order: .reverse)]
-        )
-        descriptor.fetchLimit = limit
+        let now = Date()
+        if let inFlightTask {
+            debugLog("coalesced with in-flight run")
+            await inFlightTask.value
+            return
+        }
+        if let lastCompletedAt,
+           now.timeIntervalSince(lastCompletedAt) < cooldownInterval {
+            debugLog("skipped by cooldown")
+            return
+        }
 
-        guard let categories = try? modelContext.fetch(descriptor) else { return }
+        let task = Task { @MainActor in
+            try? await Task.sleep(nanoseconds: deferredStartNanoseconds)
+            await runImmediately(
+                modelContext: modelContext,
+                sessionStore: sessionStore,
+                limit: limit
+            )
+        }
+        inFlightTask = task
+        await task.value
+        inFlightTask = nil
+        lastCompletedAt = Date()
+    }
+
+    private static func runImmediately(
+        modelContext: ModelContext,
+        sessionStore: SessionStore,
+        limit: Int
+    ) async {
+        let startTime = Date()
+        let categories = fetchCandidateCategories(modelContext: modelContext, limit: limit)
         let candidates = categories.filter { $0.needsCategoryNameTranslationRetry }
         guard !candidates.isEmpty else { return }
 
         let resolver = CategoryNameTranslationResolver()
-        for category in candidates {
+        let session = try? await sessionStore.refreshedSession()
+        var updatedCount = 0
+        for category in candidates.prefix(batchSize) {
             guard let source = category.categoryNameTranslationSource else { continue }
             let fallbackName = CategoryNameTranslations.fallback(
                 inputName: source.name,
                 sourceLanguage: source.language,
                 existingCategory: category
             )
-            let session = try? await sessionStore.refreshedSession()
             guard let translatedName = await resolver.translateCategoryName(
                 inputName: source.name,
                 sourceLanguage: source.language,
@@ -243,10 +272,92 @@ enum CategoryNameTranslationMaintenance {
             do {
                 try modelContext.save()
                 sessionStore.recordUpsert(entity: .category, recordID: category.id, modifiedAt: now)
+                updatedCount += 1
             } catch {
                 modelContext.rollback()
             }
         }
+        debugLog("finished candidates=\(candidates.count) processed=\(min(candidates.count, batchSize)) updated=\(updatedCount) elapsed=\(Date().timeIntervalSince(startTime))")
+    }
+
+    private static func debugLog(_ message: String) {
+        #if DEBUG
+        print("[CategoryNameTranslationMaintenance] \(message)")
+        #endif
+    }
+
+    private static func fetchCandidateCategories(
+        modelContext: ModelContext,
+        limit: Int
+    ) -> [TransactionCategory] {
+        var pendingDescriptor = FetchDescriptor<TransactionCategory>(
+            predicate: #Predicate { category in
+                category.deletedAt == nil
+                    && category.isArchived == false
+                    && category.isSystem == false
+                    && category.pendingTranslationSourceName != nil
+            },
+            sortBy: [SortDescriptor(\.updatedAt, order: .reverse)]
+        )
+        pendingDescriptor.fetchLimit = limit
+
+        var missingEnglishDescriptor = FetchDescriptor<TransactionCategory>(
+            predicate: #Predicate { category in
+                category.deletedAt == nil
+                    && category.isArchived == false
+                    && category.isSystem == false
+                    && category.nameEnglish == nil
+            },
+            sortBy: [SortDescriptor(\.updatedAt, order: .reverse)]
+        )
+        missingEnglishDescriptor.fetchLimit = limit
+
+        var blankEnglishDescriptor = FetchDescriptor<TransactionCategory>(
+            predicate: #Predicate { category in
+                category.deletedAt == nil
+                    && category.isArchived == false
+                    && category.isSystem == false
+                    && category.nameEnglish == ""
+            },
+            sortBy: [SortDescriptor(\.updatedAt, order: .reverse)]
+        )
+        blankEnglishDescriptor.fetchLimit = limit
+
+        var missingJapaneseDescriptor = FetchDescriptor<TransactionCategory>(
+            predicate: #Predicate { category in
+                category.deletedAt == nil
+                    && category.isArchived == false
+                    && category.isSystem == false
+                    && category.nameJapanese == nil
+            },
+            sortBy: [SortDescriptor(\.updatedAt, order: .reverse)]
+        )
+        missingJapaneseDescriptor.fetchLimit = limit
+
+        var blankJapaneseDescriptor = FetchDescriptor<TransactionCategory>(
+            predicate: #Predicate { category in
+                category.deletedAt == nil
+                    && category.isArchived == false
+                    && category.isSystem == false
+                    && category.nameJapanese == ""
+            },
+            sortBy: [SortDescriptor(\.updatedAt, order: .reverse)]
+        )
+        blankJapaneseDescriptor.fetchLimit = limit
+
+        let fetched = ((try? modelContext.fetch(pendingDescriptor)) ?? [])
+            + ((try? modelContext.fetch(missingEnglishDescriptor)) ?? [])
+            + ((try? modelContext.fetch(blankEnglishDescriptor)) ?? [])
+            + ((try? modelContext.fetch(missingJapaneseDescriptor)) ?? [])
+            + ((try? modelContext.fetch(blankJapaneseDescriptor)) ?? [])
+        var categoriesByID: [UUID: TransactionCategory] = [:]
+        for category in fetched {
+            categoriesByID[category.id] = category
+        }
+        return categoriesByID.values
+            .sorted { $0.updatedAt > $1.updatedAt }
+            .prefix(limit)
+            .map { $0 }
     }
 }
 
