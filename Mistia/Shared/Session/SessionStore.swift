@@ -1058,6 +1058,13 @@ final class SessionStore {
         case .connected:
             updateAutoSyncLoopState()
             scheduleFamilyOwnerOutboxRecoveryIfNeeded()
+            Task { @MainActor [weak self] in
+                guard let self else { return }
+                await CategoryNameTranslationMaintenance.run(
+                    modelContext: self.currentModelContainer.mainContext,
+                    sessionStore: self
+                )
+            }
             guard wasOffline, currentSession != nil else { return }
 
             reconnectValidationTask?.cancel()

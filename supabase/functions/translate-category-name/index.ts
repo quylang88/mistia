@@ -1,5 +1,3 @@
-import { createClient } from "npm:@supabase/supabase-js@2"
-
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
@@ -126,42 +124,17 @@ Deno.serve(async (request) => {
     return jsonResponse({ message: "Method not allowed." }, 405)
   }
 
-  const supabaseURL = Deno.env.get("SUPABASE_URL")
   const supabaseAnonKey = Deno.env.get("SUPABASE_ANON_KEY")
   const geminiAPIKey = Deno.env.get("GEMINI_API_KEY")
   const geminiModel = Deno.env.get("GEMINI_CATEGORY_TRANSLATION_MODEL") ?? "gemini-2.5-flash"
-  const authHeader = request.headers.get("Authorization")
+  const apiKey = request.headers.get("apikey")
 
-  if (!supabaseURL || !supabaseAnonKey || !geminiAPIKey) {
+  if (!supabaseAnonKey || !geminiAPIKey) {
     return jsonResponse({ message: "Category translation environment is incomplete." }, 500)
   }
 
-  if (!authHeader) {
-    return jsonResponse({ message: "Missing Authorization header." }, 401)
-  }
-
-  const userClient = createClient(supabaseURL, supabaseAnonKey, {
-    auth: {
-      autoRefreshToken: false,
-      persistSession: false,
-    },
-    global: {
-      headers: {
-        Authorization: authHeader,
-      },
-    },
-  })
-
-  const {
-    data: { user },
-    error: getUserError,
-  } = await userClient.auth.getUser()
-
-  if (getUserError || !user) {
-    return jsonResponse(
-      { message: getUserError?.message ?? "Unable to validate the current user." },
-      401
-    )
+  if (apiKey !== supabaseAnonKey) {
+    return jsonResponse({ message: "Invalid API key." }, 401)
   }
 
   let payload: TranslationRequest

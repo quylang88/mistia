@@ -77,6 +77,7 @@ struct MistiaApp: App {
                         sessionStore.handleSceneDidBecomeActive()
                         Task {
                             await familyContextStore.refreshIfStale(sessionStore: sessionStore)
+                            await runCategoryTranslationMaintenance()
                             await runDueMaintenance()
                         }
                     case .background:
@@ -128,7 +129,16 @@ struct MistiaApp: App {
         }
 
         sessionStore.finishBootstrapping()
+        await runCategoryTranslationMaintenance()
         await runDueMaintenance()
+    }
+
+    @MainActor
+    private func runCategoryTranslationMaintenance() async {
+        await CategoryNameTranslationMaintenance.run(
+            modelContext: sessionStore.currentModelContainer.mainContext,
+            sessionStore: sessionStore
+        )
     }
 
     @MainActor

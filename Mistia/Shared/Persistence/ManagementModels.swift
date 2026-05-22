@@ -132,6 +132,8 @@ final class TransactionCategory {
     var name: String
     var nameEnglish: String?
     var nameJapanese: String?
+    var pendingTranslationSourceName: String?
+    var pendingTranslationSourceLanguageRawValue: String?
     var kindRawValue: String
     var iconSymbolName: String
     var iconColorHex: String
@@ -155,6 +157,8 @@ final class TransactionCategory {
         name: String,
         nameEnglish: String? = nil,
         nameJapanese: String? = nil,
+        pendingTranslationSourceName: String? = nil,
+        pendingTranslationSourceLanguageRawValue: String? = nil,
         kind: TransactionCategoryKind,
         iconSymbolName: String,
         iconColorHex: String,
@@ -176,6 +180,8 @@ final class TransactionCategory {
         self.name = name
         self.nameEnglish = nameEnglish
         self.nameJapanese = nameJapanese
+        self.pendingTranslationSourceName = pendingTranslationSourceName
+        self.pendingTranslationSourceLanguageRawValue = pendingTranslationSourceLanguageRawValue
         self.kindRawValue = kind.rawValue
         self.iconSymbolName = iconSymbolName
         self.iconColorHex = iconColorHex

@@ -886,6 +886,8 @@ struct ManagementCategoryEditorSheet: View {
             category.name = fallbackName.name
             category.nameEnglish = fallbackName.nameEnglish
             category.nameJapanese = fallbackName.nameJapanese
+            category.pendingTranslationSourceName = trimmedName
+            category.pendingTranslationSourceLanguageRawValue = sourceLanguage.rawValue
             category.kind = draft.kind
             category.iconSymbolName = draft.iconSymbolName
             category.iconColorHex = draft.iconColorHex
@@ -907,6 +909,8 @@ struct ManagementCategoryEditorSheet: View {
                 name: fallbackName.name,
                 nameEnglish: fallbackName.nameEnglish,
                 nameJapanese: fallbackName.nameJapanese,
+                pendingTranslationSourceName: trimmedName,
+                pendingTranslationSourceLanguageRawValue: sourceLanguage.rawValue,
                 kind: draft.kind,
                 iconSymbolName: draft.iconSymbolName,
                 iconColorHex: draft.iconColorHex,
@@ -979,6 +983,8 @@ struct ManagementCategoryEditorSheet: View {
             category.name = translatedName.name
             category.nameEnglish = translatedName.nameEnglish
             category.nameJapanese = translatedName.nameJapanese
+            category.pendingTranslationSourceName = nil
+            category.pendingTranslationSourceLanguageRawValue = nil
             category.updatedAt = now
 
             do {
@@ -1000,21 +1006,13 @@ struct ManagementCategoryEditorSheet: View {
         sourceLanguage: MistiaAppLanguage,
         fallbackName: CategoryNameTranslations
     ) async -> CategoryNameTranslations? {
-        do {
-            let session = try await sessionStore.prepareRemoteSession()
-            let translated = try await CategoryNameTranslationService().translateCategoryName(
-                inputName: inputName,
-                sourceLanguage: sourceLanguage,
-                session: session
-            )
-            return CategoryNameTranslations(
-                name: translated.name.nilIfBlank ?? fallbackName.name,
-                nameEnglish: translated.nameEnglish ?? fallbackName.nameEnglish,
-                nameJapanese: translated.nameJapanese ?? fallbackName.nameJapanese
-            )
-        } catch {
-            return nil
-        }
+        let session = try? await sessionStore.refreshedSession()
+        return await CategoryNameTranslationResolver().translateCategoryName(
+            inputName: inputName,
+            sourceLanguage: sourceLanguage,
+            fallbackName: fallbackName,
+            session: session
+        )
     }
 
     private func archiveCategory() {
