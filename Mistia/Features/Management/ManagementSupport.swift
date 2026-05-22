@@ -208,7 +208,11 @@ extension TransactionCategory {
     }
 
     var localizedDisplayName: String {
-        switch MistiaAppLanguage.current {
+        localizedDisplayName(for: .current)
+    }
+
+    func localizedDisplayName(for language: MistiaAppLanguage) -> String {
+        switch language {
         case .vietnamese:
             return name
         case .english:

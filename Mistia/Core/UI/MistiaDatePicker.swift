@@ -98,15 +98,20 @@ private extension View {
 private struct MistiaDatePickerPanel: View {
     @Binding var selection: Date
     let calendar: Calendar
+    let language: MistiaAppLanguage
 
     @Environment(\.dismiss) private var dismiss
     @State private var draftSelection: Date
     @State private var isMonthYearPickerPresented = false
+    let monthSymbols: [String]
 
     init(selection: Binding<Date>, calendar: Calendar) {
         self._selection = selection
         self.calendar = calendar
+        let language = MistiaAppLanguage.current
+        self.language = language
         _draftSelection = State(initialValue: selection.wrappedValue)
+        self.monthSymbols = Self.monthSymbols(language: language, calendar: calendar)
     }
 
     var body: some View {
@@ -350,14 +355,19 @@ private struct MistiaDatePickerPanel: View {
     }
 
     private func monthTitle(for month: Int) -> String {
+        guard !monthSymbols.isEmpty else { return String(month) }
+        return monthSymbols[max(0, min(month - 1, monthSymbols.count - 1))]
+    }
+
+    private static func monthSymbols(language: MistiaAppLanguage, calendar: Calendar) -> [String] {
         let formatter = DateFormatter()
-        formatter.locale = MistiaAppLanguage.current.locale
+        formatter.locale = language.locale
         formatter.calendar = calendar
-        return formatter.monthSymbols[max(0, min(month - 1, formatter.monthSymbols.count - 1))]
+        return formatter.monthSymbols
     }
 
     private func weekdayLabel(for weekday: Int) -> String {
-        switch MistiaAppLanguage.current {
+        switch language {
         case .vietnamese:
             return ["CN", "T2", "T3", "T4", "T5", "T6", "T7"][max(0, min(weekday - 1, 6))]
         case .english:

@@ -37,13 +37,66 @@ enum MistiaCategoryPickerSupport {
             .trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
-    static func matchesSearch(_ category: TransactionCategory, query: String) -> Bool {
+    struct SearchIndex {
+        private let normalizedValuesByCategoryID: [UUID: [String]]
+
+        init(categories: [TransactionCategory], language: MistiaAppLanguage) {
+            var valuesByID: [UUID: [String]] = [:]
+            for category in categories {
+                valuesByID[category.id] = Self.normalizedSearchableStrings(for: category, language: language)
+            }
+            normalizedValuesByCategoryID = valuesByID
+        }
+
+        func matches(_ category: TransactionCategory, normalizedQuery: String) -> Bool {
+            guard !normalizedQuery.isEmpty else { return true }
+            return normalizedValuesByCategoryID[category.id]?.contains { value in
+                value.contains(normalizedQuery)
+            } ?? false
+        }
+
+        private static func normalizedSearchableStrings(
+            for category: TransactionCategory,
+            language: MistiaAppLanguage
+        ) -> [String] {
+            var values: [String] = [
+                category.name,
+                category.localizedDisplayName(for: language)
+            ]
+
+            if let parent = category.parentCategory {
+                values.append(parent.name)
+                values.append(parent.localizedDisplayName(for: language))
+            }
+
+            if let systemKey = category.mistiaSystemCategoryKey {
+                values.append(contentsOf: systemKey.knownDefaultNames())
+            }
+
+            if let parentKey = category.mistiaSystemCategoryParentKey {
+                values.append(contentsOf: parentKey.knownDefaultNames())
+            }
+
+            return Array(Set(values.compactMap { value in
+                let normalized = normalizedSearchText(value)
+                return normalized.isEmpty ? nil : normalized
+            }))
+        }
+    }
+
+    static func normalizedSearchQuery(_ value: String) -> String {
+        normalizedSearchText(value)
+    }
+
+    static func matchesSearch(
+        _ category: TransactionCategory,
+        query: String,
+        language: MistiaAppLanguage = .current
+    ) -> Bool {
         let normalizedQuery = normalizedSearchText(query)
         guard !normalizedQuery.isEmpty else { return true }
 
-        return searchableStrings(for: category).contains { candidate in
-            normalizedSearchText(candidate).contains(normalizedQuery)
-        }
+        return SearchIndex(categories: [category], language: language).matches(category, normalizedQuery: normalizedQuery)
     }
 
     static func favoriteCategories(
@@ -149,24 +202,6 @@ enum MistiaCategoryPickerSupport {
         }
     }
 
-    private static func searchableStrings(for category: TransactionCategory) -> [String] {
-        var values: [String] = [category.name, category.localizedDisplayName]
-
-        if let parent = category.parentCategory {
-            values.append(parent.name)
-            values.append(parent.localizedDisplayName)
-        }
-
-        if let systemKey = category.mistiaSystemCategoryKey {
-            values.append(contentsOf: systemKey.knownDefaultNames())
-        }
-
-        if let parentKey = category.mistiaSystemCategoryParentKey {
-            values.append(contentsOf: parentKey.knownDefaultNames())
-        }
-
-        return Array(Set(values.filter { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }))
-    }
 }
 
 struct MistiaCategoryPickerSheet: View {
@@ -185,6 +220,8 @@ struct MistiaCategoryPickerSheet: View {
     let quickModeSubtitle: (TransactionCategory) -> String?
     let featuredSubtitle: ((TransactionCategory) -> String?)?
     let onSelect: (TransactionCategory) -> Void
+    private let appLanguage: MistiaAppLanguage
+    private let searchIndex: MistiaCategoryPickerSupport.SearchIndex
 
     @State private var mode: MistiaCategoryPickerMode
     @State private var searchText = ""
@@ -218,6 +255,17 @@ struct MistiaCategoryPickerSheet: View {
         self.quickModeSubtitle = quickModeSubtitle
         self.featuredSubtitle = featuredSubtitle
         self.onSelect = onSelect
+        let appLanguage = MistiaAppLanguage.current
+        self.appLanguage = appLanguage
+        self.searchIndex = MistiaCategoryPickerSupport.SearchIndex(
+            categories: Self.searchableCategories(
+                sections: sections,
+                recentCategories: recentCategories,
+                favoriteCategories: favoriteCategories,
+                featuredCategories: featuredCategories
+            ),
+            language: appLanguage
+        )
         _mode = State(initialValue: initialMode)
     }
 
@@ -227,6 +275,10 @@ struct MistiaCategoryPickerSheet: View {
 
     private var isSearching: Bool {
         !searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    private var normalizedSearchQuery: String {
+        MistiaCategoryPickerSupport.normalizedSearchQuery(searchText)
     }
 
     var body: some View {
@@ -391,7 +443,7 @@ struct MistiaCategoryPickerSheet: View {
                             )
 
                             VStack(alignment: .leading, spacing: 4) {
-                                Text(section.parent.localizedDisplayName)
+                                Text(displayName(for: section.parent))
                                     .font(.system(size: 16, weight: .semibold, design: .rounded))
                                     .foregroundStyle(.primary)
 
@@ -529,7 +581,7 @@ struct MistiaCategoryPickerSheet: View {
             )
 
             VStack(alignment: .leading, spacing: 3) {
-                Text(category.localizedDisplayName)
+                Text(displayName(for: category))
                     .foregroundStyle(.primary)
 
                 if let subtitle, !subtitle.isEmpty {
@@ -560,15 +612,16 @@ struct MistiaCategoryPickerSheet: View {
     }
 
     private var filteredAllSections: [FilteredSection] {
-        sections.compactMap { section in
-            let parentMatches = MistiaCategoryPickerSupport.matchesSearch(section.parent, query: searchText)
+        let normalizedQuery = normalizedSearchQuery
+        return sections.compactMap { section -> FilteredSection? in
+            let parentMatches = searchIndex.matches(section.parent, normalizedQuery: normalizedQuery)
             let children = section.children.filter { child in
-                searchText.isEmpty
-                    || MistiaCategoryPickerSupport.matchesSearch(child, query: searchText)
+                normalizedQuery.isEmpty
+                    || searchIndex.matches(child, normalizedQuery: normalizedQuery)
                     || parentMatches
             }
 
-            let includesParent = allowsParentSelectionInAll && (searchText.isEmpty || parentMatches)
+            let includesParent = allowsParentSelectionInAll && (normalizedQuery.isEmpty || parentMatches)
 
             if children.isEmpty && !includesParent {
                 return nil
@@ -583,7 +636,8 @@ struct MistiaCategoryPickerSheet: View {
     }
 
     private func filteredQuickCategories(from categories: [TransactionCategory]) -> [TransactionCategory] {
-        categories.filter { MistiaCategoryPickerSupport.matchesSearch($0, query: searchText) }
+        let normalizedQuery = normalizedSearchQuery
+        return categories.filter { searchIndex.matches($0, normalizedQuery: normalizedQuery) }
     }
 
     private var visibleFeaturedCategories: [TransactionCategory] {
@@ -621,7 +675,7 @@ struct MistiaCategoryPickerSheet: View {
             return allModeSubtitle(category)
         }
 
-        return category.parentCategory?.localizedDisplayName
+        return category.parentCategory.map { displayName(for: $0) }
             ?? quickModeSubtitle(category)
             ?? allModeSubtitle(category)
     }
@@ -699,5 +753,28 @@ struct MistiaCategoryPickerSheet: View {
         let includesParent: Bool
 
         var id: UUID { parent.id }
+    }
+
+    private func displayName(for category: TransactionCategory) -> String {
+        category.localizedDisplayName(for: appLanguage)
+    }
+
+    private static func searchableCategories(
+        sections: [TransactionCategoryGroupSection],
+        recentCategories: [TransactionCategory],
+        favoriteCategories: [TransactionCategory],
+        featuredCategories: [TransactionCategory]
+    ) -> [TransactionCategory] {
+        var categoriesByID: [UUID: TransactionCategory] = [:]
+        for section in sections {
+            categoriesByID[section.parent.id] = section.parent
+            for child in section.children {
+                categoriesByID[child.id] = child
+            }
+        }
+        for category in recentCategories + favoriteCategories + featuredCategories {
+            categoriesByID[category.id] = category
+        }
+        return Array(categoriesByID.values)
     }
 }

@@ -871,16 +871,21 @@ struct ManagementCategoryEditorSheet: View {
 
         let now = Date()
         let selectedParentCategory = draft.hierarchyRole == .child ? selectedParentCategory : nil
-        let translatedName = await translatedCategoryName(for: trimmedName)
+        let sourceLanguage = MistiaAppLanguage.current
+        let fallbackName = CategoryNameTranslations.fallback(
+            inputName: trimmedName,
+            sourceLanguage: sourceLanguage,
+            existingCategory: target.category
+        )
         let categoryForSync: TransactionCategory
 
         if let category = target.category {
             let previousKind = category.kind
             let previousParentID = category.parentCategory?.id
             let previousRole = category.hierarchyRole
-            category.name = translatedName.name
-            category.nameEnglish = translatedName.nameEnglish
-            category.nameJapanese = translatedName.nameJapanese
+            category.name = fallbackName.name
+            category.nameEnglish = fallbackName.nameEnglish
+            category.nameJapanese = fallbackName.nameJapanese
             category.kind = draft.kind
             category.iconSymbolName = draft.iconSymbolName
             category.iconColorHex = draft.iconColorHex
@@ -899,9 +904,9 @@ struct ManagementCategoryEditorSheet: View {
             categoryForSync = category
         } else {
             let category = TransactionCategory(
-                name: translatedName.name,
-                nameEnglish: translatedName.nameEnglish,
-                nameJapanese: translatedName.nameJapanese,
+                name: fallbackName.name,
+                nameEnglish: fallbackName.nameEnglish,
+                nameJapanese: fallbackName.nameJapanese,
                 kind: draft.kind,
                 iconSymbolName: draft.iconSymbolName,
                 iconColorHex: draft.iconColorHex,
@@ -927,6 +932,13 @@ struct ManagementCategoryEditorSheet: View {
                 recordID: categoryForSync.id,
                 modifiedAt: categoryForSync.updatedAt
             )
+            scheduleCategoryNameTranslation(
+                inputName: trimmedName,
+                sourceLanguage: sourceLanguage,
+                fallbackName: fallbackName,
+                categoryID: categoryForSync.id,
+                savedUpdatedAt: categoryForSync.updatedAt
+            )
             dismiss()
         } catch {
             alertMessage = mistiaLocalized(vi: "Không thể lưu danh mục lúc này.", en: "Couldn't save this category right now.", ja: "現在このカテゴリを保存できません。") + " \(error.localizedDescription)"
@@ -934,14 +946,60 @@ struct ManagementCategoryEditorSheet: View {
     }
 
     @MainActor
-    private func translatedCategoryName(for inputName: String) async -> CategoryNameTranslations {
-        let sourceLanguage = MistiaAppLanguage.current
-        let fallback = CategoryNameTranslations.fallback(
-            inputName: inputName,
-            sourceLanguage: sourceLanguage,
-            existingCategory: target.category
-        )
+    private func scheduleCategoryNameTranslation(
+        inputName: String,
+        sourceLanguage: MistiaAppLanguage,
+        fallbackName: CategoryNameTranslations,
+        categoryID: UUID,
+        savedUpdatedAt: Date
+    ) {
+        Task { @MainActor in
+            guard let translatedName = await remoteTranslatedCategoryName(
+                for: inputName,
+                sourceLanguage: sourceLanguage,
+                fallbackName: fallbackName
+            ), translatedName != fallbackName else {
+                return
+            }
 
+            var descriptor = FetchDescriptor<TransactionCategory>(
+                predicate: #Predicate { category in
+                    category.id == categoryID
+                }
+            )
+            descriptor.fetchLimit = 1
+
+            guard let category = try? modelContext.fetch(descriptor).first,
+                  abs(category.updatedAt.timeIntervalSince(savedUpdatedAt)) < 0.001
+            else {
+                return
+            }
+
+            let now = Date()
+            category.name = translatedName.name
+            category.nameEnglish = translatedName.nameEnglish
+            category.nameJapanese = translatedName.nameJapanese
+            category.updatedAt = now
+
+            do {
+                try modelContext.save()
+                sessionStore.recordUpsert(
+                    entity: .category,
+                    recordID: categoryID,
+                    modifiedAt: now
+                )
+            } catch {
+                // The category is already saved locally; translation can be retried on the next edit.
+            }
+        }
+    }
+
+    @MainActor
+    private func remoteTranslatedCategoryName(
+        for inputName: String,
+        sourceLanguage: MistiaAppLanguage,
+        fallbackName: CategoryNameTranslations
+    ) async -> CategoryNameTranslations? {
         do {
             let session = try await sessionStore.prepareRemoteSession()
             let translated = try await CategoryNameTranslationService().translateCategoryName(
@@ -950,12 +1008,12 @@ struct ManagementCategoryEditorSheet: View {
                 session: session
             )
             return CategoryNameTranslations(
-                name: translated.name.nilIfBlank ?? fallback.name,
-                nameEnglish: translated.nameEnglish ?? fallback.nameEnglish,
-                nameJapanese: translated.nameJapanese ?? fallback.nameJapanese
+                name: translated.name.nilIfBlank ?? fallbackName.name,
+                nameEnglish: translated.nameEnglish ?? fallbackName.nameEnglish,
+                nameJapanese: translated.nameJapanese ?? fallbackName.nameJapanese
             )
         } catch {
-            return fallback
+            return nil
         }
     }
 
