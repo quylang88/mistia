@@ -9,7 +9,7 @@ struct MistiaDatePickerRow: View {
     let title: String
     @Binding var selection: Date
     var mode: MistiaDatePickerMode = .date
-    var selectableRange: ClosedRange<Date>? = nil
+    var selectableRange: AnyRange<Date>? = nil
 
     @Environment(\.calendar) private var calendar
     @State private var isPickerPresented = false
@@ -86,7 +86,7 @@ private extension View {
         isPresented: Binding<Bool>,
         selection: Binding<Date>,
         calendar: Calendar,
-        selectableRange: ClosedRange<Date>? = nil
+        selectableRange: AnyRange<Date>? = nil
     ) -> some View {
         popover(isPresented: isPresented) {
             MistiaDatePickerPanel(
@@ -104,30 +104,20 @@ private struct MistiaDatePickerPanel: View {
     @Binding var selection: Date
     let calendar: Calendar
     let language: MistiaAppLanguage
-    let selectableRange: ClosedRange<Date>?
+    let selectableRange: AnyRange<Date>?
 
     @Environment(\.dismiss) private var dismiss
     @State private var draftSelection: Date
 
-    init(selection: Binding<Date>, calendar: Calendar, selectableRange: ClosedRange<Date>? = nil) {
+    init(selection: Binding<Date>, calendar: Calendar, selectableRange: AnyRange<Date>? = nil) {
         self._selection = selection
         self.calendar = calendar
         self.selectableRange = selectableRange
         let language = MistiaAppLanguage.current
         self.language = language
 
-        let clampedInitial = Self.clamped(selection.wrappedValue, to: selectableRange, calendar: calendar)
+        let clampedInitial = AnyRange.clamped(selection.wrappedValue, to: selectableRange, calendar: calendar)
         _draftSelection = State(initialValue: clampedInitial)
-    }
-
-    private static func clamped(_ date: Date, to range: ClosedRange<Date>?, calendar: Calendar) -> Date {
-        guard let range else { return date }
-        let day = calendar.startOfDay(for: date)
-        let lower = calendar.startOfDay(for: range.lowerBound)
-        let upper = calendar.startOfDay(for: range.upperBound)
-        if day < lower { return lower }
-        if day > upper { return upper }
-        return date
     }
 
     var body: some View {

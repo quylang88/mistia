@@ -3096,7 +3096,7 @@ private struct ManagementEditProfileBirthdayEditorView: View {
                     selection: $draftBirthday,
                     calendar: calendar,
                     language: MistiaAppLanguage.current,
-                    selectableRange: ...Date(),
+                    selectableRange: .through(...Date()),
                     accent: accent
                 )
             }

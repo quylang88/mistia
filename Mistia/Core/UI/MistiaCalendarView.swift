@@ -4,7 +4,7 @@ struct MistiaCalendarView: View {
     @Binding var selection: Date
     let calendar: Calendar
     let language: MistiaAppLanguage
-    let selectableRange: ClosedRange<Date>?
+    let selectableRange: AnyRange<Date>?
     let accent: Color
 
     @State private var isMonthYearPickerPresented = false
@@ -14,7 +14,7 @@ struct MistiaCalendarView: View {
         selection: Binding<Date>,
         calendar: Calendar,
         language: MistiaAppLanguage = .current,
-        selectableRange: ClosedRange<Date>? = nil,
+        selectableRange: AnyRange<Date>? = nil,
         accent: Color = MistiaAccent.purple.color
     ) {
         self._selection = selection
@@ -159,7 +159,8 @@ struct MistiaCalendarView: View {
         selectedComponents.minute = timeComponents.minute
         selectedComponents.second = timeComponents.second
         selectedComponents.nanosecond = timeComponents.nanosecond
-        return Self.clamped(calendar.date(from: selectedComponents) ?? date, to: selectableRange, calendar: calendar)
+        let target = calendar.date(from: selectedComponents) ?? date
+        return AnyRange.clamped(target, to: selectableRange, calendar: calendar)
     }
 
     private func startOfMonth(for date: Date) -> Date? {
@@ -181,9 +182,7 @@ struct MistiaCalendarView: View {
 
     private func isSelectable(_ date: Date) -> Bool {
         guard let selectableRange else { return true }
-        let day = calendar.startOfDay(for: date)
-        return day >= calendar.startOfDay(for: selectableRange.lowerBound)
-            && day <= calendar.startOfDay(for: selectableRange.upperBound)
+        return selectableRange.contains(date, in: calendar)
     }
 
     private func dayForegroundColor(isSelected: Bool, isEnabled: Bool) -> Color {
@@ -191,23 +190,13 @@ struct MistiaCalendarView: View {
         if isEnabled { return .primary }
         return .secondary.opacity(0.45)
     }
-
-    fileprivate static func clamped(_ date: Date, to range: ClosedRange<Date>?, calendar: Calendar) -> Date {
-        guard let range else { return date }
-        let day = calendar.startOfDay(for: date)
-        let lower = calendar.startOfDay(for: range.lowerBound)
-        let upper = calendar.startOfDay(for: range.upperBound)
-        if day < lower { return lower }
-        if day > upper { return upper }
-        return day
-    }
 }
 
 struct MistiaMonthYearWheelPicker: View {
     @Binding var selection: Date
     let calendar: Calendar
     let language: MistiaAppLanguage
-    let selectableRange: ClosedRange<Date>?
+    let selectableRange: AnyRange<Date>?
 
     private var monthSymbols: [String] {
         let formatter = DateFormatter()
@@ -278,7 +267,7 @@ struct MistiaMonthYearWheelPicker: View {
         )
 
         if let updatedDate = calendar.date(from: components) {
-            selection = MistiaCalendarView.clamped(updatedDate, to: selectableRange, calendar: calendar)
+            selection = AnyRange.clamped(updatedDate, to: selectableRange, calendar: calendar)
         }
     }
 
@@ -297,6 +286,72 @@ struct MistiaMonthYearWheelPicker: View {
               let range = calendar.range(of: .day, in: .month, for: date)
         else { return 31 }
         return range.count
+    }
+}
+
+enum AnyRange<Bound: Comparable> {
+    case closed(ClosedRange<Bound>)
+    case through(PartialRangeThrough<Bound>)
+    case from(PartialRangeFrom<Bound>)
+
+    var lowerBound: Bound? {
+        switch self {
+        case .closed(let range): return range.lowerBound
+        case .through: return nil
+        case .from(let range): return range.lowerBound
+        }
+    }
+
+    var upperBound: Bound? {
+        switch self {
+        case .closed(let range): return range.upperBound
+        case .through(let range): return range.upperBound
+        case .from: return nil
+        }
+    }
+
+    func contains(_ value: Bound) -> Bool {
+        switch self {
+        case .closed(let range): return range.contains(value)
+        case .through(let range): return range.contains(value)
+        case .from(let range): return range.contains(value)
+        }
+    }
+}
+
+extension AnyRange where Bound == Date {
+    static func clamped(_ date: Date, to range: AnyRange<Date>?, calendar: Calendar) -> Date {
+        guard let range else { return date }
+        if range.contains(date, in: calendar) {
+            return date
+        }
+
+        let day = calendar.startOfDay(for: date)
+        if let lower = range.lowerBound {
+            let lowerDay = calendar.startOfDay(for: lower)
+            if day < lowerDay { return lowerDay }
+        }
+
+        if let upper = range.upperBound {
+            let upperDay = calendar.startOfDay(for: upper)
+            if day > upperDay { return upperDay }
+        }
+
+        return date
+    }
+
+    func contains(_ date: Date, in calendar: Calendar) -> Bool {
+        let day = calendar.startOfDay(for: date)
+
+        switch self {
+        case .closed(let range):
+            return day >= calendar.startOfDay(for: range.lowerBound) &&
+                   day <= calendar.startOfDay(for: range.upperBound)
+        case .through(let range):
+            return day <= calendar.startOfDay(for: range.upperBound)
+        case .from(let range):
+            return day >= calendar.startOfDay(for: range.lowerBound)
+        }
     }
 }
 
