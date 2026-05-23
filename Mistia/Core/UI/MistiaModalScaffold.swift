@@ -2,6 +2,7 @@ import SwiftUI
 
 struct MistiaModalScaffold<Title: View, Content: View>: View {
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.colorScheme) private var colorScheme
 
     let titleView: Title
     let accent: Color
@@ -10,14 +11,6 @@ struct MistiaModalScaffold<Title: View, Content: View>: View {
 
     private var modalBackground: Color {
         Color(UIColor.systemGroupedBackground)
-    }
-
-    private var toolbarConfirmTint: Color {
-        Color(red: 0.43, green: 0.23, blue: 0.76)
-    }
-
-    private var toolbarConfirmForeground: Color {
-        Color(red: 0.88, green: 0.78, blue: 1.0)
     }
 
     init(
@@ -34,18 +27,18 @@ struct MistiaModalScaffold<Title: View, Content: View>: View {
 
     var body: some View {
         NavigationStack {
-            ZStack {
+            ZStack(alignment: .top) {
                 modalBackground
                     .ignoresSafeArea()
 
                 ScrollView(.vertical, showsIndicators: false) {
-                    VStack(spacing: 18) {
+                    VStack(spacing: 20) {
                         content
                     }
                     .frame(maxWidth: .infinity)
                     .padding(.horizontal, 18)
-                    .padding(.top, 8)
-                    .padding(.bottom, 40)
+                    .padding(.top, 16)
+                    .padding(.bottom, 32)
                 }
             }
             .toolbar {
@@ -54,33 +47,38 @@ struct MistiaModalScaffold<Title: View, Content: View>: View {
                 }
 
                 ToolbarItem(placement: .topBarLeading) {
-                    Button {
+                    MistiaHeaderCircleButton(action: {
                         dismiss()
-                    } label: {
+                    }) {
                         Image(systemName: "xmark")
-                            .font(.system(size: 16, weight: .semibold))
+                            .font(.system(size: 15, weight: .bold))
                             .foregroundStyle(.secondary)
                     }
                 }
 
                 ToolbarItem(placement: .topBarTrailing) {
-                    Button {
+                    MistiaHeaderCircleButton(action: {
                         onSave()
                         dismiss()
-                    } label: {
+                    }) {
                         Image(systemName: "checkmark")
                             .font(.system(size: 14, weight: .bold))
-                            .foregroundStyle(toolbarConfirmForeground)
-                            .frame(width: 30, height: 30)
+                            .foregroundStyle(checkmarkForeground)
                     }
                     .buttonStyle(.glassProminent)
-                    .buttonBorderShape(.circle)
-                    .tint(toolbarConfirmTint)
+                    .tint(accent)
                 }
             }
             .navigationBarTitleDisplayMode(.inline)
             .navigationBarBackButtonHidden(true)
+            .toolbarBackground(modalBackground, for: .navigationBar)
+            .toolbarBackground(.visible, for: .navigationBar)
         }
+        .presentationBackground(modalBackground)
+    }
+
+    private var checkmarkForeground: Color {
+        colorScheme == .dark ? accent : .white
     }
 }
 
@@ -94,7 +92,7 @@ extension MistiaModalScaffold where Title == Text {
         self.init(
             titleView: {
                 Text(title)
-                    .font(.system(size: 17, weight: .semibold, design: .rounded))
+                    .font(.system(size: 17, weight: .bold, design: .rounded))
             },
             accent: accent,
             onSave: onSave,

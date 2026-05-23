@@ -51,7 +51,7 @@ struct MistiaCalendarView: View {
                     advanceMonth(by: -1)
                 } label: {
                     Image(systemName: "chevron.left")
-                        .font(.system(size: 15, weight: .bold))
+                        .font(.system(size: 16, weight: .bold))
                         .foregroundStyle(accent)
                 }
                 .buttonStyle(.plain)
@@ -60,7 +60,7 @@ struct MistiaCalendarView: View {
                     advanceMonth(by: 1)
                 } label: {
                     Image(systemName: "chevron.right")
-                        .font(.system(size: 15, weight: .bold))
+                        .font(.system(size: 16, weight: .bold))
                         .foregroundStyle(accent)
                 }
                 .buttonStyle(.plain)
@@ -123,7 +123,7 @@ struct MistiaCalendarView: View {
         }
         .padding(12)
         .background(
-            RoundedRectangle(cornerRadius: 18, style: .continuous)
+            RoundedRectangle(cornerRadius: 22, style: .continuous)
                 .fill(Color(UIColor.secondarySystemGroupedBackground))
         )
     }
@@ -371,15 +371,14 @@ extension AnyRange where Bound == Date {
             return date
         }
 
+        let day = calendar.startOfDay(for: date)
         if let lower = range.lowerBound {
             let lowerDay = calendar.startOfDay(for: lower)
-            let day = calendar.startOfDay(for: date)
             if day < lowerDay { return lowerDay }
         }
 
         if let upper = range.upperBound {
             let upperDay = calendar.startOfDay(for: upper)
-            let day = calendar.startOfDay(for: date)
             if day > upperDay { return upperDay }
         }
 
