@@ -7,6 +7,7 @@ struct MistiaCalendarView: View {
     let selectableRange: AnyRange<Date>?
     let accent: Color
 
+    @State private var displayedMonth: Date
     @State private var isMonthYearPickerPresented = false
     @Environment(\.mistiaCalendarHeaderHidden) private var isHeaderHidden
 
@@ -22,14 +23,49 @@ struct MistiaCalendarView: View {
         self.language = language
         self.selectableRange = selectableRange
         self.accent = accent
+        _displayedMonth = State(initialValue: selection.wrappedValue)
     }
 
     var body: some View {
         VStack(spacing: 16) {
             if !isHeaderHidden {
-                monthYearPicker
+                header
             }
             calendarGrid
+        }
+        .onChange(of: selection) { _, newValue in
+            if !calendar.isDate(newValue, equalTo: displayedMonth, toGranularity: .month) {
+                displayedMonth = newValue
+            }
+        }
+    }
+
+    private var header: some View {
+        HStack(spacing: 0) {
+            monthYearPicker
+
+            Spacer()
+
+            HStack(spacing: 20) {
+                Button {
+                    advanceMonth(by: -1)
+                } label: {
+                    Image(systemName: "chevron.left")
+                        .font(.system(size: 15, weight: .bold))
+                        .foregroundStyle(accent)
+                }
+                .buttonStyle(.plain)
+
+                Button {
+                    advanceMonth(by: 1)
+                } label: {
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 15, weight: .bold))
+                        .foregroundStyle(accent)
+                }
+                .buttonStyle(.plain)
+            }
+            .padding(.trailing, 8)
         }
     }
 
@@ -38,22 +74,23 @@ struct MistiaCalendarView: View {
             isMonthYearPickerPresented = true
         } label: {
             HStack(spacing: 6) {
-                Text(MistiaDateFormatting.monthYearString(for: selection, calendar: calendar))
-                    .font(.system(size: 17, weight: .semibold, design: .rounded))
+                Text(MistiaDateFormatting.monthYearString(for: displayedMonth, calendar: calendar))
+                    .font(.system(size: 17, weight: .bold, design: .rounded))
                     .lineLimit(1)
                     .minimumScaleFactor(0.82)
-                Image(systemName: "chevron.up.chevron.down")
+                Image(systemName: "chevron.right")
                     .font(.system(size: 10, weight: .bold))
                     .foregroundStyle(.secondary)
             }
             .foregroundStyle(.primary)
-            .frame(maxWidth: .infinity)
-            .frame(height: 34)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 6)
+            .background(Color(UIColor.tertiarySystemFill), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
         }
         .buttonStyle(.plain)
         .popover(isPresented: $isMonthYearPickerPresented) {
             MistiaMonthYearWheelPicker(
-                selection: $selection,
+                selection: $displayedMonth,
                 calendar: calendar,
                 language: language,
                 selectableRange: selectableRange
@@ -137,7 +174,7 @@ struct MistiaCalendarView: View {
     }
 
     private var monthGridDays: [Date?] {
-        guard let monthStart = startOfMonth(for: selection),
+        guard let monthStart = startOfMonth(for: displayedMonth),
               let dayRange = calendar.range(of: .day, in: .month, for: monthStart)
         else { return [] }
 
@@ -189,6 +226,14 @@ struct MistiaCalendarView: View {
         if isSelected { return .white }
         if isEnabled { return .primary }
         return .secondary.opacity(0.45)
+    }
+
+    private func advanceMonth(by delta: Int) {
+        if let newMonth = calendar.date(byAdding: .month, value: delta, to: displayedMonth) {
+            withAnimation(.snappy) {
+                displayedMonth = newMonth
+            }
+        }
     }
 }
 
@@ -326,14 +371,15 @@ extension AnyRange where Bound == Date {
             return date
         }
 
-        let day = calendar.startOfDay(for: date)
         if let lower = range.lowerBound {
             let lowerDay = calendar.startOfDay(for: lower)
+            let day = calendar.startOfDay(for: date)
             if day < lowerDay { return lowerDay }
         }
 
         if let upper = range.upperBound {
             let upperDay = calendar.startOfDay(for: upper)
+            let day = calendar.startOfDay(for: date)
             if day > upperDay { return upperDay }
         }
 

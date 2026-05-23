@@ -123,7 +123,7 @@ private struct MistiaDatePickerPanel: View {
     var body: some View {
         MistiaModalScaffold(
             titleView: {
-                monthYearPicker
+                EmptyView()
             },
             accent: MistiaAccent.purple.color,
             onSave: {
@@ -137,37 +137,6 @@ private struct MistiaDatePickerPanel: View {
                 selectableRange: selectableRange,
                 accent: MistiaAccent.purple.color
             )
-            .calendarHeaderHidden()
         }
     }
-
-    private var monthYearPicker: some View {
-        Button {
-            isMonthYearPickerPresented = true
-        } label: {
-            HStack(spacing: 6) {
-                Text(MistiaDateFormatting.monthYearString(for: draftSelection, calendar: calendar))
-                    .font(.system(size: 17, weight: .semibold, design: .rounded))
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.82)
-                Image(systemName: "chevron.up.chevron.down")
-                    .font(.system(size: 10, weight: .bold))
-                    .foregroundStyle(.secondary)
-            }
-            .foregroundStyle(.primary)
-            .frame(height: 34)
-        }
-        .buttonStyle(.plain)
-        .popover(isPresented: $isMonthYearPickerPresented) {
-            MistiaMonthYearWheelPicker(
-                selection: $draftSelection,
-                calendar: calendar,
-                language: language,
-                selectableRange: selectableRange
-            )
-            .presentationCompactAdaptation(.popover)
-        }
-    }
-
-    @State private var isMonthYearPickerPresented = false
 }
