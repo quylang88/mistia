@@ -87,6 +87,7 @@ private struct ManagementRenderSnapshot {
 
 struct ManagementView: View {
     @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.locale) private var locale
     @Environment(\.modelContext) private var modelContext
     @Environment(SessionStore.self) private var sessionStore
     @Environment(FamilyContextStore.self) private var familyContextStore

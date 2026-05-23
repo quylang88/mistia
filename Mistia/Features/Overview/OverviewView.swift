@@ -85,6 +85,7 @@ private struct OverviewRenderSnapshot {
 
 struct OverviewView: View {
     @Environment(\.calendar) private var calendar
+    @Environment(\.locale) private var locale
     @Environment(\.modelContext) private var modelContext
     @Environment(SessionStore.self) private var sessionStore
     @Environment(FamilyContextStore.self) private var familyContextStore
