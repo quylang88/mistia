@@ -587,6 +587,51 @@ final class FamilyContextStore {
     }
 
     @discardableResult
+    func createFamilyTransfer(
+        recipientUserID: UUID,
+        sourceWalletID: UUID,
+        destinationWalletID: UUID,
+        amountMinor: Int64,
+        occurredAt: Date,
+        sessionStore: SessionStore
+    ) async -> Bool {
+        guard let familyID = family?.id else {
+            lastErrorMessage = L10n.shared.family.familycontext.familyDataHasNotLoadedYetSync
+            return false
+        }
+        guard let session = await prepareRemoteSession(using: sessionStore) else {
+            lastErrorMessage = L10n.shared.family.familycontext.signInAndEnableCloudSyncTo
+            return false
+        }
+
+        let input = FamilyTransferInput(
+            familyID: familyID,
+            recipientUserID: recipientUserID,
+            sourceWalletID: sourceWalletID,
+            destinationWalletID: destinationWalletID,
+            amountMinor: amountMinor,
+            occurredAt: occurredAt
+        )
+
+        do {
+            let result = try await service.createFamilyTransfer(input: input, session: session)
+            try MistiaSyncLocalStore.applyRemoteRecord(
+                .transaction(result.senderTransaction),
+                in: modelContainer
+            )
+            try MistiaSyncLocalStore.applyRemoteRecord(
+                .transaction(result.recipientTransaction),
+                in: modelContainer
+            )
+            lastErrorMessage = nil
+            return true
+        } catch {
+            lastErrorMessage = visibleErrorMessage(for: error, sessionStore: sessionStore)
+            return false
+        }
+    }
+
+    @discardableResult
     func requestPermission(
         resourceType: MistiaFamilyNotificationResourceType,
         resourceID: UUID?,

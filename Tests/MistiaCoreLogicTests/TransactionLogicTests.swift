@@ -176,6 +176,56 @@ final class TransactionLogicTests: XCTestCase {
         }
     }
 
+    func testFamilyTransfersAreNeutralButChangeOnlyTheDisplayedWalletBalance() {
+        let senderWallet = TransactionWalletSnapshot(
+            id: UUID(),
+            kind: .bank,
+            openingBalanceMinor: 20_000
+        )
+        let recipientWallet = TransactionWalletSnapshot(
+            id: UUID(),
+            kind: .cash,
+            openingBalanceMinor: 5_000
+        )
+        let now = Date(timeIntervalSince1970: 1_742_646_400)
+        let outgoing = makeRecord(
+            primaryKind: .transfer,
+            transferSubtype: .familyTransfer,
+            title: "Chuyen cho B",
+            amountMinor: 3_000,
+            occurredAt: now,
+            sourceWalletID: senderWallet.id,
+            sourceWalletKind: senderWallet.kind,
+            destinationWalletID: recipientWallet.id,
+            destinationWalletKind: recipientWallet.kind
+        )
+        let incoming = makeRecord(
+            primaryKind: .transfer,
+            transferSubtype: .familyTransfer,
+            title: "Nhan tu A",
+            amountMinor: 3_000,
+            occurredAt: now,
+            sourceWalletID: recipientWallet.id,
+            sourceWalletKind: recipientWallet.kind
+        )
+
+        XCTAssertTrue(TransactionLogic.isTransactionComplete(outgoing))
+        XCTAssertTrue(TransactionLogic.isTransactionComplete(incoming))
+        XCTAssertEqual(TransactionLogic.cashflowAmount(for: outgoing), -3_000)
+        XCTAssertEqual(TransactionLogic.cashflowAmount(for: incoming), 3_000)
+
+        let summary = TransactionLogic.summary(for: [outgoing, incoming])
+        XCTAssertEqual(summary.expenseMinor, 0)
+        XCTAssertEqual(summary.incomeMinor, 0)
+
+        let index = TransactionLogic.walletBalanceIndex(
+            wallets: [senderWallet, recipientWallet],
+            records: [outgoing, incoming]
+        )
+        XCTAssertEqual(index.balance(for: senderWallet), 17_000)
+        XCTAssertEqual(index.balance(for: recipientWallet), 8_000)
+    }
+
     func testDebtAggregationTracksBothDirectionsWithNormalizedNames() {
         let walletID = UUID()
         let now = Date(timeIntervalSince1970: 1_742_646_400)

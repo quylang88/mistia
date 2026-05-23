@@ -1043,6 +1043,7 @@ nonisolated enum TransactionPrimaryKind: String, CaseIterable, Identifiable, Cod
 
 nonisolated enum TransactionTransferSubtype: String, CaseIterable, Identifiable, Codable {
     case internalTransfer
+    case familyTransfer
     case debt
 
     var id: String { rawValue }
@@ -1051,6 +1052,8 @@ nonisolated enum TransactionTransferSubtype: String, CaseIterable, Identifiable,
         switch self {
         case .internalTransfer:
             L10n.shared.corelogic.financeenums.`internal`
+        case .familyTransfer:
+            L10n.shared.corelogic.financeenums.family
         case .debt:
             L10n.shared.corelogic.financeenums.debt
         }
@@ -1060,6 +1063,8 @@ nonisolated enum TransactionTransferSubtype: String, CaseIterable, Identifiable,
         switch self {
         case .internalTransfer:
             "arrow.left.arrow.right.circle"
+        case .familyTransfer:
+            "person.2.fill"
         case .debt:
             "person.2.wave.2.fill"
         }
@@ -1069,9 +1074,32 @@ nonisolated enum TransactionTransferSubtype: String, CaseIterable, Identifiable,
         switch self {
         case .internalTransfer:
             "mistia.flow.transfer.internal"
+        case .familyTransfer:
+            "mistia.flow.transfer.family"
         case .debt:
             "mistia.flow.transfer.debt"
         }
+    }
+
+    static func editorOptions(
+        isFamilyEligible: Bool,
+        includesFamilyTransfer: Bool
+    ) -> [TransactionTransferSubtype] {
+        var options: [TransactionTransferSubtype] = [.internalTransfer]
+        if isFamilyEligible || includesFamilyTransfer {
+            options.append(.familyTransfer)
+        }
+        options.append(.debt)
+        return options
+    }
+
+    static func isEditorOptionEnabled(
+        _ subtype: TransactionTransferSubtype,
+        canPerformRemoteActions: Bool,
+        isFamilyTransferDetail: Bool
+    ) -> Bool {
+        guard subtype == .familyTransfer else { return true }
+        return isFamilyTransferDetail || canPerformRemoteActions
     }
 }
 

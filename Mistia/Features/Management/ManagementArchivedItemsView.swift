@@ -361,6 +361,32 @@ struct ManagementArchivedItemsView: View {
                     amountText: rawAmount,
                     amountTint: transferTint
                 )
+            case .familyTransfer:
+                let cashflow = TransactionLogic.cashflowAmount(for: transaction.snapshot)
+                let familyTint: Color
+                let amountText: String
+
+                if cashflow < 0 {
+                    familyTint = MistiaAccent.expense.color
+                    amountText = "-" + rawAmount
+                } else if cashflow > 0 {
+                    familyTint = MistiaAccent.income.color
+                    amountText = "+" + rawAmount
+                } else {
+                    familyTint = colorScheme == .dark ? .white : MistiaAccent.transfer.color
+                    amountText = rawAmount
+                }
+
+                return ArchivedTransactionDescriptor(
+                    title: title,
+                    subtitle: transaction.note?.nilIfBlank ?? transaction.sourceWallet?.name ?? defaultWalletTitle,
+                    icon: TransactionTransferSubtype.familyTransfer.financeIconToken,
+                    iconTint: familyTint,
+                    badgeTitle: L10n.shared.corelogic.financeenums.family,
+                    badgeTint: familyTint,
+                    amountText: amountText,
+                    amountTint: familyTint
+                )
             case .debt:
                 let cashflow = debtCashflow(for: transaction)
                 let personName = transaction.counterpartyName ?? L10n.management.managementarchiveditems.unknownName
@@ -410,6 +436,8 @@ struct ManagementArchivedItemsView: View {
             switch transaction.transferSubtype ?? .internalTransfer {
             case .internalTransfer:
                 return L10n.management.managementarchiveditems.internalTransfer
+            case .familyTransfer:
+                return L10n.shared.corelogic.financeenums.family
             case .debt:
                 return transaction.debtIntent?.title
                     ?? L10n.management.managementarchiveditems.debtTransaction
@@ -653,6 +681,13 @@ struct ManagementArchivedItemsView: View {
 
     private func categoryOwnerUserID(for category: TransactionCategory) -> UUID? {
         categoryOwnerMap[category.id] ?? selfUserID
+    }
+}
+
+private extension String {
+    var nilIfBlank: String? {
+        let trimmed = trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? nil : trimmed
     }
 }
 

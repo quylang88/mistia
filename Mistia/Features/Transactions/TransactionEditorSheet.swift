@@ -71,6 +71,14 @@ private enum TransactionEditorFocusedField: Hashable {
     case title
 }
 
+private struct FamilyTransferDraftPayload {
+    let recipientUserID: UUID
+    let sourceWalletID: UUID
+    let destinationWalletID: UUID
+    let amountMinor: Int64
+    let occurredAt: Date
+}
+
 struct TransactionEditorSheet: View {
     @Environment(\.calendar) private var calendar
     @Environment(\.dismiss) private var dismiss
@@ -121,6 +129,7 @@ struct TransactionEditorSheet: View {
     @State private var receiptAnalysisQuota: ReceiptAnalysisQuota?
     @State private var didLoadReceiptDraft = false
     @State private var didAutoPresentReceiptScanner = false
+    @State private var showsFamilyTransferConfirmation = false
     @FocusState private var focusedField: TransactionEditorFocusedField?
 
     init(
@@ -156,6 +165,16 @@ struct TransactionEditorSheet: View {
         )
     }
 
+    private var isFamilyTransferCreation: Bool {
+        target.transaction == nil
+            && draft.primaryKind == .transfer
+            && draft.transferSubtype == .familyTransfer
+    }
+
+    private var isFamilyTransferDetail: Bool {
+        target.transaction?.transferSubtype == .familyTransfer
+    }
+
     var body: some View {
         let isLockedByStatement = self.isLockedByStatement
 
@@ -178,6 +197,23 @@ struct TransactionEditorSheet: View {
                         .listRowInsets(EdgeInsets(top: 12, leading: 16, bottom: 12, trailing: 16))
                     }
                 }
+                if isFamilyTransferDetail {
+                    Section {
+                        HStack(spacing: 12) {
+                            Image(systemName: "lock.doc.fill")
+                                .font(.system(size: 14))
+                                .foregroundStyle(MistiaAccent.purple.color)
+                                .padding(8)
+                                .background(MistiaAccent.purple.color.opacity(0.1))
+                                .clipShape(Circle())
+
+                            Text(L10n.transactions.transactioneditor.familyTransferReadOnlyNotice)
+                                .font(.system(size: 13, weight: .medium, design: .rounded))
+                                .foregroundStyle(.secondary)
+                        }
+                        .listRowInsets(EdgeInsets(top: 12, leading: 16, bottom: 12, trailing: 16))
+                    }
+                }
 
                 if target.quickCapture && target.transaction == nil {
                     quickCaptureContent
@@ -188,7 +224,7 @@ struct TransactionEditorSheet: View {
             .dismissKeyboardOnTap()
             .navigationTitle(navigationTitle)
             .navigationBarTitleDisplayMode(.inline)
-            .disabled(isLockedByStatement || isSaving)
+            .disabled(isLockedByStatement || isFamilyTransferDetail || isSaving)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
                     Button {
@@ -202,7 +238,7 @@ struct TransactionEditorSheet: View {
                 }
 
                 ToolbarItem(placement: .topBarTrailing) {
-                    if !isAdjustment && !isLockedByStatement {
+                    if !isAdjustment && !isLockedByStatement && !isFamilyTransferDetail {
                         Button {
                             save()
                         } label: {
@@ -225,6 +261,17 @@ struct TransactionEditorSheet: View {
                     }
                 }
             }
+        }
+        .alert(
+            L10n.transactions.transactioneditor.confirmFamilyTransferTitle,
+            isPresented: $showsFamilyTransferConfirmation
+        ) {
+            Button(L10n.common.cancel, role: .cancel) { }
+            Button(L10n.transactions.transactioneditor.confirmFamilyTransferAction, role: .destructive) {
+                saveConfirmedFamilyTransfer()
+            }
+        } message: {
+            Text(L10n.transactions.transactioneditor.confirmFamilyTransferMessage)
         }
         .alert(
             L10n.transactions.transactioneditor.canTSaveYet,
@@ -294,6 +341,10 @@ struct TransactionEditorSheet: View {
         }
         .onChange(of: draft.transferSubtype) { _, _ in
             scheduleTitleSuggestionsRefresh()
+            normalizeTransferDraftForSubtype()
+        }
+        .onChange(of: draft.familyRecipientUserID) { _, _ in
+            clearMismatchedWalletsForCurrentSubject()
         }
         .onChange(of: familyContextStore.selectedSubjectUserID) { _, _ in
             clearMismatchedWalletsForCurrentSubject()
@@ -377,17 +428,26 @@ struct TransactionEditorSheet: View {
         return Group {
             if draft.primaryKind == .transfer {
                 Section(L10n.transactions.transactioneditor.transferType) {
-                    Picker(L10n.transactions.transactioneditor.transferType, selection: Binding(
-                        get: { bindableDraft.transferSubtype ?? .internalTransfer },
-                        set: { bindableDraft.transferSubtype = $0 }
-                    )) {
-                        ForEach(TransactionTransferSubtype.allCases, id: \.self) { subtype in
-                            Text(subtype.title).tag(subtype)
-                        }
-                    }
-                    .pickerStyle(.segmented)
+                    MistiaNativeSegmentedControl(
+                        selection: Binding(
+                            get: { bindableDraft.transferSubtype ?? .internalTransfer },
+                            set: { subtype in
+                                guard isTransferSubtypeEnabled(subtype) else { return }
+                                bindableDraft.transferSubtype = subtype
+                            }
+                        ),
+                        options: transferSubtypeOptions,
+                        title: { $0.title },
+                        isEnabled: isTransferSubtypeEnabled
+                    )
                     .listRowInsets(EdgeInsets())
                     .listRowBackground(Color.clear)
+
+                    if canShowFamilyTransferMode && !sessionStore.canPerformRemoteActions {
+                        Text(L10n.transactions.transactioneditor.familyTransferNeedsNetwork)
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                    }
                 }
             }
 
@@ -503,6 +563,40 @@ struct TransactionEditorSheet: View {
                         }
                         .pickerStyle(.menu)
                     }
+                } else if draft.transferSubtype == .familyTransfer, !isFamilyTransferDetail {
+                    Section(L10n.shared.corelogic.financeenums.family) {
+                        Picker(L10n.transactions.transactioneditor.familyMember, selection: $draft.familyRecipientUserID) {
+                            Text(L10n.transactions.transactioneditor.chooseFamilyMember).tag(Optional<UUID>.none)
+                            ForEach(availableFamilyTransferMembers) { member in
+                                Text(member.displayName).tag(Optional(member.userID))
+                            }
+                        }
+                        .pickerStyle(.menu)
+
+                        if draft.familyRecipientUserID != nil {
+                            Picker(L10n.transactions.transactioneditor.fromWallet, selection: $draft.sourceWalletID) {
+                                Text(L10n.transactions.transactioneditor.chooseSource).tag(Optional<UUID>.none)
+                                ForEach(availableSourceWalletsForFamilyTransfer) { wallet in
+                                    Text(walletPickerTitle(for: wallet)).tag(Optional(wallet.id))
+                                }
+                            }
+                            .pickerStyle(.menu)
+
+                            Picker(L10n.transactions.transactioneditor.toWallet, selection: $draft.destinationWalletID) {
+                                Text(L10n.transactions.transactioneditor.chooseDestination).tag(Optional<UUID>.none)
+                                ForEach(availableDestinationWalletsForFamilyTransfer) { wallet in
+                                    Text(walletPickerTitle(for: wallet)).tag(Optional(wallet.id))
+                                }
+                            }
+                            .pickerStyle(.menu)
+                        }
+
+                        if draft.familyRecipientUserID != nil && availableDestinationWalletsForFamilyTransfer.isEmpty {
+                            Text(L10n.transactions.transactioneditor.noUsableWalletsForThisMember)
+                                .font(.footnote)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
                 } else {
                     Section(L10n.transactions.transactioneditor.counterparty) {
                         Picker(L10n.transactions.transactioneditor.walletUsed, selection: $draft.sourceWalletID) {
@@ -521,16 +615,18 @@ struct TransactionEditorSheet: View {
                 }
             }
 
-            Section(L10n.transactions.transactioneditor.notes) {
-                TextField(L10n.transactions.transactioneditor.addANoteIfNeeded, text: $bindableDraft.note, axis: .vertical)
-                    .lineLimit(3...5)
+            if shouldShowNotesSection {
+                Section(L10n.transactions.transactioneditor.notes) {
+                    TextField(L10n.transactions.transactioneditor.addANoteIfNeeded, text: $bindableDraft.note, axis: .vertical)
+                        .lineLimit(3...5)
+                }
             }
 
             if shouldShowReceiptSection {
                 receiptSection
             }
 
-            if let transaction = target.transaction, !transaction.isArchived {
+            if let transaction = target.transaction, !transaction.isArchived, !isFamilyTransferDetail {
                 Section {
                     MistiaArchiveSection(
                         buttonTitle: L10n.transactions.transactioneditor.archiveTransaction,
@@ -549,6 +645,10 @@ struct TransactionEditorSheet: View {
         .disabled(isAdjustment)
     }
     private var navigationTitle: String {
+        if isFamilyTransferDetail {
+            return L10n.shared.corelogic.financeenums.family
+        }
+
         if target.transaction == nil {
             return target.quickCapture
                 ? L10n.transactions.transactioneditor.quickCapture
@@ -623,6 +723,27 @@ struct TransactionEditorSheet: View {
     private var availableWalletsForIncome: [LedgerWallet] {
         availableWallets.filter { $0.kind != .creditCard }
     }
+
+    private var canShowFamilyTransferMode: Bool {
+        familyContextStore.family != nil
+            && familyContextStore.members.count >= 2
+            && currentSelfUserID != nil
+    }
+
+    private var transferSubtypeOptions: [TransactionTransferSubtype] {
+        TransactionTransferSubtype.editorOptions(
+            isFamilyEligible: canShowFamilyTransferMode,
+            includesFamilyTransfer: draft.transferSubtype == .familyTransfer || isFamilyTransferDetail
+        )
+    }
+
+    private func isTransferSubtypeEnabled(_ subtype: TransactionTransferSubtype) -> Bool {
+        TransactionTransferSubtype.isEditorOptionEnabled(
+            subtype,
+            canPerformRemoteActions: sessionStore.canPerformRemoteActions,
+            isFamilyTransferDetail: isFamilyTransferDetail
+        )
+    }
     
     private var availableSourceWalletsForTransfer: [LedgerWallet] {
         // Credit cards cannot be source wallet for transfers (cannot send money)
@@ -632,6 +753,39 @@ struct TransactionEditorSheet: View {
     private var availableDestinationWalletsForTransfer: [LedgerWallet] {
         // All wallets can receive transfers (including credit cards for payment)
         availableWallets
+    }
+
+    private var availableFamilyTransferMembers: [FamilyMember] {
+        guard let currentSelfUserID else { return [] }
+        return familyContextStore.members
+            .filter { $0.userID != currentSelfUserID }
+            .sorted {
+                $0.displayName.localizedStandardCompare($1.displayName) == .orderedAscending
+            }
+    }
+
+    private var availableSourceWalletsForFamilyTransfer: [LedgerWallet] {
+        guard let currentSelfUserID else { return [] }
+        return storedWallets
+            .filter { wallet in
+                walletOwnerUserID(for: wallet) == currentSelfUserID
+                    && wallet.kind != .creditCard
+                    && wallet.deletedAt == nil
+                    && !wallet.isArchived
+            }
+            .sorted(by: walletSort)
+    }
+
+    private var availableDestinationWalletsForFamilyTransfer: [LedgerWallet] {
+        guard let recipientUserID = draft.familyRecipientUserID else { return [] }
+        return storedWallets
+            .filter { wallet in
+                walletOwnerUserID(for: wallet) == recipientUserID
+                    && wallet.deletedAt == nil
+                    && !wallet.isArchived
+                    && familyContextStore.canUseWallet(walletID: wallet.id, ownerUserID: recipientUserID)
+            }
+            .sorted(by: walletSort)
     }
 
     private var availableCategories: [TransactionCategory] {
@@ -820,6 +974,10 @@ struct TransactionEditorSheet: View {
         draft.primaryKind == .expense || draft.primaryKind == .income
     }
 
+    private var shouldShowNotesSection: Bool {
+        !isFamilyTransferCreation || target.transaction != nil
+    }
+
     private var receiptSection: some View {
         Section(L10n.transactions.transactioneditor.image) {
             if let receiptDraft {
@@ -936,10 +1094,114 @@ struct TransactionEditorSheet: View {
 
     private func save() {
         guard !isSaving else { return }
+        guard !isFamilyTransferDetail else { return }
+        if isFamilyTransferCreation {
+            requestFamilyTransferConfirmation()
+            return
+        }
         if target.quickCapture && target.transaction == nil {
             saveQuickCapture()
         } else {
             saveFullTransaction()
+        }
+    }
+
+    private func requestFamilyTransferConfirmation() {
+        guard validateFamilyTransferDraft() != nil else { return }
+        showsFamilyTransferConfirmation = true
+    }
+
+    private func validateFamilyTransferDraft() -> FamilyTransferDraftPayload? {
+        guard sessionStore.canPerformRemoteActions else {
+            alertMessage = L10n.transactions.transactioneditor.familyTransferNeedsNetwork
+            return nil
+        }
+
+        guard canShowFamilyTransferMode else {
+            alertMessage = L10n.shared.family.familycontext.familyDataHasNotLoadedYetSync
+            return nil
+        }
+
+        guard let amountMinor = draft.amountMinor, amountMinor > 0 else {
+            alertMessage = L10n.transactions.transactioneditor.enterAnAmountGreaterThan
+            return nil
+        }
+
+        guard let recipientUserID = draft.familyRecipientUserID,
+              availableFamilyTransferMembers.contains(where: { $0.userID == recipientUserID }) else {
+            alertMessage = L10n.transactions.transactioneditor.chooseFamilyMember
+            return nil
+        }
+
+        guard let sourceWalletID = draft.sourceWalletID,
+              let sourceWallet = availableSourceWalletsForFamilyTransfer.first(where: { $0.id == sourceWalletID }) else {
+            alertMessage = L10n.transactions.transactioneditor.chooseTheSourceWallet
+            return nil
+        }
+
+        guard let destinationWalletID = draft.destinationWalletID,
+              availableDestinationWalletsForFamilyTransfer.contains(where: { $0.id == destinationWalletID }) else {
+            alertMessage = L10n.transactions.transactioneditor.chooseTheDestinationWallet
+            return nil
+        }
+
+        let validationRecordSnapshots = postedTransactions
+            .filter { $0.id != target.transaction?.id }
+            .map(\.snapshot)
+        let validationBalanceIndex = TransactionLogic.walletBalanceIndex(
+            wallets: storedWallets.map {
+                TransactionWalletSnapshot(
+                    id: $0.id,
+                    kind: $0.kind,
+                    openingBalanceMinor: $0.openingBalanceMinor
+                )
+            },
+            records: validationRecordSnapshots
+        )
+        let sourceSnapshot = TransactionWalletSnapshot(
+            id: sourceWallet.id,
+            kind: sourceWallet.kind,
+            openingBalanceMinor: sourceWallet.openingBalanceMinor
+        )
+        if validationBalanceIndex.balance(for: sourceSnapshot) - amountMinor < 0 {
+            alertMessage = L10n.transactions.transactioneditor.insufficientWalletBalanceToPerformTheTransaction
+            return nil
+        }
+
+        return FamilyTransferDraftPayload(
+            recipientUserID: recipientUserID,
+            sourceWalletID: sourceWalletID,
+            destinationWalletID: destinationWalletID,
+            amountMinor: amountMinor,
+            occurredAt: draft.occurredAt
+        )
+    }
+
+    private func saveConfirmedFamilyTransfer() {
+        guard let payload = validateFamilyTransferDraft() else { return }
+        isSaving = true
+        Task { @MainActor in
+            let didCreate = await familyContextStore.createFamilyTransfer(
+                recipientUserID: payload.recipientUserID,
+                sourceWalletID: payload.sourceWalletID,
+                destinationWalletID: payload.destinationWalletID,
+                amountMinor: payload.amountMinor,
+                occurredAt: payload.occurredAt,
+                sessionStore: sessionStore
+            )
+            isSaving = false
+            guard didCreate else {
+                let detail = familyContextStore.lastErrorMessage?.nilIfBlank
+                alertMessage = [
+                    L10n.transactions.transactioneditor.couldnTCreateFamilyTransfer,
+                    detail
+                ]
+                .compactMap { $0 }
+                .joined(separator: " ")
+                return
+            }
+            onComplete(.savedTransaction)
+            dismiss()
         }
     }
 
@@ -1331,6 +1593,9 @@ struct TransactionEditorSheet: View {
                         return
                     }
                 }
+            case .familyTransfer:
+                alertMessage = L10n.transactions.transactioneditor.couldnTCreateFamilyTransfer
+                return
             }
         default:
             break
@@ -1407,6 +1672,9 @@ struct TransactionEditorSheet: View {
                 transaction.debtIntent = nil
                 transaction.counterpartyName = nil
                 transaction.normalizedCounterpartyKey = nil
+            case .familyTransfer:
+                alertMessage = L10n.transactions.transactioneditor.couldnTCreateFamilyTransfer
+                return
             case .debt:
                 guard let sourceWallet = selectedSourceWallet else {
                     alertMessage = L10n.transactions.transactioneditor.chooseTheWalletUsedForThisDebt
@@ -1800,6 +2068,13 @@ struct TransactionEditorSheet: View {
         return "\(wallet.name) • \(ownerName)"
     }
 
+    private func walletSort(_ lhs: LedgerWallet, _ rhs: LedgerWallet) -> Bool {
+        if lhs.sortOrder != rhs.sortOrder {
+            return lhs.sortOrder < rhs.sortOrder
+        }
+        return lhs.createdAt < rhs.createdAt
+    }
+
     private func clearMismatchedCategoryForSelectedWallet() {
         guard let category = storedCategories.first(where: { $0.id == draft.categoryID }),
               !shouldShowCategory(category) else {
@@ -1809,16 +2084,62 @@ struct TransactionEditorSheet: View {
     }
 
     private func clearMismatchedWalletsForCurrentSubject() {
-        let availableWalletIDs = Set(availableWallets.map(\.id))
+        let availableSourceWalletIDs: Set<UUID>
+        let availableDestinationWalletIDs: Set<UUID>
+
+        if draft.primaryKind == .transfer,
+           draft.transferSubtype == .familyTransfer,
+           !isFamilyTransferDetail {
+            if draft.familyRecipientUserID == nil {
+                availableSourceWalletIDs = []
+                availableDestinationWalletIDs = []
+            } else {
+                availableSourceWalletIDs = Set(availableSourceWalletsForFamilyTransfer.map(\.id))
+                availableDestinationWalletIDs = Set(availableDestinationWalletsForFamilyTransfer.map(\.id))
+            }
+        } else if draft.primaryKind == .transfer,
+                  draft.transferSubtype == .internalTransfer {
+            availableSourceWalletIDs = Set(availableSourceWalletsForTransfer.map(\.id))
+            availableDestinationWalletIDs = Set(availableDestinationWalletsForTransfer.map(\.id))
+        } else {
+            let availableWalletIDs = Set(availableWallets.map(\.id))
+            availableSourceWalletIDs = availableWalletIDs
+            availableDestinationWalletIDs = availableWalletIDs
+        }
+
         if let sourceWalletID = draft.sourceWalletID,
-           !availableWalletIDs.contains(sourceWalletID) {
+           !availableSourceWalletIDs.contains(sourceWalletID) {
             draft.sourceWalletID = nil
             draft.categoryID = nil
         }
         if let destinationWalletID = draft.destinationWalletID,
-           !availableWalletIDs.contains(destinationWalletID) {
+           !availableDestinationWalletIDs.contains(destinationWalletID) {
             draft.destinationWalletID = nil
         }
+    }
+
+    private func normalizeTransferDraftForSubtype() {
+        guard draft.primaryKind == .transfer else {
+            draft.familyRecipientUserID = nil
+            return
+        }
+
+        switch draft.transferSubtype ?? .internalTransfer {
+        case .internalTransfer:
+            draft.debtIntent = nil
+            draft.familyRecipientUserID = nil
+        case .familyTransfer:
+            draft.debtIntent = nil
+            draft.counterpartyName = ""
+        case .debt:
+            draft.destinationWalletID = nil
+            draft.familyRecipientUserID = nil
+            if draft.debtIntent == nil {
+                draft.debtIntent = .lend
+            }
+        }
+
+        clearMismatchedWalletsForCurrentSubject()
     }
 
     private func applyTitleSuggestion(_ suggestion: TransactionTitleSuggestion) {
@@ -2034,6 +2355,7 @@ private struct TransactionReceiptImagePicker: UIViewControllerRepresentable {
     var sourceWalletID: UUID? = nil
     var destinationWalletID: UUID? = nil
     var categoryID: UUID? = nil
+    var familyRecipientUserID: UUID? = nil
     var counterpartyName: String = ""
 
     init(target: TransactionEditorTarget) {
@@ -2048,6 +2370,7 @@ private struct TransactionReceiptImagePicker: UIViewControllerRepresentable {
             self.sourceWalletID = transaction.sourceWallet?.id
             self.destinationWalletID = transaction.destinationWallet?.id
             self.categoryID = transaction.category?.id
+            self.familyRecipientUserID = nil
             self.counterpartyName = transaction.counterpartyName ?? ""
         } else {
             let transferPreset = target.initialKind == .transfer ? target.transferPreset : nil
@@ -2063,6 +2386,7 @@ private struct TransactionReceiptImagePicker: UIViewControllerRepresentable {
             self.sourceWalletID = transferPreset?.sourceWalletID
             self.destinationWalletID = transferPreset?.destinationWalletID
             self.categoryID = nil
+            self.familyRecipientUserID = nil
             self.counterpartyName = ""
         }
     }

@@ -30669,6 +30669,28 @@
         }
       }
     },
+    "transactions.transactioneditor.chooseFamilyMember" : {
+      "localizations" : {
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Chọn thành viên"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Choose member"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "メンバーを選択"
+          }
+        }
+      }
+    },
     "transactions.transactioneditor.chooseWallet" : {
       "localizations" : {
         "vi" : {
@@ -30713,6 +30735,72 @@
         }
       }
     },
+    "transactions.transactioneditor.confirmFamilyTransferAction" : {
+      "localizations" : {
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Chuyển tiền"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Transfer"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "送金"
+          }
+        }
+      }
+    },
+    "transactions.transactioneditor.confirmFamilyTransferMessage" : {
+      "localizations" : {
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Giao dịch chuyển tiền gia đình sẽ được tạo cho cả hai thành viên và không thể sửa, lưu trữ hoặc xóa sau khi chuyển."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This family transfer will create records for both members and cannot be edited, archived, or deleted after transfer."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "家族送金は両方のメンバーに記録され、送金後は編集、アーカイブ、削除できません。"
+          }
+        }
+      }
+    },
+    "transactions.transactioneditor.confirmFamilyTransferTitle" : {
+      "localizations" : {
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Xác nhận chuyển tiền?"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Confirm transfer?"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "送金を確認しますか？"
+          }
+        }
+      }
+    },
     "transactions.transactioneditor.couldnTAnalyzeThisReceiptRightNow" : {
       "localizations" : {
         "vi" : {
@@ -30731,6 +30819,28 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "現在レシートを解析できません。"
+          }
+        }
+      }
+    },
+    "transactions.transactioneditor.couldnTCreateFamilyTransfer" : {
+      "localizations" : {
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Không thể tạo giao dịch chuyển tiền gia đình lúc này."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Couldn't create the family transfer right now."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "現在、家族送金を作成できません。"
           }
         }
       }
@@ -31175,6 +31285,72 @@
         }
       }
     },
+    "transactions.transactioneditor.familyMember" : {
+      "localizations" : {
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Thành viên"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Family member"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "家族メンバー"
+          }
+        }
+      }
+    },
+    "transactions.transactioneditor.familyTransferNeedsNetwork" : {
+      "localizations" : {
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Chuyển tiền gia đình cần đăng nhập và có internet."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Family transfers need sign-in and an internet connection."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "家族送金にはサインインとインターネット接続が必要です。"
+          }
+        }
+      }
+    },
+    "transactions.transactioneditor.familyTransferReadOnlyNotice" : {
+      "localizations" : {
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Giao dịch chuyển tiền gia đình chỉ dùng để xem chi tiết và không thể sửa, lưu trữ hoặc xóa."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Family transfer records are detail-only and cannot be edited, archived, or deleted."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "家族送金の記録は詳細表示のみで、編集、アーカイブ、削除はできません。"
+          }
+        }
+      }
+    },
     "transactions.transactioneditor.fromWallet" : {
       "localizations" : {
         "vi" : {
@@ -31369,6 +31545,28 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "基本情報"
+          }
+        }
+      }
+    },
+    "transactions.transactioneditor.noUsableWalletsForThisMember" : {
+      "localizations" : {
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Thành viên này chưa cấp quyền sử dụng ví nào cho bạn."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This member has not granted you use access to any wallet."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "このメンバーは、あなたに使用を許可したウォレットがありません。"
           }
         }
       }

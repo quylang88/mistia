@@ -73,6 +73,10 @@ protocol FamilyRemoteServicing {
         session: SupabaseAuthSession
     ) async throws -> MistiaRemoteSnapshot
     func fetchFamilyNotifications(session: SupabaseAuthSession) async throws -> [FamilyNotificationRemoteRecord]
+    func createFamilyTransfer(
+        input: FamilyTransferInput,
+        session: SupabaseAuthSession
+    ) async throws -> FamilyTransferResult
     func createFamilyPermissionRequest(
         input: FamilyPermissionRequestInput,
         session: SupabaseAuthSession
@@ -119,6 +123,13 @@ extension FamilyRemoteServicing {
 
     func fetchFamilyNotifications(session: SupabaseAuthSession) async throws -> [FamilyNotificationRemoteRecord] {
         []
+    }
+
+    func createFamilyTransfer(
+        input: FamilyTransferInput,
+        session: SupabaseAuthSession
+    ) async throws -> FamilyTransferResult {
+        throw SupabaseServiceError.serverMessage("Family transfers are unavailable.")
     }
 
     func createFamilyPermissionRequest(
@@ -356,6 +367,25 @@ struct FamilyPermissionGrantRecord: Codable, Identifiable, Equatable {
 
     var isActive: Bool {
         revokedAt == nil
+    }
+}
+
+struct FamilyTransferInput: Encodable, Equatable {
+    let familyID: UUID
+    let recipientUserID: UUID
+    let sourceWalletID: UUID
+    let destinationWalletID: UUID
+    let amountMinor: Int64
+    let occurredAt: Date
+}
+
+struct FamilyTransferResult: Codable {
+    let senderTransaction: RemoteLedgerTransaction
+    let recipientTransaction: RemoteLedgerTransaction
+
+    enum CodingKeys: String, CodingKey {
+        case senderTransaction = "sender_transaction"
+        case recipientTransaction = "recipient_transaction"
     }
 }
 
@@ -842,6 +872,17 @@ struct FamilyRemoteService: FamilyRemoteServicing {
                 URLQueryItem(name: "order", value: "created_at.desc"),
                 URLQueryItem(name: "limit", value: "100")
             ],
+            session: session
+        )
+    }
+
+    func createFamilyTransfer(
+        input: FamilyTransferInput,
+        session: SupabaseAuthSession
+    ) async throws -> FamilyTransferResult {
+        try await callRPC(
+            functionName: "create_family_transfer",
+            body: CreateFamilyTransferRPCBody(input: input),
             session: session
         )
     }
@@ -1522,6 +1563,33 @@ private struct SetFamilyPlanningManagerRPCBody: Encodable {
         case familyID = "p_family_id"
         case resourceType = "p_resource_type"
         case managerUserID = "p_manager_user_id"
+    }
+}
+
+private struct CreateFamilyTransferRPCBody: Encodable {
+    let familyID: UUID
+    let recipientUserID: UUID
+    let sourceWalletID: UUID
+    let destinationWalletID: UUID
+    let amountMinor: Int64
+    let occurredAt: Date
+
+    init(input: FamilyTransferInput) {
+        familyID = input.familyID
+        recipientUserID = input.recipientUserID
+        sourceWalletID = input.sourceWalletID
+        destinationWalletID = input.destinationWalletID
+        amountMinor = input.amountMinor
+        occurredAt = input.occurredAt
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case familyID = "p_family_id"
+        case recipientUserID = "p_recipient_user_id"
+        case sourceWalletID = "p_source_wallet_id"
+        case destinationWalletID = "p_destination_wallet_id"
+        case amountMinor = "p_amount_minor"
+        case occurredAt = "p_occurred_at"
     }
 }
 

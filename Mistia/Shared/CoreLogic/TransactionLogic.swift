@@ -542,6 +542,16 @@ nonisolated enum TransactionLogic {
                         amount: record.amountMinor,
                         delta: { kind, amount in incomingDelta(for: kind, amount: amount) }
                     )
+                case .familyTransfer:
+                    let isIncoming = record.destinationWalletID == nil
+                    applyDelta(
+                        walletID: record.sourceWalletID,
+                        explicitKind: record.sourceWalletKind,
+                        amount: record.amountMinor,
+                        delta: isIncoming
+                            ? { kind, amount in incomingDelta(for: kind, amount: amount) }
+                            : { kind, amount in outgoingDelta(for: kind, amount: amount) }
+                    )
                 case .debt:
                     switch record.debtIntent {
                     case .lend, .repay:
@@ -580,6 +590,8 @@ nonisolated enum TransactionLogic {
             switch record.transferSubtype {
             case .internalTransfer:
                 0
+            case .familyTransfer:
+                record.destinationWalletID == nil ? record.amountMinor : -record.amountMinor
             case .debt:
                 switch record.debtIntent {
                 case .lend, .repay:
@@ -613,6 +625,8 @@ nonisolated enum TransactionLogic {
                 return record.sourceWalletID != nil
                     && record.destinationWalletID != nil
                     && record.sourceWalletID != record.destinationWalletID
+            case .familyTransfer:
+                return record.sourceWalletID != nil
             case .debt:
                 return record.sourceWalletID != nil
                     && record.debtIntent != nil
@@ -792,6 +806,11 @@ nonisolated enum TransactionLogic {
                 }
 
                 return delta
+            case .familyTransfer:
+                guard record.sourceWalletID == wallet.id else { return 0 }
+                return record.destinationWalletID == nil
+                    ? incomingDelta(for: wallet.kind, amount: record.amountMinor)
+                    : outgoingDelta(for: wallet.kind, amount: record.amountMinor)
             case .debt:
                 guard record.sourceWalletID == wallet.id else { return 0 }
 

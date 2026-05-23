@@ -1003,6 +1003,8 @@ nonisolated enum OverviewLogic {
             return .income
         case .transfer:
             switch transaction.transferSubtype {
+            case .familyTransfer:
+                return transaction.destinationWalletID == nil ? .income : .expense
             case .debt:
                 switch transaction.debtIntent {
                 case .borrow, .collect:
@@ -1050,6 +1052,8 @@ nonisolated enum OverviewLogic {
             switch transaction.transferSubtype {
             case .internalTransfer:
                 return L10n.shared.corelogic.overview.internalTransfer
+            case .familyTransfer:
+                return L10n.shared.corelogic.financeenums.family
             case .debt:
                 return transaction.debtIntent?.title ?? L10n.shared.corelogic.overview.debt
             case .none:

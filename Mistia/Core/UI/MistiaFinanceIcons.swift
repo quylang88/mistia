@@ -127,6 +127,7 @@ enum MistiaFinanceIconRegistry {
         "mistia.flow.income": descriptor(token: "mistia.flow.income", fallbackSystemName: "arrow.down.left", baseHex: "#2DAA9E", group: .income, badgeSystemName: "plus"),
         "mistia.flow.transfer": descriptor(token: "mistia.flow.transfer", fallbackSystemName: "arrow.left.arrow.right", baseHex: "#5B7BFF", group: .finance, badgeSystemName: "arrow.left.arrow.right"),
         "mistia.flow.transfer.internal": descriptor(token: "mistia.flow.transfer.internal", fallbackSystemName: "arrow.left.arrow.right.circle.fill", baseHex: "#5B7BFF", group: .finance, badgeSystemName: "building.columns.fill"),
+        "mistia.flow.transfer.family": descriptor(token: "mistia.flow.transfer.family", fallbackSystemName: "person.2.fill", baseHex: "#A76BFF", group: .finance, badgeSystemName: "arrow.left.arrow.right"),
         "mistia.flow.transfer.debt": descriptor(token: "mistia.flow.transfer.debt", fallbackSystemName: "person.2.wave.2.fill", baseHex: "#FF8A4C", group: .finance, badgeSystemName: "person.fill"),
         "mistia.debt.lend": descriptor(token: "mistia.debt.lend", fallbackSystemName: "arrow.up.right.circle.fill", baseHex: "#FF7A59", group: .finance, badgeSystemName: "hand.raised.fill"),
         "mistia.debt.collect": descriptor(token: "mistia.debt.collect", fallbackSystemName: "arrow.down.left.circle.fill", baseHex: "#2DAA9E", group: .finance, badgeSystemName: "tray.full.fill"),

@@ -55,6 +55,65 @@ final class TransactionEditorEdgeCasesTests: XCTestCase {
         )
     }
 
+    // MARK: - Transfer Mode Availability
+
+    func testFamilyTransferModeOnlyAppearsForEligibleFamilyOrExistingFamilyRow() {
+        XCTAssertEqual(
+            TransactionTransferSubtype.editorOptions(
+                isFamilyEligible: false,
+                includesFamilyTransfer: false
+            ),
+            [.internalTransfer, .debt]
+        )
+
+        XCTAssertEqual(
+            TransactionTransferSubtype.editorOptions(
+                isFamilyEligible: true,
+                includesFamilyTransfer: false
+            ),
+            [.internalTransfer, .familyTransfer, .debt]
+        )
+
+        XCTAssertEqual(
+            TransactionTransferSubtype.editorOptions(
+                isFamilyEligible: false,
+                includesFamilyTransfer: true
+            ),
+            [.internalTransfer, .familyTransfer, .debt]
+        )
+    }
+
+    func testFamilyTransferModeIsDisabledOfflineExceptExistingDetail() {
+        XCTAssertFalse(
+            TransactionTransferSubtype.isEditorOptionEnabled(
+                .familyTransfer,
+                canPerformRemoteActions: false,
+                isFamilyTransferDetail: false
+            )
+        )
+        XCTAssertTrue(
+            TransactionTransferSubtype.isEditorOptionEnabled(
+                .familyTransfer,
+                canPerformRemoteActions: true,
+                isFamilyTransferDetail: false
+            )
+        )
+        XCTAssertTrue(
+            TransactionTransferSubtype.isEditorOptionEnabled(
+                .familyTransfer,
+                canPerformRemoteActions: false,
+                isFamilyTransferDetail: true
+            )
+        )
+        XCTAssertTrue(
+            TransactionTransferSubtype.isEditorOptionEnabled(
+                .debt,
+                canPerformRemoteActions: false,
+                isFamilyTransferDetail: false
+            )
+        )
+    }
+
     // MARK: - Quick Capture Edge Cases
 
     func testQuickCaptureZeroAmount() {

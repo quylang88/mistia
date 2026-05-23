@@ -865,6 +865,12 @@ struct TransactionsView: View {
     }
 
     private func openTransactionEditorIfAllowed(_ transaction: LedgerTransaction) {
+        if transaction.primaryKind == .transfer,
+           transaction.transferSubtype == .familyTransfer {
+            editorTarget = TransactionEditorTarget(transaction: transaction)
+            return
+        }
+
         guard let ownerUserID = transactionOwnerUserID(for: transaction) else {
             editorTarget = TransactionEditorTarget(transaction: transaction)
             return
@@ -1114,6 +1120,8 @@ private struct TransactionRow: View {
             switch record.transferSubtype {
             case .internalTransfer:
                 TransactionTransferSubtype.internalTransfer.financeIconToken
+            case .familyTransfer:
+                TransactionTransferSubtype.familyTransfer.financeIconToken
             case .debt:
                 TransactionTransferSubtype.debt.financeIconToken
             case nil:
@@ -1142,6 +1150,8 @@ private struct TransactionRow: View {
             switch record.transferSubtype {
             case .internalTransfer:
                 return L10n.transactions.transactions.internalTransfer
+            case .familyTransfer:
+                return L10n.shared.corelogic.financeenums.family
             case .debt:
                 return record.debtIntent?.title ?? L10n.transactions.transactions.debt
             case nil:
@@ -1166,6 +1176,15 @@ private struct TransactionRow: View {
                 let source = transaction.sourceWallet?.name ?? L10n.transactions.transactions.source
                 let destination = transaction.destinationWallet?.name ?? L10n.transactions.transactions.destination
                 return "\(source) → \(destination)"
+            case .familyTransfer:
+                if let note = record.note?.nilIfBlank {
+                    return note
+                }
+                let source = transaction.sourceWallet?.name ?? L10n.transactions.transactions.source
+                if let destination = transaction.destinationWallet?.name {
+                    return "\(source) → \(destination)"
+                }
+                return source
             case .debt:
                 let wallet = transaction.sourceWallet?.name ?? L10n.transactions.transactions.noWalletSelected
                 let person = transaction.counterpartyName ?? L10n.transactions.transactions.unknownName
@@ -1211,6 +1230,15 @@ private struct TransactionRow: View {
         case .income:
             return MistiaAccent.income.color
         case .transfer:
+            if record.transferSubtype == .familyTransfer {
+                let cashflow = TransactionLogic.cashflowAmount(for: record)
+                if cashflow > 0 {
+                    return MistiaAccent.income.color
+                }
+                if cashflow < 0 {
+                    return MistiaAccent.expense.color
+                }
+            }
             return colorScheme == .dark ? .white : MistiaAccent.transfer.color
         }
     }
