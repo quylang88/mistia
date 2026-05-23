@@ -60,6 +60,18 @@ final class MistiaMigrationPlanTests: XCTestCase {
         XCTAssertTrue(migration.contains("grant execute on function public.create_family_transfer"))
     }
 
+    func testFamilyTransferNoteUpdateMigrationIncludesNoteParameter() throws {
+        let migrationURL = repositoryRootURL()
+            .appending(path: "supabase/migrations/20260523130000_update_family_transfer_note.sql")
+        let migration = try String(contentsOf: migrationURL, encoding: .utf8)
+
+        XCTAssertTrue(migration.contains("create or replace function public.create_family_transfer"))
+        XCTAssertTrue(migration.contains("p_note text default null"))
+        XCTAssertTrue(migration.contains("sender_note || chr(10) || chr(10) || trim(p_note)"))
+        XCTAssertTrue(migration.contains("recipient_note || chr(10) || chr(10) || trim(p_note)"))
+        XCTAssertTrue(migration.contains("grant execute on function public.create_family_transfer(uuid, uuid, uuid, uuid, bigint, timestamptz, text)"))
+    }
+
     private func createCurrentV4Store(at storeURL: URL, billID: UUID) throws {
         let schema = Schema(versionedSchema: MistiaSchemaV4.self)
         let configuration = ModelConfiguration("default", schema: schema, url: storeURL)

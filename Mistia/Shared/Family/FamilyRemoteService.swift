@@ -377,6 +377,7 @@ struct FamilyTransferInput: Encodable, Equatable {
     let destinationWalletID: UUID
     let amountMinor: Int64
     let occurredAt: Date
+    let note: String?
 }
 
 struct FamilyTransferResult: Codable {
@@ -1573,6 +1574,7 @@ private struct CreateFamilyTransferRPCBody: Encodable {
     let destinationWalletID: UUID
     let amountMinor: Int64
     let occurredAt: Date
+    let note: String?
 
     init(input: FamilyTransferInput) {
         familyID = input.familyID
@@ -1581,6 +1583,7 @@ private struct CreateFamilyTransferRPCBody: Encodable {
         destinationWalletID = input.destinationWalletID
         amountMinor = input.amountMinor
         occurredAt = input.occurredAt
+        note = input.note
     }
 
     enum CodingKeys: String, CodingKey {
@@ -1590,6 +1593,7 @@ private struct CreateFamilyTransferRPCBody: Encodable {
         case destinationWalletID = "p_destination_wallet_id"
         case amountMinor = "p_amount_minor"
         case occurredAt = "p_occurred_at"
+        case note = "p_note"
     }
 }
 

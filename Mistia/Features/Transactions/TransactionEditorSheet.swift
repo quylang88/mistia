@@ -77,6 +77,7 @@ private struct FamilyTransferDraftPayload {
     let destinationWalletID: UUID
     let amountMinor: Int64
     let occurredAt: Date
+    let note: String?
 }
 
 struct TransactionEditorSheet: View {
@@ -975,7 +976,7 @@ struct TransactionEditorSheet: View {
     }
 
     private var shouldShowNotesSection: Bool {
-        !isFamilyTransferCreation || target.transaction != nil
+        true
     }
 
     private var receiptSection: some View {
@@ -1173,7 +1174,8 @@ struct TransactionEditorSheet: View {
             sourceWalletID: sourceWalletID,
             destinationWalletID: destinationWalletID,
             amountMinor: amountMinor,
-            occurredAt: draft.occurredAt
+            occurredAt: draft.occurredAt,
+            note: draft.note.nilIfBlank
         )
     }
 
@@ -1187,6 +1189,7 @@ struct TransactionEditorSheet: View {
                 destinationWalletID: payload.destinationWalletID,
                 amountMinor: payload.amountMinor,
                 occurredAt: payload.occurredAt,
+                note: payload.note,
                 sessionStore: sessionStore
             )
             isSaving = false

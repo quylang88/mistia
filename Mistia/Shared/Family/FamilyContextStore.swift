@@ -593,6 +593,7 @@ final class FamilyContextStore {
         destinationWalletID: UUID,
         amountMinor: Int64,
         occurredAt: Date,
+        note: String?,
         sessionStore: SessionStore
     ) async -> Bool {
         guard let familyID = family?.id else {
@@ -610,7 +611,8 @@ final class FamilyContextStore {
             sourceWalletID: sourceWalletID,
             destinationWalletID: destinationWalletID,
             amountMinor: amountMinor,
-            occurredAt: occurredAt
+            occurredAt: occurredAt,
+            note: note
         )
 
         do {
