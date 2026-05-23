@@ -877,7 +877,7 @@ struct PlanningBillEditorSheet: View {
                     title: L10n.planning.planning.autoPayDate,
                     selection: $draft.autoPayDate,
                     mode: .date,
-                    selectableRange: draft.oneTimePaymentWindow
+                    selectableRange: .closed(draft.oneTimePaymentWindow)
                 )
             }
         }

@@ -212,6 +212,13 @@ nonisolated enum MistiaDateFormatting {
         language: MistiaAppLanguage = .current
     ) -> String {
         let weekday = calendar.component(.weekday, from: date)
+        return weekdayLabel(for: weekday, language: language)
+    }
+
+    static func weekdayLabel(
+        for weekday: Int,
+        language: MistiaAppLanguage = .current
+    ) -> String {
         let labels: [String]
 
         switch language {
