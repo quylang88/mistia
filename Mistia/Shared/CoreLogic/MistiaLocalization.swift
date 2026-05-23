@@ -178,9 +178,9 @@ nonisolated enum MistiaDateFormatting {
         case .vietnamese:
             f.dateFormat = "dd/MM/yyyy"
         case .english:
-            f.dateFormat = "MM/dd/yyyy"
+            f.dateFormat = "yyyy-MM-dd"
         case .japanese:
-            f.dateFormat = "yyyy/MM/dd"
+            f.dateFormat = "yyyy年M月d日"
         }
         return f.string(from: date)
     }

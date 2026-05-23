@@ -57,20 +57,7 @@ final class MistiaLocalizationTests: XCTestCase {
         )
     }
 
-    func testDateFormattingUsesLanguageSpecificLocaleProfiles() {
-        XCTAssertEqual(
-            MistiaDateFormatting.fullDateString(for: referenceDate, language: .vietnamese),
-            "02/04/2026"
-        )
-        XCTAssertEqual(
-            MistiaDateFormatting.fullDateString(for: referenceDate, language: .english),
-            "04/02/2026"
-        )
-        XCTAssertEqual(
-            MistiaDateFormatting.fullDateString(for: referenceDate, language: .japanese),
-            "2026/04/02"
-        )
-
+    func testMonthYearFormattingUsesLanguageSpecificLocaleProfiles() {
         XCTAssertEqual(
             MistiaDateFormatting.monthYearString(for: referenceDate, language: .vietnamese),
             "tháng 4 năm 2026"
@@ -82,6 +69,21 @@ final class MistiaLocalizationTests: XCTestCase {
         XCTAssertEqual(
             MistiaDateFormatting.monthYearString(for: referenceDate, language: .japanese),
             "2026年4月"
+        )
+    }
+
+    func testFullDateFormattingUsesSharedAppFormats() {
+        XCTAssertEqual(
+            MistiaDateFormatting.fullDateString(for: referenceDate, language: .vietnamese),
+            "02/04/2026"
+        )
+        XCTAssertEqual(
+            MistiaDateFormatting.fullDateString(for: referenceDate, language: .english),
+            "2026-04-02"
+        )
+        XCTAssertEqual(
+            MistiaDateFormatting.fullDateString(for: referenceDate, language: .japanese),
+            "2026年4月2日"
         )
     }
 
@@ -111,7 +113,7 @@ final class MistiaLocalizationTests: XCTestCase {
                 language: .japanese,
                 calendar: japanCalendar
             ),
-            "2026/05/06"
+            "2026年5月6日"
         )
 
         let decoded = try JSONDecoder.mistiaRemoteAPIDecoder.decode(DatePayload.self, from: encoded)

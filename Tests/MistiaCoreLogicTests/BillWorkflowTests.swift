@@ -27,8 +27,8 @@ final class BillWorkflowTests: XCTestCase {
         let shortString = MistiaDateFormatting.shortDateString(for: date, calendar: calendar)
         XCTAssertEqual(shortString, "10/05", "Short date string must use literal slash dd/MM format.")
 
-        let fullString = MistiaDateFormatting.fullDateString(for: date, calendar: calendar)
-        XCTAssertEqual(fullString, "10/05/2026", "Full date string must use literal slash dd/MM/yyyy format.")
+        let fullDateString = MistiaDateFormatting.fullDateString(for: date, calendar: calendar)
+        XCTAssertEqual(fullDateString, "10/05/2026", "Full date string must use literal slash dd/MM/yyyy format in Vietnamese.")
     }
 
     // Phase 2: Enum Extensions & Metadata

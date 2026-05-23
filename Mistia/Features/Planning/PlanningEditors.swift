@@ -671,9 +671,10 @@ struct PlanningBillEditorSheet: View {
         self.target = target
         var initialDraft = PlanningBillDraft(plan: target.plan)
         if target.plan == nil {
-            initialDraft.paymentStartDate = target.selectedMonth
-            initialDraft.dueDate = target.selectedMonth
-            initialDraft.autoPayDate = target.selectedMonth
+            let today = MistiaCalendar.current.startOfDay(for: Date())
+            initialDraft.paymentStartDate = today
+            initialDraft.dueDate = today
+            initialDraft.autoPayDate = today
         }
         _draft = State(initialValue: initialDraft)
     }
@@ -817,8 +818,8 @@ struct PlanningBillEditorSheet: View {
             .onChange(of: draft.hasDeadline) { _, _ in
                 normalizeAutoPayDraft()
             }
-            .onChange(of: draft.paymentStartDate) { _, _ in
-                normalizeAutoPayDraft()
+            .onChange(of: draft.paymentStartDate) { oldValue, _ in
+                normalizeOneTimePaymentStartChange(from: oldValue)
             }
             .onChange(of: draft.dueDate) { _, _ in
                 normalizeAutoPayDraft()
@@ -860,10 +861,10 @@ struct PlanningBillEditorSheet: View {
             )
 
         case .oneTime:
-            DatePicker(
-                mistiaLocalized(vi: "Ngày thanh toán", en: "Payment date", ja: "支払開始日"),
+            MistiaDatePickerRow(
+                title: mistiaLocalized(vi: "Ngày thanh toán", en: "Payment date", ja: "支払開始日"),
                 selection: $draft.paymentStartDate,
-                displayedComponents: .date
+                mode: .date
             )
 
             Toggle(mistiaLocalized(vi: "Có hạn cuối", en: "Has deadline", ja: "期限日あり"), isOn: $draft.hasDeadline)
@@ -871,10 +872,10 @@ struct PlanningBillEditorSheet: View {
                 .toggleStyle(.switch)
 
             if draft.hasDeadline {
-                DatePicker(
-                    mistiaLocalized(vi: "Hạn cuối", en: "Deadline", ja: "期限日"),
+                MistiaDatePickerRow(
+                    title: mistiaLocalized(vi: "Hạn cuối", en: "Deadline", ja: "期限日"),
                     selection: $draft.dueDate,
-                    displayedComponents: .date
+                    mode: .date
                 )
             }
         }
@@ -882,25 +883,25 @@ struct PlanningBillEditorSheet: View {
 
     @ViewBuilder
     private var autoPayFields: some View {
-        Toggle(mistiaLocalized(vi: "Tự thanh toán", en: "Auto pay", ja: "自動支払い"), isOn: $draft.autoPayEnabled)
+        Toggle(mistiaLocalized(vi: "Tự động thanh toán", en: "Auto pay", ja: "自動支払い"), isOn: $draft.autoPayEnabled)
             .tint(MistiaAccent.purple.color)
             .toggleStyle(.switch)
 
         if draft.autoPayEnabled {
             switch draft.scheduleKind {
             case .recurring:
-                Picker(mistiaLocalized(vi: "Ngày tự thanh toán", en: "Auto-pay day", ja: "自動支払日"), selection: $draft.autoPayDay) {
+                Picker(mistiaLocalized(vi: "Ngày tự động thanh toán", en: "Auto-pay day", ja: "自動支払日"), selection: $draft.autoPayDay) {
                     ForEach(draft.recurringAutoPayDayOptions, id: \.self) { day in
                         Text(recurringAutoPayDayLabel(day)).tag(day)
                     }
                 }
                 .pickerStyle(.menu)
             case .oneTime:
-                DatePicker(
-                    mistiaLocalized(vi: "Ngày tự thanh toán", en: "Auto-pay date", ja: "自動支払日"),
+                MistiaDatePickerRow(
+                    title: mistiaLocalized(vi: "Ngày tự thanh toán", en: "Auto-pay date", ja: "自動支払日"),
                     selection: $draft.autoPayDate,
-                    in: draft.oneTimePaymentWindow,
-                    displayedComponents: .date
+                    mode: .date,
+                    selectableRange: draft.oneTimePaymentWindow
                 )
             }
         }
@@ -1068,6 +1069,27 @@ struct PlanningBillEditorSheet: View {
             let window = draft.oneTimePaymentWindow
             draft.autoPayDate = PlanningBillDraft.clampedDate(draft.autoPayDate, start: window.lowerBound, end: window.upperBound)
         }
+    }
+
+    private func normalizeOneTimePaymentStartChange(from oldValue: Date) {
+        guard draft.scheduleKind == .oneTime else {
+            normalizeAutoPayDraft()
+            return
+        }
+
+        let oldStart = calendar.startOfDay(for: oldValue)
+        let newStart = calendar.startOfDay(for: draft.paymentStartDate)
+        let currentDue = calendar.startOfDay(for: draft.dueDate)
+        if !draft.hasDeadline || currentDue == oldStart || currentDue < newStart {
+            draft.dueDate = newStart
+        }
+
+        let currentAutoPay = calendar.startOfDay(for: draft.autoPayDate)
+        if !draft.autoPayEnabled || currentAutoPay == oldStart || currentAutoPay < newStart {
+            draft.autoPayDate = newStart
+        }
+
+        normalizeAutoPayDraft()
     }
 
     private func archivePlan() {

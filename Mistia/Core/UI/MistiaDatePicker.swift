@@ -9,6 +9,7 @@ struct MistiaDatePickerRow: View {
     let title: String
     @Binding var selection: Date
     var mode: MistiaDatePickerMode = .date
+    var selectableRange: ClosedRange<Date>? = nil
 
     @Environment(\.calendar) private var calendar
     @State private var isPickerPresented = false
@@ -33,7 +34,8 @@ struct MistiaDatePickerRow: View {
             .datePickerPopover(
                 isPresented: $isPickerPresented,
                 selection: $selection,
-                calendar: calendar
+                calendar: calendar,
+                selectableRange: selectableRange
             )
 
         case .dateAndTime:
@@ -68,7 +70,8 @@ struct MistiaDatePickerRow: View {
             .datePickerPopover(
                 isPresented: $isPickerPresented,
                 selection: $selection,
-                calendar: calendar
+                calendar: calendar,
+                selectableRange: selectableRange
             )
         }
     }
@@ -82,12 +85,14 @@ private extension View {
     func datePickerPopover(
         isPresented: Binding<Bool>,
         selection: Binding<Date>,
-        calendar: Calendar
+        calendar: Calendar,
+        selectableRange: ClosedRange<Date>? = nil
     ) -> some View {
         popover(isPresented: isPresented) {
             MistiaDatePickerPanel(
                 selection: selection,
-                calendar: calendar
+                calendar: calendar,
+                selectableRange: selectableRange
             )
             .presentationCompactAdaptation(.sheet)
             .presentationDetents([.medium])
@@ -99,18 +104,20 @@ private struct MistiaDatePickerPanel: View {
     @Binding var selection: Date
     let calendar: Calendar
     let language: MistiaAppLanguage
+    let selectableRange: ClosedRange<Date>?
 
     @Environment(\.dismiss) private var dismiss
     @State private var draftSelection: Date
     @State private var isMonthYearPickerPresented = false
     let monthSymbols: [String]
 
-    init(selection: Binding<Date>, calendar: Calendar) {
+    init(selection: Binding<Date>, calendar: Calendar, selectableRange: ClosedRange<Date>? = nil) {
         self._selection = selection
         self.calendar = calendar
+        self.selectableRange = selectableRange
         let language = MistiaAppLanguage.current
         self.language = language
-        _draftSelection = State(initialValue: selection.wrappedValue)
+        _draftSelection = State(initialValue: Self.clamped(selection.wrappedValue, to: selectableRange, calendar: calendar))
         self.monthSymbols = Self.monthSymbols(language: language, calendar: calendar)
     }
 
@@ -139,7 +146,7 @@ private struct MistiaDatePickerPanel: View {
                 .frame(maxWidth: .infinity)
 
             Button {
-                selection = draftSelection
+                selection = Self.clamped(draftSelection, to: selectableRange, calendar: calendar)
                 dismiss()
             } label: {
                 Image(systemName: "checkmark")
@@ -240,13 +247,14 @@ private struct MistiaDatePickerPanel: View {
     private func dayButton(for date: Date) -> some View {
         let isSelected = calendar.isDate(date, inSameDayAs: draftSelection)
         let isToday = calendar.isDateInToday(date)
+        let isEnabled = isSelectable(date)
 
         Button {
             draftSelection = replacingDay(with: date)
         } label: {
             Text("\(calendar.component(.day, from: date))")
                 .font(.system(size: 15, weight: isSelected ? .bold : .semibold, design: .rounded))
-                .foregroundStyle(isSelected ? .white : .primary)
+                .foregroundStyle(dayForegroundColor(isSelected: isSelected, isEnabled: isEnabled))
                 .frame(maxWidth: .infinity)
                 .frame(height: 36)
                 .background {
@@ -262,6 +270,7 @@ private struct MistiaDatePickerPanel: View {
                 }
         }
         .buttonStyle(.plain)
+        .disabled(!isEnabled)
     }
 
     private var groupedBackground: Color {
@@ -323,7 +332,7 @@ private struct MistiaDatePickerPanel: View {
         )
 
         if let updatedDate = calendar.date(from: components) {
-            draftSelection = updatedDate
+            draftSelection = Self.clamped(updatedDate, to: selectableRange, calendar: calendar)
         }
     }
 
@@ -334,7 +343,7 @@ private struct MistiaDatePickerPanel: View {
         selectedComponents.minute = timeComponents.minute
         selectedComponents.second = timeComponents.second
         selectedComponents.nanosecond = timeComponents.nanosecond
-        return calendar.date(from: selectedComponents) ?? date
+        return Self.clamped(calendar.date(from: selectedComponents) ?? date, to: selectableRange, calendar: calendar)
     }
 
     private func startOfMonth(for date: Date) -> Date? {
@@ -354,6 +363,19 @@ private struct MistiaDatePickerPanel: View {
         return range.count
     }
 
+    private func isSelectable(_ date: Date) -> Bool {
+        guard let selectableRange else { return true }
+        let day = calendar.startOfDay(for: date)
+        return day >= calendar.startOfDay(for: selectableRange.lowerBound)
+            && day <= calendar.startOfDay(for: selectableRange.upperBound)
+    }
+
+    private func dayForegroundColor(isSelected: Bool, isEnabled: Bool) -> Color {
+        if isSelected { return .white }
+        if isEnabled { return .primary }
+        return .secondary.opacity(0.45)
+    }
+
     private func monthTitle(for month: Int) -> String {
         guard !monthSymbols.isEmpty else { return String(month) }
         return monthSymbols[max(0, min(month - 1, monthSymbols.count - 1))]
@@ -364,6 +386,16 @@ private struct MistiaDatePickerPanel: View {
         formatter.locale = language.locale
         formatter.calendar = calendar
         return formatter.monthSymbols
+    }
+
+    private static func clamped(_ date: Date, to range: ClosedRange<Date>?, calendar: Calendar) -> Date {
+        guard let range else { return date }
+        let day = calendar.startOfDay(for: date)
+        let lower = calendar.startOfDay(for: range.lowerBound)
+        let upper = calendar.startOfDay(for: range.upperBound)
+        if day < lower { return lower }
+        if day > upper { return upper }
+        return day
     }
 
     private func weekdayLabel(for weekday: Int) -> String {
