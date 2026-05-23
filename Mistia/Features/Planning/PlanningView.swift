@@ -2593,7 +2593,7 @@ private struct PlanningIconTile: View {
 }
 
 private struct PlanningMonthPickerSheet: View {
-    @Environment(\.dismiss) private var dismiss
+    @Environment(\.colorScheme) private var colorScheme
     @Binding var selection: Date
 
     let calendar: Calendar
@@ -2610,72 +2610,39 @@ private struct PlanningMonthPickerSheet: View {
     }
 
     var body: some View {
-        NavigationStack {
-            VStack(spacing: 0) {
-                HStack(spacing: 0) {
-                    Picker(L10n.planning.planning.month, selection: $draftMonth) {
-                        ForEach(allowedMonths, id: \.self) { month in
-                            Text(
-                                L10n.planning.planning.monthValue(String(describing: month))
-                            )
-                            .tag(month)
-                        }
-                    }
-                    .pickerStyle(.wheel)
-                    .frame(maxWidth: .infinity)
-
-                    Picker(L10n.planning.planning.year, selection: $draftYear) {
-                        ForEach(yearOptions, id: \.self) { year in
-                            Text(
-                                L10n.planning.planning.yearValue(String(describing: year))
-                            )
-                            .tag(year)
-                        }
-                    }
-                    .pickerStyle(.wheel)
-                    .frame(maxWidth: .infinity)
-                    .onChange(of: draftYear) { _, _ in
-                        validateDraft()
+        MistiaModalScaffold(
+            title: L10n.planning.planning.chooseMonth,
+            accent: planningAccentPurple,
+            onSave: applySelection
+        ) {
+            HStack(spacing: 0) {
+                Picker(L10n.planning.planning.month, selection: $draftMonth) {
+                    ForEach(allowedMonths, id: \.self) { month in
+                        Text(
+                            L10n.planning.planning.monthValue(String(describing: month))
+                        )
+                        .tag(month)
                     }
                 }
-                .frame(height: 220)
-            }
-            .padding(.horizontal, 20)
-            .padding(.top, 16)
-            .padding(.bottom, 20)
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-            .background(groupedBackground)
-            .navigationTitle(L10n.planning.planning.chooseMonth)
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbarBackground(groupedBackground, for: .navigationBar)
-            .toolbarBackground(.visible, for: .navigationBar)
-            .toolbar {
-                ToolbarItem(placement: .topBarLeading) {
-                    Button {
-                        dismiss()
-                    } label: {
-                        Image(systemName: "xmark")
-                            .font(.system(size: 16, weight: .semibold))
-                            .foregroundStyle(.secondary)
+                .pickerStyle(.wheel)
+                .frame(maxWidth: .infinity)
+
+                Picker(L10n.planning.planning.year, selection: $draftYear) {
+                    ForEach(yearOptions, id: \.self) { year in
+                        Text(
+                            L10n.planning.planning.yearValue(String(describing: year))
+                        )
+                        .tag(year)
                     }
                 }
-
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button {
-                        applySelection()
-                    } label: {
-                        Image(systemName: "checkmark")
-                            .font(.system(size: 14, weight: .bold))
-                            .foregroundStyle(Color(red: 0.88, green: 0.78, blue: 1.0))
-                            .frame(width: 30, height: 30)
-                    }
-                    .buttonStyle(.glassProminent)
-                    .buttonBorderShape(.circle)
-                    .tint(planningAccentPurple)
+                .pickerStyle(.wheel)
+                .frame(maxWidth: .infinity)
+                .onChange(of: draftYear) { _, _ in
+                    validateDraft()
                 }
             }
+            .frame(height: 220)
         }
-        .presentationBackground(groupedBackground)
     }
 
     private var groupedBackground: Color {

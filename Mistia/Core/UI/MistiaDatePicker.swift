@@ -35,7 +35,8 @@ struct MistiaDatePickerRow: View {
                 isPresented: $isPickerPresented,
                 selection: $selection,
                 calendar: calendar,
-                selectableRange: selectableRange
+                selectableRange: selectableRange,
+                title: title
             )
 
         case .dateAndTime:
@@ -71,7 +72,8 @@ struct MistiaDatePickerRow: View {
                 isPresented: $isPickerPresented,
                 selection: $selection,
                 calendar: calendar,
-                selectableRange: selectableRange
+                selectableRange: selectableRange,
+                title: title
             )
         }
     }
@@ -86,13 +88,15 @@ private extension View {
         isPresented: Binding<Bool>,
         selection: Binding<Date>,
         calendar: Calendar,
-        selectableRange: AnyRange<Date>? = nil
+        selectableRange: AnyRange<Date>? = nil,
+        title: String
     ) -> some View {
         popover(isPresented: isPresented) {
             MistiaDatePickerPanel(
                 selection: selection,
                 calendar: calendar,
-                selectableRange: selectableRange
+                selectableRange: selectableRange,
+                title: title
             )
             .presentationCompactAdaptation(.sheet)
             .presentationDetents([.medium])
@@ -105,14 +109,16 @@ private struct MistiaDatePickerPanel: View {
     let calendar: Calendar
     let language: MistiaAppLanguage
     let selectableRange: AnyRange<Date>?
+    let title: String
 
     @Environment(\.dismiss) private var dismiss
     @State private var draftSelection: Date
 
-    init(selection: Binding<Date>, calendar: Calendar, selectableRange: AnyRange<Date>? = nil) {
+    init(selection: Binding<Date>, calendar: Calendar, selectableRange: AnyRange<Date>? = nil, title: String) {
         self._selection = selection
         self.calendar = calendar
         self.selectableRange = selectableRange
+        self.title = title
         let language = MistiaAppLanguage.current
         self.language = language
 
@@ -122,9 +128,7 @@ private struct MistiaDatePickerPanel: View {
 
     var body: some View {
         MistiaModalScaffold(
-            titleView: {
-                EmptyView()
-            },
+            title: title,
             accent: MistiaAccent.purple.color,
             onSave: {
                 selection = draftSelection

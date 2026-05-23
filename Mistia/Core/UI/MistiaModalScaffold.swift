@@ -9,8 +9,12 @@ struct MistiaModalScaffold<Title: View, Content: View>: View {
     let onSave: () -> Void
     let content: Content
 
-    private var modalBackground: Color {
+    private var groupedBackground: Color {
         Color(UIColor.systemGroupedBackground)
+    }
+
+    private var checkmarkForeground: Color {
+        Color(red: 0.88, green: 0.78, blue: 1.0)
     }
 
     init(
@@ -27,8 +31,8 @@ struct MistiaModalScaffold<Title: View, Content: View>: View {
 
     var body: some View {
         NavigationStack {
-            ZStack(alignment: .top) {
-                modalBackground
+            ZStack {
+                groupedBackground
                     .ignoresSafeArea()
 
                 ScrollView(.vertical, showsIndicators: false) {
@@ -47,38 +51,36 @@ struct MistiaModalScaffold<Title: View, Content: View>: View {
                 }
 
                 ToolbarItem(placement: .topBarLeading) {
-                    MistiaHeaderCircleButton(action: {
+                    Button {
                         dismiss()
-                    }) {
+                    } label: {
                         Image(systemName: "xmark")
-                            .font(.system(size: 15, weight: .bold))
+                            .font(.system(size: 16, weight: .semibold))
                             .foregroundStyle(.secondary)
                     }
                 }
 
                 ToolbarItem(placement: .topBarTrailing) {
-                    MistiaHeaderCircleButton(action: {
+                    Button {
                         onSave()
                         dismiss()
-                    }) {
+                    } label: {
                         Image(systemName: "checkmark")
                             .font(.system(size: 14, weight: .bold))
                             .foregroundStyle(checkmarkForeground)
+                            .frame(width: 30, height: 30)
                     }
                     .buttonStyle(.glassProminent)
+                    .buttonBorderShape(.circle)
                     .tint(accent)
                 }
             }
             .navigationBarTitleDisplayMode(.inline)
             .navigationBarBackButtonHidden(true)
-            .toolbarBackground(modalBackground, for: .navigationBar)
+            .toolbarBackground(groupedBackground, for: .navigationBar)
             .toolbarBackground(.visible, for: .navigationBar)
         }
-        .presentationBackground(modalBackground)
-    }
-
-    private var checkmarkForeground: Color {
-        colorScheme == .dark ? accent : .white
+        .presentationBackground(groupedBackground)
     }
 }
 
