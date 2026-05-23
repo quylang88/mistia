@@ -5,13 +5,6 @@ import Foundation
 
 nonisolated enum L10n {
     fileprivate static func tr(_ key: String, vi: String, en: String, ja: String, language: MistiaAppLanguage = .current) -> String {
-        let localized = String(
-            localized: String.LocalizationValue(key),
-            bundle: .main,
-            locale: language.locale
-        )
-        guard localized == key else { return localized }
-
         switch language {
         case .vietnamese:
             return vi

@@ -57,6 +57,21 @@ final class MistiaLocalizationTests: XCTestCase {
         )
     }
 
+    func testGeneratedL10nFollowsSelectedAppLanguage() {
+        XCTAssertEqual(L10n.settings.title(language: .vietnamese), "Cài đặt")
+        XCTAssertEqual(L10n.settings.title(language: .english), "Settings")
+        XCTAssertEqual(L10n.settings.title(language: .japanese), "設定")
+
+        MistiaAppLanguage.persist(.english)
+        XCTAssertEqual(L10n.settings.title, "Settings")
+
+        MistiaAppLanguage.persist(.japanese)
+        XCTAssertEqual(L10n.settings.title, "設定")
+
+        MistiaAppLanguage.persist(.vietnamese)
+        XCTAssertEqual(L10n.common.cancel, "Hủy")
+    }
+
     func testMonthYearFormattingUsesLanguageSpecificLocaleProfiles() {
         XCTAssertEqual(
             MistiaDateFormatting.monthYearString(for: referenceDate, language: .vietnamese),
