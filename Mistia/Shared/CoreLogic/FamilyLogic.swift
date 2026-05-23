@@ -671,21 +671,21 @@ enum FamilyLogic {
             
             let timeframeLabel: String
             if intervalDuration > 3600 * 24 * 300 { // Year
-                timeframeLabel = mistiaLocalized(vi: "năm trước", en: "last year", ja: "昨年")
+                timeframeLabel = L10n.shared.corelogic.family.lastYear
             } else if intervalDuration > 3600 * 24 * 20 { // Month
-                timeframeLabel = mistiaLocalized(vi: "tháng trước", en: "last month", ja: "先月")
+                timeframeLabel = L10n.shared.corelogic.family.lastMonth
             } else { // Week
-                timeframeLabel = mistiaLocalized(vi: "tuần trước", en: "last week", ja: "先週")
+                timeframeLabel = L10n.shared.corelogic.family.lastWeek
             }
 
             if diff > 0.1 {
                 insights.append(FamilyInsight(
-                    text: mistiaLocalized(vi: "Chi tiêu tăng \(percent)% so với \(timeframeLabel)", en: "Spending increased by \(percent)% vs \(timeframeLabel)", ja: "支出が\(timeframeLabel)より \(percent)% 増加しました"),
+                    text: L10n.shared.corelogic.family.spendingIncreasedByValueVsValue(String(describing: percent), String(describing: timeframeLabel)),
                     isPositive: false
                 ))
             } else if diff < -0.1 {
                 insights.append(FamilyInsight(
-                    text: mistiaLocalized(vi: "Chi tiêu giảm \(percent)% so với \(timeframeLabel)", en: "Spending decreased by \(percent)% vs \(timeframeLabel)", ja: "支出が\(timeframeLabel)より \(percent)% 減少しました"),
+                    text: L10n.shared.corelogic.family.spendingDecreasedByValueVsValue(String(describing: percent), String(describing: timeframeLabel)),
                     isPositive: true
                 ))
             }
@@ -698,7 +698,7 @@ enum FamilyLogic {
                 let ratio = Double(topSpender.amountMinor) / Double(totalSpending)
                 if ratio > 0.6 {
                     insights.append(FamilyInsight(
-                        text: mistiaLocalized(vi: "\(topSpender.name) đang chi tiêu nhiều nhất (\(Int(ratio*100))%)", en: "\(topSpender.name) is spending the most (\(Int(ratio*100))%)", ja: "\(topSpender.name) が最も支出しています (\(Int(ratio*100))%)"),
+                        text: L10n.shared.corelogic.family.valueIsSpendingTheMostValue(String(describing: topSpender.name), String(describing: Int(ratio*100))),
                         isPositive: false
                     ))
                 }

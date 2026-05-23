@@ -582,11 +582,7 @@ nonisolated enum OverviewLogic {
     }
 
     private static let uncategorizedSpendingSliceID = "uncategorized-expense"
-    private static let uncategorizedSpendingName = mistiaLocalized(
-        vi: "Chưa phân loại",
-        en: "Uncategorized",
-        ja: "未分類"
-    )
+    private static let uncategorizedSpendingName = L10n.shared.corelogic.overview.uncategorized
     private static let uncategorizedSpendingIcon = "tray.full.fill"
     private static let uncategorizedSpendingColorHex = "#8A8A8E"
 
@@ -1047,17 +1043,17 @@ nonisolated enum OverviewLogic {
     ) -> String {
         switch transaction.primaryKind {
         case .expense:
-            return mistiaLocalized(vi: "Chi tiêu", en: "Expense", ja: "支出")
+            return L10n.shared.corelogic.overview.expense
         case .income:
-            return mistiaLocalized(vi: "Thu nhập", en: "Income", ja: "収入")
+            return L10n.shared.corelogic.overview.income
         case .transfer:
             switch transaction.transferSubtype {
             case .internalTransfer:
-                return mistiaLocalized(vi: "Chuyển tiền nội bộ", en: "Internal transfer", ja: "内部振替")
+                return L10n.shared.corelogic.overview.internalTransfer
             case .debt:
-                return transaction.debtIntent?.title ?? mistiaLocalized(vi: "Công nợ", en: "Debt", ja: "貸し借り")
+                return transaction.debtIntent?.title ?? L10n.shared.corelogic.overview.debt
             case .none:
-                return mistiaLocalized(vi: "Chuyển tiền", en: "Transfer", ja: "振替")
+                return L10n.shared.corelogic.overview.transfer
             }
         }
     }

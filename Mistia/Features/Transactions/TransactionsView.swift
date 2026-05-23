@@ -10,13 +10,13 @@ private enum TransactionSegment: String, CaseIterable, Hashable {
     var title: String {
         switch self {
         case .expense:
-            mistiaLocalized(vi: "Chi tiêu", en: "Expense", ja: "支出")
+            L10n.transactions.transactions.expense2
         case .income:
-            mistiaLocalized(vi: "Thu nhập", en: "Income", ja: "収入")
+            L10n.transactions.transactions.income2
         case .transfer:
-            mistiaLocalized(vi: "Chuyển tiền", en: "Transfer", ja: "振替")
+            L10n.transactions.transactions.transfer
         case .adjustment:
-            mistiaLocalized(vi: "Điều chỉnh số dư", en: "Adjustment", ja: "残高調整")
+            L10n.transactions.transactions.adjustment
         }
     }
 
@@ -450,7 +450,7 @@ struct TransactionsView: View {
         NavigationStack {
             MistiaPinnedTopBarScaffold(
                 tone: .standard,
-                title: mistiaLocalized(vi: "Giao dịch", en: "Transactions", ja: "取引"),
+                title: L10n.transactions.transactions.transactions,
                 embedsInNavigationStack: false,
                 leadingInitials: sessionStore.summary?.initials ?? "MI",
                 leadingAvatarURL: sessionStore.summary?.avatarURL,
@@ -480,7 +480,7 @@ struct TransactionsView: View {
             .searchable(
                 text: $searchText,
                 isPresented: $isSearchPresented,
-                prompt: mistiaLocalized(vi: "Tìm tên giao dịch...", en: "Search transaction name...", ja: "取引名を検索...")
+                prompt: L10n.transactions.transactions.searchTransactionName
             )
             .searchToolbarBehavior(.minimize)
             .searchPresentationToolbarBehavior(.avoidHidingContent)
@@ -514,18 +514,18 @@ struct TransactionsView: View {
         ) { alert in
             switch alert {
             case .info:
-                Button(mistiaLocalized(vi: "OK", en: "OK", ja: "OK")) {}
+                Button(L10n.common.ok) {}
             case .permission(let prompt):
                 Button(prompt.actionTitle) {
                     prompt.action()
                 }
-                Button(mistiaLocalized(vi: "Hủy", en: "Cancel", ja: "キャンセル"), role: .cancel) {}
+                Button(L10n.common.cancel, role: .cancel) {}
             }
         } message: { alert in
             Text(alert.message)
         }
         .alert(
-            mistiaLocalized(vi: "Không thể xuất sao kê", en: "Couldn't export statement", ja: "明細を出力できませんでした"),
+            L10n.transactions.transactions.couldnTExportStatement,
             isPresented: Binding(
                 get: { exportErrorMessage != nil },
                 set: { isPresented in
@@ -535,11 +535,11 @@ struct TransactionsView: View {
                 }
             )
         ) {
-            Button(mistiaLocalized(vi: "Đóng", en: "Close", ja: "閉じる"), role: .cancel) {
+            Button(L10n.transactions.transactions.close, role: .cancel) {
                 exportErrorMessage = nil
             }
         } message: {
-            Text(mistiaCatalog(exportErrorMessage ?? ""))
+            Text((exportErrorMessage ?? ""))
         }
         .onChange(of: selectedSegment) { _, _ in
             resetTransactionPage()
@@ -570,19 +570,19 @@ struct TransactionsView: View {
         }) {
             Button(action: { exportStatement(.monthlySummary) }) {
                 Label(
-                    mistiaLocalized(vi: "Sao kê tổng hợp", en: "Summary statement", ja: "サマリー明細"),
+                    L10n.transactions.transactions.summaryStatement,
                     systemImage: "doc.text.image"
                 )
             }
 
             Button(action: { exportStatement(.creditCard) }) {
                 Label(
-                    mistiaLocalized(vi: "Sao kê thẻ tín dụng", en: "Credit card statement", ja: "クレジットカード明細"),
+                    L10n.transactions.transactions.creditCardStatement,
                     systemImage: "creditcard.and.123"
                 )
             }
         }
-        .accessibilityLabel(mistiaLocalized(vi: "Sao kê", en: "Statement", ja: "明細"))
+        .accessibilityLabel(L10n.transactions.transactions.statement)
     }
 
     private func exportStatement(_ kind: TransactionStatementKind) {
@@ -653,7 +653,7 @@ struct TransactionsView: View {
                         Image(systemName: "line.3.horizontal.decrease")
                             .font(.system(size: 12, weight: .bold, design: .rounded))
                         
-                        Text("\(activeFilterCount)")
+                        Text(verbatim: "\(activeFilterCount)")
                             .font(.system(size: 12, weight: .bold, design: .rounded))
                             .foregroundStyle(activeFilterBadgeTextColor)
                             .padding(.horizontal, 4)
@@ -665,11 +665,7 @@ struct TransactionsView: View {
                     .padding(.vertical, 1)
                 } content: {
                     Text(
-                        mistiaLocalized(
-                            vi: "\(activeFilterCount) bộ lọc đang áp dụng",
-                            en: "\(activeFilterCount) active filters",
-                            ja: "\(activeFilterCount) 個のフィルタを適用中"
-                        )
+                        L10n.transactions.transactions.valueActiveFilters(String(describing: activeFilterCount))
                     )
                     
                     Button(role: .destructive) {
@@ -678,19 +674,19 @@ struct TransactionsView: View {
                             filterState = TransactionFilterState(timeScope: .allTime, statusScope: .all)
                         }
                     } label: {
-                        Text(mistiaLocalized(vi: "Xoá tất cả bộ lọc", en: "Clear all filters", ja: "すべてのフィルタを解除"))
+                        Text(L10n.transactions.transactions.clearAllFilters)
                     }
                 }
             }
 
             filterMenu(isActive: selectedSegment != nil) {
                 TransactionToolbarChip(
-                    title: selectedSegment?.title ?? mistiaLocalized(vi: "Phân loại", en: "Type", ja: "種類"),
+                    title: selectedSegment?.title ?? L10n.transactions.transactions.type,
                     isActive: selectedSegment != nil,
                     trailingIcon: "chevron.up.chevron.down"
                 )
             } content: {
-                Button(mistiaLocalized(vi: "Tất cả", en: "All", ja: "すべて")) {
+                Button(L10n.transactions.transactions.all) {
                     withAnimation(.snappy) {
                         selectedSegment = nil
                     }
@@ -708,7 +704,7 @@ struct TransactionsView: View {
 
             filterMenu(isActive: filterState.timeScope != .allTime) {
                 TransactionToolbarChip(
-                    title: filterState.timeScope == .allTime ? mistiaLocalized(vi: "Thời gian", en: "Time", ja: "期間") : filterState.timeScope.title,
+                    title: filterState.timeScope == .allTime ? L10n.transactions.transactions.time : filterState.timeScope.title,
                     isActive: filterState.timeScope != .allTime,
                     trailingIcon: "chevron.up.chevron.down"
                 )
@@ -723,14 +719,14 @@ struct TransactionsView: View {
             }
 
             filterMenu(isActive: filterState.walletID != nil) {
-                let title = activeWallets.first { $0.id == filterState.walletID }?.name ?? mistiaLocalized(vi: "Ví", en: "Wallet", ja: "ウォレット")
+                let title = activeWallets.first { $0.id == filterState.walletID }?.name ?? L10n.transactions.transactions.wallet
                 TransactionToolbarChip(
                     title: title,
                     isActive: filterState.walletID != nil,
                     trailingIcon: "chevron.up.chevron.down"
                 )
             } content: {
-                Button(mistiaLocalized(vi: "Tất cả", en: "All", ja: "すべて")) {
+                Button(L10n.transactions.transactions.all) {
                     withAnimation(.snappy) {
                         filterState.walletID = nil
                     }
@@ -747,14 +743,14 @@ struct TransactionsView: View {
             if selectedSegment?.kind != .transfer && selectedSegment != .adjustment {
                 filterMenu(isActive: filterState.categoryID != nil) {
                     let title = activeCategories.first { $0.id == filterState.categoryID }?.localizedDisplayName
-                        ?? mistiaLocalized(vi: "Danh mục", en: "Category", ja: "カテゴリ")
+                        ?? L10n.transactions.transactions.category
                     TransactionToolbarChip(
                         title: title,
                         isActive: filterState.categoryID != nil,
                         trailingIcon: "chevron.up.chevron.down"
                     )
                 } content: {
-                    Button(mistiaLocalized(vi: "Tất cả", en: "All", ja: "すべて")) {
+                    Button(L10n.transactions.transactions.all) {
                         withAnimation(.snappy) {
                             filterState.categoryID = nil
                         }
@@ -762,7 +758,7 @@ struct TransactionsView: View {
                     ForEach(activeCategorySections) { section in
                         Menu {
                             Section() {
-                                Button(mistiaLocalized(vi: "Tất cả", en: "All", ja: "すべて")) {
+                                Button(L10n.transactions.transactions.all) {
                                     withAnimation(.snappy) {
                                         filterState.categoryID = section.parent.id
                                     }
@@ -786,7 +782,7 @@ struct TransactionsView: View {
 
     private func outstandingDebtSection(_ positions: [CounterpartyDebtSnapshot]) -> some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text(mistiaLocalized(vi: "Công nợ đang mở", en: "Open debts", ja: "未解決の貸し借り"))
+            Text(L10n.transactions.transactions.openDebts)
                 .font(.system(size: 13, weight: .bold, design: .rounded))
                 .foregroundStyle(.secondary)
                 .textCase(.uppercase)
@@ -808,21 +804,13 @@ struct TransactionsView: View {
     private func transactionsContent(_ snapshot: TransactionsListSnapshot) -> some View {
         if snapshot.activeTransactionCount == 0 {
             TransactionsPlaceholderCard(
-                title: mistiaLocalized(vi: "Chưa có giao dịch nào", en: "No transactions yet", ja: "取引はまだありません"),
-                message: mistiaLocalized(
-                    vi: "Khi bạn thêm chi tiêu, thu nhập, chuyển tiền hoặc ghi nhanh từ nút plus, lịch sử sẽ xuất hiện ở đây.",
-                    en: "When you add an expense, income, transfer, or quick capture from the plus button, your history will appear here.",
-                    ja: "支出、収入、振替、またはプラスボタンからクイック記録を追加すると、ここに履歴が表示されます。"
-                )
+                title: L10n.transactions.transactions.noTransactionsYet,
+                message: L10n.transactions.transactions.whenYouAddAnExpenseIncomeTransfer
             )
         } else if snapshot.sections.isEmpty {
             TransactionsPlaceholderCard(
-                title: mistiaLocalized(vi: "Không có kết quả phù hợp", en: "No matching results", ja: "一致する結果はありません"),
-                message: mistiaLocalized(
-                    vi: "Thử đổi thời gian, ví, bộ lọc hoặc từ khóa tìm kiếm để xem thêm giao dịch.",
-                    en: "Try adjusting the time range, wallet, filters, or search keyword to see more transactions.",
-                    ja: "期間、ウォレット、フィルタ、検索キーワードを変更すると、ほかの取引を確認できます。"
-                )
+                title: L10n.transactions.transactions.noMatchingResults,
+                message: L10n.transactions.transactions.tryAdjustingTheTimeRangeWalletFilters
             )
         } else {
             ForEach(snapshot.sections) { section in
@@ -907,7 +895,7 @@ struct TransactionsView: View {
 
     private func presentTransactionEditPermissionPrompt(_ transaction: LedgerTransaction, ownerUserID: UUID) {
         let resourceName = transaction.title.nilIfBlank
-            ?? mistiaLocalized(vi: "giao dịch", en: "transaction", ja: "取引")
+            ?? L10n.transactions.transactions.transaction
         let isPending = familyContextStore.hasPendingPermissionRequest(
             ownerUserID: ownerUserID,
             resourceType: .transaction,
@@ -915,15 +903,11 @@ struct TransactionsView: View {
             scope: .edit
         )
         permissionPrompt = TransactionsPermissionPrompt(
-            title: mistiaLocalized(vi: "Chưa có quyền chỉnh sửa giao dịch", en: "No transaction edit access", ja: "取引編集権限がありません"),
-            message: mistiaLocalized(
-                vi: "Bạn chưa có quyền chỉnh sửa giao dịch của thành viên này.",
-                en: "You do not have permission to edit this member's transactions.",
-                ja: "このメンバーの取引を編集する権限がありません。"
-            ),
+            title: L10n.transactions.transactions.noTransactionEditAccess,
+            message: L10n.transactions.transactions.youDoNotHavePermissionToEdit,
             actionTitle: isPending
-                ? mistiaLocalized(vi: "Đã gửi yêu cầu chỉnh sửa", en: "Edit request sent", ja: "編集リクエスト送信済み")
-                : mistiaLocalized(vi: "Yêu cầu quyền chỉnh sửa", en: "Request edit access", ja: "編集権限をリクエスト")
+                ? L10n.transactions.transactions.editRequestSent
+                : L10n.transactions.transactions.requestEditAccess
         ) {
             Task { @MainActor in
                 if isPending {
@@ -953,19 +937,11 @@ struct TransactionsView: View {
                 try? await Task.sleep(nanoseconds: 150_000_000)
                 infoAlert = TransactionsInfoAlert(
                     title: didSend
-                        ? mistiaLocalized(vi: "Đã gửi yêu cầu", en: "Request sent", ja: "リクエストを送信しました")
-                        : mistiaLocalized(vi: "Chưa thể gửi", en: "Couldn't send", ja: "送信できませんでした"),
+                        ? L10n.transactions.transactions.requestSent
+                        : L10n.transactions.transactions.couldnTSend,
                     message: didSend
-                        ? mistiaLocalized(
-                            vi: "Yêu cầu quyền đã được gửi tới chủ dữ liệu.",
-                            en: "The permission request was sent to the data owner.",
-                            ja: "権限リクエストをデータ所有者へ送信しました。"
-                        )
-                        : (familyContextStore.lastErrorMessage ?? mistiaLocalized(
-                            vi: "Không thể gửi yêu cầu lúc này.",
-                            en: "Couldn't send the request right now.",
-                            ja: "現在リクエストは送信できません。"
-                        ))
+                        ? L10n.transactions.transactions.thePermissionRequestWasSentToThe
+                        : (familyContextStore.lastErrorMessage ?? L10n.transactions.transactions.couldnTSendTheRequestRightNow)
                 )
             }
         }
@@ -988,7 +964,7 @@ private struct TransactionLiveSummaryCard: View {
         ) {
             HStack(alignment: .top, spacing: 14) {
                 TransactionSummaryMetric(
-                    title: mistiaLocalized(vi: "Chi", en: "Expense", ja: "支出"),
+                    title: L10n.transactions.transactions.expense,
                     value: summary.expenseMinor.formattedCurrency(code: "JPY"),
                     tint: MistiaAccent.expense.color
                 )
@@ -996,7 +972,7 @@ private struct TransactionLiveSummaryCard: View {
                 Spacer(minLength: 4)
 
                 TransactionSummaryMetric(
-                    title: mistiaLocalized(vi: "Thu", en: "Income", ja: "収入"),
+                    title: L10n.transactions.transactions.income,
                     value: summary.incomeMinor.formattedCurrency(code: "JPY"),
                     tint: MistiaAccent.income.color
                 )
@@ -1004,18 +980,14 @@ private struct TransactionLiveSummaryCard: View {
                 Spacer(minLength: 4)
 
                 VStack(alignment: .trailing, spacing: 6) {
-                    Text("\(summary.totalCount)")
+                    Text(verbatim: "\(summary.totalCount)")
                         .font(.system(size: 24, weight: .bold, design: .rounded))
                         .foregroundStyle(.primary)
 
                     Text(
                         summary.draftCount == 0
-                            ? mistiaLocalized(vi: "Giao dịch", en: "Transactions", ja: "取引")
-                            : mistiaLocalized(
-                                vi: "\(summary.draftCount) nháp",
-                                en: "\(summary.draftCount) drafts",
-                                ja: "下書き \(summary.draftCount) 件"
-                            )
+                            ? L10n.transactions.transactions.transactions
+                            : L10n.transactions.transactions.valueDrafts(String(describing: summary.draftCount))
                     )
                         .font(.system(size: 11.5, weight: .semibold, design: .rounded))
                         .foregroundStyle(.secondary)
@@ -1031,7 +1003,7 @@ private struct TransactionListPagingSentinel: View {
             .controlSize(.small)
             .frame(maxWidth: .infinity)
             .frame(height: 34)
-            .accessibilityLabel(mistiaLocalized(vi: "Đang tải thêm giao dịch", en: "Loading more transactions", ja: "さらに取引を読み込み中"))
+            .accessibilityLabel(L10n.transactions.transactions.loadingMoreTransactions)
     }
 }
 
@@ -1079,11 +1051,7 @@ private struct TransactionSectionCard: View {
                 Spacer()
 
                 Text(
-                    mistiaLocalized(
-                        vi: "\(section.rows.count) mục",
-                        en: "\(section.rows.count) items",
-                        ja: "\(section.rows.count) 件"
-                    )
+                    L10n.transactions.transactions.valueItems(String(describing: section.rows.count))
                 )
                     .lineLimit(1)
                     .font(.system(size: 11.5, weight: .semibold, design: .rounded))
@@ -1166,45 +1134,45 @@ private struct TransactionRow: View {
         switch record.primaryKind {
         case .expense:
             return transaction.category?.localizedDisplayName
-                ?? mistiaLocalized(vi: "Chi tiêu cần hoàn thiện", en: "Expense needs details", ja: "支出の詳細が未入力")
+                ?? L10n.transactions.transactions.expenseNeedsDetails
         case .income:
             return transaction.category?.localizedDisplayName
-                ?? mistiaLocalized(vi: "Thu nhập cần hoàn thiện", en: "Income needs details", ja: "収入の詳細が未入力")
+                ?? L10n.transactions.transactions.incomeNeedsDetails
         case .transfer:
             switch record.transferSubtype {
             case .internalTransfer:
-                return mistiaLocalized(vi: "Chuyển tiền nội bộ", en: "Internal transfer", ja: "内部振替")
+                return L10n.transactions.transactions.internalTransfer
             case .debt:
-                return record.debtIntent?.title ?? mistiaLocalized(vi: "Công nợ", en: "Debt", ja: "貸し借り")
+                return record.debtIntent?.title ?? L10n.transactions.transactions.debt
             case nil:
-                return mistiaLocalized(vi: "Chuyển tiền cần hoàn thiện", en: "Transfer needs details", ja: "振替の詳細が未入力")
+                return L10n.transactions.transactions.transferNeedsDetails
             }
         }
     }
 
     private var subtitle: String {
         if record.entryStatus == .draft {
-            return mistiaLocalized(vi: "Bản nháp • Chạm để hoàn thiện", en: "Draft • Tap to complete", ja: "下書き • タップして仕上げる")
+            return L10n.transactions.transactions.draftTapToComplete
         }
 
         switch record.primaryKind {
         case .expense, .income:
-            let wallet = transaction.sourceWallet?.name ?? mistiaLocalized(vi: "Chưa chọn ví", en: "No wallet selected", ja: "ウォレット未選択")
-            let category = transaction.category?.localizedDisplayName ?? mistiaLocalized(vi: "Chưa chọn danh mục", en: "No category selected", ja: "カテゴリ未選択")
+            let wallet = transaction.sourceWallet?.name ?? L10n.transactions.transactions.noWalletSelected
+            let category = transaction.category?.localizedDisplayName ?? L10n.transactions.transactions.noCategorySelected
             return "\(wallet) • \(category)"
         case .transfer:
             switch record.transferSubtype {
             case .internalTransfer:
-                let source = transaction.sourceWallet?.name ?? mistiaLocalized(vi: "Nguồn", en: "Source", ja: "出金元")
-                let destination = transaction.destinationWallet?.name ?? mistiaLocalized(vi: "Đích", en: "Destination", ja: "入金先")
+                let source = transaction.sourceWallet?.name ?? L10n.transactions.transactions.source
+                let destination = transaction.destinationWallet?.name ?? L10n.transactions.transactions.destination
                 return "\(source) → \(destination)"
             case .debt:
-                let wallet = transaction.sourceWallet?.name ?? mistiaLocalized(vi: "Chưa chọn ví", en: "No wallet selected", ja: "ウォレット未選択")
-                let person = transaction.counterpartyName ?? mistiaLocalized(vi: "Không rõ tên", en: "Unknown name", ja: "名前未設定")
-                let intent = record.debtIntent?.title ?? mistiaLocalized(vi: "Công nợ", en: "Debt", ja: "貸し借り")
+                let wallet = transaction.sourceWallet?.name ?? L10n.transactions.transactions.noWalletSelected
+                let person = transaction.counterpartyName ?? L10n.transactions.transactions.unknownName
+                let intent = record.debtIntent?.title ?? L10n.transactions.transactions.debt
                 return "\(person) • \(intent) • \(wallet)"
             case nil:
-                return mistiaLocalized(vi: "Chuyển tiền", en: "Transfer", ja: "振替")
+                return L10n.transactions.transactions.transfer
             }
         }
     }
@@ -1218,12 +1186,8 @@ private struct TransactionRow: View {
         if let createdByUserID,
            createdByUserID != canonicalOwnerUserID {
             let createdByName = familyContextStore.displayName(for: createdByUserID)
-                ?? mistiaLocalized(vi: "thành viên", en: "a family member", ja: "家族メンバー")
-            return mistiaLocalized(
-                vi: "Tạo bởi \(createdByName)",
-                en: "Created by \(createdByName)",
-                ja: "\(createdByName) が作成"
-            )
+                ?? L10n.transactions.transactions.aFamilyMember
+            return L10n.transactions.transactions.createdByValue(String(describing: createdByName))
         }
 
         if let sourceWallet = transaction.sourceWallet,
@@ -1406,8 +1370,8 @@ private struct OutstandingDebtChip: View {
 
                 Text(
                     position.isReceivable
-                        ? mistiaLocalized(vi: "Đang nợ bạn", en: "They owe you", ja: "相手があなたに返す")
-                        : mistiaLocalized(vi: "Bạn đang nợ", en: "You owe", ja: "あなたが支払う")
+                        ? L10n.transactions.transactions.theyOweYou
+                        : L10n.transactions.transactions.youOwe
                 )
                     .font(.system(size: 11.5, weight: .semibold, design: .rounded))
                     .foregroundStyle(.secondary)

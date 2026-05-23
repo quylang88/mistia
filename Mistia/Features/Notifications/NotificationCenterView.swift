@@ -42,7 +42,7 @@ struct NotificationCenterView: View {
     var body: some View {
         MistiaPinnedTopBarScaffold(
             tone: .standard,
-            title: mistiaLocalized(vi: "Thông báo", en: "Notifications", ja: "通知"),
+            title: L10n.notifications.notificationcenter.notifications,
             embedsInNavigationStack: false,
             showsLeadingAvatar: false,
             leadingSystemImage: "chevron.left",
@@ -84,7 +84,7 @@ struct NotificationCenterView: View {
             Alert(
                 title: Text(alert.title),
                 message: Text(alert.message),
-                dismissButton: .default(Text(mistiaLocalized(vi: "OK", en: "OK", ja: "OK")))
+                dismissButton: .default(Text(L10n.common.ok))
             )
         }
     }
@@ -100,12 +100,12 @@ struct NotificationCenterView: View {
                 markAllAsRead()
             } label: {
                 Label(
-                    mistiaLocalized(vi: "Đọc hết", en: "Mark all as read", ja: "すべて既読"),
+                    L10n.notifications.notificationcenter.markAllAsRead,
                     systemImage: "envelope.open"
                 )
             }
         }
-        .accessibilityLabel(mistiaLocalized(vi: "Tác vụ thông báo", en: "Notification actions", ja: "通知アクション"))
+        .accessibilityLabel(L10n.notifications.notificationcenter.notificationActions)
     }
 
     private var content: some View {
@@ -126,18 +126,10 @@ struct NotificationCenterView: View {
     private var emptyState: some View {
         VStack(spacing: 14) {
             VStack(alignment: .leading, spacing: 8) {
-                Text(mistiaLocalized(
-                    vi: "Chưa có thông báo",
-                    en: "No notifications yet",
-                    ja: "通知はまだありません"
-                ))
+                Text(L10n.notifications.notificationcenter.noNotificationsYet)
                 .font(.system(.headline, design: .rounded))
 
-                Text(mistiaLocalized(
-                    vi: "Yêu cầu quyền và hoạt động gia đình sẽ xuất hiện tại đây sau khi đồng bộ.",
-                    en: "Permission requests and family activity will appear here after sync.",
-                    ja: "権限リクエストと家族のアクティビティは同期後にここに表示されます。"
-                ))
+                Text(L10n.notifications.notificationcenter.permissionRequestsAndFamilyActivityWillAppear)
                 .descriptionTextStyle()
                 .foregroundStyle(.secondary)
             }
@@ -196,7 +188,7 @@ struct NotificationCenterView: View {
                             respond(to: row, approve: true)
                         } label: {
                             Label(
-                                mistiaLocalized(vi: "Chấp thuận", en: "Approve", ja: "承認"),
+                                L10n.notifications.notificationcenter.approve,
                                 systemImage: "checkmark.circle.fill"
                             )
                         }
@@ -208,7 +200,7 @@ struct NotificationCenterView: View {
                             respond(to: row, approve: false)
                         } label: {
                             Label(
-                                mistiaLocalized(vi: "Từ chối", en: "Reject", ja: "拒否"),
+                                L10n.notifications.notificationcenter.reject,
                                 systemImage: "xmark.circle"
                             )
                         }
@@ -291,11 +283,7 @@ struct NotificationCenterView: View {
                     .font(.system(size: 12, weight: .bold))
 
                 Text(
-                    mistiaLocalized(
-                        vi: "Chạm vào để nạp tiền vào ví",
-                        en: "Tap to add funds to wallet",
-                        ja: "タップしてウォレットに入金"
-                    )
+                    L10n.notifications.notificationcenter.tapToAddFundsToWallet
                 )
                 .font(.system(size: 12.5, weight: .bold, design: .rounded))
                 .lineLimit(1)
@@ -469,16 +457,8 @@ struct NotificationCenterView: View {
                 snapshot.restore(row)
                 try? modelContext.save()
                 responseErrorAlert = NotificationResponseErrorAlert(
-                    title: mistiaLocalized(
-                        vi: "Chưa thể phản hồi",
-                        en: "Couldn't respond",
-                        ja: "返信できませんでした"
-                    ),
-                    message: familyContextStore.lastErrorMessage ?? mistiaLocalized(
-                        vi: "Mistia chưa gửi được phản hồi. Hãy thử lại sau khi đồng bộ ổn định.",
-                        en: "Mistia couldn't send this response yet. Try again when sync is stable.",
-                        ja: "まだ返信を送信できません。同期が安定してからもう一度お試しください。"
-                    )
+                    title: L10n.notifications.notificationcenter.couldnTRespond,
+                    message: familyContextStore.lastErrorMessage ?? L10n.notifications.notificationcenter.mistiaCouldnTSendThisResponseYet
                 )
             }
         }
@@ -509,55 +489,35 @@ struct NotificationCenterView: View {
             return row.title
             
         case .permissionRequestApproved, .familyTransactionRequestApproved:
-            let resource = row.resourceType?.localizedName ?? mistiaLocalized(vi: "truy cập", en: "access", ja: "アクセス")
+            let resource = row.resourceType?.localizedName ?? L10n.notifications.notificationcenter.access
             let scope = row.permissionScope?.localizedActionName ?? ""
-            let action = mistiaLocalized(vi: "đã được chấp thuận", en: "approved", ja: "が承認されました")
+            let action = L10n.notifications.notificationcenter.approved3
             
             if !scope.isEmpty {
-                return mistiaLocalized(
-                    vi: "Yêu cầu \(scope) \(resource) \(action)",
-                    en: "\(resource) \(scope) request \(action)",
-                    ja: "\(resource)の\(scope)リクエスト\(action)"
-                )
+                return L10n.notifications.notificationcenter.valueValueRequestValue(String(describing: scope), String(describing: resource), String(describing: action))
             }
-            return mistiaLocalized(
-                vi: "Yêu cầu \(resource) \(action)",
-                en: "\(resource) request \(action)",
-                ja: "\(resource)のリクエスト\(action)"
-            )
+            return L10n.notifications.notificationcenter.valueRequestValue(String(describing: resource), String(describing: action))
             
         case .permissionRequestRejected, .familyTransactionRequestRejected:
-            let resource = row.resourceType?.localizedName ?? mistiaLocalized(vi: "truy cập", en: "access", ja: "アクセス")
+            let resource = row.resourceType?.localizedName ?? L10n.notifications.notificationcenter.access
             let scope = row.permissionScope?.localizedActionName ?? ""
-            let action = mistiaLocalized(vi: "bị từ chối", en: "rejected", ja: "が拒否されました")
+            let action = L10n.notifications.notificationcenter.rejected3
             
             if !scope.isEmpty {
-                return mistiaLocalized(
-                    vi: "Yêu cầu \(scope) \(resource) \(action)",
-                    en: "\(resource) \(scope) request \(action)",
-                    ja: "\(resource)の\(scope)リクエスト\(action)"
-                )
+                return L10n.notifications.notificationcenter.valueValueRequestValue(String(describing: scope), String(describing: resource), String(describing: action))
             }
-            return mistiaLocalized(
-                vi: "Yêu cầu \(resource) \(action)",
-                en: "\(resource) request \(action)",
-                ja: "\(resource)のリクエスト\(action)"
-            )
+            return L10n.notifications.notificationcenter.valueRequestValue(String(describing: resource), String(describing: action))
             
         case .permissionRevoked:
-            let resource = row.resourceType?.localizedName ?? mistiaLocalized(vi: "truy cập", en: "access", ja: "アクセス")
-            return mistiaLocalized(
-                vi: "Đã thu hồi quyền \(resource)",
-                en: "Revoked \(resource) access",
-                ja: "\(resource)の権限が取り消されました"
-            )
+            let resource = row.resourceType?.localizedName ?? L10n.notifications.notificationcenter.access
+            return L10n.notifications.notificationcenter.revokedValueAccess(String(describing: resource))
             
         case .familyActivity:
             if let metadataJSON = row.metadataJSON,
                let data = metadataJSON.data(using: .utf8),
                let dict = try? JSONSerialization.jsonObject(with: data) as? [String: String],
                dict["joined_user_id"] != nil || dict["invite_id"] != nil {
-                return mistiaLocalized(vi: "Thành viên mới", en: "New member", ja: "新しいメンバー")
+                return L10n.notifications.notificationcenter.newMember
             }
             return row.title
 
@@ -579,12 +539,12 @@ struct NotificationCenterView: View {
         case .permissionRequestApproved, .permissionRequestRejected,
              .familyTransactionRequestApproved, .familyTransactionRequestRejected:
             let actorName = familyContextStore.displayName(for: row.actorUserID)
-                ?? mistiaLocalized(vi: "Thành viên", en: "Member", ja: "メンバー")
+                ?? L10n.notifications.notificationcenter.member
             
             let isApproved = row.kind == .permissionRequestApproved || row.kind == .familyTransactionRequestApproved
             let action = isApproved
-                ? mistiaLocalized(vi: "đã chấp thuận", en: "approved", ja: "が承認しました")
-                : mistiaLocalized(vi: "đã từ chối", en: "rejected", ja: "が拒否しました")
+                ? L10n.notifications.notificationcenter.approved2
+                : L10n.notifications.notificationcenter.rejected2
             
             let scope = row.permissionScope?.localizedActionName ?? ""
             let resourceType = row.resourceType?.localizedName ?? ""
@@ -592,34 +552,22 @@ struct NotificationCenterView: View {
             let resourceDetail = resourceName.isEmpty ? resourceType : "\(resourceType) (\(resourceName))"
             
             if !scope.isEmpty {
-                return mistiaLocalized(
-                    vi: "\(actorName) \(action) yêu cầu \(scope) \(resourceDetail) của bạn.",
-                    en: "\(actorName) \(action) your \(scope) \(resourceDetail) request.",
-                    ja: "\(actorName)があなたの\(scope) \(resourceDetail)のリクエスト\(action)。"
-                )
+                return L10n.notifications.notificationcenter.valueValueYourValueValueRequest(String(describing: actorName), String(describing: action), String(describing: scope), String(describing: resourceDetail))
             }
-            return mistiaLocalized(
-                vi: "\(actorName) \(action) yêu cầu \(resourceDetail) của bạn.",
-                en: "\(actorName) \(action) your \(resourceDetail) request.",
-                ja: "\(actorName)があなたの\(resourceDetail)のリクエスト\(action)。"
-            )
+            return L10n.notifications.notificationcenter.valueValueYourValueRequest(String(describing: actorName), String(describing: action), String(describing: resourceDetail))
             
         case .permissionRevoked:
             let actorName = familyContextStore.displayName(for: row.actorUserID)
-                ?? mistiaLocalized(vi: "Chủ sở hữu", en: "The owner", ja: "所有者")
+                ?? L10n.notifications.notificationcenter.theOwner
             let resourceType = row.resourceType?.localizedName ?? ""
             if let resourceName = resolvedResourceName(for: row) {
-                return mistiaLocalized(
-                    vi: "\(actorName) đã thu hồi quyền sử dụng \(resourceType) (\(resourceName)) của bạn.",
-                    en: "\(actorName) revoked your access to \(resourceType) (\(resourceName)).",
-                    ja: "\(actorName)があなたの\(resourceType) (\(resourceName)) の使用権限を取り消しました。"
-                )
+                return L10n.notifications.notificationcenter.valueRevokedYourAccessToValueValue(String(describing: actorName), String(describing: resourceType), String(describing: resourceName))
             }
             return row.body
             
         case .familyActivity:
             let actorName = familyContextStore.displayName(for: row.actorUserID)
-                ?? mistiaLocalized(vi: "Một thành viên", en: "A member", ja: "メンバー")
+                ?? L10n.notifications.notificationcenter.aMember
             
             if let metadataJSON = row.metadataJSON,
                let data = metadataJSON.data(using: .utf8),
@@ -633,10 +581,10 @@ struct NotificationCenterView: View {
                 if let actionRaw = dict["action"] {
                     let actionLabel: String
                     switch actionRaw {
-                    case "created": actionLabel = mistiaLocalized(vi: "vừa tạo mới", en: "created", ja: "作成")
-                    case "updated": actionLabel = mistiaLocalized(vi: "vừa cập nhật", en: "updated", ja: "更新")
-                    case "deleted": actionLabel = mistiaLocalized(vi: "vừa xóa", en: "deleted", ja: "削除")
-                    default: actionLabel = mistiaLocalized(vi: "vừa thay đổi", en: "changed", ja: "変更")
+                    case "created": actionLabel = L10n.notifications.notificationcenter.created
+                    case "updated": actionLabel = L10n.notifications.notificationcenter.updated
+                    case "deleted": actionLabel = L10n.notifications.notificationcenter.deleted
+                    default: actionLabel = L10n.notifications.notificationcenter.changed
                     }
                     
                     let resourceType = row.resourceType?.localizedName ?? ""
@@ -647,18 +595,10 @@ struct NotificationCenterView: View {
                        let amountMinor = Int64(amountMinorStr),
                        let currencyCode = dict["currency_code"] {
                         let amountText = amountMinor.formattedCurrency(code: currencyCode)
-                        return mistiaLocalized(
-                            vi: "\(actorName) \(actionLabel) \(resourceDetail) trị giá \(amountText).",
-                            en: "\(actorName) \(actionLabel) \(resourceDetail) worth \(amountText).",
-                            ja: "\(actorName)が \(amountText) の \(resourceDetail) を\(actionLabel)しました。"
-                        )
+                        return L10n.notifications.notificationcenter.valueValueValueWorthValue(String(describing: actorName), String(describing: actionLabel), String(describing: resourceDetail), String(describing: amountText))
                     }
                     
-                    return mistiaLocalized(
-                        vi: "\(actorName) \(actionLabel) \(resourceDetail) của bạn.",
-                        en: "\(actorName) \(actionLabel) your \(resourceDetail).",
-                        ja: "\(actorName)があなたの \(resourceDetail) を\(actionLabel)しました。"
-                    )
+                    return L10n.notifications.notificationcenter.valueValueYourValue(String(describing: actorName), String(describing: actionLabel), String(describing: resourceDetail))
                 }
             }
             return row.body
@@ -696,60 +636,36 @@ struct NotificationCenterView: View {
     private func resolvedPermissionRequestTitle(for row: AppNotificationRecord, approve: Bool) -> String {
         let name = permissionRequesterName(for: row)
         let action = approve
-            ? mistiaLocalized(vi: "Đã chấp thuận", en: "Approved", ja: "承認済み")
-            : mistiaLocalized(vi: "Đã từ chối", en: "Rejected", ja: "拒否済み")
-        let resource = row.resourceType?.localizedName ?? mistiaLocalized(vi: "truy cập", en: "access", ja: "アクセス")
+            ? L10n.notifications.notificationcenter.approved
+            : L10n.notifications.notificationcenter.rejected
+        let resource = row.resourceType?.localizedName ?? L10n.notifications.notificationcenter.access
         let scope = row.permissionScope?.localizedActionName ?? ""
         
         if !scope.isEmpty {
-            return mistiaLocalized(
-                vi: "\(action) yêu cầu \(scope) \(resource) của \(name)",
-                en: "\(action) \(name)'s \(scope) \(resource) request",
-                ja: "\(name)さんの\(resource)の\(scope)リクエストを\(action)しました"
-            )
+            return L10n.notifications.notificationcenter.valueValueSValueValueRequest(String(describing: action), String(describing: scope), String(describing: resource), String(describing: name))
         }
         
-        return mistiaLocalized(
-            vi: "\(action) yêu cầu \(resource) của \(name)",
-            en: "\(action) \(name)'s \(resource) request",
-            ja: "\(name)さんの\(resource)のリクエストを\(action)しました"
-        )
+        return L10n.notifications.notificationcenter.valueValueSValueRequest(String(describing: action), String(describing: resource), String(describing: name))
     }
 
     private func resolvedPermissionRequestBody(approve: Bool) -> String {
         approve
-            ? mistiaLocalized(
-                vi: "Mistia sẽ âm thầm đồng bộ thay đổi lên cloud.",
-                en: "Mistia will sync the change to cloud in the background.",
-                ja: "Mistia がバックグラウンドでクラウドへ同期します。"
-            )
-            : mistiaLocalized(
-                vi: "Không có thay đổi nào được đẩy lên cloud.",
-                en: "No change will be pushed to cloud.",
-                ja: "クラウドへ変更は送信されません。"
-            )
+            ? L10n.notifications.notificationcenter.mistiaWillSyncTheChangeToCloud
+            : L10n.notifications.notificationcenter.noChangeWillBePushedToCloud
     }
 
     private func permissionRequesterName(for row: AppNotificationRecord) -> String {
         familyContextStore.displayName(for: row.actorUserID)
-            ?? mistiaLocalized(vi: "thành viên", en: "this member", ja: "このメンバー")
+            ?? L10n.notifications.notificationcenter.thisMember
     }
 
     private func actionHint(for row: AppNotificationRecord) -> String? {
         if row.opensCreditCardStatement {
-            return mistiaLocalized(
-                vi: "Chạm để mở sao kê và thanh toán",
-                en: "Tap to open the statement and pay",
-                ja: "タップして明細を開いて支払う"
-            )
+            return L10n.notifications.notificationcenter.tapToOpenTheStatementAndPay
         }
 
         if row.opensDuePaymentSheet {
-            return mistiaLocalized(
-                vi: "Chạm để thanh toán",
-                en: "Tap to pay",
-                ja: "タップして支払う"
-            )
+            return L10n.notifications.notificationcenter.tapToPay
         }
 
         return nil
@@ -853,11 +769,7 @@ struct MistiaNotificationBellButton: View {
                         .background(MistiaAccent.expense.color, in: Capsule())
                         .offset(x: 9, y: -9)
                         .accessibilityLabel(
-                            mistiaLocalized(
-                                vi: "\(unreadCount) thông báo chưa đọc",
-                                en: "\(unreadCount) unread notifications",
-                                ja: "未読通知 \(unreadCount) 件"
-                            )
+                            L10n.notifications.notificationcenter.valueUnreadNotifications(String(describing: unreadCount))
                         )
                 }
             }

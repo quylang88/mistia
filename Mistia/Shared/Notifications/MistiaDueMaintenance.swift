@@ -230,13 +230,9 @@ private enum MistiaBudgetReminderMaintenance {
     ) {
         let key = "mistia.budget.warning.\(alert.id.uuidString.lowercased()).\(monthKey)"
         let title = alert.progress >= 1
-            ? mistiaLocalized(vi: "Ngân sách đã vượt mức", en: "Budget over limit", ja: "予算を超過しました")
-            : mistiaLocalized(vi: "Ngân sách sắp vượt mức", en: "Budget near limit", ja: "予算の上限が近づいています")
-        let body = mistiaLocalized(
-            vi: "\(alert.name) đã dùng \(alert.spentMinor.formattedCurrency(code: alert.currencyCode)) / \(alert.limitMinor.formattedCurrency(code: alert.currencyCode)) (\(alert.progressPercentText)).",
-            en: "\(alert.name) used \(alert.spentMinor.formattedCurrency(code: alert.currencyCode)) / \(alert.limitMinor.formattedCurrency(code: alert.currencyCode)) (\(alert.progressPercentText)).",
-            ja: "\(alert.name) は \(alert.spentMinor.formattedCurrency(code: alert.currencyCode)) / \(alert.limitMinor.formattedCurrency(code: alert.currencyCode))（\(alert.progressPercentText)）を使用しました。"
-        )
+            ? L10n.shared.notifications.mistiaduemaintenance.budgetOverLimit
+            : L10n.shared.notifications.mistiaduemaintenance.budgetNearLimit
+        let body = L10n.shared.notifications.mistiaduemaintenance.valueUsedValueValueValue(String(describing: alert.name), String(describing: alert.spentMinor.formattedCurrency(code: alert.currencyCode)), String(describing: alert.limitMinor.formattedCurrency(code: alert.currencyCode)), String(describing: alert.progressPercentText))
 
         let existing = (try? modelContext.fetch(
             FetchDescriptor<AppNotificationRecord>(

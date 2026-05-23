@@ -94,32 +94,32 @@ enum MistiaFinanceIconRegistry {
         option(token: LedgerWalletKind.investment.defaultIconSymbolName, title: LedgerWalletKind.investment.title, group: .wallet),
         option(token: LedgerWalletKind.crypto.defaultIconSymbolName, title: LedgerWalletKind.crypto.title, group: .wallet),
         option(token: LedgerWalletKind.other.defaultIconSymbolName, title: LedgerWalletKind.other.title, group: .wallet),
-        option(token: "mistia.wallet.savings", title: mistiaLocalized(vi: "Ví tiết kiệm", en: "Savings wallet", ja: "Savings wallet"), group: .wallet),
-        option(token: "mistia.wallet.travel", title: mistiaLocalized(vi: "Ví du lịch", en: "Travel wallet", ja: "Travel wallet"), group: .wallet),
-        option(token: "mistia.wallet.family", title: mistiaLocalized(vi: "Ví gia đình", en: "Family wallet", ja: "Family wallet"), group: .wallet),
-        option(token: "mistia.wallet.emergency", title: mistiaLocalized(vi: "Ví dự phòng", en: "Emergency wallet", ja: "Emergency wallet"), group: .wallet)
+        option(token: "mistia.wallet.savings", title: L10n.core.ui.mistiafinanceicons.savingsWallet, group: .wallet),
+        option(token: "mistia.wallet.travel", title: L10n.core.ui.mistiafinanceicons.travelWallet, group: .wallet),
+        option(token: "mistia.wallet.family", title: L10n.core.ui.mistiafinanceicons.familyWallet, group: .wallet),
+        option(token: "mistia.wallet.emergency", title: L10n.core.ui.mistiafinanceicons.emergencyWallet, group: .wallet)
     ]
 
     static let goalOptions: [MistiaFinancePickerOption] = [
-        option(token: "mistia.goal.savings", title: mistiaLocalized(vi: "Tiết kiệm", en: "Savings", ja: "Savings"), group: .planning),
-        option(token: "mistia.goal.travel", title: mistiaLocalized(vi: "Du lịch", en: "Travel", ja: "Travel"), group: .planning),
-        option(token: "mistia.goal.home", title: mistiaLocalized(vi: "Nhà ở", en: "Home", ja: "Home"), group: .planning),
-        option(token: "mistia.goal.education", title: mistiaLocalized(vi: "Học tập", en: "Study", ja: "Study"), group: .planning),
-        option(token: "mistia.goal.vehicle", title: mistiaLocalized(vi: "Xe cộ", en: "Vehicle", ja: "Vehicle"), group: .planning),
-        option(token: "mistia.goal.family", title: mistiaLocalized(vi: "Gia đình", en: "Family", ja: "Family"), group: .planning)
+        option(token: "mistia.goal.savings", title: L10n.core.ui.mistiafinanceicons.savings, group: .planning),
+        option(token: "mistia.goal.travel", title: L10n.core.ui.mistiafinanceicons.travel, group: .planning),
+        option(token: "mistia.goal.home", title: L10n.core.ui.mistiafinanceicons.home, group: .planning),
+        option(token: "mistia.goal.education", title: L10n.core.ui.mistiafinanceicons.study, group: .planning),
+        option(token: "mistia.goal.vehicle", title: L10n.core.ui.mistiafinanceicons.vehicle, group: .planning),
+        option(token: "mistia.goal.family", title: L10n.core.ui.mistiafinanceicons.family, group: .planning)
     ]
 
     static let installmentOptions: [MistiaFinancePickerOption] = [
-        option(token: "mistia.plan.installment", title: mistiaLocalized(vi: "Trả góp", en: "Installment", ja: "Installment"), group: .planning),
-        option(token: "mistia.plan.loan", title: mistiaLocalized(vi: "Vay", en: "Loan", ja: "Loan"), group: .planning),
-        option(token: "mistia.plan.card_bill", title: mistiaLocalized(vi: "Công nợ thẻ", en: "Card debt", ja: "Card debt"), group: .planning),
-        option(token: "mistia.plan.payment", title: mistiaLocalized(vi: "Thanh toán định kỳ", en: "Scheduled payment", ja: "Scheduled payment"), group: .planning)
+        option(token: "mistia.plan.installment", title: L10n.core.ui.mistiafinanceicons.installment, group: .planning),
+        option(token: "mistia.plan.loan", title: L10n.core.ui.mistiafinanceicons.loan, group: .planning),
+        option(token: "mistia.plan.card_bill", title: L10n.core.ui.mistiafinanceicons.cardDebt, group: .planning),
+        option(token: "mistia.plan.payment", title: L10n.core.ui.mistiafinanceicons.scheduledPayment, group: .planning)
     ]
 
     static let creditCardOptions: [MistiaFinancePickerOption] = [
-        option(token: LedgerWalletKind.creditCard.defaultIconSymbolName, title: mistiaLocalized(vi: "Thẻ chuẩn", en: "Classic card", ja: "Classic card"), group: .wallet),
-        option(token: "mistia.wallet.credit_card_premium", title: mistiaLocalized(vi: "Thẻ premium", en: "Premium card", ja: "Premium card"), group: .wallet),
-        option(token: "mistia.wallet.credit_card_rewards", title: mistiaLocalized(vi: "Thẻ tích điểm", en: "Rewards card", ja: "Rewards card"), group: .wallet)
+        option(token: LedgerWalletKind.creditCard.defaultIconSymbolName, title: L10n.core.ui.mistiafinanceicons.classicCard, group: .wallet),
+        option(token: "mistia.wallet.credit_card_premium", title: L10n.core.ui.mistiafinanceicons.premiumCard, group: .wallet),
+        option(token: "mistia.wallet.credit_card_rewards", title: L10n.core.ui.mistiafinanceicons.rewardsCard, group: .wallet)
     ]
 
     private static let explicitDescriptors: [String: MistiaFinanceIconDescriptor] = [
@@ -1125,13 +1125,13 @@ struct MistiaFinanceIconPickerSheet: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
-                    Button(mistiaLocalized(vi: "Đóng", en: "Close", ja: "Close")) {
+                    Button(L10n.core.ui.mistiafinanceicons.close) {
                         dismiss()
                     }
                 }
 
                 ToolbarItem(placement: .topBarTrailing) {
-                    Button(mistiaLocalized(vi: "Lưu", en: "Save", ja: "Save")) {
+                    Button(L10n.core.ui.mistiafinanceicons.save) {
                         onSave(draftToken, MistiaFinanceIconRegistry.defaultColorHex(for: draftToken))
                         dismiss()
                     }

@@ -11,35 +11,15 @@ enum MistiaSyncResult {
     var statusMessage: String {
         switch self {
         case .idle:
-            return mistiaLocalized(
-                vi: "Không có thay đổi mới cần đồng bộ.",
-                en: "There are no new changes to sync.",
-                ja: "新しく同期する変更はありません。"
-            )
+            return L10n.shared.sync.mistiasynccoordinator.thereAreNoNewChangesToSync
         case .seeded(let count):
-            return mistiaLocalized(
-                vi: "Đã đẩy \(count) bản ghi local lên cloud.",
-                en: "Uploaded \(count) local records to the cloud.",
-                ja: "ローカルの \(count) 件をクラウドへアップロードしました。"
-            )
+            return L10n.shared.sync.mistiasynccoordinator.uploadedValueLocalRecordsToTheCloud(String(describing: count))
         case .pulled(let count):
-            return mistiaLocalized(
-                vi: "Đã nhận \(count) bản ghi từ cloud.",
-                en: "Downloaded \(count) records from the cloud.",
-                ja: "クラウドから \(count) 件を取得しました。"
-            )
+            return L10n.shared.sync.mistiasynccoordinator.downloadedValueRecordsFromTheCloud(String(describing: count))
         case .synced(let count):
-            return mistiaLocalized(
-                vi: "Đồng bộ xong \(count) bản ghi.",
-                en: "Sync completed across \(count) records.",
-                ja: "\(count) 件の同期が完了しました。"
-            )
+            return L10n.shared.sync.mistiasynccoordinator.syncCompletedAcrossValueRecords(String(describing: count))
         case .pushedOnly:
-            return mistiaLocalized(
-                vi: "Đã đẩy thay đổi local lên cloud.",
-                en: "Uploaded local changes to the cloud.",
-                ja: "ローカル変更をクラウドへアップロードしました。"
-            )
+            return L10n.shared.sync.mistiasynccoordinator.uploadedLocalChangesToTheCloud
         }
     }
 }
@@ -54,11 +34,7 @@ enum MistiaFamilyCloudFirstPushError: LocalizedError {
     case remoteChanged
 
     var errorDescription: String? {
-        mistiaLocalized(
-            vi: "Dữ liệu hiện tại đã thay đổi trên cloud. Vui lòng làm mới rồi thử lại.",
-            en: "This data changed in the cloud. Refresh and try again.",
-            ja: "このデータはクラウドで変更されました。更新してからもう一度お試しください。"
-        )
+        L10n.shared.sync.mistiasynccoordinator.thisDataChangedInTheCloudRefresh
     }
 }
 
@@ -1457,7 +1433,7 @@ final class SyncCoordinator {
         return candidates
             .compactMap { $0?.trimmingCharacters(in: .whitespacesAndNewlines) }
             .first { !$0.isEmpty }
-            ?? mistiaLocalized(vi: "Một thành viên", en: "A family member", ja: "家族メンバー")
+            ?? L10n.shared.sync.mistiasynccoordinator.aFamilyMember
     }
 
     private func familyNotificationResourceType(
@@ -1504,37 +1480,37 @@ final class SyncCoordinator {
     ) -> String {
         switch (resourceType, action) {
         case (.transaction, .created):
-            return mistiaLocalized(vi: "Giao dịch mới", en: "New transaction", ja: "新しい取引")
+            return L10n.shared.sync.mistiasynccoordinator.newTransaction
         case (.transaction, .updated):
-            return mistiaLocalized(vi: "Giao dịch đã cập nhật", en: "Transaction updated", ja: "取引が更新されました")
+            return L10n.shared.sync.mistiasynccoordinator.transactionUpdated
         case (.transaction, .deleted):
-            return mistiaLocalized(vi: "Giao dịch đã xóa", en: "Transaction deleted", ja: "取引が削除されました")
+            return L10n.shared.sync.mistiasynccoordinator.transactionDeleted
         case (.category, .updated), (.category, .created):
-            return mistiaLocalized(vi: "Danh mục đã cập nhật", en: "Category updated", ja: "カテゴリが更新されました")
+            return L10n.shared.sync.mistiasynccoordinator.categoryUpdated
         case (.category, .deleted):
-            return mistiaLocalized(vi: "Danh mục đã xóa", en: "Category deleted", ja: "カテゴリが削除されました")
+            return L10n.shared.sync.mistiasynccoordinator.categoryDeleted
         case (.wallet, .updated), (.wallet, .created):
-            return mistiaLocalized(vi: "Ví đã cập nhật", en: "Wallet updated", ja: "ウォレットが更新されました")
+            return L10n.shared.sync.mistiasynccoordinator.walletUpdated
         case (.wallet, .deleted):
-            return mistiaLocalized(vi: "Ví đã xóa", en: "Wallet deleted", ja: "ウォレットが削除されました")
+            return L10n.shared.sync.mistiasynccoordinator.walletDeleted
         case (.budget, .updated), (.budget, .created):
-            return mistiaLocalized(vi: "Ngân sách đã cập nhật", en: "Budget updated", ja: "予算が更新されました")
+            return L10n.shared.sync.mistiasynccoordinator.budgetUpdated
         case (.budget, .deleted):
-            return mistiaLocalized(vi: "Ngân sách đã xóa", en: "Budget deleted", ja: "予算が削除されました")
+            return L10n.shared.sync.mistiasynccoordinator.budgetDeleted
         case (.goal, .updated), (.goal, .created):
-            return mistiaLocalized(vi: "Mục tiêu đã cập nhật", en: "Goal updated", ja: "目標が更新されました")
+            return L10n.shared.sync.mistiasynccoordinator.goalUpdated
         case (.goal, .deleted):
-            return mistiaLocalized(vi: "Mục tiêu đã xóa", en: "Goal deleted", ja: "目標が削除されました")
+            return L10n.shared.sync.mistiasynccoordinator.goalDeleted
         case (.bill, .updated), (.bill, .created):
-            return mistiaLocalized(vi: "Hóa đơn đã cập nhật", en: "Bill updated", ja: "請求が更新されました")
+            return L10n.shared.sync.mistiasynccoordinator.billUpdated
         case (.bill, .deleted):
-            return mistiaLocalized(vi: "Hóa đơn đã xóa", en: "Bill deleted", ja: "請求が削除されました")
+            return L10n.shared.sync.mistiasynccoordinator.billDeleted
         case (.installment, .updated), (.installment, .created):
-            return mistiaLocalized(vi: "Trả góp đã cập nhật", en: "Installment updated", ja: "分割払いが更新されました")
+            return L10n.shared.sync.mistiasynccoordinator.installmentUpdated
         case (.installment, .deleted):
-            return mistiaLocalized(vi: "Trả góp đã xóa", en: "Installment deleted", ja: "分割払いが削除されました")
+            return L10n.shared.sync.mistiasynccoordinator.installmentDeleted
         default:
-            return mistiaLocalized(vi: "Hoạt động gia đình", en: "Family activity", ja: "家族のアクティビティ")
+            return L10n.shared.sync.mistiasynccoordinator.familyActivity
         }
     }
 
@@ -1546,83 +1522,35 @@ final class SyncCoordinator {
     ) -> String {
         switch (record, action) {
         case (.transaction(let row), .created):
-            let label = row.title.isEmpty ? mistiaLocalized(vi: "một giao dịch", en: "a transaction", ja: "取引") : row.title
+            let label = row.title.isEmpty ? L10n.shared.sync.mistiasynccoordinator.aTransaction : row.title
             if let walletName = familyActivityWalletName(for: row.sourceWalletID) {
-                return mistiaLocalized(
-                    vi: "\(actorName) vừa sử dụng ví \(walletName) của bạn để tạo \(label).",
-                    en: "\(actorName) used your \(walletName) wallet to create \(label).",
-                    ja: "\(actorName)があなたの\(walletName)ウォレットで\(label)を作成しました。"
-                )
+                return L10n.shared.sync.mistiasynccoordinator.valueUsedYourValueWalletToCreate(String(describing: actorName), String(describing: walletName), String(describing: label))
             }
-            return mistiaLocalized(
-                vi: "\(actorName) vừa sử dụng ví của bạn để tạo \(label).",
-                en: "\(actorName) used your wallet to create \(label).",
-                ja: "\(actorName)があなたのウォレットで\(label)を作成しました。"
-            )
+            return L10n.shared.sync.mistiasynccoordinator.valueUsedYourWalletToCreateValue(String(describing: actorName), String(describing: label))
         case (.transaction(let row), .updated):
-            let label = row.title.isEmpty ? mistiaLocalized(vi: "một giao dịch", en: "a transaction", ja: "取引") : row.title
-            return mistiaLocalized(
-                vi: "\(actorName) vừa chỉnh sửa \(label) trên ví của bạn.",
-                en: "\(actorName) edited \(label) on your wallet.",
-                ja: "\(actorName)があなたのウォレットの\(label)を編集しました。"
-            )
+            let label = row.title.isEmpty ? L10n.shared.sync.mistiasynccoordinator.aTransaction : row.title
+            return L10n.shared.sync.mistiasynccoordinator.valueEditedValueOnYourWallet(String(describing: actorName), String(describing: label))
         case (.transaction(let row), .deleted):
-            let label = row.title.isEmpty ? mistiaLocalized(vi: "một giao dịch", en: "a transaction", ja: "取引") : row.title
-            return mistiaLocalized(
-                vi: "\(actorName) vừa xóa \(label) trên ví của bạn.",
-                en: "\(actorName) deleted \(label) on your wallet.",
-                ja: "\(actorName)があなたのウォレットの\(label)を削除しました。"
-            )
+            let label = row.title.isEmpty ? L10n.shared.sync.mistiasynccoordinator.aTransaction : row.title
+            return L10n.shared.sync.mistiasynccoordinator.valueDeletedValueOnYourWallet(String(describing: actorName), String(describing: label))
         case (.wallet(let row), _):
-            return mistiaLocalized(
-                vi: "\(actorName) vừa cập nhật ví \(row.name) của bạn.",
-                en: "\(actorName) updated your \(row.name) wallet.",
-                ja: "\(actorName)があなたの\(row.name)ウォレットを更新しました。"
-            )
+            return L10n.shared.sync.mistiasynccoordinator.valueUpdatedYourValueWallet(String(describing: actorName), String(describing: row.name))
         case (.category(let row), _):
-            return mistiaLocalized(
-                vi: "\(actorName) vừa cập nhật danh mục \(row.name) của bạn.",
-                en: "\(actorName) updated your \(row.name) category.",
-                ja: "\(actorName)があなたのカテゴリ\(row.name)を更新しました。"
-            )
+            return L10n.shared.sync.mistiasynccoordinator.valueUpdatedYourValueCategory(String(describing: actorName), String(describing: row.name))
         case (.budgetPlan(_), _):
-            return mistiaLocalized(
-                vi: "\(actorName) vừa cập nhật ngân sách của bạn.",
-                en: "\(actorName) updated your budget.",
-                ja: "\(actorName)があなたの予算を更新しました。"
-            )
+            return L10n.shared.sync.mistiasynccoordinator.valueUpdatedYourBudget(String(describing: actorName))
         case (.savingsGoal(let row), _):
-            return mistiaLocalized(
-                vi: "\(actorName) vừa cập nhật mục tiêu \(row.name) của bạn.",
-                en: "\(actorName) updated your \(row.name) goal.",
-                ja: "\(actorName)があなたの目標\(row.name)を更新しました。"
-            )
+            return L10n.shared.sync.mistiasynccoordinator.valueUpdatedYourValueGoal(String(describing: actorName), String(describing: row.name))
         case (.recurringBillPlan(let row), _):
-            return mistiaLocalized(
-                vi: "\(actorName) vừa cập nhật hóa đơn \(row.name) của bạn.",
-                en: "\(actorName) updated your \(row.name) bill.",
-                ja: "\(actorName)があなたの請求\(row.name)を更新しました。"
-            )
+            return L10n.shared.sync.mistiasynccoordinator.valueUpdatedYourValueBill(String(describing: actorName), String(describing: row.name))
         case (.installmentPlan(let row), _):
-            return mistiaLocalized(
-                vi: "\(actorName) vừa cập nhật trả góp \(row.name) của bạn.",
-                en: "\(actorName) updated your \(row.name) installment.",
-                ja: "\(actorName)があなたの分割払い\(row.name)を更新しました。"
-            )
+            return L10n.shared.sync.mistiasynccoordinator.valueUpdatedYourValueInstallment(String(describing: actorName), String(describing: row.name))
         default:
             switch resourceType {
             case .transaction:
-                return mistiaLocalized(
-                    vi: "\(actorName) vừa thao tác trên giao dịch của bạn.",
-                    en: "\(actorName) changed one of your transactions.",
-                    ja: "\(actorName)があなたの取引を変更しました。"
-                )
+                return L10n.shared.sync.mistiasynccoordinator.valueChangedOneOfYourTransactions(String(describing: actorName))
             default:
-                return mistiaLocalized(
-                    vi: "\(actorName) vừa thao tác trên dữ liệu của bạn.",
-                    en: "\(actorName) changed your data.",
-                    ja: "\(actorName)があなたのデータを変更しました。"
-                )
+                return L10n.shared.sync.mistiasynccoordinator.valueChangedYourData(String(describing: actorName))
             }
         }
     }

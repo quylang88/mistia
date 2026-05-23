@@ -222,7 +222,7 @@ struct FamilyContextChipBar: View {
                     }
 
                     HStack(spacing: 4) {
-                        Text(mistiaLocalized(vi: "Đang xem", en: "Viewing", ja: "表示中"))
+                        Text(L10n.shared.family.familyscopeddata.viewing)
                             .foregroundStyle(.secondary)
 
                         Text(viewedMember.displayName)

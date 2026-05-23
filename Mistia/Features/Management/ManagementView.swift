@@ -286,7 +286,7 @@ struct ManagementView: View {
         NavigationStack {
             MistiaPinnedTopBarScaffold(
                 tone: .muted,
-                title: mistiaLocalized(vi: "Quản lý", en: "Manage", ja: "管理"),
+                title: L10n.management.management.manage,
                 embedsInNavigationStack: false,
                 showsLeadingAvatar: false,
                 trailingSystemImage: "gearshape",
@@ -343,12 +343,12 @@ struct ManagementView: View {
         ) { alert in
             switch alert {
             case .info:
-                Button(mistiaLocalized(vi: "OK", en: "OK", ja: "OK")) {}
+                Button(L10n.common.ok) {}
             case .permission(let prompt):
                 Button(prompt.actionTitle) {
                     prompt.action()
                 }
-                Button(mistiaLocalized(vi: "Hủy", en: "Cancel", ja: "キャンセル"), role: .cancel) {}
+                Button(L10n.common.cancel, role: .cancel) {}
             case .wallet(let prompt):
                 if shouldShowWalletPermissionAction(for: prompt, scope: .use) {
                     Button(walletPermissionActionTitle(for: prompt, scope: .use)) {
@@ -360,7 +360,7 @@ struct ManagementView: View {
                         requestWalletPermission(prompt, scope: .edit)
                     }
                 }
-                Button(mistiaLocalized(vi: "Hủy", en: "Cancel", ja: "キャンセル"), role: .cancel) {}
+                Button(L10n.common.cancel, role: .cancel) {}
             }
         } message: { alert in
             Text(alert.message)
@@ -471,7 +471,7 @@ struct ManagementView: View {
                                 }
 
                                 VStack(alignment: .leading, spacing: 2) {
-                                    Text(mistiaLocalized(vi: "Gia đình", en: "Family", ja: "家族"))
+                                    Text(L10n.management.management.family)
                                         .font(.system(size: 16.5, weight: .semibold, design: .rounded))
                                         .foregroundStyle(.primary)
                                 }
@@ -479,7 +479,7 @@ struct ManagementView: View {
                                 Spacer(minLength: 12)
 
                                 if !hasFamilyProfile {
-                                    Text(mistiaLocalized(vi: "Chưa có", en: "None", ja: "未設定"))
+                                    Text(L10n.management.management.none)
                                         .font(.system(size: 14, weight: .medium, design: .rounded))
                                         .foregroundStyle(.secondary)
                                 }
@@ -533,17 +533,13 @@ struct ManagementView: View {
         activeWallets: [LedgerWallet],
         walletBalancesByID: [UUID: Int64]
     ) -> some View {
-        ManagementSection(title: mistiaLocalized(vi: "Ví", en: "Wallets", ja: "ウォレット"), titleColor: sectionLabelColor) {
+        ManagementSection(title: L10n.management.management.wallets, titleColor: sectionLabelColor) {
             ManagementCard(tint: cardTint) {
                 if activeWallets.isEmpty {
                     ManagementEmptyState(
-                        title: mistiaLocalized(vi: "Chưa có ví nào", en: "No wallets yet", ja: "ウォレットはまだありません"),
-                        message: mistiaLocalized(
-                            vi: "Thêm ví tiền mặt, PayPay, ví ngân hàng hoặc credit card để bắt đầu quản lý nguồn tiền.",
-                            en: "Add cash, PayPay, bank, or credit card wallets to start managing your money sources.",
-                            ja: "現金、PayPay、銀行口座、クレジットカードのウォレットを追加して資金管理を始めましょう。"
-                        ),
-                        buttonTitle: mistiaLocalized(vi: "Thêm ví", en: "Add wallet", ja: "ウォレットを追加"),
+                        title: L10n.management.management.noWalletsYet,
+                        message: L10n.management.management.addCashPayPayBankOrCreditCard,
+                        buttonTitle: L10n.management.management.addWallet,
                         accent: accentPurple,
                         symbols: ["banknote.fill", "wallet.pass.fill", "building.columns.fill", "creditcard.fill"]
                     ) {
@@ -552,8 +548,8 @@ struct ManagementView: View {
                         } else {
                             presentCreatePermissionPrompt(
                                 resourceType: .wallet,
-                                resourceName: mistiaLocalized(vi: "ví / thẻ", en: "wallets / cards", ja: "ウォレット・カード"),
-                                actionTitle: mistiaLocalized(vi: "Yêu cầu thêm mới ví / thẻ", en: "Request wallet / card creation", ja: "ウォレット・カード作成をリクエスト")
+                                resourceName: L10n.management.management.walletsCards,
+                                actionTitle: L10n.management.management.requestWalletCardCreation
                             ) {
                                 walletEditorTarget = ManagementWalletEditorTarget(wallet: nil, defaultKind: .cash)
                             }
@@ -585,7 +581,7 @@ struct ManagementView: View {
                                 .padding(.trailing, 0)
 
                         ManagementFooterAddButton(
-                            title: mistiaLocalized(vi: "Thêm ví", en: "Add wallet", ja: "ウォレットを追加"),
+                            title: L10n.management.management.addWallet,
                             accent: accentPurple
                         ) {
                             if canCreateWallet {
@@ -593,8 +589,8 @@ struct ManagementView: View {
                             } else {
                                 presentCreatePermissionPrompt(
                                     resourceType: .wallet,
-                                    resourceName: mistiaLocalized(vi: "ví / thẻ", en: "wallets / cards", ja: "ウォレット・カード"),
-                                    actionTitle: mistiaLocalized(vi: "Yêu cầu thêm mới ví / thẻ", en: "Request wallet / card creation", ja: "ウォレット・カード作成をリクエスト")
+                                    resourceName: L10n.management.management.walletsCards,
+                                    actionTitle: L10n.management.management.requestWalletCardCreation
                                 ) {
                                     walletEditorTarget = ManagementWalletEditorTarget(wallet: nil, defaultKind: .cash)
                                 }
@@ -633,12 +629,8 @@ struct ManagementView: View {
             walletID: wallet.id,
             walletName: wallet.name,
             ownerUserID: ownerUserID,
-            title: mistiaLocalized(vi: "Chưa có quyền thao tác ví", en: "No wallet access", ja: "ウォレット権限がありません"),
-            message: mistiaLocalized(
-                vi: "Bạn chưa có đủ quyền với \(wallet.name).",
-                en: "You do not have enough access for \(wallet.name).",
-                ja: "\(wallet.name) の権限が不足しています。"
-            )
+            title: L10n.management.management.noWalletAccess,
+            message: L10n.management.management.youDoNotHaveEnoughAccessFor(String(describing: wallet.name))
         )
     }
 
@@ -649,13 +641,13 @@ struct ManagementView: View {
         if isWalletPermissionGranted(for: prompt, scope: scope) {
             switch scope {
             case .use:
-                return mistiaLocalized(vi: "Đã chấp nhận yêu cầu sử dụng", en: "Use request approved", ja: "使用リクエストが承認済み")
+                return L10n.management.management.useRequestApproved
             case .edit:
-                return mistiaLocalized(vi: "Đã chấp nhận yêu cầu chỉnh sửa", en: "Edit request approved", ja: "編集リクエストが承認済み")
+                return L10n.management.management.editRequestApproved
             case .create:
-                return mistiaLocalized(vi: "Đã chấp nhận yêu cầu thêm mới", en: "Create request approved", ja: "作成リクエストが承認済み")
+                return L10n.management.management.createRequestApproved
             case .view:
-                return mistiaLocalized(vi: "Đã chấp nhận yêu cầu", en: "Request approved", ja: "リクエストが承認済み")
+                return L10n.management.management.requestApproved
             }
         }
 
@@ -667,25 +659,25 @@ struct ManagementView: View {
         ) {
             switch scope {
             case .use:
-                return mistiaLocalized(vi: "Đã yêu cầu sử dụng", en: "Use requested", ja: "使用権限をリクエスト済み")
+                return L10n.management.management.useRequested
             case .edit:
-                return mistiaLocalized(vi: "Đã yêu cầu chỉnh sửa", en: "Edit requested", ja: "編集権限をリクエスト済み")
+                return L10n.management.management.editRequested
             case .create:
-                return mistiaLocalized(vi: "Đã yêu cầu thêm mới", en: "Create requested", ja: "作成権限をリクエスト済み")
+                return L10n.management.management.createRequested
             case .view:
-                return mistiaLocalized(vi: "Đã yêu cầu quyền", en: "Access requested", ja: "権限をリクエスト済み")
+                return L10n.management.management.accessRequested
             }
         }
 
         switch scope {
         case .use:
-            return mistiaLocalized(vi: "Yêu cầu sử dụng", en: "Request use", ja: "使用をリクエスト")
+            return L10n.management.management.requestUse
         case .edit:
-            return mistiaLocalized(vi: "Yêu cầu chỉnh sửa", en: "Request edit", ja: "編集をリクエスト")
+            return L10n.management.management.requestEdit
         case .create:
-            return mistiaLocalized(vi: "Yêu cầu thêm mới", en: "Request create", ja: "作成をリクエスト")
+            return L10n.management.management.requestCreate
         case .view:
-            return mistiaLocalized(vi: "Yêu cầu quyền", en: "Request access", ja: "権限をリクエスト")
+            return L10n.management.management.requestAccess
         }
     }
 
@@ -753,12 +745,8 @@ struct ManagementView: View {
                 performApprovedWalletPermissionAction(prompt, scope: scope)
             } else {
                 infoAlert = ManagementInfoAlert(
-                    title: mistiaLocalized(vi: "Đã gửi yêu cầu", en: "Request sent", ja: "リクエスト送信済み"),
-                    message: familyContextStore.lastErrorMessage ?? mistiaLocalized(
-                        vi: "Yêu cầu đang chờ chủ dữ liệu phản hồi.",
-                        en: "The request is waiting for the data owner.",
-                        ja: "リクエストはデータ所有者の返答待ちです。"
-                    )
+                    title: L10n.management.management.requestSent2,
+                    message: familyContextStore.lastErrorMessage ?? L10n.management.management.theRequestIsWaitingForTheData
                 )
             }
         }
@@ -802,19 +790,11 @@ struct ManagementView: View {
             permissionPrompt = nil
             infoAlert = ManagementInfoAlert(
                 title: didSend
-                    ? mistiaLocalized(vi: "Đã gửi yêu cầu", en: "Request sent", ja: "リクエストを送信しました")
-                    : mistiaLocalized(vi: "Chưa thể gửi", en: "Couldn't send", ja: "送信できませんでした"),
+                    ? L10n.management.management.requestSent
+                    : L10n.management.management.couldnTSend,
                 message: didSend
-                    ? mistiaLocalized(
-                        vi: "Yêu cầu quyền đã được gửi tới chủ dữ liệu.",
-                        en: "The permission request was sent to the data owner.",
-                        ja: "権限リクエストをデータ所有者へ送信しました。"
-                    )
-                    : (familyContextStore.lastErrorMessage ?? mistiaLocalized(
-                        vi: "Không thể gửi yêu cầu lúc này.",
-                        en: "Couldn't send the request right now.",
-                        ja: "現在リクエストは送信できません。"
-                    ))
+                    ? L10n.management.management.thePermissionRequestWasSentToThe
+                    : (familyContextStore.lastErrorMessage ?? L10n.management.management.couldnTSendTheRequestRightNow)
             )
         }
     }
@@ -836,14 +816,10 @@ struct ManagementView: View {
             scope: .create
         )
         permissionPrompt = ManagementPermissionPrompt(
-            title: mistiaLocalized(vi: "Chưa có quyền thêm mới", en: "No create access", ja: "作成権限がありません"),
-            message: mistiaLocalized(
-                vi: "Bạn chưa có quyền thêm mới \(resourceName) cho thành viên này.",
-                en: "You do not have permission to create \(resourceName) for this member.",
-                ja: "このメンバーの\(resourceName)を作成する権限がありません。"
-            ),
+            title: L10n.management.management.noCreateAccess,
+            message: L10n.management.management.youDoNotHavePermissionToCreate2(String(describing: resourceName)),
             actionTitle: isPending
-                ? mistiaLocalized(vi: "Đã gửi yêu cầu thêm mới", en: "Create request sent", ja: "作成リクエスト送信済み")
+                ? L10n.management.management.createRequestSent
                 : actionTitle
         ) {
             resolvePermissionPromptAction(
@@ -885,12 +861,8 @@ struct ManagementView: View {
 
                 permissionPrompt = nil
                 infoAlert = ManagementInfoAlert(
-                    title: mistiaLocalized(vi: "Đã gửi yêu cầu", en: "Request sent", ja: "リクエスト送信済み"),
-                    message: familyContextStore.lastErrorMessage ?? mistiaLocalized(
-                        vi: "Yêu cầu đang chờ chủ dữ liệu phản hồi.",
-                        en: "The request is waiting for the data owner.",
-                        ja: "リクエストはデータ所有者の返答待ちです。"
-                    )
+                    title: L10n.management.management.requestSent2,
+                    message: familyContextStore.lastErrorMessage ?? L10n.management.management.theRequestIsWaitingForTheData
                 )
                 return
             }
@@ -907,19 +879,11 @@ struct ManagementView: View {
             permissionPrompt = nil
             infoAlert = ManagementInfoAlert(
                 title: didSend
-                    ? mistiaLocalized(vi: "Đã gửi yêu cầu", en: "Request sent", ja: "リクエストを送信しました")
-                    : mistiaLocalized(vi: "Chưa thể gửi", en: "Couldn't send", ja: "送信できませんでした"),
+                    ? L10n.management.management.requestSent
+                    : L10n.management.management.couldnTSend,
                 message: didSend
-                    ? mistiaLocalized(
-                        vi: "Yêu cầu quyền đã được gửi tới chủ dữ liệu.",
-                        en: "The permission request was sent to the data owner.",
-                        ja: "権限リクエストをデータ所有者へ送信しました。"
-                    )
-                    : (familyContextStore.lastErrorMessage ?? mistiaLocalized(
-                        vi: "Không thể gửi yêu cầu lúc này.",
-                        en: "Couldn't send the request right now.",
-                        ja: "現在リクエストは送信できません。"
-                    ))
+                    ? L10n.management.management.thePermissionRequestWasSentToThe
+                    : (familyContextStore.lastErrorMessage ?? L10n.management.management.couldnTSendTheRequestRightNow)
             )
         }
     }
@@ -927,7 +891,7 @@ struct ManagementView: View {
     private func categoriesSection(
         visibleCategorySections: [TransactionCategoryGroupSection]
     ) -> some View {
-        ManagementSection(title: mistiaLocalized(vi: "Danh mục", en: "Categories", ja: "カテゴリ"), titleColor: sectionLabelColor) {
+        ManagementSection(title: L10n.management.management.categories2, titleColor: sectionLabelColor) {
             VStack(alignment: .leading, spacing: 12) {
                 ManagementCategoryKindPicker(selection: $selectedCategoryKind)
 
@@ -936,20 +900,12 @@ struct ManagementView: View {
                         VStack(spacing: 0) {
                             ManagementEmptyState(
                                 title: selectedCategoryKind == .expense
-                                    ? mistiaLocalized(vi: "Chưa có danh mục chi tiêu", en: "No expense categories yet", ja: "支出カテゴリはまだありません")
-                                    : mistiaLocalized(vi: "Chưa có danh mục thu nhập", en: "No income categories yet", ja: "収入カテゴリはまだありません"),
+                                    ? L10n.management.management.noExpenseCategoriesYet
+                                    : L10n.management.management.noIncomeCategoriesYet,
                                 message: selectedCategoryKind == .expense
-                                    ? mistiaLocalized(
-                                        vi: "Tạo nhóm chi tiêu riêng để giao dịch và ngân sách bám sát cách bạn quản lý hằng ngày.",
-                                        en: "Create expense groups so your transactions and budgets match how you manage money every day.",
-                                        ja: "支出グループを作成すると、取引や予算を日々の管理方法に合わせやすくなります。"
-                                    )
-                                    : mistiaLocalized(
-                                        vi: "Tách riêng nguồn thu để nhìn rõ tiền lương, thưởng, freelance hay hoàn tiền.",
-                                        en: "Separate your income sources to clearly track salary, bonuses, freelance work, or refunds.",
-                                        ja: "収入源を分けておくと、給与、賞与、副業、返金などを分かりやすく把握できます。"
-                                    ),
-                                buttonTitle: mistiaLocalized(vi: "Thêm danh mục", en: "Add category", ja: "カテゴリを追加"),
+                                    ? L10n.management.management.createExpenseGroupsSoYourTransactionsAnd
+                                    : L10n.management.management.separateYourIncomeSourcesToClearlyTrack,
+                                buttonTitle: L10n.management.management.addCategory,
                                 accent: accentPurple,
                                 symbols: selectedCategoryKind == .expense
                                     ? ["fork.knife", "bag.fill", "airplane", "plus"]
@@ -1025,7 +981,7 @@ struct ManagementView: View {
                                 .padding(.trailing, 0)
 
                             ManagementFooterAddButton(
-                                title: mistiaLocalized(vi: "Thêm danh mục cha", en: "Add parent category", ja: "親カテゴリを追加"),
+                                title: L10n.management.management.addParentCategory,
                                 accent: accentPurple
                             ) {
                                 openCategoryEditorIfAllowed(
@@ -1118,22 +1074,18 @@ struct ManagementView: View {
             scope: .edit
         )
         permissionPrompt = ManagementPermissionPrompt(
-            title: mistiaLocalized(vi: "Chưa có quyền chỉnh sửa danh mục", en: "No category edit access", ja: "カテゴリ編集権限がありません"),
-            message: mistiaLocalized(
-                vi: "Bạn chưa có quyền chỉnh sửa danh mục của thành viên này.",
-                en: "You do not have permission to edit this member's categories.",
-                ja: "このメンバーのカテゴリを編集する権限がありません。"
-            ),
+            title: L10n.management.management.noCategoryEditAccess,
+            message: L10n.management.management.youDoNotHavePermissionToEdit,
             actionTitle: isPending
-                ? mistiaLocalized(vi: "Đã gửi yêu cầu chỉnh sửa", en: "Edit request sent", ja: "編集リクエスト送信済み")
-                : mistiaLocalized(vi: "Yêu cầu quyền chỉnh sửa", en: "Request edit access", ja: "編集権限をリクエスト")
+                ? L10n.management.management.editRequestSent
+                : L10n.management.management.requestEditAccess
         ) {
             resolvePermissionPromptAction(
                 resourceType: .category,
                 resourceID: nil,
                 ownerUserID: ownerUserID,
                 scope: .edit,
-                resourceName: mistiaLocalized(vi: "danh mục", en: "categories", ja: "カテゴリ"),
+                resourceName: L10n.management.management.categories,
                 wasPending: isPending,
                 onGranted: onGranted
             )
@@ -1153,22 +1105,18 @@ struct ManagementView: View {
             scope: .create
         )
         permissionPrompt = ManagementPermissionPrompt(
-            title: mistiaLocalized(vi: "Chưa có quyền thêm mới danh mục", en: "No category create access", ja: "カテゴリ作成権限がありません"),
-            message: mistiaLocalized(
-                vi: "Bạn chưa có quyền thêm mới danh mục cho thành viên này.",
-                en: "You do not have permission to create categories for this member.",
-                ja: "このメンバーのカテゴリを作成する権限がありません。"
-            ),
+            title: L10n.management.management.noCategoryCreateAccess,
+            message: L10n.management.management.youDoNotHavePermissionToCreate,
             actionTitle: isPending
-                ? mistiaLocalized(vi: "Đã gửi yêu cầu thêm mới", en: "Create request sent", ja: "作成リクエスト送信済み")
-                : mistiaLocalized(vi: "Yêu cầu thêm mới danh mục", en: "Request category creation", ja: "カテゴリ作成をリクエスト")
+                ? L10n.management.management.createRequestSent
+                : L10n.management.management.requestCategoryCreation
         ) {
             resolvePermissionPromptAction(
                 resourceType: .category,
                 resourceID: nil,
                 ownerUserID: ownerUserID,
                 scope: .create,
-                resourceName: mistiaLocalized(vi: "danh mục", en: "categories", ja: "カテゴリ"),
+                resourceName: L10n.management.management.categories,
                 wasPending: isPending,
                 onGranted: onGranted
             )
@@ -1191,7 +1139,7 @@ struct ManagementView: View {
         } catch {
             modelContext.rollback()
             infoAlert = ManagementInfoAlert(
-                title: mistiaLocalized(vi: "Không thể cập nhật yêu thích", en: "Couldn't update favorite", ja: "お気に入りを更新できませんでした"),
+                title: L10n.management.management.couldnTUpdateFavorite,
                 message: error.localizedDescription
             )
         }
@@ -1277,16 +1225,12 @@ private struct ManagementSignedOutCard: View {
                     .frame(width: 54, height: 54)
 
                     VStack(alignment: .leading, spacing: 6) {
-                        Text(mistiaLocalized(vi: "Đăng nhập để đồng bộ dữ liệu", en: "Sign in to sync your data", ja: "ログインしてデータを同期"))
+                        Text(L10n.management.management.signInToSyncYourData)
                             .font(.system(size: 18, weight: .bold, design: .rounded))
                             .foregroundStyle(.primary)
 
                         Text(
-                            mistiaLocalized(
-                                vi: "Ví, danh mục và giao dịch của bạn đã sẵn sàng cho backup, khôi phục và đồng bộ giữa các thiết bị.",
-                                en: "Your wallets, categories, and transactions are ready for backup, restore, and sync across devices.",
-                                ja: "ウォレット、カテゴリ、取引はバックアップ、復元、端末間同期に対応しています。"
-                            )
+                            L10n.management.management.yourWalletsCategoriesAndTransactionsAreReady
                         )
                             .font(.system(size: 13.5, weight: .medium, design: .rounded))
                             .foregroundStyle(.secondary)
@@ -1295,7 +1239,7 @@ private struct ManagementSignedOutCard: View {
                 }
 
                 Button(action: action) {
-                    Text(mistiaLocalized(vi: "Đăng nhập hoặc tạo tài khoản", en: "Sign in or create an account", ja: "ログインまたはアカウント作成"))
+                    Text(L10n.management.management.signInOrCreateAnAccount)
                         .font(.system(size: 15.5, weight: .bold, design: .rounded))
                         .foregroundStyle(buttonForeground)
                         .frame(maxWidth: .infinity)
@@ -1360,7 +1304,7 @@ private struct ManagementWalletRow: View {
 
                 if wallet.kind == .creditCard, let availableCredit = availableCreditMinor {
                     VStack(alignment: .trailing, spacing: 2) {
-                        Text(mistiaLocalized(vi: "Khả dụng", en: "Available", ja: "利用可能"))
+                        Text(L10n.management.management.available)
                             .font(.system(size: 10.5, weight: .medium, design: .rounded))
                             .foregroundStyle(.secondary)
                         Text(availableCredit.formattedCurrency(code: wallet.currencyCode))
@@ -1415,8 +1359,8 @@ private struct ManagementCategoryRow: View {
                 .buttonStyle(.plain)
                 .accessibilityLabel(
                     category.isFavorite
-                        ? mistiaLocalized(vi: "Bỏ yêu thích", en: "Remove favorite", ja: "お気に入り解除")
-                        : mistiaLocalized(vi: "Đánh dấu yêu thích", en: "Mark as favorite", ja: "お気に入りに追加")
+                        ? L10n.management.management.removeFavorite
+                        : L10n.management.management.markAsFavorite
                 )
             }
         }
@@ -1448,11 +1392,7 @@ private struct ManagementCategoryParentCard: View {
                                 .font(.system(size: 16, weight: .semibold, design: .rounded))
                                 .foregroundStyle(.primary)
                             Text(
-                                mistiaLocalized(
-                                    vi: "\(children.count) danh mục con",
-                                    en: "\(children.count) child categories",
-                                    ja: "子カテゴリ \(children.count) 件"
-                                )
+                                L10n.management.management.valueChildCategories(String(describing: children.count))
                             )
                                 .font(.system(size: 12.5, weight: .medium, design: .rounded))
                                 .foregroundStyle(.secondary)
@@ -1480,11 +1420,7 @@ private struct ManagementCategoryParentCard: View {
                 VStack(spacing: 10) {
                     if children.isEmpty {
                         Text(
-                            mistiaLocalized(
-                                vi: "Chưa có danh mục con nào trong nhánh này.",
-                                en: "There are no child categories in this branch yet.",
-                                ja: "この枝にはまだ子カテゴリがありません。"
-                            )
+                            L10n.management.management.thereAreNoChildCategoriesInThis
                         )
                             .font(.system(size: 13, weight: .medium, design: .rounded))
                             .foregroundStyle(.secondary)
@@ -1509,7 +1445,7 @@ private struct ManagementCategoryParentCard: View {
                     }
 
                     ManagementFooterAddButton(
-                        title: mistiaLocalized(vi: "Thêm danh mục con", en: "Add child category", ja: "子カテゴリを追加"),
+                        title: L10n.management.management.addChildCategory,
                         accent: MistiaAccent.purple.color
                     ) {
                         onAddChild()

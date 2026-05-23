@@ -184,11 +184,7 @@ final class FamilyContextStore {
 
     var contextChipTitle: String? {
         guard isViewingOtherMemberContext, let viewedMember else { return nil }
-        return mistiaLocalized(
-            vi: "Đang xem: \(viewedMember.displayName)",
-            en: "Viewing: \(viewedMember.displayName)",
-            ja: "表示中: \(viewedMember.displayName)"
-        )
+        return L10n.shared.family.familycontext.viewingValue(String(describing: viewedMember.displayName))
     }
 
     func bootstrapIfNeeded(sessionStore: SessionStore) async {
@@ -533,11 +529,7 @@ final class FamilyContextStore {
     ) async -> FamilyInviteRecord? {
         guard let familyID = family?.id else { return nil }
         guard canCreatePendingInvite else {
-            lastErrorMessage = mistiaLocalized(
-                vi: "Bạn chỉ có thể có tối đa 2 lời mời đang chờ.",
-                en: "You can only have up to 2 pending invites.",
-                ja: "待機中の招待は最大2件までです。"
-            )
+            lastErrorMessage = L10n.shared.family.familycontext.youCanOnlyHaveUpTo
             return nil
         }
         guard let session = await prepareRemoteSession(using: sessionStore) else { return nil }
@@ -604,25 +596,17 @@ final class FamilyContextStore {
         sessionStore: SessionStore
     ) async -> Bool {
         guard let familyID = family?.id else {
-            lastErrorMessage = mistiaLocalized(
-                vi: "Chưa tải được thông tin gia đình. Vui lòng đồng bộ lại rồi thử lần nữa.",
-                en: "Family data has not loaded yet. Sync again and try once more.",
-                ja: "ファミリー情報がまだ読み込まれていません。同期してからもう一度お試しください。"
-            )
+            lastErrorMessage = L10n.shared.family.familycontext.familyDataHasNotLoadedYetSync
             return false
         }
         guard let session = await prepareRemoteSession(using: sessionStore) else {
-            lastErrorMessage = mistiaLocalized(
-                vi: "Bạn cần đăng nhập và bật cloud sync để gửi yêu cầu quyền.",
-                en: "Sign in and enable cloud sync to send permission requests.",
-                ja: "権限リクエストを送るには、サインインしてクラウド同期を有効にしてください。"
-            )
+            lastErrorMessage = L10n.shared.family.familycontext.signInAndEnableCloudSyncTo
             return false
         }
 
         let requesterName = sessionStore.summary?.displayName
             ?? displayName(for: session.user.id)
-            ?? mistiaLocalized(vi: "Một thành viên", en: "A family member", ja: "家族メンバー")
+            ?? L10n.shared.family.familycontext.aFamilyMember
 
         let input = FamilyPermissionRequestInput(
             familyID: familyID,
@@ -835,9 +819,9 @@ final class FamilyContextStore {
         }
 
         return """
-        \(mistiaLocalized(vi: "Bạn đã được mời tham gia gia đình", en: "You've been invited to join the family", ja: "家族への招待が届いています")) \(family.name) \(mistiaLocalized(vi: "trên Mistia.", en: "on Mistia.", ja: "にMistiaで参加できます。"))
+        \(L10n.shared.family.familycontext.youVeBeenInvitedToJoinThe) \(family.name) \(L10n.shared.family.familycontext.onMistia)
 
-        \(mistiaLocalized(vi: "Hãy mở link dưới để tham gia ngay!", en: "Open the link below to join now!", ja: "下のリンクを開いて今すぐ参加してください！"))
+        \(L10n.shared.family.familycontext.openTheLinkBelowToJoinNow)
 
         \(inviteLinkText)
         """
@@ -1240,11 +1224,7 @@ final class FamilyContextStore {
 
         throw SupabaseServiceError.serverMessage(
             lastErrorMessage
-                ?? mistiaLocalized(
-                    vi: "Không thể kiểm tra lời mời do mất kết nối. Vui lòng thử lại.",
-                    en: "Can't check this invite because the connection is unavailable. Please try again.",
-                    ja: "接続できないため招待を確認できません。もう一度お試しください。"
-                )
+                ?? L10n.shared.family.familycontext.canTCheckThisInviteBecauseThe
         )
     }
 
@@ -1313,11 +1293,7 @@ final class FamilyContextStore {
         let action = scope.localizedActionName
         let resource = resourceType.localizedName
         
-        return mistiaLocalized(
-            vi: "Yêu cầu \(action) \(resource)",
-            en: "Request to \(action) \(resource)",
-            ja: "\(resource)の\(action)リクエスト"
-        )
+        return L10n.shared.family.familycontext.requestToValueValue(String(describing: action), String(describing: resource))
     }
 
     private func permissionRequestBody(
@@ -1327,10 +1303,6 @@ final class FamilyContextStore {
     ) -> String {
         let action = scope.localizedActionName
         
-        return mistiaLocalized(
-            vi: "\(requesterName) muốn \(action) \(resourceName) của bạn.",
-            en: "\(requesterName) wants to \(action) your \(resourceName).",
-            ja: "\(requesterName) があなたの\(resourceName)を\(action)したいとリクエストしています。"
-        )
+        return L10n.shared.family.familycontext.valueWantsToValueYourValue(String(describing: requesterName), String(describing: action), String(describing: resourceName))
     }
 }

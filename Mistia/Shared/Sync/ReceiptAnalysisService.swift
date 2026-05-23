@@ -68,13 +68,13 @@ struct ReceiptAnalysisService {
     private func receiptAnalysisFallbackErrorMessage(statusCode: Int) -> String {
         switch statusCode {
         case 401:
-            mistiaLocalized(vi: "Bạn cần đăng nhập để phân tích bill.", en: "Sign in to analyze receipts.", ja: "レシート解析にはサインインが必要です。")
+            L10n.shared.sync.receiptanalysis.signInToAnalyzeReceipts
         case 413:
-            mistiaLocalized(vi: "Ảnh bill quá lớn. Hãy chọn ảnh rõ hơn nhưng nhẹ hơn.", en: "The receipt image is too large. Choose a clearer, smaller image.", ja: "レシート画像が大きすぎます。より軽い画像を選択してください。")
+            L10n.shared.sync.receiptanalysis.theReceiptImageIsTooLargeChoose
         case 429:
-            mistiaLocalized(vi: "Bạn đã đạt giới hạn quét bill hôm nay. Vui lòng thử lại sau thời điểm reset ngày.", en: "You've reached today's receipt scan limit. Try again after the daily reset.", ja: "本日のレシート読み取り上限に達しました。日次リセット後にもう一度お試しください。")
+            L10n.shared.sync.receiptanalysis.youVeReachedTodaySReceiptScan2
         default:
-            mistiaLocalized(vi: "Không thể phân tích bill lúc này.", en: "Couldn't analyze this receipt right now.", ja: "現在レシートを解析できません。")
+            L10n.shared.sync.receiptanalysis.couldnTAnalyzeThisReceiptRightNow
         }
     }
 
@@ -83,14 +83,10 @@ struct ReceiptAnalysisService {
         if let retryAfter = quota.retryAfter {
             retryText = Self.retryDateFormatter.string(from: retryAfter)
         } else {
-            retryText = mistiaLocalized(vi: "lần reset ngày tiếp theo", en: "the next daily reset", ja: "次の日次リセット")
+            retryText = L10n.shared.sync.receiptanalysis.theNextDailyReset
         }
 
-        return mistiaLocalized(
-            vi: "Bạn đã đạt giới hạn quét bill hôm nay. Vui lòng thử lại sau \(retryText).",
-            en: "You've reached today's receipt scan limit. Try again after \(retryText).",
-            ja: "本日のレシート読み取り上限に達しました。\(retryText) 以降にもう一度お試しください。"
-        )
+        return L10n.shared.sync.receiptanalysis.youVeReachedTodaySReceiptScan(String(describing: retryText))
     }
 
     private static let retryDateFormatter: DateFormatter = {

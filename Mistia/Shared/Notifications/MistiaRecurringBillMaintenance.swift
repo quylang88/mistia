@@ -98,12 +98,8 @@ enum MistiaRecurringBillMaintenance {
                     } else {
                         upsertNotification(
                             key: "mistia.bill.autopay.failed.\(bill.id.uuidString.lowercased()).\(cycleMonthKey)",
-                            title: mistiaLocalized(vi: "Không thể tự động thanh toán", en: "Auto payment failed", ja: "自動支払いに失敗しました"),
-                            body: mistiaLocalized(
-                                vi: "Ví không đủ số dư để thanh toán \(bill.name). Vui lòng nạp thêm hoặc thanh toán thủ công.",
-                                en: "Insufficient balance to auto-pay \(bill.name). Please top up or pay manually.",
-                                ja: "\(bill.name) の自動支払いに必要な残高がありません。入金するか手動で支払ってください。"
-                            ),
+                            title: L10n.shared.notifications.mistiarecurringbillmaintenance.autoPaymentFailed,
+                            body: L10n.shared.notifications.mistiarecurringbillmaintenance.insufficientBalanceToAutoPayValuePlease(String(describing: bill.name)),
                             kind: .billAutoPaymentFailed,
                             bill: bill,
                             dueItem: dueItem,
@@ -115,12 +111,8 @@ enum MistiaRecurringBillMaintenance {
                 } else if isAutoPayToday && dueItem.autoPayEnabled {
                     upsertNotification(
                         key: "mistia.bill.autopay.failed.\(bill.id.uuidString.lowercased()).\(cycleMonthKey)",
-                        title: mistiaLocalized(vi: "Không thể tự động thanh toán", en: "Auto payment failed", ja: "自動支払いに失敗しました"),
-                        body: mistiaLocalized(
-                            vi: "\(bill.name) thiếu số tiền hoặc ví thanh toán để tự động thanh toán.",
-                            en: "\(bill.name) is missing an amount or payment wallet for auto payment.",
-                            ja: "\(bill.name) の自動支払いに必要な金額またはウォレットが不足しています。"
-                        ),
+                        title: L10n.shared.notifications.mistiarecurringbillmaintenance.autoPaymentFailed,
+                        body: L10n.shared.notifications.mistiarecurringbillmaintenance.valueIsMissingAnAmountOrPayment(String(describing: bill.name)),
                         kind: .billAutoPaymentFailed,
                         bill: bill,
                         dueItem: dueItem,
@@ -133,33 +125,17 @@ enum MistiaRecurringBillMaintenance {
                 if isPaymentStartToday || isDeadlineToday {
                     let keyPhase = isDeadlineToday ? "deadline" : "start"
                     let title = isDeadlineToday
-                        ? mistiaLocalized(vi: "Hóa đơn đến hạn hôm nay", en: "Bill due today", ja: "請求の支払期限日です")
-                        : mistiaLocalized(vi: "Đến ngày thanh toán", en: "Payment date", ja: "支払開始日です")
+                        ? L10n.shared.notifications.mistiarecurringbillmaintenance.billDueToday
+                        : L10n.shared.notifications.mistiarecurringbillmaintenance.paymentDate
                     let body: String
                     if let amountText {
                         body = dueItem.hasExplicitDueDate
-                            ? mistiaLocalized(
-                                vi: "\(bill.name) (\(amountText)) cần được thanh toán trước \(MistiaDateFormatting.shortDateString(for: dueItem.dueDate)).",
-                                en: "\(bill.name) (\(amountText)) is due by \(MistiaDateFormatting.shortDateString(for: dueItem.dueDate)).",
-                                ja: "\(bill.name) は \(MistiaDateFormatting.shortDateString(for: dueItem.dueDate)) までに \(amountText) の支払いが必要です。"
-                            )
-                            : mistiaLocalized(
-                                vi: "\(bill.name) (\(amountText)) cần được thanh toán hôm nay.",
-                                en: "\(bill.name) (\(amountText)) is ready to pay today.",
-                                ja: "\(bill.name) は本日 \(amountText) の支払いが必要です。"
-                            )
+                            ? L10n.shared.notifications.mistiarecurringbillmaintenance.valueValueIsDueByValue(String(describing: bill.name), String(describing: amountText), String(describing: MistiaDateFormatting.shortDateString(for: dueItem.dueDate)))
+                            : L10n.shared.notifications.mistiarecurringbillmaintenance.valueValueIsReadyToPayToday(String(describing: bill.name), String(describing: amountText))
                     } else {
                         body = dueItem.hasExplicitDueDate
-                            ? mistiaLocalized(
-                                vi: "\(bill.name) cần được thanh toán trước \(MistiaDateFormatting.shortDateString(for: dueItem.dueDate)).",
-                                en: "\(bill.name) is due by \(MistiaDateFormatting.shortDateString(for: dueItem.dueDate)).",
-                                ja: "\(bill.name) は \(MistiaDateFormatting.shortDateString(for: dueItem.dueDate)) までに支払いが必要です。"
-                            )
-                            : mistiaLocalized(
-                                vi: "\(bill.name) cần được thanh toán hôm nay.",
-                                en: "\(bill.name) is ready to pay today.",
-                                ja: "\(bill.name) は本日支払いが必要です。"
-                            )
+                            ? L10n.shared.notifications.mistiarecurringbillmaintenance.valueIsDueByValue(String(describing: bill.name), String(describing: MistiaDateFormatting.shortDateString(for: dueItem.dueDate)))
+                            : L10n.shared.notifications.mistiarecurringbillmaintenance.valueIsReadyToPayToday(String(describing: bill.name))
                     }
 
                     upsertNotification(
@@ -179,22 +155,14 @@ enum MistiaRecurringBillMaintenance {
                 if isOverdue {
                     let body: String
                     if let amountText {
-                        body = mistiaLocalized(
-                            vi: "\(bill.name) (\(amountText)) đã quá hạn thanh toán.",
-                            en: "\(bill.name) (\(amountText)) is past its due date.",
-                            ja: "\(bill.name) (\(amountText)) の支払い期限を過ぎています。"
-                        )
+                        body = L10n.shared.notifications.mistiarecurringbillmaintenance.valueValueIsPastItsDueDate(String(describing: bill.name), String(describing: amountText))
                     } else {
-                        body = mistiaLocalized(
-                            vi: "\(bill.name) đã quá hạn thanh toán.",
-                            en: "\(bill.name) is past its due date.",
-                            ja: "\(bill.name) の支払い期限を過ぎています。"
-                        )
+                        body = L10n.shared.notifications.mistiarecurringbillmaintenance.valueIsPastItsDueDate(String(describing: bill.name))
                     }
 
                     upsertNotification(
                         key: "mistia.bill.overdue.\(bill.id.uuidString.lowercased()).\(cycleMonthKey)",
-                        title: mistiaLocalized(vi: "Hóa đơn quá hạn", en: "Bill overdue", ja: "請求が延滞しています"),
+                        title: L10n.shared.notifications.mistiarecurringbillmaintenance.billOverdue,
                         body: body,
                         kind: .billOverdue,
                         bill: bill,
@@ -224,11 +192,7 @@ enum MistiaRecurringBillMaintenance {
         referenceDate: Date
     ) async {
         let now = Date()
-        let title = mistiaLocalized(
-            vi: "Tự động thanh toán \(bill.name)",
-            en: "Auto-paid \(bill.name)",
-            ja: "\(bill.name) を自動支払いしました"
-        )
+        let title = L10n.shared.notifications.mistiarecurringbillmaintenance.autoPaidValue(String(describing: bill.name))
         let tx = LedgerTransaction(
             primaryKind: .expense,
             title: title,
@@ -293,12 +257,8 @@ enum MistiaRecurringBillMaintenance {
 
             upsertNotification(
                 key: "mistia.bill.autopay.success.\(bill.id.uuidString.lowercased()).\(monthKey)",
-                title: mistiaLocalized(vi: "Đã tự động thanh toán", en: "Auto payment complete", ja: "自動支払いが完了しました"),
-                body: mistiaLocalized(
-                    vi: "Mistia đã thanh toán \(amount.formattedCurrency(code: bill.currencyCode)) cho \(bill.name).",
-                    en: "Mistia paid \(amount.formattedCurrency(code: bill.currencyCode)) for \(bill.name).",
-                    ja: "Mistia は \(bill.name) に \(amount.formattedCurrency(code: bill.currencyCode)) を支払いました。"
-                ),
+                title: L10n.shared.notifications.mistiarecurringbillmaintenance.autoPaymentComplete,
+                body: L10n.shared.notifications.mistiarecurringbillmaintenance.mistiaPaidValueForValue(String(describing: amount.formattedCurrency(code: bill.currencyCode)), String(describing: bill.name)),
                 kind: .billAutoPaymentSucceeded,
                 bill: bill,
                 dueItem: dueItem,
@@ -309,12 +269,8 @@ enum MistiaRecurringBillMaintenance {
         } catch {
             upsertNotification(
                 key: "mistia.bill.autopay.failed.\(bill.id.uuidString.lowercased()).\(monthKey)",
-                title: mistiaLocalized(vi: "Không thể tự động thanh toán", en: "Auto payment failed", ja: "自動支払いに失敗しました"),
-                body: mistiaLocalized(
-                    vi: "Lỗi khi thanh toán \(bill.name): \(error.localizedDescription)",
-                    en: "Failed to auto-pay \(bill.name): \(error.localizedDescription)",
-                    ja: "\(bill.name) の自動支払いに失敗しました: \(error.localizedDescription)"
-                ),
+                title: L10n.shared.notifications.mistiarecurringbillmaintenance.autoPaymentFailed,
+                body: L10n.shared.notifications.mistiarecurringbillmaintenance.failedToAutoPayValueValue(String(describing: bill.name), String(describing: error.localizedDescription)),
                 kind: .billAutoPaymentFailed,
                 bill: bill,
                 dueItem: dueItem,

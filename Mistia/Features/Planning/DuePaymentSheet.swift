@@ -129,7 +129,7 @@ struct DuePaymentSheet: View {
     private var selectedWalletName: String {
         guard let selectedWalletID,
               let wallet = wallets.first(where: { $0.id == selectedWalletID }) else {
-            return mistiaLocalized(vi: "Chọn ví", en: "Choose wallet", ja: "ウォレットを選択")
+            return L10n.planning.duepayment.chooseWallet
         }
         return wallet.name
     }
@@ -179,7 +179,7 @@ struct DuePaymentSheet: View {
     }
 
     private var walletFieldTitle: String {
-        mistiaLocalized(vi: "Ví thanh toán", en: "Payment wallet", ja: "支払いウォレット")
+        L10n.planning.duepayment.paymentWallet
     }
 
     // MARK: - Body
@@ -208,7 +208,7 @@ struct DuePaymentSheet: View {
                 paymentDetailsSection
                 paymentActionSection
             }
-            .navigationTitle(mistiaLocalized(vi: "Thanh toán hóa đơn", en: "Pay bill", ja: "請求の支払い"))
+            .navigationTitle(L10n.planning.duepayment.payBill)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
@@ -227,10 +227,10 @@ struct DuePaymentSheet: View {
             selectedWalletID = defaultWalletID
         }
         .alert(
-            mistiaLocalized(vi: "Không thể thanh toán", en: "Payment failed", ja: "支払いに失敗しました"),
+            L10n.planning.duepayment.paymentFailed,
             isPresented: Binding(get: { alertMessage != nil }, set: { if !$0 { alertMessage = nil } })
         ) {
-            Button(mistiaLocalized(vi: "Đóng", en: "Dismiss", ja: "閉じる"), role: .cancel) {}
+            Button(L10n.planning.duepayment.dismiss, role: .cancel) {}
         } message: {
             if let alertMessage { Text(alertMessage) }
         }
@@ -243,11 +243,7 @@ struct DuePaymentSheet: View {
             walletMenuRow
         } footer: {
             if target.requiresAmountInput {
-                Text(mistiaLocalized(
-                    vi: "Hóa đơn này chưa có số tiền mặc định.",
-                    en: "This bill has no default amount.",
-                    ja: "この請求にはデフォルトの金額がありません。"
-                ))
+                Text(L10n.planning.duepayment.thisBillHasNoDefaultAmount)
             }
         }
     }
@@ -255,7 +251,7 @@ struct DuePaymentSheet: View {
     private var paymentActionSection: some View {
         Section {
             DuePaymentPrimaryActionButton(
-                title: mistiaLocalized(vi: "Thanh toán ngay", en: "Pay now", ja: "今すぐ支払う"),
+                title: L10n.planning.duepayment.payNow,
                 isDisabled: payButtonDisabled
             ) {
                 pay()
@@ -274,7 +270,7 @@ struct DuePaymentSheet: View {
             TextField(
                 "",
                 text: $amountText,
-                prompt: Text(mistiaLocalized(vi: "Nhập số tiền", en: "Enter amount", ja: "金額を入力"))
+                prompt: Text(L10n.planning.duepayment.enterAmount)
                     .foregroundStyle(.tertiary)
             )
             .keyboardType(.numberPad)
@@ -288,7 +284,7 @@ struct DuePaymentSheet: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .frame(minHeight: 44)
         } else {
-            Text("—")
+            Text(verbatim: "—")
                 .foregroundStyle(.tertiary)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .frame(minHeight: 44)
@@ -297,7 +293,7 @@ struct DuePaymentSheet: View {
 
     private var walletMenuRow: some View {
         Picker(walletFieldTitle, selection: $selectedWalletID) {
-            Text(mistiaLocalized(vi: "Chọn ví", en: "Choose wallet", ja: "ウォレットを選択")).tag(Optional<UUID>.none)
+            Text(L10n.planning.duepayment.chooseWallet).tag(Optional<UUID>.none)
             ForEach(availableWallets) { wallet in
                 Text(wallet.name).tag(Optional(wallet.id))
             }
@@ -319,11 +315,7 @@ struct DuePaymentSheet: View {
 
     private func pay() {
         guard let dueItem = resolvedDueItem else {
-            alertMessage = mistiaLocalized(
-                vi: "Không tìm thấy khoản đến hạn.",
-                en: "Could not find the due item.",
-                ja: "期限項目が見つかりませんでした。"
-            )
+            alertMessage = L10n.planning.duepayment.couldNotFindTheDueItem
             return
         }
 

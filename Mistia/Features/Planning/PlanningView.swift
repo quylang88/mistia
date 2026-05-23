@@ -11,11 +11,11 @@ private enum PlanningMode: String, CaseIterable, Identifiable {
     var title: String {
         switch self {
         case .budget:
-            mistiaLocalized(vi: "Ngân sách", en: "Budget", ja: "予算")
+            L10n.planning.planning.budget2
         case .goals:
-            mistiaLocalized(vi: "Mục tiêu", en: "Goals", ja: "目標")
+            L10n.planning.planning.goals2
         case .due:
-            mistiaLocalized(vi: "Đến hạn", en: "Due", ja: "支払予定")
+            L10n.planning.planning.due2
         }
     }
 
@@ -41,11 +41,11 @@ private enum PlanningDueMode: String, CaseIterable, Identifiable {
     var title: String {
         switch self {
         case .creditCards:
-            mistiaLocalized(vi: "Thẻ tín dụng", en: "Credit cards", ja: "クレジットカード")
+            L10n.planning.planning.creditCards
         case .bills:
-            mistiaLocalized(vi: "Hóa đơn", en: "Bills", ja: "請求書")
+            L10n.planning.planning.bills2
         case .installments:
-            mistiaLocalized(vi: "Trả góp / vay", en: "Installments / loans", ja: "分割払い・借入")
+            L10n.planning.planning.installmentsLoans2
         }
     }
 }
@@ -578,7 +578,7 @@ struct PlanningView: View {
         NavigationStack {
             MistiaPinnedTopBarScaffold(
                 tone: .standard,
-                title: mistiaLocalized(vi: "Kế hoạch", en: "Planning", ja: "プラン"),
+                title: L10n.planning.planning.planning,
                 embedsInNavigationStack: false,
                 leadingInitials: sessionStore.summary?.initials ?? "MI",
                 leadingAvatarURL: sessionStore.summary?.avatarURL,
@@ -729,12 +729,12 @@ struct PlanningView: View {
         ) { alert in
             switch alert {
             case .info:
-                Button(mistiaLocalized(vi: "OK", en: "OK", ja: "OK")) {}
+                Button(L10n.common.ok) {}
             case .permission(let prompt):
                 Button(prompt.actionTitle) {
                     prompt.action()
                 }
-                Button(mistiaLocalized(vi: "Hủy", en: "Cancel", ja: "キャンセル"), role: .cancel) {}
+                Button(L10n.common.cancel, role: .cancel) {}
             case .wallet(let prompt):
                 if shouldShowWalletPermissionAction(for: prompt, scope: .use) {
                     Button(walletPermissionActionTitle(for: prompt, scope: .use)) {
@@ -746,7 +746,7 @@ struct PlanningView: View {
                         requestWalletPermission(prompt, scope: .edit)
                     }
                 }
-                Button(mistiaLocalized(vi: "Hủy", en: "Cancel", ja: "キャンセル"), role: .cancel) {}
+                Button(L10n.common.cancel, role: .cancel) {}
             }
         } message: { alert in
             Text(alert.message)
@@ -770,7 +770,7 @@ struct PlanningView: View {
             presentCreatePermissionPrompt(
                 ownerUserID: ownerUserID,
                 resourceType: .budget,
-                resourceName: mistiaLocalized(vi: "ngân sách", en: "budgets", ja: "予算")
+                resourceName: L10n.planning.planning.budgets
             ) {
                 openBudgetAddIfAllowed()
             }
@@ -789,7 +789,7 @@ struct PlanningView: View {
             presentEditPermissionPrompt(
                 ownerUserID: ownerUserID,
                 resourceType: .budget,
-                resourceName: mistiaLocalized(vi: "ngân sách", en: "budgets", ja: "予算")
+                resourceName: L10n.planning.planning.budgets
             ) {
                 openBudgetEditorIfAllowed(budget: budget, preferredParentCategoryID: preferredParentCategoryID)
             }
@@ -808,7 +808,7 @@ struct PlanningView: View {
             presentCreatePermissionPrompt(
                 ownerUserID: ownerUserID,
                 resourceType: .goal,
-                resourceName: mistiaLocalized(vi: "mục tiêu", en: "goals", ja: "目標")
+                resourceName: L10n.planning.planning.goals
             ) {
                 openGoalAddIfAllowed()
             }
@@ -823,7 +823,7 @@ struct PlanningView: View {
             presentEditPermissionPrompt(
                 ownerUserID: ownerUserID,
                 resourceType: .goal,
-                resourceName: mistiaLocalized(vi: "mục tiêu", en: "goals", ja: "目標")
+                resourceName: L10n.planning.planning.goals
             ) {
                 openGoalEditorIfAllowed(goal: goal)
             }
@@ -838,7 +838,7 @@ struct PlanningView: View {
             presentCreatePermissionPrompt(
                 ownerUserID: ownerUserID,
                 resourceType: .wallet,
-                resourceName: mistiaLocalized(vi: "ví / thẻ", en: "wallets / cards", ja: "ウォレット・カード")
+                resourceName: L10n.planning.planning.walletsCards
             ) {
                 openCreditCardAddIfAllowed()
             }
@@ -858,7 +858,7 @@ struct PlanningView: View {
             if let walletID, let ownerUserID {
                 presentCreditCardWalletPermissionPrompt(
                     walletID: walletID,
-                    walletName: wallet?.name ?? dueItem?.walletName ?? mistiaLocalized(vi: "thẻ tín dụng", en: "credit card", ja: "クレジットカード"),
+                    walletName: wallet?.name ?? dueItem?.walletName ?? L10n.planning.planning.creditCard,
                     ownerUserID: ownerUserID
                 )
             } else {
@@ -866,7 +866,7 @@ struct PlanningView: View {
                     ownerUserID: ownerUserID,
                     resourceType: .wallet,
                     resourceID: walletID,
-                    resourceName: mistiaLocalized(vi: "ví / thẻ", en: "wallets / cards", ja: "ウォレット・カード")
+                    resourceName: L10n.planning.planning.walletsCards
                 ) {
                     openCreditCardEditorIfAllowed(wallet: wallet, dueItem: dueItem)
                 }
@@ -886,7 +886,7 @@ struct PlanningView: View {
             presentCreatePermissionPrompt(
                 ownerUserID: ownerUserID,
                 resourceType: .bill,
-                resourceName: mistiaLocalized(vi: "hóa đơn", en: "bills", ja: "請求書")
+                resourceName: L10n.planning.planning.bills
             ) {
                 openBillAddIfAllowed()
             }
@@ -901,7 +901,7 @@ struct PlanningView: View {
             presentEditPermissionPrompt(
                 ownerUserID: ownerUserID,
                 resourceType: .bill,
-                resourceName: mistiaLocalized(vi: "hóa đơn", en: "bills", ja: "請求書")
+                resourceName: L10n.planning.planning.bills
             ) {
                 openBillEditorIfAllowed(plan: plan, dueItem: dueItem)
             }
@@ -916,7 +916,7 @@ struct PlanningView: View {
             presentCreatePermissionPrompt(
                 ownerUserID: ownerUserID,
                 resourceType: .installment,
-                resourceName: mistiaLocalized(vi: "trả góp / vay", en: "installments / loans", ja: "分割払い・借入")
+                resourceName: L10n.planning.planning.installmentsLoans
             ) {
                 openInstallmentAddIfAllowed()
             }
@@ -931,7 +931,7 @@ struct PlanningView: View {
             presentEditPermissionPrompt(
                 ownerUserID: ownerUserID,
                 resourceType: .installment,
-                resourceName: mistiaLocalized(vi: "trả góp / vay", en: "installments / loans", ja: "分割払い・借入")
+                resourceName: L10n.planning.planning.installmentsLoans
             ) {
                 openInstallmentEditorIfAllowed(plan: plan, dueItem: dueItem)
             }
@@ -981,11 +981,11 @@ struct PlanningView: View {
     ) -> (type: MistiaFamilyNotificationResourceType, resourceID: UUID?, name: String) {
         switch item.sourceKind {
         case .creditCard:
-            return (.wallet, item.sourceID, mistiaLocalized(vi: "ví / thẻ", en: "wallets / cards", ja: "ウォレット・カード"))
+            return (.wallet, item.sourceID, L10n.planning.planning.walletsCards)
         case .recurringBill:
-            return (.bill, nil, mistiaLocalized(vi: "hóa đơn", en: "bills", ja: "請求書"))
+            return (.bill, nil, L10n.planning.planning.bills)
         case .installment:
-            return (.installment, nil, mistiaLocalized(vi: "trả góp / vay", en: "installments / loans", ja: "分割払い・借入"))
+            return (.installment, nil, L10n.planning.planning.installmentsLoans)
         }
     }
 
@@ -1021,12 +1021,8 @@ struct PlanningView: View {
             walletID: walletID,
             walletName: walletName,
             ownerUserID: ownerUserID,
-            title: mistiaLocalized(vi: "Chưa có quyền thao tác ví", en: "No wallet access", ja: "ウォレット権限がありません"),
-            message: mistiaLocalized(
-                vi: "Bạn chưa có đủ quyền với \(walletName).",
-                en: "You do not have enough access for \(walletName).",
-                ja: "\(walletName) の権限が不足しています。"
-            )
+            title: L10n.planning.planning.noWalletAccess,
+            message: L10n.planning.planning.youDoNotHaveEnoughAccessFor(String(describing: walletName))
         )
     }
 
@@ -1037,13 +1033,13 @@ struct PlanningView: View {
         if isWalletPermissionGranted(for: prompt, scope: scope) {
             switch scope {
             case .use:
-                return mistiaLocalized(vi: "Đã chấp nhận yêu cầu sử dụng", en: "Use request approved", ja: "使用リクエストが承認済み")
+                return L10n.planning.planning.useRequestApproved
             case .edit:
-                return mistiaLocalized(vi: "Đã chấp nhận yêu cầu chỉnh sửa", en: "Edit request approved", ja: "編集リクエストが承認済み")
+                return L10n.planning.planning.editRequestApproved
             case .create:
-                return mistiaLocalized(vi: "Đã chấp nhận yêu cầu thêm mới", en: "Create request approved", ja: "作成リクエストが承認済み")
+                return L10n.planning.planning.createRequestApproved
             case .view:
-                return mistiaLocalized(vi: "Đã chấp nhận yêu cầu", en: "Request approved", ja: "リクエストが承認済み")
+                return L10n.planning.planning.requestApproved
             }
         }
 
@@ -1055,25 +1051,25 @@ struct PlanningView: View {
         ) {
             switch scope {
             case .use:
-                return mistiaLocalized(vi: "Đã yêu cầu sử dụng", en: "Use requested", ja: "使用権限をリクエスト済み")
+                return L10n.planning.planning.useRequested
             case .edit:
-                return mistiaLocalized(vi: "Đã yêu cầu chỉnh sửa", en: "Edit requested", ja: "編集権限をリクエスト済み")
+                return L10n.planning.planning.editRequested
             case .create:
-                return mistiaLocalized(vi: "Đã yêu cầu thêm mới", en: "Create requested", ja: "作成権限をリクエスト済み")
+                return L10n.planning.planning.createRequested
             case .view:
-                return mistiaLocalized(vi: "Đã yêu cầu quyền", en: "Access requested", ja: "権限をリクエスト済み")
+                return L10n.planning.planning.accessRequested
             }
         }
 
         switch scope {
         case .use:
-            return mistiaLocalized(vi: "Yêu cầu sử dụng", en: "Request use", ja: "使用をリクエスト")
+            return L10n.planning.planning.requestUse
         case .edit:
-            return mistiaLocalized(vi: "Yêu cầu chỉnh sửa", en: "Request edit", ja: "編集をリクエスト")
+            return L10n.planning.planning.requestEdit
         case .create:
-            return mistiaLocalized(vi: "Yêu cầu thêm mới", en: "Request create", ja: "作成をリクエスト")
+            return L10n.planning.planning.requestCreate
         case .view:
-            return mistiaLocalized(vi: "Yêu cầu quyền", en: "Request access", ja: "権限をリクエスト")
+            return L10n.planning.planning.requestAccess
         }
     }
 
@@ -1142,12 +1138,8 @@ struct PlanningView: View {
             } else {
                 walletPermissionPrompt = nil
                 infoAlert = PlanningInfoAlert(
-                    title: mistiaLocalized(vi: "Đã gửi yêu cầu", en: "Request sent", ja: "リクエスト送信済み"),
-                    message: familyContextStore.lastErrorMessage ?? mistiaLocalized(
-                        vi: "Yêu cầu đang chờ chủ dữ liệu phản hồi.",
-                        en: "The request is waiting for the data owner.",
-                        ja: "リクエストはデータ所有者の返答待ちです。"
-                    )
+                    title: L10n.planning.planning.requestSent2,
+                    message: familyContextStore.lastErrorMessage ?? L10n.planning.planning.theRequestIsWaitingForTheData
                 )
             }
         }
@@ -1190,15 +1182,11 @@ struct PlanningView: View {
             scope: .edit
         )
         permissionPrompt = PlanningPermissionPrompt(
-            title: mistiaLocalized(vi: "Chưa có quyền chỉnh sửa", en: "No edit access", ja: "編集権限がありません"),
-            message: mistiaLocalized(
-                vi: "Bạn chưa có quyền chỉnh sửa \(resourceName) của thành viên này.",
-                en: "You do not have permission to edit this member's \(resourceName).",
-                ja: "このメンバーの\(resourceName)を編集する権限がありません。"
-            ),
+            title: L10n.planning.planning.noEditAccess,
+            message: L10n.planning.planning.youDoNotHavePermissionToEdit(String(describing: resourceName)),
             actionTitle: isPending
-                ? mistiaLocalized(vi: "Đã gửi yêu cầu chỉnh sửa", en: "Edit request sent", ja: "編集リクエスト送信済み")
-                : mistiaLocalized(vi: "Yêu cầu quyền chỉnh sửa", en: "Request edit access", ja: "編集権限をリクエスト")
+                ? L10n.planning.planning.editRequestSent
+                : L10n.planning.planning.requestEditAccess
         ) {
             resolvePermissionPromptAction(
                 resourceType: resourceType,
@@ -1227,15 +1215,11 @@ struct PlanningView: View {
             scope: .create
         )
         permissionPrompt = PlanningPermissionPrompt(
-            title: mistiaLocalized(vi: "Chưa có quyền thêm mới", en: "No create access", ja: "作成権限がありません"),
-            message: mistiaLocalized(
-                vi: "Bạn chưa có quyền thêm mới \(resourceName) cho thành viên này.",
-                en: "You do not have permission to create \(resourceName) for this member.",
-                ja: "このメンバーの\(resourceName)を作成する権限がありません。"
-            ),
+            title: L10n.planning.planning.noCreateAccess,
+            message: L10n.planning.planning.youDoNotHavePermissionToCreate(String(describing: resourceName)),
             actionTitle: isPending
-                ? mistiaLocalized(vi: "Đã gửi yêu cầu thêm mới", en: "Create request sent", ja: "作成リクエスト送信済み")
-                : mistiaLocalized(vi: "Yêu cầu quyền thêm mới", en: "Request create access", ja: "作成権限をリクエスト")
+                ? L10n.planning.planning.createRequestSent
+                : L10n.planning.planning.requestCreateAccess
         ) {
             resolvePermissionPromptAction(
                 resourceType: resourceType,
@@ -1276,12 +1260,8 @@ struct PlanningView: View {
 
                 permissionPrompt = nil
                 infoAlert = PlanningInfoAlert(
-                    title: mistiaLocalized(vi: "Đã gửi yêu cầu", en: "Request sent", ja: "リクエスト送信済み"),
-                    message: familyContextStore.lastErrorMessage ?? mistiaLocalized(
-                        vi: "Yêu cầu đang chờ chủ dữ liệu phản hồi.",
-                        en: "The request is waiting for the data owner.",
-                        ja: "リクエストはデータ所有者の返答待ちです。"
-                    )
+                    title: L10n.planning.planning.requestSent2,
+                    message: familyContextStore.lastErrorMessage ?? L10n.planning.planning.theRequestIsWaitingForTheData
                 )
                 return
             }
@@ -1298,19 +1278,11 @@ struct PlanningView: View {
             permissionPrompt = nil
             infoAlert = PlanningInfoAlert(
                 title: didSend
-                    ? mistiaLocalized(vi: "Đã gửi yêu cầu", en: "Request sent", ja: "リクエストを送信しました")
-                    : mistiaLocalized(vi: "Chưa thể gửi", en: "Couldn't send", ja: "送信できませんでした"),
+                    ? L10n.planning.planning.requestSent
+                    : L10n.planning.planning.couldnTSend,
                 message: didSend
-                    ? mistiaLocalized(
-                        vi: "Yêu cầu quyền đã được gửi tới chủ dữ liệu.",
-                        en: "The permission request was sent to the data owner.",
-                        ja: "権限リクエストをデータ所有者へ送信しました。"
-                    )
-                    : (familyContextStore.lastErrorMessage ?? mistiaLocalized(
-                        vi: "Không thể gửi yêu cầu lúc này.",
-                        en: "Couldn't send the request right now.",
-                        ja: "現在リクエストは送信できません。"
-                    ))
+                    ? L10n.planning.planning.thePermissionRequestWasSentToThe
+                    : (familyContextStore.lastErrorMessage ?? L10n.planning.planning.couldnTSendTheRequestRightNow)
             )
         }
     }
@@ -1336,19 +1308,11 @@ struct PlanningView: View {
             permissionPrompt = nil
             infoAlert = PlanningInfoAlert(
                 title: didSend
-                    ? mistiaLocalized(vi: "Đã gửi yêu cầu", en: "Request sent", ja: "リクエストを送信しました")
-                    : mistiaLocalized(vi: "Chưa thể gửi", en: "Couldn't send", ja: "送信できませんでした"),
+                    ? L10n.planning.planning.requestSent
+                    : L10n.planning.planning.couldnTSend,
                 message: didSend
-                    ? mistiaLocalized(
-                        vi: "Yêu cầu quyền đã được gửi tới chủ dữ liệu.",
-                        en: "The permission request was sent to the data owner.",
-                        ja: "権限リクエストをデータ所有者へ送信しました。"
-                    )
-                    : (familyContextStore.lastErrorMessage ?? mistiaLocalized(
-                        vi: "Không thể gửi yêu cầu lúc này.",
-                        en: "Couldn't send the request right now.",
-                        ja: "現在リクエストは送信できません。"
-                    ))
+                    ? L10n.planning.planning.thePermissionRequestWasSentToThe
+                    : (familyContextStore.lastErrorMessage ?? L10n.planning.planning.couldnTSendTheRequestRightNow)
             )
         }
     }
@@ -1369,13 +1333,9 @@ private struct BudgetTabContent: View {
 
             if rows.isEmpty {
                 PlanningEmptyStateCard(
-                    title: mistiaLocalized(vi: "Chưa có ngân sách nào", en: "No budgets yet", ja: "予算はまだありません"),
-                    message: mistiaLocalized(
-                        vi: "Tạo ngân sách theo từng danh mục để theo dõi số tiền đã dùng và số ngày còn lại trong tháng.",
-                        en: "Create category budgets to track what you've spent and how many days are left in the month.",
-                        ja: "カテゴリごとに予算を作成すると、使った金額と月末までの残り日数を追跡できます。"
-                    ),
-                    buttonTitle: mistiaLocalized(vi: "Thêm ngân sách", en: "Add budget", ja: "予算を追加"),
+                    title: L10n.planning.planning.noBudgetsYet,
+                    message: L10n.planning.planning.createCategoryBudgetsToTrackWhatYou,
+                    buttonTitle: L10n.planning.planning.addBudget,
                     accent: planningAccentPurple,
                     symbols: ["banknote.fill", "chart.bar.fill", "bolt.fill", "plus"]
                 ) {
@@ -1404,7 +1364,7 @@ private struct BudgetTabContent: View {
                         .padding(.leading, 52)
                         .padding(.trailing, 0)
 
-                    PlanningFooterAddButton(title: mistiaLocalized(vi: "Thêm ngân sách", en: "Add budget", ja: "予算を追加")) {
+                    PlanningFooterAddButton(title: L10n.planning.planning.addBudget) {
                         onAdd()
                     }
                 }
@@ -1426,13 +1386,9 @@ private struct GoalsTabContent: View {
 
             if rows.isEmpty {
                 PlanningEmptyStateCard(
-                    title: mistiaLocalized(vi: "Chưa có mục tiêu nào", en: "No goals yet", ja: "目標はまだありません"),
-                    message: mistiaLocalized(
-                        vi: "Thêm quỹ khẩn cấp, du lịch hay món đồ lớn để theo dõi số tiền cần tích lũy mỗi tháng.",
-                        en: "Add an emergency fund, trip, or big purchase to track how much you need to save each month.",
-                        ja: "緊急資金や旅行、大きな買い物の目標を追加して、毎月どれだけ貯める必要があるか確認できます。"
-                    ),
-                    buttonTitle: mistiaLocalized(vi: "Thêm mục tiêu", en: "Add goal", ja: "目標を追加"),
+                    title: L10n.planning.planning.noGoalsYet,
+                    message: L10n.planning.planning.addAnEmergencyFundTripOrBig,
+                    buttonTitle: L10n.planning.planning.addGoal,
                     accent: planningAccentPurple,
                     symbols: ["target", "sparkles", "flag.fill", "plus"]
                 ) {
@@ -1461,7 +1417,7 @@ private struct GoalsTabContent: View {
                                 .padding(.leading, 52)
                                 .padding(.trailing, 0)
 
-                    PlanningFooterAddButton(title: mistiaLocalized(vi: "Thêm mục tiêu", en: "Add goal", ja: "目標を追加")) {
+                    PlanningFooterAddButton(title: L10n.planning.planning.addGoal) {
                         onAdd()
                     }
                 }
@@ -1502,16 +1458,12 @@ private struct DueTabContent: View {
                 )
             case .bills:
                 DueRowsSection(
-                    emptyTitle: mistiaLocalized(vi: "Chưa có hóa đơn nào", en: "No bills yet", ja: "請求はまだありません"),
-                    emptyMessage: mistiaLocalized(
-                        vi: "Thêm tiền Internet, điện nước hoặc hóa đơn định kỳ để lên lịch đến hạn.",
-                        en: "Add internet, utilities, or recurring bills to schedule upcoming due dates.",
-                        ja: "ネット料金や光熱費、定期請求を追加して支払予定を管理できます。"
-                    ),
+                    emptyTitle: L10n.planning.planning.noBillsYet,
+                    emptyMessage: L10n.planning.planning.addInternetUtilitiesOrRecurringBillsTo,
                     emptySymbols: ["wifi", "bolt.fill", "phone.fill", "plus"],
                     accent: planningAccentPurple,
                     items: bills,
-                    addTitle: mistiaLocalized(vi: "Thêm hóa đơn", en: "Add bill", ja: "請求を追加"),
+                    addTitle: L10n.planning.planning.addBill,
                     referenceDate: referenceDate,
                     onAdd: onAddBill,
                     onEdit: onEditBill,
@@ -1519,16 +1471,12 @@ private struct DueTabContent: View {
                 )
             case .installments:
                 DueRowsSection(
-                    emptyTitle: mistiaLocalized(vi: "Chưa có khoản trả góp / vay", en: "No installments or loans yet", ja: "分割払い・借入はまだありません"),
-                    emptyMessage: mistiaLocalized(
-                        vi: "Thêm các khoản cần trả theo kỳ và tạo giao dịch khi thanh toán trước.",
-                        en: "Add installment or loan payments and create transactions when you pay early.",
-                        ja: "分割払いやローンを追加すると、繰上げ支払い時に取引も作成できます。"
-                    ),
+                    emptyTitle: L10n.planning.planning.noInstallmentsOrLoansYet,
+                    emptyMessage: L10n.planning.planning.addInstallmentOrLoanPaymentsAndCreate,
                     emptySymbols: ["creditcard.and.123", "building.columns.fill", "banknote.fill", "plus"],
                     accent: planningAccentPurple,
                     items: installments,
-                    addTitle: mistiaLocalized(vi: "Thêm trả góp / vay", en: "Add installment / loan", ja: "分割払い・借入を追加"),
+                    addTitle: L10n.planning.planning.addInstallmentLoan,
                     referenceDate: referenceDate,
                     onAdd: onAddInstallment,
                     onEdit: onEditInstallment
@@ -1549,13 +1497,9 @@ private struct CreditCardsSection: View {
     var body: some View {
         if items.isEmpty {
             PlanningEmptyStateCard(
-                title: mistiaLocalized(vi: "Chưa có thẻ tín dụng", en: "No credit cards yet", ja: "クレジットカードはまだありません"),
-                message: mistiaLocalized(
-                    vi: "Liên kết hoặc thêm thẻ ngay tại đây để hiển thị credit card và theo dõi ngày thanh toán.",
-                    en: "Link or add cards here to show your credit cards and track payment dates.",
-                    ja: "ここでカードを追加または連携すると、クレジットカードと支払日を管理できます。"
-                ),
-                buttonTitle: mistiaLocalized(vi: "Thêm credit card", en: "Add credit card", ja: "カードを追加"),
+                title: L10n.planning.planning.noCreditCardsYet,
+                message: L10n.planning.planning.linkOrAddCardsHereToShow,
+                buttonTitle: L10n.planning.planning.addCreditCard,
                 accent: planningAccentPurple,
                 symbols: ["creditcard.fill", "wave.3.right.circle.fill", "building.columns.fill", "plus"]
             ) {
@@ -1577,7 +1521,7 @@ private struct CreditCardsSection: View {
                     }
                 }
 
-                PlanningFooterAddButton(title: mistiaLocalized(vi: "Thêm credit card", en: "Add credit card", ja: "カードを追加")) {
+                PlanningFooterAddButton(title: L10n.planning.planning.addCreditCard) {
                     onAdd()
                 }
             }
@@ -1760,7 +1704,7 @@ private struct PlanningBudgetSummaryCard: View {
             VStack(alignment: .leading, spacing: 18) {
                 HStack(alignment: .top, spacing: 18) {
                     VStack(alignment: .leading, spacing: 10) {
-                        Text(mistiaLocalized(vi: "Tổng ngân sách tháng", en: "Monthly budget total", ja: "月間予算合計"))
+                        Text(L10n.planning.planning.monthlyBudgetTotal)
                             .font(.system(size: 14.5, weight: .semibold, design: .rounded))
                             .foregroundStyle(.secondary)
 
@@ -1784,7 +1728,7 @@ private struct PlanningBudgetSummaryCard: View {
 
                 HStack(spacing: 14) {
                     PlanningMetricColumn(
-                        title: mistiaLocalized(vi: "Đã dùng", en: "Spent", ja: "使用済み"),
+                        title: L10n.planning.planning.spent,
                         value: summary.spentMinor.formattedCurrency(code: currencyCode),
                         tint: MistiaAccent.coral.color
                     )
@@ -1793,7 +1737,7 @@ private struct PlanningBudgetSummaryCard: View {
                         .frame(height: 30)
 
                     PlanningMetricColumn(
-                        title: mistiaLocalized(vi: "Còn lại", en: "Remaining", ja: "残り"),
+                        title: L10n.planning.planning.remaining,
                         value: summary.remainingMinor.formattedCurrency(code: currencyCode),
                         tint: Color(hex: "#2DAA9E")
                     )
@@ -1827,22 +1771,18 @@ private struct PlanningGoalSummaryCard: View {
     var body: some View {
         MistiaBlockCard(cornerRadius: 24, tint: cardTint, padding: 18) {
             VStack(alignment: .leading, spacing: 16) {
-                Text(mistiaLocalized(vi: "Mục tiêu đang hoạt động", en: "Active goals", ja: "進行中の目標"))
+                Text(L10n.planning.planning.activeGoals)
                     .font(.system(size: 14.5, weight: .semibold, design: .rounded))
                     .foregroundStyle(.secondary)
 
                 Text(
-                    mistiaLocalized(
-                        vi: "\(summary.activeCount) mục tiêu",
-                        en: "\(summary.activeCount) goals",
-                        ja: "\(summary.activeCount) 件の目標"
-                    )
+                    L10n.planning.planning.valueGoals(String(describing: summary.activeCount))
                 )
                     .font(.system(size: 28, weight: .bold, design: .rounded))
 
                 HStack(spacing: 14) {
                     PlanningMetricColumn(
-                        title: mistiaLocalized(vi: "Đã tích lũy", en: "Saved", ja: "積み立て済み"),
+                        title: L10n.planning.planning.saved,
                         value: summary.totalSavedMinor.formattedCurrency(code: currencyCode),
                         tint: Color(hex: "#2DAA9E")
                     )
@@ -1851,8 +1791,8 @@ private struct PlanningGoalSummaryCard: View {
                         .frame(height: 30)
 
                     PlanningMetricColumn(
-                        title: mistiaLocalized(vi: "Gần đạt nhất", en: "Closest to goal", ja: "達成まであと少し"),
-                        value: summary.nearestGoalName ?? mistiaLocalized(vi: "Chưa có", en: "None yet", ja: "まだありません"),
+                        title: L10n.planning.planning.closestToGoal,
+                        value: summary.nearestGoalName ?? L10n.planning.planning.noneYet,
                         tint: Color(hex: "#5B7BFF")
                     )
                 }
@@ -1873,13 +1813,13 @@ private struct PlanningDueSummaryCard: View {
     var body: some View {
         MistiaBlockCard(cornerRadius: 24, tint: cardTint, padding: 18) {
             VStack(alignment: .leading, spacing: 18) {
-                Text(mistiaLocalized(vi: "Tóm tắt", en: "Summary", ja: "概要"))
+                Text(L10n.planning.planning.summary)
                     .font(.system(size: 14.5, weight: .semibold, design: .rounded))
                     .foregroundStyle(.secondary)
 
                 HStack(spacing: 14) {
                     PlanningMetricColumn(
-                        title: mistiaLocalized(vi: "Sắp đến hạn", en: "Upcoming", ja: "まもなく期限"),
+                        title: L10n.planning.planning.upcoming2,
                         value: "\(summary.upcomingCount)",
                         tint: Color(hex: "#5B7BFF")
                     )
@@ -1888,7 +1828,7 @@ private struct PlanningDueSummaryCard: View {
                         .frame(height: 30)
 
                     PlanningMetricColumn(
-                        title: mistiaLocalized(vi: "Tổng cần trả", en: "Total due", ja: "支払合計"),
+                        title: L10n.planning.planning.totalDue,
                         value: summary.totalDueMinor.formattedCurrency(code: currencyCode),
                         tint: Color(hex: "#F59B3F")
                     )
@@ -1897,7 +1837,7 @@ private struct PlanningDueSummaryCard: View {
                         .frame(height: 30)
 
                     PlanningMetricColumn(
-                        title: mistiaLocalized(vi: "Quá hạn", en: "Overdue", ja: "延滞"),
+                        title: L10n.planning.planning.overdue,
                         value: "\(summary.overdueCount)",
                         tint: Color(hex: "#F45C7E")
                     )
@@ -1947,7 +1887,7 @@ private struct PlanningBudgetBranchCard: View {
                 VStack(alignment: .leading, spacing: 4) {
                     Text(row.name)
                         .font(.system(size: 17, weight: .semibold, design: .rounded))
-                    Text("\(row.spentMinor.formattedCurrency(code: row.currencyCode)) / \(row.limitMinor.formattedCurrency(code: row.currencyCode))")
+                    Text(verbatim: "\(row.spentMinor.formattedCurrency(code: row.currencyCode)) / \(row.limitMinor.formattedCurrency(code: row.currencyCode))")
                         .font(.system(size: 13, weight: .semibold, design: .rounded))
                         .foregroundStyle(.secondary)
                 }
@@ -1971,11 +1911,7 @@ private struct PlanningBudgetBranchCard: View {
     private var childHeader: some View {
         HStack(spacing: 8) {
             Text(
-                mistiaLocalized(
-                    vi: "Ngân sách con",
-                    en: "Child budgets",
-                    ja: "子カテゴリ予算"
-                )
+                L10n.planning.planning.childBudgets
             )
             .font(.system(size: 13, weight: .bold, design: .rounded))
             .foregroundStyle(.secondary)
@@ -2022,14 +1958,10 @@ private struct PlanningBudgetBranchCard: View {
 
     private var daysText: String {
         if row.isPastMonth {
-            return mistiaLocalized(vi: "Tháng đã kết thúc", en: "Month ended", ja: "月が終了しました")
+            return L10n.planning.planning.monthEnded
         }
 
-        return mistiaLocalized(
-            vi: "Còn \(row.daysRemaining) ngày",
-            en: "\(row.daysRemaining) days left",
-            ja: "あと \(row.daysRemaining) 日"
-        )
+        return L10n.planning.planning.valueDaysLeft(String(describing: row.daysRemaining))
     }
 }
 
@@ -2045,7 +1977,7 @@ private struct PlanningBudgetRowView: View {
                 VStack(alignment: .leading, spacing: 4) {
                     Text(row.name)
                         .font(.system(size: 17, weight: .semibold, design: .rounded))
-                    Text("\(row.spentMinor.formattedCurrency(code: row.currencyCode)) / \(row.limitMinor.formattedCurrency(code: row.currencyCode))")
+                    Text(verbatim: "\(row.spentMinor.formattedCurrency(code: row.currencyCode)) / \(row.limitMinor.formattedCurrency(code: row.currencyCode))")
                         .font(.system(size: 13, weight: .semibold, design: .rounded))
                         .foregroundStyle(.secondary)
                 }
@@ -2079,14 +2011,10 @@ private struct PlanningBudgetRowView: View {
 
     private var daysText: String {
         if row.isPastMonth {
-            return mistiaLocalized(vi: "Tháng đã kết thúc", en: "Month ended", ja: "月が終了しました")
+            return L10n.planning.planning.monthEnded
         }
 
-        return mistiaLocalized(
-            vi: "Còn \(row.daysRemaining) ngày",
-            en: "\(row.daysRemaining) days left",
-            ja: "あと \(row.daysRemaining) 日"
-        )
+        return L10n.planning.planning.valueDaysLeft(String(describing: row.daysRemaining))
     }
 }
 
@@ -2101,7 +2029,7 @@ private struct PlanningGoalRowView: View {
                 VStack(alignment: .leading, spacing: 4) {
                     Text(row.name)
                         .font(.system(size: 17, weight: .semibold, design: .rounded))
-                    Text("\(row.currentSavedMinor.formattedCurrency(code: row.currencyCode)) / \(row.targetMinor.formattedCurrency(code: row.currencyCode))")
+                    Text(verbatim: "\(row.currentSavedMinor.formattedCurrency(code: row.currencyCode)) / \(row.targetMinor.formattedCurrency(code: row.currencyCode))")
                         .font(.system(size: 13, weight: .semibold, design: .rounded))
                         .foregroundStyle(.secondary)
                 }
@@ -2117,11 +2045,7 @@ private struct PlanningGoalRowView: View {
                     .foregroundStyle(.secondary)
                 Spacer()
                 Text(
-                    mistiaLocalized(
-                        vi: "Cần thêm \(row.monthlyRequiredMinor.formattedCurrency(code: row.currencyCode))/tháng",
-                        en: "Need \(row.monthlyRequiredMinor.formattedCurrency(code: row.currencyCode))/month",
-                        ja: "毎月あと \(row.monthlyRequiredMinor.formattedCurrency(code: row.currencyCode)) 必要"
-                    )
+                    L10n.planning.planning.needValueMonth(String(describing: row.monthlyRequiredMinor.formattedCurrency(code: row.currencyCode)))
                 )
                     .font(.system(size: 12.5, weight: .semibold, design: .rounded))
                     .foregroundStyle(Color(hex: "#5B7BFF"))
@@ -2153,7 +2077,7 @@ private struct PlanningDueRow: View {
                 Spacer(minLength: 10)
 
                 if showsPayButton {
-                    PlanningDueActionButton(title: mistiaLocalized(vi: "Thanh toán", en: "Pay", ja: "支払う")) {
+                    PlanningDueActionButton(title: L10n.planning.planning.pay) {
                         onPay()
                     }
                 } else {
@@ -2187,21 +2111,21 @@ private struct PlanningDueRow: View {
         if let amount = item.amountMinor {
             return amount.formattedCurrency(code: item.currencyCode)
         }
-        return mistiaLocalized(vi: "Chưa nhập số tiền", en: "No amount yet", ja: "金額未入力")
+        return L10n.planning.planning.noAmountYet
     }
 
     private var statusText: String {
         switch item.status {
         case .paid:
-            mistiaLocalized(vi: "Đã thanh toán", en: "Paid", ja: "支払い済み")
+            L10n.planning.planning.paid
         case .pending:
             switch item.sourceKind {
             case .recurringBill:
-                mistiaLocalized(vi: "Sắp đến hạn", en: "Upcoming", ja: "まもなく")
+                L10n.planning.planning.upcoming
             case .installment:
-                mistiaLocalized(vi: "Trả góp / vay", en: "Installment / loan", ja: "分割払い・借入")
+                L10n.planning.planning.installmentLoan2
             case .creditCard:
-                mistiaLocalized(vi: "Đến hạn", en: "Due", ja: "支払予定")
+                L10n.planning.planning.due2
             }
         }
     }
@@ -2212,7 +2136,7 @@ private struct PlanningDueRow: View {
 
     private var dueDetailText: String {
         if item.status == .paid {
-            return mistiaLocalized(vi: "Hoàn tất", en: "Completed", ja: "完了")
+            return L10n.planning.planning.completed
         }
 
         let comparisonDate = currentComparisonDate
@@ -2223,20 +2147,12 @@ private struct PlanningDueRow: View {
         ).day ?? 0
 
         if dayDelta < 0 {
-            return mistiaLocalized(
-                vi: "Quá hạn \(-dayDelta) ngày",
-                en: "Overdue by \(-dayDelta) days",
-                ja: "\(-dayDelta) 日延滞"
-            )
+            return L10n.planning.planning.overdueByValueDays(String(describing: -dayDelta))
         }
         if dayDelta == 0 {
-            return mistiaLocalized(vi: "Đến hạn hôm nay", en: "Due today", ja: "本日支払い")
+            return L10n.planning.planning.dueToday
         }
-        return mistiaLocalized(
-            vi: "Còn \(dayDelta) ngày",
-            en: "\(dayDelta) days left",
-            ja: "あと \(dayDelta) 日"
-        )
+        return L10n.planning.planning.valueDaysLeft(String(describing: dayDelta))
     }
 
     private var dateWindowText: String {
@@ -2344,7 +2260,7 @@ private struct PlanningCreditCardCard: View {
                         .foregroundStyle(.white)
                         .lineLimit(1)
 
-                    Text(mistiaLocalized(vi: "Khả dụng", en: "Available", ja: "利用可能"))
+                    Text(L10n.planning.planning.available)
                         .font(.system(size: 11.5, weight: .semibold, design: .rounded))
                         .foregroundStyle(.white.opacity(0.64))
 
@@ -2365,11 +2281,11 @@ private struct PlanningCreditCardCard: View {
                 HStack(alignment: .bottom, spacing: 12) {
                     HStack(spacing: 10) {
                         statementMiniLabel(
-                            title: mistiaLocalized(vi: "Chốt", en: "Close", ja: "締め"),
+                            title: L10n.planning.planning.close,
                             value: "\(item.statementClosingDay)"
                         )
                         statementMiniLabel(
-                            title: mistiaLocalized(vi: "Hạn", en: "Due", ja: "支払"),
+                            title: L10n.planning.planning.due,
                             value: "\(item.dueDay)"
                         )
                     }
@@ -2378,7 +2294,7 @@ private struct PlanningCreditCardCard: View {
 
                     Button(action: onOpenStatement) {
                         Label(
-                            mistiaLocalized(vi: "Sao kê", en: "Statement", ja: "明細"),
+                            L10n.planning.planning.statement,
                             systemImage: "doc.text"
                         )
                         .font(.system(size: 12, weight: .bold, design: .rounded))
@@ -2415,9 +2331,9 @@ private struct PlanningCreditCardCard: View {
 
     private var paymentSourceText: String {
         if let name = item.paymentSourceWalletName?.trimmingCharacters(in: .whitespacesAndNewlines), !name.isEmpty {
-            return mistiaLocalized(vi: "Ví liên kết: \(name)", en: "Linked wallet: \(name)", ja: "連携ウォレット: \(name)")
+            return L10n.planning.planning.linkedWalletValue(String(describing: name))
         }
-        return mistiaLocalized(vi: "Chưa chọn ví liên kết", en: "No linked wallet", ja: "連携ウォレット未設定")
+        return L10n.planning.planning.noLinkedWallet
     }
 
     private var cardBackground: some View {
@@ -2581,7 +2497,7 @@ private struct PlanningSemiGauge: View {
                         .minimumScaleFactor(0.72)
 
                     if progress > 1 {
-                        Text(mistiaLocalized(vi: "vượt", en: "over", ja: "超過"))
+                        Text(L10n.planning.planning.over)
                             .font(.system(size: 10.5, weight: .bold, design: .rounded))
                             .foregroundStyle(gaugeColor)
                     }
@@ -2591,7 +2507,7 @@ private struct PlanningSemiGauge: View {
             .frame(width: 126, height: 72)
 
             if progress > 1 {
-                Text("+\(Int(((progress - 1) * 100).rounded()))%")
+                Text(verbatim: "+\(Int(((progress - 1) * 100).rounded()))%")
                     .font(.system(size: 11, weight: .bold, design: .rounded))
                     .foregroundStyle(gaugeColor)
                     .padding(.horizontal, 8)
@@ -2697,14 +2613,10 @@ private struct PlanningMonthPickerSheet: View {
         NavigationStack {
             VStack(spacing: 0) {
                 HStack(spacing: 0) {
-                    Picker(mistiaLocalized(vi: "Tháng", en: "Month", ja: "月"), selection: $draftMonth) {
+                    Picker(L10n.planning.planning.month, selection: $draftMonth) {
                         ForEach(allowedMonths, id: \.self) { month in
                             Text(
-                                mistiaLocalized(
-                                    vi: "Tháng \(month)",
-                                    en: "Month \(month)",
-                                    ja: "\(month)月"
-                                )
+                                L10n.planning.planning.monthValue(String(describing: month))
                             )
                             .tag(month)
                         }
@@ -2712,14 +2624,10 @@ private struct PlanningMonthPickerSheet: View {
                     .pickerStyle(.wheel)
                     .frame(maxWidth: .infinity)
 
-                    Picker(mistiaLocalized(vi: "Năm", en: "Year", ja: "年"), selection: $draftYear) {
+                    Picker(L10n.planning.planning.year, selection: $draftYear) {
                         ForEach(yearOptions, id: \.self) { year in
                             Text(
-                                mistiaLocalized(
-                                    vi: "Năm \(year)",
-                                    en: "Year \(year)",
-                                    ja: "\(year)年"
-                                )
+                                L10n.planning.planning.yearValue(String(describing: year))
                             )
                             .tag(year)
                         }
@@ -2737,7 +2645,7 @@ private struct PlanningMonthPickerSheet: View {
             .padding(.bottom, 20)
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
             .background(groupedBackground)
-            .navigationTitle(mistiaLocalized(vi: "Chọn tháng", en: "Choose month", ja: "月を選択"))
+            .navigationTitle(L10n.planning.planning.chooseMonth)
             .navigationBarTitleDisplayMode(.inline)
             .toolbarBackground(groupedBackground, for: .navigationBar)
             .toolbarBackground(.visible, for: .navigationBar)

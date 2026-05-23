@@ -20,31 +20,31 @@ nonisolated enum MistiaFinanceIconGroup: String, CaseIterable, Identifiable, Cod
     var title: String {
         switch self {
         case .wallet:
-            mistiaLocalized(vi: "Ví", en: "Wallets", ja: "ウォレット")
+            L10n.shared.corelogic.financeenums.wallets
         case .food:
-            mistiaLocalized(vi: "Ăn uống", en: "Food", ja: "食事")
+            L10n.shared.corelogic.financeenums.food
         case .home:
-            mistiaLocalized(vi: "Nhà ở", en: "Home", ja: "住まい")
+            L10n.shared.corelogic.financeenums.home
         case .family:
-            mistiaLocalized(vi: "Gia đình", en: "Family", ja: "家族")
+            L10n.shared.corelogic.financeenums.family
         case .mobility:
-            mistiaLocalized(vi: "Đi lại", en: "Mobility", ja: "移動")
+            L10n.shared.corelogic.financeenums.mobility
         case .personal:
-            mistiaLocalized(vi: "Cá nhân", en: "Personal", ja: "個人")
+            L10n.shared.corelogic.financeenums.personal
         case .health:
-            mistiaLocalized(vi: "Sức khỏe", en: "Health", ja: "健康")
+            L10n.shared.corelogic.financeenums.health
         case .leisure:
-            mistiaLocalized(vi: "Giải trí", en: "Leisure", ja: "娯楽")
+            L10n.shared.corelogic.financeenums.leisure
         case .work:
-            mistiaLocalized(vi: "Công việc", en: "Work", ja: "仕事")
+            L10n.shared.corelogic.financeenums.work
         case .finance:
-            mistiaLocalized(vi: "Tài chính", en: "Finance", ja: "金融")
+            L10n.shared.corelogic.financeenums.finance
         case .income:
-            mistiaLocalized(vi: "Thu nhập", en: "Income", ja: "収入")
+            L10n.shared.corelogic.financeenums.income
         case .planning:
-            mistiaLocalized(vi: "Kế hoạch", en: "Planning", ja: "計画")
+            L10n.shared.corelogic.financeenums.planning
         case .generic:
-            mistiaLocalized(vi: "Khác", en: "Other", ja: "その他")
+            L10n.shared.corelogic.financeenums.other2
         }
     }
 }
@@ -65,23 +65,23 @@ nonisolated enum LedgerWalletKind: String, CaseIterable, Identifiable, Codable {
     var title: String {
         switch self {
         case .cash:
-            mistiaLocalized(vi: "Tiền mặt", en: "Cash", ja: "現金")
+            L10n.shared.corelogic.financeenums.cash
         case .payPay:
             "PayPay"
         case .bank:
-            mistiaLocalized(vi: "Ngân hàng", en: "Bank", ja: "銀行")
+            L10n.shared.corelogic.financeenums.bank
         case .creditCard:
-            mistiaLocalized(vi: "Credit card", en: "Credit card", ja: "クレジットカード")
+            L10n.shared.corelogic.financeenums.creditCard
         case .eWallet:
-            mistiaLocalized(vi: "Ví điện tử / Barcode", en: "E-Wallet / Barcode", ja: "電子マネー / バーコード決済")
+            L10n.shared.corelogic.financeenums.eWalletBarcode
         case .prepaid:
-            mistiaLocalized(vi: "Thẻ trả trước / IC", en: "Prepaid / IC Card", ja: "プリペイド / ICカード")
+            L10n.shared.corelogic.financeenums.prepaidICCard
         case .investment:
-            mistiaLocalized(vi: "Đầu tư / Chứng khoán", en: "Investment / Stocks", ja: "投資 / 証券")
+            L10n.shared.corelogic.financeenums.investmentStocks
         case .crypto:
-            mistiaLocalized(vi: "Tiền ảo / Crypto", en: "Crypto / Digital Assets", ja: "仮想通貨 / クリプト")
+            L10n.shared.corelogic.financeenums.cryptoDigitalAssets
         case .other:
-            mistiaLocalized(vi: "Loại ví khác", en: "Other wallet", ja: "その他のウォレット")
+            L10n.shared.corelogic.financeenums.otherWallet
         }
     }
 
@@ -176,9 +176,9 @@ nonisolated enum LedgerWalletKind: String, CaseIterable, Identifiable, Codable {
     var balanceFieldTitle: String {
         switch self {
         case .creditCard:
-            mistiaLocalized(vi: "Dư nợ hiện tại", en: "Current debt", ja: "現在の利用残高")
+            L10n.shared.corelogic.financeenums.currentDebt
         default:
-            mistiaLocalized(vi: "Số dư ban đầu", en: "Opening balance", ja: "初期残高")
+            L10n.shared.corelogic.financeenums.openingBalance
         }
     }
 }
@@ -192,9 +192,9 @@ nonisolated enum TransactionCategoryKind: String, CaseIterable, Identifiable, Co
     var title: String {
         switch self {
         case .expense:
-            mistiaLocalized(vi: "Chi tiêu", en: "Expense", ja: "支出")
+            L10n.shared.corelogic.financeenums.expense
         case .income:
-            mistiaLocalized(vi: "Thu nhập", en: "Income", ja: "収入")
+            L10n.shared.corelogic.financeenums.income
         }
     }
 
@@ -245,9 +245,9 @@ nonisolated enum TransactionCategoryHierarchyRole: String, CaseIterable, Identif
     var title: String {
         switch self {
         case .parent:
-            mistiaLocalized(vi: "Danh mục cha", en: "Parent category", ja: "親カテゴリ")
+            L10n.shared.corelogic.financeenums.parentCategory
         case .child:
-            mistiaLocalized(vi: "Danh mục con", en: "Child category", ja: "子カテゴリ")
+            L10n.shared.corelogic.financeenums.childCategory
         }
     }
 }
@@ -394,12 +394,14 @@ nonisolated enum MistiaSystemCategoryParentKey: String, CaseIterable, Codable, I
 
     func localizedTitle(for language: MistiaAppLanguage) -> String {
         let localizedTitle = Self.localizedDefaultTitles[self]
-        return mistiaLocalized(
-            vi: meta.title,
-            en: localizedTitle?.english ?? meta.title,
-            ja: localizedTitle?.japanese ?? meta.title,
-            language: language
-        )
+        switch language {
+        case .vietnamese:
+            return meta.title
+        case .english:
+            return localizedTitle?.english ?? meta.title
+        case .japanese:
+            return localizedTitle?.japanese ?? meta.title
+        }
     }
 }
 
@@ -993,7 +995,7 @@ nonisolated enum CreditCardNetwork: String, CaseIterable, Identifiable, Codable 
         case .unionPay:
             "UnionPay"
         case .other:
-            mistiaLocalized(vi: "Khác", en: "Other", ja: "Other")
+            L10n.shared.corelogic.financeenums.other
         }
     }
 }
@@ -1008,11 +1010,11 @@ nonisolated enum TransactionPrimaryKind: String, CaseIterable, Identifiable, Cod
     var title: String {
         switch self {
         case .expense:
-            mistiaLocalized(vi: "Chi tiêu", en: "Expense", ja: "支出")
+            L10n.shared.corelogic.financeenums.expense
         case .income:
-            mistiaLocalized(vi: "Thu nhập", en: "Income", ja: "収入")
+            L10n.shared.corelogic.financeenums.income
         case .transfer:
-            mistiaLocalized(vi: "Chuyển tiền", en: "Transfer", ja: "振替")
+            L10n.shared.corelogic.financeenums.transfer
         }
     }
 
@@ -1048,9 +1050,9 @@ nonisolated enum TransactionTransferSubtype: String, CaseIterable, Identifiable,
     var title: String {
         switch self {
         case .internalTransfer:
-            mistiaLocalized(vi: "Nội bộ", en: "Internal", ja: "内部")
+            L10n.shared.corelogic.financeenums.`internal`
         case .debt:
-            mistiaLocalized(vi: "Công nợ", en: "Debt", ja: "貸し借り")
+            L10n.shared.corelogic.financeenums.debt
         }
     }
 
@@ -1084,13 +1086,13 @@ nonisolated enum TransactionDebtIntent: String, CaseIterable, Identifiable, Coda
     var title: String {
         switch self {
         case .lend:
-            mistiaLocalized(vi: "Cho vay", en: "Lend", ja: "貸す")
+            L10n.shared.corelogic.financeenums.lend
         case .collect:
-            mistiaLocalized(vi: "Thu nợ", en: "Collect debt", ja: "回収")
+            L10n.shared.corelogic.financeenums.collectDebt
         case .borrow:
-            mistiaLocalized(vi: "Đi vay", en: "Borrow", ja: "借りる")
+            L10n.shared.corelogic.financeenums.borrow
         case .repay:
-            mistiaLocalized(vi: "Trả nợ", en: "Repay", ja: "返済")
+            L10n.shared.corelogic.financeenums.repay
         }
     }
 
@@ -1130,9 +1132,9 @@ nonisolated enum TransactionEntryStatus: String, CaseIterable, Identifiable, Cod
     var title: String {
         switch self {
         case .posted:
-            mistiaLocalized(vi: "Đã ghi nhận", en: "Recorded", ja: "記録済み")
+            L10n.shared.corelogic.financeenums.recorded
         case .draft:
-            mistiaLocalized(vi: "Bản nháp", en: "Draft", ja: "下書き")
+            L10n.shared.corelogic.financeenums.draft
         }
     }
 }
@@ -1148,13 +1150,13 @@ nonisolated enum TransactionTimeScope: String, CaseIterable, Identifiable, Codab
     var title: String {
         switch self {
         case .allTime:
-            mistiaLocalized(vi: "Tất cả", en: "All", ja: "すべて")
+            L10n.shared.corelogic.financeenums.all
         case .thisMonth:
-            mistiaLocalized(vi: "Tháng này", en: "This month", ja: "今月")
+            L10n.shared.corelogic.financeenums.thisMonth
         case .yesterday:
-            mistiaLocalized(vi: "Hôm qua", en: "Yesterday", ja: "昨日")
+            L10n.shared.corelogic.financeenums.yesterday
         case .today:
-            mistiaLocalized(vi: "Hôm nay", en: "Today", ja: "今日")
+            L10n.shared.corelogic.financeenums.today
         }
     }
 }
@@ -1169,11 +1171,11 @@ nonisolated enum TransactionStatusScope: String, CaseIterable, Identifiable, Cod
     var title: String {
         switch self {
         case .all:
-            mistiaLocalized(vi: "Tất cả", en: "All", ja: "すべて")
+            L10n.shared.corelogic.financeenums.all
         case .postedOnly:
-            mistiaLocalized(vi: "Đã ghi nhận", en: "Recorded", ja: "記録済み")
+            L10n.shared.corelogic.financeenums.recorded
         case .draftOnly:
-            mistiaLocalized(vi: "Bản nháp", en: "Draft", ja: "下書き")
+            L10n.shared.corelogic.financeenums.draft
         }
     }
 }

@@ -48,27 +48,27 @@ enum MistiaFamilyNotificationResourceType: String, Codable, CaseIterable {
     var localizedName: String {
         switch self {
         case .wallet:
-            return mistiaLocalized(vi: "Ví", en: "Wallet", ja: "ウォレット")
+            return L10n.shared.persistence.notification.wallet
         case .category:
-            return mistiaLocalized(vi: "Danh mục", en: "Category", ja: "カテゴリ")
+            return L10n.shared.persistence.notification.category
         case .budget:
-            return mistiaLocalized(vi: "Ngân sách", en: "Budget", ja: "予算")
+            return L10n.shared.persistence.notification.budget
         case .goal:
-            return mistiaLocalized(vi: "Mục tiêu", en: "Goal", ja: "目標")
+            return L10n.shared.persistence.notification.goal
         case .card:
-            return mistiaLocalized(vi: "Thẻ", en: "Card", ja: "カード")
+            return L10n.shared.persistence.notification.card
         case .debt:
-            return mistiaLocalized(vi: "Khoản nợ", en: "Debt", ja: "借金")
+            return L10n.shared.persistence.notification.debt
         case .transaction:
-            return mistiaLocalized(vi: "Giao dịch", en: "Transaction", ja: "取引")
+            return L10n.shared.persistence.notification.transaction
         case .permission:
-            return mistiaLocalized(vi: "Quyền hạn", en: "Permission", ja: "権限")
+            return L10n.shared.persistence.notification.permission
         case .bill:
-            return mistiaLocalized(vi: "Hóa đơn", en: "Bill", ja: "請求書")
+            return L10n.shared.persistence.notification.bill
         case .due:
-            return mistiaLocalized(vi: "Kế hoạch chi", en: "Payment plan", ja: "支払いプラン")
+            return L10n.shared.persistence.notification.paymentPlan
         case .installment:
-            return mistiaLocalized(vi: "Trả góp", en: "Installment", ja: "分割払い")
+            return L10n.shared.persistence.notification.installment
         }
     }
 }
@@ -82,13 +82,13 @@ enum MistiaFamilyPermissionScope: String, Codable, CaseIterable {
     var localizedActionName: String {
         switch self {
         case .use:
-            return mistiaLocalized(vi: "sử dụng", en: "use", ja: "使用")
+            return L10n.shared.persistence.notification.use
         case .edit:
-            return mistiaLocalized(vi: "chỉnh sửa", en: "edit", ja: "編集")
+            return L10n.shared.persistence.notification.edit
         case .create:
-            return mistiaLocalized(vi: "thêm mới", en: "create", ja: "作成")
+            return L10n.shared.persistence.notification.create
         case .view:
-            return mistiaLocalized(vi: "xem", en: "view", ja: "閲覧")
+            return L10n.shared.persistence.notification.view
         }
     }
 }

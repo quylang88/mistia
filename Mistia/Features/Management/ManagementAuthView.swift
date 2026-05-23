@@ -12,9 +12,9 @@ private enum ManagementAuthMode: String, CaseIterable, Identifiable {
     var title: String {
         switch self {
         case .signIn:
-            mistiaLocalized(vi: "Đăng nhập", en: "Sign in", ja: "ログイン")
+            L10n.management.managementauth.signIn
         case .signUp:
-            mistiaLocalized(vi: "Tạo tài khoản", en: "Create account", ja: "アカウント作成")
+            L10n.management.managementauth.createAccount
         }
     }
 }
@@ -32,24 +32,16 @@ private struct ManagementAutoSyncDetailView: View {
 
     private var autoSyncDescription: String {
         if sessionStore.isAutoSyncEnabled {
-            return mistiaLocalized(
-                vi: "Mistia đang tự động kiểm tra và đồng bộ dữ liệu. Để đạt hiệu quả tốt nhất, hãy đảm bảo iPhone của bạn được kết nối Wi-Fi và cắm sạc khi có thể. Hệ thống sẽ ưu tiên chạy ngầm khi bạn không sử dụng ứng dụng.",
-                en: "Mistia is automatically checking and syncing data. For best performance, ensure your iPhone is connected to Wi-Fi and charging when possible. The system prioritizes background sync when you're not using the app.",
-                ja: "Mistia はデータを自動的に確認して同期しています。最高のパフォーマンスを得るために、可能であれば iPhone を Wi-Fi に接続し、充電状態にしてください。アプリを使用していない間のバックグラウンド同期が優先されます。"
-            )
+            return L10n.management.managementauth.mistiaIsAutomaticallyCheckingAndSyncingData
         } else {
-            return mistiaLocalized(
-                vi: "Tự động đồng bộ đang tắt. Dữ liệu của bạn sẽ chỉ được cập nhật khi bạn nhấn nút 'Đồng bộ ngay' một cách thủ công. Bật tính năng này để đảm bảo dữ liệu luôn được cập nhật mới nhất trên mọi thiết bị.",
-                en: "Auto sync is off. Your data will only update when you manually tap the 'Sync now' button. Enable this feature to keep your data up to date across all your devices automatically.",
-                ja: "自動同期はオフです。データは「今すぐ同期」ボタンを手動で押したときにのみ更新されます。すべてのデバイスでデータを最新の状態に保つには、この機能を有効にしてください。"
-            )
+            return L10n.management.managementauth.autoSyncIsOffYourDataWill
         }
     }
 
     var body: some View {
         MistiaPinnedTopBarScaffold(
             tone: .standard,
-            title: mistiaLocalized(vi: "Tự động đồng bộ", en: "Auto sync", ja: "自動同期"),
+            title: L10n.management.managementauth.autoSync,
             embedsInNavigationStack: false,
             showsLeadingAvatar: false,
             leadingSystemImage: "chevron.left",
@@ -60,13 +52,13 @@ private struct ManagementAutoSyncDetailView: View {
         ) {
             ManagementProfileListCard(tint: cardTint) {
                 HStack(spacing: 12) {
-                    Text(mistiaLocalized(vi: "Tự động đồng bộ", en: "Auto sync", ja: "自動同期"))
+                    Text(L10n.management.managementauth.autoSync)
                         .font(.system(size: 16.5, weight: .semibold, design: .rounded))
                         .foregroundStyle(.primary)
 
                     Spacer()
 
-                    Toggle("", isOn: Binding(
+                    Toggle(String(), isOn: Binding(
                         get: { sessionStore.isAutoSyncEnabled },
                         set: { sessionStore.setAutoSyncEnabled($0) }
                     ))
@@ -185,8 +177,8 @@ struct ManagementAccountView: View {
         MistiaPinnedTopBarScaffold(
             tone: .standard,
             title: sessionStore.isSignedIn
-                ? mistiaLocalized(vi: "Hồ sơ", en: "Profile", ja: "プロフィール")
-                : (isEmailAuthExpanded ? authScreenTitle : mistiaLocalized(vi: "Hồ sơ", en: "Profile", ja: "プロフィール")),
+                ? L10n.management.managementauth.profile
+                : (isEmailAuthExpanded ? authScreenTitle : L10n.management.managementauth.profile),
             embedsInNavigationStack: false,
             showsLeadingAvatar: false,
             leadingSystemImage: "chevron.left",
@@ -236,28 +228,20 @@ struct ManagementAccountView: View {
                 ManagementBackupRestoreView()
             case .signedInDevices:
                 ManagementProfilePlaceholderView(
-                    title: mistiaLocalized(vi: "Thiết bị đã đăng nhập", en: "Signed-in devices", ja: "サインイン済みデバイス"),
+                    title: L10n.management.managementauth.signedInDevices,
                     systemImage: "desktopcomputer",
                     accent: accent,
-                    message: mistiaLocalized(
-                        vi: "Màn này sẽ hiển thị các thiết bị đã đăng nhập vào tài khoản Mistia của bạn.",
-                        en: "This screen will list devices currently signed in to your Mistia account.",
-                        ja: "この画面では Mistia アカウントにログインしている端末を表示します。"
-                    )
+                    message: L10n.management.managementauth.thisScreenWillListDevicesCurrentlySigned
                 )
             case .editProfile:
                 if let summary = sessionStore.summary {
                     ManagementEditProfileView(summary: summary, accent: accent)
                 } else {
                     ManagementProfilePlaceholderView(
-                        title: mistiaLocalized(vi: "Sửa hồ sơ", en: "Edit profile", ja: "プロフィールを編集"),
+                        title: L10n.management.managementauth.editProfile,
                         systemImage: "square.and.pencil",
                         accent: accent,
-                        message: mistiaLocalized(
-                            vi: "Hồ sơ hiện chưa sẵn sàng để chỉnh sửa vì phiên đăng nhập chưa được khôi phục.",
-                            en: "The profile isn't ready to edit yet because the signed-in session hasn't been restored.",
-                            ja: "ログイン状態の復元がまだ完了していないため、プロフィールを編集できません。"
-                        )
+                        message: L10n.management.managementauth.theProfileIsnTReadyToEdit
                     )
                 }
             }
@@ -341,28 +325,24 @@ struct ManagementAccountView: View {
         ) {
             VStack(alignment: .leading, spacing: 16) {
                 ManagementStatusBadge(
-                    title: mistiaLocalized(vi: "Chưa cấu hình", en: "Not configured", ja: "未設定"),
+                    title: L10n.management.managementauth.notConfigured,
                     systemImage: "wrench.and.screwdriver.fill",
                     accent: accent
                 )
 
                 Text(
-                    mistiaLocalized(
-                        vi: "Mistia đã có sẵn flow đăng nhập và đồng bộ, nhưng bạn cần điền URL cùng public key của dịch vụ cloud trước khi dùng.",
-                        en: "Mistia already has the sign-in and sync flow, but you need to fill in the cloud service URL and public key first.",
-                        ja: "Mistia にはログインと同期の流れがありますが、使う前にクラウドサービスの URL と公開キーを設定する必要があります。"
-                    )
+                    L10n.management.managementauth.mistiaAlreadyHasTheSignInAnd
                 )
                 .font(.system(size: 15, weight: .medium, design: .rounded))
                 .foregroundStyle(.secondary)
 
-                Text("Mistia/MistiaSyncConfig.plist")
+                Text(verbatim: "Mistia/MistiaSyncConfig.plist")
                     .font(.system(size: 14, weight: .semibold, design: .monospaced))
                     .foregroundStyle(.primary)
 
                 VStack(alignment: .leading, spacing: 8) {
-                    Text("SUPABASE_URL")
-                    Text("SUPABASE_ANON_KEY")
+                    Text(verbatim: "SUPABASE_URL")
+                    Text(verbatim: "SUPABASE_ANON_KEY")
                 }
                 .font(.system(size: 14, weight: .medium, design: .monospaced))
                 .foregroundStyle(.secondary)
@@ -378,7 +358,7 @@ struct ManagementAccountView: View {
             ManagementProfileListCard(tint: secondaryBackground) {
                 VStack(spacing: 0) {
                     ManagementProfileNavigationRow(
-                        title: mistiaLocalized(vi: "Đồng bộ dữ liệu", en: "Sync settings", ja: "同期設定"),
+                        title: L10n.management.managementauth.syncSettings2,
                         icon: "arrow.triangle.2.circlepath.icloud",
                         accent: .sky,
                         subtitle: nil,
@@ -392,7 +372,7 @@ struct ManagementAccountView: View {
                     ManagementProfileRowDivider()
 
                     ManagementProfileNavigationRow(
-                        title: mistiaLocalized(vi: "Sao lưu & Khôi phục", en: "Backup & Restore", ja: "バックアップ & 復元"),
+                        title: L10n.management.managementauth.backupRestore,
                         icon: "externaldrive.fill.badge.icloud",
                         accent: .mint,
                         subtitle: nil
@@ -403,7 +383,7 @@ struct ManagementAccountView: View {
                     ManagementProfileRowDivider()
 
                     ManagementProfileNavigationRow(
-                        title: mistiaLocalized(vi: "Thiết bị đã đăng nhập", en: "Signed-in devices", ja: "サインイン済みデバイス"),
+                        title: L10n.management.managementauth.signedInDevices,
                         icon: "desktopcomputer",
                         accent: .teal,
                         subtitle: nil
@@ -415,7 +395,7 @@ struct ManagementAccountView: View {
 
             if let lastErrorMessage = sessionStore.lastErrorMessage {
                 ManagementInlineMessageCard(
-                    title: mistiaLocalized(vi: "Lỗi gần nhất", en: "Latest issue", ja: "直近の問題"),
+                    title: L10n.management.managementauth.latestIssue,
                     message: lastErrorMessage,
                     accent: .orange
                 )
@@ -423,11 +403,11 @@ struct ManagementAccountView: View {
 
             ManagementProfileListCard(tint: secondaryBackground) {
                 ManagementProfileNavigationRow(
-                    title: mistiaLocalized(vi: "Gia đình", en: "Family", ja: "家族"),
+                    title: L10n.management.managementauth.family,
                     icon: "person.3.fill",
                     accent: .lightPurple,
                     subtitle: nil,
-                    value: familyContextStore.family?.name ?? mistiaLocalized(vi: "Chưa có", en: "None", ja: "未設定"),
+                    value: familyContextStore.family?.name ?? L10n.management.managementauth.none,
                     isLoading: isOpeningFamily && shouldRefreshFamilyBeforeOpening,
                     isDisabled: !sessionStore.canPerformRemoteActions || isOpeningFamily
                 ) {
@@ -436,12 +416,8 @@ struct ManagementAccountView: View {
             }
 
             ManagementProfileCenteredDestructiveButton(
-                title: mistiaLocalized(vi: "Đăng xuất và giữ local", en: "Sign out and keep local", ja: "ログアウトしてローカルを保持"),
-                confirmationMessage: mistiaLocalized(
-                    vi: "Bạn sẽ bị đăng xuất khỏi Mistia trên thiết bị này. Dữ liệu local hiện có vẫn được giữ lại.",
-                    en: "You will be signed out of Mistia on this device. Existing local data will stay on the device.",
-                    ja: "この端末で Mistia からログアウトします。既存のローカルデータは保持されます。"
-                ),
+                title: L10n.management.managementauth.signOutAndKeepLocal,
+                confirmationMessage: L10n.management.managementauth.youWillBeSignedOutOfMistia,
                 isDisabled: sessionStore.isWorking
             ) {
                 Task {
@@ -450,12 +426,8 @@ struct ManagementAccountView: View {
             }
 
             ManagementProfileCenteredDestructiveButton(
-                title: mistiaLocalized(vi: "Đăng xuất và xóa local", en: "Sign out and delete local", ja: "ログアウトしてローカルを削除"),
-                confirmationMessage: mistiaLocalized(
-                    vi: "Bạn sẽ bị đăng xuất và toàn bộ dữ liệu local của profile hiện tại trên máy này sẽ bị xóa. Các profile local khác trên thiết bị vẫn được giữ nguyên.",
-                    en: "You will be signed out and the current profile's local data on this device will be deleted. Other local profiles on this device will stay untouched.",
-                    ja: "ログアウトして、この端末にある現在のプロフィールのローカルデータを削除します。この端末上の他のローカルプロフィールは保持されます。"
-                ),
+                title: L10n.management.managementauth.signOutAndDeleteLocal,
+                confirmationMessage: L10n.management.managementauth.youWillBeSignedOutAndThe,
                 isDisabled: sessionStore.isWorking
             ) {
                 Task {
@@ -464,12 +436,8 @@ struct ManagementAccountView: View {
             }
 
             ManagementProfileCenteredDestructiveButton(
-                title: mistiaLocalized(vi: "Xóa tài khoản", en: "Delete account", ja: "アカウントを削除"),
-                confirmationMessage: mistiaLocalized(
-                    vi: "Tài khoản và dữ liệu đồng bộ trên cloud sẽ bị xóa vĩnh viễn. Dữ liệu local trên máy này vẫn được giữ lại.",
-                    en: "Your cloud account and synced server data will be permanently deleted. Local data on this device will remain.",
-                    ja: "クラウドアカウントと同期済みサーバーデータは完全に削除されます。この端末のローカルデータは保持されます。"
-                ),
+                title: L10n.management.managementauth.deleteAccount,
+                confirmationMessage: L10n.management.managementauth.yourCloudAccountAndSyncedServerData,
                 isDisabled: sessionStore.isWorking || !sessionStore.canPerformRemoteActions
             ) {
                 Task {
@@ -522,7 +490,7 @@ struct ManagementAccountView: View {
                         }
                 }
                 .buttonStyle(.plain)
-                .accessibilityLabel(mistiaLocalized(vi: "Sửa hồ sơ", en: "Edit profile", ja: "プロフィールを編集"))
+                .accessibilityLabel(L10n.management.managementauth.editProfile)
                 .offset(x: 2, y: 2)
                 .disabled(!sessionStore.canPerformRemoteActions)
                 .opacity(sessionStore.canPerformRemoteActions ? 1 : 0.55)
@@ -554,26 +522,14 @@ struct ManagementAccountView: View {
 
     private var lastSyncBadgeTitle: String {
         if sessionStore.isOfflineModeActive {
-            return mistiaLocalized(
-                vi: "Đang ngoại tuyến",
-                en: "Offline",
-                ja: "オフライン"
-            )
+            return L10n.management.managementauth.offline
         }
 
         guard let lastSyncAt = sessionStore.lastSyncAt else {
-            return mistiaLocalized(
-                vi: "Chưa đồng bộ",
-                en: "Sync is off",
-                ja: "同期はオフです"
-            )
+            return L10n.management.managementauth.syncIsOff
         }
 
-        return mistiaLocalized(
-            vi: "Đã đồng bộ lúc \(MistiaDateFormatting.dateTimeString(for: lastSyncAt))",
-            en: "Synced at \(MistiaDateFormatting.dateTimeString(for: lastSyncAt, language: .english))",
-            ja: "\(MistiaDateFormatting.dateTimeString(for: lastSyncAt, language: .japanese)) に同期済み"
-        )
+        return L10n.management.managementauth.syncedAtValue(String(describing: MistiaDateFormatting.dateTimeString(for: lastSyncAt)))
     }
 
     private var dataManagementBadgeText: String? {
@@ -584,14 +540,14 @@ struct ManagementAccountView: View {
 
     private var syncSettingsValue: String {
         if sessionStore.isAutoSyncEnabled {
-            return mistiaLocalized(vi: "Tự động", en: "Auto", ja: "自動")
+            return L10n.management.managementauth.auto
         }
 
         if sessionStore.canManageSync {
-            return mistiaLocalized(vi: "Thủ công", en: "Manual", ja: "手動")
+            return L10n.management.managementauth.manual
         }
 
-        return mistiaLocalized(vi: "Tắt", en: "Off", ja: "オフ")
+        return L10n.common.off
     }
 
     private var authForm: some View {
@@ -621,7 +577,7 @@ struct ManagementAccountView: View {
 
             if let lastErrorMessage = lastSignedInIssue {
                 ManagementInlineMessageCard(
-                    title: mistiaLocalized(vi: "Chưa thể tiếp tục", en: "Can't continue yet", ja: "まだ続行できません"),
+                    title: L10n.management.managementauth.canTContinueYet,
                     message: lastErrorMessage,
                     accent: .orange
                 )
@@ -654,7 +610,7 @@ struct ManagementAccountView: View {
             .shadow(color: accent.opacity(0.18), radius: 16, y: 8)
             .padding(.bottom, 8)
             
-            Text(mistiaLocalized(vi: "Chào mừng đến với Mistia", en: "Welcome to Mistia", ja: "Mistiaへようこそ"))
+            Text(L10n.management.managementauth.welcomeToMistia)
                 .font(.system(size: 24, weight: .bold, design: .rounded))
                 .multilineTextAlignment(.center)
             
@@ -670,11 +626,7 @@ struct ManagementAccountView: View {
     private var authMenuContent: some View {
         VStack(spacing: 16) {
             ManagementGoogleActionButton(
-                title: mistiaLocalized(
-                    vi: "Tiếp tục với Google",
-                    en: "Continue with Google",
-                    ja: "Google で続行"
-                ),
+                title: L10n.management.managementauth.continueWithGoogle,
                 isWorking: sessionStore.isWorking && sessionStore.activeAuthAction == .google,
                 accent: accent
             ) {
@@ -685,7 +637,7 @@ struct ManagementAccountView: View {
             .disabled(sessionStore.isWorking)
 
             ManagementAuthDivider(
-                title: mistiaLocalized(vi: "hoặc", en: "or", ja: "または")
+                title: L10n.management.managementauth.or
             )
 
             Button {
@@ -694,7 +646,7 @@ struct ManagementAccountView: View {
                     transition(to: .signIn)
                 }
             } label: {
-                Text(mistiaLocalized(vi: "Tiếp tục bằng Email", en: "Continue with Email", ja: "メールで続行"))
+                Text(L10n.management.managementauth.continueWithEmail)
                     .font(.system(size: 15.5, weight: .bold, design: .rounded))
                     .foregroundStyle(accent)
                     .frame(maxWidth: .infinity)
@@ -704,11 +656,7 @@ struct ManagementAccountView: View {
             .buttonStyle(.plain)
             
             Text(
-                mistiaLocalized(
-                    vi: "Bằng việc tiếp tục, bạn đồng ý với Điều khoản Dịch vụ và Chính sách Bảo mật của chúng tôi.",
-                    en: "By continuing, you agree to our Terms of Service and Privacy Policy.",
-                    ja: "続行することで、利用規約とプライバシーポリシーに同意したことになります。"
-                )
+                L10n.management.managementauth.byContinuingYouAgreeToOurTerms
             )
             .font(.system(size: 12, weight: .regular, design: .rounded))
             .foregroundStyle(.secondary)
@@ -720,36 +668,24 @@ struct ManagementAccountView: View {
     private var authScreenTitle: String {
         switch sessionStore.authPhase {
         case .signIn:
-            return mistiaLocalized(vi: "Đăng nhập", en: "Sign in", ja: "ログイン")
+            return L10n.management.managementauth.signIn
         case .signUp:
-            return mistiaLocalized(vi: "Tạo tài khoản", en: "Create account", ja: "アカウント作成")
+            return L10n.management.managementauth.createAccount
         case .forgotPassword:
-            return mistiaLocalized(vi: "Quên mật khẩu", en: "Forgot password", ja: "パスワードをお忘れですか")
+            return L10n.management.managementauth.forgotPassword2
         case .verifyEmailPending:
-            return mistiaLocalized(vi: "Xác nhận email", en: "Confirm your email", ja: "メール確認")
+            return L10n.management.managementauth.confirmYourEmail
         }
     }
 
     private var authIntroCopy: String {
         switch sessionStore.authPhase {
         case .signIn, .signUp:
-            return mistiaLocalized(
-                vi: "Dùng cùng một tài khoản Mistia để đồng bộ ví, danh mục, giao dịch và các kế hoạch sang thiết bị khác.",
-                en: "Use the same Mistia account to sync wallets, categories, transactions, and plans across devices.",
-                ja: "同じ Mistia アカウントでウォレット、カテゴリ、取引、計画を別の端末へ同期できます。"
-            )
+            return L10n.management.managementauth.useTheSameMistiaAccountToSync
         case .forgotPassword:
-            return mistiaLocalized(
-                vi: "Nhập email bạn dùng với Mistia. Nếu hợp lệ, hệ thống sẽ gửi email đặt lại mật khẩu.",
-                en: "Enter the email you use with Mistia. If it's valid, the system will send a reset email.",
-                ja: "Mistia で使っているメールアドレスを入力してください。有効であればシステムが再設定メールを送信します。"
-            )
+            return L10n.management.managementauth.enterTheEmailYouUseWithMistia
         case .verifyEmailPending:
-            return mistiaLocalized(
-                vi: "Tài khoản của bạn đang chờ xác nhận email trước khi có thể đăng nhập và bật đồng bộ.",
-                en: "Your account is waiting for email confirmation before it can sign in and start syncing.",
-                ja: "このアカウントはメール確認が完了するまでログインと同期を開始できません。"
-            )
+            return L10n.management.managementauth.yourAccountIsWaitingForEmailConfirmation
         }
     }
 
@@ -788,7 +724,7 @@ struct ManagementAccountView: View {
             if sessionStore.authPhase == .signUp {
                 ManagementAuthFieldContainer(errorMessage: sessionStore.authFieldErrors[.displayName]) {
                     TextField(
-                        mistiaLocalized(vi: "Tên hiển thị", en: "Display name", ja: "表示名"),
+                        L10n.management.managementauth.displayName,
                         text: $displayName
                     )
                     .textContentType(.name)
@@ -801,7 +737,7 @@ struct ManagementAccountView: View {
 
             ManagementAuthFieldContainer(errorMessage: sessionStore.authFieldErrors[.email]) {
                 TextField(
-                    mistiaLocalized(vi: "Email", en: "Email", ja: "メールアドレス"),
+                    L10n.management.managementauth.email2,
                     text: $email
                 )
                 .keyboardType(.emailAddress)
@@ -814,7 +750,7 @@ struct ManagementAccountView: View {
             }
 
             ManagementPasswordInputField(
-                placeholder: mistiaLocalized(vi: "Mật khẩu", en: "Password", ja: "パスワード"),
+                placeholder: L10n.management.managementauth.password,
                 text: $password,
                 isVisible: $isPasswordVisible,
                 errorMessage: sessionStore.authFieldErrors[.password],
@@ -840,7 +776,7 @@ struct ManagementAccountView: View {
                 )
 
                 ManagementPasswordInputField(
-                    placeholder: mistiaLocalized(vi: "Nhập lại mật khẩu", en: "Confirm password", ja: "パスワードを再入力"),
+                    placeholder: L10n.management.managementauth.confirmPassword,
                     text: $confirmPassword,
                     isVisible: $isConfirmPasswordVisible,
                     errorMessage: sessionStore.authFieldErrors[.confirmPassword],
@@ -865,8 +801,8 @@ struct ManagementAccountView: View {
 
                     Text(
                         sessionStore.authPhase == .signUp
-                            ? mistiaLocalized(vi: "Tạo tài khoản", en: "Create account", ja: "アカウント作成")
-                            : mistiaLocalized(vi: "Đăng nhập", en: "Sign in", ja: "ログイン")
+                            ? L10n.management.managementauth.createAccount
+                            : L10n.management.managementauth.signIn
                     )
                     .font(.system(size: 15.5, weight: .bold, design: .rounded))
                     .foregroundStyle(colorScheme == .dark ? .black : .white)
@@ -883,7 +819,7 @@ struct ManagementAccountView: View {
                 Button {
                     transition(to: .forgotPassword)
                 } label: {
-                    Text(mistiaLocalized(vi: "Quên mật khẩu?", en: "Forgot password?", ja: "パスワードをお忘れですか？"))
+                    Text(L10n.management.managementauth.forgotPassword)
                         .font(.system(size: 13.5, weight: .semibold, design: .rounded))
                 }
                 .buttonStyle(.plain)
@@ -900,9 +836,9 @@ struct ManagementAccountView: View {
                         transition(to: .signUp)
                     } label: {
                         HStack(spacing: 4) {
-                            Text(mistiaLocalized(vi: "Chưa có tài khoản?", en: "Don't have an account?", ja: "アカウントがありませんか？"))
+                            Text(L10n.management.managementauth.donTHaveAnAccount)
                                 .foregroundStyle(.secondary)
-                            Text(mistiaLocalized(vi: "Đăng ký ngay", en: "Sign up now", ja: "今すぐ登録"))
+                            Text(L10n.management.managementauth.signUpNow)
                                 .foregroundStyle(accent)
                                 .fontWeight(.bold)
                         }
@@ -914,9 +850,9 @@ struct ManagementAccountView: View {
                         transition(to: .signIn)
                     } label: {
                         HStack(spacing: 4) {
-                            Text(mistiaLocalized(vi: "Đã có tài khoản?", en: "Already have an account?", ja: "すでにアカウントをお持ちですか？"))
+                            Text(L10n.management.managementauth.alreadyHaveAnAccount)
                                 .foregroundStyle(.secondary)
-                            Text(mistiaLocalized(vi: "Đăng nhập", en: "Sign in", ja: "ログイン"))
+                            Text(L10n.management.managementauth.signIn)
                                 .foregroundStyle(accent)
                                 .fontWeight(.bold)
                         }
@@ -932,7 +868,7 @@ struct ManagementAccountView: View {
         VStack(alignment: .leading, spacing: 14) {
             ManagementAuthFieldContainer(errorMessage: sessionStore.authFieldErrors[.email]) {
                 TextField(
-                    mistiaLocalized(vi: "Email", en: "Email", ja: "メールアドレス"),
+                    L10n.management.managementauth.email2,
                     text: $email
                 )
                 .keyboardType(.emailAddress)
@@ -954,7 +890,7 @@ struct ManagementAccountView: View {
                     }
 
                     Text(
-                        mistiaLocalized(vi: "Gửi email đặt lại mật khẩu", en: "Send reset email", ja: "再設定メールを送信")
+                        L10n.management.managementauth.sendResetEmail
                     )
                     .font(.system(size: 15.5, weight: .bold, design: .rounded))
                     .foregroundStyle(colorScheme == .dark ? .black : .white)
@@ -970,7 +906,7 @@ struct ManagementAccountView: View {
             Button {
                 transition(to: .signIn)
             } label: {
-                Text(mistiaLocalized(vi: "Quay lại đăng nhập", en: "Back to sign in", ja: "ログインへ戻る"))
+                Text(L10n.management.managementauth.backToSignIn)
                     .font(.system(size: 14, weight: .semibold, design: .rounded))
             }
             .buttonStyle(.plain)
@@ -995,7 +931,7 @@ struct ManagementAccountView: View {
                             .tint(colorScheme == .dark ? .black : .white)
                     }
 
-                    Text(mistiaLocalized(vi: "Gửi lại email xác nhận", en: "Resend confirmation email", ja: "確認メールを再送"))
+                    Text(L10n.management.managementauth.resendConfirmationEmail)
                         .font(.system(size: 15.5, weight: .bold, design: .rounded))
                         .foregroundStyle(colorScheme == .dark ? .black : .white)
                 }
@@ -1010,7 +946,7 @@ struct ManagementAccountView: View {
             Button {
                 transition(to: .signIn)
             } label: {
-                Text(mistiaLocalized(vi: "Quay lại đăng nhập", en: "Back to sign in", ja: "ログインへ戻る"))
+                Text(L10n.management.managementauth.backToSignIn)
                     .font(.system(size: 14, weight: .semibold, design: .rounded))
             }
             .buttonStyle(.plain)
@@ -1112,77 +1048,37 @@ struct ManagementAccountView: View {
         switch sessionStore.authPhase {
         case .signIn:
             if !isValidEmail(trimmedEmail) {
-                errors[.email] = mistiaLocalized(
-                    vi: "Email chưa đúng định dạng.",
-                    en: "The email format doesn't look right.",
-                    ja: "メールアドレスの形式が正しくありません。"
-                )
+                errors[.email] = L10n.management.managementauth.theEmailFormatDoesnTLookRight
             }
 
             if password.isEmpty {
-                errors[.password] = mistiaLocalized(
-                    vi: "Nhập mật khẩu để tiếp tục.",
-                    en: "Enter your password to continue.",
-                    ja: "続行するにはパスワードを入力してください。"
-                )
+                errors[.password] = L10n.management.managementauth.enterYourPasswordToContinue
             }
         case .signUp:
             if trimmedDisplayName.isEmpty {
-                errors[.displayName] = mistiaLocalized(
-                    vi: "Tên hiển thị không được để trống.",
-                    en: "Display name can't be empty.",
-                    ja: "表示名は空にできません。"
-                )
+                errors[.displayName] = L10n.management.managementauth.displayNameCanTBeEmpty
             }
 
             if !isValidEmail(trimmedEmail) {
-                errors[.email] = mistiaLocalized(
-                    vi: "Email chưa đúng định dạng.",
-                    en: "The email format doesn't look right.",
-                    ja: "メールアドレスの形式が正しくありません。"
-                )
+                errors[.email] = L10n.management.managementauth.theEmailFormatDoesnTLookRight
             }
 
             if !passwordAssessment.hasMinimumLength {
-                errors[.password] = mistiaLocalized(
-                    vi: "Mật khẩu cần ít nhất 8 ký tự.",
-                    en: "Password must be at least 8 characters.",
-                    ja: "パスワードは 8 文字以上である必要があります。"
-                )
+                errors[.password] = L10n.management.managementauth.passwordMustBeAtLeastCharacters
             } else if !passwordAssessment.hasUppercase {
-                errors[.password] = mistiaLocalized(
-                    vi: "Mật khẩu cần ít nhất 1 chữ viết hoa.",
-                    en: "Password needs at least 1 uppercase letter.",
-                    ja: "パスワードには大文字を 1 文字以上含めてください。"
-                )
+                errors[.password] = L10n.management.managementauth.passwordNeedsAtLeastUppercaseLetter
             } else if !passwordAssessment.hasLowercase {
-                errors[.password] = mistiaLocalized(
-                    vi: "Mật khẩu cần ít nhất 1 chữ viết thường.",
-                    en: "Password needs at least 1 lowercase letter.",
-                    ja: "パスワードには小文字を 1 文字以上含めてください。"
-                )
+                errors[.password] = L10n.management.managementauth.passwordNeedsAtLeastLowercaseLetter
             }
 
             if confirmPassword.isEmpty {
-                errors[.confirmPassword] = mistiaLocalized(
-                    vi: "Nhập lại mật khẩu để xác nhận.",
-                    en: "Re-enter your password to confirm it.",
-                    ja: "確認のためパスワードを再入力してください。"
-                )
+                errors[.confirmPassword] = L10n.management.managementauth.reEnterYourPasswordToConfirmIt
             } else if confirmPassword != password {
-                errors[.confirmPassword] = mistiaLocalized(
-                    vi: "Mật khẩu nhập lại chưa khớp.",
-                    en: "The confirmation password doesn't match yet.",
-                    ja: "確認用パスワードがまだ一致していません。"
-                )
+                errors[.confirmPassword] = L10n.management.managementauth.theConfirmationPasswordDoesnTMatchYet
             }
         case .forgotPassword:
             if !isValidEmail(trimmedEmail) {
-                errors[.email] = mistiaLocalized(
-                    vi: "Email chưa đúng định dạng.",
-                    en: "The email format doesn't look right.",
-                    ja: "メールアドレスの形式が正しくありません。"
-                )
+                errors[.email] = L10n.management.managementauth.theEmailFormatDoesnTLookRight
             }
         case .verifyEmailPending:
             break
@@ -1306,7 +1202,7 @@ private struct ManagementPendingAuthenticationPromptOverlay: View {
                         }
                     }
 
-                    Button(mistiaLocalized(vi: "Hủy", en: "Cancel", ja: "キャンセル")) {
+                    Button(L10n.common.cancel) {
                         onCancel()
                     }
                     .font(.system(size: 15, weight: .semibold, design: .rounded))
@@ -1360,46 +1256,22 @@ private struct ManagementPendingAuthenticationPromptOverlay: View {
                     decision: .attachGuestData,
                     role: .primary,
                     systemImage: "arrow.down.circle.fill",
-                    title: mistiaLocalized(
-                        vi: "Gắn vào tài khoản này",
-                        en: "Attach to this account",
-                        ja: "このアカウントに紐づける"
-                    ),
-                    subtitle: mistiaLocalized(
-                        vi: "Giữ luôn dữ liệu local guest hiện tại như dữ liệu của tài khoản này.",
-                        en: "Keep the current guest local data as part of this account.",
-                        ja: "現在のゲストローカルデータをこのアカウントのデータとして引き継ぎます。"
-                    )
+                    title: L10n.management.managementauth.attachToThisAccount,
+                    subtitle: L10n.management.managementauth.keepTheCurrentGuestLocalDataAs
                 ),
                 .init(
                     decision: .keepGuestDataSeparate,
                     role: .normal,
                     systemImage: "square.split.2x1.fill",
-                    title: mistiaLocalized(
-                        vi: "Giữ guest riêng",
-                        en: "Keep guest separate",
-                        ja: "ゲストを分離したまま保持"
-                    ),
-                    subtitle: mistiaLocalized(
-                        vi: "Đăng nhập tài khoản này nhưng không trộn với dữ liệu guest hiện tại.",
-                        en: "Sign in to this account without mixing in the current guest data.",
-                        ja: "現在のゲストデータとは分けたまま、このアカウントでログインします。"
-                    )
+                    title: L10n.management.managementauth.keepGuestSeparate,
+                    subtitle: L10n.management.managementauth.signInToThisAccountWithoutMixing
                 ),
                 .init(
                     decision: .deleteGuestData,
                     role: .destructive,
                     systemImage: "trash.fill",
-                    title: mistiaLocalized(
-                        vi: "Xóa dữ liệu guest",
-                        en: "Delete guest data",
-                        ja: "ゲストデータを削除"
-                    ),
-                    subtitle: mistiaLocalized(
-                        vi: "Xóa local guest hiện tại rồi mở tài khoản này với trạng thái sạch.",
-                        en: "Delete the current guest local data before opening this account cleanly.",
-                        ja: "現在のゲストローカルデータを削除してから、このアカウントをクリーンに開きます。"
-                    )
+                    title: L10n.management.managementauth.deleteGuestData,
+                    subtitle: L10n.management.managementauth.deleteTheCurrentGuestLocalDataBefore2
                 )
             ]
 
@@ -1409,31 +1281,15 @@ private struct ManagementPendingAuthenticationPromptOverlay: View {
                     decision: .keepGuestDataSeparate,
                     role: .primary,
                     systemImage: "square.split.2x1.fill",
-                    title: mistiaLocalized(
-                        vi: "Giữ guest riêng",
-                        en: "Keep guest separate",
-                        ja: "ゲストを分離したまま保持"
-                    ),
-                    subtitle: mistiaLocalized(
-                        vi: "Mở tài khoản này bằng profile riêng, không chuyển dữ liệu guest cũ sang.",
-                        en: "Open this account in its own profile without moving over the old guest data.",
-                        ja: "古いゲストデータを移さず、このアカウント専用のプロファイルで開きます。"
-                    )
+                    title: L10n.management.managementauth.keepGuestSeparate,
+                    subtitle: L10n.management.managementauth.openThisAccountInItsOwnProfile
                 ),
                 .init(
                     decision: .deleteGuestData,
                     role: .destructive,
                     systemImage: "trash.fill",
-                    title: mistiaLocalized(
-                        vi: "Xóa dữ liệu guest",
-                        en: "Delete guest data",
-                        ja: "ゲストデータを削除"
-                    ),
-                    subtitle: mistiaLocalized(
-                        vi: "Xóa local guest hiện tại trước khi tiếp tục với tài khoản này.",
-                        en: "Delete the current guest local data before continuing with this account.",
-                        ja: "このアカウントを続ける前に、現在のゲストローカルデータを削除します。"
-                    )
+                    title: L10n.management.managementauth.deleteGuestData,
+                    subtitle: L10n.management.managementauth.deleteTheCurrentGuestLocalDataBefore
                 )
             ]
         }
@@ -1825,7 +1681,7 @@ private struct ManagementProfileToggleRow: View {
 
             Spacer(minLength: 12)
 
-            Toggle("", isOn: isOn)
+            Toggle(String(), isOn: isOn)
                 .labelsHidden()
                 .tint(accent.color)
                 .disabled(isDisabled)
@@ -1990,7 +1846,7 @@ private struct ManagementProfileCenteredDestructiveButton: View {
             Button(title, role: .destructive) {
                 action()
             }
-            Button(mistiaLocalized(vi: "Hủy", en: "Cancel", ja: "キャンセル"), role: .cancel) { }
+            Button(L10n.common.cancel, role: .cancel) { }
         } message: {
             Text(confirmationMessage)
         }
@@ -2095,16 +1951,8 @@ private struct ManagementInitialSyncChoiceSheet: View {
                     VStack(alignment: .leading, spacing: 22) {
                         Text(
                             preview.remoteActiveCount == 0
-                            ? mistiaLocalized(
-                                vi: "Cloud hiện chưa có dữ liệu nào (ngoại trừ hồ sơ của bạn). Máy này đang có \(preview.localActiveCount) bản ghi. Hãy chọn cách bạn muốn bắt đầu.",
-                                en: "The cloud has no data yet (except your profile). This device has \(preview.localActiveCount) records. Choose how you want to start.",
-                                ja: "クラウドにはまだデータがありません（プロフィールを除く）。この端末には \(preview.localActiveCount) 件のレコードがあります。開始方法を選択してください。"
-                            )
-                            : mistiaLocalized(
-                                vi: "Máy này đang có \(preview.localActiveCount) bản ghi và cloud đang có \(preview.remoteActiveCount) bản ghi. Mistia sẽ ưu tiên an toàn dữ liệu trước.",
-                                en: "This device has \(preview.localActiveCount) records and the cloud has \(preview.remoteActiveCount) records. Mistia will prioritize data safety first.",
-                                ja: "この端末には \(preview.localActiveCount) 件、クラウドには \(preview.remoteActiveCount) 件のレコードがあります。Mistia はまずデータの安全性を優先します。"
-                            )
+                            ? L10n.management.managementauth.theCloudHasNoDataYetExcept(String(describing: preview.localActiveCount))
+                            : L10n.management.managementauth.thisDeviceHasValueRecordsAndThe(String(describing: preview.localActiveCount), String(describing: preview.remoteActiveCount))
                         )
                         .font(.system(size: 15, weight: .medium, design: .rounded))
                         .foregroundStyle(.secondary)
@@ -2112,12 +1960,8 @@ private struct ManagementInitialSyncChoiceSheet: View {
 
                         VStack(spacing: 12) {
                             ManagementInitialSyncChoiceButton(
-                                title: mistiaLocalized(vi: "Gộp an toàn", en: "Merge safely", ja: "安全にマージ"),
-                                detail: mistiaLocalized(
-                                    vi: "Giữ cả hai phía, gộp theo ID, không tự động nhập nhằng giao dịch giống nhau.",
-                                    en: "Keep both sides, merge by record ID, and avoid risky automatic transaction dedupe.",
-                                    ja: "両側のデータを保持し、レコード ID で統合しつつ危険な自動重複排除は行いません。"
-                                ),
+                                title: L10n.management.managementauth.mergeSafely,
+                                detail: L10n.management.managementauth.keepBothSidesMergeByRecordID,
                                 accent: accent,
                                 isRecommended: true
                             ) {
@@ -2125,12 +1969,8 @@ private struct ManagementInitialSyncChoiceSheet: View {
                             }
 
                             ManagementInitialSyncChoiceButton(
-                                title: mistiaLocalized(vi: "Dùng dữ liệu trên máy này", en: "Use this device", ja: "この端末を使う"),
-                                detail: mistiaLocalized(
-                                    vi: "Đẩy local lên cloud và tombstone các bản chỉ có trên cloud.",
-                                    en: "Upload local data to the cloud and tombstone cloud-only records.",
-                                    ja: "ローカルデータをクラウドへアップロードし、クラウドにしかないレコードは tombstone 化します。"
-                                ),
+                                title: L10n.management.managementauth.useThisDevice,
+                                detail: L10n.management.managementauth.uploadLocalDataToTheCloudAnd,
                                 accent: accent,
                                 isRecommended: false
                             ) {
@@ -2138,12 +1978,8 @@ private struct ManagementInitialSyncChoiceSheet: View {
                             }
 
                             ManagementInitialSyncChoiceButton(
-                                title: mistiaLocalized(vi: "Dùng dữ liệu trên cloud", en: "Use cloud", ja: "クラウドを使う"),
-                                detail: mistiaLocalized(
-                                    vi: "Xóa snapshot local hiện tại rồi kéo toàn bộ cloud về máy.",
-                                    en: "Replace the current local snapshot with the full cloud state.",
-                                    ja: "現在のローカルスナップショットを置き換えて、クラウド全体を取得します。"
-                                ),
+                                title: L10n.management.managementauth.useCloud2,
+                                detail: L10n.management.managementauth.replaceTheCurrentLocalSnapshotWithThe,
                                 accent: .secondary,
                                 isRecommended: false
                             ) {
@@ -2157,11 +1993,7 @@ private struct ManagementInitialSyncChoiceSheet: View {
                 }
             }
             .navigationTitle(
-                mistiaLocalized(
-                    vi: "Đồng bộ lần đầu",
-                    en: "First sync",
-                    ja: "初回同期"
-                )
+                L10n.management.managementauth.firstSync
             )
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -2195,7 +2027,7 @@ private struct ManagementInitialSyncChoiceButton: View {
                         .foregroundStyle(.primary)
 
                     if isRecommended {
-                        Text(mistiaLocalized(vi: "Khuyên dùng", en: "Recommended", ja: "おすすめ"))
+                        Text(L10n.management.managementauth.recommended)
                             .font(.system(size: 11.5, weight: .bold, design: .rounded))
                             .foregroundStyle(accent)
                             .padding(.horizontal, 8)
@@ -2356,11 +2188,7 @@ private struct ManagementSyncConflictCard: View {
                 VStack(spacing: 0) {
                     if visibleDifferences.isEmpty {
                         Text(
-                            mistiaLocalized(
-                                vi: "Conflict ở thời điểm cập nhật.",
-                                en: "Conflict in update timing.",
-                                ja: "更新タイミングで競合しています。"
-                            )
+                            L10n.management.managementauth.conflictInUpdateTiming
                         )
                         .font(.system(size: 13, weight: .medium, design: .rounded))
                         .foregroundStyle(.secondary)
@@ -2401,7 +2229,7 @@ private struct ManagementSyncConflictCard: View {
             onResolve(.useLocal)
         } label: {
             Label(
-                mistiaLocalized(vi: "Dùng local", en: "Use local", ja: "Local を使用"),
+                L10n.management.managementauth.useLocal,
                 systemImage: "icloud.and.arrow.up.fill"
             )
             .frame(maxWidth: .infinity)
@@ -2414,7 +2242,7 @@ private struct ManagementSyncConflictCard: View {
             onResolve(.useRemote)
         } label: {
             Label(
-                mistiaLocalized(vi: "Dùng cloud", en: "Use cloud", ja: "Cloud を使用"),
+                L10n.management.managementauth.useCloud,
                 systemImage: "icloud.and.arrow.down.fill"
             )
             .frame(maxWidth: .infinity)
@@ -2551,7 +2379,7 @@ private struct ManagementConflictReferenceResolver {
     private func transactionName(for id: UUID) -> String? {
         transactions.first { $0.id == id }.map { transaction in
             let title = transaction.title.isEmpty
-                ? mistiaLocalized(vi: "Giao dịch không tên", en: "Unnamed transaction", ja: "無名取引")
+                ? L10n.management.managementauth.unnamedTransaction
                 : transaction.title
             let currencyCode = transaction.sourceWallet?.currencyCode ?? transaction.destinationWallet?.currencyCode ?? "JPY"
             return compactConflictName(title, transaction.amountMinor.formattedCurrency(code: currencyCode))
@@ -2567,7 +2395,7 @@ private struct ManagementConflictReferenceResolver {
     private func budgetName(for id: UUID) -> String? {
         budgetPlans.first { $0.id == id }.map { plan in
             compactConflictName(
-                plan.category?.localizedDisplayName ?? mistiaLocalized(vi: "Ngân sách", en: "Budget", ja: "予算"),
+                plan.category?.localizedDisplayName ?? L10n.management.managementauth.budget,
                 plan.limitMinor.formattedCurrency(code: plan.currencyCode)
             )
         }
@@ -2588,7 +2416,7 @@ private struct ManagementConflictReferenceResolver {
     private func dueOccurrenceName(for id: UUID) -> String? {
         dueOccurrences.first { $0.id == id }.map { due in
             compactConflictName(
-                mistiaLocalized(vi: "Kỳ đến hạn", en: "Due occurrence", ja: "支払予定"),
+                L10n.management.managementauth.dueOccurrence,
                 due.selectedMonthKey
             )
         }
@@ -2618,11 +2446,7 @@ private struct ManagementConflictReferenceResolver {
     }
 
     private var unavailableName: String {
-        mistiaLocalized(
-            vi: "Không tìm thấy tên",
-            en: "Name unavailable",
-            ja: "名前なし"
-        )
+        L10n.management.managementauth.nameUnavailable
     }
 
     private func compactConflictName(_ values: String?...) -> String {
@@ -2649,12 +2473,12 @@ private struct ManagementConflictCompactDifferenceRow: View {
 
             VStack(alignment: .leading, spacing: 3) {
                 ManagementConflictCompactValueLine(
-                    title: mistiaLocalized(vi: "Local", en: "Local", ja: "Local"),
+                    title: L10n.management.managementauth.local,
                     value: difference.localValue
                 )
 
                 ManagementConflictCompactValueLine(
-                    title: mistiaLocalized(vi: "Cloud", en: "Cloud", ja: "Cloud"),
+                    title: L10n.management.managementauth.cloud,
                     value: difference.remoteValue
                 )
             }
@@ -2703,7 +2527,7 @@ private struct ManagementConflictSectionHeader: View {
 
             Spacer(minLength: 8)
 
-            Text("\(section.conflicts.count)")
+            Text(verbatim: "\(section.conflicts.count)")
                 .font(.system(size: 12.5, weight: .bold, design: .rounded))
                 .foregroundStyle(.white)
                 .padding(.horizontal, 9)
@@ -2735,7 +2559,7 @@ private struct ManagementDataConflictsView: View {
     var body: some View {
         MistiaPinnedTopBarScaffold(
             tone: .standard,
-            title: mistiaLocalized(vi: "Quản lý dữ liệu", en: "Data management", ja: "データ管理"),
+            title: L10n.management.managementauth.dataManagement,
             embedsInNavigationStack: false,
             showsLeadingAvatar: false,
             leadingSystemImage: "chevron.left",
@@ -2746,11 +2570,7 @@ private struct ManagementDataConflictsView: View {
         ) {
             if let remoteUnavailableReason = sessionStore.remoteUnavailableReason {
                 ManagementInlineMessageCard(
-                    title: mistiaLocalized(
-                        vi: "Cần mạng để xử lý conflict",
-                        en: "Resolving conflicts needs the network",
-                        ja: "競合の解決にはネットワークが必要です"
-                    ),
+                    title: L10n.management.managementauth.resolvingConflictsNeedsTheNetwork,
                     message: remoteUnavailableReason,
                     accent: MistiaAccent.sky.color
                 )
@@ -2758,28 +2578,16 @@ private struct ManagementDataConflictsView: View {
 
             if sessionStore.possibleDuplicateCount > 0 {
                 ManagementInlineMessageCard(
-                    title: mistiaLocalized(
-                        vi: "Có giao dịch có thể bị trùng",
-                        en: "Possible duplicates detected",
-                        ja: "重複の可能性がある取引があります"
-                    ),
-                    message: mistiaLocalized(
-                        vi: "Mistia đang giữ an toàn cả hai bản ghi. Hiện có \(sessionStore.possibleDuplicateCount) giao dịch cần bạn rà lại sau sync.",
-                        en: "Mistia kept both records safely. There are currently \(sessionStore.possibleDuplicateCount) transactions to review after sync.",
-                        ja: "両方のレコードを安全に保持しています。同期後に確認が必要な取引が \(sessionStore.possibleDuplicateCount) 件あります。"
-                    ),
+                    title: L10n.management.managementauth.possibleDuplicatesDetected,
+                    message: L10n.management.managementauth.mistiaKeptBothRecordsSafelyThereAre(String(describing: sessionStore.possibleDuplicateCount)),
                     accent: .orange
                 )
             }
 
             if activeConflicts.isEmpty {
                 ManagementProfilePlaceholderCard(
-                    title: mistiaLocalized(vi: "Chưa có conflict", en: "No conflicts yet", ja: "競合はまだありません"),
-                    message: mistiaLocalized(
-                        vi: "Khi đồng bộ phát sinh conflict hoặc dữ liệu cần rà lại, bạn sẽ quản lý tại đây.",
-                        en: "When sync conflicts or review-needed data appear, you will manage them here.",
-                        ja: "同期競合や確認が必要なデータが発生したら、ここで管理できます。"
-                    ),
+                    title: L10n.management.managementauth.noConflictsYet,
+                    message: L10n.management.managementauth.whenSyncConflictsOrReviewNeededData,
                     systemImage: "checkmark.shield.fill",
                     accent: accent
                 )
@@ -2848,7 +2656,7 @@ private struct ManagementEditProfileView: View {
 
     private var birthdayLabel: String {
         guard hasBirthday else {
-            return mistiaLocalized(vi: "Thêm", en: "Add", ja: "追加")
+            return L10n.management.managementauth.add
         }
 
         return MistiaDateFormatting.fullDateString(
@@ -2859,17 +2667,13 @@ private struct ManagementEditProfileView: View {
     }
 
     private var privacyButtonTitle: String {
-        mistiaLocalized(
-            vi: "Tìm hiểu cách Mistia sử dụng thông tin cá nhân",
-            en: "Learn how Mistia uses personal information",
-            ja: "Mistia の個人情報の利用方法を確認する"
-        )
+        L10n.management.managementauth.learnHowMistiaUsesPersonalInformation
     }
 
     var body: some View {
         MistiaPinnedTopBarScaffold(
             tone: .standard,
-            title: mistiaLocalized(vi: "Sửa hồ sơ", en: "Edit profile", ja: "プロフィールを編集"),
+            title: L10n.management.managementauth.editProfile,
             embedsInNavigationStack: false,
             showsLeadingAvatar: false,
             leadingSystemImage: "chevron.left",
@@ -2881,11 +2685,7 @@ private struct ManagementEditProfileView: View {
             VStack(spacing: 18) {
                 if let remoteUnavailableReason = sessionStore.remoteUnavailableReason {
                     ManagementInlineMessageCard(
-                        title: mistiaLocalized(
-                            vi: "Chỉnh sửa hồ sơ cần mạng",
-                            en: "Editing your profile needs the network",
-                            ja: "プロフィール編集にはネットワークが必要です"
-                        ),
+                        title: L10n.management.managementauth.editingYourProfileNeedsTheNetwork,
                         message: remoteUnavailableReason,
                         accent: MistiaAccent.sky.color
                     )
@@ -2901,7 +2701,7 @@ private struct ManagementEditProfileView: View {
                     Button {
                         showsAvatarSourceDialog = true
                     } label: {
-                        Text(mistiaLocalized(vi: "Đổi ảnh", en: "Change Photo", ja: "写真を変更"))
+                        Text(L10n.management.managementauth.changePhoto)
                             .font(.system(size: 13.5, weight: .bold, design: .rounded))
                             .foregroundStyle(accent)
                             .padding(.horizontal, 14)
@@ -2919,7 +2719,7 @@ private struct ManagementEditProfileView: View {
                 ManagementProfileListCard(tint: cardTint) {
                     VStack(spacing: 0) {
                         ManagementEditProfileNavigationRow(
-                            title: mistiaLocalized(vi: "Họ và tên", en: "Full name", ja: "氏名"),
+                            title: L10n.management.managementauth.fullName,
                             value: draftDisplayName,
                             isDisabled: !sessionStore.canPerformRemoteActions
                         ) {
@@ -2929,14 +2729,14 @@ private struct ManagementEditProfileView: View {
                         ManagementEditProfileRowDivider()
 
                         ManagementEditProfileInfoRow(
-                            title: mistiaLocalized(vi: "Email", en: "Email", ja: "メール"),
+                            title: L10n.management.managementauth.email,
                             value: summary.email
                         )
 
                         ManagementEditProfileRowDivider()
 
                         ManagementEditProfileNavigationRow(
-                            title: mistiaLocalized(vi: "Ngày sinh", en: "Birthday", ja: "生年月日"),
+                            title: L10n.management.managementauth.birthday,
                             value: birthdayLabel,
                             isDisabled: !sessionStore.canPerformRemoteActions
                         ) {
@@ -2990,30 +2790,30 @@ private struct ManagementEditProfileView: View {
             }
         }
         .confirmationDialog(
-            mistiaLocalized(vi: "Đổi ảnh đại diện", en: "Change profile photo", ja: "プロフィール写真を変更"),
+            L10n.management.managementauth.changeProfilePhoto,
             isPresented: $showsAvatarSourceDialog,
             titleVisibility: .visible
         ) {
             if UIImagePickerController.isSourceTypeAvailable(.camera) {
-                Button(mistiaLocalized(vi: "Chụp ảnh", en: "Take Photo", ja: "写真を撮る")) {
+                Button(L10n.management.managementauth.takePhoto) {
                     avatarSource = .camera
                 }
             }
 
-            Button(mistiaLocalized(vi: "Chọn từ thư viện", en: "Choose from Library", ja: "ライブラリから選択")) {
+            Button(L10n.management.managementauth.chooseFromLibrary) {
                 avatarSource = .photoLibrary
             }
 
-            Button(mistiaLocalized(vi: "Hủy", en: "Cancel", ja: "キャンセル"), role: .cancel) { }
+            Button(L10n.common.cancel, role: .cancel) { }
         }
         .alert(
-            mistiaLocalized(vi: "Chưa thể cập nhật hồ sơ", en: "Couldn't update profile", ja: "プロフィールを更新できませんでした"),
+            L10n.management.managementauth.couldnTUpdateProfile,
             isPresented: Binding(
                 get: { profileErrorMessage != nil },
                 set: { if !$0 { profileErrorMessage = nil } }
             )
         ) {
-            Button("OK", role: .cancel) { }
+            Button(L10n.common.ok, role: .cancel) { }
         } message: {
             Text(profileErrorMessage ?? "")
         }
@@ -3074,11 +2874,7 @@ private struct ManagementEditProfileView: View {
 
     private func handlePickedAvatar(_ image: UIImage) {
         guard let avatarJPEGData = image.jpegData(compressionQuality: 0.9) else {
-            profileErrorMessage = mistiaLocalized(
-                vi: "Không xử lý được ảnh đã chọn.",
-                en: "Couldn't process the selected image.",
-                ja: "選択した画像を処理できませんでした。"
-            )
+            profileErrorMessage = L10n.management.managementauth.couldnTProcessTheSelectedImage
             return
         }
 
@@ -3258,7 +3054,7 @@ private struct ManagementEditProfileNameEditorView: View {
 
     var body: some View {
         ManagementEditProfileModalScaffold(
-            title: mistiaLocalized(vi: "Họ và tên", en: "Full name", ja: "氏名"),
+            title: L10n.management.managementauth.fullName,
             accent: accent
         ) {
             displayName = [
@@ -3272,14 +3068,14 @@ private struct ManagementEditProfileNameEditorView: View {
             ManagementProfileListCard(tint: cardTint) {
                 VStack(spacing: 0) {
                     ManagementEditProfileTextFieldRow(
-                        title: mistiaLocalized(vi: "Họ", en: "Last name", ja: "姓"),
+                        title: L10n.management.managementauth.lastName,
                         text: $familyName
                     )
 
                     ManagementEditProfileRowDivider()
 
                     ManagementEditProfileTextFieldRow(
-                        title: mistiaLocalized(vi: "Tên", en: "First name", ja: "名"),
+                        title: L10n.management.managementauth.firstName,
                         text: $givenName
                     )
                 }
@@ -3313,7 +3109,7 @@ private struct ManagementEditProfileTextFieldRow: View {
                 .foregroundStyle(.primary)
                 .frame(width: 60, alignment: .leading)
 
-            TextField("", text: $text)
+            TextField(String(), text: $text)
                 .font(.system(size: 16.5, weight: .medium, design: .rounded))
                 .textInputAutocapitalization(.words)
                 .autocorrectionDisabled()
@@ -3356,7 +3152,7 @@ private struct ManagementEditProfileBirthdayEditorView: View {
 
     var body: some View {
         ManagementEditProfileModalScaffold(
-            title: mistiaLocalized(vi: "Ngày sinh", en: "Birthday", ja: "生年月日"),
+            title: L10n.management.managementauth.birthday,
             accent: accent
         ) {
             birthday = draftBirthday
@@ -3366,7 +3162,7 @@ private struct ManagementEditProfileBirthdayEditorView: View {
             VStack(spacing: 18) {
                 ManagementProfileListCard(tint: cardTint) {
                     ManagementEditProfileInfoRow(
-                        title: mistiaLocalized(vi: "Ngày sinh", en: "Birthday", ja: "生年月日"),
+                        title: L10n.management.managementauth.birthday,
                         value: MistiaDateFormatting.fullDateString(
                             for: draftBirthday,
                             language: MistiaAppLanguage.current,
@@ -3501,7 +3297,7 @@ private struct ManagementProfilePersonalInfoView: View {
     var body: some View {
         MistiaPinnedTopBarScaffold(
             tone: .standard,
-            title: mistiaLocalized(vi: "Thông tin cá nhân", en: "Personal information", ja: "個人情報"),
+            title: L10n.management.managementauth.personalInformation,
             embedsInNavigationStack: false,
             showsLeadingAvatar: false,
             leadingSystemImage: "chevron.left",
@@ -3513,30 +3309,18 @@ private struct ManagementProfilePersonalInfoView: View {
             MistiaGlassCard(cornerRadius: 24, tint: cardTint) {
                 VStack(alignment: .leading, spacing: 18) {
                     ManagementProfilePersonalInfoItem(
-                        title: mistiaLocalized(vi: "Tên và ảnh đại diện", en: "Name and profile photo", ja: "名前とプロフィール写真"),
-                        message: mistiaLocalized(
-                            vi: "Mistia dùng tên và ảnh đại diện để hiển thị hồ sơ của bạn trên thiết bị đã đăng nhập và trong các vùng liên quan đến tài khoản.",
-                            en: "Mistia uses your name and profile photo to present your account consistently across signed-in devices and account-related surfaces.",
-                            ja: "Mistia は、サインイン済みデバイスやアカウント関連画面でプロフィールを一貫して表示するために、名前とプロフィール写真を使用します。"
-                        )
+                        title: L10n.management.managementauth.nameAndProfilePhoto,
+                        message: L10n.management.managementauth.mistiaUsesYourNameAndProfilePhoto
                     )
 
                     ManagementProfilePersonalInfoItem(
-                        title: mistiaLocalized(vi: "Ngày sinh", en: "Birthday", ja: "生年月日"),
-                        message: mistiaLocalized(
-                            vi: "Ngày sinh giúp cá nhân hóa trải nghiệm trong tương lai, ví dụ các nhắc nhở hoặc thiết lập phù hợp với độ tuổi. Bạn có thể cập nhật lại bất kỳ lúc nào.",
-                            en: "Your birthday can help personalize future experiences such as reminders or age-appropriate settings. You can update it anytime.",
-                            ja: "生年月日は、将来のリマインダーや年齢に応じた設定などを個人化するために利用される場合があります。いつでも変更できます。"
-                        )
+                        title: L10n.management.managementauth.birthday,
+                        message: L10n.management.managementauth.yourBirthdayCanHelpPersonalizeFutureExperiences
                     )
 
                     ManagementProfilePersonalInfoItem(
-                        title: mistiaLocalized(vi: "Quyền kiểm soát dữ liệu", en: "Data controls", ja: "データ管理"),
-                        message: mistiaLocalized(
-                            vi: "Bạn luôn có thể đăng xuất, tắt đồng bộ, hoặc xóa tài khoản cloud trong phần Hồ sơ. Dữ liệu local trên thiết bị vẫn được kiểm soát riêng theo các lựa chọn đó.",
-                            en: "You can always sign out, disable sync, or delete your cloud account from Profile. Local data on your device remains under the control of those choices.",
-                            ja: "プロフィール画面から、ログアウト、同期の無効化、クラウドアカウントの削除をいつでも行えます。ローカルデータはその選択に応じて管理されます。"
-                        )
+                        title: L10n.management.managementauth.dataControls,
+                        message: L10n.management.managementauth.youCanAlwaysSignOutDisableSync
                     )
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -3654,50 +3438,34 @@ struct ManagementSyncSettingsView: View {
             return ""
         }
 
-        return mistiaLocalized(
-            vi: "Đã đồng bộ lúc \(MistiaDateFormatting.dateTimeString(for: lastSyncAt))",
-            en: "Synced at \(MistiaDateFormatting.dateTimeString(for: lastSyncAt, language: .english))",
-            ja: "\(MistiaDateFormatting.dateTimeString(for: lastSyncAt, language: .japanese)) に同期済み"
-        )
+        return L10n.management.managementauth.syncedAtValue(String(describing: MistiaDateFormatting.dateTimeString(for: lastSyncAt)))
     }
 
     private var syncExplanatoryText: String {
-        mistiaLocalized(
-            vi: "Mistia đang thực hiện đồng bộ dữ liệu của bạn với hệ thống đám mây để đảm bảo mọi thay đổi được lưu trữ an toàn. Quá trình này giúp bạn có thể truy cập dữ liệu mới nhất trên tất cả các thiết bị của mình.",
-            en: "Mistia is syncing your data with the cloud to ensure all changes are stored safely. This process allows you to access the latest data across all your devices.",
-            ja: "Mistia はデータをクラウドと同期して, すべての変更が安全に保存されるようにしています。このプロセスにより, すべてのデバイスで最新のデータにアクセスできるようになります。"
-        )
+        L10n.management.managementauth.mistiaIsSyncingYourDataWithThe
     }
 
     private var autoSyncValue: String {
         if sessionStore.isAutoSyncEnabled {
-            return mistiaLocalized(vi: "Bật", en: "On", ja: "オン")
+            return L10n.common.on
         } else {
-            return mistiaLocalized(vi: "Tắt", en: "Off", ja: "オフ")
+            return L10n.common.off
         }
     }
 
     private func timeRemainingLabel(_ seconds: TimeInterval) -> String {
         if seconds < 60 {
-            return mistiaLocalized(
-                vi: "Còn khoảng \(Int(seconds)) giây",
-                en: "About \(Int(seconds)) seconds left",
-                ja: "残り約 \(Int(seconds)) 秒"
-            )
+            return L10n.management.managementauth.aboutValueSecondsLeft(String(describing: Int(seconds)))
         } else {
             let minutes = Int(seconds / 60)
-            return mistiaLocalized(
-                vi: "Còn khoảng \(minutes) phút",
-                en: "About \(minutes) minutes left",
-                ja: "残り約 \(minutes) 分"
-            )
+            return L10n.management.managementauth.aboutValueMinutesLeft(String(describing: minutes))
         }
     }
 
     var body: some View {
         MistiaPinnedTopBarScaffold(
             tone: .standard,
-            title: mistiaLocalized(vi: "Cài đặt đồng bộ", en: "Sync settings", ja: "同期設定"),
+            title: L10n.management.managementauth.syncSettings,
             embedsInNavigationStack: false,
             showsLeadingAvatar: false,
             leadingSystemImage: "chevron.left",
@@ -3709,7 +3477,7 @@ struct ManagementSyncSettingsView: View {
             ManagementProfileListCard(tint: cardTint) {
                 VStack(spacing: 0) {
                     ManagementProfileNavigationRow(
-                        title: mistiaLocalized(vi: "Quản lý dữ liệu đồng bộ", en: "Manage synced data", ja: "同期データを管理"),
+                        title: L10n.management.managementauth.manageSyncedData,
                         icon: "externaldrive.badge.person.crop",
                         accent: .purple,
                         subtitle: nil,
@@ -3730,7 +3498,7 @@ struct ManagementSyncSettingsView: View {
                     ManagementProfileRowDivider()
 
                     ManagementProfileNavigationRow(
-                        title: mistiaLocalized(vi: "Tự động đồng bộ", en: "Auto sync", ja: "自動同期"),
+                        title: L10n.management.managementauth.autoSync,
                         icon: "arrow.triangle.2.circlepath.icloud",
                         accent: .mint,
                         subtitle: sessionStore.canPerformRemoteActions ? nil : sessionStore.remoteUnavailableReason,
@@ -3756,7 +3524,7 @@ struct ManagementSyncSettingsView: View {
                                 .clipShape(Capsule())
 
                             HStack {
-                                Text("\(Int(progress * 100))%")
+                                Text(verbatim: "\(Int(progress * 100))%")
                                     .font(.system(size: 12, weight: .bold, design: .rounded))
                                     .foregroundStyle(accent)
 
@@ -3782,7 +3550,7 @@ struct ManagementSyncSettingsView: View {
             } else {
                 VStack(spacing: 12) {
                     ManagementProfilePrimaryActionButton(
-                        title: mistiaLocalized(vi: "Đồng bộ ngay", en: "Sync now", ja: "今すぐ同期"),
+                        title: L10n.management.managementauth.syncNow,
                         accent: accent,
                         isDisabled: !sessionStore.canPerformRemoteActions || sessionStore.isManualSyncInProgress,
                         showsProgress: sessionStore.isManualSyncInProgress && sessionStore.canPerformRemoteActions
@@ -3811,21 +3579,13 @@ struct ManagementSyncSettingsView: View {
             }
         }
         .alert(
-            mistiaLocalized(
-                vi: "Dữ liệu đã tối ưu",
-                en: "Data is optimized",
-                ja: "データは最適化されています"
-            ),
+            L10n.management.managementauth.dataIsOptimized,
             isPresented: $showsNoConflictsAlert
         ) {
-            Button("OK", role: .cancel) { }
+            Button(L10n.common.ok, role: .cancel) { }
         } message: {
             Text(
-                mistiaLocalized(
-                    vi: "Hiện tại dữ liệu của bạn đã được đồng bộ hoàn toàn, không có bất đồng bộ nào cần xử lý.",
-                    en: "Your data is currently fully synced, no conflicts need attention.",
-                    ja: "現在、データは完全に同期されており、解決が必要な競合はありません。"
-                )
+                L10n.management.managementauth.yourDataIsCurrentlyFullySyncedNo
             )
         }
     }
@@ -3944,8 +3704,8 @@ private struct ManagementPasswordInputField: View {
                 .buttonStyle(.plain)
                 .accessibilityLabel(
                     isVisible
-                        ? mistiaLocalized(vi: "Ẩn mật khẩu", en: "Hide password", ja: "パスワードを隠す")
-                        : mistiaLocalized(vi: "Hiện mật khẩu", en: "Show password", ja: "パスワードを表示")
+                        ? L10n.management.managementauth.hidePassword
+                        : L10n.management.managementauth.showPassword
                 )
             }
         }
@@ -4003,7 +3763,7 @@ private struct ManagementGoogleActionButton: View {
 
 private struct ManagementGoogleMark: View {
     var body: some View {
-        Text("G")
+        Text(verbatim: "G")
             .font(.system(size: 18, weight: .black, design: .rounded))
             .foregroundStyle(
                 LinearGradient(
@@ -4078,31 +3838,19 @@ private struct ManagementPasswordRequirementChecklist: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             ManagementPasswordRequirementRow(
-                title: mistiaLocalized(
-                    vi: "Ít nhất 8 ký tự",
-                    en: "At least 8 characters",
-                    ja: "8 文字以上"
-                ),
+                title: L10n.management.managementauth.atLeastCharacters,
                 isSatisfied: assessment.hasMinimumLength,
                 showsNeutralState: showsNeutralState
             )
 
             ManagementPasswordRequirementRow(
-                title: mistiaLocalized(
-                    vi: "Ít nhất 1 chữ viết hoa",
-                    en: "At least 1 uppercase letter",
-                    ja: "大文字を 1 文字以上"
-                ),
+                title: L10n.management.managementauth.atLeastUppercaseLetter,
                 isSatisfied: assessment.hasUppercase,
                 showsNeutralState: showsNeutralState
             )
 
             ManagementPasswordRequirementRow(
-                title: mistiaLocalized(
-                    vi: "Ít nhất 1 chữ viết thường",
-                    en: "At least 1 lowercase letter",
-                    ja: "小文字を 1 文字以上"
-                ),
+                title: L10n.management.managementauth.atLeastLowercaseLetter,
                 isSatisfied: assessment.hasLowercase,
                 showsNeutralState: showsNeutralState
             )
@@ -4230,15 +3978,15 @@ private enum PasswordStrengthLevel {
     var title: String {
         switch self {
         case .veryWeak:
-            return mistiaLocalized(vi: "Rất yếu", en: "Very weak", ja: "とても弱い")
+            return L10n.management.managementauth.veryWeak
         case .weak:
-            return mistiaLocalized(vi: "Yếu", en: "Weak", ja: "弱い")
+            return L10n.management.managementauth.weak
         case .normal:
-            return mistiaLocalized(vi: "Ổn", en: "Normal", ja: "普通")
+            return L10n.management.managementauth.normal
         case .strong:
-            return mistiaLocalized(vi: "Mạnh", en: "Strong", ja: "強い")
+            return L10n.management.managementauth.strong
         case .veryStrong:
-            return mistiaLocalized(vi: "Rất mạnh", en: "Very strong", ja: "とても強い")
+            return L10n.management.managementauth.veryStrong
         }
     }
 }
@@ -4290,7 +4038,7 @@ struct ManagementBackupRestoreView: View {
     var body: some View {
         MistiaPinnedTopBarScaffold(
             tone: .standard,
-            title: mistiaLocalized(vi: "Sao lưu & Khôi phục", en: "Backup & Restore", ja: "バックアップ & 復元"),
+            title: L10n.management.managementauth.backupRestore,
             embedsInNavigationStack: false,
             showsLeadingAvatar: false,
             leadingSystemImage: "chevron.left",
@@ -4300,24 +4048,16 @@ struct ManagementBackupRestoreView: View {
             contentSpacing: 18
         ) {
             ManagementInlineMessageCard(
-                title: mistiaLocalized(vi: "Snapshot khẩn cấp", en: "Emergency snapshot", ja: "緊急スナップショット"),
-                message: mistiaLocalized(
-                    vi: "Tạo file `.mistiabackup` để lưu lại toàn bộ dữ liệu local hiện tại. Khi nhập lại snapshot, Mistia chỉ khôi phục local trước và sẽ không tự đẩy lên cloud cho tới khi bạn tự bấm Đồng bộ ngay.",
-                    en: "Create a `.mistiabackup` file to capture the current local state. When you restore it, Mistia updates local data first and won't push to the cloud until you manually tap Sync now.",
-                    ja: "現在のローカル状態を `.mistiabackup` ファイルとして保存できます。復元時はまずローカルデータだけを更新し、手動で「今すぐ同期」を押すまでクラウドへは自動送信しません。"
-                ),
+                title: L10n.management.managementauth.emergencySnapshot,
+                message: L10n.management.managementauth.createAMistiabackupFileToCaptureThe,
                 accent: .mint
             )
 
             ManagementProfileListCard(tint: cardTint) {
                 VStack(spacing: 0) {
                     backupActionRow(
-                        title: mistiaLocalized(vi: "Tạo snapshot", en: "Create snapshot", ja: "スナップショットを作成"),
-                        subtitle: mistiaLocalized(
-                            vi: "Xuất dữ liệu local hiện tại thành một file `.mistiabackup`.",
-                            en: "Export the current local data into a single `.mistiabackup` file.",
-                            ja: "現在のローカルデータを 1 つの `.mistiabackup` ファイルとして書き出します。"
-                        ),
+                        title: L10n.management.managementauth.createSnapshot,
+                        subtitle: L10n.management.managementauth.exportTheCurrentLocalDataIntoA,
                         systemImage: "square.and.arrow.up.fill",
                         tint: .blue,
                         isDisabled: isBusy,
@@ -4327,18 +4067,10 @@ struct ManagementBackupRestoreView: View {
                     ManagementProfileRowDivider()
 
                     backupActionRow(
-                        title: mistiaLocalized(vi: "Nhập snapshot", en: "Import snapshot", ja: "スナップショットを読み込む"),
+                        title: L10n.management.managementauth.importSnapshot,
                         subtitle: restoreMode == .merge
-                            ? mistiaLocalized(
-                                vi: "Nhập file và ưu tiên dữ liệu trong snapshot khi trùng ID, nhưng vẫn giữ các mục local khác.",
-                                en: "Import the file and let snapshot values win on matching IDs while keeping unrelated local records.",
-                                ja: "同じ ID はスナップショット側を優先しつつ、関係ないローカルレコードは維持して読み込みます。"
-                            )
-                            : mistiaLocalized(
-                                vi: "Nhập file và thay toàn bộ dữ liệu local hiện tại sau khi Mistia tạo một safety snapshot nội bộ.",
-                                en: "Import the file and replace the current local dataset after Mistia creates an internal safety snapshot first.",
-                                ja: "先に内部の安全用スナップショットを作成したうえで、現在のローカルデータ全体を置き換えて読み込みます。"
-                            ),
+                            ? L10n.management.managementauth.importTheFileAndLetSnapshotValues
+                            : L10n.management.managementauth.importTheFileAndReplaceTheCurrent,
                         systemImage: "square.and.arrow.down.fill",
                         tint: .mint,
                         isDisabled: isBusy,
@@ -4349,11 +4081,11 @@ struct ManagementBackupRestoreView: View {
 
             ManagementProfileListCard(tint: cardTint) {
                 VStack(alignment: .leading, spacing: 14) {
-                    Text(mistiaLocalized(vi: "Chế độ khôi phục", en: "Restore mode", ja: "復元モード"))
+                    Text(L10n.management.managementauth.restoreMode)
                         .font(.system(size: 15.5, weight: .semibold, design: .rounded))
                         .foregroundStyle(.primary)
 
-                    Picker("", selection: $restoreMode) {
+                    Picker(String(), selection: $restoreMode) {
                         ForEach(MistiaBackupRestoreMode.allCases) { mode in
                             Text(mode.localizedTitle).tag(mode)
                         }
@@ -4370,16 +4102,12 @@ struct ManagementBackupRestoreView: View {
             if let latestSummary {
                 ManagementProfileListCard(tint: cardTint) {
                     VStack(alignment: .leading, spacing: 12) {
-                        Text(mistiaLocalized(vi: "Nội dung snapshot gần nhất", en: "Latest snapshot summary", ja: "直近のスナップショット概要"))
+                        Text(L10n.management.managementauth.latestSnapshotSummary)
                             .font(.system(size: 15.5, weight: .semibold, design: .rounded))
                             .foregroundStyle(.primary)
 
                         Text(
-                            mistiaLocalized(
-                                vi: "Bản sao lưu format V\(latestSummary.manifest.backupFormatVersion) • app \(latestSummary.manifest.appVersion) (\(latestSummary.manifest.appBuild)) • schema local V\(latestSummary.manifest.localSchemaVersion)",
-                                en: "Backup format V\(latestSummary.manifest.backupFormatVersion) • app \(latestSummary.manifest.appVersion) (\(latestSummary.manifest.appBuild)) • local schema V\(latestSummary.manifest.localSchemaVersion)",
-                                ja: "バックアップ形式 V\(latestSummary.manifest.backupFormatVersion) • app \(latestSummary.manifest.appVersion) (\(latestSummary.manifest.appBuild)) • ローカルスキーマ V\(latestSummary.manifest.localSchemaVersion)"
-                            )
+                            L10n.management.managementauth.backupFormatVValueAppValueValue(String(describing: latestSummary.manifest.backupFormatVersion), String(describing: latestSummary.manifest.appVersion), String(describing: latestSummary.manifest.appBuild), String(describing: latestSummary.manifest.localSchemaVersion))
                         )
                         .descriptionTextStyle()
 
@@ -4393,12 +4121,8 @@ struct ManagementBackupRestoreView: View {
 
             if sessionStore.isManualSyncRequiredAfterRestore {
                 ManagementInlineMessageCard(
-                    title: mistiaLocalized(vi: "Đang chờ bạn kiểm tra rồi sync", en: "Waiting for your review before sync", ja: "確認後の手動同期待ち"),
-                    message: mistiaLocalized(
-                        vi: "Tự động sync đang tạm dừng sau khi khôi phục snapshot. Khi bạn đã kiểm tra dữ liệu ổn, hãy vào Đồng bộ dữ liệu và nhấn Đồng bộ ngay.",
-                        en: "Auto sync is paused after the restore. Once you've reviewed the data, open Sync settings and tap Sync now.",
-                        ja: "スナップショット復元後は自動同期を停止しています。データ確認後に同期設定へ移動して「今すぐ同期」を押してください。"
-                    ),
+                    title: L10n.management.managementauth.waitingForYourReviewBeforeSync,
+                    message: L10n.management.managementauth.autoSyncIsPausedAfterTheRestore,
                     accent: .orange
                 )
             }
@@ -4406,16 +4130,12 @@ struct ManagementBackupRestoreView: View {
             if let latestRestoreResult, let safetySnapshotURL = latestRestoreResult.safetySnapshotURL {
                 ManagementProfileListCard(tint: cardTint) {
                     VStack(alignment: .leading, spacing: 12) {
-                        Text(mistiaLocalized(vi: "Safety snapshot nội bộ", en: "Internal safety snapshot", ja: "内部安全スナップショット"))
+                        Text(L10n.management.managementauth.internalSafetySnapshot)
                             .font(.system(size: 15.5, weight: .semibold, design: .rounded))
                             .foregroundStyle(.primary)
 
                         Text(
-                            mistiaLocalized(
-                                vi: "Mistia đã tạo một snapshot an toàn trước khi thay toàn bộ dữ liệu local. Bạn có thể share file này ra ngoài nếu muốn giữ thêm một lớp dự phòng.",
-                                en: "Mistia created a safety snapshot before replacing local data. You can share that file if you want an extra fallback copy.",
-                                ja: "ローカルデータを置き換える前に、安全用スナップショットを作成しました。追加の予備として外部共有することもできます。"
-                            )
+                            L10n.management.managementauth.mistiaCreatedASafetySnapshotBeforeReplacing
                         )
                         .descriptionTextStyle()
 
@@ -4423,7 +4143,7 @@ struct ManagementBackupRestoreView: View {
                             shareItem = TransactionShareItem(url: safetySnapshotURL)
                         } label: {
                             Label(
-                                mistiaLocalized(vi: "Chia sẻ safety snapshot", en: "Share safety snapshot", ja: "安全スナップショットを共有"),
+                                L10n.management.managementauth.shareSafetySnapshot,
                                 systemImage: "square.and.arrow.up"
                             )
                             .font(.system(size: 14.5, weight: .semibold, design: .rounded))
@@ -4449,9 +4169,9 @@ struct ManagementBackupRestoreView: View {
         }
         .alert(item: $alert) { alert in
             Alert(
-                title: Text(mistiaCatalog(alert.title)),
-                message: Text(mistiaCatalog(alert.message)),
-                dismissButton: .default(Text(mistiaLocalized(vi: "OK", en: "OK", ja: "OK")))
+                title: Text((alert.title)),
+                message: Text((alert.message)),
+                dismissButton: .default(Text(L10n.common.ok))
             )
         }
     }
@@ -4515,7 +4235,7 @@ struct ManagementBackupRestoreView: View {
             shareItem = TransactionShareItem(url: url)
         } catch {
             alert = ManagementBackupAlert(
-                title: mistiaLocalized(vi: "Không thể tạo snapshot", en: "Couldn't create snapshot", ja: "スナップショットを作成できませんでした"),
+                title: L10n.management.managementauth.couldnTCreateSnapshot,
                 message: error.localizedDescription
             )
         }
@@ -4526,12 +4246,8 @@ struct ManagementBackupRestoreView: View {
         case .success(let urls):
             guard let url = urls.first else {
                 alert = ManagementBackupAlert(
-                    title: mistiaLocalized(vi: "Không có file nào được chọn", en: "No file selected", ja: "ファイルが選択されていません"),
-                    message: mistiaLocalized(
-                        vi: "Hãy chọn một file `.mistiabackup` để tiếp tục.",
-                        en: "Choose a `.mistiabackup` file to continue.",
-                        ja: "続行するには `.mistiabackup` ファイルを選択してください。"
-                    )
+                    title: L10n.management.managementauth.noFileSelected,
+                    message: L10n.management.managementauth.chooseAMistiabackupFileToContinue
                 )
                 return
             }
@@ -4556,29 +4272,21 @@ struct ManagementBackupRestoreView: View {
                     )
 
                     alert = ManagementBackupAlert(
-                        title: mistiaLocalized(vi: "Đã khôi phục snapshot", en: "Snapshot restored", ja: "スナップショットを復元しました"),
+                        title: L10n.management.managementauth.snapshotRestored,
                         message: restoreMode == .merge
-                            ? mistiaLocalized(
-                                vi: "Mistia đã merge dữ liệu từ snapshot vào local. Hãy kiểm tra lại rồi tự bấm Đồng bộ ngay nếu bạn muốn cập nhật cloud.",
-                                en: "Mistia merged the snapshot into local data. Review it, then manually tap Sync now if you want to update the cloud.",
-                                ja: "スナップショットをローカルデータへマージしました。内容を確認してから、必要に応じて手動で「今すぐ同期」を押してください。"
-                            )
-                            : mistiaLocalized(
-                                vi: "Mistia đã thay dữ liệu local bằng snapshot đã chọn và giữ lại một safety snapshot nội bộ trước đó.",
-                                en: "Mistia replaced local data with the selected snapshot and kept an internal safety snapshot beforehand.",
-                                ja: "選択したスナップショットでローカルデータを置き換え、事前に内部の安全用スナップショットも保存しました。"
-                            )
+                            ? L10n.management.managementauth.mistiaMergedTheSnapshotIntoLocalData
+                            : L10n.management.managementauth.mistiaReplacedLocalDataWithTheSelected
                     )
                 } catch {
                     alert = ManagementBackupAlert(
-                        title: mistiaLocalized(vi: "Không thể nhập snapshot", en: "Couldn't import snapshot", ja: "スナップショットを読み込めませんでした"),
+                        title: L10n.management.managementauth.couldnTImportSnapshot,
                         message: error.localizedDescription
                     )
                 }
             }
         case .failure(let error):
             alert = ManagementBackupAlert(
-                title: mistiaLocalized(vi: "Không thể mở file", en: "Couldn't open file", ja: "ファイルを開けませんでした"),
+                title: L10n.management.managementauth.couldnTOpenFile,
                 message: error.localizedDescription
             )
         }
@@ -4616,37 +4324,25 @@ private extension MistiaBackupRestoreMode {
     var localizedTitle: String {
         switch self {
         case .merge:
-            mistiaLocalized(vi: "Merge", en: "Merge", ja: "マージ")
+            L10n.management.managementauth.merge
         case .replaceLocal:
-            mistiaLocalized(vi: "Thay local", en: "Replace local", ja: "ローカルを置換")
+            L10n.management.managementauth.replaceLocal
         }
     }
 
     var localizedDescription: String {
         switch self {
         case .merge:
-            mistiaLocalized(
-                vi: "Giữ dữ liệu local không liên quan, nhưng nếu snapshot có cùng ID thì bản trong snapshot sẽ ghi đè lên local.",
-                en: "Keep unrelated local records, but if the snapshot contains the same ID, the snapshot version wins.",
-                ja: "関係のないローカルレコードは維持しつつ、同じ ID がある場合はスナップショット側を優先します。"
-            )
+            L10n.management.managementauth.keepUnrelatedLocalRecordsButIfThe
         case .replaceLocal:
-            mistiaLocalized(
-                vi: "Mistia sẽ tạo safety snapshot nội bộ, xóa toàn bộ dữ liệu local hiện tại rồi khôi phục đúng nội dung snapshot bạn đã chọn.",
-                en: "Mistia first creates an internal safety snapshot, clears the current local dataset, then restores exactly what the selected snapshot contains.",
-                ja: "最初に内部の安全用スナップショットを作成し、現在のローカルデータを消去してから、選択したスナップショットの内容をそのまま復元します。"
-            )
+            L10n.management.managementauth.mistiaFirstCreatesAnInternalSafetySnapshot
         }
     }
 }
 
 private extension MistiaBackupValidationSummary {
     var localizedBreakdown: String {
-        mistiaLocalized(
-            vi: "Tổng \(activeRecordCount) bản ghi dữ liệu • Ví \(walletCount) • Thẻ \(creditCardProfileCount) • Danh mục \(categoryCount) • Giao dịch \(transactionCount) • Ngân sách \(budgetPlanCount) • Mục tiêu \(savingsGoalCount) • Hóa đơn định kỳ \(recurringBillPlanCount) • Trả góp \(installmentPlanCount) • Kỳ hạn \(dueOccurrenceCount) • Hồ sơ \(userProfileCount) • Quyền sở hữu \(ownershipScopeCount) • Audit \(transactionAuditCount)",
-            en: "\(activeRecordCount) data records total • Wallets \(walletCount) • Cards \(creditCardProfileCount) • Categories \(categoryCount) • Transactions \(transactionCount) • Budgets \(budgetPlanCount) • Goals \(savingsGoalCount) • Recurring bills \(recurringBillPlanCount) • Installments \(installmentPlanCount) • Due occurrences \(dueOccurrenceCount) • Profiles \(userProfileCount) • Ownership scopes \(ownershipScopeCount) • Audits \(transactionAuditCount)",
-            ja: "データ \(activeRecordCount) 件 • ウォレット \(walletCount) • カード \(creditCardProfileCount) • カテゴリ \(categoryCount) • 取引 \(transactionCount) • 予算 \(budgetPlanCount) • 目標 \(savingsGoalCount) • 定期請求 \(recurringBillPlanCount) • 分割払い \(installmentPlanCount) • 支払予定 \(dueOccurrenceCount) • プロフィール \(userProfileCount) • 所有スコープ \(ownershipScopeCount) • 監査 \(transactionAuditCount)"
-        )
+        L10n.management.managementauth.valueDataRecordsTotalWalletsValueCards(String(describing: activeRecordCount), String(describing: walletCount), String(describing: creditCardProfileCount), String(describing: categoryCount), String(describing: transactionCount), String(describing: budgetPlanCount), String(describing: savingsGoalCount), String(describing: recurringBillPlanCount), String(describing: installmentPlanCount), String(describing: dueOccurrenceCount), String(describing: userProfileCount), String(describing: ownershipScopeCount), String(describing: transactionAuditCount))
     }
 }
 

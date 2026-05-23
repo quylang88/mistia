@@ -21,11 +21,11 @@ enum MistiaCategoryPickerMode: String, CaseIterable, Identifiable {
     var title: String {
         switch self {
         case .recent:
-            mistiaLocalized(vi: "Gần đây", en: "Recent", ja: "最近")
+            L10n.core.ui.mistiacategorypicker.recent
         case .favorites:
-            mistiaLocalized(vi: "Yêu thích", en: "Favorites", ja: "お気に入り")
+            L10n.core.ui.mistiacategorypicker.favorites
         case .all:
-            mistiaLocalized(vi: "Tất cả", en: "All", ja: "すべて")
+            L10n.core.ui.mistiacategorypicker.all
         }
     }
 }
@@ -293,7 +293,7 @@ struct MistiaCategoryPickerSheet: View {
                         LazyVStack(alignment: .leading, spacing: 18) {
                             if isSearching {
                                 quickSection(
-                                    title: mistiaLocalized(vi: "Kết quả tìm kiếm", en: "Search results", ja: "検索結果"),
+                                    title: L10n.core.ui.mistiacategorypicker.searchResults,
                                     categories: searchResults,
                                     subtitleProvider: searchResultSubtitle
                                 )
@@ -310,7 +310,7 @@ struct MistiaCategoryPickerSheet: View {
 
                                     if !visibleRecentCategories.isEmpty {
                                         quickSection(
-                                            title: mistiaLocalized(vi: "Danh mục dùng nhiều trong 90 ngày", en: "Most used in the last 90 days", ja: "過去90日でよく使ったカテゴリ"),
+                                            title: L10n.core.ui.mistiacategorypicker.mostUsedInTheLastDays,
                                             categories: visibleRecentCategories,
                                             subtitleProvider: quickModeSubtitle
                                         )
@@ -318,7 +318,7 @@ struct MistiaCategoryPickerSheet: View {
                                 case .favorites:
                                     if !visibleFavoriteCategories.isEmpty {
                                         quickSection(
-                                            title: mistiaLocalized(vi: "Danh mục yêu thích", en: "Favorite categories", ja: "お気に入りカテゴリ"),
+                                            title: L10n.core.ui.mistiacategorypicker.favoriteCategories,
                                             categories: visibleFavoriteCategories,
                                             subtitleProvider: quickModeSubtitle
                                         )
@@ -343,7 +343,7 @@ struct MistiaCategoryPickerSheet: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
-                    Button(mistiaLocalized(vi: "Đóng", en: "Close", ja: "閉じる")) {
+                    Button(L10n.core.ui.mistiacategorypicker.close) {
                         dismiss()
                     }
                 }
@@ -363,7 +363,7 @@ struct MistiaCategoryPickerSheet: View {
                     .foregroundStyle(.secondary)
 
                 TextField(
-                    mistiaLocalized(vi: "Tìm danh mục", en: "Search categories", ja: "カテゴリを検索"),
+                    L10n.core.ui.mistiacategorypicker.searchCategories,
                     text: $searchText
                 )
                 .textInputAutocapitalization(.never)
@@ -448,11 +448,7 @@ struct MistiaCategoryPickerSheet: View {
                                     .foregroundStyle(.primary)
 
                                 Text(
-                                    mistiaLocalized(
-                                        vi: "\(section.children.count) danh mục con",
-                                        en: "\(section.children.count) child categories",
-                                        ja: "子カテゴリ \(section.children.count) 件"
-                                    )
+                                    L10n.core.ui.mistiacategorypicker.valueChildCategories(String(describing: section.children.count))
                                 )
                                     .font(.system(size: 12.5, weight: .medium, design: .rounded))
                                     .foregroundStyle(.secondary)
@@ -474,11 +470,7 @@ struct MistiaCategoryPickerSheet: View {
                         VStack(spacing: 0) {
                             if section.children.isEmpty && (!allowsParentSelectionInAll || !section.includesParent) {
                                 Text(
-                                    mistiaLocalized(
-                                        vi: "Chưa có danh mục con.",
-                                        en: "No child categories.",
-                                        ja: "子カテゴリがありません。"
-                                    )
+                                    L10n.core.ui.mistiacategorypicker.noChildCategories
                                 )
                                     .font(.system(size: 13, weight: .medium, design: .rounded))
                                     .foregroundStyle(.secondary)
@@ -717,34 +709,22 @@ struct MistiaCategoryPickerSheet: View {
 
     private var emptyTitle: String {
         if isSearching || mode == .all {
-            return mistiaLocalized(vi: "Không tìm thấy danh mục", en: "No categories found", ja: "カテゴリが見つかりません")
+            return L10n.core.ui.mistiacategorypicker.noCategoriesFound
         }
 
         return mode == .favorites
-            ? mistiaLocalized(vi: "Chưa có danh mục yêu thích", en: "No favorite categories yet", ja: "お気に入りカテゴリはまだありません")
-            : mistiaLocalized(vi: "Chưa có danh mục gần đây", en: "No recent categories yet", ja: "最近のカテゴリはまだありません")
+            ? L10n.core.ui.mistiacategorypicker.noFavoriteCategoriesYet
+            : L10n.core.ui.mistiacategorypicker.noRecentCategoriesYet
     }
 
     private var emptyMessage: String {
         if !searchText.isEmpty {
-            return mistiaLocalized(
-                vi: "Thử từ khóa khác hoặc chuyển sang xem tất cả danh mục.",
-                en: "Try another keyword or switch to all categories.",
-                ja: "別のキーワードを試すか、すべてのカテゴリに切り替えてください。"
-            )
+            return L10n.core.ui.mistiacategorypicker.tryAnotherKeywordOrSwitchToAll
         }
 
         return mode == .favorites
-            ? mistiaLocalized(
-                vi: "Đánh dấu sao ở danh mục con trong tab Quản lý để chọn nhanh hơn ở đây.",
-                en: "Star child categories in Manage to access them quickly here.",
-                ja: "管理タブで子カテゴリにスターを付けると、ここからすばやく選べます。"
-            )
-            : mistiaLocalized(
-                vi: "Sau khi bạn dùng danh mục vài lần, Mistia sẽ đưa các mục xuất hiện nhiều nhất vào đây.",
-                en: "After you use categories a few times, Mistia will surface the most-used ones here.",
-                ja: "カテゴリを数回使うと、Mistia がよく使う項目をここに表示します。"
-            )
+            ? L10n.core.ui.mistiacategorypicker.starChildCategoriesInManageToAccess
+            : L10n.core.ui.mistiacategorypicker.afterYouUseCategoriesAFewTimes
     }
 
     private struct FilteredSection: Identifiable {

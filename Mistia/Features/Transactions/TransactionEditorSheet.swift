@@ -171,11 +171,7 @@ struct TransactionEditorSheet: View {
                                 .background(.orange.opacity(0.1))
                                 .clipShape(Circle())
 
-                            Text(mistiaLocalized(
-                                vi: "Giao dịch này thuộc sao kê đã thanh toán nên không thể sửa đổi hoặc lưu trữ.",
-                                en: "This transaction is part of a paid statement and cannot be modified or archived.",
-                                ja: "この取引は支払い済みの明細に含まれているため、変更やアーカイブはできません。"
-                            ))
+                            Text(L10n.transactions.transactioneditor.thisTransactionIsPartOfAPaid)
                             .font(.system(size: 13, weight: .medium, design: .rounded))
                             .foregroundStyle(.secondary)
                         }
@@ -231,19 +227,19 @@ struct TransactionEditorSheet: View {
             }
         }
         .alert(
-            mistiaLocalized(vi: "Chưa thể lưu", en: "Can't save yet", ja: "まだ保存できません"),
+            L10n.transactions.transactioneditor.canTSaveYet,
             isPresented: Binding(
                 get: { alertMessage != nil },
                 set: { if !$0 { alertMessage = nil } }
             )
         ) {
-            Button(mistiaLocalized(vi: "OK", en: "OK", ja: "OK"), role: .cancel) { }
+            Button(L10n.common.ok, role: .cancel) { }
         } message: {
-            Text(mistiaCatalog(alertMessage ?? ""))
+            Text((alertMessage ?? ""))
         }
         .sheet(isPresented: $showsCategoryPicker) {
             MistiaCategoryPickerSheet(
-                title: mistiaLocalized(vi: "Chọn danh mục", en: "Choose category", ja: "カテゴリを選択"),
+                title: L10n.transactions.transactioneditor.chooseCategory,
                 selectedCategoryID: draft.categoryID,
                 sections: categorySections,
                 recentCategories: recentCategories,
@@ -275,7 +271,7 @@ struct TransactionEditorSheet: View {
                         .scaledToFit()
                         .padding()
                 }
-                .navigationTitle(mistiaLocalized(vi: "Ảnh bill", en: "Receipt image", ja: "レシート画像"))
+                .navigationTitle(L10n.transactions.transactioneditor.receiptImage)
                 .navigationBarTitleDisplayMode(.inline)
                 .toolbar {
                     ToolbarItem(placement: .topBarLeading) {
@@ -344,7 +340,7 @@ struct TransactionEditorSheet: View {
             onComplete(.savedTransaction)
             dismiss()
         } catch {
-            alertMessage = mistiaLocalized(vi: "Không thể lưu trạng thái lưu trữ.", en: "Couldn't save the archive state.", ja: "アーカイブ状態を保存できません。") + " \(error.localizedDescription)"
+            alertMessage = L10n.transactions.transactioneditor.couldnTSaveTheArchiveState + " \(error.localizedDescription)"
         }
     }
 
@@ -352,8 +348,8 @@ struct TransactionEditorSheet: View {
         @Bindable var bindableDraft = draft
 
         return Group {
-            Section(mistiaLocalized(vi: "Loại giao dịch", en: "Transaction type", ja: "取引タイプ")) {
-                Picker(mistiaLocalized(vi: "Loại giao dịch", en: "Transaction type", ja: "取引タイプ"), selection: $bindableDraft.primaryKind) {
+            Section(L10n.transactions.transactioneditor.transactionType) {
+                Picker(L10n.transactions.transactioneditor.transactionType, selection: $bindableDraft.primaryKind) {
                     ForEach(TransactionPrimaryKind.allCases, id: \.self) { kind in
                         Text(kind.title).tag(kind)
                     }
@@ -363,17 +359,13 @@ struct TransactionEditorSheet: View {
                 .listRowBackground(Color.clear)
             }
 
-            Section(mistiaLocalized(vi: "Số tiền", en: "Amount", ja: "金額")) {
-                TextField(mistiaLocalized(vi: "Số tiền", en: "Amount", ja: "金額"), text: $bindableDraft.amountText)
+            Section(L10n.transactions.transactioneditor.amount) {
+                TextField(L10n.transactions.transactioneditor.amount, text: $bindableDraft.amountText)
                     .keyboardType(.numberPad)
             }
 
             Section {
-                Text(mistiaLocalized(
-                    vi: "Ghi nhanh chỉ lưu loại giao dịch và số tiền. Hãy hoàn thiện chi tiết ở tab Giao dịch.",
-                    en: "Quick capture only saves the transaction type and amount. Complete the rest in the Transactions tab.",
-                    ja: "クイック記録では取引タイプと金額だけを保存します。残りの詳細は取引タブで仕上げてください。"
-                ))
+                Text(L10n.transactions.transactioneditor.quickCaptureOnlySavesTheTransactionType)
                 .font(.footnote)
                 .foregroundStyle(.secondary)
             }
@@ -384,8 +376,8 @@ struct TransactionEditorSheet: View {
 
         return Group {
             if draft.primaryKind == .transfer {
-                Section(mistiaLocalized(vi: "Kiểu chuyển tiền", en: "Transfer type", ja: "振替タイプ")) {
-                    Picker(mistiaLocalized(vi: "Kiểu chuyển tiền", en: "Transfer type", ja: "振替タイプ"), selection: Binding(
+                Section(L10n.transactions.transactioneditor.transferType) {
+                    Picker(L10n.transactions.transactioneditor.transferType, selection: Binding(
                         get: { bindableDraft.transferSubtype ?? .internalTransfer },
                         set: { bindableDraft.transferSubtype = $0 }
                     )) {
@@ -400,8 +392,8 @@ struct TransactionEditorSheet: View {
             }
 
             if draft.primaryKind == .transfer, draft.transferSubtype == .debt {
-                Section(mistiaLocalized(vi: "Loại công nợ", en: "Debt type", ja: "貸し借りの種類")) {
-                    Picker(mistiaLocalized(vi: "Loại công nợ", en: "Debt type", ja: "貸し借りの種類"), selection: Binding(
+                Section(L10n.transactions.transactioneditor.debtType) {
+                    Picker(L10n.transactions.transactioneditor.debtType, selection: Binding(
                         get: { bindableDraft.debtIntent ?? .lend },
                         set: { bindableDraft.debtIntent = $0 }
                     )) {
@@ -417,17 +409,13 @@ struct TransactionEditorSheet: View {
 
             if shouldShowMissingWalletsState {
                 Section {
-                    Text(mistiaLocalized(
-                        vi: "Bạn cần thêm ít nhất một ví trong tab Quản lý trước khi ghi nhận giao dịch hoàn chỉnh.",
-                        en: "You need to add at least one wallet in the Manage tab before saving a full transaction.",
-                        ja: "取引を完全に記録する前に、管理タブで少なくとも 1 つのウォレットを追加してください。"
-                    ))
+                    Text(L10n.transactions.transactioneditor.youNeedToAddAtLeastOne)
                     .font(.footnote)
                     .foregroundStyle(.secondary)
                 }
             }
 
-            Section(mistiaLocalized(vi: "Thông tin chính", en: "Main details", ja: "基本情報")) {
+            Section(L10n.transactions.transactioneditor.mainDetails) {
                 if let titleFieldPlaceholder {
                     VStack(alignment: .leading, spacing: 10) {
                         TextField(titleFieldPlaceholder, text: $bindableDraft.title)
@@ -458,11 +446,11 @@ struct TransactionEditorSheet: View {
                     .animation(.snappy(duration: 0.2), value: shouldShowTitleSuggestions)
                 }
 
-                TextField(mistiaLocalized(vi: "Số tiền", en: "Amount", ja: "金額"), text: $bindableDraft.amountText)
+                TextField(L10n.transactions.transactioneditor.amount, text: $bindableDraft.amountText)
                     .keyboardType(.numberPad)
 
                 MistiaDatePickerRow(
-                    title: mistiaLocalized(vi: "Thời gian", en: "Date & time", ja: "日時"),
+                    title: L10n.transactions.transactioneditor.dateTime,
                     selection: $bindableDraft.occurredAt,
                     mode: .dateAndTime
                 )
@@ -470,9 +458,9 @@ struct TransactionEditorSheet: View {
 
             switch draft.primaryKind {
             case .expense, .income:
-                Section(mistiaLocalized(vi: "Nguồn tiền", en: "Funding source", ja: "支払い元")) {
-                    Picker(mistiaLocalized(vi: "Ví", en: "Wallet", ja: "ウォレット"), selection: $draft.sourceWalletID) {
-                        Text(mistiaLocalized(vi: "Chọn ví", en: "Choose wallet", ja: "ウォレットを選択")).tag(Optional<UUID>.none)
+                Section(L10n.transactions.transactioneditor.fundingSource) {
+                    Picker(L10n.transactions.transactioneditor.wallet, selection: $draft.sourceWalletID) {
+                        Text(L10n.transactions.transactioneditor.chooseWallet).tag(Optional<UUID>.none)
                         ForEach(availableWallets) { wallet in
                             Text(walletPickerTitle(for: wallet)).tag(Optional(wallet.id))
                         }
@@ -483,7 +471,7 @@ struct TransactionEditorSheet: View {
                         showsCategoryPicker = true
                     } label: {
                         HStack {
-                            Text(mistiaLocalized(vi: "Danh mục", en: "Category", ja: "カテゴリ"))
+                            Text(L10n.transactions.transactioneditor.category)
                                 .foregroundStyle(.primary)
                             Spacer()
                             Text(selectedCategoryLabel)
@@ -498,17 +486,17 @@ struct TransactionEditorSheet: View {
                 }
             case .transfer:
                 if draft.transferSubtype == .internalTransfer {
-                    Section(mistiaLocalized(vi: "Luồng chuyển", en: "Transfer flow", ja: "振替の流れ")) {
-                        Picker(mistiaLocalized(vi: "Từ ví", en: "From wallet", ja: "出金元"), selection: $draft.sourceWalletID) {
-                            Text(mistiaLocalized(vi: "Chọn nguồn", en: "Choose source", ja: "出金元を選択")).tag(Optional<UUID>.none)
+                    Section(L10n.transactions.transactioneditor.transferFlow) {
+                        Picker(L10n.transactions.transactioneditor.fromWallet, selection: $draft.sourceWalletID) {
+                            Text(L10n.transactions.transactioneditor.chooseSource).tag(Optional<UUID>.none)
                             ForEach(availableSourceWalletsForTransfer) { wallet in
                                 Text(walletPickerTitle(for: wallet)).tag(Optional(wallet.id))
                             }
                         }
                         .pickerStyle(.menu)
 
-                        Picker(mistiaLocalized(vi: "Đến ví", en: "To wallet", ja: "入金先"), selection: $draft.destinationWalletID) {
-                            Text(mistiaLocalized(vi: "Chọn đích", en: "Choose destination", ja: "入金先を選択")).tag(Optional<UUID>.none)
+                        Picker(L10n.transactions.transactioneditor.toWallet, selection: $draft.destinationWalletID) {
+                            Text(L10n.transactions.transactioneditor.chooseDestination).tag(Optional<UUID>.none)
                             ForEach(availableDestinationWalletsForTransfer) { wallet in
                                 Text(walletPickerTitle(for: wallet)).tag(Optional(wallet.id))
                             }
@@ -516,9 +504,9 @@ struct TransactionEditorSheet: View {
                         .pickerStyle(.menu)
                     }
                 } else {
-                    Section(mistiaLocalized(vi: "Đối tượng", en: "Counterparty", ja: "相手")) {
-                        Picker(mistiaLocalized(vi: "Ví thực hiện", en: "Wallet used", ja: "使用ウォレット"), selection: $draft.sourceWalletID) {
-                            Text(mistiaLocalized(vi: "Chọn ví", en: "Choose wallet", ja: "ウォレットを選択")).tag(Optional<UUID>.none)
+                    Section(L10n.transactions.transactioneditor.counterparty) {
+                        Picker(L10n.transactions.transactioneditor.walletUsed, selection: $draft.sourceWalletID) {
+                            Text(L10n.transactions.transactioneditor.chooseWallet).tag(Optional<UUID>.none)
                             ForEach(availableWallets) { wallet in
                                 Text(walletPickerTitle(for: wallet)).tag(Optional(wallet.id))
                             }
@@ -526,15 +514,15 @@ struct TransactionEditorSheet: View {
                         .pickerStyle(.menu)
 
                         TextField(
-                            mistiaLocalized(vi: "Tên người liên quan", en: "Counterparty name", ja: "相手の名前"),
+                            L10n.transactions.transactioneditor.counterpartyName,
                             text: $bindableDraft.counterpartyName
                         )
                     }
                 }
             }
 
-            Section(mistiaLocalized(vi: "Ghi chú", en: "Notes", ja: "メモ")) {
-                TextField(mistiaLocalized(vi: "Thêm ghi chú nếu cần", en: "Add a note if needed", ja: "必要ならメモを追加"), text: $bindableDraft.note, axis: .vertical)
+            Section(L10n.transactions.transactioneditor.notes) {
+                TextField(L10n.transactions.transactioneditor.addANoteIfNeeded, text: $bindableDraft.note, axis: .vertical)
                     .lineLimit(3...5)
             }
 
@@ -545,9 +533,9 @@ struct TransactionEditorSheet: View {
             if let transaction = target.transaction, !transaction.isArchived {
                 Section {
                     MistiaArchiveSection(
-                        buttonTitle: mistiaLocalized(vi: "Lưu trữ giao dịch", en: "Archive transaction", ja: "取引をアーカイブ"),
-                        descriptionText: mistiaLocalized(vi: "Giao dịch lưu trữ sẽ không còn hiện trong danh sách. Mục này sẽ được tự động xóa vĩnh viễn sau 30 ngày.", en: "Archived transactions will no longer appear in the list. They will be automatically deleted permanently after 30 days.", ja: "アーカイブした取引はリストに表示されなくなります。これらは30日後に自動的に永久削除されます。"),
-                        popupMessage: mistiaLocalized(vi: "Giao dịch này sẽ bị lưu trữ. Các giao dịch đã lưu trữ sẽ nằm trong \"Mục đã lưu trữ\" và được giữ lại trong 30 ngày.", en: "This transaction will be archived. Archived transactions will remain in \"Archived items\" for 30 days.", ja: "この取引はアーカイブされます。アーカイブされた取引は「アーカイブ済みアイテム」に30日間保持されます。")
+                        buttonTitle: L10n.transactions.transactioneditor.archiveTransaction,
+                        descriptionText: L10n.transactions.transactioneditor.archivedTransactionsWillNoLongerAppearIn,
+                        popupMessage: L10n.transactions.transactioneditor.thisTransactionWillBeArchivedArchivedTransactions
                     ) {
                         archiveTransaction()
                     }
@@ -563,39 +551,31 @@ struct TransactionEditorSheet: View {
     private var navigationTitle: String {
         if target.transaction == nil {
             return target.quickCapture
-                ? mistiaLocalized(vi: "Ghi nhanh", en: "Quick capture", ja: "クイック記録")
+                ? L10n.transactions.transactioneditor.quickCapture
                 : target.initialKind.title
         }
 
-        return mistiaLocalized(vi: "Sửa giao dịch", en: "Edit transaction", ja: "取引を編集")
+        return L10n.transactions.transactioneditor.editTransaction
     }
 
     private var headerTitle: String {
         if target.quickCapture && target.transaction == nil {
-            return mistiaLocalized(vi: "Lưu nhanh rồi hoàn thiện sau", en: "Save fast, finish later", ja: "すばやく保存して後で仕上げる")
+            return L10n.transactions.transactioneditor.saveFastFinishLater
         }
 
         if let transaction = target.transaction, transaction.entryStatus == .draft {
-            return mistiaLocalized(vi: "Hoàn thiện bản nháp", en: "Complete the draft", ja: "下書きを完成させる")
+            return L10n.transactions.transactioneditor.completeTheDraft
         }
 
-        return mistiaLocalized(vi: "Giao dịch local-first", en: "Local-first transaction", ja: "ローカルファーストの取引")
+        return L10n.transactions.transactioneditor.localFirstTransaction
     }
 
     private var headerSubtitle: String {
         if target.quickCapture && target.transaction == nil {
-            return mistiaLocalized(
-                vi: "Chỉ cần số tiền và loại giao dịch. Phần còn lại sẽ xuất hiện trong lịch sử để bạn bổ sung sau.",
-                en: "Just enter the amount and transaction type. The rest will appear in history for you to complete later.",
-                ja: "金額と取引タイプだけ入力してください。残りの内容は履歴に表示され、あとで追記できます。"
-            )
+            return L10n.transactions.transactioneditor.justEnterTheAmountAndTransactionType
         }
 
-        return mistiaLocalized(
-            vi: "Dữ liệu sẽ được lưu ngay trên thiết bị và phản ánh trực tiếp vào tab Giao dịch.",
-            en: "Data is saved directly on this device and reflected immediately in the Transactions tab.",
-            ja: "データはこの端末にすぐ保存され、取引タブへ即時反映されます。"
-        )
+        return L10n.transactions.transactioneditor.dataIsSavedDirectlyOnThisDevice
     }
 
     private var accentColor: Color {
@@ -692,16 +672,12 @@ struct TransactionEditorSheet: View {
     private var titleFieldPlaceholder: String? {
         if draft.primaryKind != .transfer {
             return draft.primaryKind == .expense
-                ? mistiaLocalized(vi: "Tên khoản chi", en: "Expense name", ja: "支出名")
-                : mistiaLocalized(vi: "Tên khoản thu", en: "Income name", ja: "収入名")
+                ? L10n.transactions.transactioneditor.expenseName
+                : L10n.transactions.transactioneditor.incomeName
         }
 
         if draft.transferSubtype == .debt {
-            return mistiaLocalized(
-                vi: "Tên giao dịch (không bắt buộc)",
-                en: "Transaction name (optional)",
-                ja: "取引名（任意）"
-            )
+            return L10n.transactions.transactioneditor.transactionNameOptional
         }
 
         return nil
@@ -833,7 +809,7 @@ struct TransactionEditorSheet: View {
 
     private var selectedCategoryLabel: String {
         guard let selectedCategory else {
-            return mistiaLocalized(vi: "Chọn danh mục", en: "Choose category", ja: "カテゴリを選択")
+            return L10n.transactions.transactioneditor.chooseCategory
         }
 
         let parentName = selectedCategory.parentCategory?.localizedDisplayName ?? selectedCategory.branchDisplayName
@@ -845,7 +821,7 @@ struct TransactionEditorSheet: View {
     }
 
     private var receiptSection: some View {
-        Section(mistiaLocalized(vi: "Ảnh", en: "Image", ja: "画像")) {
+        Section(L10n.transactions.transactioneditor.image) {
             if let receiptDraft {
                 HStack(spacing: 12) {
                     Button {
@@ -859,7 +835,7 @@ struct TransactionEditorSheet: View {
                                 .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
 
                             VStack(alignment: .leading, spacing: 3) {
-                                Text(mistiaLocalized(vi: "Ảnh bill", en: "Receipt image", ja: "レシート画像"))
+                                Text(L10n.transactions.transactioneditor.receiptImage)
                                     .foregroundStyle(.primary)
 
                                 Text(receiptFileSizeText(for: receiptDraft.imageData.count))
@@ -881,14 +857,14 @@ struct TransactionEditorSheet: View {
                             .frame(width: 36, height: 36)
                     }
                     .buttonStyle(.borderless)
-                    .accessibilityLabel(mistiaLocalized(vi: "Xóa ảnh", en: "Remove image", ja: "画像を削除"))
+                    .accessibilityLabel(L10n.transactions.transactioneditor.removeImage)
                 }
 
                 if isAnalyzingReceipt {
                     HStack(spacing: 10) {
                         ProgressView()
                             .controlSize(.small)
-                        Text(mistiaLocalized(vi: "Đang phân tích bill", en: "Analyzing receipt", ja: "レシートを解析中"))
+                        Text(L10n.transactions.transactioneditor.analyzingReceipt)
                             .foregroundStyle(.secondary)
                     }
                 }
@@ -908,7 +884,7 @@ struct TransactionEditorSheet: View {
                     receiptImageSourceMenuButtons()
                 } label: {
                     Label(
-                        mistiaLocalized(vi: "Thêm ảnh bill", en: "Add receipt image", ja: "レシート画像を追加"),
+                        L10n.transactions.transactioneditor.addReceiptImage,
                         systemImage: "camera"
                     )
                 }
@@ -923,7 +899,7 @@ struct TransactionEditorSheet: View {
                 receiptImageSource = .camera
             } label: {
                 Label(
-                    mistiaLocalized(vi: "Chụp ảnh", en: "Take photo", ja: "写真を撮る"),
+                    L10n.transactions.transactioneditor.takePhoto,
                     systemImage: "camera"
                 )
             }
@@ -933,7 +909,7 @@ struct TransactionEditorSheet: View {
             receiptImageSource = .photoLibrary
         } label: {
             Label(
-                mistiaLocalized(vi: "Chọn từ ảnh", en: "Choose from Photos", ja: "写真から選択"),
+                L10n.transactions.transactioneditor.chooseFromPhotos,
                 systemImage: "photo"
             )
         }
@@ -952,10 +928,10 @@ struct TransactionEditorSheet: View {
 
     private var saveButtonTitle: String {
         if target.quickCapture && target.transaction == nil {
-            return mistiaLocalized(vi: "Lưu nháp", en: "Save draft", ja: "下書きを保存")
+            return L10n.transactions.transactioneditor.saveDraft
         }
 
-        return mistiaLocalized(vi: "Lưu", en: "Save", ja: "保存")
+        return L10n.common.save
     }
 
     private func save() {
@@ -969,7 +945,7 @@ struct TransactionEditorSheet: View {
 
     private func saveQuickCapture() {
         guard let amountMinor = draft.amountMinor, amountMinor > 0 else {
-            alertMessage = mistiaLocalized(vi: "Nhập số tiền lớn hơn 0 để lưu ghi nhanh.", en: "Enter an amount greater than 0 to save the quick capture.", ja: "クイック記録を保存するには 0 より大きい金額を入力してください。")
+            alertMessage = L10n.transactions.transactioneditor.enterAnAmountGreaterThanTo
             return
         }
 
@@ -1052,19 +1028,11 @@ struct TransactionEditorSheet: View {
                     )
                     shouldDeleteReceiptOnSave = false
                 case .failure(let error):
-                    alertMessage = mistiaLocalized(
-                        vi: "Không thể mở ảnh bill đã lưu.",
-                        en: "Couldn't load the saved receipt image.",
-                        ja: "保存済みのレシート画像を読み込めません。"
-                    ) + " \(error.localizedDescription)"
+                    alertMessage = L10n.transactions.transactioneditor.couldnTLoadTheSavedReceiptImage + " \(error.localizedDescription)"
                 }
             }
         } catch {
-            alertMessage = mistiaLocalized(
-                vi: "Không thể mở ảnh bill đã lưu.",
-                en: "Couldn't load the saved receipt image.",
-                ja: "保存済みのレシート画像を読み込めません。"
-            ) + " \(error.localizedDescription)"
+            alertMessage = L10n.transactions.transactioneditor.couldnTLoadTheSavedReceiptImage + " \(error.localizedDescription)"
         }
     }
 
@@ -1095,11 +1063,7 @@ struct TransactionEditorSheet: View {
 
     private func handlePickedReceiptImage(_ image: UIImage) {
         guard let draft = TransactionReceiptImageProcessor.makeDraft(from: image) else {
-            alertMessage = mistiaLocalized(
-                vi: "Không thể xử lý ảnh bill này.",
-                en: "Couldn't process this receipt image.",
-                ja: "このレシート画像を処理できません。"
-            )
+            alertMessage = L10n.transactions.transactioneditor.couldnTProcessThisReceiptImage
             return
         }
 
@@ -1119,20 +1083,12 @@ struct TransactionEditorSheet: View {
         guard !isAnalyzingReceipt, let receiptDraft else { return }
 
         guard sessionStore.canPerformRemoteActions else {
-            alertMessage = mistiaLocalized(
-                vi: "AI cần đăng nhập và kết nối mạng để phân tích bill. Ảnh vẫn được giữ trong modal để bạn nhập thủ công.",
-                en: "Receipt AI needs sign-in and network access. The image stays in the modal so you can fill the transaction manually.",
-                ja: "レシートAIにはサインインとネットワーク接続が必要です。画像はモーダルに残るため手入力できます。"
-            )
+            alertMessage = L10n.transactions.transactioneditor.receiptAINeedsSignInAndNetwork
             return
         }
 
         guard !availableCategories.isEmpty else {
-            alertMessage = mistiaLocalized(
-                vi: "Bạn cần có danh mục phù hợp trước khi AI có thể chọn danh mục cho bill.",
-                en: "You need available categories before AI can choose one for the receipt.",
-                ja: "AIがカテゴリを選ぶには利用可能なカテゴリが必要です。"
-            )
+            alertMessage = L10n.transactions.transactioneditor.youNeedAvailableCategoriesBeforeAICan
             return
         }
 
@@ -1234,42 +1190,30 @@ struct TransactionEditorSheet: View {
         }
 
         let detail = error.localizedDescription
-        return mistiaLocalized(
-            vi: "Không thể phân tích bill lúc này.",
-            en: "Couldn't analyze this receipt right now.",
-            ja: "現在レシートを解析できません。"
-        ) + " \(detail)"
+        return L10n.transactions.transactioneditor.couldnTAnalyzeThisReceiptRightNow + " \(detail)"
     }
 
     private func receiptQuotaStatusText(for quota: ReceiptAnalysisQuota) -> String {
         if quota.limitCount <= 0 {
-            return mistiaLocalized(
-                vi: "AI quét bill đang tạm tắt hôm nay.",
-                en: "Receipt AI is temporarily disabled today.",
-                ja: "本日のレシートAIは一時的に無効です。"
-            )
+            return L10n.transactions.transactioneditor.receiptAIIsTemporarilyDisabledToday
         }
 
-        return mistiaLocalized(
-            vi: "Đã dùng \(quota.usedCount)/\(quota.limitCount) lượt quét bill hôm nay.",
-            en: "Used \(quota.usedCount)/\(quota.limitCount) receipt scans today.",
-            ja: "本日のレシート読み取りは \(quota.usedCount)/\(quota.limitCount) 回使用済みです。"
-        )
+        return L10n.transactions.transactioneditor.usedValueValueReceiptScansToday(String(describing: quota.usedCount), String(describing: quota.limitCount))
     }
 
     private func saveFullTransaction() {
         guard let amountMinor = draft.amountMinor, amountMinor > 0 else {
-            alertMessage = mistiaLocalized(vi: "Nhập số tiền lớn hơn 0.", en: "Enter an amount greater than 0.", ja: "0 より大きい金額を入力してください。")
+            alertMessage = L10n.transactions.transactioneditor.enterAnAmountGreaterThan
             return
         }
 
         if draft.primaryKind != .transfer, draft.title.nilIfBlank == nil {
-            alertMessage = mistiaLocalized(vi: "Nhập tên giao dịch để lưu.", en: "Enter a transaction name before saving.", ja: "保存する前に取引名を入力してください。")
+            alertMessage = L10n.transactions.transactioneditor.enterATransactionNameBeforeSaving
             return
         }
 
         guard !availableWallets.isEmpty else {
-            alertMessage = mistiaLocalized(vi: "Bạn chưa có ví nào để gắn vào giao dịch.", en: "You don't have any wallets available for this transaction.", ja: "この取引に使えるウォレットがまだありません。")
+            alertMessage = L10n.transactions.transactioneditor.youDonTHaveAnyWalletsAvailable
             return
         }
 
@@ -1277,7 +1221,7 @@ struct TransactionEditorSheet: View {
         if draft.primaryKind == .income,
            let sourceWallet = selectedSourceWallet,
            sourceWallet.kind == .creditCard {
-            alertMessage = mistiaLocalized(vi: "Thẻ tín dụng không thể ghi nhận thu nhập. Hãy chọn ví tiền mặt, ngân hàng hoặc ví điện tử.", en: "Credit cards cannot receive income. Please select a cash, bank, or e-wallet instead.", ja: "クレジットカードは収入を記録できません。現金、銀行、または電子マネーを選択してください。")
+            alertMessage = L10n.transactions.transactioneditor.creditCardsCannotReceiveIncomePleaseSelect
             return
         }
         
@@ -1286,7 +1230,7 @@ struct TransactionEditorSheet: View {
            draft.transferSubtype == .internalTransfer,
            let sourceWallet = selectedSourceWallet,
            sourceWallet.kind == .creditCard {
-            alertMessage = mistiaLocalized(vi: "Thẻ tín dụng không thể chuyển tiền đi. Chỉ có thể nhận tiền để trả nợ.", en: "Credit cards cannot send money via transfer. They can only receive payments for debt repayment.", ja: "クレジットカードは振替で送金できません。返済の受け取りのみ可能です。")
+            alertMessage = L10n.transactions.transactioneditor.creditCardsCannotSendMoneyViaTransfer
             return
         }
 
@@ -1307,7 +1251,7 @@ struct TransactionEditorSheet: View {
         switch draft.primaryKind {
         case .expense:
             guard let sourceWallet = selectedSourceWallet else {
-                alertMessage = mistiaLocalized(vi: "Chọn ví cho giao dịch này.", en: "Choose a wallet for this transaction.", ja: "この取引のウォレットを選択してください。")
+                alertMessage = L10n.transactions.transactioneditor.chooseAWalletForThisTransaction
                 return
             }
 
@@ -1338,11 +1282,11 @@ struct TransactionEditorSheet: View {
                     availableCredit = 0
                 }
                 if amountMinor > availableCredit {
-                    alertMessage = mistiaLocalized(vi: "Số tiền vượt quá hạn mức khả dụng của thẻ.", en: "The amount exceeds the available credit on the card.", ja: "金額がカードの利用可能額を超えています。")
+                    alertMessage = L10n.transactions.transactioneditor.theAmountExceedsTheAvailableCreditOn
                     return
                 }
             } else if currentBalance - amountMinor < 0 {
-                alertMessage = mistiaLocalized(vi: "Số dư ví không đủ để thực hiện giao dịch.", en: "Insufficient wallet balance to perform the transaction.", ja: "取引を実行するためのウォレット残高が不足しています。")
+                alertMessage = L10n.transactions.transactioneditor.insufficientWalletBalanceToPerformTheTransaction
                 return
             }
 
@@ -1350,7 +1294,7 @@ struct TransactionEditorSheet: View {
             switch draft.transferSubtype ?? .internalTransfer {
             case .internalTransfer:
                 guard let sourceWallet = selectedSourceWallet else {
-                    alertMessage = mistiaLocalized(vi: "Chọn ví nguồn.", en: "Choose the source wallet.", ja: "出金元ウォレットを選択してください。")
+                    alertMessage = L10n.transactions.transactioneditor.chooseTheSourceWallet
                     return
                 }
                 
@@ -1363,14 +1307,14 @@ struct TransactionEditorSheet: View {
                 let currentBalance = validationBalanceIndex.balance(for: snapshot)
                 
                 if currentBalance - amountMinor < 0 {
-                    alertMessage = mistiaLocalized(vi: "Số dư ví không đủ để thực hiện giao dịch.", en: "Insufficient wallet balance to perform the transaction.", ja: "取引を実行するためのウォレット残高が不足しています。")
+                    alertMessage = L10n.transactions.transactioneditor.insufficientWalletBalanceToPerformTheTransaction
                     return
                 }
 
             case .debt:
                 if draft.debtIntent == .lend || draft.debtIntent == .repay {
                     guard let sourceWallet = selectedSourceWallet else {
-                        alertMessage = mistiaLocalized(vi: "Chọn ví thực hiện giao dịch công nợ.", en: "Choose the wallet used for this debt transaction.", ja: "この貸し借り取引で使うウォレットを選択してください。")
+                        alertMessage = L10n.transactions.transactioneditor.chooseTheWalletUsedForThisDebt
                         return
                     }
 
@@ -1383,7 +1327,7 @@ struct TransactionEditorSheet: View {
                     let currentBalance = validationBalanceIndex.balance(for: snapshot)
                     
                     if currentBalance - amountMinor < 0 {
-                        alertMessage = mistiaLocalized(vi: "Số dư ví không đủ để thực hiện giao dịch.", en: "Insufficient wallet balance to perform the transaction.", ja: "取引を実行するためのウォレット残高が不足しています。")
+                        alertMessage = L10n.transactions.transactioneditor.insufficientWalletBalanceToPerformTheTransaction
                         return
                     }
                 }
@@ -1409,31 +1353,23 @@ struct TransactionEditorSheet: View {
         switch draft.primaryKind {
         case .expense, .income:
             guard let sourceWallet = selectedSourceWallet else {
-                alertMessage = mistiaLocalized(vi: "Chọn ví cho giao dịch này.", en: "Choose a wallet for this transaction.", ja: "この取引のウォレットを選択してください。")
+                alertMessage = L10n.transactions.transactioneditor.chooseAWalletForThisTransaction
                 return
             }
 
             guard let category = selectedCategory else {
-                alertMessage = mistiaLocalized(vi: "Chọn danh mục cho giao dịch này.", en: "Choose a category for this transaction.", ja: "この取引のカテゴリを選択してください。")
+                alertMessage = L10n.transactions.transactioneditor.chooseACategoryForThisTransaction
                 return
             }
 
             guard category.isChildCategory else {
-                alertMessage = mistiaLocalized(
-                    vi: "Chi tiêu và thu nhập phải dùng danh mục con.",
-                    en: "Expenses and income must use a child category.",
-                    ja: "支出と収入は子カテゴリを使う必要があります。"
-                )
+                alertMessage = L10n.transactions.transactioneditor.expensesAndIncomeMustUseAChild
                 return
             }
 
             let walletOwnerUserID = walletOwnerUserID(for: sourceWallet)
             guard categoryOwnerUserID(for: category) == walletOwnerUserID else {
-                alertMessage = mistiaLocalized(
-                    vi: "Ví gia đình phải dùng danh mục đã có trên cloud của chủ ví.",
-                    en: "Family wallets must use a category from the wallet owner's cloud catalog.",
-                    ja: "家族ウォレットでは、ウォレット所有者のクラウドカテゴリを使う必要があります。"
-                )
+                alertMessage = L10n.transactions.transactioneditor.familyWalletsMustUseACategoryFrom
                 return
             }
 
@@ -1449,21 +1385,21 @@ struct TransactionEditorSheet: View {
             switch draft.transferSubtype ?? .internalTransfer {
             case .internalTransfer:
                 guard let sourceWallet = selectedSourceWallet else {
-                    alertMessage = mistiaLocalized(vi: "Chọn ví nguồn.", en: "Choose the source wallet.", ja: "出金元ウォレットを選択してください。")
+                    alertMessage = L10n.transactions.transactioneditor.chooseTheSourceWallet
                     return
                 }
 
                 guard let destinationWallet = selectedDestinationWallet else {
-                    alertMessage = mistiaLocalized(vi: "Chọn ví đích.", en: "Choose the destination wallet.", ja: "入金先ウォレットを選択してください。")
+                    alertMessage = L10n.transactions.transactioneditor.chooseTheDestinationWallet
                     return
                 }
 
                 guard sourceWallet.id != destinationWallet.id else {
-                    alertMessage = mistiaLocalized(vi: "Ví nguồn và đích phải khác nhau.", en: "Source and destination wallets must be different.", ja: "出金元と入金先のウォレットは別である必要があります。")
+                    alertMessage = L10n.transactions.transactioneditor.sourceAndDestinationWalletsMustBeDifferent
                     return
                 }
 
-                transaction.title = draft.title.nilIfBlank ?? mistiaLocalized(vi: "Chuyển tiền nội bộ", en: "Internal transfer", ja: "内部振替")
+                transaction.title = draft.title.nilIfBlank ?? L10n.transactions.transactioneditor.internalTransfer
                 transaction.sourceWallet = sourceWallet
                 transaction.destinationWallet = destinationWallet
                 transaction.category = nil
@@ -1473,19 +1409,19 @@ struct TransactionEditorSheet: View {
                 transaction.normalizedCounterpartyKey = nil
             case .debt:
                 guard let sourceWallet = selectedSourceWallet else {
-                    alertMessage = mistiaLocalized(vi: "Chọn ví thực hiện giao dịch công nợ.", en: "Choose the wallet used for this debt transaction.", ja: "この貸し借り取引で使うウォレットを選択してください。")
+                    alertMessage = L10n.transactions.transactioneditor.chooseTheWalletUsedForThisDebt
                     return
                 }
 
                 guard let debtIntent = draft.debtIntent else {
-                    alertMessage = mistiaLocalized(vi: "Chọn loại công nợ.", en: "Choose a debt type.", ja: "貸し借りの種類を選択してください。")
+                    alertMessage = L10n.transactions.transactioneditor.chooseADebtType
                     return
                 }
 
                 guard let counterpartyName = draft.counterpartyName.nilIfBlank,
                       let normalizedCounterpartyKey = TransactionLogic.normalizeCounterpartyName(counterpartyName)
                 else {
-                    alertMessage = mistiaLocalized(vi: "Nhập tên người liên quan.", en: "Enter the counterparty name.", ja: "相手の名前を入力してください。")
+                    alertMessage = L10n.transactions.transactioneditor.enterTheCounterpartyName
                     return
                 }
 
@@ -1507,11 +1443,7 @@ struct TransactionEditorSheet: View {
         do {
             try persistReceiptDraftIfNeeded(for: transaction)
         } catch {
-            alertMessage = mistiaLocalized(
-                vi: "Không thể lưu ảnh bill.",
-                en: "Couldn't save the receipt image.",
-                ja: "レシート画像を保存できません。"
-            ) + " \(error.localizedDescription)"
+            alertMessage = L10n.transactions.transactioneditor.couldnTSaveTheReceiptImage + " \(error.localizedDescription)"
             return
         }
 
@@ -1608,11 +1540,7 @@ struct TransactionEditorSheet: View {
             for: statement.statementMonth,
             calendar: calendar
         )
-        return mistiaLocalized(
-            vi: "Sao kê \(statementMonth) của thẻ này đã thanh toán xong. Không thể thêm chi tiêu mới vào kỳ đã đóng.",
-            en: "The \(statementMonth) statement for this card has already been paid. You can't add a new expense to a closed cycle.",
-            ja: "このカードの \(statementMonth) 明細は支払い済みです。締め済みの期間に新しい支出は追加できません。"
-        )
+        return L10n.transactions.transactioneditor.theValueStatementForThisCardHas(String(describing: statementMonth))
     }
 
     private func persist(
@@ -1673,17 +1601,13 @@ struct TransactionEditorSheet: View {
             onComplete(completion)
             dismiss()
         } catch {
-            alertMessage = mistiaLocalized(vi: "Không thể lưu giao dịch lúc này.", en: "Couldn't save this transaction right now.", ja: "現在この取引を保存できません。") + " \(error.localizedDescription)"
+            alertMessage = L10n.transactions.transactioneditor.couldnTSaveThisTransactionRightNow + " \(error.localizedDescription)"
         }
     }
 
     private func familyCloudPushFailedMessage() -> String {
         let detail = sessionStore.lastErrorMessage?.nilIfBlank
-        let base = mistiaLocalized(
-            vi: "Giao dịch đã lưu trên máy này nhưng chưa đẩy được lên cloud của chủ ví.",
-            en: "The transaction was saved on this device but couldn't be pushed to the wallet owner's cloud yet.",
-            ja: "この端末には保存されましたが、ウォレット所有者のクラウドにはまだ送信できませんでした。"
-        )
+        let base = L10n.transactions.transactioneditor.theTransactionWasSavedOnThisDevice
         guard let detail else { return base }
         return "\(base) \(detail)"
     }

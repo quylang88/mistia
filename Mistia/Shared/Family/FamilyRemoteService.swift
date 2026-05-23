@@ -1019,27 +1019,15 @@ struct FamilyRemoteService: FamilyRemoteServicing {
         )
 
         guard let invite = rows.first, invite.deletedAt == nil else {
-            throw SupabaseServiceError.serverMessage(mistiaLocalized(
-                vi: "Mã mời không tồn tại hoặc đã bị xóa.",
-                en: "Invite code does not exist or has been deleted.",
-                ja: "招待コードが存在しないか、削除されました。"
-            ))
+            throw SupabaseServiceError.serverMessage(L10n.shared.family.familyremote.inviteCodeDoesNotExistOrHas)
         }
 
         if invite.acceptedAt != nil || invite.declinedAt != nil || invite.revokedAt != nil {
-            throw SupabaseServiceError.serverMessage(mistiaLocalized(
-                vi: "Mã mời này không còn hiệu lực.",
-                en: "This invite code is no longer valid.",
-                ja: "この招待コードはもう有効ではありません。"
-            ))
+            throw SupabaseServiceError.serverMessage(L10n.shared.family.familyremote.thisInviteCodeIsNoLongerValid)
         }
 
         if invite.expiresAt < .now {
-            throw SupabaseServiceError.serverMessage(mistiaLocalized(
-                vi: "Mã mời đã hết hạn.",
-                en: "Invite code has expired.",
-                ja: "招待コードの期限が切れました。"
-            ))
+            throw SupabaseServiceError.serverMessage(L10n.shared.family.familyremote.inviteCodeHasExpired)
         }
 
         return invite

@@ -162,11 +162,7 @@ private struct MistiaAuthTransitionView: View {
                 ProgressView()
                     .controlSize(.large)
 
-                Text(mistiaLocalized(
-                    vi: "Đang chuyển phiên...",
-                    en: "Switching session...",
-                    ja: "セッションを切り替えています..."
-                ))
+                Text(L10n.app.mistia.switchingSession)
                 .font(.system(size: 16, weight: .semibold, design: .rounded))
                 .foregroundStyle(.secondary)
             }
@@ -195,42 +191,22 @@ private struct MistiaProtectedLaunchView: View {
 
             ScrollView(.vertical) {
                 VStack(alignment: .leading, spacing: 18) {
-                    Text(mistiaLocalized(
-                        vi: "Mistia đang bảo vệ dữ liệu của bạn",
-                        en: "Mistia is protecting your data",
-                        ja: "Mistia はデータを保護しています",
-                        language: appLanguage
-                    ))
+                    Text(L10n.app.mistia.mistiaIsProtectingYourData)
                     .font(.system(size: 31, weight: .bold, design: .rounded))
                     .foregroundStyle(.white)
 
-                    Text(mistiaLocalized(
-                        vi: "Ứng dụng không thể mở cơ sở dữ liệu cục bộ sau khi cập nhật. Mistia đã chuyển sang chế độ an toàn và không xóa dữ liệu trên máy.",
-                        en: "The app couldn't open the local database after the update. Mistia switched to safe mode and did not delete the data on this device.",
-                        ja: "アップデート後にローカルデータベースを開けなかったため、Mistia はセーフモードに切り替わり、この端末のデータは削除していません。",
-                        language: appLanguage
-                    ))
+                    Text(L10n.app.mistia.theAppCouldnTOpenTheLocal)
                     .font(.body)
                     .foregroundStyle(.white.opacity(0.86))
 
                     VStack(alignment: .leading, spacing: 12) {
                         Label(
-                            mistiaLocalized(
-                                vi: "Dữ liệu local vẫn được giữ nguyên trên máy",
-                                en: "Local data has been kept on this device",
-                                ja: "ローカルデータはこの端末に保持されています",
-                                language: appLanguage
-                            ),
+                            L10n.app.mistia.localDataHasBeenKeptOnThis,
                             systemImage: "internaldrive.fill"
                         )
 
                         Label(
-                            mistiaLocalized(
-                                vi: "App sẽ không tự tạo DB mới để tránh ghi đè hoặc đồng bộ nhầm",
-                                en: "The app will not create a replacement database that could overwrite or sync bad state",
-                                ja: "上書きや誤同期を防ぐため、代わりのデータベースは自動作成しません",
-                                language: appLanguage
-                            ),
+                            L10n.app.mistia.theAppWillNotCreateAReplacement,
                             systemImage: "lock.shield.fill"
                         )
                     }
@@ -238,12 +214,7 @@ private struct MistiaProtectedLaunchView: View {
                     .foregroundStyle(.white)
 
                     VStack(alignment: .leading, spacing: 8) {
-                        Text(mistiaLocalized(
-                            vi: "Chi tiết kỹ thuật",
-                            en: "Technical details",
-                            ja: "技術的な詳細",
-                            language: appLanguage
-                        ))
+                        Text(L10n.app.mistia.technicalDetails)
                         .font(.headline)
                         .foregroundStyle(.white)
 
@@ -284,11 +255,7 @@ private struct MistiaStartupLoadingView: View {
                 ProgressView()
                     .controlSize(.large)
 
-                Text(mistiaLocalized(
-                    vi: "Đang tải dữ liệu...",
-                    en: "Loading your data...",
-                    ja: "データを読み込み中..."
-                ))
+                Text(L10n.app.mistia.loadingYourData)
                 .font(.system(size: 16, weight: .semibold, design: .rounded))
                 .foregroundStyle(.secondary)
             }

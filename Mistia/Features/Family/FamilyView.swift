@@ -164,8 +164,8 @@ struct FamilyManagementView: View {
         MistiaGlassCard(cornerRadius: 14, tint: cardTint, padding: 0) {
             VStack(spacing: 0) {
                 FamilySettingsRow(
-                    title: mistiaLocalized(vi: "Tạo gia đình", en: "Create family", ja: "家族を作成"),
-                    subtitle: remoteActionsDisabledReason ?? mistiaLocalized(vi: "Bạn trở thành owner và mời thêm thành viên sau.", en: "You become the owner and invite others later.", ja: "作成者が owner になり、あとでメンバーを招待できます。"),
+                    title: L10n.family.family.createFamily,
+                    subtitle: remoteActionsDisabledReason ?? L10n.family.family.youBecomeTheOwnerAndInviteOthers,
                     icon: "plus",
                     iconColor: .mint,
                     isDisabled: remoteActionsDisabled
@@ -176,8 +176,8 @@ struct FamilyManagementView: View {
                 FamilyRowDivider()
 
                 FamilySettingsRow(
-                    title: mistiaLocalized(vi: "Dùng link mời", en: "Use invite link", ja: "招待リンクを使う"),
-                    subtitle: remoteActionsDisabledReason ?? mistiaLocalized(vi: "Bấm link owner đã chia sẻ, hoặc dán link nếu bạn đã copy.", en: "Tap the owner's shared link, or paste the link if you've copied it.", ja: "owner が共有したリンクを開くか、コピー済みのリンクを貼り付けます。"),
+                    title: L10n.family.family.useInviteLink,
+                    subtitle: remoteActionsDisabledReason ?? L10n.family.family.tapTheOwnerSSharedLinkOr,
                     icon: "link",
                     iconColor: .cyan,
                     isDisabled: remoteActionsDisabled
@@ -192,21 +192,13 @@ struct FamilyManagementView: View {
         MistiaGlassCard(cornerRadius: 14, tint: cardTint, padding: 20) {
             VStack(alignment: .leading, spacing: 12) {
                 Label(
-                    mistiaLocalized(
-                        vi: "Gia đình đang chờ kết nối",
-                        en: "Family is waiting for the connection",
-                        ja: "家族機能は接続待ちです"
-                    ),
+                    L10n.family.family.familyIsWaitingForTheConnection,
                     systemImage: "wifi.slash"
                 )
                 .font(.system(size: 17, weight: .semibold, design: .rounded))
                 .foregroundStyle(.primary)
 
-                Text(sessionStore.remoteUnavailableReason ?? mistiaLocalized(
-                    vi: "Kết nối lại mạng để tạo gia đình mới, dùng link mời hoặc đồng bộ lại dữ liệu gia đình.",
-                    en: "Reconnect to create a family, use an invite link, or sync family data again.",
-                    ja: "ネットワークに再接続すると、家族の作成、招待リンクの使用、家族データの再同期が行えます。"
-                ))
+                Text(sessionStore.remoteUnavailableReason ?? L10n.family.family.reconnectToCreateAFamilyUseAn)
                 .font(.system(size: 14.5, weight: .medium, design: .rounded))
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
@@ -253,7 +245,7 @@ struct FamilyManagementView: View {
                     showsStatus: false
                 )
 
-                Text(mistiaLocalized(vi: "Gia đình", en: "Family", ja: "家族"))
+                Text(L10n.family.family.family)
                     .font(.system(size: 22, weight: .bold, design: .rounded))
                     .foregroundStyle(.primary)
             }
@@ -293,7 +285,7 @@ struct FamilyManagementView: View {
                                                 .foregroundStyle(.secondary)
                                             
                                             if member.userID == sessionStore.signedInUserID {
-                                                Text(mistiaLocalized(vi: "(Bạn)", en: "(You)", ja: "(自分)"))
+                                                Text(L10n.family.family.you)
                                                     .font(.system(size: 13, weight: .medium, design: .rounded))
                                                     .foregroundStyle(.secondary)
                                             }
@@ -321,11 +313,7 @@ struct FamilyManagementView: View {
 
             // Member description
             VStack(alignment: .leading, spacing: 4) {
-                Text(mistiaLocalized(
-                    vi: "Bạn có thể kiểm tra những gì các thành viên trong gia đình có thể truy cập hoặc chia sẻ, đồng thời quản lý cài đặt tài khoản của trẻ em và các kiểm soát của phụ huynh.",
-                    en: "You can check what family members can access or share, while managing child account settings and parental controls.",
-                    ja: "ファミリーメンバーがアクセスまたは共有できるもの確認でき、お子様のアカウント設定と保護者による制限を管理できます。"
-                ))
+                Text(L10n.family.family.youCanCheckWhatFamilyMembersCan)
                 .descriptionTextStyle()
                 .padding(.horizontal, 2)
             }
@@ -337,11 +325,7 @@ struct FamilyManagementView: View {
 
             // Privacy Link
             VStack(alignment: .leading, spacing: 6) {
-                Text(mistiaLocalized(
-                    vi: "Mistia sẽ sử dụng dữ liệu để đồng bộ và hiển thị thông tin gia đình của bạn một cách an toàn.",
-                    en: "Mistia will use data to securely sync and display your family information.",
-                    ja: "Mistiaはデータを安全に同期し、家族情報を表示するために使用します。"
-                ))
+                Text(L10n.family.family.mistiaWillUseDataToSecurelySync)
                 .font(.system(size: 13, weight: .medium, design: .rounded))
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.leading)
@@ -350,11 +334,7 @@ struct FamilyManagementView: View {
                 Button {
                     activeSheet = .privacy
                 } label: {
-                    Text(mistiaLocalized(
-                        vi: "Xác nhận sử dụng dữ liệu & thông tin cá nhân",
-                        en: "Confirm data & personal information usage",
-                        ja: "データおよび個人情報の使用を確認する"
-                    ))
+                    Text(L10n.family.family.confirmDataPersonalInformationUsage)
                     .font(.system(size: 13, weight: .bold, design: .rounded))
                     .foregroundStyle(accent)
                 }
@@ -369,7 +349,7 @@ struct FamilyManagementView: View {
         var rows = [
             FamilyHubRouteRowItem(
                 destination: .overview,
-                title: mistiaLocalized(vi: "Tổng quan gia đình", en: "Family overview", ja: "家族の概要"),
+                title: L10n.family.family.familyOverview,
                 icon: "chart.bar.xaxis",
                 iconColor: .indigo
             )
@@ -379,7 +359,7 @@ struct FamilyManagementView: View {
             rows.append(
                 FamilyHubRouteRowItem(
                     destination: .inviteManagement,
-                    title: mistiaLocalized(vi: "Quản lý lời mời", en: "Manage invites", ja: "招待を管理"),
+                    title: L10n.family.family.manageInvites,
                     icon: "link.badge.plus",
                     iconColor: .cyan
                 )
@@ -403,9 +383,9 @@ private enum FamilyTimeframe: String, CaseIterable, Identifiable {
     var id: String { rawValue }
     var title: String {
         switch self {
-        case .week: return mistiaLocalized(vi: "Tuần", en: "Week", ja: "週")
-        case .month: return mistiaLocalized(vi: "Tháng", en: "Month", ja: "月")
-        case .year: return mistiaLocalized(vi: "Năm", en: "Year", ja: "年")
+        case .week: return L10n.family.family.week
+        case .month: return L10n.family.family.month
+        case .year: return L10n.family.family.year
         }
     }
 }
@@ -415,9 +395,9 @@ private enum FamilyDistributionMode: String, CaseIterable, Identifiable {
     var id: String { rawValue }
     var title: String {
         switch self {
-        case .spending: return mistiaLocalized(vi: "Chi tiêu", en: "Spending", ja: "支出")
-        case .accounts: return mistiaLocalized(vi: "Tài khoản", en: "Accounts", ja: "口座")
-        case .members: return mistiaLocalized(vi: "Thành viên", en: "Members", ja: "メンバー")
+        case .spending: return L10n.family.family.spending
+        case .accounts: return L10n.family.family.accounts
+        case .members: return L10n.family.family.members
         }
     }
 }
@@ -427,8 +407,8 @@ private enum FamilyComparisonMode: String, CaseIterable, Identifiable {
     var id: String { rawValue }
     var title: String {
         switch self {
-        case .spending: return mistiaLocalized(vi: "Chi tiêu", en: "Spending", ja: "支出")
-        case .income: return mistiaLocalized(vi: "Thu nhập", en: "Income", ja: "収入")
+        case .spending: return L10n.family.family.spending
+        case .income: return L10n.family.family.income
         }
     }
 }
@@ -511,7 +491,7 @@ private struct FamilyHeroCard: View {
             VStack(alignment: .leading, spacing: 20) {
                 HStack(spacing: 0) {
                     VStack(alignment: .leading, spacing: 6) {
-                        Text(mistiaLocalized(vi: "Tổng tài sản", en: "Total assets", ja: "総資産"))
+                        Text(L10n.family.family.totalAssets)
                             .font(.system(size: 15, weight: .medium, design: .rounded))
                             .foregroundStyle(.secondary)
                         
@@ -529,13 +509,13 @@ private struct FamilyHeroCard: View {
 
                 HStack(spacing: 20) {
                     FamilyMetricCompact(
-                        title: mistiaLocalized(vi: "Đang nợ", en: "Current debt", ja: "現在の負債"),
+                        title: L10n.family.family.currentDebt,
                         value: summary.totalDebtMinor.formattedCurrency(code: currencyCode),
                         color: .red
                     )
                     
                     FamilyMetricCompact(
-                        title: mistiaLocalized(vi: "Có thể chi tháng này", en: "Spendable this month", ja: "今月使える金額"),
+                        title: L10n.family.family.spendableThisMonth,
                         value: monthlySpendable.displayMinor.formattedCurrency(code: currencyCode),
                         color: MistiaAccent.income.color
                     )
@@ -604,11 +584,7 @@ private struct FamilySpendableWarning: View {
 
     private var warningText: String {
         let amount = shortfallMinor.formattedCurrency(code: currencyCode)
-        return mistiaLocalized(
-            vi: "Cần bù thêm \(amount) trong tháng này.",
-            en: "Need \(amount) more this month.",
-            ja: "今月あと \(amount) 必要です。"
-        )
+        return L10n.family.family.needValueMoreThisMonth(String(describing: amount))
     }
 
     private var warningForeground: Color {
@@ -655,7 +631,7 @@ private struct FamilyDistributionSection: View {
             EmptyView()
         } else {
             VStack(spacing: 12) {
-                Picker("", selection: $timeframe) {
+                Picker(String(), selection: $timeframe) {
                     ForEach(FamilyTimeframe.allCases) { tf in
                         Text(tf.title).tag(tf)
                     }
@@ -666,7 +642,7 @@ private struct FamilyDistributionSection: View {
                 MistiaGlassCard(cornerRadius: 24, tint: cardTint) {
                     VStack(alignment: .leading, spacing: 16) {
                         HStack(alignment: .firstTextBaseline) {
-                            Text(mistiaLocalized(vi: "Phân bổ", en: "Distribution", ja: "内訳"))
+                            Text(L10n.family.family.distribution)
                                 .familyOverviewSectionTitleStyle()
 
                             Spacer(minLength: 10)
@@ -678,7 +654,7 @@ private struct FamilyDistributionSection: View {
                                 .minimumScaleFactor(0.72)
                         }
 
-                        Picker("", selection: resolvedModeBinding) {
+                        Picker(String(), selection: resolvedModeBinding) {
                             ForEach(availableModes) { m in
                                 Text(m.title).tag(m)
                             }
@@ -792,7 +768,7 @@ private struct FamilyDistributionSection: View {
             }
             displaySegments.append(
                 FamilyDonutSegment(
-                    label: mistiaLocalized(vi: "Khác", en: "Other", ja: "その他"),
+                    label: L10n.family.family.other,
                     valueMinor: otherValue,
                     colorHex: nil
                 )
@@ -943,7 +919,7 @@ private struct FamilySingleSegmentSemiGauge: View {
                 )
                 .shadow(color: tint.opacity(colorScheme == .dark ? 0.30 : 0.22), radius: 5, y: 2)
 
-            Text("100%")
+            Text(verbatim: "100%")
                 .font(.system(size: 20, weight: .bold, design: .rounded))
                 .foregroundStyle(tint)
                 .lineLimit(1)
@@ -952,7 +928,7 @@ private struct FamilySingleSegmentSemiGauge: View {
         }
         .frame(width: 132, height: 72)
         .frame(width: 150, height: 104, alignment: .center)
-        .accessibilityLabel(mistiaLocalized(vi: "Một mục chiếm toàn bộ", en: "Single item fills the chart", ja: "1つの項目が全体を占めています"))
+        .accessibilityLabel(L10n.family.family.singleItemFillsTheChart)
     }
 }
 
@@ -1075,13 +1051,13 @@ private struct FamilyMemberComparisonSection: View {
         } else {
             VStack(alignment: .leading, spacing: 12) {
                 HStack {
-                    Text(mistiaLocalized(vi: "So sánh thành viên", en: "Member comparison", ja: "メンバー比較"))
+                    Text(L10n.family.family.memberComparison)
                         .familyOverviewSectionTitleStyle()
 
                     Spacer()
 
                     if availableModes.count > 1 {
-                        Picker("", selection: $mode) {
+                        Picker(String(), selection: $mode) {
                             ForEach(availableModes) { m in
                                 Text(m.title).tag(m)
                             }
@@ -1174,7 +1150,7 @@ private struct FamilyAggregateAccountList: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text(mistiaLocalized(vi: "Danh sách tài khoản gộp", en: "Merged accounts", ja: "統合口座リスト"))
+            Text(L10n.family.family.mergedAccounts)
                 .familyOverviewSectionTitleStyle()
                 .padding(.horizontal, 4)
 
@@ -1190,7 +1166,7 @@ private struct FamilyAggregateAccountList: View {
                                     .foregroundStyle(.primary)
                                 
                                 if row.kind == .creditCard {
-                                    Text(mistiaLocalized(vi: "Sắp đến hạn", en: "Upcoming", ja: "間もなく期限"))
+                                    Text(L10n.family.family.upcoming)
                                         .font(.system(size: 11, weight: .medium, design: .rounded))
                                         .foregroundStyle(.orange)
                                 }
@@ -1240,14 +1216,14 @@ private struct FamilyBudgetStatusSection: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text(mistiaLocalized(vi: "Ngân sách gia đình", en: "Family budget", ja: "家族の予算"))
+            Text(L10n.family.family.familyBudget)
                 .familyOverviewSectionTitleStyle()
                 .padding(.horizontal, 4)
 
             MistiaGlassCard(cornerRadius: 24, tint: cardTint, padding: 0) {
                 VStack(spacing: 0) {
                     if rows.isEmpty {
-                        Text(mistiaLocalized(vi: "Chưa có ngân sách nào đang toang", en: "No budgets are over limit", ja: "予算オーバーはありません"))
+                        Text(L10n.family.family.noBudgetsAreOverLimit)
                             .font(.system(size: 14, weight: .medium, design: .rounded))
                             .foregroundStyle(.secondary)
                             .padding(.vertical, 24)
@@ -1292,7 +1268,7 @@ private struct FamilyGoalStatusSection: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text(mistiaLocalized(vi: "Mục tiêu gia đình", en: "Family goals", ja: "家族の目標"))
+            Text(L10n.family.family.familyGoals)
                 .familyOverviewSectionTitleStyle()
                 .padding(.horizontal, 4)
 
@@ -1355,14 +1331,14 @@ private struct FamilyUpcomingSection: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text(mistiaLocalized(vi: "Sắp đến hạn", en: "Upcoming", ja: "間もなく期限"))
+            Text(L10n.family.family.upcoming)
                 .familyOverviewSectionTitleStyle()
                 .padding(.horizontal, 4)
 
             MistiaGlassCard(cornerRadius: 24, tint: cardTint, padding: 0) {
                 VStack(spacing: 0) {
                     if rows.isEmpty {
-                        Text(mistiaLocalized(vi: "Không có khoản nào sắp đến hạn", en: "No upcoming items", ja: "間もなく期限の項目はありません"))
+                        Text(L10n.family.family.noUpcomingItems)
                             .font(.system(size: 14, weight: .medium, design: .rounded))
                             .foregroundStyle(.secondary)
                             .padding(.vertical, 24)
@@ -1400,18 +1376,18 @@ private struct FamilyTransactionFilterSheet: View {
     var body: some View {
         NavigationStack {
             VStack {
-                Text(mistiaLocalized(vi: "Danh sách giao dịch đã lọc", en: "Filtered transactions", ja: "フィルター済み取引"))
+                Text(L10n.family.family.filteredTransactions)
                     .font(.headline)
                 Spacer()
-                Text(mistiaLocalized(vi: "Tính năng lọc giao dịch đang được hoàn thiện.", en: "Transaction filtering is coming soon.", ja: "取引フィルター機能は近日公開予定です。"))
+                Text(L10n.family.family.transactionFilteringIsComingSoon)
                     .foregroundStyle(.secondary)
                 Spacer()
             }
-            .navigationTitle(mistiaLocalized(vi: "Giao dịch", en: "Transactions", ja: "取引"))
+            .navigationTitle(L10n.family.family.transactions)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
-                    Button(mistiaLocalized(vi: "Đóng", en: "Close", ja: "閉じる")) { dismiss() }
+                    Button(L10n.family.family.close) { dismiss() }
                 }
             }
         }
@@ -1424,7 +1400,7 @@ private struct FamilyAIInsightsSection: View {
     var body: some View {
         if !insights.isEmpty {
             VStack(alignment: .leading, spacing: 12) {
-                Text(mistiaLocalized(vi: "Insight gia đình", en: "Family insights", ja: "家族のインサイト"))
+                Text(L10n.family.family.familyInsights)
                     .font(.system(size: 16, weight: .bold, design: .rounded))
                     .padding(.horizontal, 4)
 
@@ -1496,7 +1472,7 @@ private struct FamilyOverviewHeader: View {
                                     .foregroundStyle(familyContextStore.isViewingFamilyAggregate ? .white : MistiaAccent.purple.color)
                             }
                             
-                            Text(mistiaLocalized(vi: "Cả nhà", en: "Family", ja: "家族"))
+                            Text(L10n.family.family.family2)
                                 .font(.system(size: 12, weight: .medium, design: .rounded))
                                 .foregroundStyle(familyContextStore.isViewingFamilyAggregate ? .primary : .secondary)
                         }
@@ -1555,7 +1531,7 @@ private struct FamilyOverviewHeader: View {
                                         familyContextStore.activateMemberView(member)
                                     }
                                 } label: {
-                                    Label(mistiaLocalized(vi: "Xem chi tiết", en: "View details", ja: "詳細を見る"), systemImage: "eye.fill")
+                                    Label(L10n.family.family.viewDetails, systemImage: "eye.fill")
                                 }
                             }
                         }
@@ -1574,7 +1550,7 @@ private struct FamilyOverviewHeader: View {
                                         .foregroundStyle(.secondary)
                                 }
 
-                                Text(mistiaLocalized(vi: "Thêm", en: "Invite", ja: "招待"))
+                                Text(L10n.family.family.invite)
                                     .font(.system(size: 12, weight: .medium, design: .rounded))
                                     .foregroundStyle(.secondary)
                             }
@@ -1644,11 +1620,7 @@ private struct FamilyAppleHeaderCard: View {
 
                 // Member count
                 Text(
-                    mistiaLocalized(
-                        vi: "\(members.count) thành viên",
-                        en: "\(members.count) members",
-                        ja: "\(members.count) 人のメンバー"
-                    )
+                    L10n.family.family.valueMembers(String(describing: members.count))
                 )
                 .font(.system(size: 14, weight: .medium, design: .rounded))
                 .foregroundStyle(.secondary)
@@ -1791,7 +1763,7 @@ private struct FamilyAlertBanner: View {
                     .foregroundStyle(.orange)
 
                 VStack(alignment: .leading, spacing: 4) {
-                    Text(mistiaLocalized(vi: "Gia đình cần kiểm tra", en: "Family needs attention", ja: "家族設定の確認が必要です"))
+                    Text(L10n.family.family.familyNeedsAttention)
                         .font(.system(size: 15, weight: .semibold, design: .rounded))
 
                     Text(message)
@@ -1818,11 +1790,7 @@ private struct FamilySyncOverlayIndicator: View {
             .allowsHitTesting(false)
             .transition(.opacity.combined(with: .scale(scale: 0.9)))
             .accessibilityLabel(
-                Text(mistiaLocalized(
-                    vi: "Đang đồng bộ gia đình",
-                    en: "Syncing family",
-                    ja: "家族データを同期中"
-                ))
+                Text(L10n.family.family.syncingFamily)
             )
     }
 }
@@ -2342,7 +2310,7 @@ struct FamilyOverviewScreen: View {
 
         MistiaPinnedTopBarScaffold(
             tone: .standard,
-            title: familyContextStore.family?.name ?? mistiaLocalized(vi: "Gia đình", en: "Family", ja: "家族"),
+            title: familyContextStore.family?.name ?? L10n.family.family.family,
             leadingSystemImage: "chevron.left",
             trailingSystemImage: nil,
             hidesSystemBackButton: true,
@@ -2468,7 +2436,7 @@ struct FamilyMembersScreen: View {
     var body: some View {
         MistiaPinnedTopBarScaffold(
             tone: .standard,
-            title: mistiaLocalized(vi: "Thành viên", en: "Members", ja: "メンバー"),
+            title: L10n.family.family.members,
             contentSpacing: 18
         ) {
             ForEach(familyContextStore.members) { member in
@@ -2663,24 +2631,20 @@ private struct FamilyMemberProfileScreen: View {
             .disabled(remoteActionsDisabled)
             .opacity(remoteActionsDisabled ? 0.55 : 1)
             .confirmationDialog(
-                mistiaLocalized(vi: "Nhượng quyền owner?", en: "Transfer owner?", ja: "owner を譲渡しますか？"),
+                L10n.family.family.transferOwner2,
                 isPresented: $confirmsTransferOwner,
                 titleVisibility: .visible
             ) {
-                Button(mistiaLocalized(vi: "Nhượng quyền owner", en: "Transfer owner", ja: "owner を譲渡"), role: .destructive) {
+                Button(L10n.family.family.transferOwner, role: .destructive) {
                     Task {
                         await familyContextStore.transferOwner(to: member, sessionStore: sessionStore)
                         dismiss()
                     }
                 }
 
-                Button(mistiaLocalized(vi: "Hủy", en: "Cancel", ja: "キャンセル"), role: .cancel) {}
+                Button(L10n.common.cancel, role: .cancel) {}
             } message: {
-                Text(mistiaLocalized(
-                    vi: "\(member.displayName) sẽ là owner duy nhất của gia đình này. Bạn sẽ không còn quyền quản lý thành viên sau khi chuyển.",
-                    en: "\(member.displayName) will be the only owner of this family. You will no longer manage members after transfer.",
-                    ja: "\(member.displayName) がこの家族の唯一の owner になります。譲渡後、あなたはメンバー管理ができません。"
-                ))
+                Text(L10n.family.family.valueWillBeTheOnlyOwnerOf(String(describing: member.displayName)))
             }
 
         case .viewData:
@@ -2726,7 +2690,7 @@ private struct FamilyMemberProfileScreen: View {
                     }
                 }
 
-                Button(mistiaLocalized(vi: "Hủy", en: "Cancel", ja: "キャンセル"), role: .cancel) {
+                Button(L10n.common.cancel, role: .cancel) {
                     destructiveAction = nil
                 }
             } message: {
@@ -2767,29 +2731,21 @@ private struct FamilyMemberProfileScreen: View {
     private func memberActionTitle(_ action: FamilyMemberProfileAction) -> String {
         switch action {
         case .sharing:
-            return mistiaLocalized(vi: "Đang chia sẻ", en: "Sharing", ja: "共有中")
+            return L10n.family.family.sharing
         case .permissions:
-            return mistiaLocalized(vi: "Quyền hạn", en: "Permissions", ja: "権限")
+            return L10n.family.family.permissions2
         case .transferOwner:
-            return mistiaLocalized(vi: "Nhượng quyền owner", en: "Transfer owner", ja: "owner を譲渡")
+            return L10n.family.family.transferOwner
         case .viewData:
-            return mistiaLocalized(
-                vi: "Xem dữ liệu của \(member.displayName)",
-                en: "View \(member.displayName)'s data",
-                ja: "\(member.displayName)のデータを見る"
-            )
+            return L10n.family.family.viewValueSData(String(describing: member.displayName))
         case .destructive:
             if isMe {
                 return isOwner
-                    ? mistiaLocalized(vi: "Xóa gia đình", en: "Delete family", ja: "家族を削除")
-                    : mistiaLocalized(vi: "Rời khỏi gia đình", en: "Leave family", ja: "家族を退会")
+                    ? L10n.family.family.deleteFamily2
+                    : L10n.family.family.leaveFamily2
             }
 
-            return mistiaLocalized(
-                vi: "Xóa \(member.displayName) khỏi gia đình",
-                en: "Remove \(member.displayName)",
-                ja: "\(member.displayName)を削除"
-            )
+            return L10n.family.family.removeValue(String(describing: member.displayName))
         }
     }
 
@@ -2822,11 +2778,11 @@ private struct FamilyMemberProfileScreen: View {
     private var destructiveActionTitle: String {
         switch destructiveAction {
         case .deleteFamily:
-            return mistiaLocalized(vi: "Xóa gia đình?", en: "Delete family?", ja: "家族を削除しますか？")
+            return L10n.family.family.deleteFamily
         case .leaveFamily:
-            return mistiaLocalized(vi: "Rời khỏi gia đình?", en: "Leave family?", ja: "家族を退会しますか？")
+            return L10n.family.family.leaveFamily
         case .removeMember:
-            return mistiaLocalized(vi: "Xóa thành viên?", en: "Remove member?", ja: "メンバーを削除しますか？")
+            return L10n.family.family.removeMember
         case nil:
             return ""
         }
@@ -2835,11 +2791,11 @@ private struct FamilyMemberProfileScreen: View {
     private var destructiveActionButtonTitle: String {
         switch destructiveAction {
         case .deleteFamily:
-            return mistiaLocalized(vi: "Xóa vĩnh viễn", en: "Delete permanently", ja: "完全に削除")
+            return L10n.family.family.deletePermanently
         case .leaveFamily:
-            return mistiaLocalized(vi: "Rời khỏi", en: "Leave", ja: "退会")
+            return L10n.family.family.leave
         case .removeMember:
-            return mistiaLocalized(vi: "Xóa khỏi gia đình", en: "Remove from family", ja: "家族から削除")
+            return L10n.family.family.removeFromFamily
         case nil:
             return ""
         }
@@ -2848,23 +2804,11 @@ private struct FamilyMemberProfileScreen: View {
     private var destructiveActionMessage: String {
         switch destructiveAction {
         case .deleteFamily:
-            return mistiaLocalized(
-                vi: "Tất cả dữ liệu chia sẻ và kết nối gia đình sẽ bị xóa vĩnh viễn. Hành động này không thể hoàn tác.",
-                en: "All shared data and family connections will be permanently deleted. This cannot be undone.",
-                ja: "共有データと家族のつながりはすべて完全に削除されます。この操作は取り消せません。"
-            )
+            return L10n.family.family.allSharedDataAndFamilyConnectionsWill
         case .leaveFamily:
-            return mistiaLocalized(
-                vi: "Bạn sẽ không còn quyền truy cập vào dữ liệu chung của gia đình này nữa.",
-                en: "You will no longer have access to this family's shared data.",
-                ja: "この家族の共有データにアクセスできなくなります。"
-            )
+            return L10n.family.family.youWillNoLongerHaveAccessTo
         case .removeMember:
-            return mistiaLocalized(
-                vi: "Thành viên này sẽ bị xóa khỏi gia đình và không còn quyền truy cập dữ liệu chung.",
-                en: "This member will be removed and lose access to shared data.",
-                ja: "このメンバーは家族から削除され、共有データにアクセスできなくなります。"
-            )
+            return L10n.family.family.thisMemberWillBeRemovedAndLose
         case nil:
             return ""
         }
@@ -2897,14 +2841,14 @@ private struct FamilyCreateSheet: View {
                     }
                 }
 
-                Section(mistiaLocalized(vi: "Gia đình mới", en: "New family", ja: "新しい家族")) {
-                    TextField(mistiaLocalized(vi: "Tên gia đình", en: "Family name", ja: "家族名"), text: $familyName)
+                Section(L10n.family.family.newFamily) {
+                    TextField(L10n.family.family.familyName, text: $familyName)
                         .focused($focusedField, equals: .familyName)
                 }
             }
             .disabled(!sessionStore.canPerformRemoteActions)
             .dismissKeyboardOnTap()
-            .navigationTitle(mistiaLocalized(vi: "Tạo gia đình", en: "Create family", ja: "家族を作成"))
+            .navigationTitle(L10n.family.family.createFamily)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
@@ -2970,17 +2914,13 @@ private struct FamilyJoinSheet: View {
                 }
 
                 Section {
-                    Text(mistiaLocalized(
-                        vi: "Nếu bạn đã copy link mời, hãy dán link ở đây. Mistia sẽ mở màn hình chào mừng và không tự tham gia cho đến khi bạn xác nhận.",
-                        en: "If you've copied an invite link, paste it here. Mistia will open the welcome screen and won't join until you confirm.",
-                        ja: "招待リンクをコピー済みの場合はここに貼り付けてください。確認するまで自動参加はしません。"
-                    ))
+                    Text(L10n.family.family.ifYouVeCopiedAnInviteLink)
                     .font(.footnote)
                     .foregroundStyle(.secondary)
                 }
 
-                Section(mistiaLocalized(vi: "Link mời", en: "Invite link", ja: "招待リンク")) {
-                    TextField("mistia://family-invite/...", text: $inviteLink)
+                Section(L10n.family.family.inviteLink) {
+                    TextField(L10n.family.invite.linkPlaceholder, text: $inviteLink)
                         .focused($focusedField, equals: .inviteCode)
                         .keyboardType(.URL)
                         .textInputAutocapitalization(.never)
@@ -2995,7 +2935,7 @@ private struct FamilyJoinSheet: View {
             }
             .disabled(!sessionStore.canPerformRemoteActions)
             .dismissKeyboardOnTap()
-            .navigationTitle(mistiaLocalized(vi: "Dùng link mời", en: "Use invite link", ja: "招待リンクを使う"))
+            .navigationTitle(L10n.family.family.useInviteLink)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
@@ -3011,11 +2951,7 @@ private struct FamilyJoinSheet: View {
                 ToolbarItem(placement: .topBarTrailing) {
                     Button {
                         guard let token = inviteToken else {
-                            validationMessage = mistiaLocalized(
-                                vi: "Link mời không hợp lệ.",
-                                en: "This invite link isn't valid.",
-                                ja: "招待リンクが無効です。"
-                            )
+                            validationMessage = L10n.family.family.thisInviteLinkIsnTValid
                             return
                         }
 
@@ -3092,7 +3028,7 @@ private struct FamilyInviteManagementScreen: View {
     var body: some View {
         MistiaPinnedTopBarScaffold(
             tone: .standard,
-            title: mistiaLocalized(vi: "Quản lý lời mời", en: "Manage invites", ja: "招待を管理"),
+            title: L10n.family.family.manageInvites,
             leadingSystemImage: "chevron.left",
             trailingSystemImage: nil,
             hidesSystemBackButton: true,
@@ -3121,17 +3057,13 @@ private struct FamilyInviteManagementScreen: View {
         MistiaGlassCard(cornerRadius: 18, tint: Color(UIColor.secondarySystemGroupedBackground), padding: 18) {
             VStack(alignment: .leading, spacing: 10) {
                 Label(
-                    mistiaLocalized(vi: "Chưa có lời mời nào", en: "No invites yet", ja: "招待はまだありません"),
+                    L10n.family.family.noInvitesYet,
                     systemImage: "link.badge.plus"
                 )
                 .font(.system(size: 17, weight: .semibold, design: .rounded))
                 .foregroundStyle(.primary)
 
-                Text(mistiaLocalized(
-                    vi: "Các link đã tạo sẽ xuất hiện ở đây cùng trạng thái chờ, đã dùng, đã từ chối, hết hạn hoặc đã thu hồi.",
-                    en: "Created links will appear here with pending, used, declined, expired, or revoked states.",
-                    ja: "作成済みリンクは、待機中・使用済み・辞退済み・期限切れ・取り消し済みの状態でここに表示されます。"
-                ))
+                Text(L10n.family.family.createdLinksWillAppearHereWithPending)
                 .descriptionTextStyle()
                 .fixedSize(horizontal: false, vertical: true)
             }
@@ -3143,22 +3075,22 @@ private struct FamilyInviteManagementScreen: View {
         MistiaGlassCard(cornerRadius: 18, tint: Color(UIColor.secondarySystemGroupedBackground), padding: 16) {
             LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 12), count: 2), spacing: 14) {
                 inviteSummaryMetric(
-                    title: mistiaLocalized(vi: "Đang chờ", en: "Pending", ja: "待機中"),
+                    title: L10n.family.family.pending,
                     count: pendingCount,
                     tint: .orange
                 )
                 inviteSummaryMetric(
-                    title: mistiaLocalized(vi: "Đã dùng", en: "Used", ja: "使用済み"),
+                    title: L10n.family.family.used,
                     count: acceptedCount,
                     tint: .mint
                 )
                 inviteSummaryMetric(
-                    title: mistiaLocalized(vi: "Đã từ chối", en: "Declined", ja: "辞退済み"),
+                    title: L10n.family.family.declined,
                     count: declinedCount,
                     tint: .red
                 )
                 inviteSummaryMetric(
-                    title: mistiaLocalized(vi: "Hết hạn", en: "Expired", ja: "期限切れ"),
+                    title: L10n.family.family.expired,
                     count: expiredCount,
                     tint: .secondary
                 )
@@ -3197,7 +3129,7 @@ private struct FamilyInviteManagementScreen: View {
 
     private func inviteSummaryMetric(title: String, count: Int, tint: Color) -> some View {
         VStack(alignment: .leading, spacing: 4) {
-            Text("\(count)")
+            Text(verbatim: "\(count)")
                 .font(.system(size: 22, weight: .bold, design: .rounded))
                 .foregroundStyle(tint)
             Text(title)
@@ -3216,7 +3148,7 @@ private struct FamilyInviteManagementScreen: View {
         }
 
         return familyContextStore.displayName(for: acceptedByUserID)
-            ?? mistiaLocalized(vi: "Thành viên đã chấp nhận", en: "Accepted member", ja: "承認済みメンバー")
+            ?? L10n.family.family.acceptedMember
     }
 
     private func shareInvite(_ invite: FamilyInviteRecord) {
@@ -3252,25 +3184,17 @@ private struct FamilyInviteTimelineRow: View {
 
     private var roleDetail: String {
         if acceptedDisplayName != nil {
-            return mistiaLocalized(
-                vi: "Vai trò: \(invite.defaultRole.title)",
-                en: "Role: \(invite.defaultRole.title)",
-                ja: "役割: \(invite.defaultRole.title)"
-            )
+            return L10n.family.family.roleValue(String(describing: invite.defaultRole.title))
         }
 
-        return mistiaLocalized(
-            vi: "Vai trò được mời: \(invite.defaultRole.title)",
-            en: "Invite role: \(invite.defaultRole.title)",
-            ja: "招待する役割: \(invite.defaultRole.title)"
-        )
+        return L10n.family.family.inviteRoleValue(String(describing: invite.defaultRole.title))
     }
 
     private var copyTitle: String {
         if copiedInviteID == invite.id {
-            return mistiaLocalized(vi: "Đã copy", en: "Copied", ja: "コピー済み")
+            return L10n.family.family.copied
         }
-        return mistiaLocalized(vi: "Sao chép", en: "Copy", ja: "コピー")
+        return L10n.family.family.copy
     }
 
     var body: some View {
@@ -3313,7 +3237,7 @@ private struct FamilyInviteTimelineRow: View {
                 HStack(spacing: 14) {
                     if invite.status == .pending {
                         Button(action: onShare) {
-                            Label(mistiaLocalized(vi: "Chia sẻ", en: "Share", ja: "共有"), systemImage: "square.and.arrow.up")
+                            Label(L10n.family.family.share, systemImage: "square.and.arrow.up")
                         }
                     }
 
@@ -3325,7 +3249,7 @@ private struct FamilyInviteTimelineRow: View {
                         Spacer(minLength: 0)
 
                         Button(role: .destructive, action: onRevoke) {
-                            Label(mistiaLocalized(vi: "Thu hồi", en: "Revoke", ja: "取り消す"), systemImage: "xmark.circle")
+                            Label(L10n.family.family.revoke, systemImage: "xmark.circle")
                         }
                         .disabled(!canRevoke)
                         .opacity(canRevoke ? 1 : 0.45)
@@ -3377,11 +3301,7 @@ private struct FamilyInviteSheet: View {
 
     private var inviteLimitMessage: String? {
         guard !familyContextStore.canCreatePendingInvite else { return nil }
-        return mistiaLocalized(
-            vi: "Bạn đang có 2 lời mời chờ phản hồi. Khi một lời mời hết hạn, bị từ chối, được chấp nhận hoặc thu hồi, bạn có thể tạo link mới.",
-            en: "You already have 2 pending invites. You can create another link after one expires, is declined, accepted, or revoked.",
-            ja: "待機中の招待が2件あります。いずれかが期限切れ、辞退、承認、取り消しになると新しいリンクを作成できます。"
-        )
+        return L10n.family.family.youAlreadyHavePendingInvitesYou
     }
 
     var body: some View {
@@ -3395,7 +3315,7 @@ private struct FamilyInviteSheet: View {
                     }
                 }
 
-                Section(mistiaLocalized(vi: "Vai trò được mời", en: "Invite role", ja: "招待する役割")) {
+                Section(L10n.family.family.inviteRole) {
                     ForEach([FamilyRole.member, .kid], id: \.self) { role in
                         Button {
                             selectedRole = role
@@ -3422,11 +3342,11 @@ private struct FamilyInviteSheet: View {
             }
             .disabled(!sessionStore.canPerformRemoteActions || isCreatingInvite)
             .dismissKeyboardOnTap()
-            .navigationTitle(mistiaLocalized(vi: "Mời thành viên", en: "Invite member", ja: "メンバーを招待"))
+            .navigationTitle(L10n.family.family.inviteMember)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
-                    Button(mistiaLocalized(vi: "Đóng", en: "Close", ja: "閉じる")) {
+                    Button(L10n.family.family.close) {
                         dismiss()
                     }
                 }
@@ -3441,7 +3361,7 @@ private struct FamilyInviteSheet: View {
                             ProgressView()
                                 .controlSize(.small)
                         } else {
-                            Text(mistiaLocalized(vi: "Tạo link", en: "Create link", ja: "リンク作成"))
+                            Text(L10n.family.family.createLink)
                         }
                     }
                     .disabled(isCreateDisabled)
@@ -3478,23 +3398,11 @@ private struct FamilyInviteSheet: View {
     private func roleDescription(_ role: FamilyRole) -> String {
         switch role {
         case .owner:
-            return mistiaLocalized(
-                vi: "Gia đình chỉ có một owner. Hãy mời thành viên rồi nhượng quyền owner từ màn hình thông tin thành viên.",
-                en: "A family has one owner. Invite a member, then transfer ownership from that member's info screen.",
-                ja: "家族の owner は1人です。メンバーとして招待してから、メンバー情報画面で owner を譲渡します。"
-            )
+            return L10n.family.family.aFamilyHasOneOwnerInviteA
         case .member:
-            return mistiaLocalized(
-                vi: "Thành viên có thể xem dữ liệu gia đình theo quyền xem mặc định, nhưng muốn sửa hoặc dùng ví thì cần được cấp quyền.",
-                en: "Members can view family data by default, but editing or using wallets requires an explicit grant.",
-                ja: "メンバーは既定で家族データを表示できますが、編集やウォレット利用には明示的な許可が必要です。"
-            )
+            return L10n.family.family.membersCanViewFamilyDataByDefault
         case .kid:
-            return mistiaLocalized(
-                vi: "Trẻ em mặc định bị giới hạn và có thể chịu sự quản lý của phụ huynh hoặc chủ gia đình.",
-                en: "Kids are limited by default and can be managed by a parent or family owner.",
-                ja: "子どもは初期状態で制限され、保護者または所有者が管理できます。"
-            )
+            return L10n.family.family.kidsAreLimitedByDefaultAndCan
         }
     }
 }
@@ -3567,59 +3475,39 @@ private struct FamilyInviteActivitySheet: UIViewControllerRepresentable {
 }
 
 private func familyInviteCreatedText(_ invite: FamilyInviteRecord) -> String {
-    mistiaLocalized(
-        vi: "Đã gửi: \(invite.createdAt.formatted(date: .abbreviated, time: .shortened))",
-        en: "Sent: \(invite.createdAt.formatted(date: .abbreviated, time: .shortened))",
-        ja: "送信: \(invite.createdAt.formatted(date: .abbreviated, time: .shortened))"
-    )
+    L10n.family.family.sentValue(String(describing: invite.createdAt.formatted(date: .abbreviated, time: .shortened)))
 }
 
 private func familyInviteLifecycleText(_ invite: FamilyInviteRecord) -> String {
     if invite.status == .accepted, let acceptedAt = invite.acceptedAt {
-        return mistiaLocalized(
-            vi: "Đã chấp nhận: \(acceptedAt.formatted(date: .abbreviated, time: .shortened))",
-            en: "Accepted: \(acceptedAt.formatted(date: .abbreviated, time: .shortened))",
-            ja: "承認: \(acceptedAt.formatted(date: .abbreviated, time: .shortened))"
-        )
+        return L10n.family.family.acceptedValue(String(describing: acceptedAt.formatted(date: .abbreviated, time: .shortened)))
     }
 
     if invite.status == .revoked, let revokedAt = invite.revokedAt {
-        return mistiaLocalized(
-            vi: "Đã thu hồi: \(revokedAt.formatted(date: .abbreviated, time: .shortened))",
-            en: "Revoked: \(revokedAt.formatted(date: .abbreviated, time: .shortened))",
-            ja: "取り消し: \(revokedAt.formatted(date: .abbreviated, time: .shortened))"
-        )
+        return L10n.family.family.revokedValue(String(describing: revokedAt.formatted(date: .abbreviated, time: .shortened)))
     }
 
     if invite.status == .declined, let declinedAt = invite.declinedAt {
-        return mistiaLocalized(
-            vi: "Đã từ chối: \(declinedAt.formatted(date: .abbreviated, time: .shortened))",
-            en: "Declined: \(declinedAt.formatted(date: .abbreviated, time: .shortened))",
-            ja: "辞退: \(declinedAt.formatted(date: .abbreviated, time: .shortened))"
-        )
+        return L10n.family.family.declinedValue(String(describing: declinedAt.formatted(date: .abbreviated, time: .shortened)))
     }
 
-    return mistiaLocalized(
-        vi: "Hết hạn: \(invite.expiresAt.formatted(date: .abbreviated, time: .shortened))",
-        en: "Expires: \(invite.expiresAt.formatted(date: .abbreviated, time: .shortened))",
-        ja: "期限: \(invite.expiresAt.formatted(date: .abbreviated, time: .shortened))"
-    )
+    return L10n.family.family.expiresValue(String(describing: invite.expiresAt.formatted(date: .abbreviated, time: .shortened)))
 }
 
 private func familyInviteStatusTitle(_ status: FamilyInviteStatus) -> String {
     switch status {
     case .pending:
-        return mistiaLocalized(vi: "Đang chờ", en: "Pending", ja: "待機中")
+        return L10n.family.family.pending
     case .accepted:
-        return mistiaLocalized(vi: "Đã dùng", en: "Used", ja: "使用済み")
+        return L10n.family.family.used
     case .declined:
-        return mistiaLocalized(vi: "Đã từ chối", en: "Declined", ja: "辞退済み")
+        return L10n.family.family.declined
     case .expired:
-        return mistiaLocalized(vi: "Hết hạn", en: "Expired", ja: "期限切れ")
+        return L10n.family.family.expired
     case .revoked:
-        return mistiaLocalized(vi: "Đã thu hồi", en: "Revoked", ja: "取り消し済み")
+        return L10n.family.family.revoked
     case .invalid:
-        return mistiaLocalized(vi: "Không hợp lệ", en: "Invalid", ja: "無効")
+        return L10n.family.family.invalid
     }
 }
 
@@ -3697,105 +3585,105 @@ private struct FamilySharingSheet: View {
                 }
 
                 if familyContextStore.currentRole == .owner {
-                    Section(mistiaLocalized(vi: "Quản lý tổng quan gia đình", en: "Family overview managers", ja: "家族概要の管理者")) {
+                    Section(L10n.family.family.familyOverviewManagers) {
                         planningManagerToggle(
-                            title: mistiaLocalized(vi: "Quản lý ngân sách gia đình", en: "Manage family budgets", ja: "家族予算を管理"),
+                            title: L10n.family.family.manageFamilyBudgets,
                             resourceType: .budget
                         )
                         planningManagerToggle(
-                            title: mistiaLocalized(vi: "Quản lý mục tiêu gia đình", en: "Manage family goals", ja: "家族目標を管理"),
+                            title: L10n.family.family.manageFamilyGoals,
                             resourceType: .goal
                         )
                     }
                 }
 
-                Section(mistiaLocalized(vi: "Quyền chỉnh sửa", en: "Edit access", ja: "編集権限")) {
+                Section(L10n.family.family.editAccess) {
                     sharingToggle(
-                        title: mistiaLocalized(vi: "Giao dịch", en: "Transactions", ja: "取引"),
+                        title: L10n.family.family.transactions,
                         resourceType: .transaction,
                         resourceID: nil,
                         scope: .edit
                     )
                     sharingToggle(
-                        title: mistiaLocalized(vi: "Danh mục", en: "Categories", ja: "カテゴリ"),
+                        title: L10n.family.family.categories,
                         resourceType: .category,
                         resourceID: nil,
                         scope: .edit
                     )
                     sharingToggle(
-                        title: mistiaLocalized(vi: "Ngân sách", en: "Budgets", ja: "予算"),
+                        title: L10n.family.family.budgets,
                         resourceType: .budget,
                         resourceID: nil,
                         scope: .edit
                     )
                     sharingToggle(
-                        title: mistiaLocalized(vi: "Hóa đơn", en: "Bills", ja: "請求書"),
+                        title: L10n.family.family.bills,
                         resourceType: .bill,
                         resourceID: nil,
                         scope: .edit
                     )
                     sharingToggle(
-                        title: mistiaLocalized(vi: "Trả góp / vay", en: "Installments / loans", ja: "分割払い・借入"),
+                        title: L10n.family.family.installmentsLoans,
                         resourceType: .installment,
                         resourceID: nil,
                         scope: .edit
                     )
                     sharingToggle(
-                        title: mistiaLocalized(vi: "Mục tiêu", en: "Goals", ja: "目標"),
+                        title: L10n.family.family.goals,
                         resourceType: .goal,
                         resourceID: nil,
                         scope: .edit
                     )
                 }
 
-                Section(mistiaLocalized(vi: "Quyền thêm mới", en: "Create access", ja: "作成権限")) {
+                Section(L10n.family.family.createAccess) {
                     sharingToggle(
-                        title: mistiaLocalized(vi: "Ví / thẻ", en: "Wallets / cards", ja: "ウォレット・カード"),
+                        title: L10n.family.family.walletsCards,
                         resourceType: .wallet,
                         resourceID: nil,
                         scope: .create
                     )
                     sharingToggle(
-                        title: mistiaLocalized(vi: "Giao dịch", en: "Transactions", ja: "取引"),
+                        title: L10n.family.family.transactions,
                         resourceType: .transaction,
                         resourceID: nil,
                         scope: .create
                     )
                     sharingToggle(
-                        title: mistiaLocalized(vi: "Danh mục", en: "Categories", ja: "カテゴリ"),
+                        title: L10n.family.family.categories,
                         resourceType: .category,
                         resourceID: nil,
                         scope: .create
                     )
                     sharingToggle(
-                        title: mistiaLocalized(vi: "Ngân sách", en: "Budgets", ja: "予算"),
+                        title: L10n.family.family.budgets,
                         resourceType: .budget,
                         resourceID: nil,
                         scope: .create
                     )
                     sharingToggle(
-                        title: mistiaLocalized(vi: "Hóa đơn", en: "Bills", ja: "請求書"),
+                        title: L10n.family.family.bills,
                         resourceType: .bill,
                         resourceID: nil,
                         scope: .create
                     )
                     sharingToggle(
-                        title: mistiaLocalized(vi: "Trả góp / vay", en: "Installments / loans", ja: "分割払い・借入"),
+                        title: L10n.family.family.installmentsLoans,
                         resourceType: .installment,
                         resourceID: nil,
                         scope: .create
                     )
                     sharingToggle(
-                        title: mistiaLocalized(vi: "Mục tiêu", en: "Goals", ja: "目標"),
+                        title: L10n.family.family.goals,
                         resourceType: .goal,
                         resourceID: nil,
                         scope: .create
                     )
                 }
 
-                Section(mistiaLocalized(vi: "Quyền sử dụng ví", en: "Wallet use access", ja: "ウォレット使用権限")) {
+                Section(L10n.family.family.walletUseAccess) {
                     if ownWallets.isEmpty {
-                        Text(mistiaLocalized(vi: "Bạn chưa có ví nào để chia sẻ quyền sử dụng.", en: "You do not have wallets to share use access for yet.", ja: "使用権限を共有できるウォレットはまだありません。"))
+                        Text(L10n.family.family.youDoNotHaveWalletsToShare2)
                             .font(.footnote)
                             .foregroundStyle(.secondary)
                     } else {
@@ -3810,9 +3698,9 @@ private struct FamilySharingSheet: View {
                     }
                 }
 
-                Section(mistiaLocalized(vi: "Quyền chỉnh sửa ví", en: "Wallet edit access", ja: "ウォレット編集権限")) {
+                Section(L10n.family.family.walletEditAccess) {
                     if ownWallets.isEmpty {
-                        Text(mistiaLocalized(vi: "Bạn chưa có ví nào để chia sẻ quyền chỉnh sửa.", en: "You do not have wallets to share edit access for yet.", ja: "編集権限を共有できるウォレットはまだありません。"))
+                        Text(L10n.family.family.youDoNotHaveWalletsToShare)
                             .font(.footnote)
                             .foregroundStyle(.secondary)
                     } else {
@@ -3828,7 +3716,7 @@ private struct FamilySharingSheet: View {
                 }
             }
             .disabled(!sessionStore.canPerformRemoteActions || ownerUserID == nil)
-            .navigationTitle(mistiaLocalized(vi: "Đang chia sẻ", en: "Sharing", ja: "共有中"))
+            .navigationTitle(L10n.family.family.sharing)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
@@ -3837,7 +3725,7 @@ private struct FamilySharingSheet: View {
                     } label: {
                         Image(systemName: "xmark")
                     }
-                    .accessibilityLabel(mistiaLocalized(vi: "Đóng", en: "Close", ja: "閉じる"))
+                    .accessibilityLabel(L10n.family.family.close)
                 }
 
                 ToolbarItem(placement: .topBarTrailing) {
@@ -3846,44 +3734,36 @@ private struct FamilySharingSheet: View {
                     } label: {
                         Image(systemName: "checkmark")
                     }
-                    .accessibilityLabel(mistiaLocalized(vi: "Xong", en: "Done", ja: "完了"))
+                    .accessibilityLabel(L10n.family.family.done)
                 }
             }
         }
         .alert(item: $pendingChange) { change in
             let title = change.isGranted
-                ? mistiaLocalized(vi: "Chia sẻ quyền?", en: "Share access?", ja: "権限を共有しますか？")
-                : mistiaLocalized(vi: "Thu hồi quyền?", en: "Revoke access?", ja: "権限を取り消しますか？")
+                ? L10n.family.family.shareAccess
+                : L10n.family.family.revokeAccess
             let message = change.isGranted
-                ? mistiaLocalized(
-                    vi: "Bạn sẽ chia sẻ quyền \(change.title) với \(member.displayName).",
-                    en: "You will share \(change.title) access with \(member.displayName).",
-                    ja: "\(member.displayName)に\(change.title)の権限を共有します。"
-                )
-                : mistiaLocalized(
-                    vi: "Bạn sẽ thu hồi quyền \(change.title) với \(member.displayName).",
-                    en: "You will revoke \(change.title) access from \(member.displayName).",
-                    ja: "\(member.displayName)から\(change.title)の権限を取り消します。"
-                )
+                ? L10n.family.family.youWillShareValueAccessWithValue(String(describing: change.title), String(describing: member.displayName))
+                : L10n.family.family.youWillRevokeValueAccessFromValue(String(describing: change.title), String(describing: member.displayName))
 
             if change.isGranted {
                 return Alert(
                     title: Text(title),
                     message: Text(message),
-                    primaryButton: .default(Text(mistiaLocalized(vi: "Đồng ý", en: "Confirm", ja: "確認"))) {
+                    primaryButton: .default(Text(L10n.family.family.confirm)) {
                         applySharingChange(change)
                     },
-                    secondaryButton: .cancel(Text(mistiaLocalized(vi: "Hủy", en: "Cancel", ja: "キャンセル")))
+                    secondaryButton: .cancel(Text(L10n.common.cancel))
                 )
             }
 
             return Alert(
                 title: Text(title),
                 message: Text(message),
-                primaryButton: .destructive(Text(mistiaLocalized(vi: "Đồng ý", en: "Confirm", ja: "確認"))) {
+                primaryButton: .destructive(Text(L10n.family.family.confirm)) {
                         applySharingChange(change)
                 },
-                secondaryButton: .cancel(Text(mistiaLocalized(vi: "Hủy", en: "Cancel", ja: "キャンセル")))
+                secondaryButton: .cancel(Text(L10n.common.cancel))
             )
         }
     }
@@ -4029,8 +3909,8 @@ private struct FamilyPermissionsSheet: View {
                     }
                 }
 
-                Section(mistiaLocalized(vi: "Role", en: "Role", ja: "役割")) {
-                    Picker(mistiaLocalized(vi: "Role", en: "Role", ja: "役割"), selection: $role) {
+                Section(L10n.family.family.role) {
+                    Picker(L10n.family.family.role, selection: $role) {
                         ForEach([FamilyRole.member, .kid], id: \.self) { role in
                             Text(role.title).tag(role)
                         }
@@ -4038,26 +3918,26 @@ private struct FamilyPermissionsSheet: View {
                     .pickerStyle(.inline)
                 }
 
-                Section(mistiaLocalized(vi: "Quyền", en: "Permissions", ja: "権限")) {
-                    Toggle(mistiaLocalized(vi: "Xem dashboard gia đình", en: "View family dashboard", ja: "家族ダッシュボードを見る"), isOn: $policy.canViewFamilyDashboard)
+                Section(L10n.family.family.permissions) {
+                    Toggle(L10n.family.family.viewFamilyDashboard, isOn: $policy.canViewFamilyDashboard)
                         .tint(MistiaAccent.purple.color)
                     .toggleStyle(.switch)
-                    Toggle(mistiaLocalized(vi: "Xem dữ liệu người khác", en: "View others", ja: "他メンバーを表示"), isOn: $policy.canViewOthers)
+                    Toggle(L10n.family.family.viewOthers, isOn: $policy.canViewOthers)
                         .tint(MistiaAccent.purple.color)
                     .toggleStyle(.switch)
-                    Toggle(mistiaLocalized(vi: "Sửa dữ liệu người khác", en: "Edit others", ja: "他メンバーを編集"), isOn: $policy.canEditOthers)
+                    Toggle(L10n.family.family.editOthers, isOn: $policy.canEditOthers)
                         .tint(MistiaAccent.purple.color)
                     .toggleStyle(.switch)
-                    Toggle(mistiaLocalized(vi: "Xem ví / tài khoản", en: "View wallets", ja: "ウォレットを見る"), isOn: $policy.canViewWallets)
+                    Toggle(L10n.family.family.viewWallets, isOn: $policy.canViewWallets)
                         .tint(MistiaAccent.purple.color)
                     .toggleStyle(.switch)
-                    Toggle(mistiaLocalized(vi: "Xem công nợ", en: "View debts", ja: "負債を見る"), isOn: $policy.canViewDebts)
+                    Toggle(L10n.family.family.viewDebts, isOn: $policy.canViewDebts)
                         .tint(MistiaAccent.purple.color)
                     .toggleStyle(.switch)
-                    Toggle(mistiaLocalized(vi: "Xem kid", en: "View kids", ja: "kid を表示"), isOn: $policy.canViewKids)
+                    Toggle(L10n.family.family.viewKids, isOn: $policy.canViewKids)
                         .tint(MistiaAccent.purple.color)
                     .toggleStyle(.switch)
-                    Toggle(mistiaLocalized(vi: "Sửa kid", en: "Edit kids", ja: "kid を編集"), isOn: $policy.canEditKids)
+                    Toggle(L10n.family.family.editKids, isOn: $policy.canEditKids)
                         .tint(MistiaAccent.purple.color)
                     .toggleStyle(.switch)
                 }
@@ -4065,17 +3945,17 @@ private struct FamilyPermissionsSheet: View {
             }
             .disabled(!sessionStore.canPerformRemoteActions)
             .dismissKeyboardOnTap()
-            .navigationTitle(mistiaLocalized(vi: "Role & quyền", en: "Role & permissions", ja: "役割と権限"))
+            .navigationTitle(L10n.family.family.rolePermissions)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
-                    Button(mistiaLocalized(vi: "Hủy", en: "Cancel", ja: "キャンセル")) {
+                    Button(L10n.common.cancel) {
                         dismiss()
                     }
                 }
 
                 ToolbarItem(placement: .topBarTrailing) {
-                    Button(mistiaLocalized(vi: "Lưu", en: "Save", ja: "保存")) {
+                    Button(L10n.common.save) {
                         Task {
                             await familyContextStore.updateMember(
                                 member,
@@ -4102,11 +3982,11 @@ private extension FamilyRole {
     var title: String {
         switch self {
         case .owner:
-            mistiaLocalized(vi: "Chủ sở hữu", en: "Owner", ja: "Owner")
+            L10n.family.family.owner
         case .member:
-            mistiaLocalized(vi: "Thành viên", en: "Member", ja: "Member")
+            L10n.family.family.member
         case .kid:
-            mistiaLocalized(vi: "Trẻ con", en: "Kid", ja: "Kid")
+            L10n.family.family.kid
         }
     }
 

@@ -99,11 +99,7 @@ enum MistiaLocalNotificationScheduler {
             components.minute = 0
 
             let content = UNMutableNotificationContent()
-            content.title = mistiaLocalized(
-                vi: "Ví sắp hết tiền",
-                en: "Low wallet balance",
-                ja: "残高が少ない"
-            )
+            content.title = L10n.shared.notifications.mistialocalnotificationscheduler.lowWalletBalance
             content.body = "\(wallet.name) — \(balance.formattedCurrency(code: wallet.currencyCode))"
             content.sound = .default
             content.categoryIdentifier = reminderCategoryID

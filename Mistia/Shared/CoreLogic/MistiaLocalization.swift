@@ -32,11 +32,11 @@ nonisolated enum MistiaAppLanguage: String, CaseIterable, Identifiable, Codable 
     var displayName: String {
         switch self {
         case .vietnamese:
-            "Tiếng Việt"
+            L10n.settings.language.option.vietnamese
         case .english:
-            "English"
+            L10n.settings.language.option.english
         case .japanese:
-            "日本語"
+            L10n.settings.language.option.japanese
         }
     }
 
@@ -110,35 +110,6 @@ nonisolated enum MistiaAppLanguage: String, CaseIterable, Identifiable, Codable 
 
         return infer()
     }
-}
-
-@inline(__always)
-nonisolated func mistiaLocalized(
-    vi: String,
-    en: String,
-    ja: String,
-    language: MistiaAppLanguage = .current
-) -> String {
-    switch language {
-    case .vietnamese:
-        vi
-    case .english:
-        en
-    case .japanese:
-        ja
-    }
-}
-
-@inline(__always)
-nonisolated func mistiaCatalog(
-    _ key: String,
-    language: MistiaAppLanguage = .current
-) -> String {
-    String(
-        localized: String.LocalizationValue(key),
-        bundle: .main,
-        locale: language.locale
-    )
 }
 
 nonisolated enum MistiaCalendar {
@@ -232,12 +203,7 @@ nonisolated enum MistiaDateFormatting {
     ) -> String {
         let range = "\(shortDateString(for: start, language: language, calendar: calendar)) - \(shortDateString(for: end, language: language, calendar: calendar))"
         guard isCurrentWeek else { return range }
-        return mistiaLocalized(
-            vi: "Tuần này • \(range)",
-            en: "This week • \(range)",
-            ja: "今週 • \(range)",
-            language: language
-        )
+        return L10n.shared.corelogic.mistialocalization.thisWeekValue(String(describing: range))
     }
 
     static func weekdayLabel(
@@ -266,26 +232,11 @@ nonisolated enum MistiaDateFormatting {
     ) -> String? {
         switch dayDelta {
         case 0:
-            return mistiaLocalized(
-                vi: "Hôm nay",
-                en: "Today",
-                ja: "今日",
-                language: language
-            )
+            return L10n.shared.corelogic.mistialocalization.today(language: language)
         case 1:
-            return mistiaLocalized(
-                vi: "Hôm qua",
-                en: "Yesterday",
-                ja: "昨日",
-                language: language
-            )
+            return L10n.shared.corelogic.mistialocalization.yesterday(language: language)
         case 2:
-            return mistiaLocalized(
-                vi: "Hôm kia",
-                en: "2 days ago",
-                ja: "一昨日",
-                language: language
-            )
+            return L10n.shared.corelogic.mistialocalization.daysAgo(language: language)
         default:
             return nil
         }
@@ -302,45 +253,25 @@ nonisolated enum MistiaDateFormatting {
         // < 1 hour: 3 minutes ago
         if diff < 3600 {
             let minutes = max(Int(diff / 60), 1)
-            return mistiaLocalized(
-                vi: "\(minutes) phút trước",
-                en: "\(minutes) min ago",
-                ja: "\(minutes)分前",
-                language: language
-            )
+            return L10n.shared.corelogic.mistialocalization.valueMinAgo(String(describing: minutes), language: language)
         }
         
         // < 24 hours: 5 hours ago
         if diff < 86400 {
             let hours = max(Int(diff / 3600), 1)
-            return mistiaLocalized(
-                vi: "\(hours) tiếng trước",
-                en: "\(hours) hr ago",
-                ja: "\(hours)時間前",
-                language: language
-            )
+            return L10n.shared.corelogic.mistialocalization.valueHrAgo(String(describing: hours), language: language)
         }
         
         // < 30 days: 10 days ago
         if diff < 2592000 {
             let days = max(Int(diff / 86400), 1)
-            return mistiaLocalized(
-                vi: "\(days) ngày trước",
-                en: "\(days) days ago",
-                ja: "\(days)日前",
-                language: language
-            )
+            return L10n.shared.corelogic.mistialocalization.valueDaysAgo(String(describing: days), language: language)
         }
         
         // < 1 year: 1 month ago, 2 months ago
         if diff < 31536000 {
             let months = max(Int(diff / 2592000), 1)
-            return mistiaLocalized(
-                vi: "\(months) tháng trước",
-                en: "\(months) months ago",
-                ja: "\(months)ヶ月前",
-                language: language
-            )
+            return L10n.shared.corelogic.mistialocalization.valueMonthsAgo(String(describing: months), language: language)
         }
 
         return fullDateString(for: date, language: language, calendar: calendar)

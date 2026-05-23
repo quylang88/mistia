@@ -74,7 +74,7 @@ struct ManagementArchivedItemsView: View {
     }
 
     private var navigationTitle: String {
-        mistiaLocalized(vi: "Mục đã lưu trữ", en: "Archived items", ja: "アーカイブ済みアイテム")
+        L10n.management.managementarchiveditems.archivedItems
     }
 
     private var selfUserID: UUID? {
@@ -178,13 +178,13 @@ struct ManagementArchivedItemsView: View {
         .ignoresSafeArea(.all, edges: .bottom)
         .animation(.spring(response: 0.35, dampingFraction: 0.85), value: isSelecting)
         .alert(
-            mistiaLocalized(vi: "Chưa thể khôi phục", en: "Cannot restore", ja: "復元できません"),
+            L10n.management.managementarchiveditems.cannotRestore,
             isPresented: Binding(
                 get: { alertMessage != nil },
                 set: { if !$0 { alertMessage = nil } }
             )
         ) {
-            Button("OK", role: .cancel) { }
+            Button(L10n.common.ok, role: .cancel) { }
         } message: {
             if let alertMessage {
                 Text(alertMessage)
@@ -210,16 +210,12 @@ struct ManagementArchivedItemsView: View {
                     .font(.system(size: 64, weight: .regular))
                     .foregroundStyle(.tertiary)
 
-                Text(mistiaLocalized(vi: "Không có mục lưu trữ", en: "No archived items", ja: "アーカイブなし"))
+                Text(L10n.management.managementarchiveditems.noArchivedItems)
                     .font(.system(size: 20, weight: .bold, design: .rounded))
                     .foregroundStyle(.primary)
 
                 Text(
-                    mistiaLocalized(
-                        vi: "Bạn chưa có mục nào được lưu trữ. Các mục được lưu trữ sẽ tự động xoá sau 30 ngày.",
-                        en: "You don't have any archived items yet. Archived items are automatically deleted after 30 days.",
-                        ja: "アーカイブされたアイテムはまだありません。アーカイブされたアイテムは30日後に自動的に削除されます。"
-                    )
+                    L10n.management.managementarchiveditems.youDonTHaveAnyArchivedItems
                 )
                 .font(.system(size: 15, weight: .regular, design: .rounded))
                 .foregroundStyle(.secondary)
@@ -229,7 +225,7 @@ struct ManagementArchivedItemsView: View {
         } else {
             if !ownArchivedTransactions.isEmpty {
                 ManagementSection(
-                    title: mistiaLocalized(vi: "Giao dịch", en: "Transactions", ja: "取引"),
+                    title: L10n.management.managementarchiveditems.transactions,
                     titleColor: sectionLabelColor
                 ) {
                     ForEach(ownArchivedTransactions) { transaction in
@@ -247,7 +243,7 @@ struct ManagementArchivedItemsView: View {
 
             if !ownArchivedWallets.isEmpty {
                 ManagementSection(
-                    title: mistiaLocalized(vi: "Ví", en: "Wallets", ja: "ウォレット"),
+                    title: L10n.management.managementarchiveditems.wallets,
                     titleColor: sectionLabelColor
                 ) {
                     ForEach(ownArchivedWallets) { wallet in
@@ -268,7 +264,7 @@ struct ManagementArchivedItemsView: View {
 
             if !ownArchivedCategories.isEmpty {
                 ManagementSection(
-                    title: mistiaLocalized(vi: "Danh mục", en: "Categories", ja: "カテゴリ"),
+                    title: L10n.management.managementarchiveditems.categories,
                     titleColor: sectionLabelColor
                 ) {
                     ForEach(ownArchivedCategories) { category in
@@ -319,8 +315,8 @@ struct ManagementArchivedItemsView: View {
     }
 
     private func descriptor(for transaction: LedgerTransaction) -> ArchivedTransactionDescriptor {
-        let defaultWalletTitle = mistiaLocalized(vi: "Chưa chọn ví", en: "No wallet selected", ja: "ウォレット未選択")
-        let defaultCategoryTitle = mistiaLocalized(vi: "Chưa chọn danh mục", en: "No category selected", ja: "カテゴリ未選択")
+        let defaultWalletTitle = L10n.management.managementarchiveditems.noWalletSelected
+        let defaultCategoryTitle = L10n.management.managementarchiveditems.noCategorySelected
         let currency = transaction.sourceWallet?.currencyCode ?? transaction.destinationWallet?.currencyCode ?? currencyCode
         let rawAmount = transaction.amountMinor.formattedCurrency(code: currency)
         let title = transactionTitle(for: transaction)
@@ -351,8 +347,8 @@ struct ManagementArchivedItemsView: View {
         case .transfer:
             switch transaction.transferSubtype ?? .internalTransfer {
             case .internalTransfer:
-                let source = transaction.sourceWallet?.name ?? mistiaLocalized(vi: "Nguồn", en: "Source", ja: "出金元")
-                let destination = transaction.destinationWallet?.name ?? mistiaLocalized(vi: "Đích", en: "Destination", ja: "入金先")
+                let source = transaction.sourceWallet?.name ?? L10n.management.managementarchiveditems.source
+                let destination = transaction.destinationWallet?.name ?? L10n.management.managementarchiveditems.destination
                 let transferTint = colorScheme == .dark ? .white : MistiaAccent.transfer.color
 
                 return ArchivedTransactionDescriptor(
@@ -360,14 +356,14 @@ struct ManagementArchivedItemsView: View {
                     subtitle: "\(source) → \(destination)",
                     icon: TransactionTransferSubtype.internalTransfer.financeIconToken,
                     iconTint: transferTint,
-                    badgeTitle: mistiaLocalized(vi: "Chuyển tiền", en: "Transfer", ja: "振替"),
+                    badgeTitle: L10n.management.managementarchiveditems.transfer,
                     badgeTint: transferTint,
                     amountText: rawAmount,
                     amountTint: transferTint
                 )
             case .debt:
                 let cashflow = debtCashflow(for: transaction)
-                let personName = transaction.counterpartyName ?? mistiaLocalized(vi: "Không rõ tên", en: "Unknown name", ja: "名前未設定")
+                let personName = transaction.counterpartyName ?? L10n.management.managementarchiveditems.unknownName
                 let walletName = transaction.sourceWallet?.name ?? defaultWalletTitle
                 let debtTint: Color
                 let amountText: String
@@ -385,10 +381,10 @@ struct ManagementArchivedItemsView: View {
 
                 return ArchivedTransactionDescriptor(
                     title: title,
-                    subtitle: "\(personName) • \(transaction.debtIntent?.title ?? mistiaLocalized(vi: "Công nợ", en: "Debt", ja: "貸し借り")) • \(walletName)",
+                    subtitle: "\(personName) • \(transaction.debtIntent?.title ?? L10n.management.managementarchiveditems.debt) • \(walletName)",
                     icon: transaction.debtIntent?.financeIconToken ?? TransactionTransferSubtype.debt.financeIconToken,
                     iconTint: debtTint,
-                    badgeTitle: mistiaLocalized(vi: "Công nợ", en: "Debt", ja: "貸し借り"),
+                    badgeTitle: L10n.management.managementarchiveditems.debt,
                     badgeTint: Color(red: 0.29, green: 0.56, blue: 0.96),
                     amountText: amountText,
                     amountTint: debtTint
@@ -406,17 +402,17 @@ struct ManagementArchivedItemsView: View {
         switch transaction.primaryKind {
         case .expense:
             return transaction.category?.localizedDisplayName
-                ?? mistiaLocalized(vi: "Chi tiêu", en: "Expense", ja: "支出")
+                ?? L10n.management.managementarchiveditems.expense
         case .income:
             return transaction.category?.localizedDisplayName
-                ?? mistiaLocalized(vi: "Thu nhập", en: "Income", ja: "収入")
+                ?? L10n.management.managementarchiveditems.income
         case .transfer:
             switch transaction.transferSubtype ?? .internalTransfer {
             case .internalTransfer:
-                return mistiaLocalized(vi: "Chuyển tiền nội bộ", en: "Internal transfer", ja: "内部振替")
+                return L10n.management.managementarchiveditems.internalTransfer
             case .debt:
                 return transaction.debtIntent?.title
-                    ?? mistiaLocalized(vi: "Giao dịch công nợ", en: "Debt transaction", ja: "貸し借り取引")
+                    ?? L10n.management.managementarchiveditems.debtTransaction
             }
         }
     }
@@ -556,11 +552,7 @@ struct ManagementArchivedItemsView: View {
 
             if isDuplicate {
                 let monthStr = MistiaDateFormatting.monthYearString(for: transaction.occurredAt, calendar: calendar)
-                alertMessage = mistiaLocalized(
-                    vi: "Tháng \(monthStr) đã có giao dịch thanh toán thẻ. Mỗi tháng chỉ được thanh toán một lần.",
-                    en: "Month \(monthStr) already has a card payment. Only one payment is allowed per month.",
-                    ja: "\(monthStr) は既にカード支払いがあります。毎月1回のみ支払いが可能です。"
-                )
+                alertMessage = L10n.management.managementarchiveditems.monthValueAlreadyHasACardPayment(String(describing: monthStr))
                 throw MistiaRestoreError.duplicatePayment
             }
         }
@@ -824,7 +816,7 @@ private struct ArchivedBottomActionBar: View {
     private var actionRow: some View {
         HStack(alignment: .center, spacing: 16) {
             ArchivedBottomActionMenu(
-                accessibilityTitle: mistiaLocalized(vi: "Khôi phục", en: "Restore", ja: "復元"),
+                accessibilityTitle: L10n.management.managementarchiveditems.restore,
                 systemImage: "arrow.uturn.backward",
                 isEnabled: canRestore,
                 tint: .primary
@@ -834,21 +826,13 @@ private struct ArchivedBottomActionBar: View {
                         onRestore()
                     } label: {
                         Label(
-                            mistiaLocalized(
-                                vi: "Khôi phục",
-                                en: "Restore",
-                                ja: "復元"
-                            ),
+                            L10n.management.managementarchiveditems.restore,
                             systemImage: "arrow.uturn.backward"
                         )
                     }
                 } header: {
                     Text(
-                        mistiaLocalized(
-                            vi: "Các mục đã chọn sẽ được khôi phục về trạng thái hoạt động.",
-                            en: "The selected items will be restored to their active state.",
-                            ja: "選択した項目を元の状態に復元します。"
-                        )
+                        L10n.management.managementarchiveditems.theSelectedItemsWillBeRestoredTo
                     )
                 }
             }
@@ -866,7 +850,7 @@ private struct ArchivedBottomActionBar: View {
             Spacer(minLength: 12)
 
             ArchivedBottomActionMenu(
-                accessibilityTitle: mistiaLocalized(vi: "Xóa", en: "Delete", ja: "削除"),
+                accessibilityTitle: L10n.common.delete,
                 systemImage: "trash",
                 isEnabled: canDelete,
                 tint: .red
@@ -876,21 +860,13 @@ private struct ArchivedBottomActionBar: View {
                         onDelete()
                     } label: {
                         Label(
-                            mistiaLocalized(
-                                vi: "Xóa vĩnh viễn",
-                                en: "Delete permanently",
-                                ja: "完全に削除"
-                            ),
+                            L10n.management.managementarchiveditems.deletePermanently,
                             systemImage: "trash"
                         )
                     }
                 } header: {
                     Text(
-                        mistiaLocalized(
-                            vi: "Các mục này sẽ bị xóa khỏi lưu trữ và không thể hoàn tác.",
-                            en: "These items will be removed from the archive and can't be undone.",
-                            ja: "これらの項目はアーカイブから削除され、元に戻せません。"
-                        )
+                        L10n.management.managementarchiveditems.theseItemsWillBeRemovedFromThe
                     )
                 }
             }
@@ -907,14 +883,10 @@ private struct ArchivedBottomActionBar: View {
 
     private var selectionText: String {
         if selectedCount == 0 {
-            return mistiaLocalized(vi: "Chọn mục", en: "Select items", ja: "項目を選択")
+            return L10n.management.managementarchiveditems.selectItems
         }
 
-        return mistiaLocalized(
-            vi: "Đã chọn \(selectedCount) mục",
-            en: "\(selectedCount) selected",
-            ja: "\(selectedCount)件を選択"
-        )
+        return L10n.management.managementarchiveditems.valueSelected(String(describing: selectedCount))
     }
 }
 

@@ -817,12 +817,7 @@ private struct MistiaQuickCreateFloatingButton: View {
     .tint(Color(red: 0.43, green: 0.23, blue: 0.76))
     .shadow(color: Color.black.opacity(0.18), radius: 16, y: 8)
     .accessibilityLabel(
-      mistiaLocalized(
-        vi: "Tạo nhanh",
-        en: "Quick create",
-        ja: "クイック作成",
-        language: appLanguage
-      )
+      L10n.app.mistianativetab.quickCreate
     )
   }
 }

@@ -215,7 +215,7 @@ private struct MistiaDatePickerPanel: View {
 
     private var monthYearWheelPicker: some View {
         HStack(spacing: 4) {
-            Picker("", selection: monthBinding) {
+            Picker(String(), selection: monthBinding) {
                 ForEach(1...12, id: \.self) { month in
                     Text(monthTitle(for: month))
                         .tag(month)
@@ -226,7 +226,7 @@ private struct MistiaDatePickerPanel: View {
             .frame(width: 150)
             .clipped()
 
-            Picker("", selection: yearBinding) {
+            Picker(String(), selection: yearBinding) {
                 ForEach(yearRange, id: \.self) { year in
                     Text(String(year))
                         .tag(year)
@@ -252,7 +252,7 @@ private struct MistiaDatePickerPanel: View {
         Button {
             draftSelection = replacingDay(with: date)
         } label: {
-            Text("\(calendar.component(.day, from: date))")
+            Text(verbatim: "\(calendar.component(.day, from: date))")
                 .font(.system(size: 15, weight: isSelected ? .bold : .semibold, design: .rounded))
                 .foregroundStyle(dayForegroundColor(isSelected: isSelected, isEnabled: isEnabled))
                 .frame(maxWidth: .infinity)

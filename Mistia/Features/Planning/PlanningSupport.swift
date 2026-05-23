@@ -42,11 +42,11 @@ enum PlanningPersistenceError: LocalizedError {
     var errorDescription: String? {
         switch self {
         case .missingWallet:
-            mistiaLocalized(vi: "Không tìm thấy ví thanh toán phù hợp.", en: "A matching payment wallet could not be found.", ja: "支払いに使うウォレットが見つかりません。")
+            L10n.planning.planning.aMatchingPaymentWalletCouldNotBe
         case .missingDestinationWallet:
-            mistiaLocalized(vi: "Không tìm thấy thẻ tín dụng đích.", en: "The destination credit card could not be found.", ja: "振替先のクレジットカードが見つかりません。")
+            L10n.planning.planning.theDestinationCreditCardCouldNotBe
         case .missingCategory:
-            mistiaLocalized(vi: "Không thể xác định danh mục hệ thống cho khoản thanh toán này.", en: "The system category for this payment could not be resolved.", ja: "この支払いに使うシステムカテゴリを特定できません。")
+            L10n.planning.planning.theSystemCategoryForThisPaymentCould
         }
     }
 }
@@ -239,7 +239,7 @@ extension BudgetPlan {
         BudgetPlanSnapshot(
             id: id,
             categoryID: category?.id,
-            categoryName: category?.localizedDisplayName ?? mistiaLocalized(vi: "Danh mục đã xóa", en: "Deleted category", ja: "削除されたカテゴリ"),
+            categoryName: category?.localizedDisplayName ?? L10n.planning.planning.deletedCategory,
             categoryIconSymbolName: category?.iconSymbolName ?? "questionmark.circle.fill",
             categoryColorHex: category?.iconColorHex ?? "#8A8A8E",
             limitMinor: limitMinor,

@@ -79,11 +79,11 @@ nonisolated enum PlanningBudgetHealth: String, Equatable {
     var title: String {
         switch self {
         case .stable:
-            mistiaLocalized(vi: "Ổn định", en: "Stable", ja: "安定")
+            L10n.shared.corelogic.planning.stable
         case .caution:
-            mistiaLocalized(vi: "Cần chú ý", en: "Needs attention", ja: "注意")
+            L10n.shared.corelogic.planning.needsAttention
         case .exceeded:
-            mistiaLocalized(vi: "Vượt kế hoạch", en: "Exceeded", ja: "超過")
+            L10n.shared.corelogic.planning.exceeded
         }
     }
 }
@@ -467,23 +467,11 @@ extension PlanningDuePaymentError: LocalizedError {
     var errorDescription: String? {
         switch self {
         case .missingAmount:
-            mistiaLocalized(
-                vi: "Nhập số tiền thanh toán trước khi tiếp tục.",
-                en: "Enter a payment amount before continuing.",
-                ja: "続行する前に支払い金額を入力してください。"
-            )
+            L10n.shared.corelogic.planning.enterAPaymentAmountBeforeContinuing
         case .missingSourceWallet:
-            mistiaLocalized(
-                vi: "Chọn ví thanh toán trước khi tiếp tục.",
-                en: "Choose a payment wallet before continuing.",
-                ja: "続行する前に支払いウォレットを選択してください。"
-            )
+            L10n.shared.corelogic.planning.chooseAPaymentWalletBeforeContinuing
         case .missingDestinationWallet:
-            mistiaLocalized(
-                vi: "Không tìm thấy ví đích cho khoản thanh toán này.",
-                en: "The destination wallet for this payment could not be found.",
-                ja: "この支払いの振替先ウォレットが見つかりません。"
-            )
+            L10n.shared.corelogic.planning.theDestinationWalletForThisPaymentCould
         }
     }
 }

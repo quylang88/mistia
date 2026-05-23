@@ -34,7 +34,7 @@ struct MistiaArchiveSection: View {
                 Button(buttonTitle, role: .destructive) {
                     action()
                 }
-                Button(mistiaLocalized(vi: "Hủy", en: "Cancel", ja: "キャンセル"), role: .cancel) { }
+                Button(L10n.common.cancel, role: .cancel) { }
             } message: {
                 Text(popupMessage)
             }

@@ -86,19 +86,11 @@ struct FamilyInviteAcceptanceScreen: View {
                 FamilyInviteStatusSymbol(systemImage: "person.crop.circle.badge.plus", tint: accent)
 
                 VStack(spacing: 9) {
-                    Text(mistiaLocalized(
-                        vi: "Đăng nhập để xem lời mời",
-                        en: "Sign in to view this invite",
-                        ja: "招待を確認するにはログイン"
-                    ))
+                    Text(L10n.family.familyinviteacceptance.signInToViewThisInvite)
                     .font(.system(size: 27, weight: .bold, design: .rounded))
                     .multilineTextAlignment(.center)
 
-                    Text(mistiaLocalized(
-                        vi: "Mistia sẽ giữ lời mời này và tự mở lại sau khi bạn đăng nhập.",
-                        en: "Mistia will keep this invite and reopen it after you sign in.",
-                        ja: "ログイン後、この招待を自動で再開します。"
-                    ))
+                    Text(L10n.family.familyinviteacceptance.mistiaWillKeepThisInviteAndReopen)
                     .font(.system(size: 15, weight: .medium, design: .rounded))
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)
@@ -106,7 +98,7 @@ struct FamilyInviteAcceptanceScreen: View {
                 }
 
                 FamilyInviteActionButton(
-                    title: mistiaLocalized(vi: "Đăng nhập ngay", en: "Sign in now", ja: "今すぐログイン"),
+                    title: L10n.family.familyinviteacceptance.signInNow,
                     systemImage: "person.crop.circle",
                     style: .primary(accent),
                     isLoading: isOpeningAccount
@@ -130,7 +122,7 @@ struct FamilyInviteAcceptanceScreen: View {
                     .controlSize(.large)
                     .tint(accent)
 
-                Text(mistiaLocalized(vi: "Đang kiểm tra lời mời", en: "Checking invite", ja: "招待を確認中"))
+                Text(L10n.family.familyinviteacceptance.checkingInvite)
                     .font(.system(size: 16, weight: .semibold, design: .rounded))
                     .foregroundStyle(.secondary)
 
@@ -143,42 +135,22 @@ struct FamilyInviteAcceptanceScreen: View {
     private func previewContent(_ preview: FamilyInvitePreviewRecord) -> some View {
         if preview.inviterUserID == sessionStore.signedInUserID {
             unavailableContent(
-                title: mistiaLocalized(
-                    vi: "Không dành cho bạn",
-                    en: "Not for you",
-                    ja: "利用できません"
-                ),
-                message: mistiaLocalized(
-                    vi: "Bạn là người tạo lời mời này.",
-                    en: "You created this invite.",
-                    ja: "この招待を作成したアカウントです。"
-                ),
+                title: L10n.family.familyinviteacceptance.notForYou,
+                message: L10n.family.familyinviteacceptance.youCreatedThisInvite,
                 systemImage: "link.badge.plus",
                 tint: .orange
             )
         } else if preview.alreadyMemberOfFamily {
             unavailableContent(
-                title: mistiaLocalized(vi: "Đã tham gia", en: "Already joined", ja: "参加済み"),
-                message: mistiaLocalized(
-                    vi: "Tài khoản này đã ở trong \(preview.familyName).",
-                    en: "This account is already in \(preview.familyName).",
-                    ja: "このアカウントはすでに \(preview.familyName) に参加しています。"
-                ),
+                title: L10n.family.familyinviteacceptance.alreadyJoined,
+                message: L10n.family.familyinviteacceptance.thisAccountIsAlreadyInValue(String(describing: preview.familyName)),
                 systemImage: "checkmark.circle.fill",
                 tint: .mint
             )
         } else if preview.belongsToAnotherFamily {
             unavailableContent(
-                title: mistiaLocalized(
-                    vi: "Gia đình khác",
-                    en: "Another family",
-                    ja: "別の家族"
-                ),
-                message: mistiaLocalized(
-                    vi: "Tài khoản này đang thuộc một gia đình khác.",
-                    en: "This account currently belongs to another family.",
-                    ja: "このアカウントは現在別の家族に参加しています。"
-                ),
+                title: L10n.family.familyinviteacceptance.anotherFamily,
+                message: L10n.family.familyinviteacceptance.thisAccountCurrentlyBelongsToAnotherFamily,
                 systemImage: "person.2.slash",
                 tint: .orange
             )
@@ -214,7 +186,7 @@ struct FamilyInviteAcceptanceScreen: View {
     private func actionsSection(_ preview: FamilyInvitePreviewRecord) -> some View {
         HStack(spacing: 12) {
             FamilyInviteActionButton(
-                title: mistiaLocalized(vi: "Chấp nhận", en: "Accept", ja: "承認"),
+                title: L10n.family.familyinviteacceptance.accept,
                 systemImage: "checkmark",
                 style: .primary(accent),
                 isLoading: isAccepting,
@@ -224,7 +196,7 @@ struct FamilyInviteAcceptanceScreen: View {
             }
 
             FamilyInviteActionButton(
-                title: mistiaLocalized(vi: "Từ chối", en: "Decline", ja: "辞退"),
+                title: L10n.family.familyinviteacceptance.decline,
                 systemImage: "xmark",
                 style: .secondary(.red),
                 isDisabled: isAccepting || isDeclining
@@ -290,7 +262,7 @@ struct FamilyInviteAcceptanceScreen: View {
                 }
 
                 FamilyInviteActionButton(
-                    title: mistiaLocalized(vi: "Đồng ý", en: "OK", ja: "OK"),
+                    title: L10n.family.familyinviteacceptance.ok,
                     systemImage: "checkmark",
                     style: .primary(accent)
                 ) {
@@ -346,16 +318,12 @@ struct FamilyInviteAcceptanceScreen: View {
 
     private var offlineTitle: String {
         isOfflineError
-            ? mistiaLocalized(vi: "Mất kết nối", en: "Offline", ja: "オフライン")
-            : mistiaLocalized(vi: "Không khả dụng", en: "Unavailable", ja: "利用不可")
+            ? L10n.family.familyinviteacceptance.offline
+            : L10n.family.familyinviteacceptance.unavailable
     }
 
     private var offlineMessage: String {
-        sessionStore.remoteUnavailableReason ?? mistiaLocalized(
-            vi: "Không thể kiểm tra lời mời lúc này.",
-            en: "Mistia can't check this invite right now.",
-            ja: "現在この招待を確認できません。"
-        )
+        sessionStore.remoteUnavailableReason ?? L10n.family.familyinviteacceptance.mistiaCanTCheckThisInviteRight
     }
 
     private func canRespond(to preview: FamilyInvitePreviewRecord) -> Bool {
@@ -453,15 +421,15 @@ struct FamilyInviteAcceptanceScreen: View {
         case .pending:
             return ""
         case .accepted:
-            return mistiaLocalized(vi: "Đã được dùng", en: "Already used", ja: "使用済み")
+            return L10n.family.familyinviteacceptance.alreadyUsed
         case .declined:
-            return mistiaLocalized(vi: "Đã từ chối", en: "Declined", ja: "辞退済み")
+            return L10n.family.familyinviteacceptance.declined
         case .expired:
-            return mistiaLocalized(vi: "Hết hạn", en: "Expired", ja: "期限切れ")
+            return L10n.family.familyinviteacceptance.expired
         case .revoked:
-            return mistiaLocalized(vi: "Đã thu hồi", en: "Revoked", ja: "取消済み")
+            return L10n.family.familyinviteacceptance.revoked
         case .invalid:
-            return mistiaLocalized(vi: "Không hợp lệ", en: "Invalid", ja: "無効")
+            return L10n.family.familyinviteacceptance.invalid
         }
     }
 
@@ -470,35 +438,15 @@ struct FamilyInviteAcceptanceScreen: View {
         case .pending:
             return ""
         case .accepted:
-            return mistiaLocalized(
-                vi: "Link này đã được sử dụng.",
-                en: "This link has already been used.",
-                ja: "このリンクはすでに使用されています。"
-            )
+            return L10n.family.familyinviteacceptance.thisLinkHasAlreadyBeenUsed
         case .declined:
-            return mistiaLocalized(
-                vi: "Owner cần tạo link mới nếu muốn mời lại.",
-                en: "The owner needs to create a new link to invite again.",
-                ja: "再招待するには owner が新しいリンクを作成する必要があります。"
-            )
+            return L10n.family.familyinviteacceptance.theOwnerNeedsToCreateANew
         case .expired:
-            return mistiaLocalized(
-                vi: "Vui lòng yêu cầu người mời gửi lại link mới.",
-                en: "Please ask the inviter to send a new link.",
-                ja: "招待者に新しいリンクを送ってもらってください。"
-            )
+            return L10n.family.familyinviteacceptance.pleaseAskTheInviterToSendA
         case .revoked:
-            return mistiaLocalized(
-                vi: "Owner đã thu hồi lời mời này.",
-                en: "The owner revoked this invite.",
-                ja: "owner がこの招待を取り消しました。"
-            )
+            return L10n.family.familyinviteacceptance.theOwnerRevokedThisInvite
         case .invalid:
-            return mistiaLocalized(
-                vi: "Link này không còn hợp lệ.",
-                en: "This link is no longer valid.",
-                ja: "このリンクは無効です。"
-            )
+            return L10n.family.familyinviteacceptance.thisLinkIsNoLongerValid
         }
     }
 
@@ -568,7 +516,7 @@ private struct FamilyInviteWelcomeStage: View {
             FamilyInviteAnimatedGreeting(accent: accent)
 
             VStack(spacing: 8) {
-                Text(mistiaLocalized(vi: "đến với gia đình", en: "to the family", ja: "ファミリーへ"))
+                Text(L10n.family.familyinviteacceptance.toTheFamily)
                     .font(.system(size: 19, weight: .semibold, design: .rounded))
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)
@@ -730,35 +678,27 @@ private enum FamilyInviteResponseAction: Equatable {
     var title: String {
         switch self {
         case .accept:
-            return mistiaLocalized(vi: "Chấp nhận lời mời?", en: "Accept this invite?", ja: "この招待を承認しますか？")
+            return L10n.family.familyinviteacceptance.acceptThisInvite
         case .decline:
-            return mistiaLocalized(vi: "Từ chối lời mời?", en: "Decline this invite?", ja: "この招待を辞退しますか？")
+            return L10n.family.familyinviteacceptance.declineThisInvite
         }
     }
 
     var message: String {
         switch self {
         case .accept:
-            return mistiaLocalized(
-                vi: "Bạn sẽ tham gia gia đình này sau khi xác nhận.",
-                en: "You will join this family after confirming.",
-                ja: "確認するとこのファミリーに参加します。"
-            )
+            return L10n.family.familyinviteacceptance.youWillJoinThisFamilyAfterConfirming
         case .decline:
-            return mistiaLocalized(
-                vi: "Link này sẽ không dùng lại được.",
-                en: "This link cannot be used again.",
-                ja: "このリンクは再利用できません。"
-            )
+            return L10n.family.familyinviteacceptance.thisLinkCannotBeUsedAgain
         }
     }
 
     var confirmTitle: String {
         switch self {
         case .accept:
-            return mistiaLocalized(vi: "Chấp nhận", en: "Accept", ja: "承認")
+            return L10n.family.familyinviteacceptance.accept
         case .decline:
-            return mistiaLocalized(vi: "Từ chối", en: "Decline", ja: "辞退")
+            return L10n.family.familyinviteacceptance.decline
         }
     }
 

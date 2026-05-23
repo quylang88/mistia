@@ -109,22 +109,22 @@ enum MistiaAppearanceMode: String, CaseIterable, Identifiable {
     var title: String {
         switch self {
         case .automatic:
-            mistiaLocalized(vi: "Tự động", en: "Automatic", ja: "自動")
+            L10n.settings.appearance.mode.automatic.title
         case .dark:
-            mistiaLocalized(vi: "Tối", en: "Dark", ja: "ダーク")
+            L10n.settings.appearance.mode.dark.title
         case .light:
-            mistiaLocalized(vi: "Sáng", en: "Light", ja: "ライト")
+            L10n.settings.appearance.mode.light.title
         }
     }
 
     var subtitle: String {
         switch self {
         case .automatic:
-            mistiaLocalized(vi: "Theo giao diện hệ thống", en: "Follow system appearance", ja: "システム設定に合わせる")
+            L10n.settings.appearance.mode.automatic.subtitle
         case .dark:
-            mistiaLocalized(vi: "Luôn dùng nền tối", en: "Always use dark mode", ja: "常にダークモードを使う")
+            L10n.settings.appearance.mode.dark.subtitle
         case .light:
-            mistiaLocalized(vi: "Luôn dùng nền sáng", en: "Always use light mode", ja: "常にライトモードを使う")
+            L10n.settings.appearance.mode.light.subtitle
         }
     }
 

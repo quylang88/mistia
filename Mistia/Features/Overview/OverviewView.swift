@@ -24,9 +24,9 @@ private enum OverviewHeroChartMode: String, CaseIterable, Identifiable {
     var title: String {
         switch self {
         case .day:
-            mistiaLocalized(vi: "Ngày", en: "Day", ja: "日")
+            L10n.overview.overview.day
         case .category:
-            mistiaLocalized(vi: "Danh mục", en: "Category", ja: "カテゴリ")
+            L10n.overview.overview.category
         }
     }
 }
@@ -450,7 +450,7 @@ struct OverviewView: View {
         NavigationStack {
             MistiaPinnedTopBarScaffold(
                 tone: .standard,
-                title: mistiaLocalized(vi: "Tổng quan", en: "Overview", ja: "ホーム"),
+                title: L10n.overview.overview.overview,
                 embedsInNavigationStack: false,
                 leadingInitials: sessionStore.summary?.initials ?? "MI",
                 leadingAvatarURL: sessionStore.summary?.avatarURL,
@@ -532,12 +532,12 @@ struct OverviewView: View {
         ) { alert in
             switch alert {
             case .info:
-                Button(mistiaLocalized(vi: "OK", en: "OK", ja: "OK")) {}
+                Button(L10n.common.ok) {}
             case .permission(let prompt):
                 Button(prompt.actionTitle) {
                     prompt.action()
                 }
-                Button(mistiaLocalized(vi: "Hủy", en: "Cancel", ja: "キャンセル"), role: .cancel) {}
+                Button(L10n.common.cancel, role: .cancel) {}
             }
         } message: { alert in
             Text(alert.message)
@@ -605,15 +605,11 @@ struct OverviewView: View {
             scope: .edit
         )
         permissionPrompt = OverviewPermissionPrompt(
-            title: mistiaLocalized(vi: "Chưa có quyền chỉnh sửa giao dịch", en: "No transaction edit access", ja: "取引編集権限がありません"),
-            message: mistiaLocalized(
-                vi: "Bạn chưa có quyền chỉnh sửa giao dịch của thành viên này.",
-                en: "You do not have permission to edit this member's transactions.",
-                ja: "このメンバーの取引を編集する権限がありません。"
-            ),
+            title: L10n.overview.overview.noTransactionEditAccess,
+            message: L10n.overview.overview.youDoNotHavePermissionToEdit,
             actionTitle: isPending
-                ? mistiaLocalized(vi: "Đã gửi yêu cầu chỉnh sửa", en: "Edit request sent", ja: "編集リクエスト送信済み")
-                : mistiaLocalized(vi: "Yêu cầu quyền chỉnh sửa", en: "Request edit access", ja: "編集権限をリクエスト")
+                ? L10n.overview.overview.editRequestSent
+                : L10n.overview.overview.requestEditAccess
         ) {
             if isPending {
                 refreshTransactionEditPermission(
@@ -628,7 +624,7 @@ struct OverviewView: View {
                 resourceID: nil,
                 ownerUserID: ownerUserID,
                 scope: .edit,
-                resourceName: mistiaLocalized(vi: "giao dịch", en: "transactions", ja: "取引")
+                resourceName: L10n.overview.overview.transactions2
             )
         }
     }
@@ -672,19 +668,11 @@ struct OverviewView: View {
             try? await Task.sleep(nanoseconds: 150_000_000)
             infoAlert = OverviewInfoAlert(
                 title: didSend
-                    ? mistiaLocalized(vi: "Đã gửi yêu cầu", en: "Request sent", ja: "リクエストを送信しました")
-                    : mistiaLocalized(vi: "Chưa thể gửi", en: "Couldn't send", ja: "送信できませんでした"),
+                    ? L10n.overview.overview.requestSent
+                    : L10n.overview.overview.couldnTSend,
                 message: didSend
-                    ? mistiaLocalized(
-                        vi: "Yêu cầu quyền đã được gửi tới chủ dữ liệu.",
-                        en: "The permission request was sent to the data owner.",
-                        ja: "権限リクエストをデータ所有者へ送信しました。"
-                    )
-                    : (familyContextStore.lastErrorMessage ?? mistiaLocalized(
-                        vi: "Không thể gửi yêu cầu lúc này.",
-                        en: "Couldn't send the request right now.",
-                        ja: "現在リクエストは送信できません。"
-                    ))
+                    ? L10n.overview.overview.thePermissionRequestWasSentToThe
+                    : (familyContextStore.lastErrorMessage ?? L10n.overview.overview.couldnTSendTheRequestRightNow)
             )
         }
     }
@@ -915,7 +903,7 @@ private struct OverviewHeroCard: View {
             ?? OverviewWeekSpendingSnapshot(
                 weekStart: snapshot.currentWeekStart,
                 weekEnd: snapshot.currentWeekStart,
-                title: mistiaLocalized(vi: "Tuần này", en: "This week", ja: "今週"),
+                title: L10n.overview.overview.thisWeek,
                 isCurrentWeek: true,
                 points: []
             )
@@ -935,9 +923,9 @@ private struct OverviewHeroCard: View {
     private var chartTitle: String {
         switch chartMode {
         case .day:
-            mistiaLocalized(vi: "Chi tiêu theo ngày", en: "Daily spending", ja: "日別支出")
+            L10n.overview.overview.dailySpending
         case .category:
-            mistiaLocalized(vi: "Chi tiêu theo danh mục", en: "Spending by category", ja: "カテゴリ別支出")
+            L10n.overview.overview.spendingByCategory
         }
     }
 
@@ -958,7 +946,7 @@ private struct OverviewHeroCard: View {
             VStack(alignment: .leading, spacing: 18) {
                 HStack(alignment: .top, spacing: 12) {
                     VStack(alignment: .leading, spacing: 7) {
-                        Text(mistiaLocalized(vi: "Tài sản khả dụng", en: "Available assets", ja: "利用可能資産"))
+                        Text(L10n.overview.overview.availableAssets)
                             .font(.system(size: 15, weight: .medium, design: .rounded))
                             .foregroundStyle(.secondary)
 
@@ -976,7 +964,7 @@ private struct OverviewHeroCard: View {
 
                 HStack(spacing: 14) {
                     SummaryMetricColumn(
-                        title: mistiaLocalized(vi: "Thu tháng này", en: "Income this month", ja: "今月の収入"),
+                        title: L10n.overview.overview.incomeThisMonth,
                         value: snapshot.incomeThisMonthMinor.formattedCurrency(code: snapshot.currencyCode),
                         accent: Color(hex: "#2DAA9E")
                     )
@@ -985,7 +973,7 @@ private struct OverviewHeroCard: View {
                         .frame(height: 26)
 
                     SummaryMetricColumn(
-                        title: mistiaLocalized(vi: "Chi tháng này", en: "Expense this month", ja: "今月の支出"),
+                        title: L10n.overview.overview.expenseThisMonth,
                         value: snapshot.expenseThisMonthMinor.formattedCurrency(code: snapshot.currencyCode),
                         accent: Color(hex: "#F45C7E")
                     )
@@ -1010,7 +998,7 @@ private struct OverviewHeroCard: View {
                     .contentShape(Rectangle())
                     .onTapGesture { dismissChartSelection() }
 
-                    Picker("", selection: $chartMode) {
+                    Picker(String(), selection: $chartMode) {
                         ForEach(OverviewHeroChartMode.allCases) { mode in
                             Text(mode.title).tag(mode)
                         }
@@ -1377,11 +1365,7 @@ private struct OverviewDayTransactionsSheet: View {
                         MistiaBlockCard(cornerRadius: 24, padding: 18) {
                             VStack(alignment: .leading, spacing: 16) {
                                 Text(
-                                    mistiaLocalized(
-                                        vi: "Chi tiêu trong ngày",
-                                        en: "Daily expenses",
-                                        ja: "その日の支出"
-                                    )
+                                    L10n.overview.overview.dailyExpenses
                                 )
                                 .font(.system(size: 13, weight: .bold, design: .rounded))
                                 .foregroundStyle(.secondary)
@@ -1394,7 +1378,7 @@ private struct OverviewDayTransactionsSheet: View {
 
                                 HStack(spacing: 12) {
                                     OverviewDaySummaryMetric(
-                                        title: mistiaLocalized(vi: "Tổng chi", en: "Total spent", ja: "合計支出"),
+                                        title: L10n.overview.overview.totalSpent,
                                         value: totalMinor.formattedCurrency(code: currencyCode),
                                         tint: MistiaAccent.expense.color
                                     )
@@ -1403,7 +1387,7 @@ private struct OverviewDayTransactionsSheet: View {
                                         .frame(height: 28)
 
                                     OverviewDaySummaryMetric(
-                                        title: mistiaLocalized(vi: "Giao dịch", en: "Transactions", ja: "取引"),
+                                        title: L10n.overview.overview.transactions,
                                         value: "\(transactions.count)",
                                         tint: colorScheme == .dark ? .white : .primary
                                     )
@@ -1440,7 +1424,7 @@ private struct OverviewDayTransactionsSheet: View {
                     .padding(.bottom, 28)
                 }
             }
-            .navigationTitle(mistiaLocalized(vi: "Chi tiết ngày", en: "Day details", ja: "日別詳細"))
+            .navigationTitle(L10n.overview.overview.dayDetails)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
@@ -1493,7 +1477,7 @@ private struct OverviewDayTransactionRow: View {
         }
 
         return transaction.category?.localizedDisplayName
-            ?? mistiaLocalized(vi: "Chi tiêu", en: "Expense", ja: "支出")
+            ?? L10n.overview.overview.expense
     }
 
     private var subtitleText: String {
@@ -1502,7 +1486,7 @@ private struct OverviewDayTransactionRow: View {
                 .locale(MistiaAppLanguage.current.locale)
         )
         let walletName = transaction.sourceWallet?.name
-            ?? mistiaLocalized(vi: "Chưa chọn ví", en: "No wallet selected", ja: "ウォレット未選択")
+            ?? L10n.overview.overview.noWalletSelected
 
         if let categoryName = transaction.category?.localizedDisplayName,
            categoryName != titleText {
@@ -1538,7 +1522,7 @@ private struct OverviewDayTransactionRow: View {
 
             Spacer(minLength: 8)
 
-            Text("-" + transaction.amountMinor.formattedCurrency(code: currencyCode))
+            Text(verbatim: "-" + transaction.amountMinor.formattedCurrency(code: currencyCode))
                 .font(.system(size: 15, weight: .bold, design: .rounded))
                 .foregroundStyle(amountColor)
                 .lineLimit(1)
@@ -1572,14 +1556,10 @@ private struct BudgetFocusSection: View {
     let rows: [OverviewBudgetAlertSnapshot]
 
     var body: some View {
-        OverviewSection(title: mistiaLocalized(vi: "Ngân sách cần chú ý", en: "Budget watchlist", ja: "注意が必要な予算")) {
+        OverviewSection(title: L10n.overview.overview.budgetWatchlist) {
             if rows.isEmpty {
                 OverviewEmptySectionContent(
-                    message: mistiaLocalized(
-                        vi: "Chưa có danh mục nào vượt quá 50% ngân sách trong tháng này.",
-                        en: "No categories have exceeded 50% of their budget this month.",
-                        ja: "今月の予算消化が 50% を超えたカテゴリはまだありません。"
-                    )
+                    message: L10n.overview.overview.noCategoriesHaveExceededOfTheir
                 )
             } else {
                 VStack(spacing: 0) {
@@ -1620,7 +1600,7 @@ private struct BudgetRow: View {
                         .foregroundStyle(row.tint.color)
                 }
 
-                Text("\(row.spentMinor.formattedCurrency(code: row.currencyCode)) / \(row.limitMinor.formattedCurrency(code: row.currencyCode))")
+                Text(verbatim: "\(row.spentMinor.formattedCurrency(code: row.currencyCode)) / \(row.limitMinor.formattedCurrency(code: row.currencyCode))")
                     .font(.system(size: 12, weight: .semibold, design: .rounded))
                     .foregroundStyle(.secondary)
 
@@ -1628,11 +1608,7 @@ private struct BudgetRow: View {
                     .tint(row.tint.color)
 
                 Text(
-                    mistiaLocalized(
-                        vi: "Còn \(row.daysRemaining) ngày",
-                        en: "\(row.daysRemaining) days left",
-                        ja: "あと \(row.daysRemaining) 日"
-                    )
+                    L10n.overview.overview.valueDaysLeft(String(describing: row.daysRemaining))
                 )
                     .font(.system(size: 11, weight: .bold, design: .rounded))
                     .foregroundStyle(row.tint.color)
@@ -1646,14 +1622,10 @@ private struct UpcomingBillsSection: View {
     let onSelect: (OverviewDueAlertSnapshot) -> Void
 
     var body: some View {
-        OverviewSection(title: mistiaLocalized(vi: "Khoản sắp đến hạn", en: "Upcoming due items", ja: "まもなく期限の項目")) {
+        OverviewSection(title: L10n.overview.overview.upcomingDueItems) {
             if rows.isEmpty {
                 OverviewEmptySectionContent(
-                    message: mistiaLocalized(
-                        vi: "Không có hóa đơn, vay hoặc credit nào đến hạn trong 7 ngày tới.",
-                        en: "No bills, loans, or credit payments are due in the next 7 days.",
-                        ja: "今後 7 日以内に期限を迎える請求、ローン、カード支払いはありません。"
-                    )
+                    message: L10n.overview.overview.noBillsLoansOrCreditPaymentsAre
                 )
             } else {
                 VStack(spacing: 0) {
@@ -1690,7 +1662,7 @@ private struct DueRow: View {
                     .font(.system(size: 16, weight: .semibold, design: .rounded))
                     .foregroundStyle(.primary)
 
-                Text("\(row.dueDate.overviewDayText) • \(detailText)")
+                Text(verbatim: "\(row.dueDate.overviewDayText) • \(detailText)")
                     .font(.system(size: 11, weight: .semibold, design: .rounded))
                     .foregroundStyle(row.tint == .red ? row.tint.color : .secondary)
             }
@@ -1704,7 +1676,7 @@ private struct DueRow: View {
                     .lineLimit(1)
                     .minimumScaleFactor(0.8)
             } else {
-                Text(mistiaLocalized(vi: "Chưa có số tiền", en: "No amount yet", ja: "金額未入力"))
+                Text(L10n.overview.overview.noAmountYet)
                     .font(.system(size: 11, weight: .semibold, design: .rounded))
                     .foregroundStyle(.secondary)
             }
@@ -1713,14 +1685,10 @@ private struct DueRow: View {
 
     private var detailText: String {
         if row.dayDelta == 0 {
-            return mistiaLocalized(vi: "Đến hạn hôm nay", en: "Due today", ja: "本日支払い")
+            return L10n.overview.overview.dueToday
         }
 
-        return mistiaLocalized(
-            vi: "Còn \(row.dayDelta) ngày",
-            en: "\(row.dayDelta) days left",
-            ja: "あと \(row.dayDelta) 日"
-        )
+        return L10n.overview.overview.valueDaysLeft(String(describing: row.dayDelta))
     }
 }
 
@@ -1729,14 +1697,10 @@ private struct RecentTransactionsSection: View {
     let onSelect: (OverviewRecentTransactionSnapshot) -> Void
 
     var body: some View {
-        OverviewSection(title: mistiaLocalized(vi: "Giao dịch gần đây", en: "Recent transactions", ja: "最近の取引")) {
+        OverviewSection(title: L10n.overview.overview.recentTransactions) {
             if rows.isEmpty {
                 OverviewEmptySectionContent(
-                    message: mistiaLocalized(
-                        vi: "Chưa có giao dịch nào được ghi nhận gần đây.",
-                        en: "No transactions have been recorded recently.",
-                        ja: "最近記録された取引はまだありません。"
-                    )
+                    message: L10n.overview.overview.noTransactionsHaveBeenRecordedRecently
                 )
             } else {
                 VStack(spacing: 0) {

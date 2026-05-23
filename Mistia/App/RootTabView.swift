@@ -11,13 +11,13 @@ enum MistiaTab: String, CaseIterable, Hashable {
   var title: String {
     switch self {
     case .overview:
-      mistiaLocalized(vi: "Tổng quan", en: "Overview", ja: "ホーム")
+      L10n.app.roottab.overview
     case .transactions:
-      mistiaLocalized(vi: "Giao dịch", en: "Transactions", ja: "取引")
+      L10n.app.roottab.transactions
     case .planning:
-      mistiaLocalized(vi: "Kế hoạch", en: "Planning", ja: "プラン")
+      L10n.app.roottab.planning
     case .settings:
-      mistiaLocalized(vi: "Quản lý", en: "Manage", ja: "管理")
+      L10n.app.roottab.manage
     }
   }
 
@@ -203,31 +203,27 @@ struct RootTabView: View {
         Alert(
           title: Text(alert.title),
           message: Text(alert.message),
-          dismissButton: .default(Text(mistiaLocalized(vi: "OK", en: "OK", ja: "OK")))
+          dismissButton: .default(Text(L10n.common.ok))
         )
       }
       .confirmationDialog(
-        mistiaLocalized(vi: "Quét bill", en: "Scan receipt", ja: "レシート読取"),
+        L10n.app.roottab.scanReceipt,
         isPresented: $showsReceiptSourceDialog,
         titleVisibility: .visible
       ) {
         if UIImagePickerController.isSourceTypeAvailable(.camera) {
-          Button(mistiaLocalized(vi: "Chụp ảnh", en: "Take photo", ja: "写真を撮る")) {
+          Button(L10n.app.roottab.takePhoto) {
             activeSheet = .quickCreate(.receipt, .camera)
           }
         }
 
-        Button(mistiaLocalized(vi: "Chọn từ ảnh", en: "Choose from Photos", ja: "写真から選択")) {
+        Button(L10n.app.roottab.chooseFromPhotos) {
           activeSheet = .quickCreate(.receipt, .photoLibrary)
         }
 
-        Button(mistiaLocalized(vi: "Hủy", en: "Cancel", ja: "キャンセル"), role: .cancel) {}
+        Button(L10n.common.cancel, role: .cancel) {}
       } message: {
-        Text(mistiaLocalized(
-          vi: "Chọn nguồn ảnh bill để AI phân tích.",
-          en: "Choose a receipt image source for AI analysis.",
-          ja: "AI解析に使うレシート画像の取得方法を選択します。"
-        ))
+        Text(L10n.app.roottab.chooseAReceiptImageSourceForAI)
       }
     }
   }
@@ -350,16 +346,8 @@ struct RootTabView: View {
         }
 
         quickCreateAccessAlert = RootQuickCreateAccessAlert(
-          title: mistiaLocalized(
-            vi: "Chưa có quyền sử dụng ví",
-            en: "No wallet use access",
-            ja: "ウォレット使用権限がありません"
-          ),
-          message: familyContextStore.lastErrorMessage ?? mistiaLocalized(
-            vi: "Bạn chưa có quyền sử dụng ví của thành viên này.",
-            en: "You do not have use access to this member's wallets.",
-            ja: "このメンバーのウォレットを使用する権限がありません。"
-          )
+          title: L10n.app.roottab.noWalletUseAccess,
+          message: familyContextStore.lastErrorMessage ?? L10n.app.roottab.youDoNotHaveUseAccessTo
         )
       }
       return
@@ -373,16 +361,8 @@ struct RootTabView: View {
     guard quickCreateButtonFrame.width > 0 else { return }
     if familyContextStore.isViewingOtherMemberContext && !hasUsableWalletForQuickCreateSubject {
       quickCreateAccessAlert = RootQuickCreateAccessAlert(
-        title: mistiaLocalized(
-          vi: "Chưa có quyền sử dụng ví",
-          en: "No wallet use access",
-          ja: "ウォレット使用権限がありません"
-        ),
-        message: mistiaLocalized(
-          vi: "Bạn chưa có quyền sử dụng ví của thành viên này.",
-          en: "You do not have use access to this member's wallets.",
-          ja: "このメンバーのウォレットを使用する権限がありません。"
-        )
+        title: L10n.app.roottab.noWalletUseAccess,
+        message: L10n.app.roottab.youDoNotHaveUseAccessTo
       )
       return
     }
@@ -548,45 +528,45 @@ private enum MistiaQuickCreateDestination: String, CaseIterable, Identifiable {
   var title: String {
     switch self {
     case .expense:
-      mistiaLocalized(vi: "Chi tiêu", en: "Expense", ja: "支出")
+      L10n.app.roottab.expense
     case .income:
-      mistiaLocalized(vi: "Thu nhập", en: "Income", ja: "収入")
+      L10n.app.roottab.income
     case .transfer:
-      mistiaLocalized(vi: "Chuyển tiền", en: "Transfer", ja: "振替")
+      L10n.app.roottab.transfer
     case .receipt:
-      mistiaLocalized(vi: "Quét bill", en: "Scan receipt", ja: "レシート読取")
+      L10n.app.roottab.scanReceipt
     case .note:
-      mistiaLocalized(vi: "Ghi nhanh", en: "Quick note", ja: "クイック入力")
+      L10n.app.roottab.quickNote
     }
   }
 
   var subtitle: String {
     switch self {
     case .expense:
-      mistiaLocalized(vi: "Lưu lại khoản chi tiêu từ ví cá nhân.", en: "Save an expense from a personal wallet.", ja: "個人のウォレットから支出を記録します。")
+      L10n.app.roottab.saveAnExpenseFromAPersonalWallet
     case .income:
-      mistiaLocalized(vi: "Ghi nhận nguồn thu để cập nhật số dư.", en: "Record income to update your balance.", ja: "残高を更新するための収入を記録します。")
+      L10n.app.roottab.recordIncomeToUpdateYourBalance
     case .transfer:
-      mistiaLocalized(vi: "Chuyển nội bộ hoặc theo dõi công nợ.", en: "Move money internally or track debt.", ja: "内部振替や貸し借りを記録します。")
+      L10n.app.roottab.moveMoneyInternallyOrTrackDebt
     case .receipt:
-      mistiaLocalized(vi: "Chọn chụp hoặc tải ảnh bill để AI điền giao dịch.", en: "Choose camera or photo upload for AI receipt fill.", ja: "撮影または写真選択でAIが取引を入力します。")
+      L10n.app.roottab.chooseCameraOrPhotoUploadForAI
     case .note:
-      mistiaLocalized(vi: "Chỉ nhập số tiền và loại để hoàn thiện sau.", en: "Capture amount and type first, then complete later.", ja: "金額と種類だけ先に入れて、あとで詳細を整えます。")
+      L10n.app.roottab.captureAmountAndTypeFirstThenComplete
     }
   }
 
   var placeholderMessage: String {
     switch self {
     case .expense:
-      mistiaLocalized(vi: "Flow tạo khoản chi sẽ đi từ menu popout này. Hiện tại mình đã chốt interaction để bạn duyệt UI trước.", en: "The expense flow will connect from this popout menu. The interaction is locked in for UI review first.", ja: "支出作成フローはこのポップアウトメニューから接続されます。まずは UI レビュー用に操作感を固定しています。")
+      L10n.app.roottab.theExpenseFlowWillConnectFromThis
     case .income:
-      mistiaLocalized(vi: "Flow thêm thu nhập sẽ nối từ menu này. Hiện tại đang giữ chỗ bằng sheet riêng để state không phải làm lại.", en: "The income flow will connect from this menu. A separate placeholder sheet keeps the state wiring stable for now.", ja: "収入追加フローはこのメニューから接続されます。今は状態管理を崩さないためにプレースホルダーのシートを使っています。")
+      L10n.app.roottab.theIncomeFlowWillConnectFromThis
     case .transfer:
-      mistiaLocalized(vi: "Flow chuyển tiền giữa các nguồn sẽ được nối tại đây sau. Menu popout mới đã tách sẵn action riêng cho màn này.", en: "Transfers between sources will be connected here next. The new popout menu already separates the action for this screen.", ja: "資金移動フローはここに後で接続されます。この画面用のアクションは新しいポップアウトメニューですでに分かれています。")
+      L10n.app.roottab.transfersBetweenSourcesWillBeConnectedHere
     case .receipt:
-      mistiaLocalized(vi: "Quét bill sẽ mở modal giao dịch và tự điền thông tin đọc được từ ảnh.", en: "Receipt scan opens the transaction modal and fills details from the image.", ja: "レシート読取は取引モーダルを開き、画像から読み取った内容を入力します。")
+      L10n.app.roottab.receiptScanOpensTheTransactionModalAnd
     case .note:
-      mistiaLocalized(vi: "Ghi nhanh sẽ dùng cho những entry cần capture thật gọn. Trước mắt đây là placeholder để bạn duyệt layout và nhịp mở menu.", en: "Quick capture is for ultra-light entries. For now this is a placeholder so you can review layout and menu timing.", ja: "クイック入力は最小限の記録向けです。今はレイアウトとメニューの開き方を確認するためのプレースホルダーです。")
+      L10n.app.roottab.quickCaptureIsForUltraLightEntries
     }
   }
 

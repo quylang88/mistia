@@ -108,8 +108,8 @@ enum MistiaShortcutLogic {
             return MistiaShortcutResolution(
                 selection: .backupRestore,
                 presentation: MistiaShortcutPresentation(
-                    title: mistiaLocalized(vi: "Sao lưu & Khôi phục", en: "Backup & Restore", ja: "バックアップ & 復元"),
-                    accessibilityLabel: mistiaLocalized(vi: "Mở Sao lưu & Khôi phục", en: "Open backup and restore", ja: "バックアップと復元を開く"),
+                    title: L10n.settings.shortcut.option.backupRestore.title,
+                    accessibilityLabel: L10n.settings.shortcut.option.backupRestore.accessibility,
                     icon: .systemImage("externaldrive.fill.badge.icloud"),
                     action: .backupRestore
                 )
@@ -119,8 +119,8 @@ enum MistiaShortcutLogic {
             return MistiaShortcutResolution(
                 selection: .archivedItems,
                 presentation: MistiaShortcutPresentation(
-                    title: mistiaLocalized(vi: "Mục đã lưu trữ", en: "Archived items", ja: "アーカイブ済みアイテム"),
-                    accessibilityLabel: mistiaLocalized(vi: "Mở Mục đã lưu trữ", en: "Open archived items", ja: "アーカイブ済みアイテムを開く"),
+                    title: L10n.settings.shortcut.option.archivedItems.title,
+                    accessibilityLabel: L10n.settings.shortcut.option.archivedItems.accessibility,
                     icon: .systemImage("archivebox.fill"),
                     action: .archivedItems
                 )
@@ -137,8 +137,8 @@ enum MistiaShortcutLogic {
             return MistiaShortcutResolution(
                 selection: .familyOverview,
                 presentation: MistiaShortcutPresentation(
-                    title: mistiaLocalized(vi: "Tổng quan gia đình", en: "Family overview", ja: "家族の概要"),
-                    accessibilityLabel: mistiaLocalized(vi: "Mở tổng quan gia đình", en: "Open family overview", ja: "家族の概要を開く"),
+                    title: L10n.settings.shortcut.option.familyOverview.title,
+                    accessibilityLabel: L10n.settings.shortcut.option.familyOverview.accessibility,
                     icon: .systemImage("person.2.fill"),
                     action: .familyOverview(familyID: familyID)
                 )
@@ -159,11 +159,7 @@ enum MistiaShortcutLogic {
                 selection: MistiaShortcutSelection(kind: .familyMember, memberUserID: member.userID),
                 presentation: MistiaShortcutPresentation(
                     title: member.displayName,
-                    accessibilityLabel: mistiaLocalized(
-                        vi: "Xem nhanh \(member.displayName)",
-                        en: "Quick view \(member.displayName)",
-                        ja: "\(member.displayName) をすぐ見る"
-                    ),
+                    accessibilityLabel: L10n.settings.shortcut.member.quickViewAccessibility(member.displayName),
                     icon: .memberAvatar(initials: member.initials, avatarURL: member.avatarURL),
                     action: .memberOverview(userID: member.userID)
                 )
@@ -173,8 +169,8 @@ enum MistiaShortcutLogic {
             return MistiaShortcutResolution(
                 selection: .receiptScan,
                 presentation: MistiaShortcutPresentation(
-                    title: mistiaLocalized(vi: "Quét bill", en: "Scan receipt", ja: "レシート読取"),
-                    accessibilityLabel: mistiaLocalized(vi: "Mở quét bill", en: "Open receipt scan", ja: "レシート読取を開く"),
+                    title: L10n.settings.shortcut.option.receiptScan.title,
+                    accessibilityLabel: L10n.settings.shortcut.option.receiptScan.accessibility,
                     icon: .systemImage("doc.viewfinder"),
                     action: .receiptScan
                 )
@@ -184,8 +180,8 @@ enum MistiaShortcutLogic {
             return MistiaShortcutResolution(
                 selection: .syncNow,
                 presentation: MistiaShortcutPresentation(
-                    title: mistiaLocalized(vi: "Đồng bộ ngay", en: "Sync now", ja: "今すぐ同期"),
-                    accessibilityLabel: mistiaLocalized(vi: "Đồng bộ ngay", en: "Sync now", ja: "今すぐ同期"),
+                    title: L10n.settings.shortcut.option.syncNow.title,
+                    accessibilityLabel: L10n.settings.shortcut.option.syncNow.accessibility,
                     icon: .systemImage("arrow.triangle.2.circlepath.icloud.fill"),
                     action: .syncNow
                 )
@@ -195,8 +191,8 @@ enum MistiaShortcutLogic {
 
     private static func backupRestorePresentation() -> MistiaShortcutPresentation {
         MistiaShortcutPresentation(
-            title: mistiaLocalized(vi: "Sao lưu & Khôi phục", en: "Backup & Restore", ja: "バックアップ & 復元"),
-            accessibilityLabel: mistiaLocalized(vi: "Mở Sao lưu & Khôi phục", en: "Open backup and restore", ja: "バックアップと復元を開く"),
+            title: L10n.settings.shortcut.option.backupRestore.title,
+            accessibilityLabel: L10n.settings.shortcut.option.backupRestore.accessibility,
             icon: .systemImage("externaldrive.fill.badge.icloud"),
             action: .backupRestore
         )

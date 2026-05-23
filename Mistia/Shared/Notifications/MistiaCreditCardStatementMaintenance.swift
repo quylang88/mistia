@@ -92,7 +92,7 @@ enum MistiaCreditCardStatementMaintenance {
                 case .missingLinkedWallet:
                     upsertAutoPaymentFailureNotification(
                         statement,
-                        reason: mistiaLocalized(vi: "chưa thiết lập ví liên kết", en: "no linked wallet is set", ja: "連携ウォレットが未設定です"),
+                        reason: L10n.shared.notifications.mistiacreditcardstatementmaintenance.noLinkedWalletIsSet,
                         modelContext: modelContext,
                         recipientUserID: sessionStore.activeLocalProfileUserID,
                         calendar: calendar
@@ -100,7 +100,7 @@ enum MistiaCreditCardStatementMaintenance {
                 case .insufficientFunds:
                     upsertAutoPaymentFailureNotification(
                         statement,
-                        reason: mistiaLocalized(vi: "ví liên kết không đủ số dư", en: "the linked wallet has insufficient funds", ja: "連携ウォレットの残高が不足しています"),
+                        reason: L10n.shared.notifications.mistiacreditcardstatementmaintenance.theLinkedWalletHasInsufficientFunds,
                         modelContext: modelContext,
                         recipientUserID: sessionStore.activeLocalProfileUserID,
                         calendar: calendar
@@ -234,7 +234,7 @@ enum MistiaCreditCardStatementMaintenance {
               let cardWallet = walletByID[statement.walletID] else {
             upsertAutoPaymentFailureNotification(
                 statement,
-                reason: mistiaLocalized(vi: "chưa thiết lập ví liên kết", en: "no linked wallet is set", ja: "連携ウォレットが未設定です"),
+                reason: L10n.shared.notifications.mistiacreditcardstatementmaintenance.noLinkedWalletIsSet,
                 modelContext: modelContext,
                 recipientUserID: sessionStore.activeLocalProfileUserID,
                 calendar: calendar
@@ -252,7 +252,7 @@ enum MistiaCreditCardStatementMaintenance {
         guard sourceBalanceMinor >= statement.amountMinor else {
             upsertAutoPaymentFailureNotification(
                 statement,
-                reason: mistiaLocalized(vi: "ví liên kết không đủ số dư", en: "the linked wallet has insufficient funds", ja: "連携ウォレットの残高が不足しています"),
+                reason: L10n.shared.notifications.mistiacreditcardstatementmaintenance.theLinkedWalletHasInsufficientFunds,
                 modelContext: modelContext,
                 recipientUserID: sessionStore.activeLocalProfileUserID,
                 calendar: calendar
@@ -260,11 +260,7 @@ enum MistiaCreditCardStatementMaintenance {
             return
         }
 
-        let title = mistiaLocalized(
-            vi: "Tự động thanh toán thẻ \(statement.walletName)",
-            en: "Auto payment for \(statement.walletName)",
-            ja: "\(statement.walletName) の自動支払い"
-        )
+        let title = L10n.shared.notifications.mistiacreditcardstatementmaintenance.autoPaymentForValue(String(describing: statement.walletName))
         let paymentTx = LedgerTransaction(
             primaryKind: .transfer,
             transferSubtype: .internalTransfer,
@@ -373,11 +369,12 @@ enum MistiaCreditCardStatementMaintenance {
         )
         upsertNotification(
             key: "mistia.credit.statement.ready.\(statement.walletID.uuidString.lowercased()).\(PlanningLogic.monthKey(for: statement.statementMonth, calendar: calendar))",
-            title: mistiaLocalized(vi: "Sao kê đã chốt", en: "Statement ready", ja: "明細が確定しました"),
-            body: mistiaLocalized(
-                vi: "Số tiền cần thanh toán tháng \(statementMonthString) của thẻ \(statement.walletName) là \(statement.amountMinor.formattedCurrency(code: statement.currencyCode)). Hạn \(MistiaDateFormatting.shortDateString(for: statement.dueDate)).",
-                en: "\(statement.walletName) needs \(statement.amountMinor.formattedCurrency(code: statement.currencyCode)) by \(MistiaDateFormatting.shortDateString(for: statement.dueDate)).",
-                ja: "\(statement.walletName) は \(MistiaDateFormatting.shortDateString(for: statement.dueDate)) までに \(statement.amountMinor.formattedCurrency(code: statement.currencyCode)) の支払いが必要です。"
+            title: L10n.shared.notifications.mistiacreditcardstatementmaintenance.statementReady,
+            body: L10n.notifications.creditCard.statementReadyBody(
+                statementMonthString,
+                statement.walletName,
+                statement.amountMinor.formattedCurrency(code: statement.currencyCode),
+                MistiaDateFormatting.shortDateString(for: statement.dueDate)
             ),
             kind: .creditCardStatementReady,
             resourceID: statement.walletID,
@@ -401,12 +398,8 @@ enum MistiaCreditCardStatementMaintenance {
     ) {
         upsertNotification(
             key: "mistia.credit.autopay.success.\(statement.walletID.uuidString.lowercased()).\(PlanningLogic.monthKey(for: statement.statementMonth))",
-            title: mistiaLocalized(vi: "Đã tự động thanh toán", en: "Auto payment complete", ja: "自動支払いが完了しました"),
-            body: mistiaLocalized(
-                vi: "Mistia đã thanh toán \(statement.amountMinor.formattedCurrency(code: statement.currencyCode)) cho thẻ \(statement.walletName).",
-                en: "Mistia paid \(statement.amountMinor.formattedCurrency(code: statement.currencyCode)) for \(statement.walletName).",
-                ja: "Mistia は \(statement.walletName) に \(statement.amountMinor.formattedCurrency(code: statement.currencyCode)) を支払いました。"
-            ),
+            title: L10n.shared.notifications.mistiacreditcardstatementmaintenance.autoPaymentComplete,
+            body: L10n.shared.notifications.mistiacreditcardstatementmaintenance.mistiaPaidValueForValue(String(describing: statement.amountMinor.formattedCurrency(code: statement.currencyCode)), String(describing: statement.walletName)),
             kind: .creditCardAutoPaymentSucceeded,
             resourceID: statement.walletID,
             modelContext: modelContext,
@@ -433,11 +426,11 @@ enum MistiaCreditCardStatementMaintenance {
         )
         upsertNotification(
             key: "mistia.credit.autopay.failed.\(statement.walletID.uuidString.lowercased()).\(PlanningLogic.monthKey(for: statement.statementMonth))",
-            title: mistiaLocalized(vi: "Tự động thanh toán thất bại", en: "Auto payment failed", ja: "自動支払いに失敗しました"),
-            body: mistiaLocalized(
-                vi: "Không thể tự động thanh toán sao kê tháng \(statementMonthString) của thẻ \(statement.walletName) vì \(reason). Vui lòng nạp thêm tiền hoặc thanh toán thủ công.",
-                en: "Mistia could not auto-pay \(statement.walletName) because \(reason). Please add funds or pay manually.",
-                ja: "\(reason) のため \(statement.walletName) の自動支払いができませんでした。入金するか手動で支払ってください。"
+            title: L10n.shared.notifications.mistiacreditcardstatementmaintenance.autoPaymentFailed,
+            body: L10n.notifications.creditCard.autoPaymentFailedBody(
+                statementMonthString,
+                statement.walletName,
+                reason
             ),
             kind: .creditCardAutoPaymentFailed,
             resourceID: statement.walletID,

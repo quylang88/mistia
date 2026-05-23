@@ -146,11 +146,11 @@ struct MistiaCategorySpendingChartView: View {
                 .foregroundStyle(.secondary.opacity(0.6))
 
             VStack(spacing: 4) {
-                Text(mistiaLocalized(vi: "Chưa có chi tiêu", en: "No spending yet", ja: "支出はまだありません"))
+                Text(L10n.core.ui.mistiacategoryspendingchart.noSpendingYet)
                     .font(.system(size: 15, weight: .bold, design: .rounded))
                     .foregroundStyle(.primary)
 
-                Text(mistiaLocalized(vi: "Đổi mốc thời gian để xem thêm.", en: "Change the time range to see more.", ja: "期間を変えると表示されます。"))
+                Text(L10n.core.ui.mistiacategoryspendingchart.changeTheTimeRangeToSeeMore)
                     .font(.system(size: 12, weight: .medium, design: .rounded))
                     .foregroundStyle(.secondary)
                     .lineLimit(2)
@@ -199,7 +199,7 @@ struct MistiaCategorySpendingChartView: View {
                 MistiaCategoryChartSlice(
                     id: "other-\(overflowID)",
                     sourceSliceID: "other-\(overflowID)",
-                    name: mistiaLocalized(vi: "Khác", en: "Other", ja: "その他"),
+                    name: L10n.core.ui.mistiacategoryspendingchart.other,
                     iconSymbolName: "ellipsis.circle.fill",
                     colorHex: "#7C85A3",
                     amountMinor: overflowAmount,

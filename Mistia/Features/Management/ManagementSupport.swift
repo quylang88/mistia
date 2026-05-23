@@ -70,15 +70,15 @@ enum ManagementDataActionKind: String, Identifiable, CaseIterable {
     var title: String {
         switch self {
         case .archivedItems:
-            mistiaLocalized(vi: "Mục đã lưu trữ", en: "Archived items", ja: "アーカイブ済みアイテム")
+            L10n.management.dataAction.archivedItems.title
         case .exportData:
-            mistiaLocalized(vi: "Xuất dữ liệu", en: "Export data", ja: "データを書き出す")
+            L10n.management.dataAction.exportData.title
         case .importData:
-            mistiaLocalized(vi: "Nhập dữ liệu", en: "Import data", ja: "データを取り込む")
+            L10n.management.dataAction.importData.title
         case .backupRestore:
-            mistiaLocalized(vi: "Sao lưu & khôi phục", en: "Backup & restore", ja: "バックアップ & 復元")
+            L10n.management.dataAction.backupRestore.title
         case .deleteAllData:
-            mistiaLocalized(vi: "Xóa tất cả dữ liệu", en: "Delete all data", ja: "すべてのデータを削除")
+            L10n.management.dataAction.deleteAllData.title
         }
     }
 
@@ -186,7 +186,7 @@ extension LedgerWallet {
             case let (nil, suffix?):
                 return "•••• \(suffix)"
             default:
-                return mistiaLocalized(vi: "Thẻ tín dụng", en: "Credit card", ja: "クレジットカード")
+                return L10n.management.management.creditCard2
             }
         }
     }

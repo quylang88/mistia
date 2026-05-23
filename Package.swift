@@ -45,6 +45,7 @@ let package = Package(
                 "CoreLogic/CurrencyFormatting.swift",
                 "CoreLogic/FamilyLogic.swift",
                 "CoreLogic/FinanceEnums.swift",
+                "CoreLogic/L10n.generated.swift",
                 "CoreLogic/MistiaLocalization.swift",
                 "CoreLogic/MistiaResetSupport.swift",
                 "CoreLogic/MistiaShortcutLogic.swift",

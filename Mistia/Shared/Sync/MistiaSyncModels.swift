@@ -971,15 +971,11 @@ enum MistiaSyncUploadRecord {
             return row.name
         case .transaction(let row):
             if row.title.isEmpty {
-                return mistiaLocalized(
-                    vi: "Giao dịch không tên",
-                    en: "Unnamed transaction",
-                    ja: "無名取引"
-                )
+                return L10n.shared.sync.mistiasync.unnamedTransaction
             }
             return row.title
         case .budgetPlan:
-            return mistiaLocalized(vi: "Ngân sách", en: "Budget plan", ja: "予算")
+            return L10n.shared.sync.mistiasync.budgetPlan
         case .savingsGoal(let row):
             return row.name
         case .recurringBillPlan(let row):
@@ -987,7 +983,7 @@ enum MistiaSyncUploadRecord {
         case .installmentPlan(let row):
             return row.name
         case .dueOccurrence:
-            return mistiaLocalized(vi: "Kỳ đến hạn", en: "Due occurrence", ja: "支払予定")
+            return L10n.shared.sync.mistiasync.dueOccurrence
         }
     }
 
@@ -1140,23 +1136,23 @@ extension MistiaSyncEntity {
     var displayTitle: String {
         switch self {
         case .wallet:
-            return mistiaLocalized(vi: "Ví", en: "Wallet", ja: "ウォレット")
+            return L10n.shared.sync.mistiasync.wallet
         case .creditCardProfile:
-            return mistiaLocalized(vi: "Thẻ tín dụng", en: "Credit card", ja: "クレジットカード")
+            return L10n.shared.sync.mistiasync.creditCard
         case .category:
-            return mistiaLocalized(vi: "Danh mục", en: "Category", ja: "カテゴリ")
+            return L10n.shared.sync.mistiasync.category
         case .transaction:
-            return mistiaLocalized(vi: "Giao dịch", en: "Transaction", ja: "取引")
+            return L10n.shared.sync.mistiasync.transaction
         case .budgetPlan:
-            return mistiaLocalized(vi: "Ngân sách", en: "Budget", ja: "予算")
+            return L10n.shared.sync.mistiasync.budget
         case .savingsGoal:
-            return mistiaLocalized(vi: "Mục tiêu", en: "Goal", ja: "目標")
+            return L10n.shared.sync.mistiasync.goal
         case .recurringBillPlan:
-            return mistiaLocalized(vi: "Hóa đơn", en: "Bill", ja: "請求書")
+            return L10n.shared.sync.mistiasync.bill
         case .installmentPlan:
-            return mistiaLocalized(vi: "Trả góp", en: "Installment", ja: "分割払い")
+            return L10n.shared.sync.mistiasync.installment
         case .dueOccurrenceRecord:
-            return mistiaLocalized(vi: "Kỳ đến hạn", en: "Due occurrence", ja: "支払予定")
+            return L10n.shared.sync.mistiasync.dueOccurrence
         }
     }
 }
@@ -1165,63 +1161,31 @@ extension MistiaSyncConflictKind {
     var localizedTitle: String {
         switch self {
         case .createCreate:
-            return mistiaLocalized(
-                vi: "Trùng tạo dữ liệu",
-                en: "Duplicate create",
-                ja: "重複作成"
-            )
+            return L10n.shared.sync.mistiasync.duplicateCreate
         case .editEdit:
-            return mistiaLocalized(
-                vi: "Hai thiết bị cùng sửa",
-                en: "Edited on two devices",
-                ja: "2 台で同時編集"
-            )
+            return L10n.shared.sync.mistiasync.editedOnTwoDevices
         case .editDelete:
-            return mistiaLocalized(
-                vi: "Máy này sửa, cloud đã xóa",
-                en: "Edited here, deleted in cloud",
-                ja: "この端末で編集、クラウドでは削除"
-            )
+            return L10n.shared.sync.mistiasync.editedHereDeletedInCloud
         case .deleteEdit:
-            return mistiaLocalized(
-                vi: "Máy này xóa, cloud đã sửa",
-                en: "Deleted here, edited in cloud",
-                ja: "この端末で削除、クラウドでは編集"
-            )
+            return L10n.shared.sync.mistiasync.deletedHereEditedInCloud
         }
     }
 
     var localActionTitle: String {
         switch self {
         case .editDelete:
-            return mistiaLocalized(
-                vi: "Khôi phục bản trên máy",
-                en: "Restore record",
-                ja: "この端末の内容を復元"
-            )
+            return L10n.shared.sync.mistiasync.restoreRecord
         default:
-            return mistiaLocalized(
-                vi: "Dùng bản trên máy này",
-                en: "Use this device's version",
-                ja: "この端末の内容を使う"
-            )
+            return L10n.shared.sync.mistiasync.useThisDeviceSVersion
         }
     }
 
     var remoteActionTitle: String {
         switch self {
         case .deleteEdit:
-            return mistiaLocalized(
-                vi: "Giữ đã xóa",
-                en: "Keep deleted",
-                ja: "削除を維持"
-            )
+            return L10n.shared.sync.mistiasync.keepDeleted
         default:
-            return mistiaLocalized(
-                vi: "Dùng bản trên cloud",
-                en: "Use cloud version",
-                ja: "クラウドの内容を使う"
-            )
+            return L10n.shared.sync.mistiasync.useCloudVersion
         }
     }
 }

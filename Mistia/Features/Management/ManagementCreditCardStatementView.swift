@@ -85,8 +85,8 @@ struct ManagementCreditCardStatementView: View {
                 statementHero(selectedStatement)
                 statementTimeline(selectedStatement)
                 transactionSection(
-                    title: mistiaLocalized(vi: "Chi tiêu trong kỳ", en: "Charges in cycle", ja: "期間内の利用"),
-                    emptyText: mistiaLocalized(vi: "Không có chi tiêu nào trong kỳ này", en: "No charges in this cycle", ja: "この期間の利用はありません"),
+                    title: L10n.management.managementcreditcardstatement.chargesInCycle,
+                    emptyText: L10n.management.managementcreditcardstatement.noChargesInThisCycle,
                     transactions: chargeTransactions(for: selectedStatement),
                     isLocked: effectiveState(for: selectedStatement) == .paid
                 )
@@ -94,8 +94,8 @@ struct ManagementCreditCardStatementView: View {
                 emptyStatementCard
             }
         }
-        .alert(mistiaLocalized(vi: "Thông báo", en: "Notice", ja: "お知らせ"), isPresented: $showingAlert) {
-            Button("OK", role: .cancel) { }
+        .alert(L10n.management.managementcreditcardstatement.notice, isPresented: $showingAlert) {
+            Button(L10n.common.ok, role: .cancel) { }
         } message: {
             Text(alertMessage)
         }
@@ -147,7 +147,7 @@ struct ManagementCreditCardStatementView: View {
         return MistiaGlassCard(cornerRadius: 24, tint: dynamicAccentColor.opacity(0.12)) {
             VStack(alignment: .leading, spacing: 16) {
                 VStack(alignment: .leading, spacing: 6) {
-                    Text(mistiaLocalized(vi: "Tổng cần thanh toán", en: "Total due", ja: "支払い合計"))
+                    Text(L10n.management.managementcreditcardstatement.totalDue)
                         .font(.system(size: 13, weight: .bold, design: .rounded))
                         .foregroundStyle(.secondary)
 
@@ -181,17 +181,17 @@ struct ManagementCreditCardStatementView: View {
     private func statementTimeline(_ statement: PlanningCreditCardStatementSnapshot) -> some View {
         HStack(spacing: 10) {
             timelineItem(
-                title: mistiaLocalized(vi: "Chi tiêu", en: "Spend", ja: "利用"),
+                title: L10n.management.managementcreditcardstatement.spend,
                 value: MistiaDateFormatting.statementMonthYearString(for: statement.statementMonth, calendar: calendar),
                 color: Color(hex: "#5B7BFF")
             )
             timelineItem(
-                title: mistiaLocalized(vi: "Chốt", en: "Close", ja: "締め"),
+                title: L10n.management.managementcreditcardstatement.close,
                 value: MistiaDateFormatting.shortDateString(for: statement.closingDate),
                 color: dynamicAccentColor
             )
             timelineItem(
-                title: mistiaLocalized(vi: "Hạn", en: "Due", ja: "支払"),
+                title: L10n.management.managementcreditcardstatement.due,
                 value: MistiaDateFormatting.shortDateString(for: statement.dueDate),
                 color: Color(hex: "#F59B3F")
             )
@@ -262,9 +262,9 @@ struct ManagementCreditCardStatementView: View {
     private var emptyStatementCard: some View {
         MistiaBlockCard(cornerRadius: 22, padding: 18) {
             VStack(alignment: .leading, spacing: 8) {
-                Text(mistiaLocalized(vi: "Chưa có sao kê", en: "No statement yet", ja: "明細はまだありません"))
+                Text(L10n.management.managementcreditcardstatement.noStatementYet)
                     .font(.system(.headline, design: .rounded))
-                Text(mistiaLocalized(vi: "Thẻ này chưa có dữ liệu chi tiêu trong tháng đã chọn.", en: "This card has no spending data for the selected month.", ja: "選択した月の利用データはありません。"))
+                Text(L10n.management.managementcreditcardstatement.thisCardHasNoSpendingDataFor)
                     .descriptionTextStyle()
                     .foregroundStyle(.secondary)
             }
@@ -325,7 +325,7 @@ struct ManagementCreditCardStatementView: View {
 
         guard let sourceWalletID = statement.paymentSourceWalletID,
               let sourceWallet = storedWallets.first(where: { $0.id == sourceWalletID }) else {
-            alertMessage = mistiaLocalized(vi: "Vui lòng thiết lập ví liên kết cho thẻ này.", en: "Please set a linked payment wallet for this card.", ja: "このカードの連携支払いウォレットを設定してください。")
+            alertMessage = L10n.management.managementcreditcardstatement.pleaseSetALinkedPaymentWalletFor
             showingAlert = true
             return
         }
@@ -340,7 +340,7 @@ struct ManagementCreditCardStatementView: View {
         )
 
         guard sourceBalanceMinor >= statement.amountMinor else {
-            alertMessage = mistiaLocalized(vi: "Số dư ví liên kết không đủ để thanh toán sao kê này.", en: "The linked wallet balance is not enough for this statement.", ja: "連携ウォレットの残高がこの明細の支払いに不足しています。")
+            alertMessage = L10n.management.managementcreditcardstatement.theLinkedWalletBalanceIsNotEnough
             showingAlert = true
             return
         }
@@ -370,7 +370,7 @@ struct ManagementCreditCardStatementView: View {
                 recordID: savedPayment.occurrenceID,
                 modifiedAt: savedPayment.transaction.updatedAt
             )
-            alertMessage = mistiaLocalized(vi: "Đã thanh toán sao kê.", en: "Statement paid.", ja: "明細を支払いました。")
+            alertMessage = L10n.management.managementcreditcardstatement.statementPaid
             showingAlert = true
         } catch {
             alertMessage = error.localizedDescription
@@ -383,18 +383,18 @@ struct ManagementCreditCardStatementView: View {
         amountMinor: Int64
     ) -> String {
         if amountMinor <= 0, state != .unclosed {
-            return mistiaLocalized(vi: "Không cần thanh toán", en: "No payment needed", ja: "支払い不要")
+            return L10n.management.managementcreditcardstatement.noPaymentNeeded
         }
 
         switch state {
         case .unclosed:
-            return mistiaLocalized(vi: "Chưa chốt", en: "Not closed yet", ja: "未締め")
+            return L10n.management.managementcreditcardstatement.notClosedYet
         case .payable:
-            return mistiaLocalized(vi: "Thanh toán trước", en: "Pay early", ja: "先に支払う")
+            return L10n.management.managementcreditcardstatement.payEarly
         case .overdue:
-            return mistiaLocalized(vi: "Thanh toán ngay", en: "Pay now", ja: "今すぐ支払う")
+            return L10n.management.managementcreditcardstatement.payNow
         case .paid:
-            return mistiaLocalized(vi: "Đã thanh toán", en: "Paid", ja: "支払い済み")
+            return L10n.management.managementcreditcardstatement.paid
         }
     }
 

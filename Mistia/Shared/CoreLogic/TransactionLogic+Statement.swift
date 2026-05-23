@@ -322,37 +322,36 @@ nonisolated extension TransactionLogic {
     static func renderMonthlyStatement(
         _ statement: TransactionSummaryStatementSnapshot
     ) -> TransactionStatementDocument {
-        let language = MistiaAppLanguage.current
         let filename = "mistia-sao-ke-tong-hop-\(yearMonthToken(for: statement.period.start)).html"
         let body = """
         <div class="hero">
           <div>
             <div class="eyebrow">Mistia Statement</div>
-            <h1>\(htmlEscaped(mistiaLocalized(vi: "Sao kê tổng hợp tháng", en: "Monthly summary statement", ja: "月次サマリーステートメント", language: language)))</h1>
-            <p>\(htmlEscaped(mistiaLocalized(vi: "Kỳ sao kê", en: "Statement period", ja: "対象期間", language: language))): \(htmlEscaped(fullDateString(for: statement.period.start))) - \(htmlEscaped(fullDateString(for: statement.period.end)))</p>
-            <p>\(htmlEscaped(mistiaLocalized(vi: "Xuất lúc", en: "Generated at", ja: "出力日時", language: language))) \(htmlEscaped(dateTimeString(for: statement.generatedAt)))</p>
+            <h1>\(htmlEscaped(L10n.shared.corelogic.transactionlogicstatement.monthlySummaryStatement))</h1>
+            <p>\(htmlEscaped(L10n.shared.corelogic.transactionlogicstatement.statementPeriod)): \(htmlEscaped(fullDateString(for: statement.period.start))) - \(htmlEscaped(fullDateString(for: statement.period.end)))</p>
+            <p>\(htmlEscaped(L10n.shared.corelogic.transactionlogicstatement.generatedAt)) \(htmlEscaped(dateTimeString(for: statement.generatedAt)))</p>
           </div>
           <div class="hero-amount">\(htmlEscaped(statement.totalAssetBalanceMinor.formattedCurrency(code: statement.currencyCode)))</div>
         </div>
 
         <div class="grid three">
-          \(summaryCard(title: mistiaLocalized(vi: "Tài sản khả dụng", en: "Available assets", ja: "利用可能資産", language: language), value: statement.totalAssetBalanceMinor.formattedCurrency(code: statement.currencyCode), accentClass: "green"))
-          \(summaryCard(title: mistiaLocalized(vi: "Thu tháng này", en: "Income this month", ja: "今月の収入", language: language), value: statement.totalIncomeMinor.formattedCurrency(code: statement.currencyCode), accentClass: "blue"))
-          \(summaryCard(title: mistiaLocalized(vi: "Chi tháng này", en: "Expense this month", ja: "今月の支出", language: language), value: statement.totalExpenseMinor.formattedCurrency(code: statement.currencyCode), accentClass: "red"))
+          \(summaryCard(title: L10n.shared.corelogic.transactionlogicstatement.availableAssets, value: statement.totalAssetBalanceMinor.formattedCurrency(code: statement.currencyCode), accentClass: "green"))
+          \(summaryCard(title: L10n.shared.corelogic.transactionlogicstatement.incomeThisMonth, value: statement.totalIncomeMinor.formattedCurrency(code: statement.currencyCode), accentClass: "blue"))
+          \(summaryCard(title: L10n.shared.corelogic.transactionlogicstatement.expenseThisMonth, value: statement.totalExpenseMinor.formattedCurrency(code: statement.currencyCode), accentClass: "red"))
         </div>
 
         <div class="grid two">
           <section class="panel">
             <div class="panel-header">
-              <h2>\(htmlEscaped(mistiaLocalized(vi: "Chênh lệch dòng tiền", en: "Net cashflow", ja: "キャッシュフロー差額", language: language)))</h2>
+              <h2>\(htmlEscaped(L10n.shared.corelogic.transactionlogicstatement.netCashflow))</h2>
               <span>\(htmlEscaped(statement.netCashflowMinor.formattedCurrency(code: statement.currencyCode)))</span>
             </div>
             \(renderChart(points: statement.chartPoints, currencyCode: statement.currencyCode))
           </section>
           <section class="panel">
             <div class="panel-header">
-              <h2>\(htmlEscaped(mistiaLocalized(vi: "Ví tài sản", en: "Asset wallets", ja: "資産ウォレット", language: language)))</h2>
-              <span>\(statement.wallets.count) \(htmlEscaped(mistiaLocalized(vi: "ví", en: "wallets", ja: "件", language: language)))</span>
+              <h2>\(htmlEscaped(L10n.shared.corelogic.transactionlogicstatement.assetWallets))</h2>
+              <span>\(statement.wallets.count) \(htmlEscaped(L10n.shared.corelogic.transactionlogicstatement.wallets))</span>
             </div>
             \(renderWalletTable(rows: statement.wallets))
           </section>
@@ -360,10 +359,10 @@ nonisolated extension TransactionLogic {
 
         <section class="panel">
           <div class="panel-header">
-            <h2>\(htmlEscaped(mistiaLocalized(vi: "Giao dịch tháng hiện tại", en: "Transactions this month", ja: "今月の取引", language: language)))</h2>
-            <span>\(statement.transactions.count) \(htmlEscaped(mistiaLocalized(vi: "mục", en: "items", ja: "件", language: language)))</span>
+            <h2>\(htmlEscaped(L10n.shared.corelogic.transactionlogicstatement.transactionsThisMonth))</h2>
+            <span>\(statement.transactions.count) \(htmlEscaped(L10n.shared.corelogic.transactionlogicstatement.items))</span>
           </div>
-          \(renderTransactionTable(rows: statement.transactions, emptyMessage: mistiaLocalized(vi: "Chưa có giao dịch nào trong tháng này.", en: "No transactions in this month yet.", ja: "今月の取引はまだありません。", language: language)))
+          \(renderTransactionTable(rows: statement.transactions, emptyMessage: L10n.shared.corelogic.transactionlogicstatement.noTransactionsInThisMonthYet))
         </section>
         """
 
@@ -371,8 +370,8 @@ nonisolated extension TransactionLogic {
             kind: .monthlySummary,
             filename: filename,
             html: renderDocument(
-                title: mistiaLocalized(vi: "Mistia Sao kê tổng hợp", en: "Mistia Monthly Summary", ja: "Mistia 月次サマリー", language: language),
-                subtitle: mistiaLocalized(vi: "Tổng hợp tài sản, dòng tiền và giao dịch tháng hiện tại", en: "A summary of assets, cashflow, and transactions for the current month", ja: "今月の資産、キャッシュフロー、取引のサマリー", language: language),
+                title: L10n.shared.corelogic.transactionlogicstatement.mistiaMonthlySummary,
+                subtitle: L10n.shared.corelogic.transactionlogicstatement.aSummaryOfAssetsCashflowAndTransactions,
                 body: body
             )
         )
@@ -382,15 +381,14 @@ nonisolated extension TransactionLogic {
     static func renderCreditCardStatement(
         _ statement: TransactionCreditCardStatementSnapshot
     ) -> TransactionStatementDocument {
-        let language = MistiaAppLanguage.current
         let filename = "mistia-sao-ke-the-tin-dung-\(yearMonthToken(for: statement.generatedAt)).html"
         let sections: String
 
         if statement.cards.isEmpty {
             sections = """
             <section class="panel empty">
-              <h2>\(htmlEscaped(mistiaLocalized(vi: "Chưa có thẻ tín dụng", en: "No credit cards yet", ja: "クレジットカードはまだありません", language: language)))</h2>
-              <p>\(htmlEscaped(mistiaLocalized(vi: "Hiện tại bạn chưa thêm thẻ nào vào Mistia nên không có sao kê để xuất.", en: "You have not added any cards to Mistia yet, so there is no statement to export.", ja: "Mistia にカードがまだ追加されていないため、書き出せる明細がありません。", language: language)))</p>
+              <h2>\(htmlEscaped(L10n.shared.corelogic.transactionlogicstatement.noCreditCardsYet))</h2>
+              <p>\(htmlEscaped(L10n.shared.corelogic.transactionlogicstatement.youHaveNotAddedAnyCardsTo))</p>
             </section>
             """
         } else {
@@ -401,51 +399,51 @@ nonisolated extension TransactionLogic {
                     <div>
                       <div class="eyebrow">\(htmlEscaped(card.networkTitle)) • •••• \(htmlEscaped(card.last4))</div>
                       <h2>\(htmlEscaped(card.walletName))</h2>
-                      <p>\(htmlEscaped(card.issuerName.isEmpty ? mistiaLocalized(vi: "Thẻ tín dụng", en: "Credit card", ja: "クレジットカード", language: language) : card.issuerName))</p>
+                      <p>\(htmlEscaped(card.issuerName.isEmpty ? L10n.shared.corelogic.transactionlogicstatement.creditCard : card.issuerName))</p>
                     </div>
-                    <div class="badge">\(htmlEscaped(mistiaLocalized(vi: "Tỷ lệ sử dụng", en: "Utilization", ja: "利用率", language: language))) \(htmlEscaped(percentText(card.utilization)))</div>
+                    <div class="badge">\(htmlEscaped(L10n.shared.corelogic.transactionlogicstatement.utilization)) \(htmlEscaped(percentText(card.utilization)))</div>
                   </div>
 
                   <div class="grid four">
-                    \(summaryCard(title: mistiaLocalized(vi: "Dư nợ hiện tại", en: "Current debt", ja: "現在の利用残高", language: language), value: card.currentDebtMinor.formattedCurrency(code: card.currencyCode), accentClass: "red"))
-                    \(summaryCard(title: mistiaLocalized(vi: "Hạn mức", en: "Credit limit", ja: "利用限度額", language: language), value: card.creditLimitMinor.formattedCurrency(code: card.currencyCode), accentClass: "blue"))
-                    \(summaryCard(title: mistiaLocalized(vi: "Hạn mức còn lại", en: "Available credit", ja: "利用可能額", language: language), value: card.availableCreditMinor.formattedCurrency(code: card.currencyCode), accentClass: "green"))
-                    \(summaryCard(title: mistiaLocalized(vi: "Ngày thanh toán tiếp theo", en: "Next payment date", ja: "次回支払日", language: language), value: fullDateString(for: card.nextPaymentDate), accentClass: "orange"))
+                    \(summaryCard(title: L10n.shared.corelogic.transactionlogicstatement.currentDebt, value: card.currentDebtMinor.formattedCurrency(code: card.currencyCode), accentClass: "red"))
+                    \(summaryCard(title: L10n.shared.corelogic.transactionlogicstatement.creditLimit, value: card.creditLimitMinor.formattedCurrency(code: card.currencyCode), accentClass: "blue"))
+                    \(summaryCard(title: L10n.shared.corelogic.transactionlogicstatement.availableCredit, value: card.availableCreditMinor.formattedCurrency(code: card.currencyCode), accentClass: "green"))
+                    \(summaryCard(title: L10n.shared.corelogic.transactionlogicstatement.nextPaymentDate, value: fullDateString(for: card.nextPaymentDate), accentClass: "orange"))
                   </div>
 
                   <div class="meta-grid">
                     <div class="meta-item">
-                      <span>\(htmlEscaped(mistiaLocalized(vi: "Kỳ sao kê hiện tại", en: "Current cycle", ja: "現在の締め期間", language: language)))</span>
+                      <span>\(htmlEscaped(L10n.shared.corelogic.transactionlogicstatement.currentCycle))</span>
                       <strong>\(htmlEscaped(fullDateString(for: card.cycle.start))) - \(htmlEscaped(fullDateString(for: card.cycle.end.addingTimeInterval(-1))))</strong>
                     </div>
                     <div class="meta-item">
-                      <span>\(htmlEscaped(mistiaLocalized(vi: "Ngày chốt sao kê", en: "Statement closing day", ja: "締め日", language: language)))</span>
-                      <strong>\(htmlEscaped(mistiaLocalized(vi: "\(card.statementClosingDay) hằng tháng", en: "Day \(card.statementClosingDay) each month", ja: "毎月 \(card.statementClosingDay) 日", language: language)))</strong>
+                      <span>\(htmlEscaped(L10n.shared.corelogic.transactionlogicstatement.statementClosingDay))</span>
+                      <strong>\(htmlEscaped(L10n.shared.corelogic.transactionlogicstatement.dayValueEachMonth(String(describing: card.statementClosingDay))))</strong>
                     </div>
                     <div class="meta-item">
-                      <span>\(htmlEscaped(mistiaLocalized(vi: "Ngày thanh toán", en: "Payment due day", ja: "支払日", language: language)))</span>
-                      <strong>\(htmlEscaped(mistiaLocalized(vi: "\(card.paymentDueDay) hằng tháng", en: "Day \(card.paymentDueDay) each month", ja: "毎月 \(card.paymentDueDay) 日", language: language)))</strong>
+                      <span>\(htmlEscaped(L10n.shared.corelogic.transactionlogicstatement.paymentDueDay))</span>
+                      <strong>\(htmlEscaped(L10n.shared.corelogic.transactionlogicstatement.dayValueEachMonth(String(describing: card.paymentDueDay))))</strong>
                     </div>
                     <div class="meta-item">
-                      <span>\(htmlEscaped(mistiaLocalized(vi: "Ví thanh toán", en: "Payment wallet", ja: "支払い元ウォレット", language: language)))</span>
-                      <strong>\(htmlEscaped(card.paymentSourceWalletName ?? mistiaLocalized(vi: "Chưa cài đặt", en: "Not set", ja: "未設定", language: language)))</strong>
+                      <span>\(htmlEscaped(L10n.shared.corelogic.transactionlogicstatement.paymentWallet))</span>
+                      <strong>\(htmlEscaped(card.paymentSourceWalletName ?? L10n.shared.corelogic.transactionlogicstatement.notSet))</strong>
                     </div>
                   </div>
 
                   <div class="grid two">
                     <section class="subpanel">
                       <div class="panel-header">
-                        <h3>\(htmlEscaped(mistiaLocalized(vi: "Chi tiêu trong kỳ", en: "Charges in cycle", ja: "期間内の利用", language: language)))</h3>
-                        <span>\(card.charges.count) \(htmlEscaped(mistiaLocalized(vi: "mục", en: "items", ja: "件", language: language)))</span>
+                        <h3>\(htmlEscaped(L10n.shared.corelogic.transactionlogicstatement.chargesInCycle))</h3>
+                        <span>\(card.charges.count) \(htmlEscaped(L10n.shared.corelogic.transactionlogicstatement.items))</span>
                       </div>
-                      \(renderTransactionTable(rows: card.charges, emptyMessage: mistiaLocalized(vi: "Không có chi tiêu nào trong kỳ sao kê này.", en: "There are no charges in this cycle.", ja: "この締め期間の利用はありません。", language: language)))
+                      \(renderTransactionTable(rows: card.charges, emptyMessage: L10n.shared.corelogic.transactionlogicstatement.thereAreNoChargesInThisCycle))
                     </section>
                     <section class="subpanel">
                       <div class="panel-header">
-                        <h3>\(htmlEscaped(mistiaLocalized(vi: "Thanh toán vào thẻ", en: "Payments to card", ja: "カードへの支払い", language: language)))</h3>
-                        <span>\(card.payments.count) \(htmlEscaped(mistiaLocalized(vi: "mục", en: "items", ja: "件", language: language)))</span>
+                        <h3>\(htmlEscaped(L10n.shared.corelogic.transactionlogicstatement.paymentsToCard))</h3>
+                        <span>\(card.payments.count) \(htmlEscaped(L10n.shared.corelogic.transactionlogicstatement.items))</span>
                       </div>
-                      \(renderTransactionTable(rows: card.payments, emptyMessage: mistiaLocalized(vi: "Chưa có giao dịch thanh toán vào thẻ trong kỳ.", en: "There are no card payments in this cycle.", ja: "この期間のカード支払いはありません。", language: language)))
+                      \(renderTransactionTable(rows: card.payments, emptyMessage: L10n.shared.corelogic.transactionlogicstatement.thereAreNoCardPaymentsInThis))
                     </section>
                   </div>
                 </section>
@@ -458,11 +456,11 @@ nonisolated extension TransactionLogic {
         <div class="hero">
           <div>
             <div class="eyebrow">Mistia Statement</div>
-            <h1>\(htmlEscaped(mistiaLocalized(vi: "Sao kê thẻ tín dụng", en: "Credit card statement", ja: "クレジットカード明細", language: language)))</h1>
-            <p>\(htmlEscaped(mistiaLocalized(vi: "Bản tổng hợp cho các thẻ đang hoạt động trong Mistia.", en: "A summary of active cards in Mistia.", ja: "Mistia で利用中のカードをまとめた明細です。", language: language)))</p>
-            <p>\(htmlEscaped(mistiaLocalized(vi: "Xuất lúc", en: "Generated at", ja: "出力日時", language: language))) \(htmlEscaped(dateTimeString(for: statement.generatedAt)))</p>
+            <h1>\(htmlEscaped(L10n.shared.corelogic.transactionlogicstatement.creditCardStatement))</h1>
+            <p>\(htmlEscaped(L10n.shared.corelogic.transactionlogicstatement.aSummaryOfActiveCardsInMistia))</p>
+            <p>\(htmlEscaped(L10n.shared.corelogic.transactionlogicstatement.generatedAt)) \(htmlEscaped(dateTimeString(for: statement.generatedAt)))</p>
           </div>
-          <div class="hero-amount">\(statement.cards.count) \(htmlEscaped(mistiaLocalized(vi: "thẻ", en: "cards", ja: "枚", language: language)))</div>
+          <div class="hero-amount">\(statement.cards.count) \(htmlEscaped(L10n.shared.corelogic.transactionlogicstatement.cards))</div>
         </div>
         \(sections)
         """
@@ -471,8 +469,8 @@ nonisolated extension TransactionLogic {
             kind: .creditCard,
             filename: filename,
             html: renderDocument(
-                title: mistiaLocalized(vi: "Mistia Sao kê thẻ tín dụng", en: "Mistia Credit Card Statement", ja: "Mistia クレジットカード明細", language: language),
-                subtitle: mistiaLocalized(vi: "Tổng hợp dư nợ, hạn mức và giao dịch trong kỳ sao kê hiện tại", en: "A summary of debt, credit limits, and transactions in the current cycle", ja: "現在の締め期間における残高、利用枠、取引のサマリー", language: language),
+                title: L10n.shared.corelogic.transactionlogicstatement.mistiaCreditCardStatement,
+                subtitle: L10n.shared.corelogic.transactionlogicstatement.aSummaryOfDebtCreditLimitsAnd,
                 body: body
             )
         )
@@ -484,10 +482,10 @@ nonisolated extension TransactionLogic {
     ) -> String {
         switch transaction.primaryKind {
         case .expense, .income:
-            return transaction.sourceWalletName ?? mistiaLocalized(vi: "Chưa chọn ví", en: "No wallet selected", ja: "ウォレット未選択")
+            return transaction.sourceWalletName ?? L10n.shared.corelogic.transactionlogicstatement.noWalletSelected
         case .transfer:
-            let source = transaction.sourceWalletName ?? mistiaLocalized(vi: "Nguồn", en: "Source", ja: "出金元")
-            let destination = transaction.destinationWalletName ?? mistiaLocalized(vi: "Đích", en: "Destination", ja: "入金先")
+            let source = transaction.sourceWalletName ?? L10n.shared.corelogic.transactionlogicstatement.source
+            let destination = transaction.destinationWalletName ?? L10n.shared.corelogic.transactionlogicstatement.destination
             return "\(source) -> \(destination)"
         }
     }
@@ -504,7 +502,7 @@ nonisolated extension TransactionLogic {
             return transaction.note?.trimmingCharacters(in: .whitespacesAndNewlines).nonEmpty ?? "-"
         case .transfer:
             if transaction.transferSubtype == .debt {
-                return transaction.counterpartyName?.trimmingCharacters(in: .whitespacesAndNewlines).nonEmpty ?? mistiaLocalized(vi: "Công nợ", en: "Debt", ja: "貸し借り")
+                return transaction.counterpartyName?.trimmingCharacters(in: .whitespacesAndNewlines).nonEmpty ?? L10n.shared.corelogic.transactionlogicstatement.debt
             }
             return transaction.note?.trimmingCharacters(in: .whitespacesAndNewlines).nonEmpty ?? "-"
         }
@@ -583,7 +581,7 @@ nonisolated extension TransactionLogic {
         rows: [TransactionStatementWalletRow]
     ) -> String {
         guard !rows.isEmpty else {
-            return "<div class=\"empty\"><p>\(htmlEscaped(mistiaLocalized(vi: "Chưa có ví tài sản nào.", en: "There are no asset wallets yet.", ja: "資産ウォレットはまだありません。")))</p></div>"
+            return "<div class=\"empty\"><p>\(htmlEscaped(L10n.shared.corelogic.transactionlogicstatement.thereAreNoAssetWalletsYet))</p></div>"
         }
 
         let body = rows.map { row in
@@ -600,9 +598,9 @@ nonisolated extension TransactionLogic {
         <table>
           <thead>
             <tr>
-              <th>\(htmlEscaped(mistiaLocalized(vi: "Ví", en: "Wallet", ja: "ウォレット")))</th>
-              <th>\(htmlEscaped(mistiaLocalized(vi: "Số dư đầu kỳ", en: "Opening balance", ja: "期首残高")))</th>
-              <th>\(htmlEscaped(mistiaLocalized(vi: "Số dư hiện tại", en: "Current balance", ja: "現在残高")))</th>
+              <th>\(htmlEscaped(L10n.shared.corelogic.transactionlogicstatement.wallet))</th>
+              <th>\(htmlEscaped(L10n.shared.corelogic.transactionlogicstatement.openingBalance))</th>
+              <th>\(htmlEscaped(L10n.shared.corelogic.transactionlogicstatement.currentBalance))</th>
             </tr>
           </thead>
           <tbody>
@@ -638,12 +636,12 @@ nonisolated extension TransactionLogic {
         <table>
           <thead>
             <tr>
-              <th>\(htmlEscaped(mistiaLocalized(vi: "Ngày giờ", en: "Date & time", ja: "日時")))</th>
-              <th>\(htmlEscaped(mistiaLocalized(vi: "Giao dịch", en: "Transaction", ja: "取引")))</th>
-              <th>\(htmlEscaped(mistiaLocalized(vi: "Loại", en: "Type", ja: "種類")))</th>
-              <th>\(htmlEscaped(mistiaLocalized(vi: "Tài khoản", en: "Account", ja: "口座")))</th>
-              <th>\(htmlEscaped(mistiaLocalized(vi: "Số tiền", en: "Amount", ja: "金額")))</th>
-              <th>\(htmlEscaped(mistiaLocalized(vi: "Trạng thái", en: "Status", ja: "状態")))</th>
+              <th>\(htmlEscaped(L10n.shared.corelogic.transactionlogicstatement.dateTime))</th>
+              <th>\(htmlEscaped(L10n.shared.corelogic.transactionlogicstatement.transaction))</th>
+              <th>\(htmlEscaped(L10n.shared.corelogic.transactionlogicstatement.type))</th>
+              <th>\(htmlEscaped(L10n.shared.corelogic.transactionlogicstatement.account))</th>
+              <th>\(htmlEscaped(L10n.shared.corelogic.transactionlogicstatement.amount))</th>
+              <th>\(htmlEscaped(L10n.shared.corelogic.transactionlogicstatement.status))</th>
             </tr>
           </thead>
           <tbody>

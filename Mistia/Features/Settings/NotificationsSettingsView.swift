@@ -19,7 +19,7 @@ struct NotificationsSettingsView: View {
     var body: some View {
         MistiaPinnedTopBarScaffold(
             tone: .standard,
-            title: mistiaLocalized(vi: "Thông báo", en: "Notifications", ja: "通知"),
+            title: L10n.settings.notifications.title,
             embedsInNavigationStack: false,
             showsLeadingAvatar: false,
             leadingSystemImage: "chevron.left",
@@ -31,31 +31,21 @@ struct NotificationsSettingsView: View {
             VStack(spacing: 14) {
                 notificationCard {
                     notificationToggleRow(
-                        title: mistiaLocalized(
-                            vi: "Bật thông báo",
-                            en: "Enable notifications",
-                            ja: "通知を有効にする"
-                        ),
+                        title: L10n.settings.notifications.enable.title,
                         systemImage: "bell.badge.fill",
                         accent: .coral,
                         isOn: masterEnabledBinding
                     )
                 }
 
-                textDetailLayout(
-                    mistiaLocalized(
-                        vi: "Khi bật, Mistia có thể gửi thông báo nhắc nhở quan trọng.",
-                        en: "When enabled, Mistia can send important reminders.",
-                        ja: "有効にすると、Mistia から重要なリマインダー通知が届きます。"
-                    )
-                )
+                textDetailLayout(L10n.settings.notifications.enable.description)
 
                 if notificationsEnabled {
-                    notificationBlockTitle(mistiaLocalized(vi: "Nhắc nhở", en: "Reminders", ja: "リマインダー"))
+                    notificationBlockTitle(L10n.settings.notifications.reminders.title)
 
                     notificationCard {
                         notificationToggleRow(
-                            title: mistiaLocalized(vi: "Ngân sách", en: "Budget", ja: "予算"),
+                            title: L10n.settings.notifications.reminders.budget,
                             systemImage: "chart.pie.fill",
                             accent: .mint,
                             isOn: budgetReminderBinding
@@ -64,7 +54,7 @@ struct NotificationsSettingsView: View {
                         notificationDivider()
 
                         notificationToggleRow(
-                            title: mistiaLocalized(vi: "Hóa đơn", en: "Bills", ja: "請求"),
+                            title: L10n.settings.notifications.reminders.bills,
                             systemImage: "calendar.badge.clock",
                             accent: .amber,
                             isOn: billReminderBinding
@@ -73,7 +63,7 @@ struct NotificationsSettingsView: View {
                         notificationDivider()
 
                         notificationToggleRow(
-                            title: mistiaLocalized(vi: "Thẻ tín dụng", en: "Credit cards", ja: "クレジットカード"),
+                            title: L10n.settings.notifications.reminders.creditCards,
                             systemImage: "creditcard.fill",
                             accent: .purple,
                             isOn: creditCardReminderBinding
@@ -82,37 +72,25 @@ struct NotificationsSettingsView: View {
                         notificationDivider()
 
                         notificationToggleRow(
-                            title: mistiaLocalized(vi: "Ví", en: "Wallets", ja: "ウォレット"),
+                            title: L10n.settings.notifications.reminders.wallets,
                             systemImage: "wallet.pass.fill",
                             accent: .sky,
                             isOn: walletReminderBinding
                         )
                     }
 
-                    textDetailLayout(
-                        mistiaLocalized(
-                            vi: "Mistia sẽ nhắc khi ngân sách sắp vượt mức, hóa đơn đến hạn hoặc quá hạn, sao kê thẻ cần thanh toán và ví sắp hết tiền.",
-                            en: "Mistia reminds you when budgets are near the limit, bills are due or overdue, credit card statements need payment, and wallets run low.",
-                            ja: "予算が上限に近いとき、請求の期限や延滞、カード明細の支払い、ウォレット残高不足を通知します。"
-                        )
-                    )
+                    textDetailLayout(L10n.settings.notifications.reminders.description)
 
                     notificationCard {
                         notificationToggleRow(
-                            title: mistiaLocalized(vi: "Gia đình", en: "Family", ja: "家族"),
+                            title: L10n.settings.notifications.family.title,
                             systemImage: "person.2.fill",
                             accent: .indigo,
                             isOn: familyBinding
                         )
                     }
 
-                    textDetailLayout(
-                        mistiaLocalized(
-                            vi: "Thông báo gia đình gồm yêu cầu quyền, thay đổi quyền và hoạt động tài chính từ các thành viên được chia sẻ.",
-                            en: "Family notifications include permission requests, permission changes, and shared financial activity from members.",
-                            ja: "家族通知には、権限リクエスト、権限変更、共有された家族の財務アクティビティが含まれます。"
-                        )
-                    )
+                    textDetailLayout(L10n.settings.notifications.family.description)
                 }
             }
         }
@@ -319,7 +297,7 @@ struct NotificationsSettingsView: View {
 
             Spacer(minLength: 10)
 
-            Toggle("", isOn: isOn)
+            Toggle(String(), isOn: isOn)
                 .labelsHidden()
                 .tint(MistiaAccent.purple.color)
         }

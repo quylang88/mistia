@@ -189,28 +189,12 @@ final class SessionStore {
         isBootstrapping = true
 
         if MistiaSyncConfiguration.load() == nil {
-            syncStatusTitle = mistiaLocalized(
-                vi: "Chưa cấu hình dịch vụ đồng bộ",
-                en: "Cloud sync isn't configured",
-                ja: "クラウド同期が未設定です"
-            )
-            syncStatusDetail = mistiaLocalized(
-                vi: "Điền URL dịch vụ và public key trong MistiaSyncConfig.plist để bật đăng nhập và đồng bộ.",
-                en: "Fill in the service URL and public key in MistiaSyncConfig.plist to enable sign-in and sync.",
-                ja: "ログインと同期を有効にするには MistiaSyncConfig.plist にサービス URL と公開キーを設定してください。"
-            )
+            syncStatusTitle = L10n.shared.session.session.cloudSyncIsnTConfigured
+            syncStatusDetail = L10n.shared.session.session.fillInTheServiceURLAndPublic2
             syncStatusSystemImage = "bolt.horizontal.circle"
         } else {
-            syncStatusTitle = mistiaLocalized(
-                vi: "Chưa đăng nhập",
-                en: "Signed out",
-                ja: "未ログイン"
-            )
-            syncStatusDetail = mistiaLocalized(
-                vi: "Đăng nhập để đồng bộ dữ liệu Mistia giữa các thiết bị.",
-                en: "Sign in to sync Mistia data across devices.",
-                ja: "ログインすると Mistia のデータを端末間で同期できます。"
-            )
+            syncStatusTitle = L10n.shared.session.session.signedOut
+            syncStatusDetail = L10n.shared.session.session.signInToSyncMistiaDataAcross
             syncStatusSystemImage = "person.crop.circle.badge.plus"
         }
 
@@ -478,16 +462,8 @@ final class SessionStore {
         // Nếu đã có session do thao tác đăng nhập thủ công chạy trước, bỏ qua bootstrap
         guard summary == nil else { return }
 
-        syncStatusTitle = mistiaLocalized(
-            vi: "Đang khôi phục phiên",
-            en: "Restoring session",
-            ja: "セッションを復元中"
-        )
-        syncStatusDetail = mistiaLocalized(
-            vi: "Mistia đang kiểm tra tài khoản đã đăng nhập trước đó.",
-            en: "Mistia is checking for a previously signed-in account.",
-            ja: "以前のログイン状態を確認しています。"
-        )
+        syncStatusTitle = L10n.shared.session.session.restoringSession
+        syncStatusDetail = L10n.shared.session.session.mistiaIsCheckingForAPreviouslySigned
         syncStatusSystemImage = "key.horizontal"
 
         do {
@@ -515,11 +491,7 @@ final class SessionStore {
                 if !restorePreservedSignedInProfile(reason: error) {
                     applySignedOutState(preservingBanner: true)
                     authBanner = SessionAuthBanner(
-                        title: mistiaLocalized(
-                            vi: "Chưa thể đọc phiên đã lưu",
-                            en: "Couldn't read the saved session",
-                            ja: "保存済みセッションを読み取れませんでした"
-                        ),
+                        title: L10n.shared.session.session.couldnTReadTheSavedSession,
                         message: friendlyErrorMessage(for: error),
                         style: .error
                     )
@@ -621,16 +593,8 @@ final class SessionStore {
         do {
             try await authService.requestPasswordReset(email: email)
             authBanner = SessionAuthBanner(
-                title: mistiaLocalized(
-                    vi: "Kiểm tra email của bạn",
-                    en: "Check your email",
-                    ja: "メールを確認してください"
-                ),
-                message: mistiaLocalized(
-                    vi: "Nếu email hợp lệ, Mistia sẽ gửi một email đặt lại mật khẩu trong giây lát.",
-                    en: "If the email is valid, Mistia will send a password reset email shortly.",
-                    ja: "有効なメールアドレスであれば、まもなくパスワード再設定メールが送信されます。"
-                ),
+                title: L10n.shared.session.session.checkYourEmail,
+                message: L10n.shared.session.session.ifTheEmailIsValidMistiaWill,
                 style: .success
             )
         } catch {
@@ -654,16 +618,8 @@ final class SessionStore {
         do {
             try await authService.resendConfirmation(email: email)
             authBanner = SessionAuthBanner(
-                title: mistiaLocalized(
-                    vi: "Đã gửi lại email xác nhận",
-                    en: "Confirmation email sent again",
-                    ja: "確認メールを再送しました"
-                ),
-                message: mistiaLocalized(
-                    vi: "Nếu email đang chờ xác nhận, hệ thống sẽ gửi lại email mới đến hộp thư của bạn.",
-                    en: "If this account is pending confirmation, the system will send a fresh email to your inbox.",
-                    ja: "このアカウントが確認待ちの場合、システムが新しい確認メールを再送します。"
-                ),
+                title: L10n.shared.session.session.confirmationEmailSentAgain,
+                message: L10n.shared.session.session.ifThisAccountIsPendingConfirmationThe,
                 style: .info
             )
         } catch {
@@ -758,16 +714,8 @@ final class SessionStore {
             clearSessionRuntimeState()
             applySignedOutState(preservingBanner: true)
             authBanner = SessionAuthBanner(
-                title: mistiaLocalized(
-                    vi: "Đã xóa tài khoản cloud",
-                    en: "Cloud account deleted",
-                    ja: "クラウドアカウントを削除しました"
-                ),
-                message: mistiaLocalized(
-                    vi: "Tài khoản và dữ liệu trên cloud đã được xóa. Dữ liệu local trên máy này vẫn được giữ lại.",
-                    en: "Your cloud account and server data were deleted. Local data on this device has been kept.",
-                    ja: "クラウドアカウントとサーバーデータを削除しました。この端末のローカルデータは保持されています。"
-                ),
+                title: L10n.shared.session.session.cloudAccountDeleted,
+                message: L10n.shared.session.session.yourCloudAccountAndServerDataWere,
                 style: .success
             )
         } catch {
@@ -873,16 +821,8 @@ final class SessionStore {
 
         initialSyncPreview = nil
         pendingInitialSyncChoice = nil
-        syncStatusTitle = mistiaLocalized(
-            vi: "Đã tạm hoãn đồng bộ lần đầu",
-            en: "Initial sync postponed",
-            ja: "初回同期を保留しました"
-        )
-        syncStatusDetail = mistiaLocalized(
-            vi: "Nhấn Đồng bộ ngay khi bạn sẵn sàng chọn cách đồng bộ dữ liệu với cloud.",
-            en: "Tap Sync now when you're ready to choose how to sync with the cloud.",
-            ja: "クラウドとの同期方法を選ぶ準備ができたら「今すぐ同期」を押してください。"
-        )
+        syncStatusTitle = L10n.shared.session.session.initialSyncPostponed
+        syncStatusDetail = L10n.shared.session.session.tapSyncNowWhenYouReReady
         syncStatusSystemImage = "pause.circle"
         updateAutoSyncLoopState()
     }
@@ -936,22 +876,10 @@ final class SessionStore {
             lastErrorMessage = nil
             setRequiresManualSyncAfterRestore(isConfigured)
 
-            syncStatusTitle = mistiaLocalized(
-                vi: "Đã khôi phục snapshot",
-                en: "Snapshot restored",
-                ja: "スナップショットを復元しました"
-            )
+            syncStatusTitle = L10n.shared.session.session.snapshotRestored
             syncStatusDetail = isConfigured
-                ? mistiaLocalized(
-                    vi: "Mistia đã khôi phục dữ liệu local. Hãy kiểm tra dữ liệu rồi nhấn Đồng bộ ngay khi bạn sẵn sàng cập nhật cloud.",
-                    en: "Mistia restored your local data. Review it first, then tap Sync now when you're ready to update the cloud.",
-                    ja: "ローカルデータを復元しました。内容を確認してから、クラウドを更新する準備ができた時点で「今すぐ同期」を押してください。"
-                )
-                : mistiaLocalized(
-                    vi: "Mistia đã khôi phục dữ liệu local từ snapshot đã chọn.",
-                    en: "Mistia restored local data from the selected snapshot.",
-                    ja: "選択したスナップショットからローカルデータを復元しました。"
-                )
+                ? L10n.shared.session.session.mistiaRestoredYourLocalDataReviewIt
+                : L10n.shared.session.session.mistiaRestoredLocalDataFromTheSelected
             syncStatusSystemImage = "externaldrive.badge.checkmark"
             updateAutoSyncLoopState()
             return result
@@ -994,22 +922,10 @@ final class SessionStore {
                 setRequiresManualSyncAfterRestore(true)
             }
 
-            syncStatusTitle = mistiaLocalized(
-                vi: "Đã xóa dữ liệu local",
-                en: "Local data cleared",
-                ja: "ローカルデータを削除しました"
-            )
+            syncStatusTitle = L10n.shared.session.session.localDataCleared
             syncStatusDetail = canManageSync
-                ? mistiaLocalized(
-                    vi: "Dữ liệu trên thiết bị này đã về trạng thái ban đầu. Cloud, đăng nhập và gia đình vẫn được giữ; hãy bấm Đồng bộ ngay nếu muốn tải lại dữ liệu cloud.",
-                    en: "This device is back to a clean local state. Cloud, sign-in, and family are preserved; tap Sync now if you want to load cloud data again.",
-                    ja: "この端末のローカルデータを初期状態に戻しました。クラウド、ログイン、家族は保持されています。クラウドデータを再取得する場合は「今すぐ同期」を押してください。"
-                )
-                : mistiaLocalized(
-                    vi: "Dữ liệu trên thiết bị này đã về trạng thái ban đầu.",
-                    en: "This device is back to a clean local state.",
-                    ja: "この端末のローカルデータを初期状態に戻しました。"
-                )
+                ? L10n.shared.session.session.thisDeviceIsBackToAClean2
+                : L10n.shared.session.session.thisDeviceIsBackToAClean
             syncStatusSystemImage = "trash.circle"
             isWorking = false
             updateAutoSyncLoopState()
@@ -1127,16 +1043,8 @@ final class SessionStore {
             try normalizeCategoryHierarchyIfNeeded()
             lastSyncAt = .now
             lastErrorMessage = nil
-            syncStatusTitle = mistiaLocalized(
-                vi: "Conflict đã được xử lý",
-                en: "Conflict resolved",
-                ja: "競合を解決しました"
-            )
-            syncStatusDetail = mistiaLocalized(
-                vi: "Mistia đã cập nhật lại bản ghi theo lựa chọn của bạn.",
-                en: "Mistia updated the record with your selected resolution.",
-                ja: "選択した内容でレコードを更新しました。"
-            )
+            syncStatusTitle = L10n.shared.session.session.conflictResolved
+            syncStatusDetail = L10n.shared.session.session.mistiaUpdatedTheRecordWithYourSelected
             syncStatusSystemImage = "checkmark.icloud"
             updateAutoSyncLoopState()
         } catch {
@@ -1254,11 +1162,7 @@ final class SessionStore {
 
         if isInfrastructureAuthError(error) {
             authBanner = SessionAuthBanner(
-                title: mistiaLocalized(
-                    vi: "Chưa thể kết nối",
-                    en: "Can't connect right now",
-                    ja: "現在接続できません"
-                ),
+                title: L10n.shared.session.session.canTConnectRightNow,
                 message: infrastructureErrorMessage(for: error),
                 style: .error
             )
@@ -1266,16 +1170,8 @@ final class SessionStore {
         }
 
         authBanner = SessionAuthBanner(
-            title: mistiaLocalized(
-                vi: "Đăng nhập chưa thành công",
-                en: "Couldn't sign in",
-                ja: "ログインできませんでした"
-            ),
-            message: mistiaLocalized(
-                vi: "Email hoặc mật khẩu chưa đúng. Kiểm tra lại rồi thử thêm lần nữa.",
-                en: "The email or password is incorrect. Check them and try again.",
-                ja: "メールアドレスまたはパスワードが正しくありません。確認してもう一度お試しください。"
-            ),
+            title: L10n.shared.session.session.couldnTSignIn,
+            message: L10n.shared.session.session.theEmailOrPasswordIsIncorrectCheck,
             style: .error
         )
     }
@@ -1285,11 +1181,7 @@ final class SessionStore {
 
         if isInfrastructureAuthError(error) {
             authBanner = SessionAuthBanner(
-                title: mistiaLocalized(
-                    vi: "Chưa thể tạo tài khoản",
-                    en: "Can't create the account right now",
-                    ja: "現在アカウントを作成できません"
-                ),
+                title: L10n.shared.session.session.canTCreateTheAccountRightNow,
                 message: infrastructureErrorMessage(for: error),
                 style: .error
             )
@@ -1298,32 +1190,16 @@ final class SessionStore {
 
         if isRateLimitedError(error) {
             authBanner = SessionAuthBanner(
-                title: mistiaLocalized(
-                    vi: "Bạn thao tác hơi nhanh",
-                    en: "You're moving a bit fast",
-                    ja: "少し操作が速すぎます"
-                ),
-                message: mistiaLocalized(
-                    vi: "Hệ thống tạm chậm lại để bảo vệ tài khoản. Chờ một chút rồi thử lại nhé.",
-                    en: "The service temporarily slowed things down to protect the account flow. Please wait a moment and try again.",
-                    ja: "サービス保護のため一時的に制限されています。少し待ってからもう一度お試しください。"
-                ),
+                title: L10n.shared.session.session.youReMovingABitFast,
+                message: L10n.shared.session.session.theServiceTemporarilySlowedThingsDownTo,
                 style: .error
             )
             return
         }
 
         authBanner = SessionAuthBanner(
-            title: mistiaLocalized(
-                vi: "Tạo tài khoản chưa thành công",
-                en: "Couldn't create the account",
-                ja: "アカウントを作成できませんでした"
-            ),
-            message: mistiaLocalized(
-                vi: "Email này chưa sẵn sàng để tạo tài khoản mới. Thử đăng nhập hoặc dùng quên mật khẩu nhé.",
-                en: "This email isn't ready for a new account right now. Try signing in or use password recovery instead.",
-                ja: "このメールアドレスでは現在新しいアカウントを作成できません。ログインするか、パスワード再設定をお試しください。"
-            ),
+            title: L10n.shared.session.session.couldnTCreateTheAccount,
+            message: L10n.shared.session.session.thisEmailIsnTReadyForA,
             style: .error
         )
     }
@@ -1333,16 +1209,8 @@ final class SessionStore {
 
         if let serviceError = error as? SupabaseServiceError, case .oauthCancelled = serviceError {
             authBanner = SessionAuthBanner(
-                title: mistiaLocalized(
-                    vi: "Đã hủy đăng nhập Google",
-                    en: "Google sign-in was cancelled",
-                    ja: "Google ログインはキャンセルされました"
-                ),
-                message: mistiaLocalized(
-                    vi: "Bạn có thể thử lại bất cứ lúc nào khi sẵn sàng.",
-                    en: "You can try again any time when you're ready.",
-                    ja: "準備ができたらいつでも再試行できます。"
-                ),
+                title: L10n.shared.session.session.googleSignInWasCancelled,
+                message: L10n.shared.session.session.youCanTryAgainAnyTimeWhen,
                 style: .info
             )
             return
@@ -1350,11 +1218,7 @@ final class SessionStore {
 
         if isGoogleSignInSetupError(error) {
             authBanner = SessionAuthBanner(
-                title: mistiaLocalized(
-                    vi: "Google Sign-In chưa sẵn sàng",
-                    en: "Google sign-in isn't ready yet",
-                    ja: "Google ログインの設定がまだ完了していません"
-                ),
+                title: L10n.shared.session.session.googleSignInIsnTReadyYet,
                 message: googleSetupErrorMessage(for: error),
                 style: .error
             )
@@ -1363,11 +1227,7 @@ final class SessionStore {
 
         if isInfrastructureAuthError(error) {
             authBanner = SessionAuthBanner(
-                title: mistiaLocalized(
-                    vi: "Google chưa thể kết nối",
-                    en: "Google sign-in can't connect right now",
-                    ja: "現在 Google ログインに接続できません"
-                ),
+                title: L10n.shared.session.session.googleSignInCanTConnectRight,
                 message: infrastructureErrorMessage(for: error),
                 style: .error
             )
@@ -1375,11 +1235,7 @@ final class SessionStore {
         }
 
         authBanner = SessionAuthBanner(
-            title: mistiaLocalized(
-                vi: "Google đăng nhập chưa thành công",
-                en: "Google sign-in couldn't finish",
-                ja: "Google ログインを完了できませんでした"
-            ),
+            title: L10n.shared.session.session.googleSignInCouldnTFinish,
             message: friendlyErrorMessage(for: error),
             style: .error
         )
@@ -1388,11 +1244,7 @@ final class SessionStore {
     private func handleRecoveryFailure(_ error: Error, isResend: Bool) {
         if isInfrastructureAuthError(error) {
             authBanner = SessionAuthBanner(
-                title: mistiaLocalized(
-                    vi: isResend ? "Chưa thể gửi lại email" : "Chưa thể gửi email",
-                    en: isResend ? "Can't resend the email yet" : "Can't send the email yet",
-                    ja: isResend ? "メールを再送できません" : "メールを送信できません"
-                ),
+                title: isResend ? L10n.session.auth.cantResendEmailTitle : L10n.session.auth.cantSendEmailTitle,
                 message: infrastructureErrorMessage(for: error),
                 style: .error
             )
@@ -1401,38 +1253,16 @@ final class SessionStore {
 
         if isRateLimitedError(error) {
             authBanner = SessionAuthBanner(
-                title: mistiaLocalized(
-                    vi: "Bạn vừa yêu cầu gần đây",
-                    en: "A request was just sent",
-                    ja: "直前にリクエストされました"
-                ),
-                message: mistiaLocalized(
-                    vi: "Chờ một chút rồi thử lại để tránh gửi email quá dày.",
-                    en: "Please wait a bit before trying again to avoid sending too many emails.",
-                    ja: "メール送信が多すぎないよう、少し待ってからもう一度お試しください。"
-                ),
+                title: L10n.shared.session.session.aRequestWasJustSent,
+                message: L10n.shared.session.session.pleaseWaitABitBeforeTryingAgain,
                 style: .info
             )
             return
         }
 
         authBanner = SessionAuthBanner(
-            title: mistiaLocalized(
-                vi: isResend ? "Email đang được xử lý" : "Yêu cầu đang được xử lý",
-                en: isResend ? "The email request is being processed" : "The request is being processed",
-                ja: isResend ? "メール再送を処理中です" : "リクエストを処理中です"
-            ),
-                message: mistiaLocalized(
-                    vi: isResend
-                    ? "Nếu tài khoản đang chờ xác nhận, hệ thống sẽ tiếp tục gửi email xác nhận đến đúng hộp thư."
-                    : "Nếu email hợp lệ, hệ thống sẽ tiếp tục gửi email đặt lại mật khẩu đến đúng hộp thư.",
-                en: isResend
-                    ? "If the account is pending confirmation, the system will still deliver the confirmation email to the right inbox."
-                    : "If the email is valid, the system will still deliver the reset email to the right inbox.",
-                ja: isResend
-                    ? "アカウントが確認待ちであれば、システムが正しい受信箱へ確認メールを送信します。"
-                    : "有効なメールアドレスであれば、システムが正しい受信箱へ再設定メールを送信します。"
-            ),
+            title: isResend ? L10n.session.auth.emailRequestProcessingTitle : L10n.session.auth.requestProcessingTitle,
+            message: isResend ? L10n.session.auth.confirmationEmailDeliveryMessage : L10n.session.auth.resetEmailDeliveryMessage,
             style: .info
         )
     }
@@ -1441,16 +1271,8 @@ final class SessionStore {
         authPhase = .verifyEmailPending
         authPendingEmail = email
         authBanner = SessionAuthBanner(
-            title: mistiaLocalized(
-                vi: "Kiểm tra email để xác nhận",
-                en: "Check your email to confirm",
-                ja: "確認メールをチェックしてください"
-            ),
-            message: mistiaLocalized(
-                vi: "Tài khoản của bạn đã được tạo. Mở email xác nhận rồi quay lại đăng nhập trong Mistia nhé.",
-                en: "Your account has been created. Open the confirmation email, then come back and sign in to Mistia.",
-                ja: "アカウントが作成されました。確認メールを開いてから Mistia にログインしてください。"
-            ),
+            title: L10n.shared.session.session.checkYourEmailToConfirm,
+            message: L10n.shared.session.session.yourAccountHasBeenCreatedOpenThe,
             style: .info
         )
     }
@@ -1478,11 +1300,7 @@ final class SessionStore {
         } catch {
             lastErrorMessage = friendlyErrorMessage(for: error)
             authBanner = SessionAuthBanner(
-                title: mistiaLocalized(
-                    vi: "Chưa thể hoàn tất đăng nhập",
-                    en: "Couldn't finish signing in",
-                    ja: "ログインを完了できませんでした"
-                ),
+                title: L10n.shared.session.session.couldnTFinishSigningIn,
                 message: friendlyErrorMessage(for: error),
                 style: .error
             )
@@ -1539,16 +1357,8 @@ final class SessionStore {
                     sourceGuestDescriptor: activeDescriptor,
                     prompt: SessionPendingAuthenticationPrompt(
                         kind: .keepOrDeleteGuestData,
-                        title: mistiaLocalized(
-                            vi: "Dữ liệu local guest đang tách riêng",
-                            en: "Guest local data is separate",
-                            ja: "ゲストのローカルデータは分離されています"
-                        ),
-                        message: mistiaLocalized(
-                            vi: "Tài khoản này không được nhận dữ liệu local guest hiện tại. Giữ dữ liệu guest lại riêng hoặc xóa nó trước khi mở tài khoản.",
-                            en: "This account can't automatically take the current guest local data. Keep the guest data separate or delete it before opening the account.",
-                            ja: "このアカウントには現在のゲストローカルデータを自動で引き継げません。アカウントを開く前に、ゲストデータを分離したまま保持するか削除してください。"
-                        )
+                        title: L10n.shared.session.session.guestLocalDataIsSeparate,
+                        message: L10n.shared.session.session.thisAccountCanTAutomaticallyTakeThe
                     )
                 )
             }
@@ -1559,16 +1369,8 @@ final class SessionStore {
                     sourceGuestDescriptor: activeDescriptor,
                     prompt: SessionPendingAuthenticationPrompt(
                         kind: .attachGuestData,
-                        title: mistiaLocalized(
-                            vi: "Chọn cách dùng dữ liệu local guest",
-                            en: "Choose how to use the guest local data",
-                            ja: "ゲストのローカルデータの使い方を選択してください"
-                        ),
-                        message: mistiaLocalized(
-                            vi: "Mistia chưa thể xác định chắc dữ liệu local guest có nên gắn vào tài khoản này hay không. Bạn có thể gắn vào tài khoản hoặc giữ tách riêng.",
-                            en: "Mistia can't confirm yet whether the current guest local data should attach to this account. You can attach it now or keep it separate.",
-                            ja: "現在のゲストローカルデータをこのアカウントへ紐づけるべきか、Mistia がまだ確定できません。今すぐ紐づけるか、分離したまま保持できます。"
-                        )
+                        title: L10n.shared.session.session.chooseHowToUseTheGuestLocal,
+                        message: L10n.shared.session.session.mistiaCanTConfirmYetWhetherThe
                     )
                 )
             }
@@ -1746,16 +1548,8 @@ final class SessionStore {
         pendingInitialSyncChoice = nil
 
         if restoringExistingSession && networkStatus != .disconnected {
-            syncStatusTitle = mistiaLocalized(
-                vi: "Đang khôi phục phiên",
-                en: "Restoring session",
-                ja: "セッションを復元中"
-            )
-            syncStatusDetail = mistiaLocalized(
-                vi: "Mistia đang kiểm tra tài khoản đã đăng nhập trước đó.",
-                en: "Mistia is checking for a previously signed-in account.",
-                ja: "以前のログイン状態を確認しています。"
-            )
+            syncStatusTitle = L10n.shared.session.session.restoringSession
+            syncStatusDetail = L10n.shared.session.session.mistiaIsCheckingForAPreviouslySigned
             syncStatusSystemImage = "key.horizontal"
         }
     }
@@ -1793,22 +1587,10 @@ final class SessionStore {
         requiresInitialSync = !hasCompletedCloudSyncHistory(storedProfile: storedProfile)
         initialSyncPreview = nil
         pendingInitialSyncChoice = nil
-        syncStatusTitle = mistiaLocalized(
-            vi: "Đã đăng nhập",
-            en: "Signed in",
-            ja: "ログイン済み"
-        )
-        syncStatusDetail = mistiaLocalized(
-            vi: restoringExistingSession
-                ? "Phiên đã được khôi phục. Nhấn Sync ngay khi bạn muốn đồng bộ với cloud."
-                : "Đăng nhập thành công. Nhấn Sync ngay để bắt đầu đồng bộ dữ liệu.",
-            en: restoringExistingSession
-                ? "Your session has been restored. Tap Sync now when you want to sync with the cloud."
-                : "Sign-in succeeded. Tap Sync now to start syncing your data.",
-            ja: restoringExistingSession
-                ? "セッションを復元しました。クラウドと同期するには「今すぐ同期」を押してください。"
-                : "ログインに成功しました。データ同期を始めるには「今すぐ同期」を押してください。"
-        )
+        syncStatusTitle = L10n.shared.session.session.signedIn
+        syncStatusDetail = restoringExistingSession
+            ? L10n.session.sync.sessionRestoredDetail
+            : L10n.session.sync.signInSucceededDetail
         syncStatusSystemImage = "checkmark.circle"
         updateAutoSyncLoopState()
         scheduleFamilyOwnerOutboxRecoveryIfNeeded()
@@ -1817,21 +1599,9 @@ final class SessionStore {
     private func applySignedInOfflineState() {
         guard isSignedIn else { return }
         lastErrorMessage = nil
-        remoteUnavailableReason = mistiaLocalized(
-            vi: "Không có kết nối mạng. Hãy kết nối lại để đồng bộ, chỉnh sửa hồ sơ hoặc quản lý gia đình.",
-            en: "No network connection. Reconnect to sync, edit your profile, or manage family features.",
-            ja: "ネットワーク接続がありません。同期、プロフィール編集、家族機能の管理を行うには再接続してください。"
-        )
-        syncStatusTitle = mistiaLocalized(
-            vi: "Đang ngoại tuyến",
-            en: "Offline",
-            ja: "オフライン"
-        )
-        syncStatusDetail = mistiaLocalized(
-            vi: "Không có kết nối mạng. Hãy kết nối lại để đồng bộ, chỉnh sửa hồ sơ hoặc quản lý gia đình.",
-            en: "No network connection. Reconnect to sync, edit your profile, or manage family features.",
-            ja: "ネットワーク接続がありません。同期、プロフィール編集、家族機能の管理を行うには再接続してください。"
-        )
+        remoteUnavailableReason = L10n.shared.session.session.noNetworkConnectionReconnectToSyncEdit
+        syncStatusTitle = L10n.shared.session.session.offline
+        syncStatusDetail = L10n.shared.session.session.noNetworkConnectionReconnectToSyncEdit
         syncStatusSystemImage = "wifi.slash"
     }
 
@@ -1849,16 +1619,8 @@ final class SessionStore {
         lastErrorMessage = message
         remoteUnavailableReason = message
         syncStatusTitle = restoringExistingSession
-            ? mistiaLocalized(
-                vi: "Phiên đã được giữ lại trên máy",
-                en: "The session was kept on this device",
-                ja: "この端末ではセッションを保持しています"
-            )
-            : mistiaLocalized(
-                vi: "Đã đăng nhập trên máy này",
-                en: "Signed in on this device",
-                ja: "この端末ではログイン済みです"
-            )
+            ? L10n.shared.session.session.theSessionWasKeptOnThisDevice
+            : L10n.shared.session.session.signedInOnThisDevice2
         syncStatusDetail = message
         syncStatusSystemImage = syncErrorSystemImage(for: error)
         updateAutoSyncLoopState()
@@ -1912,17 +1674,9 @@ final class SessionStore {
         initialSyncPreview = nil
         pendingInitialSyncChoice = nil
 
-        let detail = reason.map { friendlyErrorMessage(for: $0) } ?? mistiaLocalized(
-            vi: "Mistia không thấy phiên cloud đã lưu, nhưng tài khoản vẫn được giữ đăng nhập trên thiết bị này.",
-            en: "Mistia couldn't find the saved cloud session, but the account is still kept signed in on this device.",
-            ja: "保存済みのクラウドセッションは見つかりませんでしたが、この端末ではアカウントをログイン状態のまま保持しています。"
-        )
+        let detail = reason.map { friendlyErrorMessage(for: $0) } ?? L10n.shared.session.session.mistiaCouldnTFindTheSavedCloud
         remoteUnavailableReason = detail
-        syncStatusTitle = mistiaLocalized(
-            vi: "Đã giữ đăng nhập trên máy này",
-            en: "Signed in on this device",
-            ja: "この端末ではログイン済みです"
-        )
+        syncStatusTitle = L10n.shared.session.session.signedInOnThisDevice
         syncStatusDetail = detail
         syncStatusSystemImage = reason.map { syncErrorSystemImage(for: $0) } ?? "person.crop.circle.badge.checkmark"
         updateAutoSyncLoopState()
@@ -1960,16 +1714,8 @@ final class SessionStore {
         authPendingEmail = nil
         authFieldErrors = [:]
         activeAuthAction = nil
-        syncStatusTitle = mistiaLocalized(
-            vi: "Chưa cấu hình dịch vụ đồng bộ",
-            en: "Cloud sync isn't configured",
-            ja: "クラウド同期が未設定です"
-        )
-        syncStatusDetail = mistiaLocalized(
-            vi: "Điền URL dịch vụ và public key trong MistiaSyncConfig.plist rồi build lại app.",
-            en: "Fill in the service URL and public key in MistiaSyncConfig.plist, then rebuild the app.",
-            ja: "MistiaSyncConfig.plist にサービス URL と公開キーを設定してから再ビルドしてください。"
-        )
+        syncStatusTitle = L10n.shared.session.session.cloudSyncIsnTConfigured
+        syncStatusDetail = L10n.shared.session.session.fillInTheServiceURLAndPublic
         syncStatusSystemImage = "wrench.and.screwdriver"
     }
 
@@ -2008,63 +1754,25 @@ final class SessionStore {
         let guestUnboundHasData = currentGuestUnboundHasMeaningfulData()
         switch activeLocalContext {
         case .guestAttached:
-            syncStatusTitle = mistiaLocalized(
-                vi: "Đang dùng local",
-                en: "Local mode",
-                ja: "ローカルモード"
-            )
-            syncStatusDetail = mistiaLocalized(
-                vi: "Bạn đang chỉnh sửa dữ liệu cục bộ của profile trước đó. Thay đổi chỉ đồng bộ khi đăng nhập lại đúng tài khoản.",
-                en: "You're editing local data for the previous profile. Changes sync only after signing back into that same account.",
-                ja: "以前のプロフィールのローカルデータを編集中です。変更は同じアカウントで再ログインした場合のみ同期されます。"
-            )
+            syncStatusTitle = L10n.shared.session.session.localMode
+            syncStatusDetail = L10n.shared.session.session.youReEditingLocalDataForThe
             syncStatusSystemImage = "externaldrive.badge.person.crop"
         case .guestUnbound:
-            syncStatusTitle = mistiaLocalized(
-                vi: guestUnboundHasData ? "Guest local" : "Guest sạch",
-                en: guestUnboundHasData ? "Guest local" : "Clean guest",
-                ja: guestUnboundHasData ? "ゲストローカル" : "クリーンゲスト"
-            )
-            syncStatusDetail = mistiaLocalized(
-                vi: guestUnboundHasData
-                    ? "Dữ liệu local guest trên máy này đang tách riêng. Bạn có thể tiếp tục chỉnh sửa và quyết định sau sẽ gắn nó với tài khoản nào."
-                    : "Thiết bị hiện chưa gắn với dữ liệu local của tài khoản nào. Đăng nhập để tải dữ liệu tài khoản của bạn hoặc bắt đầu dùng local mới.",
-                en: guestUnboundHasData
-                    ? "This device has separate guest local data. You can keep editing it now and decide later whether it should stay separate or attach to an account."
-                    : "This device isn't attached to any saved account data right now. Sign in to load your account, or start fresh with new local data.",
-                ja: guestUnboundHasData
-                    ? "この端末には独立したゲストのローカルデータがあります。今のまま編集を続け、後でどのアカウントに紐づけるか決められます。"
-                    : "この端末は現在どの保存済みアカウントデータにも紐づいていません。ログインしてアカウントデータを読み込むか、新しいローカルデータから始められます。"
-            )
+            syncStatusTitle = guestUnboundHasData ? L10n.session.guest.localTitle : L10n.session.guest.cleanTitle
+            syncStatusDetail = guestUnboundHasData ? L10n.session.guest.localDataSeparateDetail : L10n.session.guest.cleanDataDetail
             syncStatusSystemImage = guestUnboundHasData
                 ? "externaldrive.badge.plus"
                 : "person.crop.circle.badge.questionmark"
         case .authenticated, nil:
-            syncStatusTitle = mistiaLocalized(
-                vi: "Chưa đăng nhập",
-                en: "Signed out",
-                ja: "未ログイン"
-            )
-            syncStatusDetail = mistiaLocalized(
-                vi: "Đăng nhập để đồng bộ ví, danh mục, giao dịch và kế hoạch giữa các thiết bị.",
-                en: "Sign in to sync wallets, categories, transactions, and planning data across devices.",
-                ja: "ログインするとウォレット、カテゴリ、取引、計画データを端末間で同期できます。"
-            )
+            syncStatusTitle = L10n.shared.session.session.signedOut
+            syncStatusDetail = L10n.shared.session.session.signInToSyncWalletsCategoriesTransactions
             syncStatusSystemImage = "person.crop.circle.badge.plus"
         }
     }
 
     private func applySyncingState() {
-        syncStatusTitle = mistiaLocalized(
-            vi: "Đang đồng bộ",
-            en: "Syncing",
-            ja: "同期中"
-        )
-        syncStatusDetail = mistiaLocalized(
-            vi: "Mistia đang đẩy thay đổi local và kéo dữ liệu mới từ cloud.",
-            en: "Mistia is pushing local changes and pulling the latest cloud data.",
-            ja: "ローカル変更を送信し、最新のクラウドデータを取得しています。"
-        )
+        syncStatusTitle = L10n.shared.session.session.syncing
+        syncStatusDetail = L10n.shared.session.session.mistiaIsPushingLocalChangesAndPulling
         syncStatusSystemImage = "arrow.triangle.2.circlepath.circle"
     }
 
@@ -2122,56 +1830,32 @@ final class SessionStore {
         if let serviceError = error as? SupabaseServiceError {
             switch serviceError {
             case .googleClientIDMissing, .googleServerClientIDMissing:
-                return mistiaLocalized(
-                    vi: "Điền Google iOS client ID và Google web client ID trong MistiaInfo.plist rồi build lại app.",
-                    en: "Fill in the Google iOS client ID and Google web client ID in MistiaInfo.plist, then rebuild the app.",
-                    ja: "MistiaInfo.plist に Google iOS client ID と Google web client ID を設定してから再ビルドしてください。"
-                )
+                return L10n.shared.session.session.fillInTheGoogleIOSClientID
             case .googleCallbackSchemeMissing(let expected):
-                return mistiaLocalized(
-                    vi: "Thêm URL scheme Google `\(expected)` vào MistiaInfo.plist rồi build lại app.",
-                    en: "Add the Google URL scheme `\(expected)` to MistiaInfo.plist, then rebuild the app.",
-                    ja: "Google の URL スキーム `\(expected)` を MistiaInfo.plist に追加してから再ビルドしてください。"
-                )
+                return L10n.shared.session.session.addTheGoogleURLSchemeValueTo(String(describing: expected))
             case .configurationMissing, .invalidURL, .invalidResponse, .serverMessage, .missingSession, .missingRefreshToken, .oauthCancelled, .googlePresentationContextMissing, .googleTokensMissing:
                 break
             }
         }
 
-        return mistiaLocalized(
-            vi: "Google Sign-In của app này còn thiếu cấu hình iOS cần thiết. Kiểm tra lại client ID và URL scheme rồi thử lại nhé.",
-            en: "This build is missing the iOS settings Google Sign-In needs. Check the client IDs and URL scheme, then try again.",
-            ja: "このビルドでは Google ログインに必要な iOS 設定が不足しています。client ID と URL スキームを確認してから再試行してください。"
-        )
+        return L10n.shared.session.session.thisBuildIsMissingTheIOSSettings
     }
 
     private func infrastructureErrorMessage(for error: Error) -> String {
         if error is URLError || error is SessionRemoteAccessError {
-            return mistiaLocalized(
-                vi: "Mistia chưa thể kết nối đến dịch vụ đồng bộ. Kiểm tra mạng rồi thử lại nhé.",
-                en: "Mistia can't reach the sync service right now. Check your connection and try again.",
-                ja: "現在 Mistia は同期サービスに接続できません。通信状況を確認してから再度お試しください。"
-            )
+            return L10n.shared.session.session.mistiaCanTReachTheSyncService
         }
 
         if let serviceError = error as? SupabaseServiceError {
             switch serviceError {
             case .configurationMissing:
-                return mistiaLocalized(
-                    vi: "Dịch vụ đồng bộ chưa được cấu hình đầy đủ trong app này.",
-                    en: "The sync service hasn't been configured completely in this build.",
-                    ja: "このビルドでは同期サービスの設定がまだ完了していません。"
-                )
+                return L10n.shared.session.session.theSyncServiceHasnTBeenConfigured
             case .invalidURL, .invalidResponse, .missingSession, .missingRefreshToken, .oauthCancelled, .serverMessage, .googleClientIDMissing, .googleServerClientIDMissing, .googleCallbackSchemeMissing, .googlePresentationContextMissing, .googleTokensMissing:
                 break
             }
         }
 
-        return mistiaLocalized(
-            vi: "Hệ thống xác thực đang tạm bận. Thử lại sau ít phút nhé.",
-            en: "The authentication service is temporarily busy. Please try again in a moment.",
-            ja: "認証サービスが一時的に混み合っています。少し待ってからお試しください。"
-        )
+        return L10n.shared.session.session.theAuthenticationServiceIsTemporarilyBusyPlease
     }
 
     private func friendlyErrorMessage(for error: Error) -> String {
@@ -2195,59 +1879,31 @@ final class SessionStore {
         let message = rawMessage.lowercased()
 
         if message.contains("401") || message.contains("unauthorized") || message.contains("jwt") {
-            return mistiaLocalized(
-                vi: "Phiên cloud cần xác thực lại. Tài khoản vẫn được giữ đăng nhập trên thiết bị này.",
-                en: "The cloud session needs to reconnect. The account is still kept signed in on this device.",
-                ja: "クラウドセッションの再接続が必要です。この端末ではアカウントをログイン状態のまま保持しています。"
-            )
+            return L10n.shared.session.session.theCloudSessionNeedsToReconnectThe
         }
 
         if message.contains("404") || message.contains("not found") {
-            return mistiaLocalized(
-                vi: "Máy chủ chưa sẵn sàng (Lỗi 404). Có thể bạn chưa chạy database migrations trên Supabase.",
-                en: "Server not ready (Error 404). You might need to run database migrations on Supabase.",
-                ja: "サーバーの準備ができていません (Error 404)。Supabase でデータベースのマイグレーションを実行する必要があるかもしれません。"
-            )
+            return L10n.shared.session.session.serverNotReadyErrorYouMight
         }
 
         if message.contains("403") || message.contains("forbidden") || message.contains("policy") {
-            return mistiaLocalized(
-                vi: "Bị từ chối truy cập (Lỗi 403). Kiểm tra lại quyền hạn (RLS) trên database Supabase nhé.",
-                en: "Access denied (Error 403). Please check your database Row Level Security (RLS) policies.",
-                ja: "アクセスが拒否されました (Error 403)。Supabase のデータベース権限 (RLS) を確認してください。"
-            )
+            return L10n.shared.session.session.accessDeniedErrorPleaseCheckYour
         }
 
         if message.contains("400") || message.contains("bad request") {
             if isGoogleOAuthConfigurationMessage(message) {
-                return mistiaLocalized(
-                    vi: "Yêu cầu đăng nhập Google không hợp lệ (Lỗi 400). Kiểm tra lại Client ID và URL Scheme của Google nhé.",
-                    en: "Google sign-in request is invalid (Error 400). Please check your Google Client ID and URL Scheme configuration.",
-                    ja: "Google ログインのリクエストが不正です (Error 400)。Google の Client ID と URL スキームの設定を確認してください。"
-                )
+                return L10n.shared.session.session.googleSignInRequestIsInvalidError
             }
 
-            return mistiaLocalized(
-                vi: "Yêu cầu sync không hợp lệ (Lỗi 400). Chi tiết: \(rawMessage)",
-                en: "Sync request is invalid (Error 400). Details: \(rawMessage)",
-                ja: "同期リクエストが不正です (Error 400)。詳細: \(rawMessage)"
-            )
+            return L10n.shared.session.session.syncRequestIsInvalidErrorDetails(String(describing: rawMessage))
         }
 
         if message.contains("connection") || message.contains("offline") {
-            return mistiaLocalized(
-                vi: "Không có kết nối mạng. Kiểm tra wifi hoặc 4G rồi thử lại nhé.",
-                en: "No internet connection. Check your Wi-Fi or cellular data and try again.",
-                ja: "ネットワーク接続がありません. Wi-Fi またはデータ通信を確認してもう一度お試しください。"
-            )
+            return L10n.shared.session.session.noInternetConnectionCheckYourWiFi
         }
 
         if message.contains("data couldn") || message.contains("missing") || message.contains("no data") {
-            return mistiaLocalized(
-                vi: "Không đọc được dữ liệu sync trả về. Khả năng response từ Supabase đang thiếu dữ liệu hoặc sai định dạng.",
-                en: "The sync response couldn't be read. Supabase may be returning missing or malformed data.",
-                ja: "同期レスポンスを読み取れませんでした。Supabase が不足または不正な形式のデータを返している可能性があります。"
-            )
+            return L10n.shared.session.session.theSyncResponseCouldnTBeRead
         }
 
         return rawMessage
@@ -2269,74 +1925,38 @@ final class SessionStore {
     private func localizedDecodingErrorMessage(_ error: DecodingError) -> String {
         switch error {
         case .keyNotFound(let key, _):
-            return mistiaLocalized(
-                vi: "Supabase đang trả về dữ liệu thiếu trường `\(key.stringValue)`. Có thể schema cloud chưa khớp với app hiện tại.",
-                en: "Supabase is returning data without the `\(key.stringValue)` field. The cloud schema may be out of sync with this app build.",
-                ja: "Supabase が `\(key.stringValue)` フィールドのないデータを返しています。クラウドスキーマがこのアプリのビルドと一致していない可能性があります。"
-            )
+            return L10n.shared.session.session.supabaseIsReturningDataWithoutTheValue(String(describing: key.stringValue))
         case .typeMismatch(_, _), .valueNotFound(_, _), .dataCorrupted(_):
-            return mistiaLocalized(
-                vi: "Dữ liệu đồng bộ từ Supabase không đúng định dạng app đang cần. Kiểm tra lại schema bảng hoặc dữ liệu cũ trên cloud.",
-                en: "The sync data from Supabase doesn't match the format this app expects. Check the table schema or older cloud data.",
-                ja: "Supabase からの同期データが、このアプリが想定する形式と一致しません。テーブルスキーマまたは既存のクラウドデータを確認してください。"
-            )
+            return L10n.shared.session.session.theSyncDataFromSupabaseDoesnT
         @unknown default:
-            return mistiaLocalized(
-                vi: "Không đọc được dữ liệu đồng bộ từ Supabase. Kiểm tra lại schema và dữ liệu cloud nhé.",
-                en: "The sync data from Supabase couldn't be read. Please check the cloud schema and data.",
-                ja: "Supabase からの同期データを読み取れませんでした。クラウドのスキーマとデータを確認してください。"
-            )
+            return L10n.shared.session.session.theSyncDataFromSupabaseCouldnT
         }
     }
 
     private func syncErrorTitle(for error: Error) -> String {
         if error is URLError || error is SessionRemoteAccessError {
-            return mistiaLocalized(
-                vi: "Đồng bộ đang chờ mạng",
-                en: "Sync is waiting for the network",
-                ja: "同期はネットワーク待ちです"
-            )
+            return L10n.shared.session.session.syncIsWaitingForTheNetwork
         }
 
         let message = errorMessage(for: error)
 
         if message.contains("failed to decode remote data") {
-            return mistiaLocalized(
-                vi: "Dữ liệu cloud hiện có không khớp format app đang cần.",
-                en: "The existing cloud data doesn't match the format this app expects.",
-                ja: "既存のクラウドデータが、このアプリの想定フォーマットと一致していません。"
-            )
+            return L10n.shared.session.session.theExistingCloudDataDoesnTMatch
         }
 
         if message.contains("403") || message.contains("forbidden") || message.contains("policy") {
-            return mistiaLocalized(
-                vi: "Đồng bộ bị từ chối",
-                en: "Sync access denied",
-                ja: "同期アクセスが拒否されました"
-            )
+            return L10n.shared.session.session.syncAccessDenied
         }
 
         if message.contains("404") || message.contains("not found") || message.contains("relation") {
-            return mistiaLocalized(
-                vi: "Thiếu bảng đồng bộ",
-                en: "Sync tables missing",
-                ja: "同期テーブルが見つかりません"
-            )
+            return L10n.shared.session.session.syncTablesMissing
         }
 
         if message.contains("401") || message.contains("unauthorized") || message.contains("jwt") {
-            return mistiaLocalized(
-                vi: "Phiên sync không hợp lệ",
-                en: "Sync session invalid",
-                ja: "同期セッションが無効です"
-            )
+            return L10n.shared.session.session.syncSessionInvalid
         }
 
-        return mistiaLocalized(
-            vi: "Đồng bộ cần kiểm tra cấu hình",
-            en: "Sync needs configuration checks",
-            ja: "同期設定の確認が必要です"
-        )
+        return L10n.shared.session.session.syncNeedsConfigurationChecks
     }
 
     private func syncErrorSystemImage(for error: Error) -> String {
@@ -2541,24 +2161,12 @@ final class SessionStore {
             }
 
             if showProgress || trigger == .foregroundCatchUp {
-                syncStatusTitle = mistiaLocalized(
-                    vi: "Đồng bộ đã hoàn tất",
-                    en: "Sync completed",
-                    ja: "同期が完了しました"
-                )
+                syncStatusTitle = L10n.shared.session.session.syncCompleted
                 if possibleDuplicateCount > 0 {
-                    syncStatusDetail = result.statusMessage + " " + mistiaLocalized(
-                        vi: "Mistia thấy \(possibleDuplicateCount) giao dịch có thể bị trùng và đang giữ an toàn cả hai bản ghi.",
-                        en: "Mistia found \(possibleDuplicateCount) possible duplicate transactions and kept both records safely.",
-                        ja: "重複の可能性がある取引を \(possibleDuplicateCount) 件検出したため, 両方のレコードを安全に保持しています。"
-                    )
+                    syncStatusDetail = result.statusMessage + " " + L10n.shared.session.session.mistiaFoundValuePossibleDuplicateTransactionsAnd(String(describing: possibleDuplicateCount))
                 } else {
                     syncStatusDetail = pushedFamilyOwnerMutations
-                        ? mistiaLocalized(
-                            vi: "Đã đẩy thay đổi ví thành viên lên cloud. \(result.statusMessage)",
-                            en: "Pushed member wallet changes to cloud. \(result.statusMessage)",
-                            ja: "メンバーのウォレット変更をクラウドへ反映しました。\(result.statusMessage)"
-                        )
+                        ? L10n.shared.session.session.pushedMemberWalletChangesToCloudValue(String(describing: result.statusMessage))
                         : result.statusMessage
                 }
                 syncStatusSystemImage = "checkmark.icloud"
@@ -2633,32 +2241,16 @@ final class SessionStore {
                 if preview.requiresChoice, pendingInitialSyncChoice == nil {
                     initialSyncPreview = preview
                     if showProgress {
-                        syncStatusTitle = mistiaLocalized(
-                            vi: "Cần chọn cách đồng bộ lần đầu",
-                            en: "Choose how to run the first sync",
-                            ja: "初回同期の方法を選んでください"
-                        )
-                        syncStatusDetail = mistiaLocalized(
-                            vi: "Cloud và máy này đều đã có dữ liệu. Chọn cách hợp nhất an toàn trước khi tiếp tục.",
-                            en: "Both this device and the cloud already have data. Choose the safest way to continue.",
-                            ja: "この端末とクラウドの両方にデータがあります。続行方法を選択してください。"
-                        )
+                        syncStatusTitle = L10n.shared.session.session.chooseHowToRunTheFirstSync
+                        syncStatusDetail = L10n.shared.session.session.bothThisDeviceAndTheCloudAlready
                         syncStatusSystemImage = "arrow.triangle.branch"
                     }
                     return false
                 }
 
                 if showProgress {
-                    syncStatusTitle = mistiaLocalized(
-                        vi: "Đang đồng bộ lần đầu",
-                        en: "Running initial sync",
-                        ja: "初回同期を実行中"
-                    )
-                    syncStatusDetail = mistiaLocalized(
-                        vi: "Mistia đang kiểm tra local và cloud rồi áp dụng chiến lược đồng bộ an toàn.",
-                        en: "Mistia is comparing local and cloud data, then applying the safest sync strategy.",
-                        ja: "ローカルとクラウドを比較して、安全な同期方法を適用しています。"
-                    )
+                    syncStatusTitle = L10n.shared.session.session.runningInitialSync
+                    syncStatusDetail = L10n.shared.session.session.mistiaIsComparingLocalAndCloudData
                     syncStatusSystemImage = "arrow.triangle.2.circlepath"
                 }
 
@@ -2698,24 +2290,12 @@ final class SessionStore {
             ).count) ?? 0)
             
             if showProgress {
-                syncStatusTitle = mistiaLocalized(
-                    vi: "Đồng bộ đã hoàn tất",
-                    en: "Sync completed",
-                    ja: "同期が完了しました"
-                )
+                syncStatusTitle = L10n.shared.session.session.syncCompleted
                 if possibleDuplicateCount > 0 {
-                    syncStatusDetail = result.statusMessage + " " + mistiaLocalized(
-                        vi: "Mistia thấy \(possibleDuplicateCount) giao dịch có thể bị trùng và đang giữ an toàn cả hai bản ghi.",
-                        en: "Mistia found \(possibleDuplicateCount) possible duplicate transactions and kept both records safely.",
-                        ja: "重複の可能性がある取引を \(possibleDuplicateCount) 件検出したため, 両方のレコードを安全に保持しています。"
-                    )
+                    syncStatusDetail = result.statusMessage + " " + L10n.shared.session.session.mistiaFoundValuePossibleDuplicateTransactionsAnd(String(describing: possibleDuplicateCount))
                 } else {
                     syncStatusDetail = pushedFamilyOwnerMutations
-                        ? mistiaLocalized(
-                            vi: "Đã đẩy thay đổi ví thành viên lên cloud. \(result.statusMessage)",
-                            en: "Pushed member wallet changes to cloud. \(result.statusMessage)",
-                            ja: "メンバーのウォレット変更をクラウドへ反映しました。\(result.statusMessage)"
-                        )
+                        ? L10n.shared.session.session.pushedMemberWalletChangesToCloudValue(String(describing: result.statusMessage))
                         : result.statusMessage
                 }
                 syncStatusSystemImage = "checkmark.icloud"

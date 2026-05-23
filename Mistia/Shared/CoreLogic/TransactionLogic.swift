@@ -298,7 +298,7 @@ nonisolated enum TransactionLogic {
             builtSections.append(
                 TransactionSectionSnapshot(
                     id: "drafts",
-                    title: mistiaLocalized(vi: "Cần hoàn thiện", en: "Needs completion", ja: "要確認"),
+                    title: L10n.shared.corelogic.transaction.needsCompletion,
                     rows: drafts,
                     isDraftSection: true
                 )
@@ -370,7 +370,7 @@ nonisolated enum TransactionLogic {
                 displayName: groupedRecords
                     .compactMap(\.counterpartyName)
                     .first(where: { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty })
-                    ?? mistiaLocalized(vi: "Không rõ tên", en: "Unknown name", ja: "名前未設定"),
+                    ?? L10n.shared.corelogic.transaction.unknownName,
                 netMinor: total
             )
         }

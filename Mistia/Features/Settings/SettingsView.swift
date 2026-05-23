@@ -85,21 +85,21 @@ struct SettingsView: View {
         SettingsSectionDump(
             rows: [
                 SettingsRowDump(
-                    title: mistiaLocalized(vi: "Giao diện", en: "Appearance", ja: "表示"),
+                    title: L10n.settings.appearance.title,
                     icon: "moon.stars.fill",
                     accent: .indigo,
                     value: appearanceMode.title,
                     action: .openAppearance
                 ),
                 SettingsRowDump(
-                    title: mistiaLocalized(vi: "Ngôn ngữ", en: "Language", ja: "言語"),
+                    title: L10n.settings.language.title,
                     icon: "globe.asia.australia.fill",
                     accent: .sky,
                     value: appLanguage.displayName,
                     action: .openLanguage
                 ),
                 SettingsRowDump(
-                    title: mistiaLocalized(vi: "Tiền tệ", en: "Currency", ja: "通貨"),
+                    title: L10n.settings.currency.title,
                     icon: "yensign.circle.fill",
                     accent: .amber,
                     value: currencyCode,
@@ -113,14 +113,14 @@ struct SettingsView: View {
         SettingsSectionDump(
             rows: [
                 SettingsRowDump(
-                    title: mistiaLocalized(vi: "Thông báo", en: "Notifications", ja: "通知"),
+                    title: L10n.settings.notifications.title,
                     icon: "bell.badge.fill",
                     accent: .coral,
                     value: notificationStatusText,
                     action: .openNotifications
                 ),
                 SettingsRowDump(
-                    title: mistiaLocalized(vi: "Bảo mật", en: "Security", ja: "セキュリティ"),
+                    title: L10n.settings.security.title,
                     icon: "lock.shield.fill",
                     accent: .mint,
                     value: nil,
@@ -132,8 +132,8 @@ struct SettingsView: View {
 
     private var notificationStatusText: String {
         notificationsEnabled
-            ? mistiaLocalized(vi: "Bật", en: "On", ja: "オン")
-            : mistiaLocalized(vi: "Tắt", en: "Off", ja: "オフ")
+            ? L10n.common.on
+            : L10n.common.off
     }
 
     private var dataSection: SettingsSectionDump {
@@ -151,10 +151,10 @@ struct SettingsView: View {
             row = SettingsRowDump(shortcutResolution: shortcutResolution)
         } else {
             row = SettingsRowDump(
-                title: mistiaLocalized(vi: "Lối tắt Mistia", en: "Mistia shortcut", ja: "Mistia ショートカット"),
+                title: L10n.settings.shortcut.title,
                 icon: "pin.slash",
                 accent: .slate,
-                value: mistiaLocalized(vi: "Đang tắt", en: "Off", ja: "オフ"),
+                value: L10n.settings.shortcut.offStatus,
                 action: .openShortcut
             )
         }
@@ -166,7 +166,7 @@ struct SettingsView: View {
         SettingsSectionDump(
             rows: [
                 SettingsRowDump(
-                    title: mistiaLocalized(vi: "Gửi feedback", en: "Send feedback", ja: "フィードバック"),
+                    title: L10n.settings.feedback.title,
                     icon: "bubble.left.and.bubble.right.fill",
                     accent: .indigo,
                     value: nil,
@@ -180,7 +180,7 @@ struct SettingsView: View {
         SettingsSectionDump(
             rows: [
                 SettingsRowDump(
-                    title: mistiaLocalized(vi: "Đặt lại & dữ liệu", en: "Reset & data", ja: "リセットとデータ"),
+                    title: L10n.settings.resetData.title,
                     icon: "gearshape.2.fill",
                     accent: .amber,
                     value: nil,
@@ -193,7 +193,7 @@ struct SettingsView: View {
     var body: some View {
         MistiaPinnedTopBarScaffold(
             tone: .standard,
-            title: mistiaLocalized(vi: "Cài đặt", en: "Settings", ja: "設定"),
+            title: L10n.settings.title,
             embedsInNavigationStack: false,
             showsLeadingAvatar: false,
             leadingSystemImage: "chevron.left",
@@ -227,13 +227,7 @@ struct SettingsView: View {
                     onTap: handleTap
                 )
 
-                Text(
-                    mistiaLocalized(
-                        vi: "Bật Lối tắt Mistia để hiện nút pinned ở tab bar. Nút này sẽ mở thẳng mục bạn chọn.",
-                        en: "Enable the Mistia shortcut to show a pinned button in the tab bar. It opens the destination you choose.",
-                        ja: "Mistia ショートカットを有効にするとタブバーに固定ボタンが表示されます。選んだ項目を直接開きます。"
-                    )
-                )
+                Text(L10n.settings.shortcut.description)
                 .descriptionTextStyle()
                 .cardDescriptionStyle()
 
@@ -319,7 +313,7 @@ private struct AppearanceSettingsView: View {
     var body: some View {
         MistiaPinnedTopBarScaffold(
             tone: .standard,
-            title: mistiaLocalized(vi: "Giao diện", en: "Appearance", ja: "表示"),
+            title: L10n.settings.appearance.title,
             embedsInNavigationStack: false,
             showsLeadingAvatar: false,
             leadingSystemImage: "chevron.left",
@@ -350,7 +344,7 @@ private struct LanguageSettingsView: View {
     var body: some View {
         MistiaPinnedTopBarScaffold(
             tone: .standard,
-            title: mistiaLocalized(vi: "Ngôn ngữ", en: "Language", ja: "言語"),
+            title: L10n.settings.language.title,
             embedsInNavigationStack: false,
             showsLeadingAvatar: false,
             leadingSystemImage: "chevron.left",
@@ -450,7 +444,7 @@ private struct MistiaShortcutSettingsView: View {
         if !familyRows.isEmpty {
             output.append(
                 MistiaShortcutOptionSectionDump(
-                    title: mistiaLocalized(vi: "Gia đình", en: "Family", ja: "家族"),
+                    title: L10n.settings.shortcut.familySection,
                     rows: familyRows
                 )
             )
@@ -471,7 +465,7 @@ private struct MistiaShortcutSettingsView: View {
 
         output.append(
             MistiaShortcutOptionSectionDump(
-                title: mistiaLocalized(vi: "Tiện ích cá nhân", en: "Personal utilities", ja: "個人ユーティリティ"),
+                title: L10n.settings.shortcut.personalUtilitiesSection,
                 rows: utilitySelections.compactMap(makeOption)
             )
         )
@@ -482,7 +476,7 @@ private struct MistiaShortcutSettingsView: View {
     var body: some View {
         MistiaPinnedTopBarScaffold(
             tone: .standard,
-            title: mistiaLocalized(vi: "Lối tắt Mistia", en: "Mistia shortcut", ja: "Mistia ショートカット"),
+            title: L10n.settings.shortcut.title,
             embedsInNavigationStack: false,
             showsLeadingAvatar: false,
             leadingSystemImage: "chevron.left",
@@ -492,11 +486,7 @@ private struct MistiaShortcutSettingsView: View {
             contentSpacing: 18
         ) {
             Toggle(
-                mistiaLocalized(
-                    vi: "Bật nút pinned",
-                    en: "Enable pinned button",
-                    ja: "固定ボタンを有効にする"
-                ),
+                L10n.settings.shortcut.enablePinnedButton,
                 isOn: $mistiaShortcutEnabled
             )
             .tint(MistiaAccent.purple.color)
@@ -553,46 +543,22 @@ private struct MistiaShortcutSettingsView: View {
     private func subtitle(for presentation: MistiaShortcutPresentation) -> String? {
         switch presentation.action {
         case .backupRestore:
-            return mistiaLocalized(
-                vi: "Mở sao lưu cục bộ và khôi phục dữ liệu.",
-                en: "Open local backup and restore.",
-                ja: "ローカルのバックアップと復元を開きます。"
-            )
+            return L10n.settings.shortcut.option.backupRestore.subtitle
 
         case .archivedItems:
-            return mistiaLocalized(
-                vi: "Mở các ví, danh mục và giao dịch đã lưu trữ.",
-                en: "Open archived wallets, categories, and transactions.",
-                ja: "アーカイブ済みのウォレット、カテゴリ、取引を開きます。"
-            )
+            return L10n.settings.shortcut.option.archivedItems.subtitle
 
         case .familyOverview:
-            return mistiaLocalized(
-                vi: "Mở thẳng màn tổng quan tài chính của cả gia đình.",
-                en: "Open the family financial overview directly.",
-                ja: "家族全体の財務概要を直接開きます。"
-            )
+            return L10n.settings.shortcut.option.familyOverview.subtitle
 
         case .memberOverview:
-            return mistiaLocalized(
-                vi: "Chuyển ngay sang chế độ xem dữ liệu của thành viên này trong tab Tổng quan.",
-                en: "Jump straight into this member's data in Overview.",
-                ja: "概要タブでこのメンバーのデータへすぐ移動します。"
-            )
+            return L10n.settings.shortcut.option.memberOverview.subtitle
 
         case .receiptScan:
-            return mistiaLocalized(
-                vi: "Mở camera chụp bill ngay để AI điền giao dịch.",
-                en: "Open the camera immediately so AI can fill the transaction.",
-                ja: "カメラをすぐ開き、AIで取引を入力します。"
-            )
+            return L10n.settings.shortcut.option.receiptScan.subtitle
 
         case .syncNow:
-            return mistiaLocalized(
-                vi: "Đồng bộ dữ liệu ngay lập tức với cloud.",
-                en: "Sync data immediately with cloud.",
-                ja: "すぐにクラウドとデータを同期します。"
-            )
+            return L10n.settings.shortcut.option.syncNow.subtitle
         }
     }
 
@@ -625,7 +591,7 @@ private struct ResetDataSettingsView: View {
     var body: some View {
         MistiaPinnedTopBarScaffold(
             tone: .standard,
-            title: mistiaLocalized(vi: "Đặt lại & dữ liệu", en: "Reset & data", ja: "リセットとデータ"),
+            title: L10n.settings.resetData.title,
             embedsInNavigationStack: false,
             showsLeadingAvatar: false,
             leadingSystemImage: "chevron.left",
@@ -637,7 +603,7 @@ private struct ResetDataSettingsView: View {
             MistiaGlassCard(cornerRadius: 22, tint: cardTint, padding: 0) {
                 VStack(spacing: 0) {
                     ResetDataActionRow(
-                        title: mistiaLocalized(vi: "Reset", en: "Reset", ja: "リセット"),
+                        title: L10n.settings.resetData.reset.title,
                         icon: "arrow.clockwise.circle.fill",
                         accent: .sky,
                         role: nil,
@@ -652,7 +618,7 @@ private struct ResetDataSettingsView: View {
                         .padding(.trailing, 0)
 
                     ResetDataActionRow(
-                        title: mistiaLocalized(vi: "Xóa tất cả dữ liệu", en: "Delete all data", ja: "すべてのデータを削除"),
+                        title: L10n.settings.resetData.deleteAllData.title,
                         icon: "trash.fill",
                         accent: .expense,
                         role: .destructive,
@@ -665,76 +631,58 @@ private struct ResetDataSettingsView: View {
             }
         }
         .alert(
-            mistiaLocalized(vi: "Reset", en: "Reset", ja: "リセット"),
+            L10n.settings.resetData.reset.title,
             isPresented: $showsResetOptions
         ) {
-            Button(mistiaLocalized(vi: "Reset cài đặt", en: "Reset settings", ja: "設定をリセット")) {
+            Button(L10n.settings.resetData.reset.settingsTitle) {
                 resetSettings()
             }
-            Button(mistiaLocalized(vi: "Reset thông báo", en: "Reset notifications", ja: "通知をリセット")) {
+            Button(L10n.settings.resetData.reset.notificationsTitle) {
                 resetNotifications()
             }
             Button(
-                mistiaLocalized(vi: "Reset danh mục", en: "Reset categories", ja: "カテゴリをリセット"),
+                L10n.settings.resetData.reset.categoriesTitle,
                 role: .destructive
             ) {
                 showsResetCategoriesConfirmation = true
             }
-            Button(mistiaLocalized(vi: "Hủy", en: "Cancel", ja: "キャンセル"), role: .cancel) { }
+            Button(L10n.common.cancel, role: .cancel) { }
         } message: {
-            Text(
-                mistiaLocalized(
-                    vi: "Chọn phần bạn muốn đưa về trạng thái ban đầu.",
-                    en: "Choose what you want to return to its default state.",
-                    ja: "初期状態に戻す項目を選んでください。"
-                )
-            )
+            Text(L10n.settings.resetData.reset.optionsMessage)
         }
         .alert(
-            mistiaLocalized(vi: "Reset danh mục?", en: "Reset categories?", ja: "カテゴリをリセットしますか？"),
+            L10n.settings.resetData.reset.categoriesConfirmationTitle,
             isPresented: $showsResetCategoriesConfirmation
         ) {
             Button(
-                mistiaLocalized(vi: "Reset danh mục", en: "Reset categories", ja: "カテゴリをリセット"),
+                L10n.settings.resetData.reset.categoriesTitle,
                 role: .destructive
             ) {
                 resetCategories()
             }
-            Button(mistiaLocalized(vi: "Hủy", en: "Cancel", ja: "キャンセル"), role: .cancel) { }
+            Button(L10n.common.cancel, role: .cancel) { }
         } message: {
-            Text(
-                mistiaLocalized(
-                    vi: "Danh mục system sẽ về mặc định. Danh mục tự tạo được chuyển vào lưu trữ.",
-                    en: "System categories return to defaults. Custom categories move to archived items.",
-                    ja: "システムカテゴリを初期状態に戻し、作成したカテゴリはアーカイブに移動します。"
-                )
-            )
+            Text(L10n.settings.resetData.reset.categoriesConfirmationMessage)
         }
         .alert(
-            mistiaLocalized(vi: "Xóa tất cả dữ liệu?", en: "Delete all data?", ja: "すべてのデータを削除しますか？"),
+            L10n.settings.resetData.deleteAllData.confirmationTitle,
             isPresented: $showsDeleteConfirmation
         ) {
             Button(
-                mistiaLocalized(vi: "Xóa tất cả dữ liệu", en: "Delete all data", ja: "すべてのデータを削除"),
+                L10n.settings.resetData.deleteAllData.title,
                 role: .destructive
             ) {
                 deleteAllLocalData()
             }
-            Button(mistiaLocalized(vi: "Hủy", en: "Cancel", ja: "キャンセル"), role: .cancel) { }
+            Button(L10n.common.cancel, role: .cancel) { }
         } message: {
-            Text(
-                mistiaLocalized(
-                    vi: "Mistia chỉ xóa dữ liệu local trên thiết bị này. Đăng nhập, hồ sơ cloud và gia đình vẫn được giữ.",
-                    en: "Mistia will only clear local data on this device. Sign-in, cloud profile, and family are preserved.",
-                    ja: "この端末のローカルデータのみを削除します。ログイン、クラウドプロフィール、家族は保持されます。"
-                )
-            )
+            Text(L10n.settings.resetData.deleteAllData.confirmationMessage)
         }
         .alert(item: $statusAlert) { alert in
             Alert(
                 title: Text(alert.title),
                 message: Text(alert.message),
-                dismissButton: .default(Text(mistiaLocalized(vi: "OK", en: "OK", ja: "OK")))
+                dismissButton: .default(Text(L10n.common.ok))
             )
         }
     }
@@ -743,12 +691,8 @@ private struct ResetDataSettingsView: View {
         MistiaSettingsResetSupport.resetAppPreferences()
         sessionStore.setAutoSyncEnabled(false)
         statusAlert = ResetDataStatusAlert(
-            title: mistiaLocalized(vi: "Đã reset cài đặt", en: "Settings reset", ja: "設定をリセットしました"),
-            message: mistiaLocalized(
-                vi: "Cài đặt app đã về mặc định. Dữ liệu, đăng nhập và gia đình không bị thay đổi.",
-                en: "App settings are back to defaults. Data, sign-in, and family were not changed.",
-                ja: "アプリ設定を初期状態に戻しました。データ、ログイン、家族は変更していません。"
-            )
+            title: L10n.settings.resetData.settingsResetTitle,
+            message: L10n.settings.resetData.settingsResetMessage
         )
     }
 
@@ -760,16 +704,12 @@ private struct ResetDataSettingsView: View {
                 try MistiaNotificationStore.clearAll(in: sessionStore.currentModelContainer.mainContext)
                 await MistiaLocalNotificationScheduler.clearAllScheduledReminders()
                 statusAlert = ResetDataStatusAlert(
-                    title: mistiaLocalized(vi: "Đã reset thông báo", en: "Notifications reset", ja: "通知をリセットしました"),
-                    message: mistiaLocalized(
-                        vi: "Trung tâm thông báo trên thiết bị này đã về 0 row.",
-                        en: "The notification center on this device is now empty.",
-                        ja: "この端末の通知センターを空にしました。"
-                    )
+                    title: L10n.settings.resetData.notificationsResetTitle,
+                    message: L10n.settings.resetData.notificationsResetMessage
                 )
             } catch {
                 statusAlert = ResetDataStatusAlert(
-                    title: mistiaLocalized(vi: "Không thể reset thông báo", en: "Couldn't reset notifications", ja: "通知をリセットできませんでした"),
+                    title: L10n.settings.resetData.notificationsResetFailedTitle,
                     message: error.localizedDescription
                 )
             }
@@ -786,12 +726,12 @@ private struct ResetDataSettingsView: View {
                     modelContext: sessionStore.currentModelContainer.mainContext
                 )
                 statusAlert = ResetDataStatusAlert(
-                    title: mistiaLocalized(vi: "Đã reset danh mục", en: "Categories reset", ja: "カテゴリをリセットしました"),
+                    title: L10n.settings.resetData.categoriesResetTitle,
                     message: resetCategoriesSuccessMessage(result)
                 )
             } catch {
                 statusAlert = ResetDataStatusAlert(
-                    title: mistiaLocalized(vi: "Không thể reset danh mục", en: "Couldn't reset categories", ja: "カテゴリをリセットできませんでした"),
+                    title: L10n.settings.resetData.categoriesResetFailedTitle,
                     message: error.localizedDescription
                 )
             }
@@ -800,17 +740,9 @@ private struct ResetDataSettingsView: View {
     }
 
     private func resetCategoriesSuccessMessage(_ result: MistiaCategoryResetResult) -> String {
-        let base = mistiaLocalized(
-            vi: "Danh mục system trên thiết bị này đã về trạng thái ban đầu.",
-            en: "System categories on this device are back to defaults.",
-            ja: "この端末のシステムカテゴリを初期状態に戻しました。"
-        )
+        let base = L10n.settings.resetData.categoriesResetMessage
         guard result.archivedCustomCategoryCount > 0 else { return base }
-        let archivedText = mistiaLocalized(
-            vi: "\(result.archivedCustomCategoryCount) danh mục tự tạo đã được lưu trữ.",
-            en: "\(result.archivedCustomCategoryCount) custom categories were archived.",
-            ja: "作成したカテゴリ \(result.archivedCustomCategoryCount) 件をアーカイブしました。"
-        )
+        let archivedText = L10n.settings.resetData.categoriesArchivedMessage(result.archivedCustomCategoryCount)
         return "\(base) \(archivedText)"
     }
 
@@ -822,16 +754,12 @@ private struct ResetDataSettingsView: View {
                 try await sessionStore.resetCurrentDeviceLocalData()
                 await MistiaLocalNotificationScheduler.clearAllScheduledReminders()
                 statusAlert = ResetDataStatusAlert(
-                    title: mistiaLocalized(vi: "Đã xóa dữ liệu local", en: "Local data deleted", ja: "ローカルデータを削除しました"),
-                    message: mistiaLocalized(
-                        vi: "Thiết bị này đã về trạng thái dữ liệu ban đầu. Cloud, đăng nhập và gia đình vẫn được giữ.",
-                        en: "This device is back to a clean local data state. Cloud, sign-in, and family are preserved.",
-                        ja: "この端末のデータを初期状態に戻しました。クラウド、ログイン、家族は保持されています。"
-                    )
+                    title: L10n.settings.resetData.localDataDeletedTitle,
+                    message: L10n.settings.resetData.localDataDeletedMessage
                 )
             } catch {
                 statusAlert = ResetDataStatusAlert(
-                    title: mistiaLocalized(vi: "Không thể xóa dữ liệu", en: "Couldn't delete data", ja: "データを削除できませんでした"),
+                    title: L10n.settings.resetData.deleteDataFailedTitle,
                     message: error.localizedDescription
                 )
             }
@@ -1136,15 +1064,11 @@ private struct LanguageOptionRow: View {
 private struct SettingsVersionFooter: View {
     var body: some View {
         VStack(spacing: 3) {
-            Text("Mistia")
+            Text(L10n.common.appName)
                 .font(.system(size: 13, weight: .bold, design: .rounded))
                 .foregroundStyle(.secondary)
 
-            Text(mistiaLocalized(
-                vi: "version 16.09 powered by Quý Lăng",
-                en: "version 16.09 powered by Quy Lang",
-                ja: "version 16.09 powered by Quy Lang"
-            ))
+            Text(L10n.settings.footer.version)
                 .font(.system(size: 11.5, weight: .medium, design: .rounded))
                 .foregroundStyle(.tertiary)
         }
@@ -1294,7 +1218,7 @@ private extension SettingsRowDump {
 
     init(shortcutResolution: MistiaShortcutResolution) {
         self.init(
-            title: mistiaLocalized(vi: "Lối tắt Mistia", en: "Mistia shortcut", ja: "Mistia ショートカット"),
+            title: L10n.settings.shortcut.title,
             iconContent: shortcutResolution.presentation.settingsRowIconContent,
             value: shortcutResolution.presentation.title,
             action: .openShortcut
