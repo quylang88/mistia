@@ -246,6 +246,100 @@ final class SessionStoreOfflineTests: XCTestCase {
         XCTAssertEqual(familyStore.lastErrorMessage, store.remoteUnavailableReason)
     }
 
+    func testFamilyEntryRefreshPullsMemberFinanceWithoutPersonalSyncWhenAutoSyncOff() async throws {
+        let currentUserID = UUID()
+        let memberUserID = UUID()
+        let session = makeSession(userID: currentUserID)
+        let container = try storeTestContainer()
+        let syncRemoteStore = SessionSyncRemoteStoreSpy()
+        let store = try makeSessionStore(
+            authService: SessionAuthServiceSpy(
+                persistedSession: session,
+                refreshResult: .success(session)
+            ),
+            userProfileStore: UserProfileStoreSpy(),
+            networkStatus: .connected,
+            modelContainer: container,
+            syncCoordinator: SyncCoordinator(
+                modelContainer: container,
+                remoteStore: syncRemoteStore,
+                outbox: MistiaSyncOutbox(
+                    defaults: UserDefaults(suiteName: "MistiaTests.\(UUID().uuidString)") ?? .standard,
+                    key: "family-entry-refresh"
+                )
+            )
+        )
+        let familyService = FamilyRemoteServiceSpy(
+            snapshot: makeFamilySnapshot(userID: currentUserID, ownerUserID: memberUserID)
+        )
+        let familyStore = FamilyContextStore(
+            modelContainer: container,
+            service: familyService
+        )
+
+        await store.bootstrapIfNeeded()
+        store.requiresInitialSync = false
+        store.lastSyncAt = nil
+        XCTAssertFalse(store.isAutoSyncEnabled)
+
+        await familyStore.refreshLatest(sessionStore: store, source: .enterFamily)
+
+        XCTAssertNil(store.lastSyncAt)
+        XCTAssertEqual(syncRemoteStore.fetchSnapshotCallCount, 0)
+        XCTAssertEqual(familyService.fetchStateCallCount, 1)
+        XCTAssertEqual(
+            familyService.accessibleFinanceUserIDBatches.map(Set.init),
+            [Set([memberUserID])]
+        )
+    }
+
+    func testFamilyUserInitiatedRefreshDoesNotRunPersonalSync() async throws {
+        let currentUserID = UUID()
+        let memberUserID = UUID()
+        let session = makeSession(userID: currentUserID)
+        let container = try storeTestContainer()
+        let syncRemoteStore = SessionSyncRemoteStoreSpy()
+        let store = try makeSessionStore(
+            authService: SessionAuthServiceSpy(
+                persistedSession: session,
+                refreshResult: .success(session)
+            ),
+            userProfileStore: UserProfileStoreSpy(),
+            networkStatus: .connected,
+            modelContainer: container,
+            syncCoordinator: SyncCoordinator(
+                modelContainer: container,
+                remoteStore: syncRemoteStore,
+                outbox: MistiaSyncOutbox(
+                    defaults: UserDefaults(suiteName: "MistiaTests.\(UUID().uuidString)") ?? .standard,
+                    key: "family-user-refresh"
+                )
+            )
+        )
+        let familyService = FamilyRemoteServiceSpy(
+            snapshot: makeFamilySnapshot(userID: currentUserID, ownerUserID: memberUserID)
+        )
+        let familyStore = FamilyContextStore(
+            modelContainer: container,
+            service: familyService
+        )
+
+        await store.bootstrapIfNeeded()
+        store.requiresInitialSync = false
+        store.lastSyncAt = nil
+        XCTAssertFalse(store.isAutoSyncEnabled)
+
+        await familyStore.refreshLatest(sessionStore: store, source: .userInitiated)
+
+        XCTAssertNil(store.lastSyncAt)
+        XCTAssertEqual(syncRemoteStore.fetchSnapshotCallCount, 0)
+        XCTAssertEqual(familyService.fetchStateCallCount, 1)
+        XCTAssertEqual(
+            familyService.accessibleFinanceUserIDBatches.map(Set.init),
+            [Set([memberUserID])]
+        )
+    }
+
     func testFamilyGranularPermissionGrantsSeparateUseEditAndCreate() async throws {
         let currentUserID = UUID()
         let ownerUserID = UUID()
@@ -462,6 +556,53 @@ final class SessionStoreOfflineTests: XCTestCase {
             MistiaNotificationStore.visibleRows(rows, userID: otherUserID, referenceDate: referenceDate).map(\.key),
             ["other.local", "family.other"]
         )
+    }
+
+    func testFamilyNotificationDecodesLegacyMixedTypeMetadata() throws {
+        let notificationID = UUID()
+        let familyID = UUID()
+        let recipientUserID = UUID()
+        let actorUserID = UUID()
+        let transactionID = UUID()
+        let sourceWalletID = UUID()
+        let destinationWalletID = UUID()
+        let json = """
+        {
+          "id": "\(notificationID.uuidString)",
+          "source_event_key": "family-transfer:\(transactionID.uuidString.lowercased())",
+          "family_id": "\(familyID.uuidString)",
+          "user_id": "\(recipientUserID.uuidString)",
+          "actor_user_id": "\(actorUserID.uuidString)",
+          "kind": "family_activity",
+          "resource_type": "transaction",
+          "resource_id": "\(transactionID.uuidString)",
+          "permission_scope": null,
+          "permission_request_id": null,
+          "action_state": "informational",
+          "title": "Nhận tiền",
+          "body": "Transfer received",
+          "metadata": {
+            "action": "family_transfer",
+            "sender_transaction_id": "\(transactionID.uuidString.lowercased())",
+            "source_wallet_id": "\(sourceWalletID.uuidString.lowercased())",
+            "destination_wallet_id": "\(destinationWalletID.uuidString.lowercased())",
+            "amount_minor": 123456
+          },
+          "read_at": null,
+          "created_at": "2026-05-24T12:00:00.000Z",
+          "updated_at": "2026-05-24T12:00:00.000Z",
+          "sync_version": 1
+        }
+        """
+
+        let record = try JSONDecoder.mistiaRemoteAPIDecoder.decode(
+            FamilyNotificationRemoteRecord.self,
+            from: Data(json.utf8)
+        )
+
+        XCTAssertEqual(record.metadata?["action"], "family_transfer")
+        XCTAssertEqual(record.metadata?["amount_minor"], "123456")
+        XCTAssertEqual(record.metadata?["source_wallet_id"], sourceWalletID.uuidString.lowercased())
     }
 
     func testCreditCardStatementMaintenanceIgnoresFamilyMemberCards() async throws {
@@ -843,7 +984,8 @@ final class SessionStoreOfflineTests: XCTestCase {
         userProfileStore: UserProfileStoreSpy,
         networkStatus: SessionNetworkStatus,
         modelContainer: ModelContainer? = nil,
-        userDefaults: UserDefaults? = nil
+        userDefaults: UserDefaults? = nil,
+        syncCoordinator: SyncCoordinator? = nil
     ) throws -> SessionStore {
         let resolvedContainer: ModelContainer
         if let modelContainer {
@@ -857,6 +999,7 @@ final class SessionStoreOfflineTests: XCTestCase {
             userDefaults: userDefaults ?? UserDefaults(suiteName: "MistiaTests.\(UUID().uuidString)") ?? .standard,
             authService: authService,
             userProfileStore: userProfileStore,
+            syncCoordinator: syncCoordinator,
             connectivityMonitor: SessionConnectivityMonitor(initialStatus: networkStatus),
             registerBackgroundRefresh: false
         )
@@ -1144,6 +1287,73 @@ private final class UserProfileStoreSpy: UserProfileRemoteStoring {
         session: SupabaseAuthSession
     ) async throws -> URL {
         URL(string: "https://example.com/avatar.jpg")!
+    }
+}
+
+@MainActor
+private final class SessionSyncRemoteStoreSpy: MistiaRemoteStore {
+    private(set) var fetchSnapshotSubjectUserIDs: [UUID?] = []
+
+    var fetchSnapshotCallCount: Int {
+        fetchSnapshotSubjectUserIDs.count
+    }
+
+    func fetchSnapshot(session: SupabaseAuthSession, subjectUserID: UUID?) async throws -> MistiaRemoteSnapshot {
+        fetchSnapshotSubjectUserIDs.append(subjectUserID)
+        return .empty
+    }
+
+    func fetchRecord(
+        entity: MistiaSyncEntity,
+        recordID: UUID,
+        subjectUserID: UUID,
+        session: SupabaseAuthSession
+    ) async throws -> MistiaSyncUploadRecord? {
+        nil
+    }
+
+    func create(
+        _ record: MistiaSyncUploadRecord,
+        subjectUserID: UUID,
+        session: SupabaseAuthSession
+    ) async throws -> MistiaSyncUploadRecord {
+        record
+    }
+
+    func conditionalUpdate(
+        _ record: MistiaSyncUploadRecord,
+        expectedVersion: Int64,
+        subjectUserID: UUID,
+        session: SupabaseAuthSession
+    ) async throws -> MistiaSyncUploadRecord? {
+        nil
+    }
+
+    func conditionalDelete(
+        entity: MistiaSyncEntity,
+        recordID: UUID,
+        subjectUserID: UUID,
+        expectedVersion: Int64,
+        modifiedAt: Date,
+        deviceID: UUID,
+        session: SupabaseAuthSession
+    ) async throws -> MistiaSyncUploadRecord? {
+        nil
+    }
+
+    func forceUpsert(
+        _ record: MistiaSyncUploadRecord,
+        subjectUserID: UUID,
+        session: SupabaseAuthSession
+    ) async throws -> MistiaSyncUploadRecord {
+        record
+    }
+
+    func createFamilyActivityNotification(
+        _ event: RemoteFamilyActivityNotificationEvent,
+        session: SupabaseAuthSession
+    ) async throws {
+        // no-op
     }
 }
 

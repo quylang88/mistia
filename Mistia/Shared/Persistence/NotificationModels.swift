@@ -369,6 +369,66 @@ struct FamilyNotificationRemoteRecord: Codable, Identifiable, Equatable {
     }
 }
 
+extension FamilyNotificationRemoteRecord {
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(UUID.self, forKey: .id)
+        sourceEventKey = try container.decode(String.self, forKey: .sourceEventKey)
+        familyID = try container.decode(UUID.self, forKey: .familyID)
+        userID = try container.decode(UUID.self, forKey: .userID)
+        actorUserID = try container.decodeIfPresent(UUID.self, forKey: .actorUserID)
+        kindRawValue = try container.decode(String.self, forKey: .kindRawValue)
+        resourceTypeRawValue = try container.decodeIfPresent(String.self, forKey: .resourceTypeRawValue)
+        resourceID = try container.decodeIfPresent(UUID.self, forKey: .resourceID)
+        permissionScopeRawValue = try container.decodeIfPresent(String.self, forKey: .permissionScopeRawValue)
+        permissionRequestID = try container.decodeIfPresent(UUID.self, forKey: .permissionRequestID)
+        actionStateRawValue = try container.decodeIfPresent(String.self, forKey: .actionStateRawValue)
+            ?? MistiaNotificationActionState.informational.rawValue
+        title = try container.decode(String.self, forKey: .title)
+        body = try container.decode(String.self, forKey: .body)
+
+        if let decodedMetadata = try container.decodeIfPresent(
+            [String: FamilyNotificationMetadataValue].self,
+            forKey: .metadata
+        ) {
+            let stringMetadata = decodedMetadata.reduce(into: [String: String]()) { result, entry in
+                if let value = entry.value.stringValue {
+                    result[entry.key] = value
+                }
+            }
+            metadata = stringMetadata.isEmpty ? nil : stringMetadata
+        } else {
+            metadata = nil
+        }
+
+        readAt = try container.decodeIfPresent(Date.self, forKey: .readAt)
+        createdAt = try container.decode(Date.self, forKey: .createdAt)
+        updatedAt = try container.decode(Date.self, forKey: .updatedAt)
+        syncVersion = try container.decode(Int64.self, forKey: .syncVersion)
+    }
+}
+
+private struct FamilyNotificationMetadataValue: Decodable {
+    let stringValue: String?
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.singleValueContainer()
+        if container.decodeNil() {
+            stringValue = nil
+        } else if let value = try? container.decode(String.self) {
+            stringValue = value
+        } else if let value = try? container.decode(Int64.self) {
+            stringValue = String(value)
+        } else if let value = try? container.decode(Double.self), value.isFinite {
+            stringValue = String(value)
+        } else if let value = try? container.decode(Bool.self) {
+            stringValue = value ? "true" : "false"
+        } else {
+            stringValue = nil
+        }
+    }
+}
+
 struct FamilyPermissionRequestRemoteRecord: Codable, Identifiable, Equatable {
     let id: UUID
     let familyID: UUID

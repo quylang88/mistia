@@ -8,6 +8,11 @@ enum FamilyRefreshSource {
     case postManualSync
 }
 
+private enum FamilyAccessibleFinanceScope {
+    case allAccessible
+    case membersOnly
+}
+
 struct FamilyOverviewPresentationRoute: Identifiable, Equatable {
     let familyID: UUID
 
@@ -238,7 +243,11 @@ final class FamilyContextStore {
         return Date().timeIntervalSince(lastPassiveRefreshCompletedAt) < Self.passiveRefreshCooldown
     }
 
-    private func performRefresh(sessionStore: SessionStore) async -> Bool {
+    private func performRefresh(
+        sessionStore: SessionStore,
+        financeScope: FamilyAccessibleFinanceScope = .allAccessible,
+        syncsPendingNotificationReadState: Bool = true
+    ) async -> Bool {
         setModelContainer(sessionStore.currentModelContainer)
         restoreCachedStateIfAvailable(sessionStore: sessionStore)
 
@@ -265,10 +274,13 @@ final class FamilyContextStore {
 
             try await refreshAccessibleFinance(
                 sessionStore: sessionStore,
-                session: session
+                session: session,
+                scope: financeScope
             )
             try await refreshFamilyNotifications(session: session)
-            try await pushPendingNotificationReadState(session: session)
+            if syncsPendingNotificationReadState {
+                try await pushPendingNotificationReadState(session: session)
+            }
             return true
         } catch {
             lastErrorMessage = visibleErrorMessage(for: error, sessionStore: sessionStore)
@@ -304,17 +316,10 @@ final class FamilyContextStore {
     ) async {
         switch source {
         case .enterFamily:
-            guard sessionStore.isAutoSyncEnabled else { return }
             guard !didCompleteLatestRefreshRecently else { return }
-            await refreshWithLatestSync(
-                sessionStore: sessionStore,
-                isManualSync: false
-            )
+            await refreshLatestFamilyData(sessionStore: sessionStore)
         case .userInitiated:
-            await refreshWithLatestSync(
-                sessionStore: sessionStore,
-                isManualSync: true
-            )
+            await refreshLatestFamilyData(sessionStore: sessionStore)
         case .postManualSync:
             await refresh(sessionStore: sessionStore)
             lastLatestRefreshCompletedAt = Date()
@@ -326,15 +331,7 @@ final class FamilyContextStore {
         return Date().timeIntervalSince(lastLatestRefreshCompletedAt) < Self.latestRefreshCooldown
     }
 
-    private func didCompleteLatestRefresh(after startDate: Date) -> Bool {
-        guard let lastLatestRefreshCompletedAt else { return false }
-        return lastLatestRefreshCompletedAt >= startDate
-    }
-
-    private func refreshWithLatestSync(
-        sessionStore: SessionStore,
-        isManualSync: Bool
-    ) async {
+    private func refreshLatestFamilyData(sessionStore: SessionStore) async {
         guard !isRefreshingLatest else { return }
         guard sessionStore.canPerformRemoteActions else {
             lastErrorMessage = sessionStore.remoteUnavailableReason
@@ -344,19 +341,15 @@ final class FamilyContextStore {
         isRefreshingLatest = true
         defer { isRefreshingLatest = false }
 
-        let refreshStartedAt = Date()
-        let didSync = await sessionStore.syncNow(isManual: isManualSync)
-        if !didSync && sessionStore.isAnySyncInProgress {
-            while sessionStore.isAnySyncInProgress {
-                guard !Task.isCancelled else { return }
-                try? await Task.sleep(for: .milliseconds(150))
-            }
-        }
-
-        guard !didCompleteLatestRefresh(after: refreshStartedAt) else { return }
         guard !Task.isCancelled else { return }
-        await refresh(sessionStore: sessionStore)
-        lastLatestRefreshCompletedAt = Date()
+        let didRefresh = await performRefresh(
+            sessionStore: sessionStore,
+            financeScope: .membersOnly,
+            syncsPendingNotificationReadState: false
+        )
+        if didRefresh {
+            lastLatestRefreshCompletedAt = Date()
+        }
     }
 
     func refreshAccessibleFinance(sessionStore: SessionStore) async {
@@ -365,7 +358,8 @@ final class FamilyContextStore {
         do {
             try await refreshAccessibleFinance(
                 sessionStore: sessionStore,
-                session: session
+                session: session,
+                scope: .allAccessible
             )
             lastErrorMessage = nil
         } catch {
@@ -1183,13 +1177,17 @@ final class FamilyContextStore {
 
     private func refreshAccessibleFinance(
         sessionStore: SessionStore,
-        session: SupabaseAuthSession
+        session: SupabaseAuthSession,
+        scope: FamilyAccessibleFinanceScope = .allAccessible
     ) async throws {
-        let accessibleUserIDs = Array(viewableTargetUserIDs.union(operableTargetUserIDs))
+        var accessibleUserIDs = viewableTargetUserIDs.union(operableTargetUserIDs)
+        if scope == .membersOnly {
+            accessibleUserIDs.remove(session.user.id)
+        }
         guard !accessibleUserIDs.isEmpty else { return }
 
         let financeSnapshot = try await service.fetchAccessibleFinanceSnapshot(
-            userIDs: accessibleUserIDs,
+            userIDs: Array(accessibleUserIDs),
             session: session
         )
         let reconciledFinanceSnapshot = MistiaSystemCategorySyncSupport.deduplicatingRemoteSystemCategories(
@@ -1215,7 +1213,7 @@ final class FamilyContextStore {
             protectedRecordIDs: protectedRecordIDs,
             preserveLocalNewerRows: true,
             familyCategoryScopedTo: session.user.id,
-            familyCategoryPruneOwnerIDs: Set(accessibleUserIDs).subtracting([session.user.id]),
+            familyCategoryPruneOwnerIDs: accessibleUserIDs.subtracting([session.user.id]),
             in: modelContainer
         )
         try MistiaSyncLocalStore.mergeAccessibleTransactions(
