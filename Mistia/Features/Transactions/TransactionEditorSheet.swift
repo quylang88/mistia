@@ -24,12 +24,44 @@ struct TransactionTransferPreset: Equatable {
     }
 }
 
+struct TransactionEditorPrefill {
+    let title: String?
+    let amountMinor: Int64?
+    let occurredAt: Date?
+    let sourceWalletID: UUID?
+    let categoryID: UUID?
+    let lockedTransferSubtype: TransactionTransferSubtype?
+    let lockedDebtIntent: TransactionDebtIntent?
+    let receiptImage: UIImage?
+
+    init(
+        title: String? = nil,
+        amountMinor: Int64? = nil,
+        occurredAt: Date? = nil,
+        sourceWalletID: UUID? = nil,
+        categoryID: UUID? = nil,
+        lockedTransferSubtype: TransactionTransferSubtype? = nil,
+        lockedDebtIntent: TransactionDebtIntent? = nil,
+        receiptImage: UIImage? = nil
+    ) {
+        self.title = title
+        self.amountMinor = amountMinor
+        self.occurredAt = occurredAt
+        self.sourceWalletID = sourceWalletID
+        self.categoryID = categoryID
+        self.lockedTransferSubtype = lockedTransferSubtype
+        self.lockedDebtIntent = lockedDebtIntent
+        self.receiptImage = receiptImage
+    }
+}
+
 struct TransactionEditorTarget: Identifiable {
     let id = UUID()
     let transaction: LedgerTransaction?
     let initialKind: TransactionPrimaryKind
     let quickCapture: Bool
     let transferPreset: TransactionTransferPreset?
+    let prefill: TransactionEditorPrefill?
     let subjectUserIDOverride: UUID?
     let startsReceiptScan: Bool
     let receiptInitialSource: TransactionReceiptInitialSource?
@@ -39,6 +71,7 @@ struct TransactionEditorTarget: Identifiable {
         self.initialKind = transaction.primaryKind
         self.quickCapture = false
         self.transferPreset = nil
+        self.prefill = nil
         self.subjectUserIDOverride = nil
         self.startsReceiptScan = false
         self.receiptInitialSource = nil
@@ -48,6 +81,7 @@ struct TransactionEditorTarget: Identifiable {
         initialKind: TransactionPrimaryKind,
         quickCapture: Bool = false,
         transferPreset: TransactionTransferPreset? = nil,
+        prefill: TransactionEditorPrefill? = nil,
         subjectUserIDOverride: UUID? = nil,
         startsReceiptScan: Bool = false,
         receiptInitialSource: TransactionReceiptInitialSource? = nil
@@ -56,6 +90,7 @@ struct TransactionEditorTarget: Identifiable {
         self.initialKind = initialKind
         self.quickCapture = quickCapture
         self.transferPreset = transferPreset
+        self.prefill = prefill
         self.subjectUserIDOverride = subjectUserIDOverride
         self.startsReceiptScan = startsReceiptScan || receiptInitialSource != nil
         self.receiptInitialSource = receiptInitialSource ?? (startsReceiptScan ? .cameraPreferred : nil)
@@ -130,6 +165,7 @@ struct TransactionEditorSheet: View {
     @State private var receiptAnalysisQuota: ReceiptAnalysisQuota?
     @State private var didLoadReceiptDraft = false
     @State private var didAutoPresentReceiptScanner = false
+    @State private var didApplyReceiptPrefill = false
     @State private var showsFamilyTransferConfirmation = false
     @FocusState private var focusedField: TransactionEditorFocusedField?
 
@@ -355,6 +391,7 @@ struct TransactionEditorSheet: View {
             Task { @MainActor in
                 await Task.yield()
                 loadReceiptDraftIfNeeded()
+                applyReceiptPrefillIfNeeded()
                 scheduleTitleSuggestionsRefresh()
                 presentInitialReceiptScannerIfNeeded()
             }
@@ -458,11 +495,12 @@ struct TransactionEditorSheet: View {
                         get: { bindableDraft.debtIntent ?? .lend },
                         set: { bindableDraft.debtIntent = $0 }
                     )) {
-                        ForEach(TransactionDebtIntent.allCases, id: \.self) { intent in
+                        ForEach(debtIntentOptions, id: \.self) { intent in
                             Text(intent.title).tag(intent)
                         }
                     }
                     .pickerStyle(.segmented)
+                    .disabled(target.prefill?.lockedDebtIntent != nil)
                     .listRowInsets(EdgeInsets())
                     .listRowBackground(Color.clear)
                 }
@@ -732,18 +770,34 @@ struct TransactionEditorSheet: View {
     }
 
     private var transferSubtypeOptions: [TransactionTransferSubtype] {
-        TransactionTransferSubtype.editorOptions(
+        if let lockedTransferSubtype = target.prefill?.lockedTransferSubtype {
+            return [lockedTransferSubtype]
+        }
+
+        return TransactionTransferSubtype.editorOptions(
             isFamilyEligible: canShowFamilyTransferMode,
             includesFamilyTransfer: draft.transferSubtype == .familyTransfer || isFamilyTransferDetail
         )
     }
 
     private func isTransferSubtypeEnabled(_ subtype: TransactionTransferSubtype) -> Bool {
-        TransactionTransferSubtype.isEditorOptionEnabled(
+        if let lockedTransferSubtype = target.prefill?.lockedTransferSubtype {
+            return subtype == lockedTransferSubtype
+        }
+
+        return TransactionTransferSubtype.isEditorOptionEnabled(
             subtype,
             canPerformRemoteActions: sessionStore.canPerformRemoteActions,
             isFamilyTransferDetail: isFamilyTransferDetail
         )
+    }
+
+    private var debtIntentOptions: [TransactionDebtIntent] {
+        if let lockedDebtIntent = target.prefill?.lockedDebtIntent {
+            return [lockedDebtIntent]
+        }
+
+        return TransactionDebtIntent.allCases
     }
     
     private var availableSourceWalletsForTransfer: [LedgerWallet] {
@@ -1324,6 +1378,24 @@ struct TransactionEditorSheet: View {
                 receiptImageSource = .photoLibrary
             }
         }
+    }
+
+    private func applyReceiptPrefillIfNeeded() {
+        guard !didApplyReceiptPrefill,
+              target.transaction == nil,
+              receiptDraft == nil,
+              let receiptImage = target.prefill?.receiptImage else {
+            return
+        }
+
+        didApplyReceiptPrefill = true
+        guard let draft = TransactionReceiptImageProcessor.makeDraft(from: receiptImage) else {
+            return
+        }
+
+        receiptDraft = draft
+        receiptAnalysisQuota = nil
+        shouldDeleteReceiptOnSave = false
     }
 
     private func handlePickedReceiptImage(_ image: UIImage) {
@@ -2377,18 +2449,21 @@ private struct TransactionReceiptImagePicker: UIViewControllerRepresentable {
             self.counterpartyName = transaction.counterpartyName ?? ""
         } else {
             let transferPreset = target.initialKind == .transfer ? target.transferPreset : nil
+            let prefill = target.prefill
             self.primaryKind = target.initialKind
             self.transferSubtype = target.initialKind == .transfer
-                ? (transferPreset?.transferSubtype ?? .internalTransfer)
+                ? (prefill?.lockedTransferSubtype ?? transferPreset?.transferSubtype ?? .internalTransfer)
                 : nil
-            self.debtIntent = target.initialKind == .transfer ? .lend : nil
-            self.title = ""
-            self.amountText = ""
+            self.debtIntent = target.initialKind == .transfer
+                ? (prefill?.lockedDebtIntent ?? .lend)
+                : nil
+            self.title = prefill?.title ?? ""
+            self.amountText = prefill?.amountMinor.map(String.init) ?? ""
             self.note = ""
-            self.occurredAt = .now
-            self.sourceWalletID = transferPreset?.sourceWalletID
+            self.occurredAt = prefill?.occurredAt ?? .now
+            self.sourceWalletID = prefill?.sourceWalletID ?? transferPreset?.sourceWalletID
             self.destinationWalletID = transferPreset?.destinationWalletID
-            self.categoryID = nil
+            self.categoryID = prefill?.categoryID
             self.familyRecipientUserID = nil
             self.counterpartyName = ""
         }

@@ -40,6 +40,7 @@ private enum TransactionSegment: String, CaseIterable, Hashable {
 
 private enum TransactionsNavigationDestination: String, Identifiable {
     case profile
+    case aiBill
 
     var id: String { rawValue }
 }
@@ -469,8 +470,11 @@ struct TransactionsView: View {
                         .zIndex(99)
                 },
                 trailingAccessory: {
-                    transactionsStatementMenuButton
-                        .padding(.trailing, -12)
+                    HStack(spacing: 10) {
+                        aiBillScanButton
+                        transactionsStatementMenuButton
+                    }
+                    .padding(.trailing, -12)
                 }
             ) {
                 if !listSnapshot.openDebtPositions.isEmpty {
@@ -489,6 +493,8 @@ struct TransactionsView: View {
                 switch route {
                 case .profile:
                     ManagementAccountView()
+                case .aiBill:
+                    AIBillAnalysisView()
                 }
             }
         }
@@ -584,6 +590,16 @@ struct TransactionsView: View {
             }
         }
         .accessibilityLabel(L10n.transactions.transactions.statement)
+    }
+
+    private var aiBillScanButton: some View {
+        MistiaHeaderCircleButton(action: { destination = .aiBill }) {
+            Image(systemName: "doc.viewfinder")
+                .font(.system(size: 15, weight: .bold))
+                .symbolRenderingMode(.monochrome)
+                .foregroundStyle(colorScheme == .dark ? .white.opacity(0.96) : Color.black.opacity(0.72))
+        }
+        .accessibilityLabel(L10n.transactions.aibill.scanBillItems)
     }
 
     private func exportStatement(_ kind: TransactionStatementKind) {
