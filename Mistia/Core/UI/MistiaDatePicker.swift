@@ -13,6 +13,15 @@ struct MistiaDatePickerRow: View {
 
     @Environment(\.calendar) private var calendar
     @State private var isPickerPresented = false
+    @State private var internalSelection: Date
+
+    init(title: String, selection: Binding<Date>, mode: MistiaDatePickerMode = .date, selectableRange: AnyRange<Date>? = nil) {
+        self.title = title
+        self._selection = selection
+        self.mode = mode
+        self.selectableRange = selectableRange
+        self._internalSelection = State(initialValue: selection.wrappedValue)
+    }
 
     var body: some View {
         switch mode {
@@ -33,7 +42,7 @@ struct MistiaDatePickerRow: View {
             .buttonStyle(.plain)
             .datePickerPopover(
                 isPresented: $isPickerPresented,
-                selection: $selection,
+                selection: $internalSelection,
                 calendar: calendar,
                 selectableRange: selectableRange,
                 title: title
@@ -70,11 +79,19 @@ struct MistiaDatePickerRow: View {
             }
             .datePickerPopover(
                 isPresented: $isPickerPresented,
-                selection: $selection,
+                selection: $internalSelection,
                 calendar: calendar,
                 selectableRange: selectableRange,
                 title: title
             )
+        }
+        .onChange(of: internalSelection) { _, newValue in
+            selection = newValue
+        }
+        .onChange(of: selection) { _, newValue in
+            if internalSelection != newValue {
+                internalSelection = newValue
+            }
         }
     }
 

@@ -479,11 +479,9 @@ struct ManagementView: View {
 
                                 Spacer(minLength: 12)
 
-                                if !hasFamilyProfile {
-                                    Text(L10n.management.management.none)
-                                        .font(.system(size: 14, weight: .medium, design: .rounded))
-                                        .foregroundStyle(.secondary)
-                                }
+                                Text(familyContextStore.family?.name ?? L10n.management.management.none)
+                                    .font(.system(size: 14, weight: .medium, design: .rounded))
+                                    .foregroundStyle(.secondary)
 
                                 if isOpeningFamily && shouldRefreshFamilyBeforeOpening {
                                     ProgressView()

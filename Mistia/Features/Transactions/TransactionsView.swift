@@ -853,7 +853,7 @@ struct TransactionsView: View {
 
         if value.isEmpty {
             debouncedSearchText = ""
-            resetTransactionPage()
+            // Do not reset the transaction page limit when clearing search to preserve scroll position
             return
         }
 
