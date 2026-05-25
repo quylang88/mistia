@@ -72,31 +72,31 @@ enum MistiaSyncLocalStore {
     static func hasMeaningfulUserData(in container: ModelContainer) throws -> Bool {
         let context = ModelContext(container)
 
-        if try fetchWallets(context).contains(where: { $0.deletedAt == nil }) {
+        if try fetchActiveWallet(context) != nil {
             return true
         }
-        if try fetchCreditCardProfiles(context).contains(where: { $0.deletedAt == nil }) {
+        if try fetchActiveCreditCardProfile(context) != nil {
             return true
         }
-        if try fetchTransactions(context).contains(where: { $0.deletedAt == nil }) {
+        if try fetchActiveTransaction(context) != nil {
             return true
         }
-        if try fetchBudgetPlans(context).contains(where: { $0.deletedAt == nil }) {
+        if try fetchActiveBudgetPlan(context) != nil {
             return true
         }
-        if try fetchSavingsGoals(context).contains(where: { $0.deletedAt == nil }) {
+        if try fetchActiveSavingsGoal(context) != nil {
             return true
         }
-        if try fetchRecurringBillPlans(context).contains(where: { $0.deletedAt == nil }) {
+        if try fetchActiveRecurringBillPlan(context) != nil {
             return true
         }
-        if try fetchInstallmentPlans(context).contains(where: { $0.deletedAt == nil }) {
+        if try fetchActiveInstallmentPlan(context) != nil {
             return true
         }
-        if try fetchDueOccurrences(context).contains(where: { $0.deletedAt == nil }) {
+        if try fetchActiveDueOccurrence(context) != nil {
             return true
         }
-        if try fetchCategories(context).contains(where: { $0.deletedAt == nil && !$0.isSystem }) {
+        if try fetchActiveUserCategory(context) != nil {
             return true
         }
 
@@ -201,47 +201,50 @@ enum MistiaSyncLocalStore {
     ) throws -> MistiaSyncUploadRecord? {
         let context = ModelContext(container)
         let subjectUserID = mutation.subjectUserID
-        let auditMap = try TransactionAuditStore.auditMap(from: fetchTransactionAudits(context))
 
         switch mutation.entity {
         case .wallet:
-            guard let wallet = try fetchWallets(context).first(where: { $0.id == mutation.recordID }) else {
+            guard let wallet = try fetchWallet(id: mutation.recordID, context) else {
                 return nil
             }
             return .wallet(RemoteLedgerWallet(local: wallet, userID: subjectUserID))
         case .creditCardProfile:
-            guard let profile = try fetchCreditCardProfiles(context).first(where: { $0.id == mutation.recordID }) else {
+            guard let profile = try fetchCreditCardProfile(id: mutation.recordID, context) else {
                 return nil
             }
             return .creditCardProfile(RemoteCreditCardProfile(local: profile, userID: subjectUserID))
         case .category:
-            guard let category = try fetchCategories(context).first(where: { $0.id == mutation.recordID }) else {
+            guard let category = try fetchCategory(id: mutation.recordID, context) else {
                 return nil
             }
             return .category(RemoteTransactionCategory(local: category, userID: subjectUserID))
         case .transaction:
-            guard let transaction = try fetchTransactions(context).first(where: { $0.id == mutation.recordID }) else {
+            guard let transaction = try fetchTransaction(id: mutation.recordID, context) else {
                 return nil
             }
+            let auditRecord = try TransactionAuditStore.fetch(
+                transactionID: transaction.id,
+                context: context
+            )
             return .transaction(
                 RemoteLedgerTransaction(
                     local: transaction,
                     userID: subjectUserID,
-                    auditRecord: auditMap[transaction.id]
+                    auditRecord: auditRecord
                 )
             )
         case .budgetPlan:
-            guard let plan = try fetchBudgetPlans(context).first(where: { $0.id == mutation.recordID }) else {
+            guard let plan = try fetchBudgetPlan(id: mutation.recordID, context) else {
                 return nil
             }
             return .budgetPlan(RemoteBudgetPlan(local: plan, userID: subjectUserID))
         case .savingsGoal:
-            guard let goal = try fetchSavingsGoals(context).first(where: { $0.id == mutation.recordID }) else {
+            guard let goal = try fetchSavingsGoal(id: mutation.recordID, context) else {
                 return nil
             }
             return .savingsGoal(RemoteSavingsGoal(local: goal, userID: subjectUserID))
         case .recurringBillPlan:
-            guard let plan = try fetchRecurringBillPlans(context).first(where: { $0.id == mutation.recordID }) else {
+            guard let plan = try fetchRecurringBillPlan(id: mutation.recordID, context) else {
                 return nil
             }
             let categories = try fetchCategories(context)
@@ -253,12 +256,12 @@ enum MistiaSyncLocalStore {
                 )
             )
         case .installmentPlan:
-            guard let plan = try fetchInstallmentPlans(context).first(where: { $0.id == mutation.recordID }) else {
+            guard let plan = try fetchInstallmentPlan(id: mutation.recordID, context) else {
                 return nil
             }
             return .installmentPlan(RemoteInstallmentPlan(local: plan, userID: subjectUserID))
         case .dueOccurrenceRecord:
-            guard let record = try fetchDueOccurrences(context).first(where: { $0.id == mutation.recordID }) else {
+            guard let record = try fetchDueOccurrence(id: mutation.recordID, context) else {
                 return nil
             }
             return .dueOccurrence(RemoteDueOccurrenceRecord(local: record, userID: subjectUserID))
@@ -339,23 +342,23 @@ enum MistiaSyncLocalStore {
 
         switch entity {
         case .wallet:
-            return try fetchWallets(context).first(where: { $0.id == recordID })?.remoteVersion ?? 0
+            return try fetchWallet(id: recordID, context)?.remoteVersion ?? 0
         case .creditCardProfile:
-            return try fetchCreditCardProfiles(context).first(where: { $0.id == recordID })?.remoteVersion ?? 0
+            return try fetchCreditCardProfile(id: recordID, context)?.remoteVersion ?? 0
         case .category:
-            return try fetchCategories(context).first(where: { $0.id == recordID })?.remoteVersion ?? 0
+            return try fetchCategory(id: recordID, context)?.remoteVersion ?? 0
         case .transaction:
-            return try fetchTransactions(context).first(where: { $0.id == recordID })?.remoteVersion ?? 0
+            return try fetchTransaction(id: recordID, context)?.remoteVersion ?? 0
         case .budgetPlan:
-            return try fetchBudgetPlans(context).first(where: { $0.id == recordID })?.remoteVersion ?? 0
+            return try fetchBudgetPlan(id: recordID, context)?.remoteVersion ?? 0
         case .savingsGoal:
-            return try fetchSavingsGoals(context).first(where: { $0.id == recordID })?.remoteVersion ?? 0
+            return try fetchSavingsGoal(id: recordID, context)?.remoteVersion ?? 0
         case .recurringBillPlan:
-            return try fetchRecurringBillPlans(context).first(where: { $0.id == recordID })?.remoteVersion ?? 0
+            return try fetchRecurringBillPlan(id: recordID, context)?.remoteVersion ?? 0
         case .installmentPlan:
-            return try fetchInstallmentPlans(context).first(where: { $0.id == recordID })?.remoteVersion ?? 0
+            return try fetchInstallmentPlan(id: recordID, context)?.remoteVersion ?? 0
         case .dueOccurrenceRecord:
-            return try fetchDueOccurrences(context).first(where: { $0.id == recordID })?.remoteVersion ?? 0
+            return try fetchDueOccurrence(id: recordID, context)?.remoteVersion ?? 0
         }
     }
 
@@ -2202,16 +2205,113 @@ enum MistiaSyncLocalStore {
         )
     }
 
+    private static func fetchFirst<Model: PersistentModel>(
+        _ descriptor: FetchDescriptor<Model>,
+        context: ModelContext
+    ) throws -> Model? {
+        var descriptor = descriptor
+        descriptor.fetchLimit = 1
+        return try context.fetch(descriptor).first
+    }
+
+    private static func fetchWallet(id: UUID, _ context: ModelContext) throws -> LedgerWallet? {
+        try fetchFirst(
+            FetchDescriptor<LedgerWallet>(
+                predicate: #Predicate<LedgerWallet> { wallet in
+                    wallet.id == id
+                }
+            ),
+            context: context
+        )
+    }
+
+    private static func fetchActiveWallet(_ context: ModelContext) throws -> LedgerWallet? {
+        try fetchFirst(
+            FetchDescriptor<LedgerWallet>(
+                predicate: #Predicate<LedgerWallet> { wallet in
+                    wallet.deletedAt == nil
+                }
+            ),
+            context: context
+        )
+    }
+
     private static func fetchWallets(_ context: ModelContext) throws -> [LedgerWallet] {
         try context.fetch(FetchDescriptor<LedgerWallet>())
+    }
+
+    private static func fetchCreditCardProfile(id: UUID, _ context: ModelContext) throws -> CreditCardProfile? {
+        try fetchFirst(
+            FetchDescriptor<CreditCardProfile>(
+                predicate: #Predicate<CreditCardProfile> { profile in
+                    profile.id == id
+                }
+            ),
+            context: context
+        )
+    }
+
+    private static func fetchActiveCreditCardProfile(_ context: ModelContext) throws -> CreditCardProfile? {
+        try fetchFirst(
+            FetchDescriptor<CreditCardProfile>(
+                predicate: #Predicate<CreditCardProfile> { profile in
+                    profile.deletedAt == nil
+                }
+            ),
+            context: context
+        )
     }
 
     private static func fetchCreditCardProfiles(_ context: ModelContext) throws -> [CreditCardProfile] {
         try context.fetch(FetchDescriptor<CreditCardProfile>())
     }
 
+    private static func fetchCategory(id: UUID, _ context: ModelContext) throws -> TransactionCategory? {
+        try fetchFirst(
+            FetchDescriptor<TransactionCategory>(
+                predicate: #Predicate<TransactionCategory> { category in
+                    category.id == id
+                }
+            ),
+            context: context
+        )
+    }
+
+    private static func fetchActiveUserCategory(_ context: ModelContext) throws -> TransactionCategory? {
+        try fetchFirst(
+            FetchDescriptor<TransactionCategory>(
+                predicate: #Predicate<TransactionCategory> { category in
+                    category.deletedAt == nil && !category.isSystem
+                }
+            ),
+            context: context
+        )
+    }
+
     private static func fetchCategories(_ context: ModelContext) throws -> [TransactionCategory] {
         try context.fetch(FetchDescriptor<TransactionCategory>())
+    }
+
+    private static func fetchTransaction(id: UUID, _ context: ModelContext) throws -> LedgerTransaction? {
+        try fetchFirst(
+            FetchDescriptor<LedgerTransaction>(
+                predicate: #Predicate<LedgerTransaction> { transaction in
+                    transaction.id == id
+                }
+            ),
+            context: context
+        )
+    }
+
+    private static func fetchActiveTransaction(_ context: ModelContext) throws -> LedgerTransaction? {
+        try fetchFirst(
+            FetchDescriptor<LedgerTransaction>(
+                predicate: #Predicate<LedgerTransaction> { transaction in
+                    transaction.deletedAt == nil
+                }
+            ),
+            context: context
+        )
     }
 
     private static func fetchTransactions(_ context: ModelContext) throws -> [LedgerTransaction] {
@@ -2222,12 +2322,78 @@ enum MistiaSyncLocalStore {
         try context.fetch(FetchDescriptor<TransactionAuditRecord>())
     }
 
+    private static func fetchBudgetPlan(id: UUID, _ context: ModelContext) throws -> BudgetPlan? {
+        try fetchFirst(
+            FetchDescriptor<BudgetPlan>(
+                predicate: #Predicate<BudgetPlan> { plan in
+                    plan.id == id
+                }
+            ),
+            context: context
+        )
+    }
+
+    private static func fetchActiveBudgetPlan(_ context: ModelContext) throws -> BudgetPlan? {
+        try fetchFirst(
+            FetchDescriptor<BudgetPlan>(
+                predicate: #Predicate<BudgetPlan> { plan in
+                    plan.deletedAt == nil
+                }
+            ),
+            context: context
+        )
+    }
+
     private static func fetchBudgetPlans(_ context: ModelContext) throws -> [BudgetPlan] {
         try context.fetch(FetchDescriptor<BudgetPlan>())
     }
 
+    private static func fetchSavingsGoal(id: UUID, _ context: ModelContext) throws -> SavingsGoal? {
+        try fetchFirst(
+            FetchDescriptor<SavingsGoal>(
+                predicate: #Predicate<SavingsGoal> { goal in
+                    goal.id == id
+                }
+            ),
+            context: context
+        )
+    }
+
+    private static func fetchActiveSavingsGoal(_ context: ModelContext) throws -> SavingsGoal? {
+        try fetchFirst(
+            FetchDescriptor<SavingsGoal>(
+                predicate: #Predicate<SavingsGoal> { goal in
+                    goal.deletedAt == nil
+                }
+            ),
+            context: context
+        )
+    }
+
     private static func fetchSavingsGoals(_ context: ModelContext) throws -> [SavingsGoal] {
         try context.fetch(FetchDescriptor<SavingsGoal>())
+    }
+
+    private static func fetchRecurringBillPlan(id: UUID, _ context: ModelContext) throws -> RecurringBillPlan? {
+        try fetchFirst(
+            FetchDescriptor<RecurringBillPlan>(
+                predicate: #Predicate<RecurringBillPlan> { plan in
+                    plan.id == id
+                }
+            ),
+            context: context
+        )
+    }
+
+    private static func fetchActiveRecurringBillPlan(_ context: ModelContext) throws -> RecurringBillPlan? {
+        try fetchFirst(
+            FetchDescriptor<RecurringBillPlan>(
+                predicate: #Predicate<RecurringBillPlan> { plan in
+                    plan.deletedAt == nil
+                }
+            ),
+            context: context
+        )
     }
 
     private static func fetchRecurringBillPlans(_ context: ModelContext) throws -> [RecurringBillPlan] {
@@ -2256,8 +2422,52 @@ enum MistiaSyncLocalStore {
         return mistiaCloudCategoryID(for: matchingCategory, userID: userID)
     }
 
+    private static func fetchInstallmentPlan(id: UUID, _ context: ModelContext) throws -> InstallmentPlan? {
+        try fetchFirst(
+            FetchDescriptor<InstallmentPlan>(
+                predicate: #Predicate<InstallmentPlan> { plan in
+                    plan.id == id
+                }
+            ),
+            context: context
+        )
+    }
+
+    private static func fetchActiveInstallmentPlan(_ context: ModelContext) throws -> InstallmentPlan? {
+        try fetchFirst(
+            FetchDescriptor<InstallmentPlan>(
+                predicate: #Predicate<InstallmentPlan> { plan in
+                    plan.deletedAt == nil
+                }
+            ),
+            context: context
+        )
+    }
+
     private static func fetchInstallmentPlans(_ context: ModelContext) throws -> [InstallmentPlan] {
         try context.fetch(FetchDescriptor<InstallmentPlan>())
+    }
+
+    private static func fetchDueOccurrence(id: UUID, _ context: ModelContext) throws -> DueOccurrenceRecord? {
+        try fetchFirst(
+            FetchDescriptor<DueOccurrenceRecord>(
+                predicate: #Predicate<DueOccurrenceRecord> { record in
+                    record.id == id
+                }
+            ),
+            context: context
+        )
+    }
+
+    private static func fetchActiveDueOccurrence(_ context: ModelContext) throws -> DueOccurrenceRecord? {
+        try fetchFirst(
+            FetchDescriptor<DueOccurrenceRecord>(
+                predicate: #Predicate<DueOccurrenceRecord> { record in
+                    record.deletedAt == nil
+                }
+            ),
+            context: context
+        )
     }
 
     private static func fetchDueOccurrences(_ context: ModelContext) throws -> [DueOccurrenceRecord] {

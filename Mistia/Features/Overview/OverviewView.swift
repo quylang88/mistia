@@ -83,6 +83,33 @@ private struct OverviewRenderSnapshot {
     let postedExpenseTransactionsByDay: [Date: [LedgerTransaction]]
 }
 
+private struct OverviewRenderSnapshotCache {
+    let key: OverviewRenderSnapshotCacheKey
+    let snapshot: OverviewRenderSnapshot
+}
+
+private struct OverviewRenderSnapshotCacheKey: Hashable {
+    let activeScope: FamilyContext.Scope
+    let selectedSubjectUserID: UUID?
+    let currentUserID: UUID?
+    let activeLocalProfileUserID: UUID?
+    let signedInUserID: UUID?
+    let familyID: UUID?
+    let currentMonthStart: TimeInterval
+    let calendarIdentifier: String
+    let calendarTimeZoneIdentifier: String
+    let localeIdentifier: String
+    let currencyCode: String
+    let familyAccessSignature: Int
+    let walletSignature: Int
+    let transactionSignature: Int
+    let budgetSignature: Int
+    let billSignature: Int
+    let installmentSignature: Int
+    let occurrenceSignature: Int
+    let ownershipSignature: Int
+}
+
 struct OverviewView: View {
     @Environment(\.calendar) private var calendar
     @Environment(\.locale) private var locale
@@ -118,6 +145,7 @@ struct OverviewView: View {
     @State private var duePaymentTarget: DuePaymentSheetTarget?
     @State private var permissionPrompt: OverviewPermissionPrompt?
     @State private var infoAlert: OverviewInfoAlert?
+    @State private var renderSnapshotCache: OverviewRenderSnapshotCache?
 
     private var currentMonth: Date {
         PlanningLogic.startOfMonth(for: .now, calendar: calendar)
@@ -239,6 +267,146 @@ struct OverviewView: View {
             transactionsByID: transactionsByID,
             postedExpenseTransactionsByDay: expenseTransactionsByDay
         )
+    }
+
+    private func cachedRenderSnapshot(for key: OverviewRenderSnapshotCacheKey) -> OverviewRenderSnapshot {
+        if let renderSnapshotCache, renderSnapshotCache.key == key {
+            return renderSnapshotCache.snapshot
+        }
+
+        return renderSnapshot
+    }
+
+    private func refreshRenderSnapshotCache(for key: OverviewRenderSnapshotCacheKey) {
+        renderSnapshotCache = OverviewRenderSnapshotCache(
+            key: key,
+            snapshot: renderSnapshot
+        )
+    }
+
+    private var renderSnapshotCacheKey: OverviewRenderSnapshotCacheKey {
+        OverviewRenderSnapshotCacheKey(
+            activeScope: familyContextStore.activeContext.scope,
+            selectedSubjectUserID: familyContextStore.selectedSubjectUserID,
+            currentUserID: familyContextStore.currentUserID,
+            activeLocalProfileUserID: sessionStore.activeLocalProfileUserID,
+            signedInUserID: sessionStore.signedInUserID,
+            familyID: familyContextStore.family?.id,
+            currentMonthStart: currentMonth.timeIntervalSince1970,
+            calendarIdentifier: String(describing: calendar.identifier),
+            calendarTimeZoneIdentifier: calendar.timeZone.identifier,
+            localeIdentifier: locale.identifier,
+            currencyCode: currencyCode,
+            familyAccessSignature: familyAccessSignature,
+            walletSignature: recordsSignature(
+                storedWallets,
+                id: \.id,
+                updatedAt: \.updatedAt,
+                deletedAt: \.deletedAt,
+                isArchived: \.isArchived
+            ),
+            transactionSignature: recordsSignature(
+                storedTransactions,
+                id: \.id,
+                updatedAt: \.updatedAt,
+                deletedAt: \.deletedAt,
+                isArchived: \.isArchived
+            ),
+            budgetSignature: recordsSignature(
+                storedBudgets,
+                id: \.id,
+                updatedAt: \.updatedAt,
+                deletedAt: \.deletedAt,
+                isArchived: \.isArchived
+            ),
+            billSignature: recordsSignature(
+                storedBills,
+                id: \.id,
+                updatedAt: \.updatedAt,
+                deletedAt: \.deletedAt,
+                isArchived: \.isArchived
+            ),
+            installmentSignature: recordsSignature(
+                storedInstallments,
+                id: \.id,
+                updatedAt: \.updatedAt,
+                deletedAt: \.deletedAt,
+                isArchived: \.isArchived
+            ),
+            occurrenceSignature: recordsSignature(
+                storedOccurrences,
+                id: \.id,
+                updatedAt: \.updatedAt,
+                deletedAt: \.deletedAt
+            ),
+            ownershipSignature: recordsSignature(
+                ownershipScopes,
+                id: \.recordID,
+                updatedAt: \.updatedAt,
+                deletedAt: { _ in nil }
+            )
+        )
+    }
+
+    private var familyAccessSignature: Int {
+        var hasher = Hasher()
+        hasher.combine(familyContextStore.currentMembership?.id)
+        hasher.combine(familyContextStore.currentMembership?.updatedAt.timeIntervalSince1970)
+        hasher.combine(familyContextStore.members.count)
+        for member in familyContextStore.members {
+            hasher.combine(member.membershipID)
+            hasher.combine(member.userID)
+            hasher.combine(member.role.rawValue)
+            hasher.combine(member.hasSyncedCloudData)
+        }
+        hasher.combine(familyContextStore.permissionGrants.count)
+        for grant in familyContextStore.permissionGrants {
+            hasher.combine(grant.id)
+            hasher.combine(grant.granteeUserID)
+            hasher.combine(grant.ownerUserID)
+            hasher.combine(grant.resourceTypeRawValue)
+            hasher.combine(grant.resourceID)
+            hasher.combine(grant.permissionScopeRawValue)
+            hasher.combine(grant.updatedAt.timeIntervalSince1970)
+            hasher.combine(grant.revokedAt?.timeIntervalSince1970)
+        }
+        return hasher.finalize()
+    }
+
+    private func recordsSignature<Record>(
+        _ records: [Record],
+        id: KeyPath<Record, UUID>,
+        updatedAt: KeyPath<Record, Date>,
+        deletedAt: KeyPath<Record, Date?>,
+        isArchived: KeyPath<Record, Bool>? = nil
+    ) -> Int {
+        var hasher = Hasher()
+        hasher.combine(records.count)
+        for record in records {
+            hasher.combine(record[keyPath: id])
+            hasher.combine(record[keyPath: updatedAt].timeIntervalSince1970)
+            hasher.combine(record[keyPath: deletedAt]?.timeIntervalSince1970)
+            if let isArchived {
+                hasher.combine(record[keyPath: isArchived])
+            }
+        }
+        return hasher.finalize()
+    }
+
+    private func recordsSignature<Record>(
+        _ records: [Record],
+        id: KeyPath<Record, UUID>,
+        updatedAt: KeyPath<Record, Date>,
+        deletedAt: (Record) -> Date?
+    ) -> Int {
+        var hasher = Hasher()
+        hasher.combine(records.count)
+        for record in records {
+            hasher.combine(record[keyPath: id])
+            hasher.combine(record[keyPath: updatedAt].timeIntervalSince1970)
+            hasher.combine(deletedAt(record)?.timeIntervalSince1970)
+        }
+        return hasher.finalize()
     }
 
     private var transactionsByID: [UUID: LedgerTransaction] {
@@ -446,7 +614,8 @@ struct OverviewView: View {
     }
 
     var body: some View {
-        let renderSnapshot = self.renderSnapshot
+        let snapshotKey = renderSnapshotCacheKey
+        let renderSnapshot = cachedRenderSnapshot(for: snapshotKey)
 
         NavigationStack {
             MistiaPinnedTopBarScaffold(
@@ -548,6 +717,9 @@ struct OverviewView: View {
                 modelContext: modelContext,
                 sessionStore: sessionStore
             )
+        }
+        .task(id: snapshotKey) {
+            refreshRenderSnapshotCache(for: snapshotKey)
         }
     }
 

@@ -4178,7 +4178,9 @@ struct ManagementBackupRestoreView: View {
                 isRestoring = true
 
                 do {
-                    let data = try Data(contentsOf: url)
+                    let data = try await Task.detached(priority: .userInitiated) {
+                        try Data(contentsOf: url)
+                    }.value
                     let summary = try MistiaBackupStore.validateBackup(data)
                     latestSummary = summary
                     latestRestoreResult = try await sessionStore.restoreBackup(
