@@ -40,6 +40,9 @@ type SanitizedItem = {
   line_id: string
   original_name: string
   translated_name: string | null
+  line_type: "purchase" | "discount"
+  original_amount_minor: number | null
+  discount_amount_minor: number
   final_amount_minor: number
   category_id: string | null
   confidence: number
@@ -69,6 +72,9 @@ const itemizedBillResponseSchema = {
           line_id: { type: "STRING" },
           original_name: { type: "STRING" },
           translated_name: { type: "STRING", nullable: true },
+          line_type: { type: "STRING" },
+          original_amount_minor: { type: "INTEGER", nullable: true },
+          discount_amount_minor: { type: "INTEGER" },
           final_amount_minor: { type: "INTEGER" },
           category_id: { type: "STRING", nullable: true },
           confidence: { type: "NUMBER" },
@@ -81,6 +87,9 @@ const itemizedBillResponseSchema = {
           "line_id",
           "original_name",
           "translated_name",
+          "line_type",
+          "original_amount_minor",
+          "discount_amount_minor",
           "final_amount_minor",
           "category_id",
           "confidence",
@@ -90,6 +99,9 @@ const itemizedBillResponseSchema = {
           "line_id",
           "original_name",
           "translated_name",
+          "line_type",
+          "original_amount_minor",
+          "discount_amount_minor",
           "final_amount_minor",
           "category_id",
           "confidence",
@@ -210,6 +222,20 @@ function optionalPositiveMinor(value: unknown): number | null {
   return null
 }
 
+function optionalMinor(value: unknown): number | null {
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return Math.round(value)
+  }
+
+  if (typeof value === "string") {
+    const sanitized = value.replace(/[^0-9-]/g, "")
+    const parsed = Number(sanitized)
+    return Number.isFinite(parsed) ? Math.round(parsed) : null
+  }
+
+  return null
+}
+
 function optionalConfidence(value: unknown): number {
   const parsed = typeof value === "number" ? value : typeof value === "string" ? Number(value) : 0
   if (!Number.isFinite(parsed)) return 0
@@ -238,8 +264,8 @@ function missingFieldsFor(result: Record<string, unknown>): string[] {
 function itemMissingFieldsFor(item: SanitizedItem): string[] {
   const missing = new Set(item.missing_fields)
   if (!item.original_name) missing.add("originalName")
-  if (item.final_amount_minor <= 0) missing.add("finalAmountMinor")
-  if (!item.category_id) missing.add("categoryID")
+  if (item.line_type === "purchase" && item.final_amount_minor <= 0) missing.add("finalAmountMinor")
+  if (item.line_type === "purchase" && !item.category_id) missing.add("categoryID")
   return Array.from(missing).sort()
 }
 
@@ -287,17 +313,32 @@ function sanitizeItem(
 ): SanitizedItem | null {
   if (typeof rawItem !== "object" || rawItem === null) return null
   const raw = rawItem as Record<string, unknown>
-  const amount = optionalPositiveMinor(valueFor(raw, "final_amount_minor", "finalAmountMinor", "amount_minor", "amountMinor", "amount"))
   const originalName = trimmedString(valueFor(raw, "original_name", "originalName", "name", "item_name", "itemName")) ?? ""
+  const rawLineType = trimmedString(valueFor(raw, "line_type", "lineType", "type"))?.toLowerCase()
+  const rawFinalAmount = optionalMinor(valueFor(raw, "final_amount_minor", "finalAmountMinor", "amount_minor", "amountMinor", "amount"))
+  const isDiscount = rawLineType === "discount"
+    || (rawFinalAmount ?? 0) < 0
+    || /^[-−－]/.test(originalName)
+    || /(値引|割引|クーポン|ｸｰﾎﾟﾝ|割戻|discount|coupon|voucher|giảm giá|khuyến mãi|khuyen mai)/i.test(originalName)
 
-  if (!amount && !originalName) return null
+  if (rawFinalAmount === null && !originalName) return null
+
+  const originalAmount = optionalPositiveMinor(valueFor(raw, "original_amount_minor", "originalAmountMinor", "gross_amount_minor", "grossAmountMinor", "original_amount", "originalAmount"))
+  const rawDiscountAmount = optionalPositiveMinor(valueFor(raw, "discount_amount_minor", "discountAmountMinor", "discount_minor", "discountMinor", "discount_amount", "discountAmount"))
+  const discountAmount = rawDiscountAmount ?? (isDiscount ? Math.abs(rawFinalAmount ?? 0) : 0)
+  const finalAmount = isDiscount
+    ? -Math.abs(rawFinalAmount ?? discountAmount)
+    : Math.max(0, rawFinalAmount ?? 0)
 
   const item: SanitizedItem = {
     line_id: trimmedString(valueFor(raw, "line_id", "lineID", "lineId", "id")) ?? `line-${index + 1}`,
     original_name: originalName,
     translated_name: trimmedString(valueFor(raw, "translated_name", "translatedName", "translation")),
-    final_amount_minor: amount ?? 0,
-    category_id: optionalID(valueFor(raw, "category_id", "categoryID", "categoryId"), categoryIDs),
+    line_type: isDiscount ? "discount" : "purchase",
+    original_amount_minor: isDiscount ? null : (originalAmount ?? (finalAmount > 0 ? finalAmount + discountAmount : null)),
+    discount_amount_minor: Math.max(0, discountAmount),
+    final_amount_minor: finalAmount,
+    category_id: isDiscount ? null : optionalID(valueFor(raw, "category_id", "categoryID", "categoryId"), categoryIDs),
     confidence: optionalConfidence(valueFor(raw, "confidence", "score")),
     missing_fields: stringArray(valueFor(raw, "missing_fields", "missingFields")),
   }
@@ -305,13 +346,20 @@ function sanitizeItem(
   return item
 }
 
-function allocateItemsToTotal(items: SanitizedItem[], totalMinor: number | null): SanitizedItem[] {
+function adjustPurchasesToTotal(items: SanitizedItem[], totalMinor: number | null): SanitizedItem[] {
   if (!totalMinor || items.length === 0) return items
   const currentTotal = items.reduce((sum, item) => sum + item.final_amount_minor, 0)
-  if (currentTotal <= 0 || currentTotal === totalMinor) return items
+  const purchaseItems = items
+    .map((item, index) => ({ item, index }))
+    .filter((row) => row.item.line_type === "purchase" && row.item.final_amount_minor > 0)
+  const purchaseTotal = purchaseItems.reduce((sum, row) => sum + row.item.final_amount_minor, 0)
+  if (purchaseTotal <= 0 || currentTotal === totalMinor) return items
 
-  const scaled = items.map((item, index) => {
-    const exact = item.final_amount_minor * totalMinor / currentTotal
+  const delta = totalMinor - currentTotal
+  const absoluteDelta = Math.abs(delta)
+
+  const scaled = purchaseItems.map(({ item, index }) => {
+    const exact = item.final_amount_minor * absoluteDelta / purchaseTotal
     const floor = Math.floor(exact)
     return {
       item,
@@ -322,7 +370,7 @@ function allocateItemsToTotal(items: SanitizedItem[], totalMinor: number | null)
   })
 
   let allocatedTotal = scaled.reduce((sum, row) => sum + row.floor, 0)
-  let remainder = totalMinor - allocatedTotal
+  let remainder = absoluteDelta - allocatedTotal
   const ranked = [...scaled].sort((lhs, rhs) => {
     if (lhs.remainder !== rhs.remainder) return rhs.remainder - lhs.remainder
     return lhs.index - rhs.index
@@ -333,24 +381,18 @@ function allocateItemsToTotal(items: SanitizedItem[], totalMinor: number | null)
     remainder -= 1
   }
 
-  if (remainder < 0) {
-    const descending = [...ranked].sort((lhs, rhs) => {
-      if (lhs.remainder !== rhs.remainder) return lhs.remainder - rhs.remainder
-      return lhs.index - rhs.index
-    })
-    for (let index = 0; index < descending.length && remainder < 0; index += 1) {
-      const reducible = Math.min(descending[index].floor, Math.abs(remainder))
-      descending[index].floor -= reducible
-      remainder += reducible
+  const updated = [...items]
+  for (const row of scaled) {
+    const nextFinal = delta >= 0
+      ? row.item.final_amount_minor + row.floor
+      : Math.max(0, row.item.final_amount_minor - row.floor)
+    updated[row.index] = {
+      ...row.item,
+      final_amount_minor: nextFinal,
+      discount_amount_minor: delta < 0 ? row.item.discount_amount_minor + row.floor : row.item.discount_amount_minor,
     }
   }
-
-  return scaled
-    .sort((lhs, rhs) => lhs.index - rhs.index)
-    .map((row) => ({
-      ...row.item,
-      final_amount_minor: Math.max(0, row.floor),
-    }))
+  return updated
 }
 
 function sanitizeAnalysis(
@@ -372,7 +414,7 @@ function sanitizeAnalysis(
   if (multipleBillsDetected) {
     items = []
   } else {
-    items = allocateItemsToTotal(items, totalMinor)
+    items = adjustPurchasesToTotal(items, totalMinor)
   }
 
   const result: Record<string, unknown> = {
@@ -430,10 +472,17 @@ function buildPrompt(payload: BillItemsRequest): string {
     "You analyze one receipt image for a personal finance app.",
     "The image must contain exactly one receipt/bill. If multiple receipts or bills are visible, set multiple_bills_detected to true, return items as an empty array, include singleBillImage in missing_fields, and do not try to merge them.",
     "Return only JSON with snake_case keys: merchant_name, total_minor, currency_code, occurred_at, wallet_id, multiple_bills_detected, confidence, missing_fields, raw_text, items.",
-    "Each item must have snake_case keys: line_id, original_name, translated_name, final_amount_minor, category_id, confidence, missing_fields.",
+    "Each item must have snake_case keys: line_id, original_name, translated_name, line_type, original_amount_minor, discount_amount_minor, final_amount_minor, category_id, confidence, missing_fields.",
+    "line_type must be purchase for purchased items and discount for discount/promotion/coupon/voucher lines.",
     "List all purchased line items from this one receipt. Exclude change, cash received, payment method lines, tax-only summary lines, subtotal-only lines, loyalty points, and receipt metadata.",
+    "Do not exclude discount, promotion, coupon, or voucher lines. Return them as separate line_type discount records by default when they are visible as separate receipt rows.",
+    "Discount lines often start with -, −, or －, or contain Japanese terms such as 値引, 割引, クーポン, ｸｰﾎﾟﾝ, 特売, 割戻, or Vietnamese/English terms such as Giảm giá, Khuyến mãi, Voucher, Coupon, Discount.",
     "Preserve original_name exactly as printed. Keep Japanese, Vietnamese, Latin, punctuation, and abbreviations as seen. Do not translate or romanize original_name.",
-    "Translate original_name to the target language only when it is meaningfully different from the app language. Use null when the printed name is already in the target language, is a brand/product code, or translation would be effectively identical.",
+    "Always try to translate original_name into the target language when the item language differs from the app language. Translate by product meaning, not only phonetics.",
+    "For food, alcohol, cosmetics, medicine, toiletries, and household goods, infer the real product type from common Japanese/Vietnamese retail terms and translate that type accurately. Keep brands/product names when useful.",
+    "Example for Vietnamese target language: のどごし生 should translate to Bia Nodogoshi Nama, not just Nodogoshi Nama.",
+    "For cosmetics, translate specific product type accurately, such as lotion, cleanser, sunscreen, serum, mascara, shampoo, conditioner, deodorant, or makeup remover.",
+    "Use null for translated_name only when the printed name is already in the target language, is a pure brand/product code, or translation would be effectively identical.",
     "Never translate, romanize, or localize merchant_name. Preserve the exact script printed on the receipt.",
     "The receipt may be Japanese. Carefully read Japanese store names, dates, totals, item rows, discounts, and tax labels.",
     "The receipt may also be Vietnamese. Carefully read Vietnamese store names, dates, totals, item rows, discounts, and VAT labels.",
@@ -443,7 +492,10 @@ function buildPrompt(payload: BillItemsRequest): string {
     "Do not use お預り, お釣り, 釣銭, 内税, 消費税, 小計, 値引, points, item count, or change as total_minor.",
     "Do not use Tiền khách đưa, Tiền thừa, Thuế/VAT, Giảm giá, Tạm tính, điểm, item count, or change as total_minor.",
     "total_minor is the final payable total in minor units. For JPY, minor units are yen.",
-    "For every item, final_amount_minor must include the item's share of tax and discounts. If tax or discounts are only bill-level, allocate the difference proportionally across purchased items; use integer rounding so item totals sum exactly to total_minor.",
+    "For purchase rows, original_amount_minor is the original row amount before item-level discount when visible; discount_amount_minor is a positive discount amount applied to that row; final_amount_minor is the amount after row-level discount and tax allocation.",
+    "For discount rows, original_amount_minor must be null, discount_amount_minor must be positive, final_amount_minor must be negative, and category_id must be null.",
+    "If a discount is printed as a separate line, keep it as a separate discount record and do not fold it into purchase rows.",
+    "If tax is only bill-level, allocate tax proportionally across purchase rows. If discount is only bill-level but not printed as its own row, allocate that discount proportionally across purchase rows. Use integer rounding so item totals sum exactly to total_minor.",
     "occurred_at must be machine-readable, not localized display text. If date and time are visible, use yyyy-MM-dd'T'HH:mm:ss±HH:mm with the user's time zone offset. If seconds are not visible, use :00 seconds. If only a date is visible, use yyyy-MM-dd. Use null if unclear.",
     "Japanese dates/times like 2026年5月19日 21時34分, 26/05/19 21:34, 2026/5/19 9:34午後 must be normalized.",
     "Vietnamese dates/times like 19/05/2026 21:34, 19-05-26 9:34 CH, Ngày 19 tháng 5 năm 2026 must be normalized.",

@@ -22,21 +22,33 @@ struct BillItemAnalysisRequestPayload: Codable, Equatable {
     }
 }
 
+enum BillItemLineType: String, Codable, Equatable, Hashable {
+    case purchase
+    case discount
+}
+
 struct BillItemAnalysisItem: Codable, Equatable, Identifiable {
     let lineID: String
     var originalName: String
     var translatedName: String?
+    var lineType: BillItemLineType
+    var originalAmountMinor: Int64?
+    var discountAmountMinor: Int64
     var finalAmountMinor: Int64
     var categoryID: UUID?
     var confidence: Double
     var missingFields: [String]
 
     var id: String { lineID }
+    var transactionAmountMinor: Int64 { finalAmountMinor }
 
     enum CodingKeys: String, CodingKey {
         case lineID = "line_id"
         case originalName = "original_name"
         case translatedName = "translated_name"
+        case lineType = "line_type"
+        case originalAmountMinor = "original_amount_minor"
+        case discountAmountMinor = "discount_amount_minor"
         case finalAmountMinor = "final_amount_minor"
         case categoryID = "category_id"
         case confidence
@@ -47,6 +59,9 @@ struct BillItemAnalysisItem: Codable, Equatable, Identifiable {
         lineID: String,
         originalName: String,
         translatedName: String? = nil,
+        lineType: BillItemLineType = .purchase,
+        originalAmountMinor: Int64? = nil,
+        discountAmountMinor: Int64 = 0,
         finalAmountMinor: Int64,
         categoryID: UUID? = nil,
         confidence: Double,
@@ -55,8 +70,11 @@ struct BillItemAnalysisItem: Codable, Equatable, Identifiable {
         self.lineID = lineID.nilIfBlank ?? UUID().uuidString
         self.originalName = originalName.nilIfBlank ?? ""
         self.translatedName = translatedName?.nilIfBlank
-        self.finalAmountMinor = max(0, finalAmountMinor)
-        self.categoryID = categoryID
+        self.lineType = lineType
+        self.originalAmountMinor = originalAmountMinor.map { max(0, $0) }
+        self.discountAmountMinor = max(0, discountAmountMinor)
+        self.finalAmountMinor = lineType == .discount ? min(0, finalAmountMinor) : max(0, finalAmountMinor)
+        self.categoryID = lineType == .discount ? nil : categoryID
         self.confidence = max(0, min(1, confidence))
         self.missingFields = missingFields
             .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
@@ -68,8 +86,14 @@ struct BillItemAnalysisItem: Codable, Equatable, Identifiable {
         lineID = try container.decodeTrimmedStringIfPresent(forKey: .lineID) ?? UUID().uuidString
         originalName = try container.decodeTrimmedStringIfPresent(forKey: .originalName) ?? ""
         translatedName = try container.decodeTrimmedStringIfPresent(forKey: .translatedName)
-        finalAmountMinor = max(0, try container.decodeFlexibleInt64(forKey: .finalAmountMinor, defaultValue: 0))
-        categoryID = try container.decodeUUIDIfPresent(forKey: .categoryID)
+        let decodedLineType = try container.decodeIfPresent(BillItemLineType.self, forKey: .lineType) ?? .purchase
+        let decodedFinalAmount = try container.decodeFlexibleInt64(forKey: .finalAmountMinor, defaultValue: 0)
+        lineType = decodedLineType == .discount || decodedFinalAmount < 0 ? .discount : .purchase
+        originalAmountMinor = try container.decodeFlexibleInt64IfPresent(forKey: .originalAmountMinor).map { max(0, $0) }
+        let decodedDiscountAmount = try container.decodeFlexibleInt64IfPresent(forKey: .discountAmountMinor)
+        discountAmountMinor = max(0, decodedDiscountAmount ?? (lineType == .discount ? abs(decodedFinalAmount) : 0))
+        finalAmountMinor = lineType == .discount ? min(0, decodedFinalAmount) : max(0, decodedFinalAmount)
+        categoryID = lineType == .discount ? nil : try container.decodeUUIDIfPresent(forKey: .categoryID)
         confidence = try container.decodeFlexibleDouble(forKey: .confidence, defaultValue: 0)
         missingFields = try container.decodeStringArrayIfPresent(forKey: .missingFields)
     }
@@ -185,28 +209,41 @@ struct BillItemSelectionCandidate: Hashable, Codable, Equatable {
     let id: BillItemSelectionID
     let walletID: UUID?
     let categoryID: UUID?
+    let lineType: BillItemLineType
     let amountMinor: Int64
     let merchantName: String?
     let occurredAt: Date?
     let isCreated: Bool
+    let isLocked: Bool
 
     init(
         id: BillItemSelectionID,
         walletID: UUID?,
         categoryID: UUID?,
+        lineType: BillItemLineType = .purchase,
         amountMinor: Int64,
         merchantName: String? = nil,
         occurredAt: Date? = nil,
-        isCreated: Bool = false
+        isCreated: Bool = false,
+        isLocked: Bool = false
     ) {
         self.id = id
         self.walletID = walletID
-        self.categoryID = categoryID
-        self.amountMinor = max(0, amountMinor)
+        self.categoryID = lineType == .discount ? nil : categoryID
+        self.lineType = lineType
+        self.amountMinor = amountMinor
         self.merchantName = merchantName?.nilIfBlank
         self.occurredAt = occurredAt
         self.isCreated = isCreated
+        self.isLocked = isLocked
     }
+}
+
+struct BillItemLockedGroup: Equatable, Hashable, Identifiable {
+    let id: UUID
+    let mode: BillItemTransactionMode
+    let itemIDs: Set<BillItemSelectionID>
+    let amountMinor: Int64
 }
 
 struct BillItemTransactionDraft: Equatable {
@@ -228,12 +265,13 @@ enum BillItemSelectionLogic {
         mode: BillItemTransactionMode
     ) -> Bool {
         guard !candidate.isCreated,
-              candidate.amountMinor > 0,
+              !candidate.isLocked,
+              candidate.amountMinor != 0,
               candidate.walletID != nil else {
             return false
         }
 
-        if mode == .expense, candidate.categoryID == nil {
+        if mode == .expense, candidate.lineType == .purchase, candidate.categoryID == nil {
             return false
         }
 
@@ -241,12 +279,23 @@ enum BillItemSelectionLogic {
             return true
         }
 
+        guard candidate.walletID == anchor.walletID else {
+            return false
+        }
+
         switch mode {
         case .expense:
-            return candidate.walletID == anchor.walletID
-                && candidate.categoryID == anchor.categoryID
+            if candidate.lineType == .discount {
+                return true
+            }
+
+            guard let purchaseAnchor = selected.first(where: { $0.lineType == .purchase }) else {
+                return true
+            }
+
+            return candidate.categoryID == purchaseAnchor.categoryID
         case .lend:
-            return candidate.walletID == anchor.walletID
+            return true
         }
     }
 
@@ -255,16 +304,41 @@ enum BillItemSelectionLogic {
         candidates: [BillItemSelectionCandidate],
         mode: BillItemTransactionMode
     ) -> Set<BillItemSelectionID> {
-        let selectedCandidates = candidates.filter { selection.contains($0.id) && !$0.isCreated }
-        guard let anchor = selectedCandidates.first,
-              canSelect(anchor, selected: [], mode: mode) else {
-            return []
+        var normalized: [BillItemSelectionCandidate] = []
+        for candidate in candidates where selection.contains(candidate.id) {
+            if canSelect(candidate, selected: normalized, mode: mode) {
+                normalized.append(candidate)
+            }
         }
 
-        let normalized = selectedCandidates.filter { candidate in
-            candidate.id == anchor.id || canSelect(candidate, selected: [anchor], mode: mode)
-        }
         return Set(normalized.map(\.id))
+    }
+
+    static func lockedGroup(
+        for selected: [BillItemSelectionCandidate],
+        mode: BillItemTransactionMode,
+        id: UUID = UUID()
+    ) -> BillItemLockedGroup? {
+        let candidates = selected.filter { !$0.isCreated && !$0.isLocked && $0.amountMinor != 0 }
+        let amountMinor = candidates.reduce(Int64.zero) { $0 + $1.amountMinor }
+        guard amountMinor > 0,
+              !candidates.isEmpty,
+              normalizedSelection(Set(candidates.map(\.id)), candidates: candidates, mode: mode) == Set(candidates.map(\.id)) else {
+            return nil
+        }
+
+        return BillItemLockedGroup(
+            id: id,
+            mode: mode,
+            itemIDs: Set(candidates.map(\.id)),
+            amountMinor: amountMinor
+        )
+    }
+
+    static func lockedItemIDs(in groups: [BillItemLockedGroup]) -> Set<BillItemSelectionID> {
+        groups.reduce(into: Set<BillItemSelectionID>()) { partial, group in
+            partial.formUnion(group.itemIDs)
+        }
     }
 
     static func transactionDraft(
@@ -272,7 +346,7 @@ enum BillItemSelectionLogic {
         mode: BillItemTransactionMode,
         fallbackDate: Date
     ) -> BillItemTransactionDraft? {
-        let candidates = selected.filter { !$0.isCreated && $0.amountMinor > 0 }
+        let candidates = selected.filter { !$0.isCreated && $0.amountMinor != 0 }
         guard !candidates.isEmpty,
               let walletID = candidates.first?.walletID,
               candidates.allSatisfy({ $0.walletID == walletID }) else {
@@ -282,8 +356,10 @@ enum BillItemSelectionLogic {
         let categoryID: UUID?
         switch mode {
         case .expense:
-            guard let firstCategoryID = candidates.first?.categoryID,
-                  candidates.allSatisfy({ $0.categoryID == firstCategoryID }) else {
+            let purchaseCandidates = candidates.filter { $0.lineType == .purchase }
+            guard let firstCategoryID = purchaseCandidates.first?.categoryID,
+                  !purchaseCandidates.isEmpty,
+                  purchaseCandidates.allSatisfy({ $0.categoryID == firstCategoryID }) else {
                 return nil
             }
             categoryID = firstCategoryID
@@ -338,6 +414,57 @@ enum BillItemSelectionLogic {
         let dates = candidates.compactMap(\.occurredAt)
         guard dates.count == candidates.count else { return nil }
         return Set(dates).count == 1 ? dates.first : nil
+    }
+}
+
+enum BillItemDiscountAllocator {
+    static func allocatingDiscount(
+        itemID: String,
+        in items: [BillItemAnalysisItem]
+    ) -> [BillItemAnalysisItem]? {
+        guard let discountIndex = items.firstIndex(where: { $0.lineID == itemID && $0.lineType == .discount }) else {
+            return nil
+        }
+
+        let discountItem = items[discountIndex]
+        let discountAmount = max(discountItem.discountAmountMinor, abs(discountItem.finalAmountMinor))
+        guard discountAmount > 0 else { return nil }
+
+        let eligibleIndexes = items.indices.filter { index in
+            items[index].lineType == .purchase && items[index].finalAmountMinor > 0
+        }
+        let baseTotal = eligibleIndexes.reduce(Int64.zero) { partial, index in
+            partial + max(items[index].originalAmountMinor ?? items[index].finalAmountMinor, 0)
+        }
+        guard baseTotal > 0 else { return nil }
+
+        var allocations = eligibleIndexes.map { index -> (index: Int, floor: Int64, remainder: Double) in
+            let base = Double(max(items[index].originalAmountMinor ?? items[index].finalAmountMinor, 0))
+            let exact = base * Double(discountAmount) / Double(baseTotal)
+            return (index, Int64(floor(exact)), exact - floor(exact))
+        }
+
+        let allocatedTotal = allocations.reduce(Int64.zero) { $0 + $1.floor }
+        var remainder = discountAmount - allocatedTotal
+        let rankedIndexes = allocations.indices.sorted {
+            if allocations[$0].remainder != allocations[$1].remainder {
+                return allocations[$0].remainder > allocations[$1].remainder
+            }
+            return allocations[$0].index < allocations[$1].index
+        }
+        for allocationIndex in rankedIndexes where remainder > 0 {
+            allocations[allocationIndex].floor += 1
+            remainder -= 1
+        }
+
+        var updated = items
+        for allocation in allocations {
+            updated[allocation.index].discountAmountMinor += allocation.floor
+            updated[allocation.index].finalAmountMinor = max(0, updated[allocation.index].finalAmountMinor - allocation.floor)
+        }
+        updated[discountIndex].finalAmountMinor = 0
+        updated[discountIndex].discountAmountMinor = discountAmount
+        return updated
     }
 }
 

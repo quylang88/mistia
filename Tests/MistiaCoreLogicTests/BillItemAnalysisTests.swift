@@ -26,14 +26,20 @@ final class BillItemAnalysisTests: XCTestCase {
               "line_id": "1",
               "original_name": "牛乳",
               "translated_name": "Sữa",
+              "line_type": "purchase",
+              "original_amount_minor": 320,
+              "discount_amount_minor": 20,
               "final_amount_minor": 300,
               "category_id": "\(categoryID.uuidString)",
               "confidence": 0.89
             },
             {
               "line_id": "2",
-              "original_name": "Apple",
-              "translated_name": null,
+              "original_name": "のどごし生",
+              "translated_name": "Bia Nodogoshi Nama",
+              "line_type": "purchase",
+              "original_amount_minor": "800",
+              "discount_amount_minor": 0,
               "final_amount_minor": "800",
               "category_id": "\(categoryID.uuidString)",
               "confidence": "0.84"
@@ -55,13 +61,55 @@ final class BillItemAnalysisTests: XCTestCase {
         XCTAssertFalse(result.multipleBillsDetected)
         XCTAssertEqual(result.items.count, 2)
         XCTAssertEqual(result.items[0].lineID, "1")
+        XCTAssertEqual(result.items[0].lineType, .purchase)
         XCTAssertEqual(result.items[0].originalName, "牛乳")
         XCTAssertEqual(result.items[0].translatedName, "Sữa")
+        XCTAssertEqual(result.items[0].originalAmountMinor, 320)
+        XCTAssertEqual(result.items[0].discountAmountMinor, 20)
         XCTAssertEqual(result.items[0].finalAmountMinor, 300)
+        XCTAssertEqual(result.items[0].transactionAmountMinor, 300)
         XCTAssertEqual(result.items[0].categoryID, categoryID)
-        XCTAssertNil(result.items[1].translatedName)
+        XCTAssertEqual(result.items[1].translatedName, "Bia Nodogoshi Nama")
         XCTAssertEqual(result.items[1].finalAmountMinor, 800)
         XCTAssertEqual(result.quota?.usedCount, 2)
+    }
+
+    func testDecodesDiscountRecordAsNegativeAmountWithoutCategory() throws {
+        let result = try decode("""
+        {
+          "merchant_name": "ドラッグストア",
+          "total_minor": 900,
+          "currency_code": "JPY",
+          "occurred_at": null,
+          "wallet_id": "\(walletID.uuidString)",
+          "multiple_bills_detected": false,
+          "confidence": 0.88,
+          "missing_fields": [],
+          "raw_text": "値引 -100",
+          "items": [
+            {
+              "line_id": "d1",
+              "original_name": "値引",
+              "translated_name": "Giảm giá",
+              "line_type": "discount",
+              "original_amount_minor": null,
+              "discount_amount_minor": 100,
+              "final_amount_minor": -100,
+              "category_id": null,
+              "confidence": 0.91,
+              "missing_fields": []
+            }
+          ]
+        }
+        """)
+
+        XCTAssertEqual(result.items[0].lineType, .discount)
+        XCTAssertEqual(result.items[0].translatedName, "Giảm giá")
+        XCTAssertNil(result.items[0].originalAmountMinor)
+        XCTAssertEqual(result.items[0].discountAmountMinor, 100)
+        XCTAssertEqual(result.items[0].finalAmountMinor, -100)
+        XCTAssertEqual(result.items[0].transactionAmountMinor, -100)
+        XCTAssertNil(result.items[0].categoryID)
     }
 
     func testValidationRemovesIDsOutsideCandidateLists() {
@@ -138,12 +186,40 @@ final class BillItemAnalysisTests: XCTestCase {
         XCTAssertFalse(BillItemSelectionLogic.canSelect(differentWallet, selected: [first], mode: .expense))
     }
 
+    func testExpenseSelectionAllowsDiscountWithSameWalletWithoutCategory() {
+        let purchase = makeCandidate(itemID: "a", walletID: walletID, categoryID: categoryID)
+        let discount = makeCandidate(
+            itemID: "discount",
+            walletID: walletID,
+            categoryID: nil,
+            lineType: .discount,
+            amountMinor: -100
+        )
+        let otherWalletDiscount = makeCandidate(
+            itemID: "other-discount",
+            walletID: otherWalletID,
+            categoryID: nil,
+            lineType: .discount,
+            amountMinor: -100
+        )
+        let sameCategoryPurchase = makeCandidate(itemID: "b", walletID: walletID, categoryID: categoryID)
+        let differentCategoryPurchase = makeCandidate(itemID: "c", walletID: walletID, categoryID: otherCategoryID)
+
+        XCTAssertTrue(BillItemSelectionLogic.canSelect(discount, selected: [purchase], mode: .expense))
+        XCTAssertFalse(BillItemSelectionLogic.canSelect(otherWalletDiscount, selected: [purchase], mode: .expense))
+        XCTAssertTrue(BillItemSelectionLogic.canSelect(purchase, selected: [discount], mode: .expense))
+        XCTAssertTrue(BillItemSelectionLogic.canSelect(sameCategoryPurchase, selected: [discount, purchase], mode: .expense))
+        XCTAssertFalse(BillItemSelectionLogic.canSelect(differentCategoryPurchase, selected: [discount, purchase], mode: .expense))
+    }
+
     func testLendSelectionOnlyRequiresSameWallet() {
         let first = makeCandidate(itemID: "a", walletID: walletID, categoryID: categoryID)
         let differentCategory = makeCandidate(itemID: "b", walletID: walletID, categoryID: otherCategoryID)
         let differentWallet = makeCandidate(itemID: "c", walletID: otherWalletID, categoryID: categoryID)
+        let discount = makeCandidate(itemID: "discount", walletID: walletID, categoryID: nil, lineType: .discount, amountMinor: -100)
 
         XCTAssertTrue(BillItemSelectionLogic.canSelect(differentCategory, selected: [first], mode: .lend))
+        XCTAssertTrue(BillItemSelectionLogic.canSelect(discount, selected: [first], mode: .lend))
         XCTAssertFalse(BillItemSelectionLogic.canSelect(differentWallet, selected: [first], mode: .lend))
     }
 
@@ -264,6 +340,92 @@ final class BillItemAnalysisTests: XCTestCase {
         XCTAssertNil(draft.categoryID)
     }
 
+    func testExpenseDraftUsesDiscountAmountAndPurchaseCategory() throws {
+        let purchase = makeCandidate(itemID: "a", walletID: walletID, categoryID: categoryID, amountMinor: 1_000)
+        let discount = makeCandidate(itemID: "discount", walletID: walletID, categoryID: nil, lineType: .discount, amountMinor: -150)
+
+        let draft = try XCTUnwrap(BillItemSelectionLogic.transactionDraft(
+            for: [purchase, discount],
+            mode: .expense,
+            fallbackDate: Date(timeIntervalSince1970: 0)
+        ))
+
+        XCTAssertEqual(draft.amountMinor, 850)
+        XCTAssertEqual(draft.categoryID, categoryID)
+    }
+
+    func testLockedGroupRejectsNonPositiveTotal() {
+        let discount = makeCandidate(itemID: "discount", walletID: walletID, categoryID: nil, lineType: .discount, amountMinor: -150)
+
+        let group = BillItemSelectionLogic.lockedGroup(
+            for: [discount],
+            mode: .expense,
+            id: UUID(uuidString: "99999999-9999-9999-9999-999999999999")!
+        )
+
+        XCTAssertNil(group)
+    }
+
+    func testLockedGroupLocksItemsUntilCancelled() throws {
+        let purchase = makeCandidate(itemID: "a", walletID: walletID, categoryID: categoryID, amountMinor: 1_000)
+        let discount = makeCandidate(itemID: "discount", walletID: walletID, categoryID: nil, lineType: .discount, amountMinor: -150)
+        let group = try XCTUnwrap(BillItemSelectionLogic.lockedGroup(
+            for: [purchase, discount],
+            mode: .expense,
+            id: UUID(uuidString: "99999999-9999-9999-9999-999999999999")!
+        ))
+
+        XCTAssertEqual(group.amountMinor, 850)
+        XCTAssertEqual(BillItemSelectionLogic.lockedItemIDs(in: [group]), [purchase.id, discount.id])
+        XCTAssertEqual(BillItemSelectionLogic.lockedItemIDs(in: []), [])
+    }
+
+    func testAllocatesDiscountRecordAcrossPurchaseItemsAndClearsDiscountLine() throws {
+        let first = BillItemAnalysisItem(
+            lineID: "a",
+            originalName: "A",
+            lineType: .purchase,
+            originalAmountMinor: 1_000,
+            discountAmountMinor: 0,
+            finalAmountMinor: 1_000,
+            categoryID: categoryID,
+            confidence: 0.9
+        )
+        let second = BillItemAnalysisItem(
+            lineID: "b",
+            originalName: "B",
+            lineType: .purchase,
+            originalAmountMinor: 3_000,
+            discountAmountMinor: 0,
+            finalAmountMinor: 3_000,
+            categoryID: categoryID,
+            confidence: 0.9
+        )
+        let discount = BillItemAnalysisItem(
+            lineID: "d",
+            originalName: "値引",
+            lineType: .discount,
+            originalAmountMinor: nil,
+            discountAmountMinor: 400,
+            finalAmountMinor: -400,
+            categoryID: nil,
+            confidence: 0.9
+        )
+
+        let allocated = try XCTUnwrap(BillItemDiscountAllocator.allocatingDiscount(
+            itemID: "d",
+            in: [first, second, discount]
+        ))
+
+        XCTAssertEqual(allocated.map(\.finalAmountMinor).reduce(0, +), 3_600)
+        XCTAssertEqual(allocated[0].discountAmountMinor, 100)
+        XCTAssertEqual(allocated[0].finalAmountMinor, 900)
+        XCTAssertEqual(allocated[1].discountAmountMinor, 300)
+        XCTAssertEqual(allocated[1].finalAmountMinor, 2_700)
+        XCTAssertEqual(allocated[2].lineType, .discount)
+        XCTAssertEqual(allocated[2].finalAmountMinor, 0)
+    }
+
     private func decode(_ json: String) throws -> BillItemAnalysisResult {
         try JSONDecoder().decode(BillItemAnalysisResult.self, from: Data(json.utf8))
     }
@@ -273,6 +435,7 @@ final class BillItemAnalysisTests: XCTestCase {
         itemID: String,
         walletID: UUID?,
         categoryID: UUID?,
+        lineType: BillItemLineType = .purchase,
         amountMinor: Int64 = 100,
         merchantName: String? = "Store",
         occurredAt: Date? = nil,
@@ -282,6 +445,7 @@ final class BillItemAnalysisTests: XCTestCase {
             id: BillItemSelectionID(billID: billID ?? self.billID, itemID: itemID),
             walletID: walletID,
             categoryID: categoryID,
+            lineType: lineType,
             amountMinor: amountMinor,
             merchantName: merchantName,
             occurredAt: occurredAt,
