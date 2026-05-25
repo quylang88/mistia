@@ -24,66 +24,68 @@ struct MistiaDatePickerRow: View {
     }
 
     var body: some View {
-        switch mode {
-        case .date:
-            Button {
-                isPickerPresented = true
-            } label: {
-                HStack(spacing: 12) {
-                    Text(title)
-                        .foregroundStyle(.primary)
-                    Spacer()
-                    Text(dateText)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.82)
-                }
-            }
-            .buttonStyle(.plain)
-            .datePickerPopover(
-                isPresented: $isPickerPresented,
-                selection: $internalSelection,
-                calendar: calendar,
-                selectableRange: selectableRange,
-                title: title
-            )
-
-        case .dateAndTime:
-            HStack(spacing: 12) {
-                Text(title)
-                    .foregroundStyle(.primary)
-
-                Spacer(minLength: 8)
-
-                DatePicker(
-                    "",
-                    selection: $selection,
-                    displayedComponents: .hourAndMinute
-                )
-                .datePickerStyle(.compact)
-                .labelsHidden()
-                .environment(\.calendar, calendar)
-                .environment(\.locale, MistiaAppLanguage.current.locale)
-                .tint(MistiaAccent.purple.color)
-
+        Group {
+            switch mode {
+            case .date:
                 Button {
                     isPickerPresented = true
                 } label: {
-                    Text(dateText)
-                        .font(.body)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.82)
+                    HStack(spacing: 12) {
+                        Text(title)
+                            .foregroundStyle(.primary)
+                        Spacer()
+                        Text(dateText)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.82)
+                    }
                 }
                 .buttonStyle(.plain)
+                .datePickerPopover(
+                    isPresented: $isPickerPresented,
+                    selection: $internalSelection,
+                    calendar: calendar,
+                    selectableRange: selectableRange,
+                    title: title
+                )
+
+            case .dateAndTime:
+                HStack(spacing: 12) {
+                    Text(title)
+                        .foregroundStyle(.primary)
+
+                    Spacer(minLength: 8)
+
+                    DatePicker(
+                        "",
+                        selection: $selection,
+                        displayedComponents: .hourAndMinute
+                    )
+                    .datePickerStyle(.compact)
+                    .labelsHidden()
+                    .environment(\.calendar, calendar)
+                    .environment(\.locale, MistiaAppLanguage.current.locale)
+                    .tint(MistiaAccent.purple.color)
+
+                    Button {
+                        isPickerPresented = true
+                    } label: {
+                        Text(dateText)
+                            .font(.body)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.82)
+                    }
+                    .buttonStyle(.plain)
+                }
+                .datePickerPopover(
+                    isPresented: $isPickerPresented,
+                    selection: $internalSelection,
+                    calendar: calendar,
+                    selectableRange: selectableRange,
+                    title: title
+                )
             }
-            .datePickerPopover(
-                isPresented: $isPickerPresented,
-                selection: $internalSelection,
-                calendar: calendar,
-                selectableRange: selectableRange,
-                title: title
-            )
         }
         .onChange(of: internalSelection) { _, newValue in
             selection = newValue
