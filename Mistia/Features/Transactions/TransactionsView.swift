@@ -39,7 +39,6 @@ private enum TransactionSegment: String, CaseIterable, Hashable {
 }
 
 private enum TransactionsNavigationDestination: String, Identifiable {
-    case profile
     case aiBill
 
     var id: String { rawValue }
@@ -454,10 +453,10 @@ struct TransactionsView: View {
                 tone: .standard,
                 title: L10n.transactions.transactions.transactions,
                 embedsInNavigationStack: false,
-                leadingInitials: sessionStore.summary?.initials ?? "MI",
-                leadingAvatarURL: sessionStore.summary?.avatarURL,
+                showsLeadingAvatar: false,
+                leadingSystemImage: "doc.viewfinder",
                 trailingSystemImage: nil,
-                onLeadingTap: { destination = .profile },
+                onLeadingTap: { destination = .aiBill },
                 contentSpacing: 18,
                 contentBottomPadding: 150,
                 titleDisplayMode: .large,
@@ -470,10 +469,7 @@ struct TransactionsView: View {
                         .zIndex(99)
                 },
                 trailingAccessory: {
-                    HStack(spacing: 10) {
-                        aiBillScanButton
-                        transactionsStatementMenuButton
-                    }
+                    transactionsStatementMenuButton
                     .padding(.trailing, -12)
                 }
             ) {
@@ -491,8 +487,6 @@ struct TransactionsView: View {
             .searchPresentationToolbarBehavior(.avoidHidingContent)
             .navigationDestination(item: $destination) { route in
                 switch route {
-                case .profile:
-                    ManagementAccountView()
                 case .aiBill:
                     AIBillAnalysisView()
                 }
@@ -590,16 +584,6 @@ struct TransactionsView: View {
             }
         }
         .accessibilityLabel(L10n.transactions.transactions.statement)
-    }
-
-    private var aiBillScanButton: some View {
-        MistiaHeaderCircleButton(action: { destination = .aiBill }) {
-            Image(systemName: "doc.viewfinder")
-                .font(.system(size: 15, weight: .bold))
-                .symbolRenderingMode(.monochrome)
-                .foregroundStyle(colorScheme == .dark ? .white.opacity(0.96) : Color.black.opacity(0.72))
-        }
-        .accessibilityLabel(L10n.transactions.aibill.scanBillItems)
     }
 
     private func exportStatement(_ kind: TransactionStatementKind) {

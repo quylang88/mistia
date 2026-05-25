@@ -3537,8 +3537,8 @@ nonisolated enum L10n {
         nonisolated enum aibill {
             static var addBills: String { L10n.tr("transactions.aibill.addBills", vi: "Thêm bill", en: "Add bills", ja: "レシートを追加") }
             static func addBills(language: MistiaAppLanguage) -> String { L10n.tr("transactions.aibill.addBills", vi: "Thêm bill", en: "Add bills", ja: "レシートを追加", language: language) }
-            static var aiBill: String { L10n.tr("transactions.aibill.aiBill", vi: "AI Bill", en: "AI Bill", ja: "AI Bill") }
-            static func aiBill(language: MistiaAppLanguage) -> String { L10n.tr("transactions.aibill.aiBill", vi: "AI Bill", en: "AI Bill", ja: "AI Bill", language: language) }
+            static var aiBill: String { L10n.tr("transactions.aibill.aiBill", vi: "Phân tích bill", en: "Receipt Analysis", ja: "レシート解析") }
+            static func aiBill(language: MistiaAppLanguage) -> String { L10n.tr("transactions.aibill.aiBill", vi: "Phân tích bill", en: "Receipt Analysis", ja: "レシート解析", language: language) }
             static var allocateDiscount: String { L10n.tr("transactions.aibill.allocateDiscount", vi: "Phân bổ tỷ lệ", en: "Allocate proportionally", ja: "按分") }
             static func allocateDiscount(language: MistiaAppLanguage) -> String { L10n.tr("transactions.aibill.allocateDiscount", vi: "Phân bổ tỷ lệ", en: "Allocate proportionally", ja: "按分", language: language) }
             static var allocated: String { L10n.tr("transactions.aibill.allocated", vi: "Đã phân bổ", en: "Allocated", ja: "按分済み") }

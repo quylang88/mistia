@@ -33336,19 +33336,19 @@
         "vi": {
           "stringUnit": {
             "state": "translated",
-            "value": "AI Bill"
+            "value": "Phân tích bill"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "AI Bill"
+            "value": "Receipt Analysis"
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "AI Bill"
+            "value": "レシート解析"
           }
         }
       }
