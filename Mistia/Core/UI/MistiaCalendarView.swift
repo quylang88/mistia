@@ -243,8 +243,25 @@ struct MistiaMonthYearWheelPicker: View {
     let calendar: Calendar
     let language: MistiaAppLanguage
     let selectableRange: AnyRange<Date>?
+    private let monthSymbols: [String]
 
-    private var monthSymbols: [String] {
+    init(
+        selection: Binding<Date>,
+        calendar: Calendar,
+        language: MistiaAppLanguage,
+        selectableRange: AnyRange<Date>?
+    ) {
+        self._selection = selection
+        self.calendar = calendar
+        self.language = language
+        self.selectableRange = selectableRange
+        self.monthSymbols = Self.makeMonthSymbols(calendar: calendar, language: language)
+    }
+
+    private static func makeMonthSymbols(
+        calendar: Calendar,
+        language: MistiaAppLanguage
+    ) -> [String] {
         let formatter = DateFormatter()
         formatter.locale = language.locale
         formatter.calendar = calendar

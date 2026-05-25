@@ -500,7 +500,20 @@ enum MistiaCreditCardStatementMaintenance {
         activeUserID: UUID,
         modelContext: ModelContext
     ) {
-        let rows = (try? modelContext.fetch(FetchDescriptor<AppNotificationRecord>())) ?? []
+        let cardResourceTypeRawValue = MistiaFamilyNotificationResourceType.card.rawValue
+        let localReminderSourceRawValue = MistiaAppNotificationSource.localReminder.rawValue
+        let systemSourceRawValue = MistiaAppNotificationSource.system.rawValue
+        let rows = (try? modelContext.fetch(
+            FetchDescriptor<AppNotificationRecord>(
+                predicate: #Predicate<AppNotificationRecord> { row in
+                    row.resourceTypeRawValue == cardResourceTypeRawValue
+                        && (
+                            row.sourceRawValue == localReminderSourceRawValue
+                                || row.sourceRawValue == systemSourceRawValue
+                        )
+                }
+            )
+        )) ?? []
         let creditKinds: Set<MistiaAppNotificationKind> = [
             .creditCardStatementReady,
             .creditCardAutoPaymentSucceeded,
@@ -508,10 +521,7 @@ enum MistiaCreditCardStatementMaintenance {
         ]
         var didDelete = false
 
-        for row in rows
-            where (row.source == .system || row.source == .localReminder)
-            && row.resourceType == .card
-            && creditKinds.contains(row.kind) {
+        for row in rows where creditKinds.contains(row.kind) {
             guard let resourceID = row.resourceID,
                   let ownerUserID = walletOwnerMap[resourceID],
                   ownerUserID != activeUserID else {

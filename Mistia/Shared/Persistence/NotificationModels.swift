@@ -488,8 +488,14 @@ enum MistiaNotificationStore {
         currentUserID: UUID,
         in context: ModelContext
     ) throws {
-        let existingFamilyRows = try context.fetch(FetchDescriptor<AppNotificationRecord>())
-            .filter { $0.source == .family }
+        let familySourceRawValue = MistiaAppNotificationSource.family.rawValue
+        let existingFamilyRows = try context.fetch(
+            FetchDescriptor<AppNotificationRecord>(
+                predicate: #Predicate<AppNotificationRecord> { row in
+                    row.sourceRawValue == familySourceRawValue
+                }
+            )
+        )
         var existingByID = Dictionary(existingFamilyRows.map { ($0.id, $0) }, uniquingKeysWith: latestNotification)
         var existingByKey = Dictionary(existingFamilyRows.map { ($0.key, $0) }, uniquingKeysWith: latestNotification)
 
@@ -555,9 +561,9 @@ enum MistiaNotificationStore {
         for userID: UUID?,
         in context: ModelContext
     ) throws -> [UUID] {
-        let rows = try context.fetch(FetchDescriptor<AppNotificationRecord>())
+        let rows = try unreadRowsVisibleTo(userID, in: context)
         return try markAsRead(
-            rows.filter { isVisible($0, to: userID) && !$0.isRead },
+            rows.filter { isVisible($0, to: userID) },
             in: context
         )
     }
@@ -588,8 +594,17 @@ enum MistiaNotificationStore {
         for userID: UUID?,
         in context: ModelContext
     ) throws -> [UUID] {
-        try context.fetch(FetchDescriptor<AppNotificationRecord>())
-            .filter { isVisible($0, to: userID) && $0.source == .family && $0.needsReadSync && $0.readAt != nil }
+        let familySourceRawValue = MistiaAppNotificationSource.family.rawValue
+        return try context.fetch(
+            FetchDescriptor<AppNotificationRecord>(
+                predicate: #Predicate<AppNotificationRecord> { row in
+                    row.sourceRawValue == familySourceRawValue
+                        && row.needsReadSync
+                        && row.readAt != nil
+                }
+            )
+        )
+            .filter { isVisible($0, to: userID) }
             .map(\.id)
     }
 
@@ -599,7 +614,13 @@ enum MistiaNotificationStore {
     ) throws {
         guard !ids.isEmpty else { return }
         let idSet = Set(ids)
-        let rows = try context.fetch(FetchDescriptor<AppNotificationRecord>())
+        let rows = try context.fetch(
+            FetchDescriptor<AppNotificationRecord>(
+                predicate: #Predicate<AppNotificationRecord> { row in
+                    row.needsReadSync
+                }
+            )
+        )
         for row in rows where idSet.contains(row.id) {
             row.needsReadSync = false
         }
@@ -644,6 +665,41 @@ enum MistiaNotificationStore {
 
         guard let recipientUserID = row.recipientUserID else { return false }
         return recipientUserID == userID
+    }
+
+    private static func unreadRowsVisibleTo(
+        _ userID: UUID?,
+        in context: ModelContext
+    ) throws -> [AppNotificationRecord] {
+        let dueSoonRawValue = MistiaAppNotificationKind.dueSoon.rawValue
+
+        if let userID {
+            return try context.fetch(
+                FetchDescriptor<AppNotificationRecord>(
+                    predicate: #Predicate<AppNotificationRecord> { row in
+                        !row.isRead
+                            && row.kindRawValue != dueSoonRawValue
+                            && row.recipientUserID == userID
+                    }
+                )
+            )
+        }
+
+        let localReminderSourceRawValue = MistiaAppNotificationSource.localReminder.rawValue
+        let systemSourceRawValue = MistiaAppNotificationSource.system.rawValue
+        return try context.fetch(
+            FetchDescriptor<AppNotificationRecord>(
+                predicate: #Predicate<AppNotificationRecord> { row in
+                    !row.isRead
+                        && row.kindRawValue != dueSoonRawValue
+                        && row.recipientUserID == nil
+                        && (
+                            row.sourceRawValue == localReminderSourceRawValue
+                                || row.sourceRawValue == systemSourceRawValue
+                        )
+                }
+            )
+        )
     }
 
     private static func latestReadAt(_ lhs: Date?, _ rhs: Date?) -> Date? {

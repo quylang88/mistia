@@ -2068,7 +2068,7 @@ final class SessionStore {
         let context = modelContainer.mainContext
 
         return hasAnyRemoteBackedRecord(in: context)
-            || ((try? context.fetch(FetchDescriptor<SyncConflict>())) ?? []).isEmpty == false
+            || hasAnySyncConflict(in: context)
     }
 
     private func hasAnyRemoteBackedRecord(in context: ModelContext) -> Bool {
@@ -2089,6 +2089,12 @@ final class SessionStore {
         predicate: Predicate<Model>
     ) -> Bool {
         var descriptor = FetchDescriptor<Model>(predicate: predicate)
+        descriptor.fetchLimit = 1
+        return ((try? context.fetch(descriptor)) ?? []).isEmpty == false
+    }
+
+    private func hasAnySyncConflict(in context: ModelContext) -> Bool {
+        var descriptor = FetchDescriptor<SyncConflict>()
         descriptor.fetchLimit = 1
         return ((try? context.fetch(descriptor)) ?? []).isEmpty == false
     }

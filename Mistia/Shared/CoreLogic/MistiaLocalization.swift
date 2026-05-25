@@ -129,14 +129,19 @@ nonisolated enum MistiaCalendar {
 }
 
 nonisolated enum MistiaDateFormatting {
+    private static let formatterCache = MistiaDateFormatterCache()
+
     static func shortDateString(
         for date: Date,
         language: MistiaAppLanguage = .current,
         calendar: Calendar? = nil
     ) -> String {
-        let f = formatter(language: language, calendar: calendar)
-        f.dateFormat = "dd/MM"
-        return f.string(from: date)
+        formatterCache.string(
+            from: date,
+            language: language,
+            calendar: calendar,
+            style: .dateFormat("dd/MM")
+        )
     }
 
     static func fullDateString(
@@ -144,16 +149,21 @@ nonisolated enum MistiaDateFormatting {
         language: MistiaAppLanguage = .current,
         calendar: Calendar? = nil
     ) -> String {
-        let f = formatter(language: language, calendar: calendar)
+        let dateFormat: String
         switch language {
         case .vietnamese:
-            f.dateFormat = "dd/MM/yyyy"
+            dateFormat = "dd/MM/yyyy"
         case .english:
-            f.dateFormat = "yyyy-MM-dd"
+            dateFormat = "yyyy-MM-dd"
         case .japanese:
-            f.dateFormat = "yyyy年M月d日"
+            dateFormat = "yyyy年M月d日"
         }
-        return f.string(from: date)
+        return formatterCache.string(
+            from: date,
+            language: language,
+            calendar: calendar,
+            style: .dateFormat(dateFormat)
+        )
     }
 
     static func dateTimeString(
@@ -161,10 +171,12 @@ nonisolated enum MistiaDateFormatting {
         language: MistiaAppLanguage = .current,
         calendar: Calendar? = nil
     ) -> String {
-        let formatter = formatter(language: language, calendar: calendar)
-        formatter.dateStyle = .medium
-        formatter.timeStyle = .short
-        return formatter.string(from: date)
+        formatterCache.string(
+            from: date,
+            language: language,
+            calendar: calendar,
+            style: .dateTimeMediumShort
+        )
     }
 
     static func monthYearString(
@@ -172,11 +184,12 @@ nonisolated enum MistiaDateFormatting {
         language: MistiaAppLanguage = .current,
         calendar: Calendar? = nil
     ) -> String {
-        formatter(
-            template: "yMMMM",
+        formatterCache.string(
+            from: date,
             language: language,
-            calendar: calendar
-        ).string(from: date)
+            calendar: calendar,
+            style: .localizedTemplate("yMMMM")
+        )
     }
 
     static func statementMonthYearString(
@@ -184,14 +197,19 @@ nonisolated enum MistiaDateFormatting {
         language: MistiaAppLanguage = .current,
         calendar: Calendar? = nil
     ) -> String {
-        let formatter = formatter(language: language, calendar: calendar)
+        let dateFormat: String
         switch language {
         case .vietnamese, .english:
-            formatter.dateFormat = "MM/yyyy"
+            dateFormat = "MM/yyyy"
         case .japanese:
-            formatter.dateFormat = "yyyy年MM月"
+            dateFormat = "yyyy年MM月"
         }
-        return formatter.string(from: date)
+        return formatterCache.string(
+            from: date,
+            language: language,
+            calendar: calendar,
+            style: .dateFormat(dateFormat)
+        )
     }
 
     static func weekRangeTitle(
@@ -284,21 +302,65 @@ nonisolated enum MistiaDateFormatting {
         return fullDateString(for: date, language: language, calendar: calendar)
     }
 
-    private static func formatter(
-        template: String? = nil,
+}
+
+nonisolated private final class MistiaDateFormatterCache: @unchecked Sendable {
+    private var formatters: [MistiaDateFormatterCacheKey: DateFormatter] = [:]
+    private let lock = NSLock()
+
+    func string(
+        from date: Date,
         language: MistiaAppLanguage,
-        calendar: Calendar? = nil
-    ) -> DateFormatter {
+        calendar: Calendar?,
+        style: MistiaDateFormatterCacheStyle
+    ) -> String {
+        let resolvedCalendar = calendar ?? language.calendar
+        let key = MistiaDateFormatterCacheKey(
+            languageRawValue: language.rawValue,
+            calendarIdentifier: String(describing: resolvedCalendar.identifier),
+            localeIdentifier: language.locale.identifier,
+            timeZoneIdentifier: resolvedCalendar.timeZone.identifier,
+            style: style
+        )
+
+        lock.lock()
+        defer { lock.unlock() }
+
+        if let formatter = formatters[key] {
+            return formatter.string(from: date)
+        }
+
         let formatter = DateFormatter()
         formatter.locale = language.locale
-        let resolvedCalendar = calendar ?? language.calendar
         formatter.calendar = resolvedCalendar
         formatter.timeZone = resolvedCalendar.timeZone
-        if let template {
+        switch style {
+        case .dateFormat(let dateFormat):
+            formatter.dateFormat = dateFormat
+        case .dateTimeMediumShort:
+            formatter.dateStyle = .medium
+            formatter.timeStyle = .short
+        case .localizedTemplate(let template):
             formatter.setLocalizedDateFormatFromTemplate(template)
         }
-        return formatter
+
+        formatters[key] = formatter
+        return formatter.string(from: date)
     }
+}
+
+nonisolated private struct MistiaDateFormatterCacheKey: Hashable {
+    let languageRawValue: String
+    let calendarIdentifier: String
+    let localeIdentifier: String
+    let timeZoneIdentifier: String
+    let style: MistiaDateFormatterCacheStyle
+}
+
+nonisolated private enum MistiaDateFormatterCacheStyle: Hashable {
+    case dateFormat(String)
+    case dateTimeMediumShort
+    case localizedTemplate(String)
 }
 
 nonisolated enum MistiaIconColorPalette {
