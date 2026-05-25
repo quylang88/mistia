@@ -1087,10 +1087,37 @@ final class FamilyContextStore {
         }
     }
 
+    private static var familyCacheDecoder: JSONDecoder {
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .custom { decoder in
+            let container = try decoder.singleValueContainer()
+            let value = try container.decode(String.self)
+            if let date = ISO8601DateFormatter.mistiaSyncWithFractionalSeconds.date(from: value)
+                ?? ISO8601DateFormatter.mistiaSyncWithoutFractionalSeconds.date(from: value) {
+                return date
+            }
+            throw DecodingError.dataCorruptedError(
+                in: container,
+                debugDescription: "Invalid ISO8601 date: \(value)"
+            )
+        }
+        return decoder
+    }
+
+    private static var familyCacheEncoder: JSONEncoder {
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.sortedKeys]
+        encoder.dateEncodingStrategy = .custom { date, encoder in
+            var container = encoder.singleValueContainer()
+            try container.encode(ISO8601DateFormatter.mistiaSyncWithFractionalSeconds.string(from: date))
+        }
+        return encoder
+    }
+
     private func persistCachedState(_ snapshot: FamilyStateSnapshot) {
         guard let cacheURL = activeFamilyCacheURL() else { return }
         do {
-            let data = try JSONEncoder.mistiaSyncEncoder.encode(snapshot)
+            let data = try Self.familyCacheEncoder.encode(snapshot)
             try data.write(to: cacheURL, options: .atomic)
         } catch {
             return
@@ -1155,7 +1182,7 @@ final class FamilyContextStore {
     private func restoreCachedState(profileID: UUID) -> Bool {
         guard let cacheURL = familyCacheURL(profileID: profileID),
               let data = try? Data(contentsOf: cacheURL),
-              let snapshot = try? JSONDecoder.mistiaSyncDecoder.decode(
+              let snapshot = try? Self.familyCacheDecoder.decode(
                 FamilyStateSnapshot.self,
                 from: data
               ) else {
