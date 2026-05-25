@@ -195,7 +195,11 @@ final class FamilyContextStore {
     func bootstrapIfNeeded(sessionStore: SessionStore) async {
         guard !didBootstrap else { return }
         didBootstrap = true
-        await refreshIfStale(sessionStore: sessionStore)
+        setModelContainer(sessionStore.currentModelContainer)
+        restoreCachedStateIfAvailable(sessionStore: sessionStore)
+        if !sessionStore.isSignedIn {
+            restoreSignedOutLocalState(sessionStore: sessionStore)
+        }
     }
 
     func setModelContainer(_ modelContainer: ModelContainer) {

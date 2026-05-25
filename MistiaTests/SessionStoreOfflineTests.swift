@@ -64,6 +64,117 @@ final class SessionStoreOfflineTests: XCTestCase {
         XCTAssertNil(store.authBanner)
     }
 
+    func testBootstrapConnectedRestoresPersistedSessionWithoutRefreshingRemoteState() async throws {
+        let session = makeSession()
+        let authService = SessionAuthServiceSpy(persistedSession: session)
+        let userProfileStore = UserProfileStoreSpy()
+        let store = try makeSessionStore(
+            authService: authService,
+            userProfileStore: userProfileStore,
+            networkStatus: .connected
+        )
+
+        await store.bootstrapIfNeeded()
+
+        XCTAssertTrue(store.isSignedIn)
+        XCTAssertEqual(store.summary?.userID, session.user.id)
+        XCTAssertTrue(store.canPerformRemoteActions)
+        XCTAssertEqual(authService.loadPersistedSessionCallCount, 1)
+        XCTAssertEqual(authService.refreshSessionCallCount, 0)
+        XCTAssertEqual(userProfileStore.fetchProfileCallCount, 0)
+    }
+
+    func testDeferredValidationRefreshesExpiredSessionAfterLocalBootstrap() async throws {
+        let userID = UUID()
+        let expiredSession = makeSession(
+            userID: userID,
+            email: "taylor@example.com",
+            displayName: "Taylor Offline",
+            expiresAt: .now.addingTimeInterval(-600)
+        )
+        let refreshedSession = makeSession(
+            userID: userID,
+            email: "taylor@example.com",
+            displayName: "Taylor Remote",
+            accessToken: "refreshed-token",
+            refreshToken: "refresh-token",
+            expiresAt: .now.addingTimeInterval(3600)
+        )
+        let authService = SessionAuthServiceSpy(
+            persistedSession: expiredSession,
+            refreshResult: .success(refreshedSession)
+        )
+        let userProfileStore = UserProfileStoreSpy(
+            fetchProfileResult: RemoteUserProfile(
+                userID: userID,
+                displayName: "Taylor Remote",
+                avatarURL: URL(string: "https://example.com/avatar.jpg"),
+                birthday: nil,
+                createdAt: .now,
+                updatedAt: .now
+            )
+        )
+        let store = try makeSessionStore(
+            authService: authService,
+            userProfileStore: userProfileStore,
+            networkStatus: .connected
+        )
+
+        await store.bootstrapIfNeeded()
+
+        XCTAssertTrue(store.isSignedIn)
+        XCTAssertEqual(authService.refreshSessionCallCount, 0)
+        XCTAssertEqual(userProfileStore.fetchProfileCallCount, 0)
+
+        await store.validateRestoredSessionInBackgroundIfNeeded()
+
+        XCTAssertTrue(store.canPerformRemoteActions)
+        XCTAssertNil(store.remoteUnavailableReason)
+        XCTAssertEqual(authService.refreshSessionCallCount, 1)
+        XCTAssertEqual(userProfileStore.fetchProfileCallCount, 1)
+    }
+
+    func testFamilyBootstrapRestoresCachedSnapshotWithoutFetchingRemoteState() async throws {
+        let userID = UUID()
+        let userDefaults = UserDefaults(suiteName: "MistiaTests.\(UUID().uuidString)") ?? .standard
+        let launchState = try MistiaDataStack.LaunchState(userDefaults: userDefaults)
+        _ = try launchState.ensureCloudProfile(for: userID, activate: true)
+        let session = makeSession(userID: userID)
+        let store = SessionStore(
+            modelContainer: launchState.modelContainer,
+            launchState: launchState,
+            userDefaults: userDefaults,
+            authService: SessionAuthServiceSpy(persistedSession: session),
+            userProfileStore: UserProfileStoreSpy(),
+            connectivityMonitor: SessionConnectivityMonitor(initialStatus: .connected),
+            registerBackgroundRefresh: false
+        )
+        await store.bootstrapIfNeeded()
+
+        let cachedSnapshot = makeFamilySnapshot(userID: userID)
+        let cacheWriterService = FamilyRemoteServiceSpy(snapshot: cachedSnapshot)
+        let cacheWriter = FamilyContextStore(
+            modelContainer: launchState.modelContainer,
+            launchState: launchState,
+            service: cacheWriterService
+        )
+        await cacheWriter.refresh(sessionStore: store)
+        XCTAssertEqual(cacheWriterService.fetchStateCallCount, 1)
+
+        let bootstrapService = FamilyRemoteServiceSpy(snapshot: .empty)
+        let bootstrapStore = FamilyContextStore(
+            modelContainer: launchState.modelContainer,
+            launchState: launchState,
+            service: bootstrapService
+        )
+
+        await bootstrapStore.bootstrapIfNeeded(sessionStore: store)
+
+        XCTAssertEqual(bootstrapStore.family?.id, cachedSnapshot.family?.id)
+        XCTAssertTrue(bootstrapStore.hasCachedRemoteState)
+        XCTAssertEqual(bootstrapService.fetchStateCallCount, 0)
+    }
+
     func testReconnectRefreshesExpiredSessionAndClearsOfflineMode() async throws {
         let userID = UUID()
         let expiredSession = makeSession(

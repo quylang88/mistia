@@ -176,6 +176,63 @@ enum MistiaBootstrap {
         }
     }
 
+    static func seedDefaultCategoriesForLaunchIfNeeded(
+        modelContext: ModelContext,
+        sessionStore: SessionStore? = nil
+    ) throws {
+        guard try needsDefaultCategoryLaunchRepair(modelContext: modelContext) else { return }
+        try seedDefaultCategoriesIfNeeded(
+            modelContext: modelContext,
+            sessionStore: sessionStore
+        )
+    }
+
+    private static func needsDefaultCategoryLaunchRepair(
+        modelContext: ModelContext
+    ) throws -> Bool {
+        let expectedSystemKeys = expectedDefaultSystemKeys
+        guard !expectedSystemKeys.isEmpty else { return false }
+
+        let categories = try modelContext.fetch(
+            FetchDescriptor<TransactionCategory>(
+                predicate: #Predicate { category in
+                    category.deletedAt == nil && category.isSystem == true
+                }
+            )
+        )
+
+        var categoryBySystemKey: [String: TransactionCategory] = [:]
+        for category in categories {
+            guard let systemKey = category.systemKey,
+                  expectedSystemKeys.contains(systemKey),
+                  categoryBySystemKey[systemKey] == nil else {
+                continue
+            }
+            categoryBySystemKey[systemKey] = category
+        }
+
+        for systemKey in expectedSystemKeys {
+            guard let category = categoryBySystemKey[systemKey] else { return true }
+            if isBlank(category.name)
+                || isBlank(category.nameEnglish)
+                || isBlank(category.nameJapanese) {
+                return true
+            }
+        }
+
+        return false
+    }
+
+    private static var expectedDefaultSystemKeys: Set<String> {
+        let parentKeys = ManagementPresetData.defaultCategoryParentSeeds.map(\.systemKey.rawValue)
+        let leafKeys = ManagementPresetData.defaultCategorySeeds.compactMap(\.systemKey?.rawValue)
+        return Set(parentKeys).union(leafKeys)
+    }
+
+    private static func isBlank(_ value: String?) -> Bool {
+        value?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ?? true
+    }
+
     @discardableResult
     static func resetCategoriesToSystemDefaults(
         modelContext: ModelContext

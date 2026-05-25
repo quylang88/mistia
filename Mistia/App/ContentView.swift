@@ -2,7 +2,6 @@ import SwiftUI
 import SwiftData
 
 struct ContentView: View {
-    @Environment(SessionStore.self) private var sessionStore
     @Environment(FamilyContextStore.self) private var familyContextStore
 
     var body: some View {
@@ -12,12 +11,5 @@ struct ContentView: View {
             .fullScreenCover(item: $familyContextStore.pendingInviteRoute) { route in
                 FamilyInviteAcceptanceScreen(route: route)
             }
-            .task(id: familyRefreshToken) {
-                await familyContextStore.refreshIfStale(sessionStore: sessionStore)
-            }
-    }
-
-    private var familyRefreshToken: String {
-        "\(sessionStore.activeLocalProfileID?.uuidString.lowercased() ?? "none"):\(sessionStore.isSignedIn)"
     }
 }

@@ -75,7 +75,6 @@ enum MistiaTab: String, CaseIterable, Hashable {
 
 struct RootTabView: View {
   @Environment(\.colorScheme) private var colorScheme
-  @Environment(\.modelContext) private var modelContext
   @Environment(SessionStore.self) private var sessionStore
   @Environment(FamilyContextStore.self) private var familyContextStore
   @Environment(MistiaUIState.self) private var uiState
@@ -164,12 +163,6 @@ struct RootTabView: View {
             .presentationDetents(destination == .note ? [.medium, .large] : [.large])
             .presentationDragIndicator(.hidden)
         }
-      }
-      .task {
-        try? MistiaBootstrap.seedDefaultCategoriesIfNeeded(
-          modelContext: self.modelContext,
-          sessionStore: self.sessionStore
-        )
       }
       .task(id: shortcutNormalizationKey) {
         persistShortcutSelectionIfNeeded(shortcutResolution.selection)

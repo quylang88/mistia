@@ -160,6 +160,7 @@ final class SessionStore {
     @ObservationIgnored private var queuedFamilyOwnerPushTask: Task<Void, Never>?
     @ObservationIgnored private var pendingFamilyOwnerPush = false
     @ObservationIgnored private var reconnectValidationTask: Task<Void, Never>?
+    @ObservationIgnored private var remoteValidationTask: Task<Void, Never>?
     @ObservationIgnored private var pendingAuthenticationState: PendingAuthenticationState?
 
     init(
@@ -401,7 +402,7 @@ final class SessionStore {
         postSyncRefreshHandler = handler
     }
 
-    func handleSceneDidBecomeActive() {
+    func handleSceneDidBecomeActive(runsForegroundCatchUp: Bool = true) {
         if requiresInitialSync && hasCompletedCloudSyncHistory() {
             requiresInitialSync = false
             initialSyncPreview = nil
@@ -410,6 +411,7 @@ final class SessionStore {
         updateAutoSyncLoopState()
         scheduleFamilyOwnerOutboxRecoveryIfNeeded()
 
+        guard runsForegroundCatchUp else { return }
         guard shouldRunForegroundCatchUp() else { return }
         Task {
             _ = await runMergeSync(trigger: .foregroundCatchUp, showProgress: false)
@@ -477,13 +479,11 @@ final class SessionStore {
             }
 
             if summary == nil {
-                try await handleAuthenticationResult(
-                    SessionAuthResult(
-                        session: restoredSession,
-                        origin: .existing
-                    ),
+                try applyLocalAuthenticatedState(
+                    restoredSession,
                     restoringExistingSession: true
                 )
+                applyLocalRestoredSessionStateIfNeeded()
             }
         } catch {
             lastErrorMessage = friendlyErrorMessage(for: error)
@@ -503,6 +503,27 @@ final class SessionStore {
     /// Called by ContentView after all startup tasks complete
     func finishBootstrapping() {
         isBootstrapping = false
+    }
+
+    func validateRestoredSessionInBackgroundIfNeeded() async {
+        if let remoteValidationTask {
+            await remoteValidationTask.value
+            return
+        }
+
+        let task = Task { @MainActor [weak self] in
+            guard let self else { return }
+            await self.performRemoteSessionValidation()
+        }
+        remoteValidationTask = task
+        await task.value
+        remoteValidationTask = nil
+    }
+
+    func runDeferredStartupSyncIfNeeded() async -> Bool {
+        await validateRestoredSessionInBackgroundIfNeeded()
+        guard shouldRunForegroundCatchUp() else { return false }
+        return await runMergeSync(trigger: .foregroundCatchUp, showProgress: false)
     }
 
     func signIn(email: String, password: String) async {
@@ -1629,6 +1650,12 @@ final class SessionStore {
     private func revalidateRemoteSessionAfterReconnect() async {
         guard currentSession != nil else { return }
 
+        await performRemoteSessionValidation()
+    }
+
+    private func performRemoteSessionValidation() async {
+        guard currentSession != nil, canPerformRemoteActions else { return }
+
         do {
             let validSession = try await prepareRemoteSession()
             try await syncAuthenticatedStateWithRemote(
@@ -1639,6 +1666,24 @@ final class SessionStore {
             guard isSignedIn else { return }
             applyRemoteUnavailableState(error, restoringExistingSession: true)
         }
+    }
+
+    private func applyLocalRestoredSessionStateIfNeeded() {
+        guard isSignedIn else { return }
+
+        if networkStatus == .disconnected {
+            applySignedInOfflineState()
+            updateAutoSyncLoopState()
+            scheduleFamilyOwnerOutboxRecoveryIfNeeded()
+            return
+        }
+
+        remoteUnavailableReason = nil
+        syncStatusTitle = L10n.shared.session.session.signedInOnThisDevice2
+        syncStatusDetail = L10n.session.sync.sessionRestoredDetail
+        syncStatusSystemImage = "person.crop.circle.badge.checkmark"
+        updateAutoSyncLoopState()
+        scheduleFamilyOwnerOutboxRecoveryIfNeeded()
     }
 
     private func restorePreservedSignedInProfile(reason: Error?) -> Bool {
