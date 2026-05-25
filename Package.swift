@@ -58,6 +58,7 @@ let package = Package(
                 "CoreLogic/ReceiptAnalysisModels.swift",
                 "CoreLogic/TransactionLogic.swift",
                 "CoreLogic/TransactionLogic+Statement.swift",
+                "CoreLogic/TransactionSearchLogic.swift",
                 "Persistence/CategoryHierarchySupport.swift",
                 "Persistence/ManagementModels.swift",
                 "Persistence/MistiaDataStack.swift",

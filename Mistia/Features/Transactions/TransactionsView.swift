@@ -165,6 +165,7 @@ struct TransactionsView: View {
     @State private var debouncedSearchText = ""
     @State private var searchDebounceTask: Task<Void, Never>?
     @State private var isSearchPresented = false
+    @State private var visibleSearchResultLimit = TransactionsListPaging.initialLimit
     @State private var shareItem: TransactionShareItem?
     @State private var exportErrorMessage: String?
     @State private var destination: TransactionsNavigationDestination?
@@ -298,6 +299,42 @@ struct TransactionsView: View {
             visibleRecordCount: page.totalCount,
             displayedRecordCount: displayedRecords.count,
             openDebtPositions: openDebtPositions,
+            sections: TransactionLogic.sections(from: displayedRecords, calendar: calendar),
+            transactionsByID: Dictionary(
+                activeTransactions
+                    .filter { displayedRecordIDs.contains($0.id) }
+                    .map { ($0.id, $0) },
+                uniquingKeysWith: { lhs, rhs in lhs.updatedAt >= rhs.updatedAt ? lhs : rhs }
+            ),
+            transactionAuditMap: transactionAuditMap,
+            walletOwnerMap: walletOwnerMap,
+            transactionOwnerMap: transactionOwnerMap
+        )
+    }
+
+    private var transactionSearchSnapshot: TransactionsListSnapshot? {
+        guard let filters = TransactionSearchLogic.filters(for: debouncedSearchText) else {
+            return nil
+        }
+
+        let activeTransactions = self.activeTransactions
+        let records = activeTransactions.map(\.snapshot)
+        let page = TransactionLogic.visibleRecordsPage(
+            from: records,
+            selectedKind: nil,
+            filters: filters,
+            limit: visibleSearchResultLimit,
+            assumesSortedByRecency: true,
+            calendar: calendar
+        )
+        let displayedRecords = page.displayedRecords
+        let displayedRecordIDs = Set(displayedRecords.map(\.id))
+
+        return TransactionsListSnapshot(
+            activeTransactionCount: activeTransactions.count,
+            visibleRecordCount: page.totalCount,
+            displayedRecordCount: displayedRecords.count,
+            openDebtPositions: [],
             sections: TransactionLogic.sections(from: displayedRecords, calendar: calendar),
             transactionsByID: Dictionary(
                 activeTransactions
@@ -550,7 +587,7 @@ struct TransactionsView: View {
 
     private var effectiveFilters: TransactionFilterState {
         var effective = filterState
-        effective.searchText = debouncedSearchText
+        effective.searchText = ""
         effective.isAdjustmentOnly = selectedSegment == .adjustment
         return effective
     }
@@ -602,39 +639,61 @@ struct TransactionsView: View {
             : MistiaAccent.purple.color
     }
 
+    private var isSearchSceneVisible: Bool {
+        isSearchPresented || !searchText.isEmpty || !debouncedSearchText.isEmpty
+    }
+
     var body: some View {
         let listSnapshotKey = transactionListSnapshotCacheKey
         let listSnapshot = cachedTransactionListSnapshot(for: listSnapshotKey)
+        let searchSnapshot = transactionSearchSnapshot
 
         NavigationStack {
-            MistiaPinnedTopBarScaffold(
-                tone: .standard,
-                title: L10n.transactions.transactions.transactions,
-                embedsInNavigationStack: false,
-                showsLeadingAvatar: false,
-                leadingSystemImage: "doc.viewfinder",
-                trailingSystemImage: nil,
-                onLeadingTap: { destination = .aiBill },
-                contentSpacing: 18,
-                contentBottomPadding: 150,
-                titleDisplayMode: .large,
-                pinnedHeader: {
-                    VStack(alignment: .leading, spacing: 8) {
-                        FamilyContextChipBar()
-                            .padding(.horizontal, 18)
-                        unifiedFilterRow
+            ZStack {
+                MistiaPinnedTopBarScaffold(
+                    tone: .standard,
+                    title: L10n.transactions.transactions.transactions,
+                    embedsInNavigationStack: false,
+                    showsLeadingAvatar: false,
+                    leadingSystemImage: "doc.viewfinder",
+                    trailingSystemImage: nil,
+                    onLeadingTap: { destination = .aiBill },
+                    contentSpacing: 18,
+                    contentBottomPadding: 150,
+                    titleDisplayMode: .large,
+                    pinnedHeader: {
+                        VStack(alignment: .leading, spacing: 8) {
+                            FamilyContextChipBar()
+                                .padding(.horizontal, 18)
+                            unifiedFilterRow
+                        }
+                            .zIndex(99)
+                    },
+                    trailingAccessory: {
+                        transactionsStatementMenuButton
+                        .padding(.trailing, -12)
                     }
-                        .zIndex(99)
-                },
-                trailingAccessory: {
-                    transactionsStatementMenuButton
-                    .padding(.trailing, -12)
+                ) {
+                    if !listSnapshot.openDebtPositions.isEmpty {
+                        outstandingDebtSection(listSnapshot.openDebtPositions)
+                    }
+                    transactionsContent(listSnapshot)
                 }
-            ) {
-                if !listSnapshot.openDebtPositions.isEmpty {
-                    outstandingDebtSection(listSnapshot.openDebtPositions)
+
+                if isSearchSceneVisible {
+                    TransactionsSearchScene(
+                        searchText: searchText,
+                        snapshot: searchSnapshot,
+                        transactionsByID: searchSnapshot?.transactionsByID ?? [:],
+                        transactionAuditMap: transactionAuditMap,
+                        walletOwnerMap: walletOwnerMap,
+                        transactionOwnerMap: transactionOwnerMap,
+                        onSelect: openTransactionEditorIfAllowed,
+                        onLoadMore: loadMoreSearchResultsIfNeeded
+                    )
+                    .transition(.opacity)
+                    .zIndex(10)
                 }
-                transactionsContent(listSnapshot)
             }
             .searchable(
                 text: $searchText,
@@ -707,6 +766,11 @@ struct TransactionsView: View {
         }
         .onChange(of: searchText) { _, newValue in
             scheduleSearchDebounce(newValue)
+        }
+        .onChange(of: isSearchPresented) { _, isPresented in
+            if !isPresented {
+                closeTransactionSearch()
+            }
         }
         .onChange(of: familyContextStore.selectedSubjectUserID) { _, _ in
             resetTransactionPage()
@@ -1000,10 +1064,23 @@ struct TransactionsView: View {
         visibleTransactionLimit = TransactionsListPaging.initialLimit
     }
 
+    private func resetSearchResultsPage() {
+        guard visibleSearchResultLimit != TransactionsListPaging.initialLimit else { return }
+        visibleSearchResultLimit = TransactionsListPaging.initialLimit
+    }
+
     private func loadMoreTransactionsIfNeeded(totalVisibleCount: Int) {
         guard visibleTransactionLimit < totalVisibleCount else { return }
         visibleTransactionLimit = min(
             visibleTransactionLimit + TransactionsListPaging.increment,
+            totalVisibleCount
+        )
+    }
+
+    private func loadMoreSearchResultsIfNeeded(totalVisibleCount: Int) {
+        guard visibleSearchResultLimit < totalVisibleCount else { return }
+        visibleSearchResultLimit = min(
+            visibleSearchResultLimit + TransactionsListPaging.increment,
             totalVisibleCount
         )
     }
@@ -1013,7 +1090,7 @@ struct TransactionsView: View {
 
         if value.isEmpty {
             debouncedSearchText = ""
-            resetTransactionPage()
+            resetSearchResultsPage()
             return
         }
 
@@ -1021,8 +1098,16 @@ struct TransactionsView: View {
             try? await Task.sleep(for: .milliseconds(220))
             guard !Task.isCancelled else { return }
             debouncedSearchText = value
-            resetTransactionPage()
+            resetSearchResultsPage()
         }
+    }
+
+    private func closeTransactionSearch() {
+        searchDebounceTask?.cancel()
+        searchDebounceTask = nil
+        searchText = ""
+        debouncedSearchText = ""
+        resetSearchResultsPage()
     }
 
     private func openTransactionEditorIfAllowed(_ transaction: LedgerTransaction) {
@@ -1110,6 +1195,84 @@ struct TransactionsView: View {
                         ? L10n.transactions.transactions.thePermissionRequestWasSentToThe
                         : (familyContextStore.lastErrorMessage ?? L10n.transactions.transactions.couldnTSendTheRequestRightNow)
                 )
+            }
+        }
+    }
+}
+
+private struct TransactionsSearchScene: View {
+    let searchText: String
+    let snapshot: TransactionsListSnapshot?
+    let transactionsByID: [UUID: LedgerTransaction]
+    let transactionAuditMap: [UUID: TransactionAuditRecord]
+    let walletOwnerMap: [UUID: UUID]
+    let transactionOwnerMap: [UUID: UUID]
+    let onSelect: (LedgerTransaction) -> Void
+    let onLoadMore: (Int) -> Void
+
+    private var backgroundColor: Color {
+        Color(UIColor.systemGroupedBackground)
+    }
+
+    private var hasSearchQuery: Bool {
+        TransactionSearchLogic.filters(for: searchText) != nil
+    }
+
+    var body: some View {
+        ZStack {
+            backgroundColor
+                .ignoresSafeArea()
+
+            ScrollView(.vertical, showsIndicators: false) {
+                LazyVStack(spacing: 18) {
+                    searchContent
+                }
+                .padding(.horizontal, 18)
+                .padding(.top, 24)
+                .padding(.bottom, 150)
+                .frame(maxWidth: .infinity)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var searchContent: some View {
+        if !hasSearchQuery {
+            MistiaEmptyStateContent(
+                title: L10n.transactions.transactions.searchEmptyTitle,
+                message: L10n.transactions.transactions.searchEmptyMessage,
+                buttonTitle: nil,
+                symbols: ["magnifyingglass", "text.cursor", "list.bullet.rectangle"]
+            )
+            .padding(.top, 44)
+        } else if let snapshot {
+            if snapshot.sections.isEmpty {
+                MistiaEmptyStateContent(
+                    title: L10n.transactions.transactions.noMatchingResults,
+                    message: L10n.transactions.transactions.searchNoResultsMessage,
+                    buttonTitle: nil,
+                    symbols: ["magnifyingglass", "xmark.circle.fill", "list.bullet.rectangle"]
+                )
+                .padding(.top, 44)
+            } else {
+                ForEach(snapshot.sections) { section in
+                    TransactionSectionCard(
+                        section: section,
+                        transactionsByID: transactionsByID,
+                        transactionAuditMap: transactionAuditMap,
+                        walletOwnerMap: walletOwnerMap,
+                        transactionOwnerMap: transactionOwnerMap
+                    ) { transaction in
+                        onSelect(transaction)
+                    }
+                }
+
+                if snapshot.hasMoreRows {
+                    TransactionListPagingSentinel()
+                        .onAppear {
+                            onLoadMore(snapshot.visibleRecordCount)
+                        }
+                }
             }
         }
     }

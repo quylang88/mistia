@@ -32847,6 +32847,72 @@
         }
       }
     },
+    "transactions.transactions.searchEmptyMessage": {
+      "localizations": {
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nhập tên, ghi chú hoặc người liên quan để tìm giao dịch."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Enter a name, note, or person to find transactions."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "名前、メモ、相手を入力して取引を検索します。"
+          }
+        }
+      }
+    },
+    "transactions.transactions.searchEmptyTitle": {
+      "localizations": {
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tìm giao dịch"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Search transactions"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "取引を検索"
+          }
+        }
+      }
+    },
+    "transactions.transactions.searchNoResultsMessage": {
+      "localizations": {
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Không có giao dịch nào khớp với từ khóa này."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No transactions match this search."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "この検索に一致する取引はありません。"
+          }
+        }
+      }
+    },
     "transactions.transactions.searchTransactionName": {
       "localizations": {
         "vi": {
