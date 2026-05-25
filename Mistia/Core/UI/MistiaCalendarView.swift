@@ -91,7 +91,7 @@ struct MistiaCalendarView: View {
         .buttonStyle(.plain)
         .popover(isPresented: $isMonthYearPickerPresented, attachmentAnchor: .rect(.bounds), arrowEdge: .top) {
             MistiaMonthYearWheelPicker(
-                selection: $displayedMonth,
+                selection: $selection,
                 calendar: calendar,
                 language: language,
                 selectableRange: selectableRange
@@ -304,17 +304,13 @@ struct MistiaMonthYearWheelPicker: View {
     }
 
     private func updateSelection(month: Int, year: Int) {
-        var components = calendar.dateComponents([.era, .year, .month, .day, .hour, .minute, .second, .nanosecond], from: selection)
-        components.year = year
-        components.month = month
-        components.day = min(
-            components.day ?? 1,
-            numberOfDays(inMonth: month, year: year)
+        let updatedDate = MistiaCalendarSelectionLogic.replacingMonthYear(
+            in: selection,
+            month: month,
+            year: year,
+            calendar: calendar
         )
-
-        if let updatedDate = calendar.date(from: components) {
-            selection = AnyRange.clamped(updatedDate, to: selectableRange, calendar: calendar)
-        }
+        selection = AnyRange.clamped(updatedDate, to: selectableRange, calendar: calendar)
     }
 
     private func monthTitle(for month: Int) -> String {
@@ -322,17 +318,6 @@ struct MistiaMonthYearWheelPicker: View {
         return monthSymbols[max(0, min(month - 1, monthSymbols.count - 1))]
     }
 
-    private func numberOfDays(inMonth month: Int, year: Int) -> Int {
-        var components = DateComponents()
-        components.calendar = calendar
-        components.year = year
-        components.month = month
-        components.day = 1
-        guard let date = calendar.date(from: components),
-              let range = calendar.range(of: .day, in: .month, for: date)
-        else { return 31 }
-        return range.count
-    }
 }
 
 private struct MistiaCalendarHeaderHiddenKey: EnvironmentKey {

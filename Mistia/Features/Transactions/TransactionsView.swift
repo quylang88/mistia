@@ -484,7 +484,6 @@ struct TransactionsView: View {
                 prompt: L10n.transactions.transactions.searchTransactionName
             )
             .searchToolbarBehavior(.minimize)
-            .searchPresentationToolbarBehavior(.avoidHidingContent)
             .navigationDestination(item: $destination) { route in
                 switch route {
                 case .aiBill:

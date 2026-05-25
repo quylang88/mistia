@@ -49,6 +49,7 @@ let package = Package(
                 "CoreLogic/BillItemAnalysisModels.swift",
                 "CoreLogic/L10n.generated.swift",
                 "CoreLogic/MistiaLocalization.swift",
+                "CoreLogic/MistiaCalendarSelectionLogic.swift",
                 "CoreLogic/MistiaResetSupport.swift",
                 "CoreLogic/MistiaShortcutLogic.swift",
                 "CoreLogic/MistiaSystemCategoryIdentity.swift",
