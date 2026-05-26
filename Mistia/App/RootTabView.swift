@@ -399,6 +399,12 @@ struct RootTabView: View {
 
       familyContextStore.activateMemberView(member)
       selectedTab = .overview
+      Task { @MainActor in
+        await familyContextStore.refreshLatest(
+          sessionStore: sessionStore,
+          source: .userInitiated
+        )
+      }
 
     case .receiptScan:
       activeSheet = .quickCreate(.receipt, .cameraPreferred)

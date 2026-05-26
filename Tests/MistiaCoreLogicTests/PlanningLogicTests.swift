@@ -521,6 +521,128 @@ final class PlanningLogicTests: XCTestCase {
         XCTAssertTrue(items.first?.hasExplicitDueDate == true)
     }
 
+    func testRecurringBillFirstScheduledMonthDefaultsToCreatedAtMonth() {
+        let items = PlanningLogic.recurringBillDueItems(
+            bills: [
+                PlanningBillSnapshot(
+                    id: UUID(),
+                    name: "Internet",
+                    iconSymbolName: MistiaSystemCategoryKey.internet.iconSymbolName,
+                    categorySystemKey: .internet,
+                    amountMinor: 5_000,
+                    dueDay: 25,
+                    frequencyMonths: 1,
+                    paymentWalletID: UUID(),
+                    currencyCode: "JPY",
+                    createdAt: makeDate(year: 2026, month: 5, day: 20),
+                    scheduleKind: .recurring,
+                    paymentStartDay: 25,
+                    paymentStartDate: nil,
+                    firstScheduledMonth: nil,
+                    hasExplicitDueDate: false,
+                    dueDate: nil,
+                    autoPayEnabled: false,
+                    autoPayDay: nil,
+                    autoPayDate: nil
+                )
+            ],
+            occurrences: [],
+            selectedMonth: makeDate(year: 2026, month: 5, day: 1),
+            calendar: calendar
+        )
+
+        XCTAssertEqual(items.count, 1)
+        XCTAssertEqual(items.first?.paymentStartDate, makeDate(year: 2026, month: 5, day: 25))
+    }
+
+    func testRecurringBillCanStartNextMonthWithoutAppearingInCurrentMonth() {
+        let bill = PlanningBillSnapshot(
+            id: UUID(),
+            name: "Train pass",
+            iconSymbolName: MistiaSystemCategoryKey.publicTransport.iconSymbolName,
+            categorySystemKey: .publicTransport,
+            amountMinor: 12_000,
+            dueDay: 5,
+            frequencyMonths: 1,
+            paymentWalletID: UUID(),
+            currencyCode: "JPY",
+            createdAt: makeDate(year: 2026, month: 5, day: 20),
+            scheduleKind: .recurring,
+            paymentStartDay: 5,
+            paymentStartDate: nil,
+            firstScheduledMonth: makeDate(year: 2026, month: 6, day: 1),
+            hasExplicitDueDate: false,
+            dueDate: nil,
+            autoPayEnabled: false,
+            autoPayDay: nil,
+            autoPayDate: nil
+        )
+
+        let currentMonthItems = PlanningLogic.recurringBillDueItems(
+            bills: [bill],
+            occurrences: [],
+            selectedMonth: makeDate(year: 2026, month: 5, day: 1),
+            calendar: calendar
+        )
+        let nextMonthItems = PlanningLogic.recurringBillDueItems(
+            bills: [bill],
+            occurrences: [],
+            selectedMonth: makeDate(year: 2026, month: 6, day: 1),
+            calendar: calendar
+        )
+
+        XCTAssertEqual(currentMonthItems.count, 0)
+        XCTAssertEqual(nextMonthItems.count, 1)
+        XCTAssertEqual(nextMonthItems.first?.paymentStartDate, makeDate(year: 2026, month: 6, day: 5))
+    }
+
+    func testCurrentMonthOverdueRecurringBillRemainsPayable() {
+        let selectedMonth = makeDate(year: 2026, month: 5, day: 1)
+        let items = PlanningLogic.recurringBillDueItems(
+            bills: [
+                PlanningBillSnapshot(
+                    id: UUID(),
+                    name: "Parking",
+                    iconSymbolName: MistiaSystemCategoryKey.parking.iconSymbolName,
+                    categorySystemKey: .parking,
+                    amountMinor: 8_000,
+                    dueDay: 5,
+                    frequencyMonths: 1,
+                    paymentWalletID: UUID(),
+                    currencyCode: "JPY",
+                    createdAt: makeDate(year: 2026, month: 5, day: 20),
+                    scheduleKind: .recurring,
+                    paymentStartDay: 1,
+                    paymentStartDate: nil,
+                    firstScheduledMonth: selectedMonth,
+                    hasExplicitDueDate: true,
+                    dueDate: nil,
+                    autoPayEnabled: false,
+                    autoPayDay: nil,
+                    autoPayDate: nil
+                )
+            ],
+            occurrences: [],
+            selectedMonth: selectedMonth,
+            calendar: calendar
+        )
+
+        let summary = PlanningLogic.dueSummary(
+            creditStatements: [],
+            recurring: items,
+            selectedMonth: selectedMonth,
+            referenceDate: makeDate(year: 2026, month: 5, day: 20),
+            calendar: calendar
+        )
+
+        XCTAssertEqual(items.count, 1)
+        XCTAssertEqual(items.first?.status, .pending)
+        XCTAssertEqual(items.first?.paymentStartDate, makeDate(year: 2026, month: 5, day: 1))
+        XCTAssertEqual(items.first?.dueDate, makeDate(year: 2026, month: 5, day: 5))
+        XCTAssertEqual(summary.totalDueMinor, 8_000)
+        XCTAssertEqual(summary.overdueCount, 1)
+    }
+
     func testRecurringBillWindowTreatsMissingOrEqualDeadlineAsPaymentDate() {
         let selectedMonth = makeDate(year: 2026, month: 5, day: 1)
         let missingDeadline = PlanningBillSnapshot(

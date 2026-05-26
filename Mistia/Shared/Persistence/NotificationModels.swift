@@ -39,6 +39,7 @@ enum MistiaFamilyNotificationResourceType: String, Codable, CaseIterable {
     case goal
     case card
     case debt
+    case familyTransfer = "family_transfer"
     case transaction
     case permission
     case bill
@@ -59,6 +60,8 @@ enum MistiaFamilyNotificationResourceType: String, Codable, CaseIterable {
             return L10n.shared.persistence.notification.card
         case .debt:
             return L10n.shared.persistence.notification.debt
+        case .familyTransfer:
+            return L10n.shared.persistence.notification.familyTransfer
         case .transaction:
             return L10n.shared.persistence.notification.transaction
         case .permission:

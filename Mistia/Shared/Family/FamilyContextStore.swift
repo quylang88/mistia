@@ -55,6 +55,7 @@ final class FamilyContextStore {
     @ObservationIgnored private var lastLatestRefreshCompletedAt: Date?
     @ObservationIgnored private var avatarHydrationTask: Task<Void, Never>?
     private var pendingPermissionRequestKeys: Set<FamilyPendingPermissionRequestKey> = []
+    private var pendingPermissionRequests: [FamilyPermissionRequestRemoteRecord] = []
 
     init(
         modelContainer: ModelContainer,
@@ -672,7 +673,8 @@ final class FamilyContextStore {
         )
 
         do {
-            _ = try await service.createFamilyPermissionRequest(input: input, session: session)
+            let request = try await service.createFamilyPermissionRequest(input: input, session: session)
+            upsertPendingPermissionRequest(request)
             pendingPermissionRequestKeys.insert(
                 permissionRequestKey(
                     ownerUserID: ownerUserID,
@@ -1038,6 +1040,7 @@ final class FamilyContextStore {
         invites = []
         permissionGrants = []
         pendingPermissionRequestKeys = []
+        pendingPermissionRequests = []
         lastErrorMessage = nil
         isRefreshingLatest = false
         avatarHydrationTask?.cancel()
@@ -1050,6 +1053,8 @@ final class FamilyContextStore {
         members = snapshot.members.map(memberWithCachedAvatar)
         invites = snapshot.invites
         permissionGrants = snapshot.permissionGrants
+        pendingPermissionRequests = snapshot.pendingPermissionRequests
+        pendingPermissionRequestKeys = Set(snapshot.pendingPermissionRequests.compactMap(pendingPermissionRequestKey))
         removeGrantedPendingPermissionRequests()
     }
 
@@ -1130,7 +1135,8 @@ final class FamilyContextStore {
             currentMembership: currentMembership,
             members: members,
             invites: invites,
-            permissionGrants: permissionGrants
+            permissionGrants: permissionGrants,
+            pendingPermissionRequests: pendingPermissionRequests
         )
     }
 
@@ -1332,6 +1338,17 @@ final class FamilyContextStore {
         removeGrantedPendingPermissionRequests()
     }
 
+    private func upsertPendingPermissionRequest(_ request: FamilyPermissionRequestRemoteRecord) {
+        if let index = pendingPermissionRequests.firstIndex(where: { $0.id == request.id }) {
+            pendingPermissionRequests[index] = request
+        } else if request.statusRawValue == "pending" {
+            pendingPermissionRequests.append(request)
+        }
+        if let key = pendingPermissionRequestKey(from: request) {
+            pendingPermissionRequestKeys.insert(key)
+        }
+    }
+
     private func permissionRequestKey(
         ownerUserID: UUID,
         resourceType: MistiaFamilyNotificationResourceType,
@@ -1343,6 +1360,22 @@ final class FamilyContextStore {
             resourceTypeRawValue: resourceType.rawValue,
             resourceID: resourceID,
             scopeRawValue: scope.rawValue
+        )
+    }
+
+    private func pendingPermissionRequestKey(
+        from request: FamilyPermissionRequestRemoteRecord
+    ) -> FamilyPendingPermissionRequestKey? {
+        guard request.statusRawValue == "pending",
+              let resourceType = MistiaFamilyNotificationResourceType(rawValue: request.resourceTypeRawValue),
+              let scope = MistiaFamilyPermissionScope(rawValue: request.permissionScopeRawValue) else {
+            return nil
+        }
+        return permissionRequestKey(
+            ownerUserID: request.recipientUserID,
+            resourceType: resourceType,
+            resourceID: request.resourceID,
+            scope: scope
         )
     }
 
@@ -1359,6 +1392,9 @@ final class FamilyContextStore {
                     scope: scope
                 )
             )
+        }
+        pendingPermissionRequests.removeAll { request in
+            pendingPermissionRequestKey(from: request).map { !pendingPermissionRequestKeys.contains($0) } ?? true
         }
     }
 

@@ -98,6 +98,7 @@ final class MistiaBackupStoreTests: XCTestCase {
         let profiles = try fetchAll(CreditCardProfile.self, in: targetContainer)
         XCTAssertEqual(profiles.count, 1)
         XCTAssertEqual(profiles.first?.paymentSourceWallet?.id, fixture.cashWalletID)
+        XCTAssertEqual(profiles.first?.autoPayEnabled, true)
 
         let categories = try fetchAll(TransactionCategory.self, in: targetContainer)
         XCTAssertEqual(categories.count, 2)
@@ -125,6 +126,7 @@ final class MistiaBackupStoreTests: XCTestCase {
         XCTAssertEqual(recurringBills.first?.resolvedPaymentStartDay, 25)
         XCTAssertEqual(recurringBills.first?.dueDay, 10)
         XCTAssertEqual(recurringBills.first?.resolvedHasExplicitDueDate, true)
+        XCTAssertEqual(recurringBills.first?.firstScheduledMonth, makeDate(year: 2026, month: 4, day: 1))
         XCTAssertEqual(recurringBills.first?.autoPayEnabled, true)
         XCTAssertEqual(recurringBills.first?.autoPayDay, 28)
 
@@ -371,6 +373,7 @@ final class MistiaBackupStoreTests: XCTestCase {
             statementClosingDay: 25,
             paymentDueDay: 10,
             notes: "Primary card",
+            autoPayEnabled: true,
             createdAt: now,
             updatedAt: now,
             wallet: creditWallet,
@@ -423,6 +426,7 @@ final class MistiaBackupStoreTests: XCTestCase {
             dueDay: 10,
             scheduleKind: .recurring,
             paymentStartDay: 25,
+            firstScheduledMonth: makeDate(year: 2026, month: 4, day: 1),
             hasExplicitDueDate: true,
             autoPayEnabled: true,
             autoPayDay: 28,

@@ -103,6 +103,7 @@ final class RecurringBillPlan {
     var scheduleKindRawValue: String?
     var paymentStartDay: Int?
     var paymentStartDate: Date?
+    var firstScheduledMonth: Date?
     var hasExplicitDueDate: Bool?
     var dueDate: Date?
     var autoPayEnabled: Bool = false
@@ -127,6 +128,7 @@ final class RecurringBillPlan {
         scheduleKind: PlanningBillScheduleKind = .recurring,
         paymentStartDay: Int? = nil,
         paymentStartDate: Date? = nil,
+        firstScheduledMonth: Date? = nil,
         hasExplicitDueDate: Bool? = nil,
         dueDate: Date? = nil,
         autoPayEnabled: Bool = false,
@@ -150,6 +152,7 @@ final class RecurringBillPlan {
         self.scheduleKindRawValue = scheduleKind.rawValue
         self.paymentStartDay = paymentStartDay ?? dueDay
         self.paymentStartDate = paymentStartDate
+        self.firstScheduledMonth = firstScheduledMonth
         self.hasExplicitDueDate = hasExplicitDueDate ?? false
         self.dueDate = dueDate
         self.autoPayEnabled = autoPayEnabled

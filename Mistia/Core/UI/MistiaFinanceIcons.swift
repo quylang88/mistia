@@ -744,7 +744,7 @@ enum MistiaFinanceIconRegistry {
             "mistia.category.expense.home_bills.condo_fee"
         ])
 
-        assign("ic_fluent_vehicle_motorcycle_24_filled", [
+        assign("ic_fluent_gas_pump_24_filled", [
             "mistia.category.expense.transport_vehicle.fuel"
         ])
 

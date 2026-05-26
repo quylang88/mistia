@@ -413,7 +413,7 @@ struct NotificationCenterView: View {
             return .transactions
         case .wallet, .category:
             return .settings
-        case .budget, .goal, .card, .debt, .bill, .due, .installment:
+        case .budget, .goal, .card, .debt, .bill, .due, .installment, .familyTransfer:
             return .planning
         case .permission, nil:
             return .settings

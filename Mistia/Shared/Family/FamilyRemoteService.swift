@@ -72,6 +72,11 @@ protocol FamilyRemoteServicing {
         userIDs: [UUID],
         session: SupabaseAuthSession
     ) async throws -> MistiaRemoteSnapshot
+    func fetchPendingPermissionRequests(
+        familyID: UUID,
+        requesterUserID: UUID,
+        session: SupabaseAuthSession
+    ) async throws -> [FamilyPermissionRequestRemoteRecord]
     func fetchFamilyNotifications(session: SupabaseAuthSession) async throws -> [FamilyNotificationRemoteRecord]
     func createFamilyTransfer(
         input: FamilyTransferInput,
@@ -122,6 +127,14 @@ extension FamilyRemoteServicing {
     }
 
     func fetchFamilyNotifications(session: SupabaseAuthSession) async throws -> [FamilyNotificationRemoteRecord] {
+        []
+    }
+
+    func fetchPendingPermissionRequests(
+        familyID: UUID,
+        requesterUserID: UUID,
+        session: SupabaseAuthSession
+    ) async throws -> [FamilyPermissionRequestRemoteRecord] {
         []
     }
 
@@ -453,6 +466,7 @@ struct FamilyStateSnapshot: Codable, Equatable {
     var members: [FamilyMember]
     var invites: [FamilyInviteRecord]
     var permissionGrants: [FamilyPermissionGrantRecord] = []
+    var pendingPermissionRequests: [FamilyPermissionRequestRemoteRecord] = []
 
     enum CodingKeys: String, CodingKey {
         case family
@@ -460,6 +474,7 @@ struct FamilyStateSnapshot: Codable, Equatable {
         case members
         case invites
         case permissionGrants
+        case pendingPermissionRequests
     }
 
     init(
@@ -467,13 +482,15 @@ struct FamilyStateSnapshot: Codable, Equatable {
         currentMembership: FamilyMembershipRecord?,
         members: [FamilyMember],
         invites: [FamilyInviteRecord],
-        permissionGrants: [FamilyPermissionGrantRecord] = []
+        permissionGrants: [FamilyPermissionGrantRecord] = [],
+        pendingPermissionRequests: [FamilyPermissionRequestRemoteRecord] = []
     ) {
         self.family = family
         self.currentMembership = currentMembership
         self.members = members
         self.invites = invites
         self.permissionGrants = permissionGrants
+        self.pendingPermissionRequests = pendingPermissionRequests
     }
 
     init(from decoder: Decoder) throws {
@@ -483,6 +500,10 @@ struct FamilyStateSnapshot: Codable, Equatable {
         members = try container.decodeIfPresent([FamilyMember].self, forKey: .members) ?? []
         invites = try container.decodeIfPresent([FamilyInviteRecord].self, forKey: .invites) ?? []
         permissionGrants = try container.decodeIfPresent([FamilyPermissionGrantRecord].self, forKey: .permissionGrants) ?? []
+        pendingPermissionRequests = try container.decodeIfPresent(
+            [FamilyPermissionRequestRemoteRecord].self,
+            forKey: .pendingPermissionRequests
+        ) ?? []
     }
 }
 
@@ -518,6 +539,11 @@ struct FamilyRemoteService: FamilyRemoteServicing {
             session: session,
             userID: currentMembership.role == .owner ? nil : session.user.id
         )
+        async let pendingPermissionRequestsTask = fetchPendingPermissionRequests(
+            familyID: currentMembership.familyID,
+            requesterUserID: session.user.id,
+            session: session
+        )
         async let syncStatusRowsTask = fetchCloudSyncStatuses(
             familyID: currentMembership.familyID,
             session: session
@@ -551,13 +577,15 @@ struct FamilyRemoteService: FamilyRemoteServicing {
         let resolvedFamily = try await family
         let invites = try await invitesTask
         let permissionGrants = try await permissionGrantsTask
+        let pendingPermissionRequests = (try? await pendingPermissionRequestsTask) ?? []
 
         return FamilyStateSnapshot(
             family: resolvedFamily,
             currentMembership: currentMembership,
             members: members,
             invites: invites,
-            permissionGrants: permissionGrants
+            permissionGrants: permissionGrants,
+            pendingPermissionRequests: pendingPermissionRequests
         )
     }
 
@@ -872,6 +900,24 @@ struct FamilyRemoteService: FamilyRemoteServicing {
                 URLQueryItem(name: "user_id", value: "eq.\(session.user.id.uuidString.lowercased())"),
                 URLQueryItem(name: "order", value: "created_at.desc"),
                 URLQueryItem(name: "limit", value: "100")
+            ],
+            session: session
+        )
+    }
+
+    func fetchPendingPermissionRequests(
+        familyID: UUID,
+        requesterUserID: UUID,
+        session: SupabaseAuthSession
+    ) async throws -> [FamilyPermissionRequestRemoteRecord] {
+        try await fetchRows(
+            path: "family_permission_requests",
+            filters: [
+                URLQueryItem(name: "select", value: "*"),
+                URLQueryItem(name: "family_id", value: "eq.\(familyID.uuidString.lowercased())"),
+                URLQueryItem(name: "requester_user_id", value: "eq.\(requesterUserID.uuidString.lowercased())"),
+                URLQueryItem(name: "status", value: "eq.pending"),
+                URLQueryItem(name: "order", value: "created_at.desc")
             ],
             session: session
         )

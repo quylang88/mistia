@@ -115,6 +115,18 @@ private struct FamilyTransferDraftPayload {
     let note: String?
 }
 
+private struct TransferCreatePermissionPrompt: Identifiable {
+    let subtype: TransactionTransferSubtype
+    let resourceType: MistiaFamilyNotificationResourceType
+    let ownerUserID: UUID
+    let memberName: String
+    let isPending: Bool
+
+    var id: String {
+        "\(resourceType.rawValue):\(ownerUserID.uuidString.lowercased()):\(isPending)"
+    }
+}
+
 struct TransactionEditorSheet: View {
     @Environment(\.calendar) private var calendar
     @Environment(\.dismiss) private var dismiss
@@ -167,6 +179,7 @@ struct TransactionEditorSheet: View {
     @State private var didAutoPresentReceiptScanner = false
     @State private var didApplyReceiptPrefill = false
     @State private var showsFamilyTransferConfirmation = false
+    @State private var transferPermissionPrompt: TransferCreatePermissionPrompt?
     @FocusState private var focusedField: TransactionEditorFocusedField?
 
     init(
@@ -309,6 +322,29 @@ struct TransactionEditorSheet: View {
             }
         } message: {
             Text(L10n.transactions.transactioneditor.confirmFamilyTransferMessage)
+        }
+        .alert(
+            transferPermissionPrompt?.isPending == true
+                ? L10n.transactions.transactioneditor.permissionRequestPendingTitle
+                : L10n.transactions.transactioneditor.requestTransferPermissionTitle,
+            isPresented: Binding(
+                get: { transferPermissionPrompt != nil },
+                set: { if !$0 { transferPermissionPrompt = nil } }
+            ),
+            presenting: transferPermissionPrompt
+        ) { prompt in
+            Button(L10n.common.cancel, role: .cancel) { }
+            if prompt.isPending {
+                Button(L10n.transactions.transactioneditor.refreshPermissionStatus) {
+                    refreshTransferPermissionPrompt()
+                }
+            } else {
+                Button(L10n.transactions.transactioneditor.sendPermissionRequest) {
+                    requestTransferCreatePermission(prompt)
+                }
+            }
+        } message: { prompt in
+            Text(transferPermissionMessage(for: prompt))
         }
         .alert(
             L10n.transactions.transactioneditor.canTSaveYet,
@@ -471,6 +507,10 @@ struct TransactionEditorSheet: View {
                             get: { bindableDraft.transferSubtype ?? .internalTransfer },
                             set: { subtype in
                                 guard isTransferSubtypeEnabled(subtype) else { return }
+                                if let prompt = transferPermissionPrompt(for: subtype) {
+                                    transferPermissionPrompt = prompt
+                                    return
+                                }
                                 bindableDraft.transferSubtype = subtype
                             }
                         ),
@@ -486,6 +526,7 @@ struct TransactionEditorSheet: View {
                             .font(.footnote)
                             .foregroundStyle(.secondary)
                     }
+
                 }
             }
 
@@ -790,6 +831,94 @@ struct TransactionEditorSheet: View {
             canPerformRemoteActions: sessionStore.canPerformRemoteActions,
             isFamilyTransferDetail: isFamilyTransferDetail
         )
+    }
+
+    private func transferPermissionPrompt(for subtype: TransactionTransferSubtype) -> TransferCreatePermissionPrompt? {
+        guard familyContextStore.isViewingOtherMemberContext,
+              let ownerUserID = familyContextStore.selectedSubjectUserID,
+              let resourceType = transferCreatePermissionResourceType(for: subtype),
+              !familyContextStore.canCreate(ownerUserID: ownerUserID, resourceType: resourceType) else {
+            return nil
+        }
+
+        return TransferCreatePermissionPrompt(
+            subtype: subtype,
+            resourceType: resourceType,
+            ownerUserID: ownerUserID,
+            memberName: familyContextStore.viewedMember?.displayName
+                ?? familyContextStore.displayName(for: ownerUserID)
+                ?? L10n.shared.family.familycontext.aFamilyMember,
+            isPending: familyContextStore.hasPendingPermissionRequest(
+                ownerUserID: ownerUserID,
+                resourceType: resourceType,
+                resourceID: nil,
+                scope: .create
+            )
+        )
+    }
+
+    private func transferCreatePermissionResourceType(
+        for subtype: TransactionTransferSubtype
+    ) -> MistiaFamilyNotificationResourceType? {
+        switch subtype {
+        case .familyTransfer:
+            return .familyTransfer
+        case .debt:
+            return .debt
+        case .internalTransfer:
+            return nil
+        }
+    }
+
+    private func transferPermissionMessage(for prompt: TransferCreatePermissionPrompt) -> String {
+        if prompt.isPending {
+            return L10n.transactions.transactioneditor.transferPermissionPendingMessage(
+                prompt.subtype.title,
+                prompt.memberName
+            )
+        }
+
+        switch prompt.subtype {
+        case .familyTransfer:
+            return L10n.transactions.transactioneditor.requestFamilyTransferPermissionMessage(prompt.memberName)
+        case .debt:
+            return L10n.transactions.transactioneditor.requestDebtPermissionMessage(prompt.memberName)
+        case .internalTransfer:
+            return ""
+        }
+    }
+
+    private func refreshTransferPermissionPrompt() {
+        guard let prompt = transferPermissionPrompt else { return }
+        transferPermissionPrompt = nil
+        Task { @MainActor in
+            await familyContextStore.refreshLatest(
+                sessionStore: sessionStore,
+                source: .userInitiated
+            )
+            if transferPermissionPrompt(for: prompt.subtype) == nil {
+                draft.transferSubtype = prompt.subtype
+            }
+        }
+    }
+
+    private func requestTransferCreatePermission(_ prompt: TransferCreatePermissionPrompt) {
+        transferPermissionPrompt = nil
+        Task { @MainActor in
+            let didSend = await familyContextStore.requestPermission(
+                resourceType: prompt.resourceType,
+                resourceID: nil,
+                ownerUserID: prompt.ownerUserID,
+                scope: .create,
+                resourceName: prompt.subtype.title,
+                sessionStore: sessionStore
+            )
+            if didSend {
+                alertMessage = L10n.transactions.transactions.requestSent
+            } else if let message = familyContextStore.lastErrorMessage {
+                alertMessage = message
+            }
+        }
     }
 
     private var debtIntentOptions: [TransactionDebtIntent] {
@@ -1150,6 +1279,13 @@ struct TransactionEditorSheet: View {
     private func save() {
         guard !isSaving else { return }
         guard !isFamilyTransferDetail else { return }
+        if draft.primaryKind == .transfer {
+            let subtype = draft.transferSubtype ?? .internalTransfer
+            if let prompt = transferPermissionPrompt(for: subtype) {
+                transferPermissionPrompt = prompt
+                return
+            }
+        }
         if isFamilyTransferCreation {
             requestFamilyTransferConfirmation()
             return

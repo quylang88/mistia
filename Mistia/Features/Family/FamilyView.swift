@@ -1446,6 +1446,7 @@ private struct FamilyMiniTrendChart: View {
 
 private struct FamilyOverviewHeader: View {
     @Environment(FamilyContextStore.self) private var familyContextStore
+    @Environment(SessionStore.self) private var sessionStore
     let walletRows: [FamilyWalletAggregateSnapshot]
     let signedInUserID: UUID?
     let canInviteMembers: Bool
@@ -1486,6 +1487,7 @@ private struct FamilyOverviewHeader: View {
                                     familyContextStore.activateSelfView()
                                 } else {
                                     familyContextStore.activateMemberView(member)
+                                    refreshLatestMemberData()
                                 }
                             }
                         } label: {
@@ -1529,6 +1531,7 @@ private struct FamilyOverviewHeader: View {
                                         familyContextStore.activateSelfView()
                                     } else {
                                         familyContextStore.activateMemberView(member)
+                                        refreshLatestMemberData()
                                     }
                                 } label: {
                                     Label(L10n.family.family.viewDetails, systemImage: "eye.fill")
@@ -1570,6 +1573,15 @@ private struct FamilyOverviewHeader: View {
 
         guard case .member(let userID) = familyContextStore.activeContext.scope else { return false }
         return userID == member.userID
+    }
+
+    private func refreshLatestMemberData() {
+        Task { @MainActor in
+            await familyContextStore.refreshLatest(
+                sessionStore: sessionStore,
+                source: .userInitiated
+            )
+        }
     }
 }
 
@@ -2650,6 +2662,12 @@ private struct FamilyMemberProfileScreen: View {
         case .viewData:
             Button {
                 familyContextStore.activateMemberView(member)
+                Task { @MainActor in
+                    await familyContextStore.refreshLatest(
+                        sessionStore: sessionStore,
+                        source: .userInitiated
+                    )
+                }
                 dismiss()
             } label: {
                 memberActionRowContent(action)
@@ -3646,6 +3664,18 @@ private struct FamilySharingSheet: View {
                     sharingToggle(
                         title: L10n.family.family.transactions,
                         resourceType: .transaction,
+                        resourceID: nil,
+                        scope: .create
+                    )
+                    sharingToggle(
+                        title: TransactionTransferSubtype.familyTransfer.title,
+                        resourceType: .familyTransfer,
+                        resourceID: nil,
+                        scope: .create
+                    )
+                    sharingToggle(
+                        title: TransactionTransferSubtype.debt.title,
+                        resourceType: .debt,
                         resourceID: nil,
                         scope: .create
                     )

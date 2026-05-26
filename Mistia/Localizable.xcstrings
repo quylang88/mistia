@@ -15005,6 +15005,28 @@
         }
       }
     },
+    "planning.duepayment.paymentCycleMonth": {
+      "localizations": {
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Thanh toán kỳ tháng %@"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Paying cycle %@"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@分を支払い"
+          }
+        }
+      }
+    },
     "planning.duepayment.paymentWallet": {
       "localizations": {
         "vi": {
@@ -16721,6 +16743,28 @@
         }
       }
     },
+    "planning.planning.currentMonth": {
+      "localizations": {
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tháng hiện tại"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Current month"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "今月"
+          }
+        }
+      }
+    },
     "planning.planning.cycle": {
       "localizations": {
         "vi": {
@@ -17843,6 +17887,28 @@
         }
       }
     },
+    "planning.planning.nextMonth": {
+      "localizations": {
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tháng sau"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Next month"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "翌月"
+          }
+        }
+      }
+    },
     "planning.planning.name": {
       "localizations": {
         "vi": {
@@ -18939,6 +19005,28 @@
           "stringUnit": {
             "state": "translated",
             "value": "使用済み"
+          }
+        }
+      }
+    },
+    "planning.planning.startCounting": {
+      "localizations": {
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bắt đầu tính"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Start counting"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "開始月"
           }
         }
       }
@@ -25121,6 +25209,28 @@
           "stringUnit": {
             "state": "translated",
             "value": "借金"
+          }
+        }
+      }
+    },
+    "shared.persistence.notification.familyTransfer": {
+      "localizations": {
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Chuyển tiền gia đình"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Family transfer"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ファミリー送金"
           }
         }
       }
@@ -31347,6 +31457,160 @@
           "stringUnit": {
             "state": "translated",
             "value": "家族送金の記録は詳細表示のみで、編集、アーカイブ、削除はできません。"
+          }
+        }
+      }
+    },
+    "transactions.transactioneditor.permissionRequestPendingTitle": {
+      "localizations": {
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Đã gửi yêu cầu quyền"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Access request sent"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "権限リクエスト送信済み"
+          }
+        }
+      }
+    },
+    "transactions.transactioneditor.refreshPermissionStatus": {
+      "localizations": {
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Làm mới"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Refresh"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "更新"
+          }
+        }
+      }
+    },
+    "transactions.transactioneditor.requestDebtPermissionMessage": {
+      "localizations": {
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bạn cần quyền tạo công nợ cho %@. Gửi yêu cầu tới chủ dữ liệu?"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "You need debt creation access for %@. Send a request to the data owner?"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ の貸し借り作成権限が必要です。データ所有者へリクエストしますか？"
+          }
+        }
+      }
+    },
+    "transactions.transactioneditor.requestFamilyTransferPermissionMessage": {
+      "localizations": {
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bạn cần quyền chuyển tiền gia đình cho %@. Gửi yêu cầu tới chủ dữ liệu?"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "You need family transfer access for %@. Send a request to the data owner?"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ のファミリー送金権限が必要です。データ所有者へリクエストしますか？"
+          }
+        }
+      }
+    },
+    "transactions.transactioneditor.requestTransferPermissionTitle": {
+      "localizations": {
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Yêu cầu quyền chuyển tiền"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Request transfer access"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "送金権限をリクエスト"
+          }
+        }
+      }
+    },
+    "transactions.transactioneditor.sendPermissionRequest": {
+      "localizations": {
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Gửi yêu cầu"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Send request"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "リクエストを送信"
+          }
+        }
+      }
+    },
+    "transactions.transactioneditor.transferPermissionPendingMessage": {
+      "localizations": {
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Yêu cầu quyền %@ cho %@ đã được gửi. Làm mới trạng thái quyền từ cloud?"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The %@ access request for %@ has already been sent. Refresh access status from cloud?"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@（%@）の権限リクエストは送信済みです。クラウドから権限状態を更新しますか？"
           }
         }
       }

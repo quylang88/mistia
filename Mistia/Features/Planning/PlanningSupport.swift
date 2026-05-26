@@ -291,6 +291,7 @@ extension RecurringBillPlan {
             scheduleKind: scheduleKind,
             paymentStartDay: resolvedPaymentStartDay,
             paymentStartDate: paymentStartDate,
+            firstScheduledMonth: firstScheduledMonth,
             hasExplicitDueDate: resolvedHasExplicitDueDate,
             dueDate: dueDate,
             autoPayEnabled: autoPayEnabled,
@@ -409,7 +410,8 @@ extension LedgerWallet {
             currencyCode: currencyCode,
             currentDebtMinor: debt,
             availableCreditMinor: availableCredit,
-            openedAt: createdAt
+            openedAt: createdAt,
+            autoPayEnabled: profile.autoPayEnabled
         )
     }
 }

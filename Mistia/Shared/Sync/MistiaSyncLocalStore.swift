@@ -1841,6 +1841,7 @@ enum MistiaSyncLocalStore {
             statementClosingDay: row.statementClosingDay,
             paymentDueDay: row.paymentDueDay,
             notes: row.notes,
+            autoPayEnabled: row.autoPayEnabled,
             createdAt: row.createdAt,
             updatedAt: row.updatedAt,
             deletedAt: row.deletedAt,
@@ -1859,6 +1860,7 @@ enum MistiaSyncLocalStore {
         profile.statementClosingDay = row.statementClosingDay
         profile.paymentDueDay = row.paymentDueDay
         profile.notes = row.notes
+        profile.autoPayEnabled = row.autoPayEnabled
         profile.createdAt = row.createdAt
         profile.updatedAt = row.updatedAt
         profile.deletedAt = row.deletedAt
@@ -2058,6 +2060,7 @@ enum MistiaSyncLocalStore {
             scheduleKind: PlanningBillScheduleKind(rawValue: row.scheduleKindRawValue ?? "") ?? .recurring,
             paymentStartDay: row.paymentStartDay,
             paymentStartDate: row.paymentStartDate,
+            firstScheduledMonth: row.firstScheduledMonth,
             hasExplicitDueDate: row.hasExplicitDueDate,
             dueDate: row.dueDate,
             autoPayEnabled: row.autoPayEnabled ?? false,
@@ -2086,6 +2089,7 @@ enum MistiaSyncLocalStore {
         plan.scheduleKind = PlanningBillScheduleKind(rawValue: row.scheduleKindRawValue ?? "") ?? .recurring
         plan.paymentStartDay = row.paymentStartDay ?? row.dueDay
         plan.paymentStartDate = row.paymentStartDate
+        plan.firstScheduledMonth = row.firstScheduledMonth
         plan.hasExplicitDueDate = row.hasExplicitDueDate ?? false
         plan.dueDate = row.dueDate
         plan.autoPayEnabled = row.autoPayEnabled ?? false
@@ -2547,6 +2551,7 @@ private extension RemoteCreditCardProfile {
             notes: profile.notes,
             walletID: profile.wallet?.id,
             paymentSourceWalletID: profile.paymentSourceWallet?.id,
+            autoPayEnabled: profile.autoPayEnabled,
             createdAt: profile.createdAt,
             updatedAt: profile.updatedAt,
             deletedAt: profile.deletedAt,
@@ -2707,6 +2712,7 @@ private extension RemoteRecurringBillPlan {
             scheduleKindRawValue: plan.scheduleKind.rawValue,
             paymentStartDay: plan.resolvedPaymentStartDay,
             paymentStartDate: plan.paymentStartDate,
+            firstScheduledMonth: plan.firstScheduledMonth,
             hasExplicitDueDate: plan.resolvedHasExplicitDueDate,
             dueDate: plan.dueDate,
             autoPayEnabled: plan.autoPayEnabled,

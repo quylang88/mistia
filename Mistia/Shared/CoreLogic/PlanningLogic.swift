@@ -235,6 +235,41 @@ nonisolated struct PlanningCreditCardAccountSnapshot: Equatable, Identifiable {
     let currentDebtMinor: Int64
     let availableCreditMinor: Int64
     let openedAt: Date
+    let autoPayEnabled: Bool
+
+    init(
+        id: UUID,
+        walletID: UUID,
+        walletName: String,
+        issuerName: String,
+        network: CreditCardNetwork,
+        last4: String,
+        dueDay: Int,
+        statementClosingDay: Int,
+        paymentSourceWalletID: UUID?,
+        paymentSourceWalletName: String?,
+        currencyCode: String,
+        currentDebtMinor: Int64,
+        availableCreditMinor: Int64,
+        openedAt: Date,
+        autoPayEnabled: Bool = true
+    ) {
+        self.id = id
+        self.walletID = walletID
+        self.walletName = walletName
+        self.issuerName = issuerName
+        self.network = network
+        self.last4 = last4
+        self.dueDay = dueDay
+        self.statementClosingDay = statementClosingDay
+        self.paymentSourceWalletID = paymentSourceWalletID
+        self.paymentSourceWalletName = paymentSourceWalletName
+        self.currencyCode = currencyCode
+        self.currentDebtMinor = currentDebtMinor
+        self.availableCreditMinor = availableCreditMinor
+        self.openedAt = openedAt
+        self.autoPayEnabled = autoPayEnabled
+    }
 }
 
 nonisolated enum PlanningCreditCardStatementState: String, Equatable {
@@ -290,6 +325,7 @@ nonisolated struct PlanningBillSnapshot: Equatable, Identifiable {
     let scheduleKind: PlanningBillScheduleKind
     let paymentStartDay: Int
     let paymentStartDate: Date?
+    let firstScheduledMonth: Date?
     let hasExplicitDueDate: Bool
     let dueDate: Date?
     let autoPayEnabled: Bool
@@ -310,6 +346,7 @@ nonisolated struct PlanningBillSnapshot: Equatable, Identifiable {
         scheduleKind: PlanningBillScheduleKind = .recurring,
         paymentStartDay: Int? = nil,
         paymentStartDate: Date? = nil,
+        firstScheduledMonth: Date? = nil,
         hasExplicitDueDate: Bool = false,
         dueDate: Date? = nil,
         autoPayEnabled: Bool = false,
@@ -329,6 +366,7 @@ nonisolated struct PlanningBillSnapshot: Equatable, Identifiable {
         self.scheduleKind = scheduleKind
         self.paymentStartDay = paymentStartDay ?? dueDay
         self.paymentStartDate = paymentStartDate
+        self.firstScheduledMonth = firstScheduledMonth
         self.hasExplicitDueDate = hasExplicitDueDate
         self.dueDate = dueDate
         self.autoPayEnabled = autoPayEnabled
@@ -1305,7 +1343,7 @@ nonisolated enum PlanningLogic {
         case .recurring:
             guard isScheduledMonth(
                 selectedMonth: selectedMonth,
-                anchorDate: bill.createdAt,
+                anchorDate: bill.firstScheduledMonth ?? bill.createdAt,
                 frequencyMonths: bill.frequencyMonths,
                 totalCycles: nil,
                 calendar: calendar

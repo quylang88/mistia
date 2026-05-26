@@ -957,7 +957,7 @@ struct PlanningView: View {
         duePaymentTarget = DuePaymentSheetTarget(
             sourceKind: item.sourceKind,
             sourceID: item.sourceID,
-            dueMonthKey: PlanningLogic.monthKey(for: selectedMonth),
+            dueMonthKey: PlanningLogic.monthKey(for: item.paymentStartDate),
             dueDate: item.dueDate,
             requiresAmountInput: item.amountMinor == nil,
             currencyCode: item.currencyCode,

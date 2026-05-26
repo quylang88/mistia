@@ -74,6 +74,8 @@ enum MistiaCreditCardStatementMaintenance {
                     calendar: calendar
                 )
 
+                guard account.autoPayEnabled else { continue }
+
                 let sourceBalanceMinor = paymentSourceBalance(
                     for: statement,
                     walletByID: snapshot.walletByID,

@@ -817,6 +817,15 @@ struct PlanningBillEditorSheet: View {
             }
             .pickerStyle(.menu)
 
+            if target.plan == nil {
+                Picker(L10n.planning.planning.startCounting, selection: $draft.firstScheduledMonthChoice) {
+                    ForEach(PlanningBillFirstScheduledMonthChoice.allCases) { choice in
+                        Text(choice.title).tag(choice)
+                    }
+                }
+                .pickerStyle(.menu)
+            }
+
             Toggle(L10n.planning.planning.hasDeadline, isOn: $draft.hasDeadline)
                 .tint(MistiaAccent.purple.color)
                 .toggleStyle(.switch)
@@ -920,6 +929,7 @@ struct PlanningBillEditorSheet: View {
             plan.scheduleKind = draft.scheduleKind
             plan.paymentStartDay = normalized.paymentStartDay
             plan.paymentStartDate = normalized.paymentStartDate
+            plan.firstScheduledMonth = normalized.firstScheduledMonth
             plan.hasExplicitDueDate = normalized.hasExplicitDueDate
             plan.dueDate = normalized.dueDate
             plan.autoPayEnabled = normalized.autoPayEnabled
@@ -939,6 +949,7 @@ struct PlanningBillEditorSheet: View {
                 scheduleKind: draft.scheduleKind,
                 paymentStartDay: normalized.paymentStartDay,
                 paymentStartDate: normalized.paymentStartDate,
+                firstScheduledMonth: normalized.firstScheduledMonth,
                 hasExplicitDueDate: normalized.hasExplicitDueDate,
                 dueDate: normalized.dueDate,
                 autoPayEnabled: normalized.autoPayEnabled,
@@ -971,6 +982,7 @@ struct PlanningBillEditorSheet: View {
         dueDay: Int,
         paymentStartDay: Int,
         paymentStartDate: Date?,
+        firstScheduledMonth: Date?,
         hasExplicitDueDate: Bool,
         dueDate: Date?,
         autoPayEnabled: Bool,
@@ -989,6 +1001,7 @@ struct PlanningBillEditorSheet: View {
                 dueDay,
                 draft.paymentStartDay,
                 nil,
+                target.plan == nil ? firstScheduledMonth(for: draft.firstScheduledMonthChoice) : target.plan?.firstScheduledMonth,
                 hasExplicitDueDate,
                 nil,
                 draft.autoPayEnabled,
@@ -1014,6 +1027,7 @@ struct PlanningBillEditorSheet: View {
                 calendar.component(.day, from: effectiveDueDate),
                 calendar.component(.day, from: paymentStartDate),
                 paymentStartDate,
+                nil,
                 hasExplicitDueDate,
                 dueDate,
                 draft.autoPayEnabled,
@@ -1029,6 +1043,18 @@ struct PlanningBillEditorSheet: View {
             return L10n.planning.planning.dayValue(String(describing: day))
         }
         return L10n.planning.planning.dayValueNextMonth(String(describing: day))
+    }
+
+    private func firstScheduledMonth(
+        for choice: PlanningBillFirstScheduledMonthChoice
+    ) -> Date {
+        let currentMonth = PlanningLogic.startOfMonth(for: Date(), calendar: calendar)
+        switch choice {
+        case .currentMonth:
+            return currentMonth
+        case .nextMonth:
+            return calendar.date(byAdding: .month, value: 1, to: currentMonth) ?? currentMonth
+        }
     }
 
     private func normalizeAutoPayDraft() {
@@ -1464,6 +1490,9 @@ struct PlanningCreditCardEditorSheet: View {
                         }
                     }
                     .pickerStyle(.menu)
+                    Toggle(L10n.planning.planning.autoPay, isOn: $draft.autoPayEnabled)
+                        .tint(MistiaAccent.purple.color)
+                        .toggleStyle(.switch)
                     Picker(L10n.planning.planning.paymentWallet, selection: $draft.paymentSourceWalletID) {
                         Text(L10n.planning.planning.chooseWallet).tag(Optional<UUID>.none)
                         ForEach(availablePaymentWallets) { wallet in
@@ -1613,6 +1642,7 @@ struct PlanningCreditCardEditorSheet: View {
         profile.statementClosingDay = draft.statementClosingDay
         profile.paymentDueDay = draft.paymentDueDay
         profile.notes = draft.notes.nilIfBlank
+        profile.autoPayEnabled = draft.autoPayEnabled
         profile.paymentSourceWallet = storedWallets.first(where: { $0.id == draft.paymentSourceWalletID })
         profile.updatedAt = now
 
@@ -1816,6 +1846,7 @@ private struct PlanningBillDraft {
     var scheduleKind: PlanningBillScheduleKind
     var paymentStartDay: Int
     var paymentStartDate: Date
+    var firstScheduledMonthChoice: PlanningBillFirstScheduledMonthChoice
     var hasDeadline: Bool
     var dueDay: Int
     var dueDate: Date
@@ -1834,6 +1865,7 @@ private struct PlanningBillDraft {
         scheduleKind = plan?.scheduleKind ?? .recurring
         paymentStartDay = plan?.resolvedPaymentStartDay ?? plan?.dueDay ?? 10
         paymentStartDate = plan?.paymentStartDate ?? .now
+        firstScheduledMonthChoice = .currentMonth
         hasDeadline = plan?.resolvedHasExplicitDueDate ?? false
         dueDay = plan?.dueDay ?? paymentStartDay
         dueDate = plan?.dueDate ?? plan?.paymentStartDate ?? .now
@@ -1870,6 +1902,22 @@ private struct PlanningBillDraft {
         if date < start { return start }
         if date > end { return end }
         return date
+    }
+}
+
+private enum PlanningBillFirstScheduledMonthChoice: String, CaseIterable, Identifiable {
+    case currentMonth
+    case nextMonth
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .currentMonth:
+            L10n.planning.planning.currentMonth
+        case .nextMonth:
+            L10n.planning.planning.nextMonth
+        }
     }
 }
 
@@ -1920,6 +1968,7 @@ private struct PlanningCreditCardDraft {
     var creditLimitText: String
     var paymentDueDay: Int
     var statementClosingDay: Int
+    var autoPayEnabled: Bool
     var paymentSourceWalletID: UUID?
     var notes: String
 
@@ -1953,6 +2002,7 @@ private struct PlanningCreditCardDraft {
         creditLimitText = profile.map { String($0.creditLimitMinor) } ?? ""
         paymentDueDay = normalizedBillingDays.paymentDueDay
         statementClosingDay = normalizedBillingDays.statementClosingDay
+        autoPayEnabled = profile?.autoPayEnabled ?? false
         paymentSourceWalletID = profile?.paymentSourceWallet?.id
         notes = profile?.notes ?? ""
     }

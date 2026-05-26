@@ -358,7 +358,7 @@ struct AIBillAnalysisView: View {
                     .strikethrough()
             }
             if item.discountAmountMinor > 0 {
-                Text("-\(item.discountAmountMinor.formattedCurrency(code: currencyCode))")
+                Text(verbatim: "-\(item.discountAmountMinor.formattedCurrency(code: currencyCode))")
                     .font(.caption2.weight(.semibold))
                     .foregroundStyle(.red)
             }

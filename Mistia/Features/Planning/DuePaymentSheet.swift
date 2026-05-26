@@ -198,6 +198,9 @@ struct DuePaymentSheet: View {
                         VStack(alignment: .leading, spacing: 3) {
                             Text(target.name)
                                 .font(.system(size: 17, weight: .semibold, design: .rounded))
+                            Text(paymentCycleMonthText)
+                                .font(.system(size: 13, weight: .semibold, design: .rounded))
+                                .foregroundStyle(.primary)
                             Text(paymentWindowText)
                                 .font(.system(size: 13, weight: .medium, design: .rounded))
                                 .foregroundStyle(.secondary)
@@ -309,6 +312,15 @@ struct DuePaymentSheet: View {
             return "\(MistiaDateFormatting.shortDateString(for: item.paymentStartDate)) - \(MistiaDateFormatting.shortDateString(for: item.dueDate))"
         }
         return MistiaDateFormatting.shortDateString(for: item.paymentStartDate)
+    }
+
+    private var paymentCycleMonthText: String {
+        L10n.planning.duepayment.paymentCycleMonth(
+            MistiaDateFormatting.statementMonthYearString(
+                for: selectedMonthDate,
+                calendar: calendar
+            )
+        )
     }
 
     // MARK: - Pay

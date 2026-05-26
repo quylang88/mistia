@@ -81,6 +81,7 @@ final class CreditCardProfile {
     var statementClosingDay: Int
     var paymentDueDay: Int
     var notes: String?
+    var autoPayEnabled: Bool = true
     var createdAt: Date
     var updatedAt: Date
     var deletedAt: Date?
@@ -97,6 +98,7 @@ final class CreditCardProfile {
         statementClosingDay: Int = 25,
         paymentDueDay: Int = 10,
         notes: String? = nil,
+        autoPayEnabled: Bool = true,
         createdAt: Date = .now,
         updatedAt: Date = .now,
         deletedAt: Date? = nil,
@@ -112,6 +114,7 @@ final class CreditCardProfile {
         self.statementClosingDay = statementClosingDay
         self.paymentDueDay = paymentDueDay
         self.notes = notes
+        self.autoPayEnabled = autoPayEnabled
         self.createdAt = createdAt
         self.updatedAt = updatedAt
         self.deletedAt = deletedAt

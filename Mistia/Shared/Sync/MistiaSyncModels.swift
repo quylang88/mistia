@@ -78,11 +78,50 @@ struct RemoteCreditCardProfile: MistiaRemoteRow {
     var notes: String?
     var walletID: UUID?
     var paymentSourceWalletID: UUID?
+    var autoPayEnabled: Bool
     var createdAt: Date
     var updatedAt: Date
     var deletedAt: Date?
     var syncVersion: Int64
     var lastModifiedByDeviceID: UUID?
+
+    init(
+        userID: UUID,
+        id: UUID,
+        issuerName: String,
+        networkRawValue: String,
+        last4: String,
+        creditLimitMinor: Int64,
+        statementClosingDay: Int,
+        paymentDueDay: Int,
+        notes: String?,
+        walletID: UUID?,
+        paymentSourceWalletID: UUID?,
+        autoPayEnabled: Bool = true,
+        createdAt: Date,
+        updatedAt: Date,
+        deletedAt: Date?,
+        syncVersion: Int64,
+        lastModifiedByDeviceID: UUID?
+    ) {
+        self.userID = userID
+        self.id = id
+        self.issuerName = issuerName
+        self.networkRawValue = networkRawValue
+        self.last4 = last4
+        self.creditLimitMinor = creditLimitMinor
+        self.statementClosingDay = statementClosingDay
+        self.paymentDueDay = paymentDueDay
+        self.notes = notes
+        self.walletID = walletID
+        self.paymentSourceWalletID = paymentSourceWalletID
+        self.autoPayEnabled = autoPayEnabled
+        self.createdAt = createdAt
+        self.updatedAt = updatedAt
+        self.deletedAt = deletedAt
+        self.syncVersion = syncVersion
+        self.lastModifiedByDeviceID = lastModifiedByDeviceID
+    }
 
     enum CodingKeys: String, CodingKey {
         case userID = "user_id"
@@ -96,11 +135,33 @@ struct RemoteCreditCardProfile: MistiaRemoteRow {
         case notes
         case walletID = "wallet_id"
         case paymentSourceWalletID = "payment_source_wallet_id"
+        case autoPayEnabled = "auto_pay_enabled"
         case createdAt = "created_at"
         case updatedAt = "updated_at"
         case deletedAt = "deleted_at"
         case syncVersion = "sync_version"
         case lastModifiedByDeviceID = "last_modified_by_device_id"
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        userID = try container.decode(UUID.self, forKey: .userID)
+        id = try container.decode(UUID.self, forKey: .id)
+        issuerName = try container.decode(String.self, forKey: .issuerName)
+        networkRawValue = try container.decode(String.self, forKey: .networkRawValue)
+        last4 = try container.decode(String.self, forKey: .last4)
+        creditLimitMinor = try container.decode(Int64.self, forKey: .creditLimitMinor)
+        statementClosingDay = try container.decode(Int.self, forKey: .statementClosingDay)
+        paymentDueDay = try container.decode(Int.self, forKey: .paymentDueDay)
+        notes = try container.decodeIfPresent(String.self, forKey: .notes)
+        walletID = try container.decodeIfPresent(UUID.self, forKey: .walletID)
+        paymentSourceWalletID = try container.decodeIfPresent(UUID.self, forKey: .paymentSourceWalletID)
+        autoPayEnabled = try container.decodeIfPresent(Bool.self, forKey: .autoPayEnabled) ?? true
+        createdAt = try container.decode(Date.self, forKey: .createdAt)
+        updatedAt = try container.decode(Date.self, forKey: .updatedAt)
+        deletedAt = try container.decodeIfPresent(Date.self, forKey: .deletedAt)
+        syncVersion = try container.decode(Int64.self, forKey: .syncVersion)
+        lastModifiedByDeviceID = try container.decodeIfPresent(UUID.self, forKey: .lastModifiedByDeviceID)
     }
 }
 
@@ -396,6 +457,7 @@ struct RemoteRecurringBillPlan: MistiaRemoteRow {
     var scheduleKindRawValue: String?
     var paymentStartDay: Int?
     var paymentStartDate: Date?
+    var firstScheduledMonth: Date?
     var hasExplicitDueDate: Bool?
     var dueDate: Date?
     var autoPayEnabled: Bool?
@@ -422,6 +484,7 @@ struct RemoteRecurringBillPlan: MistiaRemoteRow {
         case scheduleKindRawValue = "schedule_kind_raw_value"
         case paymentStartDay = "payment_start_day"
         case paymentStartDate = "payment_start_date"
+        case firstScheduledMonth = "first_scheduled_month"
         case hasExplicitDueDate = "has_explicit_due_date"
         case dueDate = "due_date"
         case autoPayEnabled = "auto_pay_enabled"
