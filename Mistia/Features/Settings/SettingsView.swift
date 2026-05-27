@@ -374,7 +374,7 @@ private struct CurrencySettingsView: View {
     @Environment(\.colorScheme) private var colorScheme
     @AppStorage(MistiaCurrencySettings.StorageKey.primaryCurrencyCode) private var primaryCurrencyCode = "JPY"
     @AppStorage(MistiaCurrencySettings.StorageKey.enabledCurrencyCodes) private var enabledCurrencyCodesRawValue = "JPY"
-    @AppStorage(MistiaCurrencySettings.StorageKey.rateMode) private var rateModeRawValue = MistiaCurrencyRateMode.automatic.rawValue
+    @AppStorage(MistiaCurrencySettings.StorageKey.rateMode) private var rateModeRawValue = MistiaCurrencyRateMode.manual.rawValue
     @AppStorage(MistiaCurrencySettings.StorageKey.manualJPYToVNDRate) private var manualJPYToVNDRate = "165"
     @State private var isRefreshingRates = false
 
@@ -387,7 +387,47 @@ private struct CurrencySettingsView: View {
     }
 
     private var selectedRateMode: MistiaCurrencyRateMode {
-        MistiaCurrencyRateMode(rawValue: rateModeRawValue) ?? .automatic
+        MistiaCurrencyRateMode(rawValue: rateModeRawValue) ?? .manual
+    }
+
+    private var showsRateControls: Bool {
+        enabledCurrencyCodes.count > 1
+    }
+
+    private var rateSourceCurrencyCode: String? {
+        enabledCurrencyCodes.first { $0 != primaryCurrencyCode }
+    }
+
+    private var rateTargetCurrencyCode: String {
+        primaryCurrencyCode
+    }
+
+    private var ratePairTitle: String {
+        guard let source = rateSourceCurrencyCode else {
+            return L10n.settings.currency.rateValue
+        }
+        return L10n.settings.currency.ratePairValue(source, rateTargetCurrencyCode)
+    }
+
+    private var displayedRateText: String? {
+        guard let source = rateSourceCurrencyCode,
+              let jpyToVNDRate = currentJPYToVNDRate
+        else {
+            return nil
+        }
+        return displayText(forJPYToVNDRate: jpyToVNDRate, source: source, target: rateTargetCurrencyCode)
+    }
+
+    private var currentJPYToVNDRate: Decimal? {
+        switch selectedRateMode {
+        case .automatic:
+            return MistiaCurrencySettings.cachedRates().first { rate in
+                MistiaCurrencyLogic.normalizedCode(rate.baseCurrencyCode) == "JPY"
+                    && MistiaCurrencyLogic.normalizedCode(rate.quoteCurrencyCode) == "VND"
+            }?.rateDecimal
+        case .manual:
+            return decimal(from: manualJPYToVNDRate)
+        }
     }
 
     var body: some View {
@@ -409,10 +449,10 @@ private struct CurrencySettingsView: View {
                 primaryCurrencyCard
                 textDetailLayout(L10n.settings.currency.primaryDescription)
 
-                rateModeCard
-                textDetailLayout(selectedRateMode == .automatic
-                    ? L10n.settings.currency.autoDescription
-                    : L10n.settings.currency.manualDescription)
+                if showsRateControls {
+                    rateModeCard
+                    textDetailLayout(L10n.settings.currency.rateDescription)
+                }
             }
         }
     }
@@ -437,12 +477,34 @@ private struct CurrencySettingsView: View {
 
     private var primaryCurrencyCard: some View {
         MistiaGlassCard(cornerRadius: 22, tint: cardTint, padding: 0) {
-            Picker(L10n.settings.currency.primaryCurrency, selection: $primaryCurrencyCode) {
-                ForEach(enabledCurrencyCodes, id: \.self) { code in
-                    Text(verbatim: code).tag(code)
+            HStack(spacing: 14) {
+                Text(L10n.settings.currency.primaryCurrency)
+                    .font(.system(size: 16, weight: .semibold, design: .rounded))
+                Spacer(minLength: 12)
+                Menu {
+                    ForEach(enabledCurrencyCodes, id: \.self) { code in
+                        Button {
+                            primaryCurrencyCode = code
+                        } label: {
+                            HStack {
+                                Text(currencyMenuTitle(for: code))
+                                if code == primaryCurrencyCode {
+                                    Image(systemName: "checkmark")
+                                }
+                            }
+                        }
+                    }
+                } label: {
+                    HStack(spacing: 6) {
+                        Text(currencyMenuTitle(for: primaryCurrencyCode))
+                            .font(.system(size: 14, weight: .semibold, design: .rounded))
+                        Image(systemName: "chevron.up.chevron.down")
+                            .font(.system(size: 11, weight: .bold))
+                            .foregroundStyle(.secondary)
+                    }
                 }
+                .menuStyle(.button)
             }
-            .pickerStyle(.menu)
             .padding(.horizontal, 18)
             .padding(.vertical, 14)
         }
@@ -451,17 +513,16 @@ private struct CurrencySettingsView: View {
     private var rateModeCard: some View {
         MistiaGlassCard(cornerRadius: 22, tint: cardTint, padding: 0) {
             VStack(spacing: 0) {
-                Picker(L10n.settings.currency.rateMode, selection: $rateModeRawValue) {
-                    Text(L10n.settings.currency.rateModeAutomatic).tag(MistiaCurrencyRateMode.automatic.rawValue)
-                    Text(L10n.settings.currency.rateModeManual).tag(MistiaCurrencyRateMode.manual.rawValue)
+                Toggle(isOn: automaticRateBinding) {
+                    Text(L10n.settings.currency.autoUpdateRates)
+                        .font(.system(size: 16, weight: .semibold, design: .rounded))
                 }
-                .pickerStyle(.segmented)
                 .padding(.horizontal, 18)
                 .padding(.vertical, 14)
 
-                Divider().padding(.leading, 18)
-
                 if selectedRateMode == .automatic {
+                    Divider().padding(.leading, 18)
+
                     Button {
                         refreshRates()
                     } label: {
@@ -490,18 +551,53 @@ private struct CurrencySettingsView: View {
                             .padding(.horizontal, 18)
                             .padding(.vertical, 12)
                     }
-                } else {
-                    LabeledContent(L10n.settings.currency.manualJPYToVND) {
-                        TextField(String(), text: $manualJPYToVNDRate)
+                }
+
+                Divider().padding(.leading, 18)
+
+                LabeledContent(ratePairTitle) {
+                    if selectedRateMode == .automatic {
+                        Text(displayedRateText ?? "—")
+                            .font(.system(size: 15, weight: .semibold, design: .rounded))
+                            .foregroundStyle(displayedRateText == nil ? .secondary : .primary)
+                    } else {
+                        TextField(String(), text: displayedManualRateBinding)
                             .keyboardType(.decimalPad)
                             .multilineTextAlignment(.trailing)
                             .frame(maxWidth: 120)
                     }
-                    .padding(.horizontal, 18)
-                    .padding(.vertical, 14)
                 }
+                .font(.system(size: 15, weight: .semibold, design: .rounded))
+                .padding(.horizontal, 18)
+                .padding(.vertical, 14)
             }
         }
+    }
+
+    private var automaticRateBinding: Binding<Bool> {
+        Binding(
+            get: { selectedRateMode == .automatic },
+            set: { isAutomatic in
+                rateModeRawValue = (isAutomatic ? MistiaCurrencyRateMode.automatic : .manual).rawValue
+            }
+        )
+    }
+
+    private var displayedManualRateBinding: Binding<String> {
+        Binding(
+            get: { displayedRateText ?? manualJPYToVNDRate },
+            set: { newValue in
+                guard let source = rateSourceCurrencyCode else {
+                    manualJPYToVNDRate = newValue
+                    return
+                }
+                if let jpyToVNDRate = jpyToVNDRate(fromDisplayedRateText: newValue, source: source, target: rateTargetCurrencyCode) {
+                    manualJPYToVNDRate = rateText(jpyToVNDRate)
+                } else if source == "JPY" && rateTargetCurrencyCode == "VND" {
+                    manualJPYToVNDRate = newValue
+                }
+            }
+        )
     }
 
     private var lastUpdatedText: String? {
@@ -549,6 +645,44 @@ private struct CurrencySettingsView: View {
             }
         }
     }
+
+    private func currencyMenuTitle(for code: String) -> String {
+        "\(code) · \(localizedCurrencyName(for: code))"
+    }
+
+    private func displayText(forJPYToVNDRate rate: Decimal, source: String, target: String) -> String? {
+        if source == "JPY", target == "VND" {
+            return rateText(rate)
+        }
+        if source == "VND", target == "JPY", rate != 0 {
+            return rateText(Decimal(1) / rate)
+        }
+        return nil
+    }
+
+    private func jpyToVNDRate(fromDisplayedRateText text: String, source: String, target: String) -> Decimal? {
+        guard let displayedRate = decimal(from: text), displayedRate > 0 else {
+            return nil
+        }
+        if source == "JPY", target == "VND" {
+            return displayedRate
+        }
+        if source == "VND", target == "JPY" {
+            return Decimal(1) / displayedRate
+        }
+        return nil
+    }
+
+    private func decimal(from text: String) -> Decimal? {
+        Decimal(string: text.replacingOccurrences(of: ",", with: "."), locale: Locale(identifier: "en_US_POSIX"))
+    }
+
+    private func rateText(_ decimal: Decimal) -> String {
+        var value = decimal
+        var rounded = Decimal()
+        NSDecimalRound(&rounded, &value, 8, .plain)
+        return NSDecimalNumber(decimal: rounded).stringValue
+    }
 }
 
 private struct CurrencySettingsRowTitle: View {
@@ -559,10 +693,21 @@ private struct CurrencySettingsRowTitle: View {
             Text(verbatim: code)
                 .font(.system(size: 16, weight: .semibold, design: .rounded))
             Spacer()
-            Text(MistiaCurrencyFormatting.locale(for: code).localizedString(forCurrencyCode: code) ?? code)
+            Text(localizedCurrencyName(for: code))
                 .font(.system(size: 13, weight: .medium, design: .rounded))
                 .foregroundStyle(.secondary)
         }
+    }
+}
+
+private func localizedCurrencyName(for code: String) -> String {
+    switch MistiaCurrencyLogic.normalizedCode(code) {
+    case "JPY":
+        return L10n.settings.currency.currencyNameJPY
+    case "VND":
+        return L10n.settings.currency.currencyNameVND
+    default:
+        return code
     }
 }
 

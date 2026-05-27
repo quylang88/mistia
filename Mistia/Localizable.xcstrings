@@ -20131,24 +20131,90 @@
         }
       }
     },
-    "settings.currency.enabledDescription": {
+    "settings.currency.autoUpdateRates": {
       "localizations": {
         "vi": {
           "stringUnit": {
             "state": "translated",
-            "value": "Currency đã bật có thể dùng cho ví và chọn làm tiền tệ chính."
+            "value": "Tự động cập nhật tỷ giá"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Enabled currencies can be used for wallets and as the primary display currency."
+            "value": "Auto-update exchange rates"
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "有効な通貨はウォレットとメイン表示通貨に使えます。"
+            "value": "為替レートを自動更新"
+          }
+        }
+      }
+    },
+    "settings.currency.currencyNameJPY": {
+      "localizations": {
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Yên Nhật"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Japanese yen"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "日本円"
+          }
+        }
+      }
+    },
+    "settings.currency.currencyNameVND": {
+      "localizations": {
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Việt Nam Đồng"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vietnamese dong"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ベトナムドン"
+          }
+        }
+      }
+    },
+    "settings.currency.enabledDescription": {
+      "localizations": {
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tiền tệ đã bật có thể sử dụng cho ví."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Enabled currencies can be used for wallets."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "有効な通貨はウォレットで使えます。"
           }
         }
       }
@@ -20246,19 +20312,19 @@
         "vi": {
           "stringUnit": {
             "state": "translated",
-            "value": "Tiền tệ chính"
+            "value": "Tiền tệ hiển thị"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Primary currency"
+            "value": "Display currency"
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "メイン通貨"
+            "value": "表示通貨"
           }
         }
       }
@@ -20268,19 +20334,41 @@
         "vi": {
           "stringUnit": {
             "state": "translated",
-            "value": "Tổng quan và tổng hợp sẽ quy đổi về tiền tệ chính."
+            "value": "Tổng quan, Kế hoạch và Gia đình sẽ hiển thị tổng hợp theo tiền tệ này. Giao dịch và ví vẫn giữ tiền tệ riêng."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Overview and summary totals convert into the primary currency."
+            "value": "Overview, Planning, and Family totals use this currency. Transactions and wallets keep their own currencies."
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "概要と集計はメイン通貨に換算されます。"
+            "value": "概要、プラン、家族の集計はこの通貨で表示します。取引とウォレットはそれぞれの通貨を保持します。"
+          }
+        }
+      }
+    },
+    "settings.currency.rateDescription": {
+      "localizations": {
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Khi bật tự động, Mistia cập nhật tỷ giá sau 7:00 sáng hoặc khi bạn bấm cập nhật. Khi tắt, Mistia dùng tỷ giá bạn nhập."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "When auto-update is on, Mistia refreshes rates after 7:00 AM or when you tap refresh. When it is off, Mistia uses the rate you enter."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "自動更新をオンにすると、Mistia は午前7時以降または更新ボタンを押したときにレートを更新します。オフのときは入力したレートを使います。"
           }
         }
       }
@@ -20303,6 +20391,50 @@
           "stringUnit": {
             "state": "translated",
             "value": "為替レート"
+          }
+        }
+      }
+    },
+    "settings.currency.ratePairValue": {
+      "localizations": {
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "1 %@ sang %@"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "1 %@ to %@"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "1 %@ から %@"
+          }
+        }
+      }
+    },
+    "settings.currency.rateValue": {
+      "localizations": {
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tỷ giá"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Rate"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "レート"
           }
         }
       }

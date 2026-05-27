@@ -2252,8 +2252,14 @@ nonisolated enum L10n {
         nonisolated enum currency {
             static var autoDescription: String { L10n.tr("settings.currency.autoDescription", vi: "Mistia tự cập nhật tỷ giá sau 7:00 sáng khi app có mạng.", en: "Mistia updates rates after 7:00 AM when the app has network access.", ja: "Mistia は午前7時以降、通信できるときにレートを更新します。") }
             static func autoDescription(language: MistiaAppLanguage) -> String { L10n.tr("settings.currency.autoDescription", vi: "Mistia tự cập nhật tỷ giá sau 7:00 sáng khi app có mạng.", en: "Mistia updates rates after 7:00 AM when the app has network access.", ja: "Mistia は午前7時以降、通信できるときにレートを更新します。", language: language) }
-            static var enabledDescription: String { L10n.tr("settings.currency.enabledDescription", vi: "Currency đã bật có thể dùng cho ví và chọn làm tiền tệ chính.", en: "Enabled currencies can be used for wallets and as the primary display currency.", ja: "有効な通貨はウォレットとメイン表示通貨に使えます。") }
-            static func enabledDescription(language: MistiaAppLanguage) -> String { L10n.tr("settings.currency.enabledDescription", vi: "Currency đã bật có thể dùng cho ví và chọn làm tiền tệ chính.", en: "Enabled currencies can be used for wallets and as the primary display currency.", ja: "有効な通貨はウォレットとメイン表示通貨に使えます。", language: language) }
+            static var autoUpdateRates: String { L10n.tr("settings.currency.autoUpdateRates", vi: "Tự động cập nhật tỷ giá", en: "Auto-update exchange rates", ja: "為替レートを自動更新") }
+            static func autoUpdateRates(language: MistiaAppLanguage) -> String { L10n.tr("settings.currency.autoUpdateRates", vi: "Tự động cập nhật tỷ giá", en: "Auto-update exchange rates", ja: "為替レートを自動更新", language: language) }
+            static var currencyNameJPY: String { L10n.tr("settings.currency.currencyNameJPY", vi: "Yên Nhật", en: "Japanese yen", ja: "日本円") }
+            static func currencyNameJPY(language: MistiaAppLanguage) -> String { L10n.tr("settings.currency.currencyNameJPY", vi: "Yên Nhật", en: "Japanese yen", ja: "日本円", language: language) }
+            static var currencyNameVND: String { L10n.tr("settings.currency.currencyNameVND", vi: "Việt Nam Đồng", en: "Vietnamese dong", ja: "ベトナムドン") }
+            static func currencyNameVND(language: MistiaAppLanguage) -> String { L10n.tr("settings.currency.currencyNameVND", vi: "Việt Nam Đồng", en: "Vietnamese dong", ja: "ベトナムドン", language: language) }
+            static var enabledDescription: String { L10n.tr("settings.currency.enabledDescription", vi: "Tiền tệ đã bật có thể sử dụng cho ví.", en: "Enabled currencies can be used for wallets.", ja: "有効な通貨はウォレットで使えます。") }
+            static func enabledDescription(language: MistiaAppLanguage) -> String { L10n.tr("settings.currency.enabledDescription", vi: "Tiền tệ đã bật có thể sử dụng cho ví.", en: "Enabled currencies can be used for wallets.", ja: "有効な通貨はウォレットで使えます。", language: language) }
             static func lastUpdatedValue(_ value: String) -> String {
                 L10n.format("settings.currency.lastUpdatedValue", vi: "Cập nhật lần cuối: %@", en: "Last updated: %@", ja: "最終更新: %@", value)
             }
@@ -2266,16 +2272,26 @@ nonisolated enum L10n {
             static func manualJPYToVND(language: MistiaAppLanguage) -> String { L10n.tr("settings.currency.manualJPYToVND", vi: "1 JPY sang VND", en: "1 JPY to VND", ja: "1 JPY から VND", language: language) }
             static var notUpdatedYet: String { L10n.tr("settings.currency.notUpdatedYet", vi: "Chưa cập nhật tỷ giá tự động.", en: "Automatic rates have not been updated yet.", ja: "自動レートはまだ更新されていません。") }
             static func notUpdatedYet(language: MistiaAppLanguage) -> String { L10n.tr("settings.currency.notUpdatedYet", vi: "Chưa cập nhật tỷ giá tự động.", en: "Automatic rates have not been updated yet.", ja: "自動レートはまだ更新されていません。", language: language) }
-            static var primaryCurrency: String { L10n.tr("settings.currency.primaryCurrency", vi: "Tiền tệ chính", en: "Primary currency", ja: "メイン通貨") }
-            static func primaryCurrency(language: MistiaAppLanguage) -> String { L10n.tr("settings.currency.primaryCurrency", vi: "Tiền tệ chính", en: "Primary currency", ja: "メイン通貨", language: language) }
-            static var primaryDescription: String { L10n.tr("settings.currency.primaryDescription", vi: "Tổng quan và tổng hợp sẽ quy đổi về tiền tệ chính.", en: "Overview and summary totals convert into the primary currency.", ja: "概要と集計はメイン通貨に換算されます。") }
-            static func primaryDescription(language: MistiaAppLanguage) -> String { L10n.tr("settings.currency.primaryDescription", vi: "Tổng quan và tổng hợp sẽ quy đổi về tiền tệ chính.", en: "Overview and summary totals convert into the primary currency.", ja: "概要と集計はメイン通貨に換算されます。", language: language) }
+            static var primaryCurrency: String { L10n.tr("settings.currency.primaryCurrency", vi: "Tiền tệ hiển thị", en: "Display currency", ja: "表示通貨") }
+            static func primaryCurrency(language: MistiaAppLanguage) -> String { L10n.tr("settings.currency.primaryCurrency", vi: "Tiền tệ hiển thị", en: "Display currency", ja: "表示通貨", language: language) }
+            static var primaryDescription: String { L10n.tr("settings.currency.primaryDescription", vi: "Tổng quan, Kế hoạch và Gia đình sẽ hiển thị tổng hợp theo tiền tệ này. Giao dịch và ví vẫn giữ tiền tệ riêng.", en: "Overview, Planning, and Family totals use this currency. Transactions and wallets keep their own currencies.", ja: "概要、プラン、家族の集計はこの通貨で表示します。取引とウォレットはそれぞれの通貨を保持します。") }
+            static func primaryDescription(language: MistiaAppLanguage) -> String { L10n.tr("settings.currency.primaryDescription", vi: "Tổng quan, Kế hoạch và Gia đình sẽ hiển thị tổng hợp theo tiền tệ này. Giao dịch và ví vẫn giữ tiền tệ riêng.", en: "Overview, Planning, and Family totals use this currency. Transactions and wallets keep their own currencies.", ja: "概要、プラン、家族の集計はこの通貨で表示します。取引とウォレットはそれぞれの通貨を保持します。", language: language) }
+            static var rateDescription: String { L10n.tr("settings.currency.rateDescription", vi: "Khi bật tự động, Mistia cập nhật tỷ giá sau 7:00 sáng hoặc khi bạn bấm cập nhật. Khi tắt, Mistia dùng tỷ giá bạn nhập.", en: "When auto-update is on, Mistia refreshes rates after 7:00 AM or when you tap refresh. When it is off, Mistia uses the rate you enter.", ja: "自動更新をオンにすると、Mistia は午前7時以降または更新ボタンを押したときにレートを更新します。オフのときは入力したレートを使います。") }
+            static func rateDescription(language: MistiaAppLanguage) -> String { L10n.tr("settings.currency.rateDescription", vi: "Khi bật tự động, Mistia cập nhật tỷ giá sau 7:00 sáng hoặc khi bạn bấm cập nhật. Khi tắt, Mistia dùng tỷ giá bạn nhập.", en: "When auto-update is on, Mistia refreshes rates after 7:00 AM or when you tap refresh. When it is off, Mistia uses the rate you enter.", ja: "自動更新をオンにすると、Mistia は午前7時以降または更新ボタンを押したときにレートを更新します。オフのときは入力したレートを使います。", language: language) }
             static var rateMode: String { L10n.tr("settings.currency.rateMode", vi: "Tỷ giá", en: "Exchange rate", ja: "為替レート") }
             static func rateMode(language: MistiaAppLanguage) -> String { L10n.tr("settings.currency.rateMode", vi: "Tỷ giá", en: "Exchange rate", ja: "為替レート", language: language) }
             static var rateModeAutomatic: String { L10n.tr("settings.currency.rateModeAutomatic", vi: "Tự động", en: "Automatic", ja: "自動") }
             static func rateModeAutomatic(language: MistiaAppLanguage) -> String { L10n.tr("settings.currency.rateModeAutomatic", vi: "Tự động", en: "Automatic", ja: "自動", language: language) }
             static var rateModeManual: String { L10n.tr("settings.currency.rateModeManual", vi: "Thủ công", en: "Manual", ja: "手動") }
             static func rateModeManual(language: MistiaAppLanguage) -> String { L10n.tr("settings.currency.rateModeManual", vi: "Thủ công", en: "Manual", ja: "手動", language: language) }
+            static func ratePairValue(_ arg1: String, _ arg2: String) -> String {
+                L10n.format("settings.currency.ratePairValue", vi: "1 %@ sang %@", en: "1 %@ to %@", ja: "1 %@ から %@", arg1, arg2)
+            }
+            static func ratePairValue(_ arg1: String, _ arg2: String, language: MistiaAppLanguage) -> String {
+                L10n.format("settings.currency.ratePairValue", vi: "1 %@ sang %@", en: "1 %@ to %@", ja: "1 %@ から %@", language: language, arg1, arg2)
+            }
+            static var rateValue: String { L10n.tr("settings.currency.rateValue", vi: "Tỷ giá", en: "Rate", ja: "レート") }
+            static func rateValue(language: MistiaAppLanguage) -> String { L10n.tr("settings.currency.rateValue", vi: "Tỷ giá", en: "Rate", ja: "レート", language: language) }
             static var refreshRates: String { L10n.tr("settings.currency.refreshRates", vi: "Cập nhật tỷ giá", en: "Refresh rates", ja: "レートを更新") }
             static func refreshRates(language: MistiaAppLanguage) -> String { L10n.tr("settings.currency.refreshRates", vi: "Cập nhật tỷ giá", en: "Refresh rates", ja: "レートを更新", language: language) }
             static var refreshingRates: String { L10n.tr("settings.currency.refreshingRates", vi: "Đang cập nhật", en: "Refreshing", ja: "更新中") }

@@ -65,7 +65,7 @@ enum MistiaCurrencySettings {
     }
 
     static func rateMode(defaults: UserDefaults = .standard) -> MistiaCurrencyRateMode {
-        MistiaCurrencyRateMode(rawValue: defaults.string(forKey: StorageKey.rateMode) ?? "") ?? .automatic
+        MistiaCurrencyRateMode(rawValue: defaults.string(forKey: StorageKey.rateMode) ?? "") ?? .manual
     }
 
     static func rates(defaults: UserDefaults = .standard) -> [MistiaExchangeRate] {

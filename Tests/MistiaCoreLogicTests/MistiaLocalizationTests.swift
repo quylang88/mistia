@@ -72,6 +72,21 @@ final class MistiaLocalizationTests: XCTestCase {
         XCTAssertEqual(L10n.common.cancel, "Hủy")
     }
 
+    func testCurrencyNamesFollowSelectedAppLanguage() {
+        XCTAssertEqual(L10n.settings.currency.currencyNameJPY(language: .vietnamese), "Yên Nhật")
+        XCTAssertEqual(L10n.settings.currency.currencyNameVND(language: .vietnamese), "Việt Nam Đồng")
+        XCTAssertEqual(L10n.settings.currency.currencyNameJPY(language: .japanese), "日本円")
+        XCTAssertEqual(L10n.settings.currency.currencyNameVND(language: .japanese), "ベトナムドン")
+    }
+
+    func testCurrencyRateModeDefaultsToManual() {
+        let suiteName = "MistiaLocalizationTests.currencyRateMode.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suiteName)!
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+
+        XCTAssertEqual(MistiaCurrencySettings.rateMode(defaults: defaults), .manual)
+    }
+
     func testMonthYearFormattingUsesLanguageSpecificLocaleProfiles() {
         XCTAssertEqual(
             MistiaDateFormatting.monthYearString(for: referenceDate, language: .vietnamese),

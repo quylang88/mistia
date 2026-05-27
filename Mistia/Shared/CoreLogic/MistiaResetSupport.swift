@@ -34,7 +34,7 @@ enum MistiaSettingsResetSupport {
         defaults.set(false, forKey: StorageKey.hideQuickCreate)
         defaults.set("JPY", forKey: StorageKey.currencyCode)
         defaults.set("JPY", forKey: StorageKey.enabledCurrencyCodes)
-        defaults.set("automatic", forKey: StorageKey.currencyRateMode)
+        defaults.set("manual", forKey: StorageKey.currencyRateMode)
         defaults.set("165", forKey: StorageKey.manualJPYToVNDRate)
         defaults.removeObject(forKey: StorageKey.cachedRatesData)
         defaults.removeObject(forKey: StorageKey.lastAutoRateRefreshAt)
