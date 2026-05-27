@@ -380,6 +380,57 @@ final class BillItemAnalysisTests: XCTestCase {
         XCTAssertEqual(BillItemSelectionLogic.lockedItemIDs(in: []), [])
     }
 
+    func testSelectionSnapshotPrecomputesCandidatesSelectionAndLockedItemsByBill() throws {
+        let billID = UUID()
+        let purchase = BillItemAnalysisItem(
+            lineID: "a",
+            originalName: "A",
+            lineType: .purchase,
+            originalAmountMinor: 1_000,
+            discountAmountMinor: 0,
+            finalAmountMinor: 1_000,
+            categoryID: categoryID,
+            confidence: 0.9
+        )
+        let locked = BillItemAnalysisItem(
+            lineID: "locked",
+            originalName: "Locked",
+            lineType: .purchase,
+            originalAmountMinor: 2_000,
+            discountAmountMinor: 0,
+            finalAmountMinor: 2_000,
+            categoryID: categoryID,
+            confidence: 0.9
+        )
+        let lockedID = BillItemSelectionID(billID: billID, itemID: locked.lineID)
+        let group = BillItemLockedGroup(
+            id: UUID(),
+            mode: .expense,
+            itemIDs: [lockedID],
+            amountMinor: locked.transactionAmountMinor
+        )
+
+        let snapshot = BillItemSelectionSnapshot(
+            bills: [
+                BillItemSelectionBillSnapshot(
+                    billID: billID,
+                    walletID: walletID,
+                    merchantName: "Store",
+                    occurredAt: Date(timeIntervalSince1970: 100),
+                    items: [purchase, locked],
+                    createdItemIDs: [],
+                    lockedGroups: [group]
+                )
+            ],
+            selectedIDs: [BillItemSelectionID(billID: billID, itemID: purchase.lineID)]
+        )
+
+        XCTAssertEqual(snapshot.candidatesByBillID[billID]?.count, 2)
+        XCTAssertEqual(snapshot.selectedCandidatesByBillID[billID]?.map(\.id.itemID), ["a"])
+        XCTAssertEqual(snapshot.lockedItemIDsByBillID[billID], [lockedID])
+        XCTAssertEqual(snapshot.candidatesByID[lockedID]?.isLocked, true)
+    }
+
     func testAllocatesDiscountRecordAcrossPurchaseItemsAndClearsDiscountLine() throws {
         let first = BillItemAnalysisItem(
             lineID: "a",

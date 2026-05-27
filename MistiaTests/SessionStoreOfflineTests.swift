@@ -451,6 +451,127 @@ final class SessionStoreOfflineTests: XCTestCase {
         )
     }
 
+    func testQueuedLocalMutationWaitsForAutomaticCadenceInsteadOfImmediateSync() async throws {
+        let session = makeSession()
+        let container = try storeTestContainer()
+        let syncRemoteStore = SessionSyncRemoteStoreSpy()
+        let store = try makeSessionStore(
+            authService: SessionAuthServiceSpy(
+                persistedSession: session,
+                refreshResult: .success(session)
+            ),
+            userProfileStore: UserProfileStoreSpy(),
+            networkStatus: .connected,
+            modelContainer: container,
+            syncCoordinator: SyncCoordinator(
+                modelContainer: container,
+                remoteStore: syncRemoteStore,
+                outbox: MistiaSyncOutbox(
+                    defaults: UserDefaults(suiteName: "MistiaTests.\(UUID().uuidString)") ?? .standard,
+                    key: "queued-local-mutation"
+                )
+            )
+        )
+
+        await store.bootstrapIfNeeded()
+        store.requiresInitialSync = false
+        store.lastSyncAt = .now
+        store.setAutoSyncEnabled(true)
+
+        store.recordUpsert(
+            entity: .transaction,
+            recordID: UUID(),
+            modifiedAt: .now,
+            subjectUserIDOverride: session.user.id
+        )
+        try? await Task.sleep(for: .seconds(1))
+
+        XCTAssertEqual(syncRemoteStore.fetchSnapshotCallCount, 0)
+    }
+
+    func testFamilyOwnerMutationPushesImmediatelyWithoutWaitingForAutoSyncCadence() async throws {
+        let session = makeSession()
+        let memberUserID = UUID()
+        let container = try storeTestContainer()
+        let syncRemoteStore = SessionSyncRemoteStoreSpy()
+        let store = try makeSessionStore(
+            authService: SessionAuthServiceSpy(
+                persistedSession: session,
+                refreshResult: .success(session)
+            ),
+            userProfileStore: UserProfileStoreSpy(),
+            networkStatus: .connected,
+            modelContainer: container,
+            syncCoordinator: SyncCoordinator(
+                modelContainer: container,
+                remoteStore: syncRemoteStore,
+                outbox: MistiaSyncOutbox(
+                    defaults: UserDefaults(suiteName: "MistiaTests.\(UUID().uuidString)") ?? .standard,
+                    key: "family-owner-mutation"
+                )
+            )
+        )
+        let wallet = LedgerWallet(
+            name: "Member cash",
+            kind: .cash,
+            iconSymbolName: "banknote",
+            iconColorHex: "#34C759"
+        )
+        container.mainContext.insert(wallet)
+        try container.mainContext.save()
+
+        await store.bootstrapIfNeeded()
+        store.requiresInitialSync = false
+        store.lastSyncAt = .now
+        store.setAutoSyncEnabled(false)
+
+        store.recordUpsert(
+            entity: .wallet,
+            recordID: wallet.id,
+            modifiedAt: wallet.updatedAt,
+            subjectUserIDOverride: memberUserID
+        )
+
+        await waitUntil("family owner mutation pushes immediately") {
+            syncRemoteStore.createCallCount > 0
+        }
+        XCTAssertEqual(syncRemoteStore.createdSubjectUserIDs, [memberUserID])
+    }
+
+    func testForegroundCatchUpRunsWhenLastSyncIsOlderThanTwentyMinutes() async throws {
+        let session = makeSession()
+        let container = try storeTestContainer()
+        let syncRemoteStore = SessionSyncRemoteStoreSpy()
+        let store = try makeSessionStore(
+            authService: SessionAuthServiceSpy(
+                persistedSession: session,
+                refreshResult: .success(session)
+            ),
+            userProfileStore: UserProfileStoreSpy(),
+            networkStatus: .connected,
+            modelContainer: container,
+            syncCoordinator: SyncCoordinator(
+                modelContainer: container,
+                remoteStore: syncRemoteStore,
+                outbox: MistiaSyncOutbox(
+                    defaults: UserDefaults(suiteName: "MistiaTests.\(UUID().uuidString)") ?? .standard,
+                    key: "foreground-catch-up"
+                )
+            )
+        )
+
+        await store.bootstrapIfNeeded()
+        store.requiresInitialSync = false
+        store.lastSyncAt = Date().addingTimeInterval(-1_201)
+        store.setAutoSyncEnabled(true)
+
+        store.handleSceneDidBecomeActive()
+
+        await waitUntil("foreground catch-up syncs after twenty minutes") {
+            syncRemoteStore.fetchSnapshotCallCount > 0
+        }
+    }
+
     func testFamilyContextSwitchRefreshCoalescesRapidRequests() async throws {
         let currentUserID = UUID()
         let memberUserID = UUID()
@@ -1579,9 +1700,14 @@ private final class UserProfileStoreSpy: UserProfileRemoteStoring {
 @MainActor
 private final class SessionSyncRemoteStoreSpy: MistiaRemoteStore {
     private(set) var fetchSnapshotSubjectUserIDs: [UUID?] = []
+    private(set) var createdSubjectUserIDs: [UUID] = []
 
     var fetchSnapshotCallCount: Int {
         fetchSnapshotSubjectUserIDs.count
+    }
+
+    var createCallCount: Int {
+        createdSubjectUserIDs.count
     }
 
     func fetchSnapshot(session: SupabaseAuthSession, subjectUserID: UUID?) async throws -> MistiaRemoteSnapshot {
@@ -1603,7 +1729,8 @@ private final class SessionSyncRemoteStoreSpy: MistiaRemoteStore {
         subjectUserID: UUID,
         session: SupabaseAuthSession
     ) async throws -> MistiaSyncUploadRecord {
-        record
+        createdSubjectUserIDs.append(subjectUserID)
+        return record
     }
 
     func conditionalUpdate(

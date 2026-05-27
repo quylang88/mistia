@@ -2268,18 +2268,9 @@ struct TransactionEditorSheet: View {
                     subjectUserIDOverride: subjectUserIDOverride
                 )
                 if subjectUserIDOverride != sessionStore.activeLocalProfileUserID {
-                    isSaving = true
                     Task { @MainActor in
-                        let didSync = await sessionStore.pushQueuedFamilyOwnerChangesNow()
-                        isSaving = false
-                        guard didSync else {
-                            alertMessage = familyCloudPushFailedMessage()
-                            return
-                        }
-                        onComplete(completion)
-                        dismiss()
+                        _ = await sessionStore.pushQueuedFamilyOwnerChangesNow()
                     }
-                    return
                 }
             }
             onComplete(completion)
@@ -2287,13 +2278,6 @@ struct TransactionEditorSheet: View {
         } catch {
             alertMessage = L10n.transactions.transactioneditor.couldnTSaveThisTransactionRightNow + " \(error.localizedDescription)"
         }
-    }
-
-    private func familyCloudPushFailedMessage() -> String {
-        let detail = sessionStore.lastErrorMessage?.nilIfBlank
-        let base = L10n.transactions.transactioneditor.theTransactionWasSavedOnThisDevice
-        guard let detail else { return base }
-        return "\(base) \(detail)"
     }
 
     private var effectiveOperableTargetUserIDs: Set<UUID> {

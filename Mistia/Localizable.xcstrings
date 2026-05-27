@@ -32649,28 +32649,6 @@
         }
       }
     },
-    "transactions.transactioneditor.theTransactionWasSavedOnThisDevice": {
-      "localizations": {
-        "vi": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Giao dịch đã lưu trên máy này nhưng chưa đẩy được lên cloud của chủ ví."
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "The transaction was saved on this device but couldn't be pushed to the wallet owner's cloud yet."
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "この端末には保存されましたが、ウォレット所有者のクラウドにはまだ送信できませんでした。"
-          }
-        }
-      }
-    },
     "transactions.transactioneditor.theValueStatementForThisCardHas": {
       "localizations": {
         "vi": {

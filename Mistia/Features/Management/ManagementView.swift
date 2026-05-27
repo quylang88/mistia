@@ -114,7 +114,6 @@ struct ManagementView: View {
     @State private var infoAlert: ManagementInfoAlert?
     @State private var permissionPrompt: ManagementPermissionPrompt?
     @State private var walletPermissionPrompt: ManagementWalletPermissionPrompt?
-    @State private var isOpeningFamily = false
 
     private var cardTint: Color {
         colorScheme == .dark ? .white.opacity(0.018) : .white.opacity(0.12)
@@ -483,21 +482,15 @@ struct ManagementView: View {
                                     .font(.system(size: 14, weight: .medium, design: .rounded))
                                     .foregroundStyle(.secondary)
 
-                                if isOpeningFamily && shouldRefreshFamilyBeforeOpening {
-                                    ProgressView()
-                                        .controlSize(.small)
-                                        .frame(width: 12, height: 12)
-                                } else {
-                                    Image(systemName: "chevron.right")
-                                        .font(.system(size: 12, weight: .bold))
-                                        .foregroundStyle(.tertiary)
-                                }
+                                Image(systemName: "chevron.right")
+                                    .font(.system(size: 12, weight: .bold))
+                                    .foregroundStyle(.tertiary)
                             }
                             .padding(.horizontal, 16)
                             .padding(.vertical, 16)
                         }
                         .buttonStyle(MistiaPressableButtonStyle(cornerRadius: 20))
-                        .disabled(!sessionStore.canPerformRemoteActions || isOpeningFamily)
+                        .disabled(!sessionStore.canPerformRemoteActions)
                         .opacity(sessionStore.canPerformRemoteActions ? 1 : 0.55)
                     }
                 }
@@ -510,21 +503,16 @@ struct ManagementView: View {
     }
 
     private func openFamily() {
+        destination = .family
         guard shouldRefreshFamilyBeforeOpening else {
-            destination = .family
             return
         }
-
-        guard !isOpeningFamily else { return }
-        isOpeningFamily = true
-        destination = .family
 
         Task { @MainActor in
             await familyContextStore.refreshLatest(
                 sessionStore: sessionStore,
                 source: .enterFamily
             )
-            isOpeningFamily = false
         }
     }
 

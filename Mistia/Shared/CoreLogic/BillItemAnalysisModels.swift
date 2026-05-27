@@ -258,6 +258,73 @@ struct BillItemTransactionDraft: Equatable {
     let receiptAttachmentBillID: UUID?
 }
 
+struct BillItemSelectionBillSnapshot: Equatable {
+    let billID: UUID
+    let walletID: UUID?
+    let merchantName: String?
+    let occurredAt: Date?
+    let items: [BillItemAnalysisItem]
+    let createdItemIDs: Set<String>
+    let lockedGroups: [BillItemLockedGroup]
+}
+
+struct BillItemSelectionSnapshot: Equatable {
+    let candidatesByBillID: [UUID: [BillItemSelectionCandidate]]
+    let selectedCandidatesByBillID: [UUID: [BillItemSelectionCandidate]]
+    let lockedItemIDsByBillID: [UUID: Set<BillItemSelectionID>]
+    let candidatesByID: [BillItemSelectionID: BillItemSelectionCandidate]
+    let allCandidates: [BillItemSelectionCandidate]
+    let selectedCandidates: [BillItemSelectionCandidate]
+
+    init(
+        bills: [BillItemSelectionBillSnapshot],
+        selectedIDs: Set<BillItemSelectionID>
+    ) {
+        var candidatesByBillID: [UUID: [BillItemSelectionCandidate]] = [:]
+        var selectedCandidatesByBillID: [UUID: [BillItemSelectionCandidate]] = [:]
+        var lockedItemIDsByBillID: [UUID: Set<BillItemSelectionID>] = [:]
+        var candidatesByID: [BillItemSelectionID: BillItemSelectionCandidate] = [:]
+        var allCandidates: [BillItemSelectionCandidate] = []
+        var selectedCandidates: [BillItemSelectionCandidate] = []
+
+        for bill in bills {
+            let lockedItemIDs = BillItemSelectionLogic.lockedItemIDs(in: bill.lockedGroups)
+            lockedItemIDsByBillID[bill.billID] = lockedItemIDs
+
+            let candidates = bill.items.map { item in
+                let id = BillItemSelectionID(billID: bill.billID, itemID: item.lineID)
+                return BillItemSelectionCandidate(
+                    id: id,
+                    walletID: bill.walletID,
+                    categoryID: item.categoryID,
+                    lineType: item.lineType,
+                    amountMinor: item.transactionAmountMinor,
+                    merchantName: bill.merchantName,
+                    occurredAt: bill.occurredAt,
+                    isCreated: bill.createdItemIDs.contains(item.lineID),
+                    isLocked: lockedItemIDs.contains(id)
+                )
+            }
+
+            candidatesByBillID[bill.billID] = candidates
+            let selectedForBill = candidates.filter { selectedIDs.contains($0.id) }
+            selectedCandidatesByBillID[bill.billID] = selectedForBill
+            allCandidates.append(contentsOf: candidates)
+            selectedCandidates.append(contentsOf: selectedForBill)
+            for candidate in candidates {
+                candidatesByID[candidate.id] = candidate
+            }
+        }
+
+        self.candidatesByBillID = candidatesByBillID
+        self.selectedCandidatesByBillID = selectedCandidatesByBillID
+        self.lockedItemIDsByBillID = lockedItemIDsByBillID
+        self.candidatesByID = candidatesByID
+        self.allCandidates = allCandidates
+        self.selectedCandidates = selectedCandidates
+    }
+}
+
 enum BillItemSelectionLogic {
     static func canSelect(
         _ candidate: BillItemSelectionCandidate,

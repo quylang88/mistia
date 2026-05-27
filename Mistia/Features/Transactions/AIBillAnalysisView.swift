@@ -31,6 +31,8 @@ struct AIBillAnalysisView: View {
     private let imageLimit = 5
 
     var body: some View {
+        let renderContext = makeRenderContext()
+
         ScrollView {
             VStack(spacing: 18) {
                 modeSection
@@ -39,7 +41,7 @@ struct AIBillAnalysisView: View {
                     emptyState
                 } else {
                     ForEach(bills) { bill in
-                        billCard(bill)
+                        billCard(bill, renderContext: renderContext)
                     }
                 }
             }
@@ -192,7 +194,7 @@ struct AIBillAnalysisView: View {
         .padding(.top, 40)
     }
 
-    private func billCard(_ bill: AIBillDraft) -> some View {
+    private func billCard(_ bill: AIBillDraft, renderContext: AIBillRenderContext) -> some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(spacing: 12) {
                 Image(uiImage: bill.thumbnail)
@@ -231,11 +233,11 @@ struct AIBillAnalysisView: View {
             }
 
             if bill.result != nil, !bill.isMultipleBillImage {
-                walletPicker(for: bill)
+                walletPicker(for: bill, renderContext: renderContext)
                 lockedGroupList(for: bill)
-                itemList(for: bill)
-                if !selectedCandidates(for: bill).isEmpty {
-                    billSelectionSummary(for: bill)
+                itemList(for: bill, renderContext: renderContext)
+                if !selectedCandidates(for: bill, snapshot: renderContext.selectionSnapshot).isEmpty {
+                    billSelectionSummary(for: bill, renderContext: renderContext)
                 }
             }
         }
@@ -246,20 +248,20 @@ struct AIBillAnalysisView: View {
         }
     }
 
-    private func walletPicker(for bill: AIBillDraft) -> some View {
+    private func walletPicker(for bill: AIBillDraft, renderContext: AIBillRenderContext) -> some View {
         Picker(L10n.transactions.aibill.walletForBill, selection: bindingForBillWallet(bill.id)) {
             Text(L10n.transactions.transactioneditor.chooseWallet).tag(Optional<UUID>.none)
-            ForEach(availableWallets) { wallet in
-                Text(walletPickerTitle(for: wallet)).tag(Optional(wallet.id))
+            ForEach(renderContext.availableWallets) { wallet in
+                Text(renderContext.walletLabelsByID[wallet.id] ?? wallet.name).tag(Optional(wallet.id))
             }
         }
         .pickerStyle(.menu)
     }
 
-    private func itemList(for bill: AIBillDraft) -> some View {
+    private func itemList(for bill: AIBillDraft, renderContext: AIBillRenderContext) -> some View {
         VStack(spacing: 0) {
             ForEach(bill.result?.items ?? []) { item in
-                itemRow(item, bill: bill)
+                itemRow(item, bill: bill, renderContext: renderContext)
                 if item.id != bill.result?.items.last?.id {
                     Divider()
                         .padding(.leading, 36)
@@ -268,10 +270,12 @@ struct AIBillAnalysisView: View {
         }
     }
 
-    private func itemRow(_ item: BillItemAnalysisItem, bill: AIBillDraft) -> some View {
-        let candidate = selectionCandidate(for: item, bill: bill)
+    private func itemRow(_ item: BillItemAnalysisItem, bill: AIBillDraft, renderContext: AIBillRenderContext) -> some View {
+        let candidateID = BillItemSelectionID(billID: bill.id, itemID: item.lineID)
+        let candidate = renderContext.selectionSnapshot.candidatesByID[candidateID]
+            ?? fallbackSelectionCandidate(for: item, bill: bill)
         let isSelected = selectedIDs.contains(candidate.id)
-        let selectedForBill = selectedCandidates(for: bill)
+        let selectedForBill = selectedCandidates(for: bill, snapshot: renderContext.selectionSnapshot)
         let canSelect = canSelectCandidate(candidate, selectedInBill: selectedForBill) || isSelected
 
         return HStack(alignment: .top, spacing: 10) {
@@ -310,13 +314,13 @@ struct AIBillAnalysisView: View {
                     }
                 } else {
                     Menu {
-                        ForEach(availableExpenseCategories) { category in
-                            Button(categoryLabel(for: category)) {
+                        ForEach(renderContext.availableExpenseCategories) { category in
+                            Button(renderContext.categoryLabelsByID[category.id] ?? category.localizedDisplayName) {
                                 updateItemCategory(itemID: item.lineID, billID: bill.id, categoryID: category.id)
                             }
                         }
                     } label: {
-                        Text(categoryLabel(for: item.categoryID))
+                        Text(categoryLabel(for: item.categoryID, renderContext: renderContext))
                             .font(.footnote)
                             .foregroundStyle(item.categoryID == nil ? .red : .secondary)
                     }
@@ -408,9 +412,13 @@ struct AIBillAnalysisView: View {
         }
     }
 
-    private func billSelectionSummary(for bill: AIBillDraft) -> some View {
-        let selectedAmount = selectedAmountMinor(for: bill)
-        let remainingAmount = remainingAmountMinor(for: bill, includingCurrentSelection: true)
+    private func billSelectionSummary(for bill: AIBillDraft, renderContext: AIBillRenderContext) -> some View {
+        let selectedAmount = selectedAmountMinor(for: bill, snapshot: renderContext.selectionSnapshot)
+        let remainingAmount = remainingAmountMinor(
+            for: bill,
+            includingCurrentSelection: true,
+            snapshot: renderContext.selectionSnapshot
+        )
 
         return HStack(spacing: 10) {
             VStack(alignment: .leading, spacing: 3) {
@@ -438,21 +446,26 @@ struct AIBillAnalysisView: View {
     }
 
     private var selectedCandidates: [BillItemSelectionCandidate] {
-        allSelectionCandidates.filter { selectedIDs.contains($0.id) }
+        currentSelectionSnapshot.selectedCandidates
     }
 
     private func selectedCandidates(for bill: AIBillDraft) -> [BillItemSelectionCandidate] {
-        allSelectionCandidates(for: bill).filter { selectedIDs.contains($0.id) }
+        selectedCandidates(for: bill, snapshot: currentSelectionSnapshot)
+    }
+
+    private func selectedCandidates(
+        for bill: AIBillDraft,
+        snapshot: BillItemSelectionSnapshot
+    ) -> [BillItemSelectionCandidate] {
+        snapshot.selectedCandidatesByBillID[bill.id] ?? []
     }
 
     private var allSelectionCandidates: [BillItemSelectionCandidate] {
-        bills.flatMap { bill in
-            allSelectionCandidates(for: bill)
-        }
+        currentSelectionSnapshot.allCandidates
     }
 
     private func allSelectionCandidates(for bill: AIBillDraft) -> [BillItemSelectionCandidate] {
-        (bill.result?.items ?? []).map { selectionCandidate(for: $0, bill: bill) }
+        currentSelectionSnapshot.candidatesByBillID[bill.id] ?? []
     }
 
     private var availableWallets: [LedgerWallet] {
@@ -497,7 +510,63 @@ struct AIBillAnalysisView: View {
         )
     }
 
-    private func selectionCandidate(for item: BillItemAnalysisItem, bill: AIBillDraft) -> BillItemSelectionCandidate {
+    private var currentSelectionSnapshot: BillItemSelectionSnapshot {
+        BillItemSelectionSnapshot(
+            bills: bills.map { bill in
+                BillItemSelectionBillSnapshot(
+                    billID: bill.id,
+                    walletID: bill.walletID,
+                    merchantName: bill.result?.merchantName,
+                    occurredAt: bill.result?.occurredAt,
+                    items: bill.result?.items ?? [],
+                    createdItemIDs: bill.createdItemIDs,
+                    lockedGroups: bill.lockedGroups
+                )
+            },
+            selectedIDs: selectedIDs
+        )
+    }
+
+    private func makeRenderContext() -> AIBillRenderContext {
+        let access = walletPickerAccess
+        let wallets = access.availableWallets(
+            from: storedWallets,
+            targetOwnerUserID: quickCreateSubjectUserID
+        )
+        let categoryOwnerMap = MistiaRecordOwnershipStore.ownerMap(from: ownershipScopes, entity: .category)
+        let categories = storedCategories
+            .filter { category in
+                guard category.kind == .expense,
+                      category.isChildCategory,
+                      !category.isBalanceAdjustmentSystemCategory else {
+                    return false
+                }
+                let ownerUserID = categoryOwnerMap[category.id] ?? sessionStore.activeLocalProfileUserID
+                return ownerUserID == quickCreateSubjectUserID
+            }
+            .sorted {
+                if $0.sortOrder != $1.sortOrder {
+                    return $0.sortOrder < $1.sortOrder
+                }
+                return $0.createdAt < $1.createdAt
+            }
+        let categoryLabelsByID = Dictionary(uniqueKeysWithValues: categories.map { category in
+            (category.id, categoryLabel(for: category))
+        })
+        let walletLabelsByID = Dictionary(uniqueKeysWithValues: wallets.map { wallet in
+            (wallet.id, access.title(for: wallet))
+        })
+
+        return AIBillRenderContext(
+            selectionSnapshot: currentSelectionSnapshot,
+            availableWallets: wallets,
+            availableExpenseCategories: categories,
+            categoryLabelsByID: categoryLabelsByID,
+            walletLabelsByID: walletLabelsByID
+        )
+    }
+
+    private func fallbackSelectionCandidate(for item: BillItemAnalysisItem, bill: AIBillDraft) -> BillItemSelectionCandidate {
         BillItemSelectionCandidate(
             id: BillItemSelectionID(billID: bill.id, itemID: item.lineID),
             walletID: bill.walletID,
@@ -539,12 +608,12 @@ struct AIBillAnalysisView: View {
         walletPickerAccess.title(for: wallet)
     }
 
-    private func categoryLabel(for categoryID: UUID?) -> String {
+    private func categoryLabel(for categoryID: UUID?, renderContext: AIBillRenderContext) -> String {
         guard let categoryID,
-              let category = availableExpenseCategories.first(where: { $0.id == categoryID }) else {
+              let label = renderContext.categoryLabelsByID[categoryID] else {
             return L10n.transactions.transactioneditor.chooseCategory
         }
-        return categoryLabel(for: category)
+        return label
     }
 
     private func categoryLabel(for category: TransactionCategory) -> String {
@@ -627,7 +696,7 @@ struct AIBillAnalysisView: View {
     private func normalizeSelection() {
         selectedIDs = BillItemSelectionLogic.normalizedSelection(
             selectedIDs,
-            candidates: allSelectionCandidates,
+            candidates: currentSelectionSnapshot.allCandidates,
             mode: mode
         )
     }
@@ -663,15 +732,19 @@ struct AIBillAnalysisView: View {
         normalizeSelection()
     }
 
-    private func selectedAmountMinor(for bill: AIBillDraft) -> Int64 {
-        selectedCandidates(for: bill).reduce(Int64.zero) { $0 + $1.amountMinor }
+    private func selectedAmountMinor(for bill: AIBillDraft, snapshot: BillItemSelectionSnapshot) -> Int64 {
+        selectedCandidates(for: bill, snapshot: snapshot).reduce(Int64.zero) { $0 + $1.amountMinor }
     }
 
-    private func remainingAmountMinor(for bill: AIBillDraft, includingCurrentSelection: Bool) -> Int64 {
+    private func remainingAmountMinor(
+        for bill: AIBillDraft,
+        includingCurrentSelection: Bool,
+        snapshot: BillItemSelectionSnapshot
+    ) -> Int64 {
         billTotalMinor(for: bill)
             - createdAmountMinor(for: bill)
             - bill.lockedGroups.reduce(Int64.zero) { $0 + $1.amountMinor }
-            - (includingCurrentSelection ? selectedAmountMinor(for: bill) : 0)
+            - (includingCurrentSelection ? selectedAmountMinor(for: bill, snapshot: snapshot) : 0)
     }
 
     private func billTotalMinor(for bill: AIBillDraft) -> Int64 {
@@ -950,6 +1023,14 @@ private struct AIBillDraft: Identifiable {
     var currencyCode: String {
         result?.currencyCode ?? "JPY"
     }
+}
+
+private struct AIBillRenderContext {
+    let selectionSnapshot: BillItemSelectionSnapshot
+    let availableWallets: [LedgerWallet]
+    let availableExpenseCategories: [TransactionCategory]
+    let categoryLabelsByID: [UUID: String]
+    let walletLabelsByID: [UUID: String]
 }
 
 private enum AIBillAlertKind {

@@ -107,7 +107,7 @@ private enum SessionSyncTrigger {
 @Observable
 final class SessionStore {
     // MARK: - Auto-sync Configuration
-    private static let AUTOMATIC_SYNC_INTERVAL: TimeInterval = 1800 // 30 minutes in seconds
+    private static let AUTOMATIC_SYNC_INTERVAL: TimeInterval = 1_200 // 20 minutes in seconds
     private static let QUEUED_AUTO_SYNC_DEBOUNCE: Duration = .milliseconds(600)
     var summary: SessionSummary?
     var isWorking = false
@@ -427,7 +427,7 @@ final class SessionStore {
         if hasQueuedFamilyOwnerMutations() {
             _ = await flushQueuedFamilyOwnerPushIfAllowed()
         }
-        guard isReadyForAutomaticSync, !isSyncInFlight else { return false }
+        guard shouldRunForegroundCatchUp() else { return false }
         return await runMergeSync(trigger: .backgroundRefresh, showProgress: false)
     }
 
@@ -2234,7 +2234,7 @@ final class SessionStore {
 
             updateAutoSyncLoopState()
             if pendingQueuedAutoSync {
-                scheduleQueuedSyncIfAllowed()
+                updateQueuedAutoSyncAfterSync()
             }
             return true
         } catch {
@@ -2367,7 +2367,7 @@ final class SessionStore {
             }
             updateAutoSyncLoopState()
             if pendingQueuedAutoSync {
-                scheduleQueuedSyncIfAllowed()
+                updateQueuedAutoSyncAfterSync()
             }
             return true
         } catch {
@@ -2509,6 +2509,8 @@ final class SessionStore {
         }
         if hasOwnMutations {
             scheduleQueuedSyncIfAllowed()
+        } else {
+            updateAutoSyncLoopState()
         }
     }
 
@@ -2542,9 +2544,15 @@ final class SessionStore {
 
         pendingQueuedAutoSync = true
         queuedAutoSyncTask?.cancel()
-        queuedAutoSyncTask = Task { [weak self] in
-            try? await Task.sleep(for: Self.QUEUED_AUTO_SYNC_DEBOUNCE)
-            await self?.flushQueuedAutoSyncIfAllowed()
+        queuedAutoSyncTask = nil
+        updateAutoSyncLoopState()
+    }
+
+    private func updateQueuedAutoSyncAfterSync() {
+        if hasQueuedOwnMutations() {
+            scheduleQueuedSyncIfAllowed()
+        } else {
+            cancelQueuedAutoSync()
         }
     }
 
@@ -2639,6 +2647,16 @@ final class SessionStore {
         activeUserID: UUID? = nil
     ) -> Bool {
         !queuedFamilyOwnerMutations(activeUserID: activeUserID).isEmpty
+    }
+
+    private func hasQueuedOwnMutations(
+        activeUserID: UUID? = nil
+    ) -> Bool {
+        let resolvedActiveUserID = activeUserID ?? activeLocalProfileUserID ?? currentSession?.user.id
+        guard let resolvedActiveUserID else { return false }
+        return syncCoordinator.queuedMutations().contains { mutation in
+            mutation.subjectUserID == resolvedActiveUserID
+        }
     }
 
     private func pushQueuedFamilyOwnerMutations(
