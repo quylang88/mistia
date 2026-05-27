@@ -80,6 +80,8 @@ final class MistiaSyncOutbox {
     private let key: String
     private let encoder = JSONEncoder.mistiaSyncEncoder
     private let decoder = JSONDecoder.mistiaSyncDecoder
+    private var cachedData: Data?
+    private var cachedMutations: [MistiaSyncMutation]?
 
     init(
         defaults: UserDefaults = .standard,
@@ -122,6 +124,8 @@ final class MistiaSyncOutbox {
 
     func clear() {
         defaults.removeObject(forKey: key)
+        cachedData = nil
+        cachedMutations = []
     }
 
     func contains(entity: MistiaSyncEntity, recordID: UUID) -> Bool {
@@ -160,20 +164,33 @@ final class MistiaSyncOutbox {
 
     private func load() -> [MistiaSyncMutation] {
         guard let data = defaults.data(forKey: key) else {
+            cachedData = nil
+            cachedMutations = []
             return []
         }
 
-        return (try? decoder.decode([MistiaSyncMutation].self, from: data)) ?? []
+        if cachedData == data, let cachedMutations {
+            return cachedMutations
+        }
+
+        let mutations = (try? decoder.decode([MistiaSyncMutation].self, from: data)) ?? []
+        cachedData = data
+        cachedMutations = mutations
+        return mutations
     }
 
     private func save(_ mutations: [MistiaSyncMutation]) {
         if mutations.isEmpty {
             defaults.removeObject(forKey: key)
+            cachedData = nil
+            cachedMutations = []
             return
         }
 
         if let data = try? encoder.encode(mutations) {
             defaults.set(data, forKey: key)
+            cachedData = data
+            cachedMutations = mutations
         }
     }
 

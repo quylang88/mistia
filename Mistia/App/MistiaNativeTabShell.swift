@@ -376,16 +376,16 @@ final class MistiaNativeTabBarController: UITabBarController, UITabBarController
   private func fetchShortcutAvatarImage(from url: URL) async -> UIImage? {
     if url.isFileURL {
       return await Task.detached(priority: .utility) {
-        guard let data = try? Data(contentsOf: url),
-              let image = UIImage(data: data) else { return nil }
-        return Self.makeShortcutAvatarImage(from: image)
+        guard let data = try? Data(contentsOf: url) else { return nil }
+        return Self.makeShortcutAvatarImage(from: data)
       }.value
     }
 
     do {
       let (data, _) = try await URLSession.shared.data(from: url)
-      guard let image = UIImage(data: data) else { return nil }
-      return Self.makeShortcutAvatarImage(from: image)
+      return await Task.detached(priority: .utility) {
+        Self.makeShortcutAvatarImage(from: data)
+      }.value
     } catch {
       return nil
     }
@@ -503,6 +503,11 @@ final class MistiaNativeTabBarController: UITabBarController, UITabBarController
       UIBezierPath(ovalIn: CGRect(origin: .zero, size: size)).addClip()
       image.draw(in: CGRect(origin: .zero, size: size))
     }.withRenderingMode(.alwaysOriginal)
+  }
+
+  private nonisolated static func makeShortcutAvatarImage(from data: Data) -> UIImage? {
+    guard let image = UIImage(data: data) else { return nil }
+    return makeShortcutAvatarImage(from: image)
   }
 
   private func alignQuickCreateButtonToSearchPill() {

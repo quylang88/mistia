@@ -27,6 +27,7 @@ struct AIBillAnalysisView: View {
     @State private var pendingTransactionGroupID: UUID?
     @State private var isLoadingPhotos = false
     @State private var isAnalyzing = false
+    @State private var imageProcessingTask: Task<Void, Never>?
 
     private let imageLimit = 5
 
@@ -65,7 +66,7 @@ struct AIBillAnalysisView: View {
         }
         .onChange(of: photoItems) { _, newItems in
             guard !newItems.isEmpty else { return }
-            Task { await loadPhotoItems(newItems) }
+            imageProcessingTask = Task { await loadPhotoItems(newItems) }
         }
         .onChange(of: mode) { _, _ in
             normalizeSelection()
@@ -102,6 +103,11 @@ struct AIBillAnalysisView: View {
                     dismissButton: .default(Text(L10n.common.ok))
                 )
             }
+        }
+        .onDisappear {
+            imageProcessingTask?.cancel()
+            imageProcessingTask = nil
+            isLoadingPhotos = false
         }
     }
 
@@ -787,14 +793,29 @@ struct AIBillAnalysisView: View {
             showTooManyImagesAlert()
             return
         }
-        guard let draft = AIBillImageProcessor.makeDraft(from: image) else {
-            alert = AIBillAlert(
-                title: L10n.transactions.aibill.aiBill,
-                message: L10n.transactions.transactioneditor.couldnTProcessThisReceiptImage
-            )
-            return
+
+        isLoadingPhotos = true
+        imageProcessingTask = Task { @MainActor in
+            defer {
+                isLoadingPhotos = false
+                imageProcessingTask = nil
+            }
+
+            let draft = await Task.detached(priority: .userInitiated) {
+                AIBillImageProcessor.makeDraft(from: image)
+            }.value
+
+            guard !Task.isCancelled else { return }
+            guard let draft else {
+                alert = AIBillAlert(
+                    title: L10n.transactions.aibill.aiBill,
+                    message: L10n.transactions.transactioneditor.couldnTProcessThisReceiptImage
+                )
+                return
+            }
+
+            bills.append(draft)
         }
-        bills.append(draft)
     }
 
     @MainActor
@@ -806,15 +827,25 @@ struct AIBillAnalysisView: View {
         }
 
         for item in items {
+            guard !Task.isCancelled else { return }
             guard bills.count < imageLimit else {
                 showTooManyImagesAlert()
                 return
             }
-            guard let data = try? await item.loadTransferable(type: Data.self),
-                  let image = UIImage(data: data) else {
+            guard let data = try? await item.loadTransferable(type: Data.self) else {
                 continue
             }
-            appendImage(image)
+
+            let draft = await Task.detached(priority: .userInitiated) {
+                AIBillImageProcessor.makeDraft(from: data)
+            }.value
+
+            guard !Task.isCancelled else { return }
+            guard let draft else {
+                continue
+            }
+
+            bills.append(draft)
         }
     }
 
@@ -1056,6 +1087,11 @@ private enum AIBillCameraSource: Identifiable {
 }
 
 private enum AIBillImageProcessor {
+    static func makeDraft(from data: Data) -> AIBillDraft? {
+        guard let image = UIImage(data: data) else { return nil }
+        return makeDraft(from: image)
+    }
+
     static func makeDraft(from image: UIImage) -> AIBillDraft? {
         let normalized = normalizedImage(image)
         guard let imageData = normalized.jpegData(compressionQuality: 0.82),

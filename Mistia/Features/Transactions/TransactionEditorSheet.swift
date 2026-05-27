@@ -197,6 +197,8 @@ struct TransactionEditorSheet: View {
     @State private var receiptImageSource: TransactionReceiptImageSource?
     @State private var receiptPreview: TransactionReceiptPreviewItem?
     @State private var receiptLoadTask: Task<Void, Never>?
+    @State private var receiptProcessingTask: Task<Void, Never>?
+    @State private var isProcessingReceiptImage = false
     @State private var isAnalyzingReceipt = false
     @State private var receiptAnalysisQuota: ReceiptAnalysisQuota?
     @State private var didLoadReceiptDraft = false
@@ -298,7 +300,7 @@ struct TransactionEditorSheet: View {
             .dismissKeyboardOnTap()
             .navigationTitle(navigationTitle)
             .navigationBarTitleDisplayMode(.inline)
-            .disabled(isLockedByStatement || isFamilyTransferDetail || isSaving)
+            .disabled(isLockedByStatement || isFamilyTransferDetail || isSaving || isProcessingReceiptImage)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
                     Button {
@@ -316,7 +318,7 @@ struct TransactionEditorSheet: View {
                         Button {
                             save()
                         } label: {
-                            if isSaving {
+                            if isSaving || isProcessingReceiptImage {
                                 ProgressView()
                                     .controlSize(.small)
                                     .tint(Color(red: 0.88, green: 0.78, blue: 1.0))
@@ -331,7 +333,7 @@ struct TransactionEditorSheet: View {
                         .buttonStyle(.glassProminent)
                         .buttonBorderShape(.circle)
                         .tint(Color(red: 0.43, green: 0.23, blue: 0.76))
-                        .disabled(isSaving)
+                        .disabled(isSaving || isProcessingReceiptImage)
                     }
                 }
             }
@@ -461,6 +463,9 @@ struct TransactionEditorSheet: View {
             titleSuggestionRefreshTask = nil
             receiptLoadTask?.cancel()
             receiptLoadTask = nil
+            receiptProcessingTask?.cancel()
+            receiptProcessingTask = nil
+            isProcessingReceiptImage = false
         }
     }
     private func archiveTransaction() {
@@ -1512,38 +1517,30 @@ struct TransactionEditorSheet: View {
 
             receiptLoadTask?.cancel()
             receiptLoadTask = Task { @MainActor in
-                let dataResult = await Task.detached(priority: .utility) {
+                let draftResult = await Task.detached(priority: .utility) {
                     do {
-                        return Result<(Data, Data), Error>.success((
-                            try Data(contentsOf: imageURL),
-                            try Data(contentsOf: thumbnailURL)
-                        ))
+                        let imageData = try Data(contentsOf: imageURL)
+                        let thumbnailData = try Data(contentsOf: thumbnailURL)
+                        guard let draft = TransactionReceiptImageProcessor.makeDraft(
+                            imageData: imageData,
+                            thumbnailData: thumbnailData,
+                            contentType: contentType,
+                            isChanged: false
+                        ) else {
+                            return Result<TransactionReceiptDraft, Error>.failure(CocoaError(.fileReadCorruptFile))
+                        }
+                        return Result<TransactionReceiptDraft, Error>.success(draft)
                     } catch {
-                        return Result<(Data, Data), Error>.failure(error)
+                        return Result<TransactionReceiptDraft, Error>.failure(error)
                     }
                 }.value
 
                 guard !Task.isCancelled else { return }
                 receiptLoadTask = nil
 
-                switch dataResult {
-                case .success(let payload):
-                    let (imageData, thumbnailData) = payload
-                    guard
-                        let previewImage = UIImage(data: imageData),
-                        let thumbnailImage = UIImage(data: thumbnailData)
-                    else {
-                        return
-                    }
-
-                    receiptDraft = TransactionReceiptDraft(
-                        imageData: imageData,
-                        thumbnailData: thumbnailData,
-                        contentType: contentType,
-                        previewImage: previewImage,
-                        thumbnailImage: thumbnailImage,
-                        isChanged: false
-                    )
+                switch draftResult {
+                case .success(let draft):
+                    receiptDraft = draft
                     shouldDeleteReceiptOnSave = false
                 case .failure(let error):
                     alertMessage = L10n.transactions.transactioneditor.couldnTLoadTheSavedReceiptImage + " \(error.localizedDescription)"
@@ -1588,25 +1585,41 @@ struct TransactionEditorSheet: View {
         }
 
         didApplyReceiptPrefill = true
-        guard let draft = TransactionReceiptImageProcessor.makeDraft(from: receiptImage) else {
-            return
-        }
-
-        receiptDraft = draft
-        receiptAnalysisQuota = nil
-        shouldDeleteReceiptOnSave = false
+        processReceiptImage(receiptImage, shouldAnalyze: false)
     }
 
     private func handlePickedReceiptImage(_ image: UIImage) {
-        guard let draft = TransactionReceiptImageProcessor.makeDraft(from: image) else {
-            alertMessage = L10n.transactions.transactioneditor.couldnTProcessThisReceiptImage
-            return
-        }
+        processReceiptImage(image, shouldAnalyze: true)
+    }
 
+    private func processReceiptImage(_ image: UIImage, shouldAnalyze: Bool) {
+        receiptProcessingTask?.cancel()
+        isProcessingReceiptImage = true
+        receiptProcessingTask = Task { @MainActor in
+            let draft = await Task.detached(priority: .userInitiated) {
+                TransactionReceiptImageProcessor.makeDraft(from: image)
+            }.value
+
+            guard !Task.isCancelled else { return }
+            receiptProcessingTask = nil
+            isProcessingReceiptImage = false
+
+            guard let draft else {
+                alertMessage = L10n.transactions.transactioneditor.couldnTProcessThisReceiptImage
+                return
+            }
+
+            applyProcessedReceiptDraft(draft, shouldAnalyze: shouldAnalyze)
+        }
+    }
+
+    private func applyProcessedReceiptDraft(_ draft: TransactionReceiptDraft, shouldAnalyze: Bool) {
         receiptDraft = draft
         receiptAnalysisQuota = nil
         shouldDeleteReceiptOnSave = false
-        analyzeCurrentReceiptDraft()
+        if shouldAnalyze {
+            analyzeCurrentReceiptDraft()
+        }
     }
 
     private func removeReceiptDraft() {
@@ -2653,6 +2666,29 @@ private enum TransactionReceiptImageProcessor {
             previewImage: previewImage,
             thumbnailImage: thumbnailImage,
             isChanged: true
+        )
+    }
+
+    static func makeDraft(
+        imageData: Data,
+        thumbnailData: Data,
+        contentType: String,
+        isChanged: Bool
+    ) -> TransactionReceiptDraft? {
+        guard
+            let previewImage = UIImage(data: imageData),
+            let thumbnailImage = UIImage(data: thumbnailData)
+        else {
+            return nil
+        }
+
+        return TransactionReceiptDraft(
+            imageData: imageData,
+            thumbnailData: thumbnailData,
+            contentType: contentType,
+            previewImage: previewImage,
+            thumbnailImage: thumbnailImage,
+            isChanged: isChanged
         )
     }
 
