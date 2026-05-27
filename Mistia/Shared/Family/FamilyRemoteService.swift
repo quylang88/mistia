@@ -1,4 +1,5 @@
 import Foundation
+import os
 
 @MainActor
 protocol FamilyRemoteServicing {
@@ -1364,7 +1365,39 @@ struct FamilyRemoteService: FamilyRemoteServicing {
             return EmptyResponse() as! Response
         }
 
-        return try decoder.decode(Response.self, from: data)
+        return try await Task.detached(priority: .utility) {
+            let decodeLog = OSLog(subsystem: "Mistia", category: "FamilyRemoteDecode")
+            let signpostID = OSSignpostID(log: decodeLog)
+            os_signpost(.begin, log: decodeLog, name: "FamilyRemoteService.decode", signpostID: signpostID)
+            defer {
+                os_signpost(.end, log: decodeLog, name: "FamilyRemoteService.decode", signpostID: signpostID)
+            }
+
+            let decoder = JSONDecoder()
+            decoder.dateDecodingStrategy = .custom { decoder in
+                let container = try decoder.singleValueContainer()
+                let value = try container.decode(String.self)
+                let fractionalSecondsFormatter = ISO8601DateFormatter()
+                fractionalSecondsFormatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+                fractionalSecondsFormatter.timeZone = .gmt
+                if let date = fractionalSecondsFormatter.date(from: value) {
+                    return date
+                }
+
+                let secondsFormatter = ISO8601DateFormatter()
+                secondsFormatter.formatOptions = [.withInternetDateTime]
+                secondsFormatter.timeZone = .gmt
+                if let date = secondsFormatter.date(from: value) {
+                    return date
+                }
+
+                throw DecodingError.dataCorruptedError(
+                    in: container,
+                    debugDescription: "Invalid ISO8601 date: \(value)"
+                )
+            }
+            return try decoder.decode(Response.self, from: data)
+        }.value
     }
 
     private func inFilter(for userIDs: [UUID]) -> String {

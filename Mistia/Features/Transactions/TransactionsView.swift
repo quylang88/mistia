@@ -137,9 +137,9 @@ private struct TransactionsListSnapshotCacheKey: Hashable {
     let signedInUserID: UUID?
     let familyID: UUID?
     let familyAccessSignature: Int
-    let transactionSignature: Int
-    let ownershipSignature: Int
-    let auditSignature: Int
+    let transactionSignature: MistiaCollectionChangeSignature
+    let ownershipSignature: MistiaCollectionChangeSignature
+    let auditSignature: MistiaCollectionChangeSignature
 }
 
 struct TransactionsView: View {
@@ -390,22 +390,20 @@ struct TransactionsView: View {
             signedInUserID: sessionStore.signedInUserID,
             familyID: familyContextStore.family?.id,
             familyAccessSignature: familyAccessSignature,
-            transactionSignature: recordsSignature(
+            transactionSignature: MistiaCollectionChangeSignature.make(
                 storedTransactions,
-                id: \.id,
                 updatedAt: \.updatedAt,
                 deletedAt: \.deletedAt,
-                isArchived: \.isArchived
+                isArchived: \.isArchived,
+                remoteVersion: \.remoteVersion
             ),
-            ownershipSignature: recordsSignature(
+            ownershipSignature: MistiaCollectionChangeSignature.make(
                 ownershipScopes,
-                id: \.recordID,
                 updatedAt: \.updatedAt,
                 deletedAt: { _ in nil }
             ),
-            auditSignature: recordsSignature(
+            auditSignature: MistiaCollectionChangeSignature.make(
                 transactionAuditRecords,
-                id: \.transactionID,
                 updatedAt: \.updatedAt,
                 deletedAt: { _ in nil }
             )
@@ -433,42 +431,6 @@ struct TransactionsView: View {
             hasher.combine(grant.permissionScopeRawValue)
             hasher.combine(grant.updatedAt.timeIntervalSince1970)
             hasher.combine(grant.revokedAt?.timeIntervalSince1970)
-        }
-        return hasher.finalize()
-    }
-
-    private func recordsSignature<Record>(
-        _ records: [Record],
-        id: KeyPath<Record, UUID>,
-        updatedAt: KeyPath<Record, Date>,
-        deletedAt: KeyPath<Record, Date?>,
-        isArchived: KeyPath<Record, Bool>? = nil
-    ) -> Int {
-        var hasher = Hasher()
-        hasher.combine(records.count)
-        for record in records {
-            hasher.combine(record[keyPath: id])
-            hasher.combine(record[keyPath: updatedAt].timeIntervalSince1970)
-            hasher.combine(record[keyPath: deletedAt]?.timeIntervalSince1970)
-            if let isArchived {
-                hasher.combine(record[keyPath: isArchived])
-            }
-        }
-        return hasher.finalize()
-    }
-
-    private func recordsSignature<Record>(
-        _ records: [Record],
-        id: KeyPath<Record, UUID>,
-        updatedAt: KeyPath<Record, Date>,
-        deletedAt: (Record) -> Date?
-    ) -> Int {
-        var hasher = Hasher()
-        hasher.combine(records.count)
-        for record in records {
-            hasher.combine(record[keyPath: id])
-            hasher.combine(record[keyPath: updatedAt].timeIntervalSince1970)
-            hasher.combine(deletedAt(record)?.timeIntervalSince1970)
         }
         return hasher.finalize()
     }

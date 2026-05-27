@@ -402,7 +402,7 @@ struct RootTabView: View {
       Task { @MainActor in
         await familyContextStore.refreshLatest(
           sessionStore: sessionStore,
-          source: .userInitiated
+          source: .contextSwitch
         )
       }
 

@@ -104,13 +104,13 @@ private struct OverviewRenderSnapshotCacheKey: Hashable {
     let manualJPYToVNDRate: String
     let cachedRatesSignature: Int
     let familyAccessSignature: Int
-    let walletSignature: Int
-    let transactionSignature: Int
-    let budgetSignature: Int
-    let billSignature: Int
-    let installmentSignature: Int
-    let occurrenceSignature: Int
-    let ownershipSignature: Int
+    let walletSignature: MistiaCollectionChangeSignature
+    let transactionSignature: MistiaCollectionChangeSignature
+    let budgetSignature: MistiaCollectionChangeSignature
+    let billSignature: MistiaCollectionChangeSignature
+    let installmentSignature: MistiaCollectionChangeSignature
+    let occurrenceSignature: MistiaCollectionChangeSignature
+    let ownershipSignature: MistiaCollectionChangeSignature
 }
 
 struct OverviewView: View {
@@ -312,50 +312,49 @@ struct OverviewView: View {
             manualJPYToVNDRate: manualJPYToVNDRate,
             cachedRatesSignature: cachedCurrencyRatesData.hashValue,
             familyAccessSignature: familyAccessSignature,
-            walletSignature: recordsSignature(
+            walletSignature: MistiaCollectionChangeSignature.make(
                 storedWallets,
-                id: \.id,
                 updatedAt: \.updatedAt,
                 deletedAt: \.deletedAt,
-                isArchived: \.isArchived
+                isArchived: \.isArchived,
+                remoteVersion: \.remoteVersion
             ),
-            transactionSignature: recordsSignature(
+            transactionSignature: MistiaCollectionChangeSignature.make(
                 storedTransactions,
-                id: \.id,
                 updatedAt: \.updatedAt,
                 deletedAt: \.deletedAt,
-                isArchived: \.isArchived
+                isArchived: \.isArchived,
+                remoteVersion: \.remoteVersion
             ),
-            budgetSignature: recordsSignature(
+            budgetSignature: MistiaCollectionChangeSignature.make(
                 storedBudgets,
-                id: \.id,
                 updatedAt: \.updatedAt,
                 deletedAt: \.deletedAt,
-                isArchived: \.isArchived
+                isArchived: \.isArchived,
+                remoteVersion: \.remoteVersion
             ),
-            billSignature: recordsSignature(
+            billSignature: MistiaCollectionChangeSignature.make(
                 storedBills,
-                id: \.id,
                 updatedAt: \.updatedAt,
                 deletedAt: \.deletedAt,
-                isArchived: \.isArchived
+                isArchived: \.isArchived,
+                remoteVersion: \.remoteVersion
             ),
-            installmentSignature: recordsSignature(
+            installmentSignature: MistiaCollectionChangeSignature.make(
                 storedInstallments,
-                id: \.id,
                 updatedAt: \.updatedAt,
                 deletedAt: \.deletedAt,
-                isArchived: \.isArchived
+                isArchived: \.isArchived,
+                remoteVersion: \.remoteVersion
             ),
-            occurrenceSignature: recordsSignature(
+            occurrenceSignature: MistiaCollectionChangeSignature.make(
                 storedOccurrences,
-                id: \.id,
                 updatedAt: \.updatedAt,
-                deletedAt: \.deletedAt
+                deletedAt: \.deletedAt,
+                remoteVersion: \.remoteVersion
             ),
-            ownershipSignature: recordsSignature(
+            ownershipSignature: MistiaCollectionChangeSignature.make(
                 ownershipScopes,
-                id: \.recordID,
                 updatedAt: \.updatedAt,
                 deletedAt: { _ in nil }
             )
@@ -383,42 +382,6 @@ struct OverviewView: View {
             hasher.combine(grant.permissionScopeRawValue)
             hasher.combine(grant.updatedAt.timeIntervalSince1970)
             hasher.combine(grant.revokedAt?.timeIntervalSince1970)
-        }
-        return hasher.finalize()
-    }
-
-    private func recordsSignature<Record>(
-        _ records: [Record],
-        id: KeyPath<Record, UUID>,
-        updatedAt: KeyPath<Record, Date>,
-        deletedAt: KeyPath<Record, Date?>,
-        isArchived: KeyPath<Record, Bool>? = nil
-    ) -> Int {
-        var hasher = Hasher()
-        hasher.combine(records.count)
-        for record in records {
-            hasher.combine(record[keyPath: id])
-            hasher.combine(record[keyPath: updatedAt].timeIntervalSince1970)
-            hasher.combine(record[keyPath: deletedAt]?.timeIntervalSince1970)
-            if let isArchived {
-                hasher.combine(record[keyPath: isArchived])
-            }
-        }
-        return hasher.finalize()
-    }
-
-    private func recordsSignature<Record>(
-        _ records: [Record],
-        id: KeyPath<Record, UUID>,
-        updatedAt: KeyPath<Record, Date>,
-        deletedAt: (Record) -> Date?
-    ) -> Int {
-        var hasher = Hasher()
-        hasher.combine(records.count)
-        for record in records {
-            hasher.combine(record[keyPath: id])
-            hasher.combine(record[keyPath: updatedAt].timeIntervalSince1970)
-            hasher.combine(deletedAt(record)?.timeIntervalSince1970)
         }
         return hasher.finalize()
     }

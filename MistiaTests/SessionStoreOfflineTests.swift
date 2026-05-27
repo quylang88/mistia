@@ -451,6 +451,75 @@ final class SessionStoreOfflineTests: XCTestCase {
         )
     }
 
+    func testFamilyContextSwitchRefreshCoalescesRapidRequests() async throws {
+        let currentUserID = UUID()
+        let memberUserID = UUID()
+        let session = makeSession(userID: currentUserID)
+        let container = try storeTestContainer()
+        let store = try makeSessionStore(
+            authService: SessionAuthServiceSpy(
+                persistedSession: session,
+                refreshResult: .success(session)
+            ),
+            userProfileStore: UserProfileStoreSpy(),
+            networkStatus: .connected,
+            modelContainer: container
+        )
+        let familyService = FamilyRemoteServiceSpy(
+            snapshot: makeFamilySnapshot(userID: currentUserID, ownerUserID: memberUserID)
+        )
+        familyService.fetchStateDelayNanoseconds = 100_000_000
+        let familyStore = FamilyContextStore(
+            modelContainer: container,
+            service: familyService
+        )
+
+        await store.bootstrapIfNeeded()
+
+        async let first: Void = familyStore.refreshLatest(sessionStore: store, source: .contextSwitch)
+        async let second: Void = familyStore.refreshLatest(sessionStore: store, source: .contextSwitch)
+        _ = await (first, second)
+
+        XCTAssertEqual(familyService.fetchStateCallCount, 1)
+        XCTAssertEqual(
+            familyService.accessibleFinanceUserIDBatches.map(Set.init),
+            [Set([memberUserID])]
+        )
+    }
+
+    func testFamilyContextSwitchRefreshKeepsCachedStateWhenRemoteFails() async throws {
+        let currentUserID = UUID()
+        let memberUserID = UUID()
+        let session = makeSession(userID: currentUserID)
+        let container = try storeTestContainer()
+        let store = try makeSessionStore(
+            authService: SessionAuthServiceSpy(
+                persistedSession: session,
+                refreshResult: .success(session)
+            ),
+            userProfileStore: UserProfileStoreSpy(),
+            networkStatus: .connected,
+            modelContainer: container
+        )
+        let initialSnapshot = makeFamilySnapshot(userID: currentUserID, ownerUserID: memberUserID)
+        let familyService = FamilyRemoteServiceSpy(snapshot: initialSnapshot)
+        let familyStore = FamilyContextStore(
+            modelContainer: container,
+            service: familyService
+        )
+
+        await store.bootstrapIfNeeded()
+        await familyStore.refresh(sessionStore: store)
+        XCTAssertEqual(familyStore.family?.id, initialSnapshot.family?.id)
+
+        familyService.fetchStateError = SupabaseServiceError.serverMessage("temporary family outage")
+        await familyStore.refreshLatest(sessionStore: store, source: .contextSwitch)
+
+        XCTAssertEqual(familyStore.family?.id, initialSnapshot.family?.id)
+        XCTAssertTrue(familyStore.hasCachedRemoteState)
+        XCTAssertEqual(familyStore.lastErrorMessage, "temporary family outage")
+    }
+
     func testFamilyGranularPermissionGrantsSeparateUseEditAndCreate() async throws {
         let currentUserID = UUID()
         let ownerUserID = UUID()
@@ -1581,6 +1650,8 @@ private final class FamilyRemoteServiceSpy: FamilyRemoteServicing {
     private(set) var fetchStateCallCount = 0
     private(set) var createPermissionRequestCallCount = 0
     private(set) var accessibleFinanceUserIDBatches: [[UUID]] = []
+    var fetchStateDelayNanoseconds: UInt64?
+    var fetchStateError: Error?
 
     init(snapshot: FamilyStateSnapshot) {
         self.snapshot = snapshot
@@ -1592,6 +1663,12 @@ private final class FamilyRemoteServiceSpy: FamilyRemoteServicing {
 
     func fetchState(session: SupabaseAuthSession) async throws -> FamilyStateSnapshot {
         fetchStateCallCount += 1
+        if let fetchStateDelayNanoseconds {
+            try? await Task.sleep(nanoseconds: fetchStateDelayNanoseconds)
+        }
+        if let fetchStateError {
+            throw fetchStateError
+        }
         return snapshot
     }
 

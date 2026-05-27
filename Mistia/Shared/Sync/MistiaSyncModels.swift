@@ -8,7 +8,7 @@ private enum MistiaSyncSerializationError: LocalizedError {
     }
 }
 
-protocol MistiaRemoteRow: Codable {
+nonisolated protocol MistiaRemoteRow: Codable {
     static var entity: MistiaSyncEntity { get }
 
     var id: UUID { get }
@@ -20,7 +20,7 @@ protocol MistiaRemoteRow: Codable {
     var lastModifiedByDeviceID: UUID? { get set }
 }
 
-struct RemoteLedgerWallet: MistiaRemoteRow {
+nonisolated struct RemoteLedgerWallet: MistiaRemoteRow {
     static let entity: MistiaSyncEntity = .wallet
 
     var userID: UUID
@@ -64,7 +64,7 @@ struct RemoteLedgerWallet: MistiaRemoteRow {
     }
 }
 
-struct RemoteCreditCardProfile: MistiaRemoteRow {
+nonisolated struct RemoteCreditCardProfile: MistiaRemoteRow {
     static let entity: MistiaSyncEntity = .creditCardProfile
 
     var userID: UUID
@@ -165,7 +165,7 @@ struct RemoteCreditCardProfile: MistiaRemoteRow {
     }
 }
 
-struct RemoteTransactionCategory: MistiaRemoteRow {
+nonisolated struct RemoteTransactionCategory: MistiaRemoteRow {
     static let entity: MistiaSyncEntity = .category
 
     var userID: UUID
@@ -286,7 +286,7 @@ struct RemoteTransactionCategory: MistiaRemoteRow {
     }
 }
 
-struct RemoteLedgerTransaction: MistiaRemoteRow {
+nonisolated struct RemoteLedgerTransaction: MistiaRemoteRow {
     static let entity: MistiaSyncEntity = .transaction
 
     var userID: UUID
@@ -397,7 +397,7 @@ struct RemoteLedgerTransaction: MistiaRemoteRow {
     }
 }
 
-struct RemoteBudgetPlan: MistiaRemoteRow {
+nonisolated struct RemoteBudgetPlan: MistiaRemoteRow {
     static let entity: MistiaSyncEntity = .budgetPlan
 
     var userID: UUID
@@ -431,7 +431,7 @@ struct RemoteBudgetPlan: MistiaRemoteRow {
     }
 }
 
-struct RemoteSavingsGoal: MistiaRemoteRow {
+nonisolated struct RemoteSavingsGoal: MistiaRemoteRow {
     static let entity: MistiaSyncEntity = .savingsGoal
 
     var userID: UUID
@@ -471,7 +471,7 @@ struct RemoteSavingsGoal: MistiaRemoteRow {
     }
 }
 
-struct RemoteRecurringBillPlan: MistiaRemoteRow {
+nonisolated struct RemoteRecurringBillPlan: MistiaRemoteRow {
     static let entity: MistiaSyncEntity = .recurringBillPlan
 
     var userID: UUID
@@ -529,7 +529,7 @@ struct RemoteRecurringBillPlan: MistiaRemoteRow {
     }
 }
 
-struct RemoteInstallmentPlan: MistiaRemoteRow {
+nonisolated struct RemoteInstallmentPlan: MistiaRemoteRow {
     static let entity: MistiaSyncEntity = .installmentPlan
 
     var userID: UUID
@@ -569,7 +569,7 @@ struct RemoteInstallmentPlan: MistiaRemoteRow {
     }
 }
 
-struct RemoteDueOccurrenceRecord: MistiaRemoteRow {
+nonisolated struct RemoteDueOccurrenceRecord: MistiaRemoteRow {
     static let entity: MistiaSyncEntity = .dueOccurrenceRecord
 
     var userID: UUID
@@ -623,7 +623,7 @@ struct RemoteRowVersion: Codable {
     }
 }
 
-struct MistiaRemoteSnapshot: Codable {
+nonisolated struct MistiaRemoteSnapshot: Codable {
     let wallets: [RemoteLedgerWallet]
     let creditCardProfiles: [RemoteCreditCardProfile]
     let categories: [RemoteTransactionCategory]
@@ -723,7 +723,16 @@ struct MistiaRemoteSnapshot: Codable {
             dueOccurrences: dueOccurrences.sorted { $0.id.uuidString < $1.id.uuidString }
         )
 
-        let encoder = JSONEncoder.mistiaSyncEncoder
+        let encoder = JSONEncoder()
+        encoder.keyEncodingStrategy = .convertToSnakeCase
+        encoder.outputFormatting = [.sortedKeys]
+        encoder.dateEncodingStrategy = .custom { date, encoder in
+            let formatter = ISO8601DateFormatter()
+            formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+            formatter.timeZone = .gmt
+            var container = encoder.singleValueContainer()
+            try container.encode(formatter.string(from: date))
+        }
         guard let data = try? encoder.encode(normalized) else {
             return UUID().uuidString
         }

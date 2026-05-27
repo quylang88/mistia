@@ -4,6 +4,7 @@ import SwiftData
 
 enum FamilyRefreshSource {
     case enterFamily
+    case contextSwitch
     case userInitiated
     case postManualSync
 }
@@ -51,6 +52,7 @@ final class FamilyContextStore {
     @ObservationIgnored private let launchState: MistiaDataStack.LaunchState?
     @ObservationIgnored private var modelContainer: ModelContainer
     @ObservationIgnored private var refreshTask: Task<Bool, Never>?
+    @ObservationIgnored private var latestRefreshTask: Task<Void, Never>?
     @ObservationIgnored private var lastPassiveRefreshCompletedAt: Date?
     @ObservationIgnored private var lastLatestRefreshCompletedAt: Date?
     @ObservationIgnored private var avatarHydrationTask: Task<Void, Never>?
@@ -213,6 +215,10 @@ final class FamilyContextStore {
             return await refreshTask.value
         }
 
+        if let latestRefreshTask {
+            await latestRefreshTask.value
+        }
+
         let task = Task { @MainActor [weak self] in
             guard let self else { return false }
             return await self.performRefresh(sessionStore: sessionStore)
@@ -320,11 +326,11 @@ final class FamilyContextStore {
         source: FamilyRefreshSource
     ) async {
         switch source {
-        case .enterFamily:
+        case .enterFamily, .contextSwitch:
             guard !didCompleteLatestRefreshRecently else { return }
-            await refreshLatestFamilyData(sessionStore: sessionStore)
+            await coalescedLatestFamilyDataRefresh(sessionStore: sessionStore)
         case .userInitiated:
-            await refreshLatestFamilyData(sessionStore: sessionStore)
+            await coalescedLatestFamilyDataRefresh(sessionStore: sessionStore)
         case .postManualSync:
             await refresh(sessionStore: sessionStore)
             lastLatestRefreshCompletedAt = Date()
@@ -336,8 +342,27 @@ final class FamilyContextStore {
         return Date().timeIntervalSince(lastLatestRefreshCompletedAt) < Self.latestRefreshCooldown
     }
 
+    private func coalescedLatestFamilyDataRefresh(sessionStore: SessionStore) async {
+        if let refreshTask {
+            _ = await refreshTask.value
+            return
+        }
+
+        if let latestRefreshTask {
+            await latestRefreshTask.value
+            return
+        }
+
+        let task = Task { @MainActor [weak self] in
+            guard let self else { return }
+            await self.refreshLatestFamilyData(sessionStore: sessionStore)
+        }
+        latestRefreshTask = task
+        await task.value
+        latestRefreshTask = nil
+    }
+
     private func refreshLatestFamilyData(sessionStore: SessionStore) async {
-        guard !isRefreshingLatest else { return }
         guard sessionStore.canPerformRemoteActions else {
             lastErrorMessage = sessionStore.remoteUnavailableReason
             return

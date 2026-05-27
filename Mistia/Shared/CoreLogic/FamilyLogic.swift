@@ -126,7 +126,7 @@ struct FamilyMemberAccessCapabilities: Equatable {
     )
 }
 
-struct FamilyAggregateWalletSnapshot: Equatable {
+nonisolated struct FamilyAggregateWalletSnapshot: Equatable {
     enum Kind: String, Equatable {
         case cash
         case bank
@@ -159,7 +159,7 @@ struct FamilyAggregateWalletSnapshot: Equatable {
     }
 }
 
-struct FamilyWalletAggregateSnapshot: Equatable, Identifiable {
+nonisolated struct FamilyWalletAggregateSnapshot: Equatable, Identifiable {
     let id: String
     let ownerUserID: UUID
     let name: String
@@ -171,7 +171,7 @@ struct FamilyWalletAggregateSnapshot: Equatable, Identifiable {
     let createdAt: Date
 }
 
-struct FamilyBudgetPlanSnapshot: Equatable, Identifiable {
+nonisolated struct FamilyBudgetPlanSnapshot: Equatable, Identifiable {
     let id: UUID
     let ownerUserID: UUID
     let categoryName: String
@@ -182,7 +182,7 @@ struct FamilyBudgetPlanSnapshot: Equatable, Identifiable {
     let monthAnchor: Date
 }
 
-struct FamilyBudgetAggregateSnapshot: Equatable, Identifiable {
+nonisolated struct FamilyBudgetAggregateSnapshot: Equatable, Identifiable {
     let id: String
     let sourceBudgetID: UUID
     let sourceOwnerUserID: UUID
@@ -204,7 +204,7 @@ struct FamilyBudgetAggregateSnapshot: Equatable, Identifiable {
     }
 }
 
-struct FamilyGoalSnapshot: Equatable, Identifiable {
+nonisolated struct FamilyGoalSnapshot: Equatable, Identifiable {
     let id: UUID
     let ownerUserID: UUID
     let name: String
@@ -216,7 +216,7 @@ struct FamilyGoalSnapshot: Equatable, Identifiable {
     let sortOrder: Int
 }
 
-struct FamilyGoalAggregateSnapshot: Equatable, Identifiable {
+nonisolated struct FamilyGoalAggregateSnapshot: Equatable, Identifiable {
     let id: String
     let sourceGoalID: UUID
     let sourceOwnerUserID: UUID
@@ -237,7 +237,7 @@ struct FamilyGoalAggregateSnapshot: Equatable, Identifiable {
     }
 }
 
-struct FamilyAggregateTransactionSnapshot: Equatable {
+nonisolated struct FamilyAggregateTransactionSnapshot: Equatable {
     enum Kind: String, Equatable {
         case expense
         case income
@@ -283,32 +283,32 @@ struct FamilyAggregateTransactionSnapshot: Equatable {
     }
 }
 
-struct FamilyTrendPoint: Equatable, Identifiable {
+nonisolated struct FamilyTrendPoint: Equatable, Identifiable {
     let date: Date
     let valueMinor: Int64
     var id: Date { date }
 }
 
-struct FamilyMemberSpendingSnapshot: Equatable, Identifiable {
+nonisolated struct FamilyMemberSpendingSnapshot: Equatable, Identifiable {
     let userID: UUID
     let name: String
     let amountMinor: Int64
     var id: UUID { userID }
 }
 
-struct FamilyDonutSegment: Equatable, Identifiable {
+nonisolated struct FamilyDonutSegment: Equatable, Identifiable {
     let label: String
     let valueMinor: Int64
     let colorHex: String?
     var id: String { label }
 }
 
-struct FamilyInsight: Equatable {
+nonisolated struct FamilyInsight: Equatable {
     let text: String
     let isPositive: Bool
 }
 
-struct FamilyAggregateSummary: Equatable {
+nonisolated struct FamilyAggregateSummary: Equatable {
     var totalAssetsMinor: Int64
     var totalDebtMinor: Int64
     var spendableMinor: Int64
@@ -321,7 +321,7 @@ struct FamilyAggregateSummary: Equatable {
     var insights: [FamilyInsight]
 }
 
-struct FamilyMonthlySpendableSnapshot: Equatable {
+nonisolated struct FamilyMonthlySpendableSnapshot: Equatable {
     let rawMinor: Int64
     let displayMinor: Int64
     let shortfallMinor: Int64
@@ -331,7 +331,7 @@ struct FamilyMonthlySpendableSnapshot: Equatable {
     }
 }
 
-enum FamilyLogic {
+nonisolated enum FamilyLogic {
     nonisolated static func normalizedFamilyGroupingName(_ name: String) -> String {
         name
             .trimmingCharacters(in: .whitespacesAndNewlines)

@@ -522,7 +522,7 @@ struct ManagementView: View {
         Task { @MainActor in
             await familyContextStore.refreshLatest(
                 sessionStore: sessionStore,
-                source: .userInitiated
+                source: .enterFamily
             )
             isOpeningFamily = false
         }
