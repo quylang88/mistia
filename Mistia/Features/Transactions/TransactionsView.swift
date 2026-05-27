@@ -1628,6 +1628,24 @@ private struct TransactionRow: View {
         )
     }
 
+    private var transferDestinationAmountText: String? {
+        guard let destinationDisplay = TransactionLogic.crossCurrencyTransferDestinationDisplay(for: record) else {
+            return nil
+        }
+
+        let amount = destinationDisplay.amountMinor.formattedCurrency(code: destinationDisplay.currencyCode)
+        switch destinationDisplay.style {
+        case .exactDestination:
+            return "-> " + amount
+        case .approximateDestination:
+            return "~" + amount
+        }
+    }
+
+    private var secondaryAmountText: String? {
+        transferDestinationAmountText ?? approximatePrimaryAmountText
+    }
+
     private var exchangeRates: [MistiaExchangeRate] {
         _ = currencyRateMode
         _ = manualJPYToVNDRate
@@ -1677,8 +1695,8 @@ private struct TransactionRow: View {
                     .lineLimit(1)
                     .minimumScaleFactor(0.74)
 
-                if let approximatePrimaryAmountText {
-                    Text(approximatePrimaryAmountText)
+                if let secondaryAmountText {
+                    Text(secondaryAmountText)
                         .font(.system(size: 11.5, weight: .semibold, design: .rounded))
                         .foregroundStyle(.secondary)
                         .lineLimit(1)

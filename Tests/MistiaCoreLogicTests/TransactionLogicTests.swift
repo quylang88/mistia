@@ -214,6 +214,47 @@ final class TransactionLogicTests: XCTestCase {
         XCTAssertEqual(index.balance(for: destination), 2_650_000)
     }
 
+    func testCrossCurrencyTransferManualDisplayUsesDestinationSnapshot() {
+        let record = makeRecord(
+            primaryKind: .transfer,
+            transferSubtype: .internalTransfer,
+            amountMinor: 10_000_000,
+            occurredAt: Date(timeIntervalSince1970: 1_774_051_200),
+            sourceCurrencyCode: "VND",
+            destinationCurrencyCode: "JPY",
+            destinationAmountMinor: 50_000,
+            conversionModeRawValue: MistiaCurrencyConversionMode.manual.rawValue
+        )
+
+        let display = TransactionLogic.crossCurrencyTransferDestinationDisplay(for: record)
+
+        XCTAssertEqual(display?.amountMinor, 50_000)
+        XCTAssertEqual(display?.currencyCode, "JPY")
+        XCTAssertEqual(display?.style, .exactDestination)
+    }
+
+    func testCrossCurrencyTransferAppRateDisplayUsesSavedSnapshot() {
+        let record = makeRecord(
+            primaryKind: .transfer,
+            transferSubtype: .internalTransfer,
+            amountMinor: 10_000_000,
+            occurredAt: Date(timeIntervalSince1970: 1_774_051_200),
+            sourceCurrencyCode: "VND",
+            destinationCurrencyCode: "JPY",
+            destinationAmountMinor: 50_000,
+            conversionModeRawValue: MistiaCurrencyConversionMode.appRate.rawValue,
+            exchangeRateDecimalString: "0.005",
+            exchangeRateProvider: "manual",
+            exchangeRateDate: "2026-05-27"
+        )
+
+        let display = TransactionLogic.crossCurrencyTransferDestinationDisplay(for: record)
+
+        XCTAssertEqual(display?.amountMinor, 50_000)
+        XCTAssertEqual(display?.currencyCode, "JPY")
+        XCTAssertEqual(display?.style, .approximateDestination)
+    }
+
     func testFamilyTransfersAreNeutralButChangeOnlyTheDisplayedWalletBalance() {
         let senderWallet = TransactionWalletSnapshot(
             id: UUID(),
@@ -784,6 +825,10 @@ final class TransactionLogicTests: XCTestCase {
         destinationWalletKind: LedgerWalletKind? = nil,
         destinationCurrencyCode: String? = nil,
         destinationAmountMinor: Int64? = nil,
+        conversionModeRawValue: String? = nil,
+        exchangeRateDecimalString: String? = nil,
+        exchangeRateProvider: String? = nil,
+        exchangeRateDate: String? = nil,
         categoryID: UUID? = nil,
         counterpartyName: String? = nil
     ) -> TransactionRecordSnapshot {
@@ -799,6 +844,10 @@ final class TransactionLogicTests: XCTestCase {
             sourceCurrencyCode: sourceCurrencyCode,
             destinationCurrencyCode: destinationCurrencyCode,
             destinationAmountMinor: destinationAmountMinor,
+            conversionModeRawValue: conversionModeRawValue,
+            exchangeRateDecimalString: exchangeRateDecimalString,
+            exchangeRateProvider: exchangeRateProvider,
+            exchangeRateDate: exchangeRateDate,
             occurredAt: occurredAt,
             createdAt: occurredAt,
             sourceWalletID: sourceWalletID,

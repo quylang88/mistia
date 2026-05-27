@@ -159,7 +159,43 @@ struct TransactionTitleSuggestion: Equatable, Identifiable {
     let title: String
 }
 
+nonisolated enum TransactionCrossCurrencyTransferDestinationDisplayStyle: Equatable {
+    case exactDestination
+    case approximateDestination
+}
+
+nonisolated struct TransactionCrossCurrencyTransferDestinationDisplay: Equatable {
+    let amountMinor: Int64
+    let currencyCode: String
+    let style: TransactionCrossCurrencyTransferDestinationDisplayStyle
+}
+
 nonisolated enum TransactionLogic {
+    static func crossCurrencyTransferDestinationDisplay(
+        for record: TransactionRecordSnapshot
+    ) -> TransactionCrossCurrencyTransferDestinationDisplay? {
+        guard record.primaryKind == .transfer,
+              record.transferSubtype == .internalTransfer || record.transferSubtype == .familyTransfer,
+              let destinationAmountMinor = record.destinationAmountMinor,
+              let destinationCurrencyCode = record.destinationCurrencyCode
+        else {
+            return nil
+        }
+
+        let sourceCurrencyCode = MistiaCurrencyLogic.normalizedCode(record.sourceCurrencyCode)
+        let normalizedDestinationCurrencyCode = MistiaCurrencyLogic.normalizedCode(destinationCurrencyCode)
+        guard sourceCurrencyCode != normalizedDestinationCurrencyCode else {
+            return nil
+        }
+
+        let conversionMode = MistiaCurrencyConversionMode(rawValue: record.conversionModeRawValue ?? "")
+        return TransactionCrossCurrencyTransferDestinationDisplay(
+            amountMinor: destinationAmountMinor,
+            currencyCode: normalizedDestinationCurrencyCode,
+            style: conversionMode == .manual ? .exactDestination : .approximateDestination
+        )
+    }
+
     static func normalizeCounterpartyName(_ name: String?) -> String? {
         guard let trimmed = name?
             .trimmingCharacters(in: .whitespacesAndNewlines),

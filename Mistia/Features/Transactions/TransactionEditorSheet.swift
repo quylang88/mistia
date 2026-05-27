@@ -613,11 +613,6 @@ struct TransactionEditorSheet: View {
                 TextField(L10n.transactions.transactioneditor.amount, text: $bindableDraft.amountText)
                     .keyboardType(.numberPad)
 
-                if shouldShowDestinationAmountInput {
-                    TextField(L10n.transactions.transactioneditor.destinationAmount, text: $bindableDraft.destinationAmountText)
-                        .keyboardType(.numberPad)
-                }
-
                 MistiaDatePickerRow(
                     title: L10n.transactions.transactioneditor.dateTime,
                     selection: $bindableDraft.occurredAt,
@@ -634,8 +629,13 @@ struct TransactionEditorSheet: View {
                     .pickerStyle(.segmented)
 
                     if selectedConversionMode == .manual {
-                        TextField(L10n.transactions.transactioneditor.convertedAmount, text: $bindableDraft.reportingAmountText)
-                            .keyboardType(.numberPad)
+                        if shouldShowDestinationAmountInput {
+                            TextField(L10n.transactions.transactioneditor.destinationAmount, text: $bindableDraft.destinationAmountText)
+                                .keyboardType(.numberPad)
+                        } else {
+                            TextField(L10n.transactions.transactioneditor.convertedAmount, text: $bindableDraft.reportingAmountText)
+                                .keyboardType(.numberPad)
+                        }
                     }
                 }
             }
@@ -1201,21 +1201,26 @@ struct TransactionEditorSheet: View {
         selectedDestinationWallet?.currencyCode
     }
 
-    private var shouldShowDestinationAmountInput: Bool {
+    private var shouldShowTransferConversionSection: Bool {
         guard draft.primaryKind == .transfer,
               draft.transferSubtype == .internalTransfer || draft.transferSubtype == .familyTransfer,
               let destinationCurrencyCodeForDraft
         else {
             return false
         }
-        return sourceCurrencyCodeForDraft != destinationCurrencyCodeForDraft
+        return MistiaCurrencyLogic.normalizedCode(sourceCurrencyCodeForDraft) != MistiaCurrencyLogic.normalizedCode(destinationCurrencyCodeForDraft)
+    }
+
+    private var shouldShowDestinationAmountInput: Bool {
+        shouldShowTransferConversionSection && selectedConversionMode == .manual
     }
 
     private var shouldShowConversionSection: Bool {
-        guard draft.primaryKind == .expense || draft.primaryKind == .income else {
-            return false
+        if draft.primaryKind == .expense || draft.primaryKind == .income {
+            return MistiaCurrencyLogic.normalizedCode(sourceCurrencyCodeForDraft) != MistiaCurrencyLogic.normalizedCode(primaryCurrencyCode)
         }
-        return sourceCurrencyCodeForDraft != primaryCurrencyCode
+
+        return shouldShowTransferConversionSection
     }
 
     private var selectedCategoryLabel: String {
@@ -1812,8 +1817,13 @@ struct TransactionEditorSheet: View {
             return .sameCurrency
         }
 
-        let manuallyEnteredDestination = draft.destinationAmountText.currencyInputToMinorUnits(currencyCode: destinationCurrencyCode)
-        if manuallyEnteredDestination > 0 {
+        if selectedConversionMode == .manual {
+            let manuallyEnteredDestination = draft.destinationAmountText.currencyInputToMinorUnits(currencyCode: destinationCurrencyCode)
+            guard manuallyEnteredDestination > 0 else {
+                alertMessage = L10n.transactions.transactioneditor.enterTheConvertedAmountOrRefreshRates
+                return CurrencyConversionResolution(isValid: false, amountMinor: nil, mode: .manual, rateDecimalString: nil, rateProvider: nil, rateDate: nil)
+            }
+
             return CurrencyConversionResolution(
                 isValid: true,
                 amountMinor: manuallyEnteredDestination,
