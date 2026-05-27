@@ -993,7 +993,8 @@ struct PlanningView: View {
             dueDate: item.dueDate,
             requiresAmountInput: item.amountMinor == nil,
             currencyCode: item.currencyCode,
-            name: item.name
+            name: item.name,
+            ownerUserID: ownerUserID
         )
     }
 

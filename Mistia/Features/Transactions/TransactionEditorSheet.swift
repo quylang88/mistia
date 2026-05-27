@@ -701,7 +701,7 @@ struct TransactionEditorSheet: View {
                             Picker(L10n.transactions.transactioneditor.fromWallet, selection: $draft.sourceWalletID) {
                                 Text(L10n.transactions.transactioneditor.chooseSource).tag(Optional<UUID>.none)
                                 ForEach(availableSourceWalletsForFamilyTransfer) { wallet in
-                                    Text(walletPickerTitle(for: wallet)).tag(Optional(wallet.id))
+                                    Text(walletPickerTitle(for: wallet, labelMode: .alwaysShowsOwner)).tag(Optional(wallet.id))
                                 }
                             }
                             .pickerStyle(.menu)
@@ -709,7 +709,7 @@ struct TransactionEditorSheet: View {
                             Picker(L10n.transactions.transactioneditor.toWallet, selection: $draft.destinationWalletID) {
                                 Text(L10n.transactions.transactioneditor.chooseDestination).tag(Optional<UUID>.none)
                                 ForEach(availableDestinationWalletsForFamilyTransfer) { wallet in
-                                    Text(walletPickerTitle(for: wallet)).tag(Optional(wallet.id))
+                                    Text(walletPickerTitle(for: wallet, labelMode: .alwaysShowsOwner)).tag(Optional(wallet.id))
                                 }
                             }
                             .pickerStyle(.menu)
@@ -811,37 +811,12 @@ struct TransactionEditorSheet: View {
             target.transaction?.sourceWallet?.id,
             target.transaction?.destinationWallet?.id
         ].compactMap { $0 })
-        let allowedOwnerUserIDs = target.transaction == nil
-            ? newTransactionWalletOwnerUserIDs
-            : nil
-        return storedWallets
-            .filter { wallet in
-                guard let ownerUserID = walletOwnerUserID(for: wallet) else {
-                    return preferredWalletIDs.contains(wallet.id)
-                }
-                if let allowedOwnerUserIDs, !allowedOwnerUserIDs.contains(ownerUserID) {
-                    return preferredWalletIDs.contains(wallet.id)
-                }
-                if ownerUserID == sessionStore.activeLocalProfileUserID {
-                    return true
-                }
-                return familyContextStore.canUseWallet(walletID: wallet.id, ownerUserID: ownerUserID)
-                    || preferredWalletIDs.contains(wallet.id)
-            }
-            .filter { ($0.deletedAt == nil && !$0.isArchived) || preferredWalletIDs.contains($0.id) }
-            .filter { wallet in
-                // Credit cards cannot be used for income transactions
-                if draft.primaryKind == .income && wallet.kind == .creditCard {
-                    return preferredWalletIDs.contains(wallet.id)
-                }
-                return true
-            }
-            .sorted {
-                if $0.sortOrder != $1.sortOrder {
-                    return $0.sortOrder < $1.sortOrder
-                }
-                return $0.createdAt < $1.createdAt
-            }
+        return walletPickerAccess.availableWallets(
+            from: storedWallets,
+            preferredWalletIDs: preferredWalletIDs,
+            targetOwnerUserID: activeWalletPickerOwnerUserID,
+            excludesCreditCards: draft.primaryKind == .income
+        )
     }
 
     private var availableWalletsForIncome: [LedgerWallet] {
@@ -994,26 +969,19 @@ struct TransactionEditorSheet: View {
 
     private var availableSourceWalletsForFamilyTransfer: [LedgerWallet] {
         guard let currentSelfUserID else { return [] }
-        return storedWallets
-            .filter { wallet in
-                walletOwnerUserID(for: wallet) == currentSelfUserID
-                    && wallet.kind != .creditCard
-                    && wallet.deletedAt == nil
-                    && !wallet.isArchived
-            }
-            .sorted(by: walletSort)
+        return walletPickerAccess.availableWallets(
+            from: storedWallets,
+            targetOwnerUserID: currentSelfUserID,
+            excludesCreditCards: true
+        )
     }
 
     private var availableDestinationWalletsForFamilyTransfer: [LedgerWallet] {
         guard let recipientUserID = draft.familyRecipientUserID else { return [] }
-        return storedWallets
-            .filter { wallet in
-                walletOwnerUserID(for: wallet) == recipientUserID
-                    && wallet.deletedAt == nil
-                    && !wallet.isArchived
-                    && familyContextStore.canUseWallet(walletID: wallet.id, ownerUserID: recipientUserID)
-            }
-            .sorted(by: walletSort)
+        return walletPickerAccess.availableWallets(
+            from: storedWallets,
+            targetOwnerUserID: recipientUserID
+        )
     }
 
     private var availableCategories: [TransactionCategory] {
@@ -2368,10 +2336,25 @@ struct TransactionEditorSheet: View {
         MistiaRecordOwnershipStore.ownerMap(from: ownershipScopes, entity: .transaction)
     }
 
+    private var walletPickerAccess: MistiaWalletPickerAccess {
+        MistiaWalletPickerAccess(
+            sessionStore: sessionStore,
+            familyContextStore: familyContextStore,
+            ownershipScopes: ownershipScopes
+        )
+    }
+
     private var currentSelfUserID: UUID? {
-        sessionStore.activeLocalProfileUserID
-            ?? familyContextStore.currentUserID
-            ?? sessionStore.signedInUserID
+        walletPickerAccess.currentSelfUserID
+    }
+
+    private var activeWalletPickerOwnerUserID: UUID? {
+        if let transaction = target.transaction {
+            return transactionOwnerUserID(for: transaction)
+        }
+        return target.subjectUserIDOverride
+            ?? familyContextStore.selectedSubjectUserID
+            ?? currentSelfUserID
     }
 
     private var effectiveCategoryOwnerUserIDs: Set<UUID> {
@@ -2418,27 +2401,11 @@ struct TransactionEditorSheet: View {
 
     private func walletOwnerUserID(for wallet: LedgerWallet?) -> UUID? {
         guard let wallet else { return nil }
-        return walletOwnerMap[wallet.id]
-            ?? walletUseGrantOwnerUserID(for: wallet.id)
-            ?? currentSelfUserID
+        return walletPickerAccess.walletOwnerUserID(for: wallet)
     }
 
     private func walletOwnerUserID(for walletID: UUID?) -> UUID? {
-        guard let walletID else { return nil }
-        return walletOwnerMap[walletID]
-            ?? walletUseGrantOwnerUserID(for: walletID)
-            ?? currentSelfUserID
-    }
-
-    private func walletUseGrantOwnerUserID(for walletID: UUID) -> UUID? {
-        guard let currentSelfUserID else { return nil }
-        return familyContextStore.permissionGrants.first {
-            $0.revokedAt == nil
-                && $0.granteeUserID == currentSelfUserID
-                && $0.resourceType == .wallet
-                && $0.permissionScope == .use
-                && $0.resourceID == walletID
-        }?.ownerUserID
+        walletPickerAccess.walletOwnerUserID(for: walletID)
     }
 
     private func categoryOwnerUserID(for category: TransactionCategory) -> UUID? {
@@ -2508,19 +2475,11 @@ struct TransactionEditorSheet: View {
             .trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
-    private func walletPickerTitle(for wallet: LedgerWallet) -> String {
-        guard let ownerName = familyContextStore.displayName(for: walletOwnerUserID(for: wallet)),
-              familyContextStore.family != nil else {
-            return wallet.name
-        }
-        return "\(wallet.name) • \(ownerName)"
-    }
-
-    private func walletSort(_ lhs: LedgerWallet, _ rhs: LedgerWallet) -> Bool {
-        if lhs.sortOrder != rhs.sortOrder {
-            return lhs.sortOrder < rhs.sortOrder
-        }
-        return lhs.createdAt < rhs.createdAt
+    private func walletPickerTitle(
+        for wallet: LedgerWallet,
+        labelMode: MistiaWalletPickerLabelMode = .contextual
+    ) -> String {
+        walletPickerAccess.title(for: wallet, labelMode: labelMode)
     }
 
     private func clearMismatchedCategoryForSelectedWallet() {

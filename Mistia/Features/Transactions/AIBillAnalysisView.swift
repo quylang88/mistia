@@ -456,21 +456,10 @@ struct AIBillAnalysisView: View {
     }
 
     private var availableWallets: [LedgerWallet] {
-        let ownerMap = MistiaRecordOwnershipStore.ownerMap(from: ownershipScopes, entity: .wallet)
-        return storedWallets
-            .filter { wallet in
-                guard let ownerUserID = ownerMap[wallet.id] ?? sessionStore.activeLocalProfileUserID else {
-                    return false
-                }
-                guard ownerUserID == quickCreateSubjectUserID else {
-                    return false
-                }
-                if ownerUserID == sessionStore.activeLocalProfileUserID {
-                    return true
-                }
-                return familyContextStore.canUseWallet(walletID: wallet.id, ownerUserID: ownerUserID)
-            }
-            .sorted(by: walletSort)
+        walletPickerAccess.availableWallets(
+            from: storedWallets,
+            targetOwnerUserID: quickCreateSubjectUserID
+        )
     }
 
     private var availableExpenseCategories: [TransactionCategory] {
@@ -497,7 +486,15 @@ struct AIBillAnalysisView: View {
         if familyContextStore.isViewingOtherMemberContext {
             return familyContextStore.selectedSubjectUserID
         }
-        return sessionStore.activeLocalProfileUserID
+        return walletPickerAccess.currentSelfUserID
+    }
+
+    private var walletPickerAccess: MistiaWalletPickerAccess {
+        MistiaWalletPickerAccess(
+            sessionStore: sessionStore,
+            familyContextStore: familyContextStore,
+            ownershipScopes: ownershipScopes
+        )
     }
 
     private func selectionCandidate(for item: BillItemAnalysisItem, bill: AIBillDraft) -> BillItemSelectionCandidate {
@@ -539,10 +536,7 @@ struct AIBillAnalysisView: View {
     }
 
     private func walletPickerTitle(for wallet: LedgerWallet) -> String {
-        if let institution = wallet.institutionDisplayName, !institution.isEmpty {
-            return "\(wallet.name) - \(institution)"
-        }
-        return wallet.name
+        walletPickerAccess.title(for: wallet)
     }
 
     private func categoryLabel(for categoryID: UUID?) -> String {
@@ -936,12 +930,6 @@ struct AIBillAnalysisView: View {
         normalizeSelection()
     }
 
-    private func walletSort(_ lhs: LedgerWallet, _ rhs: LedgerWallet) -> Bool {
-        if lhs.sortOrder != rhs.sortOrder {
-            return lhs.sortOrder < rhs.sortOrder
-        }
-        return lhs.createdAt < rhs.createdAt
-    }
 }
 
 private struct AIBillDraft: Identifiable {

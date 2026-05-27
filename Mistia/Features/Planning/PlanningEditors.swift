@@ -449,11 +449,13 @@ struct PlanningGoalEditorSheet: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
     @Environment(SessionStore.self) private var sessionStore
+    @Environment(FamilyContextStore.self) private var familyContextStore
     @AppStorage(MistiaAppStorageKey.currencyCode) private var currencyCode = "JPY"
-    @Query(filter: #Predicate<LedgerWallet> { $0.deletedAt == nil })
+    @Query
     private var storedWallets: [LedgerWallet]
     @Query(filter: #Predicate<SavingsGoal> { $0.deletedAt == nil })
     private var storedGoals: [SavingsGoal]
+    @Query private var ownershipScopes: [OwnedRecordScope]
 
     let target: PlanningGoalEditorTarget
 
@@ -468,14 +470,34 @@ struct PlanningGoalEditorSheet: View {
     }
 
     private var availableWallets: [LedgerWallet] {
-        storedWallets
-            .filter { !$0.isArchived }
-            .sorted {
-                if $0.sortOrder != $1.sortOrder {
-                    return $0.sortOrder < $1.sortOrder
-                }
-                return $0.createdAt < $1.createdAt
-            }
+        let preferredWalletIDs = Set([target.goal?.linkedWallet?.id, draft.linkedWalletID].compactMap { $0 })
+        return paymentWalletAccess.availableWallets(
+            from: storedWallets,
+            preferredWalletIDs: preferredWalletIDs,
+            ownerUserID: goalOwnerUserID,
+            excludesCreditCards: false
+        )
+    }
+
+    private var goalOwnerUserID: UUID? {
+        if let goal = target.goal,
+           let ownerUserID = goalOwnerMap[goal.id] {
+            return ownerUserID
+        }
+        return familyContextStore.selectedSubjectUserID
+            ?? paymentWalletAccess.currentSelfUserID
+    }
+
+    private var goalOwnerMap: [UUID: UUID] {
+        MistiaRecordOwnershipStore.ownerMap(from: ownershipScopes, entity: .savingsGoal)
+    }
+
+    private var paymentWalletAccess: PlanningPaymentWalletAccess {
+        PlanningPaymentWalletAccess(
+            sessionStore: sessionStore,
+            familyContextStore: familyContextStore,
+            ownershipScopes: ownershipScopes
+        )
     }
 
     private var activeCurrencyCode: String {
@@ -510,7 +532,7 @@ struct PlanningGoalEditorSheet: View {
                     Picker(L10n.planning.planning.linkedWallet, selection: $draft.linkedWalletID) {
                         Text(L10n.planning.planning.notLinked).tag(Optional<UUID>.none)
                         ForEach(availableWallets) { wallet in
-                            Text(wallet.name).tag(Optional(wallet.id))
+                            Text(paymentWalletAccess.title(for: wallet)).tag(Optional(wallet.id))
                         }
                     }
                     .pickerStyle(.menu)
@@ -639,20 +661,22 @@ struct PlanningGoalEditorSheet: View {
 }
 
 private struct PlanningPaymentWalletAccess {
-    let familyContextStore: FamilyContextStore
-    let currentSelfUserID: UUID?
-    private let walletOwnerMap: [UUID: UUID]
+    private let access: MistiaWalletPickerAccess
 
     init(
         sessionStore: SessionStore,
         familyContextStore: FamilyContextStore,
         ownershipScopes: [OwnedRecordScope]
     ) {
-        self.familyContextStore = familyContextStore
-        self.currentSelfUserID = sessionStore.activeLocalProfileUserID
-            ?? familyContextStore.currentUserID
-            ?? sessionStore.signedInUserID
-        self.walletOwnerMap = MistiaRecordOwnershipStore.ownerMap(from: ownershipScopes, entity: .wallet)
+        self.access = MistiaWalletPickerAccess(
+            sessionStore: sessionStore,
+            familyContextStore: familyContextStore,
+            ownershipScopes: ownershipScopes
+        )
+    }
+
+    var currentSelfUserID: UUID? {
+        access.currentSelfUserID
     }
 
     func availableWallets(
@@ -662,58 +686,25 @@ private struct PlanningPaymentWalletAccess {
         excludesCreditCards: Bool,
         excludedWalletID: UUID? = nil
     ) -> [LedgerWallet] {
-        wallets
-            .filter { wallet in
-                if wallet.id == excludedWalletID {
-                    return false
-                }
-                if excludesCreditCards, wallet.kind == .creditCard {
-                    return preferredWalletIDs.contains(wallet.id)
-                }
-                guard let walletOwnerUserID = walletOwnerUserID(for: wallet) else {
-                    return preferredWalletIDs.contains(wallet.id)
-                }
-                if let ownerUserID, walletOwnerUserID != ownerUserID {
-                    return preferredWalletIDs.contains(wallet.id)
-                }
-                if walletOwnerUserID == currentSelfUserID {
-                    return true
-                }
-                return familyContextStore.canUseWallet(walletID: wallet.id, ownerUserID: walletOwnerUserID)
-                    || preferredWalletIDs.contains(wallet.id)
-            }
-            .filter { ($0.deletedAt == nil && !$0.isArchived) || preferredWalletIDs.contains($0.id) }
-            .sorted {
-                if $0.sortOrder != $1.sortOrder {
-                    return $0.sortOrder < $1.sortOrder
-                }
-                return $0.createdAt < $1.createdAt
-            }
+        access.availableWallets(
+            from: wallets,
+            preferredWalletIDs: preferredWalletIDs,
+            targetOwnerUserID: ownerUserID,
+            excludesCreditCards: excludesCreditCards,
+            excludedWalletID: excludedWalletID
+        )
     }
 
     func title(for wallet: LedgerWallet) -> String {
-        guard familyContextStore.family != nil,
-              let ownerName = familyContextStore.displayName(for: walletOwnerUserID(for: wallet)) else {
-            return wallet.name
-        }
-        return "\(wallet.name) • \(ownerName)"
+        access.title(for: wallet)
     }
 
     func walletOwnerUserID(for wallet: LedgerWallet) -> UUID? {
-        walletOwnerMap[wallet.id]
-            ?? walletUseGrantOwnerUserID(for: wallet.id)
-            ?? currentSelfUserID
+        access.walletOwnerUserID(for: wallet)
     }
 
-    private func walletUseGrantOwnerUserID(for walletID: UUID) -> UUID? {
-        guard let currentSelfUserID else { return nil }
-        return familyContextStore.permissionGrants.first {
-            $0.revokedAt == nil
-                && $0.granteeUserID == currentSelfUserID
-                && $0.resourceType == .wallet
-                && $0.permissionScope == .use
-                && $0.resourceID == walletID
-        }?.ownerUserID
+    func walletOwnerUserID(for walletID: UUID?) -> UUID? {
+        access.walletOwnerUserID(for: walletID)
     }
 }
 
@@ -726,7 +717,7 @@ struct PlanningBillEditorSheet: View {
     @AppStorage(MistiaAppStorageKey.currencyCode) private var currencyCode = "JPY"
     @Query(filter: #Predicate<TransactionCategory> { $0.deletedAt == nil })
     private var storedCategories: [TransactionCategory]
-    @Query(filter: #Predicate<LedgerWallet> { $0.deletedAt == nil })
+    @Query
     private var storedWallets: [LedgerWallet]
     @Query private var ownershipScopes: [OwnedRecordScope]
 
@@ -1229,7 +1220,7 @@ struct PlanningInstallmentEditorSheet: View {
     @Environment(SessionStore.self) private var sessionStore
     @Environment(FamilyContextStore.self) private var familyContextStore
     @AppStorage(MistiaAppStorageKey.currencyCode) private var currencyCode = "JPY"
-    @Query(filter: #Predicate<LedgerWallet> { $0.deletedAt == nil })
+    @Query
     private var storedWallets: [LedgerWallet]
     @Query(filter: #Predicate<DueOccurrenceRecord> { $0.deletedAt == nil })
     private var storedOccurrences: [DueOccurrenceRecord]
@@ -1531,7 +1522,7 @@ struct PlanningCreditCardEditorSheet: View {
     @Environment(SessionStore.self) private var sessionStore
     @Environment(FamilyContextStore.self) private var familyContextStore
     @AppStorage(MistiaAppStorageKey.currencyCode) private var currencyCode = "JPY"
-    @Query(filter: #Predicate<LedgerWallet> { $0.deletedAt == nil })
+    @Query
     private var storedWallets: [LedgerWallet]
     @Query(filter: #Predicate<DueOccurrenceRecord> { $0.deletedAt == nil })
     private var storedOccurrences: [DueOccurrenceRecord]

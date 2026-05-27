@@ -54,6 +54,7 @@ let package = Package(
                 "CoreLogic/MistiaResetSupport.swift",
                 "CoreLogic/MistiaShortcutLogic.swift",
                 "CoreLogic/MistiaSystemCategoryIdentity.swift",
+                "CoreLogic/MistiaWalletPickerAccessLogic.swift",
                 "CoreLogic/OverviewLogic.swift",
                 "CoreLogic/PlanningLogic.swift",
                 "CoreLogic/ReceiptAnalysisModels.swift",

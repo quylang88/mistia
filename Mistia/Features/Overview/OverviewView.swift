@@ -893,9 +893,30 @@ struct OverviewView: View {
                 dueDate: alert.dueDate,
                 requiresAmountInput: alert.requiresAmountInput,
                 currencyCode: alert.currencyCode,
-                name: alert.name
+                name: alert.name,
+                ownerUserID: dueOwnerUserID(for: alert)
             )
         }
+    }
+
+    private func dueOwnerUserID(for alert: OverviewDueAlertSnapshot) -> UUID? {
+        guard let sourceID = alert.sourceID else {
+            return familyContextStore.selectedSubjectUserID ?? sessionStore.activeLocalProfileUserID
+        }
+
+        let entity: MistiaSyncEntity
+        switch alert.sourceKind {
+        case .recurringBill:
+            entity = .recurringBillPlan
+        case .installment:
+            entity = .installmentPlan
+        case .creditCard:
+            entity = .wallet
+        }
+
+        return MistiaRecordOwnershipStore.ownerMap(from: ownershipScopes, entity: entity)[sourceID]
+            ?? familyContextStore.selectedSubjectUserID
+            ?? sessionStore.activeLocalProfileUserID
     }
 }
 

@@ -18,10 +18,13 @@ struct ManagementWalletEditorSheet: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
     @Environment(SessionStore.self) private var sessionStore
+    @Environment(FamilyContextStore.self) private var familyContextStore
     @Query
     private var storedWallets: [LedgerWallet]
     @Query
     private var storedTransactions: [LedgerTransaction]
+    @Query
+    private var ownershipScopes: [OwnedRecordScope]
 
     let target: ManagementWalletEditorTarget
 
@@ -291,7 +294,7 @@ struct ManagementWalletEditorSheet: View {
                 Text(L10n.management.management.chooseLater).tag(Optional<UUID>.none)
 
                 ForEach(paymentSourceWallets) { wallet in
-                    Text(wallet.name).tag(Optional(wallet.id))
+                    Text(walletPickerAccess.title(for: wallet)).tag(Optional(wallet.id))
                 }
             }
             .pickerStyle(.menu)
@@ -333,19 +336,30 @@ struct ManagementWalletEditorSheet: View {
     }
 
     private var paymentSourceWallets: [LedgerWallet] {
-        storedWallets
-            .filter { wallet in
-                wallet.deletedAt == nil
-                    && !wallet.isArchived
-                    && wallet.kind != .creditCard
-                    && wallet.id != target.wallet?.id
-            }
-            .sorted {
-                if $0.sortOrder != $1.sortOrder {
-                    return $0.sortOrder < $1.sortOrder
-                }
-                return $0.createdAt < $1.createdAt
-            }
+        let preferredWalletIDs = Set([target.wallet?.creditCardProfile?.paymentSourceWallet?.id, draft.paymentSourceWalletID].compactMap { $0 })
+        return walletPickerAccess.availableWallets(
+            from: storedWallets,
+            preferredWalletIDs: preferredWalletIDs,
+            targetOwnerUserID: targetWalletOwnerUserID,
+            excludesCreditCards: true,
+            excludedWalletID: target.wallet?.id
+        )
+    }
+
+    private var targetWalletOwnerUserID: UUID? {
+        if let wallet = target.wallet {
+            return walletPickerAccess.walletOwnerUserID(for: wallet)
+        }
+        return familyContextStore.selectedSubjectUserID
+            ?? walletPickerAccess.currentSelfUserID
+    }
+
+    private var walletPickerAccess: MistiaWalletPickerAccess {
+        MistiaWalletPickerAccess(
+            sessionStore: sessionStore,
+            familyContextStore: familyContextStore,
+            ownershipScopes: ownershipScopes
+        )
     }
 
     private func save() {

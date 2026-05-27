@@ -12,6 +12,7 @@ struct DuePaymentSheetTarget: Identifiable {
     let requiresAmountInput: Bool
     let currencyCode: String
     let name: String
+    let ownerUserID: UUID?
 }
 
 // MARK: - Sheet
@@ -22,7 +23,8 @@ struct DuePaymentSheet: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(\.calendar) private var calendar
     @Environment(SessionStore.self) private var sessionStore
-    @Query(filter: #Predicate<LedgerWallet> { $0.deletedAt == nil && !$0.isArchived })
+    @Environment(FamilyContextStore.self) private var familyContextStore
+    @Query
     private var wallets: [LedgerWallet]
     @Query(filter: #Predicate<DueOccurrenceRecord> { $0.deletedAt == nil })
     private var occurrences: [DueOccurrenceRecord]
@@ -30,6 +32,7 @@ struct DuePaymentSheet: View {
     private var bills: [RecurringBillPlan]
     @Query(filter: #Predicate<InstallmentPlan> { $0.deletedAt == nil })
     private var installments: [InstallmentPlan]
+    @Query private var ownershipScopes: [OwnedRecordScope]
 
     let target: DuePaymentSheetTarget
     /// Called after a successful payment so the caller can mark the notification as read.
@@ -102,24 +105,12 @@ struct DuePaymentSheet: View {
     }
 
     private var availableWallets: [LedgerWallet] {
-        wallets
-            .filter { !$0.isArchived }
-            .filter { wallet in
-                switch target.sourceKind {
-                case .recurringBill:
-                    return true
-                case .installment:
-                    return wallet.kind != .creditCard
-                case .creditCard:
-                    return true
-                }
-            }
-            .sorted {
-                if $0.sortOrder != $1.sortOrder {
-                    return $0.sortOrder < $1.sortOrder
-                }
-                return $0.createdAt < $1.createdAt
-            }
+        walletPickerAccess.availableWallets(
+            from: wallets,
+            preferredWalletIDs: Set([defaultWalletID, selectedWalletID].compactMap { $0 }),
+            targetOwnerUserID: target.ownerUserID ?? walletPickerAccess.currentSelfUserID,
+            excludesCreditCards: target.sourceKind == .installment
+        )
     }
 
     private var parsedAmountInput: Int64? {
@@ -132,6 +123,14 @@ struct DuePaymentSheet: View {
             return L10n.planning.duepayment.chooseWallet
         }
         return wallet.name
+    }
+
+    private var walletPickerAccess: MistiaWalletPickerAccess {
+        MistiaWalletPickerAccess(
+            sessionStore: sessionStore,
+            familyContextStore: familyContextStore,
+            ownershipScopes: ownershipScopes
+        )
     }
 
     private var resolvedIconSymbolName: String {
@@ -298,7 +297,7 @@ struct DuePaymentSheet: View {
         Picker(walletFieldTitle, selection: $selectedWalletID) {
             Text(L10n.planning.duepayment.chooseWallet).tag(Optional<UUID>.none)
             ForEach(availableWallets) { wallet in
-                Text(wallet.name).tag(Optional(wallet.id))
+                Text(walletPickerAccess.title(for: wallet)).tag(Optional(wallet.id))
             }
         }
         .pickerStyle(.menu)
