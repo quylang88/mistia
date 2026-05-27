@@ -591,6 +591,11 @@ final class FamilyContextStore {
         sourceWalletID: UUID,
         destinationWalletID: UUID,
         amountMinor: Int64,
+        destinationAmountMinor: Int64?,
+        conversionMode: MistiaCurrencyConversionMode?,
+        exchangeRateDecimalString: String?,
+        exchangeRateProvider: String?,
+        exchangeRateDate: String?,
         occurredAt: Date,
         note: String?,
         sessionStore: SessionStore
@@ -610,6 +615,11 @@ final class FamilyContextStore {
             sourceWalletID: sourceWalletID,
             destinationWalletID: destinationWalletID,
             amountMinor: amountMinor,
+            destinationAmountMinor: destinationAmountMinor,
+            conversionModeRawValue: conversionMode?.rawValue,
+            exchangeRateDecimalString: exchangeRateDecimalString,
+            exchangeRateProvider: exchangeRateProvider,
+            exchangeRateDate: exchangeRateDate,
             occurredAt: occurredAt,
             note: note
         )

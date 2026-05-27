@@ -100,6 +100,9 @@ private struct OverviewRenderSnapshotCacheKey: Hashable {
     let calendarTimeZoneIdentifier: String
     let localeIdentifier: String
     let currencyCode: String
+    let currencyRateMode: String
+    let manualJPYToVNDRate: String
+    let cachedRatesSignature: Int
     let familyAccessSignature: Int
     let walletSignature: Int
     let transactionSignature: Int
@@ -117,6 +120,9 @@ struct OverviewView: View {
     @Environment(SessionStore.self) private var sessionStore
     @Environment(FamilyContextStore.self) private var familyContextStore
     @AppStorage(MistiaAppStorageKey.currencyCode) private var currencyCode = "JPY"
+    @AppStorage(MistiaCurrencySettings.StorageKey.rateMode) private var currencyRateMode = MistiaCurrencyRateMode.automatic.rawValue
+    @AppStorage(MistiaCurrencySettings.StorageKey.manualJPYToVNDRate) private var manualJPYToVNDRate = ""
+    @AppStorage(MistiaCurrencySettings.StorageKey.cachedRatesData) private var cachedCurrencyRatesData = Data()
 
     @Query(filter: #Predicate<BudgetPlan> { $0.deletedAt == nil })
     private var storedBudgets: [BudgetPlan]
@@ -149,6 +155,10 @@ struct OverviewView: View {
 
     private var currentMonth: Date {
         PlanningLogic.startOfMonth(for: .now, calendar: calendar)
+    }
+
+    private var appExchangeRates: [MistiaExchangeRate] {
+        MistiaCurrencySettings.rates()
     }
 
     private var renderSnapshot: OverviewRenderSnapshot {
@@ -244,6 +254,7 @@ struct OverviewView: View {
             recurringDues: recurringDueItems + installmentDueItems,
             currencyCode: currencyCode,
             balanceIndex: balanceIndex,
+            exchangeRates: appExchangeRates,
             referenceDate: .now,
             calendar: calendar
         )
@@ -297,6 +308,9 @@ struct OverviewView: View {
             calendarTimeZoneIdentifier: calendar.timeZone.identifier,
             localeIdentifier: locale.identifier,
             currencyCode: currencyCode,
+            currencyRateMode: currencyRateMode,
+            manualJPYToVNDRate: manualJPYToVNDRate,
+            cachedRatesSignature: cachedCurrencyRatesData.hashValue,
             familyAccessSignature: familyAccessSignature,
             walletSignature: recordsSignature(
                 storedWallets,
@@ -593,6 +607,7 @@ struct OverviewView: View {
             creditCardDues: creditCardDueItems,
             recurringDues: recurringBillDueItems + installmentDueItems,
             currencyCode: currencyCode,
+            exchangeRates: appExchangeRates,
             referenceDate: .now,
             calendar: calendar
         )

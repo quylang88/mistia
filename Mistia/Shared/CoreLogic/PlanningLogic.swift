@@ -544,7 +544,8 @@ nonisolated enum PlanningLogic {
         records: [TransactionRecordSnapshot],
         selectedMonth: Date,
         referenceDate: Date = .now,
-        calendar: Calendar = MistiaCalendar.current
+        calendar: Calendar = MistiaCalendar.current,
+        exchangeRates: [MistiaExchangeRate] = []
     ) -> [PlanningBudgetRowSnapshot] {
         let monthInterval = calendar.dateInterval(of: .month, for: selectedMonth)
         let spentByCategory = Dictionary(grouping: records.filter { record in
@@ -556,7 +557,8 @@ nonisolated enum PlanningLogic {
                 return false
             }
 
-            return monthInterval.contains(record.occurredAt)
+            return record.occurredAt >= monthInterval.start
+                && record.occurredAt < monthInterval.end
         }, by: \.categoryID)
 
         let remainingDays = daysRemainingInMonth(for: selectedMonth, referenceDate: referenceDate, calendar: calendar)
@@ -566,7 +568,11 @@ nonisolated enum PlanningLogic {
             .map { plan in
                 let spent = spentByCategory[plan.categoryID]?
                     .reduce(into: Int64.zero) { partial, record in
-                        partial += record.amountMinor
+                        partial += reportingAmount(
+                            for: record,
+                            currencyCode: plan.currencyCode,
+                            exchangeRates: exchangeRates
+                        )
                     } ?? 0
 
                 return PlanningBudgetRowSnapshot(
@@ -593,12 +599,26 @@ nonisolated enum PlanningLogic {
             }
     }
 
-    static func budgetSummary(from rows: [PlanningBudgetRowSnapshot]) -> PlanningBudgetSummarySnapshot {
+    static func budgetSummary(
+        from rows: [PlanningBudgetRowSnapshot],
+        reportingCurrencyCode: String? = nil,
+        exchangeRates: [MistiaExchangeRate] = []
+    ) -> PlanningBudgetSummarySnapshot {
         let totalBudget = rows.reduce(into: Int64.zero) { partial, row in
-            partial += row.limitMinor
+            partial += reportingAmount(
+                amountMinor: row.limitMinor,
+                sourceCurrencyCode: row.currencyCode,
+                currencyCode: reportingCurrencyCode ?? row.currencyCode,
+                exchangeRates: exchangeRates
+            )
         }
         let spent = rows.reduce(into: Int64.zero) { partial, row in
-            partial += row.spentMinor
+            partial += reportingAmount(
+                amountMinor: row.spentMinor,
+                sourceCurrencyCode: row.currencyCode,
+                currencyCode: reportingCurrencyCode ?? row.currencyCode,
+                exchangeRates: exchangeRates
+            )
         }
         let remaining = max(totalBudget - spent, 0)
 
@@ -615,7 +635,8 @@ nonisolated enum PlanningLogic {
         records: [TransactionRecordSnapshot],
         selectedMonth: Date,
         referenceDate: Date = .now,
-        calendar: Calendar = MistiaCalendar.current
+        calendar: Calendar = MistiaCalendar.current,
+        exchangeRates: [MistiaExchangeRate] = []
     ) -> [PlanningBudgetBranchRowSnapshot] {
         let monthInterval = calendar.dateInterval(of: .month, for: selectedMonth)
         let expenseRecordsInMonth = records.filter { record in
@@ -626,7 +647,8 @@ nonisolated enum PlanningLogic {
                 return false
             }
 
-            return monthInterval.contains(record.occurredAt)
+            return record.occurredAt >= monthInterval.start
+                && record.occurredAt < monthInterval.end
         }
         let spentByCategory = Dictionary(grouping: expenseRecordsInMonth, by: \.categoryID)
         let spentByBranch = Dictionary(grouping: expenseRecordsInMonth) { record in
@@ -649,7 +671,11 @@ nonisolated enum PlanningLogic {
                     .map { plan in
                         let spent = spentByCategory[plan.categoryID]?
                             .reduce(into: Int64.zero) { partial, record in
-                                partial += record.amountMinor
+                                partial += reportingAmount(
+                                    for: record,
+                                    currencyCode: plan.currencyCode,
+                                    exchangeRates: exchangeRates
+                                )
                             } ?? 0
 
                         return PlanningBudgetRowSnapshot(
@@ -675,10 +701,19 @@ nonisolated enum PlanningLogic {
                 if let parentPlan {
                     let spent = spentByBranch[branchID]?
                         .reduce(into: Int64.zero) { partial, record in
-                            partial += record.amountMinor
+                            partial += reportingAmount(
+                                for: record,
+                                currencyCode: parentPlan.currencyCode,
+                                exchangeRates: exchangeRates
+                            )
                         } ?? 0
                     let allocatedChildLimit = childRows.reduce(into: Int64.zero) { partial, row in
-                        partial += row.limitMinor
+                        partial += reportingAmount(
+                            amountMinor: row.limitMinor,
+                            sourceCurrencyCode: row.currencyCode,
+                            currencyCode: parentPlan.currencyCode,
+                            exchangeRates: exchangeRates
+                        )
                     }
 
                     return PlanningBudgetBranchRowSnapshot(
@@ -723,10 +758,20 @@ nonisolated enum PlanningLogic {
                 }
 
                 let spent = childRows.reduce(into: Int64.zero) { partial, row in
-                    partial += row.spentMinor
+                    partial += reportingAmount(
+                        amountMinor: row.spentMinor,
+                        sourceCurrencyCode: row.currencyCode,
+                        currencyCode: branchTemplate.currencyCode,
+                        exchangeRates: exchangeRates
+                    )
                 }
                 let limit = childRows.reduce(into: Int64.zero) { partial, row in
-                    partial += row.limitMinor
+                    partial += reportingAmount(
+                        amountMinor: row.limitMinor,
+                        sourceCurrencyCode: row.currencyCode,
+                        currencyCode: branchTemplate.currencyCode,
+                        exchangeRates: exchangeRates
+                    )
                 }
 
                 return PlanningBudgetBranchRowSnapshot(
@@ -759,12 +804,26 @@ nonisolated enum PlanningLogic {
             }
     }
 
-    static func budgetSummary(from rows: [PlanningBudgetBranchRowSnapshot]) -> PlanningBudgetSummarySnapshot {
+    static func budgetSummary(
+        from rows: [PlanningBudgetBranchRowSnapshot],
+        reportingCurrencyCode: String? = nil,
+        exchangeRates: [MistiaExchangeRate] = []
+    ) -> PlanningBudgetSummarySnapshot {
         let totalBudget = rows.reduce(into: Int64.zero) { partial, row in
-            partial += row.limitMinor
+            partial += reportingAmount(
+                amountMinor: row.limitMinor,
+                sourceCurrencyCode: row.currencyCode,
+                currencyCode: reportingCurrencyCode ?? row.currencyCode,
+                exchangeRates: exchangeRates
+            )
         }
         let spent = rows.reduce(into: Int64.zero) { partial, row in
-            partial += row.spentMinor
+            partial += reportingAmount(
+                amountMinor: row.spentMinor,
+                sourceCurrencyCode: row.currencyCode,
+                currencyCode: reportingCurrencyCode ?? row.currencyCode,
+                exchangeRates: exchangeRates
+            )
         }
         let remaining = max(totalBudget - spent, 0)
 
@@ -866,7 +925,11 @@ nonisolated enum PlanningLogic {
             }
     }
 
-    static func goalSummary(from rows: [PlanningGoalRowSnapshot]) -> PlanningGoalSummarySnapshot {
+    static func goalSummary(
+        from rows: [PlanningGoalRowSnapshot],
+        reportingCurrencyCode: String? = nil,
+        exchangeRates: [MistiaExchangeRate] = []
+    ) -> PlanningGoalSummarySnapshot {
         let nearest = rows.max { lhs, rhs in
             if lhs.progress != rhs.progress {
                 return lhs.progress < rhs.progress
@@ -877,7 +940,12 @@ nonisolated enum PlanningLogic {
         return PlanningGoalSummarySnapshot(
             activeCount: rows.count,
             totalSavedMinor: rows.reduce(into: Int64.zero) { partial, row in
-                partial += row.currentSavedMinor
+                partial += reportingAmount(
+                    amountMinor: row.currentSavedMinor,
+                    sourceCurrencyCode: row.currencyCode,
+                    currencyCode: reportingCurrencyCode ?? row.currencyCode,
+                    exchangeRates: exchangeRates
+                )
             },
             nearestGoalName: nearest?.name
         )
@@ -1118,6 +1186,8 @@ nonisolated enum PlanningLogic {
         creditStatements: [PlanningCreditCardStatementSnapshot],
         recurring: [PlanningRecurringDueSnapshot],
         selectedMonth: Date,
+        reportingCurrencyCode: String? = nil,
+        exchangeRates: [MistiaExchangeRate] = [],
         referenceDate: Date = .now,
         calendar: Calendar = MistiaCalendar.current
     ) -> PlanningDueSummarySnapshot {
@@ -1143,8 +1213,23 @@ nonisolated enum PlanningLogic {
         }
         let upcomingCount = upcomingCards.count + upcomingRecurring.count
 
-        let totalDueCards = pendingStatements.reduce(into: Int64.zero) { $0 += $1.amountMinor }
-        let totalDueRecurring = pendingRecurring.reduce(into: Int64.zero) { $0 += $1.amountMinor ?? 0 }
+        let totalDueCards = pendingStatements.reduce(into: Int64.zero) { partial, statement in
+            partial += reportingAmount(
+                amountMinor: statement.amountMinor,
+                sourceCurrencyCode: statement.currencyCode,
+                currencyCode: reportingCurrencyCode ?? statement.currencyCode,
+                exchangeRates: exchangeRates
+            )
+        }
+        let totalDueRecurring = pendingRecurring.reduce(into: Int64.zero) { partial, item in
+            guard let amountMinor = item.amountMinor else { return }
+            partial += reportingAmount(
+                amountMinor: amountMinor,
+                sourceCurrencyCode: item.currencyCode,
+                currencyCode: reportingCurrencyCode ?? item.currencyCode,
+                exchangeRates: exchangeRates
+            )
+        }
         let totalDueMinor = totalDueCards + totalDueRecurring
 
         // Quá hạn
@@ -1170,6 +1255,8 @@ nonisolated enum PlanningLogic {
         creditCards: [PlanningCreditCardDueSnapshot],
         recurring: [PlanningRecurringDueSnapshot],
         selectedMonth: Date,
+        reportingCurrencyCode: String? = nil,
+        exchangeRates: [MistiaExchangeRate] = [],
         referenceDate: Date = .now,
         calendar: Calendar = MistiaCalendar.current
     ) -> PlanningDueSummarySnapshot {
@@ -1198,6 +1285,8 @@ nonisolated enum PlanningLogic {
             creditStatements: statements,
             recurring: recurring,
             selectedMonth: selectedMonth,
+            reportingCurrencyCode: reportingCurrencyCode,
+            exchangeRates: exchangeRates,
             referenceDate: referenceDate,
             calendar: calendar
         )
@@ -1643,6 +1732,32 @@ nonisolated enum PlanningLogic {
         }
 
         return .payable
+    }
+
+    private static func reportingAmount(
+        for record: TransactionRecordSnapshot,
+        currencyCode: String,
+        exchangeRates: [MistiaExchangeRate]
+    ) -> Int64 {
+        MistiaCurrencyLogic.reportingMinorAmount(
+            for: record,
+            reportingCurrencyCode: currencyCode,
+            rates: exchangeRates
+        ) ?? 0
+    }
+
+    private static func reportingAmount(
+        amountMinor: Int64,
+        sourceCurrencyCode: String,
+        currencyCode: String,
+        exchangeRates: [MistiaExchangeRate]
+    ) -> Int64 {
+        MistiaCurrencyLogic.reportingMinorAmount(
+            amountMinor: amountMinor,
+            sourceCurrencyCode: sourceCurrencyCode,
+            reportingCurrencyCode: currencyCode,
+            rates: exchangeRates
+        ) ?? 0
     }
 
     static func monthsRemaining(

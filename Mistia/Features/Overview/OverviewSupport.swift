@@ -120,6 +120,7 @@ extension LedgerTransaction {
             title: title,
             note: note,
             amountMinor: amountMinor,
+            sourceCurrencyCode: sourceCurrencyCode ?? sourceWallet?.currencyCode,
             occurredAt: occurredAt,
             createdAt: createdAt,
             sourceWalletID: sourceWallet?.id,

@@ -111,6 +111,11 @@ private struct FamilyTransferDraftPayload {
     let sourceWalletID: UUID
     let destinationWalletID: UUID
     let amountMinor: Int64
+    let destinationAmountMinor: Int64?
+    let conversionMode: MistiaCurrencyConversionMode?
+    let exchangeRateDecimalString: String?
+    let exchangeRateProvider: String?
+    let exchangeRateDate: String?
     let occurredAt: Date
     let note: String?
 }
@@ -127,6 +132,24 @@ private struct TransferCreatePermissionPrompt: Identifiable {
     }
 }
 
+private struct CurrencyConversionResolution {
+    let isValid: Bool
+    let amountMinor: Int64?
+    let mode: MistiaCurrencyConversionMode
+    let rateDecimalString: String?
+    let rateProvider: String?
+    let rateDate: String?
+
+    static let sameCurrency = CurrencyConversionResolution(
+        isValid: true,
+        amountMinor: nil,
+        mode: .appRate,
+        rateDecimalString: nil,
+        rateProvider: nil,
+        rateDate: nil
+    )
+}
+
 struct TransactionEditorSheet: View {
     @Environment(\.calendar) private var calendar
     @Environment(\.dismiss) private var dismiss
@@ -134,6 +157,7 @@ struct TransactionEditorSheet: View {
     @Environment(\.colorScheme) private var colorScheme
     @Environment(SessionStore.self) private var sessionStore
     @Environment(FamilyContextStore.self) private var familyContextStore
+    @AppStorage(MistiaCurrencySettings.StorageKey.primaryCurrencyCode) private var primaryCurrencyCode = "JPY"
 
     @Query
     private var storedWallets: [LedgerWallet]
@@ -589,11 +613,31 @@ struct TransactionEditorSheet: View {
                 TextField(L10n.transactions.transactioneditor.amount, text: $bindableDraft.amountText)
                     .keyboardType(.numberPad)
 
+                if shouldShowDestinationAmountInput {
+                    TextField(L10n.transactions.transactioneditor.destinationAmount, text: $bindableDraft.destinationAmountText)
+                        .keyboardType(.numberPad)
+                }
+
                 MistiaDatePickerRow(
                     title: L10n.transactions.transactioneditor.dateTime,
                     selection: $bindableDraft.occurredAt,
                     mode: .dateAndTime
                 )
+            }
+
+            if shouldShowConversionSection {
+                Section(L10n.transactions.transactioneditor.conversion) {
+                    Picker(L10n.transactions.transactioneditor.conversion, selection: $bindableDraft.conversionModeRawValue) {
+                        Text(L10n.transactions.transactioneditor.useAppRate).tag(MistiaCurrencyConversionMode.appRate.rawValue)
+                        Text(L10n.transactions.transactioneditor.enterManually).tag(MistiaCurrencyConversionMode.manual.rawValue)
+                    }
+                    .pickerStyle(.segmented)
+
+                    if selectedConversionMode == .manual {
+                        TextField(L10n.transactions.transactioneditor.convertedAmount, text: $bindableDraft.reportingAmountText)
+                            .keyboardType(.numberPad)
+                    }
+                }
             }
 
             switch draft.primaryKind {
@@ -1145,6 +1189,35 @@ struct TransactionEditorSheet: View {
         availableCategories.first(where: { $0.id == draft.categoryID })
     }
 
+    private var selectedConversionMode: MistiaCurrencyConversionMode {
+        MistiaCurrencyConversionMode(rawValue: draft.conversionModeRawValue) ?? .appRate
+    }
+
+    private var sourceCurrencyCodeForDraft: String {
+        selectedSourceWallet?.currencyCode ?? "JPY"
+    }
+
+    private var destinationCurrencyCodeForDraft: String? {
+        selectedDestinationWallet?.currencyCode
+    }
+
+    private var shouldShowDestinationAmountInput: Bool {
+        guard draft.primaryKind == .transfer,
+              draft.transferSubtype == .internalTransfer || draft.transferSubtype == .familyTransfer,
+              let destinationCurrencyCodeForDraft
+        else {
+            return false
+        }
+        return sourceCurrencyCodeForDraft != destinationCurrencyCodeForDraft
+    }
+
+    private var shouldShowConversionSection: Bool {
+        guard draft.primaryKind == .expense || draft.primaryKind == .income else {
+            return false
+        }
+        return sourceCurrencyCodeForDraft != primaryCurrencyCode
+    }
+
     private var selectedCategoryLabel: String {
         guard let selectedCategory else {
             return L10n.transactions.transactioneditor.chooseCategory
@@ -1359,11 +1432,23 @@ struct TransactionEditorSheet: View {
             return nil
         }
 
+        let destinationAmount = resolvedDestinationAmount(
+            amountMinor: amountMinor,
+            sourceCurrencyCode: sourceWallet.currencyCode,
+            destinationCurrencyCode: selectedDestinationWallet?.currencyCode ?? sourceWallet.currencyCode
+        )
+        guard destinationAmount.isValid else { return nil }
+
         return FamilyTransferDraftPayload(
             recipientUserID: recipientUserID,
             sourceWalletID: sourceWalletID,
             destinationWalletID: destinationWalletID,
             amountMinor: amountMinor,
+            destinationAmountMinor: destinationAmount.amountMinor,
+            conversionMode: destinationAmount.amountMinor == nil ? nil : destinationAmount.mode,
+            exchangeRateDecimalString: destinationAmount.rateDecimalString,
+            exchangeRateProvider: destinationAmount.rateProvider,
+            exchangeRateDate: destinationAmount.rateDate,
             occurredAt: draft.occurredAt,
             note: draft.note.nilIfBlank
         )
@@ -1378,6 +1463,11 @@ struct TransactionEditorSheet: View {
                 sourceWalletID: payload.sourceWalletID,
                 destinationWalletID: payload.destinationWalletID,
                 amountMinor: payload.amountMinor,
+                destinationAmountMinor: payload.destinationAmountMinor,
+                conversionMode: payload.conversionMode,
+                exchangeRateDecimalString: payload.exchangeRateDecimalString,
+                exchangeRateProvider: payload.exchangeRateProvider,
+                exchangeRateDate: payload.exchangeRateDate,
                 occurredAt: payload.occurredAt,
                 note: payload.note,
                 sessionStore: sessionStore
@@ -1674,6 +1764,103 @@ struct TransactionEditorSheet: View {
         return L10n.transactions.transactioneditor.usedValueValueReceiptScansToday(String(describing: quota.usedCount), String(describing: quota.limitCount))
     }
 
+    private func resolvedReportingAmount(
+        amountMinor: Int64,
+        sourceCurrencyCode: String
+    ) -> CurrencyConversionResolution {
+        guard MistiaCurrencyLogic.normalizedCode(sourceCurrencyCode) != MistiaCurrencyLogic.normalizedCode(primaryCurrencyCode) else {
+            return .sameCurrency
+        }
+
+        if selectedConversionMode == .manual {
+            let parsed = draft.reportingAmountText.currencyInputToMinorUnits(currencyCode: primaryCurrencyCode)
+            guard parsed > 0 else {
+                alertMessage = L10n.transactions.transactioneditor.enterTheConvertedAmountOrRefreshRates
+                return CurrencyConversionResolution(isValid: false, amountMinor: nil, mode: .manual, rateDecimalString: nil, rateProvider: nil, rateDate: nil)
+            }
+            return CurrencyConversionResolution(isValid: true, amountMinor: parsed, mode: .manual, rateDecimalString: nil, rateProvider: "manual", rateDate: nil)
+        }
+
+        let rates = MistiaCurrencySettings.rates()
+        guard let converted = MistiaCurrencyLogic.convertedMinorAmount(
+            amountMinor,
+            from: sourceCurrencyCode,
+            to: primaryCurrencyCode,
+            rates: rates
+        ) else {
+            alertMessage = L10n.transactions.transactioneditor.enterTheConvertedAmountOrRefreshRates
+            return CurrencyConversionResolution(isValid: false, amountMinor: nil, mode: .appRate, rateDecimalString: nil, rateProvider: nil, rateDate: nil)
+        }
+
+        let rate = matchingRate(from: sourceCurrencyCode, to: primaryCurrencyCode, rates: rates)
+        return CurrencyConversionResolution(
+            isValid: true,
+            amountMinor: converted,
+            mode: .appRate,
+            rateDecimalString: rate?.rateDecimalString,
+            rateProvider: rate?.provider,
+            rateDate: rate?.rateDate
+        )
+    }
+
+    private func resolvedDestinationAmount(
+        amountMinor: Int64,
+        sourceCurrencyCode: String,
+        destinationCurrencyCode: String
+    ) -> CurrencyConversionResolution {
+        guard MistiaCurrencyLogic.normalizedCode(sourceCurrencyCode) != MistiaCurrencyLogic.normalizedCode(destinationCurrencyCode) else {
+            return .sameCurrency
+        }
+
+        let manuallyEnteredDestination = draft.destinationAmountText.currencyInputToMinorUnits(currencyCode: destinationCurrencyCode)
+        if manuallyEnteredDestination > 0 {
+            return CurrencyConversionResolution(
+                isValid: true,
+                amountMinor: manuallyEnteredDestination,
+                mode: .manual,
+                rateDecimalString: nil,
+                rateProvider: "manual",
+                rateDate: nil
+            )
+        }
+
+        let rates = MistiaCurrencySettings.rates()
+        guard let converted = MistiaCurrencyLogic.convertedMinorAmount(
+            amountMinor,
+            from: sourceCurrencyCode,
+            to: destinationCurrencyCode,
+            rates: rates
+        ) else {
+            alertMessage = L10n.transactions.transactioneditor.enterTheConvertedAmountOrRefreshRates
+            return CurrencyConversionResolution(isValid: false, amountMinor: nil, mode: .appRate, rateDecimalString: nil, rateProvider: nil, rateDate: nil)
+        }
+
+        let rate = matchingRate(from: sourceCurrencyCode, to: destinationCurrencyCode, rates: rates)
+        return CurrencyConversionResolution(
+            isValid: true,
+            amountMinor: converted,
+            mode: .appRate,
+            rateDecimalString: rate?.rateDecimalString,
+            rateProvider: rate?.provider,
+            rateDate: rate?.rateDate
+        )
+    }
+
+    private func matchingRate(
+        from sourceCurrencyCode: String,
+        to targetCurrencyCode: String,
+        rates: [MistiaExchangeRate]
+    ) -> MistiaExchangeRate? {
+        let source = MistiaCurrencyLogic.normalizedCode(sourceCurrencyCode)
+        let target = MistiaCurrencyLogic.normalizedCode(targetCurrencyCode)
+        return rates.first {
+            (MistiaCurrencyLogic.normalizedCode($0.baseCurrencyCode) == source
+                && MistiaCurrencyLogic.normalizedCode($0.quoteCurrencyCode) == target)
+            || (MistiaCurrencyLogic.normalizedCode($0.baseCurrencyCode) == target
+                && MistiaCurrencyLogic.normalizedCode($0.quoteCurrencyCode) == source)
+        }
+    }
+
     private func saveFullTransaction() {
         guard let amountMinor = draft.amountMinor, amountMinor > 0 else {
             alertMessage = L10n.transactions.transactioneditor.enterAnAmountGreaterThan
@@ -1849,6 +2036,12 @@ struct TransactionEditorSheet: View {
                 return
             }
 
+            let reportingAmount = resolvedReportingAmount(
+                amountMinor: amountMinor,
+                sourceCurrencyCode: sourceWallet.currencyCode
+            )
+            guard reportingAmount.isValid else { return }
+
             transaction.title = draft.title.nilIfBlank ?? ""
             transaction.sourceWallet = sourceWallet
             transaction.destinationWallet = nil
@@ -1857,6 +2050,15 @@ struct TransactionEditorSheet: View {
             transaction.debtIntent = nil
             transaction.counterpartyName = nil
             transaction.normalizedCounterpartyKey = nil
+            transaction.sourceCurrencyCode = sourceWallet.currencyCode
+            transaction.destinationCurrencyCode = nil
+            transaction.destinationAmountMinor = nil
+            transaction.reportingCurrencyCode = reportingAmount.amountMinor == nil ? nil : primaryCurrencyCode
+            transaction.reportingAmountMinor = reportingAmount.amountMinor
+            transaction.conversionModeRawValue = reportingAmount.amountMinor == nil ? nil : selectedConversionMode.rawValue
+            transaction.exchangeRateDecimalString = reportingAmount.rateDecimalString
+            transaction.exchangeRateProvider = reportingAmount.rateProvider
+            transaction.exchangeRateDate = reportingAmount.rateDate
         case .transfer:
             switch draft.transferSubtype ?? .internalTransfer {
             case .internalTransfer:
@@ -1875,6 +2077,13 @@ struct TransactionEditorSheet: View {
                     return
                 }
 
+                let destinationAmount = resolvedDestinationAmount(
+                    amountMinor: amountMinor,
+                    sourceCurrencyCode: sourceWallet.currencyCode,
+                    destinationCurrencyCode: destinationWallet.currencyCode
+                )
+                guard destinationAmount.isValid else { return }
+
                 transaction.title = draft.title.nilIfBlank ?? L10n.transactions.transactioneditor.internalTransfer
                 transaction.sourceWallet = sourceWallet
                 transaction.destinationWallet = destinationWallet
@@ -1883,6 +2092,15 @@ struct TransactionEditorSheet: View {
                 transaction.debtIntent = nil
                 transaction.counterpartyName = nil
                 transaction.normalizedCounterpartyKey = nil
+                transaction.sourceCurrencyCode = sourceWallet.currencyCode
+                transaction.destinationCurrencyCode = destinationWallet.currencyCode
+                transaction.destinationAmountMinor = destinationAmount.amountMinor
+                transaction.reportingCurrencyCode = nil
+                transaction.reportingAmountMinor = nil
+                transaction.conversionModeRawValue = destinationAmount.amountMinor == nil ? nil : destinationAmount.mode.rawValue
+                transaction.exchangeRateDecimalString = destinationAmount.rateDecimalString
+                transaction.exchangeRateProvider = destinationAmount.rateProvider
+                transaction.exchangeRateDate = destinationAmount.rateDate
             case .familyTransfer:
                 alertMessage = L10n.transactions.transactioneditor.couldnTCreateFamilyTransfer
                 return
@@ -1912,6 +2130,15 @@ struct TransactionEditorSheet: View {
                 transaction.debtIntent = debtIntent
                 transaction.counterpartyName = counterpartyName
                 transaction.normalizedCounterpartyKey = normalizedCounterpartyKey
+                transaction.sourceCurrencyCode = sourceWallet.currencyCode
+                transaction.destinationCurrencyCode = nil
+                transaction.destinationAmountMinor = nil
+                transaction.reportingCurrencyCode = nil
+                transaction.reportingAmountMinor = nil
+                transaction.conversionModeRawValue = nil
+                transaction.exchangeRateDecimalString = nil
+                transaction.exchangeRateProvider = nil
+                transaction.exchangeRateDate = nil
             }
         }
 
@@ -2561,6 +2788,9 @@ private struct TransactionReceiptImagePicker: UIViewControllerRepresentable {
     var debtIntent: TransactionDebtIntent? = nil
     var title: String = ""
     var amountText: String = ""
+    var destinationAmountText: String = ""
+    var reportingAmountText: String = ""
+    var conversionModeRawValue: String = MistiaCurrencyConversionMode.appRate.rawValue
     var note: String = ""
     var occurredAt: Date = .now
     var sourceWalletID: UUID? = nil
@@ -2576,6 +2806,9 @@ private struct TransactionReceiptImagePicker: UIViewControllerRepresentable {
             self.debtIntent = transaction.debtIntent
             self.title = transaction.title
             self.amountText = "\(transaction.amountMinor)"
+            self.destinationAmountText = transaction.destinationAmountMinor.map(String.init) ?? ""
+            self.reportingAmountText = transaction.reportingAmountMinor.map(String.init) ?? ""
+            self.conversionModeRawValue = transaction.conversionModeRawValue ?? MistiaCurrencyConversionMode.appRate.rawValue
             self.note = transaction.note ?? ""
             self.occurredAt = transaction.occurredAt
             self.sourceWalletID = transaction.sourceWallet?.id
@@ -2595,6 +2828,9 @@ private struct TransactionReceiptImagePicker: UIViewControllerRepresentable {
                 : nil
             self.title = prefill?.title ?? ""
             self.amountText = prefill?.amountMinor.map(String.init) ?? ""
+            self.destinationAmountText = ""
+            self.reportingAmountText = ""
+            self.conversionModeRawValue = MistiaCurrencyConversionMode.appRate.rawValue
             self.note = ""
             self.occurredAt = prefill?.occurredAt ?? .now
             self.sourceWalletID = prefill?.sourceWalletID ?? transferPreset?.sourceWalletID

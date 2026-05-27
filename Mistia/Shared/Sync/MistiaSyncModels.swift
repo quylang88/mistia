@@ -298,6 +298,15 @@ struct RemoteLedgerTransaction: MistiaRemoteRow {
     var title: String
     var note: String?
     var amountMinor: Int64
+    var sourceCurrencyCode: String?
+    var destinationCurrencyCode: String?
+    var destinationAmountMinor: Int64?
+    var reportingCurrencyCode: String?
+    var reportingAmountMinor: Int64?
+    var conversionModeRawValue: String?
+    var exchangeRateDecimalString: String?
+    var exchangeRateProvider: String?
+    var exchangeRateDate: String?
     var occurredAt: Date
     var createdAt: Date
     var updatedAt: Date
@@ -324,6 +333,15 @@ struct RemoteLedgerTransaction: MistiaRemoteRow {
         case title
         case note
         case amountMinor = "amount_minor"
+        case sourceCurrencyCode = "source_currency_code"
+        case destinationCurrencyCode = "destination_currency_code"
+        case destinationAmountMinor = "destination_amount_minor"
+        case reportingCurrencyCode = "reporting_currency_code"
+        case reportingAmountMinor = "reporting_amount_minor"
+        case conversionModeRawValue = "conversion_mode_raw_value"
+        case exchangeRateDecimalString = "exchange_rate_decimal_string"
+        case exchangeRateProvider = "exchange_rate_provider"
+        case exchangeRateDate = "exchange_rate_date"
         case occurredAt = "occurred_at"
         case createdAt = "created_at"
         case updatedAt = "updated_at"
@@ -352,6 +370,15 @@ struct RemoteLedgerTransaction: MistiaRemoteRow {
         title = try container.decode(String.self, forKey: .title)
         note = try container.decodeIfPresent(String.self, forKey: .note)
         amountMinor = try container.decode(Int64.self, forKey: .amountMinor)
+        sourceCurrencyCode = try container.decodeIfPresent(String.self, forKey: .sourceCurrencyCode)
+        destinationCurrencyCode = try container.decodeIfPresent(String.self, forKey: .destinationCurrencyCode)
+        destinationAmountMinor = try container.decodeIfPresent(Int64.self, forKey: .destinationAmountMinor)
+        reportingCurrencyCode = try container.decodeIfPresent(String.self, forKey: .reportingCurrencyCode)
+        reportingAmountMinor = try container.decodeIfPresent(Int64.self, forKey: .reportingAmountMinor)
+        conversionModeRawValue = try container.decodeIfPresent(String.self, forKey: .conversionModeRawValue)
+        exchangeRateDecimalString = try container.decodeIfPresent(String.self, forKey: .exchangeRateDecimalString)
+        exchangeRateProvider = try container.decodeIfPresent(String.self, forKey: .exchangeRateProvider)
+        exchangeRateDate = try container.decodeIfPresent(String.self, forKey: .exchangeRateDate)
         occurredAt = try container.decode(Date.self, forKey: .occurredAt)
         createdAt = try container.decode(Date.self, forKey: .createdAt)
         updatedAt = try container.decode(Date.self, forKey: .updatedAt)
@@ -945,6 +972,15 @@ enum MistiaSyncUploadRecord {
                 row.title,
                 row.note ?? "",
                 "\(row.amountMinor)",
+                row.sourceCurrencyCode ?? "",
+                row.destinationCurrencyCode ?? "",
+                row.destinationAmountMinor.map(String.init) ?? "",
+                row.reportingCurrencyCode ?? "",
+                row.reportingAmountMinor.map(String.init) ?? "",
+                row.conversionModeRawValue ?? "",
+                row.exchangeRateDecimalString ?? "",
+                row.exchangeRateProvider ?? "",
+                row.exchangeRateDate ?? "",
                 Self.dateString(row.occurredAt),
                 row.counterpartyName ?? "",
                 row.normalizedCounterpartyKey ?? "",

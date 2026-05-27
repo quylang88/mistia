@@ -1260,6 +1260,10 @@ private struct ManagementWalletRow: View {
     let wallet: LedgerWallet
     let currentBalanceMinor: Int64
     let action: () -> Void
+    @AppStorage(MistiaCurrencySettings.StorageKey.primaryCurrencyCode) private var primaryCurrencyCode = "JPY"
+    @AppStorage(MistiaCurrencySettings.StorageKey.rateMode) private var currencyRateMode = MistiaCurrencyRateMode.automatic.rawValue
+    @AppStorage(MistiaCurrencySettings.StorageKey.manualJPYToVNDRate) private var manualJPYToVNDRate = ""
+    @AppStorage(MistiaCurrencySettings.StorageKey.cachedRatesData) private var cachedCurrencyRatesData = Data()
     
     private var availableCreditMinor: Int64? {
         guard wallet.kind == .creditCard,
@@ -1301,25 +1305,48 @@ private struct ManagementWalletRow: View {
 
                 Spacer(minLength: 8)
 
-                if wallet.kind == .creditCard, let availableCredit = availableCreditMinor {
-                    VStack(alignment: .trailing, spacing: 2) {
+                VStack(alignment: .trailing, spacing: 2) {
+                    if wallet.kind == .creditCard, availableCreditMinor != nil {
                         Text(L10n.management.management.available)
                             .font(.system(size: 10.5, weight: .medium, design: .rounded))
                             .foregroundStyle(.secondary)
-                        Text(availableCredit.formattedCurrency(code: wallet.currencyCode))
-                            .font(.system(size: 16, weight: .bold, design: .rounded))
-                            .foregroundStyle(balanceColor)
                     }
-                } else {
-                    Text(currentBalanceMinor.formattedCurrency(code: wallet.currencyCode))
+
+                    Text(balanceAmountMinor.formattedCurrency(code: wallet.currencyCode))
                         .font(.system(size: 16, weight: .bold, design: .rounded))
                         .foregroundStyle(balanceColor)
+
+                    if let approximatePrimaryAmountText {
+                        Text(approximatePrimaryAmountText)
+                            .font(.system(size: 11.5, weight: .semibold, design: .rounded))
+                            .foregroundStyle(.secondary)
+                    }
                 }
             }
             .padding(.horizontal, 14)
             .padding(.vertical, 11)
         }
         .buttonStyle(MistiaPressableButtonStyle(cornerRadius: 16))
+    }
+
+    private var balanceAmountMinor: Int64 {
+        availableCreditMinor ?? currentBalanceMinor
+    }
+
+    private var approximatePrimaryAmountText: String? {
+        MistiaCurrencyLogic.approximatePrimaryAmountText(
+            amountMinor: balanceAmountMinor,
+            sourceCurrencyCode: wallet.currencyCode,
+            primaryCurrencyCode: primaryCurrencyCode,
+            rates: exchangeRates
+        )
+    }
+
+    private var exchangeRates: [MistiaExchangeRate] {
+        _ = currencyRateMode
+        _ = manualJPYToVNDRate
+        _ = cachedCurrencyRatesData
+        return MistiaCurrencySettings.rates()
     }
 }
 

@@ -1893,6 +1893,15 @@ enum MistiaSyncLocalStore {
             title: row.title,
             note: row.note,
             amountMinor: row.amountMinor,
+            sourceCurrencyCode: row.sourceCurrencyCode,
+            destinationCurrencyCode: row.destinationCurrencyCode,
+            destinationAmountMinor: row.destinationAmountMinor,
+            reportingCurrencyCode: row.reportingCurrencyCode,
+            reportingAmountMinor: row.reportingAmountMinor,
+            conversionModeRawValue: row.conversionModeRawValue,
+            exchangeRateDecimalString: row.exchangeRateDecimalString,
+            exchangeRateProvider: row.exchangeRateProvider,
+            exchangeRateDate: row.exchangeRateDate,
             occurredAt: row.occurredAt,
             createdAt: row.createdAt,
             updatedAt: row.updatedAt,
@@ -1919,6 +1928,15 @@ enum MistiaSyncLocalStore {
         transaction.title = row.title
         transaction.note = row.note
         transaction.amountMinor = row.amountMinor
+        transaction.sourceCurrencyCode = row.sourceCurrencyCode
+        transaction.destinationCurrencyCode = row.destinationCurrencyCode
+        transaction.destinationAmountMinor = row.destinationAmountMinor
+        transaction.reportingCurrencyCode = row.reportingCurrencyCode
+        transaction.reportingAmountMinor = row.reportingAmountMinor
+        transaction.conversionModeRawValue = row.conversionModeRawValue
+        transaction.exchangeRateDecimalString = row.exchangeRateDecimalString
+        transaction.exchangeRateProvider = row.exchangeRateProvider
+        transaction.exchangeRateDate = row.exchangeRateDate
         transaction.occurredAt = row.occurredAt
         transaction.createdAt = row.createdAt
         transaction.updatedAt = row.updatedAt
@@ -2638,6 +2656,15 @@ private extension RemoteLedgerTransaction {
         self.title = transaction.title
         self.note = transaction.note
         self.amountMinor = transaction.amountMinor
+        self.sourceCurrencyCode = transaction.sourceCurrencyCode
+        self.destinationCurrencyCode = transaction.destinationCurrencyCode
+        self.destinationAmountMinor = transaction.destinationAmountMinor
+        self.reportingCurrencyCode = transaction.reportingCurrencyCode
+        self.reportingAmountMinor = transaction.reportingAmountMinor
+        self.conversionModeRawValue = transaction.conversionModeRawValue
+        self.exchangeRateDecimalString = transaction.exchangeRateDecimalString
+        self.exchangeRateProvider = transaction.exchangeRateProvider
+        self.exchangeRateDate = transaction.exchangeRateDate
         self.occurredAt = transaction.occurredAt
         self.createdAt = transaction.createdAt
         self.updatedAt = transaction.updatedAt

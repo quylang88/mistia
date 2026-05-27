@@ -144,6 +144,7 @@ struct MistiaApp: App {
         }
 
         _ = await sessionStore.runDeferredStartupSyncIfNeeded()
+        await MistiaCurrencyRateMaintenance.refreshIfNeeded()
         await runCategoryTranslationMaintenance()
         await runDueMaintenance()
     }

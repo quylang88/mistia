@@ -176,6 +176,44 @@ final class TransactionLogicTests: XCTestCase {
         }
     }
 
+    func testWalletBalanceIndexUsesDestinationAmountForCrossCurrencyTransfer() {
+        let source = TransactionWalletSnapshot(
+            id: UUID(),
+            kind: .bank,
+            openingBalanceMinor: 100_000
+        )
+        let destination = TransactionWalletSnapshot(
+            id: UUID(),
+            kind: .cash,
+            openingBalanceMinor: 1_000_000
+        )
+        let occurredAt = Date(timeIntervalSince1970: 1_774_051_200)
+
+        let records = [
+            makeRecord(
+                primaryKind: .transfer,
+                transferSubtype: .internalTransfer,
+                amountMinor: 10_000,
+                occurredAt: occurredAt,
+                sourceWalletID: source.id,
+                sourceWalletKind: .bank,
+                sourceCurrencyCode: "JPY",
+                destinationWalletID: destination.id,
+                destinationWalletKind: .cash,
+                destinationCurrencyCode: "VND",
+                destinationAmountMinor: 1_650_000
+            )
+        ]
+
+        let index = TransactionLogic.walletBalanceIndex(
+            wallets: [source, destination],
+            records: records
+        )
+
+        XCTAssertEqual(index.balance(for: source), 90_000)
+        XCTAssertEqual(index.balance(for: destination), 2_650_000)
+    }
+
     func testFamilyTransfersAreNeutralButChangeOnlyTheDisplayedWalletBalance() {
         let senderWallet = TransactionWalletSnapshot(
             id: UUID(),
@@ -741,8 +779,11 @@ final class TransactionLogicTests: XCTestCase {
         occurredAt: Date,
         sourceWalletID: UUID? = nil,
         sourceWalletKind: LedgerWalletKind? = nil,
+        sourceCurrencyCode: String? = nil,
         destinationWalletID: UUID? = nil,
         destinationWalletKind: LedgerWalletKind? = nil,
+        destinationCurrencyCode: String? = nil,
+        destinationAmountMinor: Int64? = nil,
         categoryID: UUID? = nil,
         counterpartyName: String? = nil
     ) -> TransactionRecordSnapshot {
@@ -755,6 +796,9 @@ final class TransactionLogicTests: XCTestCase {
             title: title,
             note: nil,
             amountMinor: amountMinor,
+            sourceCurrencyCode: sourceCurrencyCode,
+            destinationCurrencyCode: destinationCurrencyCode,
+            destinationAmountMinor: destinationAmountMinor,
             occurredAt: occurredAt,
             createdAt: occurredAt,
             sourceWalletID: sourceWalletID,

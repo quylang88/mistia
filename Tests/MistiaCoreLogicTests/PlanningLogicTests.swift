@@ -97,6 +97,45 @@ final class PlanningLogicTests: XCTestCase {
         XCTAssertEqual(summary.health, .stable)
     }
 
+    func testBudgetSummaryConvertsRowsToReportingCurrencyBeforeSumming() {
+        let rows = [
+            PlanningBudgetRowSnapshot(
+                id: UUID(),
+                categoryID: UUID(),
+                name: "JPY",
+                iconSymbolName: "yen",
+                colorHex: "#111111",
+                spentMinor: 50,
+                limitMinor: 100,
+                currencyCode: "JPY",
+                daysRemaining: 10,
+                isPastMonth: false
+            ),
+            PlanningBudgetRowSnapshot(
+                id: UUID(),
+                categoryID: UUID(),
+                name: "VND",
+                iconSymbolName: "dong",
+                colorHex: "#222222",
+                spentMinor: 8_250,
+                limitMinor: 16_500,
+                currencyCode: "VND",
+                daysRemaining: 10,
+                isPastMonth: false
+            )
+        ]
+
+        let summary = PlanningLogic.budgetSummary(
+            from: rows,
+            reportingCurrencyCode: "JPY",
+            exchangeRates: [jpyVndRate]
+        )
+
+        XCTAssertEqual(summary.totalBudgetMinor, 200)
+        XCTAssertEqual(summary.spentMinor, 100)
+        XCTAssertEqual(summary.remainingMinor, 100)
+    }
+
     func testGoalRowsPickNearestGoalAndComputeMonthlyContribution() {
         let selectedMonth = makeDate(year: 2026, month: 4, day: 1)
 
@@ -1434,5 +1473,16 @@ final class PlanningLogicTests: XCTestCase {
         components.hour = hour
         components.minute = minute
         return try XCTUnwrap(calendar.date(from: components))
+    }
+
+    private var jpyVndRate: MistiaExchangeRate {
+        MistiaExchangeRate(
+            baseCurrencyCode: "JPY",
+            quoteCurrencyCode: "VND",
+            rateDecimalString: "165",
+            provider: "test",
+            fetchedAt: Date(timeIntervalSince1970: 0),
+            rateDate: "2026-05-27"
+        )
     }
 }

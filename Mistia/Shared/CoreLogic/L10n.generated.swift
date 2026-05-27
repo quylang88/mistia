@@ -2250,6 +2250,36 @@ nonisolated enum L10n {
         }
 
         nonisolated enum currency {
+            static var autoDescription: String { L10n.tr("settings.currency.autoDescription", vi: "Mistia tự cập nhật tỷ giá sau 7:00 sáng khi app có mạng.", en: "Mistia updates rates after 7:00 AM when the app has network access.", ja: "Mistia は午前7時以降、通信できるときにレートを更新します。") }
+            static func autoDescription(language: MistiaAppLanguage) -> String { L10n.tr("settings.currency.autoDescription", vi: "Mistia tự cập nhật tỷ giá sau 7:00 sáng khi app có mạng.", en: "Mistia updates rates after 7:00 AM when the app has network access.", ja: "Mistia は午前7時以降、通信できるときにレートを更新します。", language: language) }
+            static var enabledDescription: String { L10n.tr("settings.currency.enabledDescription", vi: "Currency đã bật có thể dùng cho ví và chọn làm tiền tệ chính.", en: "Enabled currencies can be used for wallets and as the primary display currency.", ja: "有効な通貨はウォレットとメイン表示通貨に使えます。") }
+            static func enabledDescription(language: MistiaAppLanguage) -> String { L10n.tr("settings.currency.enabledDescription", vi: "Currency đã bật có thể dùng cho ví và chọn làm tiền tệ chính.", en: "Enabled currencies can be used for wallets and as the primary display currency.", ja: "有効な通貨はウォレットとメイン表示通貨に使えます。", language: language) }
+            static func lastUpdatedValue(_ value: String) -> String {
+                L10n.format("settings.currency.lastUpdatedValue", vi: "Cập nhật lần cuối: %@", en: "Last updated: %@", ja: "最終更新: %@", value)
+            }
+            static func lastUpdatedValue(_ value: String, language: MistiaAppLanguage) -> String {
+                L10n.format("settings.currency.lastUpdatedValue", vi: "Cập nhật lần cuối: %@", en: "Last updated: %@", ja: "最終更新: %@", language: language, value)
+            }
+            static var manualDescription: String { L10n.tr("settings.currency.manualDescription", vi: "Mistia dùng tỷ giá bạn nhập để hiển thị số tiền quy đổi.", en: "Mistia uses your manual rate for converted display amounts.", ja: "入力した手動レートで換算額を表示します。") }
+            static func manualDescription(language: MistiaAppLanguage) -> String { L10n.tr("settings.currency.manualDescription", vi: "Mistia dùng tỷ giá bạn nhập để hiển thị số tiền quy đổi.", en: "Mistia uses your manual rate for converted display amounts.", ja: "入力した手動レートで換算額を表示します。", language: language) }
+            static var manualJPYToVND: String { L10n.tr("settings.currency.manualJPYToVND", vi: "1 JPY sang VND", en: "1 JPY to VND", ja: "1 JPY から VND") }
+            static func manualJPYToVND(language: MistiaAppLanguage) -> String { L10n.tr("settings.currency.manualJPYToVND", vi: "1 JPY sang VND", en: "1 JPY to VND", ja: "1 JPY から VND", language: language) }
+            static var notUpdatedYet: String { L10n.tr("settings.currency.notUpdatedYet", vi: "Chưa cập nhật tỷ giá tự động.", en: "Automatic rates have not been updated yet.", ja: "自動レートはまだ更新されていません。") }
+            static func notUpdatedYet(language: MistiaAppLanguage) -> String { L10n.tr("settings.currency.notUpdatedYet", vi: "Chưa cập nhật tỷ giá tự động.", en: "Automatic rates have not been updated yet.", ja: "自動レートはまだ更新されていません。", language: language) }
+            static var primaryCurrency: String { L10n.tr("settings.currency.primaryCurrency", vi: "Tiền tệ chính", en: "Primary currency", ja: "メイン通貨") }
+            static func primaryCurrency(language: MistiaAppLanguage) -> String { L10n.tr("settings.currency.primaryCurrency", vi: "Tiền tệ chính", en: "Primary currency", ja: "メイン通貨", language: language) }
+            static var primaryDescription: String { L10n.tr("settings.currency.primaryDescription", vi: "Tổng quan và tổng hợp sẽ quy đổi về tiền tệ chính.", en: "Overview and summary totals convert into the primary currency.", ja: "概要と集計はメイン通貨に換算されます。") }
+            static func primaryDescription(language: MistiaAppLanguage) -> String { L10n.tr("settings.currency.primaryDescription", vi: "Tổng quan và tổng hợp sẽ quy đổi về tiền tệ chính.", en: "Overview and summary totals convert into the primary currency.", ja: "概要と集計はメイン通貨に換算されます。", language: language) }
+            static var rateMode: String { L10n.tr("settings.currency.rateMode", vi: "Tỷ giá", en: "Exchange rate", ja: "為替レート") }
+            static func rateMode(language: MistiaAppLanguage) -> String { L10n.tr("settings.currency.rateMode", vi: "Tỷ giá", en: "Exchange rate", ja: "為替レート", language: language) }
+            static var rateModeAutomatic: String { L10n.tr("settings.currency.rateModeAutomatic", vi: "Tự động", en: "Automatic", ja: "自動") }
+            static func rateModeAutomatic(language: MistiaAppLanguage) -> String { L10n.tr("settings.currency.rateModeAutomatic", vi: "Tự động", en: "Automatic", ja: "自動", language: language) }
+            static var rateModeManual: String { L10n.tr("settings.currency.rateModeManual", vi: "Thủ công", en: "Manual", ja: "手動") }
+            static func rateModeManual(language: MistiaAppLanguage) -> String { L10n.tr("settings.currency.rateModeManual", vi: "Thủ công", en: "Manual", ja: "手動", language: language) }
+            static var refreshRates: String { L10n.tr("settings.currency.refreshRates", vi: "Cập nhật tỷ giá", en: "Refresh rates", ja: "レートを更新") }
+            static func refreshRates(language: MistiaAppLanguage) -> String { L10n.tr("settings.currency.refreshRates", vi: "Cập nhật tỷ giá", en: "Refresh rates", ja: "レートを更新", language: language) }
+            static var refreshingRates: String { L10n.tr("settings.currency.refreshingRates", vi: "Đang cập nhật", en: "Refreshing", ja: "更新中") }
+            static func refreshingRates(language: MistiaAppLanguage) -> String { L10n.tr("settings.currency.refreshingRates", vi: "Đang cập nhật", en: "Refreshing", ja: "更新中", language: language) }
             static var title: String { L10n.tr("settings.currency.title", vi: "Tiền tệ", en: "Currency", ja: "通貨") }
             static func title(language: MistiaAppLanguage) -> String { L10n.tr("settings.currency.title", vi: "Tiền tệ", en: "Currency", ja: "通貨", language: language) }
         }
@@ -3682,6 +3712,10 @@ nonisolated enum L10n {
             static func confirmFamilyTransferMessage(language: MistiaAppLanguage) -> String { L10n.tr("transactions.transactioneditor.confirmFamilyTransferMessage", vi: "Giao dịch chuyển tiền gia đình sẽ được tạo cho cả hai thành viên và không thể sửa, lưu trữ hoặc xóa sau khi chuyển.", en: "This family transfer will create records for both members and cannot be edited, archived, or deleted after transfer.", ja: "家族送金は両方のメンバーに記録され、送金後は編集、アーカイブ、削除できません。", language: language) }
             static var confirmFamilyTransferTitle: String { L10n.tr("transactions.transactioneditor.confirmFamilyTransferTitle", vi: "Xác nhận chuyển tiền?", en: "Confirm transfer?", ja: "送金を確認しますか？") }
             static func confirmFamilyTransferTitle(language: MistiaAppLanguage) -> String { L10n.tr("transactions.transactioneditor.confirmFamilyTransferTitle", vi: "Xác nhận chuyển tiền?", en: "Confirm transfer?", ja: "送金を確認しますか？", language: language) }
+            static var conversion: String { L10n.tr("transactions.transactioneditor.conversion", vi: "Quy đổi", en: "Conversion", ja: "換算") }
+            static func conversion(language: MistiaAppLanguage) -> String { L10n.tr("transactions.transactioneditor.conversion", vi: "Quy đổi", en: "Conversion", ja: "換算", language: language) }
+            static var convertedAmount: String { L10n.tr("transactions.transactioneditor.convertedAmount", vi: "Số tiền quy đổi", en: "Converted amount", ja: "換算額") }
+            static func convertedAmount(language: MistiaAppLanguage) -> String { L10n.tr("transactions.transactioneditor.convertedAmount", vi: "Số tiền quy đổi", en: "Converted amount", ja: "換算額", language: language) }
             static var couldnTAnalyzeThisReceiptRightNow: String { L10n.tr("transactions.transactioneditor.couldnTAnalyzeThisReceiptRightNow", vi: "Không thể phân tích bill lúc này.", en: "Couldn't analyze this receipt right now.", ja: "現在レシートを解析できません。") }
             static func couldnTAnalyzeThisReceiptRightNow(language: MistiaAppLanguage) -> String { L10n.tr("transactions.transactioneditor.couldnTAnalyzeThisReceiptRightNow", vi: "Không thể phân tích bill lúc này.", en: "Couldn't analyze this receipt right now.", ja: "現在レシートを解析できません。", language: language) }
             static var couldnTCreateFamilyTransfer: String { L10n.tr("transactions.transactioneditor.couldnTCreateFamilyTransfer", vi: "Không thể tạo giao dịch chuyển tiền gia đình lúc này.", en: "Couldn't create the family transfer right now.", ja: "現在、家族送金を作成できません。") }
@@ -3710,6 +3744,8 @@ nonisolated enum L10n {
             static func dateTime(language: MistiaAppLanguage) -> String { L10n.tr("transactions.transactioneditor.dateTime", vi: "Thời gian", en: "Date & time", ja: "日時", language: language) }
             static var debtType: String { L10n.tr("transactions.transactioneditor.debtType", vi: "Loại công nợ", en: "Debt type", ja: "貸し借りの種類") }
             static func debtType(language: MistiaAppLanguage) -> String { L10n.tr("transactions.transactioneditor.debtType", vi: "Loại công nợ", en: "Debt type", ja: "貸し借りの種類", language: language) }
+            static var destinationAmount: String { L10n.tr("transactions.transactioneditor.destinationAmount", vi: "Số tiền ví đích", en: "Destination amount", ja: "入金先の金額") }
+            static func destinationAmount(language: MistiaAppLanguage) -> String { L10n.tr("transactions.transactioneditor.destinationAmount", vi: "Số tiền ví đích", en: "Destination amount", ja: "入金先の金額", language: language) }
             static var editTransaction: String { L10n.tr("transactions.transactioneditor.editTransaction", vi: "Sửa giao dịch", en: "Edit transaction", ja: "取引を編集") }
             static func editTransaction(language: MistiaAppLanguage) -> String { L10n.tr("transactions.transactioneditor.editTransaction", vi: "Sửa giao dịch", en: "Edit transaction", ja: "取引を編集", language: language) }
             static var enterATransactionNameBeforeSaving: String { L10n.tr("transactions.transactioneditor.enterATransactionNameBeforeSaving", vi: "Nhập tên giao dịch để lưu.", en: "Enter a transaction name before saving.", ja: "保存する前に取引名を入力してください。") }
@@ -3718,6 +3754,10 @@ nonisolated enum L10n {
             static func enterAnAmountGreaterThan(language: MistiaAppLanguage) -> String { L10n.tr("transactions.transactioneditor.enterAnAmountGreaterThan", vi: "Nhập số tiền lớn hơn 0.", en: "Enter an amount greater than 0.", ja: "0 より大きい金額を入力してください。", language: language) }
             static var enterAnAmountGreaterThanTo: String { L10n.tr("transactions.transactioneditor.enterAnAmountGreaterThanTo", vi: "Nhập số tiền lớn hơn 0 để lưu ghi nhanh.", en: "Enter an amount greater than 0 to save the quick capture.", ja: "クイック記録を保存するには 0 より大きい金額を入力してください。") }
             static func enterAnAmountGreaterThanTo(language: MistiaAppLanguage) -> String { L10n.tr("transactions.transactioneditor.enterAnAmountGreaterThanTo", vi: "Nhập số tiền lớn hơn 0 để lưu ghi nhanh.", en: "Enter an amount greater than 0 to save the quick capture.", ja: "クイック記録を保存するには 0 より大きい金額を入力してください。", language: language) }
+            static var enterManually: String { L10n.tr("transactions.transactioneditor.enterManually", vi: "Tự nhập", en: "Manual", ja: "手入力") }
+            static func enterManually(language: MistiaAppLanguage) -> String { L10n.tr("transactions.transactioneditor.enterManually", vi: "Tự nhập", en: "Manual", ja: "手入力", language: language) }
+            static var enterTheConvertedAmountOrRefreshRates: String { L10n.tr("transactions.transactioneditor.enterTheConvertedAmountOrRefreshRates", vi: "Nhập số tiền quy đổi hoặc cập nhật tỷ giá trước khi lưu.", en: "Enter the converted amount or refresh rates before saving.", ja: "保存する前に換算額を入力するかレートを更新してください。") }
+            static func enterTheConvertedAmountOrRefreshRates(language: MistiaAppLanguage) -> String { L10n.tr("transactions.transactioneditor.enterTheConvertedAmountOrRefreshRates", vi: "Nhập số tiền quy đổi hoặc cập nhật tỷ giá trước khi lưu.", en: "Enter the converted amount or refresh rates before saving.", ja: "保存する前に換算額を入力するかレートを更新してください。", language: language) }
             static var enterTheCounterpartyName: String { L10n.tr("transactions.transactioneditor.enterTheCounterpartyName", vi: "Nhập tên người liên quan.", en: "Enter the counterparty name.", ja: "相手の名前を入力してください。") }
             static func enterTheCounterpartyName(language: MistiaAppLanguage) -> String { L10n.tr("transactions.transactioneditor.enterTheCounterpartyName", vi: "Nhập tên người liên quan.", en: "Enter the counterparty name.", ja: "相手の名前を入力してください。", language: language) }
             static var expenseName: String { L10n.tr("transactions.transactioneditor.expenseName", vi: "Tên khoản chi", en: "Expense name", ja: "支出名") }
@@ -3824,6 +3864,8 @@ nonisolated enum L10n {
             }
             static var transferType: String { L10n.tr("transactions.transactioneditor.transferType", vi: "Kiểu chuyển tiền", en: "Transfer type", ja: "振替タイプ") }
             static func transferType(language: MistiaAppLanguage) -> String { L10n.tr("transactions.transactioneditor.transferType", vi: "Kiểu chuyển tiền", en: "Transfer type", ja: "振替タイプ", language: language) }
+            static var useAppRate: String { L10n.tr("transactions.transactioneditor.useAppRate", vi: "Theo app", en: "App rate", ja: "アプリのレート") }
+            static func useAppRate(language: MistiaAppLanguage) -> String { L10n.tr("transactions.transactioneditor.useAppRate", vi: "Theo app", en: "App rate", ja: "アプリのレート", language: language) }
             static func usedValueValueReceiptScansToday(_ arg1: String, _ arg2: String) -> String {
                 L10n.format("transactions.transactioneditor.usedValueValueReceiptScansToday", vi: "Đã dùng %@/%@ lượt quét bill hôm nay.", en: "Used %@/%@ receipt scans today.", ja: "本日のレシート読み取りは %@/%@ 回使用済みです。", arg1, arg2)
             }

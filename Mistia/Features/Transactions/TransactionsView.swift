@@ -1426,8 +1426,11 @@ private struct TransactionSectionCard: View {
 }
 
 private struct TransactionRow: View {
-    @Environment(\.colorScheme) private var 
-    colorScheme: ColorScheme
+    @Environment(\.colorScheme) private var colorScheme: ColorScheme
+    @AppStorage(MistiaCurrencySettings.StorageKey.primaryCurrencyCode) private var primaryCurrencyCode = "JPY"
+    @AppStorage(MistiaCurrencySettings.StorageKey.rateMode) private var currencyRateMode = MistiaCurrencyRateMode.automatic.rawValue
+    @AppStorage(MistiaCurrencySettings.StorageKey.manualJPYToVNDRate) private var manualJPYToVNDRate = ""
+    @AppStorage(MistiaCurrencySettings.StorageKey.cachedRatesData) private var cachedCurrencyRatesData = Data()
 
     let record: TransactionRecordSnapshot
     let transaction: LedgerTransaction
@@ -1568,7 +1571,7 @@ private struct TransactionRow: View {
     }
 
     private var displayAmount: String {
-        let raw = record.amountMinor.formattedCurrency(code: "JPY")
+        let raw = displayAmountMinor.formattedCurrency(code: displayCurrencyCode)
 
         if TransactionLogic.isCreditCardPayment(record) {
             return raw
@@ -1589,6 +1592,47 @@ private struct TransactionRow: View {
             }
             return raw
         }
+    }
+
+    private var displayAmountMinor: Int64 {
+        if record.primaryKind == .transfer,
+           record.transferSubtype == .internalTransfer,
+           TransactionLogic.cashflowAmount(for: record) > 0 {
+            return record.destinationAmountMinor ?? record.amountMinor
+        }
+        return record.amountMinor
+    }
+
+    private var displayCurrencyCode: String {
+        if record.primaryKind == .transfer,
+           record.transferSubtype == .internalTransfer,
+           TransactionLogic.cashflowAmount(for: record) > 0 {
+            return record.destinationCurrencyCode
+                ?? transaction.destinationWallet?.currencyCode
+                ?? transaction.sourceWallet?.currencyCode
+                ?? "JPY"
+        }
+
+        return record.sourceCurrencyCode
+            ?? transaction.sourceWallet?.currencyCode
+            ?? transaction.destinationWallet?.currencyCode
+            ?? "JPY"
+    }
+
+    private var approximatePrimaryAmountText: String? {
+        MistiaCurrencyLogic.approximatePrimaryAmountText(
+            amountMinor: displayAmountMinor,
+            sourceCurrencyCode: displayCurrencyCode,
+            primaryCurrencyCode: primaryCurrencyCode,
+            rates: exchangeRates
+        )
+    }
+
+    private var exchangeRates: [MistiaExchangeRate] {
+        _ = currencyRateMode
+        _ = manualJPYToVNDRate
+        _ = cachedCurrencyRatesData
+        return MistiaCurrencySettings.rates()
     }
 
     var body: some View {
@@ -1626,11 +1670,20 @@ private struct TransactionRow: View {
 
             Spacer(minLength: 8)
 
-            Text(displayAmount)
-                .font(.system(size: 16, weight: .bold, design: .rounded))
-                .foregroundStyle(cashflowColor)
-                .lineLimit(1)
-                .minimumScaleFactor(0.74)
+            VStack(alignment: .trailing, spacing: 2) {
+                Text(displayAmount)
+                    .font(.system(size: 16, weight: .bold, design: .rounded))
+                    .foregroundStyle(cashflowColor)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.74)
+
+                if let approximatePrimaryAmountText {
+                    Text(approximatePrimaryAmountText)
+                        .font(.system(size: 11.5, weight: .semibold, design: .rounded))
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                }
+            }
         }
     }
 

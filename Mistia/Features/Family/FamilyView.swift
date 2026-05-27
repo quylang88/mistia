@@ -444,6 +444,9 @@ private struct FamilyOverviewDataCacheKey: Hashable {
     let currentUserID: UUID?
     let activeLocalProfileUserID: UUID?
     let currencyCode: String
+    let currencyRateMode: String
+    let manualJPYToVNDRate: String
+    let cachedRatesSignature: Int
     let referenceDayStart: TimeInterval
     let membersSignature: Int
     let walletsSignature: Int
@@ -1146,6 +1149,10 @@ private struct FamilyMemberComparisonSection: View {
 
 private struct FamilyAggregateAccountList: View {
     @Environment(\.colorScheme) private var colorScheme
+    @AppStorage(MistiaCurrencySettings.StorageKey.primaryCurrencyCode) private var primaryCurrencyCode = "JPY"
+    @AppStorage(MistiaCurrencySettings.StorageKey.rateMode) private var currencyRateMode = MistiaCurrencyRateMode.automatic.rawValue
+    @AppStorage(MistiaCurrencySettings.StorageKey.manualJPYToVNDRate) private var manualJPYToVNDRate = ""
+    @AppStorage(MistiaCurrencySettings.StorageKey.cachedRatesData) private var cachedCurrencyRatesData = Data()
     let rows: [FamilyWalletAggregateSnapshot]
 
     var body: some View {
@@ -1174,9 +1181,17 @@ private struct FamilyAggregateAccountList: View {
                             
                             Spacer()
                             
-                            Text(row.currentBalanceMinor.formattedCurrency(code: row.currencyCode))
-                                .font(.system(size: 15, weight: .bold, design: .rounded))
-                                .foregroundStyle(amountColor(for: row))
+                            VStack(alignment: .trailing, spacing: 2) {
+                                Text(row.currentBalanceMinor.formattedCurrency(code: row.currencyCode))
+                                    .font(.system(size: 15, weight: .bold, design: .rounded))
+                                    .foregroundStyle(amountColor(for: row))
+
+                                if let approximatePrimaryAmountText = approximatePrimaryAmountText(for: row) {
+                                    Text(approximatePrimaryAmountText)
+                                        .font(.system(size: 11, weight: .semibold, design: .rounded))
+                                        .foregroundStyle(.secondary)
+                                }
+                            }
                         }
                         .padding(.horizontal, 16)
                         .padding(.vertical, 12)
@@ -1193,6 +1208,22 @@ private struct FamilyAggregateAccountList: View {
 
     private var cardTint: Color {
         colorScheme == .dark ? .white.opacity(0.04) : .white.opacity(0.16)
+    }
+
+    private var exchangeRates: [MistiaExchangeRate] {
+        _ = currencyRateMode
+        _ = manualJPYToVNDRate
+        _ = cachedCurrencyRatesData
+        return MistiaCurrencySettings.rates()
+    }
+
+    private func approximatePrimaryAmountText(for row: FamilyWalletAggregateSnapshot) -> String? {
+        MistiaCurrencyLogic.approximatePrimaryAmountText(
+            amountMinor: row.currentBalanceMinor,
+            sourceCurrencyCode: row.currencyCode,
+            primaryCurrencyCode: primaryCurrencyCode,
+            rates: exchangeRates
+        )
     }
 
     private func amountColor(for row: FamilyWalletAggregateSnapshot) -> Color {
@@ -1835,6 +1866,9 @@ struct FamilyOverviewScreen: View {
     @Environment(SessionStore.self) private var sessionStore
     @Environment(FamilyContextStore.self) private var familyContextStore
     @AppStorage(MistiaAppStorageKey.currencyCode) private var currencyCode = "JPY"
+    @AppStorage(MistiaCurrencySettings.StorageKey.rateMode) private var currencyRateMode = MistiaCurrencyRateMode.automatic.rawValue
+    @AppStorage(MistiaCurrencySettings.StorageKey.manualJPYToVNDRate) private var manualJPYToVNDRate = ""
+    @AppStorage(MistiaCurrencySettings.StorageKey.cachedRatesData) private var cachedCurrencyRatesData = Data()
 
     @Query(filter: #Predicate<LedgerWallet> { $0.deletedAt == nil })
     private var storedWallets: [LedgerWallet]
@@ -1852,6 +1886,13 @@ struct FamilyOverviewScreen: View {
     private var storedOccurrences: [DueOccurrenceRecord]
     @Query private var ownershipScopes: [OwnedRecordScope]
     @Query private var transactionAuditRecords: [TransactionAuditRecord]
+
+    private var appExchangeRates: [MistiaExchangeRate] {
+        _ = currencyRateMode
+        _ = manualJPYToVNDRate
+        _ = cachedCurrencyRatesData
+        return MistiaCurrencySettings.rates()
+    }
 
     private func makeOverviewData() -> FamilyOverviewDerivedData {
         let now = Date.now
@@ -1967,7 +2008,10 @@ struct FamilyOverviewScreen: View {
                     sortOrder: wallet.sortOrder,
                     createdAt: wallet.createdAt
                 )
-            })
+            },
+            reportingCurrencyCode: currencyCode,
+            exchangeRates: appExchangeRates
+        )
         let creditCardAccounts = visibleWallets.compactMap {
             $0.planningCreditCardSnapshot(balanceIndex: walletBalanceIndex)
         }
@@ -2003,6 +2047,8 @@ struct FamilyOverviewScreen: View {
             creditStatements: creditCardStatementDueItems,
             recurring: recurringBillDueItems + installmentDueItems,
             selectedMonth: currentMonth,
+            reportingCurrencyCode: currencyCode,
+            exchangeRates: appExchangeRates,
             referenceDate: now,
             calendar: calendar
         )
@@ -2021,6 +2067,7 @@ struct FamilyOverviewScreen: View {
                 occurredAt: transaction.occurredAt,
                 kind: transaction.primaryKind.familyAggregateKind,
                 amountMinor: abs(transaction.amountMinor),
+                currencyCode: record.sourceCurrencyCode ?? transaction.sourceWallet?.currencyCode ?? "JPY",
                 isCreditCardPayment: TransactionLogic.isCreditCardPayment(record),
                 isAdjustment: TransactionLogic.isAdjustment(record),
                 isInstallmentPayment: TransactionLogic.isInstallmentPayment(record)
@@ -2046,7 +2093,8 @@ struct FamilyOverviewScreen: View {
             budgetManagerUserID: familyContextStore.family?.budgetManagerUserID,
             memberOrder: memberOrder,
             referenceDate: now,
-            calendar: calendar
+            calendar: calendar,
+            exchangeRates: appExchangeRates
         )
         let goalRows = FamilyLogic.familyGoalRows(
             goals: visibleGoals
@@ -2066,7 +2114,8 @@ struct FamilyOverviewScreen: View {
                 },
             ownerUserID: familyContextStore.family?.ownerUserID,
             goalManagerUserID: familyContextStore.family?.goalManagerUserID,
-            memberOrder: memberOrder
+            memberOrder: memberOrder,
+            exchangeRates: appExchangeRates
         )
         let dueAlerts = OverviewLogic.dueAlerts(
             creditCardDues: creditCardDueItems,
@@ -2085,13 +2134,16 @@ struct FamilyOverviewScreen: View {
                     kind: row.kind.familyAggregateKind,
                     balanceMinor: row.kind == .creditCard ? 0 : row.currentBalanceMinor,
                     debtMinor: row.debtMinor,
-                    name: row.name
+                    name: row.name,
+                    currencyCode: row.currencyCode
                 )
             },
             transactions: familyTransactions,
             selectedInterval: interval,
             visibleMemberIDs: familyMemberUserIDs,
             memberNames: memberNames,
+            reportingCurrencyCode: currencyCode,
+            exchangeRates: appExchangeRates,
             calendar: calendar
         )
         let categorySpendingSnapshot = OverviewLogic.categorySpendingInterval(
@@ -2099,6 +2151,7 @@ struct FamilyOverviewScreen: View {
             interval: interval,
             title: timeframe.title,
             currencyCode: currencyCode,
+            exchangeRates: appExchangeRates,
             calendar: calendar
         )
         let monthlySpendable = FamilyLogic.monthlySpendable(
@@ -2143,6 +2196,9 @@ struct FamilyOverviewScreen: View {
             currentUserID: familyContextStore.currentUserID,
             activeLocalProfileUserID: sessionStore.activeLocalProfileUserID,
             currencyCode: currencyCode,
+            currencyRateMode: currencyRateMode,
+            manualJPYToVNDRate: manualJPYToVNDRate,
+            cachedRatesSignature: cachedCurrencyRatesData.hashValue,
             referenceDayStart: calendar.startOfDay(for: .now).timeIntervalSince1970,
             membersSignature: membersSignature,
             walletsSignature: recordsSignature(

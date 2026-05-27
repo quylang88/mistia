@@ -20,6 +20,8 @@ struct ManagementWalletEditorSheet: View {
     @Environment(SessionStore.self) private var sessionStore
     @Query
     private var storedWallets: [LedgerWallet]
+    @Query
+    private var storedTransactions: [LedgerTransaction]
 
     let target: ManagementWalletEditorTarget
 
@@ -99,9 +101,18 @@ struct ManagementWalletEditorSheet: View {
                         }
                     }
 
-                    LabeledContent(L10n.management.management.currency) {
-                        Text(draft.currencyCode)
-                            .foregroundStyle(.secondary)
+                    if canEditWalletCurrency {
+                        Picker(L10n.management.management.currency, selection: $draft.currencyCode) {
+                            ForEach(MistiaCurrencySettings.enabledCurrencyCodes(), id: \.self) { code in
+                                Text(verbatim: code).tag(code)
+                            }
+                        }
+                        .pickerStyle(.menu)
+                    } else {
+                        LabeledContent(L10n.management.management.currency) {
+                            Text(draft.currencyCode)
+                                .foregroundStyle(.secondary)
+                        }
                     }
                 }
 
@@ -493,6 +504,13 @@ struct ManagementWalletEditorSheet: View {
         }
         
         return debt
+    }
+
+    private var canEditWalletCurrency: Bool {
+        guard let wallet = target.wallet else { return true }
+        return !storedTransactions.contains {
+            $0.sourceWallet?.id == wallet.id || $0.destinationWallet?.id == wallet.id
+        }
     }
 
     private func updateCreditCardProfile(for wallet: LedgerWallet, now: Date) {

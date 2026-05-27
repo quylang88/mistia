@@ -50,6 +50,7 @@ nonisolated struct OverviewTransactionSnapshot: Equatable, Identifiable {
     let title: String
     let note: String?
     let amountMinor: Int64
+    let sourceCurrencyCode: String?
     let occurredAt: Date
     let createdAt: Date
     let sourceWalletID: UUID?
@@ -68,6 +69,64 @@ nonisolated struct OverviewTransactionSnapshot: Equatable, Identifiable {
     let categoryParentColorHex: String?
     let counterpartyName: String?
     let isArchived: Bool
+
+    init(
+        id: UUID,
+        primaryKind: TransactionPrimaryKind,
+        transferSubtype: TransactionTransferSubtype?,
+        debtIntent: TransactionDebtIntent?,
+        entryStatus: TransactionEntryStatus,
+        title: String,
+        note: String?,
+        amountMinor: Int64,
+        sourceCurrencyCode: String? = nil,
+        occurredAt: Date,
+        createdAt: Date,
+        sourceWalletID: UUID?,
+        sourceWalletName: String?,
+        sourceWalletKind: LedgerWalletKind?,
+        destinationWalletID: UUID?,
+        destinationWalletName: String?,
+        destinationWalletKind: LedgerWalletKind?,
+        categoryID: UUID?,
+        categoryName: String?,
+        categoryIconSymbolName: String?,
+        categoryColorHex: String?,
+        categoryParentID: UUID?,
+        categoryParentName: String?,
+        categoryParentIconSymbolName: String?,
+        categoryParentColorHex: String?,
+        counterpartyName: String?,
+        isArchived: Bool
+    ) {
+        self.id = id
+        self.primaryKind = primaryKind
+        self.transferSubtype = transferSubtype
+        self.debtIntent = debtIntent
+        self.entryStatus = entryStatus
+        self.title = title
+        self.note = note
+        self.amountMinor = amountMinor
+        self.sourceCurrencyCode = sourceCurrencyCode
+        self.occurredAt = occurredAt
+        self.createdAt = createdAt
+        self.sourceWalletID = sourceWalletID
+        self.sourceWalletName = sourceWalletName
+        self.sourceWalletKind = sourceWalletKind
+        self.destinationWalletID = destinationWalletID
+        self.destinationWalletName = destinationWalletName
+        self.destinationWalletKind = destinationWalletKind
+        self.categoryID = categoryID
+        self.categoryName = categoryName
+        self.categoryIconSymbolName = categoryIconSymbolName
+        self.categoryColorHex = categoryColorHex
+        self.categoryParentID = categoryParentID
+        self.categoryParentName = categoryParentName
+        self.categoryParentIconSymbolName = categoryParentIconSymbolName
+        self.categoryParentColorHex = categoryParentColorHex
+        self.counterpartyName = counterpartyName
+        self.isArchived = isArchived
+    }
 }
 
 nonisolated struct OverviewChartPoint: Equatable, Identifiable {
@@ -214,6 +273,7 @@ nonisolated enum OverviewLogic {
         recurringDues: [PlanningRecurringDueSnapshot],
         currencyCode: String,
         balanceIndex: TransactionWalletBalanceIndex? = nil,
+        exchangeRates: [MistiaExchangeRate] = [],
         referenceDate: Date = .now,
         calendar: Calendar = MistiaCalendar.current
     ) -> OverviewDashboardSnapshot {
@@ -224,6 +284,7 @@ nonisolated enum OverviewLogic {
                 transactions: transactions,
                 currencyCode: currencyCode,
                 balanceIndex: balanceIndex,
+                exchangeRates: exchangeRates,
                 referenceDate: referenceDate,
                 calendar: calendar
             ),
@@ -231,7 +292,8 @@ nonisolated enum OverviewLogic {
                 budgets: budgets,
                 transactionRecords: transactionRecords,
                 referenceDate: referenceDate,
-                calendar: calendar
+                calendar: calendar,
+                exchangeRates: exchangeRates
             ),
             dueAlerts: dueAlerts(
                 creditCardDues: creditCardDues,
@@ -254,6 +316,7 @@ nonisolated enum OverviewLogic {
         transactions: [OverviewTransactionSnapshot] = [],
         currencyCode: String,
         balanceIndex: TransactionWalletBalanceIndex? = nil,
+        exchangeRates: [MistiaExchangeRate] = [],
         referenceDate: Date = .now,
         calendar: Calendar = MistiaCalendar.current
     ) -> OverviewHeroSnapshot {
@@ -268,10 +331,11 @@ nonisolated enum OverviewLogic {
                     return false
                 }
 
-                return monthInterval.contains(record.occurredAt)
+                return record.occurredAt >= monthInterval.start
+                    && record.occurredAt < monthInterval.end
             }
             .reduce(into: Int64.zero) { partialResult, record in
-                partialResult += record.amountMinor
+                partialResult += reportingAmount(for: record, currencyCode: currencyCode, exchangeRates: exchangeRates)
             }
 
         let expenseThisMonth = transactionRecords
@@ -283,28 +347,34 @@ nonisolated enum OverviewLogic {
                     return false
                 }
 
-                return monthInterval.contains(record.occurredAt)
+                return record.occurredAt >= monthInterval.start
+                    && record.occurredAt < monthInterval.end
             }
             .reduce(into: Int64.zero) { partialResult, record in
-                partialResult += record.amountMinor
+                partialResult += reportingAmount(for: record, currencyCode: currencyCode, exchangeRates: exchangeRates)
             }
 
         return OverviewHeroSnapshot(
             totalAssetBalanceMinor: totalAssetBalance(
                 wallets: wallets,
                 transactionRecords: transactionRecords,
-                balanceIndex: balanceIndex
+                balanceIndex: balanceIndex,
+                currencyCode: currencyCode,
+                exchangeRates: exchangeRates
             ),
             incomeThisMonthMinor: incomeThisMonth,
             expenseThisMonthMinor: expenseThisMonth,
             weekPages: weeklySpendingPages(
                 from: transactionRecords,
+                currencyCode: currencyCode,
+                exchangeRates: exchangeRates,
                 referenceDate: referenceDate,
                 calendar: calendar
             ),
             categoryMonthPages: categorySpendingMonthPages(
                 from: transactions,
                 currencyCode: currencyCode,
+                exchangeRates: exchangeRates,
                 referenceDate: referenceDate,
                 calendar: calendar
             ),
@@ -316,7 +386,9 @@ nonisolated enum OverviewLogic {
     static func totalAssetBalance(
         wallets: [OverviewWalletSnapshot],
         transactionRecords: [TransactionRecordSnapshot],
-        balanceIndex: TransactionWalletBalanceIndex? = nil
+        balanceIndex: TransactionWalletBalanceIndex? = nil,
+        currencyCode: String? = nil,
+        exchangeRates: [MistiaExchangeRate] = []
     ) -> Int64 {
         let resolvedBalanceIndex = balanceIndex ?? TransactionLogic.walletBalanceIndex(
             wallets: wallets.map {
@@ -332,18 +404,31 @@ nonisolated enum OverviewLogic {
         return wallets
             .filter { $0.kind != .creditCard }
             .reduce(into: Int64.zero) { partialResult, wallet in
-                partialResult += resolvedBalanceIndex.balance(
+                let balance = resolvedBalanceIndex.balance(
                     for: TransactionWalletSnapshot(
                         id: wallet.id,
                         kind: wallet.kind,
                         openingBalanceMinor: wallet.openingBalanceMinor
                     )
                 )
+                guard let currencyCode else {
+                    partialResult += balance
+                    return
+                }
+
+                partialResult += reportingAmount(
+                    amountMinor: balance,
+                    sourceCurrencyCode: wallet.currencyCode,
+                    currencyCode: currencyCode,
+                    exchangeRates: exchangeRates
+                )
             }
     }
 
     static func weeklySpendingPages(
         from transactionRecords: [TransactionRecordSnapshot],
+        currencyCode: String? = nil,
+        exchangeRates: [MistiaExchangeRate] = [],
         referenceDate: Date = .now,
         calendar: Calendar = MistiaCalendar.current
     ) -> [OverviewWeekSpendingSnapshot] {
@@ -376,7 +461,15 @@ nonisolated enum OverviewLogic {
                             && record.occurredAt < nextDay
                     }
                     .reduce(into: Int64.zero) { partialResult, record in
-                        partialResult += record.amountMinor
+                        if let currencyCode {
+                            partialResult += reportingAmount(
+                                for: record,
+                                currencyCode: currencyCode,
+                                exchangeRates: exchangeRates
+                            )
+                        } else {
+                            partialResult += record.amountMinor
+                        }
                     }
 
                 return (day, total)
@@ -449,6 +542,8 @@ nonisolated enum OverviewLogic {
 
     static func recentSevenDaySpendingChartPoints(
         from transactionRecords: [TransactionRecordSnapshot],
+        currencyCode: String? = nil,
+        exchangeRates: [MistiaExchangeRate] = [],
         referenceDate: Date = .now,
         calendar: Calendar = MistiaCalendar.current
     ) -> [OverviewChartPoint] {
@@ -467,7 +562,15 @@ nonisolated enum OverviewLogic {
                         && record.occurredAt < nextDay
                 }
                 .reduce(into: Int64.zero) { partialResult, record in
-                    partialResult += record.amountMinor
+                    if let currencyCode {
+                        partialResult += reportingAmount(
+                            for: record,
+                            currencyCode: currencyCode,
+                            exchangeRates: exchangeRates
+                        )
+                    } else {
+                        partialResult += record.amountMinor
+                    }
                 }
             return (day, total)
         }
@@ -492,6 +595,7 @@ nonisolated enum OverviewLogic {
     static func categorySpendingMonthPages(
         from transactions: [OverviewTransactionSnapshot],
         currencyCode: String,
+        exchangeRates: [MistiaExchangeRate] = [],
         referenceDate: Date = .now,
         calendar: Calendar = MistiaCalendar.current
     ) -> [OverviewCategorySpendingMonthSnapshot] {
@@ -511,6 +615,7 @@ nonisolated enum OverviewLogic {
                     from: transactions,
                     selectedMonth: monthStart,
                     currencyCode: currencyCode,
+                    exchangeRates: exchangeRates,
                     calendar: calendar
                 )
             )
@@ -527,6 +632,7 @@ nonisolated enum OverviewLogic {
                     from: transactions,
                     selectedMonth: currentMonthStart,
                     currencyCode: currencyCode,
+                    exchangeRates: exchangeRates,
                     calendar: calendar
                 )
             ]
@@ -539,6 +645,7 @@ nonisolated enum OverviewLogic {
         from transactions: [OverviewTransactionSnapshot],
         selectedMonth: Date,
         currencyCode: String,
+        exchangeRates: [MistiaExchangeRate] = [],
         calendar: Calendar = MistiaCalendar.current
     ) -> OverviewCategorySpendingMonthSnapshot {
         let monthStart = PlanningLogic.startOfMonth(for: selectedMonth, calendar: calendar)
@@ -550,14 +657,19 @@ nonisolated enum OverviewLogic {
                 return false
             }
 
-            return monthInterval.contains(transaction.occurredAt)
+            return transaction.occurredAt >= monthInterval.start
+                && transaction.occurredAt < monthInterval.end
         }
 
         return OverviewCategorySpendingMonthSnapshot(
             monthStart: monthStart,
             title: MistiaDateFormatting.monthYearString(for: monthStart, calendar: calendar),
             currencyCode: currencyCode,
-            slices: categorySpendingSlices(from: transactionsInMonth)
+            slices: categorySpendingSlices(
+                from: transactionsInMonth,
+                currencyCode: currencyCode,
+                exchangeRates: exchangeRates
+            )
         )
     }
 
@@ -566,6 +678,7 @@ nonisolated enum OverviewLogic {
         interval: DateInterval,
         title: String,
         currencyCode: String,
+        exchangeRates: [MistiaExchangeRate] = [],
         calendar: Calendar = MistiaCalendar.current
     ) -> OverviewCategorySpendingMonthSnapshot {
         let intervalTransactions = transactions.filter { transaction in
@@ -577,7 +690,11 @@ nonisolated enum OverviewLogic {
             monthStart: PlanningLogic.startOfMonth(for: interval.start, calendar: calendar),
             title: title,
             currencyCode: currencyCode,
-            slices: categorySpendingSlices(from: intervalTransactions)
+            slices: categorySpendingSlices(
+                from: intervalTransactions,
+                currencyCode: currencyCode,
+                exchangeRates: exchangeRates
+            )
         )
     }
 
@@ -646,7 +763,9 @@ nonisolated enum OverviewLogic {
     }
 
     private static func categorySpendingSlices(
-        from transactions: [OverviewTransactionSnapshot]
+        from transactions: [OverviewTransactionSnapshot],
+        currencyCode: String,
+        exchangeRates: [MistiaExchangeRate]
     ) -> [OverviewCategorySpendingSlice] {
         let groupedByBranch = Dictionary(grouping: transactions) { transaction in
             categoryBranchKey(for: transaction)
@@ -654,27 +773,42 @@ nonisolated enum OverviewLogic {
 
         return groupedByBranch
             .map { _, branchTransactions in
-                categoryBranchSlice(from: branchTransactions)
+                categoryBranchSlice(
+                    from: branchTransactions,
+                    currencyCode: currencyCode,
+                    exchangeRates: exchangeRates
+                )
             }
             .sorted(by: categorySliceSort)
     }
 
     private static func categoryBranchSlice(
-        from transactions: [OverviewTransactionSnapshot]
+        from transactions: [OverviewTransactionSnapshot],
+        currencyCode: String,
+        exchangeRates: [MistiaExchangeRate]
     ) -> OverviewCategorySpendingSlice {
         guard let template = transactions.first else {
             return uncategorizedCategorySlice(amountMinor: 0)
         }
 
         let amount = transactions.reduce(into: Int64.zero) { partialResult, transaction in
-            partialResult += transaction.amountMinor
+            partialResult += reportingAmount(
+                amountMinor: transaction.amountMinor,
+                sourceCurrencyCode: transaction.sourceCurrencyCode,
+                currencyCode: currencyCode,
+                exchangeRates: exchangeRates
+            )
         }
         let categoryID = template.categoryParentID ?? template.categoryID
         let childSlices = Dictionary(grouping: transactions) { transaction in
             categoryChildKey(for: transaction)
         }
             .map { _, childTransactions in
-                categoryChildSlice(from: childTransactions)
+                categoryChildSlice(
+                    from: childTransactions,
+                    currencyCode: currencyCode,
+                    exchangeRates: exchangeRates
+                )
             }
             .sorted(by: categorySliceSort)
 
@@ -698,14 +832,21 @@ nonisolated enum OverviewLogic {
     }
 
     private static func categoryChildSlice(
-        from transactions: [OverviewTransactionSnapshot]
+        from transactions: [OverviewTransactionSnapshot],
+        currencyCode: String,
+        exchangeRates: [MistiaExchangeRate]
     ) -> OverviewCategorySpendingSlice {
         guard let template = transactions.first else {
             return uncategorizedCategorySlice(amountMinor: 0)
         }
 
         let amount = transactions.reduce(into: Int64.zero) { partialResult, transaction in
-            partialResult += transaction.amountMinor
+            partialResult += reportingAmount(
+                amountMinor: transaction.amountMinor,
+                sourceCurrencyCode: transaction.sourceCurrencyCode,
+                currencyCode: currencyCode,
+                exchangeRates: exchangeRates
+            )
         }
 
         guard let categoryID = template.categoryID else {
@@ -763,6 +904,7 @@ nonisolated enum OverviewLogic {
         transactionRecords: [TransactionRecordSnapshot],
         referenceDate: Date = .now,
         calendar: Calendar = MistiaCalendar.current,
+        exchangeRates: [MistiaExchangeRate] = [],
         minimumProgress: Double = 0.5,
         includesMinimumProgress: Bool = false,
         maximumCount: Int? = 3
@@ -773,7 +915,8 @@ nonisolated enum OverviewLogic {
             records: transactionRecords,
             selectedMonth: selectedMonth,
             referenceDate: referenceDate,
-            calendar: calendar
+            calendar: calendar,
+            exchangeRates: exchangeRates
         )
 
         let sortedRows = rows
@@ -915,11 +1058,14 @@ nonisolated enum OverviewLogic {
             .sorted(by: transactionSort)
             .prefix(5)
             .map { transaction in
-                OverviewRecentTransactionSnapshot(
+                let rowCurrencyCode = MistiaCurrencyLogic.normalizedCode(
+                    transaction.sourceCurrencyCode ?? currencyCode
+                )
+                return OverviewRecentTransactionSnapshot(
                     id: transaction.id,
                     title: transaction.title,
                     amountMinor: transaction.amountMinor,
-                    currencyCode: currencyCode,
+                    currencyCode: rowCurrencyCode,
                     occurredAt: transaction.occurredAt,
                     timeLabel: relativeTimeLabel(
                         for: transaction.occurredAt,
@@ -1038,6 +1184,32 @@ nonisolated enum OverviewLogic {
         case .transfer:
             TransactionPrimaryKind.transfer.financeIconToken
         }
+    }
+
+    private static func reportingAmount(
+        for record: TransactionRecordSnapshot,
+        currencyCode: String,
+        exchangeRates: [MistiaExchangeRate]
+    ) -> Int64 {
+        MistiaCurrencyLogic.reportingMinorAmount(
+            for: record,
+            reportingCurrencyCode: currencyCode,
+            rates: exchangeRates
+        ) ?? 0
+    }
+
+    private static func reportingAmount(
+        amountMinor: Int64,
+        sourceCurrencyCode: String?,
+        currencyCode: String,
+        exchangeRates: [MistiaExchangeRate]
+    ) -> Int64 {
+        MistiaCurrencyLogic.reportingMinorAmount(
+            amountMinor: amountMinor,
+            sourceCurrencyCode: sourceCurrencyCode,
+            reportingCurrencyCode: currencyCode,
+            rates: exchangeRates
+        ) ?? 0
     }
 
     static func transactionKindTitle(

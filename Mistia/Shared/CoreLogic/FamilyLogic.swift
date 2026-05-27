@@ -140,19 +140,22 @@ struct FamilyAggregateWalletSnapshot: Equatable {
     let balanceMinor: Int64
     let debtMinor: Int64
     let name: String?
+    let currencyCode: String
 
     init(
         ownerUserID: UUID,
         kind: Kind,
         balanceMinor: Int64,
         debtMinor: Int64,
-        name: String? = nil
+        name: String? = nil,
+        currencyCode: String = "JPY"
     ) {
         self.ownerUserID = ownerUserID
         self.kind = kind
         self.balanceMinor = balanceMinor
         self.debtMinor = debtMinor
         self.name = name
+        self.currencyCode = currencyCode
     }
 }
 
@@ -248,6 +251,7 @@ struct FamilyAggregateTransactionSnapshot: Equatable {
     let occurredAt: Date
     let kind: Kind
     let amountMinor: Int64
+    let currencyCode: String
     let isCreditCardPayment: Bool
     let isAdjustment: Bool
     let isInstallmentPayment: Bool
@@ -260,6 +264,7 @@ struct FamilyAggregateTransactionSnapshot: Equatable {
         occurredAt: Date,
         kind: Kind,
         amountMinor: Int64,
+        currencyCode: String = "JPY",
         isCreditCardPayment: Bool = false,
         isAdjustment: Bool = false,
         isInstallmentPayment: Bool = false
@@ -271,6 +276,7 @@ struct FamilyAggregateTransactionSnapshot: Equatable {
         self.occurredAt = occurredAt
         self.kind = kind
         self.amountMinor = amountMinor
+        self.currencyCode = currencyCode
         self.isCreditCardPayment = isCreditCardPayment
         self.isAdjustment = isAdjustment
         self.isInstallmentPayment = isInstallmentPayment
@@ -335,7 +341,9 @@ enum FamilyLogic {
     }
 
     nonisolated static func aggregateWalletsByName(
-        _ wallets: [FamilyWalletAggregateSnapshot]
+        _ wallets: [FamilyWalletAggregateSnapshot],
+        reportingCurrencyCode: String? = nil,
+        exchangeRates: [MistiaExchangeRate] = []
     ) -> [FamilyWalletAggregateSnapshot] {
         Dictionary(grouping: wallets) { wallet in
             normalizedFamilyGroupingName(wallet.name)
@@ -346,11 +354,26 @@ enum FamilyLogic {
                 return nil
             }
 
+            let groupedCurrencyCodes = Set(groupedWallets.map { MistiaCurrencyLogic.normalizedCode($0.currencyCode) })
+            let outputCurrencyCode = groupedCurrencyCodes.count == 1
+                ? MistiaCurrencyLogic.normalizedCode(representative.currencyCode)
+                : MistiaCurrencyLogic.normalizedCode(reportingCurrencyCode)
+
             let currentBalance = groupedWallets.reduce(into: Int64.zero) { partial, wallet in
-                partial += wallet.currentBalanceMinor
+                partial += reportingAmount(
+                    amountMinor: wallet.currentBalanceMinor,
+                    sourceCurrencyCode: wallet.currencyCode,
+                    currencyCode: outputCurrencyCode,
+                    exchangeRates: exchangeRates
+                )
             }
             let debt = groupedWallets.reduce(into: Int64.zero) { partial, wallet in
-                partial += wallet.debtMinor
+                partial += reportingAmount(
+                    amountMinor: wallet.debtMinor,
+                    sourceCurrencyCode: wallet.currencyCode,
+                    currencyCode: outputCurrencyCode,
+                    exchangeRates: exchangeRates
+                )
             }
 
             return FamilyWalletAggregateSnapshot(
@@ -360,7 +383,7 @@ enum FamilyLogic {
                 kind: representative.kind,
                 currentBalanceMinor: currentBalance,
                 debtMinor: debt,
-                currencyCode: representative.currencyCode,
+                currencyCode: outputCurrencyCode,
                 sortOrder: representative.sortOrder,
                 createdAt: representative.createdAt
             )
@@ -377,6 +400,7 @@ enum FamilyLogic {
         memberOrder: [UUID],
         referenceDate: Date = .now,
         calendar: Calendar = MistiaCalendar.current,
+        exchangeRates: [MistiaExchangeRate] = [],
         minimumProgress: Double = 0.5,
         includesMinimumProgress: Bool = false,
         maximumCount: Int? = 3
@@ -408,13 +432,18 @@ enum FamilyLogic {
 
             let spent = transactions.reduce(into: Int64.zero) { partial, transaction in
                 guard isExpenseSpending(transaction),
-                      monthInterval?.contains(transaction.occurredAt) == true,
+                      monthInterval.map({ transaction.occurredAt >= $0.start && transaction.occurredAt < $0.end }) == true,
                       transaction.matchesCategoryGroupingKey(key)
                 else {
                     return
                 }
 
-                partial += transaction.amountMinor
+                partial += reportingAmount(
+                    amountMinor: transaction.amountMinor,
+                    sourceCurrencyCode: transaction.currencyCode,
+                    currencyCode: selectedPlan.currencyCode,
+                    exchangeRates: exchangeRates
+                )
             }
 
             return FamilyBudgetAggregateSnapshot(
@@ -454,7 +483,8 @@ enum FamilyLogic {
         goals: [FamilyGoalSnapshot],
         ownerUserID: UUID?,
         goalManagerUserID: UUID?,
-        memberOrder: [UUID]
+        memberOrder: [UUID],
+        exchangeRates: [MistiaExchangeRate] = []
     ) -> [FamilyGoalAggregateSnapshot] {
         Dictionary(grouping: goals.filter { !$0.name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }) { goal in
             normalizedFamilyGroupingName(goal.name)
@@ -470,7 +500,12 @@ enum FamilyLogic {
             }
 
             let saved = groupedGoals.reduce(into: Int64.zero) { partial, goal in
-                partial += goal.currentSavedMinor
+                partial += reportingAmount(
+                    amountMinor: goal.currentSavedMinor,
+                    sourceCurrencyCode: goal.currencyCode,
+                    currencyCode: selectedGoal.currencyCode,
+                    exchangeRates: exchangeRates
+                )
             }
 
             return FamilyGoalAggregateSnapshot(
@@ -561,6 +596,8 @@ enum FamilyLogic {
         selectedInterval: DateInterval,
         visibleMemberIDs: Set<UUID>? = nil,
         memberNames: [UUID: String] = [:],
+        reportingCurrencyCode: String? = nil,
+        exchangeRates: [MistiaExchangeRate] = [],
         referenceDate: Date = .now,
         calendar: Calendar = MistiaCalendar.current
     ) -> FamilyAggregateSummary {
@@ -568,13 +605,27 @@ enum FamilyLogic {
         let intervalTransactions = transactions.filter {
             (visibleMemberIDs?.contains($0.ownerUserID) ?? true) && selectedInterval.contains($0.occurredAt)
         }
+        let summaryCurrencyCode = MistiaCurrencyLogic.normalizedCode(reportingCurrencyCode)
 
         // 1. Current Balances
         let totalAssetsMinor = visibleWallets.reduce(into: Int64.zero) { partial, wallet in
-            partial += max(wallet.balanceMinor, 0)
+            partial += max(
+                reportingAmount(
+                    amountMinor: wallet.balanceMinor,
+                    sourceCurrencyCode: wallet.currencyCode,
+                    currencyCode: summaryCurrencyCode,
+                    exchangeRates: exchangeRates
+                ),
+                0
+            )
         }
         let totalDebtMinor = visibleWallets.reduce(into: Int64.zero) { partial, wallet in
-            partial += wallet.debtMinor
+            partial += reportingAmount(
+                amountMinor: wallet.debtMinor,
+                sourceCurrencyCode: wallet.currencyCode,
+                currencyCode: summaryCurrencyCode,
+                exchangeRates: exchangeRates
+            )
         }
         let spendableMinor = totalAssetsMinor - totalDebtMinor
 
@@ -590,8 +641,22 @@ enum FamilyLogic {
             
             // Asset = CurrentAsset - Sum(Income after date) + Sum(Expense after date)
             // This is a simplification.
-            let incomeAfter = transactionsAfterDate.filter { $0.kind == .income }.reduce(0) { $0 + $1.amountMinor }
-            let expenseAfter = transactionsAfterDate.filter(isExpenseSpending).reduce(0) { $0 + $1.amountMinor }
+            let incomeAfter = transactionsAfterDate.filter { $0.kind == .income }.reduce(0) { partial, transaction in
+                partial + reportingAmount(
+                    amountMinor: transaction.amountMinor,
+                    sourceCurrencyCode: transaction.currencyCode,
+                    currencyCode: summaryCurrencyCode,
+                    exchangeRates: exchangeRates
+                )
+            }
+            let expenseAfter = transactionsAfterDate.filter(isExpenseSpending).reduce(0) { partial, transaction in
+                partial + reportingAmount(
+                    amountMinor: transaction.amountMinor,
+                    sourceCurrencyCode: transaction.currencyCode,
+                    currencyCode: summaryCurrencyCode,
+                    exchangeRates: exchangeRates
+                )
+            }
             
             let historicalSpendable = spendableMinor - incomeAfter + expenseAfter
             return FamilyTrendPoint(date: date, valueMinor: historicalSpendable)
@@ -601,7 +666,19 @@ enum FamilyLogic {
         // 3. Distribution
         let balanceByWalletKind = visibleWallets.reduce(into: [FamilyAggregateWalletSnapshot.Kind: Int64]()) {
             partial, wallet in
-            partial[wallet.kind, default: 0] += wallet.balanceMinor - wallet.debtMinor
+            let balance = reportingAmount(
+                amountMinor: wallet.balanceMinor,
+                sourceCurrencyCode: wallet.currencyCode,
+                currencyCode: summaryCurrencyCode,
+                exchangeRates: exchangeRates
+            )
+            let debt = reportingAmount(
+                amountMinor: wallet.debtMinor,
+                sourceCurrencyCode: wallet.currencyCode,
+                currencyCode: summaryCurrencyCode,
+                exchangeRates: exchangeRates
+            )
+            partial[wallet.kind, default: 0] += balance - debt
         }
 
         let balanceByWalletNameMap = visibleWallets.reduce(into: [String: (name: String, value: Int64)]()) { partial, wallet in
@@ -611,7 +688,19 @@ enum FamilyLogic {
             }
             let key = normalizedFamilyGroupingName(name)
             let current = partial[key] ?? (name: name, value: 0)
-            partial[key] = (name: current.name, value: current.value + wallet.balanceMinor - wallet.debtMinor)
+            let balance = reportingAmount(
+                amountMinor: wallet.balanceMinor,
+                sourceCurrencyCode: wallet.currencyCode,
+                currencyCode: summaryCurrencyCode,
+                exchangeRates: exchangeRates
+            )
+            let debt = reportingAmount(
+                amountMinor: wallet.debtMinor,
+                sourceCurrencyCode: wallet.currencyCode,
+                currencyCode: summaryCurrencyCode,
+                exchangeRates: exchangeRates
+            )
+            partial[key] = (name: current.name, value: current.value + balance - debt)
         }
         let balanceByWalletName = balanceByWalletNameMap
             .map { key, value in
@@ -626,7 +715,12 @@ enum FamilyLogic {
 
         let expenseMap = intervalTransactions.reduce(into: [String: Int64]()) { partial, transaction in
             guard isExpenseSpending(transaction) else { return }
-            partial[transaction.categoryName ?? "Other", default: 0] += transaction.amountMinor
+            partial[transaction.categoryName ?? "Other", default: 0] += reportingAmount(
+                amountMinor: transaction.amountMinor,
+                sourceCurrencyCode: transaction.currencyCode,
+                currencyCode: summaryCurrencyCode,
+                exchangeRates: exchangeRates
+            )
         }
         let expenseByCategory = expenseMap.map { FamilyDonutSegment(label: $0.key, valueMinor: $0.value, colorHex: nil) }
             .sorted { $0.valueMinor > $1.valueMinor }
@@ -636,7 +730,12 @@ enum FamilyLogic {
             guard isExpenseSpending(transaction) else { return }
             let spendingUserID = transaction.createdByUserID ?? transaction.ownerUserID
             guard visibleMemberIDs?.contains(spendingUserID) ?? true else { return }
-            partial[spendingUserID, default: 0] += transaction.amountMinor
+            partial[spendingUserID, default: 0] += reportingAmount(
+                amountMinor: transaction.amountMinor,
+                sourceCurrencyCode: transaction.currencyCode,
+                currencyCode: summaryCurrencyCode,
+                exchangeRates: exchangeRates
+            )
         }
         let spendingByMember = memberSpendingMap.map { 
             FamilyMemberSpendingSnapshot(userID: $0.key, name: memberNames[$0.key] ?? "Unknown", amountMinor: $0.value)
@@ -644,7 +743,12 @@ enum FamilyLogic {
 
         let memberIncomeMap = intervalTransactions.reduce(into: [UUID: Int64]()) { partial, transaction in
             guard transaction.kind == .income else { return }
-            partial[transaction.ownerUserID, default: 0] += transaction.amountMinor
+            partial[transaction.ownerUserID, default: 0] += reportingAmount(
+                amountMinor: transaction.amountMinor,
+                sourceCurrencyCode: transaction.currencyCode,
+                currencyCode: summaryCurrencyCode,
+                exchangeRates: exchangeRates
+            )
         }
         let incomeByMember = memberIncomeMap.map { 
             FamilyMemberSpendingSnapshot(userID: $0.key, name: memberNames[$0.key] ?? "Unknown", amountMinor: $0.value)
@@ -662,8 +766,22 @@ enum FamilyLogic {
         let previousTransactions = transactions.filter {
             (visibleMemberIDs?.contains($0.ownerUserID) ?? true) && previousInterval.contains($0.occurredAt)
         }
-        let currentSpending = intervalTransactions.filter(isExpenseSpending).reduce(0) { $0 + $1.amountMinor }
-        let previousSpending = previousTransactions.filter(isExpenseSpending).reduce(0) { $0 + $1.amountMinor }
+        let currentSpending = intervalTransactions.filter(isExpenseSpending).reduce(0) { partial, transaction in
+            partial + reportingAmount(
+                amountMinor: transaction.amountMinor,
+                sourceCurrencyCode: transaction.currencyCode,
+                currencyCode: summaryCurrencyCode,
+                exchangeRates: exchangeRates
+            )
+        }
+        let previousSpending = previousTransactions.filter(isExpenseSpending).reduce(0) { partial, transaction in
+            partial + reportingAmount(
+                amountMinor: transaction.amountMinor,
+                sourceCurrencyCode: transaction.currencyCode,
+                currencyCode: summaryCurrencyCode,
+                exchangeRates: exchangeRates
+            )
+        }
         
         if previousSpending > 0 {
             let diff = Double(currentSpending - previousSpending) / Double(previousSpending)
@@ -724,6 +842,20 @@ enum FamilyLogic {
             && !transaction.isAdjustment
             && !transaction.isCreditCardPayment
             && !transaction.isInstallmentPayment
+    }
+
+    nonisolated private static func reportingAmount(
+        amountMinor: Int64,
+        sourceCurrencyCode: String,
+        currencyCode: String,
+        exchangeRates: [MistiaExchangeRate]
+    ) -> Int64 {
+        MistiaCurrencyLogic.reportingMinorAmount(
+            amountMinor: amountMinor,
+            sourceCurrencyCode: sourceCurrencyCode,
+            reportingCurrencyCode: currencyCode,
+            rates: exchangeRates
+        ) ?? 0
     }
 
     nonisolated private static func walletAggregateSort(

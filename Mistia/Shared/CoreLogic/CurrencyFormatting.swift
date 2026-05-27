@@ -38,7 +38,7 @@ nonisolated enum MistiaCurrencyFormatting {
 extension Int64 {
     nonisolated func formattedCurrency(code: String) -> String {
         let uppercaseCode = code.uppercased()
-        let fractionDigits = uppercaseCode == "JPY" ? 0 : 2
+        let fractionDigits = MistiaCurrencyLogic.hasMinorFractionDigits(uppercaseCode) ? 2 : 0
         let amount = decimalCurrencyAmount(fractionDigits: fractionDigits)
         let locale = MistiaCurrencyFormatting.locale(for: uppercaseCode)
 

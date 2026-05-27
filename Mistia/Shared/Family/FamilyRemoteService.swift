@@ -389,6 +389,11 @@ struct FamilyTransferInput: Encodable, Equatable {
     let sourceWalletID: UUID
     let destinationWalletID: UUID
     let amountMinor: Int64
+    let destinationAmountMinor: Int64?
+    let conversionModeRawValue: String?
+    let exchangeRateDecimalString: String?
+    let exchangeRateProvider: String?
+    let exchangeRateDate: String?
     let occurredAt: Date
     let note: String?
 }
@@ -1619,6 +1624,11 @@ private struct CreateFamilyTransferRPCBody: Encodable {
     let sourceWalletID: UUID
     let destinationWalletID: UUID
     let amountMinor: Int64
+    let destinationAmountMinor: Int64?
+    let conversionModeRawValue: String?
+    let exchangeRateDecimalString: String?
+    let exchangeRateProvider: String?
+    let exchangeRateDate: String?
     let occurredAt: Date
     let note: String?
 
@@ -1628,6 +1638,11 @@ private struct CreateFamilyTransferRPCBody: Encodable {
         sourceWalletID = input.sourceWalletID
         destinationWalletID = input.destinationWalletID
         amountMinor = input.amountMinor
+        destinationAmountMinor = input.destinationAmountMinor
+        conversionModeRawValue = input.conversionModeRawValue
+        exchangeRateDecimalString = input.exchangeRateDecimalString
+        exchangeRateProvider = input.exchangeRateProvider
+        exchangeRateDate = input.exchangeRateDate
         occurredAt = input.occurredAt
         note = input.note
     }
@@ -1638,6 +1653,11 @@ private struct CreateFamilyTransferRPCBody: Encodable {
         case sourceWalletID = "p_source_wallet_id"
         case destinationWalletID = "p_destination_wallet_id"
         case amountMinor = "p_amount_minor"
+        case destinationAmountMinor = "p_destination_amount_minor"
+        case conversionModeRawValue = "p_conversion_mode_raw_value"
+        case exchangeRateDecimalString = "p_exchange_rate_decimal_string"
+        case exchangeRateProvider = "p_exchange_rate_provider"
+        case exchangeRateDate = "p_exchange_rate_date"
         case occurredAt = "p_occurred_at"
         case note = "p_note"
     }

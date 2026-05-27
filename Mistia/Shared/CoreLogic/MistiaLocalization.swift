@@ -274,32 +274,26 @@ nonisolated enum MistiaDateFormatting {
         language: MistiaAppLanguage = .current
     ) -> String {
         let diff = referenceDate.timeIntervalSince(date)
-        
-        // < 1 hour: 3 minutes ago
-        if diff < 3600 {
+
+        let referenceDay = calendar.startOfDay(for: referenceDate)
+        let dateDay = calendar.startOfDay(for: date)
+        let dayDelta = calendar.dateComponents([.day], from: dateDay, to: referenceDay).day ?? 0
+
+        if dayDelta == 0, diff < 3600 {
             let minutes = max(Int(diff / 60), 1)
             return L10n.shared.corelogic.mistialocalization.valueMinAgo(String(describing: minutes), language: language)
         }
-        
-        // < 24 hours: 5 hours ago
-        if diff < 86400 {
+
+        if dayDelta == 0, diff < 6 * 3600 {
             let hours = max(Int(diff / 3600), 1)
             return L10n.shared.corelogic.mistialocalization.valueHrAgo(String(describing: hours), language: language)
         }
-        
-        // < 30 days: 10 days ago
-        if diff < 2592000 {
-            let days = max(Int(diff / 86400), 1)
-            return L10n.shared.corelogic.mistialocalization.valueDaysAgo(String(describing: days), language: language)
-        }
-        
-        // < 1 year: 1 month ago, 2 months ago
-        if diff < 31536000 {
-            let months = max(Int(diff / 2592000), 1)
-            return L10n.shared.corelogic.mistialocalization.valueMonthsAgo(String(describing: months), language: language)
+
+        if let label = relativeDayLabel(for: dayDelta, language: language) {
+            return label
         }
 
-        return fullDateString(for: date, language: language, calendar: calendar)
+        return shortDateString(for: date, language: language, calendar: calendar)
     }
 
 }

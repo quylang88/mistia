@@ -31,6 +31,15 @@ struct TransactionRecordSnapshot: Equatable, Identifiable {
     let title: String
     let note: String?
     let amountMinor: Int64
+    let sourceCurrencyCode: String?
+    let destinationCurrencyCode: String?
+    let destinationAmountMinor: Int64?
+    let reportingCurrencyCode: String?
+    let reportingAmountMinor: Int64?
+    let conversionModeRawValue: String?
+    let exchangeRateDecimalString: String?
+    let exchangeRateProvider: String?
+    let exchangeRateDate: String?
     let isArchived: Bool
     let occurredAt: Date
     let createdAt: Date
@@ -52,6 +61,15 @@ struct TransactionRecordSnapshot: Equatable, Identifiable {
         title: String,
         note: String?,
         amountMinor: Int64,
+        sourceCurrencyCode: String? = nil,
+        destinationCurrencyCode: String? = nil,
+        destinationAmountMinor: Int64? = nil,
+        reportingCurrencyCode: String? = nil,
+        reportingAmountMinor: Int64? = nil,
+        conversionModeRawValue: String? = nil,
+        exchangeRateDecimalString: String? = nil,
+        exchangeRateProvider: String? = nil,
+        exchangeRateDate: String? = nil,
         isArchived: Bool = false,
         occurredAt: Date,
         createdAt: Date,
@@ -72,6 +90,15 @@ struct TransactionRecordSnapshot: Equatable, Identifiable {
         self.title = title
         self.note = note
         self.amountMinor = amountMinor
+        self.sourceCurrencyCode = sourceCurrencyCode
+        self.destinationCurrencyCode = destinationCurrencyCode
+        self.destinationAmountMinor = destinationAmountMinor
+        self.reportingCurrencyCode = reportingCurrencyCode
+        self.reportingAmountMinor = reportingAmountMinor
+        self.conversionModeRawValue = conversionModeRawValue
+        self.exchangeRateDecimalString = exchangeRateDecimalString
+        self.exchangeRateProvider = exchangeRateProvider
+        self.exchangeRateDate = exchangeRateDate
         self.isArchived = isArchived
         self.occurredAt = occurredAt
         self.createdAt = createdAt
@@ -539,7 +566,7 @@ nonisolated enum TransactionLogic {
                     applyDelta(
                         walletID: record.destinationWalletID,
                         explicitKind: record.destinationWalletKind,
-                        amount: record.amountMinor,
+                        amount: record.destinationAmountMinor ?? record.amountMinor,
                         delta: { kind, amount in incomingDelta(for: kind, amount: amount) }
                     )
                 case .familyTransfer:
@@ -802,7 +829,10 @@ nonisolated enum TransactionLogic {
                 }
 
                 if record.destinationWalletID == wallet.id {
-                    delta += incomingDelta(for: wallet.kind, amount: record.amountMinor)
+                    delta += incomingDelta(
+                        for: wallet.kind,
+                        amount: record.destinationAmountMinor ?? record.amountMinor
+                    )
                 }
 
                 return delta
@@ -1030,6 +1060,15 @@ extension LedgerTransaction {
             title: title,
             note: note,
             amountMinor: amountMinor,
+            sourceCurrencyCode: sourceCurrencyCode,
+            destinationCurrencyCode: destinationCurrencyCode,
+            destinationAmountMinor: destinationAmountMinor,
+            reportingCurrencyCode: reportingCurrencyCode,
+            reportingAmountMinor: reportingAmountMinor,
+            conversionModeRawValue: conversionModeRawValue,
+            exchangeRateDecimalString: exchangeRateDecimalString,
+            exchangeRateProvider: exchangeRateProvider,
+            exchangeRateDate: exchangeRateDate,
             isArchived: isArchived,
             occurredAt: occurredAt,
             createdAt: createdAt,

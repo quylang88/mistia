@@ -44,6 +44,7 @@ let package = Package(
             ],
             sources: [
                 "CoreLogic/CurrencyFormatting.swift",
+                "CoreLogic/CurrencyLogic.swift",
                 "CoreLogic/FamilyLogic.swift",
                 "CoreLogic/FinanceEnums.swift",
                 "CoreLogic/BillItemAnalysisModels.swift",

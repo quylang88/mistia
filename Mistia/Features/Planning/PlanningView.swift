@@ -176,6 +176,9 @@ struct PlanningView: View {
     private var storedTransactions: [LedgerTransaction]
     @Query private var ownershipScopes: [OwnedRecordScope]
     @AppStorage(MistiaAppStorageKey.currencyCode) private var currencyCode = "JPY"
+    @AppStorage(MistiaCurrencySettings.StorageKey.rateMode) private var currencyRateMode = MistiaCurrencyRateMode.automatic.rawValue
+    @AppStorage(MistiaCurrencySettings.StorageKey.manualJPYToVNDRate) private var manualJPYToVNDRate = ""
+    @AppStorage(MistiaCurrencySettings.StorageKey.cachedRatesData) private var cachedCurrencyRatesData = Data()
 
     @State private var selectedMode: PlanningMode = .budget
     @State private var selectedDueMode: PlanningDueMode = .creditCards
@@ -198,6 +201,13 @@ struct PlanningView: View {
 
     private var transactionSnapshots: [TransactionRecordSnapshot] {
         visibleTransactions.map(\.planningRecordSnapshot)
+    }
+
+    private var appExchangeRates: [MistiaExchangeRate] {
+        _ = currencyRateMode
+        _ = manualJPYToVNDRate
+        _ = cachedCurrencyRatesData
+        return MistiaCurrencySettings.rates()
     }
 
     private var occurrenceSnapshots: [PlanningDueOccurrenceSnapshot] {
@@ -245,11 +255,16 @@ struct PlanningView: View {
             records: transactionSnapshots,
             selectedMonth: selectedMonth,
             referenceDate: .now,
-            calendar: calendar
+            calendar: calendar,
+            exchangeRates: appExchangeRates
         )
 
         return PlanningBudgetRenderSnapshot(
-            summary: PlanningLogic.budgetSummary(from: rows),
+            summary: PlanningLogic.budgetSummary(
+                from: rows,
+                reportingCurrencyCode: currencyCode,
+                exchangeRates: appExchangeRates
+            ),
             rows: rows
         )
     }
@@ -270,7 +285,11 @@ struct PlanningView: View {
         )
 
         return PlanningGoalRenderSnapshot(
-            summary: PlanningLogic.goalSummary(from: rows),
+            summary: PlanningLogic.goalSummary(
+                from: rows,
+                reportingCurrencyCode: currencyCode,
+                exchangeRates: appExchangeRates
+            ),
             rows: rows
         )
     }
@@ -346,6 +365,8 @@ struct PlanningView: View {
                 creditStatements: creditCardStatements,
                 recurring: recurringBillDueItems + installmentDueItems,
                 selectedMonth: selectedMonth,
+                reportingCurrencyCode: currencyCode,
+                exchangeRates: appExchangeRates,
                 referenceDate: .now,
                 calendar: calendar
             ),
@@ -367,12 +388,17 @@ struct PlanningView: View {
             records: transactionSnapshots,
             selectedMonth: selectedMonth,
             referenceDate: .now,
-            calendar: calendar
+            calendar: calendar,
+            exchangeRates: appExchangeRates
         )
     }
 
     private var budgetSummary: PlanningBudgetSummarySnapshot {
-        PlanningLogic.budgetSummary(from: budgetRows)
+        PlanningLogic.budgetSummary(
+            from: budgetRows,
+            reportingCurrencyCode: currencyCode,
+            exchangeRates: appExchangeRates
+        )
     }
 
     private var activeGoals: [SavingsGoalSnapshot] {
@@ -390,7 +416,11 @@ struct PlanningView: View {
     }
 
     private var goalSummary: PlanningGoalSummarySnapshot {
-        PlanningLogic.goalSummary(from: goalRows)
+        PlanningLogic.goalSummary(
+            from: goalRows,
+            reportingCurrencyCode: currencyCode,
+            exchangeRates: appExchangeRates
+        )
     }
 
     private var creditCardAccounts: [PlanningCreditCardAccountSnapshot] {
@@ -569,6 +599,8 @@ struct PlanningView: View {
             creditStatements: creditCardStatementDueItems,
             recurring: recurringBillDueItems + installmentDueItems,
             selectedMonth: selectedMonth,
+            reportingCurrencyCode: currencyCode,
+            exchangeRates: appExchangeRates,
             referenceDate: .now,
             calendar: calendar
         )

@@ -246,6 +246,43 @@ final class MistiaLocalizationTests: XCTestCase {
         XCTAssertTrue(vietnameseJPY.first.map { $0 == "¥" || $0 == "￥" } ?? false)
     }
 
+    func testVNDFormatsWithoutFractionDigits() {
+        let formatted = Int64(123_456_789).formattedCurrency(code: "VND")
+
+        XCTAssertTrue(formatted.contains("₫") || formatted.uppercased().contains("VND"))
+        XCTAssertFalse(formatted.contains(".00"))
+        XCTAssertFalse(formatted.contains(",00"))
+    }
+
+    func testApproximatePrimaryAmountOnlyShowsForDifferentCurrencies() {
+        let rate = MistiaExchangeRate(
+            baseCurrencyCode: "VND",
+            quoteCurrencyCode: "JPY",
+            rateDecimalString: "0.006",
+            provider: "test",
+            fetchedAt: Date(timeIntervalSince1970: 1_774_051_200),
+            rateDate: "2026-03-21"
+        )
+
+        XCTAssertNil(
+            MistiaCurrencyLogic.approximatePrimaryAmountText(
+                amountMinor: 150_000,
+                sourceCurrencyCode: "VND",
+                primaryCurrencyCode: "VND",
+                rates: [rate]
+            )
+        )
+
+        let text = MistiaCurrencyLogic.approximatePrimaryAmountText(
+            amountMinor: 150_000,
+            sourceCurrencyCode: "VND",
+            primaryCurrencyCode: "JPY",
+            rates: [rate]
+        )
+
+        XCTAssertEqual(text, "~¥900")
+    }
+
     func testBootstrapStoredPreferenceRestoresBackupBeforeInferringSystemLanguage() {
         UserDefaults.standard.removeObject(forKey: MistiaAppLanguage.userDefaultsKey)
         UserDefaults.standard.set(

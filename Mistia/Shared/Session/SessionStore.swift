@@ -423,6 +423,7 @@ final class SessionStore {
     }
 
     func handleBackgroundRefresh() async -> Bool {
+        await MistiaCurrencyRateMaintenance.refreshIfNeeded()
         if hasQueuedFamilyOwnerMutations() {
             _ = await flushQueuedFamilyOwnerPushIfAllowed()
         }
