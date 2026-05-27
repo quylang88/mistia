@@ -3221,6 +3221,15 @@ nonisolated enum L10n {
 
         nonisolated enum sync {
 
+            nonisolated enum familyOwnerPushConflict {
+                static var alertMessage: String { L10n.tr("shared.sync.familyOwnerPushConflict.alertMessage", vi: "Mục này đã thay đổi trên cloud. Mistia sẽ làm mới dữ liệu rồi bạn có thể thử lại. Thay đổi chưa đẩy của bạn sẽ bị bỏ.", en: "This item changed in the cloud. Mistia will refresh the data, then you can try again. Your unpushed change will be discarded.", ja: "この項目はクラウドで変更されました。Mistia がデータを更新するので、その後もう一度お試しください。未送信の変更は破棄されます。") }
+                static func alertMessage(language: MistiaAppLanguage) -> String { L10n.tr("shared.sync.familyOwnerPushConflict.alertMessage", vi: "Mục này đã thay đổi trên cloud. Mistia sẽ làm mới dữ liệu rồi bạn có thể thử lại. Thay đổi chưa đẩy của bạn sẽ bị bỏ.", en: "This item changed in the cloud. Mistia will refresh the data, then you can try again. Your unpushed change will be discarded.", ja: "この項目はクラウドで変更されました。Mistia がデータを更新するので、その後もう一度お試しください。未送信の変更は破棄されます。", language: language) }
+                static var alertTitle: String { L10n.tr("shared.sync.familyOwnerPushConflict.alertTitle", vi: "Dữ liệu đã thay đổi", en: "Data changed", ja: "データが変更されました") }
+                static func alertTitle(language: MistiaAppLanguage) -> String { L10n.tr("shared.sync.familyOwnerPushConflict.alertTitle", vi: "Dữ liệu đã thay đổi", en: "Data changed", ja: "データが変更されました", language: language) }
+                static var badge: String { L10n.tr("shared.sync.familyOwnerPushConflict.badge", vi: "Đã có thay đổi trên cloud", en: "Changed in cloud", ja: "クラウドで変更あり") }
+                static func badge(language: MistiaAppLanguage) -> String { L10n.tr("shared.sync.familyOwnerPushConflict.badge", vi: "Đã có thay đổi trên cloud", en: "Changed in cloud", ja: "クラウドで変更あり", language: language) }
+            }
+
             nonisolated enum mistiasync {
                 static var active: String { L10n.tr("shared.sync.mistiasync.active", vi: "Đang active", en: "Active", ja: "有効") }
                 static func active(language: MistiaAppLanguage) -> String { L10n.tr("shared.sync.mistiasync.active", vi: "Đang active", en: "Active", ja: "有効", language: language) }
@@ -3911,6 +3920,12 @@ nonisolated enum L10n {
             static func clearAllFilters(language: MistiaAppLanguage) -> String { L10n.tr("transactions.transactions.clearAllFilters", vi: "Xoá tất cả bộ lọc", en: "Clear all filters", ja: "すべてのフィルタを解除", language: language) }
             static var close: String { L10n.tr("transactions.transactions.close", vi: "Đóng", en: "Close", ja: "閉じる") }
             static func close(language: MistiaAppLanguage) -> String { L10n.tr("transactions.transactions.close", vi: "Đóng", en: "Close", ja: "閉じる", language: language) }
+            static var cloudChangedAlertMessage: String { L10n.tr("transactions.transactions.cloudChangedAlertMessage", vi: "Mục này đã thay đổi trên cloud. Mistia sẽ làm mới dữ liệu rồi bạn có thể thử lại. Thay đổi chưa đẩy của bạn sẽ bị bỏ.", en: "This item changed in the cloud. Mistia will refresh the data, then you can try again. Your unpushed change will be discarded.", ja: "この項目はクラウドで変更されました。Mistia がデータを更新するので、その後もう一度お試しください。未送信の変更は破棄されます。") }
+            static func cloudChangedAlertMessage(language: MistiaAppLanguage) -> String { L10n.tr("transactions.transactions.cloudChangedAlertMessage", vi: "Mục này đã thay đổi trên cloud. Mistia sẽ làm mới dữ liệu rồi bạn có thể thử lại. Thay đổi chưa đẩy của bạn sẽ bị bỏ.", en: "This item changed in the cloud. Mistia will refresh the data, then you can try again. Your unpushed change will be discarded.", ja: "この項目はクラウドで変更されました。Mistia がデータを更新するので、その後もう一度お試しください。未送信の変更は破棄されます。", language: language) }
+            static var cloudChangedAlertTitle: String { L10n.tr("transactions.transactions.cloudChangedAlertTitle", vi: "Dữ liệu đã thay đổi", en: "Data changed", ja: "データが変更されました") }
+            static func cloudChangedAlertTitle(language: MistiaAppLanguage) -> String { L10n.tr("transactions.transactions.cloudChangedAlertTitle", vi: "Dữ liệu đã thay đổi", en: "Data changed", ja: "データが変更されました", language: language) }
+            static var cloudChangedBadge: String { L10n.tr("transactions.transactions.cloudChangedBadge", vi: "Đã có thay đổi trên cloud", en: "Changed in cloud", ja: "クラウドで変更あり") }
+            static func cloudChangedBadge(language: MistiaAppLanguage) -> String { L10n.tr("transactions.transactions.cloudChangedBadge", vi: "Đã có thay đổi trên cloud", en: "Changed in cloud", ja: "クラウドで変更あり", language: language) }
             static var couldnTExportStatement: String { L10n.tr("transactions.transactions.couldnTExportStatement", vi: "Không thể xuất sao kê", en: "Couldn't export statement", ja: "明細を出力できませんでした") }
             static func couldnTExportStatement(language: MistiaAppLanguage) -> String { L10n.tr("transactions.transactions.couldnTExportStatement", vi: "Không thể xuất sao kê", en: "Couldn't export statement", ja: "明細を出力できませんでした", language: language) }
             static var couldnTSend: String { L10n.tr("transactions.transactions.couldnTSend", vi: "Chưa thể gửi", en: "Couldn't send", ja: "送信できませんでした") }

@@ -35,6 +35,15 @@ private struct ManagementWalletPermissionPrompt: Identifiable {
     let message: String
 }
 
+private struct ManagementFamilyOwnerConflictAlert: Identifiable {
+    let entity: MistiaSyncEntity
+    let recordID: UUID
+
+    var id: String {
+        FamilyOwnerPushConflict.key(entity: entity, recordID: recordID)
+    }
+}
+
 private struct ManagementSystemCategoryUseRequestTarget: Identifiable {
     let id = UUID()
     let ownerUserID: UUID
@@ -44,15 +53,18 @@ private enum ManagementAlertPresentation: Identifiable {
     case info(ManagementInfoAlert)
     case permission(ManagementPermissionPrompt)
     case wallet(ManagementWalletPermissionPrompt)
+    case familyOwnerConflict(ManagementFamilyOwnerConflictAlert)
 
-    var id: UUID {
+    var id: String {
         switch self {
         case .info(let alert):
-            alert.id
+            alert.id.uuidString
         case .permission(let prompt):
-            prompt.id
+            prompt.id.uuidString
         case .wallet(let prompt):
-            prompt.id
+            prompt.id.uuidString
+        case .familyOwnerConflict(let alert):
+            alert.id
         }
     }
 
@@ -64,6 +76,8 @@ private enum ManagementAlertPresentation: Identifiable {
             prompt.title
         case .wallet(let prompt):
             prompt.title
+        case .familyOwnerConflict:
+            L10n.shared.sync.familyOwnerPushConflict.alertTitle
         }
     }
 
@@ -75,6 +89,8 @@ private enum ManagementAlertPresentation: Identifiable {
             prompt.message
         case .wallet(let prompt):
             prompt.message
+        case .familyOwnerConflict:
+            L10n.shared.sync.familyOwnerPushConflict.alertMessage
         }
     }
 }
@@ -114,6 +130,7 @@ struct ManagementView: View {
     @State private var infoAlert: ManagementInfoAlert?
     @State private var permissionPrompt: ManagementPermissionPrompt?
     @State private var walletPermissionPrompt: ManagementWalletPermissionPrompt?
+    @State private var familyOwnerConflictAlert: ManagementFamilyOwnerConflictAlert?
 
     private var cardTint: Color {
         colorScheme == .dark ? .white.opacity(0.018) : .white.opacity(0.12)
@@ -266,20 +283,6 @@ struct ManagementView: View {
         familyContextStore.selectedSubjectUserID ?? sessionStore.activeLocalProfileUserID
     }
 
-
-    private var activeAlert: ManagementAlertPresentation? {
-        if let walletPermissionPrompt {
-            return .wallet(walletPermissionPrompt)
-        }
-        if let permissionPrompt {
-            return .permission(permissionPrompt)
-        }
-        if let infoAlert {
-            return .info(infoAlert)
-        }
-        return nil
-    }
-
     var body: some View {
         let renderSnapshot = self.renderSnapshot
 
@@ -333,6 +336,7 @@ struct ManagementView: View {
                 get: { activeAlert != nil },
                 set: { isPresented in
                     if !isPresented {
+                        familyOwnerConflictAlert = nil
                         walletPermissionPrompt = nil
                         permissionPrompt = nil
                         infoAlert = nil
@@ -344,6 +348,17 @@ struct ManagementView: View {
             switch alert {
             case .info:
                 Button(L10n.common.ok) {}
+            case .familyOwnerConflict(let conflict):
+                Button(L10n.common.ok) {
+                    Task { @MainActor in
+                        await sessionStore.discardFamilyOwnerPushConflictAndRefresh(
+                            entity: conflict.entity,
+                            recordID: conflict.recordID,
+                            familyContextStore: familyContextStore
+                        )
+                        familyOwnerConflictAlert = nil
+                    }
+                }
             case .permission(let prompt):
                 Button(prompt.actionTitle) {
                     prompt.action()
@@ -549,6 +564,9 @@ struct ManagementView: View {
                                 wallet: wallet,
                                 currentBalanceMinor: walletBalancesByID[wallet.id] ?? wallet.openingBalanceMinor
                             ) {
+                                if presentFamilyOwnerConflictIfNeeded(entity: .wallet, recordID: wallet.id) {
+                                    return
+                                }
                                 if canOpenWalletEditor(wallet) {
                                     walletEditorTarget = ManagementWalletEditorTarget(wallet: wallet, defaultKind: wallet.kind)
                                 } else {
@@ -595,6 +613,22 @@ struct ManagementView: View {
         guard let ownerUserID = selectedSubjectUserID else { return false }
         return ownerUserID == sessionStore.activeLocalProfileUserID
             || familyContextStore.canCreate(ownerUserID: ownerUserID, resourceType: .wallet)
+    }
+
+    private var activeAlert: ManagementAlertPresentation? {
+        if let familyOwnerConflictAlert {
+            return .familyOwnerConflict(familyOwnerConflictAlert)
+        }
+        if let walletPermissionPrompt {
+            return .wallet(walletPermissionPrompt)
+        }
+        if let permissionPrompt {
+            return .permission(permissionPrompt)
+        }
+        if let infoAlert {
+            return .info(infoAlert)
+        }
+        return nil
     }
 
     private func walletOwnerUserID(for wallet: LedgerWallet) -> UUID? {
@@ -993,6 +1027,9 @@ struct ManagementView: View {
         preferredParentCategoryID: UUID?
     ) {
         if let category {
+            if presentFamilyOwnerConflictIfNeeded(entity: .category, recordID: category.id) {
+                return
+            }
             guard canEditCategory(category) else {
                 presentCategoryEditPermissionPrompt(category) {
                     openCategoryEditorIfAllowed(
@@ -1022,6 +1059,14 @@ struct ManagementView: View {
             defaultKind: defaultKind,
             preferredParentCategoryID: preferredParentCategoryID
         )
+    }
+
+    private func presentFamilyOwnerConflictIfNeeded(entity: MistiaSyncEntity, recordID: UUID) -> Bool {
+        guard sessionStore.hasFamilyOwnerPushConflict(entity: entity, recordID: recordID) else {
+            return false
+        }
+        familyOwnerConflictAlert = ManagementFamilyOwnerConflictAlert(entity: entity, recordID: recordID)
+        return true
     }
 
     private func categoryOwnerUserID(for category: TransactionCategory) -> UUID? {

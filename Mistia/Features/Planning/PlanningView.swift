@@ -86,6 +86,15 @@ private struct PlanningInfoAlert: Identifiable {
     let message: String
 }
 
+private struct PlanningFamilyOwnerConflictAlert: Identifiable {
+    let entity: MistiaSyncEntity
+    let recordID: UUID
+
+    var id: String {
+        FamilyOwnerPushConflict.key(entity: entity, recordID: recordID)
+    }
+}
+
 private struct PlanningWalletPermissionPrompt: Identifiable {
     let id = UUID()
     let walletID: UUID
@@ -99,14 +108,17 @@ private enum PlanningAlertPresentation: Identifiable {
     case permission(PlanningPermissionPrompt)
     case wallet(PlanningWalletPermissionPrompt)
     case info(PlanningInfoAlert)
+    case familyOwnerConflict(PlanningFamilyOwnerConflictAlert)
 
-    var id: UUID {
+    var id: String {
         switch self {
         case .permission(let prompt):
-            prompt.id
+            prompt.id.uuidString
         case .wallet(let prompt):
-            prompt.id
+            prompt.id.uuidString
         case .info(let alert):
+            alert.id.uuidString
+        case .familyOwnerConflict(let alert):
             alert.id
         }
     }
@@ -119,6 +131,8 @@ private enum PlanningAlertPresentation: Identifiable {
             prompt.title
         case .info(let alert):
             alert.title
+        case .familyOwnerConflict:
+            L10n.shared.sync.familyOwnerPushConflict.alertTitle
         }
     }
 
@@ -130,6 +144,8 @@ private enum PlanningAlertPresentation: Identifiable {
             prompt.message
         case .info(let alert):
             alert.message
+        case .familyOwnerConflict:
+            L10n.shared.sync.familyOwnerPushConflict.alertMessage
         }
     }
 }
@@ -194,6 +210,7 @@ struct PlanningView: View {
     @State private var permissionPrompt: PlanningPermissionPrompt?
     @State private var walletPermissionPrompt: PlanningWalletPermissionPrompt?
     @State private var infoAlert: PlanningInfoAlert?
+    @State private var familyOwnerConflictAlert: PlanningFamilyOwnerConflictAlert?
 
     private var cardTint: Color {
         colorScheme == .dark ? .white.opacity(0.022) : .white.opacity(0.14)
@@ -215,6 +232,9 @@ struct PlanningView: View {
     }
 
     private var activeAlert: PlanningAlertPresentation? {
+        if let familyOwnerConflictAlert {
+            return .familyOwnerConflict(familyOwnerConflictAlert)
+        }
         if let walletPermissionPrompt {
             return .wallet(walletPermissionPrompt)
         }
@@ -751,6 +771,7 @@ struct PlanningView: View {
                 get: { activeAlert != nil },
                 set: { isPresented in
                     if !isPresented {
+                        familyOwnerConflictAlert = nil
                         walletPermissionPrompt = nil
                         permissionPrompt = nil
                         infoAlert = nil
@@ -762,6 +783,17 @@ struct PlanningView: View {
             switch alert {
             case .info:
                 Button(L10n.common.ok) {}
+            case .familyOwnerConflict(let conflict):
+                Button(L10n.common.ok) {
+                    Task { @MainActor in
+                        await sessionStore.discardFamilyOwnerPushConflictAndRefresh(
+                            entity: conflict.entity,
+                            recordID: conflict.recordID,
+                            familyContextStore: familyContextStore
+                        )
+                        familyOwnerConflictAlert = nil
+                    }
+                }
             case .permission(let prompt):
                 Button(prompt.actionTitle) {
                     prompt.action()
@@ -816,6 +848,11 @@ struct PlanningView: View {
     }
 
     private func openBudgetEditorIfAllowed(budget: BudgetPlan?, preferredParentCategoryID: UUID?) {
+        if let budget,
+           presentFamilyOwnerConflictIfNeeded(entity: .budgetPlan, recordID: budget.id) {
+            return
+        }
+
         let ownerUserID = budget.flatMap { budgetOwnerMap[$0.id] } ?? selectedSubjectUserID
         guard canEdit(ownerUserID: ownerUserID, resourceType: .budget) else {
             presentEditPermissionPrompt(
@@ -850,6 +887,11 @@ struct PlanningView: View {
     }
 
     private func openGoalEditorIfAllowed(goal: SavingsGoal?) {
+        if let goal,
+           presentFamilyOwnerConflictIfNeeded(entity: .savingsGoal, recordID: goal.id) {
+            return
+        }
+
         let ownerUserID = goal.flatMap { goalOwnerMap[$0.id] } ?? selectedSubjectUserID
         guard canEdit(ownerUserID: ownerUserID, resourceType: .goal) else {
             presentEditPermissionPrompt(
@@ -885,6 +927,11 @@ struct PlanningView: View {
 
     private func openCreditCardEditorIfAllowed(wallet: LedgerWallet?, dueItem: PlanningCreditCardDueSnapshot?) {
         let walletID = wallet?.id ?? dueItem?.walletID
+        if let walletID,
+           presentFamilyOwnerConflictIfNeeded(entity: .wallet, recordID: walletID) {
+            return
+        }
+
         let ownerUserID = walletID.flatMap { walletOwnerMap[$0] } ?? selectedSubjectUserID
         guard canOpenCreditCardEditor(walletID: walletID, ownerUserID: ownerUserID) else {
             if let walletID, let ownerUserID {
@@ -928,6 +975,11 @@ struct PlanningView: View {
     }
 
     private func openBillEditorIfAllowed(plan: RecurringBillPlan?, dueItem: PlanningRecurringDueSnapshot?) {
+        if let plan,
+           presentFamilyOwnerConflictIfNeeded(entity: .recurringBillPlan, recordID: plan.id) {
+            return
+        }
+
         let ownerUserID = plan.flatMap { billOwnerMap[$0.id] } ?? selectedSubjectUserID
         guard canEdit(ownerUserID: ownerUserID, resourceType: .bill) else {
             presentEditPermissionPrompt(
@@ -958,6 +1010,11 @@ struct PlanningView: View {
     }
 
     private func openInstallmentEditorIfAllowed(plan: InstallmentPlan?, dueItem: PlanningRecurringDueSnapshot?) {
+        if let plan,
+           presentFamilyOwnerConflictIfNeeded(entity: .installmentPlan, recordID: plan.id) {
+            return
+        }
+
         let ownerUserID = plan.flatMap { installmentOwnerMap[$0.id] } ?? selectedSubjectUserID
         guard canEdit(ownerUserID: ownerUserID, resourceType: .installment) else {
             presentEditPermissionPrompt(
@@ -973,6 +1030,15 @@ struct PlanningView: View {
     }
 
     private func openDuePaymentIfAllowed(_ item: PlanningRecurringDueSnapshot) {
+        if presentFamilyOwnerConflictIfNeeded(entity: .dueOccurrenceRecord, recordID: item.id) {
+            return
+        }
+
+        if let entity = syncEntity(for: duePermissionResource(for: item).type),
+           presentFamilyOwnerConflictIfNeeded(entity: entity, recordID: item.sourceID) {
+            return
+        }
+
         let ownerUserID = dueOwnerUserID(for: item)
         let resource = duePermissionResource(for: item)
         guard canEdit(ownerUserID: ownerUserID, resourceType: resource.type, resourceID: resource.resourceID) else {
@@ -1042,6 +1108,37 @@ struct PlanningView: View {
         guard let walletID else { return false }
         return familyContextStore.canUseWallet(walletID: walletID, ownerUserID: ownerUserID)
             && familyContextStore.canEdit(ownerUserID: ownerUserID, resourceType: .wallet, resourceID: walletID)
+    }
+
+    private func presentFamilyOwnerConflictIfNeeded(entity: MistiaSyncEntity, recordID: UUID) -> Bool {
+        guard sessionStore.hasFamilyOwnerPushConflict(entity: entity, recordID: recordID) else {
+            return false
+        }
+        familyOwnerConflictAlert = PlanningFamilyOwnerConflictAlert(entity: entity, recordID: recordID)
+        return true
+    }
+
+    private func syncEntity(for resourceType: MistiaFamilyNotificationResourceType) -> MistiaSyncEntity? {
+        switch resourceType {
+        case .wallet, .card:
+            return .wallet
+        case .category:
+            return .category
+        case .budget:
+            return .budgetPlan
+        case .goal:
+            return .savingsGoal
+        case .transaction, .debt, .familyTransfer:
+            return .transaction
+        case .bill:
+            return .recurringBillPlan
+        case .installment:
+            return .installmentPlan
+        case .due:
+            return .dueOccurrenceRecord
+        case .permission:
+            return nil
+        }
     }
 
     private func presentCreditCardWalletPermissionPrompt(

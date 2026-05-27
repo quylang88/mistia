@@ -103,12 +103,53 @@ private enum SessionSyncTrigger {
     case backgroundRefresh
 }
 
+struct FamilyOwnerPushConflict: Codable, Equatable, Hashable, Identifiable {
+    let entity: MistiaSyncEntity
+    let recordID: UUID
+    let ownerUserID: UUID
+    let kind: MistiaSyncMutationKind
+    let detectedAt: Date
+
+    var id: String {
+        Self.key(entity: entity, recordID: recordID)
+    }
+
+    init(
+        entity: MistiaSyncEntity,
+        recordID: UUID,
+        ownerUserID: UUID,
+        kind: MistiaSyncMutationKind,
+        detectedAt: Date = .now
+    ) {
+        self.entity = entity
+        self.recordID = recordID
+        self.ownerUserID = ownerUserID
+        self.kind = kind
+        self.detectedAt = detectedAt
+    }
+
+    init(mutation: MistiaSyncMutation, detectedAt: Date = .now) {
+        self.init(
+            entity: mutation.entity,
+            recordID: mutation.recordID,
+            ownerUserID: mutation.subjectUserID,
+            kind: mutation.kind,
+            detectedAt: detectedAt
+        )
+    }
+
+    static func key(entity: MistiaSyncEntity, recordID: UUID) -> String {
+        "\(entity.rawValue):\(recordID.uuidString.lowercased())"
+    }
+}
+
 @MainActor
 @Observable
 final class SessionStore {
     // MARK: - Auto-sync Configuration
     private static let AUTOMATIC_SYNC_INTERVAL: TimeInterval = 1_200 // 20 minutes in seconds
     private static let QUEUED_AUTO_SYNC_DEBOUNCE: Duration = .milliseconds(600)
+    private static let FAMILY_OWNER_PUSH_CONFLICTS_KEY = "mistia.familyOwnerPushConflicts.v1"
     var summary: SessionSummary?
     var isWorking = false
     var isManualSyncInProgress = false
@@ -131,6 +172,7 @@ final class SessionStore {
     var pendingAuthenticationPrompt: SessionPendingAuthenticationPrompt?
     var isAuthTransitioning = false
     var isBootstrapping = false
+    var familyOwnerPushConflicts: [FamilyOwnerPushConflict] = []
 
     var networkStatus: SessionNetworkStatus = .checking
     var remoteUnavailableReason: String?
@@ -182,6 +224,7 @@ final class SessionStore {
         self.connectivityMonitor = providedConnectivityMonitor ?? SessionConnectivityMonitor()
         isAutoSyncEnabled = userDefaults.bool(forKey: MistiaAppStorageKey.syncAutoEnabled)
         legacyLocalModeProfileUserID = Self.storedLocalModeProfileUserID(in: userDefaults)
+        familyOwnerPushConflicts = Self.loadFamilyOwnerPushConflicts(from: userDefaults)
         requiresManualSyncAfterRestore = Self.storedManualSyncReviewRequired(
             in: userDefaults,
             profileID: launchState?.activeProfileDescriptor?.id
@@ -1172,6 +1215,38 @@ final class SessionStore {
 
     func protectedQueuedRecordIDs() -> Set<String> {
         syncCoordinator.queuedMutationIDs()
+    }
+
+    func hasFamilyOwnerPushConflict(entity: MistiaSyncEntity, recordID: UUID) -> Bool {
+        familyOwnerPushConflict(entity: entity, recordID: recordID) != nil
+    }
+
+    func familyOwnerPushConflict(
+        entity: MistiaSyncEntity,
+        recordID: UUID
+    ) -> FamilyOwnerPushConflict? {
+        let key = FamilyOwnerPushConflict.key(entity: entity, recordID: recordID)
+        return familyOwnerPushConflicts.first { $0.id == key }
+    }
+
+    func discardFamilyOwnerPushConflictAndRefresh(
+        entity: MistiaSyncEntity,
+        recordID: UUID,
+        familyContextStore: FamilyContextStore
+    ) async {
+        guard let conflict = familyOwnerPushConflict(entity: entity, recordID: recordID) else {
+            return
+        }
+
+        syncCoordinator.removeQueuedMutation(entity: entity, recordID: recordID)
+        clearFamilyOwnerPushConflict(entity: entity, recordID: recordID)
+        pendingFamilyOwnerPush = hasQueuedFamilyOwnerMutations()
+
+        await familyContextStore.refreshAccessibleFinance(
+            sessionStore: self,
+            userIDs: [conflict.ownerUserID],
+            preserveLocalNewerRows: false
+        )
     }
 
     private func handleSignInFailure(_ error: Error, email: String) {
@@ -2627,6 +2702,7 @@ final class SessionStore {
             lastErrorMessage = nil
             return true
         } catch {
+            recordFamilyOwnerPushConflictIfNeeded(from: error)
             pendingFamilyOwnerPush = hasQueuedFamilyOwnerMutations()
             applySyncErrorState(error)
             return false
@@ -2678,6 +2754,7 @@ final class SessionStore {
             pendingFamilyOwnerPush = hasQueuedFamilyOwnerMutations(activeUserID: session.user.id)
             return true
         } catch {
+            recordFamilyOwnerPushConflictIfNeeded(from: error)
             pendingFamilyOwnerPush = hasQueuedFamilyOwnerMutations(activeUserID: session.user.id)
             throw error
         }
@@ -2709,8 +2786,54 @@ final class SessionStore {
         possibleDuplicateCount = 0
         pendingInitialSyncChoice = nil
         syncCoordinator.clearQueuedMutations()
+        clearFamilyOwnerPushConflicts()
         MistiaSyncBackgroundScheduler.shared.cancelPendingRefresh()
         clearPendingAuthenticationState()
+    }
+
+    private func recordFamilyOwnerPushConflictIfNeeded(from error: Error) {
+        guard let cloudFirstError = error as? MistiaFamilyCloudFirstPushError,
+              let mutation = cloudFirstError.mutation else {
+            return
+        }
+        recordFamilyOwnerPushConflict(for: mutation)
+    }
+
+    private func recordFamilyOwnerPushConflict(for mutation: MistiaSyncMutation) {
+        let conflict = FamilyOwnerPushConflict(mutation: mutation)
+        familyOwnerPushConflicts.removeAll { $0.id == conflict.id }
+        familyOwnerPushConflicts.append(conflict)
+        persistFamilyOwnerPushConflicts()
+    }
+
+    private func clearFamilyOwnerPushConflict(entity: MistiaSyncEntity, recordID: UUID) {
+        let key = FamilyOwnerPushConflict.key(entity: entity, recordID: recordID)
+        familyOwnerPushConflicts.removeAll { $0.id == key }
+        persistFamilyOwnerPushConflicts()
+    }
+
+    private func clearFamilyOwnerPushConflicts() {
+        familyOwnerPushConflicts.removeAll()
+        userDefaults.removeObject(forKey: Self.FAMILY_OWNER_PUSH_CONFLICTS_KEY)
+    }
+
+    private func persistFamilyOwnerPushConflicts() {
+        guard !familyOwnerPushConflicts.isEmpty else {
+            userDefaults.removeObject(forKey: Self.FAMILY_OWNER_PUSH_CONFLICTS_KEY)
+            return
+        }
+
+        guard let data = try? JSONEncoder.mistiaSyncEncoder.encode(familyOwnerPushConflicts) else {
+            return
+        }
+        userDefaults.set(data, forKey: Self.FAMILY_OWNER_PUSH_CONFLICTS_KEY)
+    }
+
+    private static func loadFamilyOwnerPushConflicts(from userDefaults: UserDefaults) -> [FamilyOwnerPushConflict] {
+        guard let data = userDefaults.data(forKey: FAMILY_OWNER_PUSH_CONFLICTS_KEY) else {
+            return []
+        }
+        return (try? JSONDecoder.mistiaSyncDecoder.decode([FamilyOwnerPushConflict].self, from: data)) ?? []
     }
 }
 

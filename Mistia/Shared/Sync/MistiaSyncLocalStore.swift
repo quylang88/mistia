@@ -733,6 +733,7 @@ enum MistiaSyncLocalStore {
         _ rows: [RemoteLedgerTransaction],
         protectedRecordIDs: Set<String>,
         familyCategoryScopedTo localUserID: UUID? = nil,
+        preserveLocalNewerRows: Bool = true,
         in container: ModelContainer
     ) throws {
         let context = ModelContext(container)
@@ -796,7 +797,8 @@ enum MistiaSyncLocalStore {
             )
             let remoteRecord = MistiaSyncUploadRecord.transaction(row)
 
-            if row.syncVersion > localTransaction.remoteVersion,
+            if preserveLocalNewerRows,
+               row.syncVersion > localTransaction.remoteVersion,
                localTransaction.updatedAt > row.updatedAt,
                localRecord.payloadFingerprint != remoteRecord.payloadFingerprint {
                 try saveConflict(

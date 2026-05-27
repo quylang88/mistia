@@ -30669,6 +30669,72 @@
         }
       }
     },
+    "shared.sync.familyOwnerPushConflict.alertMessage": {
+      "localizations": {
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mục này đã thay đổi trên cloud. Mistia sẽ làm mới dữ liệu rồi bạn có thể thử lại. Thay đổi chưa đẩy của bạn sẽ bị bỏ."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This item changed in the cloud. Mistia will refresh the data, then you can try again. Your unpushed change will be discarded."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "この項目はクラウドで変更されました。Mistia がデータを更新するので、その後もう一度お試しください。未送信の変更は破棄されます。"
+          }
+        }
+      }
+    },
+    "shared.sync.familyOwnerPushConflict.alertTitle": {
+      "localizations": {
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dữ liệu đã thay đổi"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Data changed"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "データが変更されました"
+          }
+        }
+      }
+    },
+    "shared.sync.familyOwnerPushConflict.badge": {
+      "localizations": {
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Đã có thay đổi trên cloud"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Changed in cloud"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "クラウドで変更あり"
+          }
+        }
+      }
+    },
     "shared.sync.receiptanalysis.couldnTAnalyzeThisReceiptRightNow": {
       "localizations": {
         "vi": {
@@ -33085,6 +33151,72 @@
           "stringUnit": {
             "state": "translated",
             "value": "閉じる"
+          }
+        }
+      }
+    },
+    "transactions.transactions.cloudChangedAlertMessage": {
+      "localizations": {
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mục này đã thay đổi trên cloud. Mistia sẽ làm mới dữ liệu rồi bạn có thể thử lại. Thay đổi chưa đẩy của bạn sẽ bị bỏ."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This item changed in the cloud. Mistia will refresh the data, then you can try again. Your unpushed change will be discarded."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "この項目はクラウドで変更されました。Mistia がデータを更新するので、その後もう一度お試しください。未送信の変更は破棄されます。"
+          }
+        }
+      }
+    },
+    "transactions.transactions.cloudChangedAlertTitle": {
+      "localizations": {
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dữ liệu đã thay đổi"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Data changed"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "データが変更されました"
+          }
+        }
+      }
+    },
+    "transactions.transactions.cloudChangedBadge": {
+      "localizations": {
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Đã có thay đổi trên cloud"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Changed in cloud"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "クラウドで変更あり"
           }
         }
       }

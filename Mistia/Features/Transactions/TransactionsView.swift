@@ -58,16 +58,28 @@ private struct TransactionsInfoAlert: Identifiable {
     let message: String
 }
 
+private struct TransactionsFamilyOwnerConflictAlert: Identifiable {
+    let entity: MistiaSyncEntity
+    let recordID: UUID
+
+    var id: String {
+        FamilyOwnerPushConflict.key(entity: entity, recordID: recordID)
+    }
+}
+
 private enum TransactionsAlertPresentation: Identifiable {
     case info(TransactionsInfoAlert)
     case permission(TransactionsPermissionPrompt)
+    case familyOwnerConflict(TransactionsFamilyOwnerConflictAlert)
 
-    var id: UUID {
+    var id: String {
         switch self {
         case .info(let alert):
-            alert.id
+            return alert.id.uuidString
         case .permission(let prompt):
-            prompt.id
+            return prompt.id.uuidString
+        case .familyOwnerConflict(let alert):
+            return alert.id
         }
     }
 
@@ -77,6 +89,8 @@ private enum TransactionsAlertPresentation: Identifiable {
             alert.title
         case .permission(let prompt):
             prompt.title
+        case .familyOwnerConflict:
+            L10n.shared.sync.familyOwnerPushConflict.alertTitle
         }
     }
 
@@ -86,6 +100,8 @@ private enum TransactionsAlertPresentation: Identifiable {
             alert.message
         case .permission(let prompt):
             prompt.message
+        case .familyOwnerConflict:
+            L10n.shared.sync.familyOwnerPushConflict.alertMessage
         }
     }
 }
@@ -171,6 +187,7 @@ struct TransactionsView: View {
     @State private var destination: TransactionsNavigationDestination?
     @State private var permissionPrompt: TransactionsPermissionPrompt?
     @State private var infoAlert: TransactionsInfoAlert?
+    @State private var familyOwnerConflictAlert: TransactionsFamilyOwnerConflictAlert?
     @State private var visibleTransactionLimit = TransactionsListPaging.initialLimit
     @State private var listSnapshotCache: TransactionsListSnapshotCache?
 
@@ -197,6 +214,9 @@ struct TransactionsView: View {
     }
 
     private var activeAlert: TransactionsAlertPresentation? {
+        if let familyOwnerConflictAlert {
+            return .familyOwnerConflict(familyOwnerConflictAlert)
+        }
         if let permissionPrompt {
             return .permission(permissionPrompt)
         }
@@ -684,6 +704,7 @@ struct TransactionsView: View {
                 get: { activeAlert != nil },
                 set: { isPresented in
                     if !isPresented {
+                        familyOwnerConflictAlert = nil
                         permissionPrompt = nil
                         infoAlert = nil
                     }
@@ -694,6 +715,18 @@ struct TransactionsView: View {
             switch alert {
             case .info:
                 Button(L10n.common.ok) {}
+            case .familyOwnerConflict(let conflict):
+                Button(L10n.common.ok) {
+                    Task { @MainActor in
+                        await sessionStore.discardFamilyOwnerPushConflictAndRefresh(
+                            entity: conflict.entity,
+                            recordID: conflict.recordID,
+                            familyContextStore: familyContextStore
+                        )
+                        familyOwnerConflictAlert = nil
+                        listSnapshotCache = nil
+                    }
+                }
             case .permission(let prompt):
                 Button(prompt.actionTitle) {
                     prompt.action()
@@ -1073,6 +1106,14 @@ struct TransactionsView: View {
     }
 
     private func openTransactionEditorIfAllowed(_ transaction: LedgerTransaction) {
+        guard !sessionStore.hasFamilyOwnerPushConflict(entity: .transaction, recordID: transaction.id) else {
+            familyOwnerConflictAlert = TransactionsFamilyOwnerConflictAlert(
+                entity: .transaction,
+                recordID: transaction.id
+            )
+            return
+        }
+
         if transaction.primaryKind == .transfer,
            transaction.transferSubtype == .familyTransfer {
             editorTarget = TransactionEditorTarget(transaction: transaction)
@@ -1322,6 +1363,7 @@ private struct TransactionSummaryMetric: View {
 private struct TransactionSectionCard: View {
     @Environment(\.colorScheme) private var colorScheme
     @Environment(FamilyContextStore.self) private var familyContextStore
+    @Environment(SessionStore.self) private var sessionStore
     let section: TransactionSectionSnapshot
     let transactionsByID: [UUID: LedgerTransaction]
     let transactionAuditMap: [UUID: TransactionAuditRecord]
@@ -1367,7 +1409,11 @@ private struct TransactionSectionCard: View {
                                     auditRecord: transactionAuditMap[transaction.id],
                                     walletOwnerMap: walletOwnerMap,
                                     transactionOwnerMap: transactionOwnerMap,
-                                    familyContextStore: familyContextStore
+                                    familyContextStore: familyContextStore,
+                                    hasFamilyOwnerConflict: sessionStore.hasFamilyOwnerPushConflict(
+                                        entity: .transaction,
+                                        recordID: transaction.id
+                                    )
                                 )
                                     .padding(.horizontal, 14)
                                     .padding(.vertical, 12)
@@ -1400,6 +1446,7 @@ private struct TransactionRow: View {
     let walletOwnerMap: [UUID: UUID]
     let transactionOwnerMap: [UUID: UUID]
     let familyContextStore: FamilyContextStore
+    let hasFamilyOwnerConflict: Bool
 
     private var icon: String {
         switch record.primaryKind {
@@ -1631,6 +1678,13 @@ private struct TransactionRow: View {
                         TransactionMiniBadge(
                             title: subtype.title,
                             tint: Color(red: 0.29, green: 0.56, blue: 0.96)
+                        )
+                    }
+
+                    if hasFamilyOwnerConflict {
+                        TransactionMiniBadge(
+                            title: L10n.shared.sync.familyOwnerPushConflict.badge,
+                            tint: MistiaAccent.amber.color
                         )
                     }
                 }

@@ -31,7 +31,14 @@ private enum FamilyActivityNotificationAction: String {
 }
 
 enum MistiaFamilyCloudFirstPushError: LocalizedError {
-    case remoteChanged
+    case remoteChanged(MistiaSyncMutation)
+
+    var mutation: MistiaSyncMutation? {
+        switch self {
+        case .remoteChanged(let mutation):
+            return mutation
+        }
+    }
 
     var errorDescription: String? {
         L10n.shared.sync.mistiasynccoordinator.thisDataChangedInTheCloudRefresh
@@ -83,6 +90,10 @@ final class SyncCoordinator {
 
     func queuedMutations() -> [MistiaSyncMutation] {
         outbox.allMutations
+    }
+
+    func removeQueuedMutation(entity: MistiaSyncEntity, recordID: UUID) {
+        outbox.remove(entity: entity, recordID: recordID)
     }
 
     func clearQueuedMutations() {
@@ -663,7 +674,7 @@ final class SyncCoordinator {
 
         if mutation.baseVersion == 0 {
             guard remoteRecord == nil else {
-                throw MistiaFamilyCloudFirstPushError.remoteChanged
+                throw MistiaFamilyCloudFirstPushError.remoteChanged(mutation)
             }
 
             let created = try await remoteStore.create(
@@ -687,11 +698,11 @@ final class SyncCoordinator {
         }
 
         guard let remoteRecord, remoteRecord.deletedAt == nil else {
-            throw MistiaFamilyCloudFirstPushError.remoteChanged
+            throw MistiaFamilyCloudFirstPushError.remoteChanged(mutation)
         }
 
         guard remoteRecord.syncVersion == mutation.baseVersion else {
-            throw MistiaFamilyCloudFirstPushError.remoteChanged
+            throw MistiaFamilyCloudFirstPushError.remoteChanged(mutation)
         }
 
         guard let updated = try await remoteStore.conditionalUpdate(
@@ -700,7 +711,7 @@ final class SyncCoordinator {
             subjectUserID: mutation.subjectUserID,
             session: session
         ) else {
-            throw MistiaFamilyCloudFirstPushError.remoteChanged
+            throw MistiaFamilyCloudFirstPushError.remoteChanged(mutation)
         }
 
         try MistiaSyncLocalStore.applyRemoteRecord(
@@ -751,7 +762,7 @@ final class SyncCoordinator {
         }
 
         guard remoteRecord.syncVersion == mutation.baseVersion else {
-            throw MistiaFamilyCloudFirstPushError.remoteChanged
+            throw MistiaFamilyCloudFirstPushError.remoteChanged(mutation)
         }
 
         guard let deletedRecord = try await remoteStore.conditionalDelete(
@@ -763,7 +774,7 @@ final class SyncCoordinator {
             deviceID: deviceID,
             session: session
         ) else {
-            throw MistiaFamilyCloudFirstPushError.remoteChanged
+            throw MistiaFamilyCloudFirstPushError.remoteChanged(mutation)
         }
 
         try MistiaSyncLocalStore.applyRemoteRecord(

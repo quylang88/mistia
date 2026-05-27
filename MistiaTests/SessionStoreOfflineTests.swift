@@ -538,6 +538,131 @@ final class SessionStoreOfflineTests: XCTestCase {
         XCTAssertEqual(syncRemoteStore.createdSubjectUserIDs, [memberUserID])
     }
 
+    func testFamilyOwnerRemoteChangeCreatesConflictMarkerAndKeepsQueuedMutation() async throws {
+        let session = makeSession()
+        let memberUserID = UUID()
+        let container = try storeTestContainer()
+        let syncRemoteStore = SessionSyncRemoteStoreSpy()
+        let store = try makeSessionStore(
+            authService: SessionAuthServiceSpy(
+                persistedSession: session,
+                refreshResult: .success(session)
+            ),
+            userProfileStore: UserProfileStoreSpy(),
+            networkStatus: .connected,
+            modelContainer: container,
+            syncCoordinator: SyncCoordinator(
+                modelContainer: container,
+                remoteStore: syncRemoteStore,
+                outbox: MistiaSyncOutbox(
+                    defaults: UserDefaults(suiteName: "MistiaTests.\(UUID().uuidString)") ?? .standard,
+                    key: "family-owner-remote-change"
+                )
+            )
+        )
+        let wallet = LedgerWallet(
+            name: "Member cash",
+            kind: .cash,
+            iconSymbolName: "banknote",
+            iconColorHex: "#34C759"
+        )
+        container.mainContext.insert(wallet)
+        try container.mainContext.save()
+        syncRemoteStore.fetchRecordResult = .wallet(remoteWallet(
+            id: wallet.id,
+            userID: memberUserID,
+            name: "Cloud member cash",
+            syncVersion: 2
+        ))
+
+        await store.bootstrapIfNeeded()
+        store.requiresInitialSync = false
+        store.lastSyncAt = .now
+
+        store.recordUpsert(
+            entity: .wallet,
+            recordID: wallet.id,
+            modifiedAt: wallet.updatedAt,
+            subjectUserIDOverride: memberUserID
+        )
+
+        await waitUntil("family owner conflict marker appears") {
+            store.hasFamilyOwnerPushConflict(entity: .wallet, recordID: wallet.id)
+        }
+        let conflict = try XCTUnwrap(store.familyOwnerPushConflict(entity: .wallet, recordID: wallet.id))
+        XCTAssertEqual(conflict.ownerUserID, memberUserID)
+        XCTAssertEqual(conflict.kind, .upsert)
+        XCTAssertTrue(store.protectedQueuedRecordIDs().contains("ledger_wallets:\(wallet.id.uuidString.lowercased())"))
+    }
+
+    func testDiscardFamilyOwnerConflictRemovesQueuedMutationAndRefreshesOwnerFinance() async throws {
+        let session = makeSession()
+        let memberUserID = UUID()
+        let container = try storeTestContainer()
+        let syncRemoteStore = SessionSyncRemoteStoreSpy()
+        let store = try makeSessionStore(
+            authService: SessionAuthServiceSpy(
+                persistedSession: session,
+                refreshResult: .success(session)
+            ),
+            userProfileStore: UserProfileStoreSpy(),
+            networkStatus: .connected,
+            modelContainer: container,
+            syncCoordinator: SyncCoordinator(
+                modelContainer: container,
+                remoteStore: syncRemoteStore,
+                outbox: MistiaSyncOutbox(
+                    defaults: UserDefaults(suiteName: "MistiaTests.\(UUID().uuidString)") ?? .standard,
+                    key: "family-owner-discard"
+                )
+            )
+        )
+        let familyService = FamilyRemoteServiceSpy(
+            snapshot: makeFamilySnapshot(userID: session.user.id, ownerUserID: memberUserID)
+        )
+        let familyStore = FamilyContextStore(
+            modelContainer: container,
+            service: familyService
+        )
+        let wallet = LedgerWallet(
+            name: "Member cash",
+            kind: .cash,
+            iconSymbolName: "banknote",
+            iconColorHex: "#34C759"
+        )
+        container.mainContext.insert(wallet)
+        try container.mainContext.save()
+        syncRemoteStore.fetchRecordResult = .wallet(remoteWallet(
+            id: wallet.id,
+            userID: memberUserID,
+            name: "Cloud member cash",
+            syncVersion: 2
+        ))
+
+        await store.bootstrapIfNeeded()
+        store.requiresInitialSync = false
+        store.lastSyncAt = .now
+        store.recordUpsert(
+            entity: .wallet,
+            recordID: wallet.id,
+            modifiedAt: wallet.updatedAt,
+            subjectUserIDOverride: memberUserID
+        )
+        await waitUntil("family owner conflict marker appears") {
+            store.hasFamilyOwnerPushConflict(entity: .wallet, recordID: wallet.id)
+        }
+
+        await store.discardFamilyOwnerPushConflictAndRefresh(
+            entity: .wallet,
+            recordID: wallet.id,
+            familyContextStore: familyStore
+        )
+
+        XCTAssertFalse(store.hasFamilyOwnerPushConflict(entity: .wallet, recordID: wallet.id))
+        XCTAssertFalse(store.protectedQueuedRecordIDs().contains("ledger_wallets:\(wallet.id.uuidString.lowercased())"))
+        XCTAssertEqual(familyService.accessibleFinanceUserIDBatches.map(Set.init), [Set([memberUserID])])
+    }
+
     func testForegroundCatchUpRunsWhenLastSyncIsOlderThanTwentyMinutes() async throws {
         let session = makeSession()
         let container = try storeTestContainer()
@@ -1549,6 +1674,34 @@ final class SessionStoreOfflineTests: XCTestCase {
         )
     }
 
+    private func remoteWallet(
+        id: UUID,
+        userID: UUID,
+        name: String,
+        syncVersion: Int64
+    ) -> RemoteLedgerWallet {
+        RemoteLedgerWallet(
+            userID: userID,
+            id: id,
+            name: name,
+            kindRawValue: LedgerWalletKind.cash.rawValue,
+            iconSymbolName: "banknote",
+            iconColorHex: "#34C759",
+            currencyCode: "JPY",
+            openingBalanceMinor: 0,
+            institutionDisplayName: nil,
+            institutionPresetKey: nil,
+            sortOrder: 0,
+            isArchived: false,
+            archivedAt: nil,
+            createdAt: Date(),
+            updatedAt: Date(),
+            deletedAt: nil,
+            syncVersion: syncVersion,
+            lastModifiedByDeviceID: UUID()
+        )
+    }
+
     private func waitUntil(
         _ description: String,
         timeout: Duration = .seconds(2),
@@ -1701,6 +1854,7 @@ private final class UserProfileStoreSpy: UserProfileRemoteStoring {
 private final class SessionSyncRemoteStoreSpy: MistiaRemoteStore {
     private(set) var fetchSnapshotSubjectUserIDs: [UUID?] = []
     private(set) var createdSubjectUserIDs: [UUID] = []
+    var fetchRecordResult: MistiaSyncUploadRecord?
 
     var fetchSnapshotCallCount: Int {
         fetchSnapshotSubjectUserIDs.count
@@ -1721,7 +1875,7 @@ private final class SessionSyncRemoteStoreSpy: MistiaRemoteStore {
         subjectUserID: UUID,
         session: SupabaseAuthSession
     ) async throws -> MistiaSyncUploadRecord? {
-        nil
+        fetchRecordResult
     }
 
     func create(

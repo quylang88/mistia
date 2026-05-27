@@ -397,6 +397,26 @@ final class FamilyContextStore {
         }
     }
 
+    func refreshAccessibleFinance(
+        sessionStore: SessionStore,
+        userIDs: Set<UUID>,
+        preserveLocalNewerRows: Bool = true
+    ) async {
+        guard let session = await prepareRemoteSession(using: sessionStore) else { return }
+
+        do {
+            try await refreshAccessibleFinance(
+                sessionStore: sessionStore,
+                session: session,
+                userIDs: userIDs,
+                preserveLocalNewerRows: preserveLocalNewerRows
+            )
+            lastErrorMessage = nil
+        } catch {
+            lastErrorMessage = visibleErrorMessage(for: error, sessionStore: sessionStore)
+        }
+    }
+
     func deleteFamily(sessionStore: SessionStore) async {
         guard let familyID = family?.id else { return }
         guard let session = await prepareRemoteSession(using: sessionStore) else { return }
@@ -1250,12 +1270,28 @@ final class FamilyContextStore {
     private func refreshAccessibleFinance(
         sessionStore: SessionStore,
         session: SupabaseAuthSession,
-        scope: FamilyAccessibleFinanceScope = .allAccessible
+        scope: FamilyAccessibleFinanceScope = .allAccessible,
+        preserveLocalNewerRows: Bool = true
     ) async throws {
         var accessibleUserIDs = viewableTargetUserIDs.union(operableTargetUserIDs)
         if scope == .membersOnly {
             accessibleUserIDs.remove(session.user.id)
         }
+        try await refreshAccessibleFinance(
+            sessionStore: sessionStore,
+            session: session,
+            userIDs: accessibleUserIDs,
+            preserveLocalNewerRows: preserveLocalNewerRows
+        )
+    }
+
+    private func refreshAccessibleFinance(
+        sessionStore: SessionStore,
+        session: SupabaseAuthSession,
+        userIDs: Set<UUID>,
+        preserveLocalNewerRows: Bool
+    ) async throws {
+        let accessibleUserIDs = userIDs
         guard !accessibleUserIDs.isEmpty else { return }
 
         let financeSnapshot = try await service.fetchAccessibleFinanceSnapshot(
@@ -1283,7 +1319,7 @@ final class FamilyContextStore {
             nonTransactionSnapshot,
             shouldPruneMissing: false,
             protectedRecordIDs: protectedRecordIDs,
-            preserveLocalNewerRows: true,
+            preserveLocalNewerRows: preserveLocalNewerRows,
             familyCategoryScopedTo: session.user.id,
             familyCategoryPruneOwnerIDs: accessibleUserIDs.subtracting([session.user.id]),
             in: modelContainer
@@ -1292,6 +1328,7 @@ final class FamilyContextStore {
             reconciledFinanceSnapshot.transactions,
             protectedRecordIDs: protectedRecordIDs,
             familyCategoryScopedTo: session.user.id,
+            preserveLocalNewerRows: preserveLocalNewerRows,
             in: modelContainer
         )
     }
