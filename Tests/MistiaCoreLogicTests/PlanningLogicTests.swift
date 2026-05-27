@@ -1224,6 +1224,36 @@ final class PlanningLogicTests: XCTestCase {
         )
     }
 
+    func testCreditCardAutoPaymentDecisionRetriesAcrossMonthForFiveDaysAfterDueDate() {
+        let paymentWalletID = UUID()
+        let statement = makeCreditCardStatement(
+            paymentWalletID: paymentWalletID,
+            status: .pending,
+            state: .overdue,
+            dueDate: makeDate(year: 2026, month: 3, day: 30)
+        )
+
+        XCTAssertEqual(
+            PlanningLogic.creditCardAutoPaymentDecision(
+                statement: statement,
+                sourceWalletBalanceMinor: 40_000,
+                referenceDate: makeDate(year: 2026, month: 4, day: 2),
+                calendar: calendar
+            ),
+            .payable
+        )
+
+        XCTAssertEqual(
+            PlanningLogic.creditCardAutoPaymentDecision(
+                statement: statement,
+                sourceWalletBalanceMinor: 40_000,
+                referenceDate: makeDate(year: 2026, month: 4, day: 5),
+                calendar: calendar
+            ),
+            .notDue
+        )
+    }
+
     func testInstallmentOccurrenceGenerationHonorsFrequencyAndCycleLimit() {
         let selectedMonth = makeDate(year: 2026, month: 5, day: 1)
         let plans = [
@@ -1430,7 +1460,8 @@ final class PlanningLogicTests: XCTestCase {
         walletID: UUID = UUID(),
         paymentWalletID: UUID?,
         status: PlanningDueOccurrenceStatus,
-        state: PlanningCreditCardStatementState
+        state: PlanningCreditCardStatementState,
+        dueDate: Date? = nil
     ) -> PlanningCreditCardStatementSnapshot {
         PlanningCreditCardStatementSnapshot(
             id: "\(walletID.uuidString.lowercased())-2026-02",
@@ -1441,7 +1472,7 @@ final class PlanningLogicTests: XCTestCase {
             last4: "1234",
             statementMonth: makeDate(year: 2026, month: 2, day: 1),
             closingDate: makeDate(year: 2026, month: 3, day: 10),
-            dueDate: makeDate(year: 2026, month: 3, day: 26),
+            dueDate: dueDate ?? makeDate(year: 2026, month: 3, day: 26),
             amountMinor: 32_456,
             availableCreditMinor: 100_000,
             paymentSourceWalletID: paymentWalletID,

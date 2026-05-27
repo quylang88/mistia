@@ -1711,12 +1711,11 @@ nonisolated enum PlanningLogic {
 
         let today = calendar.startOfDay(for: referenceDate)
         let dueDay = calendar.startOfDay(for: statement.dueDate)
-        let currentMonth = startOfMonth(for: referenceDate, calendar: calendar)
-        let dueMonth = startOfMonth(for: statement.dueDate, calendar: calendar)
-        guard currentMonth == dueMonth else {
+        guard today >= dueDay else {
             return .notDue
         }
-        guard today >= dueDay else {
+        let lastRetryDay = calendar.date(byAdding: .day, value: 5, to: dueDay) ?? dueDay
+        guard today <= lastRetryDay else {
             return .notDue
         }
 

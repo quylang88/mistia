@@ -814,6 +814,112 @@ final class SessionStoreOfflineTests: XCTestCase {
         XCTAssertFalse(rows.contains { $0.body.localizedCaseInsensitiveContains("Mercard") })
     }
 
+    func testCreditCardStatementMaintenanceReusesExistingAutoPaymentTransaction() async throws {
+        let currentUserID = UUID()
+        let session = makeSession(userID: currentUserID)
+        let store = try makeSessionStore(
+            authService: SessionAuthServiceSpy(persistedSession: session),
+            userProfileStore: UserProfileStoreSpy(),
+            networkStatus: .disconnected
+        )
+        await store.bootstrapIfNeeded()
+
+        let calendar = Calendar(identifier: .gregorian)
+        let statementMonth = try XCTUnwrap(calendar.date(from: DateComponents(year: 2026, month: 2, day: 1)))
+        let expenseDate = try XCTUnwrap(calendar.date(from: DateComponents(year: 2026, month: 2, day: 12, hour: 12)))
+        let dueDate = try XCTUnwrap(calendar.date(from: DateComponents(year: 2026, month: 3, day: 26, hour: 9)))
+        let seedDate = try XCTUnwrap(calendar.date(from: DateComponents(year: 2026, month: 1, day: 1)))
+
+        let paymentWallet = LedgerWallet(
+            name: "Main",
+            kind: .bank,
+            iconSymbolName: "building.columns.fill",
+            iconColorHex: "#2F80ED",
+            openingBalanceMinor: 100_000,
+            createdAt: seedDate,
+            updatedAt: seedDate
+        )
+        let cardWallet = LedgerWallet(
+            name: "SMBC Card",
+            kind: .creditCard,
+            iconSymbolName: "creditcard.fill",
+            iconColorHex: "#E5484D",
+            openingBalanceMinor: 0,
+            createdAt: seedDate,
+            updatedAt: seedDate
+        )
+        let profile = CreditCardProfile(
+            issuerName: "SMBC",
+            creditLimitMinor: 200_000,
+            statementClosingDay: 10,
+            paymentDueDay: 26,
+            autoPayEnabled: true,
+            createdAt: seedDate,
+            updatedAt: seedDate,
+            wallet: cardWallet,
+            paymentSourceWallet: paymentWallet
+        )
+        cardWallet.creditCardProfile = profile
+        let charge = LedgerTransaction(
+            primaryKind: .expense,
+            title: "Card charge",
+            amountMinor: 32_456,
+            occurredAt: expenseDate,
+            createdAt: expenseDate,
+            updatedAt: expenseDate,
+            sourceWallet: cardWallet
+        )
+        let existingPayment = LedgerTransaction(
+            primaryKind: .transfer,
+            transferSubtype: .internalTransfer,
+            title: "Auto payment for SMBC Card",
+            amountMinor: 32_456,
+            occurredAt: dueDate,
+            createdAt: dueDate,
+            updatedAt: dueDate,
+            sourceWallet: paymentWallet,
+            destinationWallet: cardWallet
+        )
+        let staleOccurrence = DueOccurrenceRecord(
+            sourceKind: .creditCard,
+            sourceID: cardWallet.id,
+            selectedMonthKey: PlanningLogic.monthKey(for: statementMonth, calendar: calendar),
+            scheduledDate: dueDate,
+            amountMinorSnapshot: 32_456,
+            status: .pending,
+            createdAt: seedDate,
+            updatedAt: seedDate
+        )
+
+        let context = store.currentModelContainer.mainContext
+        [paymentWallet, cardWallet].forEach(context.insert)
+        context.insert(profile)
+        context.insert(charge)
+        context.insert(existingPayment)
+        context.insert(staleOccurrence)
+        try context.save()
+
+        await MistiaCreditCardStatementMaintenance.run(
+            modelContext: context,
+            sessionStore: store,
+            referenceDate: dueDate,
+            calendar: calendar
+        )
+
+        let transactions = try context.fetch(FetchDescriptor<LedgerTransaction>())
+        let autoPayments = transactions.filter {
+            $0.primaryKind == .transfer
+                && $0.transferSubtype == .internalTransfer
+                && $0.sourceWallet?.id == paymentWallet.id
+                && $0.destinationWallet?.id == cardWallet.id
+                && $0.amountMinor == 32_456
+                && calendar.isDate($0.occurredAt, inSameDayAs: dueDate)
+        }
+        XCTAssertEqual(autoPayments.count, 1)
+        XCTAssertEqual(staleOccurrence.status, .paid)
+        XCTAssertEqual(staleOccurrence.linkedTransactionID, existingPayment.id)
+    }
+
     func testRecurringBillMaintenanceIgnoresFamilyMemberBills() async throws {
         let currentUserID = UUID()
         let memberUserID = UUID()
