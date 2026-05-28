@@ -637,9 +637,12 @@ struct TransactionsView: View {
                     title: L10n.transactions.transactions.transactions,
                     embedsInNavigationStack: false,
                     showsLeadingAvatar: false,
-                    leadingSystemImage: "doc.viewfinder",
+                    leadingSystemImage: familyContextStore.isViewingOtherMemberContext ? nil : "doc.viewfinder",
                     trailingSystemImage: nil,
-                    onLeadingTap: { destination = .aiBill },
+                    onLeadingTap: {
+                        guard !familyContextStore.isViewingOtherMemberContext else { return }
+                        destination = .aiBill
+                    },
                     contentSpacing: 18,
                     contentBottomPadding: 150,
                     titleDisplayMode: .large,

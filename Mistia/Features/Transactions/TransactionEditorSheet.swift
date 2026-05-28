@@ -1206,7 +1206,11 @@ struct TransactionEditorSheet: View {
     }
 
     private var shouldShowReceiptSection: Bool {
-        draft.primaryKind == .expense || draft.primaryKind == .income
+        isReceiptFeatureAvailable && (draft.primaryKind == .expense || draft.primaryKind == .income)
+    }
+
+    private var isReceiptFeatureAvailable: Bool {
+        !familyContextStore.isViewingOtherMemberContext
     }
 
     private var shouldShowNotesSection: Bool {
@@ -1506,6 +1510,7 @@ struct TransactionEditorSheet: View {
         guard !didLoadReceiptDraft else { return }
         didLoadReceiptDraft = true
 
+        guard isReceiptFeatureAvailable else { return }
         guard let transaction = target.transaction else { return }
 
         do {
@@ -1553,6 +1558,7 @@ struct TransactionEditorSheet: View {
 
     private func presentInitialReceiptScannerIfNeeded() {
         guard target.startsReceiptScan,
+              isReceiptFeatureAvailable,
               let receiptInitialSource = target.receiptInitialSource,
               target.transaction == nil,
               !didAutoPresentReceiptScanner else {
@@ -1578,6 +1584,7 @@ struct TransactionEditorSheet: View {
 
     private func applyReceiptPrefillIfNeeded() {
         guard !didApplyReceiptPrefill,
+              isReceiptFeatureAvailable,
               target.transaction == nil,
               receiptDraft == nil,
               let receiptImage = target.prefill?.receiptImage else {
@@ -1589,10 +1596,12 @@ struct TransactionEditorSheet: View {
     }
 
     private func handlePickedReceiptImage(_ image: UIImage) {
+        guard isReceiptFeatureAvailable else { return }
         processReceiptImage(image, shouldAnalyze: true)
     }
 
     private func processReceiptImage(_ image: UIImage, shouldAnalyze: Bool) {
+        guard isReceiptFeatureAvailable else { return }
         receiptProcessingTask?.cancel()
         isProcessingReceiptImage = true
         receiptProcessingTask = Task { @MainActor in
@@ -1629,7 +1638,7 @@ struct TransactionEditorSheet: View {
     }
 
     private func analyzeCurrentReceiptDraft() {
-        guard !isAnalyzingReceipt, let receiptDraft else { return }
+        guard isReceiptFeatureAvailable, !isAnalyzingReceipt, let receiptDraft else { return }
 
         guard sessionStore.canPerformRemoteActions else {
             alertMessage = L10n.transactions.transactioneditor.receiptAINeedsSignInAndNetwork

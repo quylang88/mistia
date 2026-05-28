@@ -602,8 +602,12 @@ struct OverviewView: View {
                 embedsInNavigationStack: false,
                 leadingInitials: sessionStore.summary?.initials ?? "MI",
                 leadingAvatarURL: sessionStore.summary?.avatarURL,
+                isLeadingEnabled: !familyContextStore.isViewingOtherMemberContext,
                 trailingSystemImage: nil,
-                onLeadingTap: { destination = .profile },
+                onLeadingTap: {
+                    guard !familyContextStore.isViewingOtherMemberContext else { return }
+                    destination = .profile
+                },
                 contentSpacing: 18,
                 titleDisplayMode: .large,
                 pinnedHeader: { EmptyView() },

@@ -797,11 +797,14 @@ private struct MistiaShortcutSettingsView: View {
         }
 
         let utilitySelections: [MistiaShortcutSelection] = {
-            var selections: [MistiaShortcutSelection] = [
-                .receiptScan,
+            var selections: [MistiaShortcutSelection] = []
+            if !familyContextStore.isViewingOtherMemberContext {
+                selections.append(.receiptScan)
+            }
+            selections.append(contentsOf: [
                 .backupRestore,
                 .archivedItems
-            ]
+            ])
             // syncNow only available when signed in AND initial sync is completed
             if sessionStore.isSignedIn && !sessionStore.requiresInitialSync {
                 selections.append(.syncNow)

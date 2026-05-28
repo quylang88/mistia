@@ -3488,15 +3488,28 @@ private func familyInviteStatusTint(_ status: FamilyInviteStatus) -> Color {
 
 // MARK: - Sharing Sheet
 
-private struct FamilySharingChange: Identifiable {
-    let id = UUID()
-    let granteeUserID: UUID
-    let ownerUserID: UUID
+private struct FamilySharingPermissionKey: Hashable {
     let resourceType: MistiaFamilyNotificationResourceType
     let resourceID: UUID?
     let scope: MistiaFamilyPermissionScope
+
+    var sortKey: String {
+        [
+            resourceType.rawValue,
+            resourceID?.uuidString.lowercased() ?? "",
+            scope.rawValue
+        ].joined(separator: ":")
+    }
+}
+
+private struct FamilySharingPermissionCommit {
+    let key: FamilySharingPermissionKey
     let isGranted: Bool
-    let title: String
+}
+
+private struct FamilySharingManagerCommit {
+    let resourceType: MistiaFamilyNotificationResourceType
+    let managerUserID: UUID
 }
 
 private struct FamilySharingSheet: View {
@@ -3510,8 +3523,10 @@ private struct FamilySharingSheet: View {
 
     let member: FamilyMember
 
-    @State private var pendingChange: FamilySharingChange?
-    @State private var updatingPlanningManager: MistiaFamilyNotificationResourceType?
+    @State private var stagedPermissionValues: [FamilySharingPermissionKey: Bool] = [:]
+    @State private var stagedPlanningManagerValues: [MistiaFamilyNotificationResourceType: UUID] = [:]
+    @State private var isApplyingSharingChanges = false
+    @State private var sharingErrorMessage: String?
 
     private var ownerUserID: UUID? {
         sessionStore.activeLocalProfileUserID ?? sessionStore.signedInUserID
@@ -3539,6 +3554,14 @@ private struct FamilySharingSheet: View {
                 if let remoteUnavailableReason = sessionStore.remoteUnavailableReason {
                     Section {
                         Text(remoteUnavailableReason)
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+
+                if let sharingErrorMessage {
+                    Section {
+                        Text(sharingErrorMessage)
                             .font(.footnote)
                             .foregroundStyle(.secondary)
                     }
@@ -3687,7 +3710,7 @@ private struct FamilySharingSheet: View {
                     }
                 }
             }
-            .disabled(!sessionStore.canPerformRemoteActions || ownerUserID == nil)
+            .disabled(!sessionStore.canPerformRemoteActions || ownerUserID == nil || isApplyingSharingChanges)
             .navigationTitle(L10n.family.family.sharing)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -3696,47 +3719,39 @@ private struct FamilySharingSheet: View {
                         dismiss()
                     } label: {
                         Image(systemName: "xmark")
+                            .font(.system(size: 16, weight: .semibold))
+                            .foregroundStyle(.secondary)
                     }
                     .accessibilityLabel(L10n.family.family.close)
+                    .disabled(isApplyingSharingChanges)
                 }
 
                 ToolbarItem(placement: .topBarTrailing) {
                     Button {
-                        dismiss()
+                        applyStagedSharingChanges()
                     } label: {
-                        Image(systemName: "checkmark")
+                        if isApplyingSharingChanges {
+                            ProgressView()
+                                .controlSize(.small)
+                                .tint(Color(red: 0.88, green: 0.78, blue: 1.0))
+                                .frame(width: 30, height: 30)
+                        } else {
+                            Image(systemName: "checkmark")
+                                .font(.system(size: 14, weight: .bold))
+                                .foregroundStyle(Color(red: 0.88, green: 0.78, blue: 1.0))
+                                .frame(width: 30, height: 30)
+                        }
                     }
+                    .buttonStyle(.glassProminent)
+                    .buttonBorderShape(.circle)
+                    .tint(Color(red: 0.43, green: 0.23, blue: 0.76))
+                    .disabled(
+                        isApplyingSharingChanges
+                            || (hasStagedSharingChanges && (!sessionStore.canPerformRemoteActions || ownerUserID == nil))
+                    )
                     .accessibilityLabel(L10n.family.family.done)
                 }
             }
-        }
-        .alert(item: $pendingChange) { change in
-            let title = change.isGranted
-                ? L10n.family.family.shareAccess
-                : L10n.family.family.revokeAccess
-            let message = change.isGranted
-                ? L10n.family.family.youWillShareValueAccessWithValue(String(describing: change.title), String(describing: member.displayName))
-                : L10n.family.family.youWillRevokeValueAccessFromValue(String(describing: change.title), String(describing: member.displayName))
-
-            if change.isGranted {
-                return Alert(
-                    title: Text(title),
-                    message: Text(message),
-                    primaryButton: .default(Text(L10n.family.family.confirm)) {
-                        applySharingChange(change)
-                    },
-                    secondaryButton: .cancel(Text(L10n.common.cancel))
-                )
-            }
-
-            return Alert(
-                title: Text(title),
-                message: Text(message),
-                primaryButton: .destructive(Text(L10n.family.family.confirm)) {
-                        applySharingChange(change)
-                },
-                secondaryButton: .cancel(Text(L10n.common.cancel))
-            )
         }
     }
 
@@ -3750,16 +3765,15 @@ private struct FamilySharingSheet: View {
                 title,
                 isOn: Binding(
                     get: {
-                        resolvedPlanningManagerUserID(for: resourceType, family: family) == member.userID
+                        stagedPlanningManagerUserID(for: resourceType, family: family) == member.userID
                     },
                     set: { isManager in
-                        setPlanningManager(resourceType: resourceType, isManager: isManager)
+                        stagePlanningManager(resourceType: resourceType, isManager: isManager, family: family)
                     }
                 )
             )
             .tint(MistiaAccent.purple.color)
             .toggleStyle(.switch)
-            .disabled(updatingPlanningManager != nil)
         }
     }
 
@@ -3771,28 +3785,20 @@ private struct FamilySharingSheet: View {
         scope: MistiaFamilyPermissionScope
     ) -> some View {
         if let ownerUserID {
+            let key = FamilySharingPermissionKey(
+                resourceType: resourceType,
+                resourceID: resourceID,
+                scope: scope
+            )
             Toggle(
                 title,
                 isOn: Binding(
                     get: {
-                        familyContextStore.hasPermission(
-                            granteeUserID: member.userID,
-                            ownerUserID: ownerUserID,
-                            resourceType: resourceType,
-                            resourceID: resourceID,
-                            scope: scope
-                        )
+                        stagedPermissionValue(for: key, ownerUserID: ownerUserID)
                     },
                     set: { isGranted in
-                        pendingChange = FamilySharingChange(
-                            granteeUserID: member.userID,
-                            ownerUserID: ownerUserID,
-                            resourceType: resourceType,
-                            resourceID: resourceID,
-                            scope: scope,
-                            isGranted: isGranted,
-                            title: title
-                        )
+                        stagedPermissionValues[key] = isGranted
+                        sharingErrorMessage = nil
                     }
                 )
             )
@@ -3815,39 +3821,143 @@ private struct FamilySharingSheet: View {
         }
     }
 
-    private func setPlanningManager(
+    private func stagedPlanningManagerUserID(
+        for resourceType: MistiaFamilyNotificationResourceType,
+        family: FamilyGroupRecord
+    ) -> UUID {
+        stagedPlanningManagerValues[resourceType] ?? resolvedPlanningManagerUserID(for: resourceType, family: family)
+    }
+
+    private func stagePlanningManager(
         resourceType: MistiaFamilyNotificationResourceType,
-        isManager: Bool
+        isManager: Bool,
+        family: FamilyGroupRecord
     ) {
-        guard let family = familyContextStore.family else { return }
         let currentManagerUserID = resolvedPlanningManagerUserID(for: resourceType, family: family)
         guard isManager || currentManagerUserID == member.userID else { return }
-        let nextManagerUserID = isManager
-            ? (member.userID == family.ownerUserID ? nil : member.userID)
-            : nil
+        stagedPlanningManagerValues[resourceType] = isManager ? member.userID : family.ownerUserID
+        sharingErrorMessage = nil
+    }
 
-        Task { @MainActor in
-            updatingPlanningManager = resourceType
-            await familyContextStore.setFamilyPlanningManager(
-                resourceType: resourceType,
-                managerUserID: nextManagerUserID,
-                sessionStore: sessionStore
-            )
-            updatingPlanningManager = nil
+    private func currentPermissionValue(
+        for key: FamilySharingPermissionKey,
+        ownerUserID: UUID
+    ) -> Bool {
+        familyContextStore.hasPermission(
+            granteeUserID: member.userID,
+            ownerUserID: ownerUserID,
+            resourceType: key.resourceType,
+            resourceID: key.resourceID,
+            scope: key.scope
+        )
+    }
+
+    private func stagedPermissionValue(
+        for key: FamilySharingPermissionKey,
+        ownerUserID: UUID
+    ) -> Bool {
+        stagedPermissionValues[key] ?? currentPermissionValue(for: key, ownerUserID: ownerUserID)
+    }
+
+    private var hasStagedSharingChanges: Bool {
+        guard let ownerUserID else { return false }
+        if stagedPermissionValues.contains(where: { key, isGranted in
+            currentPermissionValue(for: key, ownerUserID: ownerUserID) != isGranted
+        }) {
+            return true
+        }
+
+        guard let family = familyContextStore.family else {
+            return false
+        }
+
+        return stagedPlanningManagerValues.contains { resourceType, managerUserID in
+            resolvedPlanningManagerUserID(for: resourceType, family: family) != managerUserID
         }
     }
 
-    private func applySharingChange(_ change: FamilySharingChange) {
+    private func applyStagedSharingChanges() {
+        guard !isApplyingSharingChanges else { return }
+        guard hasStagedSharingChanges else {
+            dismiss()
+            return
+        }
+        guard sessionStore.canPerformRemoteActions, let ownerUserID else { return }
+
+        let permissionCommits = stagedPermissionValues
+            .filter { key, isGranted in
+                currentPermissionValue(for: key, ownerUserID: ownerUserID) != isGranted
+            }
+            .map { key, isGranted in
+                FamilySharingPermissionCommit(key: key, isGranted: isGranted)
+            }
+            .sorted { $0.key.sortKey < $1.key.sortKey }
+
+        let managerCommits: [FamilySharingManagerCommit]
+        if let family = familyContextStore.family {
+            managerCommits = stagedPlanningManagerValues
+                .filter { resourceType, managerUserID in
+                    resolvedPlanningManagerUserID(for: resourceType, family: family) != managerUserID
+                }
+                .map { resourceType, managerUserID in
+                    FamilySharingManagerCommit(resourceType: resourceType, managerUserID: managerUserID)
+                }
+                .sorted { $0.resourceType.rawValue < $1.resourceType.rawValue }
+        } else {
+            managerCommits = []
+        }
+
         Task { @MainActor in
-            await familyContextStore.setPermissionGrant(
-                granteeUserID: change.granteeUserID,
-                ownerUserID: change.ownerUserID,
-                resourceType: change.resourceType,
-                resourceID: change.resourceID,
-                scope: change.scope,
-                isGranted: change.isGranted,
-                sessionStore: sessionStore
-            )
+            isApplyingSharingChanges = true
+            sharingErrorMessage = nil
+            var didFail = false
+
+            if let family = familyContextStore.family {
+                for commit in managerCommits {
+                    let managerUserID = commit.managerUserID == family.ownerUserID ? nil : commit.managerUserID
+                    let didApply = await familyContextStore.setFamilyPlanningManager(
+                        resourceType: commit.resourceType,
+                        managerUserID: managerUserID,
+                        sessionStore: sessionStore,
+                        refreshAfterChange: false
+                    )
+                    if !didApply {
+                        didFail = true
+                        break
+                    }
+                }
+            }
+
+            if !didFail {
+                for commit in permissionCommits {
+                    let didApply = await familyContextStore.setPermissionGrant(
+                        granteeUserID: member.userID,
+                        ownerUserID: ownerUserID,
+                        resourceType: commit.key.resourceType,
+                        resourceID: commit.key.resourceID,
+                        scope: commit.key.scope,
+                        isGranted: commit.isGranted,
+                        sessionStore: sessionStore,
+                        refreshAfterChange: false
+                    )
+                    if !didApply {
+                        didFail = true
+                        break
+                    }
+                }
+            }
+
+            if didFail {
+                sharingErrorMessage = familyContextStore.lastErrorMessage ?? sessionStore.remoteUnavailableReason
+                isApplyingSharingChanges = false
+                return
+            }
+
+            await familyContextStore.refresh(sessionStore: sessionStore)
+            stagedPermissionValues.removeAll()
+            stagedPlanningManagerValues.removeAll()
+            isApplyingSharingChanges = false
+            dismiss()
         }
     }
 }

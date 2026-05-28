@@ -408,6 +408,7 @@ struct MistiaPinnedTopBarScaffold<PinnedHeader: View, Content: View, TrailingAcc
     let title: String
     var embedsInNavigationStack: Bool = true
     var showsLeadingAvatar: Bool = true
+    var isLeadingEnabled: Bool = true
     var leadingInitials: String = "QL"
     var leadingAvatarURL: URL? = nil
     var leadingSystemImage: String? = nil
@@ -430,6 +431,7 @@ struct MistiaPinnedTopBarScaffold<PinnedHeader: View, Content: View, TrailingAcc
         showsLeadingAvatar: Bool = true,
         leadingInitials: String = "QL",
         leadingAvatarURL: URL? = nil,
+        isLeadingEnabled: Bool = true,
         leadingSystemImage: String? = nil,
         trailingSystemImage: String? = "bell",
         hidesSystemBackButton: Bool = false,
@@ -447,6 +449,7 @@ struct MistiaPinnedTopBarScaffold<PinnedHeader: View, Content: View, TrailingAcc
         self.title = title
         self.embedsInNavigationStack = embedsInNavigationStack
         self.showsLeadingAvatar = showsLeadingAvatar
+        self.isLeadingEnabled = isLeadingEnabled
         self.leadingInitials = leadingInitials
         self.leadingAvatarURL = leadingAvatarURL
         self.leadingSystemImage = leadingSystemImage
@@ -558,10 +561,14 @@ struct MistiaPinnedTopBarScaffold<PinnedHeader: View, Content: View, TrailingAcc
                     .symbolRenderingMode(.monochrome)
                     .foregroundStyle(.primary)
             }
+            .disabled(!isLeadingEnabled)
+            .opacity(isLeadingEnabled ? 1 : 0.45)
         } else if showsLeadingAvatar {
             MistiaHeaderCircleButton(action: onLeadingTap) {
                 MistiaAvatarBadge(initials: leadingInitials, avatarURL: leadingAvatarURL, size: 28)
             }
+            .disabled(!isLeadingEnabled)
+            .opacity(isLeadingEnabled ? 1 : 0.45)
         }
     }
 
@@ -588,6 +595,7 @@ extension MistiaPinnedTopBarScaffold where TrailingAccessory == EmptyView {
         showsLeadingAvatar: Bool = true,
         leadingInitials: String = "QL",
         leadingAvatarURL: URL? = nil,
+        isLeadingEnabled: Bool = true,
         leadingSystemImage: String? = nil,
         trailingSystemImage: String? = "bell",
         hidesSystemBackButton: Bool = false,
@@ -607,6 +615,7 @@ extension MistiaPinnedTopBarScaffold where TrailingAccessory == EmptyView {
             showsLeadingAvatar: showsLeadingAvatar,
             leadingInitials: leadingInitials,
             leadingAvatarURL: leadingAvatarURL,
+            isLeadingEnabled: isLeadingEnabled,
             leadingSystemImage: leadingSystemImage,
             trailingSystemImage: trailingSystemImage,
             hidesSystemBackButton: hidesSystemBackButton,
@@ -631,6 +640,7 @@ extension MistiaPinnedTopBarScaffold where PinnedHeader == EmptyView, TrailingAc
         showsLeadingAvatar: Bool = true,
         leadingInitials: String = "QL",
         leadingAvatarURL: URL? = nil,
+        isLeadingEnabled: Bool = true,
         leadingSystemImage: String? = nil,
         trailingSystemImage: String? = "bell",
         hidesSystemBackButton: Bool = false,
@@ -649,6 +659,7 @@ extension MistiaPinnedTopBarScaffold where PinnedHeader == EmptyView, TrailingAc
             showsLeadingAvatar: showsLeadingAvatar,
             leadingInitials: leadingInitials,
             leadingAvatarURL: leadingAvatarURL,
+            isLeadingEnabled: isLeadingEnabled,
             leadingSystemImage: leadingSystemImage,
             trailingSystemImage: trailingSystemImage,
             hidesSystemBackButton: hidesSystemBackButton,

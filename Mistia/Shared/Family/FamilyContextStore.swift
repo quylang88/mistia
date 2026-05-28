@@ -754,7 +754,8 @@ final class FamilyContextStore {
         resourceID: UUID?,
         scope: MistiaFamilyPermissionScope,
         isGranted: Bool,
-        sessionStore: SessionStore
+        sessionStore: SessionStore,
+        refreshAfterChange: Bool = true
     ) async -> Bool {
         guard let familyID = family?.id else { return false }
         guard let session = await prepareRemoteSession(using: sessionStore) else { return false }
@@ -772,7 +773,9 @@ final class FamilyContextStore {
             )
             upsertPermissionGrant(grant)
             lastErrorMessage = nil
-            await refresh(sessionStore: sessionStore)
+            if refreshAfterChange {
+                await refresh(sessionStore: sessionStore)
+            }
             return true
         } catch {
             lastErrorMessage = visibleErrorMessage(for: error, sessionStore: sessionStore)
@@ -784,7 +787,8 @@ final class FamilyContextStore {
     func setFamilyPlanningManager(
         resourceType: MistiaFamilyNotificationResourceType,
         managerUserID: UUID?,
-        sessionStore: SessionStore
+        sessionStore: SessionStore,
+        refreshAfterChange: Bool = true
     ) async -> Bool {
         guard let familyID = family?.id else { return false }
         guard resourceType == .budget || resourceType == .goal else { return false }
@@ -799,7 +803,9 @@ final class FamilyContextStore {
             )
             family = updatedFamily
             lastErrorMessage = nil
-            await refresh(sessionStore: sessionStore)
+            if refreshAfterChange {
+                await refresh(sessionStore: sessionStore)
+            }
             return true
         } catch {
             lastErrorMessage = visibleErrorMessage(for: error, sessionStore: sessionStore)

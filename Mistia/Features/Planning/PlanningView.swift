@@ -634,8 +634,12 @@ struct PlanningView: View {
                 embedsInNavigationStack: false,
                 leadingInitials: sessionStore.summary?.initials ?? "MI",
                 leadingAvatarURL: sessionStore.summary?.avatarURL,
+                isLeadingEnabled: !familyContextStore.isViewingOtherMemberContext,
                 trailingSystemImage: "calendar",
-                onLeadingTap: { destination = .profile },
+                onLeadingTap: {
+                    guard !familyContextStore.isViewingOtherMemberContext else { return }
+                    destination = .profile
+                },
                 onTrailingTap: { isMonthPickerPresented = true },
                 contentSpacing: 18,
                 titleDisplayMode: .large,

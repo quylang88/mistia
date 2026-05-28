@@ -283,6 +283,10 @@ struct ManagementView: View {
         familyContextStore.selectedSubjectUserID ?? sessionStore.activeLocalProfileUserID
     }
 
+    private var canOpenOwnProfile: Bool {
+        !familyContextStore.isViewingOtherMemberContext
+    }
+
     var body: some View {
         let renderSnapshot = self.renderSnapshot
 
@@ -416,6 +420,7 @@ struct ManagementView: View {
                 ManagementCard(tint: cardTint) {
                     VStack(spacing: 0) {
                         Button {
+                            guard canOpenOwnProfile else { return }
                             destination = .authPlaceholder
                         } label: {
                             HStack(spacing: profileRowSpacing) {
@@ -447,6 +452,8 @@ struct ManagementView: View {
                             .padding(.vertical, 13)
                         }
                         .buttonStyle(MistiaPressableButtonStyle(cornerRadius: 20))
+                        .disabled(!canOpenOwnProfile)
+                        .opacity(canOpenOwnProfile ? 1 : 0.55)
 
                         Divider()
                             .padding(.leading, 52)
@@ -511,8 +518,11 @@ struct ManagementView: View {
                 }
             } else {
                 ManagementSignedOutCard(accent: accentPurple, tint: cardTint) {
+                    guard canOpenOwnProfile else { return }
                     destination = .authPlaceholder
                 }
+                .disabled(!canOpenOwnProfile)
+                .opacity(canOpenOwnProfile ? 1 : 0.55)
             }
         }
     }
