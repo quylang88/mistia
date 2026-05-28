@@ -165,6 +165,21 @@ final class MistiaLocalizationTests: XCTestCase {
         XCTAssertEqual(decoded.occurredAt, localDate)
     }
 
+    func testSharedISO8601DateCodingHandlesRemoteSyncFormats() throws {
+        let date = try XCTUnwrap(MistiaISO8601DateCoding.date(from: "2026-05-06T09:15:49.204Z"))
+
+        XCTAssertEqual(
+            MistiaISO8601DateCoding.stringWithFractionalSeconds(from: date),
+            "2026-05-06T09:15:49.204Z"
+        )
+        XCTAssertEqual(
+            MistiaISO8601DateCoding
+                .date(from: "2026-05-06T09:15:49Z")
+                .map(MistiaISO8601DateCoding.stringWithFractionalSeconds(from:)),
+            "2026-05-06T09:15:49.000Z"
+        )
+    }
+
     func testRelativeLabelsFollowSelectedLanguage() {
         let sameDay = referenceDate.addingTimeInterval(-25 * 60)
         XCTAssertEqual(

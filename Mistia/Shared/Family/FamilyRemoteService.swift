@@ -1377,17 +1377,7 @@ struct FamilyRemoteService: FamilyRemoteServicing {
             decoder.dateDecodingStrategy = .custom { decoder in
                 let container = try decoder.singleValueContainer()
                 let value = try container.decode(String.self)
-                let fractionalSecondsFormatter = ISO8601DateFormatter()
-                fractionalSecondsFormatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-                fractionalSecondsFormatter.timeZone = .gmt
-                if let date = fractionalSecondsFormatter.date(from: value) {
-                    return date
-                }
-
-                let secondsFormatter = ISO8601DateFormatter()
-                secondsFormatter.formatOptions = [.withInternetDateTime]
-                secondsFormatter.timeZone = .gmt
-                if let date = secondsFormatter.date(from: value) {
+                if let date = MistiaISO8601DateCoding.date(from: value) {
                     return date
                 }
 

@@ -634,8 +634,7 @@ private extension KeyedDecodingContainer {
         guard contains(key), !(try decodeNil(forKey: key)) else { return nil }
         let value = try decode(String.self, forKey: key).trimmingCharacters(in: .whitespacesAndNewlines)
         guard !value.isEmpty else { return nil }
-        if let date = ISO8601DateFormatter.mistiaSyncWithFractionalSeconds.date(from: value)
-            ?? ISO8601DateFormatter.mistiaSyncWithoutFractionalSeconds.date(from: value) {
+        if let date = MistiaISO8601DateCoding.date(from: value) {
             return date
         }
 

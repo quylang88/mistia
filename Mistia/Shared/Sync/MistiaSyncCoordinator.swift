@@ -273,14 +273,14 @@ final class SyncCoordinator {
 
         let snapshot = rawRemoteSnapshot
         let previousFingerprint = lastSnapshotFingerprint
-        try applySnapshot(snapshot)
+        let snapshotFingerprint = try applySnapshot(snapshot)
         onProgressUpdate?(1.0)
 
         if seededMissingRows && remoteWasEmpty {
             return .seeded(snapshot.activeRowCount)
         }
 
-        if snapshot.fingerprint != previousFingerprint {
+        if snapshotFingerprint != previousFingerprint {
             return (pushedMutations || seededMissingRows) ? .synced(snapshot.activeRowCount) : .pulled(snapshot.activeRowCount)
         }
 
@@ -288,23 +288,39 @@ final class SyncCoordinator {
     }
 
     private func sortedMutationsForPush(_ mutations: [MistiaSyncMutation]) -> [MistiaSyncMutation] {
-        mutations.sorted { a, b in
+        let categoryChildRecordIDs = categoryChildRecordIDsForPushSorting(mutations)
+
+        return mutations.sorted { a, b in
             if a.entity.pushPriority != b.entity.pushPriority {
                 return a.entity.pushPriority < b.entity.pushPriority
             }
 
             if a.entity == .category && b.entity == .category {
-                let aRecord = try? MistiaSyncLocalStore.exportRecord(for: a, from: modelContainer)
-                let bRecord = try? MistiaSyncLocalStore.exportRecord(for: b, from: modelContainer)
-                let aParent = aRecord?.parentID
-                let bParent = bRecord?.parentID
+                let aIsChild = categoryChildRecordIDs.contains(a.recordID)
+                let bIsChild = categoryChildRecordIDs.contains(b.recordID)
 
-                if aParent == nil && bParent != nil { return true }
-                if aParent != nil && bParent == nil { return false }
+                if !aIsChild && bIsChild { return true }
+                if aIsChild && !bIsChild { return false }
             }
 
             return a.modifiedAt < b.modifiedAt
         }
+    }
+
+    private func categoryChildRecordIDsForPushSorting(_ mutations: [MistiaSyncMutation]) -> Set<UUID> {
+        let categoryMutations = mutations.filter { $0.entity == .category }
+        guard !categoryMutations.isEmpty else { return [] }
+
+        var childRecordIDs: Set<UUID> = []
+        var inspectedRecordIDs: Set<UUID> = []
+        for mutation in categoryMutations where inspectedRecordIDs.insert(mutation.recordID).inserted {
+            guard let record = try? MistiaSyncLocalStore.exportRecord(for: mutation, from: modelContainer),
+                  record.parentID != nil else {
+                continue
+            }
+            childRecordIDs.insert(mutation.recordID)
+        }
+        return childRecordIDs
     }
 
     func pushQueuedMutationsOnly(
@@ -1316,14 +1332,17 @@ final class SyncCoordinator {
         return true
     }
 
-    private func applySnapshot(_ snapshot: MistiaRemoteSnapshot) throws {
+    @discardableResult
+    private func applySnapshot(_ snapshot: MistiaRemoteSnapshot) throws -> String {
         try MistiaSyncLocalStore.applySnapshotIncrementally(
             snapshot,
             shouldPruneMissing: false,
             protectedRecordIDs: queuedMutationIDs(),
             in: modelContainer
         )
-        lastSnapshotFingerprint = snapshot.fingerprint
+        let fingerprint = snapshot.fingerprint
+        lastSnapshotFingerprint = fingerprint
+        return fingerprint
     }
 
     private func resolveConflictingRecords(

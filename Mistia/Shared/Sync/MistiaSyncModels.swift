@@ -8,6 +8,45 @@ private enum MistiaSyncSerializationError: LocalizedError {
     }
 }
 
+enum MistiaISO8601DateCoding {
+    private static let withFractionalSecondsCacheKey = "MistiaISO8601DateCoding.withFractionalSeconds"
+    private static let withoutFractionalSecondsCacheKey = "MistiaISO8601DateCoding.withoutFractionalSeconds"
+
+    static func date(from value: String) -> Date? {
+        formatter(
+            cacheKey: withFractionalSecondsCacheKey,
+            formatOptions: [.withInternetDateTime, .withFractionalSeconds]
+        ).date(from: value)
+            ?? formatter(
+                cacheKey: withoutFractionalSecondsCacheKey,
+                formatOptions: [.withInternetDateTime]
+            ).date(from: value)
+    }
+
+    static func stringWithFractionalSeconds(from date: Date) -> String {
+        formatter(
+            cacheKey: withFractionalSecondsCacheKey,
+            formatOptions: [.withInternetDateTime, .withFractionalSeconds]
+        ).string(from: date)
+    }
+
+    private static func formatter(
+        cacheKey: String,
+        formatOptions: ISO8601DateFormatter.Options
+    ) -> ISO8601DateFormatter {
+        let threadDictionary = Thread.current.threadDictionary
+        if let cached = threadDictionary[cacheKey] as? ISO8601DateFormatter {
+            return cached
+        }
+
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = formatOptions
+        formatter.timeZone = .gmt
+        threadDictionary[cacheKey] = formatter
+        return formatter
+    }
+}
+
 nonisolated protocol MistiaRemoteRow: Codable {
     static var entity: MistiaSyncEntity { get }
 
@@ -659,15 +698,15 @@ nonisolated struct MistiaRemoteSnapshot: Codable {
     }
 
     var activeRowCount: Int {
-        activeWallets.count
-            + activeCreditCardProfiles.count
-            + activeCategories.count
-            + activeTransactions.count
-            + activeBudgetPlans.count
-            + activeSavingsGoals.count
-            + activeRecurringBillPlans.count
-            + activeInstallmentPlans.count
-            + activeDueOccurrences.count
+        wallets.activeRemoteRowCount
+            + creditCardProfiles.activeRemoteRowCount
+            + categories.activeRemoteRowCount
+            + transactions.activeRemoteRowCount
+            + budgetPlans.activeRemoteRowCount
+            + savingsGoals.activeRemoteRowCount
+            + recurringBillPlans.activeRemoteRowCount
+            + installmentPlans.activeRemoteRowCount
+            + dueOccurrences.activeRemoteRowCount
     }
 
     var hasRemoteData: Bool {
@@ -727,16 +766,23 @@ nonisolated struct MistiaRemoteSnapshot: Codable {
         encoder.keyEncodingStrategy = .convertToSnakeCase
         encoder.outputFormatting = [.sortedKeys]
         encoder.dateEncodingStrategy = .custom { date, encoder in
-            let formatter = ISO8601DateFormatter()
-            formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-            formatter.timeZone = .gmt
             var container = encoder.singleValueContainer()
-            try container.encode(formatter.string(from: date))
+            try container.encode(MistiaISO8601DateCoding.stringWithFractionalSeconds(from: date))
         }
         guard let data = try? encoder.encode(normalized) else {
             return UUID().uuidString
         }
         return data.base64EncodedString()
+    }
+}
+
+private extension Array where Element: MistiaRemoteRow {
+    nonisolated var activeRemoteRowCount: Int {
+        reduce(into: 0) { count, row in
+            if row.deletedAt == nil {
+                count += 1
+            }
+        }
     }
 }
 
@@ -1236,7 +1282,7 @@ enum MistiaSyncUploadRecord {
 
     private static func dateString(_ date: Date?) -> String {
         guard let date else { return "" }
-        return ISO8601DateFormatter.mistiaSyncWithFractionalSeconds.string(from: date)
+        return MistiaISO8601DateCoding.stringWithFractionalSeconds(from: date)
     }
 }
 
@@ -1305,8 +1351,7 @@ extension JSONDecoder {
         decoder.dateDecodingStrategy = .custom { decoder in
             let container = try decoder.singleValueContainer()
             let value = try container.decode(String.self)
-            if let date = ISO8601DateFormatter.mistiaSyncWithFractionalSeconds.date(from: value)
-                ?? ISO8601DateFormatter.mistiaSyncWithoutFractionalSeconds.date(from: value) {
+            if let date = MistiaISO8601DateCoding.date(from: value) {
                 return date
             }
             throw DecodingError.dataCorruptedError(
@@ -1322,8 +1367,7 @@ extension JSONDecoder {
         decoder.dateDecodingStrategy = .custom { decoder in
             let container = try decoder.singleValueContainer()
             let value = try container.decode(String.self)
-            if let date = ISO8601DateFormatter.mistiaSyncWithFractionalSeconds.date(from: value)
-                ?? ISO8601DateFormatter.mistiaSyncWithoutFractionalSeconds.date(from: value) {
+            if let date = MistiaISO8601DateCoding.date(from: value) {
                 return date
             }
             throw DecodingError.dataCorruptedError(
@@ -1339,8 +1383,7 @@ extension JSONDecoder {
         decoder.dateDecodingStrategy = .custom { decoder in
             let container = try decoder.singleValueContainer()
             let value = try container.decode(String.self)
-            if let date = ISO8601DateFormatter.mistiaSyncWithFractionalSeconds.date(from: value)
-                ?? ISO8601DateFormatter.mistiaSyncWithoutFractionalSeconds.date(from: value) {
+            if let date = MistiaISO8601DateCoding.date(from: value) {
                 return date
             }
             throw DecodingError.dataCorruptedError(
@@ -1359,7 +1402,7 @@ extension JSONEncoder {
         encoder.outputFormatting = [.sortedKeys]
         encoder.dateEncodingStrategy = .custom { date, encoder in
             var container = encoder.singleValueContainer()
-            try container.encode(ISO8601DateFormatter.mistiaSyncWithFractionalSeconds.string(from: date))
+            try container.encode(MistiaISO8601DateCoding.stringWithFractionalSeconds(from: date))
         }
         return encoder
     }
@@ -1369,7 +1412,7 @@ extension JSONEncoder {
         encoder.outputFormatting = [.sortedKeys]
         encoder.dateEncodingStrategy = .custom { date, encoder in
             var container = encoder.singleValueContainer()
-            try container.encode(ISO8601DateFormatter.mistiaSyncWithFractionalSeconds.string(from: date))
+            try container.encode(MistiaISO8601DateCoding.stringWithFractionalSeconds(from: date))
         }
         return encoder
     }
@@ -1379,7 +1422,7 @@ extension JSONEncoder {
         encoder.outputFormatting = [.sortedKeys]
         encoder.dateEncodingStrategy = .custom { date, encoder in
             var container = encoder.singleValueContainer()
-            try container.encode(ISO8601DateFormatter.mistiaSyncWithFractionalSeconds.string(from: date))
+            try container.encode(MistiaISO8601DateCoding.stringWithFractionalSeconds(from: date))
         }
         return encoder
     }

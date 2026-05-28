@@ -1216,8 +1216,7 @@ final class FamilyContextStore {
         decoder.dateDecodingStrategy = .custom { decoder in
             let container = try decoder.singleValueContainer()
             let value = try container.decode(String.self)
-            if let date = ISO8601DateFormatter.mistiaSyncWithFractionalSeconds.date(from: value)
-                ?? ISO8601DateFormatter.mistiaSyncWithoutFractionalSeconds.date(from: value) {
+            if let date = MistiaISO8601DateCoding.date(from: value) {
                 return date
             }
             throw DecodingError.dataCorruptedError(
@@ -1233,7 +1232,7 @@ final class FamilyContextStore {
         encoder.outputFormatting = [.sortedKeys]
         encoder.dateEncodingStrategy = .custom { date, encoder in
             var container = encoder.singleValueContainer()
-            try container.encode(ISO8601DateFormatter.mistiaSyncWithFractionalSeconds.string(from: date))
+            try container.encode(MistiaISO8601DateCoding.stringWithFractionalSeconds(from: date))
         }
         return encoder
     }
