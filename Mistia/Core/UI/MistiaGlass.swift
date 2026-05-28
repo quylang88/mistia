@@ -418,7 +418,7 @@ private struct MistiaAttentionPulseAvatar: View {
         MistiaAvatarBadge(initials: initials, avatarURL: avatarURL, size: size)
             .overlay {
                 Circle()
-                    .strokeBorder(pulseColor.opacity(pulseOpacity), lineWidth: 1.6)
+                    .strokeBorder(pulseColor.opacity(pulseOpacity), lineWidth: 2.0)
                     .scaleEffect(pulseScale)
                     .allowsHitTesting(false)
             }
@@ -442,19 +442,16 @@ private struct MistiaAttentionPulseAvatar: View {
         guard isActive, !accessibilityReduceMotion else { return }
 
         while !Task.isCancelled {
-            try? await Task.sleep(for: .seconds(5))
-            guard !Task.isCancelled else { return }
-
             await MainActor.run {
                 pulseScale = 1
-                pulseOpacity = 0.6
-                withAnimation(.easeOut(duration: 1.15)) {
-                    pulseScale = 1.62
+                pulseOpacity = 0.85
+                withAnimation(.easeOut(duration: 1.6)) {
+                    pulseScale = 2.2
                     pulseOpacity = 0
                 }
             }
 
-            try? await Task.sleep(for: .milliseconds(1200))
+            try? await Task.sleep(for: .seconds(2.5))
             guard !Task.isCancelled else { return }
             resetPulse()
         }

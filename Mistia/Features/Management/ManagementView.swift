@@ -477,16 +477,18 @@ struct ManagementView: View {
                                     showsStatus: false
                                 )
                                 .frame(width: profileLeadingVisualWidth, height: 50)
+                                .opacity(profileRow.opensOwnProfile ? 1 : 0.72)
 
                                 VStack(alignment: .leading, spacing: 5) {
                                     Text(profileRow.displayName)
                                         .font(.system(size: 20, weight: .bold, design: .rounded))
-                                        .foregroundStyle(.primary)
+                                        .foregroundStyle(profileRow.opensOwnProfile ? .primary : .secondary)
 
                                     Text(profileRow.email)
                                         .font(.system(size: 13, weight: .medium, design: .rounded))
                                         .foregroundStyle(.secondary)
                                 }
+                                .opacity(profileRow.opensOwnProfile ? 1 : 0.6)
 
                                 Spacer()
 
