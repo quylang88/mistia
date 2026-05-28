@@ -50,9 +50,12 @@ struct AIBillAnalysisView: View {
             }
             .padding(.horizontal, 18)
             .padding(.top, 16)
-            .padding(.bottom, 120)
+            .padding(.bottom, shouldShowAnalyzeButton ? 116 : 96)
         }
         .background(Color(UIColor.systemGroupedBackground).ignoresSafeArea())
+        .safeAreaInset(edge: .bottom) {
+            bottomAnalyzeSection
+        }
         .navigationTitle(L10n.transactions.aibill.aiBill)
         .navigationBarTitleDisplayMode(.inline)
         .navigationBarBackButtonHidden(true)
@@ -172,73 +175,80 @@ struct AIBillAnalysisView: View {
     }
 
     private var actionSection: some View {
-        VStack(spacing: 10) {
-            HStack(spacing: 10) {
-                PhotosPicker(
-                    selection: $photoItems,
-                    maxSelectionCount: max(1, imageLimit - bills.count),
-                    matching: .images
-                ) {
-                    Label {
-                        Text(L10n.transactions.aibill.addBills)
-                    } icon: {
-                        Image(systemName: "photo.on.rectangle")
-                            .font(.system(size: 15, weight: .bold))
+        HStack(spacing: 10) {
+            PhotosPicker(
+                selection: $photoItems,
+                maxSelectionCount: max(1, imageLimit - bills.count),
+                matching: .images
+            ) {
+                Label {
+                    Text(L10n.transactions.aibill.addBills)
+                } icon: {
+                    Image(systemName: "photo.on.rectangle")
+                        .font(.system(size: 15, weight: .bold))
+                }
+                .font(.system(size: 15, weight: .semibold, design: .rounded))
+                .foregroundStyle(actionControlForeground)
+                .frame(maxWidth: .infinity, minHeight: 46)
+                .background {
+                    actionControlBackground()
+                }
+            }
+            .buttonStyle(MistiaPressableButtonStyle(cornerRadius: 16, tint: actionControlForeground))
+            .disabled(bills.count >= imageLimit || isAnalyzing || isLoadingPhotos)
+
+            if UIImagePickerController.isSourceTypeAvailable(.camera) {
+                Button {
+                    guard bills.count < imageLimit else {
+                        showTooManyImagesAlert()
+                        return
                     }
-                    .font(.system(size: 15, weight: .semibold, design: .rounded))
-                    .foregroundStyle(actionControlForeground)
-                    .frame(maxWidth: .infinity, minHeight: 46)
-                    .background {
-                        actionControlBackground()
-                    }
+                    cameraSource = .camera
+                } label: {
+                    Image(systemName: "camera.fill")
+                        .font(.system(size: 15, weight: .bold))
+                        .foregroundStyle(actionControlForeground)
+                        .frame(width: 50, height: 46)
+                        .background {
+                            actionControlBackground()
+                        }
                 }
                 .buttonStyle(MistiaPressableButtonStyle(cornerRadius: 16, tint: actionControlForeground))
-                .disabled(bills.count >= imageLimit || isAnalyzing || isLoadingPhotos)
-
-                if UIImagePickerController.isSourceTypeAvailable(.camera) {
-                    Button {
-                        guard bills.count < imageLimit else {
-                            showTooManyImagesAlert()
-                            return
-                        }
-                        cameraSource = .camera
-                    } label: {
-                        Image(systemName: "camera.fill")
-                            .font(.system(size: 15, weight: .bold))
-                            .foregroundStyle(actionControlForeground)
-                            .frame(width: 50, height: 46)
-                            .background {
-                                actionControlBackground()
-                            }
-                    }
-                    .buttonStyle(MistiaPressableButtonStyle(cornerRadius: 16, tint: actionControlForeground))
-                    .disabled(isAnalyzing || isLoadingPhotos)
-                    .accessibilityLabel(L10n.transactions.transactioneditor.takePhoto)
-                }
+                .disabled(isAnalyzing || isLoadingPhotos)
+                .accessibilityLabel(L10n.transactions.transactioneditor.takePhoto)
             }
+        }
+    }
 
-            if shouldShowAnalyzeButton {
-                Button {
-                    analyzeBills()
-                } label: {
-                    HStack(spacing: 8) {
-                        if isAnalyzing {
-                            ProgressView()
-                                .controlSize(.small)
-                                .tint(.white)
-                        } else {
-                            Image(systemName: "sparkles")
-                        }
-                        Text(isAnalyzing ? L10n.transactions.aibill.analyzing : L10n.transactions.aibill.analyze)
+    @ViewBuilder
+    private var bottomAnalyzeSection: some View {
+        if shouldShowAnalyzeButton {
+            Button {
+                analyzeBills()
+            } label: {
+                HStack(spacing: 8) {
+                    if isAnalyzing {
+                        ProgressView()
+                            .controlSize(.small)
+                            .tint(.white)
+                    } else {
+                        Image(systemName: "sparkles")
+                            .font(.system(size: 16, weight: .bold))
                     }
-                    .font(.system(size: 15, weight: .bold, design: .rounded))
-                    .frame(maxWidth: .infinity)
+                    Text(isAnalyzing ? L10n.transactions.aibill.analyzing : L10n.transactions.aibill.analyze)
                 }
-                .buttonStyle(.glassProminent)
-                .buttonBorderShape(.capsule)
-                .tint(MistiaAccent.purple.color)
-                .disabled(isAnalyzing || !hasPendingAnalyzableBills)
+                .font(.system(size: 16.5, weight: .bold, design: .rounded))
+                .frame(maxWidth: .infinity)
+                .padding(.horizontal, 16)
+                .padding(.vertical, 10)
             }
+            .buttonStyle(.glassProminent)
+            .buttonBorderShape(.capsule)
+            .tint(MistiaAccent.purple.color)
+            .disabled(isAnalyzing || !hasPendingAnalyzableBills)
+            .padding(.horizontal, 32)
+            .padding(.top, 4)
+            .padding(.bottom, 6)
         }
     }
 
