@@ -3997,7 +3997,6 @@ struct ManagementBackupRestoreView: View {
                         }
                     }
                     .pickerStyle(.segmented)
-                    .tint(Color(UIColor.systemGray))
 
                     Text(restoreMode.localizedDescription)
                         .descriptionTextStyle()

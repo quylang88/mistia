@@ -2,14 +2,12 @@ import SwiftUI
 import UIKit
 
 struct MistiaNativeSegmentedControl<Option: Hashable>: View {
-    @Environment(\.colorScheme) private var colorScheme
     @Environment(\.locale) private var locale
     @Binding var selection: Option
 
     let options: [Option]
     let title: (Option) -> String
     var isEnabled: (Option) -> Bool = { _ in true }
-    var accent: Color = Color(UIColor.systemGray5)
 
     var body: some View {
         MistiaSegmentedControlRepresentable(
@@ -17,36 +15,10 @@ struct MistiaNativeSegmentedControl<Option: Hashable>: View {
             options: options,
             title: title,
             isEnabled: isEnabled,
-            localeIdentifier: locale.identifier,
-            selectedSegmentTintColor: selectedSegmentTintColor,
-            backgroundColor: backgroundColor,
-            selectedTextColor: selectedTextColor,
-            normalTextColor: normalTextColor
+            localeIdentifier: locale.identifier
         )
         .frame(maxWidth: .infinity)
         .frame(height: 32)
-    }
-
-    private var selectedSegmentTintColor: UIColor {
-        if colorScheme == .dark {
-            return UIColor.secondarySystemGroupedBackground
-        }
-        return UIColor.systemBackground
-    }
-
-    private var backgroundColor: UIColor {
-        return UIColor.secondarySystemGroupedBackground
-    }
-
-    private var selectedTextColor: UIColor {
-        UIColor.label
-    }
-
-    private var normalTextColor: UIColor {
-        if colorScheme == .dark {
-            return UIColor.secondaryLabel
-        }
-        return UIColor.secondaryLabel
     }
 }
 
@@ -57,10 +29,6 @@ private struct MistiaSegmentedControlRepresentable<Option: Hashable>: UIViewRepr
     let title: (Option) -> String
     let isEnabled: (Option) -> Bool
     let localeIdentifier: String
-    let selectedSegmentTintColor: UIColor
-    let backgroundColor: UIColor
-    let selectedTextColor: UIColor
-    let normalTextColor: UIColor
 
     func makeCoordinator() -> Coordinator {
         Coordinator(selection: $selection, options: options, isEnabled: isEnabled)
@@ -80,7 +48,6 @@ private struct MistiaSegmentedControlRepresentable<Option: Hashable>: UIViewRepr
         }
         control.setContentHuggingPriority(.defaultLow, for: .horizontal)
         control.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
-        updateAppearance(for: control)
         return control
     }
 
@@ -107,24 +74,6 @@ private struct MistiaSegmentedControlRepresentable<Option: Hashable>: UIViewRepr
         }
 
         control.selectedSegmentIndex = options.firstIndex(of: selection) ?? UISegmentedControl.noSegment
-        updateAppearance(for: control)
-    }
-
-    private func updateAppearance(for control: UISegmentedControl) {
-        control.selectedSegmentTintColor = selectedSegmentTintColor
-        control.backgroundColor = backgroundColor
-
-        let normalAttributes: [NSAttributedString.Key: Any] = [
-            .foregroundColor: normalTextColor,
-            .font: UIFont.systemFont(ofSize: 13, weight: .semibold)
-        ]
-        let selectedAttributes: [NSAttributedString.Key: Any] = [
-            .foregroundColor: selectedTextColor,
-            .font: UIFont.systemFont(ofSize: 13, weight: .semibold)
-        ]
-
-        control.setTitleTextAttributes(normalAttributes, for: .normal)
-        control.setTitleTextAttributes(selectedAttributes, for: .selected)
     }
 
     final class Coordinator: NSObject {

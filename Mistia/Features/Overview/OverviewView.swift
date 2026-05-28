@@ -1180,7 +1180,6 @@ private struct OverviewHeroCard: View {
                         }
                     }
                     .pickerStyle(.segmented)
-                    .tint(Color(UIColor.systemGray))
                     .accessibilityIdentifier("overview.hero.chart.mode")
 
                     if chartMode == .day {

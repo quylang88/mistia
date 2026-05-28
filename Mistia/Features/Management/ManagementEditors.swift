@@ -713,8 +713,7 @@ struct ManagementCategoryEditorSheet: View {
                         MistiaNativeSegmentedControl(
                             selection: $draft.kind,
                             options: TransactionCategoryKind.allCases,
-                            title: \.title,
-                            accent: Color(red: 0.43, green: 0.23, blue: 0.76)
+                            title: \.title
                         )
                     }
 
@@ -726,8 +725,7 @@ struct ManagementCategoryEditorSheet: View {
                         MistiaNativeSegmentedControl(
                             selection: $draft.hierarchyRole,
                             options: TransactionCategoryHierarchyRole.allCases,
-                            title: \.title,
-                            accent: Color(red: 0.43, green: 0.23, blue: 0.76)
+                            title: \.title
                         )
                         .disabled(!canEditHierarchyRole)
                         .opacity(canEditHierarchyRole ? 1 : 0.68)

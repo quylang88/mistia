@@ -523,7 +523,6 @@ struct TransactionEditorSheet: View {
                     }
                 }
                 .pickerStyle(.segmented)
-                .tint(Color(UIColor.systemGray))
                 .listRowInsets(EdgeInsets())
                 .listRowBackground(Color.clear)
             }
@@ -585,7 +584,6 @@ struct TransactionEditorSheet: View {
                         }
                     }
                     .pickerStyle(.segmented)
-                    .tint(Color(UIColor.systemGray))
                     .disabled(target.prefill?.lockedDebtIntent != nil || isExistingDebtTransaction)
                     .listRowInsets(EdgeInsets())
                     .listRowBackground(Color.clear)
@@ -648,7 +646,6 @@ struct TransactionEditorSheet: View {
                         Text(L10n.transactions.transactioneditor.enterManually).tag(MistiaCurrencyConversionMode.manual.rawValue)
                     }
                     .pickerStyle(.segmented)
-                    .tint(Color(UIColor.systemGray))
 
                     if selectedConversionMode == .manual {
                         if shouldShowDestinationAmountInput {

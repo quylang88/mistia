@@ -1810,16 +1810,11 @@ private struct PlanningModePicker: View {
 private struct PlanningDueModePicker: View {
     @Binding var selection: PlanningDueMode
 
-    private var accent: Color {
-        Color(red: 0.43, green: 0.23, blue: 0.76)
-    }
-
     var body: some View {
         MistiaNativeSegmentedControl(
             selection: $selection,
             options: PlanningDueMode.allCases,
-            title: \.title,
-            accent: accent
+            title: \.title
         )
     }
 }

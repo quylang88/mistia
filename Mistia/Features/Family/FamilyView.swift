@@ -616,7 +616,6 @@ private struct FamilyDistributionSection: View {
                     }
                 }
                 .pickerStyle(.segmented)
-                .tint(Color(UIColor.systemGray))
                 .padding(.horizontal, 4)
 
                 MistiaGlassCard(cornerRadius: 24, tint: cardTint) {
@@ -640,7 +639,6 @@ private struct FamilyDistributionSection: View {
                             }
                         }
                         .pickerStyle(.segmented)
-                        .tint(Color(UIColor.systemGray))
 
                         if resolvedMode == .spending {
                             MistiaCategorySpendingChartView(

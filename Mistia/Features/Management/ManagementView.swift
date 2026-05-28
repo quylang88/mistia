@@ -1598,16 +1598,11 @@ private struct ManagementEmptyState: View {
 private struct ManagementCategoryKindPicker: View {
     @Binding var selection: TransactionCategoryKind
 
-    private var accentPurple: Color {
-        MistiaAccent.purple.color
-    }
-
     var body: some View {
         MistiaNativeSegmentedControl(
             selection: $selection,
             options: TransactionCategoryKind.allCases,
-            title: \.title,
-            accent: accentPurple
+            title: \.title
         )
     }
 }
