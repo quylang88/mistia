@@ -719,7 +719,7 @@ struct TransactionsView: View {
         }
         .sheet(item: $debtSettlementTarget) { target in
             DebtSettlementSheet(target: target)
-                .presentationDetents([.medium, .large])
+                .presentationDetents([.large])
                 .presentationDragIndicator(.hidden)
         }
         .alert(
@@ -1907,13 +1907,15 @@ private struct DebtSettlementSheet: View {
     }
 
     private var activeOwnerUserID: UUID? {
-        familyContextStore.selectedSubjectUserID ?? walletPickerAccess.currentSelfUserID
+        walletPickerAccess.walletOwnerUserID(for: target.position.preferredWalletID)
+            ?? familyContextStore.selectedSubjectUserID
+            ?? walletPickerAccess.currentSelfUserID
     }
 
     private var availableWallets: [LedgerWallet] {
         walletPickerAccess.availableWallets(
             from: wallets,
-            preferredWalletIDs: Set([selectedWalletID].compactMap { $0 }),
+            preferredWalletIDs: Set([target.position.preferredWalletID, selectedWalletID].compactMap { $0 }),
             targetOwnerUserID: activeOwnerUserID,
             excludesCreditCards: true
         )
@@ -2007,7 +2009,12 @@ private struct DebtSettlementSheet: View {
         }
         .onAppear {
             amountText = String(target.amountMinor)
-            selectedWalletID = availableWallets.first?.id
+            if let preferredWalletID = target.position.preferredWalletID,
+               availableWallets.contains(where: { $0.id == preferredWalletID }) {
+                selectedWalletID = preferredWalletID
+            } else {
+                selectedWalletID = availableWallets.first?.id
+            }
         }
         .alert(
             L10n.transactions.transactioneditor.canTSaveYet,

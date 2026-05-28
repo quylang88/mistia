@@ -149,6 +149,7 @@ struct CounterpartyDebtSnapshot: Equatable, Identifiable {
     let displayName: String
     let netMinor: Int64
     let currencyCode: String
+    let preferredWalletID: UUID?
 
     var isReceivable: Bool {
         netMinor > 0
@@ -436,6 +437,12 @@ nonisolated enum TransactionLogic {
                 }
 
             guard total != 0 else { return nil }
+            let preferredIntent: TransactionDebtIntent = total > 0 ? .lend : .borrow
+            let preferredWalletID = groupedRecords
+                .filter { $0.debtIntent == preferredIntent && $0.sourceWalletID != nil }
+                .sorted(by: recordSort)
+                .first?
+                .sourceWalletID
 
             return CounterpartyDebtSnapshot(
                 id: key,
@@ -444,7 +451,8 @@ nonisolated enum TransactionLogic {
                     .first(where: { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty })
                     ?? L10n.shared.corelogic.transaction.unknownName,
                 netMinor: total,
-                currencyCode: MistiaCurrencyLogic.normalizedCode(first.sourceCurrencyCode)
+                currencyCode: MistiaCurrencyLogic.normalizedCode(first.sourceCurrencyCode),
+                preferredWalletID: preferredWalletID
             )
         }
         .sorted {
