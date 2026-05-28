@@ -24795,24 +24795,90 @@
         }
       }
     },
-    "shared.family.familycontext.viewingValue": {
+    "shared.family.memberViewing.avatarAccessibility": {
       "localizations": {
         "vi": {
           "stringUnit": {
             "state": "translated",
-            "value": "Đang xem: %@"
+            "value": "Đang xem dữ liệu của %@"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Viewing: %@"
+            "value": "Viewing %@'s data"
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "表示中: %@"
+            "value": "%@のデータを表示中"
+          }
+        }
+      }
+    },
+    "shared.family.memberViewing.confirmExit": {
+      "localizations": {
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Đồng ý"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Confirm"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "同意"
+          }
+        }
+      }
+    },
+    "shared.family.memberViewing.exitMessage": {
+      "localizations": {
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bạn có muốn thoát khỏi dữ liệu của %@ và quay lại dữ liệu của bạn không?"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Do you want to leave %@'s data and return to your data?"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@のデータ表示を終了して、自分のデータに戻りますか？"
+          }
+        }
+      }
+    },
+    "shared.family.memberViewing.exitTitle": {
+      "localizations": {
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Thoát khỏi chế độ xem dữ liệu?"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Leave data view?"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "データ表示を終了しますか？"
           }
         }
       }
@@ -24923,28 +24989,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "この招待コードはもう有効ではありません。"
-          }
-        }
-      }
-    },
-    "shared.family.familyscopeddata.viewing": {
-      "localizations": {
-        "vi": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Đang xem"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Viewing"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "表示中"
           }
         }
       }

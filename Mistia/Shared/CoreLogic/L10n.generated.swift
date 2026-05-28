@@ -2833,12 +2833,6 @@ nonisolated enum L10n {
                 static func valueWantsToValueYourValue(_ arg1: String, _ arg2: String, _ arg3: String, language: MistiaAppLanguage) -> String {
                     L10n.format("shared.family.familycontext.valueWantsToValueYourValue", vi: "%@ muốn %@ %@ của bạn.", en: "%@ wants to %@ your %@.", ja: "%@ があなたの%@を%@したいとリクエストしています。", language: language, arg1, arg2, arg3)
                 }
-                static func viewingValue(_ value: String) -> String {
-                    L10n.format("shared.family.familycontext.viewingValue", vi: "Đang xem: %@", en: "Viewing: %@", ja: "表示中: %@", value)
-                }
-                static func viewingValue(_ value: String, language: MistiaAppLanguage) -> String {
-                    L10n.format("shared.family.familycontext.viewingValue", vi: "Đang xem: %@", en: "Viewing: %@", ja: "表示中: %@", language: language, value)
-                }
                 static var youCanOnlyHaveUpTo: String { L10n.tr("shared.family.familycontext.youCanOnlyHaveUpTo", vi: "Bạn chỉ có thể có tối đa 2 lời mời đang chờ.", en: "You can only have up to 2 pending invites.", ja: "待機中の招待は最大2件までです。") }
                 static func youCanOnlyHaveUpTo(language: MistiaAppLanguage) -> String { L10n.tr("shared.family.familycontext.youCanOnlyHaveUpTo", vi: "Bạn chỉ có thể có tối đa 2 lời mời đang chờ.", en: "You can only have up to 2 pending invites.", ja: "待機中の招待は最大2件までです。", language: language) }
                 static var youVeBeenInvitedToJoinThe: String { L10n.tr("shared.family.familycontext.youVeBeenInvitedToJoinThe", vi: "Bạn đã được mời tham gia gia đình", en: "You've been invited to join the family", ja: "家族への招待が届いています") }
@@ -2854,9 +2848,23 @@ nonisolated enum L10n {
                 static func thisInviteCodeIsNoLongerValid(language: MistiaAppLanguage) -> String { L10n.tr("shared.family.familyremote.thisInviteCodeIsNoLongerValid", vi: "Mã mời này không còn hiệu lực.", en: "This invite code is no longer valid.", ja: "この招待コードはもう有効ではありません。", language: language) }
             }
 
-            nonisolated enum familyscopeddata {
-                static var viewing: String { L10n.tr("shared.family.familyscopeddata.viewing", vi: "Đang xem", en: "Viewing", ja: "表示中") }
-                static func viewing(language: MistiaAppLanguage) -> String { L10n.tr("shared.family.familyscopeddata.viewing", vi: "Đang xem", en: "Viewing", ja: "表示中", language: language) }
+            nonisolated enum memberViewing {
+                static func avatarAccessibility(_ value: String) -> String {
+                    L10n.format("shared.family.memberViewing.avatarAccessibility", vi: "Đang xem dữ liệu của %@", en: "Viewing %@'s data", ja: "%@のデータを表示中", value)
+                }
+                static func avatarAccessibility(_ value: String, language: MistiaAppLanguage) -> String {
+                    L10n.format("shared.family.memberViewing.avatarAccessibility", vi: "Đang xem dữ liệu của %@", en: "Viewing %@'s data", ja: "%@のデータを表示中", language: language, value)
+                }
+                static var confirmExit: String { L10n.tr("shared.family.memberViewing.confirmExit", vi: "Đồng ý", en: "Confirm", ja: "同意") }
+                static func confirmExit(language: MistiaAppLanguage) -> String { L10n.tr("shared.family.memberViewing.confirmExit", vi: "Đồng ý", en: "Confirm", ja: "同意", language: language) }
+                static func exitMessage(_ value: String) -> String {
+                    L10n.format("shared.family.memberViewing.exitMessage", vi: "Bạn có muốn thoát khỏi dữ liệu của %@ và quay lại dữ liệu của bạn không?", en: "Do you want to leave %@'s data and return to your data?", ja: "%@のデータ表示を終了して、自分のデータに戻りますか？", value)
+                }
+                static func exitMessage(_ value: String, language: MistiaAppLanguage) -> String {
+                    L10n.format("shared.family.memberViewing.exitMessage", vi: "Bạn có muốn thoát khỏi dữ liệu của %@ và quay lại dữ liệu của bạn không?", en: "Do you want to leave %@'s data and return to your data?", ja: "%@のデータ表示を終了して、自分のデータに戻りますか？", language: language, value)
+                }
+                static var exitTitle: String { L10n.tr("shared.family.memberViewing.exitTitle", vi: "Thoát khỏi chế độ xem dữ liệu?", en: "Leave data view?", ja: "データ表示を終了しますか？") }
+                static func exitTitle(language: MistiaAppLanguage) -> String { L10n.tr("shared.family.memberViewing.exitTitle", vi: "Thoát khỏi chế độ xem dữ liệu?", en: "Leave data view?", ja: "データ表示を終了しますか？", language: language) }
             }
         }
 

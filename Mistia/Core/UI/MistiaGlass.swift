@@ -403,6 +403,64 @@ struct MistiaHeaderCircleMenu<Label: View, MenuContent: View>: View {
     }
 }
 
+private struct MistiaAttentionPulseAvatar: View {
+    let initials: String
+    let avatarURL: URL?
+    let size: CGFloat
+    let isActive: Bool
+
+    @Environment(\.accessibilityReduceMotion) private var accessibilityReduceMotion
+    @Environment(\.colorScheme) private var colorScheme
+    @State private var pulseScale: CGFloat = 1
+    @State private var pulseOpacity: Double = 0
+
+    var body: some View {
+        MistiaAvatarBadge(initials: initials, avatarURL: avatarURL, size: size)
+            .overlay {
+                Circle()
+                    .strokeBorder(pulseColor.opacity(pulseOpacity), lineWidth: 1.6)
+                    .scaleEffect(pulseScale)
+                    .allowsHitTesting(false)
+            }
+            .task(id: "\(isActive)-\(accessibilityReduceMotion)") {
+                await runPulseLoop()
+            }
+    }
+
+    private var pulseColor: Color {
+        colorScheme == .dark ? MistiaAccent.lightPurple.color : MistiaAccent.purple.color
+    }
+
+    @MainActor
+    private func resetPulse() {
+        pulseScale = 1
+        pulseOpacity = 0
+    }
+
+    private func runPulseLoop() async {
+        resetPulse()
+        guard isActive, !accessibilityReduceMotion else { return }
+
+        while !Task.isCancelled {
+            try? await Task.sleep(for: .seconds(60))
+            guard !Task.isCancelled else { return }
+
+            await MainActor.run {
+                pulseScale = 1
+                pulseOpacity = 0.6
+                withAnimation(.easeOut(duration: 1.15)) {
+                    pulseScale = 1.62
+                    pulseOpacity = 0
+                }
+            }
+
+            try? await Task.sleep(for: .milliseconds(1200))
+            guard !Task.isCancelled else { return }
+            resetPulse()
+        }
+    }
+}
+
 struct MistiaPinnedTopBarScaffold<PinnedHeader: View, Content: View, TrailingAccessory: View>: View {
     let tone: MistiaBackgroundTone
     let title: String
@@ -411,6 +469,8 @@ struct MistiaPinnedTopBarScaffold<PinnedHeader: View, Content: View, TrailingAcc
     var isLeadingEnabled: Bool = true
     var leadingInitials: String = "QL"
     var leadingAvatarURL: URL? = nil
+    var leadingAccessibilityLabel: String? = nil
+    var leadingAvatarAttentionPulse: Bool = false
     var leadingSystemImage: String? = nil
     var trailingSystemImage: String? = "bell"
     var hidesSystemBackButton: Bool = false
@@ -431,6 +491,8 @@ struct MistiaPinnedTopBarScaffold<PinnedHeader: View, Content: View, TrailingAcc
         showsLeadingAvatar: Bool = true,
         leadingInitials: String = "QL",
         leadingAvatarURL: URL? = nil,
+        leadingAccessibilityLabel: String? = nil,
+        leadingAvatarAttentionPulse: Bool = false,
         isLeadingEnabled: Bool = true,
         leadingSystemImage: String? = nil,
         trailingSystemImage: String? = "bell",
@@ -452,6 +514,8 @@ struct MistiaPinnedTopBarScaffold<PinnedHeader: View, Content: View, TrailingAcc
         self.isLeadingEnabled = isLeadingEnabled
         self.leadingInitials = leadingInitials
         self.leadingAvatarURL = leadingAvatarURL
+        self.leadingAccessibilityLabel = leadingAccessibilityLabel
+        self.leadingAvatarAttentionPulse = leadingAvatarAttentionPulse
         self.leadingSystemImage = leadingSystemImage
         self.trailingSystemImage = trailingSystemImage
         self.hidesSystemBackButton = hidesSystemBackButton
@@ -564,11 +628,27 @@ struct MistiaPinnedTopBarScaffold<PinnedHeader: View, Content: View, TrailingAcc
             .disabled(!isLeadingEnabled)
             .opacity(isLeadingEnabled ? 1 : 0.45)
         } else if showsLeadingAvatar {
-            MistiaHeaderCircleButton(action: onLeadingTap) {
-                MistiaAvatarBadge(initials: leadingInitials, avatarURL: leadingAvatarURL, size: 28)
-            }
-            .disabled(!isLeadingEnabled)
-            .opacity(isLeadingEnabled ? 1 : 0.45)
+            leadingAvatarButton
+        }
+    }
+
+    @ViewBuilder
+    private var leadingAvatarButton: some View {
+        let button = MistiaHeaderCircleButton(action: onLeadingTap) {
+            MistiaAttentionPulseAvatar(
+                initials: leadingInitials,
+                avatarURL: leadingAvatarURL,
+                size: 28,
+                isActive: leadingAvatarAttentionPulse
+            )
+        }
+        .disabled(!isLeadingEnabled)
+        .opacity(isLeadingEnabled ? 1 : 0.45)
+
+        if let leadingAccessibilityLabel {
+            button.accessibilityLabel(Text(leadingAccessibilityLabel))
+        } else {
+            button
         }
     }
 
@@ -595,6 +675,8 @@ extension MistiaPinnedTopBarScaffold where TrailingAccessory == EmptyView {
         showsLeadingAvatar: Bool = true,
         leadingInitials: String = "QL",
         leadingAvatarURL: URL? = nil,
+        leadingAccessibilityLabel: String? = nil,
+        leadingAvatarAttentionPulse: Bool = false,
         isLeadingEnabled: Bool = true,
         leadingSystemImage: String? = nil,
         trailingSystemImage: String? = "bell",
@@ -615,6 +697,8 @@ extension MistiaPinnedTopBarScaffold where TrailingAccessory == EmptyView {
             showsLeadingAvatar: showsLeadingAvatar,
             leadingInitials: leadingInitials,
             leadingAvatarURL: leadingAvatarURL,
+            leadingAccessibilityLabel: leadingAccessibilityLabel,
+            leadingAvatarAttentionPulse: leadingAvatarAttentionPulse,
             isLeadingEnabled: isLeadingEnabled,
             leadingSystemImage: leadingSystemImage,
             trailingSystemImage: trailingSystemImage,
@@ -640,6 +724,8 @@ extension MistiaPinnedTopBarScaffold where PinnedHeader == EmptyView, TrailingAc
         showsLeadingAvatar: Bool = true,
         leadingInitials: String = "QL",
         leadingAvatarURL: URL? = nil,
+        leadingAccessibilityLabel: String? = nil,
+        leadingAvatarAttentionPulse: Bool = false,
         isLeadingEnabled: Bool = true,
         leadingSystemImage: String? = nil,
         trailingSystemImage: String? = "bell",
@@ -659,6 +745,8 @@ extension MistiaPinnedTopBarScaffold where PinnedHeader == EmptyView, TrailingAc
             showsLeadingAvatar: showsLeadingAvatar,
             leadingInitials: leadingInitials,
             leadingAvatarURL: leadingAvatarURL,
+            leadingAccessibilityLabel: leadingAccessibilityLabel,
+            leadingAvatarAttentionPulse: leadingAvatarAttentionPulse,
             isLeadingEnabled: isLeadingEnabled,
             leadingSystemImage: leadingSystemImage,
             trailingSystemImage: trailingSystemImage,

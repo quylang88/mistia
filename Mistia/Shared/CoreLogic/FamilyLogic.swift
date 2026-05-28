@@ -1,5 +1,34 @@
 import Foundation
 
+struct FamilyMemberViewingToolbarPresentation: Equatable {
+    let displayName: String
+    let initials: String
+    let exitTitle: String
+    let exitMessage: String
+    let confirmExitTitle: String
+    let cancelTitle: String
+    let accessibilityLabel: String
+}
+
+enum FamilyMemberViewingToolbarLogic {
+    static func presentation(displayName: String) -> FamilyMemberViewingToolbarPresentation {
+        let normalizedName = displayName.trimmingCharacters(in: .whitespacesAndNewlines)
+        let resolvedName = normalizedName.isEmpty
+            ? L10n.shared.family.familycontext.aFamilyMember
+            : normalizedName
+
+        return FamilyMemberViewingToolbarPresentation(
+            displayName: resolvedName,
+            initials: String(resolvedName.prefix(2)).uppercased(),
+            exitTitle: L10n.shared.family.memberViewing.exitTitle,
+            exitMessage: L10n.shared.family.memberViewing.exitMessage(resolvedName),
+            confirmExitTitle: L10n.shared.family.memberViewing.confirmExit,
+            cancelTitle: L10n.common.cancel,
+            accessibilityLabel: L10n.shared.family.memberViewing.avatarAccessibility(resolvedName)
+        )
+    }
+}
+
 enum FamilyRole: CaseIterable, Codable, Hashable, RawRepresentable {
     typealias RawValue = String
 

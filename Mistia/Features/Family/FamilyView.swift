@@ -2217,8 +2217,6 @@ private struct FamilyOverviewDataHost: View {
             contentSpacing: 18,
             titleDisplayMode: .large
         ) {
-            FamilyContextChipBar()
-
             if let data = cachedOverviewData {
                 FamilyOverviewContent(
                     data: data,
@@ -2413,6 +2411,7 @@ private struct FamilyMemberProfileScreen: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(SessionStore.self) private var sessionStore
     @Environment(FamilyContextStore.self) private var familyContextStore
+    @Environment(MistiaUIState.self) private var uiState
 
     let member: FamilyMember
 
@@ -2582,6 +2581,7 @@ private struct FamilyMemberProfileScreen: View {
         case .viewData:
             Button {
                 familyContextStore.activateMemberView(member)
+                uiState.requestTabSelection(.overview)
                 Task { @MainActor in
                     await familyContextStore.refreshMemberFinance(
                         sessionStore: sessionStore,

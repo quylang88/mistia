@@ -131,6 +131,7 @@ struct ManagementView: View {
     @State private var permissionPrompt: ManagementPermissionPrompt?
     @State private var walletPermissionPrompt: ManagementWalletPermissionPrompt?
     @State private var familyOwnerConflictAlert: ManagementFamilyOwnerConflictAlert?
+    @State private var memberViewingExitPrompt: FamilyMemberViewingExitPrompt?
 
     private var cardTint: Color {
         colorScheme == .dark ? .white.opacity(0.018) : .white.opacity(0.12)
@@ -289,19 +290,28 @@ struct ManagementView: View {
 
     var body: some View {
         let renderSnapshot = self.renderSnapshot
+        let memberToolbar = familyContextStore.memberViewingToolbarPresentation
 
         NavigationStack {
             MistiaPinnedTopBarScaffold(
                 tone: .muted,
                 title: L10n.management.management.manage,
                 embedsInNavigationStack: false,
-                showsLeadingAvatar: false,
+                showsLeadingAvatar: memberToolbar != nil,
+                leadingInitials: memberToolbar?.initials ?? "MI",
+                leadingAvatarURL: memberToolbar != nil ? familyContextStore.viewedMember?.avatarURL : nil,
+                leadingAccessibilityLabel: memberToolbar?.accessibilityLabel,
+                leadingAvatarAttentionPulse: memberToolbar != nil,
                 trailingSystemImage: "gearshape",
+                onLeadingTap: {
+                    if let memberToolbar {
+                        memberViewingExitPrompt = FamilyMemberViewingExitPrompt(presentation: memberToolbar)
+                    }
+                },
                 onTrailingTap: { destination = .settings },
                 contentSpacing: 20,
                 titleDisplayMode: .large
             ) {
-                FamilyContextChipBar()
                 profileSection
                 walletsSection(
                     activeWallets: renderSnapshot.activeWallets,
@@ -326,6 +336,10 @@ struct ManagementView: View {
                 }
             }
         }
+        .familyMemberViewingExitAlert(
+            prompt: $memberViewingExitPrompt,
+            familyContextStore: familyContextStore
+        )
         .sheet(item: $walletEditorTarget) { target in
             ManagementWalletEditorSheet(target: target)
                 .presentationDragIndicator(.hidden)

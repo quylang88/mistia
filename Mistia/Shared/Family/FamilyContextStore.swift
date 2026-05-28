@@ -193,11 +193,6 @@ final class FamilyContextStore {
         return capabilities(for: viewedMember).canViewTarget
     }
 
-    var contextChipTitle: String? {
-        guard isViewingOtherMemberContext, let viewedMember else { return nil }
-        return L10n.shared.family.familycontext.viewingValue(String(describing: viewedMember.displayName))
-    }
-
     func bootstrapIfNeeded(sessionStore: SessionStore) async {
         guard !didBootstrap else { return }
         didBootstrap = true

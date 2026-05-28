@@ -151,6 +151,7 @@ struct OverviewView: View {
     @State private var duePaymentTarget: DuePaymentSheetTarget?
     @State private var permissionPrompt: OverviewPermissionPrompt?
     @State private var infoAlert: OverviewInfoAlert?
+    @State private var memberViewingExitPrompt: FamilyMemberViewingExitPrompt?
     @State private var renderSnapshotCache: OverviewRenderSnapshotCache?
 
     private var currentMonth: Date {
@@ -594,19 +595,24 @@ struct OverviewView: View {
     var body: some View {
         let snapshotKey = renderSnapshotCacheKey
         let renderSnapshot = cachedRenderSnapshot(for: snapshotKey)
+        let memberToolbar = familyContextStore.memberViewingToolbarPresentation
 
         NavigationStack {
             MistiaPinnedTopBarScaffold(
                 tone: .standard,
                 title: L10n.overview.overview.overview,
                 embedsInNavigationStack: false,
-                leadingInitials: sessionStore.summary?.initials ?? "MI",
-                leadingAvatarURL: sessionStore.summary?.avatarURL,
-                isLeadingEnabled: !familyContextStore.isViewingOtherMemberContext,
+                leadingInitials: memberToolbar?.initials ?? sessionStore.summary?.initials ?? "MI",
+                leadingAvatarURL: memberToolbar != nil ? familyContextStore.viewedMember?.avatarURL : sessionStore.summary?.avatarURL,
+                leadingAccessibilityLabel: memberToolbar?.accessibilityLabel,
+                leadingAvatarAttentionPulse: memberToolbar != nil,
                 trailingSystemImage: nil,
                 onLeadingTap: {
-                    guard !familyContextStore.isViewingOtherMemberContext else { return }
-                    destination = .profile
+                    if let memberToolbar {
+                        memberViewingExitPrompt = FamilyMemberViewingExitPrompt(presentation: memberToolbar)
+                    } else {
+                        destination = .profile
+                    }
                 },
                 contentSpacing: 18,
                 titleDisplayMode: .large,
@@ -617,7 +623,6 @@ struct OverviewView: View {
                     }
                 }
             ) {
-                FamilyContextChipBar()
                 OverviewHeroCard(
                     snapshot: renderSnapshot.dashboard.hero,
                     isSheetPresented: selectedExpenseDay != nil,
@@ -650,6 +655,10 @@ struct OverviewView: View {
                 ManagementCreditCardStatementView(wallet: target.wallet, initialMonth: target.month)
             }
         }
+        .familyMemberViewingExitAlert(
+            prompt: $memberViewingExitPrompt,
+            familyContextStore: familyContextStore
+        )
         .sheet(item: $selectedExpenseDay) { selection in
             OverviewDayTransactionsSheet(
                 day: selection.date,

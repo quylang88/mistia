@@ -211,6 +211,7 @@ struct PlanningView: View {
     @State private var walletPermissionPrompt: PlanningWalletPermissionPrompt?
     @State private var infoAlert: PlanningInfoAlert?
     @State private var familyOwnerConflictAlert: PlanningFamilyOwnerConflictAlert?
+    @State private var memberViewingExitPrompt: FamilyMemberViewingExitPrompt?
 
     private var cardTint: Color {
         colorScheme == .dark ? .white.opacity(0.022) : .white.opacity(0.14)
@@ -627,26 +628,30 @@ struct PlanningView: View {
     }
 
     var body: some View {
+        let memberToolbar = familyContextStore.memberViewingToolbarPresentation
+
         NavigationStack {
             MistiaPinnedTopBarScaffold(
                 tone: .standard,
                 title: L10n.planning.planning.planning,
                 embedsInNavigationStack: false,
-                leadingInitials: sessionStore.summary?.initials ?? "MI",
-                leadingAvatarURL: sessionStore.summary?.avatarURL,
-                isLeadingEnabled: !familyContextStore.isViewingOtherMemberContext,
+                leadingInitials: memberToolbar?.initials ?? sessionStore.summary?.initials ?? "MI",
+                leadingAvatarURL: memberToolbar != nil ? familyContextStore.viewedMember?.avatarURL : sessionStore.summary?.avatarURL,
+                leadingAccessibilityLabel: memberToolbar?.accessibilityLabel,
+                leadingAvatarAttentionPulse: memberToolbar != nil,
                 trailingSystemImage: "calendar",
                 onLeadingTap: {
-                    guard !familyContextStore.isViewingOtherMemberContext else { return }
-                    destination = .profile
+                    if let memberToolbar {
+                        memberViewingExitPrompt = FamilyMemberViewingExitPrompt(presentation: memberToolbar)
+                    } else {
+                        destination = .profile
+                    }
                 },
                 onTrailingTap: { isMonthPickerPresented = true },
                 contentSpacing: 18,
                 titleDisplayMode: .large,
                 pinnedHeader: {
                     VStack(alignment: .leading, spacing: 8) {
-                        FamilyContextChipBar()
-                            .padding(.horizontal, 18)
                         PlanningModePicker(selection: $selectedMode)
                     }
                 }
@@ -745,6 +750,10 @@ struct PlanningView: View {
                 }
             }
         }
+        .familyMemberViewingExitAlert(
+            prompt: $memberViewingExitPrompt,
+            familyContextStore: familyContextStore
+        )
         .sheet(item: $budgetEditorTarget) { target in
             PlanningBudgetEditorSheet(target: target)
                 .presentationDragIndicator(.hidden)

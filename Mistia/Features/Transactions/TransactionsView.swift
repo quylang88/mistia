@@ -204,6 +204,7 @@ struct TransactionsView: View {
     @State private var permissionPrompt: TransactionsPermissionPrompt?
     @State private var infoAlert: TransactionsInfoAlert?
     @State private var familyOwnerConflictAlert: TransactionsFamilyOwnerConflictAlert?
+    @State private var memberViewingExitPrompt: FamilyMemberViewingExitPrompt?
     @State private var visibleTransactionLimit = TransactionsListPaging.initialLimit
     @State private var listSnapshotCache: TransactionsListSnapshotCache?
 
@@ -645,6 +646,7 @@ struct TransactionsView: View {
         let listSnapshotKey = transactionListSnapshotCacheKey
         let listSnapshot = cachedTransactionListSnapshot(for: listSnapshotKey)
         let searchSnapshot = transactionSearchSnapshot
+        let memberToolbar = familyContextStore.memberViewingToolbarPresentation
 
         NavigationStack {
             ZStack {
@@ -652,20 +654,25 @@ struct TransactionsView: View {
                     tone: .standard,
                     title: L10n.transactions.transactions.transactions,
                     embedsInNavigationStack: false,
-                    showsLeadingAvatar: false,
-                    leadingSystemImage: familyContextStore.isViewingOtherMemberContext ? nil : "doc.viewfinder",
+                    showsLeadingAvatar: memberToolbar != nil,
+                    leadingInitials: memberToolbar?.initials ?? "MI",
+                    leadingAvatarURL: memberToolbar != nil ? familyContextStore.viewedMember?.avatarURL : nil,
+                    leadingAccessibilityLabel: memberToolbar?.accessibilityLabel,
+                    leadingAvatarAttentionPulse: memberToolbar != nil,
+                    leadingSystemImage: memberToolbar == nil ? "doc.viewfinder" : nil,
                     trailingSystemImage: nil,
                     onLeadingTap: {
-                        guard !familyContextStore.isViewingOtherMemberContext else { return }
-                        destination = .aiBill
+                        if let memberToolbar {
+                            memberViewingExitPrompt = FamilyMemberViewingExitPrompt(presentation: memberToolbar)
+                        } else {
+                            destination = .aiBill
+                        }
                     },
                     contentSpacing: 18,
                     contentBottomPadding: 150,
                     titleDisplayMode: .large,
                     pinnedHeader: {
                         VStack(alignment: .leading, spacing: 8) {
-                            FamilyContextChipBar()
-                                .padding(.horizontal, 18)
                             unifiedFilterRow
                         }
                             .zIndex(99)
@@ -709,6 +716,10 @@ struct TransactionsView: View {
                 }
             }
         }
+        .familyMemberViewingExitAlert(
+            prompt: $memberViewingExitPrompt,
+            familyContextStore: familyContextStore
+        )
         .sheet(item: $shareItem) { item in
             TransactionShareSheet(url: item.url)
         }
