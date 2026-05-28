@@ -151,19 +151,48 @@ struct AIBillAnalysisView: View {
         .padding(.horizontal, 4)
     }
 
+    private var hasPendingAnalyzableBills: Bool {
+        bills.contains { $0.result == nil && !$0.isMultipleBillImage }
+    }
+
+    private var shouldShowAnalyzeButton: Bool {
+        isAnalyzing || (!bills.isEmpty && hasPendingAnalyzableBills)
+    }
+
+    private var actionControlForeground: Color {
+        colorScheme == .dark ? MistiaAccent.lightPurple.color : MistiaAccent.purple.color
+    }
+
+    private var actionControlFill: Color {
+        colorScheme == .dark ? .white.opacity(0.12) : .black.opacity(0.06)
+    }
+
+    private var actionControlStroke: Color {
+        colorScheme == .dark ? .white.opacity(0.08) : .black.opacity(0.04)
+    }
+
     private var actionSection: some View {
-        VStack(spacing: 12) {
+        VStack(spacing: 10) {
             HStack(spacing: 10) {
                 PhotosPicker(
                     selection: $photoItems,
                     maxSelectionCount: max(1, imageLimit - bills.count),
                     matching: .images
                 ) {
-                    Label(L10n.transactions.aibill.addBills, systemImage: "photo.on.rectangle")
-                        .font(.system(size: 14, weight: .semibold, design: .rounded))
-                        .frame(maxWidth: .infinity)
+                    Label {
+                        Text(L10n.transactions.aibill.addBills)
+                    } icon: {
+                        Image(systemName: "photo.on.rectangle")
+                            .font(.system(size: 15, weight: .bold))
+                    }
+                    .font(.system(size: 15, weight: .semibold, design: .rounded))
+                    .foregroundStyle(actionControlForeground)
+                    .frame(maxWidth: .infinity, minHeight: 46)
+                    .background {
+                        actionControlBackground()
+                    }
                 }
-                .buttonStyle(.bordered)
+                .buttonStyle(MistiaPressableButtonStyle(cornerRadius: 16, tint: actionControlForeground))
                 .disabled(bills.count >= imageLimit || isAnalyzing || isLoadingPhotos)
 
                 if UIImagePickerController.isSourceTypeAvailable(.camera) {
@@ -175,47 +204,51 @@ struct AIBillAnalysisView: View {
                         cameraSource = .camera
                     } label: {
                         Image(systemName: "camera.fill")
-                            .font(.system(size: 15, weight: .semibold))
-                            .frame(width: 42)
+                            .font(.system(size: 15, weight: .bold))
+                            .foregroundStyle(actionControlForeground)
+                            .frame(width: 50, height: 46)
+                            .background {
+                                actionControlBackground()
+                            }
                     }
-                    .buttonStyle(.bordered)
+                    .buttonStyle(MistiaPressableButtonStyle(cornerRadius: 16, tint: actionControlForeground))
                     .disabled(isAnalyzing || isLoadingPhotos)
+                    .accessibilityLabel(L10n.transactions.transactioneditor.takePhoto)
                 }
             }
 
-            Button {
-                analyzeBills()
-            } label: {
-                HStack(spacing: 8) {
-                    if isAnalyzing {
-                        ProgressView()
-                            .controlSize(.small)
-                            .tint(.white)
-                    } else {
-                        Image(systemName: "sparkles")
+            if shouldShowAnalyzeButton {
+                Button {
+                    analyzeBills()
+                } label: {
+                    HStack(spacing: 8) {
+                        if isAnalyzing {
+                            ProgressView()
+                                .controlSize(.small)
+                                .tint(.white)
+                        } else {
+                            Image(systemName: "sparkles")
+                        }
+                        Text(isAnalyzing ? L10n.transactions.aibill.analyzing : L10n.transactions.aibill.analyze)
                     }
-                    Text(isAnalyzing ? L10n.transactions.aibill.analyzing : L10n.transactions.aibill.analyze)
+                    .font(.system(size: 15, weight: .bold, design: .rounded))
+                    .frame(maxWidth: .infinity)
                 }
-                .font(.system(size: 15, weight: .bold, design: .rounded))
-                .frame(maxWidth: .infinity)
+                .buttonStyle(.glassProminent)
+                .buttonBorderShape(.capsule)
+                .tint(MistiaAccent.purple.color)
+                .disabled(isAnalyzing || !hasPendingAnalyzableBills)
             }
-            .buttonStyle(.glassProminent)
-            .buttonBorderShape(.capsule)
-            .tint(MistiaAccent.purple.color)
-            .disabled(isAnalyzing || bills.isEmpty || bills.allSatisfy { $0.result != nil || $0.isMultipleBillImage })
+        }
+    }
 
-            Text(L10n.transactions.aibill.chooseUpToValueBills(String(describing: imageLimit)))
-                .font(.footnote)
-                .foregroundStyle(.secondary)
-                .frame(maxWidth: .infinity, alignment: .leading)
-        }
-        .padding(14)
-        .background {
-            MistiaRoundedGlassBackground(
-                cornerRadius: 20,
-                tint: Color(UIColor.secondarySystemGroupedBackground)
-            )
-        }
+    private func actionControlBackground(cornerRadius: CGFloat = 16) -> some View {
+        RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+            .fill(actionControlFill)
+            .overlay {
+                RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                    .strokeBorder(actionControlStroke, lineWidth: 0.8)
+            }
     }
 
     private var emptyState: some View {

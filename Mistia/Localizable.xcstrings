@@ -34519,28 +34519,6 @@
         }
       }
     },
-    "transactions.aibill.chooseUpToValueBills": {
-      "localizations": {
-        "vi": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Chọn tối đa %@ ảnh bill mỗi lần."
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Choose up to %@ receipt images at a time."
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "一度に最大 %@ 枚のレシート画像を選べます。"
-          }
-        }
-      }
-    },
     "transactions.aibill.createTransaction": {
       "localizations": {
         "vi": {
@@ -34656,19 +34634,19 @@
         "vi": {
           "stringUnit": {
             "state": "translated",
-            "value": "Thêm ảnh bill để AI tách từng mục đã mua."
+            "value": "Thêm tối đa 5 ảnh bill để AI tách từng mục đã mua."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Add receipt images so AI can split purchased items."
+            "value": "Add up to 5 receipt images for AI to split items."
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "レシート画像を追加すると、AIが購入項目を分解します。"
+            "value": "最大5枚のレシートを追加してAIで明細を分けます。"
           }
         }
       }

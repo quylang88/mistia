@@ -3634,12 +3634,6 @@ nonisolated enum L10n {
             static func billValue(_ value: String, language: MistiaAppLanguage) -> String {
                 L10n.format("transactions.aibill.billValue", vi: "Bill %@", en: "Bill %@", ja: "レシート %@", language: language, value)
             }
-            static func chooseUpToValueBills(_ value: String) -> String {
-                L10n.format("transactions.aibill.chooseUpToValueBills", vi: "Chọn tối đa %@ ảnh bill mỗi lần.", en: "Choose up to %@ receipt images at a time.", ja: "一度に最大 %@ 枚のレシート画像を選べます。", value)
-            }
-            static func chooseUpToValueBills(_ value: String, language: MistiaAppLanguage) -> String {
-                L10n.format("transactions.aibill.chooseUpToValueBills", vi: "Chọn tối đa %@ ảnh bill mỗi lần.", en: "Choose up to %@ receipt images at a time.", ja: "一度に最大 %@ 枚のレシート画像を選べます。", language: language, value)
-            }
             static var couldnTAnalyzeBill: String { L10n.tr("transactions.aibill.couldnTAnalyzeBill", vi: "Không thể phân tích bill này lúc này.", en: "Could not analyze this receipt right now.", ja: "このレシートを解析できませんでした。") }
             static func couldnTAnalyzeBill(language: MistiaAppLanguage) -> String { L10n.tr("transactions.aibill.couldnTAnalyzeBill", vi: "Không thể phân tích bill này lúc này.", en: "Could not analyze this receipt right now.", ja: "このレシートを解析できませんでした。", language: language) }
             static var createTransaction: String { L10n.tr("transactions.aibill.createTransaction", vi: "Tạo giao dịch", en: "Create transaction", ja: "取引を作成") }
@@ -3660,8 +3654,8 @@ nonisolated enum L10n {
             static func lockedGroupValue(_ value: String, language: MistiaAppLanguage) -> String {
                 L10n.format("transactions.aibill.lockedGroupValue", vi: "Đã chốt %@", en: "Locked %@", ja: "%@ 確定済み", language: language, value)
             }
-            static var noBillsMessage: String { L10n.tr("transactions.aibill.noBillsMessage", vi: "Thêm ảnh bill để AI tách từng mục đã mua.", en: "Add receipt images so AI can split purchased items.", ja: "レシート画像を追加すると、AIが購入項目を分解します。") }
-            static func noBillsMessage(language: MistiaAppLanguage) -> String { L10n.tr("transactions.aibill.noBillsMessage", vi: "Thêm ảnh bill để AI tách từng mục đã mua.", en: "Add receipt images so AI can split purchased items.", ja: "レシート画像を追加すると、AIが購入項目を分解します。", language: language) }
+            static var noBillsMessage: String { L10n.tr("transactions.aibill.noBillsMessage", vi: "Thêm tối đa 5 ảnh bill để AI tách từng mục đã mua.", en: "Add up to 5 receipt images for AI to split items.", ja: "最大5枚のレシートを追加してAIで明細を分けます。") }
+            static func noBillsMessage(language: MistiaAppLanguage) -> String { L10n.tr("transactions.aibill.noBillsMessage", vi: "Thêm tối đa 5 ảnh bill để AI tách từng mục đã mua.", en: "Add up to 5 receipt images for AI to split items.", ja: "最大5枚のレシートを追加してAIで明細を分けます。", language: language) }
             static var noBillsTitle: String { L10n.tr("transactions.aibill.noBillsTitle", vi: "Chưa có bill", en: "No receipts yet", ja: "レシートがありません") }
             static func noBillsTitle(language: MistiaAppLanguage) -> String { L10n.tr("transactions.aibill.noBillsTitle", vi: "Chưa có bill", en: "No receipts yet", ja: "レシートがありません", language: language) }
             static var noSelectableItems: String { L10n.tr("transactions.aibill.noSelectableItems", vi: "Chọn các mục hợp lệ để tạo giao dịch.", en: "Select valid items to create a transaction.", ja: "有効な項目を選んで取引を作成してください。") }

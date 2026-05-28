@@ -72,6 +72,21 @@ final class MistiaLocalizationTests: XCTestCase {
         XCTAssertEqual(L10n.common.cancel, "Hủy")
     }
 
+    func testAIBillEmptyStateMessageMentionsLimitAndAISplitting() {
+        XCTAssertEqual(
+            L10n.transactions.aibill.noBillsMessage(language: .vietnamese),
+            "Thêm tối đa 5 ảnh bill để AI tách từng mục đã mua."
+        )
+        XCTAssertEqual(
+            L10n.transactions.aibill.noBillsMessage(language: .english),
+            "Add up to 5 receipt images for AI to split items."
+        )
+        XCTAssertEqual(
+            L10n.transactions.aibill.noBillsMessage(language: .japanese),
+            "最大5枚のレシートを追加してAIで明細を分けます。"
+        )
+    }
+
     func testCurrencyNamesFollowSelectedAppLanguage() {
         XCTAssertEqual(L10n.settings.currency.currencyNameJPY(language: .vietnamese), "Yên Nhật")
         XCTAssertEqual(L10n.settings.currency.currencyNameVND(language: .vietnamese), "Việt Nam Đồng")
