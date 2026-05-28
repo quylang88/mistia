@@ -275,6 +275,7 @@ struct BillItemSelectionSnapshot: Equatable {
     let candidatesByID: [BillItemSelectionID: BillItemSelectionCandidate]
     let allCandidates: [BillItemSelectionCandidate]
     let selectedCandidates: [BillItemSelectionCandidate]
+    let selectedIDs: Set<BillItemSelectionID>
 
     init(
         bills: [BillItemSelectionBillSnapshot],
@@ -322,6 +323,27 @@ struct BillItemSelectionSnapshot: Equatable {
         self.candidatesByID = candidatesByID
         self.allCandidates = allCandidates
         self.selectedCandidates = selectedCandidates
+        self.selectedIDs = selectedIDs
+    }
+
+    func selectableIDs(mode: BillItemTransactionMode) -> Set<BillItemSelectionID> {
+        var ids: Set<BillItemSelectionID> = []
+
+        for candidate in allCandidates {
+            guard !selectedIDs.contains(candidate.id) else {
+                continue
+            }
+            guard selectedIDs.allSatisfy({ $0.billID == candidate.id.billID }) else {
+                continue
+            }
+
+            let selectedForBill = selectedCandidatesByBillID[candidate.id.billID] ?? []
+            if BillItemSelectionLogic.canSelect(candidate, selected: selectedForBill, mode: mode) {
+                ids.insert(candidate.id)
+            }
+        }
+
+        return ids
     }
 }
 

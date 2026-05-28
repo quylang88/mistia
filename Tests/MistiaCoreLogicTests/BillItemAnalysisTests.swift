@@ -431,6 +431,44 @@ final class BillItemAnalysisTests: XCTestCase {
         XCTAssertEqual(snapshot.candidatesByID[lockedID]?.isLocked, true)
     }
 
+    func testSelectionSnapshotPrecomputesSelectableIDsForCurrentMode() throws {
+        let first = makeCandidate(itemID: "a", walletID: walletID, categoryID: categoryID)
+        let sameGroup = makeCandidate(itemID: "b", walletID: walletID, categoryID: categoryID)
+        let differentCategory = makeCandidate(itemID: "c", walletID: walletID, categoryID: otherCategoryID)
+        let otherBill = makeCandidate(billID: otherBillID, itemID: "e", walletID: walletID, categoryID: categoryID)
+
+        let snapshot = BillItemSelectionSnapshot(
+            bills: [
+                BillItemSelectionBillSnapshot(
+                    billID: billID,
+                    walletID: walletID,
+                    merchantName: "Store",
+                    occurredAt: nil,
+                    items: [
+                        makeItem(first),
+                        makeItem(sameGroup),
+                        makeItem(differentCategory)
+                    ],
+                    createdItemIDs: [],
+                    lockedGroups: []
+                ),
+                BillItemSelectionBillSnapshot(
+                    billID: otherBillID,
+                    walletID: walletID,
+                    merchantName: "Other",
+                    occurredAt: nil,
+                    items: [makeItem(otherBill)],
+                    createdItemIDs: [],
+                    lockedGroups: []
+                )
+            ],
+            selectedIDs: [first.id]
+        )
+
+        XCTAssertEqual(snapshot.selectableIDs(mode: .expense), [sameGroup.id])
+        XCTAssertEqual(snapshot.selectableIDs(mode: .lend), [sameGroup.id, differentCategory.id])
+    }
+
     func testAllocatesDiscountRecordAcrossPurchaseItemsAndClearsDiscountLine() throws {
         let first = BillItemAnalysisItem(
             lineID: "a",
@@ -501,6 +539,17 @@ final class BillItemAnalysisTests: XCTestCase {
             merchantName: merchantName,
             occurredAt: occurredAt,
             isCreated: isCreated
+        )
+    }
+
+    private func makeItem(_ candidate: BillItemSelectionCandidate) -> BillItemAnalysisItem {
+        BillItemAnalysisItem(
+            lineID: candidate.id.itemID,
+            originalName: candidate.id.itemID,
+            lineType: candidate.lineType,
+            finalAmountMinor: candidate.amountMinor,
+            categoryID: candidate.categoryID,
+            confidence: 0.9
         )
     }
 

@@ -23,6 +23,7 @@ struct AIBillAnalysisView: View {
     @State private var cameraSource: AIBillCameraSource?
     @State private var alert: AIBillAlert?
     @State private var editorTarget: TransactionEditorTarget?
+    @State private var categoryPickerTarget: AIBillCategoryPickerTarget?
     @State private var pendingTransactionItemIDs: Set<BillItemSelectionID> = []
     @State private var pendingTransactionGroupID: UUID?
     @State private var isLoadingPhotos = false
@@ -32,8 +33,6 @@ struct AIBillAnalysisView: View {
     private let imageLimit = 5
 
     var body: some View {
-        let renderContext = makeRenderContext()
-
         ScrollView {
             VStack(spacing: 18) {
                 actionSection
@@ -41,6 +40,7 @@ struct AIBillAnalysisView: View {
                 if bills.isEmpty {
                     emptyState
                 } else {
+                    let renderContext = makeRenderContext()
                     ForEach(bills) { bill in
                         billCard(bill, renderContext: renderContext)
                     }
@@ -84,6 +84,27 @@ struct AIBillAnalysisView: View {
             }
             .presentationDetents([.large])
             .presentationDragIndicator(.hidden)
+        }
+        .sheet(item: $categoryPickerTarget) { target in
+            let context = makeCategoryPickerContext()
+            MistiaCategoryPickerSheet(
+                title: L10n.transactions.transactioneditor.chooseCategory,
+                selectedCategoryID: categoryID(for: target),
+                sections: context.sections,
+                recentCategories: [],
+                favoriteCategories: context.favoriteCategories,
+                initialMode: .all,
+                allowsParentSelectionInAll: false,
+                allModeSubtitle: { category in
+                    category.parentCategory?.localizedDisplayName
+                },
+                quickModeSubtitle: { category in
+                    category.parentCategory?.localizedDisplayName
+                }
+            ) { category in
+                updateItemCategory(itemID: target.itemID, billID: target.billID, categoryID: category.id)
+                categoryPickerTarget = nil
+            }
         }
         .alert(item: $alert) { alert in
             switch alert.kind {
@@ -283,9 +304,8 @@ struct AIBillAnalysisView: View {
         let candidateID = BillItemSelectionID(billID: bill.id, itemID: item.lineID)
         let candidate = renderContext.selectionSnapshot.candidatesByID[candidateID]
             ?? fallbackSelectionCandidate(for: item, bill: bill)
-        let isSelected = selectedIDs.contains(candidate.id)
-        let selectedForBill = selectedCandidates(for: bill, snapshot: renderContext.selectionSnapshot)
-        let canSelect = canSelectCandidate(candidate, selectedInBill: selectedForBill) || isSelected
+        let isSelected = renderContext.selectionSnapshot.selectedIDs.contains(candidate.id)
+        let canSelect = renderContext.selectableIDs.contains(candidate.id) || isSelected
 
         return HStack(alignment: .top, spacing: 10) {
             Button {
@@ -322,17 +342,14 @@ struct AIBillAnalysisView: View {
                         }
                     }
                 } else {
-                    Menu {
-                        ForEach(renderContext.availableExpenseCategories) { category in
-                            Button(renderContext.categoryLabelsByID[category.id] ?? category.localizedDisplayName) {
-                                updateItemCategory(itemID: item.lineID, billID: bill.id, categoryID: category.id)
-                            }
-                        }
+                    Button {
+                        categoryPickerTarget = AIBillCategoryPickerTarget(billID: bill.id, itemID: item.lineID)
                     } label: {
                         Text(categoryLabel(for: item.categoryID, renderContext: renderContext))
                             .font(.footnote)
                             .foregroundStyle(item.categoryID == nil ? .red : .secondary)
                     }
+                    .buttonStyle(.plain)
                     .disabled(mode == .lend || candidate.isCreated || candidate.isLocked)
                 }
             }
@@ -487,12 +504,22 @@ struct AIBillAnalysisView: View {
     }
 
     private var availableExpenseCategories: [TransactionCategory] {
+        scopedExpenseCategories(includesParents: false)
+    }
+
+    private func scopedExpenseCategories(includesParents: Bool) -> [TransactionCategory] {
         let categoryOwnerMap = MistiaRecordOwnershipStore.ownerMap(from: ownershipScopes, entity: .category)
         return storedCategories
             .filter { category in
                 guard category.kind == .expense,
-                      category.isChildCategory,
                       !category.isBalanceAdjustmentSystemCategory else {
+                    return false
+                }
+                if includesParents {
+                    guard category.isParentCategory || category.isChildCategory else {
+                        return false
+                    }
+                } else if !category.isChildCategory {
                     return false
                 }
                 let ownerUserID = categoryOwnerMap[category.id] ?? sessionStore.activeLocalProfileUserID
@@ -544,36 +571,38 @@ struct AIBillAnalysisView: View {
             from: storedWallets,
             targetOwnerUserID: quickCreateSubjectUserID
         )
-        let categoryOwnerMap = MistiaRecordOwnershipStore.ownerMap(from: ownershipScopes, entity: .category)
-        let categories = storedCategories
-            .filter { category in
-                guard category.kind == .expense,
-                      category.isChildCategory,
-                      !category.isBalanceAdjustmentSystemCategory else {
-                    return false
-                }
-                let ownerUserID = categoryOwnerMap[category.id] ?? sessionStore.activeLocalProfileUserID
-                return ownerUserID == quickCreateSubjectUserID
-            }
-            .sorted {
-                if $0.sortOrder != $1.sortOrder {
-                    return $0.sortOrder < $1.sortOrder
-                }
-                return $0.createdAt < $1.createdAt
-            }
+        let categories = scopedExpenseCategories(includesParents: false)
         let categoryLabelsByID = Dictionary(uniqueKeysWithValues: categories.map { category in
             (category.id, categoryLabel(for: category))
         })
         let walletLabelsByID = Dictionary(uniqueKeysWithValues: wallets.map { wallet in
             (wallet.id, access.title(for: wallet))
         })
+        let selectionSnapshot = currentSelectionSnapshot
 
         return AIBillRenderContext(
-            selectionSnapshot: currentSelectionSnapshot,
+            selectionSnapshot: selectionSnapshot,
+            selectableIDs: selectionSnapshot.selectableIDs(mode: mode),
             availableWallets: wallets,
             availableExpenseCategories: categories,
             categoryLabelsByID: categoryLabelsByID,
             walletLabelsByID: walletLabelsByID
+        )
+    }
+
+    private func makeCategoryPickerContext() -> AIBillCategoryPickerContext {
+        let categories = scopedExpenseCategories(includesParents: true)
+        return AIBillCategoryPickerContext(
+            sections: MistiaCategoryHierarchy.groupedSections(
+                from: categories,
+                kind: .expense,
+                includeArchived: false,
+                includeEmptyParents: false
+            ),
+            favoriteCategories: MistiaCategoryPickerSupport.favoriteCategories(
+                from: categories,
+                kind: .expense
+            )
         )
     }
 
@@ -665,6 +694,11 @@ struct AIBillAnalysisView: View {
         )
     }
 
+    private func categoryID(for target: AIBillCategoryPickerTarget) -> UUID? {
+        guard let bill = bills.first(where: { $0.id == target.billID }) else { return nil }
+        return bill.result?.items.first(where: { $0.lineID == target.itemID })?.categoryID
+    }
+
     private func updateItemCategory(itemID: String, billID: UUID, categoryID: UUID?) {
         guard let billIndex = bills.firstIndex(where: { $0.id == billID }),
               let itemIndex = bills[billIndex].result?.items.firstIndex(where: { $0.lineID == itemID }) else {
@@ -687,13 +721,13 @@ struct AIBillAnalysisView: View {
     }
 
     private func toggleSelection(_ candidate: BillItemSelectionCandidate) {
-        if selectedIDs.contains(candidate.id) {
+        let snapshot = currentSelectionSnapshot
+        if snapshot.selectedIDs.contains(candidate.id) {
             selectedIDs.remove(candidate.id)
             return
         }
 
-        guard selectedIDs.allSatisfy({ $0.billID == candidate.id.billID }),
-              BillItemSelectionLogic.canSelect(candidate, selected: selectedCandidates, mode: mode) else {
+        guard snapshot.selectableIDs(mode: mode).contains(candidate.id) else {
             alert = AIBillAlert(
                 title: L10n.transactions.aibill.aiBill,
                 message: L10n.transactions.aibill.noSelectableItems
@@ -710,16 +744,6 @@ struct AIBillAnalysisView: View {
             candidates: currentSelectionSnapshot.allCandidates,
             mode: mode
         )
-    }
-
-    private func canSelectCandidate(
-        _ candidate: BillItemSelectionCandidate,
-        selectedInBill: [BillItemSelectionCandidate]
-    ) -> Bool {
-        guard selectedIDs.allSatisfy({ $0.billID == candidate.id.billID }) else {
-            return false
-        }
-        return BillItemSelectionLogic.canSelect(candidate, selected: selectedInBill, mode: mode)
     }
 
     private func confirmSelectionGroup(for bill: AIBillDraft) {
@@ -1063,10 +1087,25 @@ private struct AIBillDraft: Identifiable {
 
 private struct AIBillRenderContext {
     let selectionSnapshot: BillItemSelectionSnapshot
+    let selectableIDs: Set<BillItemSelectionID>
     let availableWallets: [LedgerWallet]
     let availableExpenseCategories: [TransactionCategory]
     let categoryLabelsByID: [UUID: String]
     let walletLabelsByID: [UUID: String]
+}
+
+private struct AIBillCategoryPickerContext {
+    let sections: [TransactionCategoryGroupSection]
+    let favoriteCategories: [TransactionCategory]
+}
+
+private struct AIBillCategoryPickerTarget: Identifiable {
+    let billID: UUID
+    let itemID: String
+
+    var id: String {
+        "\(billID.uuidString)-\(itemID)"
+    }
 }
 
 private enum AIBillAlertKind {
@@ -1091,7 +1130,7 @@ private enum AIBillCameraSource: Identifiable {
     }
 }
 
-private enum AIBillImageProcessor {
+private nonisolated enum AIBillImageProcessor {
     static func makeDraft(from data: Data) -> AIBillDraft? {
         guard let image = UIImage(data: data) else { return nil }
         return makeDraft(from: image)
