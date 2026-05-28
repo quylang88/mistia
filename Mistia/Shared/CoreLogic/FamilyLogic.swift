@@ -11,6 +11,8 @@ struct FamilyMemberViewingToolbarPresentation: Equatable {
 }
 
 enum FamilyMemberViewingToolbarLogic {
+    static let privateEmailPlaceholder = "***"
+
     static func presentation(displayName: String) -> FamilyMemberViewingToolbarPresentation {
         let normalizedName = displayName.trimmingCharacters(in: .whitespacesAndNewlines)
         let resolvedName = normalizedName.isEmpty
@@ -26,6 +28,20 @@ enum FamilyMemberViewingToolbarLogic {
             cancelTitle: L10n.common.cancel,
             accessibilityLabel: L10n.shared.family.memberViewing.avatarAccessibility(resolvedName)
         )
+    }
+
+    static func maskedEmail(_ email: String?) -> String {
+        let trimmedEmail = email?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        guard let atIndex = trimmedEmail.firstIndex(of: "@") else {
+            return privateEmailPlaceholder
+        }
+
+        let domainStartIndex = trimmedEmail.index(after: atIndex)
+        guard domainStartIndex < trimmedEmail.endIndex else {
+            return privateEmailPlaceholder
+        }
+
+        return "\(privateEmailPlaceholder)@\(trimmedEmail[domainStartIndex...])"
     }
 }
 

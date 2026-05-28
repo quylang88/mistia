@@ -101,6 +101,14 @@ private struct ManagementRenderSnapshot {
     let visibleCategorySections: [TransactionCategoryGroupSection]
 }
 
+private struct ManagementProfileRowPresentation {
+    let initials: String
+    let avatarURL: URL?
+    let displayName: String
+    let email: String
+    let opensOwnProfile: Bool
+}
+
 struct ManagementView: View {
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.locale) private var locale
@@ -288,6 +296,30 @@ struct ManagementView: View {
         !familyContextStore.isViewingOtherMemberContext
     }
 
+    private var profileRowPresentation: ManagementProfileRowPresentation? {
+        if let memberToolbar = familyContextStore.memberViewingToolbarPresentation {
+            return ManagementProfileRowPresentation(
+                initials: memberToolbar.initials,
+                avatarURL: familyContextStore.viewedMember?.avatarURL,
+                displayName: memberToolbar.displayName,
+                email: FamilyMemberViewingToolbarLogic.maskedEmail(nil),
+                opensOwnProfile: false
+            )
+        }
+
+        guard let summary = sessionStore.summary else {
+            return nil
+        }
+
+        return ManagementProfileRowPresentation(
+            initials: summary.initials,
+            avatarURL: summary.avatarURL,
+            displayName: summary.displayName,
+            email: summary.email,
+            opensOwnProfile: true
+        )
+    }
+
     var body: some View {
         let renderSnapshot = self.renderSnapshot
         let memberToolbar = familyContextStore.memberViewingToolbarPresentation
@@ -430,28 +462,28 @@ struct ManagementView: View {
 
     private var profileSection: some View {
         VStack(spacing: 12) {
-            if let summary = sessionStore.summary {
+            if let profileRow = profileRowPresentation {
                 ManagementCard(tint: cardTint) {
                     VStack(spacing: 0) {
                         Button {
-                            guard canOpenOwnProfile else { return }
+                            guard profileRow.opensOwnProfile else { return }
                             destination = .authPlaceholder
                         } label: {
                             HStack(spacing: profileRowSpacing) {
                                 MistiaAvatarBadge(
-                                    initials: summary.initials,
-                                    avatarURL: summary.avatarURL,
+                                    initials: profileRow.initials,
+                                    avatarURL: profileRow.avatarURL,
                                     size: 50,
                                     showsStatus: false
                                 )
                                 .frame(width: profileLeadingVisualWidth, height: 50)
 
                                 VStack(alignment: .leading, spacing: 5) {
-                                    Text(summary.displayName)
+                                    Text(profileRow.displayName)
                                         .font(.system(size: 20, weight: .bold, design: .rounded))
                                         .foregroundStyle(.primary)
 
-                                    Text(summary.email)
+                                    Text(profileRow.email)
                                         .font(.system(size: 13, weight: .medium, design: .rounded))
                                         .foregroundStyle(.secondary)
                                 }
@@ -461,13 +493,13 @@ struct ManagementView: View {
                                 Image(systemName: "chevron.right")
                                     .font(.system(size: 11, weight: .bold))
                                     .foregroundStyle(.tertiary)
+                                    .opacity(profileRow.opensOwnProfile ? 1 : 0)
                             }
                             .padding(.horizontal, 14)
                             .padding(.vertical, 13)
                         }
                         .buttonStyle(MistiaPressableButtonStyle(cornerRadius: 20))
-                        .disabled(!canOpenOwnProfile)
-                        .opacity(canOpenOwnProfile ? 1 : 0.55)
+                        .disabled(!profileRow.opensOwnProfile)
 
                         Divider()
                             .padding(.leading, 52)

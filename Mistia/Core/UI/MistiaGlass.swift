@@ -442,7 +442,7 @@ private struct MistiaAttentionPulseAvatar: View {
         guard isActive, !accessibilityReduceMotion else { return }
 
         while !Task.isCancelled {
-            try? await Task.sleep(for: .seconds(60))
+            try? await Task.sleep(for: .seconds(5))
             guard !Task.isCancelled else { return }
 
             await MainActor.run {

@@ -24,4 +24,18 @@ final class FamilyMemberViewingToolbarLogicTests: XCTestCase {
 
         XCTAssertEqual(presentation.initials, "AN")
     }
+
+    func testMaskedEmailKeepsOnlyDomainWhenAvailable() {
+        XCTAssertEqual(
+            FamilyMemberViewingToolbarLogic.maskedEmail("  member@example.com  "),
+            "***@example.com"
+        )
+    }
+
+    func testMaskedEmailFallsBackToPrivatePlaceholderWithoutDomain() {
+        XCTAssertEqual(FamilyMemberViewingToolbarLogic.maskedEmail(nil), "***")
+        XCTAssertEqual(FamilyMemberViewingToolbarLogic.maskedEmail(""), "***")
+        XCTAssertEqual(FamilyMemberViewingToolbarLogic.maskedEmail("member"), "***")
+        XCTAssertEqual(FamilyMemberViewingToolbarLogic.maskedEmail("member@"), "***")
+    }
 }
