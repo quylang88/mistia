@@ -459,6 +459,11 @@ private struct MistiaAttentionPulseAvatar: View {
 }
 
 struct MistiaPinnedTopBarScaffold<PinnedHeader: View, Content: View, TrailingAccessory: View>: View {
+    enum HeaderBehavior {
+        case fixedInset
+        case scrollsThenPins
+    }
+
     let tone: MistiaBackgroundTone
     let title: String
     var embedsInNavigationStack: Bool = true
@@ -477,6 +482,7 @@ struct MistiaPinnedTopBarScaffold<PinnedHeader: View, Content: View, TrailingAcc
     var contentSpacing: CGFloat = 18
     var contentBottomPadding: CGFloat = 150
     var titleDisplayMode: NavigationBarItem.TitleDisplayMode = .inline
+    var headerBehavior: HeaderBehavior = .fixedInset
     @ViewBuilder let pinnedHeader: PinnedHeader
     @ViewBuilder let trailingAccessory: TrailingAccessory
     @ViewBuilder let content: Content
@@ -500,6 +506,7 @@ struct MistiaPinnedTopBarScaffold<PinnedHeader: View, Content: View, TrailingAcc
         contentSpacing: CGFloat = 18,
         contentBottomPadding: CGFloat = 150,
         titleDisplayMode: NavigationBarItem.TitleDisplayMode = .inline,
+        headerBehavior: HeaderBehavior = .fixedInset,
         @ViewBuilder pinnedHeader: () -> PinnedHeader,
         @ViewBuilder trailingAccessory: () -> TrailingAccessory,
         @ViewBuilder content: () -> Content
@@ -522,6 +529,7 @@ struct MistiaPinnedTopBarScaffold<PinnedHeader: View, Content: View, TrailingAcc
         self.contentSpacing = contentSpacing
         self.contentBottomPadding = contentBottomPadding
         self.titleDisplayMode = titleDisplayMode
+        self.headerBehavior = headerBehavior
         self.pinnedHeader = pinnedHeader()
         self.trailingAccessory = trailingAccessory()
         self.content = content()
@@ -541,13 +549,28 @@ struct MistiaPinnedTopBarScaffold<PinnedHeader: View, Content: View, TrailingAcc
 
     private var baseScrollableContent: some View {
         ScrollView(.vertical, showsIndicators: false) {
-            LazyVStack(spacing: contentSpacing) {
-                content
+            if headerBehavior == .scrollsThenPins, PinnedHeader.self != EmptyView.self {
+                LazyVStack(spacing: contentSpacing, pinnedViews: [.sectionHeaders]) {
+                    Section {
+                        content
+                    } header: {
+                        pinnedHeader
+                            .padding(.horizontal, -18)
+                    }
+                }
+                .frame(maxWidth: .infinity)
+                .padding(.horizontal, 18)
+                .padding(.top, 8)
+                .padding(.bottom, contentBottomPadding)
+            } else {
+                LazyVStack(spacing: contentSpacing) {
+                    content
+                }
+                .frame(maxWidth: .infinity)
+                .padding(.horizontal, 18)
+                .padding(.top, 8)
+                .padding(.bottom, contentBottomPadding)
             }
-            .frame(maxWidth: .infinity)
-            .padding(.horizontal, 18)
-            .padding(.top, 8)
-            .padding(.bottom, contentBottomPadding)
         }
         .modifier(MistiaTopScrollEdgeEffect())
         .scrollIndicators(.hidden)
@@ -569,7 +592,7 @@ struct MistiaPinnedTopBarScaffold<PinnedHeader: View, Content: View, TrailingAcc
         ZStack {
             MistiaBackgroundView(tone: tone)
 
-            if PinnedHeader.self != EmptyView.self {
+            if PinnedHeader.self != EmptyView.self && headerBehavior == .fixedInset {
                 scrollableContent
                     .safeAreaInset(edge: .top) {
                         pinnedHeader
@@ -684,6 +707,7 @@ extension MistiaPinnedTopBarScaffold where TrailingAccessory == EmptyView {
         contentSpacing: CGFloat = 18,
         contentBottomPadding: CGFloat = 150,
         titleDisplayMode: NavigationBarItem.TitleDisplayMode = .inline,
+        headerBehavior: HeaderBehavior = .fixedInset,
         @ViewBuilder pinnedHeader: () -> PinnedHeader,
         @ViewBuilder content: () -> Content
     ) {
@@ -706,6 +730,7 @@ extension MistiaPinnedTopBarScaffold where TrailingAccessory == EmptyView {
             contentSpacing: contentSpacing,
             contentBottomPadding: contentBottomPadding,
             titleDisplayMode: titleDisplayMode,
+            headerBehavior: headerBehavior,
             pinnedHeader: pinnedHeader,
             trailingAccessory: { EmptyView() },
             content: content
@@ -733,6 +758,7 @@ extension MistiaPinnedTopBarScaffold where PinnedHeader == EmptyView, TrailingAc
         contentSpacing: CGFloat = 18,
         contentBottomPadding: CGFloat = 150,
         titleDisplayMode: NavigationBarItem.TitleDisplayMode = .inline,
+        headerBehavior: HeaderBehavior = .fixedInset,
         @ViewBuilder content: () -> Content
     ) {
         self.init(
@@ -754,6 +780,7 @@ extension MistiaPinnedTopBarScaffold where PinnedHeader == EmptyView, TrailingAc
             contentSpacing: contentSpacing,
             contentBottomPadding: contentBottomPadding,
             titleDisplayMode: titleDisplayMode,
+            headerBehavior: headerBehavior,
             pinnedHeader: { EmptyView() },
             trailingAccessory: { EmptyView() },
             content: content

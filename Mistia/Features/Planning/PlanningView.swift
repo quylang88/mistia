@@ -650,6 +650,7 @@ struct PlanningView: View {
                 onTrailingTap: { isMonthPickerPresented = true },
                 contentSpacing: 18,
                 titleDisplayMode: .large,
+                headerBehavior: .scrollsThenPins,
                 pinnedHeader: {
                     VStack(alignment: .leading, spacing: 8) {
                         PlanningModePicker(selection: $selectedMode)

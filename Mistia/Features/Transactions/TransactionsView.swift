@@ -671,6 +671,7 @@ struct TransactionsView: View {
                     contentSpacing: 18,
                     contentBottomPadding: 150,
                     titleDisplayMode: .large,
+                    headerBehavior: .scrollsThenPins,
                     pinnedHeader: {
                         VStack(alignment: .leading, spacing: 8) {
                             unifiedFilterRow
