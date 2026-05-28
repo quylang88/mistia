@@ -1627,6 +1627,21 @@ private struct SetFamilyPermissionGrantRPCBody: Encodable {
         case permissionScope = "p_permission_scope"
         case isGranted = "p_is_granted"
     }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(familyID, forKey: .familyID)
+        try container.encode(granteeUserID, forKey: .granteeUserID)
+        try container.encode(ownerUserID, forKey: .ownerUserID)
+        try container.encode(resourceType, forKey: .resourceType)
+        if let resourceID {
+            try container.encode(resourceID, forKey: .resourceID)
+        } else {
+            try container.encodeNil(forKey: .resourceID)
+        }
+        try container.encode(permissionScope, forKey: .permissionScope)
+        try container.encode(isGranted, forKey: .isGranted)
+    }
 }
 
 private struct SetFamilyPlanningManagerRPCBody: Encodable {
@@ -1648,6 +1663,17 @@ private struct SetFamilyPlanningManagerRPCBody: Encodable {
         case familyID = "p_family_id"
         case resourceType = "p_resource_type"
         case managerUserID = "p_manager_user_id"
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(familyID, forKey: .familyID)
+        try container.encode(resourceType, forKey: .resourceType)
+        if let managerUserID {
+            try container.encode(managerUserID, forKey: .managerUserID)
+        } else {
+            try container.encodeNil(forKey: .managerUserID)
+        }
     }
 }
 

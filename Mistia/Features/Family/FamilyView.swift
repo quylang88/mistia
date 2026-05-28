@@ -3633,13 +3633,13 @@ private struct FamilySharingSheet: View {
                         scope: .create
                     )
                     sharingToggle(
-                        title: TransactionTransferSubtype.familyTransfer.title,
+                        title: L10n.family.family.createFamilyTransfer,
                         resourceType: .familyTransfer,
                         resourceID: nil,
                         scope: .create
                     )
                     sharingToggle(
-                        title: TransactionTransferSubtype.debt.title,
+                        title: L10n.family.family.createDebtTransfer,
                         resourceType: .debt,
                         resourceID: nil,
                         scope: .create

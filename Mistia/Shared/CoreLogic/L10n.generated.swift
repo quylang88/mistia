@@ -286,8 +286,12 @@ nonisolated enum L10n {
             static func copy(language: MistiaAppLanguage) -> String { L10n.tr("family.family.copy", vi: "Sao chép", en: "Copy", ja: "コピー", language: language) }
             static var createAccess: String { L10n.tr("family.family.createAccess", vi: "Quyền thêm mới", en: "Create access", ja: "作成権限") }
             static func createAccess(language: MistiaAppLanguage) -> String { L10n.tr("family.family.createAccess", vi: "Quyền thêm mới", en: "Create access", ja: "作成権限", language: language) }
+            static var createDebtTransfer: String { L10n.tr("family.family.createDebtTransfer", vi: "Chuyển tiền công nợ", en: "Debt transfer", ja: "貸借の送金") }
+            static func createDebtTransfer(language: MistiaAppLanguage) -> String { L10n.tr("family.family.createDebtTransfer", vi: "Chuyển tiền công nợ", en: "Debt transfer", ja: "貸借の送金", language: language) }
             static var createFamily: String { L10n.tr("family.family.createFamily", vi: "Tạo gia đình", en: "Create family", ja: "家族を作成") }
             static func createFamily(language: MistiaAppLanguage) -> String { L10n.tr("family.family.createFamily", vi: "Tạo gia đình", en: "Create family", ja: "家族を作成", language: language) }
+            static var createFamilyTransfer: String { L10n.tr("family.family.createFamilyTransfer", vi: "Chuyển tiền gia đình", en: "Family transfer", ja: "家族への送金") }
+            static func createFamilyTransfer(language: MistiaAppLanguage) -> String { L10n.tr("family.family.createFamilyTransfer", vi: "Chuyển tiền gia đình", en: "Family transfer", ja: "家族への送金", language: language) }
             static var createLink: String { L10n.tr("family.family.createLink", vi: "Tạo link", en: "Create link", ja: "リンク作成") }
             static func createLink(language: MistiaAppLanguage) -> String { L10n.tr("family.family.createLink", vi: "Tạo link", en: "Create link", ja: "リンク作成", language: language) }
             static var createdLinksWillAppearHereWithPending: String { L10n.tr("family.family.createdLinksWillAppearHereWithPending", vi: "Các link đã tạo sẽ xuất hiện ở đây cùng trạng thái chờ, đã dùng, đã từ chối, hết hạn hoặc đã thu hồi.", en: "Created links will appear here with pending, used, declined, expired, or revoked states.", ja: "作成済みリンクは、待機中・使用済み・辞退済み・期限切れ・取り消し済みの状態でここに表示されます。") }

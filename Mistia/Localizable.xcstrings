@@ -2333,6 +2333,28 @@
         }
       }
     },
+    "family.family.createDebtTransfer": {
+      "localizations": {
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Chuyển tiền công nợ"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Debt transfer"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "貸借の送金"
+          }
+        }
+      }
+    },
     "family.family.createFamily": {
       "localizations": {
         "vi": {
@@ -2351,6 +2373,28 @@
           "stringUnit": {
             "state": "translated",
             "value": "家族を作成"
+          }
+        }
+      }
+    },
+    "family.family.createFamilyTransfer": {
+      "localizations": {
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Chuyển tiền gia đình"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Family transfer"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "家族への送金"
           }
         }
       }
