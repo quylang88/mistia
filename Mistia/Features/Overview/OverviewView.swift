@@ -289,10 +289,13 @@ struct OverviewView: View {
         return renderSnapshot
     }
 
-    private func refreshRenderSnapshotCache(for key: OverviewRenderSnapshotCacheKey) {
+    private func refreshRenderSnapshotCache(
+        for key: OverviewRenderSnapshotCacheKey,
+        snapshot: OverviewRenderSnapshot
+    ) {
         renderSnapshotCache = OverviewRenderSnapshotCache(
             key: key,
-            snapshot: renderSnapshot
+            snapshot: snapshot
         )
     }
 
@@ -710,7 +713,7 @@ struct OverviewView: View {
             )
         }
         .task(id: snapshotKey) {
-            refreshRenderSnapshotCache(for: snapshotKey)
+            refreshRenderSnapshotCache(for: snapshotKey, snapshot: renderSnapshot)
         }
     }
 

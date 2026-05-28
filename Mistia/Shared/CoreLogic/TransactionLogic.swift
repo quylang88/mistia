@@ -328,36 +328,60 @@ nonisolated enum TransactionLogic {
     }
 
     static func summary(for records: [TransactionRecordSnapshot]) -> TransactionSummarySnapshot {
-        let posted = records.filter { $0.entryStatus == .posted }
-        let expenseMinor = posted
-            .filter(isExpenseSpending)
-            .reduce(into: Int64.zero) { partialResult, record in
-                partialResult += record.amountMinor
+        var expenseMinor = Int64.zero
+        var incomeMinor = Int64.zero
+        var draftCount = 0
+
+        for record in records {
+            switch record.entryStatus {
+            case .draft:
+                draftCount += 1
+            case .posted:
+                if isExpenseSpending(record) {
+                    expenseMinor += record.amountMinor
+                }
+                if record.primaryKind == .income {
+                    incomeMinor += record.amountMinor
+                }
             }
-        let incomeMinor = posted
-            .filter { $0.primaryKind == .income }
-            .reduce(into: Int64.zero) { partialResult, record in
-                partialResult += record.amountMinor
-            }
+        }
 
         return TransactionSummarySnapshot(
             expenseMinor: expenseMinor,
             incomeMinor: incomeMinor,
             totalCount: records.count,
-            draftCount: records.filter { $0.entryStatus == .draft }.count
+            draftCount: draftCount
         )
     }
 
     static func sections(
         from records: [TransactionRecordSnapshot],
+        assumesSortedByRecency: Bool = false,
         referenceDate: Date = .now,
         calendar: Calendar = MistiaCalendar.current
     ) -> [TransactionSectionSnapshot] {
         var builtSections: [TransactionSectionSnapshot] = []
+        var drafts: [TransactionRecordSnapshot] = []
+        var postedByDay: [Date: [TransactionRecordSnapshot]] = [:]
+        var postedDays: [Date] = []
 
-        let drafts = records
-            .filter { $0.entryStatus == .draft }
-            .sorted(by: recordSort)
+        for record in records {
+            switch record.entryStatus {
+            case .draft:
+                drafts.append(record)
+            case .posted:
+                let day = calendar.startOfDay(for: record.occurredAt)
+                if postedByDay[day] == nil {
+                    postedDays.append(day)
+                }
+                postedByDay[day, default: []].append(record)
+            }
+        }
+
+        if !assumesSortedByRecency {
+            drafts.sort(by: recordSort)
+            postedDays.sort(by: >)
+        }
 
         if !drafts.isEmpty {
             builtSections.append(
@@ -370,27 +394,23 @@ nonisolated enum TransactionLogic {
             )
         }
 
-        let posted = records
-            .filter { $0.entryStatus == .posted }
-            .sorted(by: recordSort)
-
-        let groups = Dictionary(grouping: posted) { calendar.startOfDay(for: $0.occurredAt) }
-        let sortedDays = groups.keys.sorted(by: >)
-
         let language = MistiaAppLanguage.current
+        let startOfReference = calendar.startOfDay(for: referenceDate)
 
-        for day in sortedDays {
-            let startOfReference = calendar.startOfDay(for: referenceDate)
+        for day in postedDays {
             let startOfDay = calendar.startOfDay(for: day)
             let dayDelta = calendar.dateComponents([.day], from: startOfDay, to: startOfReference).day ?? 0
             let title = MistiaDateFormatting.relativeDayLabel(for: dayDelta, language: language)
                 ?? MistiaDateFormatting.fullDateString(for: day, language: language, calendar: calendar)
+            let rows = assumesSortedByRecency
+                ? postedByDay[day, default: []]
+                : postedByDay[day, default: []].sorted(by: recordSort)
 
             builtSections.append(
                 TransactionSectionSnapshot(
                     id: "day-\(day.timeIntervalSince1970)",
                     title: title,
-                    rows: groups[day, default: []].sorted(by: recordSort),
+                    rows: rows,
                     isDraftSection: false
                 )
             )

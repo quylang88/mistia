@@ -336,7 +336,11 @@ struct TransactionsView: View {
             visibleRecordCount: page.totalCount,
             displayedRecordCount: displayedRecords.count,
             openDebtPositions: openDebtPositions,
-            sections: TransactionLogic.sections(from: displayedRecords, calendar: calendar),
+            sections: TransactionLogic.sections(
+                from: displayedRecords,
+                assumesSortedByRecency: true,
+                calendar: calendar
+            ),
             transactionsByID: Dictionary(
                 activeTransactions
                     .filter { displayedRecordIDs.contains($0.id) }
@@ -372,7 +376,11 @@ struct TransactionsView: View {
             visibleRecordCount: page.totalCount,
             displayedRecordCount: displayedRecords.count,
             openDebtPositions: [],
-            sections: TransactionLogic.sections(from: displayedRecords, calendar: calendar),
+            sections: TransactionLogic.sections(
+                from: displayedRecords,
+                assumesSortedByRecency: true,
+                calendar: calendar
+            ),
             transactionsByID: Dictionary(
                 activeTransactions
                     .filter { displayedRecordIDs.contains($0.id) }
@@ -396,11 +404,12 @@ struct TransactionsView: View {
     }
 
     private func refreshTransactionListSnapshotCache(
-        for key: TransactionsListSnapshotCacheKey
+        for key: TransactionsListSnapshotCacheKey,
+        snapshot: TransactionsListSnapshot
     ) {
         listSnapshotCache = TransactionsListSnapshotCache(
             key: key,
-            snapshot: transactionListSnapshot
+            snapshot: snapshot
         )
     }
 
@@ -811,7 +820,7 @@ struct TransactionsView: View {
             searchDebounceTask = nil
         }
         .task(id: listSnapshotKey) {
-            refreshTransactionListSnapshotCache(for: listSnapshotKey)
+            refreshTransactionListSnapshotCache(for: listSnapshotKey, snapshot: listSnapshot)
         }
     }
 

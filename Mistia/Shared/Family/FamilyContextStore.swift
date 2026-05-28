@@ -197,9 +197,9 @@ final class FamilyContextStore {
         guard !didBootstrap else { return }
         didBootstrap = true
         setModelContainer(sessionStore.currentModelContainer)
-        restoreCachedStateIfAvailable(sessionStore: sessionStore)
+        await restoreCachedStateIfAvailable(sessionStore: sessionStore)
         if !sessionStore.isSignedIn {
-            restoreSignedOutLocalState(sessionStore: sessionStore)
+            await restoreSignedOutLocalState(sessionStore: sessionStore)
         }
     }
 
@@ -234,7 +234,7 @@ final class FamilyContextStore {
     @discardableResult
     func refreshIfStale(sessionStore: SessionStore) async -> Bool {
         setModelContainer(sessionStore.currentModelContainer)
-        restoreCachedStateIfAvailable(sessionStore: sessionStore)
+        await restoreCachedStateIfAvailable(sessionStore: sessionStore)
 
         if let refreshTask {
             return await refreshTask.value
@@ -259,10 +259,10 @@ final class FamilyContextStore {
         syncsPendingNotificationReadState: Bool = true
     ) async -> Bool {
         setModelContainer(sessionStore.currentModelContainer)
-        restoreCachedStateIfAvailable(sessionStore: sessionStore)
+        await restoreCachedStateIfAvailable(sessionStore: sessionStore)
 
         guard sessionStore.isSignedIn else {
-            restoreSignedOutLocalState(sessionStore: sessionStore)
+            await restoreSignedOutLocalState(sessionStore: sessionStore)
             return false
         }
 
@@ -345,7 +345,7 @@ final class FamilyContextStore {
     @discardableResult
     func refreshFamilyMetadata(sessionStore: SessionStore) async -> Bool {
         setModelContainer(sessionStore.currentModelContainer)
-        restoreCachedStateIfAvailable(sessionStore: sessionStore)
+        await restoreCachedStateIfAvailable(sessionStore: sessionStore)
 
         guard sessionStore.canPerformRemoteActions else {
             lastErrorMessage = sessionStore.remoteUnavailableReason
@@ -1177,10 +1177,10 @@ final class FamilyContextStore {
         removeGrantedPendingPermissionRequests()
     }
 
-    private func restoreSignedOutLocalState(sessionStore: SessionStore) {
+    private func restoreSignedOutLocalState(sessionStore: SessionStore) async {
         switch sessionStore.activeLocalContext {
         case .guestAttached(let profileID, _):
-            if restoreCachedState(profileID: profileID) {
+            if await restoreCachedState(profileID: profileID) {
                 lastErrorMessage = nil
             } else {
                 clear()
@@ -1190,13 +1190,13 @@ final class FamilyContextStore {
         }
     }
 
-    private func restoreCachedStateIfAvailable(sessionStore: SessionStore) {
+    private func restoreCachedStateIfAvailable(sessionStore: SessionStore) async {
         guard !hasCachedRemoteState,
               let profileID = sessionStore.activeLocalProfileID else {
             return
         }
 
-        _ = restoreCachedState(profileID: profileID)
+        _ = await restoreCachedState(profileID: profileID)
     }
 
     private func normalizeActiveContextAfterStateLoad() {
@@ -1211,7 +1211,7 @@ final class FamilyContextStore {
         }
     }
 
-    private static var familyCacheDecoder: JSONDecoder {
+    nonisolated private static var familyCacheDecoder: JSONDecoder {
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .custom { decoder in
             let container = try decoder.singleValueContainer()
@@ -1304,19 +1304,25 @@ final class FamilyContextStore {
         persistCachedState(currentSnapshot)
     }
 
-    private func restoreCachedState(profileID: UUID) -> Bool {
+    private func restoreCachedState(profileID: UUID) async -> Bool {
         guard let cacheURL = familyCacheURL(profileID: profileID),
-              let data = try? Data(contentsOf: cacheURL),
-              let snapshot = try? Self.familyCacheDecoder.decode(
-                FamilyStateSnapshot.self,
-                from: data
-              ) else {
+              let snapshot = await Self.loadFamilyCacheSnapshot(from: cacheURL) else {
             return false
         }
 
         apply(snapshot: snapshot)
         normalizeActiveContextAfterStateLoad()
         return true
+    }
+
+    nonisolated private static func loadFamilyCacheSnapshot(from cacheURL: URL) async -> FamilyStateSnapshot? {
+        await Task.detached(priority: .utility) {
+            guard let data = try? Data(contentsOf: cacheURL) else { return nil }
+            return try? familyCacheDecoder.decode(
+                FamilyStateSnapshot.self,
+                from: data
+            )
+        }.value
     }
 
     private func activeFamilyCacheURL() -> URL? {

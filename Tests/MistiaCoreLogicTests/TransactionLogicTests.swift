@@ -407,6 +407,67 @@ final class TransactionLogicTests: XCTestCase {
         XCTAssertEqual(sections.first?.rows.count, 1)
     }
 
+    func testSectionsCanReuseRecencySortedInputWithoutChangingOutput() {
+        let walletID = UUID()
+        let now = Date(timeIntervalSince1970: 1_742_646_400)
+
+        let latestDraft = makeRecord(
+            primaryKind: .expense,
+            entryStatus: .draft,
+            title: "Draft latest",
+            amountMinor: 700,
+            occurredAt: now.addingTimeInterval(180),
+            sourceWalletID: walletID,
+            sourceWalletKind: .cash,
+            categoryID: UUID()
+        )
+        let olderDraft = makeRecord(
+            primaryKind: .expense,
+            entryStatus: .draft,
+            title: "Draft older",
+            amountMinor: 500,
+            occurredAt: now.addingTimeInterval(60),
+            sourceWalletID: walletID,
+            sourceWalletKind: .cash,
+            categoryID: UUID()
+        )
+        let todayExpense = makeRecord(
+            primaryKind: .expense,
+            title: "Today",
+            amountMinor: 3_000,
+            occurredAt: now,
+            sourceWalletID: walletID,
+            sourceWalletKind: .cash,
+            categoryID: UUID()
+        )
+        let yesterdayExpense = makeRecord(
+            primaryKind: .expense,
+            title: "Yesterday",
+            amountMinor: 2_000,
+            occurredAt: now.addingTimeInterval(-86_400),
+            sourceWalletID: walletID,
+            sourceWalletKind: .cash,
+            categoryID: UUID()
+        )
+
+        let sortedRecords = TransactionLogic.visibleRecords(
+            from: [todayExpense, olderDraft, yesterdayExpense, latestDraft],
+            selectedKind: nil,
+            filters: TransactionFilterState(),
+            referenceDate: now
+        )
+
+        let baseline = TransactionLogic.sections(from: sortedRecords, referenceDate: now)
+        let optimized = TransactionLogic.sections(
+            from: sortedRecords,
+            assumesSortedByRecency: true,
+            referenceDate: now
+        )
+
+        XCTAssertEqual(optimized, baseline)
+        XCTAssertEqual(optimized.first?.rows.map(\.id), [latestDraft.id, olderDraft.id])
+    }
+
     func testNonSpendingExpenseLikePaymentsDoNotCountAsExpenseSpending() {
         let bankID = UUID()
         let cardID = UUID()
