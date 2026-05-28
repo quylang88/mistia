@@ -116,20 +116,12 @@ struct AIBillAnalysisView: View {
     }
 
     private var modeSection: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            MistiaNativeSegmentedControl(
-                selection: $mode,
-                options: BillItemTransactionMode.allCases,
-                title: modeTitle
-            )
-        }
-        .padding(12)
-        .background {
-            MistiaRoundedGlassBackground(
-                cornerRadius: 18,
-                tint: Color(UIColor.secondarySystemGroupedBackground)
-            )
-        }
+        MistiaNativeSegmentedControl(
+            selection: $mode,
+            options: BillItemTransactionMode.allCases,
+            title: modeTitle
+        )
+        .padding(.horizontal, 4)
     }
 
     private var actionSection: some View {
