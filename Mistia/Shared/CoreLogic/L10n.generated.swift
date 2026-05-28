@@ -3692,6 +3692,11 @@ nonisolated enum L10n {
             static func walletForBill(language: MistiaAppLanguage) -> String { L10n.tr("transactions.aibill.walletForBill", vi: "Ví của bill", en: "Receipt wallet", ja: "レシートのウォレット", language: language) }
         }
 
+        nonisolated enum debtsettlement {
+            static var amountExceedsOutstanding: String { L10n.tr("transactions.debtsettlement.amountExceedsOutstanding", vi: "Số tiền không được lớn hơn công nợ đang mở.", en: "The amount cannot be greater than the open debt.", ja: "金額は未決済の債務を超えられません。") }
+            static func amountExceedsOutstanding(language: MistiaAppLanguage) -> String { L10n.tr("transactions.debtsettlement.amountExceedsOutstanding", vi: "Số tiền không được lớn hơn công nợ đang mở.", en: "The amount cannot be greater than the open debt.", ja: "金額は未決済の債務を超えられません。", language: language) }
+        }
+
         nonisolated enum transactioneditor {
             static var addANoteIfNeeded: String { L10n.tr("transactions.transactioneditor.addANoteIfNeeded", vi: "Thêm ghi chú nếu cần", en: "Add a note if needed", ja: "必要ならメモを追加") }
             static func addANoteIfNeeded(language: MistiaAppLanguage) -> String { L10n.tr("transactions.transactioneditor.addANoteIfNeeded", vi: "Thêm ghi chú nếu cần", en: "Add a note if needed", ja: "必要ならメモを追加", language: language) }

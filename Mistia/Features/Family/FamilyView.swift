@@ -98,10 +98,7 @@ struct FamilyManagementView: View {
                 activeSheet = .invite
             },
             onRefresh: {
-                await familyContextStore.refreshLatest(
-                    sessionStore: sessionStore,
-                    source: .userInitiated
-                )
+                await familyContextStore.refreshFamilyMetadata(sessionStore: sessionStore)
             },
             contentSpacing: 22
         ) {
@@ -123,13 +120,6 @@ struct FamilyManagementView: View {
                 familyHubContent
             }
         }
-        .overlay(alignment: .topTrailing) {
-            if familyContextStore.isRefreshingLatest {
-                FamilySyncOverlayIndicator()
-                    .padding(.top, 12)
-                    .padding(.trailing, 18)
-            }
-        }
         .navigationDestination(item: $destination) { route in
             switch route {
             case .overview:
@@ -149,12 +139,6 @@ struct FamilyManagementView: View {
             case .privacy:
                 MistiaPrivacySheet()
             }
-        }
-        .task {
-            await familyContextStore.refreshLatest(
-                sessionStore: sessionStore,
-                source: .enterFamily
-            )
         }
     }
 
@@ -632,6 +616,7 @@ private struct FamilyDistributionSection: View {
                     }
                 }
                 .pickerStyle(.segmented)
+                .tint(Color(UIColor.systemGray))
                 .padding(.horizontal, 4)
 
                 MistiaGlassCard(cornerRadius: 24, tint: cardTint) {
@@ -655,6 +640,7 @@ private struct FamilyDistributionSection: View {
                             }
                         }
                         .pickerStyle(.segmented)
+                        .tint(Color(UIColor.systemGray))
 
                         if resolvedMode == .spending {
                             MistiaCategorySpendingChartView(
@@ -1510,7 +1496,6 @@ private struct FamilyOverviewHeader: View {
                                     familyContextStore.activateSelfView()
                                 } else {
                                     familyContextStore.activateMemberView(member)
-                                    refreshLatestMemberData()
                                 }
                             }
                         } label: {
@@ -1554,7 +1539,6 @@ private struct FamilyOverviewHeader: View {
                                         familyContextStore.activateSelfView()
                                     } else {
                                         familyContextStore.activateMemberView(member)
-                                        refreshLatestMemberData()
                                     }
                                 } label: {
                                     Label(L10n.family.family.viewDetails, systemImage: "eye.fill")
@@ -1598,14 +1582,6 @@ private struct FamilyOverviewHeader: View {
         return userID == member.userID
     }
 
-    private func refreshLatestMemberData() {
-        Task { @MainActor in
-            await familyContextStore.refreshLatest(
-                sessionStore: sessionStore,
-                source: .contextSwitch
-            )
-        }
-    }
 }
 
 // MARK: - Apple-style Family Header Card
@@ -2237,7 +2213,7 @@ private struct FamilyOverviewDataHost: View {
             onRefresh: {
                 await familyContextStore.refreshLatest(
                     sessionStore: sessionStore,
-                    source: .userInitiated
+                    source: .familyOverview
                 )
             },
             contentSpacing: 18,
@@ -2259,6 +2235,10 @@ private struct FamilyOverviewDataHost: View {
             if !familyContextStore.isViewingOtherMemberContext {
                 familyContextStore.activateFamilyHome()
             }
+            await familyContextStore.refreshLatest(
+                sessionStore: sessionStore,
+                source: .familyOverview
+            )
         }
         .task(id: dataKey) {
             await refreshOverviewDataCache(for: dataKey)
@@ -2605,9 +2585,9 @@ private struct FamilyMemberProfileScreen: View {
             Button {
                 familyContextStore.activateMemberView(member)
                 Task { @MainActor in
-                    await familyContextStore.refreshLatest(
+                    await familyContextStore.refreshMemberFinance(
                         sessionStore: sessionStore,
-                        source: .contextSwitch
+                        memberUserID: member.userID
                     )
                 }
                 dismiss()

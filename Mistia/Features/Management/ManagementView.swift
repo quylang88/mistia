@@ -534,10 +534,7 @@ struct ManagementView: View {
         }
 
         Task { @MainActor in
-            await familyContextStore.refreshLatest(
-                sessionStore: sessionStore,
-                source: .enterFamily
-            )
+            await familyContextStore.refreshFamilyMetadata(sessionStore: sessionStore)
         }
     }
 

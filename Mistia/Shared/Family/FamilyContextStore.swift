@@ -4,6 +4,7 @@ import SwiftData
 
 enum FamilyRefreshSource {
     case enterFamily
+    case familyOverview
     case contextSwitch
     case userInitiated
     case postManualSync
@@ -53,8 +54,10 @@ final class FamilyContextStore {
     @ObservationIgnored private var modelContainer: ModelContainer
     @ObservationIgnored private var refreshTask: Task<Bool, Never>?
     @ObservationIgnored private var latestRefreshTask: Task<Void, Never>?
+    @ObservationIgnored private var metadataRefreshTask: Task<Bool, Never>?
     @ObservationIgnored private var lastPassiveRefreshCompletedAt: Date?
     @ObservationIgnored private var lastLatestRefreshCompletedAt: Date?
+    @ObservationIgnored private var lastMetadataRefreshCompletedAt: Date?
     @ObservationIgnored private var avatarHydrationTask: Task<Void, Never>?
     private var pendingPermissionRequestKeys: Set<FamilyPendingPermissionRequestKey> = []
     private var pendingPermissionRequests: [FamilyPermissionRequestRemoteRecord] = []
@@ -256,7 +259,8 @@ final class FamilyContextStore {
 
     private func performRefresh(
         sessionStore: SessionStore,
-        financeScope: FamilyAccessibleFinanceScope = .allAccessible,
+        financeScope: FamilyAccessibleFinanceScope? = .allAccessible,
+        refreshesNotifications: Bool = true,
         syncsPendingNotificationReadState: Bool = true
     ) async -> Bool {
         setModelContainer(sessionStore.currentModelContainer)
@@ -283,13 +287,17 @@ final class FamilyContextStore {
 
             normalizeActiveContextAfterStateLoad()
 
-            try await refreshAccessibleFinance(
-                sessionStore: sessionStore,
-                session: session,
-                scope: financeScope
-            )
-            try await refreshFamilyNotifications(session: session)
-            if syncsPendingNotificationReadState {
+            if let financeScope {
+                try await refreshAccessibleFinance(
+                    sessionStore: sessionStore,
+                    session: session,
+                    scope: financeScope
+                )
+            }
+            if refreshesNotifications {
+                try await refreshFamilyNotifications(session: session)
+            }
+            if refreshesNotifications && syncsPendingNotificationReadState {
                 try await pushPendingNotificationReadState(session: session)
             }
             return true
@@ -326,7 +334,9 @@ final class FamilyContextStore {
         source: FamilyRefreshSource
     ) async {
         switch source {
-        case .enterFamily, .contextSwitch:
+        case .enterFamily:
+            await refreshFamilyMetadata(sessionStore: sessionStore)
+        case .familyOverview, .contextSwitch:
             guard !didCompleteLatestRefreshRecently else { return }
             await coalescedLatestFamilyDataRefresh(sessionStore: sessionStore)
         case .userInitiated:
@@ -335,6 +345,47 @@ final class FamilyContextStore {
             await refresh(sessionStore: sessionStore)
             lastLatestRefreshCompletedAt = Date()
         }
+    }
+
+    @discardableResult
+    func refreshFamilyMetadata(sessionStore: SessionStore) async -> Bool {
+        setModelContainer(sessionStore.currentModelContainer)
+        restoreCachedStateIfAvailable(sessionStore: sessionStore)
+
+        guard sessionStore.canPerformRemoteActions else {
+            lastErrorMessage = sessionStore.remoteUnavailableReason
+            return false
+        }
+
+        if let metadataRefreshTask {
+            return await metadataRefreshTask.value
+        }
+
+        if didCompleteMetadataRefreshRecently {
+            return hasCachedRemoteState || family != nil
+        }
+
+        let task = Task { @MainActor [weak self] in
+            guard let self else { return false }
+            return await self.performRefresh(
+                sessionStore: sessionStore,
+                financeScope: nil,
+                refreshesNotifications: false,
+                syncsPendingNotificationReadState: false
+            )
+        }
+        metadataRefreshTask = task
+        let didRefresh = await task.value
+        metadataRefreshTask = nil
+        if didRefresh {
+            lastMetadataRefreshCompletedAt = Date()
+        }
+        return didRefresh
+    }
+
+    private var didCompleteMetadataRefreshRecently: Bool {
+        guard let lastMetadataRefreshCompletedAt else { return false }
+        return Date().timeIntervalSince(lastMetadataRefreshCompletedAt) < Self.latestRefreshCooldown
     }
 
     private var didCompleteLatestRefreshRecently: Bool {
@@ -415,6 +466,18 @@ final class FamilyContextStore {
         } catch {
             lastErrorMessage = visibleErrorMessage(for: error, sessionStore: sessionStore)
         }
+    }
+
+    func refreshMemberFinance(
+        sessionStore: SessionStore,
+        memberUserID: UUID,
+        preserveLocalNewerRows: Bool = true
+    ) async {
+        await refreshAccessibleFinance(
+            sessionStore: sessionStore,
+            userIDs: [memberUserID],
+            preserveLocalNewerRows: preserveLocalNewerRows
+        )
     }
 
     func deleteFamily(sessionStore: SessionStore) async {

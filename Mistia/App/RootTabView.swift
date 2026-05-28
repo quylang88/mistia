@@ -410,7 +410,7 @@ struct RootTabView: View {
       Task { @MainActor in
         await familyContextStore.refreshLatest(
           sessionStore: sessionStore,
-          source: .enterFamily
+          source: .familyOverview
         )
       }
 
@@ -423,9 +423,9 @@ struct RootTabView: View {
       familyContextStore.activateMemberView(member)
       selectedTab = .overview
       Task { @MainActor in
-        await familyContextStore.refreshLatest(
+        await familyContextStore.refreshMemberFinance(
           sessionStore: sessionStore,
-          source: .contextSwitch
+          memberUserID: member.userID
         )
       }
 

@@ -36,8 +36,8 @@ struct AIBillAnalysisView: View {
 
         ScrollView {
             VStack(spacing: 18) {
-                modeSection
                 actionSection
+                modeSection
                 if bills.isEmpty {
                     emptyState
                 } else {
@@ -123,6 +123,13 @@ struct AIBillAnalysisView: View {
                 title: modeTitle
             )
         }
+        .padding(12)
+        .background {
+            MistiaRoundedGlassBackground(
+                cornerRadius: 18,
+                tint: Color(UIColor.secondarySystemGroupedBackground)
+            )
+        }
     }
 
     private var actionSection: some View {
@@ -185,8 +192,10 @@ struct AIBillAnalysisView: View {
         }
         .padding(14)
         .background {
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .fill(Color(UIColor.secondarySystemGroupedBackground))
+            MistiaRoundedGlassBackground(
+                cornerRadius: 20,
+                tint: Color(UIColor.secondarySystemGroupedBackground)
+            )
         }
     }
 
@@ -249,8 +258,10 @@ struct AIBillAnalysisView: View {
         }
         .padding(14)
         .background {
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .fill(Color(UIColor.secondarySystemGroupedBackground))
+            MistiaRoundedGlassBackground(
+                cornerRadius: 20,
+                tint: Color(UIColor.secondarySystemGroupedBackground)
+            )
         }
     }
 
@@ -393,7 +404,7 @@ struct AIBillAnalysisView: View {
         HStack(spacing: 10) {
             Image(systemName: "lock.fill")
                 .font(.system(size: 12, weight: .bold))
-                .foregroundStyle(MistiaAccent.purple.color)
+                .foregroundStyle(.secondary)
             VStack(alignment: .leading, spacing: 2) {
                 Text(L10n.transactions.aibill.lockedGroupValue(group.amountMinor.formattedCurrency(code: bill.currencyCode)))
                     .font(.system(size: 13, weight: .semibold, design: .rounded))
@@ -414,7 +425,7 @@ struct AIBillAnalysisView: View {
         .padding(10)
         .background {
             RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .fill(MistiaAccent.purple.color.opacity(colorScheme == .dark ? 0.18 : 0.09))
+                .fill(Color(UIColor.tertiarySystemGroupedBackground))
         }
     }
 
@@ -446,8 +457,10 @@ struct AIBillAnalysisView: View {
         }
         .padding(12)
         .background {
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .fill(Color(UIColor.tertiarySystemGroupedBackground))
+            MistiaRoundedGlassBackground(
+                cornerRadius: 16,
+                tint: Color(UIColor.tertiarySystemGroupedBackground)
+            )
         }
     }
 

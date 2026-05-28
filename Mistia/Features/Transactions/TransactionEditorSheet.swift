@@ -104,6 +104,7 @@ enum TransactionEditorCompletion: Equatable {
 
 private enum TransactionEditorFocusedField: Hashable {
     case title
+    case counterparty
 }
 
 private struct FamilyTransferDraftPayload {
@@ -188,9 +189,13 @@ struct TransactionEditorSheet: View {
     }
     @State private var showsCategoryPicker = false
     @State private var cachedTitleSuggestions: [TransactionTitleSuggestion] = []
+    @State private var cachedCounterpartySuggestions: [TransactionTitleSuggestion] = []
     @State private var titleSuggestionRefreshTask: Task<Void, Never>?
+    @State private var counterpartySuggestionRefreshTask: Task<Void, Never>?
     @State private var suppressTitleSuggestions = false
+    @State private var suppressCounterpartySuggestions = false
     @State private var isApplyingTitleSuggestion = false
+    @State private var isApplyingCounterpartySuggestion = false
     @State private var isSaving = false
     @State private var receiptDraft: TransactionReceiptDraft?
     @State private var shouldDeleteReceiptOnSave = false
@@ -249,6 +254,11 @@ struct TransactionEditorSheet: View {
 
     private var isFamilyTransferDetail: Bool {
         target.transaction?.transferSubtype == .familyTransfer
+    }
+
+    private var isExistingDebtTransaction: Bool {
+        guard let transaction = target.transaction else { return false }
+        return transaction.primaryKind == .transfer && transaction.transferSubtype == .debt
     }
 
     var body: some View {
@@ -440,6 +450,7 @@ struct TransactionEditorSheet: View {
         }
         .onChange(of: draft.transferSubtype) { _, _ in
             scheduleTitleSuggestionsRefresh()
+            scheduleCounterpartySuggestionsRefresh()
             normalizeTransferDraftForSubtype()
         }
         .onChange(of: draft.familyRecipientUserID) { _, _ in
@@ -455,12 +466,15 @@ struct TransactionEditorSheet: View {
                 loadReceiptDraftIfNeeded()
                 applyReceiptPrefillIfNeeded()
                 scheduleTitleSuggestionsRefresh()
+                scheduleCounterpartySuggestionsRefresh()
                 presentInitialReceiptScannerIfNeeded()
             }
         }
         .onDisappear {
             titleSuggestionRefreshTask?.cancel()
             titleSuggestionRefreshTask = nil
+            counterpartySuggestionRefreshTask?.cancel()
+            counterpartySuggestionRefreshTask = nil
             receiptLoadTask?.cancel()
             receiptLoadTask = nil
             receiptProcessingTask?.cancel()
@@ -509,6 +523,7 @@ struct TransactionEditorSheet: View {
                     }
                 }
                 .pickerStyle(.segmented)
+                .tint(Color(UIColor.systemGray))
                 .listRowInsets(EdgeInsets())
                 .listRowBackground(Color.clear)
             }
@@ -570,7 +585,8 @@ struct TransactionEditorSheet: View {
                         }
                     }
                     .pickerStyle(.segmented)
-                    .disabled(target.prefill?.lockedDebtIntent != nil)
+                    .tint(Color(UIColor.systemGray))
+                    .disabled(target.prefill?.lockedDebtIntent != nil || isExistingDebtTransaction)
                     .listRowInsets(EdgeInsets())
                     .listRowBackground(Color.clear)
                 }
@@ -632,6 +648,7 @@ struct TransactionEditorSheet: View {
                         Text(L10n.transactions.transactioneditor.enterManually).tag(MistiaCurrencyConversionMode.manual.rawValue)
                     }
                     .pickerStyle(.segmented)
+                    .tint(Color(UIColor.systemGray))
 
                     if selectedConversionMode == .manual {
                         if shouldShowDestinationAmountInput {
@@ -736,12 +753,35 @@ struct TransactionEditorSheet: View {
                         }
                         .pickerStyle(.menu)
 
-                        TextField(
-                            L10n.transactions.transactioneditor.counterpartyName,
-                            text: $bindableDraft.counterpartyName
-                        )
+                    TextField(
+                        L10n.transactions.transactioneditor.counterpartyName,
+                        text: $bindableDraft.counterpartyName
+                    )
+                    .focused($focusedField, equals: .counterparty)
+                    .textInputAutocapitalization(.words)
+                    .autocorrectionDisabled()
+                    .onChange(of: focusedField) { _, newValue in
+                        if newValue == .counterparty {
+                            suppressCounterpartySuggestions = false
+                        }
+                        scheduleCounterpartySuggestionsRefresh()
+                    }
+                    .onChange(of: bindableDraft.counterpartyName) { _, _ in
+                        if isApplyingCounterpartySuggestion {
+                            isApplyingCounterpartySuggestion = false
+                            cachedCounterpartySuggestions = []
+                        } else {
+                            suppressCounterpartySuggestions = false
+                            scheduleCounterpartySuggestionsRefresh()
+                        }
+                    }
+
+                    if shouldShowCounterpartySuggestions {
+                        counterpartySuggestionsPanel
+                            .transition(.move(edge: .top).combined(with: .opacity))
                     }
                 }
+            }
             }
 
             if shouldShowNotesSection {
@@ -838,6 +878,9 @@ struct TransactionEditorSheet: View {
         if let lockedTransferSubtype = target.prefill?.lockedTransferSubtype {
             return [lockedTransferSubtype]
         }
+        if isExistingDebtTransaction {
+            return [.debt]
+        }
 
         return TransactionTransferSubtype.editorOptions(
             isFamilyEligible: canShowFamilyTransferMode,
@@ -848,6 +891,9 @@ struct TransactionEditorSheet: View {
     private func isTransferSubtypeEnabled(_ subtype: TransactionTransferSubtype) -> Bool {
         if let lockedTransferSubtype = target.prefill?.lockedTransferSubtype {
             return subtype == lockedTransferSubtype
+        }
+        if isExistingDebtTransaction {
+            return subtype == .debt
         }
 
         return TransactionTransferSubtype.isEditorOptionEnabled(
@@ -916,10 +962,7 @@ struct TransactionEditorSheet: View {
         guard let prompt = transferPermissionPrompt else { return }
         transferPermissionPrompt = nil
         Task { @MainActor in
-            await familyContextStore.refreshLatest(
-                sessionStore: sessionStore,
-                source: .userInitiated
-            )
+            await familyContextStore.refreshFamilyMetadata(sessionStore: sessionStore)
             if transferPermissionPrompt(for: prompt.subtype) == nil {
                 draft.transferSubtype = prompt.subtype
             }
@@ -948,6 +991,9 @@ struct TransactionEditorSheet: View {
     private var debtIntentOptions: [TransactionDebtIntent] {
         if let lockedDebtIntent = target.prefill?.lockedDebtIntent {
             return [lockedDebtIntent]
+        }
+        if isExistingDebtTransaction, let existingDebtIntent = target.transaction?.debtIntent {
+            return [existingDebtIntent]
         }
 
         return TransactionDebtIntent.allCases
@@ -1042,8 +1088,20 @@ struct TransactionEditorSheet: View {
         cachedTitleSuggestions
     }
 
+    private var counterpartySuggestions: [TransactionTitleSuggestion] {
+        cachedCounterpartySuggestions
+    }
+
     private var shouldShowTitleSuggestions: Bool {
         focusedField == .title && !suppressTitleSuggestions && !cachedTitleSuggestions.isEmpty
+    }
+
+    private var shouldShowCounterpartySuggestions: Bool {
+        focusedField == .counterparty
+            && draft.primaryKind == .transfer
+            && draft.transferSubtype == .debt
+            && !suppressCounterpartySuggestions
+            && !cachedCounterpartySuggestions.isEmpty
     }
 
     private func scheduleTitleSuggestionsRefresh() {
@@ -1069,6 +1127,33 @@ struct TransactionEditorSheet: View {
             query: draft.title,
             primaryKind: draft.primaryKind,
             transferSubtype: draft.primaryKind == .transfer ? draft.transferSubtype : nil,
+            excludingTransactionID: target.transaction?.id,
+            limit: 5
+        )
+    }
+
+    private func scheduleCounterpartySuggestionsRefresh() {
+        counterpartySuggestionRefreshTask?.cancel()
+        counterpartySuggestionRefreshTask = Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(120))
+            guard !Task.isCancelled else { return }
+            refreshCounterpartySuggestionsNow()
+        }
+    }
+
+    private func refreshCounterpartySuggestionsNow() {
+        guard focusedField == .counterparty,
+              draft.primaryKind == .transfer,
+              draft.transferSubtype == .debt,
+              !suppressCounterpartySuggestions,
+              draft.counterpartyName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false else {
+            cachedCounterpartySuggestions = []
+            return
+        }
+
+        cachedCounterpartySuggestions = TransactionLogic.counterpartySuggestions(
+            from: visiblePostedTransactions.prefix(500).map(\.snapshot),
+            query: draft.counterpartyName,
             excludingTransactionID: target.transaction?.id,
             limit: 5
         )
@@ -2561,11 +2646,32 @@ struct TransactionEditorSheet: View {
         draft.title = suggestion.title
     }
 
+    private func applyCounterpartySuggestion(_ suggestion: TransactionTitleSuggestion) {
+        isApplyingCounterpartySuggestion = true
+        suppressCounterpartySuggestions = true
+        draft.counterpartyName = suggestion.title
+    }
+
     private var titleSuggestionsPanel: some View {
+        suggestionsPanel(titleSuggestions) { suggestion in
+            applyTitleSuggestion(suggestion)
+        }
+    }
+
+    private var counterpartySuggestionsPanel: some View {
+        suggestionsPanel(counterpartySuggestions) { suggestion in
+            applyCounterpartySuggestion(suggestion)
+        }
+    }
+
+    private func suggestionsPanel(
+        _ suggestions: [TransactionTitleSuggestion],
+        onApply: @escaping (TransactionTitleSuggestion) -> Void
+    ) -> some View {
         VStack(spacing: 0) {
-            ForEach(Array(titleSuggestions.enumerated()), id: \.element.id) { index, suggestion in
+            ForEach(Array(suggestions.enumerated()), id: \.element.id) { index, suggestion in
                 Button {
-                    applyTitleSuggestion(suggestion)
+                    onApply(suggestion)
                 } label: {
                     HStack(spacing: 12) {
                         Image(systemName: "clock.arrow.circlepath")
@@ -2588,7 +2694,7 @@ struct TransactionEditorSheet: View {
                 }
                 .buttonStyle(.plain)
 
-                if index < titleSuggestions.count - 1 {
+                if index < suggestions.count - 1 {
                     Divider()
                         .padding(.leading, 39)
                 }

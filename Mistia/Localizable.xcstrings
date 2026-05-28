@@ -31989,6 +31989,28 @@
         }
       }
     },
+    "transactions.debtsettlement.amountExceedsOutstanding": {
+      "localizations": {
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Số tiền không được lớn hơn công nợ đang mở."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The amount cannot be greater than the open debt."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "金額は未決済の債務を超えられません。"
+          }
+        }
+      }
+    },
     "transactions.transactioneditor.expenseName": {
       "localizations": {
         "vi": {

@@ -148,6 +148,7 @@ struct CounterpartyDebtSnapshot: Equatable, Identifiable {
     let id: String
     let displayName: String
     let netMinor: Int64
+    let currencyCode: String
 
     var isReceivable: Bool {
         netMinor > 0
@@ -400,7 +401,16 @@ nonisolated enum TransactionLogic {
     static func openDebtPositions(
         from records: [TransactionRecordSnapshot]
     ) -> [CounterpartyDebtSnapshot] {
-        let grouped = Dictionary(grouping: records) { $0.normalizedCounterpartyKey ?? UUID().uuidString }
+        let debtRecords = records.filter {
+            $0.entryStatus == .posted
+                && $0.primaryKind == .transfer
+                && $0.transferSubtype == .debt
+        }
+        let grouped = Dictionary(grouping: debtRecords) { record in
+            let counterpartyKey = record.normalizedCounterpartyKey ?? UUID().uuidString
+            let currencyCode = MistiaCurrencyLogic.normalizedCode(record.sourceCurrencyCode)
+            return "\(counterpartyKey)|\(currencyCode)"
+        }
         return grouped.compactMap { key, groupedRecords in
             guard let first = groupedRecords.first,
                   let normalizedKey = first.normalizedCounterpartyKey,
@@ -410,7 +420,6 @@ nonisolated enum TransactionLogic {
             }
 
             let total = groupedRecords
-                .filter { $0.entryStatus == .posted && $0.primaryKind == .transfer && $0.transferSubtype == .debt }
                 .reduce(into: Int64.zero) { partialResult, record in
                     switch record.debtIntent {
                     case .lend:
@@ -429,20 +438,84 @@ nonisolated enum TransactionLogic {
             guard total != 0 else { return nil }
 
             return CounterpartyDebtSnapshot(
-                id: normalizedKey,
+                id: key,
                 displayName: groupedRecords
                     .compactMap(\.counterpartyName)
                     .first(where: { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty })
                     ?? L10n.shared.corelogic.transaction.unknownName,
-                netMinor: total
+                netMinor: total,
+                currencyCode: MistiaCurrencyLogic.normalizedCode(first.sourceCurrencyCode)
             )
         }
         .sorted {
+            if $0.displayName.localizedCaseInsensitiveCompare($1.displayName) != .orderedSame {
+                return $0.displayName.localizedCaseInsensitiveCompare($1.displayName) == .orderedAscending
+            }
+            if $0.currencyCode != $1.currencyCode {
+                return $0.currencyCode.localizedCaseInsensitiveCompare($1.currencyCode) == .orderedAscending
+            }
             if abs($0.netMinor) != abs($1.netMinor) {
                 return abs($0.netMinor) > abs($1.netMinor)
             }
-            return $0.displayName.localizedCaseInsensitiveCompare($1.displayName) == .orderedAscending
+            return $0.id < $1.id
         }
+    }
+
+    static func counterpartySuggestions(
+        from records: [TransactionRecordSnapshot],
+        query: String,
+        excludingTransactionID: UUID? = nil,
+        limit: Int = 5
+    ) -> [TransactionTitleSuggestion] {
+        guard limit > 0,
+              let normalizedQuery = normalizeCounterpartyName(query),
+              !normalizedQuery.isEmpty else {
+            return []
+        }
+
+        let matchingDebtRecords = records.filter { record in
+            guard record.id != excludingTransactionID,
+                  record.entryStatus == .posted,
+                  record.primaryKind == .transfer,
+                  record.transferSubtype == .debt,
+                  let counterpartyName = record.counterpartyName?.trimmingCharacters(in: .whitespacesAndNewlines),
+                  !counterpartyName.isEmpty,
+                  let counterpartyKey = normalizeCounterpartyName(counterpartyName)
+            else {
+                return false
+            }
+            return titleSuggestionMatchRank(query: normalizedQuery, normalizedTitle: counterpartyKey) != nil
+        }
+
+        let grouped = Dictionary(grouping: matchingDebtRecords) { record in
+            normalizeCounterpartyName(record.counterpartyName)?
+                .replacingOccurrences(of: " ", with: "")
+                ?? record.id.uuidString
+        }
+
+        return grouped.compactMap { key, groupedRecords -> (TransactionTitleSuggestion, Int, Date, Int)? in
+            guard let representative = groupedRecords.sorted(by: recordSort).first,
+                  let counterpartyName = representative.counterpartyName?.trimmingCharacters(in: .whitespacesAndNewlines),
+                  let counterpartyKey = normalizeCounterpartyName(counterpartyName),
+                  let rank = titleSuggestionMatchRank(query: normalizedQuery, normalizedTitle: counterpartyKey)
+            else {
+                return nil
+            }
+            return (
+                TransactionTitleSuggestion(id: key, title: counterpartyName),
+                rank,
+                representative.occurredAt,
+                groupedRecords.count
+            )
+        }
+        .sorted { lhs, rhs in
+            if lhs.1 != rhs.1 { return lhs.1 < rhs.1 }
+            if lhs.2 != rhs.2 { return lhs.2 > rhs.2 }
+            if lhs.3 != rhs.3 { return lhs.3 > rhs.3 }
+            return lhs.0.title.localizedCaseInsensitiveCompare(rhs.0.title) == .orderedAscending
+        }
+        .prefix(limit)
+        .map(\.0)
     }
 
     static func titleSuggestions(

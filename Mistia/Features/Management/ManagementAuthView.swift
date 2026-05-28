@@ -151,7 +151,6 @@ struct ManagementAccountView: View {
     @State private var isConfirmPasswordVisible = false
     @State private var isEmailAuthExpanded = false
     @State private var destination: ManagementProfileDestination?
-    @State private var isOpeningFamily = false
     @FocusState private var focusedField: ManagementAuthInput?
     
     @Environment(\.colorScheme) private var colorScheme
@@ -408,8 +407,8 @@ struct ManagementAccountView: View {
                     accent: .lightPurple,
                     subtitle: nil,
                     value: familyContextStore.family?.name ?? L10n.management.managementauth.none,
-                    isLoading: isOpeningFamily && shouldRefreshFamilyBeforeOpening,
-                    isDisabled: !sessionStore.canPerformRemoteActions || isOpeningFamily
+                    isLoading: false,
+                    isDisabled: !sessionStore.canPerformRemoteActions
                 ) {
                     openFamily()
                 }
@@ -448,21 +447,13 @@ struct ManagementAccountView: View {
     }
 
     private func openFamily() {
+        destination = .family
         guard shouldRefreshFamilyBeforeOpening else {
-            destination = .family
             return
         }
 
-        guard !isOpeningFamily else { return }
-        isOpeningFamily = true
-
         Task { @MainActor in
-            await familyContextStore.refreshLatest(
-                sessionStore: sessionStore,
-                source: .userInitiated
-            )
-            destination = .family
-            isOpeningFamily = false
+            await familyContextStore.refreshFamilyMetadata(sessionStore: sessionStore)
         }
     }
 
@@ -4006,6 +3997,7 @@ struct ManagementBackupRestoreView: View {
                         }
                     }
                     .pickerStyle(.segmented)
+                    .tint(Color(UIColor.systemGray))
 
                     Text(restoreMode.localizedDescription)
                         .descriptionTextStyle()

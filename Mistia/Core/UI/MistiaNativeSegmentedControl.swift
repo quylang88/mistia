@@ -9,7 +9,7 @@ struct MistiaNativeSegmentedControl<Option: Hashable>: View {
     let options: [Option]
     let title: (Option) -> String
     var isEnabled: (Option) -> Bool = { _ in true }
-    var accent: Color = Color(red: 0.43, green: 0.23, blue: 0.76)
+    var accent: Color = Color(UIColor.systemGray5)
 
     var body: some View {
         MistiaSegmentedControlRepresentable(
@@ -29,9 +29,9 @@ struct MistiaNativeSegmentedControl<Option: Hashable>: View {
 
     private var selectedSegmentTintColor: UIColor {
         if colorScheme == .dark {
-            return UIColor(red: 0.34, green: 0.18, blue: 0.60, alpha: 0.92)
+            return UIColor.secondarySystemGroupedBackground
         }
-        return UIColor(accent).withAlphaComponent(0.98)
+        return UIColor.systemBackground
     }
 
     private var backgroundColor: UIColor {
@@ -39,17 +39,14 @@ struct MistiaNativeSegmentedControl<Option: Hashable>: View {
     }
 
     private var selectedTextColor: UIColor {
-        if colorScheme == .dark {
-            return UIColor.white
-        }
-        return UIColor.white
+        UIColor.label
     }
 
     private var normalTextColor: UIColor {
         if colorScheme == .dark {
-            return UIColor(red: 0.94, green: 0.94, blue: 0.97, alpha: 0.96)
+            return UIColor.secondaryLabel
         }
-        return UIColor(white: 0.28, alpha: 1)
+        return UIColor.secondaryLabel
     }
 }
 

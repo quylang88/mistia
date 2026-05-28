@@ -357,7 +357,7 @@ final class SessionStoreOfflineTests: XCTestCase {
         XCTAssertEqual(familyStore.lastErrorMessage, store.remoteUnavailableReason)
     }
 
-    func testFamilyEntryRefreshPullsMemberFinanceWithoutPersonalSyncWhenAutoSyncOff() async throws {
+    func testFamilyMetadataRefreshDoesNotPullMemberFinanceWhenEnteringFamily() async throws {
         let currentUserID = UUID()
         let memberUserID = UUID()
         let session = makeSession(userID: currentUserID)
@@ -393,18 +393,15 @@ final class SessionStoreOfflineTests: XCTestCase {
         store.lastSyncAt = nil
         XCTAssertFalse(store.isAutoSyncEnabled)
 
-        await familyStore.refreshLatest(sessionStore: store, source: .enterFamily)
+        await familyStore.refreshFamilyMetadata(sessionStore: store)
 
         XCTAssertNil(store.lastSyncAt)
         XCTAssertEqual(syncRemoteStore.fetchSnapshotCallCount, 0)
         XCTAssertEqual(familyService.fetchStateCallCount, 1)
-        XCTAssertEqual(
-            familyService.accessibleFinanceUserIDBatches.map(Set.init),
-            [Set([memberUserID])]
-        )
+        XCTAssertEqual(familyService.accessibleFinanceUserIDBatches.map(Set.init), [])
     }
 
-    func testFamilyUserInitiatedRefreshDoesNotRunPersonalSync() async throws {
+    func testFamilyOverviewRefreshPullsMembersOnlyWithoutPersonalSync() async throws {
         let currentUserID = UUID()
         let memberUserID = UUID()
         let session = makeSession(userID: currentUserID)
@@ -440,7 +437,7 @@ final class SessionStoreOfflineTests: XCTestCase {
         store.lastSyncAt = nil
         XCTAssertFalse(store.isAutoSyncEnabled)
 
-        await familyStore.refreshLatest(sessionStore: store, source: .userInitiated)
+        await familyStore.refreshLatest(sessionStore: store, source: .familyOverview)
 
         XCTAssertNil(store.lastSyncAt)
         XCTAssertEqual(syncRemoteStore.fetchSnapshotCallCount, 0)
@@ -448,6 +445,54 @@ final class SessionStoreOfflineTests: XCTestCase {
         XCTAssertEqual(
             familyService.accessibleFinanceUserIDBatches.map(Set.init),
             [Set([memberUserID])]
+        )
+    }
+
+    func testFamilyMemberRefreshPullsOnlySelectedMemberFinance() async throws {
+        let currentUserID = UUID()
+        let ownerUserID = UUID()
+        let selectedMemberUserID = UUID()
+        let session = makeSession(userID: currentUserID)
+        let container = try storeTestContainer()
+        let store = try makeSessionStore(
+            authService: SessionAuthServiceSpy(
+                persistedSession: session,
+                refreshResult: .success(session)
+            ),
+            userProfileStore: UserProfileStoreSpy(),
+            networkStatus: .connected,
+            modelContainer: container
+        )
+        var snapshot = makeFamilySnapshot(userID: currentUserID, ownerUserID: ownerUserID)
+        snapshot.members.append(
+            FamilyMember(
+                membershipID: UUID(),
+                familyID: snapshot.family!.id,
+                userID: selectedMemberUserID,
+                displayName: "Member",
+                avatarURL: nil,
+                role: .member,
+                policy: .preset(for: .member),
+                isCurrentUser: false
+            )
+        )
+        let familyService = FamilyRemoteServiceSpy(snapshot: snapshot)
+        let familyStore = FamilyContextStore(
+            modelContainer: container,
+            service: familyService
+        )
+
+        await store.bootstrapIfNeeded()
+        await familyStore.refreshFamilyMetadata(sessionStore: store)
+        await familyStore.refreshMemberFinance(
+            sessionStore: store,
+            memberUserID: selectedMemberUserID
+        )
+
+        XCTAssertEqual(familyService.fetchStateCallCount, 1)
+        XCTAssertEqual(
+            familyService.accessibleFinanceUserIDBatches.map(Set.init),
+            [Set([selectedMemberUserID])]
         )
     }
 
@@ -697,7 +742,7 @@ final class SessionStoreOfflineTests: XCTestCase {
         }
     }
 
-    func testFamilyContextSwitchRefreshCoalescesRapidRequests() async throws {
+    func testFamilyOverviewRefreshCoalescesRapidRequests() async throws {
         let currentUserID = UUID()
         let memberUserID = UUID()
         let session = makeSession(userID: currentUserID)
@@ -722,8 +767,8 @@ final class SessionStoreOfflineTests: XCTestCase {
 
         await store.bootstrapIfNeeded()
 
-        async let first: Void = familyStore.refreshLatest(sessionStore: store, source: .contextSwitch)
-        async let second: Void = familyStore.refreshLatest(sessionStore: store, source: .contextSwitch)
+        async let first: Void = familyStore.refreshLatest(sessionStore: store, source: .familyOverview)
+        async let second: Void = familyStore.refreshLatest(sessionStore: store, source: .familyOverview)
         _ = await (first, second)
 
         XCTAssertEqual(familyService.fetchStateCallCount, 1)
@@ -733,7 +778,7 @@ final class SessionStoreOfflineTests: XCTestCase {
         )
     }
 
-    func testFamilyContextSwitchRefreshKeepsCachedStateWhenRemoteFails() async throws {
+    func testFamilyOverviewRefreshKeepsCachedStateWhenRemoteFails() async throws {
         let currentUserID = UUID()
         let memberUserID = UUID()
         let session = makeSession(userID: currentUserID)
@@ -759,7 +804,7 @@ final class SessionStoreOfflineTests: XCTestCase {
         XCTAssertEqual(familyStore.family?.id, initialSnapshot.family?.id)
 
         familyService.fetchStateError = SupabaseServiceError.serverMessage("temporary family outage")
-        await familyStore.refreshLatest(sessionStore: store, source: .contextSwitch)
+        await familyStore.refreshLatest(sessionStore: store, source: .familyOverview)
 
         XCTAssertEqual(familyStore.family?.id, initialSnapshot.family?.id)
         XCTAssertTrue(familyStore.hasCachedRemoteState)
