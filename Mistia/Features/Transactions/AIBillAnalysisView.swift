@@ -7,6 +7,7 @@ struct AIBillAnalysisView: View {
     @Environment(\.calendar) private var calendar
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.dismiss) private var dismiss
+    @Environment(MistiaUIState.self) private var uiState
     @Environment(SessionStore.self) private var sessionStore
     @Environment(FamilyContextStore.self) private var familyContextStore
     @Query(filter: #Predicate<LedgerWallet> { $0.deletedAt == nil && !$0.isArchived })
@@ -29,6 +30,7 @@ struct AIBillAnalysisView: View {
     @State private var isLoadingPhotos = false
     @State private var isAnalyzing = false
     @State private var imageProcessingTask: Task<Void, Never>?
+    @State private var hideRequestID = UUID()
 
     private let imageLimit = 5
 
@@ -125,7 +127,11 @@ struct AIBillAnalysisView: View {
                 )
             }
         }
+        .onAppear {
+            uiState.requestQuickCreateHidden(true, id: hideRequestID)
+        }
         .onDisappear {
+            uiState.requestQuickCreateHidden(false, id: hideRequestID)
             imageProcessingTask?.cancel()
             imageProcessingTask = nil
             isLoadingPhotos = false

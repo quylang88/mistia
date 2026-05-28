@@ -3,8 +3,8 @@ import SwiftUI
 
 private enum PlanningMode: String, CaseIterable, Identifiable {
     case budget
-    case goals
     case due
+    case goals
 
     var id: String { rawValue }
 
@@ -12,10 +12,10 @@ private enum PlanningMode: String, CaseIterable, Identifiable {
         switch self {
         case .budget:
             L10n.planning.planning.budget2
-        case .goals:
-            L10n.planning.planning.goals2
         case .due:
             L10n.planning.planning.due2
+        case .goals:
+            L10n.planning.planning.goals2
         }
     }
 
@@ -23,27 +23,27 @@ private enum PlanningMode: String, CaseIterable, Identifiable {
         switch self {
         case .budget:
             "banknote.fill"
-        case .goals:
-            "target"
         case .due:
             "calendar.badge.clock"
+        case .goals:
+            "target"
         }
     }
 }
 
 private enum PlanningDueMode: String, CaseIterable, Identifiable {
-    case creditCards
     case bills
+    case creditCards
     case installments
 
     var id: String { rawValue }
 
     var title: String {
         switch self {
-        case .creditCards:
-            L10n.planning.planning.creditCards
         case .bills:
             L10n.planning.planning.bills2
+        case .creditCards:
+            L10n.planning.planning.creditCards
         case .installments:
             L10n.planning.planning.installmentsLoans2
         }
@@ -197,7 +197,7 @@ struct PlanningView: View {
     @AppStorage(MistiaCurrencySettings.StorageKey.cachedRatesData) private var cachedCurrencyRatesData = Data()
 
     @State private var selectedMode: PlanningMode = .budget
-    @State private var selectedDueMode: PlanningDueMode = .creditCards
+    @State private var selectedDueMode: PlanningDueMode = .bills
     @State private var selectedMonth = PlanningLogic.startOfMonth(for: .now)
     @State private var isMonthPickerPresented = false
     @State private var budgetEditorTarget: PlanningBudgetEditorTarget?
@@ -683,21 +683,6 @@ struct PlanningView: View {
                             )
                         }
                     )
-                case .goals:
-                    let tabSnapshot = goalRenderSnapshot()
-                    GoalsTabContent(
-                        summary: tabSnapshot.summary,
-                        currencyCode: currencyCode,
-                        rows: tabSnapshot.rows,
-                        onAdd: {
-                            openGoalAddIfAllowed()
-                        },
-                        onEdit: { row in
-                            openGoalEditorIfAllowed(
-                                goal: storedGoals.first(where: { $0.id == row.id })
-                            )
-                        }
-                    )
                 case .due:
                     let tabSnapshot = dueRenderSnapshot()
                     DueTabContent(
@@ -737,6 +722,21 @@ struct PlanningView: View {
                         },
                         onPayBill: { item in
                             openDuePaymentIfAllowed(item)
+                        }
+                    )
+                case .goals:
+                    let tabSnapshot = goalRenderSnapshot()
+                    GoalsTabContent(
+                        summary: tabSnapshot.summary,
+                        currencyCode: currencyCode,
+                        rows: tabSnapshot.rows,
+                        onAdd: {
+                            openGoalAddIfAllowed()
+                        },
+                        onEdit: { row in
+                            openGoalEditorIfAllowed(
+                                goal: storedGoals.first(where: { $0.id == row.id })
+                            )
                         }
                     )
                 }
@@ -1592,13 +1592,6 @@ private struct DueTabContent: View {
             PlanningDueModePicker(selection: $selectedMode)
 
             switch selectedMode {
-            case .creditCards:
-                CreditCardsSection(
-                    items: creditCards,
-                    referenceDate: referenceDate,
-                    onAdd: onAddCreditCard,
-                    onEdit: onEditCreditCard
-                )
             case .bills:
                 DueRowsSection(
                     emptyTitle: L10n.planning.planning.noBillsYet,
@@ -1611,6 +1604,13 @@ private struct DueTabContent: View {
                     onAdd: onAddBill,
                     onEdit: onEditBill,
                     onPay: onPayBill
+                )
+            case .creditCards:
+                CreditCardsSection(
+                    items: creditCards,
+                    referenceDate: referenceDate,
+                    onAdd: onAddCreditCard,
+                    onEdit: onEditCreditCard
                 )
             case .installments:
                 DueRowsSection(
