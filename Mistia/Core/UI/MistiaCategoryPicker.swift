@@ -348,11 +348,6 @@ struct MistiaCategoryPickerSheet: View {
                     }
                 }
             }
-            .task {
-                guard isSearchFieldFocused == false else { return }
-                try? await Task.sleep(for: .milliseconds(150))
-                isSearchFieldFocused = true
-            }
         }
     }
 

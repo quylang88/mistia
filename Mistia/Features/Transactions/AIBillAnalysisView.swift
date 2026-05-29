@@ -868,8 +868,8 @@ struct AIBillAnalysisView: View {
     }
 
     private var hasTransientAnalysis: Bool {
-        bills.contains { bill in
-            bill.result != nil || bill.failureMessage != nil || bill.isMultipleBillImage
+        isLoadingPhotos || isAnalyzing || !bills.isEmpty || bills.contains { bill in
+            bill.result != nil || bill.failureMessage != nil || bill.isMultipleBillImage || bill.isAnalyzing
         }
     }
 
