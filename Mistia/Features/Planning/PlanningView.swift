@@ -50,8 +50,6 @@ private enum PlanningDueMode: String, CaseIterable, Identifiable {
     }
 }
 
-private let planningAccentPurple = Color(red: 0.43, green: 0.23, blue: 0.76)
-
 private enum PlanningNavigationDestination: Identifiable, Equatable, Hashable {
     case profile
     case creditCardStatement(LedgerWallet)
@@ -783,6 +781,15 @@ struct PlanningView: View {
             DuePaymentSheet(target: target)
                 .presentationDragIndicator(.hidden)
         }
+        .sheet(isPresented: $isMonthPickerPresented) {
+            MistiaMonthPickerSheet(
+                selection: $selectedMonth,
+                calendar: calendar,
+                accentColor: MistiaAccent.purple.color
+            )
+            .presentationDetents([.height(280)])
+            .presentationDragIndicator(.hidden)
+        }
         .alert(
             activeAlert?.title ?? "",
             isPresented: Binding(
@@ -832,15 +839,6 @@ struct PlanningView: View {
             }
         } message: { alert in
             Text(alert.message)
-        .sheet(isPresented: $isMonthPickerPresented) {
-            MistiaMonthPickerSheet(
-                selection: $selectedMonth,
-                calendar: calendar,
-                accentColor: planningAccentPurple
-            )
-        }
-                .presentationDetents([.medium])
-                .presentationDragIndicator(.hidden)
         }
         .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("MistiaOpenCreditCardStatementFromPlanning"))) { notification in
             if let walletID = notification.object as? UUID,
@@ -1488,7 +1486,7 @@ private struct BudgetTabContent: View {
                     title: L10n.planning.planning.noBudgetsYet,
                     message: L10n.planning.planning.createCategoryBudgetsToTrackWhatYou,
                     buttonTitle: L10n.planning.planning.addBudget,
-                    accent: planningAccentPurple,
+                    accent: MistiaAccent.purple.color,
                     symbols: ["banknote.fill", "chart.bar.fill", "bolt.fill", "plus"]
                 ) {
                     onAdd()
@@ -1541,7 +1539,7 @@ private struct GoalsTabContent: View {
                     title: L10n.planning.planning.noGoalsYet,
                     message: L10n.planning.planning.addAnEmergencyFundTripOrBig,
                     buttonTitle: L10n.planning.planning.addGoal,
-                    accent: planningAccentPurple,
+                    accent: MistiaAccent.purple.color,
                     symbols: ["target", "sparkles", "flag.fill", "plus"]
                 ) {
                     onAdd()
@@ -1613,7 +1611,7 @@ private struct DueTabContent: View {
                     emptyTitle: L10n.planning.planning.noBillsYet,
                     emptyMessage: L10n.planning.planning.addInternetUtilitiesOrRecurringBillsTo,
                     emptySymbols: ["wifi", "bolt.fill", "phone.fill", "plus"],
-                    accent: planningAccentPurple,
+                    accent: MistiaAccent.purple.color,
                     items: bills,
                     addTitle: L10n.planning.planning.addBill,
                     referenceDate: referenceDate,
@@ -1633,7 +1631,7 @@ private struct DueTabContent: View {
                     emptyTitle: L10n.planning.planning.noInstallmentsOrLoansYet,
                     emptyMessage: L10n.planning.planning.addInstallmentOrLoanPaymentsAndCreate,
                     emptySymbols: ["creditcard.and.123", "building.columns.fill", "banknote.fill", "plus"],
-                    accent: planningAccentPurple,
+                    accent: MistiaAccent.purple.color,
                     items: installments,
                     addTitle: L10n.planning.planning.addInstallmentLoan,
                     referenceDate: referenceDate,
@@ -1677,7 +1675,7 @@ private struct CreditCardsSection: View {
                 title: L10n.planning.planning.noCreditCardsYet,
                 message: L10n.planning.planning.linkOrAddCardsHereToShow,
                 buttonTitle: L10n.planning.planning.addCreditCard,
-                accent: planningAccentPurple,
+                accent: MistiaAccent.purple.color,
                 symbols: ["creditcard.fill", "wave.3.right.circle.fill", "building.columns.fill", "plus"]
             ) {
                 onAdd()
@@ -2580,7 +2578,7 @@ private struct PlanningFooterAddButton: View {
     let action: () -> Void
 
     var body: some View {
-        MistiaFooterAddButton(title: title, accent: planningAccentPurple, action: action)
+        MistiaFooterAddButton(title: title, accent: MistiaAccent.purple.color, action: action)
             .padding(.horizontal, 14)
             .padding(.vertical, 14)
     }
