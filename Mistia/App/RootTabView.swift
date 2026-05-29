@@ -129,6 +129,8 @@ struct RootTabView: View {
         )
         .ignoresSafeArea()
 
+        NotificationBadgeObserver()
+
         if isQuickCreateMenuVisible, quickCreateAnchorFrame.width > 0 {
           Color.black
             .opacity(isQuickCreateMenuExpanded ? (colorScheme == .dark ? 0.18 : 0.08) : 0)
@@ -558,6 +560,29 @@ private struct RootQuickCreateAccessAlert: Identifiable {
   let id = UUID()
   let title: String
   let message: String
+}
+
+private struct NotificationBadgeObserver: View {
+  @Environment(SessionStore.self) private var sessionStore
+  @Environment(\.modelContext) private var modelContext
+  @Query private var rows: [AppNotificationRecord]
+
+  var body: some View {
+    Color.clear
+      .frame(width: 0, height: 0)
+      .onChange(of: rows) { _, _ in
+        MistiaNotificationStore.updateAppBadgeCount(
+          in: modelContext,
+          userID: sessionStore.activeLocalProfileUserID
+        )
+      }
+      .onAppear {
+        MistiaNotificationStore.updateAppBadgeCount(
+          in: modelContext,
+          userID: sessionStore.activeLocalProfileUserID
+        )
+      }
+  }
 }
 
 private enum MistiaQuickCreateDestination: String, CaseIterable, Identifiable {
