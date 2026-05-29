@@ -1428,6 +1428,8 @@ private struct FamilyMonthlyBillListSection: View {
     let totals: [FamilyMonthlyBillTotalSnapshot]
     @Binding var selectedMonth: Date
 
+    @State private var isMonthPickerPresented = false
+
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(spacing: 12) {
@@ -1436,18 +1438,25 @@ private struct FamilyMonthlyBillListSection: View {
 
                 Spacer()
 
-                Menu {
-                    ForEach(monthChoices, id: \.self) { month in
-                        Button(monthTitle(for: month)) {
-                            selectedMonth = PlanningLogic.startOfMonth(for: month, calendar: calendar)
-                        }
-                    }
+                Button {
+                    isMonthPickerPresented = true
                 } label: {
-                    Label(monthTitle(for: selectedMonth), systemImage: "calendar")
-                        .font(.system(size: 13, weight: .semibold, design: .rounded))
+                    Label(
+                        MistiaDateFormatting.statementMonthYearString(for: selectedMonth, calendar: calendar),
+                        systemImage: "calendar"
+                    )
+                    .font(.system(size: 13, weight: .semibold, design: .rounded))
                 }
                 .buttonStyle(.bordered)
                 .controlSize(.small)
+                .sheet(isPresented: $isMonthPickerPresented) {
+                    MistiaMonthPickerSheet(
+                        selection: $selectedMonth,
+                        calendar: calendar,
+                        accentColor: MistiaAccent.purple.color
+                    )
+                    .presentationDetents([.height(280)])
+                }
             }
             .padding(.horizontal, 4)
 
@@ -1516,17 +1525,6 @@ private struct FamilyMonthlyBillListSection: View {
 
     private var cardTint: Color {
         colorScheme == .dark ? .white.opacity(0.04) : .white.opacity(0.16)
-    }
-
-    private var monthChoices: [Date] {
-        let currentMonth = PlanningLogic.startOfMonth(for: .now, calendar: calendar)
-        return (-6...6).compactMap {
-            calendar.date(byAdding: .month, value: $0, to: currentMonth)
-        }
-    }
-
-    private func monthTitle(for month: Date) -> String {
-        MistiaDateFormatting.monthYearString(for: month, calendar: calendar)
     }
 }
 
