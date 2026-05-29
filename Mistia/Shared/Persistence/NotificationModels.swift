@@ -483,6 +483,7 @@ enum MistiaNotificationStore {
             context.delete(row)
         }
         try context.save()
+        MistiaNotificationBadgeManager.setBadgeCount(0)
         return rows.count
     }
 
@@ -551,6 +552,7 @@ enum MistiaNotificationStore {
         }
 
         try context.save()
+        updateAppBadgeCount(in: context, userID: currentUserID)
     }
 
     nonisolated private static func latestNotification(
@@ -590,6 +592,7 @@ enum MistiaNotificationStore {
         }
 
         try context.save()
+        updateAppBadgeCount(in: context, userID: rows.first?.recipientUserID)
         return remoteIDs
     }
 
@@ -722,5 +725,14 @@ enum MistiaNotificationStore {
         guard let metadata, !metadata.isEmpty else { return nil }
         let encoder = JSONEncoder.mistiaSyncEncoder
         return try? String(data: encoder.encode(metadata), encoding: .utf8)
+    }
+
+    static func updateAppBadgeCount(
+        in context: ModelContext,
+        userID: UUID?
+    ) {
+        let rows = (try? context.fetch(FetchDescriptor<AppNotificationRecord>())) ?? []
+        let count = unreadCount(rows: rows, userID: userID)
+        MistiaNotificationBadgeManager.setBadgeCount(count)
     }
 }

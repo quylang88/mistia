@@ -172,6 +172,7 @@ enum MistiaLocalNotificationScheduler {
 
         if didDelete {
             try? modelContext.save()
+            MistiaNotificationStore.updateAppBadgeCount(in: modelContext, userID: recipientUserID)
         }
     }
 
@@ -246,5 +247,6 @@ enum MistiaLocalNotificationScheduler {
         }
 
         try? modelContext.save()
+        MistiaNotificationStore.updateAppBadgeCount(in: modelContext, userID: recipientUserID)
     }
 }

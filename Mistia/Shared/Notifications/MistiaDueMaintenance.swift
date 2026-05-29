@@ -224,6 +224,7 @@ private enum MistiaBudgetReminderMaintenance {
 
         if didMutateNotifications {
             try? modelContext.save()
+            MistiaNotificationStore.updateAppBadgeCount(in: modelContext, userID: snapshot.activeUserID)
         }
     }
 
