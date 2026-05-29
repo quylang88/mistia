@@ -162,6 +162,7 @@ private struct PlanningGoalRenderSnapshot {
 
 private struct PlanningDueRenderSnapshot {
     let summary: PlanningDueSummarySnapshot
+    let billTotalsByCurrency: [PlanningCurrencyAmountTotalSnapshot]
     let creditCards: [PlanningCreditCardAccountSnapshot]
     let bills: [PlanningRecurringDueSnapshot]
     let installments: [PlanningRecurringDueSnapshot]
@@ -391,6 +392,7 @@ struct PlanningView: View {
                 referenceDate: .now,
                 calendar: calendar
             ),
+            billTotalsByCurrency: PlanningLogic.recurringBillAmountTotalsByCurrency(recurringBillDueItems),
             creditCards: creditCardAccounts,
             bills: recurringBillDueItems,
             installments: installmentDueItems
@@ -689,6 +691,8 @@ struct PlanningView: View {
                     DueTabContent(
                         selectedMode: $selectedDueMode,
                         summary: tabSnapshot.summary,
+                        billTotalsByCurrency: tabSnapshot.billTotalsByCurrency,
+                        usesLocalSelfBillTotal: familyContextStore.isViewingSelfContext,
                         currencyCode: currencyCode,
                         creditCards: tabSnapshot.creditCards,
                         bills: tabSnapshot.bills,
@@ -1574,6 +1578,8 @@ private struct DueTabContent: View {
     @Binding var selectedMode: PlanningDueMode
 
     let summary: PlanningDueSummarySnapshot
+    let billTotalsByCurrency: [PlanningCurrencyAmountTotalSnapshot]
+    let usesLocalSelfBillTotal: Bool
     let currencyCode: String
     let creditCards: [PlanningCreditCardAccountSnapshot]
     let bills: [PlanningRecurringDueSnapshot]
@@ -1589,7 +1595,12 @@ private struct DueTabContent: View {
 
     var body: some View {
         VStack(spacing: 16) {
-            PlanningDueSummaryCard(summary: summary, currencyCode: currencyCode)
+            PlanningDueSummaryCard(
+                summary: summary,
+                currencyCode: currencyCode,
+                totalTitle: dueTotalTitle,
+                totalValue: dueTotalValue
+            )
             PlanningDueModePicker(selection: $selectedMode)
 
             switch selectedMode {
@@ -1627,6 +1638,24 @@ private struct DueTabContent: View {
                 )
             }
         }
+    }
+
+    private var usesBillAmountSummary: Bool {
+        usesLocalSelfBillTotal && selectedMode == .bills
+    }
+
+    private var dueTotalTitle: String {
+        usesBillAmountSummary ? L10n.planning.planning.totalAmount : L10n.planning.planning.totalDue
+    }
+
+    private var dueTotalValue: String? {
+        guard usesBillAmountSummary else { return nil }
+        guard !billTotalsByCurrency.isEmpty else {
+            return Int64.zero.formattedCurrency(code: currencyCode)
+        }
+        return billTotalsByCurrency
+            .map { $0.amountMinor.formattedCurrency(code: $0.currencyCode) }
+            .joined(separator: " / ")
     }
 }
 
@@ -1944,6 +1973,8 @@ private struct PlanningDueSummaryCard: View {
     @Environment(\.colorScheme) private var colorScheme
     let summary: PlanningDueSummarySnapshot
     let currencyCode: String
+    var totalTitle: String = L10n.planning.planning.totalDue
+    var totalValue: String?
 
     private var cardTint: Color {
         colorScheme == .dark ? .white.opacity(0.018) : .white.opacity(0.12)
@@ -1967,8 +1998,8 @@ private struct PlanningDueSummaryCard: View {
                         .frame(height: 30)
 
                     PlanningMetricColumn(
-                        title: L10n.planning.planning.totalDue,
-                        value: summary.totalDueMinor.formattedCurrency(code: currencyCode),
+                        title: totalTitle,
+                        value: totalValue ?? summary.totalDueMinor.formattedCurrency(code: currencyCode),
                         tint: Color(hex: "#F59B3F")
                     )
 

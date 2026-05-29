@@ -268,6 +268,8 @@ nonisolated enum L10n {
             static func accounts(language: MistiaAppLanguage) -> String { L10n.tr("family.family.accounts", vi: "Tài khoản", en: "Accounts", ja: "口座", language: language) }
             static var allSharedDataAndFamilyConnectionsWill: String { L10n.tr("family.family.allSharedDataAndFamilyConnectionsWill", vi: "Tất cả dữ liệu chia sẻ và kết nối gia đình sẽ bị xóa vĩnh viễn. Hành động này không thể hoàn tác.", en: "All shared data and family connections will be permanently deleted. This cannot be undone.", ja: "共有データと家族のつながりはすべて完全に削除されます。この操作は取り消せません。") }
             static func allSharedDataAndFamilyConnectionsWill(language: MistiaAppLanguage) -> String { L10n.tr("family.family.allSharedDataAndFamilyConnectionsWill", vi: "Tất cả dữ liệu chia sẻ và kết nối gia đình sẽ bị xóa vĩnh viễn. Hành động này không thể hoàn tác.", en: "All shared data and family connections will be permanently deleted. This cannot be undone.", ja: "共有データと家族のつながりはすべて完全に削除されます。この操作は取り消せません。", language: language) }
+            static var billList: String { L10n.tr("family.family.billList", vi: "Danh sách hóa đơn", en: "Bill list", ja: "請求一覧") }
+            static func billList(language: MistiaAppLanguage) -> String { L10n.tr("family.family.billList", vi: "Danh sách hóa đơn", en: "Bill list", ja: "請求一覧", language: language) }
             static var bills: String { L10n.tr("family.family.bills", vi: "Hóa đơn", en: "Bills", ja: "請求書") }
             static func bills(language: MistiaAppLanguage) -> String { L10n.tr("family.family.bills", vi: "Hóa đơn", en: "Bills", ja: "請求書", language: language) }
             static var budgets: String { L10n.tr("family.family.budgets", vi: "Ngân sách", en: "Budgets", ja: "予算") }
@@ -338,8 +340,6 @@ nonisolated enum L10n {
             static func familyBudget(language: MistiaAppLanguage) -> String { L10n.tr("family.family.familyBudget", vi: "Ngân sách gia đình", en: "Family budget", ja: "家族の予算", language: language) }
             static var familyGoals: String { L10n.tr("family.family.familyGoals", vi: "Mục tiêu gia đình", en: "Family goals", ja: "家族の目標") }
             static func familyGoals(language: MistiaAppLanguage) -> String { L10n.tr("family.family.familyGoals", vi: "Mục tiêu gia đình", en: "Family goals", ja: "家族の目標", language: language) }
-            static var familyInsights: String { L10n.tr("family.family.familyInsights", vi: "Insight gia đình", en: "Family insights", ja: "家族のインサイト") }
-            static func familyInsights(language: MistiaAppLanguage) -> String { L10n.tr("family.family.familyInsights", vi: "Insight gia đình", en: "Family insights", ja: "家族のインサイト", language: language) }
             static var familyIsWaitingForTheConnection: String { L10n.tr("family.family.familyIsWaitingForTheConnection", vi: "Gia đình đang chờ kết nối", en: "Family is waiting for the connection", ja: "家族機能は接続待ちです") }
             static func familyIsWaitingForTheConnection(language: MistiaAppLanguage) -> String { L10n.tr("family.family.familyIsWaitingForTheConnection", vi: "Gia đình đang chờ kết nối", en: "Family is waiting for the connection", ja: "家族機能は接続待ちです", language: language) }
             static var familyName: String { L10n.tr("family.family.familyName", vi: "Tên gia đình", en: "Family name", ja: "家族名") }
@@ -414,6 +414,8 @@ nonisolated enum L10n {
             }
             static var newFamily: String { L10n.tr("family.family.newFamily", vi: "Gia đình mới", en: "New family", ja: "新しい家族") }
             static func newFamily(language: MistiaAppLanguage) -> String { L10n.tr("family.family.newFamily", vi: "Gia đình mới", en: "New family", ja: "新しい家族", language: language) }
+            static var noBillsForMonth: String { L10n.tr("family.family.noBillsForMonth", vi: "Không có hóa đơn có số tiền trong tháng này", en: "No bills with amounts this month", ja: "この月は金額のある請求がありません") }
+            static func noBillsForMonth(language: MistiaAppLanguage) -> String { L10n.tr("family.family.noBillsForMonth", vi: "Không có hóa đơn có số tiền trong tháng này", en: "No bills with amounts this month", ja: "この月は金額のある請求がありません", language: language) }
             static var noBudgetsAreOverLimit: String { L10n.tr("family.family.noBudgetsAreOverLimit", vi: "Chưa có ngân sách nào đang toang", en: "No budgets are over limit", ja: "予算オーバーはありません") }
             static func noBudgetsAreOverLimit(language: MistiaAppLanguage) -> String { L10n.tr("family.family.noBudgetsAreOverLimit", vi: "Chưa có ngân sách nào đang toang", en: "No budgets are over limit", ja: "予算オーバーはありません", language: language) }
             static var noInvitesYet: String { L10n.tr("family.family.noInvitesYet", vi: "Chưa có lời mời nào", en: "No invites yet", ja: "招待はまだありません") }
@@ -2131,6 +2133,8 @@ nonisolated enum L10n {
             static func thisCategoryAlreadyHasABudgetIn(language: MistiaAppLanguage) -> String { L10n.tr("planning.planning.thisCategoryAlreadyHasABudgetIn", vi: "Danh mục này đã có ngân sách trong tháng đang xem.", en: "This category already has a budget in the selected month.", ja: "このカテゴリには表示中の月ですでに予算があります。", language: language) }
             static var thisPaymentWillBeRecordedAsA: String { L10n.tr("planning.planning.thisPaymentWillBeRecordedAsA", vi: "Khoản này sẽ được ghi nhận thành giao dịch chi tiêu thật.", en: "This payment will be recorded as a real expense transaction.", ja: "この支払いは実際の支出取引として記録されます。") }
             static func thisPaymentWillBeRecordedAsA(language: MistiaAppLanguage) -> String { L10n.tr("planning.planning.thisPaymentWillBeRecordedAsA", vi: "Khoản này sẽ được ghi nhận thành giao dịch chi tiêu thật.", en: "This payment will be recorded as a real expense transaction.", ja: "この支払いは実際の支出取引として記録されます。", language: language) }
+            static var totalAmount: String { L10n.tr("planning.planning.totalAmount", vi: "Tổng tiền", en: "Total amount", ja: "合計金額") }
+            static func totalAmount(language: MistiaAppLanguage) -> String { L10n.tr("planning.planning.totalAmount", vi: "Tổng tiền", en: "Total amount", ja: "合計金額", language: language) }
             static var totalCyclesOptional: String { L10n.tr("planning.planning.totalCyclesOptional", vi: "Tổng số kỳ (không bắt buộc)", en: "Total cycles (optional)", ja: "支払い回数（任意）") }
             static func totalCyclesOptional(language: MistiaAppLanguage) -> String { L10n.tr("planning.planning.totalCyclesOptional", vi: "Tổng số kỳ (không bắt buộc)", en: "Total cycles (optional)", ja: "支払い回数（任意）", language: language) }
             static var totalDue: String { L10n.tr("planning.planning.totalDue", vi: "Tổng cần trả", en: "Total due", ja: "支払合計") }
@@ -2509,33 +2513,6 @@ nonisolated enum L10n {
     nonisolated enum shared {
 
         nonisolated enum corelogic {
-
-            nonisolated enum family {
-                static var lastMonth: String { L10n.tr("shared.corelogic.family.lastMonth", vi: "tháng trước", en: "last month", ja: "先月") }
-                static func lastMonth(language: MistiaAppLanguage) -> String { L10n.tr("shared.corelogic.family.lastMonth", vi: "tháng trước", en: "last month", ja: "先月", language: language) }
-                static var lastWeek: String { L10n.tr("shared.corelogic.family.lastWeek", vi: "tuần trước", en: "last week", ja: "先週") }
-                static func lastWeek(language: MistiaAppLanguage) -> String { L10n.tr("shared.corelogic.family.lastWeek", vi: "tuần trước", en: "last week", ja: "先週", language: language) }
-                static var lastYear: String { L10n.tr("shared.corelogic.family.lastYear", vi: "năm trước", en: "last year", ja: "昨年") }
-                static func lastYear(language: MistiaAppLanguage) -> String { L10n.tr("shared.corelogic.family.lastYear", vi: "năm trước", en: "last year", ja: "昨年", language: language) }
-                static func spendingDecreasedByValueVsValue(_ arg1: String, _ arg2: String) -> String {
-                    L10n.format("shared.corelogic.family.spendingDecreasedByValueVsValue", vi: "Chi tiêu giảm %@%% so với %@", en: "Spending decreased by %@%% vs %@", ja: "支出が%@より %@%% 減少しました", arg1, arg2)
-                }
-                static func spendingDecreasedByValueVsValue(_ arg1: String, _ arg2: String, language: MistiaAppLanguage) -> String {
-                    L10n.format("shared.corelogic.family.spendingDecreasedByValueVsValue", vi: "Chi tiêu giảm %@%% so với %@", en: "Spending decreased by %@%% vs %@", ja: "支出が%@より %@%% 減少しました", language: language, arg1, arg2)
-                }
-                static func spendingIncreasedByValueVsValue(_ arg1: String, _ arg2: String) -> String {
-                    L10n.format("shared.corelogic.family.spendingIncreasedByValueVsValue", vi: "Chi tiêu tăng %@%% so với %@", en: "Spending increased by %@%% vs %@", ja: "支出が%@より %@%% 増加しました", arg1, arg2)
-                }
-                static func spendingIncreasedByValueVsValue(_ arg1: String, _ arg2: String, language: MistiaAppLanguage) -> String {
-                    L10n.format("shared.corelogic.family.spendingIncreasedByValueVsValue", vi: "Chi tiêu tăng %@%% so với %@", en: "Spending increased by %@%% vs %@", ja: "支出が%@より %@%% 増加しました", language: language, arg1, arg2)
-                }
-                static func valueIsSpendingTheMostValue(_ arg1: String, _ arg2: String) -> String {
-                    L10n.format("shared.corelogic.family.valueIsSpendingTheMostValue", vi: "%@ đang chi tiêu nhiều nhất (%@%%)", en: "%@ is spending the most (%@%%)", ja: "%@ が最も支出しています (%@%%)", arg1, arg2)
-                }
-                static func valueIsSpendingTheMostValue(_ arg1: String, _ arg2: String, language: MistiaAppLanguage) -> String {
-                    L10n.format("shared.corelogic.family.valueIsSpendingTheMostValue", vi: "%@ đang chi tiêu nhiều nhất (%@%%)", en: "%@ is spending the most (%@%%)", ja: "%@ が最も支出しています (%@%%)", language: language, arg1, arg2)
-                }
-            }
 
             nonisolated enum financeenums {
                 static var all: String { L10n.tr("shared.corelogic.financeenums.all", vi: "Tất cả", en: "All", ja: "すべて") }

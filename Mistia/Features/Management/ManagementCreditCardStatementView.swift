@@ -281,34 +281,7 @@ struct ManagementCreditCardStatementView: View {
         .sorted { $0.occurredAt > $1.occurredAt }
     }
 
-    private func paymentTransactions(for statement: PlanningCreditCardStatementSnapshot) -> [LedgerTransaction] {
-        let dueEnd = calendar.date(
-            byAdding: .day,
-            value: 1,
-            to: calendar.startOfDay(for: statement.dueDate)
-        ) ?? statement.dueDate
-
-        return allTransactions.filter { tx in
-            tx.destinationWallet?.id == wallet.id
-                && tx.entryStatus == .posted
-                && tx.primaryKind == .transfer
-                && tx.transferSubtype == .internalTransfer
-                && tx.occurredAt >= statement.closingDate
-                && tx.occurredAt < dueEnd
-        }
-        .sorted { $0.occurredAt > $1.occurredAt }
-    }
-
-    private func findPaymentTransaction(for statement: PlanningCreditCardStatementSnapshot) -> LedgerTransaction? {
-        paymentTransactions(for: statement).first { $0.amountMinor >= statement.amountMinor }
-    }
-
     private func effectiveState(for statement: PlanningCreditCardStatementSnapshot) -> PlanningCreditCardStatementState {
-        if statement.state != .unclosed,
-           statement.amountMinor > 0,
-           findPaymentTransaction(for: statement) != nil {
-            return .paid
-        }
         return statement.state
     }
 

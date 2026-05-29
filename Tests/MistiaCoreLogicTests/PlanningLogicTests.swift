@@ -1121,6 +1121,53 @@ final class PlanningLogicTests: XCTestCase {
         XCTAssertNil(statement?.linkedTransactionID)
     }
 
+    func testCreditCardStatementIsPaidByPostedTransferAfterClosingEvenWhenLate() {
+        let cardWalletID = UUID()
+        let paymentWalletID = UUID()
+        let paymentTransactionID = UUID()
+        let account = makeCreditCardAccount(
+            walletID: cardWalletID,
+            paymentWalletID: paymentWalletID,
+            dueDay: 26,
+            statementClosingDay: 10
+        )
+        let records = [
+            makeRecord(
+                primaryKind: .expense,
+                amountMinor: 32_456,
+                occurredAt: makeDate(year: 2026, month: 2, day: 12),
+                categoryID: nil,
+                sourceWalletID: cardWalletID,
+                sourceWalletKind: .creditCard
+            ),
+            makeRecord(
+                id: paymentTransactionID,
+                primaryKind: .transfer,
+                transferSubtype: .internalTransfer,
+                amountMinor: 32_456,
+                occurredAt: makeDate(year: 2026, month: 4, day: 3),
+                categoryID: nil,
+                sourceWalletID: paymentWalletID,
+                sourceWalletKind: .bank,
+                destinationWalletID: cardWalletID,
+                destinationWalletKind: .creditCard
+            )
+        ]
+
+        let statement = PlanningLogic.creditCardStatementItems(
+            accounts: [account],
+            records: records,
+            occurrences: [],
+            statementMonths: [makeDate(year: 2026, month: 2, day: 1)],
+            referenceDate: makeDate(year: 2026, month: 4, day: 4),
+            calendar: calendar
+        ).first
+
+        XCTAssertEqual(statement?.status, .paid)
+        XCTAssertEqual(statement?.state, .paid)
+        XCTAssertEqual(statement?.linkedTransactionID, paymentTransactionID)
+    }
+
     func testCreditCardStatementIgnoresStaleOccurrenceForEmptyStatementMonth() {
         let cardWalletID = UUID()
         let account = makeCreditCardAccount(
@@ -1153,6 +1200,49 @@ final class PlanningLogicTests: XCTestCase {
         XCTAssertEqual(statement?.status, .pending)
         XCTAssertEqual(statement?.state, .paid)
         XCTAssertNil(statement?.linkedTransactionID)
+    }
+
+    func testBillAmountTotalsByCurrencyIgnoreUnknownAmountsAndNonBillRows() {
+        let month = makeDate(year: 2026, month: 5, day: 1)
+        let totals = PlanningLogic.recurringBillAmountTotalsByCurrency(
+            [
+                makeRecurringDueItem(
+                    sourceKind: .recurringBill,
+                    amountMinor: 1_000,
+                    currencyCode: "JPY",
+                    dueDate: month
+                ),
+                makeRecurringDueItem(
+                    sourceKind: .recurringBill,
+                    amountMinor: nil,
+                    currencyCode: "JPY",
+                    dueDate: month
+                ),
+                makeRecurringDueItem(
+                    sourceKind: .recurringBill,
+                    amountMinor: 0,
+                    currencyCode: "JPY",
+                    dueDate: month
+                ),
+                makeRecurringDueItem(
+                    sourceKind: .installment,
+                    amountMinor: 2_000,
+                    currencyCode: "JPY",
+                    dueDate: month
+                ),
+                makeRecurringDueItem(
+                    sourceKind: .recurringBill,
+                    amountMinor: 500,
+                    currencyCode: "VND",
+                    dueDate: month
+                )
+            ]
+        )
+
+        XCTAssertEqual(totals, [
+            PlanningCurrencyAmountTotalSnapshot(currencyCode: "JPY", amountMinor: 1_000),
+            PlanningCurrencyAmountTotalSnapshot(currencyCode: "VND", amountMinor: 500)
+        ])
     }
 
     func testCreditCardAutoPaymentDecisionWaitsForDueDateAndRequiresFunds() {
@@ -1371,18 +1461,22 @@ final class PlanningLogicTests: XCTestCase {
     }
 
     private func makeRecord(
+        id: UUID = UUID(),
         primaryKind: TransactionPrimaryKind,
+        transferSubtype: TransactionTransferSubtype? = nil,
         amountMinor: Int64,
         occurredAt: Date,
         categoryID: UUID?,
         categoryParentID: UUID? = nil,
         sourceWalletID: UUID = UUID(),
-        sourceWalletKind: LedgerWalletKind = .cash
+        sourceWalletKind: LedgerWalletKind = .cash,
+        destinationWalletID: UUID? = nil,
+        destinationWalletKind: LedgerWalletKind? = nil
     ) -> TransactionRecordSnapshot {
         TransactionRecordSnapshot(
-            id: UUID(),
+            id: id,
             primaryKind: primaryKind,
-            transferSubtype: nil,
+            transferSubtype: transferSubtype,
             debtIntent: nil,
             entryStatus: .posted,
             title: "Test",
@@ -1392,12 +1486,36 @@ final class PlanningLogicTests: XCTestCase {
             createdAt: occurredAt,
             sourceWalletID: sourceWalletID,
             sourceWalletKind: sourceWalletKind,
-            destinationWalletID: nil,
-            destinationWalletKind: nil,
+            destinationWalletID: destinationWalletID,
+            destinationWalletKind: destinationWalletKind,
             categoryID: categoryID,
             categoryParentID: categoryParentID,
             counterpartyName: nil,
             normalizedCounterpartyKey: nil
+        )
+    }
+
+    private func makeRecurringDueItem(
+        sourceKind: PlanningDueSourceKind,
+        amountMinor: Int64?,
+        currencyCode: String,
+        dueDate: Date
+    ) -> PlanningRecurringDueSnapshot {
+        PlanningRecurringDueSnapshot(
+            id: UUID(),
+            sourceKind: sourceKind,
+            sourceID: UUID(),
+            name: "Due",
+            iconSymbolName: "doc.text.fill",
+            categorySystemKey: sourceKind == .recurringBill ? .billing : .loanRepayment,
+            amountMinor: amountMinor,
+            dueDate: dueDate,
+            frequencyMonths: 1,
+            totalCycles: sourceKind == .installment ? 6 : nil,
+            paymentWalletID: nil,
+            currencyCode: currencyCode,
+            status: .pending,
+            linkedTransactionID: nil
         )
     }
 

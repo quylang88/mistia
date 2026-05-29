@@ -2157,6 +2157,28 @@
         }
       }
     },
+    "family.family.billList": {
+      "localizations": {
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Danh sách hóa đơn"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bill list"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "請求一覧"
+          }
+        }
+      }
+    },
     "family.family.budgets": {
       "localizations": {
         "vi": {
@@ -2813,28 +2835,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "家族の目標"
-          }
-        }
-      }
-    },
-    "family.family.familyInsights": {
-      "localizations": {
-        "vi": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Insight gia đình"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Family insights"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "家族のインサイト"
           }
         }
       }
@@ -3627,6 +3627,28 @@
           "stringUnit": {
             "state": "translated",
             "value": "間もなく期限の項目はありません"
+          }
+        }
+      }
+    },
+    "family.family.noBillsForMonth": {
+      "localizations": {
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Không có hóa đơn có số tiền trong tháng này"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No bills with amounts this month"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "この月は金額のある請求がありません"
           }
         }
       }
@@ -19449,6 +19471,28 @@
         }
       }
     },
+    "planning.planning.totalAmount": {
+      "localizations": {
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tổng tiền"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Total amount"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "合計金額"
+          }
+        }
+      }
+    },
     "planning.planning.upcoming": {
       "localizations": {
         "vi": {
@@ -21997,138 +22041,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "設定"
-          }
-        }
-      }
-    },
-    "shared.corelogic.family.lastMonth": {
-      "localizations": {
-        "vi": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "tháng trước"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "last month"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "先月"
-          }
-        }
-      }
-    },
-    "shared.corelogic.family.lastWeek": {
-      "localizations": {
-        "vi": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "tuần trước"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "last week"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "先週"
-          }
-        }
-      }
-    },
-    "shared.corelogic.family.lastYear": {
-      "localizations": {
-        "vi": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "năm trước"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "last year"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "昨年"
-          }
-        }
-      }
-    },
-    "shared.corelogic.family.spendingDecreasedByValueVsValue": {
-      "localizations": {
-        "vi": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Chi tiêu giảm %@%% so với %@"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Spending decreased by %@%% vs %@"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "支出が%@より %@%% 減少しました"
-          }
-        }
-      }
-    },
-    "shared.corelogic.family.spendingIncreasedByValueVsValue": {
-      "localizations": {
-        "vi": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Chi tiêu tăng %@%% so với %@"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Spending increased by %@%% vs %@"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "支出が%@より %@%% 増加しました"
-          }
-        }
-      }
-    },
-    "shared.corelogic.family.valueIsSpendingTheMostValue": {
-      "localizations": {
-        "vi": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%@ đang chi tiêu nhiều nhất (%@%%)"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%@ is spending the most (%@%%)"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%@ が最も支出しています (%@%%)"
           }
         }
       }

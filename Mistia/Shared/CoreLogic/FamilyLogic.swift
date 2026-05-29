@@ -214,6 +214,36 @@ nonisolated struct FamilyWalletAggregateSnapshot: Equatable, Identifiable {
     let currencyCode: String
     let sortOrder: Int
     let createdAt: Date
+    let creditCardStatementStatus: FamilyCreditCardStatementStatus?
+
+    init(
+        id: String,
+        ownerUserID: UUID,
+        name: String,
+        kind: LedgerWalletKind,
+        currentBalanceMinor: Int64,
+        debtMinor: Int64,
+        currencyCode: String,
+        sortOrder: Int,
+        createdAt: Date,
+        creditCardStatementStatus: FamilyCreditCardStatementStatus? = nil
+    ) {
+        self.id = id
+        self.ownerUserID = ownerUserID
+        self.name = name
+        self.kind = kind
+        self.currentBalanceMinor = currentBalanceMinor
+        self.debtMinor = debtMinor
+        self.currencyCode = currencyCode
+        self.sortOrder = sortOrder
+        self.createdAt = createdAt
+        self.creditCardStatementStatus = creditCardStatementStatus
+    }
+}
+
+nonisolated enum FamilyCreditCardStatementStatus: Equatable {
+    case upcoming
+    case paid
 }
 
 nonisolated struct FamilyBudgetPlanSnapshot: Equatable, Identifiable {
@@ -348,11 +378,6 @@ nonisolated struct FamilyDonutSegment: Equatable, Identifiable {
     var id: String { label }
 }
 
-nonisolated struct FamilyInsight: Equatable {
-    let text: String
-    let isPositive: Bool
-}
-
 nonisolated struct FamilyAggregateSummary: Equatable {
     var totalAssetsMinor: Int64
     var totalDebtMinor: Int64
@@ -363,7 +388,23 @@ nonisolated struct FamilyAggregateSummary: Equatable {
     var expenseByCategory: [FamilyDonutSegment]
     var spendingByMember: [FamilyMemberSpendingSnapshot]
     var incomeByMember: [FamilyMemberSpendingSnapshot]
-    var insights: [FamilyInsight]
+}
+
+nonisolated struct FamilyMonthlyBillAggregateSnapshot: Equatable, Identifiable {
+    let id: String
+    let title: String
+    let iconSymbolName: String
+    let colorHex: String
+    let amountMinor: Int64
+    let currencyCode: String
+    let sourceCount: Int
+}
+
+nonisolated struct FamilyMonthlyBillTotalSnapshot: Equatable, Identifiable {
+    let currencyCode: String
+    let amountMinor: Int64
+
+    var id: String { currencyCode }
 }
 
 nonisolated struct FamilyMonthlySpendableSnapshot: Equatable {
@@ -430,10 +471,85 @@ nonisolated enum FamilyLogic {
                 debtMinor: debt,
                 currencyCode: outputCurrencyCode,
                 sortOrder: representative.sortOrder,
-                createdAt: representative.createdAt
+                createdAt: representative.createdAt,
+                creditCardStatementStatus: creditCardStatus(for: groupedWallets)
             )
         }
         .sorted(by: walletAggregateSort)
+    }
+
+    nonisolated static func monthlyBillRows(
+        bills: [PlanningBillSnapshot],
+        occurrences: [PlanningDueOccurrenceSnapshot],
+        selectedMonth: Date,
+        calendar: Calendar = MistiaCalendar.current
+    ) -> [FamilyMonthlyBillAggregateSnapshot] {
+        let dueItems = PlanningLogic.recurringBillDueItems(
+            bills: bills,
+            occurrences: occurrences,
+            selectedMonth: selectedMonth,
+            calendar: calendar
+        )
+        let validItems = dueItems.filter { item in
+            guard item.sourceKind == .recurringBill,
+                  let amountMinor = item.amountMinor,
+                  amountMinor > 0 else {
+                return false
+            }
+            return true
+        }
+
+        return Dictionary(grouping: validItems, by: monthlyBillGroupingKey)
+            .compactMap { groupKey, groupedItems -> FamilyMonthlyBillAggregateSnapshot? in
+                guard let representative = groupedItems.sorted(by: monthlyBillSort).first else {
+                    return nil
+                }
+                let amount = groupedItems.reduce(into: Int64.zero) { partial, item in
+                    partial += item.amountMinor ?? 0
+                }
+                guard amount > 0 else { return nil }
+
+                return FamilyMonthlyBillAggregateSnapshot(
+                    id: "family-bill-\(groupKey.id)",
+                    title: monthlyBillTitle(for: representative),
+                    iconSymbolName: representative.categoryIconSymbolName
+                        ?? representative.categorySystemKey?.iconSymbolName
+                        ?? representative.iconSymbolName,
+                    colorHex: representative.categoryColorHex
+                        ?? representative.categorySystemKey?.iconColorHex
+                        ?? "#8A8A8E",
+                    amountMinor: amount,
+                    currencyCode: groupKey.currencyCode,
+                    sourceCount: groupedItems.count
+                )
+            }
+            .sorted { lhs, rhs in
+                if lhs.amountMinor != rhs.amountMinor {
+                    return lhs.amountMinor > rhs.amountMinor
+                }
+                if lhs.currencyCode != rhs.currencyCode {
+                    return lhs.currencyCode.localizedCaseInsensitiveCompare(rhs.currencyCode) == .orderedAscending
+                }
+                return lhs.title.localizedCaseInsensitiveCompare(rhs.title) == .orderedAscending
+            }
+    }
+
+    nonisolated static func monthlyBillTotalsByCurrency(
+        from rows: [FamilyMonthlyBillAggregateSnapshot]
+    ) -> [FamilyMonthlyBillTotalSnapshot] {
+        Dictionary(grouping: rows) { row in
+            MistiaCurrencyLogic.normalizedCode(row.currencyCode)
+        }
+        .compactMap { currencyCode, groupedRows in
+            let amount = groupedRows.reduce(into: Int64.zero) { partial, row in
+                partial += row.amountMinor
+            }
+            guard amount > 0 else { return nil }
+            return FamilyMonthlyBillTotalSnapshot(currencyCode: currencyCode, amountMinor: amount)
+        }
+        .sorted { lhs, rhs in
+            lhs.currencyCode.localizedCaseInsensitiveCompare(rhs.currencyCode) == .orderedAscending
+        }
     }
 
     nonisolated static func familyBudgetRows(
@@ -799,75 +915,6 @@ nonisolated enum FamilyLogic {
             FamilyMemberSpendingSnapshot(userID: $0.key, name: memberNames[$0.key] ?? "Unknown", amountMinor: $0.value)
         }.sorted { $0.amountMinor > $1.amountMinor }
 
-        // 5. Insights
-        var insights: [FamilyInsight] = []
-        
-        // Spending trend vs Previous Interval
-        let intervalDuration = selectedInterval.duration
-        let previousInterval = DateInterval(
-            start: selectedInterval.start.addingTimeInterval(-intervalDuration),
-            end: selectedInterval.start
-        )
-        let previousTransactions = transactions.filter {
-            (visibleMemberIDs?.contains($0.ownerUserID) ?? true) && previousInterval.contains($0.occurredAt)
-        }
-        let currentSpending = intervalTransactions.filter(isExpenseSpending).reduce(0) { partial, transaction in
-            partial + reportingAmount(
-                amountMinor: transaction.amountMinor,
-                sourceCurrencyCode: transaction.currencyCode,
-                currencyCode: summaryCurrencyCode,
-                exchangeRates: exchangeRates
-            )
-        }
-        let previousSpending = previousTransactions.filter(isExpenseSpending).reduce(0) { partial, transaction in
-            partial + reportingAmount(
-                amountMinor: transaction.amountMinor,
-                sourceCurrencyCode: transaction.currencyCode,
-                currencyCode: summaryCurrencyCode,
-                exchangeRates: exchangeRates
-            )
-        }
-        
-        if previousSpending > 0 {
-            let diff = Double(currentSpending - previousSpending) / Double(previousSpending)
-            let percent = Int(abs(diff * 100))
-            
-            let timeframeLabel: String
-            if intervalDuration > 3600 * 24 * 300 { // Year
-                timeframeLabel = L10n.shared.corelogic.family.lastYear
-            } else if intervalDuration > 3600 * 24 * 20 { // Month
-                timeframeLabel = L10n.shared.corelogic.family.lastMonth
-            } else { // Week
-                timeframeLabel = L10n.shared.corelogic.family.lastWeek
-            }
-
-            if diff > 0.1 {
-                insights.append(FamilyInsight(
-                    text: L10n.shared.corelogic.family.spendingIncreasedByValueVsValue(String(describing: percent), String(describing: timeframeLabel)),
-                    isPositive: false
-                ))
-            } else if diff < -0.1 {
-                insights.append(FamilyInsight(
-                    text: L10n.shared.corelogic.family.spendingDecreasedByValueVsValue(String(describing: percent), String(describing: timeframeLabel)),
-                    isPositive: true
-                ))
-            }
-        }
-        
-        // Member comparison insight
-        if let topSpender = spendingByMember.first, spendingByMember.count > 1 {
-            let totalSpending = spendingByMember.reduce(0) { $0 + $1.amountMinor }
-            if totalSpending > 0 {
-                let ratio = Double(topSpender.amountMinor) / Double(totalSpending)
-                if ratio > 0.6 {
-                    insights.append(FamilyInsight(
-                        text: L10n.shared.corelogic.family.valueIsSpendingTheMostValue(String(describing: topSpender.name), String(describing: Int(ratio*100))),
-                        isPositive: false
-                    ))
-                }
-            }
-        }
-
         return FamilyAggregateSummary(
             totalAssetsMinor: totalAssetsMinor,
             totalDebtMinor: totalDebtMinor,
@@ -877,8 +924,7 @@ nonisolated enum FamilyLogic {
             balanceByWalletName: balanceByWalletName,
             expenseByCategory: expenseByCategory,
             spendingByMember: spendingByMember,
-            incomeByMember: incomeByMember,
-            insights: insights
+            incomeByMember: incomeByMember
         )
     }
 
@@ -918,6 +964,76 @@ nonisolated enum FamilyLogic {
             return nameComparison == .orderedAscending
         }
         return lhs.id < rhs.id
+    }
+
+    nonisolated private struct MonthlyBillGroupingKey: Hashable {
+        let value: String
+        let currencyCode: String
+
+        var id: String { "\(value)-\(currencyCode)" }
+    }
+
+    nonisolated private static func monthlyBillGroupingKey(
+        for item: PlanningRecurringDueSnapshot
+    ) -> MonthlyBillGroupingKey {
+        let currencyCode = MistiaCurrencyLogic.normalizedCode(item.currencyCode)
+        if let categorySystemKey = item.categorySystemKey {
+            return MonthlyBillGroupingKey(
+                value: "category-system-\(categorySystemKey.rawValue)",
+                currencyCode: currencyCode
+            )
+        }
+
+        let categoryName = item.categoryName?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        if !categoryName.isEmpty {
+            return MonthlyBillGroupingKey(
+                value: "category-name-\(normalizedFamilyGroupingName(categoryName))",
+                currencyCode: currencyCode
+            )
+        }
+
+        return MonthlyBillGroupingKey(
+            value: "bill-name-\(normalizedFamilyGroupingName(item.name))",
+            currencyCode: currencyCode
+        )
+    }
+
+    nonisolated private static func monthlyBillTitle(
+        for item: PlanningRecurringDueSnapshot
+    ) -> String {
+        let categoryName = item.categoryName?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        if !categoryName.isEmpty {
+            return categoryName
+        }
+
+        if let categorySystemKey = item.categorySystemKey {
+            return categorySystemKey.title
+        }
+
+        return item.name
+    }
+
+    nonisolated private static func monthlyBillSort(
+        lhs: PlanningRecurringDueSnapshot,
+        rhs: PlanningRecurringDueSnapshot
+    ) -> Bool {
+        if lhs.dueDate != rhs.dueDate {
+            return lhs.dueDate < rhs.dueDate
+        }
+        return lhs.name.localizedCaseInsensitiveCompare(rhs.name) == .orderedAscending
+    }
+
+    nonisolated private static func creditCardStatus(
+        for wallets: [FamilyWalletAggregateSnapshot]
+    ) -> FamilyCreditCardStatementStatus? {
+        let statuses = wallets.compactMap(\.creditCardStatementStatus)
+        if statuses.contains(.upcoming) {
+            return .upcoming
+        }
+        if statuses.contains(.paid) {
+            return .paid
+        }
+        return nil
     }
 
     nonisolated private static func prioritizedPlan(

@@ -79,6 +79,15 @@ enum MistiaShortcutResolvedAction: Equatable {
     case memberOverview(userID: UUID)
     case receiptScan
     case syncNow
+
+    var requiresRemoteAction: Bool {
+        switch self {
+        case .familyOverview, .memberOverview, .receiptScan, .syncNow:
+            return true
+        case .backupRestore, .archivedItems:
+            return false
+        }
+    }
 }
 
 struct MistiaShortcutPresentation: Equatable {

@@ -798,9 +798,7 @@ private struct MistiaShortcutSettingsView: View {
 
         let utilitySelections: [MistiaShortcutSelection] = {
             var selections: [MistiaShortcutSelection] = []
-            if !familyContextStore.isViewingOtherMemberContext {
-                selections.append(.receiptScan)
-            }
+            selections.append(.receiptScan)
             selections.append(contentsOf: [
                 .backupRestore,
                 .archivedItems

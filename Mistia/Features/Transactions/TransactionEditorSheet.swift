@@ -65,6 +65,7 @@ struct TransactionEditorTarget: Identifiable {
     let subjectUserIDOverride: UUID?
     let startsReceiptScan: Bool
     let receiptInitialSource: TransactionReceiptInitialSource?
+    let receiptPersistencePolicy: TransactionReceiptPersistencePolicy
 
     init(transaction: LedgerTransaction) {
         self.transaction = transaction
@@ -75,6 +76,7 @@ struct TransactionEditorTarget: Identifiable {
         self.subjectUserIDOverride = nil
         self.startsReceiptScan = false
         self.receiptInitialSource = nil
+        self.receiptPersistencePolicy = .persistLocally
     }
 
     init(
@@ -84,7 +86,8 @@ struct TransactionEditorTarget: Identifiable {
         prefill: TransactionEditorPrefill? = nil,
         subjectUserIDOverride: UUID? = nil,
         startsReceiptScan: Bool = false,
-        receiptInitialSource: TransactionReceiptInitialSource? = nil
+        receiptInitialSource: TransactionReceiptInitialSource? = nil,
+        receiptPersistencePolicy: TransactionReceiptPersistencePolicy = .persistLocally
     ) {
         self.transaction = nil
         self.initialKind = initialKind
@@ -94,6 +97,7 @@ struct TransactionEditorTarget: Identifiable {
         self.subjectUserIDOverride = subjectUserIDOverride
         self.startsReceiptScan = startsReceiptScan || receiptInitialSource != nil
         self.receiptInitialSource = receiptInitialSource ?? (startsReceiptScan ? .cameraPreferred : nil)
+        self.receiptPersistencePolicy = receiptPersistencePolicy
     }
 }
 
@@ -1484,7 +1488,11 @@ struct TransactionEditorSheet: View {
     }
 
     private var isReceiptFeatureAvailable: Bool {
-        !familyContextStore.isViewingOtherMemberContext
+        true
+    }
+
+    private var shouldPersistReceiptImage: Bool {
+        target.receiptPersistencePolicy == .persistLocally
     }
 
     private var shouldShowNotesSection: Bool {
@@ -1784,7 +1792,7 @@ struct TransactionEditorSheet: View {
         guard !didLoadReceiptDraft else { return }
         didLoadReceiptDraft = true
 
-        guard isReceiptFeatureAvailable else { return }
+        guard isReceiptFeatureAvailable, shouldPersistReceiptImage else { return }
         guard let transaction = target.transaction else { return }
 
         do {
@@ -1908,7 +1916,7 @@ struct TransactionEditorSheet: View {
     private func removeReceiptDraft() {
         receiptDraft = nil
         receiptAnalysisQuota = nil
-        shouldDeleteReceiptOnSave = target.transaction != nil
+        shouldDeleteReceiptOnSave = target.transaction != nil && shouldPersistReceiptImage
     }
 
     private func analyzeCurrentReceiptDraft() {
@@ -2436,7 +2444,7 @@ struct TransactionEditorSheet: View {
     }
 
     private func persistReceiptDraftIfNeeded(for transaction: LedgerTransaction) throws {
-        guard shouldShowReceiptSection else { return }
+        guard shouldShowReceiptSection, shouldPersistReceiptImage else { return }
 
         let store = TransactionReceiptImageStore()
         if let receiptDraft {

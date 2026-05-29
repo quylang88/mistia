@@ -114,6 +114,26 @@ final class TransactionEditorEdgeCasesTests: XCTestCase {
         )
     }
 
+    func testReceiptPersistencePolicyIsEphemeralForMemberOwnedTransactions() {
+        let activeUserID = UUID()
+        let memberUserID = UUID()
+
+        XCTAssertEqual(
+            TransactionReceiptPersistencePolicy.policy(
+                ownerUserID: activeUserID,
+                activeLocalProfileUserID: activeUserID
+            ),
+            .persistLocally
+        )
+        XCTAssertEqual(
+            TransactionReceiptPersistencePolicy.policy(
+                ownerUserID: memberUserID,
+                activeLocalProfileUserID: activeUserID
+            ),
+            .ephemeral
+        )
+    }
+
     // MARK: - Quick Capture Edge Cases
 
     func testQuickCaptureZeroAmount() {

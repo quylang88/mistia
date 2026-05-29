@@ -34,6 +34,7 @@ struct FamilyOverviewTransactionInputSnapshot: Equatable {
 struct FamilyOverviewCalculationInput: Equatable {
     let now: Date
     let currentMonth: Date
+    let selectedBillMonth: Date
     let selectedInterval: DateInterval
     let timeframeTitle: String
     let familyMemberUserIDs: Set<UUID>
@@ -62,6 +63,8 @@ struct FamilyOverviewCalculationResult: Equatable {
     let budgetRows: [FamilyBudgetAggregateSnapshot]
     let goalRows: [FamilyGoalAggregateSnapshot]
     let dueAlerts: [OverviewDueAlertSnapshot]
+    let monthlyBillRows: [FamilyMonthlyBillAggregateSnapshot]
+    let monthlyBillTotalsByCurrency: [FamilyMonthlyBillTotalSnapshot]
 }
 
 enum FamilyOverviewCalculator {
@@ -87,6 +90,26 @@ enum FamilyOverviewCalculator {
                 )
             },
             records: transactionRecords
+        )
+        let creditCardAccounts = input.wallets.compactMap {
+            creditCardAccount(for: $0, balanceIndex: walletBalanceIndex)
+        }
+        let currentMonthCreditCardStatements = PlanningLogic.creditCardStatementItems(
+            accounts: creditCardAccounts,
+            records: transactionRecords,
+            occurrences: input.occurrences,
+            statementMonths: [input.currentMonth],
+            referenceDate: input.now,
+            calendar: input.calendar
+        )
+        let creditCardStatementStatusByWalletID: [UUID: FamilyCreditCardStatementStatus] = Dictionary(
+            uniqueKeysWithValues: currentMonthCreditCardStatements.compactMap { statement in
+                guard statement.amountMinor > 0 else { return nil }
+                let status: FamilyCreditCardStatementStatus = statement.state == .paid
+                    ? .paid
+                    : .upcoming
+                return (statement.walletID, status)
+            }
         )
         let walletRows = FamilyLogic.aggregateWalletsByName(
             input.wallets
@@ -123,15 +146,13 @@ enum FamilyOverviewCalculator {
                         debtMinor: creditCardDebt,
                         currencyCode: wallet.currencyCode,
                         sortOrder: wallet.sortOrder,
-                        createdAt: wallet.createdAt
+                        createdAt: wallet.createdAt,
+                        creditCardStatementStatus: creditCardStatementStatusByWalletID[wallet.id]
                     )
                 },
             reportingCurrencyCode: input.reportingCurrencyCode,
             exchangeRates: input.exchangeRates
         )
-        let creditCardAccounts = input.wallets.compactMap {
-            creditCardAccount(for: $0, balanceIndex: walletBalanceIndex)
-        }
         let creditCardStatementDueItems = PlanningLogic.creditCardStatementsDue(
             in: input.currentMonth,
             accounts: creditCardAccounts,
@@ -152,6 +173,12 @@ enum FamilyOverviewCalculator {
             bills: input.bills,
             occurrences: input.occurrences,
             selectedMonth: input.currentMonth,
+            calendar: input.calendar
+        )
+        let monthlyBillRows = FamilyLogic.monthlyBillRows(
+            bills: input.bills,
+            occurrences: input.occurrences,
+            selectedMonth: input.selectedBillMonth,
             calendar: input.calendar
         )
         let installmentDueItems = PlanningLogic.installmentDueItems(
@@ -198,7 +225,7 @@ enum FamilyOverviewCalculator {
                 FamilyAggregateWalletSnapshot(
                     ownerUserID: $0.ownerUserID,
                     kind: familyAggregateKind(for: $0.kind),
-                    balanceMinor: $0.kind == .creditCard ? 0 : $0.currentBalanceMinor,
+                    balanceMinor: $0.kind == LedgerWalletKind.creditCard ? 0 : $0.currentBalanceMinor,
                     debtMinor: $0.debtMinor,
                     name: $0.name,
                     currencyCode: $0.currencyCode
@@ -232,7 +259,9 @@ enum FamilyOverviewCalculator {
             categorySpendingSnapshot: categorySpendingSnapshot,
             budgetRows: budgetRows,
             goalRows: goalRows,
-            dueAlerts: dueAlerts
+            dueAlerts: dueAlerts,
+            monthlyBillRows: monthlyBillRows,
+            monthlyBillTotalsByCurrency: FamilyLogic.monthlyBillTotalsByCurrency(from: monthlyBillRows)
         )
     }
 

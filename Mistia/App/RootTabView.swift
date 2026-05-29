@@ -115,7 +115,9 @@ struct RootTabView: View {
           hidesQuickCreate: hideQuickCreate || uiState.isQuickCreateHidden || isQuickCreateMenuVisible,
           hidesTabBar: uiState.isTabBarHidden,
           showsShortcutTab: mistiaShortcutEnabled && !shouldHideShortcutTabInCurrentContext,
-          isShortcutSyncing: isSyncingShortcut,
+          isShortcutSyncing: isSyncingShortcut && !isPinnedShortcutDisabled,
+          isShortcutDisabled: isPinnedShortcutDisabled,
+          shortcutDisabledAccessibilityHint: shortcutDisabledAccessibilityHint,
           shortcutPresentation: shortcutResolution.presentation,
           onShortcutTap: handlePinnedShortcutTap,
           onQuickCreateTap: toggleQuickCreateMenu,
@@ -273,18 +275,26 @@ struct RootTabView: View {
   }
 
   private var hidesBillFeaturesForMemberContext: Bool {
-    familyContextStore.isViewingOtherMemberContext
+    false
   }
 
   private var shouldHideShortcutTabInCurrentContext: Bool {
-    hidesBillFeaturesForMemberContext && shortcutResolution.presentation.action == .receiptScan
+    false
+  }
+
+  private var isPinnedShortcutDisabled: Bool {
+    shortcutResolution.presentation.action.requiresRemoteAction && !sessionStore.canPerformRemoteActions
+  }
+
+  private var shortcutDisabledAccessibilityHint: String? {
+    guard isPinnedShortcutDisabled else { return nil }
+    return sessionStore.remoteUnavailableReason
+      ?? L10n.shared.session.session.noNetworkConnectionReconnectToSyncEdit
   }
 
   private var quickCreateDestinations: [MistiaQuickCreateDestination] {
     var destinations: [MistiaQuickCreateDestination] = [.expense, .income, .transfer]
-    if !hidesBillFeaturesForMemberContext {
-      destinations.append(.receipt)
-    }
+    destinations.append(.receipt)
     return destinations
   }
 
@@ -335,7 +345,6 @@ struct RootTabView: View {
   }
 
   private func presentQuickCreateSheet(for destination: MistiaQuickCreateDestination) {
-    guard destination != .receipt || !hidesBillFeaturesForMemberContext else { return }
     dismissQuickCreateMenu()
     DispatchQueue.main.asyncAfter(deadline: .now() + quickCreateMenuDuration) {
       if destination == .receipt {
@@ -395,6 +404,11 @@ struct RootTabView: View {
   }
 
   private func handlePinnedShortcutTap() {
+    guard !isPinnedShortcutDisabled else {
+      isSyncingShortcut = false
+      return
+    }
+
     dismissQuickCreateMenu()
 
     switch shortcutResolution.presentation.action {
@@ -430,7 +444,6 @@ struct RootTabView: View {
       }
 
     case .receiptScan:
-      guard !hidesBillFeaturesForMemberContext else { return }
       activeSheet = .quickCreate(.receipt, .cameraPreferred)
 
     case .syncNow:
@@ -477,7 +490,8 @@ struct RootTabView: View {
       return TransactionEditorTarget(
         initialKind: .expense,
         subjectUserIDOverride: subjectUserID,
-        receiptInitialSource: receiptInitialSource
+        receiptInitialSource: receiptInitialSource,
+        receiptPersistencePolicy: receiptPersistencePolicy(for: subjectUserID)
       )
     case .note:
       return TransactionEditorTarget(initialKind: .expense, quickCapture: true, subjectUserIDOverride: subjectUserID)
@@ -489,6 +503,13 @@ struct RootTabView: View {
       return familyContextStore.selectedSubjectUserID
     }
     return sessionStore.activeLocalProfileUserID
+  }
+
+  private func receiptPersistencePolicy(for subjectUserID: UUID?) -> TransactionReceiptPersistencePolicy {
+    TransactionReceiptPersistencePolicy.policy(
+      ownerUserID: subjectUserID,
+      activeLocalProfileUserID: sessionStore.activeLocalProfileUserID
+    )
   }
 
   private var hasUsableWalletForQuickCreateSubject: Bool {

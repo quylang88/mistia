@@ -113,6 +113,25 @@ struct TransactionRecordSnapshot: Equatable, Identifiable {
     }
 }
 
+nonisolated enum TransactionReceiptPersistencePolicy: Equatable {
+    case persistLocally
+    case ephemeral
+
+    static func policy(
+        ownerUserID: UUID?,
+        activeLocalProfileUserID: UUID?
+    ) -> TransactionReceiptPersistencePolicy {
+        guard let ownerUserID,
+              let activeLocalProfileUserID,
+              ownerUserID != activeLocalProfileUserID
+        else {
+            return .persistLocally
+        }
+
+        return .ephemeral
+    }
+}
+
 struct TransactionFilterState: Equatable {
     var isAdjustmentOnly: Bool = false
     var timeScope: TransactionTimeScope = .thisMonth

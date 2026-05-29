@@ -424,6 +424,7 @@ private struct FamilyOverviewDataCacheKey: Hashable {
     let manualJPYToVNDRate: String
     let cachedRatesSignature: Int
     let referenceDayStart: TimeInterval
+    let billMonthStart: TimeInterval
     let membersSignature: Int
     let walletsSignature: MistiaCollectionChangeSignature
     let transactionsSignature: MistiaCollectionChangeSignature
@@ -1148,10 +1149,11 @@ private struct FamilyAggregateAccountList: View {
                                     .font(.system(size: 15, weight: .semibold, design: .rounded))
                                     .foregroundStyle(.primary)
                                 
-                                if row.kind == .creditCard {
-                                    Text(L10n.family.family.upcoming)
+                                if row.kind == .creditCard,
+                                   let status = row.creditCardStatementStatus {
+                                    Text(title(for: status))
                                         .font(.system(size: 11, weight: .medium, design: .rounded))
-                                        .foregroundStyle(.orange)
+                                        .foregroundStyle(color(for: status))
                                 }
                             }
                             
@@ -1211,6 +1213,24 @@ private struct FamilyAggregateAccountList: View {
             return MistiaAccent.expense.color
         }
         return .primary
+    }
+
+    private func title(for status: FamilyCreditCardStatementStatus) -> String {
+        switch status {
+        case .paid:
+            return L10n.planning.planning.paid
+        case .upcoming:
+            return L10n.family.family.upcoming
+        }
+    }
+
+    private func color(for status: FamilyCreditCardStatementStatus) -> Color {
+        switch status {
+        case .paid:
+            return MistiaAccent.income.color
+        case .upcoming:
+            return .orange
+        }
     }
 }
 
@@ -1401,32 +1421,112 @@ private struct FamilyTransactionFilterSheet: View {
     }
 }
 
-private struct FamilyAIInsightsSection: View {
-    let insights: [FamilyInsight]
+private struct FamilyMonthlyBillListSection: View {
+    @Environment(\.calendar) private var calendar
+    @Environment(\.colorScheme) private var colorScheme
+    let rows: [FamilyMonthlyBillAggregateSnapshot]
+    let totals: [FamilyMonthlyBillTotalSnapshot]
+    @Binding var selectedMonth: Date
 
     var body: some View {
-        if !insights.isEmpty {
-            VStack(alignment: .leading, spacing: 12) {
-                Text(L10n.family.family.familyInsights)
-                    .font(.system(size: 16, weight: .bold, design: .rounded))
-                    .padding(.horizontal, 4)
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(spacing: 12) {
+                Text(L10n.family.family.billList)
+                    .familyOverviewSectionTitleStyle()
 
-                ForEach(insights, id: \.text) { insight in
-                    HStack(spacing: 12) {
-                        Image(systemName: "sparkles")
-                            .foregroundStyle(MistiaAccent.purple.color)
-                        Text(insight.text)
-                            .font(.system(size: 14, weight: .medium, design: .rounded))
+                Spacer()
+
+                Menu {
+                    ForEach(monthChoices, id: \.self) { month in
+                        Button(monthTitle(for: month)) {
+                            selectedMonth = PlanningLogic.startOfMonth(for: month, calendar: calendar)
+                        }
                     }
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 12)
-                    .background {
-                        RoundedRectangle(cornerRadius: 16, style: .continuous)
-                            .fill(MistiaAccent.purple.color.opacity(0.1))
+                } label: {
+                    Label(monthTitle(for: selectedMonth), systemImage: "calendar")
+                        .font(.system(size: 13, weight: .semibold, design: .rounded))
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+            }
+            .padding(.horizontal, 4)
+
+            MistiaGlassCard(cornerRadius: 24, tint: cardTint, padding: 0) {
+                VStack(spacing: 0) {
+                    if rows.isEmpty {
+                        Text(L10n.family.family.noBillsForMonth)
+                            .font(.system(size: 14, weight: .medium, design: .rounded))
+                            .foregroundStyle(.secondary)
+                            .padding(.vertical, 24)
+                            .frame(maxWidth: .infinity)
+                    } else {
+                        ForEach(Array(rows.enumerated()), id: \.element.id) { index, row in
+                            HStack(spacing: 12) {
+                                MistiaFinanceIconView(
+                                    icon: row.iconSymbolName,
+                                    fallbackColor: Color(hex: row.colorHex),
+                                    size: 32
+                                )
+
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(row.title)
+                                        .font(.system(size: 15, weight: .semibold, design: .rounded))
+                                        .foregroundStyle(.primary)
+                                    if row.sourceCount > 1 {
+                                        Text(verbatim: "x\(row.sourceCount)")
+                                            .font(.system(size: 11, weight: .semibold, design: .rounded))
+                                            .foregroundStyle(.secondary)
+                                    }
+                                }
+
+                                Spacer()
+
+                                Text(row.amountMinor.formattedCurrency(code: row.currencyCode))
+                                    .font(.system(size: 15, weight: .bold, design: .rounded))
+                                    .foregroundStyle(.primary)
+                            }
+                            .padding(.horizontal, 16)
+                            .padding(.vertical, 12)
+
+                            if index < rows.count - 1 || !totals.isEmpty {
+                                Divider().padding(.leading, 60)
+                            }
+                        }
+
+                        ForEach(Array(totals.enumerated()), id: \.element.currencyCode) { index, total in
+                            HStack {
+                                Text(L10n.planning.planning.totalAmount)
+                                    .font(.system(size: 14, weight: .bold, design: .rounded))
+                                Spacer()
+                                Text(total.amountMinor.formattedCurrency(code: total.currencyCode))
+                                    .font(.system(size: 15, weight: .bold, design: .rounded))
+                            }
+                            .padding(.horizontal, 16)
+                            .padding(.vertical, 12)
+
+                            if index < totals.count - 1 {
+                                Divider().padding(.leading, 16)
+                            }
+                        }
                     }
                 }
             }
         }
+    }
+
+    private var cardTint: Color {
+        colorScheme == .dark ? .white.opacity(0.04) : .white.opacity(0.16)
+    }
+
+    private var monthChoices: [Date] {
+        let currentMonth = PlanningLogic.startOfMonth(for: .now, calendar: calendar)
+        return (-6...6).compactMap {
+            calendar.date(byAdding: .month, value: $0, to: currentMonth)
+        }
+    }
+
+    private func monthTitle(for month: Date) -> String {
+        MistiaDateFormatting.monthYearString(for: month, calendar: calendar)
     }
 }
 
@@ -2013,6 +2113,7 @@ private struct FamilyOverviewDataHost: View {
         return FamilyOverviewCalculationInput(
             now: now,
             currentMonth: currentMonth,
+            selectedBillMonth: billListMonth,
             selectedInterval: interval,
             timeframeTitle: timeframe.title,
             familyMemberUserIDs: familyMemberUserIDs,
@@ -2071,6 +2172,7 @@ private struct FamilyOverviewDataHost: View {
             manualJPYToVNDRate: manualJPYToVNDRate,
             cachedRatesSignature: cachedCurrencyRatesData.hashValue,
             referenceDayStart: calendar.startOfDay(for: .now).timeIntervalSince1970,
+            billMonthStart: PlanningLogic.startOfMonth(for: billListMonth, calendar: calendar).timeIntervalSince1970,
             membersSignature: membersSignature,
             walletsSignature: MistiaCollectionChangeSignature.make(
                 storedWallets,
@@ -2196,6 +2298,7 @@ private struct FamilyOverviewDataHost: View {
     }
 
     @State private var timeframe: FamilyTimeframe = .month
+    @State private var billListMonth = PlanningLogic.startOfMonth(for: .now)
     @State private var overviewDataCache: FamilyOverviewDataCache?
 
     var body: some View {
@@ -2221,6 +2324,7 @@ private struct FamilyOverviewDataHost: View {
                 FamilyOverviewContent(
                     data: data,
                     timeframe: $timeframe,
+                    billListMonth: $billListMonth,
                     currencyCode: currencyCode
                 )
             } else {
@@ -2249,6 +2353,7 @@ private struct FamilyOverviewContent: View {
 
     let data: FamilyOverviewDerivedData
     @Binding var timeframe: FamilyTimeframe
+    @Binding var billListMonth: Date
     let currencyCode: String
 
     @State private var distributionMode: FamilyDistributionMode = .spending
@@ -2315,7 +2420,11 @@ private struct FamilyOverviewContent: View {
             )
         }
 
-        FamilyAIInsightsSection(insights: data.summary.insights)
+        FamilyMonthlyBillListSection(
+            rows: data.monthlyBillRows,
+            totals: data.monthlyBillTotalsByCurrency,
+            selectedMonth: $billListMonth
+        )
             .sheet(item: $activeSheet) { sheet in
                 switch sheet {
                 case .invite:

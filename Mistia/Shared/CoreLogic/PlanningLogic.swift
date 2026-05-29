@@ -311,11 +311,21 @@ nonisolated struct PlanningCreditCardStatementSnapshot: Equatable, Identifiable 
     }
 }
 
+nonisolated struct PlanningCurrencyAmountTotalSnapshot: Equatable, Identifiable {
+    let currencyCode: String
+    let amountMinor: Int64
+
+    var id: String { currencyCode }
+}
+
 nonisolated struct PlanningBillSnapshot: Equatable, Identifiable {
     let id: UUID
     let name: String
     let iconSymbolName: String
     let categorySystemKey: MistiaSystemCategoryKey?
+    let categoryName: String?
+    let categoryIconSymbolName: String?
+    let categoryColorHex: String?
     let amountMinor: Int64?
     let dueDay: Int
     let frequencyMonths: Int
@@ -337,6 +347,9 @@ nonisolated struct PlanningBillSnapshot: Equatable, Identifiable {
         name: String,
         iconSymbolName: String,
         categorySystemKey: MistiaSystemCategoryKey?,
+        categoryName: String? = nil,
+        categoryIconSymbolName: String? = nil,
+        categoryColorHex: String? = nil,
         amountMinor: Int64?,
         dueDay: Int,
         frequencyMonths: Int,
@@ -357,6 +370,9 @@ nonisolated struct PlanningBillSnapshot: Equatable, Identifiable {
         self.name = name
         self.iconSymbolName = iconSymbolName
         self.categorySystemKey = categorySystemKey
+        self.categoryName = categoryName
+        self.categoryIconSymbolName = categoryIconSymbolName
+        self.categoryColorHex = categoryColorHex
         self.amountMinor = amountMinor
         self.dueDay = dueDay
         self.frequencyMonths = frequencyMonths
@@ -422,6 +438,9 @@ nonisolated struct PlanningRecurringDueSnapshot: Equatable, Identifiable {
     let name: String
     let iconSymbolName: String
     let categorySystemKey: MistiaSystemCategoryKey?
+    let categoryName: String?
+    let categoryIconSymbolName: String?
+    let categoryColorHex: String?
     let amountMinor: Int64?
     let paymentStartDate: Date
     let dueDate: Date
@@ -443,6 +462,9 @@ nonisolated struct PlanningRecurringDueSnapshot: Equatable, Identifiable {
         name: String,
         iconSymbolName: String,
         categorySystemKey: MistiaSystemCategoryKey?,
+        categoryName: String? = nil,
+        categoryIconSymbolName: String? = nil,
+        categoryColorHex: String? = nil,
         amountMinor: Int64?,
         paymentStartDate: Date? = nil,
         dueDate: Date,
@@ -463,6 +485,9 @@ nonisolated struct PlanningRecurringDueSnapshot: Equatable, Identifiable {
         self.name = name
         self.iconSymbolName = iconSymbolName
         self.categorySystemKey = categorySystemKey
+        self.categoryName = categoryName
+        self.categoryIconSymbolName = categoryIconSymbolName
+        self.categoryColorHex = categoryColorHex
         self.amountMinor = amountMinor
         self.paymentStartDate = paymentStartDate ?? dueDate
         self.dueDate = dueDate
@@ -1115,6 +1140,9 @@ nonisolated enum PlanningLogic {
                     name: bill.name,
                     iconSymbolName: bill.iconSymbolName,
                     categorySystemKey: bill.categorySystemKey,
+                    categoryName: bill.categoryName,
+                    categoryIconSymbolName: bill.categoryIconSymbolName,
+                    categoryColorHex: bill.categoryColorHex,
                     amountMinor: occurrence?.amountMinorSnapshot ?? bill.amountMinor,
                     paymentStartDate: window.paymentStartDate,
                     dueDate: window.dueDate,
@@ -1130,6 +1158,32 @@ nonisolated enum PlanningLogic {
                     autoPayDate: window.autoPayDate
                 )
             }
+        }
+    }
+
+    static func recurringBillAmountTotalsByCurrency(
+        _ items: [PlanningRecurringDueSnapshot]
+    ) -> [PlanningCurrencyAmountTotalSnapshot] {
+        Dictionary(grouping: items) { item in
+            MistiaCurrencyLogic.normalizedCode(item.currencyCode)
+        }
+        .compactMap { currencyCode, groupedItems in
+            let total = groupedItems.reduce(into: Int64.zero) { partial, item in
+                guard item.sourceKind == .recurringBill,
+                      let amountMinor = item.amountMinor,
+                      amountMinor > 0 else {
+                    return
+                }
+                partial += amountMinor
+            }
+            guard total > 0 else { return nil }
+            return PlanningCurrencyAmountTotalSnapshot(
+                currencyCode: currencyCode,
+                amountMinor: total
+            )
+        }
+        .sorted { lhs, rhs in
+            lhs.currencyCode.localizedCaseInsensitiveCompare(rhs.currencyCode) == .orderedAscending
         }
     }
 
@@ -1590,7 +1644,20 @@ nonisolated enum PlanningLogic {
             return nil
         }
 
-        let status = matchedOccurrence?.status ?? .pending
+        let inferredPayment = creditCardStatementPaymentRecord(
+            walletID: account.walletID,
+            amountMinor: amount,
+            closingDate: closingDate,
+            records: records,
+            calendar: calendar
+        )
+        let status: PlanningDueOccurrenceStatus =
+            matchedOccurrence?.status == .paid || inferredPayment != nil
+            ? .paid
+            : .pending
+        let linkedTransactionID = matchedOccurrence?.status == .paid
+            ? matchedOccurrence?.linkedTransactionID ?? inferredPayment?.id
+            : inferredPayment?.id ?? matchedOccurrence?.linkedTransactionID
         let state = creditCardStatementState(
             status: status,
             amountMinor: amount,
@@ -1616,7 +1683,7 @@ nonisolated enum PlanningLogic {
             paymentSourceWalletName: account.paymentSourceWalletName,
             currencyCode: account.currencyCode,
             status: status,
-            linkedTransactionID: matchedOccurrence?.linkedTransactionID,
+            linkedTransactionID: linkedTransactionID,
             state: state
         )
     }
@@ -1644,6 +1711,40 @@ nonisolated enum PlanningLogic {
 
             partial += record.amountMinor
         }
+    }
+
+    static func creditCardStatementPaymentRecord(
+        walletID: UUID,
+        amountMinor: Int64,
+        closingDate: Date,
+        records: [TransactionRecordSnapshot],
+        calendar: Calendar = MistiaCalendar.current
+    ) -> TransactionRecordSnapshot? {
+        guard amountMinor > 0 else { return nil }
+        let closingDay = calendar.startOfDay(for: closingDate)
+
+        return records
+            .filter { record in
+                guard record.entryStatus == .posted,
+                      !record.isArchived,
+                      record.primaryKind == .transfer,
+                      record.transferSubtype == .internalTransfer,
+                      record.destinationWalletID == walletID,
+                      record.occurredAt >= closingDay
+                else {
+                    return false
+                }
+
+                let paidAmount = record.destinationAmountMinor ?? record.amountMinor
+                return paidAmount >= amountMinor
+            }
+            .sorted {
+                if $0.occurredAt != $1.occurredAt {
+                    return $0.occurredAt < $1.occurredAt
+                }
+                return $0.createdAt < $1.createdAt
+            }
+            .first
     }
 
     static func creditCardStatementState(

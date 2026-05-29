@@ -37,6 +37,19 @@ final class MistiaShortcutLogicTests: XCTestCase {
         XCTAssertEqual(resolution.presentation.action, .receiptScan)
     }
 
+    func testRemoteCapablePinnedActionsRequireRemoteAvailability() {
+        let familyID = UUID()
+        let memberID = UUID()
+
+        XCTAssertTrue(MistiaShortcutResolvedAction.familyOverview(familyID: familyID).requiresRemoteAction)
+        XCTAssertTrue(MistiaShortcutResolvedAction.memberOverview(userID: memberID).requiresRemoteAction)
+        XCTAssertTrue(MistiaShortcutResolvedAction.receiptScan.requiresRemoteAction)
+        XCTAssertTrue(MistiaShortcutResolvedAction.syncNow.requiresRemoteAction)
+
+        XCTAssertFalse(MistiaShortcutResolvedAction.backupRestore.requiresRemoteAction)
+        XCTAssertFalse(MistiaShortcutResolvedAction.archivedItems.requiresRemoteAction)
+    }
+
     func testResolveFallsBackToProfileWhenFamilyOverviewIsUnavailable() {
         let resolution = MistiaShortcutLogic.resolve(
             selection: .familyOverview,

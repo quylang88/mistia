@@ -589,6 +589,13 @@ struct AIBillAnalysisView: View {
         return walletPickerAccess.currentSelfUserID
     }
 
+    private var receiptPersistencePolicy: TransactionReceiptPersistencePolicy {
+        TransactionReceiptPersistencePolicy.policy(
+            ownerUserID: quickCreateSubjectUserID,
+            activeLocalProfileUserID: sessionStore.activeLocalProfileUserID
+        )
+    }
+
     private var walletPickerAccess: MistiaWalletPickerAccess {
         MistiaWalletPickerAccess(
             sessionStore: sessionStore,
@@ -1092,7 +1099,8 @@ struct AIBillAnalysisView: View {
                 lockedDebtIntent: draft.debtIntent,
                 receiptImage: receiptImage
             ),
-            subjectUserIDOverride: quickCreateSubjectUserID
+            subjectUserIDOverride: quickCreateSubjectUserID,
+            receiptPersistencePolicy: receiptPersistencePolicy
         )
     }
 

@@ -9,6 +9,8 @@ struct MistiaNativeTabShell: UIViewControllerRepresentable {
   var hidesTabBar: Bool
   var showsShortcutTab: Bool
   var isShortcutSyncing: Bool
+  var isShortcutDisabled: Bool
+  var shortcutDisabledAccessibilityHint: String?
   var shortcutPresentation: MistiaShortcutPresentation
   var onShortcutTap: () -> Void
   var onQuickCreateTap: () -> Void
@@ -27,6 +29,8 @@ struct MistiaNativeTabShell: UIViewControllerRepresentable {
       appLanguage: appLanguage,
       shortcutPresentation: shortcutPresentation,
       isShortcutSyncing: isShortcutSyncing,
+      isShortcutDisabled: isShortcutDisabled,
+      shortcutDisabledAccessibilityHint: shortcutDisabledAccessibilityHint,
       hidesQuickCreate: hidesQuickCreate,
       hidesTabBar: hidesTabBar,
       showsShortcutTab: showsShortcutTab
@@ -43,6 +47,8 @@ struct MistiaNativeTabShell: UIViewControllerRepresentable {
       appLanguage: appLanguage,
       shortcutPresentation: shortcutPresentation,
       isShortcutSyncing: isShortcutSyncing,
+      isShortcutDisabled: isShortcutDisabled,
+      shortcutDisabledAccessibilityHint: shortcutDisabledAccessibilityHint,
       hidesQuickCreate: hidesQuickCreate,
       hidesTabBar: hidesTabBar,
       showsShortcutTab: showsShortcutTab
@@ -116,6 +122,8 @@ final class MistiaNativeTabBarController: UITabBarController, UITabBarController
     action: .backupRestore
   )
   private var isCurrentShortcutSyncing = false
+  private var isCurrentShortcutDisabled = false
+  private var currentShortcutDisabledAccessibilityHint: String?
   private var currentSelectedMistiaTab: MistiaTab?
   private var spinnerActivityIndicatorView: UIActivityIndicatorView?
 
@@ -170,6 +178,8 @@ final class MistiaNativeTabBarController: UITabBarController, UITabBarController
     appLanguage: MistiaAppLanguage,
     shortcutPresentation: MistiaShortcutPresentation,
     isShortcutSyncing: Bool,
+    isShortcutDisabled: Bool,
+    shortcutDisabledAccessibilityHint: String?,
     hidesQuickCreate: Bool,
     hidesTabBar: Bool,
     showsShortcutTab: Bool
@@ -181,12 +191,16 @@ final class MistiaNativeTabBarController: UITabBarController, UITabBarController
     let didChangeShortcutContent =
       currentShortcutPresentation != shortcutPresentation
       || isCurrentShortcutSyncing != isShortcutSyncing
+      || isCurrentShortcutDisabled != isShortcutDisabled
+      || currentShortcutDisabledAccessibilityHint != shortcutDisabledAccessibilityHint
     let didChangeSelectedTab = currentSelectedMistiaTab != selectedTab
 
     currentAppearanceMode = appearanceMode
     currentAppLanguage = appLanguage
     currentShortcutPresentation = shortcutPresentation
     isCurrentShortcutSyncing = isShortcutSyncing
+    isCurrentShortcutDisabled = isShortcutDisabled
+    currentShortcutDisabledAccessibilityHint = shortcutDisabledAccessibilityHint
     overrideUserInterfaceStyle = appearanceMode.interfaceStyle
 
     configureTabsIfNeeded()
@@ -307,8 +321,11 @@ final class MistiaNativeTabBarController: UITabBarController, UITabBarController
     shortcutAvatarTask?.cancel()
     shortcutAvatarTask = nil
     stopSpinnerAnimation()
+    shortcutTab.isEnabled = !isCurrentShortcutDisabled
+    shortcutTab.accessibilityLabel = currentShortcutPresentation.accessibilityLabel
+    shortcutTab.accessibilityHint = currentShortcutDisabledAccessibilityHint
 
-    if isCurrentShortcutSyncing {
+    if isCurrentShortcutSyncing && !isCurrentShortcutDisabled {
       currentShortcutImageKey = "syncing_spinner"
       startSpinnerAnimation()
       return
@@ -768,8 +785,7 @@ final class MistiaNativeTabBarController: UITabBarController, UITabBarController
   func tabBarController(_ tabBarController: UITabBarController, shouldSelectTab tab: UITab) -> Bool
   {
     guard let shortcutTab, tab === shortcutTab else { return true }
-    // Block interaction while syncing
-    if isCurrentShortcutSyncing {
+    if isCurrentShortcutSyncing || isCurrentShortcutDisabled {
       return false
     }
     chromeDelegate?.nativeTabBarControllerDidTapShortcut(self)
