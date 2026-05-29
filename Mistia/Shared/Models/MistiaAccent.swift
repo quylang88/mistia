@@ -14,7 +14,8 @@ enum MistiaAccent: String, Codable {
     case expense // Màu rose đỏ của số tiền chi tiêu
     case income // Màu xanh của số tiền thu nhập
     case transfer // Màu trắng xám của số tiền chuyển tiền
-    case lightPurple // Màu tím sáng (light purple) cho text hoặc background phụ
+    case lightPurple // Màu tím nhạt cho text thêm hoặc dark mode highlight
+    case checkmarkPurple // Màu tím nhạt cho checkmark/button
 
     var color: Color {
         switch self {
@@ -51,6 +52,9 @@ enum MistiaAccent: String, Codable {
         case .lightPurple:
             // Màu tím nhạt cho text thêm hoặc dark mode highlight
             Color(red: 0.65, green: 0.45, blue: 0.98)
+        case .checkmarkPurple:
+            // Màu tím nhạt cho checkmark/button
+            Color(red: 0.88, green: 0.78, blue: 1.0)
         }
     }
 }

@@ -353,12 +353,12 @@ struct TransactionEditorSheet: View {
                             if isSaving || isProcessingReceiptImage {
                                 ProgressView()
                                     .controlSize(.small)
-                                    .tint(Color(red: 0.88, green: 0.78, blue: 1.0))
+                                    .tint(MistiaAccent.checkmarkPurple.color)
                                     .frame(width: 30, height: 30)
                             } else {
                                 Image(systemName: "checkmark")
                                     .font(.system(size: 14, weight: .bold))
-                                    .foregroundStyle(Color(red: 0.88, green: 0.78, blue: 1.0))
+                                    .foregroundStyle(MistiaAccent.checkmarkPurple.color)
                                     .frame(width: 30, height: 30)
                             }
                         }

@@ -2967,7 +2967,7 @@ private struct ManagementEditProfileNameEditorView: View {
     var body: some View {
         MistiaModalScaffold(
             title: L10n.management.managementauth.fullName,
-            accent: accent
+            accent: MistiaAccent.purple.color
         ) {
             displayName = [
                 familyName.trimmingCharacters(in: .whitespacesAndNewlines),
@@ -3065,7 +3065,7 @@ private struct ManagementEditProfileBirthdayEditorView: View {
     var body: some View {
         MistiaModalScaffold(
             title: L10n.management.managementauth.birthday,
-            accent: accent
+            accent: MistiaAccent.purple.color
         ) {
             birthday = draftBirthday
             hasBirthday = true
@@ -3088,7 +3088,7 @@ private struct ManagementEditProfileBirthdayEditorView: View {
                     calendar: calendar,
                     language: MistiaAppLanguage.current,
                     selectableRange: .through(...Date()),
-                    accent: accent
+                    accent: MistiaAccent.purple.color
                 )
             }
         }

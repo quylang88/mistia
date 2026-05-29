@@ -14,7 +14,7 @@ struct MistiaModalScaffold<Title: View, Content: View>: View {
     }
 
     private var checkmarkForeground: Color {
-        Color(red: 0.88, green: 0.78, blue: 1.0)
+        MistiaAccent.checkmarkPurple.color
     }
 
     init(
