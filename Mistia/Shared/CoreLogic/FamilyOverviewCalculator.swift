@@ -33,8 +33,7 @@ struct FamilyOverviewTransactionInputSnapshot: Equatable {
 
 struct FamilyOverviewCalculationInput: Equatable {
     let now: Date
-    let currentMonth: Date
-    let selectedBillMonth: Date
+    let selectedMonth: Date
     let selectedInterval: DateInterval
     let timeframeTitle: String
     let familyMemberUserIDs: Set<UUID>
@@ -98,7 +97,7 @@ enum FamilyOverviewCalculator {
             accounts: creditCardAccounts,
             records: transactionRecords,
             occurrences: input.occurrences,
-            statementMonths: [input.currentMonth],
+            statementMonths: [input.selectedMonth],
             referenceDate: input.now,
             calendar: input.calendar
         )
@@ -154,7 +153,7 @@ enum FamilyOverviewCalculator {
             exchangeRates: input.exchangeRates
         )
         let creditCardStatementDueItems = PlanningLogic.creditCardStatementsDue(
-            in: input.currentMonth,
+            in: input.selectedMonth,
             accounts: creditCardAccounts,
             records: transactionRecords,
             occurrences: input.occurrences,
@@ -165,32 +164,32 @@ enum FamilyOverviewCalculator {
             accounts: creditCardAccounts,
             records: transactionRecords,
             occurrences: input.occurrences,
-            selectedMonth: input.currentMonth,
+            selectedMonth: input.selectedMonth,
             referenceDate: input.now,
             calendar: input.calendar
         )
         let recurringBillDueItems = PlanningLogic.recurringBillDueItems(
             bills: input.bills,
             occurrences: input.occurrences,
-            selectedMonth: input.currentMonth,
+            selectedMonth: input.selectedMonth,
             calendar: input.calendar
         )
         let monthlyBillRows = FamilyLogic.monthlyBillRows(
             bills: input.bills,
             occurrences: input.occurrences,
-            selectedMonth: input.selectedBillMonth,
+            selectedMonth: input.selectedMonth,
             calendar: input.calendar
         )
         let installmentDueItems = PlanningLogic.installmentDueItems(
             plans: input.installments,
             occurrences: input.occurrences,
-            selectedMonth: input.currentMonth,
+            selectedMonth: input.selectedMonth,
             calendar: input.calendar
         )
         let monthlyDueSummary = PlanningLogic.dueSummary(
             creditStatements: creditCardStatementDueItems,
             recurring: recurringBillDueItems + installmentDueItems,
-            selectedMonth: input.currentMonth,
+            selectedMonth: input.selectedMonth,
             reportingCurrencyCode: input.reportingCurrencyCode,
             exchangeRates: input.exchangeRates,
             referenceDate: input.now,
@@ -199,7 +198,7 @@ enum FamilyOverviewCalculator {
         let budgetRows = FamilyLogic.familyBudgetRows(
             plans: input.budgets,
             transactions: aggregateTransactions,
-            selectedMonth: input.currentMonth,
+            selectedMonth: input.selectedMonth,
             ownerUserID: input.familyOwnerUserID,
             budgetManagerUserID: input.budgetManagerUserID,
             memberOrder: input.memberOrder,

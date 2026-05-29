@@ -424,7 +424,7 @@ private struct FamilyOverviewDataCacheKey: Hashable {
     let manualJPYToVNDRate: String
     let cachedRatesSignature: Int
     let referenceDayStart: TimeInterval
-    let billMonthStart: TimeInterval
+    let selectedMonthStart: TimeInterval
     let membersSignature: Int
     let walletsSignature: MistiaCollectionChangeSignature
     let transactionsSignature: MistiaCollectionChangeSignature
@@ -596,11 +596,80 @@ private extension View {
     }
 }
 
+private struct FamilyOverviewPeriodControl: View {
+    @Environment(\.calendar) private var calendar
+    @Environment(\.colorScheme) private var colorScheme
+    @Binding var timeframe: FamilyTimeframe
+    @Binding var selectedMonth: Date
+
+    @State private var isMonthPickerPresented = false
+
+    var body: some View {
+        VStack(spacing: 10) {
+            Picker(String(), selection: $timeframe) {
+                ForEach(FamilyTimeframe.allCases) { tf in
+                    Text(tf.title).tag(tf)
+                }
+            }
+            .pickerStyle(.segmented)
+
+            if timeframe == .month {
+                Button {
+                    isMonthPickerPresented = true
+                } label: {
+                    HStack(spacing: 10) {
+                        Image(systemName: "calendar")
+                            .font(.system(size: 14, weight: .bold))
+
+                        Text(MistiaDateFormatting.statementMonthYearString(for: selectedMonth, calendar: calendar))
+                            .font(.system(size: 15, weight: .bold, design: .rounded))
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.78)
+
+                        Spacer(minLength: 8)
+
+                        Image(systemName: "chevron.up.chevron.down")
+                            .font(.system(size: 11, weight: .bold))
+                            .foregroundStyle(.secondary)
+                    }
+                    .foregroundStyle(.primary)
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 11)
+                    .frame(maxWidth: .infinity)
+                    .background(
+                        monthButtonBackground,
+                        in: RoundedRectangle(cornerRadius: 16, style: .continuous)
+                    )
+                }
+                .buttonStyle(.plain)
+                .transition(.opacity.combined(with: .move(edge: .top)))
+                .sheet(isPresented: $isMonthPickerPresented) {
+                    MistiaMonthPickerSheet(
+                        selection: $selectedMonth,
+                        calendar: calendar,
+                        accentColor: MistiaAccent.purple.color
+                    )
+                    .presentationDetents([.height(280)])
+                    .presentationDragIndicator(.hidden)
+                }
+            }
+        }
+        .padding(.horizontal, 4)
+        .animation(.snappy, value: timeframe)
+    }
+
+    private var monthButtonBackground: Color {
+        colorScheme == .dark
+            ? Color(UIColor.secondarySystemGroupedBackground).opacity(0.72)
+            : Color.white.opacity(0.22)
+    }
+}
+
 private struct FamilyDistributionSection: View {
     @Environment(\.colorScheme) private var colorScheme
     let summary: FamilyAggregateSummary
     let categorySpendingSnapshot: OverviewCategorySpendingMonthSnapshot
-    @Binding var timeframe: FamilyTimeframe
+    let timeframe: FamilyTimeframe
     @Binding var mode: FamilyDistributionMode
     let accountSegments: [FamilyDonutSegment]
     let currencyCode: String
@@ -611,14 +680,6 @@ private struct FamilyDistributionSection: View {
             EmptyView()
         } else {
             VStack(spacing: 12) {
-                Picker(String(), selection: $timeframe) {
-                    ForEach(FamilyTimeframe.allCases) { tf in
-                        Text(tf.title).tag(tf)
-                    }
-                }
-                .pickerStyle(.segmented)
-                .padding(.horizontal, 4)
-
                 MistiaGlassCard(cornerRadius: 24, tint: cardTint) {
                     VStack(alignment: .leading, spacing: 16) {
                         HStack(alignment: .firstTextBaseline) {
@@ -1422,43 +1483,15 @@ private struct FamilyTransactionFilterSheet: View {
 }
 
 private struct FamilyMonthlyBillListSection: View {
-    @Environment(\.calendar) private var calendar
     @Environment(\.colorScheme) private var colorScheme
     let rows: [FamilyMonthlyBillAggregateSnapshot]
     let totals: [FamilyMonthlyBillTotalSnapshot]
-    @Binding var selectedMonth: Date
-
-    @State private var isMonthPickerPresented = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            HStack(spacing: 12) {
-                Text(L10n.family.family.billList)
-                    .familyOverviewSectionTitleStyle()
-
-                Spacer()
-
-                Button {
-                    isMonthPickerPresented = true
-                } label: {
-                    Label(
-                        MistiaDateFormatting.statementMonthYearString(for: selectedMonth, calendar: calendar),
-                        systemImage: "calendar"
-                    )
-                    .font(.system(size: 13, weight: .semibold, design: .rounded))
-                }
-                .buttonStyle(.bordered)
-                .controlSize(.small)
-                .sheet(isPresented: $isMonthPickerPresented) {
-                    MistiaMonthPickerSheet(
-                        selection: $selectedMonth,
-                        calendar: calendar,
-                        accentColor: MistiaAccent.purple.color
-                    )
-                    .presentationDetents([.height(280)])
-                }
-            }
-            .padding(.horizontal, 4)
+            Text(L10n.family.family.billList)
+                .familyOverviewSectionTitleStyle()
+                .padding(.horizontal, 4)
 
             MistiaGlassCard(cornerRadius: 24, tint: cardTint, padding: 0) {
                 VStack(spacing: 0) {
@@ -1966,8 +1999,8 @@ private struct FamilyOverviewDataHost: View {
 
     private func makeOverviewInputSnapshot() -> FamilyOverviewCalculationInput {
         let now = Date.now
-        let currentMonth = PlanningLogic.startOfMonth(for: now, calendar: calendar)
-        let interval = selectedInterval(for: timeframe, now: now)
+        let selectedMonth = selectedMonth(for: timeframe, now: now)
+        let interval = selectedInterval(for: timeframe, now: now, selectedMonth: selectedMonth)
         let familyMemberUserIDs = familyMemberIDs
         let walletOwnerMap = MistiaRecordOwnershipStore.ownerMap(from: ownershipScopes, entity: .wallet)
         let transactionOwnerMap = MistiaRecordOwnershipStore.ownerMap(from: ownershipScopes, entity: .transaction)
@@ -2074,7 +2107,7 @@ private struct FamilyOverviewDataHost: View {
         }
         let activeBudgetPlans = visibleBudgets
             .filter {
-                PlanningLogic.startOfMonth(for: $0.monthAnchor, calendar: calendar) == currentMonth
+                PlanningLogic.startOfMonth(for: $0.monthAnchor, calendar: calendar) == selectedMonth
             }
             .map { budget in
                 let plan = budget.planningSnapshot(calendar: calendar)
@@ -2110,8 +2143,7 @@ private struct FamilyOverviewDataHost: View {
 
         return FamilyOverviewCalculationInput(
             now: now,
-            currentMonth: currentMonth,
-            selectedBillMonth: billListMonth,
+            selectedMonth: selectedMonth,
             selectedInterval: interval,
             timeframeTitle: timeframe.title,
             familyMemberUserIDs: familyMemberUserIDs,
@@ -2156,7 +2188,8 @@ private struct FamilyOverviewDataHost: View {
     }
 
     private var overviewDataCacheKey: FamilyOverviewDataCacheKey {
-        FamilyOverviewDataCacheKey(
+        let selectedMonth = selectedMonth(for: timeframe, now: .now)
+        return FamilyOverviewDataCacheKey(
             timeframeRawValue: timeframe.rawValue,
             activeScope: familyContextStore.activeContext.scope,
             familyID: familyContextStore.family?.id,
@@ -2170,7 +2203,7 @@ private struct FamilyOverviewDataHost: View {
             manualJPYToVNDRate: manualJPYToVNDRate,
             cachedRatesSignature: cachedCurrencyRatesData.hashValue,
             referenceDayStart: calendar.startOfDay(for: .now).timeIntervalSince1970,
-            billMonthStart: PlanningLogic.startOfMonth(for: billListMonth, calendar: calendar).timeIntervalSince1970,
+            selectedMonthStart: selectedMonth.timeIntervalSince1970,
             membersSignature: membersSignature,
             walletsSignature: MistiaCollectionChangeSignature.make(
                 storedWallets,
@@ -2284,19 +2317,28 @@ private struct FamilyOverviewDataHost: View {
         }
     }
 
-    private func selectedInterval(for timeframe: FamilyTimeframe, now: Date) -> DateInterval {
+    private func selectedMonth(for timeframe: FamilyTimeframe, now: Date) -> Date {
+        switch timeframe {
+        case .month:
+            return PlanningLogic.startOfMonth(for: selectedOverviewMonth, calendar: calendar)
+        case .week, .year:
+            return PlanningLogic.startOfMonth(for: now, calendar: calendar)
+        }
+    }
+
+    private func selectedInterval(for timeframe: FamilyTimeframe, now: Date, selectedMonth: Date) -> DateInterval {
         switch timeframe {
         case .week:
             return calendar.dateInterval(of: .weekOfYear, for: now) ?? DateInterval(start: now, duration: 3600*24*7)
         case .month:
-            return calendar.dateInterval(of: .month, for: now) ?? DateInterval(start: now, duration: 3600*24*30)
+            return calendar.dateInterval(of: .month, for: selectedMonth) ?? DateInterval(start: selectedMonth, duration: 3600*24*30)
         case .year:
             return calendar.dateInterval(of: .year, for: now) ?? DateInterval(start: now, duration: 3600*24*365)
         }
     }
 
     @State private var timeframe: FamilyTimeframe = .month
-    @State private var billListMonth = PlanningLogic.startOfMonth(for: .now)
+    @State private var selectedOverviewMonth = PlanningLogic.startOfMonth(for: .now)
     @State private var overviewDataCache: FamilyOverviewDataCache?
 
     var body: some View {
@@ -2322,7 +2364,7 @@ private struct FamilyOverviewDataHost: View {
                 FamilyOverviewContent(
                     data: data,
                     timeframe: $timeframe,
-                    billListMonth: $billListMonth,
+                    selectedMonth: $selectedOverviewMonth,
                     currencyCode: currencyCode
                 )
             } else {
@@ -2351,7 +2393,7 @@ private struct FamilyOverviewContent: View {
 
     let data: FamilyOverviewDerivedData
     @Binding var timeframe: FamilyTimeframe
-    @Binding var billListMonth: Date
+    @Binding var selectedMonth: Date
     let currencyCode: String
 
     @State private var distributionMode: FamilyDistributionMode = .spending
@@ -2367,6 +2409,11 @@ private struct FamilyOverviewContent: View {
         )
         .padding(.top, 8)
 
+        FamilyOverviewPeriodControl(
+            timeframe: $timeframe,
+            selectedMonth: $selectedMonth
+        )
+
         FamilyHeroCard(
             summary: data.summary,
             monthlySpendable: data.monthlySpendable,
@@ -2376,7 +2423,7 @@ private struct FamilyOverviewContent: View {
         FamilyDistributionSection(
             summary: data.summary,
             categorySpendingSnapshot: data.categorySpendingSnapshot,
-            timeframe: $timeframe,
+            timeframe: timeframe,
             mode: $distributionMode,
             accountSegments: data.summary.balanceByWalletName,
             currencyCode: currencyCode,
@@ -2420,8 +2467,7 @@ private struct FamilyOverviewContent: View {
 
         FamilyMonthlyBillListSection(
             rows: data.monthlyBillRows,
-            totals: data.monthlyBillTotalsByCurrency,
-            selectedMonth: $billListMonth
+            totals: data.monthlyBillTotalsByCurrency
         )
             .sheet(item: $activeSheet) { sheet in
                 switch sheet {

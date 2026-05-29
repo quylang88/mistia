@@ -99,8 +99,7 @@ final class FamilyOverviewCalculatorTests: XCTestCase {
         let result = FamilyOverviewCalculator.compute(
             input: FamilyOverviewCalculationInput(
                 now: makeDate(year: 2026, month: 5, day: 15),
-                currentMonth: month,
-                selectedBillMonth: month,
+                selectedMonth: month,
                 selectedInterval: DateInterval(
                     start: month,
                     end: makeDate(year: 2026, month: 6, day: 1)
@@ -146,8 +145,7 @@ final class FamilyOverviewCalculatorTests: XCTestCase {
         let result = FamilyOverviewCalculator.compute(
             input: FamilyOverviewCalculationInput(
                 now: makeDate(year: 2026, month: 5, day: 15),
-                currentMonth: month,
-                selectedBillMonth: month,
+                selectedMonth: month,
                 selectedInterval: DateInterval(
                     start: month,
                     end: makeDate(year: 2026, month: 6, day: 1)
@@ -226,6 +224,141 @@ final class FamilyOverviewCalculatorTests: XCTestCase {
         ])
     }
 
+    func testComputeUsesSelectedMonthInsteadOfCurrentMonthForMonthlyFamilyData() {
+        let ownerID = UUID()
+        let walletID = UUID()
+        let categoryID = UUID()
+        let selectedMonth = makeDate(year: 2026, month: 4, day: 1)
+        let nextMonth = makeDate(year: 2026, month: 5, day: 1)
+        let selectedMonthTransactionDate = makeDate(year: 2026, month: 4, day: 12)
+        let wallet = FamilyOverviewWalletInputSnapshot(
+            id: walletID,
+            ownerUserID: ownerID,
+            name: "Cash",
+            kind: .cash,
+            openingBalanceMinor: 100_000,
+            creditCardProfile: nil,
+            currencyCode: "JPY",
+            sortOrder: 0,
+            createdAt: makeDate(year: 2026, month: 1, day: 1)
+        )
+        let expenseRecord = TransactionRecordSnapshot(
+            id: UUID(),
+            primaryKind: .expense,
+            transferSubtype: nil,
+            debtIntent: nil,
+            entryStatus: .posted,
+            title: "Groceries",
+            note: nil,
+            amountMinor: 10_000,
+            sourceCurrencyCode: "JPY",
+            isArchived: false,
+            occurredAt: selectedMonthTransactionDate,
+            createdAt: selectedMonthTransactionDate,
+            sourceWalletID: walletID,
+            sourceWalletKind: .cash,
+            destinationWalletID: nil,
+            destinationWalletKind: nil,
+            categoryID: categoryID,
+            counterpartyName: nil,
+            normalizedCounterpartyKey: nil
+        )
+        let transaction = FamilyOverviewTransactionInputSnapshot(
+            record: expenseRecord,
+            overview: OverviewTransactionSnapshot(
+                id: expenseRecord.id,
+                primaryKind: .expense,
+                transferSubtype: nil,
+                debtIntent: nil,
+                entryStatus: .posted,
+                title: "Groceries",
+                note: nil,
+                amountMinor: 10_000,
+                sourceCurrencyCode: "JPY",
+                occurredAt: selectedMonthTransactionDate,
+                createdAt: selectedMonthTransactionDate,
+                sourceWalletID: walletID,
+                sourceWalletName: "Cash",
+                sourceWalletKind: .cash,
+                destinationWalletID: nil,
+                destinationWalletName: nil,
+                destinationWalletKind: nil,
+                categoryID: categoryID,
+                categoryName: "Food",
+                categoryIconSymbolName: "fork.knife",
+                categoryColorHex: "#FFAA00",
+                categoryParentID: nil,
+                categoryParentName: nil,
+                categoryParentIconSymbolName: nil,
+                categoryParentColorHex: nil,
+                counterpartyName: nil,
+                isArchived: false
+            ),
+            aggregate: FamilyAggregateTransactionSnapshot(
+                ownerUserID: ownerID,
+                createdByUserID: ownerID,
+                categoryName: "Food",
+                occurredAt: selectedMonthTransactionDate,
+                kind: .expense,
+                amountMinor: 10_000,
+                currencyCode: "JPY"
+            )
+        )
+        let budget = FamilyBudgetPlanSnapshot(
+            id: UUID(),
+            ownerUserID: ownerID,
+            categoryName: "Food",
+            iconSymbolName: "fork.knife",
+            colorHex: "#FFAA00",
+            limitMinor: 15_000,
+            currencyCode: "JPY",
+            monthAnchor: selectedMonth
+        )
+        let bill = makeBill(
+            name: "Selected month utility",
+            categorySystemKey: .electricity,
+            categoryName: "Electricity",
+            amountMinor: 20_000,
+            currencyCode: "JPY",
+            month: selectedMonth,
+            scheduleKind: .oneTime,
+            paymentStartDate: selectedMonthTransactionDate
+        )
+
+        let result = FamilyOverviewCalculator.compute(
+            input: FamilyOverviewCalculationInput(
+                now: makeDate(year: 2026, month: 5, day: 15),
+                selectedMonth: selectedMonth,
+                selectedInterval: DateInterval(
+                    start: selectedMonth,
+                    end: nextMonth
+                ),
+                timeframeTitle: "Tháng",
+                familyMemberUserIDs: [ownerID],
+                memberNames: [ownerID: "Owner"],
+                memberOrder: [ownerID],
+                familyOwnerUserID: ownerID,
+                budgetManagerUserID: nil,
+                goalManagerUserID: nil,
+                reportingCurrencyCode: "JPY",
+                exchangeRates: [],
+                calendar: calendar,
+                wallets: [wallet],
+                transactions: [transaction],
+                budgets: [budget],
+                goals: [],
+                bills: [bill],
+                installments: [],
+                occurrences: []
+            )
+        )
+
+        XCTAssertEqual(result.categorySpendingSnapshot.totalExpenseMinor, 10_000)
+        XCTAssertEqual(result.budgetRows.map(\.name), ["Food"])
+        XCTAssertEqual(result.monthlyBillRows.first?.amountMinor, 20_000)
+        XCTAssertEqual(result.monthlySpendable.displayMinor, 70_000)
+    }
+
     private func makeDate(year: Int, month: Int, day: Int) -> Date {
         let components = DateComponents(
             calendar: calendar,
@@ -244,7 +377,9 @@ final class FamilyOverviewCalculatorTests: XCTestCase {
         categoryName: String?,
         amountMinor: Int64?,
         currencyCode: String,
-        month: Date
+        month: Date,
+        scheduleKind: PlanningBillScheduleKind = .recurring,
+        paymentStartDate: Date? = nil
     ) -> PlanningBillSnapshot {
         PlanningBillSnapshot(
             id: id,
@@ -260,6 +395,8 @@ final class FamilyOverviewCalculatorTests: XCTestCase {
             paymentWalletID: nil,
             currencyCode: currencyCode,
             createdAt: month,
+            scheduleKind: scheduleKind,
+            paymentStartDate: paymentStartDate,
             firstScheduledMonth: month
         )
     }
