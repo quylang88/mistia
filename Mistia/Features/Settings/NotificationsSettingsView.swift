@@ -6,6 +6,7 @@ struct NotificationsSettingsView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
     @Environment(SessionStore.self) private var sessionStore
+    @Environment(FamilyContextStore.self) private var familyContextStore
 
     @AppStorage(MistiaAppStorageKey.notificationsEnabled) private var notificationsEnabled = false
     @AppStorage(MistiaAppStorageKey.notificationsHadAnyGroupOn) private var notificationsHadAnyGroupOn = false
