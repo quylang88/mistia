@@ -58,7 +58,18 @@ enum MistiaLocalNotificationScheduler {
     }
 
     private static func removeObsoleteDueSoonInboxRecords(modelContext: ModelContext) {
-        let rows = (try? modelContext.fetch(FetchDescriptor<AppNotificationRecord>())) ?? []
+        let dueSoonKindRawValue = MistiaAppNotificationKind.dueSoon.rawValue
+        let localReminderSourceRawValue = MistiaAppNotificationSource.localReminder.rawValue
+        let systemSourceRawValue = MistiaAppNotificationSource.system.rawValue
+        let rows = (try? modelContext.fetch(
+            FetchDescriptor<AppNotificationRecord>(
+                predicate: #Predicate<AppNotificationRecord> { row in
+                    row.kindRawValue == dueSoonKindRawValue
+                        || row.sourceRawValue == localReminderSourceRawValue
+                        || row.sourceRawValue == systemSourceRawValue
+                }
+            )
+        )) ?? []
         let obsoleteRows = rows.filter { row in
             row.kind == .dueSoon || row.key.hasPrefix("mistia.reminder.due.")
         }
@@ -133,10 +144,23 @@ enum MistiaLocalNotificationScheduler {
         recipientUserID: UUID,
         modelContext: ModelContext
     ) {
-        let rows = (try? modelContext.fetch(FetchDescriptor<AppNotificationRecord>())) ?? []
+        let lowWalletKindRawValue = MistiaAppNotificationKind.lowWallet.rawValue
+        let localReminderSourceRawValue = MistiaAppNotificationSource.localReminder.rawValue
+        let systemSourceRawValue = MistiaAppNotificationSource.system.rawValue
+        let rows = (try? modelContext.fetch(
+            FetchDescriptor<AppNotificationRecord>(
+                predicate: #Predicate<AppNotificationRecord> { row in
+                    row.kindRawValue == lowWalletKindRawValue
+                        && (
+                            row.sourceRawValue == localReminderSourceRawValue
+                                || row.sourceRawValue == systemSourceRawValue
+                        )
+                }
+            )
+        )) ?? []
         var didDelete = false
 
-        for row in rows where row.kind == .lowWallet && (row.source == .system || row.source == .localReminder) {
+        for row in rows {
             let walletID = row.resourceID ?? walletIDFromReminderKey(row.key)
             guard let walletID else { continue }
             let belongsToOtherUser = walletOwnerMap[walletID].map { $0 != recipientUserID } ?? false
@@ -148,6 +172,7 @@ enum MistiaLocalNotificationScheduler {
 
         if didDelete {
             try? modelContext.save()
+            MistiaNotificationStore.updateAppBadgeCount(in: modelContext, userID: recipientUserID)
         }
     }
 
@@ -222,5 +247,6 @@ enum MistiaLocalNotificationScheduler {
         }
 
         try? modelContext.save()
+        MistiaNotificationStore.updateAppBadgeCount(in: modelContext, userID: recipientUserID)
     }
 }

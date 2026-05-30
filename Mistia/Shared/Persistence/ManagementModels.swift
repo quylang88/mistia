@@ -81,6 +81,7 @@ final class CreditCardProfile {
     var statementClosingDay: Int
     var paymentDueDay: Int
     var notes: String?
+    var autoPayEnabled: Bool = true
     var createdAt: Date
     var updatedAt: Date
     var deletedAt: Date?
@@ -97,6 +98,7 @@ final class CreditCardProfile {
         statementClosingDay: Int = 25,
         paymentDueDay: Int = 10,
         notes: String? = nil,
+        autoPayEnabled: Bool = true,
         createdAt: Date = .now,
         updatedAt: Date = .now,
         deletedAt: Date? = nil,
@@ -112,6 +114,7 @@ final class CreditCardProfile {
         self.statementClosingDay = statementClosingDay
         self.paymentDueDay = paymentDueDay
         self.notes = notes
+        self.autoPayEnabled = autoPayEnabled
         self.createdAt = createdAt
         self.updatedAt = updatedAt
         self.deletedAt = deletedAt
@@ -234,6 +237,15 @@ final class LedgerTransaction {
     var title: String
     var note: String?
     var amountMinor: Int64
+    var sourceCurrencyCode: String?
+    var destinationCurrencyCode: String?
+    var destinationAmountMinor: Int64?
+    var reportingCurrencyCode: String?
+    var reportingAmountMinor: Int64?
+    var conversionModeRawValue: String?
+    var exchangeRateDecimalString: String?
+    var exchangeRateProvider: String?
+    var exchangeRateDate: String?
     var occurredAt: Date
     var createdAt: Date
     var updatedAt: Date
@@ -257,6 +269,15 @@ final class LedgerTransaction {
         title: String = "",
         note: String? = nil,
         amountMinor: Int64,
+        sourceCurrencyCode: String? = nil,
+        destinationCurrencyCode: String? = nil,
+        destinationAmountMinor: Int64? = nil,
+        reportingCurrencyCode: String? = nil,
+        reportingAmountMinor: Int64? = nil,
+        conversionModeRawValue: String? = nil,
+        exchangeRateDecimalString: String? = nil,
+        exchangeRateProvider: String? = nil,
+        exchangeRateDate: String? = nil,
         occurredAt: Date = .now,
         createdAt: Date = .now,
         updatedAt: Date = .now,
@@ -278,6 +299,15 @@ final class LedgerTransaction {
         self.title = title
         self.note = note
         self.amountMinor = amountMinor
+        self.sourceCurrencyCode = sourceCurrencyCode
+        self.destinationCurrencyCode = destinationCurrencyCode
+        self.destinationAmountMinor = destinationAmountMinor
+        self.reportingCurrencyCode = reportingCurrencyCode
+        self.reportingAmountMinor = reportingAmountMinor
+        self.conversionModeRawValue = conversionModeRawValue
+        self.exchangeRateDecimalString = exchangeRateDecimalString
+        self.exchangeRateProvider = exchangeRateProvider
+        self.exchangeRateDate = exchangeRateDate
         self.occurredAt = occurredAt
         self.createdAt = createdAt
         self.updatedAt = updatedAt

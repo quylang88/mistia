@@ -11,6 +11,7 @@ struct MistiaApp: App {
     @State private var sessionStore: SessionStore
     @State private var familyContextStore: FamilyContextStore
     @State private var uiState = MistiaUIState()
+    @State private var deferredStartupWorkTask: Task<Void, Never>?
 
     init() {
         MistiaAppLanguage.bootstrapStoredPreference()
@@ -70,15 +71,14 @@ struct MistiaApp: App {
                     }
                     familyContextStore.setModelContainer(sessionStore.currentModelContainer)
                     await runStartupTasks()
+                    scheduleDeferredStartupWork()
                 }
                 .onChange(of: scenePhase) { _, newPhase in
                     switch newPhase {
                     case .active:
-                        sessionStore.handleSceneDidBecomeActive()
-                        Task {
-                            await familyContextStore.refreshIfStale(sessionStore: sessionStore)
-                            await runCategoryTranslationMaintenance()
-                            await runDueMaintenance()
+                        sessionStore.handleSceneDidBecomeActive(runsForegroundCatchUp: false)
+                        if !sessionStore.isBootstrapping {
+                            scheduleDeferredStartupWork()
                         }
                     case .background:
                         sessionStore.handleSceneDidEnterBackground()
@@ -110,10 +110,25 @@ struct MistiaApp: App {
     private func runStartupTasks() async {
         await sessionStore.bootstrapIfNeeded()
         await familyContextStore.bootstrapIfNeeded(sessionStore: sessionStore)
+        sessionStore.finishBootstrapping()
+    }
 
+    @MainActor
+    private func scheduleDeferredStartupWork(delay: Duration = .milliseconds(850)) {
+        guard deferredStartupWorkTask == nil else { return }
+        deferredStartupWorkTask = Task { @MainActor in
+            defer { deferredStartupWorkTask = nil }
+            try? await Task.sleep(for: delay)
+            guard !Task.isCancelled else { return }
+            await runDeferredStartupWork()
+        }
+    }
+
+    @MainActor
+    private func runDeferredStartupWork() async {
         do {
             let context = sessionStore.currentModelContainer.mainContext
-            try MistiaBootstrap.seedDefaultCategoriesIfNeeded(
+            try MistiaBootstrap.seedDefaultCategoriesForLaunchIfNeeded(
                 modelContext: context,
                 sessionStore: sessionStore
             )
@@ -128,7 +143,8 @@ struct MistiaApp: App {
             print("Failed to clean up expired archived data: \(error)")
         }
 
-        sessionStore.finishBootstrapping()
+        _ = await sessionStore.runDeferredStartupSyncIfNeeded()
+        await MistiaCurrencyRateMaintenance.refreshIfNeeded()
         await runCategoryTranslationMaintenance()
         await runDueMaintenance()
     }

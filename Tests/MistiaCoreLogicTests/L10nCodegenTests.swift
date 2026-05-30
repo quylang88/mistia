@@ -30,6 +30,29 @@ final class L10nCodegenTests: XCTestCase {
         XCTAssertFalse(generated.contains("legacy vietnamese key"))
     }
 
+    func testGeneratedResolverUsesMistiaAppLanguageInsteadOfBundleLanguage() throws {
+        let tempDirectory = try makeTemporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: tempDirectory) }
+
+        let catalogURL = tempDirectory.appendingPathComponent("Localizable.xcstrings")
+        let outputURL = tempDirectory.appendingPathComponent("L10n.generated.swift")
+        try sampleCatalog.write(to: catalogURL, atomically: true, encoding: .utf8)
+
+        let result = try runGenerator(
+            arguments: [
+                "--input", catalogURL.path,
+                "--output", outputURL.path
+            ]
+        )
+
+        XCTAssertEqual(result.status, 0, result.stderr)
+
+        let generated = try String(contentsOf: outputURL, encoding: .utf8)
+        XCTAssertFalse(generated.contains("String.LocalizationValue"), generated)
+        XCTAssertFalse(generated.contains("bundle: .main"), generated)
+        XCTAssertTrue(generated.contains("switch language"), generated)
+    }
+
     func testGeneratorCheckModeFailsWhenOutputIsStale() throws {
         let tempDirectory = try makeTemporaryDirectory()
         defer { try? FileManager.default.removeItem(at: tempDirectory) }

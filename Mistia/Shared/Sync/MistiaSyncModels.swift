@@ -8,7 +8,46 @@ private enum MistiaSyncSerializationError: LocalizedError {
     }
 }
 
-protocol MistiaRemoteRow: Codable {
+enum MistiaISO8601DateCoding {
+    private static let withFractionalSecondsCacheKey = "MistiaISO8601DateCoding.withFractionalSeconds"
+    private static let withoutFractionalSecondsCacheKey = "MistiaISO8601DateCoding.withoutFractionalSeconds"
+
+    static func date(from value: String) -> Date? {
+        formatter(
+            cacheKey: withFractionalSecondsCacheKey,
+            formatOptions: [.withInternetDateTime, .withFractionalSeconds]
+        ).date(from: value)
+            ?? formatter(
+                cacheKey: withoutFractionalSecondsCacheKey,
+                formatOptions: [.withInternetDateTime]
+            ).date(from: value)
+    }
+
+    static func stringWithFractionalSeconds(from date: Date) -> String {
+        formatter(
+            cacheKey: withFractionalSecondsCacheKey,
+            formatOptions: [.withInternetDateTime, .withFractionalSeconds]
+        ).string(from: date)
+    }
+
+    private static func formatter(
+        cacheKey: String,
+        formatOptions: ISO8601DateFormatter.Options
+    ) -> ISO8601DateFormatter {
+        let threadDictionary = Thread.current.threadDictionary
+        if let cached = threadDictionary[cacheKey] as? ISO8601DateFormatter {
+            return cached
+        }
+
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = formatOptions
+        formatter.timeZone = .gmt
+        threadDictionary[cacheKey] = formatter
+        return formatter
+    }
+}
+
+nonisolated protocol MistiaRemoteRow: Codable {
     static var entity: MistiaSyncEntity { get }
 
     var id: UUID { get }
@@ -20,7 +59,7 @@ protocol MistiaRemoteRow: Codable {
     var lastModifiedByDeviceID: UUID? { get set }
 }
 
-struct RemoteLedgerWallet: MistiaRemoteRow {
+nonisolated struct RemoteLedgerWallet: MistiaRemoteRow {
     static let entity: MistiaSyncEntity = .wallet
 
     var userID: UUID
@@ -64,7 +103,7 @@ struct RemoteLedgerWallet: MistiaRemoteRow {
     }
 }
 
-struct RemoteCreditCardProfile: MistiaRemoteRow {
+nonisolated struct RemoteCreditCardProfile: MistiaRemoteRow {
     static let entity: MistiaSyncEntity = .creditCardProfile
 
     var userID: UUID
@@ -78,11 +117,50 @@ struct RemoteCreditCardProfile: MistiaRemoteRow {
     var notes: String?
     var walletID: UUID?
     var paymentSourceWalletID: UUID?
+    var autoPayEnabled: Bool
     var createdAt: Date
     var updatedAt: Date
     var deletedAt: Date?
     var syncVersion: Int64
     var lastModifiedByDeviceID: UUID?
+
+    init(
+        userID: UUID,
+        id: UUID,
+        issuerName: String,
+        networkRawValue: String,
+        last4: String,
+        creditLimitMinor: Int64,
+        statementClosingDay: Int,
+        paymentDueDay: Int,
+        notes: String?,
+        walletID: UUID?,
+        paymentSourceWalletID: UUID?,
+        autoPayEnabled: Bool = true,
+        createdAt: Date,
+        updatedAt: Date,
+        deletedAt: Date?,
+        syncVersion: Int64,
+        lastModifiedByDeviceID: UUID?
+    ) {
+        self.userID = userID
+        self.id = id
+        self.issuerName = issuerName
+        self.networkRawValue = networkRawValue
+        self.last4 = last4
+        self.creditLimitMinor = creditLimitMinor
+        self.statementClosingDay = statementClosingDay
+        self.paymentDueDay = paymentDueDay
+        self.notes = notes
+        self.walletID = walletID
+        self.paymentSourceWalletID = paymentSourceWalletID
+        self.autoPayEnabled = autoPayEnabled
+        self.createdAt = createdAt
+        self.updatedAt = updatedAt
+        self.deletedAt = deletedAt
+        self.syncVersion = syncVersion
+        self.lastModifiedByDeviceID = lastModifiedByDeviceID
+    }
 
     enum CodingKeys: String, CodingKey {
         case userID = "user_id"
@@ -96,15 +174,37 @@ struct RemoteCreditCardProfile: MistiaRemoteRow {
         case notes
         case walletID = "wallet_id"
         case paymentSourceWalletID = "payment_source_wallet_id"
+        case autoPayEnabled = "auto_pay_enabled"
         case createdAt = "created_at"
         case updatedAt = "updated_at"
         case deletedAt = "deleted_at"
         case syncVersion = "sync_version"
         case lastModifiedByDeviceID = "last_modified_by_device_id"
     }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        userID = try container.decode(UUID.self, forKey: .userID)
+        id = try container.decode(UUID.self, forKey: .id)
+        issuerName = try container.decode(String.self, forKey: .issuerName)
+        networkRawValue = try container.decode(String.self, forKey: .networkRawValue)
+        last4 = try container.decode(String.self, forKey: .last4)
+        creditLimitMinor = try container.decode(Int64.self, forKey: .creditLimitMinor)
+        statementClosingDay = try container.decode(Int.self, forKey: .statementClosingDay)
+        paymentDueDay = try container.decode(Int.self, forKey: .paymentDueDay)
+        notes = try container.decodeIfPresent(String.self, forKey: .notes)
+        walletID = try container.decodeIfPresent(UUID.self, forKey: .walletID)
+        paymentSourceWalletID = try container.decodeIfPresent(UUID.self, forKey: .paymentSourceWalletID)
+        autoPayEnabled = try container.decodeIfPresent(Bool.self, forKey: .autoPayEnabled) ?? true
+        createdAt = try container.decode(Date.self, forKey: .createdAt)
+        updatedAt = try container.decode(Date.self, forKey: .updatedAt)
+        deletedAt = try container.decodeIfPresent(Date.self, forKey: .deletedAt)
+        syncVersion = try container.decode(Int64.self, forKey: .syncVersion)
+        lastModifiedByDeviceID = try container.decodeIfPresent(UUID.self, forKey: .lastModifiedByDeviceID)
+    }
 }
 
-struct RemoteTransactionCategory: MistiaRemoteRow {
+nonisolated struct RemoteTransactionCategory: MistiaRemoteRow {
     static let entity: MistiaSyncEntity = .category
 
     var userID: UUID
@@ -225,7 +325,7 @@ struct RemoteTransactionCategory: MistiaRemoteRow {
     }
 }
 
-struct RemoteLedgerTransaction: MistiaRemoteRow {
+nonisolated struct RemoteLedgerTransaction: MistiaRemoteRow {
     static let entity: MistiaSyncEntity = .transaction
 
     var userID: UUID
@@ -237,6 +337,15 @@ struct RemoteLedgerTransaction: MistiaRemoteRow {
     var title: String
     var note: String?
     var amountMinor: Int64
+    var sourceCurrencyCode: String?
+    var destinationCurrencyCode: String?
+    var destinationAmountMinor: Int64?
+    var reportingCurrencyCode: String?
+    var reportingAmountMinor: Int64?
+    var conversionModeRawValue: String?
+    var exchangeRateDecimalString: String?
+    var exchangeRateProvider: String?
+    var exchangeRateDate: String?
     var occurredAt: Date
     var createdAt: Date
     var updatedAt: Date
@@ -263,6 +372,15 @@ struct RemoteLedgerTransaction: MistiaRemoteRow {
         case title
         case note
         case amountMinor = "amount_minor"
+        case sourceCurrencyCode = "source_currency_code"
+        case destinationCurrencyCode = "destination_currency_code"
+        case destinationAmountMinor = "destination_amount_minor"
+        case reportingCurrencyCode = "reporting_currency_code"
+        case reportingAmountMinor = "reporting_amount_minor"
+        case conversionModeRawValue = "conversion_mode_raw_value"
+        case exchangeRateDecimalString = "exchange_rate_decimal_string"
+        case exchangeRateProvider = "exchange_rate_provider"
+        case exchangeRateDate = "exchange_rate_date"
         case occurredAt = "occurred_at"
         case createdAt = "created_at"
         case updatedAt = "updated_at"
@@ -291,6 +409,15 @@ struct RemoteLedgerTransaction: MistiaRemoteRow {
         title = try container.decode(String.self, forKey: .title)
         note = try container.decodeIfPresent(String.self, forKey: .note)
         amountMinor = try container.decode(Int64.self, forKey: .amountMinor)
+        sourceCurrencyCode = try container.decodeIfPresent(String.self, forKey: .sourceCurrencyCode)
+        destinationCurrencyCode = try container.decodeIfPresent(String.self, forKey: .destinationCurrencyCode)
+        destinationAmountMinor = try container.decodeIfPresent(Int64.self, forKey: .destinationAmountMinor)
+        reportingCurrencyCode = try container.decodeIfPresent(String.self, forKey: .reportingCurrencyCode)
+        reportingAmountMinor = try container.decodeIfPresent(Int64.self, forKey: .reportingAmountMinor)
+        conversionModeRawValue = try container.decodeIfPresent(String.self, forKey: .conversionModeRawValue)
+        exchangeRateDecimalString = try container.decodeIfPresent(String.self, forKey: .exchangeRateDecimalString)
+        exchangeRateProvider = try container.decodeIfPresent(String.self, forKey: .exchangeRateProvider)
+        exchangeRateDate = try container.decodeIfPresent(String.self, forKey: .exchangeRateDate)
         occurredAt = try container.decode(Date.self, forKey: .occurredAt)
         createdAt = try container.decode(Date.self, forKey: .createdAt)
         updatedAt = try container.decode(Date.self, forKey: .updatedAt)
@@ -309,7 +436,7 @@ struct RemoteLedgerTransaction: MistiaRemoteRow {
     }
 }
 
-struct RemoteBudgetPlan: MistiaRemoteRow {
+nonisolated struct RemoteBudgetPlan: MistiaRemoteRow {
     static let entity: MistiaSyncEntity = .budgetPlan
 
     var userID: UUID
@@ -343,7 +470,7 @@ struct RemoteBudgetPlan: MistiaRemoteRow {
     }
 }
 
-struct RemoteSavingsGoal: MistiaRemoteRow {
+nonisolated struct RemoteSavingsGoal: MistiaRemoteRow {
     static let entity: MistiaSyncEntity = .savingsGoal
 
     var userID: UUID
@@ -383,7 +510,7 @@ struct RemoteSavingsGoal: MistiaRemoteRow {
     }
 }
 
-struct RemoteRecurringBillPlan: MistiaRemoteRow {
+nonisolated struct RemoteRecurringBillPlan: MistiaRemoteRow {
     static let entity: MistiaSyncEntity = .recurringBillPlan
 
     var userID: UUID
@@ -396,6 +523,7 @@ struct RemoteRecurringBillPlan: MistiaRemoteRow {
     var scheduleKindRawValue: String?
     var paymentStartDay: Int?
     var paymentStartDate: Date?
+    var firstScheduledMonth: Date?
     var hasExplicitDueDate: Bool?
     var dueDate: Date?
     var autoPayEnabled: Bool?
@@ -422,6 +550,7 @@ struct RemoteRecurringBillPlan: MistiaRemoteRow {
         case scheduleKindRawValue = "schedule_kind_raw_value"
         case paymentStartDay = "payment_start_day"
         case paymentStartDate = "payment_start_date"
+        case firstScheduledMonth = "first_scheduled_month"
         case hasExplicitDueDate = "has_explicit_due_date"
         case dueDate = "due_date"
         case autoPayEnabled = "auto_pay_enabled"
@@ -439,7 +568,7 @@ struct RemoteRecurringBillPlan: MistiaRemoteRow {
     }
 }
 
-struct RemoteInstallmentPlan: MistiaRemoteRow {
+nonisolated struct RemoteInstallmentPlan: MistiaRemoteRow {
     static let entity: MistiaSyncEntity = .installmentPlan
 
     var userID: UUID
@@ -479,7 +608,7 @@ struct RemoteInstallmentPlan: MistiaRemoteRow {
     }
 }
 
-struct RemoteDueOccurrenceRecord: MistiaRemoteRow {
+nonisolated struct RemoteDueOccurrenceRecord: MistiaRemoteRow {
     static let entity: MistiaSyncEntity = .dueOccurrenceRecord
 
     var userID: UUID
@@ -533,7 +662,7 @@ struct RemoteRowVersion: Codable {
     }
 }
 
-struct MistiaRemoteSnapshot: Codable {
+nonisolated struct MistiaRemoteSnapshot: Codable {
     let wallets: [RemoteLedgerWallet]
     let creditCardProfiles: [RemoteCreditCardProfile]
     let categories: [RemoteTransactionCategory]
@@ -569,15 +698,15 @@ struct MistiaRemoteSnapshot: Codable {
     }
 
     var activeRowCount: Int {
-        activeWallets.count
-            + activeCreditCardProfiles.count
-            + activeCategories.count
-            + activeTransactions.count
-            + activeBudgetPlans.count
-            + activeSavingsGoals.count
-            + activeRecurringBillPlans.count
-            + activeInstallmentPlans.count
-            + activeDueOccurrences.count
+        wallets.activeRemoteRowCount
+            + creditCardProfiles.activeRemoteRowCount
+            + categories.activeRemoteRowCount
+            + transactions.activeRemoteRowCount
+            + budgetPlans.activeRemoteRowCount
+            + savingsGoals.activeRemoteRowCount
+            + recurringBillPlans.activeRemoteRowCount
+            + installmentPlans.activeRemoteRowCount
+            + dueOccurrences.activeRemoteRowCount
     }
 
     var hasRemoteData: Bool {
@@ -633,11 +762,27 @@ struct MistiaRemoteSnapshot: Codable {
             dueOccurrences: dueOccurrences.sorted { $0.id.uuidString < $1.id.uuidString }
         )
 
-        let encoder = JSONEncoder.mistiaSyncEncoder
+        let encoder = JSONEncoder()
+        encoder.keyEncodingStrategy = .convertToSnakeCase
+        encoder.outputFormatting = [.sortedKeys]
+        encoder.dateEncodingStrategy = .custom { date, encoder in
+            var container = encoder.singleValueContainer()
+            try container.encode(MistiaISO8601DateCoding.stringWithFractionalSeconds(from: date))
+        }
         guard let data = try? encoder.encode(normalized) else {
             return UUID().uuidString
         }
         return data.base64EncodedString()
+    }
+}
+
+private extension Array where Element: MistiaRemoteRow {
+    nonisolated var activeRemoteRowCount: Int {
+        reduce(into: 0) { count, row in
+            if row.deletedAt == nil {
+                count += 1
+            }
+        }
     }
 }
 
@@ -882,6 +1027,15 @@ enum MistiaSyncUploadRecord {
                 row.title,
                 row.note ?? "",
                 "\(row.amountMinor)",
+                row.sourceCurrencyCode ?? "",
+                row.destinationCurrencyCode ?? "",
+                row.destinationAmountMinor.map(String.init) ?? "",
+                row.reportingCurrencyCode ?? "",
+                row.reportingAmountMinor.map(String.init) ?? "",
+                row.conversionModeRawValue ?? "",
+                row.exchangeRateDecimalString ?? "",
+                row.exchangeRateProvider ?? "",
+                row.exchangeRateDate ?? "",
                 Self.dateString(row.occurredAt),
                 row.counterpartyName ?? "",
                 row.normalizedCounterpartyKey ?? "",
@@ -1128,7 +1282,7 @@ enum MistiaSyncUploadRecord {
 
     private static func dateString(_ date: Date?) -> String {
         guard let date else { return "" }
-        return ISO8601DateFormatter.mistiaSyncWithFractionalSeconds.string(from: date)
+        return MistiaISO8601DateCoding.stringWithFractionalSeconds(from: date)
     }
 }
 
@@ -1197,8 +1351,7 @@ extension JSONDecoder {
         decoder.dateDecodingStrategy = .custom { decoder in
             let container = try decoder.singleValueContainer()
             let value = try container.decode(String.self)
-            if let date = ISO8601DateFormatter.mistiaSyncWithFractionalSeconds.date(from: value)
-                ?? ISO8601DateFormatter.mistiaSyncWithoutFractionalSeconds.date(from: value) {
+            if let date = MistiaISO8601DateCoding.date(from: value) {
                 return date
             }
             throw DecodingError.dataCorruptedError(
@@ -1214,8 +1367,7 @@ extension JSONDecoder {
         decoder.dateDecodingStrategy = .custom { decoder in
             let container = try decoder.singleValueContainer()
             let value = try container.decode(String.self)
-            if let date = ISO8601DateFormatter.mistiaSyncWithFractionalSeconds.date(from: value)
-                ?? ISO8601DateFormatter.mistiaSyncWithoutFractionalSeconds.date(from: value) {
+            if let date = MistiaISO8601DateCoding.date(from: value) {
                 return date
             }
             throw DecodingError.dataCorruptedError(
@@ -1231,8 +1383,7 @@ extension JSONDecoder {
         decoder.dateDecodingStrategy = .custom { decoder in
             let container = try decoder.singleValueContainer()
             let value = try container.decode(String.self)
-            if let date = ISO8601DateFormatter.mistiaSyncWithFractionalSeconds.date(from: value)
-                ?? ISO8601DateFormatter.mistiaSyncWithoutFractionalSeconds.date(from: value) {
+            if let date = MistiaISO8601DateCoding.date(from: value) {
                 return date
             }
             throw DecodingError.dataCorruptedError(
@@ -1251,7 +1402,7 @@ extension JSONEncoder {
         encoder.outputFormatting = [.sortedKeys]
         encoder.dateEncodingStrategy = .custom { date, encoder in
             var container = encoder.singleValueContainer()
-            try container.encode(ISO8601DateFormatter.mistiaSyncWithFractionalSeconds.string(from: date))
+            try container.encode(MistiaISO8601DateCoding.stringWithFractionalSeconds(from: date))
         }
         return encoder
     }
@@ -1261,7 +1412,7 @@ extension JSONEncoder {
         encoder.outputFormatting = [.sortedKeys]
         encoder.dateEncodingStrategy = .custom { date, encoder in
             var container = encoder.singleValueContainer()
-            try container.encode(ISO8601DateFormatter.mistiaSyncWithFractionalSeconds.string(from: date))
+            try container.encode(MistiaISO8601DateCoding.stringWithFractionalSeconds(from: date))
         }
         return encoder
     }
@@ -1271,7 +1422,7 @@ extension JSONEncoder {
         encoder.outputFormatting = [.sortedKeys]
         encoder.dateEncodingStrategy = .custom { date, encoder in
             var container = encoder.singleValueContainer()
-            try container.encode(ISO8601DateFormatter.mistiaSyncWithFractionalSeconds.string(from: date))
+            try container.encode(MistiaISO8601DateCoding.stringWithFractionalSeconds(from: date))
         }
         return encoder
     }

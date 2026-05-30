@@ -176,6 +176,7 @@ values
     ('create bill', 'bill', null, 'create'),
     ('create credit card', 'card', null, 'create'),
     ('create debt', 'debt', null, 'create'),
+    ('create family transfer', 'family_transfer', null, 'create'),
     ('create installment', 'installment', null, 'create');
 
 insert into pg_temp.mistia_permission_cases(

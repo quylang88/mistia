@@ -194,64 +194,66 @@ enum FamilyScopedData {
 
 }
 
-struct FamilyContextChipBar: View {
-    @Environment(FamilyContextStore.self) private var familyContextStore
-    @Environment(\.colorScheme) private var colorScheme
+struct FamilyMemberViewingExitPrompt: Identifiable, Equatable {
+    let id = UUID()
+    let presentation: FamilyMemberViewingToolbarPresentation
 
-    private var accent: Color {
-        colorScheme == .dark ? MistiaAccent.lightPurple.color : MistiaAccent.purple.color
+    init(presentation: FamilyMemberViewingToolbarPresentation) {
+        self.presentation = presentation
     }
+}
 
-    var body: some View {
-        if familyContextStore.isViewingOtherMemberContext, let viewedMember = familyContextStore.viewedMember {
-            Button {
+extension FamilyContextStore {
+    var memberViewingToolbarPresentation: FamilyMemberViewingToolbarPresentation? {
+        guard isViewingOtherMemberContext, let viewedMember else { return nil }
+        return FamilyMemberViewingToolbarLogic.presentation(
+            displayName: String(describing: viewedMember.displayName)
+        )
+    }
+}
+
+extension View {
+    func familyMemberViewingExitAlert(
+        prompt: Binding<FamilyMemberViewingExitPrompt?>,
+        familyContextStore: FamilyContextStore
+    ) -> some View {
+        modifier(
+            FamilyMemberViewingExitAlertModifier(
+                prompt: prompt,
+                familyContextStore: familyContextStore
+            )
+        )
+    }
+}
+
+private struct FamilyMemberViewingExitAlertModifier: ViewModifier {
+    @Binding var prompt: FamilyMemberViewingExitPrompt?
+    let familyContextStore: FamilyContextStore
+
+    func body(content: Content) -> some View {
+        content.alert(
+            prompt?.presentation.exitTitle ?? "",
+            isPresented: Binding(
+                get: { prompt != nil },
+                set: { isPresented in
+                    if !isPresented {
+                        prompt = nil
+                    }
+                }
+            ),
+            presenting: prompt
+        ) { prompt in
+            Button(prompt.presentation.confirmExitTitle) {
                 withAnimation(.snappy) {
                     familyContextStore.returnToSelf()
                 }
-            } label: {
-                HStack(spacing: 7) {
-                    MistiaAvatarBadge(
-                        initials: String(viewedMember.displayName.prefix(2)).uppercased(),
-                        avatarURL: viewedMember.avatarURL,
-                        size: 22,
-                        showsStatus: false
-                    )
-                    .overlay {
-                        Circle()
-                            .strokeBorder(accent.opacity(colorScheme == .dark ? 0.42 : 0.28), lineWidth: 1)
-                    }
-
-                    HStack(spacing: 4) {
-                        Text(L10n.shared.family.familyscopeddata.viewing)
-                            .foregroundStyle(.secondary)
-
-                        Text(viewedMember.displayName)
-                            .foregroundStyle(.primary)
-                            .lineLimit(1)
-                    }
-                    .font(.system(size: 12.5, weight: .semibold, design: .rounded))
-                    
-                    Image(systemName: "xmark.circle.fill")
-                        .font(.system(size: 14, weight: .semibold))
-                        .symbolRenderingMode(.hierarchical)
-                        .foregroundStyle(.tertiary)
-                }
-                .padding(.leading, 6)
-                .padding(.trailing, 9)
-                .padding(.vertical, 5)
-                .background {
-                    Capsule()
-                        .fill(Color(UIColor.secondarySystemGroupedBackground).opacity(colorScheme == .dark ? 0.86 : 0.72))
-                }
-                .overlay {
-                    Capsule()
-                        .strokeBorder(accent.opacity(colorScheme == .dark ? 0.28 : 0.16), lineWidth: 0.8)
-                }
+                self.prompt = nil
             }
-            .buttonStyle(.plain)
-            .accessibilityLabel(Text(familyContextStore.contextChipTitle ?? viewedMember.displayName))
-            .transition(.asymmetric(insertion: .scale.combined(with: .opacity), removal: .opacity))
-            .padding(.bottom, 4)
+            Button(prompt.presentation.cancelTitle, role: .cancel) {
+                self.prompt = nil
+            }
+        } message: { prompt in
+            Text(prompt.presentation.exitMessage)
         }
     }
 }

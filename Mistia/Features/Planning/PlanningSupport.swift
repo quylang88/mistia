@@ -282,6 +282,9 @@ extension RecurringBillPlan {
             name: name,
             iconSymbolName: iconSymbolName,
             categorySystemKey: resolvedCategorySystemKey,
+            categoryName: category?.localizedDisplayName,
+            categoryIconSymbolName: category?.iconSymbolName,
+            categoryColorHex: category?.iconColorHex,
             amountMinor: amountMinor,
             dueDay: dueDay,
             frequencyMonths: frequencyMonths,
@@ -291,6 +294,7 @@ extension RecurringBillPlan {
             scheduleKind: scheduleKind,
             paymentStartDay: resolvedPaymentStartDay,
             paymentStartDate: paymentStartDate,
+            firstScheduledMonth: firstScheduledMonth,
             hasExplicitDueDate: resolvedHasExplicitDueDate,
             dueDate: dueDate,
             autoPayEnabled: autoPayEnabled,
@@ -343,6 +347,15 @@ extension LedgerTransaction {
             title: title,
             note: note,
             amountMinor: amountMinor,
+            sourceCurrencyCode: sourceCurrencyCode,
+            destinationCurrencyCode: destinationCurrencyCode,
+            destinationAmountMinor: destinationAmountMinor,
+            reportingCurrencyCode: reportingCurrencyCode,
+            reportingAmountMinor: reportingAmountMinor,
+            conversionModeRawValue: conversionModeRawValue,
+            exchangeRateDecimalString: exchangeRateDecimalString,
+            exchangeRateProvider: exchangeRateProvider,
+            exchangeRateDate: exchangeRateDate,
             isArchived: isArchived,
             occurredAt: occurredAt,
             createdAt: createdAt,
@@ -409,7 +422,8 @@ extension LedgerWallet {
             currencyCode: currencyCode,
             currentDebtMinor: debt,
             availableCreditMinor: availableCredit,
-            openedAt: createdAt
+            openedAt: createdAt,
+            autoPayEnabled: profile.autoPayEnabled
         )
     }
 }

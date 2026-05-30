@@ -42,6 +42,55 @@ final class FamilyLogicTests: XCTestCase {
         XCTAssertEqual(summary.spendableMinor, 130_000)
     }
 
+    func testAggregateSummaryConvertsWalletsAndTransactionsBeforeSumming() {
+        let memberA = UUID()
+        let memberB = UUID()
+        let interval = DateInterval(
+            start: makeDate(year: 2026, month: 4, day: 1),
+            end: makeDate(year: 2026, month: 5, day: 1)
+        )
+
+        let summary = FamilyLogic.aggregateSummary(
+            wallets: [
+                FamilyAggregateWalletSnapshot(
+                    ownerUserID: memberA,
+                    kind: .bank,
+                    balanceMinor: 100,
+                    debtMinor: 0,
+                    currencyCode: "JPY"
+                ),
+                FamilyAggregateWalletSnapshot(
+                    ownerUserID: memberB,
+                    kind: .cash,
+                    balanceMinor: 16_500,
+                    debtMinor: 0,
+                    currencyCode: "VND"
+                )
+            ],
+            transactions: [
+                FamilyAggregateTransactionSnapshot(
+                    ownerUserID: memberB,
+                    categoryName: "Ăn uống",
+                    occurredAt: makeDate(year: 2026, month: 4, day: 10),
+                    kind: .expense,
+                    amountMinor: 16_500,
+                    currencyCode: "VND"
+                )
+            ],
+            selectedInterval: interval,
+            visibleMemberIDs: [memberA, memberB],
+            memberNames: [memberA: "A", memberB: "B"],
+            reportingCurrencyCode: "JPY",
+            exchangeRates: [jpyVndRate],
+            referenceDate: makeDate(year: 2026, month: 4, day: 15),
+            calendar: calendar
+        )
+
+        XCTAssertEqual(summary.totalAssetsMinor, 200)
+        XCTAssertEqual(summary.expenseByCategory.first?.valueMinor, 100)
+        XCTAssertEqual(summary.spendingByMember.first?.amountMinor, 100)
+    }
+
     func testMonthlySpendableUsesAssetsMinusMonthlyDue() {
         let snapshot = FamilyLogic.monthlySpendable(
             totalAssetsMinor: 250_000,
@@ -521,6 +570,17 @@ final class FamilyLogicTests: XCTestCase {
             kind: .expense,
             amountMinor: amountMinor,
             isCreditCardPayment: isCreditCardPayment
+        )
+    }
+
+    private var jpyVndRate: MistiaExchangeRate {
+        MistiaExchangeRate(
+            baseCurrencyCode: "JPY",
+            quoteCurrencyCode: "VND",
+            rateDecimalString: "165",
+            provider: "test",
+            fetchedAt: Date(timeIntervalSince1970: 0),
+            rateDate: "2026-05-27"
         )
     }
 }

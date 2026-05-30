@@ -44,6 +44,47 @@ final class MistiaMigrationPlanTests: XCTestCase {
         )
     }
 
+    func testFamilyTransferRPCMigrationGuardsPermissionsAndWritesBothRows() throws {
+        let migrationURL = repositoryRootURL()
+            .appending(path: "supabase/migrations/20260523120000_family_transfer_rpc.sql")
+        let migration = try String(contentsOf: migrationURL, encoding: .utf8)
+
+        XCTAssertTrue(migration.contains("create or replace function public.create_family_transfer"))
+        XCTAssertTrue(migration.contains("public.shared_active_family_id(actor_id, p_recipient_user_id)"))
+        XCTAssertTrue(migration.contains("public.can_operate_wallet(p_destination_wallet_id)"))
+        XCTAssertTrue(migration.contains("p_amount_minor <= 0"))
+        XCTAssertTrue(migration.contains("'familyTransfer'"))
+        XCTAssertEqual(migration.components(separatedBy: "insert into public.ledger_transactions").count - 1, 2)
+        XCTAssertTrue(migration.contains("insert into public.family_notifications"))
+        XCTAssertTrue(migration.contains("'family-transfer:' || recipient_transaction_id::text"))
+        XCTAssertTrue(migration.contains("grant execute on function public.create_family_transfer"))
+    }
+
+    func testFamilyTransferNoteUpdateMigrationIncludesNoteParameter() throws {
+        let migrationURL = repositoryRootURL()
+            .appending(path: "supabase/migrations/20260523130000_update_family_transfer_note.sql")
+        let migration = try String(contentsOf: migrationURL, encoding: .utf8)
+
+        XCTAssertTrue(migration.contains("create or replace function public.create_family_transfer"))
+        XCTAssertTrue(migration.contains("p_note text default null"))
+        XCTAssertTrue(migration.contains("sender_note || chr(10) || chr(10) || trim(p_note)"))
+        XCTAssertTrue(migration.contains("recipient_note || chr(10) || chr(10) || trim(p_note)"))
+        XCTAssertTrue(migration.contains("grant execute on function public.create_family_transfer(uuid, uuid, uuid, uuid, bigint, timestamptz, text)"))
+    }
+
+    func testFamilyTransferMetadataAndNoteFixMigration() throws {
+        let migrationURL = repositoryRootURL()
+            .appending(path: "supabase/migrations/20260524000000_fix_family_transfer_notification_metadata_and_note.sql")
+        let migration = try String(contentsOf: migrationURL, encoding: .utf8)
+
+        XCTAssertTrue(migration.contains("create or replace function public.create_family_transfer"))
+        XCTAssertTrue(migration.contains("p_note text default null"))
+        XCTAssertTrue(migration.contains("sender_note := trim(p_note);"))
+        XCTAssertTrue(migration.contains("recipient_note := trim(p_note);"))
+        XCTAssertTrue(migration.contains("amount_minor', p_amount_minor::text"))
+        XCTAssertTrue(migration.contains("grant execute on function public.create_family_transfer(uuid, uuid, uuid, uuid, bigint, timestamptz, text)"))
+    }
+
     private func createCurrentV4Store(at storeURL: URL, billID: UUID) throws {
         let schema = Schema(versionedSchema: MistiaSchemaV4.self)
         let configuration = ModelConfiguration("default", schema: schema, url: storeURL)
@@ -77,6 +118,13 @@ final class MistiaMigrationPlanTests: XCTestCase {
         FileManager.default.temporaryDirectory
             .appending(path: "mistia-migration-\(UUID().uuidString.lowercased())")
             .appendingPathExtension("store")
+    }
+
+    private func repositoryRootURL() -> URL {
+        URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
     }
 
     private func removeStoreArtifacts(at storeURL: URL) throws {

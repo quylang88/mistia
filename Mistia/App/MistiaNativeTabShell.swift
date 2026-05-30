@@ -9,6 +9,8 @@ struct MistiaNativeTabShell: UIViewControllerRepresentable {
   var hidesTabBar: Bool
   var showsShortcutTab: Bool
   var isShortcutSyncing: Bool
+  var isShortcutDisabled: Bool
+  var shortcutDisabledAccessibilityHint: String?
   var shortcutPresentation: MistiaShortcutPresentation
   var onShortcutTap: () -> Void
   var onQuickCreateTap: () -> Void
@@ -27,6 +29,8 @@ struct MistiaNativeTabShell: UIViewControllerRepresentable {
       appLanguage: appLanguage,
       shortcutPresentation: shortcutPresentation,
       isShortcutSyncing: isShortcutSyncing,
+      isShortcutDisabled: isShortcutDisabled,
+      shortcutDisabledAccessibilityHint: shortcutDisabledAccessibilityHint,
       hidesQuickCreate: hidesQuickCreate,
       hidesTabBar: hidesTabBar,
       showsShortcutTab: showsShortcutTab
@@ -43,6 +47,8 @@ struct MistiaNativeTabShell: UIViewControllerRepresentable {
       appLanguage: appLanguage,
       shortcutPresentation: shortcutPresentation,
       isShortcutSyncing: isShortcutSyncing,
+      isShortcutDisabled: isShortcutDisabled,
+      shortcutDisabledAccessibilityHint: shortcutDisabledAccessibilityHint,
       hidesQuickCreate: hidesQuickCreate,
       hidesTabBar: hidesTabBar,
       showsShortcutTab: showsShortcutTab
@@ -116,6 +122,8 @@ final class MistiaNativeTabBarController: UITabBarController, UITabBarController
     action: .backupRestore
   )
   private var isCurrentShortcutSyncing = false
+  private var isCurrentShortcutDisabled = false
+  private var currentShortcutDisabledAccessibilityHint: String?
   private var currentSelectedMistiaTab: MistiaTab?
   private var spinnerActivityIndicatorView: UIActivityIndicatorView?
 
@@ -170,6 +178,8 @@ final class MistiaNativeTabBarController: UITabBarController, UITabBarController
     appLanguage: MistiaAppLanguage,
     shortcutPresentation: MistiaShortcutPresentation,
     isShortcutSyncing: Bool,
+    isShortcutDisabled: Bool,
+    shortcutDisabledAccessibilityHint: String?,
     hidesQuickCreate: Bool,
     hidesTabBar: Bool,
     showsShortcutTab: Bool
@@ -181,12 +191,16 @@ final class MistiaNativeTabBarController: UITabBarController, UITabBarController
     let didChangeShortcutContent =
       currentShortcutPresentation != shortcutPresentation
       || isCurrentShortcutSyncing != isShortcutSyncing
+      || isCurrentShortcutDisabled != isShortcutDisabled
+      || currentShortcutDisabledAccessibilityHint != shortcutDisabledAccessibilityHint
     let didChangeSelectedTab = currentSelectedMistiaTab != selectedTab
 
     currentAppearanceMode = appearanceMode
     currentAppLanguage = appLanguage
     currentShortcutPresentation = shortcutPresentation
     isCurrentShortcutSyncing = isShortcutSyncing
+    isCurrentShortcutDisabled = isShortcutDisabled
+    currentShortcutDisabledAccessibilityHint = shortcutDisabledAccessibilityHint
     overrideUserInterfaceStyle = appearanceMode.interfaceStyle
 
     configureTabsIfNeeded()
@@ -307,8 +321,11 @@ final class MistiaNativeTabBarController: UITabBarController, UITabBarController
     shortcutAvatarTask?.cancel()
     shortcutAvatarTask = nil
     stopSpinnerAnimation()
+    shortcutTab.isEnabled = !isCurrentShortcutDisabled
+    shortcutTab.accessibilityLabel = currentShortcutPresentation.accessibilityLabel
+    shortcutTab.accessibilityHint = currentShortcutDisabledAccessibilityHint
 
-    if isCurrentShortcutSyncing {
+    if isCurrentShortcutSyncing && !isCurrentShortcutDisabled {
       currentShortcutImageKey = "syncing_spinner"
       startSpinnerAnimation()
       return
@@ -376,16 +393,16 @@ final class MistiaNativeTabBarController: UITabBarController, UITabBarController
   private func fetchShortcutAvatarImage(from url: URL) async -> UIImage? {
     if url.isFileURL {
       return await Task.detached(priority: .utility) {
-        guard let data = try? Data(contentsOf: url),
-              let image = UIImage(data: data) else { return nil }
-        return Self.makeShortcutAvatarImage(from: image)
+        guard let data = try? Data(contentsOf: url) else { return nil }
+        return Self.makeShortcutAvatarImage(from: data)
       }.value
     }
 
     do {
       let (data, _) = try await URLSession.shared.data(from: url)
-      guard let image = UIImage(data: data) else { return nil }
-      return Self.makeShortcutAvatarImage(from: image)
+      return await Task.detached(priority: .utility) {
+        Self.makeShortcutAvatarImage(from: data)
+      }.value
     } catch {
       return nil
     }
@@ -503,6 +520,11 @@ final class MistiaNativeTabBarController: UITabBarController, UITabBarController
       UIBezierPath(ovalIn: CGRect(origin: .zero, size: size)).addClip()
       image.draw(in: CGRect(origin: .zero, size: size))
     }.withRenderingMode(.alwaysOriginal)
+  }
+
+  private nonisolated static func makeShortcutAvatarImage(from data: Data) -> UIImage? {
+    guard let image = UIImage(data: data) else { return nil }
+    return makeShortcutAvatarImage(from: image)
   }
 
   private func alignQuickCreateButtonToSearchPill() {
@@ -753,7 +775,7 @@ final class MistiaNativeTabBarController: UITabBarController, UITabBarController
   private func localizedRootView(for tab: MistiaTab) -> AnyView {
     AnyView(
       tab.nativeRootView
-        .id("mistia.root.\(tab.rawValue).\(currentAppLanguage.rawValue)")
+        .id("mistia.root.\(tab.rawValue)")
         .environment(\.locale, currentAppLanguage.locale)
         .environment(\.calendar, currentAppLanguage.calendar)
     )
@@ -763,8 +785,7 @@ final class MistiaNativeTabBarController: UITabBarController, UITabBarController
   func tabBarController(_ tabBarController: UITabBarController, shouldSelectTab tab: UITab) -> Bool
   {
     guard let shortcutTab, tab === shortcutTab else { return true }
-    // Block interaction while syncing
-    if isCurrentShortcutSyncing {
+    if isCurrentShortcutSyncing || isCurrentShortcutDisabled {
       return false
     }
     chromeDelegate?.nativeTabBarControllerDidTapShortcut(self)
@@ -809,7 +830,7 @@ private struct MistiaQuickCreateFloatingButton: View {
     } label: {
       Image(systemName: "plus")
         .font(.system(size: 20, weight: .semibold, design: .rounded))
-        .foregroundStyle(Color(red: 0.88, green: 0.78, blue: 1.0))
+        .foregroundStyle(MistiaAccent.checkmarkPurple.color)
         .frame(width: 44, height: 44)
     }
     .buttonStyle(.glassProminent)

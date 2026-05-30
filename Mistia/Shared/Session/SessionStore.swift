@@ -103,12 +103,53 @@ private enum SessionSyncTrigger {
     case backgroundRefresh
 }
 
+struct FamilyOwnerPushConflict: Codable, Equatable, Hashable, Identifiable {
+    let entity: MistiaSyncEntity
+    let recordID: UUID
+    let ownerUserID: UUID
+    let kind: MistiaSyncMutationKind
+    let detectedAt: Date
+
+    var id: String {
+        Self.key(entity: entity, recordID: recordID)
+    }
+
+    init(
+        entity: MistiaSyncEntity,
+        recordID: UUID,
+        ownerUserID: UUID,
+        kind: MistiaSyncMutationKind,
+        detectedAt: Date = .now
+    ) {
+        self.entity = entity
+        self.recordID = recordID
+        self.ownerUserID = ownerUserID
+        self.kind = kind
+        self.detectedAt = detectedAt
+    }
+
+    init(mutation: MistiaSyncMutation, detectedAt: Date = .now) {
+        self.init(
+            entity: mutation.entity,
+            recordID: mutation.recordID,
+            ownerUserID: mutation.subjectUserID,
+            kind: mutation.kind,
+            detectedAt: detectedAt
+        )
+    }
+
+    static func key(entity: MistiaSyncEntity, recordID: UUID) -> String {
+        "\(entity.rawValue):\(recordID.uuidString.lowercased())"
+    }
+}
+
 @MainActor
 @Observable
 final class SessionStore {
     // MARK: - Auto-sync Configuration
-    private static let AUTOMATIC_SYNC_INTERVAL: TimeInterval = 1800 // 30 minutes in seconds
+    private static let AUTOMATIC_SYNC_INTERVAL: TimeInterval = 1_200 // 20 minutes in seconds
     private static let QUEUED_AUTO_SYNC_DEBOUNCE: Duration = .milliseconds(600)
+    private static let FAMILY_OWNER_PUSH_CONFLICTS_KEY = "mistia.familyOwnerPushConflicts.v1"
     var summary: SessionSummary?
     var isWorking = false
     var isManualSyncInProgress = false
@@ -131,6 +172,7 @@ final class SessionStore {
     var pendingAuthenticationPrompt: SessionPendingAuthenticationPrompt?
     var isAuthTransitioning = false
     var isBootstrapping = false
+    var familyOwnerPushConflicts: [FamilyOwnerPushConflict] = []
 
     var networkStatus: SessionNetworkStatus = .checking
     var remoteUnavailableReason: String?
@@ -160,6 +202,7 @@ final class SessionStore {
     @ObservationIgnored private var queuedFamilyOwnerPushTask: Task<Void, Never>?
     @ObservationIgnored private var pendingFamilyOwnerPush = false
     @ObservationIgnored private var reconnectValidationTask: Task<Void, Never>?
+    @ObservationIgnored private var remoteValidationTask: Task<Void, Never>?
     @ObservationIgnored private var pendingAuthenticationState: PendingAuthenticationState?
 
     init(
@@ -181,6 +224,7 @@ final class SessionStore {
         self.connectivityMonitor = providedConnectivityMonitor ?? SessionConnectivityMonitor()
         isAutoSyncEnabled = userDefaults.bool(forKey: MistiaAppStorageKey.syncAutoEnabled)
         legacyLocalModeProfileUserID = Self.storedLocalModeProfileUserID(in: userDefaults)
+        familyOwnerPushConflicts = Self.loadFamilyOwnerPushConflicts(from: userDefaults)
         requiresManualSyncAfterRestore = Self.storedManualSyncReviewRequired(
             in: userDefaults,
             profileID: launchState?.activeProfileDescriptor?.id
@@ -401,7 +445,7 @@ final class SessionStore {
         postSyncRefreshHandler = handler
     }
 
-    func handleSceneDidBecomeActive() {
+    func handleSceneDidBecomeActive(runsForegroundCatchUp: Bool = true) {
         if requiresInitialSync && hasCompletedCloudSyncHistory() {
             requiresInitialSync = false
             initialSyncPreview = nil
@@ -410,6 +454,7 @@ final class SessionStore {
         updateAutoSyncLoopState()
         scheduleFamilyOwnerOutboxRecoveryIfNeeded()
 
+        guard runsForegroundCatchUp else { return }
         guard shouldRunForegroundCatchUp() else { return }
         Task {
             _ = await runMergeSync(trigger: .foregroundCatchUp, showProgress: false)
@@ -421,10 +466,11 @@ final class SessionStore {
     }
 
     func handleBackgroundRefresh() async -> Bool {
+        await MistiaCurrencyRateMaintenance.refreshIfNeeded()
         if hasQueuedFamilyOwnerMutations() {
             _ = await flushQueuedFamilyOwnerPushIfAllowed()
         }
-        guard isReadyForAutomaticSync, !isSyncInFlight else { return false }
+        guard shouldRunForegroundCatchUp() else { return false }
         return await runMergeSync(trigger: .backgroundRefresh, showProgress: false)
     }
 
@@ -477,13 +523,11 @@ final class SessionStore {
             }
 
             if summary == nil {
-                try await handleAuthenticationResult(
-                    SessionAuthResult(
-                        session: restoredSession,
-                        origin: .existing
-                    ),
+                try applyLocalAuthenticatedState(
+                    restoredSession,
                     restoringExistingSession: true
                 )
+                applyLocalRestoredSessionStateIfNeeded()
             }
         } catch {
             lastErrorMessage = friendlyErrorMessage(for: error)
@@ -503,6 +547,27 @@ final class SessionStore {
     /// Called by ContentView after all startup tasks complete
     func finishBootstrapping() {
         isBootstrapping = false
+    }
+
+    func validateRestoredSessionInBackgroundIfNeeded() async {
+        if let remoteValidationTask {
+            await remoteValidationTask.value
+            return
+        }
+
+        let task = Task { @MainActor [weak self] in
+            guard let self else { return }
+            await self.performRemoteSessionValidation()
+        }
+        remoteValidationTask = task
+        await task.value
+        remoteValidationTask = nil
+    }
+
+    func runDeferredStartupSyncIfNeeded() async -> Bool {
+        await validateRestoredSessionInBackgroundIfNeeded()
+        guard shouldRunForegroundCatchUp() else { return false }
+        return await runMergeSync(trigger: .foregroundCatchUp, showProgress: false)
     }
 
     func signIn(email: String, password: String) async {
@@ -1152,6 +1217,38 @@ final class SessionStore {
         syncCoordinator.queuedMutationIDs()
     }
 
+    func hasFamilyOwnerPushConflict(entity: MistiaSyncEntity, recordID: UUID) -> Bool {
+        familyOwnerPushConflict(entity: entity, recordID: recordID) != nil
+    }
+
+    func familyOwnerPushConflict(
+        entity: MistiaSyncEntity,
+        recordID: UUID
+    ) -> FamilyOwnerPushConflict? {
+        let key = FamilyOwnerPushConflict.key(entity: entity, recordID: recordID)
+        return familyOwnerPushConflicts.first { $0.id == key }
+    }
+
+    func discardFamilyOwnerPushConflictAndRefresh(
+        entity: MistiaSyncEntity,
+        recordID: UUID,
+        familyContextStore: FamilyContextStore
+    ) async {
+        guard let conflict = familyOwnerPushConflict(entity: entity, recordID: recordID) else {
+            return
+        }
+
+        syncCoordinator.removeQueuedMutation(entity: entity, recordID: recordID)
+        clearFamilyOwnerPushConflict(entity: entity, recordID: recordID)
+        pendingFamilyOwnerPush = hasQueuedFamilyOwnerMutations()
+
+        await familyContextStore.refreshAccessibleFinance(
+            sessionStore: self,
+            userIDs: [conflict.ownerUserID],
+            preserveLocalNewerRows: false
+        )
+    }
+
     private func handleSignInFailure(_ error: Error, email: String) {
         if isEmailConfirmationError(error) {
             presentEmailConfirmationState(for: email)
@@ -1629,6 +1726,12 @@ final class SessionStore {
     private func revalidateRemoteSessionAfterReconnect() async {
         guard currentSession != nil else { return }
 
+        await performRemoteSessionValidation()
+    }
+
+    private func performRemoteSessionValidation() async {
+        guard currentSession != nil, canPerformRemoteActions else { return }
+
         do {
             let validSession = try await prepareRemoteSession()
             try await syncAuthenticatedStateWithRemote(
@@ -1639,6 +1742,24 @@ final class SessionStore {
             guard isSignedIn else { return }
             applyRemoteUnavailableState(error, restoringExistingSession: true)
         }
+    }
+
+    private func applyLocalRestoredSessionStateIfNeeded() {
+        guard isSignedIn else { return }
+
+        if networkStatus == .disconnected {
+            applySignedInOfflineState()
+            updateAutoSyncLoopState()
+            scheduleFamilyOwnerOutboxRecoveryIfNeeded()
+            return
+        }
+
+        remoteUnavailableReason = nil
+        syncStatusTitle = L10n.shared.session.session.signedInOnThisDevice2
+        syncStatusDetail = L10n.session.sync.sessionRestoredDetail
+        syncStatusSystemImage = "person.crop.circle.badge.checkmark"
+        updateAutoSyncLoopState()
+        scheduleFamilyOwnerOutboxRecoveryIfNeeded()
     }
 
     private func restorePreservedSignedInProfile(reason: Error?) -> Bool {
@@ -2023,7 +2144,7 @@ final class SessionStore {
         let context = modelContainer.mainContext
 
         return hasAnyRemoteBackedRecord(in: context)
-            || ((try? context.fetch(FetchDescriptor<SyncConflict>())) ?? []).isEmpty == false
+            || hasAnySyncConflict(in: context)
     }
 
     private func hasAnyRemoteBackedRecord(in context: ModelContext) -> Bool {
@@ -2044,6 +2165,12 @@ final class SessionStore {
         predicate: Predicate<Model>
     ) -> Bool {
         var descriptor = FetchDescriptor<Model>(predicate: predicate)
+        descriptor.fetchLimit = 1
+        return ((try? context.fetch(descriptor)) ?? []).isEmpty == false
+    }
+
+    private func hasAnySyncConflict(in context: ModelContext) -> Bool {
+        var descriptor = FetchDescriptor<SyncConflict>()
         descriptor.fetchLimit = 1
         return ((try? context.fetch(descriptor)) ?? []).isEmpty == false
     }
@@ -2182,7 +2309,7 @@ final class SessionStore {
 
             updateAutoSyncLoopState()
             if pendingQueuedAutoSync {
-                scheduleQueuedSyncIfAllowed()
+                updateQueuedAutoSyncAfterSync()
             }
             return true
         } catch {
@@ -2315,7 +2442,7 @@ final class SessionStore {
             }
             updateAutoSyncLoopState()
             if pendingQueuedAutoSync {
-                scheduleQueuedSyncIfAllowed()
+                updateQueuedAutoSyncAfterSync()
             }
             return true
         } catch {
@@ -2457,6 +2584,8 @@ final class SessionStore {
         }
         if hasOwnMutations {
             scheduleQueuedSyncIfAllowed()
+        } else {
+            updateAutoSyncLoopState()
         }
     }
 
@@ -2490,9 +2619,15 @@ final class SessionStore {
 
         pendingQueuedAutoSync = true
         queuedAutoSyncTask?.cancel()
-        queuedAutoSyncTask = Task { [weak self] in
-            try? await Task.sleep(for: Self.QUEUED_AUTO_SYNC_DEBOUNCE)
-            await self?.flushQueuedAutoSyncIfAllowed()
+        queuedAutoSyncTask = nil
+        updateAutoSyncLoopState()
+    }
+
+    private func updateQueuedAutoSyncAfterSync() {
+        if hasQueuedOwnMutations() {
+            scheduleQueuedSyncIfAllowed()
+        } else {
+            cancelQueuedAutoSync()
         }
     }
 
@@ -2567,6 +2702,7 @@ final class SessionStore {
             lastErrorMessage = nil
             return true
         } catch {
+            recordFamilyOwnerPushConflictIfNeeded(from: error)
             pendingFamilyOwnerPush = hasQueuedFamilyOwnerMutations()
             applySyncErrorState(error)
             return false
@@ -2589,6 +2725,16 @@ final class SessionStore {
         !queuedFamilyOwnerMutations(activeUserID: activeUserID).isEmpty
     }
 
+    private func hasQueuedOwnMutations(
+        activeUserID: UUID? = nil
+    ) -> Bool {
+        let resolvedActiveUserID = activeUserID ?? activeLocalProfileUserID ?? currentSession?.user.id
+        guard let resolvedActiveUserID else { return false }
+        return syncCoordinator.queuedMutations().contains { mutation in
+            mutation.subjectUserID == resolvedActiveUserID
+        }
+    }
+
     private func pushQueuedFamilyOwnerMutations(
         session: SupabaseAuthSession
     ) async throws -> Bool {
@@ -2608,6 +2754,7 @@ final class SessionStore {
             pendingFamilyOwnerPush = hasQueuedFamilyOwnerMutations(activeUserID: session.user.id)
             return true
         } catch {
+            recordFamilyOwnerPushConflictIfNeeded(from: error)
             pendingFamilyOwnerPush = hasQueuedFamilyOwnerMutations(activeUserID: session.user.id)
             throw error
         }
@@ -2639,8 +2786,54 @@ final class SessionStore {
         possibleDuplicateCount = 0
         pendingInitialSyncChoice = nil
         syncCoordinator.clearQueuedMutations()
+        clearFamilyOwnerPushConflicts()
         MistiaSyncBackgroundScheduler.shared.cancelPendingRefresh()
         clearPendingAuthenticationState()
+    }
+
+    private func recordFamilyOwnerPushConflictIfNeeded(from error: Error) {
+        guard let cloudFirstError = error as? MistiaFamilyCloudFirstPushError,
+              let mutation = cloudFirstError.mutation else {
+            return
+        }
+        recordFamilyOwnerPushConflict(for: mutation)
+    }
+
+    private func recordFamilyOwnerPushConflict(for mutation: MistiaSyncMutation) {
+        let conflict = FamilyOwnerPushConflict(mutation: mutation)
+        familyOwnerPushConflicts.removeAll { $0.id == conflict.id }
+        familyOwnerPushConflicts.append(conflict)
+        persistFamilyOwnerPushConflicts()
+    }
+
+    private func clearFamilyOwnerPushConflict(entity: MistiaSyncEntity, recordID: UUID) {
+        let key = FamilyOwnerPushConflict.key(entity: entity, recordID: recordID)
+        familyOwnerPushConflicts.removeAll { $0.id == key }
+        persistFamilyOwnerPushConflicts()
+    }
+
+    private func clearFamilyOwnerPushConflicts() {
+        familyOwnerPushConflicts.removeAll()
+        userDefaults.removeObject(forKey: Self.FAMILY_OWNER_PUSH_CONFLICTS_KEY)
+    }
+
+    private func persistFamilyOwnerPushConflicts() {
+        guard !familyOwnerPushConflicts.isEmpty else {
+            userDefaults.removeObject(forKey: Self.FAMILY_OWNER_PUSH_CONFLICTS_KEY)
+            return
+        }
+
+        guard let data = try? JSONEncoder.mistiaSyncEncoder.encode(familyOwnerPushConflicts) else {
+            return
+        }
+        userDefaults.set(data, forKey: Self.FAMILY_OWNER_PUSH_CONFLICTS_KEY)
+    }
+
+    private static func loadFamilyOwnerPushConflicts(from userDefaults: UserDefaults) -> [FamilyOwnerPushConflict] {
+        guard let data = userDefaults.data(forKey: FAMILY_OWNER_PUSH_CONFLICTS_KEY) else {
+            return []
+        }
+        return (try? JSONDecoder.mistiaSyncDecoder.decode([FamilyOwnerPushConflict].self, from: data)) ?? []
     }
 }
 

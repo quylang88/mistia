@@ -3,6 +3,11 @@ import SwiftData
 
 @MainActor
 enum MistiaCreditCardStatementMaintenance {
+    private struct StatementOccurrenceUpsertResult {
+        let record: DueOccurrenceRecord
+        let lastAutoPaymentAttemptAt: Date?
+    }
+
     static func run(
         modelContext: ModelContext,
         sessionStore: SessionStore,
@@ -60,19 +65,48 @@ enum MistiaCreditCardStatementMaintenance {
             for statement in statements where statement.amountMinor > 0 {
                 guard statement.state != .unclosed else { continue }
 
-                let occurrence = upsertClosedStatementOccurrence(
+                let occurrenceResult = upsertClosedStatementOccurrence(
                     statement,
                     occurrences: &occurrences,
                     modelContext: modelContext,
                     sessionStore: sessionStore,
                     calendar: calendar
                 )
+                let occurrence = occurrenceResult.record
                 upsertStatementReadyNotification(
                     statement,
                     modelContext: modelContext,
                     recipientUserID: sessionStore.activeLocalProfileUserID,
                     calendar: calendar
                 )
+
+                guard account.autoPayEnabled else { continue }
+
+                if let existingPayment = existingAutoPaymentTransaction(
+                    for: statement,
+                    walletByID: snapshot.walletByID,
+                    modelContext: modelContext,
+                    calendar: calendar
+                ) {
+                    markOccurrencePaid(
+                        occurrence,
+                        for: statement,
+                        linkedTransaction: existingPayment,
+                        modelContext: modelContext,
+                        sessionStore: sessionStore,
+                        calendar: calendar
+                    )
+                    continue
+                }
+
+                guard shouldAttemptAutoPayment(
+                    occurrence: occurrence,
+                    lastAttemptAt: occurrenceResult.lastAutoPaymentAttemptAt,
+                    referenceDate: referenceDate,
+                    calendar: calendar
+                ) else {
+                    continue
+                }
 
                 let sourceBalanceMinor = paymentSourceBalance(
                     for: statement,
@@ -97,6 +131,11 @@ enum MistiaCreditCardStatementMaintenance {
                         recipientUserID: sessionStore.activeLocalProfileUserID,
                         calendar: calendar
                     )
+                    markAutoPaymentAttemptFailed(
+                        occurrence,
+                        modelContext: modelContext,
+                        sessionStore: sessionStore
+                    )
                 case .insufficientFunds:
                     upsertAutoPaymentFailureNotification(
                         statement,
@@ -104,6 +143,11 @@ enum MistiaCreditCardStatementMaintenance {
                         modelContext: modelContext,
                         recipientUserID: sessionStore.activeLocalProfileUserID,
                         calendar: calendar
+                    )
+                    markAutoPaymentAttemptFailed(
+                        occurrence,
+                        modelContext: modelContext,
+                        sessionStore: sessionStore
                     )
                 case .payable:
                     await attemptAutoPayment(
@@ -132,7 +176,7 @@ enum MistiaCreditCardStatementMaintenance {
         modelContext: ModelContext,
         sessionStore: SessionStore,
         calendar: Calendar
-    ) -> DueOccurrenceRecord {
+    ) -> StatementOccurrenceUpsertResult {
         let monthKey = PlanningLogic.monthKey(for: statement.statementMonth, calendar: calendar)
         let legacyDueMonthKey = PlanningLogic.monthKey(for: statement.dueDate, calendar: calendar)
         let now = Date()
@@ -143,6 +187,11 @@ enum MistiaCreditCardStatementMaintenance {
                 && ($0.selectedMonthKey == monthKey || $0.selectedMonthKey == legacyDueMonthKey)
         }) {
             var didChange = false
+            let lastAutoPaymentAttemptAt = existing.status == .pending
+                && existing.paidAt == nil
+                && existing.linkedTransactionID == nil
+                ? existing.updatedAt
+                : nil
             if existing.selectedMonthKey != monthKey {
                 existing.selectedMonthKey = monthKey
                 didChange = true
@@ -157,7 +206,10 @@ enum MistiaCreditCardStatementMaintenance {
                         modifiedAt: existing.updatedAt
                     )
                 }
-                return existing
+                return StatementOccurrenceUpsertResult(
+                    record: existing,
+                    lastAutoPaymentAttemptAt: nil
+                )
             }
             if existing.scheduledDate != statement.dueDate {
                 existing.scheduledDate = statement.dueDate
@@ -176,7 +228,10 @@ enum MistiaCreditCardStatementMaintenance {
                     modifiedAt: existing.updatedAt
                 )
             }
-            return existing
+            return StatementOccurrenceUpsertResult(
+                record: existing,
+                lastAutoPaymentAttemptAt: lastAutoPaymentAttemptAt
+            )
         }
 
         let record = DueOccurrenceRecord(
@@ -197,7 +252,10 @@ enum MistiaCreditCardStatementMaintenance {
             recordID: record.id,
             modifiedAt: record.updatedAt
         )
-        return record
+        return StatementOccurrenceUpsertResult(
+            record: record,
+            lastAutoPaymentAttemptAt: nil
+        )
     }
 
     private static func paymentSourceBalance(
@@ -216,6 +274,81 @@ enum MistiaCreditCardStatementMaintenance {
                 kind: sourceWallet.kind,
                 openingBalanceMinor: sourceWallet.openingBalanceMinor
             )
+        )
+    }
+
+    private static func shouldAttemptAutoPayment(
+        occurrence: DueOccurrenceRecord,
+        lastAttemptAt: Date?,
+        referenceDate: Date,
+        calendar: Calendar
+    ) -> Bool {
+        guard occurrence.status == .pending,
+              occurrence.paidAt == nil,
+              occurrence.linkedTransactionID == nil else {
+            return false
+        }
+        guard let lastAttemptAt else { return true }
+        return calendar.startOfDay(for: lastAttemptAt) < calendar.startOfDay(for: referenceDate)
+    }
+
+    private static func existingAutoPaymentTransaction(
+        for statement: PlanningCreditCardStatementSnapshot,
+        walletByID: [UUID: LedgerWallet],
+        modelContext: ModelContext,
+        calendar: Calendar
+    ) -> LedgerTransaction? {
+        guard let sourceWalletID = statement.paymentSourceWalletID else { return nil }
+        let transactions = (try? modelContext.fetch(FetchDescriptor<LedgerTransaction>())) ?? []
+        return transactions
+            .filter {
+                $0.primaryKind == .transfer
+                    && $0.transferSubtype == .internalTransfer
+                    && $0.entryStatus == .posted
+                    && !$0.isArchived
+                    && $0.deletedAt == nil
+                    && $0.sourceWallet?.id == sourceWalletID
+                    && $0.destinationWallet?.id == statement.walletID
+                    && $0.amountMinor == statement.amountMinor
+                    && calendar.isDate($0.occurredAt, inSameDayAs: statement.dueDate)
+            }
+            .max(by: { $0.updatedAt < $1.updatedAt })
+    }
+
+    private static func markOccurrencePaid(
+        _ occurrence: DueOccurrenceRecord,
+        for statement: PlanningCreditCardStatementSnapshot,
+        linkedTransaction: LedgerTransaction,
+        modelContext: ModelContext,
+        sessionStore: SessionStore,
+        calendar: Calendar
+    ) {
+        occurrence.status = .paid
+        occurrence.selectedMonthKey = PlanningLogic.monthKey(for: statement.statementMonth, calendar: calendar)
+        occurrence.paidAt = linkedTransaction.occurredAt
+        occurrence.linkedTransactionID = linkedTransaction.id
+        occurrence.amountMinorSnapshot = statement.amountMinor
+        occurrence.scheduledDate = statement.dueDate
+        occurrence.updatedAt = Date()
+        try? modelContext.save()
+        sessionStore.recordUpsert(
+            entity: .dueOccurrenceRecord,
+            recordID: occurrence.id,
+            modifiedAt: occurrence.updatedAt
+        )
+    }
+
+    private static func markAutoPaymentAttemptFailed(
+        _ occurrence: DueOccurrenceRecord,
+        modelContext: ModelContext,
+        sessionStore: SessionStore
+    ) {
+        occurrence.updatedAt = Date()
+        try? modelContext.save()
+        sessionStore.recordUpsert(
+            entity: .dueOccurrenceRecord,
+            recordID: occurrence.id,
+            modifiedAt: occurrence.updatedAt
         )
     }
 
@@ -239,6 +372,11 @@ enum MistiaCreditCardStatementMaintenance {
                 recipientUserID: sessionStore.activeLocalProfileUserID,
                 calendar: calendar
             )
+            markAutoPaymentAttemptFailed(
+                occurrence,
+                modelContext: modelContext,
+                sessionStore: sessionStore
+            )
             return
         }
 
@@ -256,6 +394,11 @@ enum MistiaCreditCardStatementMaintenance {
                 modelContext: modelContext,
                 recipientUserID: sessionStore.activeLocalProfileUserID,
                 calendar: calendar
+            )
+            markAutoPaymentAttemptFailed(
+                occurrence,
+                modelContext: modelContext,
+                sessionStore: sessionStore
             )
             return
         }
@@ -321,6 +464,11 @@ enum MistiaCreditCardStatementMaintenance {
                 modelContext: modelContext,
                 recipientUserID: sessionStore.activeLocalProfileUserID,
                 calendar: calendar
+            )
+            markAutoPaymentAttemptFailed(
+                occurrence,
+                modelContext: modelContext,
+                sessionStore: sessionStore
             )
         }
     }
@@ -500,7 +648,20 @@ enum MistiaCreditCardStatementMaintenance {
         activeUserID: UUID,
         modelContext: ModelContext
     ) {
-        let rows = (try? modelContext.fetch(FetchDescriptor<AppNotificationRecord>())) ?? []
+        let cardResourceTypeRawValue = MistiaFamilyNotificationResourceType.card.rawValue
+        let localReminderSourceRawValue = MistiaAppNotificationSource.localReminder.rawValue
+        let systemSourceRawValue = MistiaAppNotificationSource.system.rawValue
+        let rows = (try? modelContext.fetch(
+            FetchDescriptor<AppNotificationRecord>(
+                predicate: #Predicate<AppNotificationRecord> { row in
+                    row.resourceTypeRawValue == cardResourceTypeRawValue
+                        && (
+                            row.sourceRawValue == localReminderSourceRawValue
+                                || row.sourceRawValue == systemSourceRawValue
+                        )
+                }
+            )
+        )) ?? []
         let creditKinds: Set<MistiaAppNotificationKind> = [
             .creditCardStatementReady,
             .creditCardAutoPaymentSucceeded,
@@ -508,10 +669,7 @@ enum MistiaCreditCardStatementMaintenance {
         ]
         var didDelete = false
 
-        for row in rows
-            where (row.source == .system || row.source == .localReminder)
-            && row.resourceType == .card
-            && creditKinds.contains(row.kind) {
+        for row in rows where creditKinds.contains(row.kind) {
             guard let resourceID = row.resourceID,
                   let ownerUserID = walletOwnerMap[resourceID],
                   ownerUserID != activeUserID else {

@@ -35,6 +35,15 @@ private struct ManagementWalletPermissionPrompt: Identifiable {
     let message: String
 }
 
+private struct ManagementFamilyOwnerConflictAlert: Identifiable {
+    let entity: MistiaSyncEntity
+    let recordID: UUID
+
+    var id: String {
+        FamilyOwnerPushConflict.key(entity: entity, recordID: recordID)
+    }
+}
+
 private struct ManagementSystemCategoryUseRequestTarget: Identifiable {
     let id = UUID()
     let ownerUserID: UUID
@@ -44,15 +53,18 @@ private enum ManagementAlertPresentation: Identifiable {
     case info(ManagementInfoAlert)
     case permission(ManagementPermissionPrompt)
     case wallet(ManagementWalletPermissionPrompt)
+    case familyOwnerConflict(ManagementFamilyOwnerConflictAlert)
 
-    var id: UUID {
+    var id: String {
         switch self {
         case .info(let alert):
-            alert.id
+            alert.id.uuidString
         case .permission(let prompt):
-            prompt.id
+            prompt.id.uuidString
         case .wallet(let prompt):
-            prompt.id
+            prompt.id.uuidString
+        case .familyOwnerConflict(let alert):
+            alert.id
         }
     }
 
@@ -64,6 +76,8 @@ private enum ManagementAlertPresentation: Identifiable {
             prompt.title
         case .wallet(let prompt):
             prompt.title
+        case .familyOwnerConflict:
+            L10n.shared.sync.familyOwnerPushConflict.alertTitle
         }
     }
 
@@ -75,6 +89,8 @@ private enum ManagementAlertPresentation: Identifiable {
             prompt.message
         case .wallet(let prompt):
             prompt.message
+        case .familyOwnerConflict:
+            L10n.shared.sync.familyOwnerPushConflict.alertMessage
         }
     }
 }
@@ -85,8 +101,17 @@ private struct ManagementRenderSnapshot {
     let visibleCategorySections: [TransactionCategoryGroupSection]
 }
 
+private struct ManagementProfileRowPresentation {
+    let initials: String
+    let avatarURL: URL?
+    let displayName: String
+    let email: String
+    let opensOwnProfile: Bool
+}
+
 struct ManagementView: View {
     @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.locale) private var locale
     @Environment(\.modelContext) private var modelContext
     @Environment(SessionStore.self) private var sessionStore
     @Environment(FamilyContextStore.self) private var familyContextStore
@@ -113,7 +138,8 @@ struct ManagementView: View {
     @State private var infoAlert: ManagementInfoAlert?
     @State private var permissionPrompt: ManagementPermissionPrompt?
     @State private var walletPermissionPrompt: ManagementWalletPermissionPrompt?
-    @State private var isOpeningFamily = false
+    @State private var familyOwnerConflictAlert: ManagementFamilyOwnerConflictAlert?
+    @State private var memberViewingExitPrompt: FamilyMemberViewingExitPrompt?
 
     private var cardTint: Color {
         colorScheme == .dark ? .white.opacity(0.018) : .white.opacity(0.12)
@@ -266,35 +292,58 @@ struct ManagementView: View {
         familyContextStore.selectedSubjectUserID ?? sessionStore.activeLocalProfileUserID
     }
 
+    private var canOpenOwnProfile: Bool {
+        !familyContextStore.isViewingOtherMemberContext
+    }
 
-    private var activeAlert: ManagementAlertPresentation? {
-        if let walletPermissionPrompt {
-            return .wallet(walletPermissionPrompt)
+    private var profileRowPresentation: ManagementProfileRowPresentation? {
+        if let memberToolbar = familyContextStore.memberViewingToolbarPresentation {
+            return ManagementProfileRowPresentation(
+                initials: memberToolbar.initials,
+                avatarURL: familyContextStore.viewedMember?.avatarURL,
+                displayName: memberToolbar.displayName,
+                email: FamilyMemberViewingToolbarLogic.maskedEmail(nil),
+                opensOwnProfile: false
+            )
         }
-        if let permissionPrompt {
-            return .permission(permissionPrompt)
+
+        guard let summary = sessionStore.summary else {
+            return nil
         }
-        if let infoAlert {
-            return .info(infoAlert)
-        }
-        return nil
+
+        return ManagementProfileRowPresentation(
+            initials: summary.initials,
+            avatarURL: summary.avatarURL,
+            displayName: summary.displayName,
+            email: summary.email,
+            opensOwnProfile: true
+        )
     }
 
     var body: some View {
         let renderSnapshot = self.renderSnapshot
+        let memberToolbar = familyContextStore.memberViewingToolbarPresentation
 
         NavigationStack {
             MistiaPinnedTopBarScaffold(
                 tone: .muted,
                 title: L10n.management.management.manage,
                 embedsInNavigationStack: false,
-                showsLeadingAvatar: false,
+                showsLeadingAvatar: memberToolbar != nil,
+                leadingInitials: memberToolbar?.initials ?? "MI",
+                leadingAvatarURL: memberToolbar != nil ? familyContextStore.viewedMember?.avatarURL : nil,
+                leadingAccessibilityLabel: memberToolbar?.accessibilityLabel,
+                leadingAvatarAttentionPulse: memberToolbar != nil,
                 trailingSystemImage: "gearshape",
+                onLeadingTap: {
+                    if let memberToolbar {
+                        memberViewingExitPrompt = FamilyMemberViewingExitPrompt(presentation: memberToolbar)
+                    }
+                },
                 onTrailingTap: { destination = .settings },
                 contentSpacing: 20,
                 titleDisplayMode: .large
             ) {
-                FamilyContextChipBar()
                 profileSection
                 walletsSection(
                     activeWallets: renderSnapshot.activeWallets,
@@ -319,6 +368,10 @@ struct ManagementView: View {
                 }
             }
         }
+        .familyMemberViewingExitAlert(
+            prompt: $memberViewingExitPrompt,
+            familyContextStore: familyContextStore
+        )
         .sheet(item: $walletEditorTarget) { target in
             ManagementWalletEditorSheet(target: target)
                 .presentationDragIndicator(.hidden)
@@ -333,6 +386,7 @@ struct ManagementView: View {
                 get: { activeAlert != nil },
                 set: { isPresented in
                     if !isPresented {
+                        familyOwnerConflictAlert = nil
                         walletPermissionPrompt = nil
                         permissionPrompt = nil
                         infoAlert = nil
@@ -344,6 +398,17 @@ struct ManagementView: View {
             switch alert {
             case .info:
                 Button(L10n.common.ok) {}
+            case .familyOwnerConflict(let conflict):
+                Button(L10n.common.ok) {
+                    Task { @MainActor in
+                        await sessionStore.discardFamilyOwnerPushConflictAndRefresh(
+                            entity: conflict.entity,
+                            recordID: conflict.recordID,
+                            familyContextStore: familyContextStore
+                        )
+                        familyOwnerConflictAlert = nil
+                    }
+                }
             case .permission(let prompt):
                 Button(prompt.actionTitle) {
                     prompt.action()
@@ -397,41 +462,46 @@ struct ManagementView: View {
 
     private var profileSection: some View {
         VStack(spacing: 12) {
-            if let summary = sessionStore.summary {
+            if let profileRow = profileRowPresentation {
                 ManagementCard(tint: cardTint) {
                     VStack(spacing: 0) {
                         Button {
+                            guard profileRow.opensOwnProfile else { return }
                             destination = .authPlaceholder
                         } label: {
                             HStack(spacing: profileRowSpacing) {
                                 MistiaAvatarBadge(
-                                    initials: summary.initials,
-                                    avatarURL: summary.avatarURL,
+                                    initials: profileRow.initials,
+                                    avatarURL: profileRow.avatarURL,
                                     size: 50,
                                     showsStatus: false
                                 )
                                 .frame(width: profileLeadingVisualWidth, height: 50)
+                                .opacity(profileRow.opensOwnProfile ? 1 : 0.72)
 
                                 VStack(alignment: .leading, spacing: 5) {
-                                    Text(summary.displayName)
+                                    Text(profileRow.displayName)
                                         .font(.system(size: 20, weight: .bold, design: .rounded))
-                                        .foregroundStyle(.primary)
+                                        .foregroundStyle(profileRow.opensOwnProfile ? .primary : .secondary)
 
-                                    Text(summary.email)
+                                    Text(profileRow.email)
                                         .font(.system(size: 13, weight: .medium, design: .rounded))
                                         .foregroundStyle(.secondary)
                                 }
+                                .opacity(profileRow.opensOwnProfile ? 1 : 0.6)
 
                                 Spacer()
 
                                 Image(systemName: "chevron.right")
                                     .font(.system(size: 11, weight: .bold))
                                     .foregroundStyle(.tertiary)
+                                    .opacity(profileRow.opensOwnProfile ? 1 : 0)
                             }
                             .padding(.horizontal, 14)
                             .padding(.vertical, 13)
                         }
                         .buttonStyle(MistiaPressableButtonStyle(cornerRadius: 20))
+                        .disabled(!profileRow.opensOwnProfile)
 
                         Divider()
                             .padding(.leading, 52)
@@ -478,54 +548,41 @@ struct ManagementView: View {
 
                                 Spacer(minLength: 12)
 
-                                if !hasFamilyProfile {
-                                    Text(L10n.management.management.none)
-                                        .font(.system(size: 14, weight: .medium, design: .rounded))
-                                        .foregroundStyle(.secondary)
-                                }
+                                Text(familyContextStore.family?.name ?? L10n.management.management.none)
+                                    .font(.system(size: 14, weight: .medium, design: .rounded))
+                                    .foregroundStyle(.secondary)
 
-                                if isOpeningFamily && shouldRefreshFamilyBeforeOpening {
-                                    ProgressView()
-                                        .controlSize(.small)
-                                        .frame(width: 12, height: 12)
-                                } else {
-                                    Image(systemName: "chevron.right")
-                                        .font(.system(size: 12, weight: .bold))
-                                        .foregroundStyle(.tertiary)
-                                }
+                                Image(systemName: "chevron.right")
+                                    .font(.system(size: 12, weight: .bold))
+                                    .foregroundStyle(.tertiary)
                             }
                             .padding(.horizontal, 16)
                             .padding(.vertical, 16)
                         }
                         .buttonStyle(MistiaPressableButtonStyle(cornerRadius: 20))
-                        .disabled(!sessionStore.canPerformRemoteActions || isOpeningFamily)
+                        .disabled(!sessionStore.canPerformRemoteActions)
                         .opacity(sessionStore.canPerformRemoteActions ? 1 : 0.55)
                     }
                 }
             } else {
                 ManagementSignedOutCard(accent: accentPurple, tint: cardTint) {
+                    guard canOpenOwnProfile else { return }
                     destination = .authPlaceholder
                 }
+                .disabled(!canOpenOwnProfile)
+                .opacity(canOpenOwnProfile ? 1 : 0.55)
             }
         }
     }
 
     private func openFamily() {
+        destination = .family
         guard shouldRefreshFamilyBeforeOpening else {
-            destination = .family
             return
         }
 
-        guard !isOpeningFamily else { return }
-        isOpeningFamily = true
-        destination = .family
-
         Task { @MainActor in
-            await familyContextStore.refreshLatest(
-                sessionStore: sessionStore,
-                source: .userInitiated
-            )
-            isOpeningFamily = false
+            await familyContextStore.refreshFamilyMetadata(sessionStore: sessionStore)
         }
     }
 
@@ -562,6 +619,9 @@ struct ManagementView: View {
                                 wallet: wallet,
                                 currentBalanceMinor: walletBalancesByID[wallet.id] ?? wallet.openingBalanceMinor
                             ) {
+                                if presentFamilyOwnerConflictIfNeeded(entity: .wallet, recordID: wallet.id) {
+                                    return
+                                }
                                 if canOpenWalletEditor(wallet) {
                                     walletEditorTarget = ManagementWalletEditorTarget(wallet: wallet, defaultKind: wallet.kind)
                                 } else {
@@ -608,6 +668,22 @@ struct ManagementView: View {
         guard let ownerUserID = selectedSubjectUserID else { return false }
         return ownerUserID == sessionStore.activeLocalProfileUserID
             || familyContextStore.canCreate(ownerUserID: ownerUserID, resourceType: .wallet)
+    }
+
+    private var activeAlert: ManagementAlertPresentation? {
+        if let familyOwnerConflictAlert {
+            return .familyOwnerConflict(familyOwnerConflictAlert)
+        }
+        if let walletPermissionPrompt {
+            return .wallet(walletPermissionPrompt)
+        }
+        if let permissionPrompt {
+            return .permission(permissionPrompt)
+        }
+        if let infoAlert {
+            return .info(infoAlert)
+        }
+        return nil
     }
 
     private func walletOwnerUserID(for wallet: LedgerWallet) -> UUID? {
@@ -1006,6 +1082,9 @@ struct ManagementView: View {
         preferredParentCategoryID: UUID?
     ) {
         if let category {
+            if presentFamilyOwnerConflictIfNeeded(entity: .category, recordID: category.id) {
+                return
+            }
             guard canEditCategory(category) else {
                 presentCategoryEditPermissionPrompt(category) {
                     openCategoryEditorIfAllowed(
@@ -1035,6 +1114,14 @@ struct ManagementView: View {
             defaultKind: defaultKind,
             preferredParentCategoryID: preferredParentCategoryID
         )
+    }
+
+    private func presentFamilyOwnerConflictIfNeeded(entity: MistiaSyncEntity, recordID: UUID) -> Bool {
+        guard sessionStore.hasFamilyOwnerPushConflict(entity: entity, recordID: recordID) else {
+            return false
+        }
+        familyOwnerConflictAlert = ManagementFamilyOwnerConflictAlert(entity: entity, recordID: recordID)
+        return true
     }
 
     private func categoryOwnerUserID(for category: TransactionCategory) -> UUID? {
@@ -1261,6 +1348,10 @@ private struct ManagementWalletRow: View {
     let wallet: LedgerWallet
     let currentBalanceMinor: Int64
     let action: () -> Void
+    @AppStorage(MistiaCurrencySettings.StorageKey.primaryCurrencyCode) private var primaryCurrencyCode = "JPY"
+    @AppStorage(MistiaCurrencySettings.StorageKey.rateMode) private var currencyRateMode = MistiaCurrencyRateMode.automatic.rawValue
+    @AppStorage(MistiaCurrencySettings.StorageKey.manualJPYToVNDRate) private var manualJPYToVNDRate = ""
+    @AppStorage(MistiaCurrencySettings.StorageKey.cachedRatesData) private var cachedCurrencyRatesData = Data()
     
     private var availableCreditMinor: Int64? {
         guard wallet.kind == .creditCard,
@@ -1302,25 +1393,48 @@ private struct ManagementWalletRow: View {
 
                 Spacer(minLength: 8)
 
-                if wallet.kind == .creditCard, let availableCredit = availableCreditMinor {
-                    VStack(alignment: .trailing, spacing: 2) {
+                VStack(alignment: .trailing, spacing: 2) {
+                    if wallet.kind == .creditCard, availableCreditMinor != nil {
                         Text(L10n.management.management.available)
                             .font(.system(size: 10.5, weight: .medium, design: .rounded))
                             .foregroundStyle(.secondary)
-                        Text(availableCredit.formattedCurrency(code: wallet.currencyCode))
-                            .font(.system(size: 16, weight: .bold, design: .rounded))
-                            .foregroundStyle(balanceColor)
                     }
-                } else {
-                    Text(currentBalanceMinor.formattedCurrency(code: wallet.currencyCode))
+
+                    Text(balanceAmountMinor.formattedCurrency(code: wallet.currencyCode))
                         .font(.system(size: 16, weight: .bold, design: .rounded))
                         .foregroundStyle(balanceColor)
+
+                    if let approximatePrimaryAmountText {
+                        Text(approximatePrimaryAmountText)
+                            .font(.system(size: 11.5, weight: .semibold, design: .rounded))
+                            .foregroundStyle(.secondary)
+                    }
                 }
             }
             .padding(.horizontal, 14)
             .padding(.vertical, 11)
         }
         .buttonStyle(MistiaPressableButtonStyle(cornerRadius: 16))
+    }
+
+    private var balanceAmountMinor: Int64 {
+        availableCreditMinor ?? currentBalanceMinor
+    }
+
+    private var approximatePrimaryAmountText: String? {
+        MistiaCurrencyLogic.approximatePrimaryAmountText(
+            amountMinor: balanceAmountMinor,
+            sourceCurrencyCode: wallet.currencyCode,
+            primaryCurrencyCode: primaryCurrencyCode,
+            rates: exchangeRates
+        )
+    }
+
+    private var exchangeRates: [MistiaExchangeRate] {
+        _ = currencyRateMode
+        _ = manualJPYToVNDRate
+        _ = cachedCurrencyRatesData
+        return MistiaCurrencySettings.rates()
     }
 }
 
@@ -1532,16 +1646,11 @@ private struct ManagementEmptyState: View {
 private struct ManagementCategoryKindPicker: View {
     @Binding var selection: TransactionCategoryKind
 
-    private var accentPurple: Color {
-        MistiaAccent.purple.color
-    }
-
     var body: some View {
         MistiaNativeSegmentedControl(
             selection: $selection,
             options: TransactionCategoryKind.allCases,
-            title: \.title,
-            accent: accentPurple
+            title: \.title
         )
     }
 }

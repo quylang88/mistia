@@ -176,6 +176,135 @@ final class TransactionLogicTests: XCTestCase {
         }
     }
 
+    func testWalletBalanceIndexUsesDestinationAmountForCrossCurrencyTransfer() {
+        let source = TransactionWalletSnapshot(
+            id: UUID(),
+            kind: .bank,
+            openingBalanceMinor: 100_000
+        )
+        let destination = TransactionWalletSnapshot(
+            id: UUID(),
+            kind: .cash,
+            openingBalanceMinor: 1_000_000
+        )
+        let occurredAt = Date(timeIntervalSince1970: 1_774_051_200)
+
+        let records = [
+            makeRecord(
+                primaryKind: .transfer,
+                transferSubtype: .internalTransfer,
+                amountMinor: 10_000,
+                occurredAt: occurredAt,
+                sourceWalletID: source.id,
+                sourceWalletKind: .bank,
+                sourceCurrencyCode: "JPY",
+                destinationWalletID: destination.id,
+                destinationWalletKind: .cash,
+                destinationCurrencyCode: "VND",
+                destinationAmountMinor: 1_650_000
+            )
+        ]
+
+        let index = TransactionLogic.walletBalanceIndex(
+            wallets: [source, destination],
+            records: records
+        )
+
+        XCTAssertEqual(index.balance(for: source), 90_000)
+        XCTAssertEqual(index.balance(for: destination), 2_650_000)
+    }
+
+    func testCrossCurrencyTransferManualDisplayUsesDestinationSnapshot() {
+        let record = makeRecord(
+            primaryKind: .transfer,
+            transferSubtype: .internalTransfer,
+            amountMinor: 10_000_000,
+            occurredAt: Date(timeIntervalSince1970: 1_774_051_200),
+            sourceCurrencyCode: "VND",
+            destinationCurrencyCode: "JPY",
+            destinationAmountMinor: 50_000,
+            conversionModeRawValue: MistiaCurrencyConversionMode.manual.rawValue
+        )
+
+        let display = TransactionLogic.crossCurrencyTransferDestinationDisplay(for: record)
+
+        XCTAssertEqual(display?.amountMinor, 50_000)
+        XCTAssertEqual(display?.currencyCode, "JPY")
+        XCTAssertEqual(display?.style, .exactDestination)
+    }
+
+    func testCrossCurrencyTransferAppRateDisplayUsesSavedSnapshot() {
+        let record = makeRecord(
+            primaryKind: .transfer,
+            transferSubtype: .internalTransfer,
+            amountMinor: 10_000_000,
+            occurredAt: Date(timeIntervalSince1970: 1_774_051_200),
+            sourceCurrencyCode: "VND",
+            destinationCurrencyCode: "JPY",
+            destinationAmountMinor: 50_000,
+            conversionModeRawValue: MistiaCurrencyConversionMode.appRate.rawValue,
+            exchangeRateDecimalString: "0.005",
+            exchangeRateProvider: "manual",
+            exchangeRateDate: "2026-05-27"
+        )
+
+        let display = TransactionLogic.crossCurrencyTransferDestinationDisplay(for: record)
+
+        XCTAssertEqual(display?.amountMinor, 50_000)
+        XCTAssertEqual(display?.currencyCode, "JPY")
+        XCTAssertEqual(display?.style, .approximateDestination)
+    }
+
+    func testFamilyTransfersAreNeutralButChangeOnlyTheDisplayedWalletBalance() {
+        let senderWallet = TransactionWalletSnapshot(
+            id: UUID(),
+            kind: .bank,
+            openingBalanceMinor: 20_000
+        )
+        let recipientWallet = TransactionWalletSnapshot(
+            id: UUID(),
+            kind: .cash,
+            openingBalanceMinor: 5_000
+        )
+        let now = Date(timeIntervalSince1970: 1_742_646_400)
+        let outgoing = makeRecord(
+            primaryKind: .transfer,
+            transferSubtype: .familyTransfer,
+            title: "Chuyen cho B",
+            amountMinor: 3_000,
+            occurredAt: now,
+            sourceWalletID: senderWallet.id,
+            sourceWalletKind: senderWallet.kind,
+            destinationWalletID: recipientWallet.id,
+            destinationWalletKind: recipientWallet.kind
+        )
+        let incoming = makeRecord(
+            primaryKind: .transfer,
+            transferSubtype: .familyTransfer,
+            title: "Nhan tu A",
+            amountMinor: 3_000,
+            occurredAt: now,
+            sourceWalletID: recipientWallet.id,
+            sourceWalletKind: recipientWallet.kind
+        )
+
+        XCTAssertTrue(TransactionLogic.isTransactionComplete(outgoing))
+        XCTAssertTrue(TransactionLogic.isTransactionComplete(incoming))
+        XCTAssertEqual(TransactionLogic.cashflowAmount(for: outgoing), -3_000)
+        XCTAssertEqual(TransactionLogic.cashflowAmount(for: incoming), 3_000)
+
+        let summary = TransactionLogic.summary(for: [outgoing, incoming])
+        XCTAssertEqual(summary.expenseMinor, 0)
+        XCTAssertEqual(summary.incomeMinor, 0)
+
+        let index = TransactionLogic.walletBalanceIndex(
+            wallets: [senderWallet, recipientWallet],
+            records: [outgoing, incoming]
+        )
+        XCTAssertEqual(index.balance(for: senderWallet), 17_000)
+        XCTAssertEqual(index.balance(for: recipientWallet), 8_000)
+    }
+
     func testDebtAggregationTracksBothDirectionsWithNormalizedNames() {
         let walletID = UUID()
         let now = Date(timeIntervalSince1970: 1_742_646_400)
@@ -276,6 +405,67 @@ final class TransactionLogicTests: XCTestCase {
         XCTAssertEqual(sections.first?.title, "Cần hoàn thiện")
         XCTAssertTrue(sections.first?.isDraftSection == true)
         XCTAssertEqual(sections.first?.rows.count, 1)
+    }
+
+    func testSectionsCanReuseRecencySortedInputWithoutChangingOutput() {
+        let walletID = UUID()
+        let now = Date(timeIntervalSince1970: 1_742_646_400)
+
+        let latestDraft = makeRecord(
+            primaryKind: .expense,
+            entryStatus: .draft,
+            title: "Draft latest",
+            amountMinor: 700,
+            occurredAt: now.addingTimeInterval(180),
+            sourceWalletID: walletID,
+            sourceWalletKind: .cash,
+            categoryID: UUID()
+        )
+        let olderDraft = makeRecord(
+            primaryKind: .expense,
+            entryStatus: .draft,
+            title: "Draft older",
+            amountMinor: 500,
+            occurredAt: now.addingTimeInterval(60),
+            sourceWalletID: walletID,
+            sourceWalletKind: .cash,
+            categoryID: UUID()
+        )
+        let todayExpense = makeRecord(
+            primaryKind: .expense,
+            title: "Today",
+            amountMinor: 3_000,
+            occurredAt: now,
+            sourceWalletID: walletID,
+            sourceWalletKind: .cash,
+            categoryID: UUID()
+        )
+        let yesterdayExpense = makeRecord(
+            primaryKind: .expense,
+            title: "Yesterday",
+            amountMinor: 2_000,
+            occurredAt: now.addingTimeInterval(-86_400),
+            sourceWalletID: walletID,
+            sourceWalletKind: .cash,
+            categoryID: UUID()
+        )
+
+        let sortedRecords = TransactionLogic.visibleRecords(
+            from: [todayExpense, olderDraft, yesterdayExpense, latestDraft],
+            selectedKind: nil,
+            filters: TransactionFilterState(),
+            referenceDate: now
+        )
+
+        let baseline = TransactionLogic.sections(from: sortedRecords, referenceDate: now)
+        let optimized = TransactionLogic.sections(
+            from: sortedRecords,
+            assumesSortedByRecency: true,
+            referenceDate: now
+        )
+
+        XCTAssertEqual(optimized, baseline)
+        XCTAssertEqual(optimized.first?.rows.map(\.id), [latestDraft.id, olderDraft.id])
     }
 
     func testNonSpendingExpenseLikePaymentsDoNotCountAsExpenseSpending() {
@@ -691,8 +881,15 @@ final class TransactionLogicTests: XCTestCase {
         occurredAt: Date,
         sourceWalletID: UUID? = nil,
         sourceWalletKind: LedgerWalletKind? = nil,
+        sourceCurrencyCode: String? = nil,
         destinationWalletID: UUID? = nil,
         destinationWalletKind: LedgerWalletKind? = nil,
+        destinationCurrencyCode: String? = nil,
+        destinationAmountMinor: Int64? = nil,
+        conversionModeRawValue: String? = nil,
+        exchangeRateDecimalString: String? = nil,
+        exchangeRateProvider: String? = nil,
+        exchangeRateDate: String? = nil,
         categoryID: UUID? = nil,
         counterpartyName: String? = nil
     ) -> TransactionRecordSnapshot {
@@ -705,6 +902,13 @@ final class TransactionLogicTests: XCTestCase {
             title: title,
             note: nil,
             amountMinor: amountMinor,
+            sourceCurrencyCode: sourceCurrencyCode,
+            destinationCurrencyCode: destinationCurrencyCode,
+            destinationAmountMinor: destinationAmountMinor,
+            conversionModeRawValue: conversionModeRawValue,
+            exchangeRateDecimalString: exchangeRateDecimalString,
+            exchangeRateProvider: exchangeRateProvider,
+            exchangeRateDate: exchangeRateDate,
             occurredAt: occurredAt,
             createdAt: occurredAt,
             sourceWalletID: sourceWalletID,

@@ -289,7 +289,20 @@ enum MistiaRecurringBillMaintenance {
         let resolvedKinds: [MistiaAppNotificationKind] = [
             .billPaymentRequired, .billAutoPaymentFailed, .billOverdue
         ]
-        let existing = (try? modelContext.fetch(FetchDescriptor<AppNotificationRecord>())) ?? []
+        let billResourceTypeRawValue = MistiaFamilyNotificationResourceType.bill.rawValue
+        let localReminderSourceRawValue = MistiaAppNotificationSource.localReminder.rawValue
+        let systemSourceRawValue = MistiaAppNotificationSource.system.rawValue
+        let existing = (try? modelContext.fetch(
+            FetchDescriptor<AppNotificationRecord>(
+                predicate: #Predicate<AppNotificationRecord> { row in
+                    row.resourceTypeRawValue == billResourceTypeRawValue
+                        && (
+                            row.sourceRawValue == localReminderSourceRawValue
+                                || row.sourceRawValue == systemSourceRawValue
+                        )
+                }
+            )
+        )) ?? []
         let now = Date()
         for row in existing
             where row.key.hasPrefix(prefix)
@@ -464,7 +477,20 @@ enum MistiaRecurringBillMaintenance {
         activeUserID: UUID,
         modelContext: ModelContext
     ) {
-        let rows = (try? modelContext.fetch(FetchDescriptor<AppNotificationRecord>())) ?? []
+        let billResourceTypeRawValue = MistiaFamilyNotificationResourceType.bill.rawValue
+        let localReminderSourceRawValue = MistiaAppNotificationSource.localReminder.rawValue
+        let systemSourceRawValue = MistiaAppNotificationSource.system.rawValue
+        let rows = (try? modelContext.fetch(
+            FetchDescriptor<AppNotificationRecord>(
+                predicate: #Predicate<AppNotificationRecord> { row in
+                    row.resourceTypeRawValue == billResourceTypeRawValue
+                        && (
+                            row.sourceRawValue == localReminderSourceRawValue
+                                || row.sourceRawValue == systemSourceRawValue
+                        )
+                }
+            )
+        )) ?? []
         let billKinds: Set<MistiaAppNotificationKind> = [
             .billPaymentRequired,
             .billAutoPaymentSucceeded,
@@ -473,10 +499,7 @@ enum MistiaRecurringBillMaintenance {
         ]
         var didDelete = false
 
-        for row in rows
-            where (row.source == .system || row.source == .localReminder)
-            && row.resourceType == .bill
-            && billKinds.contains(row.kind) {
+        for row in rows where billKinds.contains(row.kind) {
             guard let resourceID = row.resourceID,
                   let ownerUserID = billOwnerMap[resourceID],
                   ownerUserID != activeUserID else {

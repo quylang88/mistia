@@ -449,11 +449,13 @@ struct PlanningGoalEditorSheet: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
     @Environment(SessionStore.self) private var sessionStore
+    @Environment(FamilyContextStore.self) private var familyContextStore
     @AppStorage(MistiaAppStorageKey.currencyCode) private var currencyCode = "JPY"
-    @Query(filter: #Predicate<LedgerWallet> { $0.deletedAt == nil })
+    @Query
     private var storedWallets: [LedgerWallet]
     @Query(filter: #Predicate<SavingsGoal> { $0.deletedAt == nil })
     private var storedGoals: [SavingsGoal]
+    @Query private var ownershipScopes: [OwnedRecordScope]
 
     let target: PlanningGoalEditorTarget
 
@@ -468,14 +470,34 @@ struct PlanningGoalEditorSheet: View {
     }
 
     private var availableWallets: [LedgerWallet] {
-        storedWallets
-            .filter { !$0.isArchived }
-            .sorted {
-                if $0.sortOrder != $1.sortOrder {
-                    return $0.sortOrder < $1.sortOrder
-                }
-                return $0.createdAt < $1.createdAt
-            }
+        let preferredWalletIDs = Set([target.goal?.linkedWallet?.id, draft.linkedWalletID].compactMap { $0 })
+        return paymentWalletAccess.availableWallets(
+            from: storedWallets,
+            preferredWalletIDs: preferredWalletIDs,
+            ownerUserID: goalOwnerUserID,
+            excludesCreditCards: false
+        )
+    }
+
+    private var goalOwnerUserID: UUID? {
+        if let goal = target.goal,
+           let ownerUserID = goalOwnerMap[goal.id] {
+            return ownerUserID
+        }
+        return familyContextStore.selectedSubjectUserID
+            ?? paymentWalletAccess.currentSelfUserID
+    }
+
+    private var goalOwnerMap: [UUID: UUID] {
+        MistiaRecordOwnershipStore.ownerMap(from: ownershipScopes, entity: .savingsGoal)
+    }
+
+    private var paymentWalletAccess: PlanningPaymentWalletAccess {
+        PlanningPaymentWalletAccess(
+            sessionStore: sessionStore,
+            familyContextStore: familyContextStore,
+            ownershipScopes: ownershipScopes
+        )
     }
 
     private var activeCurrencyCode: String {
@@ -510,7 +532,7 @@ struct PlanningGoalEditorSheet: View {
                     Picker(L10n.planning.planning.linkedWallet, selection: $draft.linkedWalletID) {
                         Text(L10n.planning.planning.notLinked).tag(Optional<UUID>.none)
                         ForEach(availableWallets) { wallet in
-                            Text(wallet.name).tag(Optional(wallet.id))
+                            Text(paymentWalletAccess.title(for: wallet)).tag(Optional(wallet.id))
                         }
                     }
                     .pickerStyle(.menu)
@@ -638,16 +660,66 @@ struct PlanningGoalEditorSheet: View {
     }
 }
 
+private struct PlanningPaymentWalletAccess {
+    private let access: MistiaWalletPickerAccess
+
+    init(
+        sessionStore: SessionStore,
+        familyContextStore: FamilyContextStore,
+        ownershipScopes: [OwnedRecordScope]
+    ) {
+        self.access = MistiaWalletPickerAccess(
+            sessionStore: sessionStore,
+            familyContextStore: familyContextStore,
+            ownershipScopes: ownershipScopes
+        )
+    }
+
+    var currentSelfUserID: UUID? {
+        access.currentSelfUserID
+    }
+
+    func availableWallets(
+        from wallets: [LedgerWallet],
+        preferredWalletIDs: Set<UUID>,
+        ownerUserID: UUID?,
+        excludesCreditCards: Bool,
+        excludedWalletID: UUID? = nil
+    ) -> [LedgerWallet] {
+        access.availableWallets(
+            from: wallets,
+            preferredWalletIDs: preferredWalletIDs,
+            targetOwnerUserID: ownerUserID,
+            excludesCreditCards: excludesCreditCards,
+            excludedWalletID: excludedWalletID
+        )
+    }
+
+    func title(for wallet: LedgerWallet) -> String {
+        access.title(for: wallet)
+    }
+
+    func walletOwnerUserID(for wallet: LedgerWallet) -> UUID? {
+        access.walletOwnerUserID(for: wallet)
+    }
+
+    func walletOwnerUserID(for walletID: UUID?) -> UUID? {
+        access.walletOwnerUserID(for: walletID)
+    }
+}
+
 struct PlanningBillEditorSheet: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
     @Environment(\.calendar) private var calendar
     @Environment(SessionStore.self) private var sessionStore
+    @Environment(FamilyContextStore.self) private var familyContextStore
     @AppStorage(MistiaAppStorageKey.currencyCode) private var currencyCode = "JPY"
     @Query(filter: #Predicate<TransactionCategory> { $0.deletedAt == nil })
     private var storedCategories: [TransactionCategory]
-    @Query(filter: #Predicate<LedgerWallet> { $0.deletedAt == nil })
+    @Query
     private var storedWallets: [LedgerWallet]
+    @Query private var ownershipScopes: [OwnedRecordScope]
 
     let target: PlanningBillEditorTarget
 
@@ -668,14 +740,37 @@ struct PlanningBillEditorSheet: View {
     }
 
     private var availableWallets: [LedgerWallet] {
-        storedWallets
-            .filter { !$0.isArchived }
-            .sorted {
-                if $0.sortOrder != $1.sortOrder {
-                    return $0.sortOrder < $1.sortOrder
-                }
-                return $0.createdAt < $1.createdAt
-            }
+        let preferredWalletIDs = Set([
+            target.plan?.paymentWallet?.id,
+            draft.paymentWalletID
+        ].compactMap { $0 })
+        return paymentWalletAccess.availableWallets(
+            from: storedWallets,
+            preferredWalletIDs: preferredWalletIDs,
+            ownerUserID: billOwnerUserID,
+            excludesCreditCards: false
+        )
+    }
+
+    private var billOwnerUserID: UUID? {
+        if let plan = target.plan,
+           let ownerUserID = billOwnerMap[plan.id] {
+            return ownerUserID
+        }
+        return familyContextStore.selectedSubjectUserID
+            ?? paymentWalletAccess.currentSelfUserID
+    }
+
+    private var billOwnerMap: [UUID: UUID] {
+        MistiaRecordOwnershipStore.ownerMap(from: ownershipScopes, entity: .recurringBillPlan)
+    }
+
+    private var paymentWalletAccess: PlanningPaymentWalletAccess {
+        PlanningPaymentWalletAccess(
+            sessionStore: sessionStore,
+            familyContextStore: familyContextStore,
+            ownershipScopes: ownershipScopes
+        )
     }
 
     private var activeCurrencyCode: String {
@@ -745,7 +840,7 @@ struct PlanningBillEditorSheet: View {
                     Picker(L10n.planning.planning.paymentWallet, selection: $draft.paymentWalletID) {
                         Text(L10n.planning.planning.chooseWallet).tag(Optional<UUID>.none)
                         ForEach(availableWallets) { wallet in
-                            Text(wallet.name).tag(Optional(wallet.id))
+                            Text(paymentWalletAccess.title(for: wallet)).tag(Optional(wallet.id))
                         }
                     }
                     .pickerStyle(.menu)
@@ -817,6 +912,15 @@ struct PlanningBillEditorSheet: View {
             }
             .pickerStyle(.menu)
 
+            if target.plan == nil {
+                Picker(L10n.planning.planning.startCounting, selection: $draft.firstScheduledMonthChoice) {
+                    ForEach(PlanningBillFirstScheduledMonthChoice.allCases) { choice in
+                        Text(choice.title).tag(choice)
+                    }
+                }
+                .pickerStyle(.menu)
+            }
+
             Toggle(L10n.planning.planning.hasDeadline, isOn: $draft.hasDeadline)
                 .tint(MistiaAccent.purple.color)
                 .toggleStyle(.switch)
@@ -877,7 +981,7 @@ struct PlanningBillEditorSheet: View {
                     title: L10n.planning.planning.autoPayDate,
                     selection: $draft.autoPayDate,
                     mode: .date,
-                    selectableRange: draft.oneTimePaymentWindow
+                    selectableRange: .closed(draft.oneTimePaymentWindow)
                 )
             }
         }
@@ -920,6 +1024,7 @@ struct PlanningBillEditorSheet: View {
             plan.scheduleKind = draft.scheduleKind
             plan.paymentStartDay = normalized.paymentStartDay
             plan.paymentStartDate = normalized.paymentStartDate
+            plan.firstScheduledMonth = normalized.firstScheduledMonth
             plan.hasExplicitDueDate = normalized.hasExplicitDueDate
             plan.dueDate = normalized.dueDate
             plan.autoPayEnabled = normalized.autoPayEnabled
@@ -939,6 +1044,7 @@ struct PlanningBillEditorSheet: View {
                 scheduleKind: draft.scheduleKind,
                 paymentStartDay: normalized.paymentStartDay,
                 paymentStartDate: normalized.paymentStartDate,
+                firstScheduledMonth: normalized.firstScheduledMonth,
                 hasExplicitDueDate: normalized.hasExplicitDueDate,
                 dueDate: normalized.dueDate,
                 autoPayEnabled: normalized.autoPayEnabled,
@@ -971,6 +1077,7 @@ struct PlanningBillEditorSheet: View {
         dueDay: Int,
         paymentStartDay: Int,
         paymentStartDate: Date?,
+        firstScheduledMonth: Date?,
         hasExplicitDueDate: Bool,
         dueDate: Date?,
         autoPayEnabled: Bool,
@@ -989,6 +1096,7 @@ struct PlanningBillEditorSheet: View {
                 dueDay,
                 draft.paymentStartDay,
                 nil,
+                target.plan == nil ? firstScheduledMonth(for: draft.firstScheduledMonthChoice) : target.plan?.firstScheduledMonth,
                 hasExplicitDueDate,
                 nil,
                 draft.autoPayEnabled,
@@ -1014,6 +1122,7 @@ struct PlanningBillEditorSheet: View {
                 calendar.component(.day, from: effectiveDueDate),
                 calendar.component(.day, from: paymentStartDate),
                 paymentStartDate,
+                nil,
                 hasExplicitDueDate,
                 dueDate,
                 draft.autoPayEnabled,
@@ -1029,6 +1138,18 @@ struct PlanningBillEditorSheet: View {
             return L10n.planning.planning.dayValue(String(describing: day))
         }
         return L10n.planning.planning.dayValueNextMonth(String(describing: day))
+    }
+
+    private func firstScheduledMonth(
+        for choice: PlanningBillFirstScheduledMonthChoice
+    ) -> Date {
+        let currentMonth = PlanningLogic.startOfMonth(for: Date(), calendar: calendar)
+        switch choice {
+        case .currentMonth:
+            return currentMonth
+        case .nextMonth:
+            return calendar.date(byAdding: .month, value: 1, to: currentMonth) ?? currentMonth
+        }
     }
 
     private func normalizeAutoPayDraft() {
@@ -1097,11 +1218,13 @@ struct PlanningInstallmentEditorSheet: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
     @Environment(SessionStore.self) private var sessionStore
+    @Environment(FamilyContextStore.self) private var familyContextStore
     @AppStorage(MistiaAppStorageKey.currencyCode) private var currencyCode = "JPY"
-    @Query(filter: #Predicate<LedgerWallet> { $0.deletedAt == nil })
+    @Query
     private var storedWallets: [LedgerWallet]
     @Query(filter: #Predicate<DueOccurrenceRecord> { $0.deletedAt == nil })
     private var storedOccurrences: [DueOccurrenceRecord]
+    @Query private var ownershipScopes: [OwnedRecordScope]
 
     let target: PlanningInstallmentEditorTarget
 
@@ -1119,14 +1242,37 @@ struct PlanningInstallmentEditorSheet: View {
     }
 
     private var availableWallets: [LedgerWallet] {
-        storedWallets
-            .filter { !$0.isArchived && $0.kind != .creditCard }
-            .sorted {
-                if $0.sortOrder != $1.sortOrder {
-                    return $0.sortOrder < $1.sortOrder
-                }
-                return $0.createdAt < $1.createdAt
-            }
+        let preferredWalletIDs = Set([
+            target.plan?.paymentWallet?.id,
+            draft.paymentWalletID
+        ].compactMap { $0 })
+        return paymentWalletAccess.availableWallets(
+            from: storedWallets,
+            preferredWalletIDs: preferredWalletIDs,
+            ownerUserID: installmentOwnerUserID,
+            excludesCreditCards: true
+        )
+    }
+
+    private var installmentOwnerUserID: UUID? {
+        if let plan = target.plan,
+           let ownerUserID = installmentOwnerMap[plan.id] {
+            return ownerUserID
+        }
+        return familyContextStore.selectedSubjectUserID
+            ?? paymentWalletAccess.currentSelfUserID
+    }
+
+    private var installmentOwnerMap: [UUID: UUID] {
+        MistiaRecordOwnershipStore.ownerMap(from: ownershipScopes, entity: .installmentPlan)
+    }
+
+    private var paymentWalletAccess: PlanningPaymentWalletAccess {
+        PlanningPaymentWalletAccess(
+            sessionStore: sessionStore,
+            familyContextStore: familyContextStore,
+            ownershipScopes: ownershipScopes
+        )
     }
 
     private var activeCurrencyCode: String {
@@ -1166,7 +1312,7 @@ struct PlanningInstallmentEditorSheet: View {
                     Picker(L10n.planning.planning.paymentWallet, selection: $draft.paymentWalletID) {
                         Text(L10n.planning.planning.chooseWallet).tag(Optional<UUID>.none)
                         ForEach(availableWallets) { wallet in
-                            Text(wallet.name).tag(Optional(wallet.id))
+                            Text(paymentWalletAccess.title(for: wallet)).tag(Optional(wallet.id))
                         }
                     }
                     .pickerStyle(.menu)
@@ -1374,11 +1520,13 @@ struct PlanningCreditCardEditorSheet: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
     @Environment(SessionStore.self) private var sessionStore
+    @Environment(FamilyContextStore.self) private var familyContextStore
     @AppStorage(MistiaAppStorageKey.currencyCode) private var currencyCode = "JPY"
-    @Query(filter: #Predicate<LedgerWallet> { $0.deletedAt == nil })
+    @Query
     private var storedWallets: [LedgerWallet]
     @Query(filter: #Predicate<DueOccurrenceRecord> { $0.deletedAt == nil })
     private var storedOccurrences: [DueOccurrenceRecord]
+    @Query private var ownershipScopes: [OwnedRecordScope]
 
     let target: PlanningCreditCardEditorTarget
 
@@ -1395,18 +1543,36 @@ struct PlanningCreditCardEditorSheet: View {
     }
 
     private var availablePaymentWallets: [LedgerWallet] {
-        storedWallets
-            .filter { wallet in
-                !wallet.isArchived
-                    && wallet.kind != .creditCard
-                    && wallet.id != target.wallet?.id
-            }
-            .sorted {
-                if $0.sortOrder != $1.sortOrder {
-                    return $0.sortOrder < $1.sortOrder
-                }
-                return $0.createdAt < $1.createdAt
-            }
+        let preferredWalletIDs = Set([draft.paymentSourceWalletID].compactMap { $0 })
+        return paymentWalletAccess.availableWallets(
+            from: storedWallets,
+            preferredWalletIDs: preferredWalletIDs,
+            ownerUserID: cardOwnerUserID,
+            excludesCreditCards: true,
+            excludedWalletID: target.wallet?.id
+        )
+    }
+
+    private var cardOwnerUserID: UUID? {
+        if let wallet = target.wallet {
+            return paymentWalletAccess.walletOwnerUserID(for: wallet)
+                ?? wallet.creditCardProfile.flatMap { creditCardProfileOwnerMap[$0.id] }
+                ?? paymentWalletAccess.currentSelfUserID
+        }
+        return familyContextStore.selectedSubjectUserID
+            ?? paymentWalletAccess.currentSelfUserID
+    }
+
+    private var creditCardProfileOwnerMap: [UUID: UUID] {
+        MistiaRecordOwnershipStore.ownerMap(from: ownershipScopes, entity: .creditCardProfile)
+    }
+
+    private var paymentWalletAccess: PlanningPaymentWalletAccess {
+        PlanningPaymentWalletAccess(
+            sessionStore: sessionStore,
+            familyContextStore: familyContextStore,
+            ownershipScopes: ownershipScopes
+        )
     }
 
     private var activeCurrencyCode: String {
@@ -1464,10 +1630,13 @@ struct PlanningCreditCardEditorSheet: View {
                         }
                     }
                     .pickerStyle(.menu)
+                    Toggle(L10n.planning.planning.autoPay, isOn: $draft.autoPayEnabled)
+                        .tint(MistiaAccent.purple.color)
+                        .toggleStyle(.switch)
                     Picker(L10n.planning.planning.paymentWallet, selection: $draft.paymentSourceWalletID) {
                         Text(L10n.planning.planning.chooseWallet).tag(Optional<UUID>.none)
                         ForEach(availablePaymentWallets) { wallet in
-                            Text(wallet.name).tag(Optional(wallet.id))
+                            Text(paymentWalletAccess.title(for: wallet)).tag(Optional(wallet.id))
                         }
                     }
                     .pickerStyle(.menu)
@@ -1613,6 +1782,7 @@ struct PlanningCreditCardEditorSheet: View {
         profile.statementClosingDay = draft.statementClosingDay
         profile.paymentDueDay = draft.paymentDueDay
         profile.notes = draft.notes.nilIfBlank
+        profile.autoPayEnabled = draft.autoPayEnabled
         profile.paymentSourceWallet = storedWallets.first(where: { $0.id == draft.paymentSourceWalletID })
         profile.updatedAt = now
 
@@ -1816,6 +1986,7 @@ private struct PlanningBillDraft {
     var scheduleKind: PlanningBillScheduleKind
     var paymentStartDay: Int
     var paymentStartDate: Date
+    var firstScheduledMonthChoice: PlanningBillFirstScheduledMonthChoice
     var hasDeadline: Bool
     var dueDay: Int
     var dueDate: Date
@@ -1834,6 +2005,7 @@ private struct PlanningBillDraft {
         scheduleKind = plan?.scheduleKind ?? .recurring
         paymentStartDay = plan?.resolvedPaymentStartDay ?? plan?.dueDay ?? 10
         paymentStartDate = plan?.paymentStartDate ?? .now
+        firstScheduledMonthChoice = .currentMonth
         hasDeadline = plan?.resolvedHasExplicitDueDate ?? false
         dueDay = plan?.dueDay ?? paymentStartDay
         dueDate = plan?.dueDate ?? plan?.paymentStartDate ?? .now
@@ -1870,6 +2042,22 @@ private struct PlanningBillDraft {
         if date < start { return start }
         if date > end { return end }
         return date
+    }
+}
+
+private enum PlanningBillFirstScheduledMonthChoice: String, CaseIterable, Identifiable {
+    case currentMonth
+    case nextMonth
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .currentMonth:
+            L10n.planning.planning.currentMonth
+        case .nextMonth:
+            L10n.planning.planning.nextMonth
+        }
     }
 }
 
@@ -1920,6 +2108,7 @@ private struct PlanningCreditCardDraft {
     var creditLimitText: String
     var paymentDueDay: Int
     var statementClosingDay: Int
+    var autoPayEnabled: Bool
     var paymentSourceWalletID: UUID?
     var notes: String
 
@@ -1953,6 +2142,7 @@ private struct PlanningCreditCardDraft {
         creditLimitText = profile.map { String($0.creditLimitMinor) } ?? ""
         paymentDueDay = normalizedBillingDays.paymentDueDay
         statementClosingDay = normalizedBillingDays.statementClosingDay
+        autoPayEnabled = profile?.autoPayEnabled ?? false
         paymentSourceWalletID = profile?.paymentSourceWallet?.id
         notes = profile?.notes ?? ""
     }

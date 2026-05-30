@@ -77,6 +77,36 @@ final class OverviewLogicTests: XCTestCase {
         )
     }
 
+    func testTotalAssetBalanceConvertsWalletsToReportingCurrencyBeforeSumming() {
+        let jpyWallet = OverviewWalletSnapshot(
+            id: UUID(),
+            name: "JPY",
+            kind: .cash,
+            openingBalanceMinor: 100,
+            currencyCode: "JPY",
+            sortOrder: 0,
+            createdAt: makeDate(year: 2026, month: 4, day: 1)
+        )
+        let vndWallet = OverviewWalletSnapshot(
+            id: UUID(),
+            name: "VND",
+            kind: .bank,
+            openingBalanceMinor: 16_500,
+            currencyCode: "VND",
+            sortOrder: 1,
+            createdAt: makeDate(year: 2026, month: 4, day: 1)
+        )
+
+        let total = OverviewLogic.totalAssetBalance(
+            wallets: [jpyWallet, vndWallet],
+            transactionRecords: [],
+            currencyCode: "JPY",
+            exchangeRates: [jpyVndRate]
+        )
+
+        XCTAssertEqual(total, 200)
+    }
+
     func testRecentSevenDaySpendingChartPointsFillsSevenDaysAndMapsIntensityFromLowToHigh() {
         let referenceDate = makeDate(year: 2026, month: 4, day: 7, hour: 12)
         let records = [
@@ -1132,5 +1162,16 @@ final class OverviewLogicTests: XCTestCase {
         components.hour = hour
         components.minute = minute
         return try XCTUnwrap(calendar.date(from: components))
+    }
+
+    private var jpyVndRate: MistiaExchangeRate {
+        MistiaExchangeRate(
+            baseCurrencyCode: "JPY",
+            quoteCurrencyCode: "VND",
+            rateDecimalString: "165",
+            provider: "test",
+            fetchedAt: Date(timeIntervalSince1970: 0),
+            rateDate: "2026-05-27"
+        )
     }
 }

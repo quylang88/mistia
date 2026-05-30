@@ -18,8 +18,13 @@ struct ManagementWalletEditorSheet: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
     @Environment(SessionStore.self) private var sessionStore
+    @Environment(FamilyContextStore.self) private var familyContextStore
     @Query
     private var storedWallets: [LedgerWallet]
+    @Query
+    private var storedTransactions: [LedgerTransaction]
+    @Query
+    private var ownershipScopes: [OwnedRecordScope]
 
     let target: ManagementWalletEditorTarget
 
@@ -99,9 +104,18 @@ struct ManagementWalletEditorSheet: View {
                         }
                     }
 
-                    LabeledContent(L10n.management.management.currency) {
-                        Text(draft.currencyCode)
-                            .foregroundStyle(.secondary)
+                    if canEditWalletCurrency {
+                        Picker(L10n.management.management.currency, selection: $draft.currencyCode) {
+                            ForEach(MistiaCurrencySettings.enabledCurrencyCodes(), id: \.self) { code in
+                                Text(verbatim: code).tag(code)
+                            }
+                        }
+                        .pickerStyle(.menu)
+                    } else {
+                        LabeledContent(L10n.management.management.currency) {
+                            Text(draft.currencyCode)
+                                .foregroundStyle(.secondary)
+                        }
                     }
                 }
 
@@ -174,7 +188,7 @@ struct ManagementWalletEditorSheet: View {
                     } label: {
                         Image(systemName: "checkmark")
                             .font(.system(size: 14, weight: .bold))
-                            .foregroundStyle(Color(red: 0.88, green: 0.78, blue: 1.0))
+                            .foregroundStyle(MistiaAccent.checkmarkPurple.color)
                             .frame(width: 30, height: 30)
                     }
                     .buttonStyle(.glassProminent)
@@ -280,7 +294,7 @@ struct ManagementWalletEditorSheet: View {
                 Text(L10n.management.management.chooseLater).tag(Optional<UUID>.none)
 
                 ForEach(paymentSourceWallets) { wallet in
-                    Text(wallet.name).tag(Optional(wallet.id))
+                    Text(walletPickerAccess.title(for: wallet)).tag(Optional(wallet.id))
                 }
             }
             .pickerStyle(.menu)
@@ -322,19 +336,30 @@ struct ManagementWalletEditorSheet: View {
     }
 
     private var paymentSourceWallets: [LedgerWallet] {
-        storedWallets
-            .filter { wallet in
-                wallet.deletedAt == nil
-                    && !wallet.isArchived
-                    && wallet.kind != .creditCard
-                    && wallet.id != target.wallet?.id
-            }
-            .sorted {
-                if $0.sortOrder != $1.sortOrder {
-                    return $0.sortOrder < $1.sortOrder
-                }
-                return $0.createdAt < $1.createdAt
-            }
+        let preferredWalletIDs = Set([target.wallet?.creditCardProfile?.paymentSourceWallet?.id, draft.paymentSourceWalletID].compactMap { $0 })
+        return walletPickerAccess.availableWallets(
+            from: storedWallets,
+            preferredWalletIDs: preferredWalletIDs,
+            targetOwnerUserID: targetWalletOwnerUserID,
+            excludesCreditCards: true,
+            excludedWalletID: target.wallet?.id
+        )
+    }
+
+    private var targetWalletOwnerUserID: UUID? {
+        if let wallet = target.wallet {
+            return walletPickerAccess.walletOwnerUserID(for: wallet)
+        }
+        return familyContextStore.selectedSubjectUserID
+            ?? walletPickerAccess.currentSelfUserID
+    }
+
+    private var walletPickerAccess: MistiaWalletPickerAccess {
+        MistiaWalletPickerAccess(
+            sessionStore: sessionStore,
+            familyContextStore: familyContextStore,
+            ownershipScopes: ownershipScopes
+        )
     }
 
     private func save() {
@@ -493,6 +518,13 @@ struct ManagementWalletEditorSheet: View {
         }
         
         return debt
+    }
+
+    private var canEditWalletCurrency: Bool {
+        guard let wallet = target.wallet else { return true }
+        return !storedTransactions.contains {
+            $0.sourceWallet?.id == wallet.id || $0.destinationWallet?.id == wallet.id
+        }
     }
 
     private func updateCreditCardProfile(for wallet: LedgerWallet, now: Date) {
@@ -681,8 +713,7 @@ struct ManagementCategoryEditorSheet: View {
                         MistiaNativeSegmentedControl(
                             selection: $draft.kind,
                             options: TransactionCategoryKind.allCases,
-                            title: \.title,
-                            accent: Color(red: 0.43, green: 0.23, blue: 0.76)
+                            title: \.title
                         )
                     }
 
@@ -694,8 +725,7 @@ struct ManagementCategoryEditorSheet: View {
                         MistiaNativeSegmentedControl(
                             selection: $draft.hierarchyRole,
                             options: TransactionCategoryHierarchyRole.allCases,
-                            title: \.title,
-                            accent: Color(red: 0.43, green: 0.23, blue: 0.76)
+                            title: \.title
                         )
                         .disabled(!canEditHierarchyRole)
                         .opacity(canEditHierarchyRole ? 1 : 0.68)
@@ -772,12 +802,12 @@ struct ManagementCategoryEditorSheet: View {
                         if isSaving {
                             ProgressView()
                                 .controlSize(.small)
-                                .tint(Color(red: 0.88, green: 0.78, blue: 1.0))
+                                .tint(MistiaAccent.checkmarkPurple.color)
                                 .frame(width: 30, height: 30)
                         } else {
                             Image(systemName: "checkmark")
                                 .font(.system(size: 14, weight: .bold))
-                                .foregroundStyle(Color(red: 0.88, green: 0.78, blue: 1.0))
+                                .foregroundStyle(MistiaAccent.lightPurple.color)
                                 .frame(width: 30, height: 30)
                         }
                     }

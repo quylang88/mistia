@@ -171,7 +171,7 @@ struct ReceiptAnalysisResult: Codable, Equatable {
         try container.encodeIfPresent(currencyCode, forKey: .currencyCode)
         if let occurredAt {
             try container.encode(
-                ISO8601DateFormatter.mistiaSyncWithFractionalSeconds.string(from: occurredAt),
+                MistiaISO8601DateCoding.stringWithFractionalSeconds(from: occurredAt),
                 forKey: .occurredAt
             )
         } else {
@@ -263,8 +263,7 @@ private extension KeyedDecodingContainer where K == ReceiptAnalysisResult.Coding
         guard contains(key), !(try decodeNil(forKey: key)) else { return nil }
         let value = try decode(String.self, forKey: key).trimmingCharacters(in: .whitespacesAndNewlines)
         guard !value.isEmpty else { return nil }
-        if let date = ISO8601DateFormatter.mistiaSyncWithFractionalSeconds.date(from: value)
-            ?? ISO8601DateFormatter.mistiaSyncWithoutFractionalSeconds.date(from: value) {
+        if let date = MistiaISO8601DateCoding.date(from: value) {
             return date
         }
 
@@ -339,8 +338,7 @@ private extension KeyedDecodingContainer where K == ReceiptAnalysisQuota.CodingK
         let value = try decode(String.self, forKey: key).trimmingCharacters(in: .whitespacesAndNewlines)
         guard !value.isEmpty else { return nil }
 
-        if let date = ISO8601DateFormatter.mistiaSyncWithFractionalSeconds.date(from: value)
-            ?? ISO8601DateFormatter.mistiaSyncWithoutFractionalSeconds.date(from: value) {
+        if let date = MistiaISO8601DateCoding.date(from: value) {
             return date
         }
 

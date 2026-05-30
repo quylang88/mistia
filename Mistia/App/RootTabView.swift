@@ -75,7 +75,6 @@ enum MistiaTab: String, CaseIterable, Hashable {
 
 struct RootTabView: View {
   @Environment(\.colorScheme) private var colorScheme
-  @Environment(\.modelContext) private var modelContext
   @Environment(SessionStore.self) private var sessionStore
   @Environment(FamilyContextStore.self) private var familyContextStore
   @Environment(MistiaUIState.self) private var uiState
@@ -115,8 +114,10 @@ struct RootTabView: View {
           appLanguage: appLanguage,
           hidesQuickCreate: hideQuickCreate || uiState.isQuickCreateHidden || isQuickCreateMenuVisible,
           hidesTabBar: uiState.isTabBarHidden,
-          showsShortcutTab: mistiaShortcutEnabled,
-          isShortcutSyncing: isSyncingShortcut,
+          showsShortcutTab: mistiaShortcutEnabled && !shouldHideShortcutTabInCurrentContext,
+          isShortcutSyncing: isSyncingShortcut && !isPinnedShortcutDisabled,
+          isShortcutDisabled: isPinnedShortcutDisabled,
+          shortcutDisabledAccessibilityHint: shortcutDisabledAccessibilityHint,
           shortcutPresentation: shortcutResolution.presentation,
           onShortcutTap: handlePinnedShortcutTap,
           onQuickCreateTap: toggleQuickCreateMenu,
@@ -127,6 +128,8 @@ struct RootTabView: View {
           }
         )
         .ignoresSafeArea()
+
+        NotificationBadgeObserver()
 
         if isQuickCreateMenuVisible, quickCreateAnchorFrame.width > 0 {
           Color.black
@@ -139,6 +142,8 @@ struct RootTabView: View {
           MistiaQuickCreateMenu(
             isExpanded: isQuickCreateMenuExpanded,
             width: proxy.size.width - 40, // Match tab bar margins (20pt each side)
+            expandedHeight: quickCreateExpandedHeight,
+            destinations: quickCreateDestinations,
             dragOffset: $quickCreateDragOffset,
             isDragging: $isDraggingQuickCreate,
             onDismiss: dismissQuickCreateMenu
@@ -164,12 +169,6 @@ struct RootTabView: View {
             .presentationDetents(destination == .note ? [.medium, .large] : [.large])
             .presentationDragIndicator(.hidden)
         }
-      }
-      .task {
-        try? MistiaBootstrap.seedDefaultCategoriesIfNeeded(
-          modelContext: self.modelContext,
-          sessionStore: self.sessionStore
-        )
       }
       .task(id: shortcutNormalizationKey) {
         persistShortcutSelectionIfNeeded(shortcutResolution.selection)
@@ -277,6 +276,34 @@ struct RootTabView: View {
     )
   }
 
+  private var hidesBillFeaturesForMemberContext: Bool {
+    false
+  }
+
+  private var shouldHideShortcutTabInCurrentContext: Bool {
+    false
+  }
+
+  private var isPinnedShortcutDisabled: Bool {
+    shortcutResolution.presentation.action.requiresRemoteAction && !sessionStore.canPerformRemoteActions
+  }
+
+  private var shortcutDisabledAccessibilityHint: String? {
+    guard isPinnedShortcutDisabled else { return nil }
+    return sessionStore.remoteUnavailableReason
+      ?? L10n.shared.session.session.noNetworkConnectionReconnectToSyncEdit
+  }
+
+  private var quickCreateDestinations: [MistiaQuickCreateDestination] {
+    var destinations: [MistiaQuickCreateDestination] = [.expense, .income, .transfer]
+    destinations.append(.receipt)
+    return destinations
+  }
+
+  private var quickCreateExpandedHeight: CGFloat {
+    MistiaQuickCreateMenu.expandedHeight(for: quickCreateDestinations)
+  }
+
   private var shortcutNormalizationKey: String {
     let memberFingerprint = familyContextStore.members
       .map { member in
@@ -379,6 +406,11 @@ struct RootTabView: View {
   }
 
   private func handlePinnedShortcutTap() {
+    guard !isPinnedShortcutDisabled else {
+      isSyncingShortcut = false
+      return
+    }
+
     dismissQuickCreateMenu()
 
     switch shortcutResolution.presentation.action {
@@ -394,7 +426,7 @@ struct RootTabView: View {
       Task { @MainActor in
         await familyContextStore.refreshLatest(
           sessionStore: sessionStore,
-          source: .enterFamily
+          source: .familyOverview
         )
       }
 
@@ -406,6 +438,12 @@ struct RootTabView: View {
 
       familyContextStore.activateMemberView(member)
       selectedTab = .overview
+      Task { @MainActor in
+        await familyContextStore.refreshMemberFinance(
+          sessionStore: sessionStore,
+          memberUserID: member.userID
+        )
+      }
 
     case .receiptScan:
       activeSheet = .quickCreate(.receipt, .cameraPreferred)
@@ -454,7 +492,8 @@ struct RootTabView: View {
       return TransactionEditorTarget(
         initialKind: .expense,
         subjectUserIDOverride: subjectUserID,
-        receiptInitialSource: receiptInitialSource
+        receiptInitialSource: receiptInitialSource,
+        receiptPersistencePolicy: receiptPersistencePolicy(for: subjectUserID)
       )
     case .note:
       return TransactionEditorTarget(initialKind: .expense, quickCapture: true, subjectUserIDOverride: subjectUserID)
@@ -466,6 +505,13 @@ struct RootTabView: View {
       return familyContextStore.selectedSubjectUserID
     }
     return sessionStore.activeLocalProfileUserID
+  }
+
+  private func receiptPersistencePolicy(for subjectUserID: UUID?) -> TransactionReceiptPersistencePolicy {
+    TransactionReceiptPersistencePolicy.policy(
+      ownerUserID: subjectUserID,
+      activeLocalProfileUserID: sessionStore.activeLocalProfileUserID
+    )
   }
 
   private var hasUsableWalletForQuickCreateSubject: Bool {
@@ -486,7 +532,7 @@ struct RootTabView: View {
       ? proxy.size.width - 40 // Match tab bar margins
       : MistiaQuickCreateMenu.collapsedSize
     let height = isQuickCreateMenuExpanded
-      ? MistiaQuickCreateMenu.expandedHeight
+      ? quickCreateExpandedHeight
       : MistiaQuickCreateMenu.collapsedSize
 
     // Anchored to the center but width matches tab bar area
@@ -514,6 +560,29 @@ private struct RootQuickCreateAccessAlert: Identifiable {
   let id = UUID()
   let title: String
   let message: String
+}
+
+private struct NotificationBadgeObserver: View {
+  @Environment(SessionStore.self) private var sessionStore
+  @Environment(\.modelContext) private var modelContext
+  @Query private var rows: [AppNotificationRecord]
+
+  var body: some View {
+    Color.clear
+      .frame(width: 0, height: 0)
+      .onChange(of: rows) { _, _ in
+        MistiaNotificationStore.updateAppBadgeCount(
+          in: modelContext,
+          userID: sessionStore.activeLocalProfileUserID
+        )
+      }
+      .onAppear {
+        MistiaNotificationStore.updateAppBadgeCount(
+          in: modelContext,
+          userID: sessionStore.activeLocalProfileUserID
+        )
+      }
+  }
 }
 
 private enum MistiaQuickCreateDestination: String, CaseIterable, Identifiable {
@@ -592,15 +661,21 @@ private enum MistiaQuickCreateDestination: String, CaseIterable, Identifiable {
 
 private struct MistiaQuickCreateMenu: View {
   static let collapsedSize: CGFloat = 44
-  static let expandedHeight: CGFloat = 318 // Matched to menuHeight
+  static let defaultExpandedHeight: CGFloat = 318 // Matched to menuHeight
 
   @Environment(\.colorScheme) private var colorScheme
   let isExpanded: Bool
   let width: CGFloat
+  let expandedHeight: CGFloat
+  let destinations: [MistiaQuickCreateDestination]
   @Binding var dragOffset: CGFloat
   @Binding var isDragging: Bool
   let onDismiss: () -> Void
   let onSelect: (MistiaQuickCreateDestination) -> Void
+
+  static func expandedHeight(for destinations: [MistiaQuickCreateDestination]) -> CGFloat {
+    max(262, defaultExpandedHeight - CGFloat(4 - destinations.count) * 54)
+  }
 
   private var collapsedTint: Color {
     Color(red: 0.43, green: 0.23, blue: 0.76).opacity(colorScheme == .dark ? 0.18 : 0.12)
@@ -611,7 +686,7 @@ private struct MistiaQuickCreateMenu: View {
   }
 
   private var menuHeight: CGFloat {
-    isExpanded ? Self.expandedHeight : Self.collapsedSize
+    isExpanded ? expandedHeight : Self.collapsedSize
   }
 
   private var appPurple: Color {
@@ -626,9 +701,8 @@ private struct MistiaQuickCreateMenu: View {
     ZStack(alignment: .bottomTrailing) {
       if isExpanded {
         VStack(spacing: 0) {
-          // Top section: Expense, Income, Transfer, Receipt
           VStack(spacing: 0) {
-            ForEach([MistiaQuickCreateDestination.expense, .income, .transfer, .receipt]) { destination in
+            ForEach(Array(destinations.enumerated()), id: \.element.id) { index, destination in
               Button {
                 onSelect(destination)
               } label: {
@@ -637,7 +711,7 @@ private struct MistiaQuickCreateMenu: View {
               }
               .buttonStyle(PlainButtonStyle())
               
-              if destination != .receipt {
+              if index < destinations.count - 1 {
                 Divider()
                   .background(Color.white.opacity(0.06))
                   .padding(.leading, 68)

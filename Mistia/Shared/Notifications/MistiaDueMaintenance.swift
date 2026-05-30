@@ -212,22 +212,29 @@ private enum MistiaBudgetReminderMaintenance {
         )
 
         let monthKey = PlanningLogic.monthKey(for: selectedMonth, calendar: calendar)
+        var didMutateNotifications = false
         for alert in alerts {
-            upsertBudgetWarning(
+            didMutateNotifications = upsertBudgetWarning(
                 alert,
                 monthKey: monthKey,
                 recipientUserID: snapshot.activeUserID,
                 modelContext: modelContext
-            )
+            ) || didMutateNotifications
+        }
+
+        if didMutateNotifications {
+            try? modelContext.save()
+            MistiaNotificationStore.updateAppBadgeCount(in: modelContext, userID: snapshot.activeUserID)
         }
     }
 
+    @discardableResult
     private static func upsertBudgetWarning(
         _ alert: OverviewBudgetAlertSnapshot,
         monthKey: String,
         recipientUserID: UUID,
         modelContext: ModelContext
-    ) {
+    ) -> Bool {
         let key = "mistia.budget.warning.\(alert.id.uuidString.lowercased()).\(monthKey)"
         let title = alert.progress >= 1
             ? L10n.shared.notifications.mistiaduemaintenance.budgetOverLimit
@@ -249,6 +256,7 @@ private enum MistiaBudgetReminderMaintenance {
             existing.resourceType = .category
             existing.resourceID = alert.id
             existing.updatedAt = .now
+            return true
         } else {
             modelContext.insert(AppNotificationRecord(
                 key: key,
@@ -263,8 +271,7 @@ private enum MistiaBudgetReminderMaintenance {
                 resourceType: .category,
                 resourceID: alert.id
             ))
+            return true
         }
-
-        try? modelContext.save()
     }
 }

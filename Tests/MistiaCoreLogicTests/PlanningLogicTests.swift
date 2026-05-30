@@ -97,6 +97,45 @@ final class PlanningLogicTests: XCTestCase {
         XCTAssertEqual(summary.health, .stable)
     }
 
+    func testBudgetSummaryConvertsRowsToReportingCurrencyBeforeSumming() {
+        let rows = [
+            PlanningBudgetRowSnapshot(
+                id: UUID(),
+                categoryID: UUID(),
+                name: "JPY",
+                iconSymbolName: "yen",
+                colorHex: "#111111",
+                spentMinor: 50,
+                limitMinor: 100,
+                currencyCode: "JPY",
+                daysRemaining: 10,
+                isPastMonth: false
+            ),
+            PlanningBudgetRowSnapshot(
+                id: UUID(),
+                categoryID: UUID(),
+                name: "VND",
+                iconSymbolName: "dong",
+                colorHex: "#222222",
+                spentMinor: 8_250,
+                limitMinor: 16_500,
+                currencyCode: "VND",
+                daysRemaining: 10,
+                isPastMonth: false
+            )
+        ]
+
+        let summary = PlanningLogic.budgetSummary(
+            from: rows,
+            reportingCurrencyCode: "JPY",
+            exchangeRates: [jpyVndRate]
+        )
+
+        XCTAssertEqual(summary.totalBudgetMinor, 200)
+        XCTAssertEqual(summary.spentMinor, 100)
+        XCTAssertEqual(summary.remainingMinor, 100)
+    }
+
     func testGoalRowsPickNearestGoalAndComputeMonthlyContribution() {
         let selectedMonth = makeDate(year: 2026, month: 4, day: 1)
 
@@ -519,6 +558,128 @@ final class PlanningLogicTests: XCTestCase {
         XCTAssertEqual(items.first?.paymentStartDate, makeDate(year: 2026, month: 5, day: 10))
         XCTAssertEqual(items.first?.dueDate, makeDate(year: 2026, month: 5, day: 25))
         XCTAssertTrue(items.first?.hasExplicitDueDate == true)
+    }
+
+    func testRecurringBillFirstScheduledMonthDefaultsToCreatedAtMonth() {
+        let items = PlanningLogic.recurringBillDueItems(
+            bills: [
+                PlanningBillSnapshot(
+                    id: UUID(),
+                    name: "Internet",
+                    iconSymbolName: MistiaSystemCategoryKey.internet.iconSymbolName,
+                    categorySystemKey: .internet,
+                    amountMinor: 5_000,
+                    dueDay: 25,
+                    frequencyMonths: 1,
+                    paymentWalletID: UUID(),
+                    currencyCode: "JPY",
+                    createdAt: makeDate(year: 2026, month: 5, day: 20),
+                    scheduleKind: .recurring,
+                    paymentStartDay: 25,
+                    paymentStartDate: nil,
+                    firstScheduledMonth: nil,
+                    hasExplicitDueDate: false,
+                    dueDate: nil,
+                    autoPayEnabled: false,
+                    autoPayDay: nil,
+                    autoPayDate: nil
+                )
+            ],
+            occurrences: [],
+            selectedMonth: makeDate(year: 2026, month: 5, day: 1),
+            calendar: calendar
+        )
+
+        XCTAssertEqual(items.count, 1)
+        XCTAssertEqual(items.first?.paymentStartDate, makeDate(year: 2026, month: 5, day: 25))
+    }
+
+    func testRecurringBillCanStartNextMonthWithoutAppearingInCurrentMonth() {
+        let bill = PlanningBillSnapshot(
+            id: UUID(),
+            name: "Train pass",
+            iconSymbolName: MistiaSystemCategoryKey.publicTransport.iconSymbolName,
+            categorySystemKey: .publicTransport,
+            amountMinor: 12_000,
+            dueDay: 5,
+            frequencyMonths: 1,
+            paymentWalletID: UUID(),
+            currencyCode: "JPY",
+            createdAt: makeDate(year: 2026, month: 5, day: 20),
+            scheduleKind: .recurring,
+            paymentStartDay: 5,
+            paymentStartDate: nil,
+            firstScheduledMonth: makeDate(year: 2026, month: 6, day: 1),
+            hasExplicitDueDate: false,
+            dueDate: nil,
+            autoPayEnabled: false,
+            autoPayDay: nil,
+            autoPayDate: nil
+        )
+
+        let currentMonthItems = PlanningLogic.recurringBillDueItems(
+            bills: [bill],
+            occurrences: [],
+            selectedMonth: makeDate(year: 2026, month: 5, day: 1),
+            calendar: calendar
+        )
+        let nextMonthItems = PlanningLogic.recurringBillDueItems(
+            bills: [bill],
+            occurrences: [],
+            selectedMonth: makeDate(year: 2026, month: 6, day: 1),
+            calendar: calendar
+        )
+
+        XCTAssertEqual(currentMonthItems.count, 0)
+        XCTAssertEqual(nextMonthItems.count, 1)
+        XCTAssertEqual(nextMonthItems.first?.paymentStartDate, makeDate(year: 2026, month: 6, day: 5))
+    }
+
+    func testCurrentMonthOverdueRecurringBillRemainsPayable() {
+        let selectedMonth = makeDate(year: 2026, month: 5, day: 1)
+        let items = PlanningLogic.recurringBillDueItems(
+            bills: [
+                PlanningBillSnapshot(
+                    id: UUID(),
+                    name: "Parking",
+                    iconSymbolName: MistiaSystemCategoryKey.parking.iconSymbolName,
+                    categorySystemKey: .parking,
+                    amountMinor: 8_000,
+                    dueDay: 5,
+                    frequencyMonths: 1,
+                    paymentWalletID: UUID(),
+                    currencyCode: "JPY",
+                    createdAt: makeDate(year: 2026, month: 5, day: 20),
+                    scheduleKind: .recurring,
+                    paymentStartDay: 1,
+                    paymentStartDate: nil,
+                    firstScheduledMonth: selectedMonth,
+                    hasExplicitDueDate: true,
+                    dueDate: nil,
+                    autoPayEnabled: false,
+                    autoPayDay: nil,
+                    autoPayDate: nil
+                )
+            ],
+            occurrences: [],
+            selectedMonth: selectedMonth,
+            calendar: calendar
+        )
+
+        let summary = PlanningLogic.dueSummary(
+            creditStatements: [],
+            recurring: items,
+            selectedMonth: selectedMonth,
+            referenceDate: makeDate(year: 2026, month: 5, day: 20),
+            calendar: calendar
+        )
+
+        XCTAssertEqual(items.count, 1)
+        XCTAssertEqual(items.first?.status, .pending)
+        XCTAssertEqual(items.first?.paymentStartDate, makeDate(year: 2026, month: 5, day: 1))
+        XCTAssertEqual(items.first?.dueDate, makeDate(year: 2026, month: 5, day: 5))
+        XCTAssertEqual(summary.totalDueMinor, 8_000)
+        XCTAssertEqual(summary.overdueCount, 1)
     }
 
     func testRecurringBillWindowTreatsMissingOrEqualDeadlineAsPaymentDate() {
@@ -960,6 +1121,53 @@ final class PlanningLogicTests: XCTestCase {
         XCTAssertNil(statement?.linkedTransactionID)
     }
 
+    func testCreditCardStatementIsPaidByPostedTransferAfterClosingEvenWhenLate() {
+        let cardWalletID = UUID()
+        let paymentWalletID = UUID()
+        let paymentTransactionID = UUID()
+        let account = makeCreditCardAccount(
+            walletID: cardWalletID,
+            paymentWalletID: paymentWalletID,
+            dueDay: 26,
+            statementClosingDay: 10
+        )
+        let records = [
+            makeRecord(
+                primaryKind: .expense,
+                amountMinor: 32_456,
+                occurredAt: makeDate(year: 2026, month: 2, day: 12),
+                categoryID: nil,
+                sourceWalletID: cardWalletID,
+                sourceWalletKind: .creditCard
+            ),
+            makeRecord(
+                id: paymentTransactionID,
+                primaryKind: .transfer,
+                transferSubtype: .internalTransfer,
+                amountMinor: 32_456,
+                occurredAt: makeDate(year: 2026, month: 4, day: 3),
+                categoryID: nil,
+                sourceWalletID: paymentWalletID,
+                sourceWalletKind: .bank,
+                destinationWalletID: cardWalletID,
+                destinationWalletKind: .creditCard
+            )
+        ]
+
+        let statement = PlanningLogic.creditCardStatementItems(
+            accounts: [account],
+            records: records,
+            occurrences: [],
+            statementMonths: [makeDate(year: 2026, month: 2, day: 1)],
+            referenceDate: makeDate(year: 2026, month: 4, day: 4),
+            calendar: calendar
+        ).first
+
+        XCTAssertEqual(statement?.status, .paid)
+        XCTAssertEqual(statement?.state, .paid)
+        XCTAssertEqual(statement?.linkedTransactionID, paymentTransactionID)
+    }
+
     func testCreditCardStatementIgnoresStaleOccurrenceForEmptyStatementMonth() {
         let cardWalletID = UUID()
         let account = makeCreditCardAccount(
@@ -992,6 +1200,49 @@ final class PlanningLogicTests: XCTestCase {
         XCTAssertEqual(statement?.status, .pending)
         XCTAssertEqual(statement?.state, .paid)
         XCTAssertNil(statement?.linkedTransactionID)
+    }
+
+    func testBillAmountTotalsByCurrencyIgnoreUnknownAmountsAndNonBillRows() {
+        let month = makeDate(year: 2026, month: 5, day: 1)
+        let totals = PlanningLogic.recurringBillAmountTotalsByCurrency(
+            [
+                makeRecurringDueItem(
+                    sourceKind: .recurringBill,
+                    amountMinor: 1_000,
+                    currencyCode: "JPY",
+                    dueDate: month
+                ),
+                makeRecurringDueItem(
+                    sourceKind: .recurringBill,
+                    amountMinor: nil,
+                    currencyCode: "JPY",
+                    dueDate: month
+                ),
+                makeRecurringDueItem(
+                    sourceKind: .recurringBill,
+                    amountMinor: 0,
+                    currencyCode: "JPY",
+                    dueDate: month
+                ),
+                makeRecurringDueItem(
+                    sourceKind: .installment,
+                    amountMinor: 2_000,
+                    currencyCode: "JPY",
+                    dueDate: month
+                ),
+                makeRecurringDueItem(
+                    sourceKind: .recurringBill,
+                    amountMinor: 500,
+                    currencyCode: "VND",
+                    dueDate: month
+                )
+            ]
+        )
+
+        XCTAssertEqual(totals, [
+            PlanningCurrencyAmountTotalSnapshot(currencyCode: "JPY", amountMinor: 1_000),
+            PlanningCurrencyAmountTotalSnapshot(currencyCode: "VND", amountMinor: 500)
+        ])
     }
 
     func testCreditCardAutoPaymentDecisionWaitsForDueDateAndRequiresFunds() {
@@ -1060,6 +1311,36 @@ final class PlanningLogicTests: XCTestCase {
                 calendar: calendar
             ),
             .alreadyPaid
+        )
+    }
+
+    func testCreditCardAutoPaymentDecisionRetriesAcrossMonthForFiveDaysAfterDueDate() {
+        let paymentWalletID = UUID()
+        let statement = makeCreditCardStatement(
+            paymentWalletID: paymentWalletID,
+            status: .pending,
+            state: .overdue,
+            dueDate: makeDate(year: 2026, month: 3, day: 30)
+        )
+
+        XCTAssertEqual(
+            PlanningLogic.creditCardAutoPaymentDecision(
+                statement: statement,
+                sourceWalletBalanceMinor: 40_000,
+                referenceDate: makeDate(year: 2026, month: 4, day: 2),
+                calendar: calendar
+            ),
+            .payable
+        )
+
+        XCTAssertEqual(
+            PlanningLogic.creditCardAutoPaymentDecision(
+                statement: statement,
+                sourceWalletBalanceMinor: 40_000,
+                referenceDate: makeDate(year: 2026, month: 4, day: 5),
+                calendar: calendar
+            ),
+            .notDue
         )
     }
 
@@ -1180,18 +1461,22 @@ final class PlanningLogicTests: XCTestCase {
     }
 
     private func makeRecord(
+        id: UUID = UUID(),
         primaryKind: TransactionPrimaryKind,
+        transferSubtype: TransactionTransferSubtype? = nil,
         amountMinor: Int64,
         occurredAt: Date,
         categoryID: UUID?,
         categoryParentID: UUID? = nil,
         sourceWalletID: UUID = UUID(),
-        sourceWalletKind: LedgerWalletKind = .cash
+        sourceWalletKind: LedgerWalletKind = .cash,
+        destinationWalletID: UUID? = nil,
+        destinationWalletKind: LedgerWalletKind? = nil
     ) -> TransactionRecordSnapshot {
         TransactionRecordSnapshot(
-            id: UUID(),
+            id: id,
             primaryKind: primaryKind,
-            transferSubtype: nil,
+            transferSubtype: transferSubtype,
             debtIntent: nil,
             entryStatus: .posted,
             title: "Test",
@@ -1201,12 +1486,36 @@ final class PlanningLogicTests: XCTestCase {
             createdAt: occurredAt,
             sourceWalletID: sourceWalletID,
             sourceWalletKind: sourceWalletKind,
-            destinationWalletID: nil,
-            destinationWalletKind: nil,
+            destinationWalletID: destinationWalletID,
+            destinationWalletKind: destinationWalletKind,
             categoryID: categoryID,
             categoryParentID: categoryParentID,
             counterpartyName: nil,
             normalizedCounterpartyKey: nil
+        )
+    }
+
+    private func makeRecurringDueItem(
+        sourceKind: PlanningDueSourceKind,
+        amountMinor: Int64?,
+        currencyCode: String,
+        dueDate: Date
+    ) -> PlanningRecurringDueSnapshot {
+        PlanningRecurringDueSnapshot(
+            id: UUID(),
+            sourceKind: sourceKind,
+            sourceID: UUID(),
+            name: "Due",
+            iconSymbolName: "doc.text.fill",
+            categorySystemKey: sourceKind == .recurringBill ? .billing : .loanRepayment,
+            amountMinor: amountMinor,
+            dueDate: dueDate,
+            frequencyMonths: 1,
+            totalCycles: sourceKind == .installment ? 6 : nil,
+            paymentWalletID: nil,
+            currencyCode: currencyCode,
+            status: .pending,
+            linkedTransactionID: nil
         )
     }
 
@@ -1269,7 +1578,8 @@ final class PlanningLogicTests: XCTestCase {
         walletID: UUID = UUID(),
         paymentWalletID: UUID?,
         status: PlanningDueOccurrenceStatus,
-        state: PlanningCreditCardStatementState
+        state: PlanningCreditCardStatementState,
+        dueDate: Date? = nil
     ) -> PlanningCreditCardStatementSnapshot {
         PlanningCreditCardStatementSnapshot(
             id: "\(walletID.uuidString.lowercased())-2026-02",
@@ -1280,7 +1590,7 @@ final class PlanningLogicTests: XCTestCase {
             last4: "1234",
             statementMonth: makeDate(year: 2026, month: 2, day: 1),
             closingDate: makeDate(year: 2026, month: 3, day: 10),
-            dueDate: makeDate(year: 2026, month: 3, day: 26),
+            dueDate: dueDate ?? makeDate(year: 2026, month: 3, day: 26),
             amountMinor: 32_456,
             availableCreditMinor: 100_000,
             paymentSourceWalletID: paymentWalletID,
@@ -1312,5 +1622,16 @@ final class PlanningLogicTests: XCTestCase {
         components.hour = hour
         components.minute = minute
         return try XCTUnwrap(calendar.date(from: components))
+    }
+
+    private var jpyVndRate: MistiaExchangeRate {
+        MistiaExchangeRate(
+            baseCurrencyCode: "JPY",
+            quoteCurrencyCode: "VND",
+            rateDecimalString: "165",
+            provider: "test",
+            fetchedAt: Date(timeIntervalSince1970: 0),
+            rateDate: "2026-05-27"
+        )
     }
 }

@@ -770,16 +770,16 @@ nonisolated enum MistiaSystemCategoryKey: String, CaseIterable, Codable, Identif
         .childMedicine: .init(title: "Thuốc / vitamin cho bé", parentKey: .expenseFamilyChildren, iconToken: "mistia.category.expense.family_children.child_medicine", fallbackSystemName: "pills.fill", iconColorHex: "#57B7FF", group: .family, activeDefault: true, aliases: []),
         .babyGear: .init(title: "Xe đẩy / nôi / ghế ăn / đồ sơ sinh", parentKey: .expenseFamilyChildren, iconToken: "mistia.category.expense.family_children.baby_gear", fallbackSystemName: "bed.double.fill", iconColorHex: "#5B7BFF", group: .family, activeDefault: true, aliases: []),
         .familyOther: .init(title: "Chi khác cho con", parentKey: .expenseFamilyChildren, iconToken: "mistia.category.expense.family_children.family_other", fallbackSystemName: "heart.text.square.fill", iconColorHex: "#FF6D8A", group: .family, activeDefault: true, aliases: ["Chi gia đình khác"]),
-        .fuel: .init(title: "Xăng xe", parentKey: .expenseTransportVehicle, iconToken: "mistia.category.expense.transport_vehicle.fuel", fallbackSystemName: "fuelpump.fill", iconColorHex: "#2DAA9E", group: .mobility, activeDefault: true, aliases: []),
-        .parking: .init(title: "Gửi xe", parentKey: .expenseTransportVehicle, iconToken: "mistia.category.expense.transport_vehicle.parking", fallbackSystemName: "parkingsign.circle.fill", iconColorHex: "#4C8DFF", group: .mobility, activeDefault: true, aliases: []),
-        .grabTaxi: .init(title: "Grab / taxi", parentKey: .expenseTransportVehicle, iconToken: "mistia.category.expense.transport_vehicle.grab_taxi", fallbackSystemName: "car.fill", iconColorHex: "#2DAA9E", group: .mobility, activeDefault: true, aliases: []),
-        .publicTransport: .init(title: "Xe buýt / tàu / vé xe", parentKey: .expenseTransportVehicle, iconToken: "mistia.category.expense.transport_vehicle.public_transport", fallbackSystemName: "tram.fill", iconColorHex: "#5B7BFF", group: .mobility, activeDefault: true, aliases: []),
-        .vehicleMaintenance: .init(title: "Bảo dưỡng xe", parentKey: .expenseTransportVehicle, iconToken: "mistia.category.expense.transport_vehicle.maintenance", fallbackSystemName: "wrench.and.screwdriver.fill", iconColorHex: "#7C85A3", group: .mobility, activeDefault: true, aliases: []),
-        .vehicleRepair: .init(title: "Sửa xe", parentKey: .expenseTransportVehicle, iconToken: "mistia.category.expense.transport_vehicle.repair", fallbackSystemName: "gearshape.2.fill", iconColorHex: "#7C85A3", group: .mobility, activeDefault: true, aliases: []),
+        .fuel: .init(title: "Xăng xe", parentKey: .expenseTransportVehicle, iconToken: "mistia.category.expense.transport_vehicle.fuel", fallbackSystemName: "fuelpump.fill", iconColorHex: "#2DAA9E", group: .mobility, activeDefault: true, aliases: ["Đổ xăng", "Nhiên liệu"]),
+        .parking: .init(title: "Gửi xe", parentKey: .expenseTransportVehicle, iconToken: "mistia.category.expense.transport_vehicle.parking", fallbackSystemName: "parkingsign.circle.fill", iconColorHex: "#4C8DFF", group: .mobility, activeDefault: true, aliases: ["Bãi đỗ xe", "Tiền bãi đỗ xe", "Phí gửi xe"]),
+        .grabTaxi: .init(title: "Grab / taxi", parentKey: .expenseTransportVehicle, iconToken: "mistia.category.expense.transport_vehicle.grab_taxi", fallbackSystemName: "car.fill", iconColorHex: "#2DAA9E", group: .mobility, activeDefault: true, aliases: ["Taxi"]),
+        .publicTransport: .init(title: "Xe buýt / tàu / vé xe", parentKey: .expenseTransportVehicle, iconToken: "mistia.category.expense.transport_vehicle.public_transport", fallbackSystemName: "tram.fill", iconColorHex: "#5B7BFF", group: .mobility, activeDefault: true, aliases: ["Tàu điện", "Vé tháng", "Tiền tàu điện", "Vé tàu", "Vé xe buýt"]),
+        .vehicleMaintenance: .init(title: "Bảo dưỡng xe", parentKey: .expenseTransportVehicle, iconToken: "mistia.category.expense.transport_vehicle.maintenance", fallbackSystemName: "wrench.and.screwdriver.fill", iconColorHex: "#7C85A3", group: .mobility, activeDefault: true, aliases: ["Bảo trì xe"]),
+        .vehicleRepair: .init(title: "Sửa xe", parentKey: .expenseTransportVehicle, iconToken: "mistia.category.expense.transport_vehicle.repair", fallbackSystemName: "gearshape.2.fill", iconColorHex: "#7C85A3", group: .mobility, activeDefault: true, aliases: ["Sửa chữa xe"]),
         .carWash: .init(title: "Rửa xe", parentKey: .expenseTransportVehicle, iconToken: "mistia.category.expense.transport_vehicle.car_wash", fallbackSystemName: "drop.circle.fill", iconColorHex: "#57B7FF", group: .mobility, activeDefault: true, aliases: []),
-        .tolls: .init(title: "Phí cầu đường", parentKey: .expenseTransportVehicle, iconToken: "mistia.category.expense.transport_vehicle.tolls", fallbackSystemName: "road.lanes", iconColorHex: "#F59B3F", group: .mobility, activeDefault: true, aliases: []),
-        .vehicleInsurance: .init(title: "Bảo hiểm xe", parentKey: .expenseTransportVehicle, iconToken: "mistia.category.expense.transport_vehicle.insurance", fallbackSystemName: "car.rear.waves.up.fill", iconColorHex: "#7C85A3", group: .mobility, activeDefault: true, aliases: []),
-        .vehicleRegistration: .init(title: "Đăng kiểm / giấy tờ xe", parentKey: .expenseTransportVehicle, iconToken: "mistia.category.expense.transport_vehicle.registration", fallbackSystemName: "doc.text.fill", iconColorHex: "#5B7BFF", group: .mobility, activeDefault: true, aliases: []),
+        .tolls: .init(title: "Phí cầu đường", parentKey: .expenseTransportVehicle, iconToken: "mistia.category.expense.transport_vehicle.tolls", fallbackSystemName: "road.lanes", iconColorHex: "#F59B3F", group: .mobility, activeDefault: true, aliases: ["ETC", "Phí đường bộ", "Phí cầu đường"]),
+        .vehicleInsurance: .init(title: "Bảo hiểm xe", parentKey: .expenseTransportVehicle, iconToken: "mistia.category.expense.transport_vehicle.insurance", fallbackSystemName: "car.rear.waves.up.fill", iconColorHex: "#7C85A3", group: .mobility, activeDefault: true, aliases: ["Bảo hiểm ô tô", "Bảo hiểm xe máy"]),
+        .vehicleRegistration: .init(title: "Đăng kiểm / giấy tờ xe", parentKey: .expenseTransportVehicle, iconToken: "mistia.category.expense.transport_vehicle.registration", fallbackSystemName: "doc.text.fill", iconColorHex: "#5B7BFF", group: .mobility, activeDefault: true, aliases: ["Đăng ký xe", "Đăng kiểm xe", "Giấy tờ xe"]),
         .clothes: .init(title: "Quần áo", parentKey: .expensePersonalShopping, iconToken: "mistia.category.expense.personal_shopping.clothes", fallbackSystemName: "tshirt.fill", iconColorHex: "#A76BFF", group: .personal, activeDefault: true, aliases: []),
         .footwear: .init(title: "Giày dép", parentKey: .expensePersonalShopping, iconToken: "mistia.category.expense.personal_shopping.footwear", fallbackSystemName: "shoeprints.fill", iconColorHex: "#FF8A4C", group: .personal, activeDefault: true, aliases: []),
         .cosmeticsSkincare: .init(title: "Mỹ phẩm / skincare", parentKey: .expensePersonalShopping, iconToken: "mistia.category.expense.personal_shopping.cosmetics_skincare", fallbackSystemName: "sparkles", iconColorHex: "#FF6D8A", group: .personal, activeDefault: true, aliases: []),
@@ -894,11 +894,18 @@ nonisolated enum MistiaSystemCategoryKey: String, CaseIterable, Codable, Identif
         .phone,
         .gas,
         .condoFee,
+        .publicTransport,
+        .parking,
+        .tolls,
+        .fuel,
+        .vehicleMaintenance,
+        .vehicleRepair,
         .childTuition,
         .childcare,
         .healthInsurance,
         .insurance,
         .vehicleInsurance,
+        .vehicleRegistration,
         .subscriptions,
         .workSoftwareSubscriptions,
         .fitnessGym,
@@ -1043,6 +1050,7 @@ nonisolated enum TransactionPrimaryKind: String, CaseIterable, Identifiable, Cod
 
 nonisolated enum TransactionTransferSubtype: String, CaseIterable, Identifiable, Codable {
     case internalTransfer
+    case familyTransfer
     case debt
 
     var id: String { rawValue }
@@ -1051,6 +1059,8 @@ nonisolated enum TransactionTransferSubtype: String, CaseIterable, Identifiable,
         switch self {
         case .internalTransfer:
             L10n.shared.corelogic.financeenums.`internal`
+        case .familyTransfer:
+            L10n.shared.corelogic.financeenums.family
         case .debt:
             L10n.shared.corelogic.financeenums.debt
         }
@@ -1060,6 +1070,8 @@ nonisolated enum TransactionTransferSubtype: String, CaseIterable, Identifiable,
         switch self {
         case .internalTransfer:
             "arrow.left.arrow.right.circle"
+        case .familyTransfer:
+            "person.2.fill"
         case .debt:
             "person.2.wave.2.fill"
         }
@@ -1069,9 +1081,32 @@ nonisolated enum TransactionTransferSubtype: String, CaseIterable, Identifiable,
         switch self {
         case .internalTransfer:
             "mistia.flow.transfer.internal"
+        case .familyTransfer:
+            "mistia.flow.transfer.family"
         case .debt:
             "mistia.flow.transfer.debt"
         }
+    }
+
+    static func editorOptions(
+        isFamilyEligible: Bool,
+        includesFamilyTransfer: Bool
+    ) -> [TransactionTransferSubtype] {
+        var options: [TransactionTransferSubtype] = [.internalTransfer]
+        if isFamilyEligible || includesFamilyTransfer {
+            options.append(.familyTransfer)
+        }
+        options.append(.debt)
+        return options
+    }
+
+    static func isEditorOptionEnabled(
+        _ subtype: TransactionTransferSubtype,
+        canPerformRemoteActions: Bool,
+        isFamilyTransferDetail: Bool
+    ) -> Bool {
+        guard subtype == .familyTransfer else { return true }
+        return isFamilyTransferDetail || canPerformRemoteActions
     }
 }
 

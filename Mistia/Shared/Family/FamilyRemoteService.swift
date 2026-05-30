@@ -1,4 +1,5 @@
 import Foundation
+import os
 
 @MainActor
 protocol FamilyRemoteServicing {
@@ -72,7 +73,16 @@ protocol FamilyRemoteServicing {
         userIDs: [UUID],
         session: SupabaseAuthSession
     ) async throws -> MistiaRemoteSnapshot
+    func fetchPendingPermissionRequests(
+        familyID: UUID,
+        requesterUserID: UUID,
+        session: SupabaseAuthSession
+    ) async throws -> [FamilyPermissionRequestRemoteRecord]
     func fetchFamilyNotifications(session: SupabaseAuthSession) async throws -> [FamilyNotificationRemoteRecord]
+    func createFamilyTransfer(
+        input: FamilyTransferInput,
+        session: SupabaseAuthSession
+    ) async throws -> FamilyTransferResult
     func createFamilyPermissionRequest(
         input: FamilyPermissionRequestInput,
         session: SupabaseAuthSession
@@ -119,6 +129,21 @@ extension FamilyRemoteServicing {
 
     func fetchFamilyNotifications(session: SupabaseAuthSession) async throws -> [FamilyNotificationRemoteRecord] {
         []
+    }
+
+    func fetchPendingPermissionRequests(
+        familyID: UUID,
+        requesterUserID: UUID,
+        session: SupabaseAuthSession
+    ) async throws -> [FamilyPermissionRequestRemoteRecord] {
+        []
+    }
+
+    func createFamilyTransfer(
+        input: FamilyTransferInput,
+        session: SupabaseAuthSession
+    ) async throws -> FamilyTransferResult {
+        throw SupabaseServiceError.serverMessage("Family transfers are unavailable.")
     }
 
     func createFamilyPermissionRequest(
@@ -359,6 +384,31 @@ struct FamilyPermissionGrantRecord: Codable, Identifiable, Equatable {
     }
 }
 
+struct FamilyTransferInput: Encodable, Equatable {
+    let familyID: UUID
+    let recipientUserID: UUID
+    let sourceWalletID: UUID
+    let destinationWalletID: UUID
+    let amountMinor: Int64
+    let destinationAmountMinor: Int64?
+    let conversionModeRawValue: String?
+    let exchangeRateDecimalString: String?
+    let exchangeRateProvider: String?
+    let exchangeRateDate: String?
+    let occurredAt: Date
+    let note: String?
+}
+
+struct FamilyTransferResult: Codable {
+    let senderTransaction: RemoteLedgerTransaction
+    let recipientTransaction: RemoteLedgerTransaction
+
+    enum CodingKeys: String, CodingKey {
+        case senderTransaction = "sender_transaction"
+        case recipientTransaction = "recipient_transaction"
+    }
+}
+
 struct FamilyMember: Codable, Identifiable, Equatable {
     let membershipID: UUID
     let familyID: UUID
@@ -422,6 +472,7 @@ struct FamilyStateSnapshot: Codable, Equatable {
     var members: [FamilyMember]
     var invites: [FamilyInviteRecord]
     var permissionGrants: [FamilyPermissionGrantRecord] = []
+    var pendingPermissionRequests: [FamilyPermissionRequestRemoteRecord] = []
 
     enum CodingKeys: String, CodingKey {
         case family
@@ -429,6 +480,7 @@ struct FamilyStateSnapshot: Codable, Equatable {
         case members
         case invites
         case permissionGrants
+        case pendingPermissionRequests
     }
 
     init(
@@ -436,13 +488,15 @@ struct FamilyStateSnapshot: Codable, Equatable {
         currentMembership: FamilyMembershipRecord?,
         members: [FamilyMember],
         invites: [FamilyInviteRecord],
-        permissionGrants: [FamilyPermissionGrantRecord] = []
+        permissionGrants: [FamilyPermissionGrantRecord] = [],
+        pendingPermissionRequests: [FamilyPermissionRequestRemoteRecord] = []
     ) {
         self.family = family
         self.currentMembership = currentMembership
         self.members = members
         self.invites = invites
         self.permissionGrants = permissionGrants
+        self.pendingPermissionRequests = pendingPermissionRequests
     }
 
     init(from decoder: Decoder) throws {
@@ -452,6 +506,10 @@ struct FamilyStateSnapshot: Codable, Equatable {
         members = try container.decodeIfPresent([FamilyMember].self, forKey: .members) ?? []
         invites = try container.decodeIfPresent([FamilyInviteRecord].self, forKey: .invites) ?? []
         permissionGrants = try container.decodeIfPresent([FamilyPermissionGrantRecord].self, forKey: .permissionGrants) ?? []
+        pendingPermissionRequests = try container.decodeIfPresent(
+            [FamilyPermissionRequestRemoteRecord].self,
+            forKey: .pendingPermissionRequests
+        ) ?? []
     }
 }
 
@@ -487,6 +545,11 @@ struct FamilyRemoteService: FamilyRemoteServicing {
             session: session,
             userID: currentMembership.role == .owner ? nil : session.user.id
         )
+        async let pendingPermissionRequestsTask = fetchPendingPermissionRequests(
+            familyID: currentMembership.familyID,
+            requesterUserID: session.user.id,
+            session: session
+        )
         async let syncStatusRowsTask = fetchCloudSyncStatuses(
             familyID: currentMembership.familyID,
             session: session
@@ -520,13 +583,15 @@ struct FamilyRemoteService: FamilyRemoteServicing {
         let resolvedFamily = try await family
         let invites = try await invitesTask
         let permissionGrants = try await permissionGrantsTask
+        let pendingPermissionRequests = (try? await pendingPermissionRequestsTask) ?? []
 
         return FamilyStateSnapshot(
             family: resolvedFamily,
             currentMembership: currentMembership,
             members: members,
             invites: invites,
-            permissionGrants: permissionGrants
+            permissionGrants: permissionGrants,
+            pendingPermissionRequests: pendingPermissionRequests
         )
     }
 
@@ -842,6 +907,35 @@ struct FamilyRemoteService: FamilyRemoteServicing {
                 URLQueryItem(name: "order", value: "created_at.desc"),
                 URLQueryItem(name: "limit", value: "100")
             ],
+            session: session
+        )
+    }
+
+    func fetchPendingPermissionRequests(
+        familyID: UUID,
+        requesterUserID: UUID,
+        session: SupabaseAuthSession
+    ) async throws -> [FamilyPermissionRequestRemoteRecord] {
+        try await fetchRows(
+            path: "family_permission_requests",
+            filters: [
+                URLQueryItem(name: "select", value: "*"),
+                URLQueryItem(name: "family_id", value: "eq.\(familyID.uuidString.lowercased())"),
+                URLQueryItem(name: "requester_user_id", value: "eq.\(requesterUserID.uuidString.lowercased())"),
+                URLQueryItem(name: "status", value: "eq.pending"),
+                URLQueryItem(name: "order", value: "created_at.desc")
+            ],
+            session: session
+        )
+    }
+
+    func createFamilyTransfer(
+        input: FamilyTransferInput,
+        session: SupabaseAuthSession
+    ) async throws -> FamilyTransferResult {
+        try await callRPC(
+            functionName: "create_family_transfer",
+            body: CreateFamilyTransferRPCBody(input: input),
             session: session
         )
     }
@@ -1271,7 +1365,29 @@ struct FamilyRemoteService: FamilyRemoteServicing {
             return EmptyResponse() as! Response
         }
 
-        return try decoder.decode(Response.self, from: data)
+        return try await Task.detached(priority: .utility) {
+            let decodeLog = OSLog(subsystem: "Mistia", category: "FamilyRemoteDecode")
+            let signpostID = OSSignpostID(log: decodeLog)
+            os_signpost(.begin, log: decodeLog, name: "FamilyRemoteService.decode", signpostID: signpostID)
+            defer {
+                os_signpost(.end, log: decodeLog, name: "FamilyRemoteService.decode", signpostID: signpostID)
+            }
+
+            let decoder = JSONDecoder()
+            decoder.dateDecodingStrategy = .custom { decoder in
+                let container = try decoder.singleValueContainer()
+                let value = try container.decode(String.self)
+                if let date = MistiaISO8601DateCoding.date(from: value) {
+                    return date
+                }
+
+                throw DecodingError.dataCorruptedError(
+                    in: container,
+                    debugDescription: "Invalid ISO8601 date: \(value)"
+                )
+            }
+            return try decoder.decode(Response.self, from: data)
+        }.value
     }
 
     private func inFilter(for userIDs: [UUID]) -> String {
@@ -1501,6 +1617,21 @@ private struct SetFamilyPermissionGrantRPCBody: Encodable {
         case permissionScope = "p_permission_scope"
         case isGranted = "p_is_granted"
     }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(familyID, forKey: .familyID)
+        try container.encode(granteeUserID, forKey: .granteeUserID)
+        try container.encode(ownerUserID, forKey: .ownerUserID)
+        try container.encode(resourceType, forKey: .resourceType)
+        if let resourceID {
+            try container.encode(resourceID, forKey: .resourceID)
+        } else {
+            try container.encodeNil(forKey: .resourceID)
+        }
+        try container.encode(permissionScope, forKey: .permissionScope)
+        try container.encode(isGranted, forKey: .isGranted)
+    }
 }
 
 private struct SetFamilyPlanningManagerRPCBody: Encodable {
@@ -1522,6 +1653,62 @@ private struct SetFamilyPlanningManagerRPCBody: Encodable {
         case familyID = "p_family_id"
         case resourceType = "p_resource_type"
         case managerUserID = "p_manager_user_id"
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(familyID, forKey: .familyID)
+        try container.encode(resourceType, forKey: .resourceType)
+        if let managerUserID {
+            try container.encode(managerUserID, forKey: .managerUserID)
+        } else {
+            try container.encodeNil(forKey: .managerUserID)
+        }
+    }
+}
+
+private struct CreateFamilyTransferRPCBody: Encodable {
+    let familyID: UUID
+    let recipientUserID: UUID
+    let sourceWalletID: UUID
+    let destinationWalletID: UUID
+    let amountMinor: Int64
+    let destinationAmountMinor: Int64?
+    let conversionModeRawValue: String?
+    let exchangeRateDecimalString: String?
+    let exchangeRateProvider: String?
+    let exchangeRateDate: String?
+    let occurredAt: Date
+    let note: String?
+
+    init(input: FamilyTransferInput) {
+        familyID = input.familyID
+        recipientUserID = input.recipientUserID
+        sourceWalletID = input.sourceWalletID
+        destinationWalletID = input.destinationWalletID
+        amountMinor = input.amountMinor
+        destinationAmountMinor = input.destinationAmountMinor
+        conversionModeRawValue = input.conversionModeRawValue
+        exchangeRateDecimalString = input.exchangeRateDecimalString
+        exchangeRateProvider = input.exchangeRateProvider
+        exchangeRateDate = input.exchangeRateDate
+        occurredAt = input.occurredAt
+        note = input.note
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case familyID = "p_family_id"
+        case recipientUserID = "p_recipient_user_id"
+        case sourceWalletID = "p_source_wallet_id"
+        case destinationWalletID = "p_destination_wallet_id"
+        case amountMinor = "p_amount_minor"
+        case destinationAmountMinor = "p_destination_amount_minor"
+        case conversionModeRawValue = "p_conversion_mode_raw_value"
+        case exchangeRateDecimalString = "p_exchange_rate_decimal_string"
+        case exchangeRateProvider = "p_exchange_rate_provider"
+        case exchangeRateDate = "p_exchange_rate_date"
+        case occurredAt = "p_occurred_at"
+        case note = "p_note"
     }
 }
 

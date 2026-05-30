@@ -31,6 +31,15 @@ struct TransactionRecordSnapshot: Equatable, Identifiable {
     let title: String
     let note: String?
     let amountMinor: Int64
+    let sourceCurrencyCode: String?
+    let destinationCurrencyCode: String?
+    let destinationAmountMinor: Int64?
+    let reportingCurrencyCode: String?
+    let reportingAmountMinor: Int64?
+    let conversionModeRawValue: String?
+    let exchangeRateDecimalString: String?
+    let exchangeRateProvider: String?
+    let exchangeRateDate: String?
     let isArchived: Bool
     let occurredAt: Date
     let createdAt: Date
@@ -52,6 +61,15 @@ struct TransactionRecordSnapshot: Equatable, Identifiable {
         title: String,
         note: String?,
         amountMinor: Int64,
+        sourceCurrencyCode: String? = nil,
+        destinationCurrencyCode: String? = nil,
+        destinationAmountMinor: Int64? = nil,
+        reportingCurrencyCode: String? = nil,
+        reportingAmountMinor: Int64? = nil,
+        conversionModeRawValue: String? = nil,
+        exchangeRateDecimalString: String? = nil,
+        exchangeRateProvider: String? = nil,
+        exchangeRateDate: String? = nil,
         isArchived: Bool = false,
         occurredAt: Date,
         createdAt: Date,
@@ -72,6 +90,15 @@ struct TransactionRecordSnapshot: Equatable, Identifiable {
         self.title = title
         self.note = note
         self.amountMinor = amountMinor
+        self.sourceCurrencyCode = sourceCurrencyCode
+        self.destinationCurrencyCode = destinationCurrencyCode
+        self.destinationAmountMinor = destinationAmountMinor
+        self.reportingCurrencyCode = reportingCurrencyCode
+        self.reportingAmountMinor = reportingAmountMinor
+        self.conversionModeRawValue = conversionModeRawValue
+        self.exchangeRateDecimalString = exchangeRateDecimalString
+        self.exchangeRateProvider = exchangeRateProvider
+        self.exchangeRateDate = exchangeRateDate
         self.isArchived = isArchived
         self.occurredAt = occurredAt
         self.createdAt = createdAt
@@ -83,6 +110,25 @@ struct TransactionRecordSnapshot: Equatable, Identifiable {
         self.categoryParentID = categoryParentID
         self.counterpartyName = counterpartyName
         self.normalizedCounterpartyKey = normalizedCounterpartyKey
+    }
+}
+
+nonisolated enum TransactionReceiptPersistencePolicy: Equatable {
+    case persistLocally
+    case ephemeral
+
+    static func policy(
+        ownerUserID: UUID?,
+        activeLocalProfileUserID: UUID?
+    ) -> TransactionReceiptPersistencePolicy {
+        guard let ownerUserID,
+              let activeLocalProfileUserID,
+              ownerUserID != activeLocalProfileUserID
+        else {
+            return .persistLocally
+        }
+
+        return .ephemeral
     }
 }
 
@@ -121,6 +167,8 @@ struct CounterpartyDebtSnapshot: Equatable, Identifiable {
     let id: String
     let displayName: String
     let netMinor: Int64
+    let currencyCode: String
+    let preferredWalletID: UUID?
 
     var isReceivable: Bool {
         netMinor > 0
@@ -132,7 +180,43 @@ struct TransactionTitleSuggestion: Equatable, Identifiable {
     let title: String
 }
 
+nonisolated enum TransactionCrossCurrencyTransferDestinationDisplayStyle: Equatable {
+    case exactDestination
+    case approximateDestination
+}
+
+nonisolated struct TransactionCrossCurrencyTransferDestinationDisplay: Equatable {
+    let amountMinor: Int64
+    let currencyCode: String
+    let style: TransactionCrossCurrencyTransferDestinationDisplayStyle
+}
+
 nonisolated enum TransactionLogic {
+    static func crossCurrencyTransferDestinationDisplay(
+        for record: TransactionRecordSnapshot
+    ) -> TransactionCrossCurrencyTransferDestinationDisplay? {
+        guard record.primaryKind == .transfer,
+              record.transferSubtype == .internalTransfer || record.transferSubtype == .familyTransfer,
+              let destinationAmountMinor = record.destinationAmountMinor,
+              let destinationCurrencyCode = record.destinationCurrencyCode
+        else {
+            return nil
+        }
+
+        let sourceCurrencyCode = MistiaCurrencyLogic.normalizedCode(record.sourceCurrencyCode)
+        let normalizedDestinationCurrencyCode = MistiaCurrencyLogic.normalizedCode(destinationCurrencyCode)
+        guard sourceCurrencyCode != normalizedDestinationCurrencyCode else {
+            return nil
+        }
+
+        let conversionMode = MistiaCurrencyConversionMode(rawValue: record.conversionModeRawValue ?? "")
+        return TransactionCrossCurrencyTransferDestinationDisplay(
+            amountMinor: destinationAmountMinor,
+            currencyCode: normalizedDestinationCurrencyCode,
+            style: conversionMode == .manual ? .exactDestination : .approximateDestination
+        )
+    }
+
     static func normalizeCounterpartyName(_ name: String?) -> String? {
         guard let trimmed = name?
             .trimmingCharacters(in: .whitespacesAndNewlines),
@@ -263,36 +347,60 @@ nonisolated enum TransactionLogic {
     }
 
     static func summary(for records: [TransactionRecordSnapshot]) -> TransactionSummarySnapshot {
-        let posted = records.filter { $0.entryStatus == .posted }
-        let expenseMinor = posted
-            .filter(isExpenseSpending)
-            .reduce(into: Int64.zero) { partialResult, record in
-                partialResult += record.amountMinor
+        var expenseMinor = Int64.zero
+        var incomeMinor = Int64.zero
+        var draftCount = 0
+
+        for record in records {
+            switch record.entryStatus {
+            case .draft:
+                draftCount += 1
+            case .posted:
+                if isExpenseSpending(record) {
+                    expenseMinor += record.amountMinor
+                }
+                if record.primaryKind == .income {
+                    incomeMinor += record.amountMinor
+                }
             }
-        let incomeMinor = posted
-            .filter { $0.primaryKind == .income }
-            .reduce(into: Int64.zero) { partialResult, record in
-                partialResult += record.amountMinor
-            }
+        }
 
         return TransactionSummarySnapshot(
             expenseMinor: expenseMinor,
             incomeMinor: incomeMinor,
             totalCount: records.count,
-            draftCount: records.filter { $0.entryStatus == .draft }.count
+            draftCount: draftCount
         )
     }
 
     static func sections(
         from records: [TransactionRecordSnapshot],
+        assumesSortedByRecency: Bool = false,
         referenceDate: Date = .now,
         calendar: Calendar = MistiaCalendar.current
     ) -> [TransactionSectionSnapshot] {
         var builtSections: [TransactionSectionSnapshot] = []
+        var drafts: [TransactionRecordSnapshot] = []
+        var postedByDay: [Date: [TransactionRecordSnapshot]] = [:]
+        var postedDays: [Date] = []
 
-        let drafts = records
-            .filter { $0.entryStatus == .draft }
-            .sorted(by: recordSort)
+        for record in records {
+            switch record.entryStatus {
+            case .draft:
+                drafts.append(record)
+            case .posted:
+                let day = calendar.startOfDay(for: record.occurredAt)
+                if postedByDay[day] == nil {
+                    postedDays.append(day)
+                }
+                postedByDay[day, default: []].append(record)
+            }
+        }
+
+        if !assumesSortedByRecency {
+            drafts.sort(by: recordSort)
+            postedDays.sort(by: >)
+        }
 
         if !drafts.isEmpty {
             builtSections.append(
@@ -305,27 +413,23 @@ nonisolated enum TransactionLogic {
             )
         }
 
-        let posted = records
-            .filter { $0.entryStatus == .posted }
-            .sorted(by: recordSort)
-
-        let groups = Dictionary(grouping: posted) { calendar.startOfDay(for: $0.occurredAt) }
-        let sortedDays = groups.keys.sorted(by: >)
-
         let language = MistiaAppLanguage.current
+        let startOfReference = calendar.startOfDay(for: referenceDate)
 
-        for day in sortedDays {
-            let startOfReference = calendar.startOfDay(for: referenceDate)
+        for day in postedDays {
             let startOfDay = calendar.startOfDay(for: day)
             let dayDelta = calendar.dateComponents([.day], from: startOfDay, to: startOfReference).day ?? 0
             let title = MistiaDateFormatting.relativeDayLabel(for: dayDelta, language: language)
                 ?? MistiaDateFormatting.fullDateString(for: day, language: language, calendar: calendar)
+            let rows = assumesSortedByRecency
+                ? postedByDay[day, default: []]
+                : postedByDay[day, default: []].sorted(by: recordSort)
 
             builtSections.append(
                 TransactionSectionSnapshot(
                     id: "day-\(day.timeIntervalSince1970)",
                     title: title,
-                    rows: groups[day, default: []].sorted(by: recordSort),
+                    rows: rows,
                     isDraftSection: false
                 )
             )
@@ -337,7 +441,16 @@ nonisolated enum TransactionLogic {
     static func openDebtPositions(
         from records: [TransactionRecordSnapshot]
     ) -> [CounterpartyDebtSnapshot] {
-        let grouped = Dictionary(grouping: records) { $0.normalizedCounterpartyKey ?? UUID().uuidString }
+        let debtRecords = records.filter {
+            $0.entryStatus == .posted
+                && $0.primaryKind == .transfer
+                && $0.transferSubtype == .debt
+        }
+        let grouped = Dictionary(grouping: debtRecords) { record in
+            let counterpartyKey = record.normalizedCounterpartyKey ?? UUID().uuidString
+            let currencyCode = MistiaCurrencyLogic.normalizedCode(record.sourceCurrencyCode)
+            return "\(counterpartyKey)|\(currencyCode)"
+        }
         return grouped.compactMap { key, groupedRecords in
             guard let first = groupedRecords.first,
                   let normalizedKey = first.normalizedCounterpartyKey,
@@ -347,7 +460,6 @@ nonisolated enum TransactionLogic {
             }
 
             let total = groupedRecords
-                .filter { $0.entryStatus == .posted && $0.primaryKind == .transfer && $0.transferSubtype == .debt }
                 .reduce(into: Int64.zero) { partialResult, record in
                     switch record.debtIntent {
                     case .lend:
@@ -364,22 +476,93 @@ nonisolated enum TransactionLogic {
                 }
 
             guard total != 0 else { return nil }
+            let preferredIntent: TransactionDebtIntent = total > 0 ? .lend : .borrow
+            let preferredWalletID = groupedRecords
+                .filter { $0.debtIntent == preferredIntent && $0.sourceWalletID != nil }
+                .sorted(by: recordSort)
+                .first?
+                .sourceWalletID
 
             return CounterpartyDebtSnapshot(
-                id: normalizedKey,
+                id: key,
                 displayName: groupedRecords
                     .compactMap(\.counterpartyName)
                     .first(where: { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty })
                     ?? L10n.shared.corelogic.transaction.unknownName,
-                netMinor: total
+                netMinor: total,
+                currencyCode: MistiaCurrencyLogic.normalizedCode(first.sourceCurrencyCode),
+                preferredWalletID: preferredWalletID
             )
         }
         .sorted {
+            if $0.displayName.localizedCaseInsensitiveCompare($1.displayName) != .orderedSame {
+                return $0.displayName.localizedCaseInsensitiveCompare($1.displayName) == .orderedAscending
+            }
+            if $0.currencyCode != $1.currencyCode {
+                return $0.currencyCode.localizedCaseInsensitiveCompare($1.currencyCode) == .orderedAscending
+            }
             if abs($0.netMinor) != abs($1.netMinor) {
                 return abs($0.netMinor) > abs($1.netMinor)
             }
-            return $0.displayName.localizedCaseInsensitiveCompare($1.displayName) == .orderedAscending
+            return $0.id < $1.id
         }
+    }
+
+    static func counterpartySuggestions(
+        from records: [TransactionRecordSnapshot],
+        query: String,
+        excludingTransactionID: UUID? = nil,
+        limit: Int = 5
+    ) -> [TransactionTitleSuggestion] {
+        guard limit > 0,
+              let normalizedQuery = normalizeCounterpartyName(query),
+              !normalizedQuery.isEmpty else {
+            return []
+        }
+
+        let matchingDebtRecords = records.filter { record in
+            guard record.id != excludingTransactionID,
+                  record.entryStatus == .posted,
+                  record.primaryKind == .transfer,
+                  record.transferSubtype == .debt,
+                  let counterpartyName = record.counterpartyName?.trimmingCharacters(in: .whitespacesAndNewlines),
+                  !counterpartyName.isEmpty,
+                  let counterpartyKey = normalizeCounterpartyName(counterpartyName)
+            else {
+                return false
+            }
+            return titleSuggestionMatchRank(query: normalizedQuery, normalizedTitle: counterpartyKey) != nil
+        }
+
+        let grouped = Dictionary(grouping: matchingDebtRecords) { record in
+            normalizeCounterpartyName(record.counterpartyName)?
+                .replacingOccurrences(of: " ", with: "")
+                ?? record.id.uuidString
+        }
+
+        return grouped.compactMap { key, groupedRecords -> (TransactionTitleSuggestion, Int, Date, Int)? in
+            guard let representative = groupedRecords.sorted(by: recordSort).first,
+                  let counterpartyName = representative.counterpartyName?.trimmingCharacters(in: .whitespacesAndNewlines),
+                  let counterpartyKey = normalizeCounterpartyName(counterpartyName),
+                  let rank = titleSuggestionMatchRank(query: normalizedQuery, normalizedTitle: counterpartyKey)
+            else {
+                return nil
+            }
+            return (
+                TransactionTitleSuggestion(id: key, title: counterpartyName),
+                rank,
+                representative.occurredAt,
+                groupedRecords.count
+            )
+        }
+        .sorted { lhs, rhs in
+            if lhs.1 != rhs.1 { return lhs.1 < rhs.1 }
+            if lhs.2 != rhs.2 { return lhs.2 > rhs.2 }
+            if lhs.3 != rhs.3 { return lhs.3 > rhs.3 }
+            return lhs.0.title.localizedCaseInsensitiveCompare(rhs.0.title) == .orderedAscending
+        }
+        .prefix(limit)
+        .map(\.0)
     }
 
     static func titleSuggestions(
@@ -539,8 +722,18 @@ nonisolated enum TransactionLogic {
                     applyDelta(
                         walletID: record.destinationWalletID,
                         explicitKind: record.destinationWalletKind,
-                        amount: record.amountMinor,
+                        amount: record.destinationAmountMinor ?? record.amountMinor,
                         delta: { kind, amount in incomingDelta(for: kind, amount: amount) }
+                    )
+                case .familyTransfer:
+                    let isIncoming = record.destinationWalletID == nil
+                    applyDelta(
+                        walletID: record.sourceWalletID,
+                        explicitKind: record.sourceWalletKind,
+                        amount: record.amountMinor,
+                        delta: isIncoming
+                            ? { kind, amount in incomingDelta(for: kind, amount: amount) }
+                            : { kind, amount in outgoingDelta(for: kind, amount: amount) }
                     )
                 case .debt:
                     switch record.debtIntent {
@@ -580,6 +773,8 @@ nonisolated enum TransactionLogic {
             switch record.transferSubtype {
             case .internalTransfer:
                 0
+            case .familyTransfer:
+                record.destinationWalletID == nil ? record.amountMinor : -record.amountMinor
             case .debt:
                 switch record.debtIntent {
                 case .lend, .repay:
@@ -613,6 +808,8 @@ nonisolated enum TransactionLogic {
                 return record.sourceWalletID != nil
                     && record.destinationWalletID != nil
                     && record.sourceWalletID != record.destinationWalletID
+            case .familyTransfer:
+                return record.sourceWalletID != nil
             case .debt:
                 return record.sourceWalletID != nil
                     && record.debtIntent != nil
@@ -788,10 +985,18 @@ nonisolated enum TransactionLogic {
                 }
 
                 if record.destinationWalletID == wallet.id {
-                    delta += incomingDelta(for: wallet.kind, amount: record.amountMinor)
+                    delta += incomingDelta(
+                        for: wallet.kind,
+                        amount: record.destinationAmountMinor ?? record.amountMinor
+                    )
                 }
 
                 return delta
+            case .familyTransfer:
+                guard record.sourceWalletID == wallet.id else { return 0 }
+                return record.destinationWalletID == nil
+                    ? incomingDelta(for: wallet.kind, amount: record.amountMinor)
+                    : outgoingDelta(for: wallet.kind, amount: record.amountMinor)
             case .debt:
                 guard record.sourceWalletID == wallet.id else { return 0 }
 
@@ -1011,6 +1216,15 @@ extension LedgerTransaction {
             title: title,
             note: note,
             amountMinor: amountMinor,
+            sourceCurrencyCode: sourceCurrencyCode,
+            destinationCurrencyCode: destinationCurrencyCode,
+            destinationAmountMinor: destinationAmountMinor,
+            reportingCurrencyCode: reportingCurrencyCode,
+            reportingAmountMinor: reportingAmountMinor,
+            conversionModeRawValue: conversionModeRawValue,
+            exchangeRateDecimalString: exchangeRateDecimalString,
+            exchangeRateProvider: exchangeRateProvider,
+            exchangeRateDate: exchangeRateDate,
             isArchived: isArchived,
             occurredAt: occurredAt,
             createdAt: createdAt,

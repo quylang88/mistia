@@ -103,7 +103,7 @@ struct SettingsView: View {
                     icon: "yensign.circle.fill",
                     accent: .amber,
                     value: currencyCode,
-                    action: .placeholder
+                    action: .openCurrency
                 )
             ]
         )
@@ -253,6 +253,8 @@ struct SettingsView: View {
                 AppearanceSettingsView()
             case .language:
                 LanguageSettingsView()
+            case .currency:
+                CurrencySettingsView()
             case .notifications:
                 NotificationsSettingsView()
             case .backupRestore:
@@ -276,6 +278,8 @@ struct SettingsView: View {
             destination = .appearance
         case .openLanguage:
             destination = .language
+        case .openCurrency:
+            destination = .currency
         case .openNotifications:
             destination = .notifications
         case .openBackupRestore:
@@ -365,6 +369,348 @@ private struct LanguageSettingsView: View {
     }
 }
 
+private struct CurrencySettingsView: View {
+    @Environment(\.dismiss) private var dismiss
+    @Environment(\.colorScheme) private var colorScheme
+    @AppStorage(MistiaCurrencySettings.StorageKey.primaryCurrencyCode) private var primaryCurrencyCode = "JPY"
+    @AppStorage(MistiaCurrencySettings.StorageKey.enabledCurrencyCodes) private var enabledCurrencyCodesRawValue = "JPY"
+    @AppStorage(MistiaCurrencySettings.StorageKey.rateMode) private var rateModeRawValue = MistiaCurrencyRateMode.manual.rawValue
+    @AppStorage(MistiaCurrencySettings.StorageKey.manualJPYToVNDRate) private var manualJPYToVNDRate = "165"
+    @State private var isRefreshingRates = false
+
+    private var cardTint: Color {
+        colorScheme == .dark ? Color(UIColor.secondarySystemGroupedBackground) : .white.opacity(0.22)
+    }
+
+    private var enabledCurrencyCodes: [String] {
+        MistiaCurrencySettings.enabledCurrencyCodes()
+    }
+
+    private var selectedRateMode: MistiaCurrencyRateMode {
+        MistiaCurrencyRateMode(rawValue: rateModeRawValue) ?? .manual
+    }
+
+    private var showsRateControls: Bool {
+        enabledCurrencyCodes.count > 1
+    }
+
+    private var rateSourceCurrencyCode: String? {
+        enabledCurrencyCodes.first { $0 != primaryCurrencyCode }
+    }
+
+    private var rateTargetCurrencyCode: String {
+        primaryCurrencyCode
+    }
+
+    private var ratePairTitle: String {
+        guard let source = rateSourceCurrencyCode else {
+            return L10n.settings.currency.rateValue
+        }
+        return L10n.settings.currency.ratePairValue(source, rateTargetCurrencyCode)
+    }
+
+    private var displayedRateText: String? {
+        guard let source = rateSourceCurrencyCode,
+              let jpyToVNDRate = currentJPYToVNDRate
+        else {
+            return nil
+        }
+        return displayText(forJPYToVNDRate: jpyToVNDRate, source: source, target: rateTargetCurrencyCode)
+    }
+
+    private var currentJPYToVNDRate: Decimal? {
+        switch selectedRateMode {
+        case .automatic:
+            return MistiaCurrencySettings.cachedRates().first { rate in
+                MistiaCurrencyLogic.normalizedCode(rate.baseCurrencyCode) == "JPY"
+                    && MistiaCurrencyLogic.normalizedCode(rate.quoteCurrencyCode) == "VND"
+            }?.rateDecimal
+        case .manual:
+            return decimal(from: manualJPYToVNDRate)
+        }
+    }
+
+    var body: some View {
+        MistiaPinnedTopBarScaffold(
+            tone: .standard,
+            title: L10n.settings.currency.title,
+            embedsInNavigationStack: false,
+            showsLeadingAvatar: false,
+            leadingSystemImage: "chevron.left",
+            trailingSystemImage: nil,
+            hidesSystemBackButton: true,
+            onLeadingTap: { dismiss() },
+            contentSpacing: 18
+        ) {
+            VStack(spacing: 14) {
+                currencyEnabledCard
+                textDetailLayout(L10n.settings.currency.enabledDescription)
+
+                primaryCurrencyCard
+                textDetailLayout(L10n.settings.currency.primaryDescription)
+
+                if showsRateControls {
+                    rateModeCard
+                    textDetailLayout(L10n.settings.currency.rateDescription)
+                }
+            }
+        }
+    }
+
+    private var currencyEnabledCard: some View {
+        MistiaGlassCard(cornerRadius: 22, tint: cardTint, padding: 0) {
+            VStack(spacing: 0) {
+                ForEach(Array(MistiaCurrencyLogic.supportedCurrencyCodes.enumerated()), id: \.element) { index, code in
+                    Toggle(isOn: enabledBinding(for: code)) {
+                        CurrencySettingsRowTitle(code: code)
+                    }
+                    .padding(.horizontal, 18)
+                    .padding(.vertical, 14)
+
+                    if index < MistiaCurrencyLogic.supportedCurrencyCodes.count - 1 {
+                        Divider().padding(.leading, 52)
+                    }
+                }
+            }
+        }
+    }
+
+    private var primaryCurrencyCard: some View {
+        MistiaGlassCard(cornerRadius: 22, tint: cardTint, padding: 0) {
+            HStack(spacing: 14) {
+                Text(L10n.settings.currency.primaryCurrency)
+                    .font(.system(size: 16, weight: .semibold, design: .rounded))
+                Spacer(minLength: 12)
+                Menu {
+                    ForEach(enabledCurrencyCodes, id: \.self) { code in
+                        Button {
+                            primaryCurrencyCode = code
+                        } label: {
+                            HStack {
+                                Text(currencyMenuTitle(for: code))
+                                if code == primaryCurrencyCode {
+                                    Image(systemName: "checkmark")
+                                }
+                            }
+                        }
+                    }
+                } label: {
+                    HStack(spacing: 6) {
+                        Text(currencyMenuTitle(for: primaryCurrencyCode))
+                            .font(.system(size: 14, weight: .semibold, design: .rounded))
+                        Image(systemName: "chevron.up.chevron.down")
+                            .font(.system(size: 11, weight: .bold))
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                .menuStyle(.button)
+            }
+            .padding(.horizontal, 18)
+            .padding(.vertical, 14)
+        }
+    }
+
+    private var rateModeCard: some View {
+        MistiaGlassCard(cornerRadius: 22, tint: cardTint, padding: 0) {
+            VStack(spacing: 0) {
+                Toggle(isOn: automaticRateBinding) {
+                    Text(L10n.settings.currency.autoUpdateRates)
+                        .font(.system(size: 16, weight: .semibold, design: .rounded))
+                }
+                .padding(.horizontal, 18)
+                .padding(.vertical, 14)
+
+                if selectedRateMode == .automatic {
+                    Divider().padding(.leading, 18)
+
+                    Button {
+                        refreshRates()
+                    } label: {
+                        HStack(spacing: 12) {
+                            Text(isRefreshingRates ? L10n.settings.currency.refreshingRates : L10n.settings.currency.refreshRates)
+                                .font(.system(size: 16, weight: .semibold, design: .rounded))
+                            Spacer()
+                            if isRefreshingRates {
+                                ProgressView().controlSize(.small)
+                            } else {
+                                Image(systemName: "arrow.clockwise")
+                                    .font(.system(size: 14, weight: .bold))
+                            }
+                        }
+                    }
+                    .disabled(isRefreshingRates)
+                    .padding(.horizontal, 18)
+                    .padding(.vertical, 14)
+
+                    if let lastUpdatedText {
+                        Divider().padding(.leading, 18)
+                        Text(lastUpdatedText)
+                            .font(.system(size: 12.5, weight: .medium, design: .rounded))
+                            .foregroundStyle(.secondary)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(.horizontal, 18)
+                            .padding(.vertical, 12)
+                    }
+                }
+
+                Divider().padding(.leading, 18)
+
+                LabeledContent(ratePairTitle) {
+                    if selectedRateMode == .automatic {
+                        Text(displayedRateText ?? "—")
+                            .font(.system(size: 15, weight: .semibold, design: .rounded))
+                            .foregroundStyle(displayedRateText == nil ? .secondary : .primary)
+                    } else {
+                        TextField(String(), text: displayedManualRateBinding)
+                            .keyboardType(.decimalPad)
+                            .multilineTextAlignment(.trailing)
+                            .frame(maxWidth: 120)
+                    }
+                }
+                .font(.system(size: 15, weight: .semibold, design: .rounded))
+                .padding(.horizontal, 18)
+                .padding(.vertical, 14)
+            }
+        }
+    }
+
+    private var automaticRateBinding: Binding<Bool> {
+        Binding(
+            get: { selectedRateMode == .automatic },
+            set: { isAutomatic in
+                rateModeRawValue = (isAutomatic ? MistiaCurrencyRateMode.automatic : .manual).rawValue
+            }
+        )
+    }
+
+    private var displayedManualRateBinding: Binding<String> {
+        Binding(
+            get: { displayedRateText ?? manualJPYToVNDRate },
+            set: { newValue in
+                guard let source = rateSourceCurrencyCode else {
+                    manualJPYToVNDRate = newValue
+                    return
+                }
+                if let jpyToVNDRate = jpyToVNDRate(fromDisplayedRateText: newValue, source: source, target: rateTargetCurrencyCode) {
+                    manualJPYToVNDRate = rateText(jpyToVNDRate)
+                } else if source == "JPY" && rateTargetCurrencyCode == "VND" {
+                    manualJPYToVNDRate = newValue
+                }
+            }
+        )
+    }
+
+    private var lastUpdatedText: String? {
+        guard let date = UserDefaults.standard.object(forKey: MistiaCurrencySettings.StorageKey.lastAutoRateRefreshAt) as? Date else {
+            return L10n.settings.currency.notUpdatedYet
+        }
+
+        let formatter = DateFormatter()
+        formatter.dateStyle = .medium
+        formatter.timeStyle = .short
+        return L10n.settings.currency.lastUpdatedValue(formatter.string(from: date))
+    }
+
+    private func textDetailLayout(_ text: String) -> some View {
+        Text(text)
+            .descriptionTextStyle()
+            .cardDescriptionStyle()
+    }
+
+    private func enabledBinding(for code: String) -> Binding<Bool> {
+        Binding(
+            get: { enabledCurrencyCodes.contains(code) },
+            set: { isEnabled in
+                var codes = enabledCurrencyCodes
+                if isEnabled {
+                    codes.append(code)
+                } else if codes.count > 1 {
+                    codes.removeAll { $0 == code }
+                }
+                MistiaCurrencySettings.setEnabledCurrencyCodes(codes)
+                enabledCurrencyCodesRawValue = MistiaCurrencySettings.enabledCurrencyCodes().joined(separator: ",")
+                if !MistiaCurrencySettings.enabledCurrencyCodes().contains(primaryCurrencyCode) {
+                    primaryCurrencyCode = MistiaCurrencySettings.enabledCurrencyCodes().first ?? "JPY"
+                }
+            }
+        )
+    }
+
+    private func refreshRates() {
+        isRefreshingRates = true
+        Task { @MainActor in
+            defer { isRefreshingRates = false }
+            if let rate = try? await MistiaExchangeRateService.fetchJPYVNDRate() {
+                MistiaCurrencySettings.saveCachedRates([rate])
+            }
+        }
+    }
+
+    private func currencyMenuTitle(for code: String) -> String {
+        "\(code) · \(localizedCurrencyName(for: code))"
+    }
+
+    private func displayText(forJPYToVNDRate rate: Decimal, source: String, target: String) -> String? {
+        if source == "JPY", target == "VND" {
+            return rateText(rate)
+        }
+        if source == "VND", target == "JPY", rate != 0 {
+            return rateText(Decimal(1) / rate)
+        }
+        return nil
+    }
+
+    private func jpyToVNDRate(fromDisplayedRateText text: String, source: String, target: String) -> Decimal? {
+        guard let displayedRate = decimal(from: text), displayedRate > 0 else {
+            return nil
+        }
+        if source == "JPY", target == "VND" {
+            return displayedRate
+        }
+        if source == "VND", target == "JPY" {
+            return Decimal(1) / displayedRate
+        }
+        return nil
+    }
+
+    private func decimal(from text: String) -> Decimal? {
+        Decimal(string: text.replacingOccurrences(of: ",", with: "."), locale: Locale(identifier: "en_US_POSIX"))
+    }
+
+    private func rateText(_ decimal: Decimal) -> String {
+        var value = decimal
+        var rounded = Decimal()
+        NSDecimalRound(&rounded, &value, 8, .plain)
+        return NSDecimalNumber(decimal: rounded).stringValue
+    }
+}
+
+private struct CurrencySettingsRowTitle: View {
+    let code: String
+
+    var body: some View {
+        HStack(spacing: 12) {
+            Text(verbatim: code)
+                .font(.system(size: 16, weight: .semibold, design: .rounded))
+            Spacer()
+            Text(localizedCurrencyName(for: code))
+                .font(.system(size: 13, weight: .medium, design: .rounded))
+                .foregroundStyle(.secondary)
+        }
+    }
+}
+
+private func localizedCurrencyName(for code: String) -> String {
+    switch MistiaCurrencyLogic.normalizedCode(code) {
+    case "JPY":
+        return L10n.settings.currency.currencyNameJPY
+    case "VND":
+        return L10n.settings.currency.currencyNameVND
+    default:
+        return code
+    }
+}
+
 private struct MistiaShortcutSettingsView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.colorScheme) private var colorScheme
@@ -451,11 +797,12 @@ private struct MistiaShortcutSettingsView: View {
         }
 
         let utilitySelections: [MistiaShortcutSelection] = {
-            var selections: [MistiaShortcutSelection] = [
-                .receiptScan,
+            var selections: [MistiaShortcutSelection] = []
+            selections.append(.receiptScan)
+            selections.append(contentsOf: [
                 .backupRestore,
                 .archivedItems
-            ]
+            ])
             // syncNow only available when signed in AND initial sync is completed
             if sessionStore.isSignedIn && !sessionStore.requiresInitialSync {
                 selections.append(.syncNow)
@@ -1151,6 +1498,7 @@ private enum SettingsRowIconContent: Equatable {
 private enum SettingsRowAction {
     case openAppearance
     case openLanguage
+    case openCurrency
     case openNotifications
     case openBackupRestore
     case openArchivedItems
@@ -1162,6 +1510,7 @@ private enum SettingsRowAction {
 private enum SettingsDestination: String, Identifiable {
     case appearance
     case language
+    case currency
     case notifications
     case backupRestore
     case archivedItems

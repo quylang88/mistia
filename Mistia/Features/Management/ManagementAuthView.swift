@@ -151,7 +151,6 @@ struct ManagementAccountView: View {
     @State private var isConfirmPasswordVisible = false
     @State private var isEmailAuthExpanded = false
     @State private var destination: ManagementProfileDestination?
-    @State private var isOpeningFamily = false
     @FocusState private var focusedField: ManagementAuthInput?
     
     @Environment(\.colorScheme) private var colorScheme
@@ -408,8 +407,8 @@ struct ManagementAccountView: View {
                     accent: .lightPurple,
                     subtitle: nil,
                     value: familyContextStore.family?.name ?? L10n.management.managementauth.none,
-                    isLoading: isOpeningFamily && shouldRefreshFamilyBeforeOpening,
-                    isDisabled: !sessionStore.canPerformRemoteActions || isOpeningFamily
+                    isLoading: false,
+                    isDisabled: !sessionStore.canPerformRemoteActions
                 ) {
                     openFamily()
                 }
@@ -448,21 +447,13 @@ struct ManagementAccountView: View {
     }
 
     private func openFamily() {
+        destination = .family
         guard shouldRefreshFamilyBeforeOpening else {
-            destination = .family
             return
         }
 
-        guard !isOpeningFamily else { return }
-        isOpeningFamily = true
-
         Task { @MainActor in
-            await familyContextStore.refreshLatest(
-                sessionStore: sessionStore,
-                source: .userInitiated
-            )
-            destination = .family
-            isOpeningFamily = false
+            await familyContextStore.refreshFamilyMetadata(sessionStore: sessionStore)
         }
     }
 
@@ -2774,6 +2765,7 @@ private struct ManagementEditProfileView: View {
                 ) { updatedDisplayName in
                     persistProfileChanges(displayName: updatedDisplayName)
                 }
+                .presentationDetents([.medium])
             case .birthday:
                 ManagementEditProfileBirthdayEditorView(
                     accent: accent,
@@ -2782,6 +2774,7 @@ private struct ManagementEditProfileView: View {
                 ) { updatedBirthday in
                     persistProfileChanges(birthday: updatedBirthday)
                 }
+                .presentationDetents([.large])
             }
         }
         .sheet(item: $avatarSource) { source in
@@ -2946,87 +2939,6 @@ private struct ManagementEditProfileRowDivider: View {
     }
 }
 
-private struct ManagementEditProfileModalScaffold<Content: View>: View {
-    @Environment(\.dismiss) private var dismiss
-
-    let title: String
-    let accent: Color
-    let onSave: () -> Void
-    let content: Content
-
-    private var modalBackground: Color {
-        Color(UIColor.systemGroupedBackground)
-    }
-
-    private var toolbarConfirmTint: Color {
-        Color(red: 0.43, green: 0.23, blue: 0.76)
-    }
-
-    private var toolbarConfirmForeground: Color {
-        Color(red: 0.88, green: 0.78, blue: 1.0)
-    }
-
-    init(
-        title: String,
-        accent: Color,
-        onSave: @escaping () -> Void,
-        @ViewBuilder content: () -> Content
-    ) {
-        self.title = title
-        self.accent = accent
-        self.onSave = onSave
-        self.content = content()
-    }
-
-    var body: some View {
-        NavigationStack {
-            ZStack {
-                modalBackground
-                    .ignoresSafeArea()
-
-                ScrollView(.vertical, showsIndicators: false) {
-                    VStack(spacing: 18) {
-                        content
-                    }
-                    .frame(maxWidth: .infinity)
-                    .padding(.horizontal, 18)
-                    .padding(.top, 8)
-                    .padding(.bottom, 40)
-                }
-                .scrollIndicators(.hidden)
-            }
-            .navigationTitle(title)
-            .navigationBarTitleDisplayMode(.inline)
-            .navigationBarBackButtonHidden(true)
-            .toolbar {
-                ToolbarItem(placement: .topBarLeading) {
-                    Button {
-                        dismiss()
-                    } label: {
-                        Image(systemName: "xmark")
-                            .font(.system(size: 16, weight: .semibold))
-                            .foregroundStyle(.secondary)
-                    }
-                }
-
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button {
-                        onSave()
-                        dismiss()
-                    } label: {
-                        Image(systemName: "checkmark")
-                            .font(.system(size: 14, weight: .bold))
-                            .foregroundStyle(toolbarConfirmForeground)
-                            .frame(width: 30, height: 30)
-                    }
-                    .buttonStyle(.glassProminent)
-                    .buttonBorderShape(.circle)
-                    .tint(toolbarConfirmTint)
-                }
-            }
-        }
-    }
-}
 
 private struct ManagementEditProfileNameEditorView: View {
     @Environment(\.colorScheme) private var colorScheme
@@ -3053,9 +2965,9 @@ private struct ManagementEditProfileNameEditorView: View {
     }
 
     var body: some View {
-        ManagementEditProfileModalScaffold(
+        MistiaModalScaffold(
             title: L10n.management.managementauth.fullName,
-            accent: accent
+            accent: MistiaAccent.purple.color
         ) {
             displayName = [
                 familyName.trimmingCharacters(in: .whitespacesAndNewlines),
@@ -3151,9 +3063,9 @@ private struct ManagementEditProfileBirthdayEditorView: View {
     }
 
     var body: some View {
-        ManagementEditProfileModalScaffold(
+        MistiaModalScaffold(
             title: L10n.management.managementauth.birthday,
-            accent: accent
+            accent: MistiaAccent.purple.color
         ) {
             birthday = draftBirthday
             hasBirthday = true
@@ -3171,19 +3083,13 @@ private struct ManagementEditProfileBirthdayEditorView: View {
                     )
                 }
 
-                MistiaGlassCard(cornerRadius: 24, tint: cardTint) {
-                    DatePicker(
-                        "",
-                        selection: $draftBirthday,
-                        in: ...Date(),
-                        displayedComponents: .date
-                    )
-                    .datePickerStyle(.graphical)
-                    .labelsHidden()
-                    .tint(accent)
-                    .environment(\.locale, locale)
-                    .environment(\.calendar, calendar)
-                }
+                MistiaCalendarView(
+                    selection: $draftBirthday,
+                    calendar: calendar,
+                    language: MistiaAppLanguage.current,
+                    selectableRange: .through(...Date()),
+                    accent: MistiaAccent.purple.color
+                )
             }
         }
     }
@@ -4263,7 +4169,9 @@ struct ManagementBackupRestoreView: View {
                 isRestoring = true
 
                 do {
-                    let data = try Data(contentsOf: url)
+                    let data = try await Task.detached(priority: .userInitiated) {
+                        try Data(contentsOf: url)
+                    }.value
                     let summary = try MistiaBackupStore.validateBackup(data)
                     latestSummary = summary
                     latestRestoreResult = try await sessionStore.restoreBackup(

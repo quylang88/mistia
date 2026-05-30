@@ -39,7 +39,7 @@ private enum TransactionSegment: String, CaseIterable, Hashable {
 }
 
 private enum TransactionsNavigationDestination: String, Identifiable {
-    case profile
+    case aiBill
 
     var id: String { rawValue }
 }
@@ -58,16 +58,28 @@ private struct TransactionsInfoAlert: Identifiable {
     let message: String
 }
 
+private struct TransactionsFamilyOwnerConflictAlert: Identifiable {
+    let entity: MistiaSyncEntity
+    let recordID: UUID
+
+    var id: String {
+        FamilyOwnerPushConflict.key(entity: entity, recordID: recordID)
+    }
+}
+
 private enum TransactionsAlertPresentation: Identifiable {
     case info(TransactionsInfoAlert)
     case permission(TransactionsPermissionPrompt)
+    case familyOwnerConflict(TransactionsFamilyOwnerConflictAlert)
 
-    var id: UUID {
+    var id: String {
         switch self {
         case .info(let alert):
-            alert.id
+            return alert.id.uuidString
         case .permission(let prompt):
-            prompt.id
+            return prompt.id.uuidString
+        case .familyOwnerConflict(let alert):
+            return alert.id
         }
     }
 
@@ -77,6 +89,8 @@ private enum TransactionsAlertPresentation: Identifiable {
             alert.title
         case .permission(let prompt):
             prompt.title
+        case .familyOwnerConflict:
+            L10n.shared.sync.familyOwnerPushConflict.alertTitle
         }
     }
 
@@ -86,6 +100,8 @@ private enum TransactionsAlertPresentation: Identifiable {
             alert.message
         case .permission(let prompt):
             prompt.message
+        case .familyOwnerConflict:
+            L10n.shared.sync.familyOwnerPushConflict.alertMessage
         }
     }
 }
@@ -93,6 +109,21 @@ private enum TransactionsAlertPresentation: Identifiable {
 private enum TransactionsListPaging {
     static let initialLimit = 60
     static let increment = 40
+}
+
+private func debtIntentTint(_ intent: TransactionDebtIntent?) -> Color {
+    switch intent {
+    case .lend:
+        MistiaAccent.amber.color
+    case .collect:
+        MistiaAccent.indigo.color
+    case .borrow:
+        MistiaAccent.sky.color
+    case .repay:
+        MistiaAccent.coral.color
+    case nil:
+        MistiaAccent.slate.color
+    }
 }
 
 private struct TransactionsListSnapshot {
@@ -111,9 +142,41 @@ private struct TransactionsListSnapshot {
     }
 }
 
+private struct TransactionsListSnapshotCache {
+    let key: TransactionsListSnapshotCacheKey
+    let snapshot: TransactionsListSnapshot
+}
+
+private struct TransactionsListSnapshotCacheKey: Hashable {
+    let selectedSegmentRawValue: String?
+    let isAdjustmentOnly: Bool
+    let timeScopeRawValue: String
+    let walletID: UUID?
+    let categoryID: UUID?
+    let transferSubtypeRawValue: String?
+    let statusScopeRawValue: String
+    let minAmountMinor: Int64?
+    let maxAmountMinor: Int64?
+    let searchText: String
+    let visibleTransactionLimit: Int
+    let calendarIdentifier: String
+    let calendarTimeZoneIdentifier: String
+    let activeScope: FamilyContext.Scope
+    let selectedSubjectUserID: UUID?
+    let currentUserID: UUID?
+    let activeLocalProfileUserID: UUID?
+    let signedInUserID: UUID?
+    let familyID: UUID?
+    let familyAccessSignature: Int
+    let transactionSignature: MistiaCollectionChangeSignature
+    let ownershipSignature: MistiaCollectionChangeSignature
+    let auditSignature: MistiaCollectionChangeSignature
+}
+
 struct TransactionsView: View {
     @Environment(\.calendar) private var calendar
     @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.locale) private var locale
     @Environment(\.modelContext) private var modelContext
     @Environment(SessionStore.self) private var sessionStore
     @Environment(FamilyContextStore.self) private var familyContextStore
@@ -133,12 +196,17 @@ struct TransactionsView: View {
     @State private var debouncedSearchText = ""
     @State private var searchDebounceTask: Task<Void, Never>?
     @State private var isSearchPresented = false
+    @State private var visibleSearchResultLimit = TransactionsListPaging.initialLimit
     @State private var shareItem: TransactionShareItem?
     @State private var exportErrorMessage: String?
     @State private var destination: TransactionsNavigationDestination?
+    @State private var debtSettlementTarget: DebtSettlementSheetTarget?
     @State private var permissionPrompt: TransactionsPermissionPrompt?
     @State private var infoAlert: TransactionsInfoAlert?
+    @State private var familyOwnerConflictAlert: TransactionsFamilyOwnerConflictAlert?
+    @State private var memberViewingExitPrompt: FamilyMemberViewingExitPrompt?
     @State private var visibleTransactionLimit = TransactionsListPaging.initialLimit
+    @State private var listSnapshotCache: TransactionsListSnapshotCache?
 
     private var activeTransactions: [LedgerTransaction] {
         visibleTransactions
@@ -163,6 +231,9 @@ struct TransactionsView: View {
     }
 
     private var activeAlert: TransactionsAlertPresentation? {
+        if let familyOwnerConflictAlert {
+            return .familyOwnerConflict(familyOwnerConflictAlert)
+        }
         if let permissionPrompt {
             return .permission(permissionPrompt)
         }
@@ -265,7 +336,11 @@ struct TransactionsView: View {
             visibleRecordCount: page.totalCount,
             displayedRecordCount: displayedRecords.count,
             openDebtPositions: openDebtPositions,
-            sections: TransactionLogic.sections(from: displayedRecords, calendar: calendar),
+            sections: TransactionLogic.sections(
+                from: displayedRecords,
+                assumesSortedByRecency: true,
+                calendar: calendar
+            ),
             transactionsByID: Dictionary(
                 activeTransactions
                     .filter { displayedRecordIDs.contains($0.id) }
@@ -276,6 +351,134 @@ struct TransactionsView: View {
             walletOwnerMap: walletOwnerMap,
             transactionOwnerMap: transactionOwnerMap
         )
+    }
+
+    private var transactionSearchSnapshot: TransactionsListSnapshot? {
+        guard let filters = TransactionSearchLogic.filters(for: debouncedSearchText) else {
+            return nil
+        }
+
+        let activeTransactions = self.activeTransactions
+        let records = activeTransactions.map(\.snapshot)
+        let page = TransactionLogic.visibleRecordsPage(
+            from: records,
+            selectedKind: nil,
+            filters: filters,
+            limit: visibleSearchResultLimit,
+            assumesSortedByRecency: true,
+            calendar: calendar
+        )
+        let displayedRecords = page.displayedRecords
+        let displayedRecordIDs = Set(displayedRecords.map(\.id))
+
+        return TransactionsListSnapshot(
+            activeTransactionCount: activeTransactions.count,
+            visibleRecordCount: page.totalCount,
+            displayedRecordCount: displayedRecords.count,
+            openDebtPositions: [],
+            sections: TransactionLogic.sections(
+                from: displayedRecords,
+                assumesSortedByRecency: true,
+                calendar: calendar
+            ),
+            transactionsByID: Dictionary(
+                activeTransactions
+                    .filter { displayedRecordIDs.contains($0.id) }
+                    .map { ($0.id, $0) },
+                uniquingKeysWith: { lhs, rhs in lhs.updatedAt >= rhs.updatedAt ? lhs : rhs }
+            ),
+            transactionAuditMap: transactionAuditMap,
+            walletOwnerMap: walletOwnerMap,
+            transactionOwnerMap: transactionOwnerMap
+        )
+    }
+
+    private func cachedTransactionListSnapshot(
+        for key: TransactionsListSnapshotCacheKey
+    ) -> TransactionsListSnapshot {
+        if let listSnapshotCache, listSnapshotCache.key == key {
+            return listSnapshotCache.snapshot
+        }
+
+        return transactionListSnapshot
+    }
+
+    private func refreshTransactionListSnapshotCache(
+        for key: TransactionsListSnapshotCacheKey,
+        snapshot: TransactionsListSnapshot
+    ) {
+        listSnapshotCache = TransactionsListSnapshotCache(
+            key: key,
+            snapshot: snapshot
+        )
+    }
+
+    private var transactionListSnapshotCacheKey: TransactionsListSnapshotCacheKey {
+        let effectiveFilters = effectiveFilters
+        return TransactionsListSnapshotCacheKey(
+            selectedSegmentRawValue: selectedSegment?.rawValue,
+            isAdjustmentOnly: effectiveFilters.isAdjustmentOnly,
+            timeScopeRawValue: effectiveFilters.timeScope.rawValue,
+            walletID: effectiveFilters.walletID,
+            categoryID: effectiveFilters.categoryID,
+            transferSubtypeRawValue: effectiveFilters.transferSubtype?.rawValue,
+            statusScopeRawValue: effectiveFilters.statusScope.rawValue,
+            minAmountMinor: effectiveFilters.minAmountMinor,
+            maxAmountMinor: effectiveFilters.maxAmountMinor,
+            searchText: effectiveFilters.searchText,
+            visibleTransactionLimit: visibleTransactionLimit,
+            calendarIdentifier: String(describing: calendar.identifier),
+            calendarTimeZoneIdentifier: calendar.timeZone.identifier,
+            activeScope: familyContextStore.activeContext.scope,
+            selectedSubjectUserID: familyContextStore.selectedSubjectUserID,
+            currentUserID: familyContextStore.currentUserID,
+            activeLocalProfileUserID: sessionStore.activeLocalProfileUserID,
+            signedInUserID: sessionStore.signedInUserID,
+            familyID: familyContextStore.family?.id,
+            familyAccessSignature: familyAccessSignature,
+            transactionSignature: MistiaCollectionChangeSignature.make(
+                storedTransactions,
+                updatedAt: \.updatedAt,
+                deletedAt: \.deletedAt,
+                isArchived: \.isArchived,
+                remoteVersion: \.remoteVersion
+            ),
+            ownershipSignature: MistiaCollectionChangeSignature.make(
+                ownershipScopes,
+                updatedAt: \.updatedAt,
+                deletedAt: { _ in nil }
+            ),
+            auditSignature: MistiaCollectionChangeSignature.make(
+                transactionAuditRecords,
+                updatedAt: \.updatedAt,
+                deletedAt: { _ in nil }
+            )
+        )
+    }
+
+    private var familyAccessSignature: Int {
+        var hasher = Hasher()
+        hasher.combine(familyContextStore.currentMembership?.id)
+        hasher.combine(familyContextStore.currentMembership?.updatedAt.timeIntervalSince1970)
+        hasher.combine(familyContextStore.members.count)
+        for member in familyContextStore.members {
+            hasher.combine(member.membershipID)
+            hasher.combine(member.userID)
+            hasher.combine(member.role.rawValue)
+            hasher.combine(member.hasSyncedCloudData)
+        }
+        hasher.combine(familyContextStore.permissionGrants.count)
+        for grant in familyContextStore.permissionGrants {
+            hasher.combine(grant.id)
+            hasher.combine(grant.granteeUserID)
+            hasher.combine(grant.ownerUserID)
+            hasher.combine(grant.resourceTypeRawValue)
+            hasher.combine(grant.resourceID)
+            hasher.combine(grant.permissionScopeRawValue)
+            hasher.combine(grant.updatedAt.timeIntervalSince1970)
+            hasher.combine(grant.revokedAt?.timeIntervalSince1970)
+        }
+        return hasher.finalize()
     }
 
     private var walletOwnerMap: [UUID: UUID] {
@@ -392,7 +595,7 @@ struct TransactionsView: View {
 
     private var effectiveFilters: TransactionFilterState {
         var effective = filterState
-        effective.searchText = debouncedSearchText
+        effective.searchText = ""
         effective.isAdjustmentOnly = selectedSegment == .adjustment
         return effective
     }
@@ -444,38 +647,71 @@ struct TransactionsView: View {
             : MistiaAccent.purple.color
     }
 
+    private var isSearchSceneVisible: Bool {
+        isSearchPresented || !searchText.isEmpty || !debouncedSearchText.isEmpty
+    }
+
     var body: some View {
-        let listSnapshot = transactionListSnapshot
+        let listSnapshotKey = transactionListSnapshotCacheKey
+        let listSnapshot = cachedTransactionListSnapshot(for: listSnapshotKey)
+        let searchSnapshot = transactionSearchSnapshot
+        let memberToolbar = familyContextStore.memberViewingToolbarPresentation
 
         NavigationStack {
-            MistiaPinnedTopBarScaffold(
-                tone: .standard,
-                title: L10n.transactions.transactions.transactions,
-                embedsInNavigationStack: false,
-                leadingInitials: sessionStore.summary?.initials ?? "MI",
-                leadingAvatarURL: sessionStore.summary?.avatarURL,
-                trailingSystemImage: nil,
-                onLeadingTap: { destination = .profile },
-                contentSpacing: 18,
-                contentBottomPadding: 150,
-                titleDisplayMode: .large,
-                pinnedHeader: {
-                    VStack(alignment: .leading, spacing: 8) {
-                        FamilyContextChipBar()
-                            .padding(.horizontal, 18)
-                        unifiedFilterRow
-                    }
-                        .zIndex(99)
-                },
-                trailingAccessory: {
-                    transactionsStatementMenuButton
+            ZStack {
+                MistiaPinnedTopBarScaffold(
+                    tone: .standard,
+                    title: L10n.transactions.transactions.transactions,
+                    embedsInNavigationStack: false,
+                    showsLeadingAvatar: memberToolbar != nil,
+                    leadingInitials: memberToolbar?.initials ?? "MI",
+                    leadingAvatarURL: memberToolbar != nil ? familyContextStore.viewedMember?.avatarURL : nil,
+                    leadingAccessibilityLabel: memberToolbar?.accessibilityLabel,
+                    leadingAvatarAttentionPulse: memberToolbar != nil,
+                    leadingSystemImage: memberToolbar == nil ? "doc.viewfinder" : nil,
+                    trailingSystemImage: nil,
+                    onLeadingTap: {
+                        if let memberToolbar {
+                            memberViewingExitPrompt = FamilyMemberViewingExitPrompt(presentation: memberToolbar)
+                        } else {
+                            destination = .aiBill
+                        }
+                    },
+                    contentSpacing: 18,
+                    contentBottomPadding: 150,
+                    titleDisplayMode: .large,
+                    headerBehavior: .scrollsThenPins,
+                    pinnedHeader: {
+                        VStack(alignment: .leading, spacing: 8) {
+                            unifiedFilterRow
+                        }
+                            .zIndex(99)
+                    },
+                    trailingAccessory: {
+                        transactionsStatementMenuButton
                         .padding(.trailing, -12)
+                    }
+                ) {
+                    if !listSnapshot.openDebtPositions.isEmpty {
+                        outstandingDebtSection(listSnapshot.openDebtPositions)
+                    }
+                    transactionsContent(listSnapshot)
                 }
-            ) {
-                if !listSnapshot.openDebtPositions.isEmpty {
-                    outstandingDebtSection(listSnapshot.openDebtPositions)
+
+                if isSearchSceneVisible {
+                    TransactionsSearchScene(
+                        searchText: searchText,
+                        snapshot: searchSnapshot,
+                        transactionsByID: searchSnapshot?.transactionsByID ?? [:],
+                        transactionAuditMap: transactionAuditMap,
+                        walletOwnerMap: walletOwnerMap,
+                        transactionOwnerMap: transactionOwnerMap,
+                        onSelect: openTransactionEditorIfAllowed,
+                        onLoadMore: loadMoreSearchResultsIfNeeded
+                    )
+                    .transition(.opacity)
+                    .zIndex(10)
                 }
-                transactionsContent(listSnapshot)
             }
             .searchable(
                 text: $searchText,
@@ -483,14 +719,17 @@ struct TransactionsView: View {
                 prompt: L10n.transactions.transactions.searchTransactionName
             )
             .searchToolbarBehavior(.minimize)
-            .searchPresentationToolbarBehavior(.avoidHidingContent)
             .navigationDestination(item: $destination) { route in
                 switch route {
-                case .profile:
-                    ManagementAccountView()
+                case .aiBill:
+                    AIBillAnalysisView()
                 }
             }
         }
+        .familyMemberViewingExitAlert(
+            prompt: $memberViewingExitPrompt,
+            familyContextStore: familyContextStore
+        )
         .sheet(item: $shareItem) { item in
             TransactionShareSheet(url: item.url)
         }
@@ -499,12 +738,18 @@ struct TransactionsView: View {
                 .presentationDetents(target.quickCapture ? [.medium, .large] : [.large])
                 .presentationDragIndicator(.hidden)
         }
+        .sheet(item: $debtSettlementTarget) { target in
+            DebtSettlementSheet(target: target)
+                .presentationDetents([.large])
+                .presentationDragIndicator(.hidden)
+        }
         .alert(
             activeAlert?.title ?? "",
             isPresented: Binding(
                 get: { activeAlert != nil },
                 set: { isPresented in
                     if !isPresented {
+                        familyOwnerConflictAlert = nil
                         permissionPrompt = nil
                         infoAlert = nil
                     }
@@ -515,6 +760,18 @@ struct TransactionsView: View {
             switch alert {
             case .info:
                 Button(L10n.common.ok) {}
+            case .familyOwnerConflict(let conflict):
+                Button(L10n.common.ok) {
+                    Task { @MainActor in
+                        await sessionStore.discardFamilyOwnerPushConflictAndRefresh(
+                            entity: conflict.entity,
+                            recordID: conflict.recordID,
+                            familyContextStore: familyContextStore
+                        )
+                        familyOwnerConflictAlert = nil
+                        listSnapshotCache = nil
+                    }
+                }
             case .permission(let prompt):
                 Button(prompt.actionTitle) {
                     prompt.action()
@@ -550,12 +807,20 @@ struct TransactionsView: View {
         .onChange(of: searchText) { _, newValue in
             scheduleSearchDebounce(newValue)
         }
+        .onChange(of: isSearchPresented) { _, isPresented in
+            if !isPresented {
+                closeTransactionSearch()
+            }
+        }
         .onChange(of: familyContextStore.selectedSubjectUserID) { _, _ in
             resetTransactionPage()
         }
         .onDisappear {
             searchDebounceTask?.cancel()
             searchDebounceTask = nil
+        }
+        .task(id: listSnapshotKey) {
+            refreshTransactionListSnapshotCache(for: listSnapshotKey, snapshot: listSnapshot)
         }
     }
 
@@ -792,7 +1057,9 @@ struct TransactionsView: View {
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 10) {
                     ForEach(positions) { position in
-                        OutstandingDebtChip(position: position)
+                        OutstandingDebtChip(position: position) {
+                            debtSettlementTarget = DebtSettlementSheetTarget(position: position)
+                        }
                     }
                 }
                 .padding(.vertical, 2)
@@ -839,10 +1106,23 @@ struct TransactionsView: View {
         visibleTransactionLimit = TransactionsListPaging.initialLimit
     }
 
+    private func resetSearchResultsPage() {
+        guard visibleSearchResultLimit != TransactionsListPaging.initialLimit else { return }
+        visibleSearchResultLimit = TransactionsListPaging.initialLimit
+    }
+
     private func loadMoreTransactionsIfNeeded(totalVisibleCount: Int) {
         guard visibleTransactionLimit < totalVisibleCount else { return }
         visibleTransactionLimit = min(
             visibleTransactionLimit + TransactionsListPaging.increment,
+            totalVisibleCount
+        )
+    }
+
+    private func loadMoreSearchResultsIfNeeded(totalVisibleCount: Int) {
+        guard visibleSearchResultLimit < totalVisibleCount else { return }
+        visibleSearchResultLimit = min(
+            visibleSearchResultLimit + TransactionsListPaging.increment,
             totalVisibleCount
         )
     }
@@ -852,7 +1132,7 @@ struct TransactionsView: View {
 
         if value.isEmpty {
             debouncedSearchText = ""
-            resetTransactionPage()
+            resetSearchResultsPage()
             return
         }
 
@@ -860,11 +1140,33 @@ struct TransactionsView: View {
             try? await Task.sleep(for: .milliseconds(220))
             guard !Task.isCancelled else { return }
             debouncedSearchText = value
-            resetTransactionPage()
+            resetSearchResultsPage()
         }
     }
 
+    private func closeTransactionSearch() {
+        searchDebounceTask?.cancel()
+        searchDebounceTask = nil
+        searchText = ""
+        debouncedSearchText = ""
+        resetSearchResultsPage()
+    }
+
     private func openTransactionEditorIfAllowed(_ transaction: LedgerTransaction) {
+        guard !sessionStore.hasFamilyOwnerPushConflict(entity: .transaction, recordID: transaction.id) else {
+            familyOwnerConflictAlert = TransactionsFamilyOwnerConflictAlert(
+                entity: .transaction,
+                recordID: transaction.id
+            )
+            return
+        }
+
+        if transaction.primaryKind == .transfer,
+           transaction.transferSubtype == .familyTransfer {
+            editorTarget = TransactionEditorTarget(transaction: transaction)
+            return
+        }
+
         guard let ownerUserID = transactionOwnerUserID(for: transaction) else {
             editorTarget = TransactionEditorTarget(transaction: transaction)
             return
@@ -943,6 +1245,84 @@ struct TransactionsView: View {
                         ? L10n.transactions.transactions.thePermissionRequestWasSentToThe
                         : (familyContextStore.lastErrorMessage ?? L10n.transactions.transactions.couldnTSendTheRequestRightNow)
                 )
+            }
+        }
+    }
+}
+
+private struct TransactionsSearchScene: View {
+    let searchText: String
+    let snapshot: TransactionsListSnapshot?
+    let transactionsByID: [UUID: LedgerTransaction]
+    let transactionAuditMap: [UUID: TransactionAuditRecord]
+    let walletOwnerMap: [UUID: UUID]
+    let transactionOwnerMap: [UUID: UUID]
+    let onSelect: (LedgerTransaction) -> Void
+    let onLoadMore: (Int) -> Void
+
+    private var backgroundColor: Color {
+        Color(UIColor.systemGroupedBackground)
+    }
+
+    private var hasSearchQuery: Bool {
+        TransactionSearchLogic.filters(for: searchText) != nil
+    }
+
+    var body: some View {
+        ZStack {
+            backgroundColor
+                .ignoresSafeArea()
+
+            ScrollView(.vertical, showsIndicators: false) {
+                LazyVStack(spacing: 18) {
+                    searchContent
+                }
+                .padding(.horizontal, 18)
+                .padding(.top, 24)
+                .padding(.bottom, 150)
+                .frame(maxWidth: .infinity)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var searchContent: some View {
+        if !hasSearchQuery {
+            MistiaEmptyStateContent(
+                title: L10n.transactions.transactions.searchEmptyTitle,
+                message: L10n.transactions.transactions.searchEmptyMessage,
+                buttonTitle: nil,
+                symbols: ["magnifyingglass", "text.cursor", "list.bullet.rectangle"]
+            )
+            .padding(.top, 44)
+        } else if let snapshot {
+            if snapshot.sections.isEmpty {
+                MistiaEmptyStateContent(
+                    title: L10n.transactions.transactions.noMatchingResults,
+                    message: L10n.transactions.transactions.searchNoResultsMessage,
+                    buttonTitle: nil,
+                    symbols: ["magnifyingglass", "xmark.circle.fill", "list.bullet.rectangle"]
+                )
+                .padding(.top, 44)
+            } else {
+                ForEach(snapshot.sections) { section in
+                    TransactionSectionCard(
+                        section: section,
+                        transactionsByID: transactionsByID,
+                        transactionAuditMap: transactionAuditMap,
+                        walletOwnerMap: walletOwnerMap,
+                        transactionOwnerMap: transactionOwnerMap
+                    ) { transaction in
+                        onSelect(transaction)
+                    }
+                }
+
+                if snapshot.hasMoreRows {
+                    TransactionListPagingSentinel()
+                        .onAppear {
+                            onLoadMore(snapshot.visibleRecordCount)
+                        }
+                }
             }
         }
     }
@@ -1030,6 +1410,7 @@ private struct TransactionSummaryMetric: View {
 private struct TransactionSectionCard: View {
     @Environment(\.colorScheme) private var colorScheme
     @Environment(FamilyContextStore.self) private var familyContextStore
+    @Environment(SessionStore.self) private var sessionStore
     let section: TransactionSectionSnapshot
     let transactionsByID: [UUID: LedgerTransaction]
     let transactionAuditMap: [UUID: TransactionAuditRecord]
@@ -1075,7 +1456,11 @@ private struct TransactionSectionCard: View {
                                     auditRecord: transactionAuditMap[transaction.id],
                                     walletOwnerMap: walletOwnerMap,
                                     transactionOwnerMap: transactionOwnerMap,
-                                    familyContextStore: familyContextStore
+                                    familyContextStore: familyContextStore,
+                                    hasFamilyOwnerConflict: sessionStore.hasFamilyOwnerPushConflict(
+                                        entity: .transaction,
+                                        recordID: transaction.id
+                                    )
                                 )
                                     .padding(.horizontal, 14)
                                     .padding(.vertical, 12)
@@ -1096,8 +1481,11 @@ private struct TransactionSectionCard: View {
 }
 
 private struct TransactionRow: View {
-    @Environment(\.colorScheme) private var 
-    colorScheme: ColorScheme
+    @Environment(\.colorScheme) private var colorScheme: ColorScheme
+    @AppStorage(MistiaCurrencySettings.StorageKey.primaryCurrencyCode) private var primaryCurrencyCode = "JPY"
+    @AppStorage(MistiaCurrencySettings.StorageKey.rateMode) private var currencyRateMode = MistiaCurrencyRateMode.automatic.rawValue
+    @AppStorage(MistiaCurrencySettings.StorageKey.manualJPYToVNDRate) private var manualJPYToVNDRate = ""
+    @AppStorage(MistiaCurrencySettings.StorageKey.cachedRatesData) private var cachedCurrencyRatesData = Data()
 
     let record: TransactionRecordSnapshot
     let transaction: LedgerTransaction
@@ -1105,6 +1493,7 @@ private struct TransactionRow: View {
     let walletOwnerMap: [UUID: UUID]
     let transactionOwnerMap: [UUID: UUID]
     let familyContextStore: FamilyContextStore
+    let hasFamilyOwnerConflict: Bool
 
     private var icon: String {
         switch record.primaryKind {
@@ -1114,6 +1503,8 @@ private struct TransactionRow: View {
             switch record.transferSubtype {
             case .internalTransfer:
                 TransactionTransferSubtype.internalTransfer.financeIconToken
+            case .familyTransfer:
+                TransactionTransferSubtype.familyTransfer.financeIconToken
             case .debt:
                 TransactionTransferSubtype.debt.financeIconToken
             case nil:
@@ -1123,7 +1514,10 @@ private struct TransactionRow: View {
     }
 
     private var iconColor: Color {
-        MistiaAccent.purple.color
+        if record.primaryKind == .transfer, record.transferSubtype == .debt {
+            return debtIntentTint(record.debtIntent)
+        }
+        return MistiaAccent.purple.color
     }
 
     private var title: String {
@@ -1142,6 +1536,8 @@ private struct TransactionRow: View {
             switch record.transferSubtype {
             case .internalTransfer:
                 return L10n.transactions.transactions.internalTransfer
+            case .familyTransfer:
+                return L10n.shared.corelogic.financeenums.family
             case .debt:
                 return record.debtIntent?.title ?? L10n.transactions.transactions.debt
             case nil:
@@ -1166,6 +1562,15 @@ private struct TransactionRow: View {
                 let source = transaction.sourceWallet?.name ?? L10n.transactions.transactions.source
                 let destination = transaction.destinationWallet?.name ?? L10n.transactions.transactions.destination
                 return "\(source) → \(destination)"
+            case .familyTransfer:
+                if let note = record.note?.nilIfBlank {
+                    return note
+                }
+                let source = transaction.sourceWallet?.name ?? L10n.transactions.transactions.source
+                if let destination = transaction.destinationWallet?.name {
+                    return "\(source) → \(destination)"
+                }
+                return source
             case .debt:
                 let wallet = transaction.sourceWallet?.name ?? L10n.transactions.transactions.noWalletSelected
                 let person = transaction.counterpartyName ?? L10n.transactions.transactions.unknownName
@@ -1211,12 +1616,24 @@ private struct TransactionRow: View {
         case .income:
             return MistiaAccent.income.color
         case .transfer:
+            if record.transferSubtype == .debt {
+                return debtIntentTint(record.debtIntent)
+            }
+            if record.transferSubtype == .familyTransfer {
+                let cashflow = TransactionLogic.cashflowAmount(for: record)
+                if cashflow > 0 {
+                    return MistiaAccent.income.color
+                }
+                if cashflow < 0 {
+                    return MistiaAccent.expense.color
+                }
+            }
             return colorScheme == .dark ? .white : MistiaAccent.transfer.color
         }
     }
 
     private var displayAmount: String {
-        let raw = record.amountMinor.formattedCurrency(code: "JPY")
+        let raw = displayAmountMinor.formattedCurrency(code: displayCurrencyCode)
 
         if TransactionLogic.isCreditCardPayment(record) {
             return raw
@@ -1239,6 +1656,65 @@ private struct TransactionRow: View {
         }
     }
 
+    private var displayAmountMinor: Int64 {
+        if record.primaryKind == .transfer,
+           record.transferSubtype == .internalTransfer,
+           TransactionLogic.cashflowAmount(for: record) > 0 {
+            return record.destinationAmountMinor ?? record.amountMinor
+        }
+        return record.amountMinor
+    }
+
+    private var displayCurrencyCode: String {
+        if record.primaryKind == .transfer,
+           record.transferSubtype == .internalTransfer,
+           TransactionLogic.cashflowAmount(for: record) > 0 {
+            return record.destinationCurrencyCode
+                ?? transaction.destinationWallet?.currencyCode
+                ?? transaction.sourceWallet?.currencyCode
+                ?? "JPY"
+        }
+
+        return record.sourceCurrencyCode
+            ?? transaction.sourceWallet?.currencyCode
+            ?? transaction.destinationWallet?.currencyCode
+            ?? "JPY"
+    }
+
+    private var approximatePrimaryAmountText: String? {
+        MistiaCurrencyLogic.approximatePrimaryAmountText(
+            amountMinor: displayAmountMinor,
+            sourceCurrencyCode: displayCurrencyCode,
+            primaryCurrencyCode: primaryCurrencyCode,
+            rates: exchangeRates
+        )
+    }
+
+    private var transferDestinationAmountText: String? {
+        guard let destinationDisplay = TransactionLogic.crossCurrencyTransferDestinationDisplay(for: record) else {
+            return nil
+        }
+
+        let amount = destinationDisplay.amountMinor.formattedCurrency(code: destinationDisplay.currencyCode)
+        switch destinationDisplay.style {
+        case .exactDestination:
+            return "-> " + amount
+        case .approximateDestination:
+            return "~" + amount
+        }
+    }
+
+    private var secondaryAmountText: String? {
+        transferDestinationAmountText ?? approximatePrimaryAmountText
+    }
+
+    private var exchangeRates: [MistiaExchangeRate] {
+        _ = currencyRateMode
+        _ = manualJPYToVNDRate
+        _ = cachedCurrencyRatesData
+        return MistiaCurrencySettings.rates()
+    }
+
     var body: some View {
         HStack(spacing: 12) {
             TransactionIconTile(icon: icon, tint: iconColor)
@@ -1254,7 +1730,14 @@ private struct TransactionRow: View {
                        subtype == .debt {
                         TransactionMiniBadge(
                             title: subtype.title,
-                            tint: Color(red: 0.29, green: 0.56, blue: 0.96)
+                            tint: debtIntentTint(record.debtIntent)
+                        )
+                    }
+
+                    if hasFamilyOwnerConflict {
+                        TransactionMiniBadge(
+                            title: L10n.shared.sync.familyOwnerPushConflict.badge,
+                            tint: MistiaAccent.amber.color
                         )
                     }
                 }
@@ -1274,11 +1757,20 @@ private struct TransactionRow: View {
 
             Spacer(minLength: 8)
 
-            Text(displayAmount)
-                .font(.system(size: 16, weight: .bold, design: .rounded))
-                .foregroundStyle(cashflowColor)
-                .lineLimit(1)
-                .minimumScaleFactor(0.74)
+            VStack(alignment: .trailing, spacing: 2) {
+                Text(displayAmount)
+                    .font(.system(size: 16, weight: .bold, design: .rounded))
+                    .foregroundStyle(cashflowColor)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.74)
+
+                if let secondaryAmountText {
+                    Text(secondaryAmountText)
+                        .font(.system(size: 11.5, weight: .semibold, design: .rounded))
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                }
+            }
         }
     }
 
@@ -1354,15 +1846,14 @@ private struct TransactionToolbarChip: View {
 
 private struct OutstandingDebtChip: View {
     let position: CounterpartyDebtSnapshot
+    let action: () -> Void
 
     private var tint: Color {
-        position.isReceivable
-            ? MistiaAccent.income.color
-            : MistiaAccent.expense.color
+        debtIntentTint(position.isReceivable ? .collect : .repay)
     }
 
     var body: some View {
-        MistiaBlockCard(cornerRadius: 22, tint: tint.opacity(0.14), padding: 14) {
+        Button(action: action) {
             VStack(alignment: .leading, spacing: 6) {
                 Text(position.displayName)
                     .font(.system(size: 15, weight: .bold, design: .rounded))
@@ -1376,11 +1867,257 @@ private struct OutstandingDebtChip: View {
                     .font(.system(size: 11.5, weight: .semibold, design: .rounded))
                     .foregroundStyle(.secondary)
 
-                Text(abs(position.netMinor).formattedCurrency(code: "JPY"))
+                Text(abs(position.netMinor).formattedCurrency(code: position.currencyCode))
                     .font(.system(size: 15, weight: .bold, design: .rounded))
                     .foregroundStyle(tint)
             }
+            .padding(14)
             .frame(width: 150, alignment: .leading)
+            .background {
+                MistiaBlockCardBackground(tint: tint.opacity(0.14), cornerRadius: 22)
+            }
+        }
+        .buttonStyle(MistiaPressableButtonStyle(cornerRadius: 22, tint: tint))
+    }
+}
+
+private struct DebtSettlementSheetTarget: Identifiable {
+    let id: String
+    let position: CounterpartyDebtSnapshot
+
+    init(position: CounterpartyDebtSnapshot) {
+        self.position = position
+        self.id = position.id
+    }
+
+    var intent: TransactionDebtIntent {
+        position.isReceivable ? .collect : .repay
+    }
+
+    var amountMinor: Int64 {
+        abs(position.netMinor)
+    }
+}
+
+private struct DebtSettlementSheet: View {
+    @Environment(\.dismiss) private var dismiss
+    @Environment(\.modelContext) private var modelContext
+    @Environment(SessionStore.self) private var sessionStore
+    @Environment(FamilyContextStore.self) private var familyContextStore
+
+    @Query
+    private var wallets: [LedgerWallet]
+    @Query private var ownershipScopes: [OwnedRecordScope]
+
+    let target: DebtSettlementSheetTarget
+
+    @State private var amountText = ""
+    @State private var selectedWalletID: UUID?
+    @State private var alertMessage: String?
+
+    private var tint: Color {
+        debtIntentTint(target.intent)
+    }
+
+    private var walletPickerAccess: MistiaWalletPickerAccess {
+        MistiaWalletPickerAccess(
+            sessionStore: sessionStore,
+            familyContextStore: familyContextStore,
+            ownershipScopes: ownershipScopes
+        )
+    }
+
+    private var activeOwnerUserID: UUID? {
+        walletPickerAccess.walletOwnerUserID(for: target.position.preferredWalletID)
+            ?? familyContextStore.selectedSubjectUserID
+            ?? walletPickerAccess.currentSelfUserID
+    }
+
+    private var availableWallets: [LedgerWallet] {
+        walletPickerAccess.availableWallets(
+            from: wallets,
+            preferredWalletIDs: Set([target.position.preferredWalletID, selectedWalletID].compactMap { $0 }),
+            targetOwnerUserID: activeOwnerUserID,
+            excludesCreditCards: true
+        )
+        .filter { MistiaCurrencyLogic.normalizedCode($0.currencyCode) == target.position.currencyCode }
+    }
+
+    private var selectedWallet: LedgerWallet? {
+        availableWallets.first(where: { $0.id == selectedWalletID })
+    }
+
+    private var parsedAmountMinor: Int64 {
+        amountText.currencyInputToMinorUnits(currencyCode: target.position.currencyCode)
+    }
+
+    private var isSaveDisabled: Bool {
+        selectedWallet == nil || parsedAmountMinor <= 0 || parsedAmountMinor > target.amountMinor
+    }
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section {
+                    HStack(spacing: 14) {
+                        MistiaFinanceIconView(
+                            icon: target.intent.financeIconToken,
+                            fallbackColor: tint,
+                            size: 44
+                        )
+
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(target.position.displayName)
+                                .font(.system(size: 17, weight: .semibold, design: .rounded))
+                            Text(target.amountMinor.formattedCurrency(code: target.position.currencyCode))
+                                .font(.system(size: 15, weight: .bold, design: .rounded))
+                                .foregroundStyle(tint)
+                            Text(target.position.isReceivable ? L10n.transactions.transactions.theyOweYou : L10n.transactions.transactions.youOwe)
+                                .font(.system(size: 13, weight: .medium, design: .rounded))
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                    .padding(.vertical, 4)
+                }
+
+                Section {
+                    TextField(
+                        "",
+                        text: $amountText,
+                        prompt: Text(L10n.planning.duepayment.enterAmount)
+                            .foregroundStyle(.tertiary)
+                    )
+                    .keyboardType(.numberPad)
+                    .font(.system(size: 17, weight: .semibold, design: .rounded))
+                    .frame(minHeight: 44)
+
+                    Picker(L10n.planning.duepayment.paymentWallet, selection: $selectedWalletID) {
+                        Text(L10n.planning.duepayment.chooseWallet).tag(Optional<UUID>.none)
+                        ForEach(availableWallets) { wallet in
+                            Text(walletPickerAccess.title(for: wallet)).tag(Optional(wallet.id))
+                        }
+                    }
+                    .pickerStyle(.menu)
+                }
+
+                Section {
+                    DuePaymentPrimaryActionButton(
+                        title: L10n.common.save,
+                        isDisabled: isSaveDisabled
+                    ) {
+                        save()
+                    }
+                    .padding(.horizontal, 16)
+                    .padding(.top, 8)
+                    .padding(.bottom, 4)
+                    .listRowInsets(EdgeInsets())
+                    .listRowBackground(Color.clear)
+                }
+            }
+            .navigationTitle(target.intent.title)
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    Button {
+                        dismiss()
+                    } label: {
+                        Image(systemName: "xmark")
+                            .font(.system(size: 16, weight: .semibold))
+                            .foregroundStyle(.secondary)
+                    }
+                }
+            }
+        }
+        .onAppear {
+            amountText = String(target.amountMinor)
+            if let preferredWalletID = target.position.preferredWalletID,
+               availableWallets.contains(where: { $0.id == preferredWalletID }) {
+                selectedWalletID = preferredWalletID
+            } else {
+                selectedWalletID = availableWallets.first?.id
+            }
+        }
+        .alert(
+            L10n.transactions.transactioneditor.canTSaveYet,
+            isPresented: Binding(get: { alertMessage != nil }, set: { if !$0 { alertMessage = nil } })
+        ) {
+            Button(L10n.common.ok, role: .cancel) {}
+        } message: {
+            if let alertMessage { Text(alertMessage) }
+        }
+    }
+
+    private func save() {
+        guard parsedAmountMinor > 0 else {
+            alertMessage = L10n.transactions.transactioneditor.enterAnAmountGreaterThan
+            return
+        }
+
+        guard parsedAmountMinor <= target.amountMinor else {
+            alertMessage = L10n.transactions.debtsettlement.amountExceedsOutstanding
+            return
+        }
+
+        guard let selectedWallet else {
+            alertMessage = L10n.transactions.transactioneditor.chooseAWalletForThisTransaction
+            return
+        }
+
+        let now = Date()
+        let transaction = LedgerTransaction(
+            primaryKind: .transfer,
+            transferSubtype: .debt,
+            debtIntent: target.intent,
+            entryStatus: .posted,
+            title: target.intent.title,
+            amountMinor: parsedAmountMinor,
+            sourceCurrencyCode: selectedWallet.currencyCode,
+            occurredAt: now,
+            createdAt: now,
+            updatedAt: now,
+            sourceWallet: selectedWallet,
+            counterpartyName: target.position.displayName,
+            normalizedCounterpartyKey: TransactionLogic.normalizeCounterpartyName(target.position.displayName)
+        )
+
+        modelContext.insert(transaction)
+
+        do {
+            let ownerUserID = walletPickerAccess.walletOwnerUserID(for: selectedWallet)
+            let actorUserID = sessionStore.activeLocalProfileUserID ?? ownerUserID
+            if let actorUserID {
+                try TransactionAuditStore.upsert(
+                    transactionID: transaction.id,
+                    createdByUserID: actorUserID,
+                    lastModifiedByUserID: actorUserID,
+                    updatedAt: now,
+                    context: modelContext
+                )
+            }
+            if let ownerUserID {
+                try MistiaRecordOwnershipStore.upsert(
+                    entity: .transaction,
+                    recordID: transaction.id,
+                    ownerUserID: ownerUserID,
+                    updatedAt: now,
+                    context: modelContext
+                )
+            }
+            try modelContext.save()
+            sessionStore.recordUpsert(
+                entity: .transaction,
+                recordID: transaction.id,
+                modifiedAt: transaction.updatedAt,
+                subjectUserIDOverride: ownerUserID
+            )
+            if let ownerUserID, ownerUserID != sessionStore.activeLocalProfileUserID {
+                Task { @MainActor in
+                    _ = await sessionStore.pushQueuedFamilyOwnerChangesNow()
+                }
+            }
+            dismiss()
+        } catch {
+            alertMessage = error.localizedDescription
         }
     }
 }

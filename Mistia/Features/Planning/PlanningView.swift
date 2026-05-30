@@ -3,8 +3,8 @@ import SwiftUI
 
 private enum PlanningMode: String, CaseIterable, Identifiable {
     case budget
-    case goals
     case due
+    case goals
 
     var id: String { rawValue }
 
@@ -12,10 +12,10 @@ private enum PlanningMode: String, CaseIterable, Identifiable {
         switch self {
         case .budget:
             L10n.planning.planning.budget2
-        case .goals:
-            L10n.planning.planning.goals2
         case .due:
             L10n.planning.planning.due2
+        case .goals:
+            L10n.planning.planning.goals2
         }
     }
 
@@ -23,34 +23,32 @@ private enum PlanningMode: String, CaseIterable, Identifiable {
         switch self {
         case .budget:
             "banknote.fill"
-        case .goals:
-            "target"
         case .due:
             "calendar.badge.clock"
+        case .goals:
+            "target"
         }
     }
 }
 
 private enum PlanningDueMode: String, CaseIterable, Identifiable {
-    case creditCards
     case bills
+    case creditCards
     case installments
 
     var id: String { rawValue }
 
     var title: String {
         switch self {
-        case .creditCards:
-            L10n.planning.planning.creditCards
         case .bills:
             L10n.planning.planning.bills2
+        case .creditCards:
+            L10n.planning.planning.creditCards
         case .installments:
             L10n.planning.planning.installmentsLoans2
         }
     }
 }
-
-private let planningAccentPurple = Color(red: 0.43, green: 0.23, blue: 0.76)
 
 private enum PlanningNavigationDestination: Identifiable, Equatable, Hashable {
     case profile
@@ -86,6 +84,15 @@ private struct PlanningInfoAlert: Identifiable {
     let message: String
 }
 
+private struct PlanningFamilyOwnerConflictAlert: Identifiable {
+    let entity: MistiaSyncEntity
+    let recordID: UUID
+
+    var id: String {
+        FamilyOwnerPushConflict.key(entity: entity, recordID: recordID)
+    }
+}
+
 private struct PlanningWalletPermissionPrompt: Identifiable {
     let id = UUID()
     let walletID: UUID
@@ -99,14 +106,17 @@ private enum PlanningAlertPresentation: Identifiable {
     case permission(PlanningPermissionPrompt)
     case wallet(PlanningWalletPermissionPrompt)
     case info(PlanningInfoAlert)
+    case familyOwnerConflict(PlanningFamilyOwnerConflictAlert)
 
-    var id: UUID {
+    var id: String {
         switch self {
         case .permission(let prompt):
-            prompt.id
+            prompt.id.uuidString
         case .wallet(let prompt):
-            prompt.id
+            prompt.id.uuidString
         case .info(let alert):
+            alert.id.uuidString
+        case .familyOwnerConflict(let alert):
             alert.id
         }
     }
@@ -119,6 +129,8 @@ private enum PlanningAlertPresentation: Identifiable {
             prompt.title
         case .info(let alert):
             alert.title
+        case .familyOwnerConflict:
+            L10n.shared.sync.familyOwnerPushConflict.alertTitle
         }
     }
 
@@ -130,6 +142,8 @@ private enum PlanningAlertPresentation: Identifiable {
             prompt.message
         case .info(let alert):
             alert.message
+        case .familyOwnerConflict:
+            L10n.shared.sync.familyOwnerPushConflict.alertMessage
         }
     }
 }
@@ -146,6 +160,7 @@ private struct PlanningGoalRenderSnapshot {
 
 private struct PlanningDueRenderSnapshot {
     let summary: PlanningDueSummarySnapshot
+    let billTotalsByCurrency: [PlanningCurrencyAmountTotalSnapshot]
     let creditCards: [PlanningCreditCardAccountSnapshot]
     let bills: [PlanningRecurringDueSnapshot]
     let installments: [PlanningRecurringDueSnapshot]
@@ -176,9 +191,12 @@ struct PlanningView: View {
     private var storedTransactions: [LedgerTransaction]
     @Query private var ownershipScopes: [OwnedRecordScope]
     @AppStorage(MistiaAppStorageKey.currencyCode) private var currencyCode = "JPY"
+    @AppStorage(MistiaCurrencySettings.StorageKey.rateMode) private var currencyRateMode = MistiaCurrencyRateMode.automatic.rawValue
+    @AppStorage(MistiaCurrencySettings.StorageKey.manualJPYToVNDRate) private var manualJPYToVNDRate = ""
+    @AppStorage(MistiaCurrencySettings.StorageKey.cachedRatesData) private var cachedCurrencyRatesData = Data()
 
     @State private var selectedMode: PlanningMode = .budget
-    @State private var selectedDueMode: PlanningDueMode = .creditCards
+    @State private var selectedDueMode: PlanningDueMode = .bills
     @State private var selectedMonth = PlanningLogic.startOfMonth(for: .now)
     @State private var isMonthPickerPresented = false
     @State private var budgetEditorTarget: PlanningBudgetEditorTarget?
@@ -191,6 +209,8 @@ struct PlanningView: View {
     @State private var permissionPrompt: PlanningPermissionPrompt?
     @State private var walletPermissionPrompt: PlanningWalletPermissionPrompt?
     @State private var infoAlert: PlanningInfoAlert?
+    @State private var familyOwnerConflictAlert: PlanningFamilyOwnerConflictAlert?
+    @State private var memberViewingExitPrompt: FamilyMemberViewingExitPrompt?
 
     private var cardTint: Color {
         colorScheme == .dark ? .white.opacity(0.022) : .white.opacity(0.14)
@@ -200,11 +220,21 @@ struct PlanningView: View {
         visibleTransactions.map(\.planningRecordSnapshot)
     }
 
+    private var appExchangeRates: [MistiaExchangeRate] {
+        _ = currencyRateMode
+        _ = manualJPYToVNDRate
+        _ = cachedCurrencyRatesData
+        return MistiaCurrencySettings.rates()
+    }
+
     private var occurrenceSnapshots: [PlanningDueOccurrenceSnapshot] {
         visibleOccurrences.map(\.planningSnapshot)
     }
 
     private var activeAlert: PlanningAlertPresentation? {
+        if let familyOwnerConflictAlert {
+            return .familyOwnerConflict(familyOwnerConflictAlert)
+        }
         if let walletPermissionPrompt {
             return .wallet(walletPermissionPrompt)
         }
@@ -245,11 +275,16 @@ struct PlanningView: View {
             records: transactionSnapshots,
             selectedMonth: selectedMonth,
             referenceDate: .now,
-            calendar: calendar
+            calendar: calendar,
+            exchangeRates: appExchangeRates
         )
 
         return PlanningBudgetRenderSnapshot(
-            summary: PlanningLogic.budgetSummary(from: rows),
+            summary: PlanningLogic.budgetSummary(
+                from: rows,
+                reportingCurrencyCode: currencyCode,
+                exchangeRates: appExchangeRates
+            ),
             rows: rows
         )
     }
@@ -270,7 +305,11 @@ struct PlanningView: View {
         )
 
         return PlanningGoalRenderSnapshot(
-            summary: PlanningLogic.goalSummary(from: rows),
+            summary: PlanningLogic.goalSummary(
+                from: rows,
+                reportingCurrencyCode: currencyCode,
+                exchangeRates: appExchangeRates
+            ),
             rows: rows
         )
     }
@@ -346,9 +385,12 @@ struct PlanningView: View {
                 creditStatements: creditCardStatements,
                 recurring: recurringBillDueItems + installmentDueItems,
                 selectedMonth: selectedMonth,
+                reportingCurrencyCode: currencyCode,
+                exchangeRates: appExchangeRates,
                 referenceDate: .now,
                 calendar: calendar
             ),
+            billTotalsByCurrency: PlanningLogic.recurringBillAmountTotalsByCurrency(recurringBillDueItems),
             creditCards: creditCardAccounts,
             bills: recurringBillDueItems,
             installments: installmentDueItems
@@ -367,12 +409,17 @@ struct PlanningView: View {
             records: transactionSnapshots,
             selectedMonth: selectedMonth,
             referenceDate: .now,
-            calendar: calendar
+            calendar: calendar,
+            exchangeRates: appExchangeRates
         )
     }
 
     private var budgetSummary: PlanningBudgetSummarySnapshot {
-        PlanningLogic.budgetSummary(from: budgetRows)
+        PlanningLogic.budgetSummary(
+            from: budgetRows,
+            reportingCurrencyCode: currencyCode,
+            exchangeRates: appExchangeRates
+        )
     }
 
     private var activeGoals: [SavingsGoalSnapshot] {
@@ -390,7 +437,11 @@ struct PlanningView: View {
     }
 
     private var goalSummary: PlanningGoalSummarySnapshot {
-        PlanningLogic.goalSummary(from: goalRows)
+        PlanningLogic.goalSummary(
+            from: goalRows,
+            reportingCurrencyCode: currencyCode,
+            exchangeRates: appExchangeRates
+        )
     }
 
     private var creditCardAccounts: [PlanningCreditCardAccountSnapshot] {
@@ -569,28 +620,39 @@ struct PlanningView: View {
             creditStatements: creditCardStatementDueItems,
             recurring: recurringBillDueItems + installmentDueItems,
             selectedMonth: selectedMonth,
+            reportingCurrencyCode: currencyCode,
+            exchangeRates: appExchangeRates,
             referenceDate: .now,
             calendar: calendar
         )
     }
 
     var body: some View {
+        let memberToolbar = familyContextStore.memberViewingToolbarPresentation
+
         NavigationStack {
             MistiaPinnedTopBarScaffold(
                 tone: .standard,
                 title: L10n.planning.planning.planning,
                 embedsInNavigationStack: false,
-                leadingInitials: sessionStore.summary?.initials ?? "MI",
-                leadingAvatarURL: sessionStore.summary?.avatarURL,
+                leadingInitials: memberToolbar?.initials ?? sessionStore.summary?.initials ?? "MI",
+                leadingAvatarURL: memberToolbar != nil ? familyContextStore.viewedMember?.avatarURL : sessionStore.summary?.avatarURL,
+                leadingAccessibilityLabel: memberToolbar?.accessibilityLabel,
+                leadingAvatarAttentionPulse: memberToolbar != nil,
                 trailingSystemImage: "calendar",
-                onLeadingTap: { destination = .profile },
+                onLeadingTap: {
+                    if let memberToolbar {
+                        memberViewingExitPrompt = FamilyMemberViewingExitPrompt(presentation: memberToolbar)
+                    } else {
+                        destination = .profile
+                    }
+                },
                 onTrailingTap: { isMonthPickerPresented = true },
                 contentSpacing: 18,
                 titleDisplayMode: .large,
+                headerBehavior: .scrollsThenPins,
                 pinnedHeader: {
                     VStack(alignment: .leading, spacing: 8) {
-                        FamilyContextChipBar()
-                            .padding(.horizontal, 18)
                         PlanningModePicker(selection: $selectedMode)
                     }
                 }
@@ -622,26 +684,13 @@ struct PlanningView: View {
                             )
                         }
                     )
-                case .goals:
-                    let tabSnapshot = goalRenderSnapshot()
-                    GoalsTabContent(
-                        summary: tabSnapshot.summary,
-                        currencyCode: currencyCode,
-                        rows: tabSnapshot.rows,
-                        onAdd: {
-                            openGoalAddIfAllowed()
-                        },
-                        onEdit: { row in
-                            openGoalEditorIfAllowed(
-                                goal: storedGoals.first(where: { $0.id == row.id })
-                            )
-                        }
-                    )
                 case .due:
                     let tabSnapshot = dueRenderSnapshot()
                     DueTabContent(
                         selectedMode: $selectedDueMode,
                         summary: tabSnapshot.summary,
+                        billTotalsByCurrency: tabSnapshot.billTotalsByCurrency,
+                        usesLocalSelfBillTotal: familyContextStore.isViewingSelfContext,
                         currencyCode: currencyCode,
                         creditCards: tabSnapshot.creditCards,
                         bills: tabSnapshot.bills,
@@ -678,6 +727,21 @@ struct PlanningView: View {
                             openDuePaymentIfAllowed(item)
                         }
                     )
+                case .goals:
+                    let tabSnapshot = goalRenderSnapshot()
+                    GoalsTabContent(
+                        summary: tabSnapshot.summary,
+                        currencyCode: currencyCode,
+                        rows: tabSnapshot.rows,
+                        onAdd: {
+                            openGoalAddIfAllowed()
+                        },
+                        onEdit: { row in
+                            openGoalEditorIfAllowed(
+                                goal: storedGoals.first(where: { $0.id == row.id })
+                            )
+                        }
+                    )
                 }
             }
             .navigationDestination(item: $destination) { route in
@@ -689,6 +753,10 @@ struct PlanningView: View {
                 }
             }
         }
+        .familyMemberViewingExitAlert(
+            prompt: $memberViewingExitPrompt,
+            familyContextStore: familyContextStore
+        )
         .sheet(item: $budgetEditorTarget) { target in
             PlanningBudgetEditorSheet(target: target)
                 .presentationDragIndicator(.hidden)
@@ -713,12 +781,22 @@ struct PlanningView: View {
             DuePaymentSheet(target: target)
                 .presentationDragIndicator(.hidden)
         }
+        .sheet(isPresented: $isMonthPickerPresented) {
+            MistiaMonthPickerSheet(
+                selection: $selectedMonth,
+                calendar: calendar,
+                accentColor: MistiaAccent.purple.color
+            )
+            .presentationDetents([.height(280)])
+            .presentationDragIndicator(.hidden)
+        }
         .alert(
             activeAlert?.title ?? "",
             isPresented: Binding(
                 get: { activeAlert != nil },
                 set: { isPresented in
                     if !isPresented {
+                        familyOwnerConflictAlert = nil
                         walletPermissionPrompt = nil
                         permissionPrompt = nil
                         infoAlert = nil
@@ -730,6 +808,17 @@ struct PlanningView: View {
             switch alert {
             case .info:
                 Button(L10n.common.ok) {}
+            case .familyOwnerConflict(let conflict):
+                Button(L10n.common.ok) {
+                    Task { @MainActor in
+                        await sessionStore.discardFamilyOwnerPushConflictAndRefresh(
+                            entity: conflict.entity,
+                            recordID: conflict.recordID,
+                            familyContextStore: familyContextStore
+                        )
+                        familyOwnerConflictAlert = nil
+                    }
+                }
             case .permission(let prompt):
                 Button(prompt.actionTitle) {
                     prompt.action()
@@ -750,11 +839,6 @@ struct PlanningView: View {
             }
         } message: { alert in
             Text(alert.message)
-        }
-        .sheet(isPresented: $isMonthPickerPresented) {
-            PlanningMonthPickerSheet(selection: $selectedMonth, calendar: calendar)
-                .presentationDetents([.medium])
-                .presentationDragIndicator(.hidden)
         }
         .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("MistiaOpenCreditCardStatementFromPlanning"))) { notification in
             if let walletID = notification.object as? UUID,
@@ -784,6 +868,11 @@ struct PlanningView: View {
     }
 
     private func openBudgetEditorIfAllowed(budget: BudgetPlan?, preferredParentCategoryID: UUID?) {
+        if let budget,
+           presentFamilyOwnerConflictIfNeeded(entity: .budgetPlan, recordID: budget.id) {
+            return
+        }
+
         let ownerUserID = budget.flatMap { budgetOwnerMap[$0.id] } ?? selectedSubjectUserID
         guard canEdit(ownerUserID: ownerUserID, resourceType: .budget) else {
             presentEditPermissionPrompt(
@@ -818,6 +907,11 @@ struct PlanningView: View {
     }
 
     private func openGoalEditorIfAllowed(goal: SavingsGoal?) {
+        if let goal,
+           presentFamilyOwnerConflictIfNeeded(entity: .savingsGoal, recordID: goal.id) {
+            return
+        }
+
         let ownerUserID = goal.flatMap { goalOwnerMap[$0.id] } ?? selectedSubjectUserID
         guard canEdit(ownerUserID: ownerUserID, resourceType: .goal) else {
             presentEditPermissionPrompt(
@@ -853,6 +947,11 @@ struct PlanningView: View {
 
     private func openCreditCardEditorIfAllowed(wallet: LedgerWallet?, dueItem: PlanningCreditCardDueSnapshot?) {
         let walletID = wallet?.id ?? dueItem?.walletID
+        if let walletID,
+           presentFamilyOwnerConflictIfNeeded(entity: .wallet, recordID: walletID) {
+            return
+        }
+
         let ownerUserID = walletID.flatMap { walletOwnerMap[$0] } ?? selectedSubjectUserID
         guard canOpenCreditCardEditor(walletID: walletID, ownerUserID: ownerUserID) else {
             if let walletID, let ownerUserID {
@@ -896,6 +995,11 @@ struct PlanningView: View {
     }
 
     private func openBillEditorIfAllowed(plan: RecurringBillPlan?, dueItem: PlanningRecurringDueSnapshot?) {
+        if let plan,
+           presentFamilyOwnerConflictIfNeeded(entity: .recurringBillPlan, recordID: plan.id) {
+            return
+        }
+
         let ownerUserID = plan.flatMap { billOwnerMap[$0.id] } ?? selectedSubjectUserID
         guard canEdit(ownerUserID: ownerUserID, resourceType: .bill) else {
             presentEditPermissionPrompt(
@@ -926,6 +1030,11 @@ struct PlanningView: View {
     }
 
     private func openInstallmentEditorIfAllowed(plan: InstallmentPlan?, dueItem: PlanningRecurringDueSnapshot?) {
+        if let plan,
+           presentFamilyOwnerConflictIfNeeded(entity: .installmentPlan, recordID: plan.id) {
+            return
+        }
+
         let ownerUserID = plan.flatMap { installmentOwnerMap[$0.id] } ?? selectedSubjectUserID
         guard canEdit(ownerUserID: ownerUserID, resourceType: .installment) else {
             presentEditPermissionPrompt(
@@ -941,6 +1050,15 @@ struct PlanningView: View {
     }
 
     private func openDuePaymentIfAllowed(_ item: PlanningRecurringDueSnapshot) {
+        if presentFamilyOwnerConflictIfNeeded(entity: .dueOccurrenceRecord, recordID: item.id) {
+            return
+        }
+
+        if let entity = syncEntity(for: duePermissionResource(for: item).type),
+           presentFamilyOwnerConflictIfNeeded(entity: entity, recordID: item.sourceID) {
+            return
+        }
+
         let ownerUserID = dueOwnerUserID(for: item)
         let resource = duePermissionResource(for: item)
         guard canEdit(ownerUserID: ownerUserID, resourceType: resource.type, resourceID: resource.resourceID) else {
@@ -957,11 +1075,12 @@ struct PlanningView: View {
         duePaymentTarget = DuePaymentSheetTarget(
             sourceKind: item.sourceKind,
             sourceID: item.sourceID,
-            dueMonthKey: PlanningLogic.monthKey(for: selectedMonth),
+            dueMonthKey: PlanningLogic.monthKey(for: item.paymentStartDate),
             dueDate: item.dueDate,
             requiresAmountInput: item.amountMinor == nil,
             currencyCode: item.currencyCode,
-            name: item.name
+            name: item.name,
+            ownerUserID: ownerUserID
         )
     }
 
@@ -1009,6 +1128,37 @@ struct PlanningView: View {
         guard let walletID else { return false }
         return familyContextStore.canUseWallet(walletID: walletID, ownerUserID: ownerUserID)
             && familyContextStore.canEdit(ownerUserID: ownerUserID, resourceType: .wallet, resourceID: walletID)
+    }
+
+    private func presentFamilyOwnerConflictIfNeeded(entity: MistiaSyncEntity, recordID: UUID) -> Bool {
+        guard sessionStore.hasFamilyOwnerPushConflict(entity: entity, recordID: recordID) else {
+            return false
+        }
+        familyOwnerConflictAlert = PlanningFamilyOwnerConflictAlert(entity: entity, recordID: recordID)
+        return true
+    }
+
+    private func syncEntity(for resourceType: MistiaFamilyNotificationResourceType) -> MistiaSyncEntity? {
+        switch resourceType {
+        case .wallet, .card:
+            return .wallet
+        case .category:
+            return .category
+        case .budget:
+            return .budgetPlan
+        case .goal:
+            return .savingsGoal
+        case .transaction, .debt, .familyTransfer:
+            return .transaction
+        case .bill:
+            return .recurringBillPlan
+        case .installment:
+            return .installmentPlan
+        case .due:
+            return .dueOccurrenceRecord
+        case .permission:
+            return nil
+        }
     }
 
     private func presentCreditCardWalletPermissionPrompt(
@@ -1336,7 +1486,7 @@ private struct BudgetTabContent: View {
                     title: L10n.planning.planning.noBudgetsYet,
                     message: L10n.planning.planning.createCategoryBudgetsToTrackWhatYou,
                     buttonTitle: L10n.planning.planning.addBudget,
-                    accent: planningAccentPurple,
+                    accent: MistiaAccent.purple.color,
                     symbols: ["banknote.fill", "chart.bar.fill", "bolt.fill", "plus"]
                 ) {
                     onAdd()
@@ -1389,7 +1539,7 @@ private struct GoalsTabContent: View {
                     title: L10n.planning.planning.noGoalsYet,
                     message: L10n.planning.planning.addAnEmergencyFundTripOrBig,
                     buttonTitle: L10n.planning.planning.addGoal,
-                    accent: planningAccentPurple,
+                    accent: MistiaAccent.purple.color,
                     symbols: ["target", "sparkles", "flag.fill", "plus"]
                 ) {
                     onAdd()
@@ -1430,6 +1580,8 @@ private struct DueTabContent: View {
     @Binding var selectedMode: PlanningDueMode
 
     let summary: PlanningDueSummarySnapshot
+    let billTotalsByCurrency: [PlanningCurrencyAmountTotalSnapshot]
+    let usesLocalSelfBillTotal: Bool
     let currencyCode: String
     let creditCards: [PlanningCreditCardAccountSnapshot]
     let bills: [PlanningRecurringDueSnapshot]
@@ -1445,23 +1597,21 @@ private struct DueTabContent: View {
 
     var body: some View {
         VStack(spacing: 16) {
-            PlanningDueSummaryCard(summary: summary, currencyCode: currencyCode)
+            PlanningDueSummaryCard(
+                summary: summary,
+                currencyCode: currencyCode,
+                totalTitle: dueTotalTitle,
+                totalValue: dueTotalValue
+            )
             PlanningDueModePicker(selection: $selectedMode)
 
             switch selectedMode {
-            case .creditCards:
-                CreditCardsSection(
-                    items: creditCards,
-                    referenceDate: referenceDate,
-                    onAdd: onAddCreditCard,
-                    onEdit: onEditCreditCard
-                )
             case .bills:
                 DueRowsSection(
                     emptyTitle: L10n.planning.planning.noBillsYet,
                     emptyMessage: L10n.planning.planning.addInternetUtilitiesOrRecurringBillsTo,
                     emptySymbols: ["wifi", "bolt.fill", "phone.fill", "plus"],
-                    accent: planningAccentPurple,
+                    accent: MistiaAccent.purple.color,
                     items: bills,
                     addTitle: L10n.planning.planning.addBill,
                     referenceDate: referenceDate,
@@ -1469,12 +1619,19 @@ private struct DueTabContent: View {
                     onEdit: onEditBill,
                     onPay: onPayBill
                 )
+            case .creditCards:
+                CreditCardsSection(
+                    items: creditCards,
+                    referenceDate: referenceDate,
+                    onAdd: onAddCreditCard,
+                    onEdit: onEditCreditCard
+                )
             case .installments:
                 DueRowsSection(
                     emptyTitle: L10n.planning.planning.noInstallmentsOrLoansYet,
                     emptyMessage: L10n.planning.planning.addInstallmentOrLoanPaymentsAndCreate,
                     emptySymbols: ["creditcard.and.123", "building.columns.fill", "banknote.fill", "plus"],
-                    accent: planningAccentPurple,
+                    accent: MistiaAccent.purple.color,
                     items: installments,
                     addTitle: L10n.planning.planning.addInstallmentLoan,
                     referenceDate: referenceDate,
@@ -1483,6 +1640,24 @@ private struct DueTabContent: View {
                 )
             }
         }
+    }
+
+    private var usesBillAmountSummary: Bool {
+        usesLocalSelfBillTotal && selectedMode == .bills
+    }
+
+    private var dueTotalTitle: String {
+        usesBillAmountSummary ? L10n.planning.planning.totalAmount : L10n.planning.planning.totalDue
+    }
+
+    private var dueTotalValue: String? {
+        guard usesBillAmountSummary else { return nil }
+        guard !billTotalsByCurrency.isEmpty else {
+            return Int64.zero.formattedCurrency(code: currencyCode)
+        }
+        return billTotalsByCurrency
+            .map { $0.amountMinor.formattedCurrency(code: $0.currencyCode) }
+            .joined(separator: " / ")
     }
 }
 
@@ -1500,7 +1675,7 @@ private struct CreditCardsSection: View {
                 title: L10n.planning.planning.noCreditCardsYet,
                 message: L10n.planning.planning.linkOrAddCardsHereToShow,
                 buttonTitle: L10n.planning.planning.addCreditCard,
-                accent: planningAccentPurple,
+                accent: MistiaAccent.purple.color,
                 symbols: ["creditcard.fill", "wave.3.right.circle.fill", "building.columns.fill", "plus"]
             ) {
                 onAdd()
@@ -1676,16 +1851,11 @@ private struct PlanningModePicker: View {
 private struct PlanningDueModePicker: View {
     @Binding var selection: PlanningDueMode
 
-    private var accent: Color {
-        Color(red: 0.43, green: 0.23, blue: 0.76)
-    }
-
     var body: some View {
         MistiaNativeSegmentedControl(
             selection: $selection,
             options: PlanningDueMode.allCases,
-            title: \.title,
-            accent: accent
+            title: \.title
         )
     }
 }
@@ -1805,6 +1975,8 @@ private struct PlanningDueSummaryCard: View {
     @Environment(\.colorScheme) private var colorScheme
     let summary: PlanningDueSummarySnapshot
     let currencyCode: String
+    var totalTitle: String = L10n.planning.planning.totalDue
+    var totalValue: String?
 
     private var cardTint: Color {
         colorScheme == .dark ? .white.opacity(0.018) : .white.opacity(0.12)
@@ -1828,8 +2000,8 @@ private struct PlanningDueSummaryCard: View {
                         .frame(height: 30)
 
                     PlanningMetricColumn(
-                        title: L10n.planning.planning.totalDue,
-                        value: summary.totalDueMinor.formattedCurrency(code: currencyCode),
+                        title: totalTitle,
+                        value: totalValue ?? summary.totalDueMinor.formattedCurrency(code: currencyCode),
                         tint: Color(hex: "#F59B3F")
                     )
 
@@ -2406,7 +2578,7 @@ private struct PlanningFooterAddButton: View {
     let action: () -> Void
 
     var body: some View {
-        MistiaFooterAddButton(title: title, accent: planningAccentPurple, action: action)
+        MistiaFooterAddButton(title: title, accent: MistiaAccent.purple.color, action: action)
             .padding(.horizontal, 14)
             .padding(.vertical, 14)
     }
@@ -2589,140 +2761,6 @@ private struct PlanningIconTile: View {
 
     var body: some View {
         MistiaFinanceIconView(icon: icon, fallbackColor: color, size: 32)
-    }
-}
-
-private struct PlanningMonthPickerSheet: View {
-    @Environment(\.dismiss) private var dismiss
-    @Binding var selection: Date
-
-    let calendar: Calendar
-
-    @State private var draftMonth: Int
-    @State private var draftYear: Int
-
-    init(selection: Binding<Date>, calendar: Calendar) {
-        _selection = selection
-        self.calendar = calendar
-        let initialDate = selection.wrappedValue
-        _draftMonth = State(initialValue: calendar.component(.month, from: initialDate))
-        _draftYear = State(initialValue: calendar.component(.year, from: initialDate))
-    }
-
-    var body: some View {
-        NavigationStack {
-            VStack(spacing: 0) {
-                HStack(spacing: 0) {
-                    Picker(L10n.planning.planning.month, selection: $draftMonth) {
-                        ForEach(allowedMonths, id: \.self) { month in
-                            Text(
-                                L10n.planning.planning.monthValue(String(describing: month))
-                            )
-                            .tag(month)
-                        }
-                    }
-                    .pickerStyle(.wheel)
-                    .frame(maxWidth: .infinity)
-
-                    Picker(L10n.planning.planning.year, selection: $draftYear) {
-                        ForEach(yearOptions, id: \.self) { year in
-                            Text(
-                                L10n.planning.planning.yearValue(String(describing: year))
-                            )
-                            .tag(year)
-                        }
-                    }
-                    .pickerStyle(.wheel)
-                    .frame(maxWidth: .infinity)
-                    .onChange(of: draftYear) { _, _ in
-                        validateDraft()
-                    }
-                }
-                .frame(height: 220)
-            }
-            .padding(.horizontal, 20)
-            .padding(.top, 16)
-            .padding(.bottom, 20)
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-            .background(groupedBackground)
-            .navigationTitle(L10n.planning.planning.chooseMonth)
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbarBackground(groupedBackground, for: .navigationBar)
-            .toolbarBackground(.visible, for: .navigationBar)
-            .toolbar {
-                ToolbarItem(placement: .topBarLeading) {
-                    Button {
-                        dismiss()
-                    } label: {
-                        Image(systemName: "xmark")
-                            .font(.system(size: 16, weight: .semibold))
-                            .foregroundStyle(.secondary)
-                    }
-                }
-
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button {
-                        applySelection()
-                    } label: {
-                        Image(systemName: "checkmark")
-                            .font(.system(size: 14, weight: .bold))
-                            .foregroundStyle(Color(red: 0.88, green: 0.78, blue: 1.0))
-                            .frame(width: 30, height: 30)
-                    }
-                    .buttonStyle(.glassProminent)
-                    .buttonBorderShape(.circle)
-                    .tint(planningAccentPurple)
-                }
-            }
-        }
-        .presentationBackground(groupedBackground)
-    }
-
-    private var groupedBackground: Color {
-        Color(UIColor.systemGroupedBackground)
-    }
-
-    private var allowedMonths: [Int] {
-        let currentYear = calendar.component(.year, from: .now)
-        if draftYear < currentYear {
-            return Array(1...12)
-        } else {
-            let currentMonth = calendar.component(.month, from: .now)
-            return Array(1...currentMonth)
-        }
-    }
-
-    private var yearOptions: [Int] {
-        let currentYear = calendar.component(.year, from: .now)
-        let lowerBound = currentYear - 10
-        let upperBound = currentYear
-        return Array(lowerBound...upperBound)
-    }
-
-    private func validateDraft() {
-        let currentYear = calendar.component(.year, from: .now)
-        let currentMonth = calendar.component(.month, from: .now)
-        
-        if draftYear == currentYear && draftMonth > currentMonth {
-            draftMonth = currentMonth
-        }
-    }
-
-    private func applySelection() {
-        guard let date = calendar.date(from: DateComponents(year: draftYear, month: draftMonth, day: 1)) else {
-            return
-        }
-
-        let startOfTarget = PlanningLogic.startOfMonth(for: date, calendar: calendar)
-        let startOfCurrent = PlanningLogic.startOfMonth(for: .now, calendar: calendar)
-
-        if startOfTarget > startOfCurrent {
-            selection = startOfCurrent
-        } else {
-            selection = startOfTarget
-        }
-
-        dismiss()
     }
 }
 

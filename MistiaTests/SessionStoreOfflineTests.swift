@@ -64,6 +64,117 @@ final class SessionStoreOfflineTests: XCTestCase {
         XCTAssertNil(store.authBanner)
     }
 
+    func testBootstrapConnectedRestoresPersistedSessionWithoutRefreshingRemoteState() async throws {
+        let session = makeSession()
+        let authService = SessionAuthServiceSpy(persistedSession: session)
+        let userProfileStore = UserProfileStoreSpy()
+        let store = try makeSessionStore(
+            authService: authService,
+            userProfileStore: userProfileStore,
+            networkStatus: .connected
+        )
+
+        await store.bootstrapIfNeeded()
+
+        XCTAssertTrue(store.isSignedIn)
+        XCTAssertEqual(store.summary?.userID, session.user.id)
+        XCTAssertTrue(store.canPerformRemoteActions)
+        XCTAssertEqual(authService.loadPersistedSessionCallCount, 1)
+        XCTAssertEqual(authService.refreshSessionCallCount, 0)
+        XCTAssertEqual(userProfileStore.fetchProfileCallCount, 0)
+    }
+
+    func testDeferredValidationRefreshesExpiredSessionAfterLocalBootstrap() async throws {
+        let userID = UUID()
+        let expiredSession = makeSession(
+            userID: userID,
+            email: "taylor@example.com",
+            displayName: "Taylor Offline",
+            expiresAt: .now.addingTimeInterval(-600)
+        )
+        let refreshedSession = makeSession(
+            userID: userID,
+            email: "taylor@example.com",
+            displayName: "Taylor Remote",
+            accessToken: "refreshed-token",
+            refreshToken: "refresh-token",
+            expiresAt: .now.addingTimeInterval(3600)
+        )
+        let authService = SessionAuthServiceSpy(
+            persistedSession: expiredSession,
+            refreshResult: .success(refreshedSession)
+        )
+        let userProfileStore = UserProfileStoreSpy(
+            fetchProfileResult: RemoteUserProfile(
+                userID: userID,
+                displayName: "Taylor Remote",
+                avatarURL: URL(string: "https://example.com/avatar.jpg"),
+                birthday: nil,
+                createdAt: .now,
+                updatedAt: .now
+            )
+        )
+        let store = try makeSessionStore(
+            authService: authService,
+            userProfileStore: userProfileStore,
+            networkStatus: .connected
+        )
+
+        await store.bootstrapIfNeeded()
+
+        XCTAssertTrue(store.isSignedIn)
+        XCTAssertEqual(authService.refreshSessionCallCount, 0)
+        XCTAssertEqual(userProfileStore.fetchProfileCallCount, 0)
+
+        await store.validateRestoredSessionInBackgroundIfNeeded()
+
+        XCTAssertTrue(store.canPerformRemoteActions)
+        XCTAssertNil(store.remoteUnavailableReason)
+        XCTAssertEqual(authService.refreshSessionCallCount, 1)
+        XCTAssertEqual(userProfileStore.fetchProfileCallCount, 1)
+    }
+
+    func testFamilyBootstrapRestoresCachedSnapshotWithoutFetchingRemoteState() async throws {
+        let userID = UUID()
+        let userDefaults = UserDefaults(suiteName: "MistiaTests.\(UUID().uuidString)") ?? .standard
+        let launchState = try MistiaDataStack.LaunchState(userDefaults: userDefaults)
+        _ = try launchState.ensureCloudProfile(for: userID, activate: true)
+        let session = makeSession(userID: userID)
+        let store = SessionStore(
+            modelContainer: launchState.modelContainer,
+            launchState: launchState,
+            userDefaults: userDefaults,
+            authService: SessionAuthServiceSpy(persistedSession: session),
+            userProfileStore: UserProfileStoreSpy(),
+            connectivityMonitor: SessionConnectivityMonitor(initialStatus: .connected),
+            registerBackgroundRefresh: false
+        )
+        await store.bootstrapIfNeeded()
+
+        let cachedSnapshot = makeFamilySnapshot(userID: userID)
+        let cacheWriterService = FamilyRemoteServiceSpy(snapshot: cachedSnapshot)
+        let cacheWriter = FamilyContextStore(
+            modelContainer: launchState.modelContainer,
+            launchState: launchState,
+            service: cacheWriterService
+        )
+        await cacheWriter.refresh(sessionStore: store)
+        XCTAssertEqual(cacheWriterService.fetchStateCallCount, 1)
+
+        let bootstrapService = FamilyRemoteServiceSpy(snapshot: .empty)
+        let bootstrapStore = FamilyContextStore(
+            modelContainer: launchState.modelContainer,
+            launchState: launchState,
+            service: bootstrapService
+        )
+
+        await bootstrapStore.bootstrapIfNeeded(sessionStore: store)
+
+        XCTAssertEqual(bootstrapStore.family?.id, cachedSnapshot.family?.id)
+        XCTAssertTrue(bootstrapStore.hasCachedRemoteState)
+        XCTAssertEqual(bootstrapService.fetchStateCallCount, 0)
+    }
+
     func testReconnectRefreshesExpiredSessionAndClearsOfflineMode() async throws {
         let userID = UUID()
         let expiredSession = makeSession(
@@ -244,6 +355,460 @@ final class SessionStoreOfflineTests: XCTestCase {
         XCTAssertFalse(familyStore.hasCachedRemoteState)
         XCTAssertEqual(familyService.fetchStateCallCount, 0)
         XCTAssertEqual(familyStore.lastErrorMessage, store.remoteUnavailableReason)
+    }
+
+    func testFamilyMetadataRefreshDoesNotPullMemberFinanceWhenEnteringFamily() async throws {
+        let currentUserID = UUID()
+        let memberUserID = UUID()
+        let session = makeSession(userID: currentUserID)
+        let container = try storeTestContainer()
+        let syncRemoteStore = SessionSyncRemoteStoreSpy()
+        let store = try makeSessionStore(
+            authService: SessionAuthServiceSpy(
+                persistedSession: session,
+                refreshResult: .success(session)
+            ),
+            userProfileStore: UserProfileStoreSpy(),
+            networkStatus: .connected,
+            modelContainer: container,
+            syncCoordinator: SyncCoordinator(
+                modelContainer: container,
+                remoteStore: syncRemoteStore,
+                outbox: MistiaSyncOutbox(
+                    defaults: UserDefaults(suiteName: "MistiaTests.\(UUID().uuidString)") ?? .standard,
+                    key: "family-entry-refresh"
+                )
+            )
+        )
+        let familyService = FamilyRemoteServiceSpy(
+            snapshot: makeFamilySnapshot(userID: currentUserID, ownerUserID: memberUserID)
+        )
+        let familyStore = FamilyContextStore(
+            modelContainer: container,
+            service: familyService
+        )
+
+        await store.bootstrapIfNeeded()
+        store.requiresInitialSync = false
+        store.lastSyncAt = nil
+        XCTAssertFalse(store.isAutoSyncEnabled)
+
+        await familyStore.refreshFamilyMetadata(sessionStore: store)
+
+        XCTAssertNil(store.lastSyncAt)
+        XCTAssertEqual(syncRemoteStore.fetchSnapshotCallCount, 0)
+        XCTAssertEqual(familyService.fetchStateCallCount, 1)
+        XCTAssertEqual(familyService.accessibleFinanceUserIDBatches.map(Set.init), [])
+    }
+
+    func testFamilyOverviewRefreshPullsMembersOnlyWithoutPersonalSync() async throws {
+        let currentUserID = UUID()
+        let memberUserID = UUID()
+        let session = makeSession(userID: currentUserID)
+        let container = try storeTestContainer()
+        let syncRemoteStore = SessionSyncRemoteStoreSpy()
+        let store = try makeSessionStore(
+            authService: SessionAuthServiceSpy(
+                persistedSession: session,
+                refreshResult: .success(session)
+            ),
+            userProfileStore: UserProfileStoreSpy(),
+            networkStatus: .connected,
+            modelContainer: container,
+            syncCoordinator: SyncCoordinator(
+                modelContainer: container,
+                remoteStore: syncRemoteStore,
+                outbox: MistiaSyncOutbox(
+                    defaults: UserDefaults(suiteName: "MistiaTests.\(UUID().uuidString)") ?? .standard,
+                    key: "family-user-refresh"
+                )
+            )
+        )
+        let familyService = FamilyRemoteServiceSpy(
+            snapshot: makeFamilySnapshot(userID: currentUserID, ownerUserID: memberUserID)
+        )
+        let familyStore = FamilyContextStore(
+            modelContainer: container,
+            service: familyService
+        )
+
+        await store.bootstrapIfNeeded()
+        store.requiresInitialSync = false
+        store.lastSyncAt = nil
+        XCTAssertFalse(store.isAutoSyncEnabled)
+
+        await familyStore.refreshLatest(sessionStore: store, source: .familyOverview)
+
+        XCTAssertNil(store.lastSyncAt)
+        XCTAssertEqual(syncRemoteStore.fetchSnapshotCallCount, 0)
+        XCTAssertEqual(familyService.fetchStateCallCount, 1)
+        XCTAssertEqual(
+            familyService.accessibleFinanceUserIDBatches.map(Set.init),
+            [Set([memberUserID])]
+        )
+    }
+
+    func testFamilyMemberRefreshPullsOnlySelectedMemberFinance() async throws {
+        let currentUserID = UUID()
+        let ownerUserID = UUID()
+        let selectedMemberUserID = UUID()
+        let session = makeSession(userID: currentUserID)
+        let container = try storeTestContainer()
+        let store = try makeSessionStore(
+            authService: SessionAuthServiceSpy(
+                persistedSession: session,
+                refreshResult: .success(session)
+            ),
+            userProfileStore: UserProfileStoreSpy(),
+            networkStatus: .connected,
+            modelContainer: container
+        )
+        var snapshot = makeFamilySnapshot(userID: currentUserID, ownerUserID: ownerUserID)
+        snapshot.members.append(
+            FamilyMember(
+                membershipID: UUID(),
+                familyID: snapshot.family!.id,
+                userID: selectedMemberUserID,
+                displayName: "Member",
+                avatarURL: nil,
+                role: .member,
+                policy: .preset(for: .member),
+                isCurrentUser: false
+            )
+        )
+        let familyService = FamilyRemoteServiceSpy(snapshot: snapshot)
+        let familyStore = FamilyContextStore(
+            modelContainer: container,
+            service: familyService
+        )
+
+        await store.bootstrapIfNeeded()
+        await familyStore.refreshFamilyMetadata(sessionStore: store)
+        await familyStore.refreshMemberFinance(
+            sessionStore: store,
+            memberUserID: selectedMemberUserID
+        )
+
+        XCTAssertEqual(familyService.fetchStateCallCount, 1)
+        XCTAssertEqual(
+            familyService.accessibleFinanceUserIDBatches.map(Set.init),
+            [Set([selectedMemberUserID])]
+        )
+    }
+
+    func testQueuedLocalMutationWaitsForAutomaticCadenceInsteadOfImmediateSync() async throws {
+        let session = makeSession()
+        let container = try storeTestContainer()
+        let syncRemoteStore = SessionSyncRemoteStoreSpy()
+        let store = try makeSessionStore(
+            authService: SessionAuthServiceSpy(
+                persistedSession: session,
+                refreshResult: .success(session)
+            ),
+            userProfileStore: UserProfileStoreSpy(),
+            networkStatus: .connected,
+            modelContainer: container,
+            syncCoordinator: SyncCoordinator(
+                modelContainer: container,
+                remoteStore: syncRemoteStore,
+                outbox: MistiaSyncOutbox(
+                    defaults: UserDefaults(suiteName: "MistiaTests.\(UUID().uuidString)") ?? .standard,
+                    key: "queued-local-mutation"
+                )
+            )
+        )
+
+        await store.bootstrapIfNeeded()
+        store.requiresInitialSync = false
+        store.lastSyncAt = .now
+        store.setAutoSyncEnabled(true)
+
+        store.recordUpsert(
+            entity: .transaction,
+            recordID: UUID(),
+            modifiedAt: .now,
+            subjectUserIDOverride: session.user.id
+        )
+        try? await Task.sleep(for: .seconds(1))
+
+        XCTAssertEqual(syncRemoteStore.fetchSnapshotCallCount, 0)
+    }
+
+    func testFamilyOwnerMutationPushesImmediatelyWithoutWaitingForAutoSyncCadence() async throws {
+        let session = makeSession()
+        let memberUserID = UUID()
+        let container = try storeTestContainer()
+        let syncRemoteStore = SessionSyncRemoteStoreSpy()
+        let store = try makeSessionStore(
+            authService: SessionAuthServiceSpy(
+                persistedSession: session,
+                refreshResult: .success(session)
+            ),
+            userProfileStore: UserProfileStoreSpy(),
+            networkStatus: .connected,
+            modelContainer: container,
+            syncCoordinator: SyncCoordinator(
+                modelContainer: container,
+                remoteStore: syncRemoteStore,
+                outbox: MistiaSyncOutbox(
+                    defaults: UserDefaults(suiteName: "MistiaTests.\(UUID().uuidString)") ?? .standard,
+                    key: "family-owner-mutation"
+                )
+            )
+        )
+        let wallet = LedgerWallet(
+            name: "Member cash",
+            kind: .cash,
+            iconSymbolName: "banknote",
+            iconColorHex: "#34C759"
+        )
+        container.mainContext.insert(wallet)
+        try container.mainContext.save()
+
+        await store.bootstrapIfNeeded()
+        store.requiresInitialSync = false
+        store.lastSyncAt = .now
+        store.setAutoSyncEnabled(false)
+
+        store.recordUpsert(
+            entity: .wallet,
+            recordID: wallet.id,
+            modifiedAt: wallet.updatedAt,
+            subjectUserIDOverride: memberUserID
+        )
+
+        await waitUntil("family owner mutation pushes immediately") {
+            syncRemoteStore.createCallCount > 0
+        }
+        XCTAssertEqual(syncRemoteStore.createdSubjectUserIDs, [memberUserID])
+    }
+
+    func testFamilyOwnerRemoteChangeCreatesConflictMarkerAndKeepsQueuedMutation() async throws {
+        let session = makeSession()
+        let memberUserID = UUID()
+        let container = try storeTestContainer()
+        let syncRemoteStore = SessionSyncRemoteStoreSpy()
+        let store = try makeSessionStore(
+            authService: SessionAuthServiceSpy(
+                persistedSession: session,
+                refreshResult: .success(session)
+            ),
+            userProfileStore: UserProfileStoreSpy(),
+            networkStatus: .connected,
+            modelContainer: container,
+            syncCoordinator: SyncCoordinator(
+                modelContainer: container,
+                remoteStore: syncRemoteStore,
+                outbox: MistiaSyncOutbox(
+                    defaults: UserDefaults(suiteName: "MistiaTests.\(UUID().uuidString)") ?? .standard,
+                    key: "family-owner-remote-change"
+                )
+            )
+        )
+        let wallet = LedgerWallet(
+            name: "Member cash",
+            kind: .cash,
+            iconSymbolName: "banknote",
+            iconColorHex: "#34C759"
+        )
+        container.mainContext.insert(wallet)
+        try container.mainContext.save()
+        syncRemoteStore.fetchRecordResult = .wallet(remoteWallet(
+            id: wallet.id,
+            userID: memberUserID,
+            name: "Cloud member cash",
+            syncVersion: 2
+        ))
+
+        await store.bootstrapIfNeeded()
+        store.requiresInitialSync = false
+        store.lastSyncAt = .now
+
+        store.recordUpsert(
+            entity: .wallet,
+            recordID: wallet.id,
+            modifiedAt: wallet.updatedAt,
+            subjectUserIDOverride: memberUserID
+        )
+
+        await waitUntil("family owner conflict marker appears") {
+            store.hasFamilyOwnerPushConflict(entity: .wallet, recordID: wallet.id)
+        }
+        let conflict = try XCTUnwrap(store.familyOwnerPushConflict(entity: .wallet, recordID: wallet.id))
+        XCTAssertEqual(conflict.ownerUserID, memberUserID)
+        XCTAssertEqual(conflict.kind, .upsert)
+        XCTAssertTrue(store.protectedQueuedRecordIDs().contains("ledger_wallets:\(wallet.id.uuidString.lowercased())"))
+    }
+
+    func testDiscardFamilyOwnerConflictRemovesQueuedMutationAndRefreshesOwnerFinance() async throws {
+        let session = makeSession()
+        let memberUserID = UUID()
+        let container = try storeTestContainer()
+        let syncRemoteStore = SessionSyncRemoteStoreSpy()
+        let store = try makeSessionStore(
+            authService: SessionAuthServiceSpy(
+                persistedSession: session,
+                refreshResult: .success(session)
+            ),
+            userProfileStore: UserProfileStoreSpy(),
+            networkStatus: .connected,
+            modelContainer: container,
+            syncCoordinator: SyncCoordinator(
+                modelContainer: container,
+                remoteStore: syncRemoteStore,
+                outbox: MistiaSyncOutbox(
+                    defaults: UserDefaults(suiteName: "MistiaTests.\(UUID().uuidString)") ?? .standard,
+                    key: "family-owner-discard"
+                )
+            )
+        )
+        let familyService = FamilyRemoteServiceSpy(
+            snapshot: makeFamilySnapshot(userID: session.user.id, ownerUserID: memberUserID)
+        )
+        let familyStore = FamilyContextStore(
+            modelContainer: container,
+            service: familyService
+        )
+        let wallet = LedgerWallet(
+            name: "Member cash",
+            kind: .cash,
+            iconSymbolName: "banknote",
+            iconColorHex: "#34C759"
+        )
+        container.mainContext.insert(wallet)
+        try container.mainContext.save()
+        syncRemoteStore.fetchRecordResult = .wallet(remoteWallet(
+            id: wallet.id,
+            userID: memberUserID,
+            name: "Cloud member cash",
+            syncVersion: 2
+        ))
+
+        await store.bootstrapIfNeeded()
+        store.requiresInitialSync = false
+        store.lastSyncAt = .now
+        store.recordUpsert(
+            entity: .wallet,
+            recordID: wallet.id,
+            modifiedAt: wallet.updatedAt,
+            subjectUserIDOverride: memberUserID
+        )
+        await waitUntil("family owner conflict marker appears") {
+            store.hasFamilyOwnerPushConflict(entity: .wallet, recordID: wallet.id)
+        }
+
+        await store.discardFamilyOwnerPushConflictAndRefresh(
+            entity: .wallet,
+            recordID: wallet.id,
+            familyContextStore: familyStore
+        )
+
+        XCTAssertFalse(store.hasFamilyOwnerPushConflict(entity: .wallet, recordID: wallet.id))
+        XCTAssertFalse(store.protectedQueuedRecordIDs().contains("ledger_wallets:\(wallet.id.uuidString.lowercased())"))
+        XCTAssertEqual(familyService.accessibleFinanceUserIDBatches.map(Set.init), [Set([memberUserID])])
+    }
+
+    func testForegroundCatchUpRunsWhenLastSyncIsOlderThanTwentyMinutes() async throws {
+        let session = makeSession()
+        let container = try storeTestContainer()
+        let syncRemoteStore = SessionSyncRemoteStoreSpy()
+        let store = try makeSessionStore(
+            authService: SessionAuthServiceSpy(
+                persistedSession: session,
+                refreshResult: .success(session)
+            ),
+            userProfileStore: UserProfileStoreSpy(),
+            networkStatus: .connected,
+            modelContainer: container,
+            syncCoordinator: SyncCoordinator(
+                modelContainer: container,
+                remoteStore: syncRemoteStore,
+                outbox: MistiaSyncOutbox(
+                    defaults: UserDefaults(suiteName: "MistiaTests.\(UUID().uuidString)") ?? .standard,
+                    key: "foreground-catch-up"
+                )
+            )
+        )
+
+        await store.bootstrapIfNeeded()
+        store.requiresInitialSync = false
+        store.lastSyncAt = Date().addingTimeInterval(-1_201)
+        store.setAutoSyncEnabled(true)
+
+        store.handleSceneDidBecomeActive()
+
+        await waitUntil("foreground catch-up syncs after twenty minutes") {
+            syncRemoteStore.fetchSnapshotCallCount > 0
+        }
+    }
+
+    func testFamilyOverviewRefreshCoalescesRapidRequests() async throws {
+        let currentUserID = UUID()
+        let memberUserID = UUID()
+        let session = makeSession(userID: currentUserID)
+        let container = try storeTestContainer()
+        let store = try makeSessionStore(
+            authService: SessionAuthServiceSpy(
+                persistedSession: session,
+                refreshResult: .success(session)
+            ),
+            userProfileStore: UserProfileStoreSpy(),
+            networkStatus: .connected,
+            modelContainer: container
+        )
+        let familyService = FamilyRemoteServiceSpy(
+            snapshot: makeFamilySnapshot(userID: currentUserID, ownerUserID: memberUserID)
+        )
+        familyService.fetchStateDelayNanoseconds = 100_000_000
+        let familyStore = FamilyContextStore(
+            modelContainer: container,
+            service: familyService
+        )
+
+        await store.bootstrapIfNeeded()
+
+        async let first: Void = familyStore.refreshLatest(sessionStore: store, source: .familyOverview)
+        async let second: Void = familyStore.refreshLatest(sessionStore: store, source: .familyOverview)
+        _ = await (first, second)
+
+        XCTAssertEqual(familyService.fetchStateCallCount, 1)
+        XCTAssertEqual(
+            familyService.accessibleFinanceUserIDBatches.map(Set.init),
+            [Set([memberUserID])]
+        )
+    }
+
+    func testFamilyOverviewRefreshKeepsCachedStateWhenRemoteFails() async throws {
+        let currentUserID = UUID()
+        let memberUserID = UUID()
+        let session = makeSession(userID: currentUserID)
+        let container = try storeTestContainer()
+        let store = try makeSessionStore(
+            authService: SessionAuthServiceSpy(
+                persistedSession: session,
+                refreshResult: .success(session)
+            ),
+            userProfileStore: UserProfileStoreSpy(),
+            networkStatus: .connected,
+            modelContainer: container
+        )
+        let initialSnapshot = makeFamilySnapshot(userID: currentUserID, ownerUserID: memberUserID)
+        let familyService = FamilyRemoteServiceSpy(snapshot: initialSnapshot)
+        let familyStore = FamilyContextStore(
+            modelContainer: container,
+            service: familyService
+        )
+
+        await store.bootstrapIfNeeded()
+        await familyStore.refresh(sessionStore: store)
+        XCTAssertEqual(familyStore.family?.id, initialSnapshot.family?.id)
+
+        familyService.fetchStateError = SupabaseServiceError.serverMessage("temporary family outage")
+        await familyStore.refreshLatest(sessionStore: store, source: .familyOverview)
+
+        XCTAssertEqual(familyStore.family?.id, initialSnapshot.family?.id)
+        XCTAssertTrue(familyStore.hasCachedRemoteState)
+        XCTAssertEqual(familyStore.lastErrorMessage, "temporary family outage")
     }
 
     func testFamilyGranularPermissionGrantsSeparateUseEditAndCreate() async throws {
@@ -464,6 +1029,53 @@ final class SessionStoreOfflineTests: XCTestCase {
         )
     }
 
+    func testFamilyNotificationDecodesLegacyMixedTypeMetadata() throws {
+        let notificationID = UUID()
+        let familyID = UUID()
+        let recipientUserID = UUID()
+        let actorUserID = UUID()
+        let transactionID = UUID()
+        let sourceWalletID = UUID()
+        let destinationWalletID = UUID()
+        let json = """
+        {
+          "id": "\(notificationID.uuidString)",
+          "source_event_key": "family-transfer:\(transactionID.uuidString.lowercased())",
+          "family_id": "\(familyID.uuidString)",
+          "user_id": "\(recipientUserID.uuidString)",
+          "actor_user_id": "\(actorUserID.uuidString)",
+          "kind": "family_activity",
+          "resource_type": "transaction",
+          "resource_id": "\(transactionID.uuidString)",
+          "permission_scope": null,
+          "permission_request_id": null,
+          "action_state": "informational",
+          "title": "Nhận tiền",
+          "body": "Transfer received",
+          "metadata": {
+            "action": "family_transfer",
+            "sender_transaction_id": "\(transactionID.uuidString.lowercased())",
+            "source_wallet_id": "\(sourceWalletID.uuidString.lowercased())",
+            "destination_wallet_id": "\(destinationWalletID.uuidString.lowercased())",
+            "amount_minor": 123456
+          },
+          "read_at": null,
+          "created_at": "2026-05-24T12:00:00.000Z",
+          "updated_at": "2026-05-24T12:00:00.000Z",
+          "sync_version": 1
+        }
+        """
+
+        let record = try JSONDecoder.mistiaRemoteAPIDecoder.decode(
+            FamilyNotificationRemoteRecord.self,
+            from: Data(json.utf8)
+        )
+
+        XCTAssertEqual(record.metadata?["action"], "family_transfer")
+        XCTAssertEqual(record.metadata?["amount_minor"], "123456")
+        XCTAssertEqual(record.metadata?["source_wallet_id"], sourceWalletID.uuidString.lowercased())
+    }
+
     func testCreditCardStatementMaintenanceIgnoresFamilyMemberCards() async throws {
         let currentUserID = UUID()
         let memberUserID = UUID()
@@ -560,6 +1172,112 @@ final class SessionStoreOfflineTests: XCTestCase {
         let rows = try context.fetch(FetchDescriptor<AppNotificationRecord>())
         XCTAssertFalse(rows.contains { $0.kind == .creditCardStatementReady })
         XCTAssertFalse(rows.contains { $0.body.localizedCaseInsensitiveContains("Mercard") })
+    }
+
+    func testCreditCardStatementMaintenanceReusesExistingAutoPaymentTransaction() async throws {
+        let currentUserID = UUID()
+        let session = makeSession(userID: currentUserID)
+        let store = try makeSessionStore(
+            authService: SessionAuthServiceSpy(persistedSession: session),
+            userProfileStore: UserProfileStoreSpy(),
+            networkStatus: .disconnected
+        )
+        await store.bootstrapIfNeeded()
+
+        let calendar = Calendar(identifier: .gregorian)
+        let statementMonth = try XCTUnwrap(calendar.date(from: DateComponents(year: 2026, month: 2, day: 1)))
+        let expenseDate = try XCTUnwrap(calendar.date(from: DateComponents(year: 2026, month: 2, day: 12, hour: 12)))
+        let dueDate = try XCTUnwrap(calendar.date(from: DateComponents(year: 2026, month: 3, day: 26, hour: 9)))
+        let seedDate = try XCTUnwrap(calendar.date(from: DateComponents(year: 2026, month: 1, day: 1)))
+
+        let paymentWallet = LedgerWallet(
+            name: "Main",
+            kind: .bank,
+            iconSymbolName: "building.columns.fill",
+            iconColorHex: "#2F80ED",
+            openingBalanceMinor: 100_000,
+            createdAt: seedDate,
+            updatedAt: seedDate
+        )
+        let cardWallet = LedgerWallet(
+            name: "SMBC Card",
+            kind: .creditCard,
+            iconSymbolName: "creditcard.fill",
+            iconColorHex: "#E5484D",
+            openingBalanceMinor: 0,
+            createdAt: seedDate,
+            updatedAt: seedDate
+        )
+        let profile = CreditCardProfile(
+            issuerName: "SMBC",
+            creditLimitMinor: 200_000,
+            statementClosingDay: 10,
+            paymentDueDay: 26,
+            autoPayEnabled: true,
+            createdAt: seedDate,
+            updatedAt: seedDate,
+            wallet: cardWallet,
+            paymentSourceWallet: paymentWallet
+        )
+        cardWallet.creditCardProfile = profile
+        let charge = LedgerTransaction(
+            primaryKind: .expense,
+            title: "Card charge",
+            amountMinor: 32_456,
+            occurredAt: expenseDate,
+            createdAt: expenseDate,
+            updatedAt: expenseDate,
+            sourceWallet: cardWallet
+        )
+        let existingPayment = LedgerTransaction(
+            primaryKind: .transfer,
+            transferSubtype: .internalTransfer,
+            title: "Auto payment for SMBC Card",
+            amountMinor: 32_456,
+            occurredAt: dueDate,
+            createdAt: dueDate,
+            updatedAt: dueDate,
+            sourceWallet: paymentWallet,
+            destinationWallet: cardWallet
+        )
+        let staleOccurrence = DueOccurrenceRecord(
+            sourceKind: .creditCard,
+            sourceID: cardWallet.id,
+            selectedMonthKey: PlanningLogic.monthKey(for: statementMonth, calendar: calendar),
+            scheduledDate: dueDate,
+            amountMinorSnapshot: 32_456,
+            status: .pending,
+            createdAt: seedDate,
+            updatedAt: seedDate
+        )
+
+        let context = store.currentModelContainer.mainContext
+        [paymentWallet, cardWallet].forEach(context.insert)
+        context.insert(profile)
+        context.insert(charge)
+        context.insert(existingPayment)
+        context.insert(staleOccurrence)
+        try context.save()
+
+        await MistiaCreditCardStatementMaintenance.run(
+            modelContext: context,
+            sessionStore: store,
+            referenceDate: dueDate,
+            calendar: calendar
+        )
+
+        let transactions = try context.fetch(FetchDescriptor<LedgerTransaction>())
+        let autoPayments = transactions.filter {
+            $0.primaryKind == .transfer
+                && $0.transferSubtype == .internalTransfer
+                && $0.sourceWallet?.id == paymentWallet.id
+                && $0.destinationWallet?.id == cardWallet.id
+                && $0.amountMinor == 32_456
+                && calendar.isDate($0.occurredAt, inSameDayAs: dueDate)
+        }
+        XCTAssertEqual(autoPayments.count, 1)
+        XCTAssertEqual(staleOccurrence.status, .paid)
+        XCTAssertEqual(staleOccurrence.linkedTransactionID, existingPayment.id)
     }
 
     func testRecurringBillMaintenanceIgnoresFamilyMemberBills() async throws {
@@ -843,7 +1561,8 @@ final class SessionStoreOfflineTests: XCTestCase {
         userProfileStore: UserProfileStoreSpy,
         networkStatus: SessionNetworkStatus,
         modelContainer: ModelContainer? = nil,
-        userDefaults: UserDefaults? = nil
+        userDefaults: UserDefaults? = nil,
+        syncCoordinator: SyncCoordinator? = nil
     ) throws -> SessionStore {
         let resolvedContainer: ModelContainer
         if let modelContainer {
@@ -857,6 +1576,7 @@ final class SessionStoreOfflineTests: XCTestCase {
             userDefaults: userDefaults ?? UserDefaults(suiteName: "MistiaTests.\(UUID().uuidString)") ?? .standard,
             authService: authService,
             userProfileStore: userProfileStore,
+            syncCoordinator: syncCoordinator,
             connectivityMonitor: SessionConnectivityMonitor(initialStatus: networkStatus),
             registerBackgroundRefresh: false
         )
@@ -996,6 +1716,34 @@ final class SessionStoreOfflineTests: XCTestCase {
             createdAt: now,
             updatedAt: now,
             revokedAt: revokedAt
+        )
+    }
+
+    private func remoteWallet(
+        id: UUID,
+        userID: UUID,
+        name: String,
+        syncVersion: Int64
+    ) -> RemoteLedgerWallet {
+        RemoteLedgerWallet(
+            userID: userID,
+            id: id,
+            name: name,
+            kindRawValue: LedgerWalletKind.cash.rawValue,
+            iconSymbolName: "banknote",
+            iconColorHex: "#34C759",
+            currencyCode: "JPY",
+            openingBalanceMinor: 0,
+            institutionDisplayName: nil,
+            institutionPresetKey: nil,
+            sortOrder: 0,
+            isArchived: false,
+            archivedAt: nil,
+            createdAt: Date(),
+            updatedAt: Date(),
+            deletedAt: nil,
+            syncVersion: syncVersion,
+            lastModifiedByDeviceID: UUID()
         )
     }
 
@@ -1148,12 +1896,88 @@ private final class UserProfileStoreSpy: UserProfileRemoteStoring {
 }
 
 @MainActor
+private final class SessionSyncRemoteStoreSpy: MistiaRemoteStore {
+    private(set) var fetchSnapshotSubjectUserIDs: [UUID?] = []
+    private(set) var createdSubjectUserIDs: [UUID] = []
+    var fetchRecordResult: MistiaSyncUploadRecord?
+
+    var fetchSnapshotCallCount: Int {
+        fetchSnapshotSubjectUserIDs.count
+    }
+
+    var createCallCount: Int {
+        createdSubjectUserIDs.count
+    }
+
+    func fetchSnapshot(session: SupabaseAuthSession, subjectUserID: UUID?) async throws -> MistiaRemoteSnapshot {
+        fetchSnapshotSubjectUserIDs.append(subjectUserID)
+        return .empty
+    }
+
+    func fetchRecord(
+        entity: MistiaSyncEntity,
+        recordID: UUID,
+        subjectUserID: UUID,
+        session: SupabaseAuthSession
+    ) async throws -> MistiaSyncUploadRecord? {
+        fetchRecordResult
+    }
+
+    func create(
+        _ record: MistiaSyncUploadRecord,
+        subjectUserID: UUID,
+        session: SupabaseAuthSession
+    ) async throws -> MistiaSyncUploadRecord {
+        createdSubjectUserIDs.append(subjectUserID)
+        return record
+    }
+
+    func conditionalUpdate(
+        _ record: MistiaSyncUploadRecord,
+        expectedVersion: Int64,
+        subjectUserID: UUID,
+        session: SupabaseAuthSession
+    ) async throws -> MistiaSyncUploadRecord? {
+        nil
+    }
+
+    func conditionalDelete(
+        entity: MistiaSyncEntity,
+        recordID: UUID,
+        subjectUserID: UUID,
+        expectedVersion: Int64,
+        modifiedAt: Date,
+        deviceID: UUID,
+        session: SupabaseAuthSession
+    ) async throws -> MistiaSyncUploadRecord? {
+        nil
+    }
+
+    func forceUpsert(
+        _ record: MistiaSyncUploadRecord,
+        subjectUserID: UUID,
+        session: SupabaseAuthSession
+    ) async throws -> MistiaSyncUploadRecord {
+        record
+    }
+
+    func createFamilyActivityNotification(
+        _ event: RemoteFamilyActivityNotificationEvent,
+        session: SupabaseAuthSession
+    ) async throws {
+        // no-op
+    }
+}
+
+@MainActor
 private final class FamilyRemoteServiceSpy: FamilyRemoteServicing {
     private var snapshot: FamilyStateSnapshot
 
     private(set) var fetchStateCallCount = 0
     private(set) var createPermissionRequestCallCount = 0
     private(set) var accessibleFinanceUserIDBatches: [[UUID]] = []
+    var fetchStateDelayNanoseconds: UInt64?
+    var fetchStateError: Error?
 
     init(snapshot: FamilyStateSnapshot) {
         self.snapshot = snapshot
@@ -1165,6 +1989,12 @@ private final class FamilyRemoteServiceSpy: FamilyRemoteServicing {
 
     func fetchState(session: SupabaseAuthSession) async throws -> FamilyStateSnapshot {
         fetchStateCallCount += 1
+        if let fetchStateDelayNanoseconds {
+            try? await Task.sleep(nanoseconds: fetchStateDelayNanoseconds)
+        }
+        if let fetchStateError {
+            throw fetchStateError
+        }
         return snapshot
     }
 

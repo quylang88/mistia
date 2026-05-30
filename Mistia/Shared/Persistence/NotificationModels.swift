@@ -39,6 +39,7 @@ enum MistiaFamilyNotificationResourceType: String, Codable, CaseIterable {
     case goal
     case card
     case debt
+    case familyTransfer = "family_transfer"
     case transaction
     case permission
     case bill
@@ -59,6 +60,8 @@ enum MistiaFamilyNotificationResourceType: String, Codable, CaseIterable {
             return L10n.shared.persistence.notification.card
         case .debt:
             return L10n.shared.persistence.notification.debt
+        case .familyTransfer:
+            return L10n.shared.persistence.notification.familyTransfer
         case .transaction:
             return L10n.shared.persistence.notification.transaction
         case .permission:
@@ -369,6 +372,66 @@ struct FamilyNotificationRemoteRecord: Codable, Identifiable, Equatable {
     }
 }
 
+extension FamilyNotificationRemoteRecord {
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(UUID.self, forKey: .id)
+        sourceEventKey = try container.decode(String.self, forKey: .sourceEventKey)
+        familyID = try container.decode(UUID.self, forKey: .familyID)
+        userID = try container.decode(UUID.self, forKey: .userID)
+        actorUserID = try container.decodeIfPresent(UUID.self, forKey: .actorUserID)
+        kindRawValue = try container.decode(String.self, forKey: .kindRawValue)
+        resourceTypeRawValue = try container.decodeIfPresent(String.self, forKey: .resourceTypeRawValue)
+        resourceID = try container.decodeIfPresent(UUID.self, forKey: .resourceID)
+        permissionScopeRawValue = try container.decodeIfPresent(String.self, forKey: .permissionScopeRawValue)
+        permissionRequestID = try container.decodeIfPresent(UUID.self, forKey: .permissionRequestID)
+        actionStateRawValue = try container.decodeIfPresent(String.self, forKey: .actionStateRawValue)
+            ?? MistiaNotificationActionState.informational.rawValue
+        title = try container.decode(String.self, forKey: .title)
+        body = try container.decode(String.self, forKey: .body)
+
+        if let decodedMetadata = try container.decodeIfPresent(
+            [String: FamilyNotificationMetadataValue].self,
+            forKey: .metadata
+        ) {
+            let stringMetadata = decodedMetadata.reduce(into: [String: String]()) { result, entry in
+                if let value = entry.value.stringValue {
+                    result[entry.key] = value
+                }
+            }
+            metadata = stringMetadata.isEmpty ? nil : stringMetadata
+        } else {
+            metadata = nil
+        }
+
+        readAt = try container.decodeIfPresent(Date.self, forKey: .readAt)
+        createdAt = try container.decode(Date.self, forKey: .createdAt)
+        updatedAt = try container.decode(Date.self, forKey: .updatedAt)
+        syncVersion = try container.decode(Int64.self, forKey: .syncVersion)
+    }
+}
+
+private struct FamilyNotificationMetadataValue: Decodable {
+    let stringValue: String?
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.singleValueContainer()
+        if container.decodeNil() {
+            stringValue = nil
+        } else if let value = try? container.decode(String.self) {
+            stringValue = value
+        } else if let value = try? container.decode(Int64.self) {
+            stringValue = String(value)
+        } else if let value = try? container.decode(Double.self), value.isFinite {
+            stringValue = String(value)
+        } else if let value = try? container.decode(Bool.self) {
+            stringValue = value ? "true" : "false"
+        } else {
+            stringValue = nil
+        }
+    }
+}
+
 struct FamilyPermissionRequestRemoteRecord: Codable, Identifiable, Equatable {
     let id: UUID
     let familyID: UUID
@@ -420,6 +483,7 @@ enum MistiaNotificationStore {
             context.delete(row)
         }
         try context.save()
+        MistiaNotificationBadgeManager.setBadgeCount(0)
         return rows.count
     }
 
@@ -428,8 +492,14 @@ enum MistiaNotificationStore {
         currentUserID: UUID,
         in context: ModelContext
     ) throws {
-        let existingFamilyRows = try context.fetch(FetchDescriptor<AppNotificationRecord>())
-            .filter { $0.source == .family }
+        let familySourceRawValue = MistiaAppNotificationSource.family.rawValue
+        let existingFamilyRows = try context.fetch(
+            FetchDescriptor<AppNotificationRecord>(
+                predicate: #Predicate<AppNotificationRecord> { row in
+                    row.sourceRawValue == familySourceRawValue
+                }
+            )
+        )
         var existingByID = Dictionary(existingFamilyRows.map { ($0.id, $0) }, uniquingKeysWith: latestNotification)
         var existingByKey = Dictionary(existingFamilyRows.map { ($0.key, $0) }, uniquingKeysWith: latestNotification)
 
@@ -482,6 +552,7 @@ enum MistiaNotificationStore {
         }
 
         try context.save()
+        updateAppBadgeCount(in: context, userID: currentUserID)
     }
 
     nonisolated private static func latestNotification(
@@ -495,9 +566,9 @@ enum MistiaNotificationStore {
         for userID: UUID?,
         in context: ModelContext
     ) throws -> [UUID] {
-        let rows = try context.fetch(FetchDescriptor<AppNotificationRecord>())
+        let rows = try unreadRowsVisibleTo(userID, in: context)
         return try markAsRead(
-            rows.filter { isVisible($0, to: userID) && !$0.isRead },
+            rows.filter { isVisible($0, to: userID) },
             in: context
         )
     }
@@ -521,6 +592,7 @@ enum MistiaNotificationStore {
         }
 
         try context.save()
+        updateAppBadgeCount(in: context, userID: rows.first?.recipientUserID)
         return remoteIDs
     }
 
@@ -528,8 +600,17 @@ enum MistiaNotificationStore {
         for userID: UUID?,
         in context: ModelContext
     ) throws -> [UUID] {
-        try context.fetch(FetchDescriptor<AppNotificationRecord>())
-            .filter { isVisible($0, to: userID) && $0.source == .family && $0.needsReadSync && $0.readAt != nil }
+        let familySourceRawValue = MistiaAppNotificationSource.family.rawValue
+        return try context.fetch(
+            FetchDescriptor<AppNotificationRecord>(
+                predicate: #Predicate<AppNotificationRecord> { row in
+                    row.sourceRawValue == familySourceRawValue
+                        && row.needsReadSync
+                        && row.readAt != nil
+                }
+            )
+        )
+            .filter { isVisible($0, to: userID) }
             .map(\.id)
     }
 
@@ -539,7 +620,13 @@ enum MistiaNotificationStore {
     ) throws {
         guard !ids.isEmpty else { return }
         let idSet = Set(ids)
-        let rows = try context.fetch(FetchDescriptor<AppNotificationRecord>())
+        let rows = try context.fetch(
+            FetchDescriptor<AppNotificationRecord>(
+                predicate: #Predicate<AppNotificationRecord> { row in
+                    row.needsReadSync
+                }
+            )
+        )
         for row in rows where idSet.contains(row.id) {
             row.needsReadSync = false
         }
@@ -586,6 +673,41 @@ enum MistiaNotificationStore {
         return recipientUserID == userID
     }
 
+    private static func unreadRowsVisibleTo(
+        _ userID: UUID?,
+        in context: ModelContext
+    ) throws -> [AppNotificationRecord] {
+        let dueSoonRawValue = MistiaAppNotificationKind.dueSoon.rawValue
+
+        if let userID {
+            return try context.fetch(
+                FetchDescriptor<AppNotificationRecord>(
+                    predicate: #Predicate<AppNotificationRecord> { row in
+                        !row.isRead
+                            && row.kindRawValue != dueSoonRawValue
+                            && row.recipientUserID == userID
+                    }
+                )
+            )
+        }
+
+        let localReminderSourceRawValue = MistiaAppNotificationSource.localReminder.rawValue
+        let systemSourceRawValue = MistiaAppNotificationSource.system.rawValue
+        return try context.fetch(
+            FetchDescriptor<AppNotificationRecord>(
+                predicate: #Predicate<AppNotificationRecord> { row in
+                    !row.isRead
+                        && row.kindRawValue != dueSoonRawValue
+                        && row.recipientUserID == nil
+                        && (
+                            row.sourceRawValue == localReminderSourceRawValue
+                                || row.sourceRawValue == systemSourceRawValue
+                        )
+                }
+            )
+        )
+    }
+
     private static func latestReadAt(_ lhs: Date?, _ rhs: Date?) -> Date? {
         switch (lhs, rhs) {
         case (.none, .none):
@@ -603,5 +725,14 @@ enum MistiaNotificationStore {
         guard let metadata, !metadata.isEmpty else { return nil }
         let encoder = JSONEncoder.mistiaSyncEncoder
         return try? String(data: encoder.encode(metadata), encoding: .utf8)
+    }
+
+    static func updateAppBadgeCount(
+        in context: ModelContext,
+        userID: UUID?
+    ) {
+        let rows = (try? context.fetch(FetchDescriptor<AppNotificationRecord>())) ?? []
+        let count = unreadCount(rows: rows, userID: userID)
+        MistiaNotificationBadgeManager.setBadgeCount(count)
     }
 }

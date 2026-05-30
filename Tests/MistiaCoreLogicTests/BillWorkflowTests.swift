@@ -41,6 +41,34 @@ final class BillWorkflowTests: XCTestCase {
 
     func testMistiaFamilyNotificationResourceTypeCases() {
         XCTAssertEqual(MistiaFamilyNotificationResourceType.bill.rawValue, "bill")
+        XCTAssertEqual(MistiaFamilyNotificationResourceType.familyTransfer.rawValue, "family_transfer")
+        }
+
+    func testLegacyRemoteCreditCardProfileDecodesAutoPayEnabledAsTrue() throws {
+        let json = """
+        {
+          "user_id": "10000000-0000-4000-8000-000000000001",
+          "id": "10000000-0000-4000-8000-000000000101",
+          "issuer_name": "Visa",
+          "network_raw_value": "visa",
+          "last4": "1234",
+          "credit_limit_minor": 120000,
+          "statement_closing_day": 25,
+          "payment_due_day": 10,
+          "notes": null,
+          "wallet_id": "10000000-0000-4000-8000-000000000201",
+          "payment_source_wallet_id": "10000000-0000-4000-8000-000000000202",
+          "created_at": "2026-05-01T00:00:00Z",
+          "updated_at": "2026-05-01T00:00:00Z",
+          "deleted_at": null,
+          "sync_version": 7,
+          "last_modified_by_device_id": null
+        }
+        """.data(using: .utf8)!
+
+        let decoded = try JSONDecoder.mistiaRemoteAPIDecoder.decode(RemoteCreditCardProfile.self, from: json)
+
+        XCTAssertTrue(decoded.autoPayEnabled)
     }
 
     // Phase 2: Overview Typed Routing Metadata

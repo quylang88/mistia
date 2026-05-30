@@ -83,12 +83,46 @@ private struct OverviewRenderSnapshot {
     let postedExpenseTransactionsByDay: [Date: [LedgerTransaction]]
 }
 
+private struct OverviewRenderSnapshotCache {
+    let key: OverviewRenderSnapshotCacheKey
+    let snapshot: OverviewRenderSnapshot
+}
+
+private struct OverviewRenderSnapshotCacheKey: Hashable {
+    let activeScope: FamilyContext.Scope
+    let selectedSubjectUserID: UUID?
+    let currentUserID: UUID?
+    let activeLocalProfileUserID: UUID?
+    let signedInUserID: UUID?
+    let familyID: UUID?
+    let currentMonthStart: TimeInterval
+    let calendarIdentifier: String
+    let calendarTimeZoneIdentifier: String
+    let localeIdentifier: String
+    let currencyCode: String
+    let currencyRateMode: String
+    let manualJPYToVNDRate: String
+    let cachedRatesSignature: Int
+    let familyAccessSignature: Int
+    let walletSignature: MistiaCollectionChangeSignature
+    let transactionSignature: MistiaCollectionChangeSignature
+    let budgetSignature: MistiaCollectionChangeSignature
+    let billSignature: MistiaCollectionChangeSignature
+    let installmentSignature: MistiaCollectionChangeSignature
+    let occurrenceSignature: MistiaCollectionChangeSignature
+    let ownershipSignature: MistiaCollectionChangeSignature
+}
+
 struct OverviewView: View {
     @Environment(\.calendar) private var calendar
+    @Environment(\.locale) private var locale
     @Environment(\.modelContext) private var modelContext
     @Environment(SessionStore.self) private var sessionStore
     @Environment(FamilyContextStore.self) private var familyContextStore
     @AppStorage(MistiaAppStorageKey.currencyCode) private var currencyCode = "JPY"
+    @AppStorage(MistiaCurrencySettings.StorageKey.rateMode) private var currencyRateMode = MistiaCurrencyRateMode.automatic.rawValue
+    @AppStorage(MistiaCurrencySettings.StorageKey.manualJPYToVNDRate) private var manualJPYToVNDRate = ""
+    @AppStorage(MistiaCurrencySettings.StorageKey.cachedRatesData) private var cachedCurrencyRatesData = Data()
 
     @Query(filter: #Predicate<BudgetPlan> { $0.deletedAt == nil })
     private var storedBudgets: [BudgetPlan]
@@ -117,9 +151,15 @@ struct OverviewView: View {
     @State private var duePaymentTarget: DuePaymentSheetTarget?
     @State private var permissionPrompt: OverviewPermissionPrompt?
     @State private var infoAlert: OverviewInfoAlert?
+    @State private var memberViewingExitPrompt: FamilyMemberViewingExitPrompt?
+    @State private var renderSnapshotCache: OverviewRenderSnapshotCache?
 
     private var currentMonth: Date {
         PlanningLogic.startOfMonth(for: .now, calendar: calendar)
+    }
+
+    private var appExchangeRates: [MistiaExchangeRate] {
+        MistiaCurrencySettings.rates()
     }
 
     private var renderSnapshot: OverviewRenderSnapshot {
@@ -215,6 +255,7 @@ struct OverviewView: View {
             recurringDues: recurringDueItems + installmentDueItems,
             currencyCode: currencyCode,
             balanceIndex: balanceIndex,
+            exchangeRates: appExchangeRates,
             referenceDate: .now,
             calendar: calendar
         )
@@ -238,6 +279,115 @@ struct OverviewView: View {
             transactionsByID: transactionsByID,
             postedExpenseTransactionsByDay: expenseTransactionsByDay
         )
+    }
+
+    private func cachedRenderSnapshot(for key: OverviewRenderSnapshotCacheKey) -> OverviewRenderSnapshot {
+        if let renderSnapshotCache, renderSnapshotCache.key == key {
+            return renderSnapshotCache.snapshot
+        }
+
+        return renderSnapshot
+    }
+
+    private func refreshRenderSnapshotCache(
+        for key: OverviewRenderSnapshotCacheKey,
+        snapshot: OverviewRenderSnapshot
+    ) {
+        renderSnapshotCache = OverviewRenderSnapshotCache(
+            key: key,
+            snapshot: snapshot
+        )
+    }
+
+    private var renderSnapshotCacheKey: OverviewRenderSnapshotCacheKey {
+        OverviewRenderSnapshotCacheKey(
+            activeScope: familyContextStore.activeContext.scope,
+            selectedSubjectUserID: familyContextStore.selectedSubjectUserID,
+            currentUserID: familyContextStore.currentUserID,
+            activeLocalProfileUserID: sessionStore.activeLocalProfileUserID,
+            signedInUserID: sessionStore.signedInUserID,
+            familyID: familyContextStore.family?.id,
+            currentMonthStart: currentMonth.timeIntervalSince1970,
+            calendarIdentifier: String(describing: calendar.identifier),
+            calendarTimeZoneIdentifier: calendar.timeZone.identifier,
+            localeIdentifier: locale.identifier,
+            currencyCode: currencyCode,
+            currencyRateMode: currencyRateMode,
+            manualJPYToVNDRate: manualJPYToVNDRate,
+            cachedRatesSignature: cachedCurrencyRatesData.hashValue,
+            familyAccessSignature: familyAccessSignature,
+            walletSignature: MistiaCollectionChangeSignature.make(
+                storedWallets,
+                updatedAt: \.updatedAt,
+                deletedAt: \.deletedAt,
+                isArchived: \.isArchived,
+                remoteVersion: \.remoteVersion
+            ),
+            transactionSignature: MistiaCollectionChangeSignature.make(
+                storedTransactions,
+                updatedAt: \.updatedAt,
+                deletedAt: \.deletedAt,
+                isArchived: \.isArchived,
+                remoteVersion: \.remoteVersion
+            ),
+            budgetSignature: MistiaCollectionChangeSignature.make(
+                storedBudgets,
+                updatedAt: \.updatedAt,
+                deletedAt: \.deletedAt,
+                isArchived: \.isArchived,
+                remoteVersion: \.remoteVersion
+            ),
+            billSignature: MistiaCollectionChangeSignature.make(
+                storedBills,
+                updatedAt: \.updatedAt,
+                deletedAt: \.deletedAt,
+                isArchived: \.isArchived,
+                remoteVersion: \.remoteVersion
+            ),
+            installmentSignature: MistiaCollectionChangeSignature.make(
+                storedInstallments,
+                updatedAt: \.updatedAt,
+                deletedAt: \.deletedAt,
+                isArchived: \.isArchived,
+                remoteVersion: \.remoteVersion
+            ),
+            occurrenceSignature: MistiaCollectionChangeSignature.make(
+                storedOccurrences,
+                updatedAt: \.updatedAt,
+                deletedAt: \.deletedAt,
+                remoteVersion: \.remoteVersion
+            ),
+            ownershipSignature: MistiaCollectionChangeSignature.make(
+                ownershipScopes,
+                updatedAt: \.updatedAt,
+                deletedAt: { _ in nil }
+            )
+        )
+    }
+
+    private var familyAccessSignature: Int {
+        var hasher = Hasher()
+        hasher.combine(familyContextStore.currentMembership?.id)
+        hasher.combine(familyContextStore.currentMembership?.updatedAt.timeIntervalSince1970)
+        hasher.combine(familyContextStore.members.count)
+        for member in familyContextStore.members {
+            hasher.combine(member.membershipID)
+            hasher.combine(member.userID)
+            hasher.combine(member.role.rawValue)
+            hasher.combine(member.hasSyncedCloudData)
+        }
+        hasher.combine(familyContextStore.permissionGrants.count)
+        for grant in familyContextStore.permissionGrants {
+            hasher.combine(grant.id)
+            hasher.combine(grant.granteeUserID)
+            hasher.combine(grant.ownerUserID)
+            hasher.combine(grant.resourceTypeRawValue)
+            hasher.combine(grant.resourceID)
+            hasher.combine(grant.permissionScopeRawValue)
+            hasher.combine(grant.updatedAt.timeIntervalSince1970)
+            hasher.combine(grant.revokedAt?.timeIntervalSince1970)
+        }
+        return hasher.finalize()
     }
 
     private var transactionsByID: [UUID: LedgerTransaction] {
@@ -424,6 +574,7 @@ struct OverviewView: View {
             creditCardDues: creditCardDueItems,
             recurringDues: recurringBillDueItems + installmentDueItems,
             currencyCode: currencyCode,
+            exchangeRates: appExchangeRates,
             referenceDate: .now,
             calendar: calendar
         )
@@ -445,17 +596,27 @@ struct OverviewView: View {
     }
 
     var body: some View {
-        let renderSnapshot = self.renderSnapshot
+        let snapshotKey = renderSnapshotCacheKey
+        let renderSnapshot = cachedRenderSnapshot(for: snapshotKey)
+        let memberToolbar = familyContextStore.memberViewingToolbarPresentation
 
         NavigationStack {
             MistiaPinnedTopBarScaffold(
                 tone: .standard,
                 title: L10n.overview.overview.overview,
                 embedsInNavigationStack: false,
-                leadingInitials: sessionStore.summary?.initials ?? "MI",
-                leadingAvatarURL: sessionStore.summary?.avatarURL,
+                leadingInitials: memberToolbar?.initials ?? sessionStore.summary?.initials ?? "MI",
+                leadingAvatarURL: memberToolbar != nil ? familyContextStore.viewedMember?.avatarURL : sessionStore.summary?.avatarURL,
+                leadingAccessibilityLabel: memberToolbar?.accessibilityLabel,
+                leadingAvatarAttentionPulse: memberToolbar != nil,
                 trailingSystemImage: nil,
-                onLeadingTap: { destination = .profile },
+                onLeadingTap: {
+                    if let memberToolbar {
+                        memberViewingExitPrompt = FamilyMemberViewingExitPrompt(presentation: memberToolbar)
+                    } else {
+                        destination = .profile
+                    }
+                },
                 contentSpacing: 18,
                 titleDisplayMode: .large,
                 pinnedHeader: { EmptyView() },
@@ -465,7 +626,6 @@ struct OverviewView: View {
                     }
                 }
             ) {
-                FamilyContextChipBar()
                 OverviewHeroCard(
                     snapshot: renderSnapshot.dashboard.hero,
                     isSheetPresented: selectedExpenseDay != nil,
@@ -498,6 +658,10 @@ struct OverviewView: View {
                 ManagementCreditCardStatementView(wallet: target.wallet, initialMonth: target.month)
             }
         }
+        .familyMemberViewingExitAlert(
+            prompt: $memberViewingExitPrompt,
+            familyContextStore: familyContextStore
+        )
         .sheet(item: $selectedExpenseDay) { selection in
             OverviewDayTransactionsSheet(
                 day: selection.date,
@@ -547,6 +711,9 @@ struct OverviewView: View {
                 modelContext: modelContext,
                 sessionStore: sessionStore
             )
+        }
+        .task(id: snapshotKey) {
+            refreshRenderSnapshotCache(for: snapshotKey, snapshot: renderSnapshot)
         }
     }
 
@@ -705,9 +872,30 @@ struct OverviewView: View {
                 dueDate: alert.dueDate,
                 requiresAmountInput: alert.requiresAmountInput,
                 currencyCode: alert.currencyCode,
-                name: alert.name
+                name: alert.name,
+                ownerUserID: dueOwnerUserID(for: alert)
             )
         }
+    }
+
+    private func dueOwnerUserID(for alert: OverviewDueAlertSnapshot) -> UUID? {
+        guard let sourceID = alert.sourceID else {
+            return familyContextStore.selectedSubjectUserID ?? sessionStore.activeLocalProfileUserID
+        }
+
+        let entity: MistiaSyncEntity
+        switch alert.sourceKind {
+        case .recurringBill:
+            entity = .recurringBillPlan
+        case .installment:
+            entity = .installmentPlan
+        case .creditCard:
+            entity = .wallet
+        }
+
+        return MistiaRecordOwnershipStore.ownerMap(from: ownershipScopes, entity: entity)[sourceID]
+            ?? familyContextStore.selectedSubjectUserID
+            ?? sessionStore.activeLocalProfileUserID
     }
 }
 

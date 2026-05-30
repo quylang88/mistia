@@ -18,6 +18,7 @@ struct NotificationCenterView: View {
     private var storedCategories: [TransactionCategory]
     @Query(filter: #Predicate<RecurringBillPlan> { $0.deletedAt == nil && !$0.isArchived })
     private var storedBills: [RecurringBillPlan]
+    @Query private var ownershipScopes: [OwnedRecordScope]
 
     private struct StatementTarget: Identifiable, Hashable {
         let wallet: LedgerWallet
@@ -375,7 +376,8 @@ struct NotificationCenterView: View {
                 dueDate: payload.dueDate,
                 requiresAmountInput: payload.requiresAmountInput,
                 currencyCode: payload.currencyCode,
-                name: payload.billName
+                name: payload.billName,
+                ownerUserID: dueOwnerUserID(for: payload)
             )
         } else if row.opensCreditCardStatement, row.resourceType == .card, let walletID = row.resourceID {
             if let wallet = storedWallets.first(where: { $0.id == walletID }) {
@@ -389,6 +391,23 @@ struct NotificationCenterView: View {
                 )
             }
         }
+    }
+
+    private func dueOwnerUserID(for payload: DueNotificationActionPayload) -> UUID? {
+        let sourceKind = PlanningDueSourceKind(rawValue: payload.sourceKind) ?? .recurringBill
+        let entity: MistiaSyncEntity
+        switch sourceKind {
+        case .recurringBill:
+            entity = .recurringBillPlan
+        case .installment:
+            entity = .installmentPlan
+        case .creditCard:
+            entity = .wallet
+        }
+
+        return MistiaRecordOwnershipStore.ownerMap(from: ownershipScopes, entity: entity)[payload.sourceID]
+            ?? familyContextStore.selectedSubjectUserID
+            ?? sessionStore.activeLocalProfileUserID
     }
 
     private func handleFamilyActivityTap(_ row: AppNotificationRecord) -> Bool {
@@ -413,7 +432,7 @@ struct NotificationCenterView: View {
             return .transactions
         case .wallet, .category:
             return .settings
-        case .budget, .goal, .card, .debt, .bill, .due, .installment:
+        case .budget, .goal, .card, .debt, .bill, .due, .installment, .familyTransfer:
             return .planning
         case .permission, nil:
             return .settings

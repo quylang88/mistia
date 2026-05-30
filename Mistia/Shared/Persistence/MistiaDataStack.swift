@@ -361,8 +361,7 @@ enum MistiaDataStack {
             decoder.dateDecodingStrategy = .custom { decoder in
                 let container = try decoder.singleValueContainer()
                 if let stringValue = try? container.decode(String.self) {
-                    if let date = ISO8601DateFormatter.mistiaSyncWithFractionalSeconds.date(from: stringValue)
-                        ?? ISO8601DateFormatter.mistiaSyncWithoutFractionalSeconds.date(from: stringValue) {
+                    if let date = MistiaISO8601DateCoding.date(from: stringValue) {
                         return date
                     }
                 }
@@ -383,7 +382,7 @@ enum MistiaDataStack {
             let encoder = JSONEncoder()
             encoder.dateEncodingStrategy = .custom { date, encoder in
                 var container = encoder.singleValueContainer()
-                try container.encode(ISO8601DateFormatter.mistiaSyncWithFractionalSeconds.string(from: date))
+                try container.encode(MistiaISO8601DateCoding.stringWithFractionalSeconds(from: date))
             }
             let data = try encoder.encode(descriptors)
             userDefaults.set(data, forKey: MistiaPersistenceStorageKey.localProfileDescriptors)

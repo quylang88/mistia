@@ -23,6 +23,7 @@ struct ManagementCreditCardStatementView: View {
     @State private var showingAlert = false
     @State private var alertMessage = ""
     @State private var viewID = UUID()
+    @State private var isMonthPickerPresented = false
 
     init(wallet: LedgerWallet, initialMonth: Date? = nil) {
         self.wallet = wallet
@@ -108,17 +109,8 @@ struct ManagementCreditCardStatementView: View {
     }
 
     private var monthMenu: some View {
-        Menu {
-            ForEach(availableMonths, id: \.self) { month in
-                Button {
-                    selectedMonth = month
-                } label: {
-                    Label(
-                        MistiaDateFormatting.statementMonthYearString(for: month, calendar: calendar),
-                        systemImage: calendar.isDate(month, equalTo: selectedMonth, toGranularity: .month) ? "checkmark" : "calendar"
-                    )
-                }
-            }
+        Button {
+            isMonthPickerPresented = true
         } label: {
             HStack(spacing: 10) {
                 Image(systemName: "calendar")
@@ -139,6 +131,14 @@ struct ManagementCreditCardStatementView: View {
             )
         }
         .buttonStyle(.plain)
+        .sheet(isPresented: $isMonthPickerPresented) {
+            MistiaMonthPickerSheet(
+                selection: $selectedMonth,
+                calendar: calendar,
+                accentColor: MistiaAccent.purple.color
+            )
+            .presentationDetents([.height(280)])
+        }
     }
 
     private func statementHero(_ statement: PlanningCreditCardStatementSnapshot) -> some View {
@@ -281,34 +281,7 @@ struct ManagementCreditCardStatementView: View {
         .sorted { $0.occurredAt > $1.occurredAt }
     }
 
-    private func paymentTransactions(for statement: PlanningCreditCardStatementSnapshot) -> [LedgerTransaction] {
-        let dueEnd = calendar.date(
-            byAdding: .day,
-            value: 1,
-            to: calendar.startOfDay(for: statement.dueDate)
-        ) ?? statement.dueDate
-
-        return allTransactions.filter { tx in
-            tx.destinationWallet?.id == wallet.id
-                && tx.entryStatus == .posted
-                && tx.primaryKind == .transfer
-                && tx.transferSubtype == .internalTransfer
-                && tx.occurredAt >= statement.closingDate
-                && tx.occurredAt < dueEnd
-        }
-        .sorted { $0.occurredAt > $1.occurredAt }
-    }
-
-    private func findPaymentTransaction(for statement: PlanningCreditCardStatementSnapshot) -> LedgerTransaction? {
-        paymentTransactions(for: statement).first { $0.amountMinor >= statement.amountMinor }
-    }
-
     private func effectiveState(for statement: PlanningCreditCardStatementSnapshot) -> PlanningCreditCardStatementState {
-        if statement.state != .unclosed,
-           statement.amountMinor > 0,
-           findPaymentTransaction(for: statement) != nil {
-            return .paid
-        }
         return statement.state
     }
 

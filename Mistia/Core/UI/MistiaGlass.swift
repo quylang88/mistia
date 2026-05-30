@@ -403,13 +403,76 @@ struct MistiaHeaderCircleMenu<Label: View, MenuContent: View>: View {
     }
 }
 
+private struct MistiaAttentionPulseAvatar: View {
+    let initials: String
+    let avatarURL: URL?
+    let size: CGFloat
+    let isActive: Bool
+
+    @Environment(\.accessibilityReduceMotion) private var accessibilityReduceMotion
+    @Environment(\.colorScheme) private var colorScheme
+    @State private var pulseScale: CGFloat = 1
+    @State private var pulseOpacity: Double = 0
+
+    var body: some View {
+        MistiaAvatarBadge(initials: initials, avatarURL: avatarURL, size: size)
+            .overlay {
+                Circle()
+                    .strokeBorder(pulseColor.opacity(pulseOpacity), lineWidth: 2.0)
+                    .scaleEffect(pulseScale)
+                    .allowsHitTesting(false)
+            }
+            .task(id: "\(isActive)-\(accessibilityReduceMotion)") {
+                await runPulseLoop()
+            }
+    }
+
+    private var pulseColor: Color {
+        colorScheme == .dark ? MistiaAccent.lightPurple.color : MistiaAccent.purple.color
+    }
+
+    @MainActor
+    private func resetPulse() {
+        pulseScale = 1
+        pulseOpacity = 0
+    }
+
+    private func runPulseLoop() async {
+        resetPulse()
+        guard isActive, !accessibilityReduceMotion else { return }
+
+        while !Task.isCancelled {
+            await MainActor.run {
+                pulseScale = 1
+                pulseOpacity = 0.85
+                withAnimation(.easeOut(duration: 1.6)) {
+                    pulseScale = 2.2
+                    pulseOpacity = 0
+                }
+            }
+
+            try? await Task.sleep(for: .seconds(2.5))
+            guard !Task.isCancelled else { return }
+            resetPulse()
+        }
+    }
+}
+
 struct MistiaPinnedTopBarScaffold<PinnedHeader: View, Content: View, TrailingAccessory: View>: View {
+    enum HeaderBehavior {
+        case fixedInset
+        case scrollsThenPins
+    }
+
     let tone: MistiaBackgroundTone
     let title: String
     var embedsInNavigationStack: Bool = true
     var showsLeadingAvatar: Bool = true
+    var isLeadingEnabled: Bool = true
     var leadingInitials: String = "QL"
     var leadingAvatarURL: URL? = nil
+    var leadingAccessibilityLabel: String? = nil
+    var leadingAvatarAttentionPulse: Bool = false
     var leadingSystemImage: String? = nil
     var trailingSystemImage: String? = "bell"
     var hidesSystemBackButton: Bool = false
@@ -419,6 +482,7 @@ struct MistiaPinnedTopBarScaffold<PinnedHeader: View, Content: View, TrailingAcc
     var contentSpacing: CGFloat = 18
     var contentBottomPadding: CGFloat = 150
     var titleDisplayMode: NavigationBarItem.TitleDisplayMode = .inline
+    var headerBehavior: HeaderBehavior = .fixedInset
     @ViewBuilder let pinnedHeader: PinnedHeader
     @ViewBuilder let trailingAccessory: TrailingAccessory
     @ViewBuilder let content: Content
@@ -430,6 +494,9 @@ struct MistiaPinnedTopBarScaffold<PinnedHeader: View, Content: View, TrailingAcc
         showsLeadingAvatar: Bool = true,
         leadingInitials: String = "QL",
         leadingAvatarURL: URL? = nil,
+        leadingAccessibilityLabel: String? = nil,
+        leadingAvatarAttentionPulse: Bool = false,
+        isLeadingEnabled: Bool = true,
         leadingSystemImage: String? = nil,
         trailingSystemImage: String? = "bell",
         hidesSystemBackButton: Bool = false,
@@ -439,6 +506,7 @@ struct MistiaPinnedTopBarScaffold<PinnedHeader: View, Content: View, TrailingAcc
         contentSpacing: CGFloat = 18,
         contentBottomPadding: CGFloat = 150,
         titleDisplayMode: NavigationBarItem.TitleDisplayMode = .inline,
+        headerBehavior: HeaderBehavior = .fixedInset,
         @ViewBuilder pinnedHeader: () -> PinnedHeader,
         @ViewBuilder trailingAccessory: () -> TrailingAccessory,
         @ViewBuilder content: () -> Content
@@ -447,8 +515,11 @@ struct MistiaPinnedTopBarScaffold<PinnedHeader: View, Content: View, TrailingAcc
         self.title = title
         self.embedsInNavigationStack = embedsInNavigationStack
         self.showsLeadingAvatar = showsLeadingAvatar
+        self.isLeadingEnabled = isLeadingEnabled
         self.leadingInitials = leadingInitials
         self.leadingAvatarURL = leadingAvatarURL
+        self.leadingAccessibilityLabel = leadingAccessibilityLabel
+        self.leadingAvatarAttentionPulse = leadingAvatarAttentionPulse
         self.leadingSystemImage = leadingSystemImage
         self.trailingSystemImage = trailingSystemImage
         self.hidesSystemBackButton = hidesSystemBackButton
@@ -458,6 +529,7 @@ struct MistiaPinnedTopBarScaffold<PinnedHeader: View, Content: View, TrailingAcc
         self.contentSpacing = contentSpacing
         self.contentBottomPadding = contentBottomPadding
         self.titleDisplayMode = titleDisplayMode
+        self.headerBehavior = headerBehavior
         self.pinnedHeader = pinnedHeader()
         self.trailingAccessory = trailingAccessory()
         self.content = content()
@@ -477,13 +549,28 @@ struct MistiaPinnedTopBarScaffold<PinnedHeader: View, Content: View, TrailingAcc
 
     private var baseScrollableContent: some View {
         ScrollView(.vertical, showsIndicators: false) {
-            LazyVStack(spacing: contentSpacing) {
-                content
+            if headerBehavior == .scrollsThenPins, PinnedHeader.self != EmptyView.self {
+                LazyVStack(spacing: contentSpacing, pinnedViews: [.sectionHeaders]) {
+                    Section {
+                        content
+                    } header: {
+                        pinnedHeader
+                            .padding(.horizontal, -18)
+                    }
+                }
+                .frame(maxWidth: .infinity)
+                .padding(.horizontal, 18)
+                .padding(.top, 8)
+                .padding(.bottom, contentBottomPadding)
+            } else {
+                LazyVStack(spacing: contentSpacing) {
+                    content
+                }
+                .frame(maxWidth: .infinity)
+                .padding(.horizontal, 18)
+                .padding(.top, 8)
+                .padding(.bottom, contentBottomPadding)
             }
-            .frame(maxWidth: .infinity)
-            .padding(.horizontal, 18)
-            .padding(.top, 8)
-            .padding(.bottom, contentBottomPadding)
         }
         .modifier(MistiaTopScrollEdgeEffect())
         .scrollIndicators(.hidden)
@@ -505,7 +592,7 @@ struct MistiaPinnedTopBarScaffold<PinnedHeader: View, Content: View, TrailingAcc
         ZStack {
             MistiaBackgroundView(tone: tone)
 
-            if PinnedHeader.self != EmptyView.self {
+            if PinnedHeader.self != EmptyView.self && headerBehavior == .fixedInset {
                 scrollableContent
                     .safeAreaInset(edge: .top) {
                         pinnedHeader
@@ -558,10 +645,30 @@ struct MistiaPinnedTopBarScaffold<PinnedHeader: View, Content: View, TrailingAcc
                     .symbolRenderingMode(.monochrome)
                     .foregroundStyle(.primary)
             }
+            .disabled(!isLeadingEnabled)
+            .opacity(isLeadingEnabled ? 1 : 0.45)
         } else if showsLeadingAvatar {
-            MistiaHeaderCircleButton(action: onLeadingTap) {
-                MistiaAvatarBadge(initials: leadingInitials, avatarURL: leadingAvatarURL, size: 28)
-            }
+            leadingAvatarButton
+        }
+    }
+
+    @ViewBuilder
+    private var leadingAvatarButton: some View {
+        let button = MistiaHeaderCircleButton(action: onLeadingTap) {
+            MistiaAttentionPulseAvatar(
+                initials: leadingInitials,
+                avatarURL: leadingAvatarURL,
+                size: 28,
+                isActive: leadingAvatarAttentionPulse
+            )
+        }
+        .disabled(!isLeadingEnabled)
+        .opacity(isLeadingEnabled ? 1 : 0.45)
+
+        if let leadingAccessibilityLabel {
+            button.accessibilityLabel(Text(leadingAccessibilityLabel))
+        } else {
+            button
         }
     }
 
@@ -588,6 +695,9 @@ extension MistiaPinnedTopBarScaffold where TrailingAccessory == EmptyView {
         showsLeadingAvatar: Bool = true,
         leadingInitials: String = "QL",
         leadingAvatarURL: URL? = nil,
+        leadingAccessibilityLabel: String? = nil,
+        leadingAvatarAttentionPulse: Bool = false,
+        isLeadingEnabled: Bool = true,
         leadingSystemImage: String? = nil,
         trailingSystemImage: String? = "bell",
         hidesSystemBackButton: Bool = false,
@@ -597,6 +707,7 @@ extension MistiaPinnedTopBarScaffold where TrailingAccessory == EmptyView {
         contentSpacing: CGFloat = 18,
         contentBottomPadding: CGFloat = 150,
         titleDisplayMode: NavigationBarItem.TitleDisplayMode = .inline,
+        headerBehavior: HeaderBehavior = .fixedInset,
         @ViewBuilder pinnedHeader: () -> PinnedHeader,
         @ViewBuilder content: () -> Content
     ) {
@@ -607,6 +718,9 @@ extension MistiaPinnedTopBarScaffold where TrailingAccessory == EmptyView {
             showsLeadingAvatar: showsLeadingAvatar,
             leadingInitials: leadingInitials,
             leadingAvatarURL: leadingAvatarURL,
+            leadingAccessibilityLabel: leadingAccessibilityLabel,
+            leadingAvatarAttentionPulse: leadingAvatarAttentionPulse,
+            isLeadingEnabled: isLeadingEnabled,
             leadingSystemImage: leadingSystemImage,
             trailingSystemImage: trailingSystemImage,
             hidesSystemBackButton: hidesSystemBackButton,
@@ -616,6 +730,7 @@ extension MistiaPinnedTopBarScaffold where TrailingAccessory == EmptyView {
             contentSpacing: contentSpacing,
             contentBottomPadding: contentBottomPadding,
             titleDisplayMode: titleDisplayMode,
+            headerBehavior: headerBehavior,
             pinnedHeader: pinnedHeader,
             trailingAccessory: { EmptyView() },
             content: content
@@ -631,6 +746,9 @@ extension MistiaPinnedTopBarScaffold where PinnedHeader == EmptyView, TrailingAc
         showsLeadingAvatar: Bool = true,
         leadingInitials: String = "QL",
         leadingAvatarURL: URL? = nil,
+        leadingAccessibilityLabel: String? = nil,
+        leadingAvatarAttentionPulse: Bool = false,
+        isLeadingEnabled: Bool = true,
         leadingSystemImage: String? = nil,
         trailingSystemImage: String? = "bell",
         hidesSystemBackButton: Bool = false,
@@ -640,6 +758,7 @@ extension MistiaPinnedTopBarScaffold where PinnedHeader == EmptyView, TrailingAc
         contentSpacing: CGFloat = 18,
         contentBottomPadding: CGFloat = 150,
         titleDisplayMode: NavigationBarItem.TitleDisplayMode = .inline,
+        headerBehavior: HeaderBehavior = .fixedInset,
         @ViewBuilder content: () -> Content
     ) {
         self.init(
@@ -649,6 +768,9 @@ extension MistiaPinnedTopBarScaffold where PinnedHeader == EmptyView, TrailingAc
             showsLeadingAvatar: showsLeadingAvatar,
             leadingInitials: leadingInitials,
             leadingAvatarURL: leadingAvatarURL,
+            leadingAccessibilityLabel: leadingAccessibilityLabel,
+            leadingAvatarAttentionPulse: leadingAvatarAttentionPulse,
+            isLeadingEnabled: isLeadingEnabled,
             leadingSystemImage: leadingSystemImage,
             trailingSystemImage: trailingSystemImage,
             hidesSystemBackButton: hidesSystemBackButton,
@@ -658,6 +780,7 @@ extension MistiaPinnedTopBarScaffold where PinnedHeader == EmptyView, TrailingAc
             contentSpacing: contentSpacing,
             contentBottomPadding: contentBottomPadding,
             titleDisplayMode: titleDisplayMode,
+            headerBehavior: headerBehavior,
             pinnedHeader: { EmptyView() },
             trailingAccessory: { EmptyView() },
             content: content

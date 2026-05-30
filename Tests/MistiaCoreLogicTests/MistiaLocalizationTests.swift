@@ -57,6 +57,51 @@ final class MistiaLocalizationTests: XCTestCase {
         )
     }
 
+    func testGeneratedL10nFollowsSelectedAppLanguage() {
+        XCTAssertEqual(L10n.settings.title(language: .vietnamese), "Cài đặt")
+        XCTAssertEqual(L10n.settings.title(language: .english), "Settings")
+        XCTAssertEqual(L10n.settings.title(language: .japanese), "設定")
+
+        MistiaAppLanguage.persist(.english)
+        XCTAssertEqual(L10n.settings.title, "Settings")
+
+        MistiaAppLanguage.persist(.japanese)
+        XCTAssertEqual(L10n.settings.title, "設定")
+
+        MistiaAppLanguage.persist(.vietnamese)
+        XCTAssertEqual(L10n.common.cancel, "Hủy")
+    }
+
+    func testAIBillEmptyStateMessageMentionsLimitAndAISplitting() {
+        XCTAssertEqual(
+            L10n.transactions.aibill.noBillsMessage(language: .vietnamese),
+            "Thêm tối đa 5 ảnh bill để AI tách từng mục đã mua."
+        )
+        XCTAssertEqual(
+            L10n.transactions.aibill.noBillsMessage(language: .english),
+            "Add up to 5 receipt images for AI to split items."
+        )
+        XCTAssertEqual(
+            L10n.transactions.aibill.noBillsMessage(language: .japanese),
+            "最大5枚のレシートを追加してAIで明細を分けます。"
+        )
+    }
+
+    func testCurrencyNamesFollowSelectedAppLanguage() {
+        XCTAssertEqual(L10n.settings.currency.currencyNameJPY(language: .vietnamese), "Yên Nhật")
+        XCTAssertEqual(L10n.settings.currency.currencyNameVND(language: .vietnamese), "Việt Nam Đồng")
+        XCTAssertEqual(L10n.settings.currency.currencyNameJPY(language: .japanese), "日本円")
+        XCTAssertEqual(L10n.settings.currency.currencyNameVND(language: .japanese), "ベトナムドン")
+    }
+
+    func testCurrencyRateModeDefaultsToManual() {
+        let suiteName = "MistiaLocalizationTests.currencyRateMode.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suiteName)!
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+
+        XCTAssertEqual(MistiaCurrencySettings.rateMode(defaults: defaults), .manual)
+    }
+
     func testMonthYearFormattingUsesLanguageSpecificLocaleProfiles() {
         XCTAssertEqual(
             MistiaDateFormatting.monthYearString(for: referenceDate, language: .vietnamese),
@@ -118,6 +163,21 @@ final class MistiaLocalizationTests: XCTestCase {
 
         let decoded = try JSONDecoder.mistiaRemoteAPIDecoder.decode(DatePayload.self, from: encoded)
         XCTAssertEqual(decoded.occurredAt, localDate)
+    }
+
+    func testSharedISO8601DateCodingHandlesRemoteSyncFormats() throws {
+        let date = try XCTUnwrap(MistiaISO8601DateCoding.date(from: "2026-05-06T09:15:49.204Z"))
+
+        XCTAssertEqual(
+            MistiaISO8601DateCoding.stringWithFractionalSeconds(from: date),
+            "2026-05-06T09:15:49.204Z"
+        )
+        XCTAssertEqual(
+            MistiaISO8601DateCoding
+                .date(from: "2026-05-06T09:15:49Z")
+                .map(MistiaISO8601DateCoding.stringWithFractionalSeconds(from:)),
+            "2026-05-06T09:15:49.000Z"
+        )
     }
 
     func testRelativeLabelsFollowSelectedLanguage() {
@@ -231,6 +291,43 @@ final class MistiaLocalizationTests: XCTestCase {
         XCTAssertTrue(vietnameseJPY.first.map { $0 == "¥" || $0 == "￥" } ?? false)
     }
 
+    func testVNDFormatsWithoutFractionDigits() {
+        let formatted = Int64(123_456_789).formattedCurrency(code: "VND")
+
+        XCTAssertTrue(formatted.contains("₫") || formatted.uppercased().contains("VND"))
+        XCTAssertFalse(formatted.contains(".00"))
+        XCTAssertFalse(formatted.contains(",00"))
+    }
+
+    func testApproximatePrimaryAmountOnlyShowsForDifferentCurrencies() {
+        let rate = MistiaExchangeRate(
+            baseCurrencyCode: "VND",
+            quoteCurrencyCode: "JPY",
+            rateDecimalString: "0.006",
+            provider: "test",
+            fetchedAt: Date(timeIntervalSince1970: 1_774_051_200),
+            rateDate: "2026-03-21"
+        )
+
+        XCTAssertNil(
+            MistiaCurrencyLogic.approximatePrimaryAmountText(
+                amountMinor: 150_000,
+                sourceCurrencyCode: "VND",
+                primaryCurrencyCode: "VND",
+                rates: [rate]
+            )
+        )
+
+        let text = MistiaCurrencyLogic.approximatePrimaryAmountText(
+            amountMinor: 150_000,
+            sourceCurrencyCode: "VND",
+            primaryCurrencyCode: "JPY",
+            rates: [rate]
+        )
+
+        XCTAssertEqual(text, "~¥900")
+    }
+
     func testBootstrapStoredPreferenceRestoresBackupBeforeInferringSystemLanguage() {
         UserDefaults.standard.removeObject(forKey: MistiaAppLanguage.userDefaultsKey)
         UserDefaults.standard.set(
@@ -296,6 +393,14 @@ final class MistiaLocalizationTests: XCTestCase {
         XCTAssertTrue(quickPickKeys.contains(.internet))
         XCTAssertTrue(quickPickKeys.contains(.phone))
         XCTAssertTrue(quickPickKeys.contains(.gas))
+        XCTAssertTrue(quickPickKeys.contains(.publicTransport))
+        XCTAssertTrue(quickPickKeys.contains(.parking))
+        XCTAssertTrue(quickPickKeys.contains(.tolls))
+        XCTAssertTrue(quickPickKeys.contains(.fuel))
+        XCTAssertTrue(quickPickKeys.contains(.vehicleMaintenance))
+        XCTAssertTrue(quickPickKeys.contains(.vehicleRepair))
+        XCTAssertTrue(quickPickKeys.contains(.vehicleInsurance))
+        XCTAssertTrue(quickPickKeys.contains(.vehicleRegistration))
         XCTAssertTrue(quickPickKeys.contains(.loanRepayment))
         XCTAssertFalse(quickPickKeys.contains(.otherExpense))
     }
