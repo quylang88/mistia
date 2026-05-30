@@ -652,9 +652,14 @@ enum MistiaNotificationStore {
     static func isVisible(
         _ row: AppNotificationRecord,
         to userID: UUID?,
-        referenceDate: Date = .now
+        referenceDate: Date = .now,
+        defaults: UserDefaults = .standard
     ) -> Bool {
         guard row.kind != .dueSoon else {
+            return false
+        }
+
+        if row.source == .family, !MistiaNotificationPreferences.familyEnabled(defaults: defaults) {
             return false
         }
 
