@@ -247,6 +247,14 @@ nonisolated extension TransactionLogic {
         referenceDate: Date = .now,
         calendar: Calendar = MistiaCalendar.current
     ) -> TransactionCreditCardStatementSnapshot {
+        guard !accounts.isEmpty else {
+            return TransactionCreditCardStatementSnapshot(
+                generatedAt: referenceDate,
+                cards: []
+            )
+        }
+
+        let transactionBuckets = creditCardStatementTransactionBuckets(from: transactions)
         let cards = accounts
             .sorted {
                 $0.walletName.localizedCaseInsensitiveCompare($1.walletName) == .orderedAscending
@@ -258,27 +266,12 @@ nonisolated extension TransactionLogic {
                     calendar: calendar
                 )
 
-                let charges = transactions
-                    .filter {
-                        $0.entryStatus == .posted
-                            && !$0.isArchived
-                            && $0.primaryKind == .expense
-                            && $0.sourceWalletID == account.walletID
-                            && contains($0.occurredAt, in: cycle)
-                    }
-                    .sorted(by: transactionSort)
+                let charges = transactionBuckets.chargesByWalletID[account.walletID, default: []]
+                    .filter { contains($0.occurredAt, in: cycle) }
                     .map { makeStatementRow(from: $0, currencyCode: account.currencyCode) }
 
-                let payments = transactions
-                    .filter {
-                        $0.entryStatus == .posted
-                            && !$0.isArchived
-                            && $0.primaryKind == .transfer
-                            && $0.transferSubtype == .internalTransfer
-                            && $0.destinationWalletID == account.walletID
-                            && contains($0.occurredAt, in: cycle)
-                    }
-                    .sorted(by: transactionSort)
+                let payments = transactionBuckets.paymentsByWalletID[account.walletID, default: []]
+                    .filter { contains($0.occurredAt, in: cycle) }
                     .map { makeStatementRow(from: $0, currencyCode: account.currencyCode) }
 
                 let availableCredit = max(account.creditLimitMinor - account.currentDebtMinor, 0)
@@ -315,6 +308,45 @@ nonisolated extension TransactionLogic {
         return TransactionCreditCardStatementSnapshot(
             generatedAt: referenceDate,
             cards: cards
+        )
+    }
+
+    private struct CreditCardStatementTransactionBuckets {
+        let chargesByWalletID: [UUID: [OverviewTransactionSnapshot]]
+        let paymentsByWalletID: [UUID: [OverviewTransactionSnapshot]]
+    }
+
+    private static func creditCardStatementTransactionBuckets(
+        from transactions: [OverviewTransactionSnapshot]
+    ) -> CreditCardStatementTransactionBuckets {
+        var chargesByWalletID: [UUID: [OverviewTransactionSnapshot]] = [:]
+        var paymentsByWalletID: [UUID: [OverviewTransactionSnapshot]] = [:]
+
+        for transaction in transactions {
+            guard transaction.entryStatus == .posted, !transaction.isArchived else { continue }
+
+            if transaction.primaryKind == .expense, let walletID = transaction.sourceWalletID {
+                chargesByWalletID[walletID, default: []].append(transaction)
+                continue
+            }
+
+            if transaction.primaryKind == .transfer,
+               transaction.transferSubtype == .internalTransfer,
+               let walletID = transaction.destinationWalletID {
+                paymentsByWalletID[walletID, default: []].append(transaction)
+            }
+        }
+
+        for walletID in Array(chargesByWalletID.keys) {
+            chargesByWalletID[walletID]?.sort(by: transactionSort)
+        }
+        for walletID in Array(paymentsByWalletID.keys) {
+            paymentsByWalletID[walletID]?.sort(by: transactionSort)
+        }
+
+        return CreditCardStatementTransactionBuckets(
+            chargesByWalletID: chargesByWalletID,
+            paymentsByWalletID: paymentsByWalletID
         )
     }
 

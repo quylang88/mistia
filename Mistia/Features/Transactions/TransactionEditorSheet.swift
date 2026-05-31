@@ -1938,7 +1938,7 @@ struct TransactionEditorSheet: View {
 
             do {
                 let session = try await sessionStore.prepareRemoteSession()
-                let payload = receiptAnalysisPayload(for: receiptDraft)
+                let payload = await receiptAnalysisPayload(for: receiptDraft)
                 let result = try await ReceiptAnalysisService().analyzeReceipt(
                     payload: payload,
                     session: session
@@ -1954,7 +1954,7 @@ struct TransactionEditorSheet: View {
         }
     }
 
-    private func receiptAnalysisPayload(for receiptDraft: TransactionReceiptDraft) -> ReceiptAnalysisRequestPayload {
+    private func receiptAnalysisPayload(for receiptDraft: TransactionReceiptDraft) async -> ReceiptAnalysisRequestPayload {
         let categories = availableCategories.map { category in
             ReceiptAnalysisCategoryCandidate(
                 id: category.id,
@@ -1975,12 +1975,20 @@ struct TransactionEditorSheet: View {
         let currencyCode = selectedSourceWallet?.currencyCode
             ?? availableWallets.first?.currencyCode
             ?? "JPY"
+        let imageData = receiptDraft.imageData
+        let contentType = receiptDraft.contentType
+        let localeIdentifier = Locale.current.identifier
+        let timeZoneIdentifier = TimeZone.autoupdatingCurrent.identifier
+
+        let imageBase64 = await Task.detached(priority: .userInitiated) {
+            imageData.base64EncodedString()
+        }.value
 
         return ReceiptAnalysisRequestPayload(
-            imageBase64: receiptDraft.imageData.base64EncodedString(),
-            mimeType: receiptDraft.contentType,
-            localeIdentifier: Locale.current.identifier,
-            timeZoneIdentifier: TimeZone.autoupdatingCurrent.identifier,
+            imageBase64: imageBase64,
+            mimeType: contentType,
+            localeIdentifier: localeIdentifier,
+            timeZoneIdentifier: timeZoneIdentifier,
             currencyCode: currencyCode,
             categories: categories,
             wallets: wallets

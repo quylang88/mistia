@@ -1060,12 +1060,19 @@ nonisolated enum PlanningLogic {
             .compactMap { $0.value.first }
             .sorted()
 
+        guard !accounts.isEmpty, !months.isEmpty else { return [] }
+
+        let computationIndex = creditCardStatementComputationIndex(
+            records: records,
+            occurrences: occurrences,
+            calendar: calendar
+        )
+
         return accounts.flatMap { account in
             months.compactMap { month in
                 creditCardStatementItem(
                     account: account,
-                    records: records,
-                    occurrences: occurrences,
+                    computationIndex: computationIndex,
                     statementMonth: month,
                     referenceDate: referenceDate,
                     calendar: calendar
@@ -1593,10 +1600,92 @@ nonisolated enum PlanningLogic {
         return day
     }
 
-    private static func creditCardStatementItem(
-        account: PlanningCreditCardAccountSnapshot,
+    private struct CreditCardStatementIndexKey: Hashable {
+        let walletID: UUID
+        let monthKey: String
+    }
+
+    private struct CreditCardStatementComputationIndex {
+        private let amountsByWalletAndMonth: [CreditCardStatementIndexKey: Int64]
+        private let paymentRecordsByWalletID: [UUID: [TransactionRecordSnapshot]]
+        private let occurrencesByWalletAndMonth: [CreditCardStatementIndexKey: PlanningDueOccurrenceSnapshot]
+
+        init(
+            amountsByWalletAndMonth: [CreditCardStatementIndexKey: Int64],
+            paymentRecordsByWalletID: [UUID: [TransactionRecordSnapshot]],
+            occurrencesByWalletAndMonth: [CreditCardStatementIndexKey: PlanningDueOccurrenceSnapshot]
+        ) {
+            self.amountsByWalletAndMonth = amountsByWalletAndMonth
+            self.paymentRecordsByWalletID = paymentRecordsByWalletID
+            self.occurrencesByWalletAndMonth = occurrencesByWalletAndMonth
+        }
+
+        func amount(walletID: UUID, monthKey: String) -> Int64 {
+            amountsByWalletAndMonth[CreditCardStatementIndexKey(walletID: walletID, monthKey: monthKey)] ?? 0
+        }
+
+        func paymentRecords(walletID: UUID) -> [TransactionRecordSnapshot] {
+            paymentRecordsByWalletID[walletID] ?? []
+        }
+
+        func occurrence(walletID: UUID, monthKey: String) -> PlanningDueOccurrenceSnapshot? {
+            occurrencesByWalletAndMonth[CreditCardStatementIndexKey(walletID: walletID, monthKey: monthKey)]
+        }
+    }
+
+    private static func creditCardStatementComputationIndex(
         records: [TransactionRecordSnapshot],
         occurrences: [PlanningDueOccurrenceSnapshot],
+        calendar: Calendar
+    ) -> CreditCardStatementComputationIndex {
+        var amountsByWalletAndMonth: [CreditCardStatementIndexKey: Int64] = [:]
+        var paymentRecordsByWalletID: [UUID: [TransactionRecordSnapshot]] = [:]
+
+        for record in records {
+            guard record.entryStatus == .posted, !record.isArchived else { continue }
+
+            if TransactionLogic.isExpenseSpending(record), let walletID = record.sourceWalletID {
+                let key = CreditCardStatementIndexKey(
+                    walletID: walletID,
+                    monthKey: monthKey(for: record.occurredAt, calendar: calendar)
+                )
+                amountsByWalletAndMonth[key, default: 0] += record.amountMinor
+                continue
+            }
+
+            if record.primaryKind == .transfer,
+               record.transferSubtype == .internalTransfer,
+               let walletID = record.destinationWalletID {
+                paymentRecordsByWalletID[walletID, default: []].append(record)
+            }
+        }
+
+        for walletID in Array(paymentRecordsByWalletID.keys) {
+            paymentRecordsByWalletID[walletID]?.sort(by: creditCardPaymentRecordSort)
+        }
+
+        var occurrencesByWalletAndMonth: [CreditCardStatementIndexKey: PlanningDueOccurrenceSnapshot] = [:]
+        occurrencesByWalletAndMonth.reserveCapacity(occurrences.count)
+        for occurrence in occurrences where occurrence.sourceKind == .creditCard {
+            let key = CreditCardStatementIndexKey(
+                walletID: occurrence.sourceID,
+                monthKey: occurrence.selectedMonthKey
+            )
+            if occurrencesByWalletAndMonth[key] == nil {
+                occurrencesByWalletAndMonth[key] = occurrence
+            }
+        }
+
+        return CreditCardStatementComputationIndex(
+            amountsByWalletAndMonth: amountsByWalletAndMonth,
+            paymentRecordsByWalletID: paymentRecordsByWalletID,
+            occurrencesByWalletAndMonth: occurrencesByWalletAndMonth
+        )
+    }
+
+    private static func creditCardStatementItem(
+        account: PlanningCreditCardAccountSnapshot,
+        computationIndex: CreditCardStatementComputationIndex,
         statementMonth: Date,
         referenceDate: Date,
         calendar: Calendar
@@ -1615,22 +1704,16 @@ nonisolated enum PlanningLogic {
         )
         let statementMonthKey = monthKey(for: monthStart, calendar: calendar)
         let legacyDueMonthKey = monthKey(for: dueDate, calendar: calendar)
-        let occurrence = occurrenceRecord(
-            for: .creditCard,
-            sourceID: account.walletID,
-            monthKey: statementMonthKey,
-            occurrences: occurrences
-        ) ?? occurrenceRecord(
-            for: .creditCard,
-            sourceID: account.walletID,
-            monthKey: legacyDueMonthKey,
-            occurrences: occurrences
-        )
-        let computedAmount = creditCardStatementAmount(
+        let occurrence = computationIndex.occurrence(
             walletID: account.walletID,
-            records: records,
-            statementMonth: monthStart,
-            calendar: calendar
+            monthKey: statementMonthKey
+        ) ?? computationIndex.occurrence(
+            walletID: account.walletID,
+            monthKey: legacyDueMonthKey
+        )
+        let computedAmount = computationIndex.amount(
+            walletID: account.walletID,
+            monthKey: statementMonthKey
         )
         let matchedOccurrence = occurrence.flatMap { occurrence -> PlanningDueOccurrenceSnapshot? in
             guard let snapshotAmount = occurrence.amountMinorSnapshot,
@@ -1651,11 +1734,10 @@ nonisolated enum PlanningLogic {
             return nil
         }
 
-        let inferredPayment = creditCardStatementPaymentRecord(
-            walletID: account.walletID,
+        let inferredPayment = firstMatchingCreditCardPaymentRecord(
             amountMinor: amount,
             closingDate: closingDate,
-            records: records,
+            sortedPaymentRecords: computationIndex.paymentRecords(walletID: account.walletID),
             calendar: calendar
         )
         let status: PlanningDueOccurrenceStatus =
@@ -1695,31 +1777,6 @@ nonisolated enum PlanningLogic {
         )
     }
 
-    private static func creditCardStatementAmount(
-        walletID: UUID,
-        records: [TransactionRecordSnapshot],
-        statementMonth: Date,
-        calendar: Calendar
-    ) -> Int64 {
-        guard let monthInterval = calendar.dateInterval(of: .month, for: statementMonth) else {
-            return 0
-        }
-
-        return records.reduce(into: Int64.zero) { partial, record in
-            guard record.entryStatus == .posted,
-                  !record.isArchived,
-                  TransactionLogic.isExpenseSpending(record),
-                  record.sourceWalletID == walletID,
-                  record.occurredAt >= monthInterval.start,
-                  record.occurredAt < monthInterval.end
-            else {
-                return
-            }
-
-            partial += record.amountMinor
-        }
-    }
-
     static func creditCardStatementPaymentRecord(
         walletID: UUID,
         amountMinor: Int64,
@@ -1730,7 +1787,7 @@ nonisolated enum PlanningLogic {
         guard amountMinor > 0 else { return nil }
         let closingDay = calendar.startOfDay(for: closingDate)
 
-        return records
+        let matchingRecords = records
             .filter { record in
                 guard record.entryStatus == .posted,
                       !record.isArchived,
@@ -1745,13 +1802,35 @@ nonisolated enum PlanningLogic {
                 let paidAmount = record.destinationAmountMinor ?? record.amountMinor
                 return paidAmount >= amountMinor
             }
-            .sorted {
-                if $0.occurredAt != $1.occurredAt {
-                    return $0.occurredAt < $1.occurredAt
-                }
-                return $0.createdAt < $1.createdAt
-            }
-            .first
+            .sorted(by: creditCardPaymentRecordSort)
+
+        return matchingRecords.first
+    }
+
+    private static func firstMatchingCreditCardPaymentRecord(
+        amountMinor: Int64,
+        closingDate: Date,
+        sortedPaymentRecords: [TransactionRecordSnapshot],
+        calendar: Calendar
+    ) -> TransactionRecordSnapshot? {
+        guard amountMinor > 0 else { return nil }
+        let closingDay = calendar.startOfDay(for: closingDate)
+
+        return sortedPaymentRecords.first { record in
+            guard record.occurredAt >= closingDay else { return false }
+            let paidAmount = record.destinationAmountMinor ?? record.amountMinor
+            return paidAmount >= amountMinor
+        }
+    }
+
+    private static func creditCardPaymentRecordSort(
+        lhs: TransactionRecordSnapshot,
+        rhs: TransactionRecordSnapshot
+    ) -> Bool {
+        if lhs.occurredAt != rhs.occurredAt {
+            return lhs.occurredAt < rhs.occurredAt
+        }
+        return lhs.createdAt < rhs.createdAt
     }
 
     static func creditCardStatementState(
@@ -1900,19 +1979,6 @@ nonisolated enum PlanningLogic {
         }
 
         return result
-    }
-
-    private static func occurrenceRecord(
-        for sourceKind: PlanningDueSourceKind,
-        sourceID: UUID,
-        monthKey: String,
-        occurrences: [PlanningDueOccurrenceSnapshot]
-    ) -> PlanningDueOccurrenceSnapshot? {
-        occurrences.first(where: {
-            $0.sourceKind == sourceKind
-                && $0.sourceID == sourceID
-                && $0.selectedMonthKey == monthKey
-        })
     }
 
     private static func isScheduledMonth(

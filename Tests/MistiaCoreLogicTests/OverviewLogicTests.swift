@@ -903,6 +903,90 @@ final class OverviewLogicTests: XCTestCase {
         XCTAssertEqual(card.payments.map(\.title), ["Thanh toan the"])
     }
 
+    func testCreditCardStatementKeepsRowsScopedToEachCardWhenTransactionsContainNoise() throws {
+        let referenceDate = makeDate(year: 2026, month: 4, day: 2, hour: 12)
+        let primaryCardID = UUID()
+        let secondaryCardID = UUID()
+        let cashWalletID = UUID()
+        let accounts = [
+            makeCreditCardStatementAccount(
+                walletID: secondaryCardID,
+                walletName: "B Card"
+            ),
+            makeCreditCardStatementAccount(
+                walletID: primaryCardID,
+                walletName: "A Card"
+            )
+        ]
+
+        let statement = OverviewLogic.creditCardStatement(
+            accounts: accounts,
+            transactions: [
+                makeOverviewTransaction(
+                    primaryKind: .expense,
+                    title: "Primary latest",
+                    amountMinor: 2_000,
+                    occurredAt: makeDate(year: 2026, month: 4, day: 2),
+                    sourceWalletID: primaryCardID,
+                    sourceWalletName: "A Card",
+                    sourceWalletKind: .creditCard
+                ),
+                makeOverviewTransaction(
+                    primaryKind: .expense,
+                    title: "Cash noise",
+                    amountMinor: 1_000,
+                    occurredAt: makeDate(year: 2026, month: 4, day: 2),
+                    sourceWalletID: cashWalletID,
+                    sourceWalletName: "Cash",
+                    sourceWalletKind: .cash
+                ),
+                makeOverviewTransaction(
+                    primaryKind: .expense,
+                    title: "Secondary charge",
+                    amountMinor: 3_000,
+                    occurredAt: makeDate(year: 2026, month: 4, day: 1),
+                    sourceWalletID: secondaryCardID,
+                    sourceWalletName: "B Card",
+                    sourceWalletKind: .creditCard
+                ),
+                makeOverviewTransaction(
+                    primaryKind: .transfer,
+                    transferSubtype: .internalTransfer,
+                    title: "Primary payment",
+                    amountMinor: 2_000,
+                    occurredAt: makeDate(year: 2026, month: 4, day: 3),
+                    sourceWalletID: cashWalletID,
+                    sourceWalletName: "Cash",
+                    sourceWalletKind: .cash,
+                    destinationWalletID: primaryCardID,
+                    destinationWalletName: "A Card",
+                    destinationWalletKind: .creditCard
+                ),
+                makeOverviewTransaction(
+                    primaryKind: .transfer,
+                    transferSubtype: .internalTransfer,
+                    title: "Wrong destination noise",
+                    amountMinor: 2_000,
+                    occurredAt: makeDate(year: 2026, month: 4, day: 4),
+                    sourceWalletID: cashWalletID,
+                    sourceWalletName: "Cash",
+                    sourceWalletKind: .cash,
+                    destinationWalletID: cashWalletID,
+                    destinationWalletName: "Cash",
+                    destinationWalletKind: .cash
+                )
+            ],
+            referenceDate: referenceDate,
+            calendar: calendar
+        )
+
+        XCTAssertEqual(statement.cards.map(\.walletName), ["A Card", "B Card"])
+        XCTAssertEqual(statement.cards[0].charges.map(\.title), ["Primary latest"])
+        XCTAssertEqual(statement.cards[0].payments.map(\.title), ["Primary payment"])
+        XCTAssertEqual(statement.cards[1].charges.map(\.title), ["Secondary charge"])
+        XCTAssertTrue(statement.cards[1].payments.isEmpty)
+    }
+
     func testMonthlyStatementRendererProducesStableFilenameAndExpectedSections() {
         let statement = OverviewMonthlyStatementSnapshot(
             generatedAt: makeDate(year: 2026, month: 4, day: 10),
@@ -1103,6 +1187,29 @@ final class OverviewLogicTests: XCTestCase {
             categoryParentColorHex: categoryParentColorHex,
             counterpartyName: nil,
             isArchived: isArchived
+        )
+    }
+
+    private func makeCreditCardStatementAccount(
+        walletID: UUID,
+        walletName: String
+    ) -> OverviewCreditCardStatementAccountSnapshot {
+        OverviewCreditCardStatementAccountSnapshot(
+            id: walletID,
+            walletID: walletID,
+            walletName: walletName,
+            iconSymbolName: "creditcard.fill",
+            issuerName: "Issuer",
+            network: .visa,
+            last4: "1234",
+            creditLimitMinor: 100_000,
+            currentDebtMinor: 20_000,
+            availableCreditMinor: 80_000,
+            statementClosingDay: 25,
+            paymentDueDay: 10,
+            paymentSourceWalletName: "Cash",
+            currencyCode: "JPY",
+            openedAt: makeDate(year: 2026, month: 1, day: 1)
         )
     }
 

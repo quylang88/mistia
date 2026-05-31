@@ -973,8 +973,9 @@ struct AIBillAnalysisView: View {
                     bills[index].isAnalyzing = true
                     bills[index].failureMessage = nil
                     do {
+                        let payload = await analysisPayload(for: bills[index])
                         let result = try await service.analyzeBillItems(
-                            payload: analysisPayload(for: bills[index]),
+                            payload: payload,
                             session: session
                         )
                         applyAnalysisResult(result, to: billID)
@@ -997,7 +998,7 @@ struct AIBillAnalysisView: View {
         }
     }
 
-    private func analysisPayload(for bill: AIBillDraft) -> BillItemAnalysisRequestPayload {
+    private func analysisPayload(for bill: AIBillDraft) async -> BillItemAnalysisRequestPayload {
         let categories = availableExpenseCategories.map { category in
             ReceiptAnalysisCategoryCandidate(
                 id: category.id,
@@ -1016,14 +1017,23 @@ struct AIBillAnalysisView: View {
             )
         }
         let currencyCode = availableWallets.first?.currencyCode ?? "JPY"
+        let imageData = bill.imageData
+        let contentType = bill.contentType
+        let localeIdentifier = appLanguage.localeIdentifier
+        let timeZoneIdentifier = TimeZone.autoupdatingCurrent.identifier
+        let targetLanguageCode = appLanguage.rawValue
+
+        let imageBase64 = await Task.detached(priority: .userInitiated) {
+            imageData.base64EncodedString()
+        }.value
 
         return BillItemAnalysisRequestPayload(
-            imageBase64: bill.imageData.base64EncodedString(),
-            mimeType: bill.contentType,
-            localeIdentifier: appLanguage.localeIdentifier,
-            timeZoneIdentifier: TimeZone.autoupdatingCurrent.identifier,
+            imageBase64: imageBase64,
+            mimeType: contentType,
+            localeIdentifier: localeIdentifier,
+            timeZoneIdentifier: timeZoneIdentifier,
             currencyCode: currencyCode,
-            targetLanguageCode: appLanguage.rawValue,
+            targetLanguageCode: targetLanguageCode,
             categories: categories,
             wallets: wallets
         )
