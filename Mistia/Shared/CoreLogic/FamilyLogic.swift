@@ -436,7 +436,7 @@ nonisolated enum FamilyLogic {
         }
         .compactMap { key, groupedWallets in
             guard !key.isEmpty,
-                  let representative = groupedWallets.sorted(by: walletAggregateSort).first else {
+                  let representative = groupedWallets.min(by: walletAggregateSort) else {
                 return nil
             }
 
@@ -501,7 +501,7 @@ nonisolated enum FamilyLogic {
 
         return Dictionary(grouping: validItems, by: monthlyBillGroupingKey)
             .compactMap { groupKey, groupedItems -> FamilyMonthlyBillAggregateSnapshot? in
-                guard let representative = groupedItems.sorted(by: monthlyBillSort).first else {
+                guard let representative = groupedItems.min(by: monthlyBillSort) else {
                     return nil
                 }
                 let amount = groupedItems.reduce(into: Int64.zero) { partial, item in
@@ -762,109 +762,96 @@ nonisolated enum FamilyLogic {
         referenceDate: Date = .now,
         calendar: Calendar = MistiaCalendar.current
     ) -> FamilyAggregateSummary {
-        let visibleWallets = wallets.filter { visibleMemberIDs?.contains($0.ownerUserID) ?? true }
-        let intervalTransactions = transactions.filter {
-            (visibleMemberIDs?.contains($0.ownerUserID) ?? true) && selectedInterval.contains($0.occurredAt)
-        }
         let summaryCurrencyCode = MistiaCurrencyLogic.normalizedCode(reportingCurrencyCode)
 
-        // 1. Current Balances
-        let totalAssetsMinor = visibleWallets.reduce(into: Int64.zero) { partial, wallet in
-            partial += max(
-                reportingAmount(
-                    amountMinor: wallet.balanceMinor,
-                    sourceCurrencyCode: wallet.currencyCode,
-                    currencyCode: summaryCurrencyCode,
-                    exchangeRates: exchangeRates
-                ),
-                0
-            )
+        func isVisibleMember(_ userID: UUID) -> Bool {
+            visibleMemberIDs?.contains(userID) ?? true
         }
-        let totalDebtMinor = visibleWallets.reduce(into: Int64.zero) { partial, wallet in
-            partial += reportingAmount(
+
+        var totalAssetsMinor = Int64.zero
+        var totalDebtMinor = Int64.zero
+        var balanceByWalletKind: [FamilyAggregateWalletSnapshot.Kind: Int64] = [:]
+        var balanceByWalletNameMap: [String: (name: String, value: Int64)] = [:]
+
+        for wallet in wallets where isVisibleMember(wallet.ownerUserID) {
+            let balance = reportingAmount(
+                amountMinor: wallet.balanceMinor,
+                sourceCurrencyCode: wallet.currencyCode,
+                currencyCode: summaryCurrencyCode,
+                exchangeRates: exchangeRates
+            )
+            let debt = reportingAmount(
                 amountMinor: wallet.debtMinor,
                 sourceCurrencyCode: wallet.currencyCode,
                 currencyCode: summaryCurrencyCode,
                 exchangeRates: exchangeRates
             )
+
+            totalAssetsMinor += max(balance, 0)
+            totalDebtMinor += debt
+            balanceByWalletKind[wallet.kind, default: 0] += balance - debt
+
+            guard let name = wallet.name?.trimmingCharacters(in: .whitespacesAndNewlines),
+                  !name.isEmpty else {
+                continue
+            }
+            let key = normalizedFamilyGroupingName(name)
+            let current = balanceByWalletNameMap[key] ?? (name: name, value: 0)
+            balanceByWalletNameMap[key] = (name: current.name, value: current.value + balance - debt)
         }
+
         let spendableMinor = totalAssetsMinor - totalDebtMinor
 
-        // 2. Trend (Last 7 Days)
-        let assetTrend = (0..<7).map { dayOffset -> FamilyTrendPoint in
-            let date = calendar.startOfDay(for: calendar.date(byAdding: .day, value: -dayOffset, to: referenceDate) ?? referenceDate)
-            // For a simple trend based on current data without full history, 
-            // we'd need all transactions to roll back. 
-            // For now, let's calculate the "Net worth" at each day by rolling back from current.
-            let transactionsAfterDate = transactions.filter {
-                (visibleMemberIDs?.contains($0.ownerUserID) ?? true) && $0.occurredAt >= date
+        let trendDates = (0..<7).map { dayOffset in
+            calendar.startOfDay(for: calendar.date(byAdding: .day, value: -dayOffset, to: referenceDate) ?? referenceDate)
+        }
+        var incomeAfterTrendDate = Array(repeating: Int64.zero, count: trendDates.count)
+        var expenseAfterTrendDate = Array(repeating: Int64.zero, count: trendDates.count)
+        var expenseMap: [String: Int64] = [:]
+        var memberSpendingMap: [UUID: Int64] = [:]
+        var memberIncomeMap: [UUID: Int64] = [:]
+
+        for transaction in transactions where isVisibleMember(transaction.ownerUserID) {
+            let isIncome = transaction.kind == .income
+            let isSpending = isExpenseSpending(transaction)
+            guard isIncome || isSpending else { continue }
+
+            let amount = reportingAmount(
+                amountMinor: transaction.amountMinor,
+                sourceCurrencyCode: transaction.currencyCode,
+                currencyCode: summaryCurrencyCode,
+                exchangeRates: exchangeRates
+            )
+
+            for index in trendDates.indices where transaction.occurredAt >= trendDates[index] {
+                if isIncome {
+                    incomeAfterTrendDate[index] += amount
+                } else {
+                    expenseAfterTrendDate[index] += amount
+                }
             }
-            
-            // Asset = CurrentAsset - Sum(Income after date) + Sum(Expense after date)
-            // This is a simplification.
-            let incomeAfter = transactionsAfterDate.filter { $0.kind == .income }.reduce(0) { partial, transaction in
-                partial + reportingAmount(
-                    amountMinor: transaction.amountMinor,
-                    sourceCurrencyCode: transaction.currencyCode,
-                    currencyCode: summaryCurrencyCode,
-                    exchangeRates: exchangeRates
-                )
+
+            guard selectedInterval.contains(transaction.occurredAt) else { continue }
+            if isSpending {
+                expenseMap[transaction.categoryName ?? "Other", default: 0] += amount
+
+                let spendingUserID = transaction.createdByUserID ?? transaction.ownerUserID
+                if isVisibleMember(spendingUserID) {
+                    memberSpendingMap[spendingUserID, default: 0] += amount
+                }
+            } else if isIncome {
+                memberIncomeMap[transaction.ownerUserID, default: 0] += amount
             }
-            let expenseAfter = transactionsAfterDate.filter(isExpenseSpending).reduce(0) { partial, transaction in
-                partial + reportingAmount(
-                    amountMinor: transaction.amountMinor,
-                    sourceCurrencyCode: transaction.currencyCode,
-                    currencyCode: summaryCurrencyCode,
-                    exchangeRates: exchangeRates
-                )
-            }
-            
-            let historicalSpendable = spendableMinor - incomeAfter + expenseAfter
-            return FamilyTrendPoint(date: date, valueMinor: historicalSpendable)
+        }
+
+        let assetTrend = trendDates.indices.map { index in
+            let historicalSpendable = spendableMinor - incomeAfterTrendDate[index] + expenseAfterTrendDate[index]
+            return FamilyTrendPoint(date: trendDates[index], valueMinor: historicalSpendable)
         }
         let reversedTrend = Array(assetTrend.reversed())
 
-        // 3. Distribution
-        let balanceByWalletKind = visibleWallets.reduce(into: [FamilyAggregateWalletSnapshot.Kind: Int64]()) {
-            partial, wallet in
-            let balance = reportingAmount(
-                amountMinor: wallet.balanceMinor,
-                sourceCurrencyCode: wallet.currencyCode,
-                currencyCode: summaryCurrencyCode,
-                exchangeRates: exchangeRates
-            )
-            let debt = reportingAmount(
-                amountMinor: wallet.debtMinor,
-                sourceCurrencyCode: wallet.currencyCode,
-                currencyCode: summaryCurrencyCode,
-                exchangeRates: exchangeRates
-            )
-            partial[wallet.kind, default: 0] += balance - debt
-        }
-
-        let balanceByWalletNameMap = visibleWallets.reduce(into: [String: (name: String, value: Int64)]()) { partial, wallet in
-            guard let name = wallet.name?.trimmingCharacters(in: .whitespacesAndNewlines),
-                  !name.isEmpty else {
-                return
-            }
-            let key = normalizedFamilyGroupingName(name)
-            let current = partial[key] ?? (name: name, value: 0)
-            let balance = reportingAmount(
-                amountMinor: wallet.balanceMinor,
-                sourceCurrencyCode: wallet.currencyCode,
-                currencyCode: summaryCurrencyCode,
-                exchangeRates: exchangeRates
-            )
-            let debt = reportingAmount(
-                amountMinor: wallet.debtMinor,
-                sourceCurrencyCode: wallet.currencyCode,
-                currencyCode: summaryCurrencyCode,
-                exchangeRates: exchangeRates
-            )
-            partial[key] = (name: current.name, value: current.value + balance - debt)
-        }
         let balanceByWalletName = balanceByWalletNameMap
-            .map { key, value in
+            .map { _, value in
                 FamilyDonutSegment(label: value.name, valueMinor: value.value, colorHex: nil)
             }
             .sorted { lhs, rhs in
@@ -874,43 +861,13 @@ nonisolated enum FamilyLogic {
                 return lhs.label.localizedCaseInsensitiveCompare(rhs.label) == .orderedAscending
             }
 
-        let expenseMap = intervalTransactions.reduce(into: [String: Int64]()) { partial, transaction in
-            guard isExpenseSpending(transaction) else { return }
-            partial[transaction.categoryName ?? "Other", default: 0] += reportingAmount(
-                amountMinor: transaction.amountMinor,
-                sourceCurrencyCode: transaction.currencyCode,
-                currencyCode: summaryCurrencyCode,
-                exchangeRates: exchangeRates
-            )
-        }
         let expenseByCategory = expenseMap.map { FamilyDonutSegment(label: $0.key, valueMinor: $0.value, colorHex: nil) }
             .sorted { $0.valueMinor > $1.valueMinor }
 
-        // 4. Member Comparison
-        let memberSpendingMap = intervalTransactions.reduce(into: [UUID: Int64]()) { partial, transaction in
-            guard isExpenseSpending(transaction) else { return }
-            let spendingUserID = transaction.createdByUserID ?? transaction.ownerUserID
-            guard visibleMemberIDs?.contains(spendingUserID) ?? true else { return }
-            partial[spendingUserID, default: 0] += reportingAmount(
-                amountMinor: transaction.amountMinor,
-                sourceCurrencyCode: transaction.currencyCode,
-                currencyCode: summaryCurrencyCode,
-                exchangeRates: exchangeRates
-            )
-        }
         let spendingByMember = memberSpendingMap.map { 
             FamilyMemberSpendingSnapshot(userID: $0.key, name: memberNames[$0.key] ?? "Unknown", amountMinor: $0.value)
         }.sorted { $0.amountMinor > $1.amountMinor }
 
-        let memberIncomeMap = intervalTransactions.reduce(into: [UUID: Int64]()) { partial, transaction in
-            guard transaction.kind == .income else { return }
-            partial[transaction.ownerUserID, default: 0] += reportingAmount(
-                amountMinor: transaction.amountMinor,
-                sourceCurrencyCode: transaction.currencyCode,
-                currencyCode: summaryCurrencyCode,
-                exchangeRates: exchangeRates
-            )
-        }
         let incomeByMember = memberIncomeMap.map { 
             FamilyMemberSpendingSnapshot(userID: $0.key, name: memberNames[$0.key] ?? "Unknown", amountMinor: $0.value)
         }.sorted { $0.amountMinor > $1.amountMinor }

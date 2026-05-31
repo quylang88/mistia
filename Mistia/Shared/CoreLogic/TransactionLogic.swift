@@ -477,11 +477,12 @@ nonisolated enum TransactionLogic {
 
             guard total != 0 else { return nil }
             let preferredIntent: TransactionDebtIntent = total > 0 ? .lend : .borrow
-            let preferredWalletID = groupedRecords
-                .filter { $0.debtIntent == preferredIntent && $0.sourceWalletID != nil }
-                .sorted(by: recordSort)
-                .first?
-                .sourceWalletID
+            var preferredRecord: TransactionRecordSnapshot?
+            for record in groupedRecords where record.debtIntent == preferredIntent && record.sourceWalletID != nil {
+                if preferredRecord.map({ recordSort(lhs: record, rhs: $0) }) ?? true {
+                    preferredRecord = record
+                }
+            }
 
             return CounterpartyDebtSnapshot(
                 id: key,
@@ -491,7 +492,7 @@ nonisolated enum TransactionLogic {
                     ?? L10n.shared.corelogic.transaction.unknownName,
                 netMinor: total,
                 currencyCode: MistiaCurrencyLogic.normalizedCode(first.sourceCurrencyCode),
-                preferredWalletID: preferredWalletID
+                preferredWalletID: preferredRecord?.sourceWalletID
             )
         }
         .sorted {
@@ -520,7 +521,8 @@ nonisolated enum TransactionLogic {
             return []
         }
 
-        let matchingDebtRecords = records.filter { record in
+        var groupedMatches: [String: TransactionSuggestionAccumulator] = [:]
+        for record in records {
             guard record.id != excludingTransactionID,
                   record.entryStatus == .posted,
                   record.primaryKind == .transfer,
@@ -529,20 +531,31 @@ nonisolated enum TransactionLogic {
                   !counterpartyName.isEmpty,
                   let counterpartyKey = normalizeCounterpartyName(counterpartyName)
             else {
-                return false
+                continue
             }
-            return titleSuggestionMatchRank(query: normalizedQuery, normalizedTitle: counterpartyKey) != nil
+
+            guard titleSuggestionMatchRank(query: normalizedQuery, normalizedTitle: counterpartyKey) != nil else {
+                continue
+            }
+
+            let key = counterpartyKey.replacingOccurrences(of: " ", with: "")
+            if var accumulator = groupedMatches[key] {
+                accumulator.usageCount += 1
+                if recordSort(lhs: record, rhs: accumulator.representative) {
+                    accumulator.representative = record
+                }
+                groupedMatches[key] = accumulator
+            } else {
+                groupedMatches[key] = TransactionSuggestionAccumulator(
+                    representative: record,
+                    usageCount: 1
+                )
+            }
         }
 
-        let grouped = Dictionary(grouping: matchingDebtRecords) { record in
-            normalizeCounterpartyName(record.counterpartyName)?
-                .replacingOccurrences(of: " ", with: "")
-                ?? record.id.uuidString
-        }
-
-        return grouped.compactMap { key, groupedRecords -> (TransactionTitleSuggestion, Int, Date, Int)? in
-            guard let representative = groupedRecords.sorted(by: recordSort).first,
-                  let counterpartyName = representative.counterpartyName?.trimmingCharacters(in: .whitespacesAndNewlines),
+        return groupedMatches.compactMap { key, accumulator -> (TransactionTitleSuggestion, Int, Date, Int)? in
+            let representative = accumulator.representative
+            guard let counterpartyName = representative.counterpartyName?.trimmingCharacters(in: .whitespacesAndNewlines),
                   let counterpartyKey = normalizeCounterpartyName(counterpartyName),
                   let rank = titleSuggestionMatchRank(query: normalizedQuery, normalizedTitle: counterpartyKey)
             else {
@@ -552,7 +565,7 @@ nonisolated enum TransactionLogic {
                 TransactionTitleSuggestion(id: key, title: counterpartyName),
                 rank,
                 representative.occurredAt,
-                groupedRecords.count
+                accumulator.usageCount
             )
         }
         .sorted { lhs, rhs in
@@ -580,39 +593,45 @@ nonisolated enum TransactionLogic {
             return []
         }
 
-        let groupedMatches = Dictionary(grouping: records) { record in
-            titleSuggestionGroupingKey(record.title) ?? record.id.uuidString
-        }
+        var groupedMatches: [String: TransactionSuggestionAccumulator] = [:]
 
-        let rankedSuggestions: [
-            (
-                suggestion: TransactionTitleSuggestion,
-                matchRank: Int,
-                latestOccurredAt: Date,
-                latestCreatedAt: Date,
-                usageCount: Int
-            )
-        ] = groupedMatches.compactMap { entry in
-            let normalizedTitle = entry.key
-            let groupedRecords = entry.value
-            let matchingRecords = groupedRecords.filter { record in
-                guard record.id != excludingTransactionID,
-                      record.entryStatus == .posted,
-                      matchesTitleSuggestionScope(
-                        record,
-                        primaryKind: primaryKind,
-                        transferSubtype: transferSubtype
-                      ),
-                      !record.title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-                else {
-                    return false
-                }
-
-                return true
+        for record in records {
+            guard record.id != excludingTransactionID,
+                  record.entryStatus == .posted,
+                  matchesTitleSuggestionScope(
+                    record,
+                    primaryKind: primaryKind,
+                    transferSubtype: transferSubtype
+                  ),
+                  !record.title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            else {
+                continue
             }
 
-            guard let representative = matchingRecords.sorted(by: recordSort).first,
-                  let representativeKey = normalizeCounterpartyName(representative.title),
+            let normalizedTitle = titleSuggestionGroupingKey(record.title) ?? record.id.uuidString
+            if var accumulator = groupedMatches[normalizedTitle] {
+                accumulator.usageCount += 1
+                if recordSort(lhs: record, rhs: accumulator.representative) {
+                    accumulator.representative = record
+                }
+                groupedMatches[normalizedTitle] = accumulator
+            } else {
+                groupedMatches[normalizedTitle] = TransactionSuggestionAccumulator(
+                    representative: record,
+                    usageCount: 1
+                )
+            }
+        }
+
+        let rankedSuggestions = groupedMatches.compactMap { normalizedTitle, accumulator -> (
+            suggestion: TransactionTitleSuggestion,
+            matchRank: Int,
+            latestOccurredAt: Date,
+            latestCreatedAt: Date,
+            usageCount: Int
+        )? in
+            let representative = accumulator.representative
+            guard let representativeKey = normalizeCounterpartyName(representative.title),
                   let matchRank = titleSuggestionMatchRank(
                     query: normalizedQuery,
                     normalizedTitle: representativeKey
@@ -629,7 +648,7 @@ nonisolated enum TransactionLogic {
                 matchRank: matchRank,
                 latestOccurredAt: representative.occurredAt,
                 latestCreatedAt: representative.createdAt,
-                usageCount: matchingRecords.count
+                usageCount: accumulator.usageCount
             )
         }
 
@@ -1030,6 +1049,11 @@ nonisolated enum TransactionLogic {
         case .cash, .payPay, .bank, .eWallet, .prepaid, .investment, .crypto, .other:
             amount
         }
+    }
+
+    nonisolated private struct TransactionSuggestionAccumulator {
+        var representative: TransactionRecordSnapshot
+        var usageCount: Int
     }
 
     nonisolated private static func recordSort(lhs: TransactionRecordSnapshot, rhs: TransactionRecordSnapshot) -> Bool {

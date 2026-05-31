@@ -434,11 +434,22 @@ nonisolated enum OverviewLogic {
     ) -> [OverviewWeekSpendingSnapshot] {
         let currentWeekStart = startOfMondayWeek(containing: referenceDate, calendar: calendar)
         let currentWeekEnd = calendar.date(byAdding: .day, value: 6, to: currentWeekStart) ?? currentWeekStart
+        var dailyTotalsByDay: [Date: Int64] = [:]
+        var earliestExpenseWeekStart: Date?
 
-        let earliestExpenseWeekStart = transactionRecords
-            .filter { $0.entryStatus == .posted && TransactionLogic.isExpenseSpending($0) }
-            .map { startOfMondayWeek(containing: $0.occurredAt, calendar: calendar) }
-            .min()
+        for record in transactionRecords where record.entryStatus == .posted && TransactionLogic.isExpenseSpending(record) {
+            let day = calendar.startOfDay(for: record.occurredAt)
+            dailyTotalsByDay[day, default: 0] += chartSpendingAmount(
+                for: record,
+                currencyCode: currencyCode,
+                exchangeRates: exchangeRates
+            )
+
+            let weekStart = startOfMondayWeek(containing: record.occurredAt, calendar: calendar)
+            if earliestExpenseWeekStart.map({ weekStart < $0 }) ?? true {
+                earliestExpenseWeekStart = weekStart
+            }
+        }
 
         let firstWeekStart = earliestExpenseWeekStart ?? currentWeekStart
         var weekStart = firstWeekStart
@@ -447,36 +458,13 @@ nonisolated enum OverviewLogic {
         while weekStart <= currentWeekStart {
             let weekInterval = weekInterval(startingAt: weekStart, calendar: calendar)
             let weekEnd = calendar.date(byAdding: .day, value: 6, to: weekStart) ?? weekStart
-            let dailyValues: [(date: Date, valueMinor: Int64)] = (0..<7).compactMap { dayOffset in
-                guard let day = calendar.date(byAdding: .day, value: dayOffset, to: weekStart) else {
-                    return nil
-                }
-
-                let nextDay = calendar.date(byAdding: .day, value: 1, to: day) ?? day
-                let total = transactionRecords
-                    .filter { record in
-                        record.entryStatus == .posted
-                            && TransactionLogic.isExpenseSpending(record)
-                            && record.occurredAt >= day
-                            && record.occurredAt < nextDay
-                    }
-                    .reduce(into: Int64.zero) { partialResult, record in
-                        if let currencyCode {
-                            partialResult += reportingAmount(
-                                for: record,
-                                currencyCode: currencyCode,
-                                exchangeRates: exchangeRates
-                            )
-                        } else {
-                            partialResult += record.amountMinor
-                        }
-                    }
-
-                return (day, total)
-            }
-
-            let minimum = dailyValues.map(\.valueMinor).min() ?? 0
-            let maximum = dailyValues.map(\.valueMinor).max() ?? 0
+            let dailyValues = dailyChartValues(
+                startingAt: weekStart,
+                count: 7,
+                totalsByDay: dailyTotalsByDay,
+                calendar: calendar
+            )
+            let range = valueRange(for: dailyValues)
             let isCurrentWeek = weekStart == currentWeekStart
 
             pages.append(
@@ -496,8 +484,8 @@ nonisolated enum OverviewLogic {
                             valueMinor: item.valueMinor,
                             intensity: normalizedIntensity(
                                 value: item.valueMinor,
-                                minimum: minimum,
-                                maximum: maximum
+                                minimum: range.minimum,
+                                maximum: range.maximum
                             )
                         )
                     }
@@ -551,32 +539,28 @@ nonisolated enum OverviewLogic {
         let days = (0..<7).compactMap { offset in
             calendar.date(byAdding: .day, value: -(6 - offset), to: startOfToday)
         }
+        let firstDay = days.first ?? startOfToday
+        let lastDayExclusive = calendar.date(byAdding: .day, value: 1, to: days.last ?? startOfToday) ?? startOfToday
 
-        let values: [(date: Date, valueMinor: Int64)] = days.map { day in
-            let nextDay = calendar.date(byAdding: .day, value: 1, to: day) ?? day
-            let total = transactionRecords
-                .filter { record in
-                    record.entryStatus == .posted
-                        && TransactionLogic.isExpenseSpending(record)
-                        && record.occurredAt >= day
-                        && record.occurredAt < nextDay
-                }
-                .reduce(into: Int64.zero) { partialResult, record in
-                    if let currencyCode {
-                        partialResult += reportingAmount(
-                            for: record,
-                            currencyCode: currencyCode,
-                            exchangeRates: exchangeRates
-                        )
-                    } else {
-                        partialResult += record.amountMinor
-                    }
-                }
-            return (day, total)
+        var totalsByDay: [Date: Int64] = [:]
+        for record in transactionRecords where record.entryStatus == .posted && TransactionLogic.isExpenseSpending(record) {
+            guard record.occurredAt >= firstDay,
+                  record.occurredAt < lastDayExclusive else {
+                continue
+            }
+
+            let day = calendar.startOfDay(for: record.occurredAt)
+            totalsByDay[day, default: 0] += chartSpendingAmount(
+                for: record,
+                currencyCode: currencyCode,
+                exchangeRates: exchangeRates
+            )
         }
 
-        let minimum = values.map(\.valueMinor).min() ?? 0
-        let maximum = values.map(\.valueMinor).max() ?? 0
+        let values = days.map { day in
+            (date: day, valueMinor: totalsByDay[day] ?? 0)
+        }
+        let range = valueRange(for: values)
 
         return values.map { item in
             OverviewChartPoint(
@@ -585,8 +569,8 @@ nonisolated enum OverviewLogic {
                 valueMinor: item.valueMinor,
                 intensity: normalizedIntensity(
                     value: item.valueMinor,
-                    minimum: minimum,
-                    maximum: maximum
+                    minimum: range.minimum,
+                    maximum: range.maximum
                 )
             )
         }
@@ -600,10 +584,16 @@ nonisolated enum OverviewLogic {
         calendar: Calendar = MistiaCalendar.current
     ) -> [OverviewCategorySpendingMonthSnapshot] {
         let currentMonthStart = PlanningLogic.startOfMonth(for: referenceDate, calendar: calendar)
-        let earliestExpenseMonthStart = transactions
-            .filter(isCategorySpendingTransaction)
-            .map { PlanningLogic.startOfMonth(for: $0.occurredAt, calendar: calendar) }
-            .min()
+        var transactionsByMonth: [Date: [OverviewTransactionSnapshot]] = [:]
+        var earliestExpenseMonthStart: Date?
+
+        for transaction in transactions where isCategorySpendingTransaction(transaction) {
+            let monthStart = PlanningLogic.startOfMonth(for: transaction.occurredAt, calendar: calendar)
+            transactionsByMonth[monthStart, default: []].append(transaction)
+            if earliestExpenseMonthStart.map({ monthStart < $0 }) ?? true {
+                earliestExpenseMonthStart = monthStart
+            }
+        }
 
         let firstMonthStart = earliestExpenseMonthStart ?? currentMonthStart
         var monthStart = firstMonthStart
@@ -612,8 +602,8 @@ nonisolated enum OverviewLogic {
         while monthStart <= currentMonthStart {
             pages.append(
                 categorySpendingMonth(
-                    from: transactions,
-                    selectedMonth: monthStart,
+                    monthStart: monthStart,
+                    transactionsInMonth: transactionsByMonth[monthStart] ?? [],
                     currencyCode: currencyCode,
                     exchangeRates: exchangeRates,
                     calendar: calendar
@@ -629,8 +619,8 @@ nonisolated enum OverviewLogic {
         if pages.isEmpty {
             return [
                 categorySpendingMonth(
-                    from: transactions,
-                    selectedMonth: currentMonthStart,
+                    monthStart: currentMonthStart,
+                    transactionsInMonth: transactionsByMonth[currentMonthStart] ?? [],
                     currencyCode: currencyCode,
                     exchangeRates: exchangeRates,
                     calendar: calendar
@@ -661,15 +651,12 @@ nonisolated enum OverviewLogic {
                 && transaction.occurredAt < monthInterval.end
         }
 
-        return OverviewCategorySpendingMonthSnapshot(
+        return categorySpendingMonth(
             monthStart: monthStart,
-            title: MistiaDateFormatting.monthYearString(for: monthStart, calendar: calendar),
+            transactionsInMonth: transactionsInMonth,
             currencyCode: currencyCode,
-            slices: categorySpendingSlices(
-                from: transactionsInMonth,
-                currencyCode: currencyCode,
-                exchangeRates: exchangeRates
-            )
+            exchangeRates: exchangeRates,
+            calendar: calendar
         )
     }
 
@@ -696,6 +683,64 @@ nonisolated enum OverviewLogic {
                 exchangeRates: exchangeRates
             )
         )
+    }
+
+    private static func categorySpendingMonth(
+        monthStart: Date,
+        transactionsInMonth: [OverviewTransactionSnapshot],
+        currencyCode: String,
+        exchangeRates: [MistiaExchangeRate],
+        calendar: Calendar
+    ) -> OverviewCategorySpendingMonthSnapshot {
+        OverviewCategorySpendingMonthSnapshot(
+            monthStart: monthStart,
+            title: MistiaDateFormatting.monthYearString(for: monthStart, calendar: calendar),
+            currencyCode: currencyCode,
+            slices: categorySpendingSlices(
+                from: transactionsInMonth,
+                currencyCode: currencyCode,
+                exchangeRates: exchangeRates
+            )
+        )
+    }
+
+    private static func chartSpendingAmount(
+        for record: TransactionRecordSnapshot,
+        currencyCode: String?,
+        exchangeRates: [MistiaExchangeRate]
+    ) -> Int64 {
+        guard let currencyCode else {
+            return record.amountMinor
+        }
+        return reportingAmount(for: record, currencyCode: currencyCode, exchangeRates: exchangeRates)
+    }
+
+    private static func dailyChartValues(
+        startingAt startDay: Date,
+        count: Int,
+        totalsByDay: [Date: Int64],
+        calendar: Calendar
+    ) -> [(date: Date, valueMinor: Int64)] {
+        (0..<count).compactMap { dayOffset in
+            guard let day = calendar.date(byAdding: .day, value: dayOffset, to: startDay) else {
+                return nil
+            }
+            return (day, totalsByDay[day] ?? 0)
+        }
+    }
+
+    private static func valueRange(
+        for values: [(date: Date, valueMinor: Int64)]
+    ) -> (minimum: Int64, maximum: Int64) {
+        var minimum = values.first?.valueMinor ?? 0
+        var maximum = minimum
+
+        for item in values.dropFirst() {
+            minimum = min(minimum, item.valueMinor)
+            maximum = max(maximum, item.valueMinor)
+        }
+
+        return (minimum, maximum)
     }
 
     private static let uncategorizedSpendingSliceID = "uncategorized-expense"
