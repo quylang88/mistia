@@ -160,14 +160,7 @@ enum FamilyOverviewCalculator {
             referenceDate: input.now,
             calendar: input.calendar
         )
-        let creditCardDueItems = PlanningLogic.creditCardDueItems(
-            accounts: creditCardAccounts,
-            records: transactionRecords,
-            occurrences: input.occurrences,
-            selectedMonth: input.selectedMonth,
-            referenceDate: input.now,
-            calendar: input.calendar
-        )
+        let creditCardDueItems = PlanningLogic.creditCardDueItems(from: creditCardStatementDueItems)
         let recurringBillDueItems = PlanningLogic.recurringBillDueItems(
             bills: input.bills,
             occurrences: input.occurrences,
@@ -175,10 +168,7 @@ enum FamilyOverviewCalculator {
             calendar: input.calendar
         )
         let monthlyBillRows = FamilyLogic.monthlyBillRows(
-            bills: input.bills,
-            occurrences: input.occurrences,
-            selectedMonth: input.selectedMonth,
-            calendar: input.calendar
+            from: recurringBillDueItems
         )
         let installmentDueItems = PlanningLogic.installmentDueItems(
             plans: input.installments,
@@ -186,9 +176,10 @@ enum FamilyOverviewCalculator {
             selectedMonth: input.selectedMonth,
             calendar: input.calendar
         )
+        let recurringDueItems = recurringBillDueItems + installmentDueItems
         let monthlyDueSummary = PlanningLogic.dueSummary(
             creditStatements: creditCardStatementDueItems,
-            recurring: recurringBillDueItems + installmentDueItems,
+            recurring: recurringDueItems,
             selectedMonth: input.selectedMonth,
             reportingCurrencyCode: input.reportingCurrencyCode,
             exchangeRates: input.exchangeRates,
@@ -215,7 +206,7 @@ enum FamilyOverviewCalculator {
         )
         let dueAlerts = OverviewLogic.dueAlerts(
             creditCardDues: creditCardDueItems,
-            recurringDues: recurringBillDueItems + installmentDueItems,
+            recurringDues: recurringDueItems,
             referenceDate: input.now,
             calendar: input.calendar
         )

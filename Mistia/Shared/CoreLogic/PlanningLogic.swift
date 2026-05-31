@@ -984,7 +984,7 @@ nonisolated enum PlanningLogic {
         referenceDate: Date = .now,
         calendar: Calendar = MistiaCalendar.current
     ) -> [PlanningCreditCardDueSnapshot] {
-        creditCardStatementsDue(
+        let statements = creditCardStatementsDue(
             in: selectedMonth,
             accounts: accounts,
             records: records,
@@ -992,25 +992,32 @@ nonisolated enum PlanningLogic {
             referenceDate: referenceDate,
             calendar: calendar
         )
-        .filter { $0.state != .unclosed && $0.amountMinor > 0 }
-        .map { statement in
-            PlanningCreditCardDueSnapshot(
-                id: statement.walletID,
-                walletID: statement.walletID,
-                walletName: statement.walletName,
-                network: statement.network,
-                last4: statement.last4,
-                amountMinor: statement.amountMinor,
-                availableCreditMinor: statement.availableCreditMinor,
-                statementMonth: statement.statementMonth,
-                dueDate: statement.dueDate,
-                paymentSourceWalletID: statement.paymentSourceWalletID,
-                currencyCode: statement.currencyCode,
-                status: statement.status,
-                linkedTransactionID: statement.linkedTransactionID
-            )
-        }
-        .sorted(by: dueSort)
+        return creditCardDueItems(from: statements)
+    }
+
+    static func creditCardDueItems(
+        from statements: [PlanningCreditCardStatementSnapshot]
+    ) -> [PlanningCreditCardDueSnapshot] {
+        statements
+            .filter { $0.state != .unclosed && $0.amountMinor > 0 }
+            .map { statement in
+                PlanningCreditCardDueSnapshot(
+                    id: statement.walletID,
+                    walletID: statement.walletID,
+                    walletName: statement.walletName,
+                    network: statement.network,
+                    last4: statement.last4,
+                    amountMinor: statement.amountMinor,
+                    availableCreditMinor: statement.availableCreditMinor,
+                    statementMonth: statement.statementMonth,
+                    dueDate: statement.dueDate,
+                    paymentSourceWalletID: statement.paymentSourceWalletID,
+                    currencyCode: statement.currencyCode,
+                    status: statement.status,
+                    linkedTransactionID: statement.linkedTransactionID
+                )
+            }
+            .sorted(by: dueSort)
     }
 
     static func creditCardStatementsDue(
@@ -1113,11 +1120,16 @@ nonisolated enum PlanningLogic {
         selectedMonth: Date,
         calendar: Calendar = MistiaCalendar.current
     ) -> [PlanningRecurringDueSnapshot] {
-        dueItems(
-            sourceKind: .recurringBill,
-            selectedMonth: selectedMonth,
-            calendar: calendar
-        ) { monthKey in
+        let selectedMonthKey = monthKey(for: selectedMonth, calendar: calendar)
+        let occurrenceBySourceID = occurrenceMap(
+            for: .recurringBill,
+            selectedMonthKey: selectedMonthKey,
+            occurrences: occurrences
+        )
+
+        return dueItems(
+            selectedMonthKey: selectedMonthKey
+        ) { _ in
             bills.compactMap { bill in
                 let window = recurringBillWindow(
                     for: bill,
@@ -1126,12 +1138,7 @@ nonisolated enum PlanningLogic {
                 )
                 guard let window else { return nil }
 
-                let occurrence = occurrenceRecord(
-                    for: .recurringBill,
-                    sourceID: bill.id,
-                    monthKey: monthKey,
-                    occurrences: occurrences
-                )
+                let occurrence = occurrenceBySourceID[bill.id]
 
                 return PlanningRecurringDueSnapshot(
                     id: bill.id,
@@ -1193,11 +1200,16 @@ nonisolated enum PlanningLogic {
         selectedMonth: Date,
         calendar: Calendar = MistiaCalendar.current
     ) -> [PlanningRecurringDueSnapshot] {
-        dueItems(
-            sourceKind: .installment,
-            selectedMonth: selectedMonth,
-            calendar: calendar
-        ) { monthKey in
+        let selectedMonthKey = monthKey(for: selectedMonth, calendar: calendar)
+        let occurrenceBySourceID = occurrenceMap(
+            for: .installment,
+            selectedMonthKey: selectedMonthKey,
+            occurrences: occurrences
+        )
+
+        return dueItems(
+            selectedMonthKey: selectedMonthKey
+        ) { _ in
             plans.compactMap { plan in
                 guard isScheduledMonth(
                     selectedMonth: selectedMonth,
@@ -1209,12 +1221,7 @@ nonisolated enum PlanningLogic {
                     return nil
                 }
 
-                let occurrence = occurrenceRecord(
-                    for: .installment,
-                    sourceID: plan.id,
-                    monthKey: monthKey,
-                    occurrences: occurrences
-                )
+                let occurrence = occurrenceBySourceID[plan.id]
 
                 return PlanningRecurringDueSnapshot(
                     id: plan.id,
@@ -1872,13 +1879,27 @@ nonisolated enum PlanningLogic {
     }
 
     private static func dueItems(
-        sourceKind: PlanningDueSourceKind,
-        selectedMonth: Date,
-        calendar: Calendar,
+        selectedMonthKey: String,
         builder: (_ monthKey: String) -> [PlanningRecurringDueSnapshot]
     ) -> [PlanningRecurringDueSnapshot] {
-        builder(monthKey(for: selectedMonth, calendar: calendar))
-            .sorted(by: dueSort)
+        builder(selectedMonthKey).sorted(by: dueSort)
+    }
+
+    private static func occurrenceMap(
+        for sourceKind: PlanningDueSourceKind,
+        selectedMonthKey: String,
+        occurrences: [PlanningDueOccurrenceSnapshot]
+    ) -> [UUID: PlanningDueOccurrenceSnapshot] {
+        var result: [UUID: PlanningDueOccurrenceSnapshot] = [:]
+        result.reserveCapacity(occurrences.count)
+
+        for occurrence in occurrences where occurrence.sourceKind == sourceKind
+            && occurrence.selectedMonthKey == selectedMonthKey
+            && result[occurrence.sourceID] == nil {
+            result[occurrence.sourceID] = occurrence
+        }
+
+        return result
     }
 
     private static func occurrenceRecord(

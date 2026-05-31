@@ -490,6 +490,12 @@ nonisolated enum FamilyLogic {
             selectedMonth: selectedMonth,
             calendar: calendar
         )
+        return monthlyBillRows(from: dueItems)
+    }
+
+    nonisolated static func monthlyBillRows(
+        from dueItems: [PlanningRecurringDueSnapshot]
+    ) -> [FamilyMonthlyBillAggregateSnapshot] {
         let validItems = dueItems.filter { item in
             guard item.sourceKind == .recurringBill,
                   let amountMinor = item.amountMinor,
@@ -580,6 +586,10 @@ nonisolated enum FamilyLogic {
             referenceDate: referenceDate,
             calendar: calendar
         )
+        let spendingTransactionsByCategoryKey = budgetSpendingTransactionsByCategoryKey(
+            transactions: transactions,
+            monthInterval: monthInterval
+        )
 
         let rows = groupedPlans.compactMap { key, groupedPlans -> FamilyBudgetAggregateSnapshot? in
             guard let selectedPlan = prioritizedPlan(
@@ -591,21 +601,14 @@ nonisolated enum FamilyLogic {
                 return nil
             }
 
-            let spent = transactions.reduce(into: Int64.zero) { partial, transaction in
-                guard isExpenseSpending(transaction),
-                      monthInterval.map({ transaction.occurredAt >= $0.start && transaction.occurredAt < $0.end }) == true,
-                      transaction.matchesCategoryGroupingKey(key)
-                else {
-                    return
-                }
-
+            let spent = spendingTransactionsByCategoryKey[key]?.reduce(into: Int64.zero) { partial, transaction in
                 partial += reportingAmount(
                     amountMinor: transaction.amountMinor,
                     sourceCurrencyCode: transaction.currencyCode,
                     currencyCode: selectedPlan.currencyCode,
                     exchangeRates: exchangeRates
                 )
-            }
+            } ?? 0
 
             return FamilyBudgetAggregateSnapshot(
                 id: "budget-category-\(key)",
@@ -892,6 +895,28 @@ nonisolated enum FamilyLogic {
             && !transaction.isInstallmentPayment
     }
 
+    nonisolated private static func budgetSpendingTransactionsByCategoryKey(
+        transactions: [FamilyAggregateTransactionSnapshot],
+        monthInterval: DateInterval?
+    ) -> [String: [FamilyAggregateTransactionSnapshot]] {
+        guard let monthInterval else { return [:] }
+
+        var result: [String: [FamilyAggregateTransactionSnapshot]] = [:]
+        for transaction in transactions {
+            guard isExpenseSpending(transaction),
+                  transaction.occurredAt >= monthInterval.start,
+                  transaction.occurredAt < monthInterval.end else {
+                continue
+            }
+
+            for key in transaction.budgetCategoryGroupingKeys {
+                result[key, default: []].append(transaction)
+            }
+        }
+
+        return result
+    }
+
     nonisolated private static func reportingAmount(
         amountMinor: Int64,
         sourceCurrencyCode: String,
@@ -1100,9 +1125,23 @@ nonisolated enum FamilyLogic {
 }
 
 private extension FamilyAggregateTransactionSnapshot {
-    nonisolated func matchesCategoryGroupingKey(_ key: String) -> Bool {
-        let categoryKey = categoryName.map(FamilyLogic.normalizedFamilyGroupingName)
-        let parentKey = categoryParentName.map(FamilyLogic.normalizedFamilyGroupingName)
-        return categoryKey == key || parentKey == key
+    nonisolated var budgetCategoryGroupingKeys: Set<String> {
+        var keys = Set<String>()
+
+        if let categoryName {
+            let key = FamilyLogic.normalizedFamilyGroupingName(categoryName)
+            if !key.isEmpty {
+                keys.insert(key)
+            }
+        }
+
+        if let categoryParentName {
+            let key = FamilyLogic.normalizedFamilyGroupingName(categoryParentName)
+            if !key.isEmpty {
+                keys.insert(key)
+            }
+        }
+
+        return keys
     }
 }
