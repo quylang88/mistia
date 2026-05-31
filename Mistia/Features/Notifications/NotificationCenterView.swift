@@ -9,6 +9,9 @@ struct NotificationCenterView: View {
     @Environment(SessionStore.self) private var sessionStore
     @Environment(FamilyContextStore.self) private var familyContextStore
     @Environment(MistiaUIState.self) private var uiState
+
+    @AppStorage(MistiaAppStorageKey.notificationsEnabled) private var notificationsEnabled = false
+    @AppStorage(MistiaAppStorageKey.notificationsGroupFamilyEnabled) private var familyEnabled = false
     
     @Query(sort: \AppNotificationRecord.createdAt, order: .reverse)
     private var rows: [AppNotificationRecord]

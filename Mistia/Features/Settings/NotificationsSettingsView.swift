@@ -6,6 +6,7 @@ struct NotificationsSettingsView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
     @Environment(SessionStore.self) private var sessionStore
+    @Environment(FamilyContextStore.self) private var familyContextStore
 
     @AppStorage(MistiaAppStorageKey.notificationsEnabled) private var notificationsEnabled = false
     @AppStorage(MistiaAppStorageKey.notificationsHadAnyGroupOn) private var notificationsHadAnyGroupOn = false
@@ -99,10 +100,14 @@ struct NotificationsSettingsView: View {
                 Task {
                     await requestAuthorizationIfNeeded()
                     await runDueMaintenanceIfNeeded()
+                    if familyEnabled {
+                        await familyContextStore.refreshNotifications(sessionStore: sessionStore)
+                    }
                 }
             } else {
                 Task { await MistiaLocalNotificationScheduler.clearAllScheduledReminders() }
             }
+            updateAppBadge()
         }
         .onChange(of: remindersEnabled) { _, _ in
             Task { await runDueMaintenanceIfNeeded() }
@@ -192,6 +197,10 @@ struct NotificationsSettingsView: View {
             set: { newValue in
                 familyEnabled = newValue
                 handleGroupToggleChanged()
+                if newValue && notificationsEnabled {
+                    Task { await familyContextStore.refreshNotifications(sessionStore: sessionStore) }
+                }
+                updateAppBadge()
             }
         )
     }
@@ -204,6 +213,13 @@ struct NotificationsSettingsView: View {
             notificationsEnabled = false
             notificationsHadAnyGroupOn = false
         }
+    }
+
+    private func updateAppBadge() {
+        MistiaNotificationStore.updateAppBadgeCount(
+            in: modelContext,
+            userID: sessionStore.activeLocalProfileUserID
+        )
     }
 
     private func handleReminderDetailChanged() {
