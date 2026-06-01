@@ -1,6 +1,74 @@
 import SwiftData
 import SwiftUI
 
+struct NotificationCenterResourceIndex {
+    private let walletsByID: [UUID: LedgerWallet]
+    private let categoriesByID: [UUID: TransactionCategory]
+    private let billsByID: [UUID: RecurringBillPlan]
+
+    init(
+        wallets: [LedgerWallet],
+        categories: [TransactionCategory],
+        bills: [RecurringBillPlan]
+    ) {
+        var walletsByID: [UUID: LedgerWallet] = [:]
+        walletsByID.reserveCapacity(wallets.count)
+        for wallet in wallets {
+            walletsByID[wallet.id] = wallet
+        }
+
+        var categoriesByID: [UUID: TransactionCategory] = [:]
+        categoriesByID.reserveCapacity(categories.count)
+        for category in categories {
+            categoriesByID[category.id] = category
+        }
+
+        var billsByID: [UUID: RecurringBillPlan] = [:]
+        billsByID.reserveCapacity(bills.count)
+        for bill in bills {
+            billsByID[bill.id] = bill
+        }
+
+        self.walletsByID = walletsByID
+        self.categoriesByID = categoriesByID
+        self.billsByID = billsByID
+    }
+
+    func wallet(id: UUID?, resourceType: MistiaFamilyNotificationResourceType?) -> LedgerWallet? {
+        guard let id else {
+            return nil
+        }
+
+        switch resourceType {
+        case .card, .wallet:
+            return walletsByID[id]
+        default:
+            return nil
+        }
+    }
+
+    func category(id: UUID?, resourceType: MistiaFamilyNotificationResourceType?) -> TransactionCategory? {
+        guard resourceType == .category, let id else {
+            return nil
+        }
+
+        return categoriesByID[id]
+    }
+
+    func bill(id: UUID?, resourceType: MistiaFamilyNotificationResourceType?) -> RecurringBillPlan? {
+        guard resourceType == .bill, let id else {
+            return nil
+        }
+
+        return billsByID[id]
+    }
+}
+
+private struct NotificationCenterRenderSnapshot {
+    let visibleRows: [AppNotificationRecord]
+    let resourceIndex: NotificationCenterResourceIndex
+}
+
 struct NotificationCenterView: View {
     @Environment(\.calendar) private var calendar
     @Environment(\.colorScheme) private var colorScheme
@@ -43,7 +111,20 @@ struct NotificationCenterView: View {
         )
     }
 
+    private var renderSnapshot: NotificationCenterRenderSnapshot {
+        NotificationCenterRenderSnapshot(
+            visibleRows: visibleRows,
+            resourceIndex: NotificationCenterResourceIndex(
+                wallets: storedWallets,
+                categories: storedCategories,
+                bills: storedBills
+            )
+        )
+    }
+
     var body: some View {
+        let snapshot = renderSnapshot
+
         MistiaPinnedTopBarScaffold(
             tone: .standard,
             title: L10n.notifications.notificationcenter.notifications,
@@ -56,7 +137,12 @@ struct NotificationCenterView: View {
             onRefresh: { await refreshInbox(triggeredByPull: true) },
             pinnedHeader: { EmptyView() },
             trailingAccessory: { trailingMenu },
-            content: { content }
+            content: {
+                content(
+                    rows: snapshot.visibleRows,
+                    resourceIndex: snapshot.resourceIndex
+                )
+            }
         )
         .task {
             await refreshInbox(triggeredByPull: false)
@@ -112,15 +198,18 @@ struct NotificationCenterView: View {
         .accessibilityLabel(L10n.notifications.notificationcenter.notificationActions)
     }
 
-    private var content: some View {
+    private func content(
+        rows visibleRows: [AppNotificationRecord],
+        resourceIndex: NotificationCenterResourceIndex
+    ) -> some View {
         Group {
             if visibleRows.isEmpty {
                 emptyState
             } else {
                 VStack(spacing: 0) {
                     ForEach(visibleRows) { row in
-                        notificationRow(row)
-                            .onTapGesture { handleRowTap(row) }
+                        notificationRow(row, resourceIndex: resourceIndex)
+                            .onTapGesture { handleRowTap(row, resourceIndex: resourceIndex) }
                     }
                 }
             }
@@ -146,10 +235,13 @@ struct NotificationCenterView: View {
     }
     
     @ViewBuilder
-    private func notificationRow(_ row: AppNotificationRecord) -> some View {
+    private func notificationRow(
+        _ row: AppNotificationRecord,
+        resourceIndex: NotificationCenterResourceIndex
+    ) -> some View {
         HStack(alignment: .top, spacing: 14) {
             ZStack(alignment: .bottom) {
-                notificationIcon(row)
+                notificationIcon(row, resourceIndex: resourceIndex)
                     .frame(width: 32, height: 32)
                     .padding(.bottom, 8)
 
@@ -171,13 +263,13 @@ struct NotificationCenterView: View {
                         .foregroundStyle(.secondary)
                 }
 
-                Text(notificationBody(for: row))
+                Text(notificationBody(for: row, resourceIndex: resourceIndex))
                     .font(.system(size: 14, weight: row.isRead ? .regular : .medium, design: .rounded))
                     .foregroundStyle(row.isRead ? .secondary : .primary)
                     .fixedSize(horizontal: false, vertical: true)
 
                 if row.opensTopUpTransfer {
-                    topUpActionRow(for: row)
+                    topUpActionRow(for: row, resourceIndex: resourceIndex)
                         .padding(.top, 4)
                 } else if let actionHint = actionHint(for: row) {
                     Text(actionHint)
@@ -236,8 +328,11 @@ struct NotificationCenterView: View {
     }
 
     @ViewBuilder
-    private func notificationIcon(_ row: AppNotificationRecord) -> some View {
-        if let bill = billPlan(for: row) {
+    private func notificationIcon(
+        _ row: AppNotificationRecord,
+        resourceIndex: NotificationCenterResourceIndex
+    ) -> some View {
+        if let bill = billPlan(for: row, resourceIndex: resourceIndex) {
             let iconSymbolName = bill.category?.iconSymbolName ?? bill.iconSymbolName
             let iconColorHex = bill.category?.iconColorHex ?? MistiaFinanceIconRegistry.defaultColorHex(for: iconSymbolName)
             MistiaFinanceIconView(
@@ -245,13 +340,13 @@ struct NotificationCenterView: View {
                 fallbackColor: Color(hex: iconColorHex),
                 size: 32
             )
-        } else if let category = categoryResource(for: row) {
+        } else if let category = categoryResource(for: row, resourceIndex: resourceIndex) {
             MistiaFinanceIconView(
                 icon: category.iconSymbolName,
                 fallbackColor: Color(hex: category.iconColorHex),
                 size: 32
             )
-        } else if let wallet = walletResource(for: row) {
+        } else if let wallet = walletResource(for: row, resourceIndex: resourceIndex) {
             MistiaFinanceIconView(
                 icon: wallet.iconSymbolName,
                 fallbackColor: Color(hex: wallet.iconColorHex),
@@ -278,9 +373,12 @@ struct NotificationCenterView: View {
         }
     }
 
-    private func topUpActionRow(for row: AppNotificationRecord) -> some View {
+    private func topUpActionRow(
+        for row: AppNotificationRecord,
+        resourceIndex: NotificationCenterResourceIndex
+    ) -> some View {
         Button {
-            handleRowTap(row)
+            handleRowTap(row, resourceIndex: resourceIndex)
         } label: {
             HStack(spacing: 8) {
                 Image(systemName: "arrow.down.to.line.compact")
@@ -353,7 +451,10 @@ struct NotificationCenterView: View {
         }
     }
 
-    private func handleRowTap(_ row: AppNotificationRecord) {
+    private func handleRowTap(
+        _ row: AppNotificationRecord,
+        resourceIndex: NotificationCenterResourceIndex
+    ) {
         markAsRead(row)
 
         if row.isRespondableFamilyRequest {
@@ -382,8 +483,8 @@ struct NotificationCenterView: View {
                 name: payload.billName,
                 ownerUserID: dueOwnerUserID(for: payload)
             )
-        } else if row.opensCreditCardStatement, row.resourceType == .card, let walletID = row.resourceID {
-            if let wallet = storedWallets.first(where: { $0.id == walletID }) {
+        } else if row.opensCreditCardStatement, row.resourceType == .card {
+            if let wallet = resourceIndex.wallet(id: row.resourceID, resourceType: row.resourceType) {
                 let monthHint = row.creditCardActionPayload
                     .flatMap { PlanningLogic.month(from: $0.statementMonthKey, calendar: calendar) }
                     ?? row.dueActionPayload?.dueDate
@@ -548,7 +649,10 @@ struct NotificationCenterView: View {
         }
     }
 
-    private func notificationBody(for row: AppNotificationRecord) -> String {
+    private func notificationBody(
+        for row: AppNotificationRecord,
+        resourceIndex: NotificationCenterResourceIndex
+    ) -> String {
         switch row.kind {
         case .permissionRequestReceived, .familyTransactionRequestReceived:
             if row.actionState == .approved {
@@ -570,7 +674,7 @@ struct NotificationCenterView: View {
             
             let scope = row.permissionScope?.localizedActionName ?? ""
             let resourceType = row.resourceType?.localizedName ?? ""
-            let resourceName = resolvedResourceName(for: row) ?? ""
+            let resourceName = resolvedResourceName(for: row, resourceIndex: resourceIndex) ?? ""
             let resourceDetail = resourceName.isEmpty ? resourceType : "\(resourceType) (\(resourceName))"
             
             if !scope.isEmpty {
@@ -582,7 +686,7 @@ struct NotificationCenterView: View {
             let actorName = familyContextStore.displayName(for: row.actorUserID)
                 ?? L10n.notifications.notificationcenter.theOwner
             let resourceType = row.resourceType?.localizedName ?? ""
-            if let resourceName = resolvedResourceName(for: row) {
+            if let resourceName = resolvedResourceName(for: row, resourceIndex: resourceIndex) {
                 return L10n.notifications.notificationcenter.valueRevokedYourAccessToValueValue(String(describing: actorName), String(describing: resourceType), String(describing: resourceName))
             }
             return row.body
@@ -610,7 +714,7 @@ struct NotificationCenterView: View {
                     }
                     
                     let resourceType = row.resourceType?.localizedName ?? ""
-                    let resourceName = resolvedResourceName(for: row) ?? ""
+                    let resourceName = resolvedResourceName(for: row, resourceIndex: resourceIndex) ?? ""
                     let resourceDetail = resourceName.isEmpty ? resourceType : "\(resourceType) (\(resourceName))"
                     
                     if let amountMinorStr = dict["amount_minor"],
@@ -630,14 +734,17 @@ struct NotificationCenterView: View {
         }
     }
 
-    private func resolvedResourceName(for row: AppNotificationRecord) -> String? {
-        if let wallet = walletResource(for: row) {
+    private func resolvedResourceName(
+        for row: AppNotificationRecord,
+        resourceIndex: NotificationCenterResourceIndex
+    ) -> String? {
+        if let wallet = walletResource(for: row, resourceIndex: resourceIndex) {
             return wallet.name
         }
-        if let category = categoryResource(for: row) {
+        if let category = categoryResource(for: row, resourceIndex: resourceIndex) {
             return category.name
         }
-        if let bill = billPlan(for: row) {
+        if let bill = billPlan(for: row, resourceIndex: resourceIndex) {
             return bill.name
         }
         
@@ -728,34 +835,25 @@ struct NotificationCenterView: View {
         colorScheme == .dark ? MistiaAccent.lightPurple.color : MistiaAccent.purple.color
     }
 
-    private func billPlan(for row: AppNotificationRecord) -> RecurringBillPlan? {
-        guard row.resourceType == .bill, let resourceID = row.resourceID else {
-            return nil
-        }
-
-        return storedBills.first(where: { $0.id == resourceID })
+    private func billPlan(
+        for row: AppNotificationRecord,
+        resourceIndex: NotificationCenterResourceIndex
+    ) -> RecurringBillPlan? {
+        resourceIndex.bill(id: row.resourceID, resourceType: row.resourceType)
     }
 
-    private func categoryResource(for row: AppNotificationRecord) -> TransactionCategory? {
-        guard row.resourceType == .category,
-              let resourceID = row.resourceID else {
-            return nil
-        }
-
-        return storedCategories.first(where: { $0.id == resourceID })
+    private func categoryResource(
+        for row: AppNotificationRecord,
+        resourceIndex: NotificationCenterResourceIndex
+    ) -> TransactionCategory? {
+        resourceIndex.category(id: row.resourceID, resourceType: row.resourceType)
     }
 
-    private func walletResource(for row: AppNotificationRecord) -> LedgerWallet? {
-        guard let resourceID = row.resourceID else {
-            return nil
-        }
-
-        switch row.resourceType {
-        case .card, .wallet:
-            return storedWallets.first(where: { $0.id == resourceID })
-        default:
-            return nil
-        }
+    private func walletResource(
+        for row: AppNotificationRecord,
+        resourceIndex: NotificationCenterResourceIndex
+    ) -> LedgerWallet? {
+        resourceIndex.wallet(id: row.resourceID, resourceType: row.resourceType)
     }
 }
 
@@ -773,6 +871,8 @@ struct MistiaNotificationBellButton: View {
     }
 
     var body: some View {
+        let unreadCount = unreadCount
+
         MistiaHeaderCircleButton(action: action) {
             ZStack(alignment: .topTrailing) {
                 Image(systemName: "bell")
@@ -781,7 +881,7 @@ struct MistiaNotificationBellButton: View {
                     .foregroundStyle(.primary)
 
                 if unreadCount > 0 {
-                    Text(badgeText)
+                    Text(badgeText(for: unreadCount))
                         .font(.system(size: unreadCount > 99 ? 7 : 8, weight: .heavy, design: .rounded))
                         .foregroundStyle(.white)
                         .lineLimit(1)
@@ -798,7 +898,7 @@ struct MistiaNotificationBellButton: View {
         }
     }
 
-    private var badgeText: String {
+    private func badgeText(for unreadCount: Int) -> String {
         unreadCount > 99 ? "99+" : "\(unreadCount)"
     }
 }

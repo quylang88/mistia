@@ -83,6 +83,46 @@ final class FamilyAggregatePerformanceTests: XCTestCase {
         XCTAssertEqual(summary.assetTrend.last?.valueMinor, 40_000)
     }
 
+    func testNotificationResourceIndexReturnsResourcesByID() {
+        let walletID = UUID()
+        let categoryID = UUID()
+        let billID = UUID()
+        let wallet = LedgerWallet(
+            id: walletID,
+            name: "Main Wallet",
+            kind: .bank,
+            iconSymbolName: "building.columns.fill",
+            iconColorHex: "#3366FF"
+        )
+        let category = TransactionCategory(
+            id: categoryID,
+            name: "Utilities",
+            kind: .expense,
+            iconSymbolName: "bolt.fill",
+            iconColorHex: "#FFAA00"
+        )
+        let bill = RecurringBillPlan(
+            id: billID,
+            name: "Internet",
+            iconSymbolName: "wifi",
+            category: category,
+            dueDay: 15
+        )
+        let index = NotificationCenterResourceIndex(
+            wallets: [wallet],
+            categories: [category],
+            bills: [bill]
+        )
+
+        XCTAssertEqual(index.wallet(id: walletID, resourceType: .wallet)?.name, "Main Wallet")
+        XCTAssertEqual(index.wallet(id: walletID, resourceType: .card)?.name, "Main Wallet")
+        XCTAssertNil(index.wallet(id: walletID, resourceType: .category))
+        XCTAssertEqual(index.category(id: categoryID, resourceType: .category)?.name, "Utilities")
+        XCTAssertNil(index.category(id: categoryID, resourceType: .wallet))
+        XCTAssertEqual(index.bill(id: billID, resourceType: .bill)?.name, "Internet")
+        XCTAssertNil(index.bill(id: billID, resourceType: .card))
+    }
+
     private func makeDate(year: Int, month: Int, day: Int) -> Date {
         var components = DateComponents()
         components.calendar = calendar
