@@ -253,7 +253,8 @@ struct TransactionEditorSheet: View {
             return true
         }
 
-        if transaction.primaryKind == .expense,
+        let transactionSnapshot = transaction.snapshot
+        if (transaction.primaryKind == .expense || TransactionLogic.isCreditCardDebtLending(transactionSnapshot)),
            let sourceWallet = transaction.sourceWallet,
            sourceWallet.kind == .creditCard {
             if paidCreditCardStatement(for: sourceWallet, occurredAt: transaction.occurredAt) != nil {
@@ -266,7 +267,7 @@ struct TransactionEditorSheet: View {
         }
 
         return TransactionLogic.isLockedByPaidStatement(
-            transaction: transaction.snapshot,
+            transaction: transactionSnapshot,
             allTransactions: postedTransactions.map { $0.snapshot }
         )
     }

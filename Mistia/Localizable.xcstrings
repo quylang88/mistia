@@ -336,13 +336,13 @@
         "vi": {
           "stringUnit": {
             "state": "translated",
-            "value": "Chuyển nội bộ hoặc theo dõi công nợ."
+            "value": "Chuyển nội bộ hoặc theo dõi vay & cho vay."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Move money internally or track debt."
+            "value": "Move money internally or track loans."
           }
         },
         "ja": {
@@ -1282,19 +1282,19 @@
         "vi": {
           "stringUnit": {
             "state": "translated",
-            "value": "Công nợ thẻ"
+            "value": "Dư nợ thẻ"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Card debt"
+            "value": "Card balance"
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "Card debt"
+            "value": "Card balance"
           }
         }
       }
@@ -2360,13 +2360,13 @@
         "vi": {
           "stringUnit": {
             "state": "translated",
-            "value": "Chuyển tiền công nợ"
+            "value": "Chuyển tiền vay/cho vay"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Debt transfer"
+            "value": "Loan transfer"
           }
         },
         "ja": {
@@ -4472,13 +4472,13 @@
         "vi": {
           "stringUnit": {
             "state": "translated",
-            "value": "Xem công nợ"
+            "value": "Xem vay & cho vay"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "View debts"
+            "value": "View loans"
           }
         },
         "ja": {
@@ -8872,13 +8872,13 @@
         "vi": {
           "stringUnit": {
             "state": "translated",
-            "value": "Công nợ"
+            "value": "Vay & cho vay"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Debt"
+            "value": "Loans"
           }
         },
         "ja": {
@@ -8894,13 +8894,13 @@
         "vi": {
           "stringUnit": {
             "state": "translated",
-            "value": "Khoản công nợ"
+            "value": "Vay & cho vay"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Debt item"
+            "value": "Loans"
           }
         },
         "ja": {
@@ -22292,13 +22292,13 @@
         "vi": {
           "stringUnit": {
             "state": "translated",
-            "value": "Công nợ"
+            "value": "Vay & cho vay"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Debt"
+            "value": "Loans"
           }
         },
         "ja": {
@@ -23150,13 +23150,13 @@
         "vi": {
           "stringUnit": {
             "state": "translated",
-            "value": "Công nợ"
+            "value": "Vay & cho vay"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Debt"
+            "value": "Loans"
           }
         },
         "ja": {
@@ -23854,13 +23854,13 @@
         "vi": {
           "stringUnit": {
             "state": "translated",
-            "value": "Công nợ"
+            "value": "Vay & cho vay"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Debt"
+            "value": "Loans"
           }
         },
         "ja": {
@@ -31246,13 +31246,13 @@
         "vi": {
           "stringUnit": {
             "state": "translated",
-            "value": "Chọn loại công nợ."
+            "value": "Chọn loại vay/cho vay."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Choose a debt type."
+            "value": "Choose a loan type."
           }
         },
         "ja": {
@@ -31422,13 +31422,13 @@
         "vi": {
           "stringUnit": {
             "state": "translated",
-            "value": "Chọn ví thực hiện khoản công nợ."
+            "value": "Chọn ví thực hiện vay & cho vay."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Choose the wallet used for this debt item."
+            "value": "Choose the wallet used for this loan."
           }
         },
         "ja": {
@@ -31862,13 +31862,13 @@
         "vi": {
           "stringUnit": {
             "state": "translated",
-            "value": "Loại công nợ"
+            "value": "Loại vay/cho vay"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Debt type"
+            "value": "Loan type"
           }
         },
         "ja": {
@@ -31994,13 +31994,13 @@
         "vi": {
           "stringUnit": {
             "state": "translated",
-            "value": "Số tiền không được lớn hơn công nợ đang mở."
+            "value": "Số tiền không được lớn hơn khoản đang mở."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "The amount cannot be greater than the open debt."
+            "value": "The amount cannot be greater than the open loan balance."
           }
         },
         "ja": {
@@ -32192,13 +32192,13 @@
         "vi": {
           "stringUnit": {
             "state": "translated",
-            "value": "Bạn cần quyền tạo công nợ cho %@. Gửi yêu cầu tới chủ dữ liệu?"
+            "value": "Bạn cần quyền tạo vay & cho vay cho %@. Gửi yêu cầu tới chủ dữ liệu?"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "You need debt creation access for %@. Send a request to the data owner?"
+            "value": "You need loan creation access for %@. Send a request to the data owner?"
           }
         },
         "ja": {
@@ -33402,13 +33402,13 @@
         "vi": {
           "stringUnit": {
             "state": "translated",
-            "value": "Công nợ"
+            "value": "Vay & cho vay"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Debt"
+            "value": "Loans"
           }
         },
         "ja": {
@@ -33776,13 +33776,13 @@
         "vi": {
           "stringUnit": {
             "state": "translated",
-            "value": "Công nợ đang mở"
+            "value": "Vay & cho vay đang mở"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Open debts"
+            "value": "Open loans"
           }
         },
         "ja": {

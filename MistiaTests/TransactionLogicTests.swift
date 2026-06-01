@@ -53,6 +53,47 @@ final class TransactionLogicTests: XCTestCase {
         XCTAssertEqual(position?.preferredWalletID, borrowWalletID)
     }
 
+    func testOpenReceivableDebtTotalsOnlyIncludeCurrentLendingByCurrency() {
+        let positions = [
+            CounterpartyDebtSnapshot(
+                id: "an-jpy",
+                displayName: "An",
+                netMinor: 1_200,
+                currencyCode: "JPY",
+                preferredWalletID: nil
+            ),
+            CounterpartyDebtSnapshot(
+                id: "binh-jpy",
+                displayName: "Binh",
+                netMinor: -700,
+                currencyCode: "JPY",
+                preferredWalletID: nil
+            ),
+            CounterpartyDebtSnapshot(
+                id: "chi-jpy",
+                displayName: "Chi",
+                netMinor: 300,
+                currencyCode: "jpy",
+                preferredWalletID: nil
+            ),
+            CounterpartyDebtSnapshot(
+                id: "dung-vnd",
+                displayName: "Dung",
+                netMinor: 500_000,
+                currencyCode: "VND",
+                preferredWalletID: nil
+            )
+        ]
+
+        XCTAssertEqual(
+            TransactionLogic.openReceivableDebtTotalsByCurrency(from: positions),
+            [
+                PlanningCurrencyAmountTotalSnapshot(currencyCode: "JPY", amountMinor: 1_500),
+                PlanningCurrencyAmountTotalSnapshot(currencyCode: "VND", amountMinor: 500_000)
+            ]
+        )
+    }
+
     func testDebtTransfersDoNotCountAsIncomeOrExpenseSummary() {
         let records = [
             debtRecord(amountMinor: 1_000, currencyCode: "JPY", intent: .lend),
@@ -140,6 +181,43 @@ final class TransactionLogicTests: XCTestCase {
         XCTAssertEqual(statements.first?.amountMinor, 32_456)
         XCTAssertEqual(statements.first?.status, .pending)
         XCTAssertEqual(statements.first?.state, .payable)
+    }
+
+    func testLegacyPaymentTitleLockDoesNotLockCreditCardDebtLending() throws {
+        let calendar = Calendar(identifier: .gregorian)
+        let cardWalletID = UUID()
+        let cashWalletID = UUID()
+        let debtLending = record(
+            primaryKind: .transfer,
+            amountMinor: 32_456,
+            currencyCode: "JPY",
+            transferSubtype: .debt,
+            debtIntent: .lend,
+            title: TransactionDebtIntent.lend.title,
+            sourceWalletID: cardWalletID,
+            sourceWalletKind: .creditCard,
+            occurredAt: try makeDate(year: 2026, month: 2, day: 12, calendar: calendar)
+        )
+        let unrelatedPayment = record(
+            primaryKind: .transfer,
+            amountMinor: 40_000,
+            currencyCode: "JPY",
+            transferSubtype: .internalTransfer,
+            title: "Card payment",
+            sourceWalletID: cashWalletID,
+            sourceWalletKind: .cash,
+            destinationWalletID: cardWalletID,
+            destinationWalletKind: .creditCard,
+            occurredAt: try makeDate(year: 2026, month: 2, day: 26, calendar: calendar)
+        )
+
+        XCTAssertFalse(
+            TransactionLogic.isLockedByPaidStatement(
+                transaction: debtLending,
+                allTransactions: [debtLending, unrelatedPayment],
+                calendar: calendar
+            )
+        )
     }
 
     func testCounterpartySuggestionsMatchSingleCharacterQueries() {
@@ -250,6 +328,8 @@ final class TransactionLogicTests: XCTestCase {
         normalizedCounterpartyKey: String? = nil,
         sourceWalletID: UUID = UUID(),
         sourceWalletKind: LedgerWalletKind = .cash,
+        destinationWalletID: UUID? = nil,
+        destinationWalletKind: LedgerWalletKind? = nil,
         occurredAt: Date = Date(timeIntervalSince1970: 1_800_000_000)
     ) -> TransactionRecordSnapshot {
         TransactionRecordSnapshot(
@@ -267,8 +347,8 @@ final class TransactionLogicTests: XCTestCase {
             createdAt: occurredAt,
             sourceWalletID: sourceWalletID,
             sourceWalletKind: sourceWalletKind,
-            destinationWalletID: nil,
-            destinationWalletKind: nil,
+            destinationWalletID: destinationWalletID,
+            destinationWalletKind: destinationWalletKind,
             categoryID: primaryKind == .expense || primaryKind == .income ? UUID() : nil,
             counterpartyName: counterpartyName,
             normalizedCounterpartyKey: normalizedCounterpartyKey

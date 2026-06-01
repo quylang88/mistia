@@ -566,6 +566,27 @@ nonisolated enum TransactionLogic {
         }
     }
 
+    static func openReceivableDebtTotalsByCurrency(
+        from positions: [CounterpartyDebtSnapshot]
+    ) -> [PlanningCurrencyAmountTotalSnapshot] {
+        Dictionary(grouping: positions.filter { $0.netMinor > 0 }) { position in
+            MistiaCurrencyLogic.normalizedCode(position.currencyCode)
+        }
+        .compactMap { currencyCode, groupedPositions in
+            let total = groupedPositions.reduce(into: Int64.zero) { partial, position in
+                partial += position.netMinor
+            }
+            guard total > 0 else { return nil }
+            return PlanningCurrencyAmountTotalSnapshot(
+                currencyCode: currencyCode,
+                amountMinor: total
+            )
+        }
+        .sorted { lhs, rhs in
+            lhs.currencyCode.localizedCaseInsensitiveCompare(rhs.currencyCode) == .orderedAscending
+        }
+    }
+
     static func counterpartySuggestions(
         from records: [TransactionRecordSnapshot],
         query: String,
@@ -1134,10 +1155,14 @@ nonisolated enum TransactionLogic {
         guard transaction.primaryKind == .expense || transaction.primaryKind == .transfer else {
             return false
         }
+
+        if isCreditCardDebtLending(transaction) {
+            return false
+        }
         
         // Find the relevant credit card wallet ID
         let creditCardWalletID: UUID?
-        if transaction.primaryKind == .expense || isCreditCardDebtLending(transaction) {
+        if transaction.primaryKind == .expense {
             // For expenses, the source wallet must be a credit card
             guard transaction.sourceWalletKind == .creditCard else { return false }
             creditCardWalletID = transaction.sourceWalletID

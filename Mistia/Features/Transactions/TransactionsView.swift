@@ -131,6 +131,7 @@ private struct TransactionsListSnapshot {
     let visibleRecordCount: Int
     let displayedRecordCount: Int
     let openDebtPositions: [CounterpartyDebtSnapshot]
+    let openReceivableDebtTotals: [PlanningCurrencyAmountTotalSnapshot]
     let sections: [TransactionSectionSnapshot]
     let transactionsByID: [UUID: LedgerTransaction]
     let transactionAuditMap: [UUID: TransactionAuditRecord]
@@ -336,6 +337,9 @@ struct TransactionsView: View {
             visibleRecordCount: page.totalCount,
             displayedRecordCount: displayedRecords.count,
             openDebtPositions: openDebtPositions,
+            openReceivableDebtTotals: TransactionLogic.openReceivableDebtTotalsByCurrency(
+                from: openDebtPositions
+            ),
             sections: TransactionLogic.sections(
                 from: displayedRecords,
                 assumesSortedByRecency: true,
@@ -376,6 +380,7 @@ struct TransactionsView: View {
             visibleRecordCount: page.totalCount,
             displayedRecordCount: displayedRecords.count,
             openDebtPositions: [],
+            openReceivableDebtTotals: [],
             sections: TransactionLogic.sections(
                 from: displayedRecords,
                 assumesSortedByRecency: true,
@@ -693,7 +698,10 @@ struct TransactionsView: View {
                     }
                 ) {
                     if !listSnapshot.openDebtPositions.isEmpty {
-                        outstandingDebtSection(listSnapshot.openDebtPositions)
+                        outstandingDebtSection(
+                            listSnapshot.openDebtPositions,
+                            receivableTotals: listSnapshot.openReceivableDebtTotals
+                        )
                     }
                     transactionsContent(listSnapshot)
                 }
@@ -1045,14 +1053,29 @@ struct TransactionsView: View {
         }
     }
 
-    private func outstandingDebtSection(_ positions: [CounterpartyDebtSnapshot]) -> some View {
+    private func outstandingDebtSection(
+        _ positions: [CounterpartyDebtSnapshot],
+        receivableTotals: [PlanningCurrencyAmountTotalSnapshot]
+    ) -> some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text(L10n.transactions.transactions.openDebts)
-                .font(.system(size: 13, weight: .bold, design: .rounded))
-                .foregroundStyle(.secondary)
-                .textCase(.uppercase)
-                .tracking(0.6)
-                .padding(.horizontal, 2)
+            HStack(alignment: .firstTextBaseline, spacing: 10) {
+                Text(L10n.transactions.transactions.openDebts)
+                    .font(.system(size: 13, weight: .bold, design: .rounded))
+                    .foregroundStyle(.secondary)
+                    .textCase(.uppercase)
+                    .tracking(0.6)
+
+                Spacer(minLength: 12)
+
+                if let total = formattedReceivableDebtTotal(receivableTotals) {
+                    Text(verbatim: total)
+                        .font(.system(size: 15, weight: .bold, design: .rounded))
+                        .foregroundStyle(debtIntentTint(.lend))
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.72)
+                }
+            }
+            .padding(.horizontal, 2)
 
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 10) {
@@ -1065,6 +1088,15 @@ struct TransactionsView: View {
                 .padding(.vertical, 2)
             }
         }
+    }
+
+    private func formattedReceivableDebtTotal(
+        _ totals: [PlanningCurrencyAmountTotalSnapshot]
+    ) -> String? {
+        guard !totals.isEmpty else { return nil }
+        return totals
+            .map { $0.amountMinor.formattedCurrency(code: $0.currencyCode) }
+            .joined(separator: " / ")
     }
 
     @ViewBuilder
