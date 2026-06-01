@@ -101,6 +101,27 @@ private struct ManagementRenderSnapshot {
     let visibleCategorySections: [TransactionCategoryGroupSection]
 }
 
+private struct ManagementRenderSnapshotCache {
+    let key: ManagementRenderSnapshotCacheKey
+    let snapshot: ManagementRenderSnapshot
+}
+
+private struct ManagementRenderSnapshotCacheKey: Hashable {
+    let selectedCategoryKindRawValue: String
+    let activeScope: FamilyContext.Scope
+    let selectedSubjectUserID: UUID?
+    let currentUserID: UUID?
+    let activeLocalProfileUserID: UUID?
+    let signedInUserID: UUID?
+    let familyID: UUID?
+    let familyAccessSignature: Int
+    let walletSignature: MistiaCollectionChangeSignature
+    let categorySignature: MistiaCollectionChangeSignature
+    let transactionSignature: MistiaCollectionChangeSignature
+    let ownershipSignature: MistiaCollectionChangeSignature
+    let auditSignature: MistiaCollectionChangeSignature
+}
+
 private struct ManagementProfileRowPresentation {
     let initials: String
     let avatarURL: URL?
@@ -140,6 +161,7 @@ struct ManagementView: View {
     @State private var walletPermissionPrompt: ManagementWalletPermissionPrompt?
     @State private var familyOwnerConflictAlert: ManagementFamilyOwnerConflictAlert?
     @State private var memberViewingExitPrompt: FamilyMemberViewingExitPrompt?
+    @State private var renderSnapshotCache: ManagementRenderSnapshotCache?
 
     private var cardTint: Color {
         colorScheme == .dark ? .white.opacity(0.018) : .white.opacity(0.12)
@@ -186,31 +208,23 @@ struct ManagementView: View {
                 return $0.createdAt < $1.createdAt
             }
         let transactionSnapshots = visiblePostedTransactions.map(\.planningRecordSnapshot)
+        let activeWalletSnapshots = activeWallets.map {
+            TransactionWalletSnapshot(
+                id: $0.id,
+                kind: $0.kind,
+                openingBalanceMinor: $0.openingBalanceMinor
+            )
+        }
         let balanceIndex = TransactionLogic.walletBalanceIndex(
-            wallets: activeWallets.map {
-                TransactionWalletSnapshot(
-                    id: $0.id,
-                    kind: $0.kind,
-                    openingBalanceMinor: $0.openingBalanceMinor
-                )
-            },
+            wallets: activeWalletSnapshots,
             records: transactionSnapshots
         )
 
         return ManagementRenderSnapshot(
             activeWallets: activeWallets,
             walletBalancesByID: Dictionary(
-                uniqueKeysWithValues: activeWallets.map {
-                    (
-                        $0.id,
-                        balanceIndex.balance(
-                            for: TransactionWalletSnapshot(
-                                id: $0.id,
-                                kind: $0.kind,
-                                openingBalanceMinor: $0.openingBalanceMinor
-                            )
-                        )
-                    )
+                uniqueKeysWithValues: activeWalletSnapshots.map { wallet in
+                    (wallet.id, balanceIndex.balance(for: wallet))
                 }
             ),
             visibleCategorySections: MistiaCategoryHierarchy.groupedSections(
@@ -222,62 +236,99 @@ struct ManagementView: View {
         )
     }
 
+    private func cachedRenderSnapshot(for key: ManagementRenderSnapshotCacheKey) -> ManagementRenderSnapshot {
+        if let renderSnapshotCache, renderSnapshotCache.key == key {
+            return renderSnapshotCache.snapshot
+        }
+
+        return renderSnapshot
+    }
+
+    private func refreshRenderSnapshotCache(
+        for key: ManagementRenderSnapshotCacheKey,
+        snapshot: ManagementRenderSnapshot
+    ) {
+        renderSnapshotCache = ManagementRenderSnapshotCache(
+            key: key,
+            snapshot: snapshot
+        )
+    }
+
+    private var renderSnapshotCacheKey: ManagementRenderSnapshotCacheKey {
+        ManagementRenderSnapshotCacheKey(
+            selectedCategoryKindRawValue: selectedCategoryKind.rawValue,
+            activeScope: familyContextStore.activeContext.scope,
+            selectedSubjectUserID: familyContextStore.selectedSubjectUserID,
+            currentUserID: familyContextStore.currentUserID,
+            activeLocalProfileUserID: sessionStore.activeLocalProfileUserID,
+            signedInUserID: sessionStore.signedInUserID,
+            familyID: familyContextStore.family?.id,
+            familyAccessSignature: familyAccessSignature,
+            walletSignature: MistiaCollectionChangeSignature.make(
+                storedWallets,
+                updatedAt: \.updatedAt,
+                deletedAt: \.deletedAt,
+                isArchived: \.isArchived,
+                remoteVersion: \.remoteVersion
+            ),
+            categorySignature: MistiaCollectionChangeSignature.make(
+                storedCategories,
+                updatedAt: \.updatedAt,
+                deletedAt: \.deletedAt,
+                isArchived: \.isArchived,
+                remoteVersion: \.remoteVersion
+            ),
+            transactionSignature: MistiaCollectionChangeSignature.make(
+                postedTransactions,
+                updatedAt: \.updatedAt,
+                deletedAt: \.deletedAt,
+                isArchived: \.isArchived,
+                remoteVersion: \.remoteVersion
+            ),
+            ownershipSignature: MistiaCollectionChangeSignature.make(
+                ownershipScopes,
+                updatedAt: \.updatedAt,
+                deletedAt: { _ in nil }
+            ),
+            auditSignature: MistiaCollectionChangeSignature.make(
+                transactionAuditRecords,
+                updatedAt: \.updatedAt,
+                deletedAt: { _ in nil }
+            )
+        )
+    }
+
+    private var familyAccessSignature: Int {
+        var hasher = Hasher()
+        hasher.combine(familyContextStore.currentMembership?.id)
+        hasher.combine(familyContextStore.currentMembership?.updatedAt.timeIntervalSince1970)
+        hasher.combine(familyContextStore.members.count)
+        for member in familyContextStore.members {
+            hasher.combine(member.membershipID)
+            hasher.combine(member.userID)
+            hasher.combine(member.role.rawValue)
+            hasher.combine(member.hasSyncedCloudData)
+        }
+        hasher.combine(familyContextStore.permissionGrants.count)
+        for grant in familyContextStore.permissionGrants {
+            hasher.combine(grant.id)
+            hasher.combine(grant.granteeUserID)
+            hasher.combine(grant.ownerUserID)
+            hasher.combine(grant.resourceTypeRawValue)
+            hasher.combine(grant.resourceID)
+            hasher.combine(grant.permissionScopeRawValue)
+            hasher.combine(grant.updatedAt.timeIntervalSince1970)
+            hasher.combine(grant.revokedAt?.timeIntervalSince1970)
+        }
+        return hasher.finalize()
+    }
+
     private var hasFamilyProfile: Bool {
         familyContextStore.family != nil && !familyContextStore.members.isEmpty
     }
 
     private var shouldRefreshFamilyBeforeOpening: Bool {
         familyContextStore.family != nil && familyContextStore.members.count >= 2
-    }
-
-    private var activeWallets: [LedgerWallet] {
-        visibleWallets
-            .filter { !$0.isArchived }
-            .sorted {
-                if $0.sortOrder != $1.sortOrder {
-                    return $0.sortOrder < $1.sortOrder
-                }
-                return $0.createdAt < $1.createdAt
-            }
-    }
-
-    private var visibleCategorySections: [TransactionCategoryGroupSection] {
-        MistiaCategoryHierarchy.groupedSections(
-            from: visibleCategories,
-            kind: selectedCategoryKind,
-            includeArchived: false,
-            includeEmptyParents: true
-        )
-    }
-
-    private var visibleWallets: [LedgerWallet] {
-        FamilyScopedData.visible(
-            storedWallets,
-            entity: .wallet,
-            scopes: ownershipScopes,
-            familyContextStore: familyContextStore,
-            sessionStore: sessionStore
-        )
-    }
-
-    private var visibleCategories: [TransactionCategory] {
-        FamilyScopedData.visible(
-            storedCategories,
-            entity: .category,
-            scopes: ownershipScopes,
-            familyContextStore: familyContextStore,
-            sessionStore: sessionStore
-        )
-    }
-
-    private var visiblePostedTransactions: [LedgerTransaction] {
-        FamilyScopedData.visibleTransactionsForHistory(
-            postedTransactions,
-            audits: transactionAuditRecords,
-            scopes: ownershipScopes,
-            familyContextStore: familyContextStore,
-            sessionStore: sessionStore
-        )
     }
 
     private var walletOwnerMap: [UUID: UUID] {
@@ -321,7 +372,8 @@ struct ManagementView: View {
     }
 
     var body: some View {
-        let renderSnapshot = self.renderSnapshot
+        let snapshotKey = renderSnapshotCacheKey
+        let renderSnapshot = cachedRenderSnapshot(for: snapshotKey)
         let memberToolbar = familyContextStore.memberViewingToolbarPresentation
 
         NavigationStack {
@@ -441,6 +493,9 @@ struct ManagementView: View {
         }
         .onDisappear {
             hideQuickCreate = false
+        }
+        .task(id: snapshotKey) {
+            refreshRenderSnapshotCache(for: snapshotKey, snapshot: renderSnapshot)
         }
     }
 

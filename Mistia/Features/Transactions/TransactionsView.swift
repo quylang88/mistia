@@ -208,6 +208,7 @@ struct TransactionsView: View {
     @State private var memberViewingExitPrompt: FamilyMemberViewingExitPrompt?
     @State private var visibleTransactionLimit = TransactionsListPaging.initialLimit
     @State private var listSnapshotCache: TransactionsListSnapshotCache?
+    @State private var searchSnapshotCache: TransactionsListSnapshotCache?
 
     private var activeTransactions: [LedgerTransaction] {
         visibleTransactions
@@ -418,6 +419,27 @@ struct TransactionsView: View {
         )
     }
 
+    private func cachedTransactionSearchSnapshot(
+        for key: TransactionsListSnapshotCacheKey?
+    ) -> TransactionsListSnapshot? {
+        guard let key else { return nil }
+        if let searchSnapshotCache, searchSnapshotCache.key == key {
+            return searchSnapshotCache.snapshot
+        }
+
+        return transactionSearchSnapshot
+    }
+
+    private func refreshTransactionSearchSnapshotCache(
+        for key: TransactionsListSnapshotCacheKey,
+        snapshot: TransactionsListSnapshot
+    ) {
+        searchSnapshotCache = TransactionsListSnapshotCache(
+            key: key,
+            snapshot: snapshot
+        )
+    }
+
     private var transactionListSnapshotCacheKey: TransactionsListSnapshotCacheKey {
         let effectiveFilters = effectiveFilters
         return TransactionsListSnapshotCacheKey(
@@ -432,6 +454,52 @@ struct TransactionsView: View {
             maxAmountMinor: effectiveFilters.maxAmountMinor,
             searchText: effectiveFilters.searchText,
             visibleTransactionLimit: visibleTransactionLimit,
+            calendarIdentifier: String(describing: calendar.identifier),
+            calendarTimeZoneIdentifier: calendar.timeZone.identifier,
+            activeScope: familyContextStore.activeContext.scope,
+            selectedSubjectUserID: familyContextStore.selectedSubjectUserID,
+            currentUserID: familyContextStore.currentUserID,
+            activeLocalProfileUserID: sessionStore.activeLocalProfileUserID,
+            signedInUserID: sessionStore.signedInUserID,
+            familyID: familyContextStore.family?.id,
+            familyAccessSignature: familyAccessSignature,
+            transactionSignature: MistiaCollectionChangeSignature.make(
+                storedTransactions,
+                updatedAt: \.updatedAt,
+                deletedAt: \.deletedAt,
+                isArchived: \.isArchived,
+                remoteVersion: \.remoteVersion
+            ),
+            ownershipSignature: MistiaCollectionChangeSignature.make(
+                ownershipScopes,
+                updatedAt: \.updatedAt,
+                deletedAt: { _ in nil }
+            ),
+            auditSignature: MistiaCollectionChangeSignature.make(
+                transactionAuditRecords,
+                updatedAt: \.updatedAt,
+                deletedAt: { _ in nil }
+            )
+        )
+    }
+
+    private var transactionSearchSnapshotCacheKey: TransactionsListSnapshotCacheKey? {
+        guard let filters = TransactionSearchLogic.filters(for: debouncedSearchText) else {
+            return nil
+        }
+
+        return TransactionsListSnapshotCacheKey(
+            selectedSegmentRawValue: nil,
+            isAdjustmentOnly: filters.isAdjustmentOnly,
+            timeScopeRawValue: filters.timeScope.rawValue,
+            walletID: filters.walletID,
+            categoryID: filters.categoryID,
+            transferSubtypeRawValue: filters.transferSubtype?.rawValue,
+            statusScopeRawValue: filters.statusScope.rawValue,
+            minAmountMinor: filters.minAmountMinor,
+            maxAmountMinor: filters.maxAmountMinor,
+            searchText: filters.searchText,
+            visibleTransactionLimit: visibleSearchResultLimit,
             calendarIdentifier: String(describing: calendar.identifier),
             calendarTimeZoneIdentifier: calendar.timeZone.identifier,
             activeScope: familyContextStore.activeContext.scope,
@@ -659,7 +727,8 @@ struct TransactionsView: View {
     var body: some View {
         let listSnapshotKey = transactionListSnapshotCacheKey
         let listSnapshot = cachedTransactionListSnapshot(for: listSnapshotKey)
-        let searchSnapshot = transactionSearchSnapshot
+        let searchSnapshotKey = transactionSearchSnapshotCacheKey
+        let searchSnapshot = cachedTransactionSearchSnapshot(for: searchSnapshotKey)
         let memberToolbar = familyContextStore.memberViewingToolbarPresentation
 
         NavigationStack {
@@ -711,9 +780,9 @@ struct TransactionsView: View {
                         searchText: searchText,
                         snapshot: searchSnapshot,
                         transactionsByID: searchSnapshot?.transactionsByID ?? [:],
-                        transactionAuditMap: transactionAuditMap,
-                        walletOwnerMap: walletOwnerMap,
-                        transactionOwnerMap: transactionOwnerMap,
+                        transactionAuditMap: searchSnapshot?.transactionAuditMap ?? [:],
+                        walletOwnerMap: searchSnapshot?.walletOwnerMap ?? [:],
+                        transactionOwnerMap: searchSnapshot?.transactionOwnerMap ?? [:],
                         onSelect: openTransactionEditorIfAllowed,
                         onLoadMore: loadMoreSearchResultsIfNeeded
                     )
@@ -778,6 +847,7 @@ struct TransactionsView: View {
                         )
                         familyOwnerConflictAlert = nil
                         listSnapshotCache = nil
+                        searchSnapshotCache = nil
                     }
                 }
             case .permission(let prompt):
@@ -829,6 +899,13 @@ struct TransactionsView: View {
         }
         .task(id: listSnapshotKey) {
             refreshTransactionListSnapshotCache(for: listSnapshotKey, snapshot: listSnapshot)
+        }
+        .task(id: searchSnapshotKey) {
+            guard let searchSnapshotKey, let searchSnapshot else {
+                searchSnapshotCache = nil
+                return
+            }
+            refreshTransactionSearchSnapshotCache(for: searchSnapshotKey, snapshot: searchSnapshot)
         }
     }
 
