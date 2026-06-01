@@ -1294,7 +1294,7 @@
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "Card balance"
+            "value": "カード利用残高"
           }
         }
       }
@@ -1316,7 +1316,7 @@
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "Classic card"
+            "value": "クラシックカード"
           }
         }
       }
@@ -1338,7 +1338,7 @@
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "Close"
+            "value": "閉じる"
           }
         }
       }
@@ -1360,7 +1360,7 @@
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "Emergency wallet"
+            "value": "緊急用ウォレット"
           }
         }
       }
@@ -1382,7 +1382,7 @@
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "Family"
+            "value": "家族"
           }
         }
       }
@@ -1404,7 +1404,7 @@
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "Family wallet"
+            "value": "家族用ウォレット"
           }
         }
       }
@@ -1426,7 +1426,7 @@
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "Home"
+            "value": "ホーム"
           }
         }
       }
@@ -1448,7 +1448,7 @@
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "Installment"
+            "value": "分割払い"
           }
         }
       }
@@ -1470,7 +1470,7 @@
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "Loan"
+            "value": "ローン"
           }
         }
       }
@@ -1492,7 +1492,7 @@
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "Premium card"
+            "value": "プレミアムカード"
           }
         }
       }
@@ -1514,7 +1514,7 @@
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "Rewards card"
+            "value": "リワードカード"
           }
         }
       }
@@ -1536,7 +1536,7 @@
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "Save"
+            "value": "保存"
           }
         }
       }
@@ -1558,7 +1558,7 @@
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "Savings"
+            "value": "貯蓄"
           }
         }
       }
@@ -1580,7 +1580,7 @@
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "Savings wallet"
+            "value": "貯蓄用ウォレット"
           }
         }
       }
@@ -1602,7 +1602,7 @@
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "Scheduled payment"
+            "value": "支払い予定"
           }
         }
       }
@@ -1624,7 +1624,7 @@
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "Study"
+            "value": "学習"
           }
         }
       }
@@ -1646,7 +1646,7 @@
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "Travel"
+            "value": "旅行"
           }
         }
       }
@@ -1668,7 +1668,7 @@
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "Travel wallet"
+            "value": "旅行用ウォレット"
           }
         }
       }
@@ -1690,7 +1690,7 @@
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "Vehicle"
+            "value": "車両"
           }
         }
       }
@@ -3208,7 +3208,7 @@
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "Kid"
+            "value": "子ども"
           }
         }
       }
@@ -3384,7 +3384,7 @@
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "Member"
+            "value": "メンバー"
           }
         }
       }
@@ -3692,7 +3692,7 @@
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "Owner"
+            "value": "オーナー"
           }
         }
       }
@@ -9874,7 +9874,7 @@
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "Cloud"
+            "value": "クラウド"
           }
         }
       }
@@ -11018,7 +11018,7 @@
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "Local"
+            "value": "ローカル"
           }
         }
       }
@@ -20698,7 +20698,7 @@
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "version 16.09 powered by Quy Lang"
+            "value": "バージョン 16.09 / Quy Lang 提供"
           }
         }
       }
@@ -20720,7 +20720,7 @@
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "English"
+            "value": "英語"
           }
         }
       }
@@ -22656,7 +22656,7 @@
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "Other"
+            "value": "その他"
           }
         }
       }

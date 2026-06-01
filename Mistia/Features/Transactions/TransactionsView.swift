@@ -1951,6 +1951,10 @@ private struct DebtSettlementSheet: View {
         debtIntentTint(target.intent)
     }
 
+    private var amountTint: Color {
+        target.position.isReceivable ? debtIntentTint(.lend) : tint
+    }
+
     private var walletPickerAccess: MistiaWalletPickerAccess {
         MistiaWalletPickerAccess(
             sessionStore: sessionStore,
@@ -2003,7 +2007,7 @@ private struct DebtSettlementSheet: View {
                                 .font(.system(size: 17, weight: .semibold, design: .rounded))
                             Text(target.amountMinor.formattedCurrency(code: target.position.currencyCode))
                                 .font(.system(size: 15, weight: .bold, design: .rounded))
-                                .foregroundStyle(tint)
+                                .foregroundStyle(amountTint)
                             Text(target.position.isReceivable ? L10n.transactions.transactions.theyOweYou : L10n.transactions.transactions.youOwe)
                                 .font(.system(size: 13, weight: .medium, design: .rounded))
                                 .foregroundStyle(.secondary)

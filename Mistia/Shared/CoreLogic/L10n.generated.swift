@@ -168,44 +168,44 @@ nonisolated enum L10n {
             }
 
             nonisolated enum mistiafinanceicons {
-                static var cardDebt: String { L10n.tr("core.ui.mistiafinanceicons.cardDebt", vi: "Dư nợ thẻ", en: "Card balance", ja: "Card balance") }
-                static func cardDebt(language: MistiaAppLanguage) -> String { L10n.tr("core.ui.mistiafinanceicons.cardDebt", vi: "Dư nợ thẻ", en: "Card balance", ja: "Card balance", language: language) }
-                static var classicCard: String { L10n.tr("core.ui.mistiafinanceicons.classicCard", vi: "Thẻ chuẩn", en: "Classic card", ja: "Classic card") }
-                static func classicCard(language: MistiaAppLanguage) -> String { L10n.tr("core.ui.mistiafinanceicons.classicCard", vi: "Thẻ chuẩn", en: "Classic card", ja: "Classic card", language: language) }
-                static var close: String { L10n.tr("core.ui.mistiafinanceicons.close", vi: "Đóng", en: "Close", ja: "Close") }
-                static func close(language: MistiaAppLanguage) -> String { L10n.tr("core.ui.mistiafinanceicons.close", vi: "Đóng", en: "Close", ja: "Close", language: language) }
-                static var emergencyWallet: String { L10n.tr("core.ui.mistiafinanceicons.emergencyWallet", vi: "Ví dự phòng", en: "Emergency wallet", ja: "Emergency wallet") }
-                static func emergencyWallet(language: MistiaAppLanguage) -> String { L10n.tr("core.ui.mistiafinanceicons.emergencyWallet", vi: "Ví dự phòng", en: "Emergency wallet", ja: "Emergency wallet", language: language) }
-                static var family: String { L10n.tr("core.ui.mistiafinanceicons.family", vi: "Gia đình", en: "Family", ja: "Family") }
-                static func family(language: MistiaAppLanguage) -> String { L10n.tr("core.ui.mistiafinanceicons.family", vi: "Gia đình", en: "Family", ja: "Family", language: language) }
-                static var familyWallet: String { L10n.tr("core.ui.mistiafinanceicons.familyWallet", vi: "Ví gia đình", en: "Family wallet", ja: "Family wallet") }
-                static func familyWallet(language: MistiaAppLanguage) -> String { L10n.tr("core.ui.mistiafinanceicons.familyWallet", vi: "Ví gia đình", en: "Family wallet", ja: "Family wallet", language: language) }
-                static var home: String { L10n.tr("core.ui.mistiafinanceicons.home", vi: "Nhà ở", en: "Home", ja: "Home") }
-                static func home(language: MistiaAppLanguage) -> String { L10n.tr("core.ui.mistiafinanceicons.home", vi: "Nhà ở", en: "Home", ja: "Home", language: language) }
-                static var installment: String { L10n.tr("core.ui.mistiafinanceicons.installment", vi: "Trả góp", en: "Installment", ja: "Installment") }
-                static func installment(language: MistiaAppLanguage) -> String { L10n.tr("core.ui.mistiafinanceicons.installment", vi: "Trả góp", en: "Installment", ja: "Installment", language: language) }
-                static var loan: String { L10n.tr("core.ui.mistiafinanceicons.loan", vi: "Vay", en: "Loan", ja: "Loan") }
-                static func loan(language: MistiaAppLanguage) -> String { L10n.tr("core.ui.mistiafinanceicons.loan", vi: "Vay", en: "Loan", ja: "Loan", language: language) }
-                static var premiumCard: String { L10n.tr("core.ui.mistiafinanceicons.premiumCard", vi: "Thẻ premium", en: "Premium card", ja: "Premium card") }
-                static func premiumCard(language: MistiaAppLanguage) -> String { L10n.tr("core.ui.mistiafinanceicons.premiumCard", vi: "Thẻ premium", en: "Premium card", ja: "Premium card", language: language) }
-                static var rewardsCard: String { L10n.tr("core.ui.mistiafinanceicons.rewardsCard", vi: "Thẻ tích điểm", en: "Rewards card", ja: "Rewards card") }
-                static func rewardsCard(language: MistiaAppLanguage) -> String { L10n.tr("core.ui.mistiafinanceicons.rewardsCard", vi: "Thẻ tích điểm", en: "Rewards card", ja: "Rewards card", language: language) }
-                static var save: String { L10n.tr("core.ui.mistiafinanceicons.save", vi: "Lưu", en: "Save", ja: "Save") }
-                static func save(language: MistiaAppLanguage) -> String { L10n.tr("core.ui.mistiafinanceicons.save", vi: "Lưu", en: "Save", ja: "Save", language: language) }
-                static var savings: String { L10n.tr("core.ui.mistiafinanceicons.savings", vi: "Tiết kiệm", en: "Savings", ja: "Savings") }
-                static func savings(language: MistiaAppLanguage) -> String { L10n.tr("core.ui.mistiafinanceicons.savings", vi: "Tiết kiệm", en: "Savings", ja: "Savings", language: language) }
-                static var savingsWallet: String { L10n.tr("core.ui.mistiafinanceicons.savingsWallet", vi: "Ví tiết kiệm", en: "Savings wallet", ja: "Savings wallet") }
-                static func savingsWallet(language: MistiaAppLanguage) -> String { L10n.tr("core.ui.mistiafinanceicons.savingsWallet", vi: "Ví tiết kiệm", en: "Savings wallet", ja: "Savings wallet", language: language) }
-                static var scheduledPayment: String { L10n.tr("core.ui.mistiafinanceicons.scheduledPayment", vi: "Thanh toán định kỳ", en: "Scheduled payment", ja: "Scheduled payment") }
-                static func scheduledPayment(language: MistiaAppLanguage) -> String { L10n.tr("core.ui.mistiafinanceicons.scheduledPayment", vi: "Thanh toán định kỳ", en: "Scheduled payment", ja: "Scheduled payment", language: language) }
-                static var study: String { L10n.tr("core.ui.mistiafinanceicons.study", vi: "Học tập", en: "Study", ja: "Study") }
-                static func study(language: MistiaAppLanguage) -> String { L10n.tr("core.ui.mistiafinanceicons.study", vi: "Học tập", en: "Study", ja: "Study", language: language) }
-                static var travel: String { L10n.tr("core.ui.mistiafinanceicons.travel", vi: "Du lịch", en: "Travel", ja: "Travel") }
-                static func travel(language: MistiaAppLanguage) -> String { L10n.tr("core.ui.mistiafinanceicons.travel", vi: "Du lịch", en: "Travel", ja: "Travel", language: language) }
-                static var travelWallet: String { L10n.tr("core.ui.mistiafinanceicons.travelWallet", vi: "Ví du lịch", en: "Travel wallet", ja: "Travel wallet") }
-                static func travelWallet(language: MistiaAppLanguage) -> String { L10n.tr("core.ui.mistiafinanceicons.travelWallet", vi: "Ví du lịch", en: "Travel wallet", ja: "Travel wallet", language: language) }
-                static var vehicle: String { L10n.tr("core.ui.mistiafinanceicons.vehicle", vi: "Xe cộ", en: "Vehicle", ja: "Vehicle") }
-                static func vehicle(language: MistiaAppLanguage) -> String { L10n.tr("core.ui.mistiafinanceicons.vehicle", vi: "Xe cộ", en: "Vehicle", ja: "Vehicle", language: language) }
+                static var cardDebt: String { L10n.tr("core.ui.mistiafinanceicons.cardDebt", vi: "Dư nợ thẻ", en: "Card balance", ja: "カード利用残高") }
+                static func cardDebt(language: MistiaAppLanguage) -> String { L10n.tr("core.ui.mistiafinanceicons.cardDebt", vi: "Dư nợ thẻ", en: "Card balance", ja: "カード利用残高", language: language) }
+                static var classicCard: String { L10n.tr("core.ui.mistiafinanceicons.classicCard", vi: "Thẻ chuẩn", en: "Classic card", ja: "クラシックカード") }
+                static func classicCard(language: MistiaAppLanguage) -> String { L10n.tr("core.ui.mistiafinanceicons.classicCard", vi: "Thẻ chuẩn", en: "Classic card", ja: "クラシックカード", language: language) }
+                static var close: String { L10n.tr("core.ui.mistiafinanceicons.close", vi: "Đóng", en: "Close", ja: "閉じる") }
+                static func close(language: MistiaAppLanguage) -> String { L10n.tr("core.ui.mistiafinanceicons.close", vi: "Đóng", en: "Close", ja: "閉じる", language: language) }
+                static var emergencyWallet: String { L10n.tr("core.ui.mistiafinanceicons.emergencyWallet", vi: "Ví dự phòng", en: "Emergency wallet", ja: "緊急用ウォレット") }
+                static func emergencyWallet(language: MistiaAppLanguage) -> String { L10n.tr("core.ui.mistiafinanceicons.emergencyWallet", vi: "Ví dự phòng", en: "Emergency wallet", ja: "緊急用ウォレット", language: language) }
+                static var family: String { L10n.tr("core.ui.mistiafinanceicons.family", vi: "Gia đình", en: "Family", ja: "家族") }
+                static func family(language: MistiaAppLanguage) -> String { L10n.tr("core.ui.mistiafinanceicons.family", vi: "Gia đình", en: "Family", ja: "家族", language: language) }
+                static var familyWallet: String { L10n.tr("core.ui.mistiafinanceicons.familyWallet", vi: "Ví gia đình", en: "Family wallet", ja: "家族用ウォレット") }
+                static func familyWallet(language: MistiaAppLanguage) -> String { L10n.tr("core.ui.mistiafinanceicons.familyWallet", vi: "Ví gia đình", en: "Family wallet", ja: "家族用ウォレット", language: language) }
+                static var home: String { L10n.tr("core.ui.mistiafinanceicons.home", vi: "Nhà ở", en: "Home", ja: "ホーム") }
+                static func home(language: MistiaAppLanguage) -> String { L10n.tr("core.ui.mistiafinanceicons.home", vi: "Nhà ở", en: "Home", ja: "ホーム", language: language) }
+                static var installment: String { L10n.tr("core.ui.mistiafinanceicons.installment", vi: "Trả góp", en: "Installment", ja: "分割払い") }
+                static func installment(language: MistiaAppLanguage) -> String { L10n.tr("core.ui.mistiafinanceicons.installment", vi: "Trả góp", en: "Installment", ja: "分割払い", language: language) }
+                static var loan: String { L10n.tr("core.ui.mistiafinanceicons.loan", vi: "Vay", en: "Loan", ja: "ローン") }
+                static func loan(language: MistiaAppLanguage) -> String { L10n.tr("core.ui.mistiafinanceicons.loan", vi: "Vay", en: "Loan", ja: "ローン", language: language) }
+                static var premiumCard: String { L10n.tr("core.ui.mistiafinanceicons.premiumCard", vi: "Thẻ premium", en: "Premium card", ja: "プレミアムカード") }
+                static func premiumCard(language: MistiaAppLanguage) -> String { L10n.tr("core.ui.mistiafinanceicons.premiumCard", vi: "Thẻ premium", en: "Premium card", ja: "プレミアムカード", language: language) }
+                static var rewardsCard: String { L10n.tr("core.ui.mistiafinanceicons.rewardsCard", vi: "Thẻ tích điểm", en: "Rewards card", ja: "リワードカード") }
+                static func rewardsCard(language: MistiaAppLanguage) -> String { L10n.tr("core.ui.mistiafinanceicons.rewardsCard", vi: "Thẻ tích điểm", en: "Rewards card", ja: "リワードカード", language: language) }
+                static var save: String { L10n.tr("core.ui.mistiafinanceicons.save", vi: "Lưu", en: "Save", ja: "保存") }
+                static func save(language: MistiaAppLanguage) -> String { L10n.tr("core.ui.mistiafinanceicons.save", vi: "Lưu", en: "Save", ja: "保存", language: language) }
+                static var savings: String { L10n.tr("core.ui.mistiafinanceicons.savings", vi: "Tiết kiệm", en: "Savings", ja: "貯蓄") }
+                static func savings(language: MistiaAppLanguage) -> String { L10n.tr("core.ui.mistiafinanceicons.savings", vi: "Tiết kiệm", en: "Savings", ja: "貯蓄", language: language) }
+                static var savingsWallet: String { L10n.tr("core.ui.mistiafinanceicons.savingsWallet", vi: "Ví tiết kiệm", en: "Savings wallet", ja: "貯蓄用ウォレット") }
+                static func savingsWallet(language: MistiaAppLanguage) -> String { L10n.tr("core.ui.mistiafinanceicons.savingsWallet", vi: "Ví tiết kiệm", en: "Savings wallet", ja: "貯蓄用ウォレット", language: language) }
+                static var scheduledPayment: String { L10n.tr("core.ui.mistiafinanceicons.scheduledPayment", vi: "Thanh toán định kỳ", en: "Scheduled payment", ja: "支払い予定") }
+                static func scheduledPayment(language: MistiaAppLanguage) -> String { L10n.tr("core.ui.mistiafinanceicons.scheduledPayment", vi: "Thanh toán định kỳ", en: "Scheduled payment", ja: "支払い予定", language: language) }
+                static var study: String { L10n.tr("core.ui.mistiafinanceicons.study", vi: "Học tập", en: "Study", ja: "学習") }
+                static func study(language: MistiaAppLanguage) -> String { L10n.tr("core.ui.mistiafinanceicons.study", vi: "Học tập", en: "Study", ja: "学習", language: language) }
+                static var travel: String { L10n.tr("core.ui.mistiafinanceicons.travel", vi: "Du lịch", en: "Travel", ja: "旅行") }
+                static func travel(language: MistiaAppLanguage) -> String { L10n.tr("core.ui.mistiafinanceicons.travel", vi: "Du lịch", en: "Travel", ja: "旅行", language: language) }
+                static var travelWallet: String { L10n.tr("core.ui.mistiafinanceicons.travelWallet", vi: "Ví du lịch", en: "Travel wallet", ja: "旅行用ウォレット") }
+                static func travelWallet(language: MistiaAppLanguage) -> String { L10n.tr("core.ui.mistiafinanceicons.travelWallet", vi: "Ví du lịch", en: "Travel wallet", ja: "旅行用ウォレット", language: language) }
+                static var vehicle: String { L10n.tr("core.ui.mistiafinanceicons.vehicle", vi: "Xe cộ", en: "Vehicle", ja: "車両") }
+                static func vehicle(language: MistiaAppLanguage) -> String { L10n.tr("core.ui.mistiafinanceicons.vehicle", vi: "Xe cộ", en: "Vehicle", ja: "車両", language: language) }
             }
 
             nonisolated enum mistiaiconpicker {
@@ -376,8 +376,8 @@ nonisolated enum L10n {
             static func inviteRoleValue(_ value: String, language: MistiaAppLanguage) -> String {
                 L10n.format("family.family.inviteRoleValue", vi: "Vai trò được mời: %@", en: "Invite role: %@", ja: "招待する役割: %@", language: language, value)
             }
-            static var kid: String { L10n.tr("family.family.kid", vi: "Trẻ con", en: "Kid", ja: "Kid") }
-            static func kid(language: MistiaAppLanguage) -> String { L10n.tr("family.family.kid", vi: "Trẻ con", en: "Kid", ja: "Kid", language: language) }
+            static var kid: String { L10n.tr("family.family.kid", vi: "Trẻ con", en: "Kid", ja: "子ども") }
+            static func kid(language: MistiaAppLanguage) -> String { L10n.tr("family.family.kid", vi: "Trẻ con", en: "Kid", ja: "子ども", language: language) }
             static var kidsAreLimitedByDefaultAndCan: String { L10n.tr("family.family.kidsAreLimitedByDefaultAndCan", vi: "Trẻ em mặc định bị giới hạn và có thể chịu sự quản lý của phụ huynh hoặc chủ gia đình.", en: "Kids are limited by default and can be managed by a parent or family owner.", ja: "子どもは初期状態で制限され、保護者または所有者が管理できます。") }
             static func kidsAreLimitedByDefaultAndCan(language: MistiaAppLanguage) -> String { L10n.tr("family.family.kidsAreLimitedByDefaultAndCan", vi: "Trẻ em mặc định bị giới hạn và có thể chịu sự quản lý của phụ huynh hoặc chủ gia đình.", en: "Kids are limited by default and can be managed by a parent or family owner.", ja: "子どもは初期状態で制限され、保護者または所有者が管理できます。", language: language) }
             static var leave: String { L10n.tr("family.family.leave", vi: "Rời khỏi", en: "Leave", ja: "退会") }
@@ -392,8 +392,8 @@ nonisolated enum L10n {
             static func manageFamilyGoals(language: MistiaAppLanguage) -> String { L10n.tr("family.family.manageFamilyGoals", vi: "Quản lý mục tiêu gia đình", en: "Manage family goals", ja: "家族目標を管理", language: language) }
             static var manageInvites: String { L10n.tr("family.family.manageInvites", vi: "Quản lý lời mời", en: "Manage invites", ja: "招待を管理") }
             static func manageInvites(language: MistiaAppLanguage) -> String { L10n.tr("family.family.manageInvites", vi: "Quản lý lời mời", en: "Manage invites", ja: "招待を管理", language: language) }
-            static var member: String { L10n.tr("family.family.member", vi: "Thành viên", en: "Member", ja: "Member") }
-            static func member(language: MistiaAppLanguage) -> String { L10n.tr("family.family.member", vi: "Thành viên", en: "Member", ja: "Member", language: language) }
+            static var member: String { L10n.tr("family.family.member", vi: "Thành viên", en: "Member", ja: "メンバー") }
+            static func member(language: MistiaAppLanguage) -> String { L10n.tr("family.family.member", vi: "Thành viên", en: "Member", ja: "メンバー", language: language) }
             static var memberComparison: String { L10n.tr("family.family.memberComparison", vi: "So sánh thành viên", en: "Member comparison", ja: "メンバー比較") }
             static func memberComparison(language: MistiaAppLanguage) -> String { L10n.tr("family.family.memberComparison", vi: "So sánh thành viên", en: "Member comparison", ja: "メンバー比較", language: language) }
             static var members: String { L10n.tr("family.family.members", vi: "Thành viên", en: "Members", ja: "メンバー") }
@@ -424,8 +424,8 @@ nonisolated enum L10n {
             static func noUpcomingItems(language: MistiaAppLanguage) -> String { L10n.tr("family.family.noUpcomingItems", vi: "Không có khoản nào sắp tới", en: "No upcoming items", ja: "間もなく期限の項目はありません", language: language) }
             static var other: String { L10n.tr("family.family.other", vi: "Khác", en: "Other", ja: "その他") }
             static func other(language: MistiaAppLanguage) -> String { L10n.tr("family.family.other", vi: "Khác", en: "Other", ja: "その他", language: language) }
-            static var owner: String { L10n.tr("family.family.owner", vi: "Chủ sở hữu", en: "Owner", ja: "Owner") }
-            static func owner(language: MistiaAppLanguage) -> String { L10n.tr("family.family.owner", vi: "Chủ sở hữu", en: "Owner", ja: "Owner", language: language) }
+            static var owner: String { L10n.tr("family.family.owner", vi: "Chủ sở hữu", en: "Owner", ja: "オーナー") }
+            static func owner(language: MistiaAppLanguage) -> String { L10n.tr("family.family.owner", vi: "Chủ sở hữu", en: "Owner", ja: "オーナー", language: language) }
             static var pending: String { L10n.tr("family.family.pending", vi: "Đang chờ", en: "Pending", ja: "待機中") }
             static func pending(language: MistiaAppLanguage) -> String { L10n.tr("family.family.pending", vi: "Đang chờ", en: "Pending", ja: "待機中", language: language) }
             static var permissions: String { L10n.tr("family.family.permissions", vi: "Quyền", en: "Permissions", ja: "権限") }
@@ -1111,8 +1111,8 @@ nonisolated enum L10n {
             static func chooseAMistiabackupFileToContinue(language: MistiaAppLanguage) -> String { L10n.tr("management.managementauth.chooseAMistiabackupFileToContinue", vi: "Hãy chọn một file `.mistiabackup` để tiếp tục.", en: "Choose a `.mistiabackup` file to continue.", ja: "続行するには `.mistiabackup` ファイルを選択してください。", language: language) }
             static var chooseFromLibrary: String { L10n.tr("management.managementauth.chooseFromLibrary", vi: "Chọn từ thư viện", en: "Choose from Library", ja: "ライブラリから選択") }
             static func chooseFromLibrary(language: MistiaAppLanguage) -> String { L10n.tr("management.managementauth.chooseFromLibrary", vi: "Chọn từ thư viện", en: "Choose from Library", ja: "ライブラリから選択", language: language) }
-            static var cloud: String { L10n.tr("management.managementauth.cloud", vi: "Cloud", en: "Cloud", ja: "Cloud") }
-            static func cloud(language: MistiaAppLanguage) -> String { L10n.tr("management.managementauth.cloud", vi: "Cloud", en: "Cloud", ja: "Cloud", language: language) }
+            static var cloud: String { L10n.tr("management.managementauth.cloud", vi: "Cloud", en: "Cloud", ja: "クラウド") }
+            static func cloud(language: MistiaAppLanguage) -> String { L10n.tr("management.managementauth.cloud", vi: "Cloud", en: "Cloud", ja: "クラウド", language: language) }
             static var confirmPassword: String { L10n.tr("management.managementauth.confirmPassword", vi: "Nhập lại mật khẩu", en: "Confirm password", ja: "パスワードを再入力") }
             static func confirmPassword(language: MistiaAppLanguage) -> String { L10n.tr("management.managementauth.confirmPassword", vi: "Nhập lại mật khẩu", en: "Confirm password", ja: "パスワードを再入力", language: language) }
             static var confirmYourEmail: String { L10n.tr("management.managementauth.confirmYourEmail", vi: "Xác nhận email", en: "Confirm your email", ja: "メール確認") }
@@ -1215,8 +1215,8 @@ nonisolated enum L10n {
             static func latestSnapshotSummary(language: MistiaAppLanguage) -> String { L10n.tr("management.managementauth.latestSnapshotSummary", vi: "Nội dung snapshot gần nhất", en: "Latest snapshot summary", ja: "直近のスナップショット概要", language: language) }
             static var learnHowMistiaUsesPersonalInformation: String { L10n.tr("management.managementauth.learnHowMistiaUsesPersonalInformation", vi: "Tìm hiểu cách Mistia sử dụng thông tin cá nhân", en: "Learn how Mistia uses personal information", ja: "Mistia の個人情報の利用方法を確認する") }
             static func learnHowMistiaUsesPersonalInformation(language: MistiaAppLanguage) -> String { L10n.tr("management.managementauth.learnHowMistiaUsesPersonalInformation", vi: "Tìm hiểu cách Mistia sử dụng thông tin cá nhân", en: "Learn how Mistia uses personal information", ja: "Mistia の個人情報の利用方法を確認する", language: language) }
-            static var local: String { L10n.tr("management.managementauth.local", vi: "Local", en: "Local", ja: "Local") }
-            static func local(language: MistiaAppLanguage) -> String { L10n.tr("management.managementauth.local", vi: "Local", en: "Local", ja: "Local", language: language) }
+            static var local: String { L10n.tr("management.managementauth.local", vi: "Local", en: "Local", ja: "ローカル") }
+            static func local(language: MistiaAppLanguage) -> String { L10n.tr("management.managementauth.local", vi: "Local", en: "Local", ja: "ローカル", language: language) }
             static var manageSyncedData: String { L10n.tr("management.managementauth.manageSyncedData", vi: "Quản lý dữ liệu đồng bộ", en: "Manage synced data", ja: "同期データを管理") }
             static func manageSyncedData(language: MistiaAppLanguage) -> String { L10n.tr("management.managementauth.manageSyncedData", vi: "Quản lý dữ liệu đồng bộ", en: "Manage synced data", ja: "同期データを管理", language: language) }
             static var manual: String { L10n.tr("management.managementauth.manual", vi: "Thủ công", en: "Manual", ja: "手動") }
@@ -2326,15 +2326,15 @@ nonisolated enum L10n {
         }
 
         nonisolated enum footer {
-            static var version: String { L10n.tr("settings.footer.version", vi: "version 16.09 powered by Quý Lăng", en: "version 16.09 powered by Quy Lang", ja: "version 16.09 powered by Quy Lang") }
-            static func version(language: MistiaAppLanguage) -> String { L10n.tr("settings.footer.version", vi: "version 16.09 powered by Quý Lăng", en: "version 16.09 powered by Quy Lang", ja: "version 16.09 powered by Quy Lang", language: language) }
+            static var version: String { L10n.tr("settings.footer.version", vi: "version 16.09 powered by Quý Lăng", en: "version 16.09 powered by Quy Lang", ja: "バージョン 16.09 / Quy Lang 提供") }
+            static func version(language: MistiaAppLanguage) -> String { L10n.tr("settings.footer.version", vi: "version 16.09 powered by Quý Lăng", en: "version 16.09 powered by Quy Lang", ja: "バージョン 16.09 / Quy Lang 提供", language: language) }
         }
 
         nonisolated enum language {
 
             nonisolated enum option {
-                static var english: String { L10n.tr("settings.language.option.english", vi: "English", en: "English", ja: "English") }
-                static func english(language: MistiaAppLanguage) -> String { L10n.tr("settings.language.option.english", vi: "English", en: "English", ja: "English", language: language) }
+                static var english: String { L10n.tr("settings.language.option.english", vi: "English", en: "English", ja: "英語") }
+                static func english(language: MistiaAppLanguage) -> String { L10n.tr("settings.language.option.english", vi: "English", en: "English", ja: "英語", language: language) }
                 static var japanese: String { L10n.tr("settings.language.option.japanese", vi: "日本語", en: "日本語", ja: "日本語") }
                 static func japanese(language: MistiaAppLanguage) -> String { L10n.tr("settings.language.option.japanese", vi: "日本語", en: "日本語", ja: "日本語", language: language) }
                 static var vietnamese: String { L10n.tr("settings.language.option.vietnamese", vi: "Tiếng Việt", en: "Vietnamese", ja: "ベトナム語") }
@@ -2577,8 +2577,8 @@ nonisolated enum L10n {
                 static func mobility(language: MistiaAppLanguage) -> String { L10n.tr("shared.corelogic.financeenums.mobility", vi: "Đi lại", en: "Mobility", ja: "移動", language: language) }
                 static var openingBalance: String { L10n.tr("shared.corelogic.financeenums.openingBalance", vi: "Số dư ban đầu", en: "Opening balance", ja: "初期残高") }
                 static func openingBalance(language: MistiaAppLanguage) -> String { L10n.tr("shared.corelogic.financeenums.openingBalance", vi: "Số dư ban đầu", en: "Opening balance", ja: "初期残高", language: language) }
-                static var other: String { L10n.tr("shared.corelogic.financeenums.other", vi: "Khác", en: "Other", ja: "Other") }
-                static func other(language: MistiaAppLanguage) -> String { L10n.tr("shared.corelogic.financeenums.other", vi: "Khác", en: "Other", ja: "Other", language: language) }
+                static var other: String { L10n.tr("shared.corelogic.financeenums.other", vi: "Khác", en: "Other", ja: "その他") }
+                static func other(language: MistiaAppLanguage) -> String { L10n.tr("shared.corelogic.financeenums.other", vi: "Khác", en: "Other", ja: "その他", language: language) }
                 static var other2: String { L10n.tr("shared.corelogic.financeenums.other2", vi: "Khác", en: "Other", ja: "その他") }
                 static func other2(language: MistiaAppLanguage) -> String { L10n.tr("shared.corelogic.financeenums.other2", vi: "Khác", en: "Other", ja: "その他", language: language) }
                 static var otherWallet: String { L10n.tr("shared.corelogic.financeenums.otherWallet", vi: "Loại ví khác", en: "Other wallet", ja: "その他のウォレット") }
