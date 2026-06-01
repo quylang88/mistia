@@ -117,6 +117,14 @@ nonisolated enum TransactionReceiptPersistencePolicy: Equatable {
     case persistLocally
     case ephemeral
 
+    var canPersistReceiptImage: Bool {
+        self == .persistLocally
+    }
+
+    var deletesStoredReceiptOnSave: Bool {
+        self == .ephemeral
+    }
+
     static func policy(
         ownerUserID: UUID?,
         activeLocalProfileUserID: UUID?
@@ -129,6 +137,40 @@ nonisolated enum TransactionReceiptPersistencePolicy: Equatable {
         }
 
         return .ephemeral
+    }
+}
+
+nonisolated enum TransactionReceiptAnalysisSource: Equatable {
+    case initialScanner
+    case modalPicker
+    case prefill
+
+    var shouldAnalyzeImmediately: Bool {
+        self == .initialScanner
+    }
+
+    var usesManualAnalyzeButton: Bool {
+        self == .modalPicker
+    }
+}
+
+nonisolated enum TransactionReceiptAnalysisControlState: Equatable {
+    case hidden
+    case enabled
+    case disabled
+
+    static func state(
+        for source: TransactionReceiptAnalysisSource?,
+        hasReceiptDraft: Bool,
+        hasAppliedAnalysis: Bool,
+        isAnalyzing: Bool
+    ) -> TransactionReceiptAnalysisControlState {
+        guard hasReceiptDraft,
+              source?.usesManualAnalyzeButton == true else {
+            return .hidden
+        }
+
+        return hasAppliedAnalysis || isAnalyzing ? .disabled : .enabled
     }
 }
 

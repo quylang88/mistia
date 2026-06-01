@@ -227,6 +227,9 @@ struct TransactionEditorSheet: View {
     @State private var isProcessingReceiptImage = false
     @State private var isAnalyzingReceipt = false
     @State private var receiptAnalysisQuota: ReceiptAnalysisQuota?
+    @State private var receiptAnalysisSource: TransactionReceiptAnalysisSource?
+    @State private var pendingReceiptAnalysisSource: TransactionReceiptAnalysisSource?
+    @State private var didApplyReceiptAnalysisToCurrentDraft = false
     @State private var didLoadReceiptDraft = false
     @State private var didAutoPresentReceiptScanner = false
     @State private var didApplyReceiptPrefill = false
@@ -1491,8 +1494,32 @@ struct TransactionEditorSheet: View {
         true
     }
 
+    private var effectiveReceiptPersistencePolicy: TransactionReceiptPersistencePolicy {
+        if let transaction = target.transaction {
+            return TransactionReceiptPersistencePolicy.policy(
+                ownerUserID: receiptOwnerUserID(for: transaction),
+                activeLocalProfileUserID: sessionStore.activeLocalProfileUserID
+            )
+        }
+
+        return target.receiptPersistencePolicy
+    }
+
     private var shouldPersistReceiptImage: Bool {
-        target.receiptPersistencePolicy == .persistLocally
+        effectiveReceiptPersistencePolicy.canPersistReceiptImage
+    }
+
+    private var shouldDeleteStoredReceiptOnSave: Bool {
+        effectiveReceiptPersistencePolicy.deletesStoredReceiptOnSave
+    }
+
+    private var receiptAnalysisControlState: TransactionReceiptAnalysisControlState {
+        TransactionReceiptAnalysisControlState.state(
+            for: receiptAnalysisSource,
+            hasReceiptDraft: receiptDraft != nil,
+            hasAppliedAnalysis: didApplyReceiptAnalysisToCurrentDraft,
+            isAnalyzing: isAnalyzingReceipt
+        )
     }
 
     private var shouldShowNotesSection: Bool {
@@ -1527,16 +1554,40 @@ struct TransactionEditorSheet: View {
 
                     Spacer()
 
-                    Button(role: .destructive) {
-                        removeReceiptDraft()
-                    } label: {
-                        Image(systemName: "trash")
-                            .font(.system(size: 16, weight: .semibold))
-                            .foregroundStyle(.red)
-                            .frame(width: 36, height: 36)
+                    HStack(spacing: 14) {
+                        if receiptAnalysisControlState != .hidden {
+                            Button {
+                                analyzeCurrentReceiptDraft()
+                            } label: {
+                                Image(systemName: "sparkles")
+                                    .font(.system(size: 16, weight: .semibold))
+                                    .foregroundStyle(receiptAnalysisControlState == .enabled ? accentColor : .secondary)
+                                    .frame(width: 38, height: 38)
+                                    .background(
+                                        Circle()
+                                            .fill(
+                                                receiptAnalysisControlState == .enabled
+                                                    ? accentColor.opacity(0.12)
+                                                    : Color.secondary.opacity(0.08)
+                                            )
+                                    )
+                            }
+                            .buttonStyle(.borderless)
+                            .disabled(receiptAnalysisControlState != .enabled)
+                            .accessibilityLabel(L10n.transactions.aibill.analyze)
+                        }
+
+                        Button(role: .destructive) {
+                            removeReceiptDraft()
+                        } label: {
+                            Image(systemName: "trash")
+                                .font(.system(size: 16, weight: .semibold))
+                                .foregroundStyle(.red)
+                                .frame(width: 36, height: 36)
+                        }
+                        .buttonStyle(.borderless)
+                        .accessibilityLabel(L10n.transactions.transactioneditor.removeImage)
                     }
-                    .buttonStyle(.borderless)
-                    .accessibilityLabel(L10n.transactions.transactioneditor.removeImage)
                 }
 
                 if isAnalyzingReceipt {
@@ -1575,7 +1626,7 @@ struct TransactionEditorSheet: View {
     private func receiptImageSourceMenuButtons() -> some View {
         if UIImagePickerController.isSourceTypeAvailable(.camera) {
             Button {
-                receiptImageSource = .camera
+                presentReceiptImageSource(.camera, analysisSource: .modalPicker)
             } label: {
                 Label(
                     L10n.transactions.transactioneditor.takePhoto,
@@ -1585,13 +1636,21 @@ struct TransactionEditorSheet: View {
         }
 
         Button {
-            receiptImageSource = .photoLibrary
+            presentReceiptImageSource(.photoLibrary, analysisSource: .modalPicker)
         } label: {
             Label(
                 L10n.transactions.transactioneditor.chooseFromPhotos,
                 systemImage: "photo"
             )
         }
+    }
+
+    private func presentReceiptImageSource(
+        _ source: TransactionReceiptImageSource,
+        analysisSource: TransactionReceiptAnalysisSource
+    ) {
+        pendingReceiptAnalysisSource = analysisSource
+        receiptImageSource = source
     }
 
     private func receiptFileSizeText(for byteCount: Int) -> String {
@@ -1828,6 +1887,8 @@ struct TransactionEditorSheet: View {
                 switch draftResult {
                 case .success(let draft):
                     receiptDraft = draft
+                    receiptAnalysisSource = .prefill
+                    didApplyReceiptAnalysisToCurrentDraft = false
                     shouldDeleteReceiptOnSave = false
                 case .failure(let error):
                     alertMessage = L10n.transactions.transactioneditor.couldnTLoadTheSavedReceiptImage + " \(error.localizedDescription)"
@@ -1849,18 +1910,20 @@ struct TransactionEditorSheet: View {
 
         didAutoPresentReceiptScanner = true
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
+            let source: TransactionReceiptImageSource
             switch receiptInitialSource {
             case .cameraPreferred:
-                receiptImageSource = UIImagePickerController.isSourceTypeAvailable(.camera)
+                source = UIImagePickerController.isSourceTypeAvailable(.camera)
                     ? .camera
                     : .photoLibrary
             case .camera:
-                receiptImageSource = UIImagePickerController.isSourceTypeAvailable(.camera)
+                source = UIImagePickerController.isSourceTypeAvailable(.camera)
                     ? .camera
                     : .photoLibrary
             case .photoLibrary:
-                receiptImageSource = .photoLibrary
+                source = .photoLibrary
             }
+            presentReceiptImageSource(source, analysisSource: .initialScanner)
         }
     }
 
@@ -1874,15 +1937,17 @@ struct TransactionEditorSheet: View {
         }
 
         didApplyReceiptPrefill = true
-        processReceiptImage(receiptImage, shouldAnalyze: false)
+        processReceiptImage(receiptImage, analysisSource: .prefill)
     }
 
     private func handlePickedReceiptImage(_ image: UIImage) {
         guard isReceiptFeatureAvailable else { return }
-        processReceiptImage(image, shouldAnalyze: true)
+        let analysisSource = pendingReceiptAnalysisSource ?? .modalPicker
+        pendingReceiptAnalysisSource = nil
+        processReceiptImage(image, analysisSource: analysisSource)
     }
 
-    private func processReceiptImage(_ image: UIImage, shouldAnalyze: Bool) {
+    private func processReceiptImage(_ image: UIImage, analysisSource: TransactionReceiptAnalysisSource) {
         guard isReceiptFeatureAvailable else { return }
         receiptProcessingTask?.cancel()
         isProcessingReceiptImage = true
@@ -1900,15 +1965,20 @@ struct TransactionEditorSheet: View {
                 return
             }
 
-            applyProcessedReceiptDraft(draft, shouldAnalyze: shouldAnalyze)
+            applyProcessedReceiptDraft(draft, analysisSource: analysisSource)
         }
     }
 
-    private func applyProcessedReceiptDraft(_ draft: TransactionReceiptDraft, shouldAnalyze: Bool) {
+    private func applyProcessedReceiptDraft(
+        _ draft: TransactionReceiptDraft,
+        analysisSource: TransactionReceiptAnalysisSource
+    ) {
         receiptDraft = draft
+        receiptAnalysisSource = analysisSource
         receiptAnalysisQuota = nil
+        didApplyReceiptAnalysisToCurrentDraft = false
         shouldDeleteReceiptOnSave = false
-        if shouldAnalyze {
+        if analysisSource.shouldAnalyzeImmediately {
             analyzeCurrentReceiptDraft()
         }
     }
@@ -1916,11 +1986,17 @@ struct TransactionEditorSheet: View {
     private func removeReceiptDraft() {
         receiptDraft = nil
         receiptAnalysisQuota = nil
+        receiptAnalysisSource = nil
+        pendingReceiptAnalysisSource = nil
+        didApplyReceiptAnalysisToCurrentDraft = false
         shouldDeleteReceiptOnSave = target.transaction != nil && shouldPersistReceiptImage
     }
 
     private func analyzeCurrentReceiptDraft() {
-        guard isReceiptFeatureAvailable, !isAnalyzingReceipt, let receiptDraft else { return }
+        guard isReceiptFeatureAvailable,
+              !isAnalyzingReceipt,
+              !didApplyReceiptAnalysisToCurrentDraft,
+              let receiptDraft else { return }
 
         guard sessionStore.canPerformRemoteActions else {
             alertMessage = L10n.transactions.transactioneditor.receiptAINeedsSignInAndNetwork
@@ -2029,6 +2105,8 @@ struct TransactionEditorSheet: View {
            category.kind == selectedCategoryKind {
             draft.categoryID = categoryID
         }
+
+        didApplyReceiptAnalysisToCurrentDraft = true
     }
 
     private func receiptAnalysisErrorMessage(for error: Error) -> String {
@@ -2452,9 +2530,20 @@ struct TransactionEditorSheet: View {
     }
 
     private func persistReceiptDraftIfNeeded(for transaction: LedgerTransaction) throws {
-        guard shouldShowReceiptSection, shouldPersistReceiptImage else { return }
+        guard shouldShowReceiptSection else { return }
 
         let store = TransactionReceiptImageStore()
+        guard shouldPersistReceiptImage else {
+            if shouldDeleteStoredReceiptOnSave {
+                try store.deleteReceipt(
+                    for: transaction.id,
+                    context: modelContext,
+                    saveContext: false
+                )
+            }
+            return
+        }
+
         if let receiptDraft {
             guard receiptDraft.isChanged else { return }
             _ = try store.replaceReceipt(
@@ -2712,6 +2801,14 @@ struct TransactionEditorSheet: View {
         transactionOwnerMap[transaction.id]
             ?? walletOwnerUserID(for: transaction.sourceWallet)
             ?? walletOwnerUserID(for: transaction.destinationWallet)
+            ?? currentSelfUserID
+    }
+
+    private func receiptOwnerUserID(for transaction: LedgerTransaction) -> UUID? {
+        transactionOwnerMap[transaction.id]
+            ?? walletOwnerUserID(for: transaction.sourceWallet)
+            ?? walletOwnerUserID(for: transaction.destinationWallet)
+            ?? familyContextStore.selectedSubjectUserID
             ?? currentSelfUserID
     }
 

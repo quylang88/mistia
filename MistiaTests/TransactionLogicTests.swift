@@ -100,6 +100,56 @@ final class TransactionLogicTests: XCTestCase {
         XCTAssertEqual(suggestions.map(\.title), ["An"])
     }
 
+    func testReceiptAnalysisSourceSeparatesScannerFromManualModalImages() {
+        XCTAssertTrue(TransactionReceiptAnalysisSource.initialScanner.shouldAnalyzeImmediately)
+        XCTAssertFalse(TransactionReceiptAnalysisSource.modalPicker.shouldAnalyzeImmediately)
+        XCTAssertFalse(TransactionReceiptAnalysisSource.prefill.shouldAnalyzeImmediately)
+
+        XCTAssertEqual(
+            TransactionReceiptAnalysisControlState.state(
+                for: .initialScanner,
+                hasReceiptDraft: true,
+                hasAppliedAnalysis: false,
+                isAnalyzing: false
+            ),
+            .hidden
+        )
+        XCTAssertEqual(
+            TransactionReceiptAnalysisControlState.state(
+                for: .modalPicker,
+                hasReceiptDraft: true,
+                hasAppliedAnalysis: false,
+                isAnalyzing: false
+            ),
+            .enabled
+        )
+        XCTAssertEqual(
+            TransactionReceiptAnalysisControlState.state(
+                for: .modalPicker,
+                hasReceiptDraft: true,
+                hasAppliedAnalysis: true,
+                isAnalyzing: false
+            ),
+            .disabled
+        )
+        XCTAssertEqual(
+            TransactionReceiptAnalysisControlState.state(
+                for: .modalPicker,
+                hasReceiptDraft: false,
+                hasAppliedAnalysis: false,
+                isAnalyzing: false
+            ),
+            .hidden
+        )
+    }
+
+    func testEphemeralReceiptPolicyDeletesStoredReceiptOnSave() {
+        XCTAssertTrue(TransactionReceiptPersistencePolicy.ephemeral.deletesStoredReceiptOnSave)
+        XCTAssertFalse(TransactionReceiptPersistencePolicy.persistLocally.deletesStoredReceiptOnSave)
+        XCTAssertFalse(TransactionReceiptPersistencePolicy.ephemeral.canPersistReceiptImage)
+        XCTAssertTrue(TransactionReceiptPersistencePolicy.persistLocally.canPersistReceiptImage)
+    }
+
     private func debtRecord(
         amountMinor: Int64,
         currencyCode: String = "JPY",
