@@ -76,10 +76,37 @@ final class OverviewAggregationPerformanceTests: XCTestCase {
         XCTAssertEqual(pages[0].slices.first?.childSlices.map(\.name), ["Groceries"])
     }
 
-    private func transactionRecord(amountMinor: Int64, occurredAt: Date) -> TransactionRecordSnapshot {
+    func testMonthlyCashflowPagesKeepIncomeAndExpenseBuckets() {
+        let records = [
+            transactionRecord(primaryKind: .income, amountMinor: 7_000, occurredAt: makeDate(year: 2026, month: 5, day: 4)),
+            transactionRecord(primaryKind: .expense, amountMinor: 2_000, occurredAt: makeDate(year: 2026, month: 5, day: 12)),
+            transactionRecord(primaryKind: .income, amountMinor: 11_000, occurredAt: makeDate(year: 2026, month: 6, day: 2)),
+            transactionRecord(primaryKind: .expense, amountMinor: 3_000, occurredAt: makeDate(year: 2026, month: 6, day: 8))
+        ]
+
+        let pages = OverviewLogic.monthlyCashflowPages(
+            from: records,
+            currencyCode: "JPY",
+            referenceDate: makeDate(year: 2026, month: 6, day: 20),
+            calendar: calendar
+        )
+
+        XCTAssertEqual(pages.map(\.monthStart), [
+            makeDate(year: 2026, month: 5, day: 1),
+            makeDate(year: 2026, month: 6, day: 1)
+        ])
+        XCTAssertEqual(pages.map(\.incomeMinor), [7_000, 11_000])
+        XCTAssertEqual(pages.map(\.expenseMinor), [2_000, 3_000])
+    }
+
+    private func transactionRecord(
+        primaryKind: TransactionPrimaryKind = .expense,
+        amountMinor: Int64,
+        occurredAt: Date
+    ) -> TransactionRecordSnapshot {
         TransactionRecordSnapshot(
             id: UUID(),
-            primaryKind: .expense,
+            primaryKind: primaryKind,
             transferSubtype: nil,
             debtIntent: nil,
             entryStatus: .posted,

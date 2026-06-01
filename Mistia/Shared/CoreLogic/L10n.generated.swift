@@ -1620,8 +1620,20 @@ nonisolated enum L10n {
             static func editRequestSent(language: MistiaAppLanguage) -> String { L10n.tr("overview.overview.editRequestSent", vi: "Đã gửi yêu cầu chỉnh sửa", en: "Edit request sent", ja: "編集リクエスト送信済み", language: language) }
             static var expense: String { L10n.tr("overview.overview.expense", vi: "Chi tiêu", en: "Expense", ja: "支出") }
             static func expense(language: MistiaAppLanguage) -> String { L10n.tr("overview.overview.expense", vi: "Chi tiêu", en: "Expense", ja: "支出", language: language) }
+            static func expenseMonthValue(_ value: String) -> String {
+                L10n.format("overview.overview.expenseMonthValue", vi: "Chi tháng %@", en: "Expense month %@", ja: "%@月の支出", value)
+            }
+            static func expenseMonthValue(_ value: String, language: MistiaAppLanguage) -> String {
+                L10n.format("overview.overview.expenseMonthValue", vi: "Chi tháng %@", en: "Expense month %@", ja: "%@月の支出", language: language, value)
+            }
             static var expenseThisMonth: String { L10n.tr("overview.overview.expenseThisMonth", vi: "Chi tháng này", en: "Expense this month", ja: "今月の支出") }
             static func expenseThisMonth(language: MistiaAppLanguage) -> String { L10n.tr("overview.overview.expenseThisMonth", vi: "Chi tháng này", en: "Expense this month", ja: "今月の支出", language: language) }
+            static func incomeMonthValue(_ value: String) -> String {
+                L10n.format("overview.overview.incomeMonthValue", vi: "Thu tháng %@", en: "Income month %@", ja: "%@月の収入", value)
+            }
+            static func incomeMonthValue(_ value: String, language: MistiaAppLanguage) -> String {
+                L10n.format("overview.overview.incomeMonthValue", vi: "Thu tháng %@", en: "Income month %@", ja: "%@月の収入", language: language, value)
+            }
             static var incomeThisMonth: String { L10n.tr("overview.overview.incomeThisMonth", vi: "Thu tháng này", en: "Income this month", ja: "今月の収入") }
             static func incomeThisMonth(language: MistiaAppLanguage) -> String { L10n.tr("overview.overview.incomeThisMonth", vi: "Thu tháng này", en: "Income this month", ja: "今月の収入", language: language) }
             static var noAmountYet: String { L10n.tr("overview.overview.noAmountYet", vi: "Chưa có số tiền", en: "No amount yet", ja: "金額未入力") }

@@ -203,12 +203,23 @@ nonisolated struct OverviewCategorySpendingMonthSnapshot: Equatable, Identifiabl
     }
 }
 
+nonisolated struct OverviewMonthlyCashflowSnapshot: Equatable, Identifiable {
+    let monthStart: Date
+    let incomeMinor: Int64
+    let expenseMinor: Int64
+
+    var id: String {
+        String(Int(monthStart.timeIntervalSince1970))
+    }
+}
+
 nonisolated struct OverviewHeroSnapshot: Equatable {
     let totalAssetBalanceMinor: Int64
     let incomeThisMonthMinor: Int64
     let expenseThisMonthMinor: Int64
     let weekPages: [OverviewWeekSpendingSnapshot]
     let categoryMonthPages: [OverviewCategorySpendingMonthSnapshot]
+    let monthlyCashflowPages: [OverviewMonthlyCashflowSnapshot]
     let currentWeekStart: Date
     let currencyCode: String
 }
@@ -320,39 +331,15 @@ nonisolated enum OverviewLogic {
         referenceDate: Date = .now,
         calendar: Calendar = MistiaCalendar.current
     ) -> OverviewHeroSnapshot {
-        let monthInterval = calendar.dateInterval(of: .month, for: referenceDate)
-
-        let incomeThisMonth = transactionRecords
-            .filter { record in
-                guard record.entryStatus == .posted,
-                      record.primaryKind == .income,
-                      let monthInterval
-                else {
-                    return false
-                }
-
-                return record.occurredAt >= monthInterval.start
-                    && record.occurredAt < monthInterval.end
-            }
-            .reduce(into: Int64.zero) { partialResult, record in
-                partialResult += reportingAmount(for: record, currencyCode: currencyCode, exchangeRates: exchangeRates)
-            }
-
-        let expenseThisMonth = transactionRecords
-            .filter { record in
-                guard record.entryStatus == .posted,
-                      TransactionLogic.isExpenseSpending(record),
-                      let monthInterval
-                else {
-                    return false
-                }
-
-                return record.occurredAt >= monthInterval.start
-                    && record.occurredAt < monthInterval.end
-            }
-            .reduce(into: Int64.zero) { partialResult, record in
-                partialResult += reportingAmount(for: record, currencyCode: currencyCode, exchangeRates: exchangeRates)
-            }
+        let monthlyCashflowPages = monthlyCashflowPages(
+            from: transactionRecords,
+            currencyCode: currencyCode,
+            exchangeRates: exchangeRates,
+            referenceDate: referenceDate,
+            calendar: calendar
+        )
+        let currentMonthStart = PlanningLogic.startOfMonth(for: referenceDate, calendar: calendar)
+        let currentMonthCashflow = monthlyCashflowPages.first { $0.monthStart == currentMonthStart }
 
         return OverviewHeroSnapshot(
             totalAssetBalanceMinor: totalAssetBalance(
@@ -362,8 +349,8 @@ nonisolated enum OverviewLogic {
                 currencyCode: currencyCode,
                 exchangeRates: exchangeRates
             ),
-            incomeThisMonthMinor: incomeThisMonth,
-            expenseThisMonthMinor: expenseThisMonth,
+            incomeThisMonthMinor: currentMonthCashflow?.incomeMinor ?? 0,
+            expenseThisMonthMinor: currentMonthCashflow?.expenseMinor ?? 0,
             weekPages: weeklySpendingPages(
                 from: transactionRecords,
                 currencyCode: currencyCode,
@@ -378,6 +365,7 @@ nonisolated enum OverviewLogic {
                 referenceDate: referenceDate,
                 calendar: calendar
             ),
+            monthlyCashflowPages: monthlyCashflowPages,
             currentWeekStart: startOfMondayWeek(containing: referenceDate, calendar: calendar),
             currencyCode: currencyCode
         )
@@ -626,6 +614,60 @@ nonisolated enum OverviewLogic {
                     calendar: calendar
                 )
             ]
+        }
+
+        return pages
+    }
+
+    static func monthlyCashflowPages(
+        from transactionRecords: [TransactionRecordSnapshot],
+        currencyCode: String,
+        exchangeRates: [MistiaExchangeRate] = [],
+        referenceDate: Date = .now,
+        calendar: Calendar = MistiaCalendar.current
+    ) -> [OverviewMonthlyCashflowSnapshot] {
+        let currentMonthStart = PlanningLogic.startOfMonth(for: referenceDate, calendar: calendar)
+        var totalsByMonth: [Date: (incomeMinor: Int64, expenseMinor: Int64)] = [:]
+        var earliestMonthStart: Date?
+
+        for record in transactionRecords where record.entryStatus == .posted {
+            let isIncome = record.primaryKind == .income
+            let isExpense = TransactionLogic.isExpenseSpending(record)
+            guard isIncome || isExpense else { continue }
+
+            let monthStart = PlanningLogic.startOfMonth(for: record.occurredAt, calendar: calendar)
+            guard monthStart <= currentMonthStart else { continue }
+
+            if earliestMonthStart.map({ monthStart < $0 }) ?? true {
+                earliestMonthStart = monthStart
+            }
+
+            let amount = reportingAmount(for: record, currencyCode: currencyCode, exchangeRates: exchangeRates)
+            if isIncome {
+                totalsByMonth[monthStart, default: (0, 0)].incomeMinor += amount
+            } else {
+                totalsByMonth[monthStart, default: (0, 0)].expenseMinor += amount
+            }
+        }
+
+        let firstMonthStart = earliestMonthStart ?? currentMonthStart
+        var monthStart = firstMonthStart
+        var pages: [OverviewMonthlyCashflowSnapshot] = []
+
+        while monthStart <= currentMonthStart {
+            let totals = totalsByMonth[monthStart] ?? (0, 0)
+            pages.append(
+                OverviewMonthlyCashflowSnapshot(
+                    monthStart: monthStart,
+                    incomeMinor: totals.incomeMinor,
+                    expenseMinor: totals.expenseMinor
+                )
+            )
+
+            guard let nextMonth = calendar.date(byAdding: .month, value: 1, to: monthStart) else {
+                break
+            }
+            monthStart = nextMonth
         }
 
         return pages

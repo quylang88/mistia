@@ -1112,6 +1112,47 @@ private struct OverviewHeroCard: View {
             )
     }
 
+    private var activeMonthlyCashflow: OverviewMonthlyCashflowSnapshot {
+        let monthStart = chartMode == .category
+            ? activeCategoryMonth.monthStart
+            : (snapshot.monthlyCashflowPages.last?.monthStart ?? PlanningLogic.startOfMonth(for: .now, calendar: calendar))
+
+        return snapshot.monthlyCashflowPages.first(where: { $0.monthStart == monthStart })
+            ?? OverviewMonthlyCashflowSnapshot(
+                monthStart: monthStart,
+                incomeMinor: 0,
+                expenseMinor: 0
+            )
+    }
+
+    private var isShowingCurrentCashflowMonth: Bool {
+        guard let currentMonthStart = snapshot.monthlyCashflowPages.last?.monthStart else {
+            return true
+        }
+
+        return activeMonthlyCashflow.monthStart == currentMonthStart
+    }
+
+    private var incomeMetricTitle: String {
+        guard chartMode == .category, !isShowingCurrentCashflowMonth else {
+            return L10n.overview.overview.incomeThisMonth
+        }
+
+        return L10n.overview.overview.incomeMonthValue(monthNumberText(for: activeMonthlyCashflow.monthStart))
+    }
+
+    private var expenseMetricTitle: String {
+        guard chartMode == .category, !isShowingCurrentCashflowMonth else {
+            return L10n.overview.overview.expenseThisMonth
+        }
+
+        return L10n.overview.overview.expenseMonthValue(monthNumberText(for: activeMonthlyCashflow.monthStart))
+    }
+
+    private func monthNumberText(for date: Date) -> String {
+        String(calendar.component(.month, from: date))
+    }
+
     private var chartTitle: String {
         switch chartMode {
         case .day:
@@ -1156,8 +1197,8 @@ private struct OverviewHeroCard: View {
 
                 HStack(spacing: 14) {
                     SummaryMetricColumn(
-                        title: L10n.overview.overview.incomeThisMonth,
-                        value: snapshot.incomeThisMonthMinor.formattedCurrency(code: snapshot.currencyCode),
+                        title: incomeMetricTitle,
+                        value: activeMonthlyCashflow.incomeMinor.formattedCurrency(code: snapshot.currencyCode),
                         accent: Color(hex: "#2DAA9E")
                     )
 
@@ -1165,8 +1206,8 @@ private struct OverviewHeroCard: View {
                         .frame(height: 26)
 
                     SummaryMetricColumn(
-                        title: L10n.overview.overview.expenseThisMonth,
-                        value: snapshot.expenseThisMonthMinor.formattedCurrency(code: snapshot.currencyCode),
+                        title: expenseMetricTitle,
+                        value: activeMonthlyCashflow.expenseMinor.formattedCurrency(code: snapshot.currencyCode),
                         accent: Color(hex: "#F45C7E")
                     )
                 }

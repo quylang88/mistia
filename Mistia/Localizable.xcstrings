@@ -14455,6 +14455,28 @@
         }
       }
     },
+    "overview.overview.expenseMonthValue": {
+      "localizations": {
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Chi tháng %@"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Expense month %@"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@月の支出"
+          }
+        }
+      }
+    },
     "overview.overview.incomeThisMonth": {
       "localizations": {
         "vi": {
@@ -14473,6 +14495,28 @@
           "stringUnit": {
             "state": "translated",
             "value": "今月の収入"
+          }
+        }
+      }
+    },
+    "overview.overview.incomeMonthValue": {
+      "localizations": {
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Thu tháng %@"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Income month %@"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@月の収入"
           }
         }
       }
