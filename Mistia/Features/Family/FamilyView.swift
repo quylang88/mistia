@@ -1643,6 +1643,7 @@ private struct FamilyOverviewHeader: View {
                     .buttonStyle(.plain)
 
                     ForEach(familyContextStore.members) { member in
+                        let selected = isSelected(member)
                         Button {
                             withAnimation(.snappy) {
                                 if member.userID == signedInUserID {
@@ -1653,25 +1654,25 @@ private struct FamilyOverviewHeader: View {
                             }
                         } label: {
                             VStack(spacing: 8) {
-                                MistiaAvatarBadge(
+                                MistiaAttentionPulseAvatar(
                                     initials: String(member.displayName.prefix(2)).uppercased(),
                                     avatarURL: member.avatarURL,
                                     size: 56,
-                                    showsStatus: false
+                                    isActive: selected,
+                                    targetScale: 1.58,
+                                    ringLineWidth: 3.0
                                 )
-                                .overlay {
-                                    if isSelected(member) {
-                                        Circle()
-                                            .stroke(MistiaAccent.purple.color, lineWidth: 3)
-                                    }
-                                }
 
                                 Text(member.displayName)
                                     .font(.system(size: 12, weight: .medium, design: .rounded))
-                                    .foregroundStyle(isSelected(member) ? .primary : .secondary)
+                                    .foregroundStyle(selected ? .primary : .secondary)
                             }
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 8)
+                            .contentShape(Rectangle())
                         }
                         .buttonStyle(.plain)
+                        .zIndex(selected ? 10 : 0)
                         .contextMenu {
                             Section(member.displayName) {
                                 ForEach(walletRows.prefix(3)) { row in
@@ -1722,7 +1723,9 @@ private struct FamilyOverviewHeader: View {
                     }
                 }
                 .padding(.horizontal, 4)
+                .padding(.vertical, 10)
             }
+            .scrollClipDisabled()
         }
     }
 

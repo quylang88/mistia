@@ -403,11 +403,13 @@ struct MistiaHeaderCircleMenu<Label: View, MenuContent: View>: View {
     }
 }
 
-private struct MistiaAttentionPulseAvatar: View {
+struct MistiaAttentionPulseAvatar: View {
     let initials: String
     let avatarURL: URL?
     let size: CGFloat
     let isActive: Bool
+    var targetScale: CGFloat = 2.2
+    var ringLineWidth: CGFloat = 2.0
 
     @Environment(\.accessibilityReduceMotion) private var accessibilityReduceMotion
     @Environment(\.colorScheme) private var colorScheme
@@ -418,7 +420,7 @@ private struct MistiaAttentionPulseAvatar: View {
         MistiaAvatarBadge(initials: initials, avatarURL: avatarURL, size: size)
             .overlay {
                 Circle()
-                    .strokeBorder(pulseColor.opacity(pulseOpacity), lineWidth: 2.0)
+                    .strokeBorder(pulseColor.opacity(pulseOpacity), lineWidth: ringLineWidth)
                     .scaleEffect(pulseScale)
                     .allowsHitTesting(false)
             }
@@ -446,7 +448,7 @@ private struct MistiaAttentionPulseAvatar: View {
                 pulseScale = 1
                 pulseOpacity = 0.85
                 withAnimation(.easeOut(duration: 1.6)) {
-                    pulseScale = 2.2
+                    pulseScale = targetScale
                     pulseOpacity = 0
                 }
             }
