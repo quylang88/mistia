@@ -1074,7 +1074,11 @@ private struct OverviewHeroCard: View {
                 ?? PlanningLogic.startOfMonth(for: .now)
         )
         _chartMode = State(initialValue: MistiaOverviewDebugFixtures.startsInCategoryMode ? .category : .day)
-        _categoryChartHeight = State(initialValue: MistiaCategorySpendingChartView.estimatedHeight(visibleSliceCount: 3))
+        _categoryChartHeight = State(
+            initialValue: snapshot.categoryMonthPages.last.map {
+                MistiaCategorySpendingChartView.preferredRootHeight(for: $0)
+            } ?? MistiaCategorySpendingChartView.estimatedHeight(visibleSliceCount: 3)
+        )
     }
 
     private var cardTint: Color {
@@ -1246,6 +1250,12 @@ private struct OverviewHeroCard: View {
             if !monthStarts.contains(selectedCategoryMonth) {
                 selectedCategoryMonth = snapshot.categoryMonthPages.last?.monthStart
                     ?? PlanningLogic.startOfMonth(for: .now, calendar: calendar)
+            }
+            categoryChartHeight = MistiaCategorySpendingChartView.preferredRootHeight(for: activeCategoryMonth)
+        }
+        .onChange(of: selectedCategoryMonth) { _, _ in
+            withAnimation(.snappy(duration: 0.18)) {
+                categoryChartHeight = MistiaCategorySpendingChartView.preferredRootHeight(for: activeCategoryMonth)
             }
         }
         .onChange(of: chartMode) { _, _ in

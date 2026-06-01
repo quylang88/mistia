@@ -5,6 +5,7 @@ struct PlanningBudgetEditorSheet: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
     @Environment(SessionStore.self) private var sessionStore
+    @Environment(FamilyContextStore.self) private var familyContextStore
     @AppStorage(MistiaAppStorageKey.currencyCode) private var currencyCode = "JPY"
     @Query(filter: #Predicate<TransactionCategory> { $0.deletedAt == nil })
     private var storedCategories: [TransactionCategory]
@@ -14,6 +15,7 @@ struct PlanningBudgetEditorSheet: View {
         $0.entryStatusRawValue == "posted" && !$0.isArchived && $0.deletedAt == nil
     })
     private var postedTransactions: [LedgerTransaction]
+    @Query private var ownershipScopes: [OwnedRecordScope]
 
     let target: PlanningBudgetEditorTarget
 
@@ -30,7 +32,7 @@ struct PlanningBudgetEditorSheet: View {
     private var categorySections: [TransactionCategoryGroupSection] {
         let preferredCategoryID = target.budget?.category?.id
         let preferredParentID = target.budget?.category?.parentCategory?.id
-        let relevantCategories = storedCategories.filter { category in
+        let relevantCategories = visibleStoredCategories.filter { category in
             category.kind == .expense
                 && category.deletedAt == nil
                 && (!category.isArchived || category.id == preferredCategoryID || category.id == preferredParentID)
@@ -63,7 +65,7 @@ struct PlanningBudgetEditorSheet: View {
     private var favoriteBudgetCategories: [TransactionCategory] {
         let allowedCategoryIDs = Set(availableCategories.map(\.id))
         return MistiaCategoryPickerSupport.favoriteCategories(
-            from: storedCategories,
+            from: visibleStoredCategories,
             kind: .expense
         )
         .filter { allowedCategoryIDs.contains($0.id) }
@@ -73,7 +75,7 @@ struct PlanningBudgetEditorSheet: View {
         let allowedCategoryIDs = Set(availableCategories.map(\.id))
         return MistiaCategoryPickerSupport.recentCategories(
             from: postedTransactions,
-            categories: storedCategories,
+            categories: visibleStoredCategories,
             kind: .expense
         )
         .filter { allowedCategoryIDs.contains($0.id) }
@@ -87,8 +89,44 @@ struct PlanningBudgetEditorSheet: View {
         target.budget?.currencyCode ?? currencyCode
     }
 
+    private var targetOwnerUserID: UUID? {
+        if let budget = target.budget,
+           let ownerUserID = budgetOwnerMap[budget.id] {
+            return ownerUserID
+        }
+
+        return familyContextStore.selectedSubjectUserID
+            ?? sessionStore.activeLocalProfileUserID
+    }
+
+    private var categoryOwnerMap: [UUID: UUID] {
+        MistiaRecordOwnershipStore.ownerMap(from: ownershipScopes, entity: .category)
+    }
+
+    private var budgetOwnerMap: [UUID: UUID] {
+        MistiaRecordOwnershipStore.ownerMap(from: ownershipScopes, entity: .budgetPlan)
+    }
+
+    private var visibleStoredCategories: [TransactionCategory] {
+        PlanningBudgetEditorScope.visibleCategories(
+            storedCategories,
+            categoryOwnerMap: categoryOwnerMap,
+            targetOwnerUserID: targetOwnerUserID,
+            signedInUserID: sessionStore.activeLocalProfileUserID
+        )
+    }
+
+    private var visibleStoredBudgets: [BudgetPlan] {
+        PlanningBudgetEditorScope.visibleBudgets(
+            storedBudgets,
+            budgetOwnerMap: budgetOwnerMap,
+            targetOwnerUserID: targetOwnerUserID,
+            signedInUserID: sessionStore.activeLocalProfileUserID
+        )
+    }
+
     private var activeBudgetSnapshots: [BudgetPlanSnapshot] {
-        storedBudgets
+        visibleStoredBudgets
             .filter { $0.deletedAt == nil && !$0.isArchived }
             .map { $0.planningSnapshot() }
     }
@@ -197,7 +235,7 @@ struct PlanningBudgetEditorSheet: View {
         }
 
         let monthAnchor = PlanningLogic.startOfMonth(for: target.selectedMonth)
-        let hasDuplicate = storedBudgets.contains(where: { budget in
+        let hasDuplicate = visibleStoredBudgets.contains(where: { budget in
             guard !budget.isArchived else { return false }
             guard budget.id != target.budget?.id else { return false }
             guard PlanningLogic.startOfMonth(for: budget.monthAnchor) == monthAnchor else { return false }
@@ -293,7 +331,7 @@ struct PlanningBudgetEditorSheet: View {
             including: savedBudget
         )
         guard childBudgets.count >= 2 else { return nil }
-        guard let parentCategory = category.parentCategory ?? storedCategories.first(where: { $0.id == branchCategoryID && $0.isParentCategory }) else {
+        guard let parentCategory = category.parentCategory ?? visibleStoredCategories.first(where: { $0.id == branchCategoryID && $0.isParentCategory }) else {
             return nil
         }
 
@@ -318,7 +356,7 @@ struct PlanningBudgetEditorSheet: View {
         monthAnchor: Date,
         excluding budgetID: UUID
     ) -> BudgetPlan? {
-        storedBudgets.first { budget in
+        visibleStoredBudgets.first { budget in
             guard budget.id != budgetID else { return false }
             guard budget.deletedAt == nil && !budget.isArchived else { return false }
             guard PlanningLogic.startOfMonth(for: budget.monthAnchor) == monthAnchor else { return false }
@@ -331,7 +369,7 @@ struct PlanningBudgetEditorSheet: View {
         monthAnchor: Date,
         including savedBudget: BudgetPlan
     ) -> [BudgetPlan] {
-        var budgets = storedBudgets.filter { budget in
+        var budgets = visibleStoredBudgets.filter { budget in
             guard budget.id != savedBudget.id else { return false }
             guard budget.deletedAt == nil && !budget.isArchived else { return false }
             guard PlanningLogic.startOfMonth(for: budget.monthAnchor) == monthAnchor else { return false }

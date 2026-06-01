@@ -8,6 +8,38 @@ struct PlanningBudgetEditorTarget: Identifiable {
     let preferredParentCategoryID: UUID?
 }
 
+enum PlanningBudgetEditorScope {
+    static func visibleCategories(
+        _ categories: [TransactionCategory],
+        categoryOwnerMap: [UUID: UUID],
+        targetOwnerUserID: UUID?,
+        signedInUserID: UUID?
+    ) -> [TransactionCategory] {
+        MistiaRecordOwnershipStore.visibleRecords(
+            categories,
+            entity: .category,
+            ownerMap: categoryOwnerMap,
+            subjectUserID: targetOwnerUserID,
+            signedInUserID: signedInUserID
+        )
+    }
+
+    static func visibleBudgets(
+        _ budgets: [BudgetPlan],
+        budgetOwnerMap: [UUID: UUID],
+        targetOwnerUserID: UUID?,
+        signedInUserID: UUID?
+    ) -> [BudgetPlan] {
+        MistiaRecordOwnershipStore.visibleRecords(
+            budgets,
+            entity: .budgetPlan,
+            ownerMap: budgetOwnerMap,
+            subjectUserID: targetOwnerUserID,
+            signedInUserID: signedInUserID
+        )
+    }
+}
+
 struct PlanningGoalEditorTarget: Identifiable {
     let id = UUID()
     let goal: SavingsGoal?

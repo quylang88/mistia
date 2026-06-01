@@ -263,6 +263,18 @@ struct MistiaCategorySpendingChartView: View {
         return 20 + backButtonHeight + max(chartSize, listHeight)
     }
 
+    static func preferredRootHeight(for snapshot: OverviewCategorySpendingMonthSnapshot) -> CGFloat {
+        estimatedHeight(visibleSliceCount: rootVisibleSliceCount(for: snapshot))
+    }
+
+    private static func rootVisibleSliceCount(for snapshot: OverviewCategorySpendingMonthSnapshot) -> Int {
+        let positiveSliceCount = snapshot.slices.filter { $0.amountMinor > 0 }.count
+        guard positiveSliceCount > maximumVisibleSlices else {
+            return positiveSliceCount
+        }
+        return maximumVisibleSlices + 1
+    }
+
     private static let chartSize: CGFloat = 150
     private static let maximumVisibleSlices = 5
 }
