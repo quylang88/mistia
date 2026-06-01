@@ -1536,12 +1536,24 @@ private struct FamilyMonthlyBillListSection: View {
                         }
 
                         ForEach(Array(totals.enumerated()), id: \.element.currencyCode) { index, total in
-                            HStack {
-                                Text(L10n.planning.planning.totalAmount)
-                                    .font(.system(size: 14, weight: .bold, design: .rounded))
-                                Spacer()
-                                Text(total.amountMinor.formattedCurrency(code: total.currencyCode))
+                            HStack(spacing: 12) {
+                                Image(systemName: "sum")
                                     .font(.system(size: 15, weight: .bold, design: .rounded))
+                                    .foregroundStyle(totalIconForeground)
+                                    .frame(width: 32, height: 32)
+                                    .background(totalIconBackground, in: Circle())
+
+                                Text(L10n.planning.planning.totalAmount.uppercased())
+                                    .font(.system(size: 15, weight: .heavy, design: .rounded))
+                                    .foregroundStyle(.primary)
+
+                                Spacer()
+
+                                Text(total.amountMinor.formattedCurrency(code: total.currencyCode))
+                                    .font(.system(size: 16, weight: .heavy, design: .rounded))
+                                    .foregroundStyle(totalAmountForeground)
+                                    .lineLimit(1)
+                                    .minimumScaleFactor(0.75)
                             }
                             .padding(.horizontal, 16)
                             .padding(.vertical, 12)
@@ -1558,6 +1570,18 @@ private struct FamilyMonthlyBillListSection: View {
 
     private var cardTint: Color {
         colorScheme == .dark ? .white.opacity(0.04) : .white.opacity(0.16)
+    }
+
+    private var totalAmountForeground: Color {
+        colorScheme == .dark ? MistiaAccent.amber.color : MistiaAccent.purple.color
+    }
+
+    private var totalIconForeground: Color {
+        colorScheme == .dark ? MistiaAccent.amber.color : MistiaAccent.purple.color
+    }
+
+    private var totalIconBackground: Color {
+        colorScheme == .dark ? MistiaAccent.amber.color.opacity(0.24) : MistiaAccent.purple.color.opacity(0.13)
     }
 }
 
