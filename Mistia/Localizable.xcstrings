@@ -226,7 +226,7 @@
         "vi": {
           "stringUnit": {
             "state": "translated",
-            "value": "Chọn chụp hoặc tải ảnh bill để AI điền giao dịch."
+            "value": "Chọn chụp hoặc tải ảnh bill để AI điền thu chi."
           }
         },
         "en": {
@@ -326,7 +326,7 @@
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "管理"
+            "value": "マネジメント"
           }
         }
       }
@@ -402,19 +402,19 @@
         "vi": {
           "stringUnit": {
             "state": "translated",
-            "value": "Kế hoạch"
+            "value": "Sắp tới"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Planning"
+            "value": "Upcoming"
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "プラン"
+            "value": "予定"
           }
         }
       }
@@ -468,13 +468,13 @@
         "vi": {
           "stringUnit": {
             "state": "translated",
-            "value": "Quét bill sẽ mở modal giao dịch và tự điền thông tin đọc được từ ảnh."
+            "value": "Quét bill sẽ mở modal thu chi và tự điền thông tin đọc được từ ảnh."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Receipt scan opens the transaction modal and fills details from the image."
+            "value": "Receipt scan opens the cashflow item modal and fills details from the image."
           }
         },
         "ja": {
@@ -622,19 +622,19 @@
         "vi": {
           "stringUnit": {
             "state": "translated",
-            "value": "Giao dịch"
+            "value": "Thu chi"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Transactions"
+            "value": "Cashflow"
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "取引"
+            "value": "収支"
           }
         }
       }
@@ -2954,13 +2954,13 @@
         "vi": {
           "stringUnit": {
             "state": "translated",
-            "value": "Danh sách giao dịch đã lọc"
+            "value": "Danh sách thu chi đã lọc"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Filtered transactions"
+            "value": "Filtered cashflow items"
           }
         },
         "ja": {
@@ -3614,7 +3614,7 @@
         "vi": {
           "stringUnit": {
             "state": "translated",
-            "value": "Không có khoản nào sắp đến hạn"
+            "value": "Không có khoản nào sắp tới"
           }
         },
         "en": {
@@ -4274,13 +4274,13 @@
         "vi": {
           "stringUnit": {
             "state": "translated",
-            "value": "Tính năng lọc giao dịch đang được hoàn thiện."
+            "value": "Tính năng lọc thu chi đang được hoàn thiện."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Transaction filtering is coming soon."
+            "value": "Cashflow filtering is coming soon."
           }
         },
         "ja": {
@@ -4296,19 +4296,19 @@
         "vi": {
           "stringUnit": {
             "state": "translated",
-            "value": "Giao dịch"
+            "value": "Thu chi"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Transactions"
+            "value": "Cashflow"
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "取引"
+            "value": "収支"
           }
         }
       }
@@ -4362,7 +4362,7 @@
         "vi": {
           "stringUnit": {
             "state": "translated",
-            "value": "Sắp đến hạn"
+            "value": "Sắp tới"
           }
         },
         "en": {
@@ -5726,13 +5726,13 @@
         "vi": {
           "stringUnit": {
             "state": "translated",
-            "value": "Khi bạn bắt đầu hoặc tham gia một nhóm gia đình, bạn và các thành viên gia đình có thể chia sẻ các đăng ký, giao dịch và thông tin tài chính để cùng nhau quản lý hiệu quả."
+            "value": "Khi bạn bắt đầu hoặc tham gia một nhóm gia đình, bạn và các thành viên gia đình có thể chia sẻ các đăng ký, thu chi và thông tin tài chính để cùng nhau quản lý hiệu quả."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "When you start or join a family group, you and family members can share subscriptions, transactions, and financial information to manage effectively together."
+            "value": "When you start or join a family group, you and family members can share subscriptions, cashflow items, and financial information to manage effectively together."
           }
         },
         "ja": {
@@ -6958,13 +6958,13 @@
         "vi": {
           "stringUnit": {
             "state": "translated",
-            "value": "Tạo nhóm chi tiêu riêng để giao dịch và ngân sách bám sát cách bạn quản lý hằng ngày."
+            "value": "Tạo nhóm chi tiêu riêng để thu chi và ngân sách bám sát cách bạn quản lý hằng ngày."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Create expense groups so your transactions and budgets match how you manage money every day."
+            "value": "Create expense groups so your cashflow items and budgets match how you manage money every day."
           }
         },
         "ja": {
@@ -7542,7 +7542,7 @@
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "管理"
+            "value": "マネジメント"
           }
         }
       }
@@ -7872,7 +7872,7 @@
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "支払日"
+            "value": "支払い期限"
           }
         }
       }
@@ -8784,13 +8784,13 @@
         "vi": {
           "stringUnit": {
             "state": "translated",
-            "value": "Sẵn sàng sao lưu, khôi phục và đồng bộ dữ liệu ví, danh mục và giao dịch của bạn trên mọi thiết bị."
+            "value": "Sẵn sàng sao lưu, khôi phục và đồng bộ dữ liệu ví, danh mục và thu chi của bạn trên mọi thiết bị."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Ready to backup, restore, and sync your wallets, categories, and transactions across all your devices."
+            "value": "Ready to backup, restore, and sync your wallets, categories, and cashflow items across all your devices."
           }
         },
         "ja": {
@@ -8894,13 +8894,13 @@
         "vi": {
           "stringUnit": {
             "state": "translated",
-            "value": "Giao dịch công nợ"
+            "value": "Khoản công nợ"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Debt transaction"
+            "value": "Debt item"
           }
         },
         "ja": {
@@ -9026,7 +9026,7 @@
         "vi": {
           "stringUnit": {
             "state": "translated",
-            "value": "Tháng %@ đã có giao dịch thanh toán thẻ. Mỗi tháng chỉ được thanh toán một lần."
+            "value": "Tháng %@ đã có khoản thanh toán thẻ. Mỗi tháng chỉ được thanh toán một lần."
           }
         },
         "en": {
@@ -9224,19 +9224,19 @@
         "vi": {
           "stringUnit": {
             "state": "translated",
-            "value": "Giao dịch"
+            "value": "Thu chi"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Transactions"
+            "value": "Cashflow"
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "取引"
+            "value": "収支"
           }
         }
       }
@@ -10390,19 +10390,19 @@
         "vi": {
           "stringUnit": {
             "state": "translated",
-            "value": "Kỳ đến hạn"
+            "value": "Kỳ thanh toán"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Due occurrence"
+            "value": "Payment occurrence"
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "支払予定"
+            "value": "支払いが必要"
           }
         }
       }
@@ -10830,13 +10830,13 @@
         "vi": {
           "stringUnit": {
             "state": "translated",
-            "value": "Giữ cả hai phía, gộp theo ID, không tự động nhập nhằng giao dịch giống nhau."
+            "value": "Giữ cả hai phía, gộp theo ID, không tự động nhập nhằng thu chi giống nhau."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Keep both sides, merge by record ID, and avoid risky automatic transaction dedupe."
+            "value": "Keep both sides, merge by record ID, and avoid risky automatic cashflow item dedupe."
           }
         },
         "ja": {
@@ -11226,13 +11226,13 @@
         "vi": {
           "stringUnit": {
             "state": "translated",
-            "value": "Mistia đang giữ an toàn cả hai bản ghi. Hiện có %@ giao dịch cần bạn rà lại sau sync."
+            "value": "Mistia đang giữ an toàn cả hai bản ghi. Hiện có %@ thu chi cần bạn rà lại sau sync."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Mistia kept both records safely. There are currently %@ transactions to review after sync."
+            "value": "Mistia kept both records safely. There are currently %@ cashflow items to review after sync."
           }
         },
         "ja": {
@@ -11644,7 +11644,7 @@
         "vi": {
           "stringUnit": {
             "state": "translated",
-            "value": "Có giao dịch có thể bị trùng"
+            "value": "Có thu chi có thể bị trùng"
           }
         },
         "en": {
@@ -12348,13 +12348,13 @@
         "vi": {
           "stringUnit": {
             "state": "translated",
-            "value": "Giao dịch không tên"
+            "value": "Thu chi không tên"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Unnamed transaction"
+            "value": "Unnamed cashflow item"
           }
         },
         "ja": {
@@ -12458,13 +12458,13 @@
         "vi": {
           "stringUnit": {
             "state": "translated",
-            "value": "Dùng cùng một tài khoản Mistia để đồng bộ ví, danh mục, giao dịch và các kế hoạch sang thiết bị khác."
+            "value": "Dùng cùng một tài khoản Mistia để đồng bộ ví, danh mục, thu chi và các mục sắp tới sang thiết bị khác."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Use the same Mistia account to sync wallets, categories, transactions, and plans across devices."
+            "value": "Use the same Mistia account to sync wallets, categories, cashflow items, and upcoming items across devices."
           }
         },
         "ja": {
@@ -12502,13 +12502,13 @@
         "vi": {
           "stringUnit": {
             "state": "translated",
-            "value": "Tổng %@ bản ghi dữ liệu • Ví %@ • Thẻ %@ • Danh mục %@ • Giao dịch %@ • Ngân sách %@ • Mục tiêu %@ • Hóa đơn định kỳ %@ • Trả góp %@ • Kỳ hạn %@ • Hồ sơ %@ • Quyền sở hữu %@ • Audit %@"
+            "value": "Tổng %@ bản ghi dữ liệu • Ví %@ • Thẻ %@ • Danh mục %@ • Thu chi %@ • Ngân sách %@ • Mục tiêu %@ • Hóa đơn định kỳ %@ • Trả góp %@ • Kỳ hạn %@ • Hồ sơ %@ • Quyền sở hữu %@ • Audit %@"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "%@ data records total • Wallets %@ • Cards %@ • Categories %@ • Transactions %@ • Budgets %@ • Goals %@ • Recurring bills %@ • Installments %@ • Due occurrences %@ • Profiles %@ • Ownership scopes %@ • Audits %@"
+            "value": "%@ data records total • Wallets %@ • Cards %@ • Categories %@ • Cashflow %@ • Budgets %@ • Goals %@ • Recurring bills %@ • Installments %@ • To pay occurrences %@ • Profiles %@ • Ownership scopes %@ • Audits %@"
           }
         },
         "ja": {
@@ -12860,7 +12860,7 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Due"
+            "value": "To pay"
           }
         },
         "ja": {
@@ -13162,13 +13162,13 @@
         "vi": {
           "stringUnit": {
             "state": "translated",
-            "value": "Tổng cần thanh toán"
+            "value": "Tổng cần trả"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Total due"
+            "value": "Total to pay"
           }
         },
         "ja": {
@@ -13250,7 +13250,7 @@
         "vi": {
           "stringUnit": {
             "state": "translated",
-            "value": "Số tiền cần thanh toán tháng %@ của thẻ %@ là %@. Hạn %@."
+            "value": "Số tiền cần trả tháng %@ của thẻ %@ là %@. Hạn %@."
           }
         },
         "en": {
@@ -14372,19 +14372,19 @@
         "vi": {
           "stringUnit": {
             "state": "translated",
-            "value": "Đến hạn hôm nay"
+            "value": "Cần trả hôm nay"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Due today"
+            "value": "To pay today"
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "本日支払い"
+            "value": "本日支払いが必要"
           }
         }
       }
@@ -14548,13 +14548,13 @@
         "vi": {
           "stringUnit": {
             "state": "translated",
-            "value": "Không có hóa đơn, vay hoặc credit nào đến hạn trong 7 ngày tới."
+            "value": "Không có hóa đơn, khoản vay hoặc thẻ nào cần trả trong 7 ngày tới."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "No bills, loans, or credit payments are due in the next 7 days."
+            "value": "No bills, loans, or credit payments need payment in the next 7 days."
           }
         },
         "ja": {
@@ -14592,19 +14592,19 @@
         "vi": {
           "stringUnit": {
             "state": "translated",
-            "value": "Chưa có quyền chỉnh sửa giao dịch"
+            "value": "Chưa có quyền chỉnh sửa thu chi"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "No transaction edit access"
+            "value": "No cashflow edit access"
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "取引編集権限がありません"
+            "value": "収支編集権限がありません"
           }
         }
       }
@@ -14614,13 +14614,13 @@
         "vi": {
           "stringUnit": {
             "state": "translated",
-            "value": "Chưa có giao dịch nào được ghi nhận gần đây."
+            "value": "Chưa có thu chi nào được ghi nhận gần đây."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "No transactions have been recorded recently."
+            "value": "No cashflow items have been recorded recently."
           }
         },
         "ja": {
@@ -14680,19 +14680,19 @@
         "vi": {
           "stringUnit": {
             "state": "translated",
-            "value": "Giao dịch gần đây"
+            "value": "Thu chi gần đây"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Recent transactions"
+            "value": "Recent cashflow"
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "最近の取引"
+            "value": "最近の収支"
           }
         }
       }
@@ -14834,19 +14834,19 @@
         "vi": {
           "stringUnit": {
             "state": "translated",
-            "value": "Giao dịch"
+            "value": "Thu chi"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Transactions"
+            "value": "Cashflow"
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "取引"
+            "value": "収支"
           }
         }
       }
@@ -14856,19 +14856,19 @@
         "vi": {
           "stringUnit": {
             "state": "translated",
-            "value": "giao dịch"
+            "value": "thu chi"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "transactions"
+            "value": "cashflow items"
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "取引"
+            "value": "収支"
           }
         }
       }
@@ -14878,19 +14878,19 @@
         "vi": {
           "stringUnit": {
             "state": "translated",
-            "value": "Khoản sắp đến hạn"
+            "value": "Khoản sắp tới"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Upcoming due items"
+            "value": "Upcoming items"
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "まもなく期限の項目"
+            "value": "今後の項目"
           }
         }
       }
@@ -14922,13 +14922,13 @@
         "vi": {
           "stringUnit": {
             "state": "translated",
-            "value": "Bạn chưa có quyền chỉnh sửa giao dịch của thành viên này."
+            "value": "Bạn chưa có quyền chỉnh sửa thu chi của thành viên này."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "You do not have permission to edit this member's transactions."
+            "value": "You do not have permission to edit this member's cashflow items."
           }
         },
         "ja": {
@@ -14988,13 +14988,13 @@
         "vi": {
           "stringUnit": {
             "state": "translated",
-            "value": "Không tìm thấy khoản đến hạn."
+            "value": "Không tìm thấy khoản cần trả."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Could not find the due item."
+            "value": "Could not find the payment item."
           }
         },
         "ja": {
@@ -15384,13 +15384,13 @@
         "vi": {
           "stringUnit": {
             "state": "translated",
-            "value": "Thêm các khoản cần trả theo kỳ và tạo giao dịch khi thanh toán trước."
+            "value": "Thêm các khoản cần trả theo kỳ và tạo thu chi khi thanh toán trước."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Add installment or loan payments and create transactions when you pay early."
+            "value": "Add installment or loan payments and create cashflow items when you pay early."
           }
         },
         "ja": {
@@ -15406,13 +15406,13 @@
         "vi": {
           "stringUnit": {
             "state": "translated",
-            "value": "Thêm tiền Internet, điện nước hoặc hóa đơn định kỳ để lên lịch đến hạn."
+            "value": "Thêm tiền Internet, điện nước hoặc hóa đơn định kỳ vào lịch sắp tới."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Add internet, utilities, or recurring bills to schedule upcoming due dates."
+            "value": "Add internet, utilities, or recurring bills to your upcoming schedule."
           }
         },
         "ja": {
@@ -15582,13 +15582,13 @@
         "vi": {
           "stringUnit": {
             "state": "translated",
-            "value": "Hóa đơn lưu trữ sẽ không còn hiện trong tab Kế hoạch. Mục này sẽ được tự động xóa vĩnh viễn sau 30 ngày."
+            "value": "Hóa đơn lưu trữ sẽ không còn hiện trong tab Sắp tới. Mục này sẽ được tự động xóa vĩnh viễn sau 30 ngày."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Archived bills will no longer appear in Planning. They will be automatically deleted permanently after 30 days."
+            "value": "Archived bills will no longer appear in Upcoming. They will be automatically deleted permanently after 30 days."
           }
         },
         "ja": {
@@ -15604,13 +15604,13 @@
         "vi": {
           "stringUnit": {
             "state": "translated",
-            "value": "Ngân sách lưu trữ sẽ không còn hiện trong tab Kế hoạch."
+            "value": "Ngân sách lưu trữ sẽ không còn hiện trong tab Sắp tới."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Archived budgets will no longer appear in Planning."
+            "value": "Archived budgets will no longer appear in Upcoming."
           }
         },
         "ja": {
@@ -15626,13 +15626,13 @@
         "vi": {
           "stringUnit": {
             "state": "translated",
-            "value": "Thẻ lưu trữ sẽ không còn hiện trong tab kế hoạch. Mục này sẽ được tự động xóa vĩnh viễn sau 30 ngày."
+            "value": "Thẻ lưu trữ sẽ không còn hiện trong tab Sắp tới. Mục này sẽ được tự động xóa vĩnh viễn sau 30 ngày."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Archived cards will no longer appear in the planning tab. They will be automatically deleted permanently after 30 days."
+            "value": "Archived cards will no longer appear in the upcoming tab. They will be automatically deleted permanently after 30 days."
           }
         },
         "ja": {
@@ -17106,7 +17106,7 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Due"
+            "value": "To pay"
           }
         },
         "ja": {
@@ -17122,19 +17122,19 @@
         "vi": {
           "stringUnit": {
             "state": "translated",
-            "value": "Đến hạn"
+            "value": "Cần trả"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Due"
+            "value": "To pay"
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "支払予定"
+            "value": "支払いが必要"
           }
         }
       }
@@ -17144,19 +17144,19 @@
         "vi": {
           "stringUnit": {
             "state": "translated",
-            "value": "Ngày đến hạn"
+            "value": "Hạn trả"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Due day"
+            "value": "Payment deadline"
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "支払日"
+            "value": "支払い期限"
           }
         }
       }
@@ -17166,19 +17166,19 @@
         "vi": {
           "stringUnit": {
             "state": "translated",
-            "value": "Đến hạn hôm nay"
+            "value": "Cần trả hôm nay"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Due today"
+            "value": "To pay today"
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "本日支払い"
+            "value": "本日支払いが必要"
           }
         }
       }
@@ -18684,19 +18684,19 @@
         "vi": {
           "stringUnit": {
             "state": "translated",
-            "value": "Kế hoạch"
+            "value": "Sắp tới"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Planning"
+            "value": "Upcoming"
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "プラン"
+            "value": "予定"
           }
         }
       }
@@ -19190,7 +19190,7 @@
         "vi": {
           "stringUnit": {
             "state": "translated",
-            "value": "Ngày chốt sao kê phải trước ngày đến hạn thanh toán."
+            "value": "Ngày chốt sao kê phải trước hạn trả."
           }
         },
         "en": {
@@ -19454,13 +19454,13 @@
         "vi": {
           "stringUnit": {
             "state": "translated",
-            "value": "Khoản này sẽ được ghi nhận thành giao dịch chi tiêu thật."
+            "value": "Khoản này sẽ được ghi nhận thành khoản chi thật."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "This payment will be recorded as a real expense transaction."
+            "value": "This payment will be recorded as a real expense."
           }
         },
         "ja": {
@@ -19504,7 +19504,7 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Total due"
+            "value": "Total to pay"
           }
         },
         "ja": {
@@ -19542,7 +19542,7 @@
         "vi": {
           "stringUnit": {
             "state": "translated",
-            "value": "Sắp đến hạn"
+            "value": "Sắp tới"
           }
         },
         "en": {
@@ -19564,7 +19564,7 @@
         "vi": {
           "stringUnit": {
             "state": "translated",
-            "value": "Sắp đến hạn"
+            "value": "Sắp tới"
           }
         },
         "en": {
@@ -20466,13 +20466,13 @@
         "vi": {
           "stringUnit": {
             "state": "translated",
-            "value": "Tổng quan, Kế hoạch và Gia đình sẽ hiển thị tổng hợp theo tiền tệ này. Giao dịch và ví vẫn giữ tiền tệ riêng."
+            "value": "Tổng quan, Sắp tới và Gia đình sẽ hiển thị tổng hợp theo tiền tệ này. Thu chi và ví vẫn giữ tiền tệ riêng."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Overview, Planning, and Family totals use this currency. Transactions and wallets keep their own currencies."
+            "value": "Overview, Upcoming, and Family totals use this currency. Cashflow and wallets keep their own currencies."
           }
         },
         "ja": {
@@ -20950,7 +20950,7 @@
         "vi": {
           "stringUnit": {
             "state": "translated",
-            "value": "Mistia sẽ nhắc khi ngân sách sắp vượt mức, hóa đơn đến hạn hoặc quá hạn, sao kê thẻ cần thanh toán và ví sắp hết tiền."
+            "value": "Mistia sẽ nhắc khi ngân sách sắp vượt mức, hóa đơn cần trả hoặc quá hạn, sao kê thẻ cần trả và ví sắp hết tiền."
           }
         },
         "en": {
@@ -21698,13 +21698,13 @@
         "vi": {
           "stringUnit": {
             "state": "translated",
-            "value": "Mở các ví, danh mục và giao dịch đã lưu trữ."
+            "value": "Mở các ví, danh mục và thu chi đã lưu trữ."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Open archived wallets, categories, and transactions."
+            "value": "Open archived wallets, categories, and cashflow items."
           }
         },
         "ja": {
@@ -21918,13 +21918,13 @@
         "vi": {
           "stringUnit": {
             "state": "translated",
-            "value": "Mở camera chụp bill ngay để AI điền giao dịch."
+            "value": "Mở camera chụp bill ngay để AI điền thu chi."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Open the camera immediately so AI can fill the transaction."
+            "value": "Open the camera immediately so AI can fill the cashflow item."
           }
         },
         "ja": {
@@ -22754,19 +22754,19 @@
         "vi": {
           "stringUnit": {
             "state": "translated",
-            "value": "Kế hoạch"
+            "value": "Sắp tới"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Planning"
+            "value": "Upcoming"
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "計画"
+            "value": "予定"
           }
         }
       }
@@ -23326,13 +23326,13 @@
         "vi": {
           "stringUnit": {
             "state": "translated",
-            "value": "Vượt kế hoạch"
+            "value": "Vượt dự chi"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Exceeded"
+            "value": "Over planned amount"
           }
         },
         "ja": {
@@ -23480,13 +23480,13 @@
         "vi": {
           "stringUnit": {
             "state": "translated",
-            "value": "Tổng hợp tài sản, dòng tiền và giao dịch tháng hiện tại"
+            "value": "Tổng hợp tài sản, dòng tiền và thu chi tháng hiện tại"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "A summary of assets, cashflow, and transactions for the current month"
+            "value": "A summary of assets, cashflow, and cashflow items for the current month"
           }
         },
         "ja": {
@@ -23502,13 +23502,13 @@
         "vi": {
           "stringUnit": {
             "state": "translated",
-            "value": "Tổng hợp dư nợ, hạn mức và giao dịch trong kỳ sao kê hiện tại"
+            "value": "Tổng hợp dư nợ, hạn mức và thu chi trong kỳ sao kê hiện tại"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "A summary of debt, credit limits, and transactions in the current cycle"
+            "value": "A summary of debt, credit limits, and cashflow items in the current cycle"
           }
         },
         "ja": {
@@ -24118,13 +24118,13 @@
         "vi": {
           "stringUnit": {
             "state": "translated",
-            "value": "Chưa có giao dịch nào trong tháng này."
+            "value": "Chưa có thu chi nào trong tháng này."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "No transactions in this month yet."
+            "value": "No cashflow items in this month yet."
           }
         },
         "ja": {
@@ -24218,7 +24218,7 @@
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "支払日"
+            "value": "支払い期限"
           }
         }
       }
@@ -24382,7 +24382,7 @@
         "vi": {
           "stringUnit": {
             "state": "translated",
-            "value": "Chưa có giao dịch thanh toán vào thẻ trong kỳ."
+            "value": "Chưa có khoản thanh toán vào thẻ trong kỳ."
           }
         },
         "en": {
@@ -24426,19 +24426,19 @@
         "vi": {
           "stringUnit": {
             "state": "translated",
-            "value": "Giao dịch"
+            "value": "Thu chi"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Transaction"
+            "value": "Cashflow"
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "取引"
+            "value": "収支"
           }
         }
       }
@@ -24448,13 +24448,13 @@
         "vi": {
           "stringUnit": {
             "state": "translated",
-            "value": "Giao dịch tháng hiện tại"
+            "value": "Thu chi tháng hiện tại"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Transactions this month"
+            "value": "Cashflow this month"
           }
         },
         "ja": {
@@ -25262,7 +25262,7 @@
         "vi": {
           "stringUnit": {
             "state": "translated",
-            "value": "Hóa đơn đến hạn hôm nay"
+            "value": "Hóa đơn cần trả hôm nay"
           }
         },
         "en": {
@@ -25438,7 +25438,7 @@
         "vi": {
           "stringUnit": {
             "state": "translated",
-            "value": "%@ đã quá hạn thanh toán."
+            "value": "%@ đã quá hạn trả."
           }
         },
         "en": {
@@ -25504,7 +25504,7 @@
         "vi": {
           "stringUnit": {
             "state": "translated",
-            "value": "%@ (%@) đã quá hạn thanh toán."
+            "value": "%@ (%@) đã quá hạn trả."
           }
         },
         "en": {
@@ -25768,19 +25768,19 @@
         "vi": {
           "stringUnit": {
             "state": "translated",
-            "value": "Kế hoạch chi"
+            "value": "Khoản sắp tới"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Payment plan"
+            "value": "Upcoming item"
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "支払いプラン"
+            "value": "今後の項目"
           }
         }
       }
@@ -25812,19 +25812,19 @@
         "vi": {
           "stringUnit": {
             "state": "translated",
-            "value": "Giao dịch"
+            "value": "Thu chi"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Transaction"
+            "value": "Cashflow"
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "取引"
+            "value": "収支"
           }
         }
       }
@@ -26670,13 +26670,13 @@
         "vi": {
           "stringUnit": {
             "state": "translated",
-            "value": "Mistia thấy %@ giao dịch có thể bị trùng và đang giữ an toàn cả hai bản ghi."
+            "value": "Mistia thấy %@ thu chi có thể bị trùng và đang giữ an toàn cả hai bản ghi."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Mistia found %@ possible duplicate transactions and kept both records safely."
+            "value": "Mistia found %@ possible duplicate cashflow items and kept both records safely."
           }
         },
         "ja": {
@@ -27022,13 +27022,13 @@
         "vi": {
           "stringUnit": {
             "state": "translated",
-            "value": "Đăng nhập để đồng bộ ví, danh mục, giao dịch và kế hoạch giữa các thiết bị."
+            "value": "Đăng nhập để đồng bộ ví, danh mục, thu chi và các mục sắp tới giữa các thiết bị."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Sign in to sync wallets, categories, transactions, and planning data across devices."
+            "value": "Sign in to sync wallets, categories, cashflow items, and upcoming data across devices."
           }
         },
         "ja": {
@@ -28518,19 +28518,19 @@
         "vi": {
           "stringUnit": {
             "state": "translated",
-            "value": "Ngày đến hạn"
+            "value": "Hạn trả"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Due day"
+            "value": "Payment deadline"
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "支払日"
+            "value": "支払い期限"
           }
         }
       }
@@ -28540,19 +28540,19 @@
         "vi": {
           "stringUnit": {
             "state": "translated",
-            "value": "Kỳ đến hạn"
+            "value": "Kỳ thanh toán"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Due occurrence"
+            "value": "Payment occurrence"
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "支払予定"
+            "value": "支払いが必要"
           }
         }
       }
@@ -28562,19 +28562,19 @@
         "vi": {
           "stringUnit": {
             "state": "translated",
-            "value": "Kỳ đến hạn"
+            "value": "Kỳ thanh toán"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Due occurrence"
+            "value": "Payment occurrence"
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "支払予定"
+            "value": "支払いが必要"
           }
         }
       }
@@ -28958,13 +28958,13 @@
         "vi": {
           "stringUnit": {
             "state": "translated",
-            "value": "Giao dịch liên kết"
+            "value": "Thu chi liên kết"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Linked transaction"
+            "value": "Linked cashflow item"
           }
         },
         "ja": {
@@ -29596,19 +29596,19 @@
         "vi": {
           "stringUnit": {
             "state": "translated",
-            "value": "Giao dịch"
+            "value": "Thu chi"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Transaction"
+            "value": "Cashflow"
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "取引"
+            "value": "収支"
           }
         }
       }
@@ -29618,19 +29618,19 @@
         "vi": {
           "stringUnit": {
             "state": "translated",
-            "value": "Giao dịch"
+            "value": "Thu chi"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Transaction"
+            "value": "Cashflow"
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "取引"
+            "value": "収支"
           }
         }
       }
@@ -29640,13 +29640,13 @@
         "vi": {
           "stringUnit": {
             "state": "translated",
-            "value": "Ngày giao dịch"
+            "value": "Ngày thu chi"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Transaction date"
+            "value": "Cashflow date"
           }
         },
         "ja": {
@@ -29662,13 +29662,13 @@
         "vi": {
           "stringUnit": {
             "state": "translated",
-            "value": "Loại giao dịch"
+            "value": "Loại thu chi"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Transaction type"
+            "value": "Cashflow type"
           }
         },
         "ja": {
@@ -29706,13 +29706,13 @@
         "vi": {
           "stringUnit": {
             "state": "translated",
-            "value": "Giao dịch không tên"
+            "value": "Thu chi không tên"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Unnamed transaction"
+            "value": "Unnamed cashflow item"
           }
         },
         "ja": {
@@ -29728,13 +29728,13 @@
         "vi": {
           "stringUnit": {
             "state": "translated",
-            "value": "Giao dịch không tên"
+            "value": "Thu chi không tên"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Unnamed transaction"
+            "value": "Unnamed cashflow item"
           }
         },
         "ja": {
@@ -29948,19 +29948,19 @@
         "vi": {
           "stringUnit": {
             "state": "translated",
-            "value": "một giao dịch"
+            "value": "một khoản thu chi"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "a transaction"
+            "value": "a cashflow item"
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "取引"
+            "value": "収支"
           }
         }
       }
@@ -30234,13 +30234,13 @@
         "vi": {
           "stringUnit": {
             "state": "translated",
-            "value": "Giao dịch mới"
+            "value": "Thu chi mới"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "New transaction"
+            "value": "New cashflow item"
           }
         },
         "ja": {
@@ -30322,13 +30322,13 @@
         "vi": {
           "stringUnit": {
             "state": "translated",
-            "value": "Giao dịch đã xóa"
+            "value": "Thu chi đã xóa"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Transaction deleted"
+            "value": "Cashflow deleted"
           }
         },
         "ja": {
@@ -30344,13 +30344,13 @@
         "vi": {
           "stringUnit": {
             "state": "translated",
-            "value": "Giao dịch đã cập nhật"
+            "value": "Thu chi đã cập nhật"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Transaction updated"
+            "value": "Cashflow updated"
           }
         },
         "ja": {
@@ -30410,13 +30410,13 @@
         "vi": {
           "stringUnit": {
             "state": "translated",
-            "value": "%@ vừa thao tác trên giao dịch của bạn."
+            "value": "%@ vừa thao tác trên thu chi của bạn."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "%@ changed one of your transactions."
+            "value": "%@ changed one of your cashflow items."
           }
         },
         "ja": {
@@ -31136,13 +31136,13 @@
         "vi": {
           "stringUnit": {
             "state": "translated",
-            "value": "Lưu trữ giao dịch"
+            "value": "Lưu trữ thu chi"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Archive transaction"
+            "value": "Archive cashflow item"
           }
         },
         "ja": {
@@ -31158,13 +31158,13 @@
         "vi": {
           "stringUnit": {
             "state": "translated",
-            "value": "Giao dịch lưu trữ sẽ không còn hiện trong danh sách. Mục này sẽ được tự động xóa vĩnh viễn sau 30 ngày."
+            "value": "Thu chi lưu trữ sẽ không còn hiện trong danh sách. Mục này sẽ được tự động xóa vĩnh viễn sau 30 ngày."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Archived transactions will no longer appear in the list. They will be automatically deleted permanently after 30 days."
+            "value": "Archived cashflow items will no longer appear in the list. They will be automatically deleted permanently after 30 days."
           }
         },
         "ja": {
@@ -31224,13 +31224,13 @@
         "vi": {
           "stringUnit": {
             "state": "translated",
-            "value": "Chọn danh mục cho giao dịch này."
+            "value": "Chọn danh mục cho thu chi này."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Choose a category for this transaction."
+            "value": "Choose a category for this cashflow item."
           }
         },
         "ja": {
@@ -31268,13 +31268,13 @@
         "vi": {
           "stringUnit": {
             "state": "translated",
-            "value": "Chọn ví cho giao dịch này."
+            "value": "Chọn ví cho thu chi này."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Choose a wallet for this transaction."
+            "value": "Choose a wallet for this cashflow item."
           }
         },
         "ja": {
@@ -31422,13 +31422,13 @@
         "vi": {
           "stringUnit": {
             "state": "translated",
-            "value": "Chọn ví thực hiện giao dịch công nợ."
+            "value": "Chọn ví thực hiện khoản công nợ."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Choose the wallet used for this debt transaction."
+            "value": "Choose the wallet used for this debt item."
           }
         },
         "ja": {
@@ -31532,7 +31532,7 @@
         "vi": {
           "stringUnit": {
             "state": "translated",
-            "value": "Giao dịch chuyển tiền gia đình sẽ được tạo cho cả hai thành viên và không thể sửa, lưu trữ hoặc xóa sau khi chuyển."
+            "value": "Khoản chuyển tiền gia đình sẽ được tạo cho cả hai thành viên và không thể sửa, lưu trữ hoặc xóa sau khi chuyển."
           }
         },
         "en": {
@@ -31598,7 +31598,7 @@
         "vi": {
           "stringUnit": {
             "state": "translated",
-            "value": "Không thể tạo giao dịch chuyển tiền gia đình lúc này."
+            "value": "Không thể tạo khoản chuyển tiền gia đình lúc này."
           }
         },
         "en": {
@@ -31708,13 +31708,13 @@
         "vi": {
           "stringUnit": {
             "state": "translated",
-            "value": "Không thể lưu giao dịch lúc này."
+            "value": "Không thể lưu thu chi lúc này."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Couldn't save this transaction right now."
+            "value": "Couldn't save this cashflow item right now."
           }
         },
         "ja": {
@@ -31818,13 +31818,13 @@
         "vi": {
           "stringUnit": {
             "state": "translated",
-            "value": "Dữ liệu sẽ được lưu ngay trên thiết bị và phản ánh trực tiếp vào tab Giao dịch."
+            "value": "Dữ liệu sẽ được lưu ngay trên thiết bị và phản ánh trực tiếp vào tab Thu chi."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Data is saved directly on this device and reflected immediately in the Transactions tab."
+            "value": "Data is saved directly on this device and reflected immediately in the Cashflow tab."
           }
         },
         "ja": {
@@ -31884,19 +31884,19 @@
         "vi": {
           "stringUnit": {
             "state": "translated",
-            "value": "Sửa giao dịch"
+            "value": "Sửa khoản thu chi"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Edit transaction"
+            "value": "Edit cashflow item"
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "取引を編集"
+            "value": "収支を編集"
           }
         }
       }
@@ -31906,19 +31906,19 @@
         "vi": {
           "stringUnit": {
             "state": "translated",
-            "value": "Nhập tên giao dịch để lưu."
+            "value": "Nhập tên khoản thu chi để lưu."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Enter a transaction name before saving."
+            "value": "Enter a cashflow item name before saving."
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "保存する前に取引名を入力してください。"
+            "value": "保存する前に収支名を入力してください。"
           }
         }
       }
@@ -32126,7 +32126,7 @@
         "vi": {
           "stringUnit": {
             "state": "translated",
-            "value": "Giao dịch chuyển tiền gia đình chỉ dùng để xem chi tiết và không thể sửa, lưu trữ hoặc xóa."
+            "value": "Khoản chuyển tiền gia đình chỉ dùng để xem chi tiết và không thể sửa, lưu trữ hoặc xóa."
           }
         },
         "en": {
@@ -32390,13 +32390,13 @@
         "vi": {
           "stringUnit": {
             "state": "translated",
-            "value": "Số dư ví không đủ để thực hiện giao dịch."
+            "value": "Số dư ví không đủ để ghi nhận khoản này."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Insufficient wallet balance to perform the transaction."
+            "value": "Insufficient wallet balance for this item."
           }
         },
         "ja": {
@@ -32434,13 +32434,13 @@
         "vi": {
           "stringUnit": {
             "state": "translated",
-            "value": "Chỉ cần số tiền và loại giao dịch. Phần còn lại sẽ xuất hiện trong lịch sử để bạn bổ sung sau."
+            "value": "Chỉ cần số tiền và loại thu chi. Phần còn lại sẽ xuất hiện trong lịch sử để bạn bổ sung sau."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Just enter the amount and transaction type. The rest will appear in history for you to complete later."
+            "value": "Just enter the amount and cashflow item type. The rest will appear in history for you to complete later."
           }
         },
         "ja": {
@@ -32456,13 +32456,13 @@
         "vi": {
           "stringUnit": {
             "state": "translated",
-            "value": "Giao dịch local-first"
+            "value": "Ghi thu chi local-first"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Local-first transaction"
+            "value": "Local-first cashflow"
           }
         },
         "ja": {
@@ -32566,13 +32566,13 @@
         "vi": {
           "stringUnit": {
             "state": "translated",
-            "value": "Ghi nhanh chỉ lưu loại giao dịch và số tiền. Hãy hoàn thiện chi tiết ở tab Giao dịch."
+            "value": "Ghi nhanh chỉ lưu loại thu chi và số tiền. Hãy hoàn thiện chi tiết ở tab Thu chi."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Quick capture only saves the transaction type and amount. Complete the rest in the Transactions tab."
+            "value": "Quick capture only saves the cashflow item type and amount. Complete the rest in the Cashflow tab."
           }
         },
         "ja": {
@@ -32616,7 +32616,7 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Receipt AI needs sign-in and network access. The image stays in the modal so you can fill the transaction manually."
+            "value": "Receipt AI needs sign-in and network access. The image stays in the modal so you can fill the cashflow item manually."
           }
         },
         "ja": {
@@ -32808,13 +32808,13 @@
         "vi": {
           "stringUnit": {
             "state": "translated",
-            "value": "Giao dịch này thuộc sao kê đã thanh toán nên không thể sửa đổi hoặc lưu trữ."
+            "value": "Thu chi này thuộc sao kê đã thanh toán nên không thể sửa đổi hoặc lưu trữ."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "This transaction is part of a paid statement and cannot be modified or archived."
+            "value": "This cashflow item is part of a paid statement and cannot be modified or archived."
           }
         },
         "ja": {
@@ -32830,13 +32830,13 @@
         "vi": {
           "stringUnit": {
             "state": "translated",
-            "value": "Giao dịch này sẽ bị lưu trữ. Các giao dịch đã lưu trữ sẽ nằm trong \"Mục đã lưu trữ\" và được giữ lại trong 30 ngày."
+            "value": "Thu chi này sẽ bị lưu trữ. Các khoản thu chi đã lưu trữ sẽ nằm trong \"Mục đã lưu trữ\" và được giữ lại trong 30 ngày."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "This transaction will be archived. Archived transactions will remain in \"Archived items\" for 30 days."
+            "value": "This cashflow item will be archived. Archived cashflow items will remain in \"Archived items\" for 30 days."
           }
         },
         "ja": {
@@ -32874,19 +32874,19 @@
         "vi": {
           "stringUnit": {
             "state": "translated",
-            "value": "Tên giao dịch (không bắt buộc)"
+            "value": "Tên khoản thu chi (không bắt buộc)"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Transaction name (optional)"
+            "value": "Cashflow item name (optional)"
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "取引名（任意）"
+            "value": "収支名（任意）"
           }
         }
       }
@@ -32896,19 +32896,19 @@
         "vi": {
           "stringUnit": {
             "state": "translated",
-            "value": "Loại giao dịch"
+            "value": "Loại thu chi"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Transaction type"
+            "value": "Cashflow type"
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "取引タイプ"
+            "value": "収支タイプ"
           }
         }
       }
@@ -33028,13 +33028,13 @@
         "vi": {
           "stringUnit": {
             "state": "translated",
-            "value": "Bạn chưa có ví nào để gắn vào giao dịch."
+            "value": "Bạn chưa có ví nào để gắn vào thu chi."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "You don't have any wallets available for this transaction."
+            "value": "You don't have any wallets available for this cashflow item."
           }
         },
         "ja": {
@@ -33072,13 +33072,13 @@
         "vi": {
           "stringUnit": {
             "state": "translated",
-            "value": "Bạn cần thêm ít nhất một ví trong tab Quản lý trước khi ghi nhận giao dịch hoàn chỉnh."
+            "value": "Bạn cần thêm ít nhất một ví trong tab Quản lý trước khi ghi nhận thu chi hoàn chỉnh."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "You need to add at least one wallet in the Manage tab before saving a full transaction."
+            "value": "You need to add at least one wallet in the Manage tab before saving a full cashflow item."
           }
         },
         "ja": {
@@ -33644,19 +33644,19 @@
         "vi": {
           "stringUnit": {
             "state": "translated",
-            "value": "Đang tải thêm giao dịch"
+            "value": "Đang tải thêm thu chi"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Loading more transactions"
+            "value": "Loading more cashflow items"
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "さらに取引を読み込み中"
+            "value": "さらに収支を読み込み中"
           }
         }
       }
@@ -33710,19 +33710,19 @@
         "vi": {
           "stringUnit": {
             "state": "translated",
-            "value": "Chưa có quyền chỉnh sửa giao dịch"
+            "value": "Chưa có quyền chỉnh sửa thu chi"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "No transaction edit access"
+            "value": "No cashflow edit access"
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "取引編集権限がありません"
+            "value": "収支編集権限がありません"
           }
         }
       }
@@ -33732,19 +33732,19 @@
         "vi": {
           "stringUnit": {
             "state": "translated",
-            "value": "Chưa có giao dịch nào"
+            "value": "Chưa có khoản thu chi nào"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "No transactions yet"
+            "value": "No cashflow items yet"
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "取引はまだありません"
+            "value": "収支はまだありません"
           }
         }
       }
@@ -33842,13 +33842,13 @@
         "vi": {
           "stringUnit": {
             "state": "translated",
-            "value": "Nhập tên, ghi chú hoặc người liên quan để tìm giao dịch."
+            "value": "Nhập tên, ghi chú hoặc người liên quan để tìm thu chi."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Enter a name, note, or person to find transactions."
+            "value": "Enter a name, note, or person to find cashflow items."
           }
         },
         "ja": {
@@ -33864,19 +33864,19 @@
         "vi": {
           "stringUnit": {
             "state": "translated",
-            "value": "Tìm giao dịch"
+            "value": "Tìm thu chi"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Search transactions"
+            "value": "Search cashflow"
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "取引を検索"
+            "value": "収支を検索"
           }
         }
       }
@@ -33886,19 +33886,19 @@
         "vi": {
           "stringUnit": {
             "state": "translated",
-            "value": "Không có giao dịch nào khớp với từ khóa này."
+            "value": "Không có khoản thu chi nào khớp với từ khóa này."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "No transactions match this search."
+            "value": "No cashflow items match this search."
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "この検索に一致する取引はありません。"
+            "value": "この検索に一致する収支はありません。"
           }
         }
       }
@@ -33908,19 +33908,19 @@
         "vi": {
           "stringUnit": {
             "state": "translated",
-            "value": "Tìm tên giao dịch..."
+            "value": "Tìm tên khoản thu chi..."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Search transaction name..."
+            "value": "Search cashflow item name..."
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "取引名を検索..."
+            "value": "収支名を検索..."
           }
         }
       }
@@ -34062,19 +34062,19 @@
         "vi": {
           "stringUnit": {
             "state": "translated",
-            "value": "giao dịch"
+            "value": "thu chi"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "transaction"
+            "value": "cashflow"
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "取引"
+            "value": "収支"
           }
         }
       }
@@ -34084,19 +34084,19 @@
         "vi": {
           "stringUnit": {
             "state": "translated",
-            "value": "Giao dịch"
+            "value": "Thu chi"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Transactions"
+            "value": "Cashflow"
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "取引"
+            "value": "収支"
           }
         }
       }
@@ -34150,13 +34150,13 @@
         "vi": {
           "stringUnit": {
             "state": "translated",
-            "value": "Thử đổi thời gian, ví, bộ lọc hoặc từ khóa tìm kiếm để xem thêm giao dịch."
+            "value": "Thử đổi thời gian, ví, bộ lọc hoặc từ khóa tìm kiếm để xem thêm thu chi."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Try adjusting the time range, wallet, filters, or search keyword to see more transactions."
+            "value": "Try adjusting the time range, wallet, filters, or search keyword to see more cashflow items."
           }
         },
         "ja": {
@@ -34326,13 +34326,13 @@
         "vi": {
           "stringUnit": {
             "state": "translated",
-            "value": "Bạn chưa có quyền chỉnh sửa giao dịch của thành viên này."
+            "value": "Bạn chưa có quyền chỉnh sửa thu chi của thành viên này."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "You do not have permission to edit this member's transactions."
+            "value": "You do not have permission to edit this member's cashflow items."
           }
         },
         "ja": {
@@ -34480,19 +34480,19 @@
         "vi": {
           "stringUnit": {
             "state": "translated",
-            "value": "Tạo giao dịch"
+            "value": "Tạo khoản thu chi"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Create transaction"
+            "value": "Create cashflow item"
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "取引を作成"
+            "value": "収支を作成"
           }
         }
       }
@@ -34634,13 +34634,13 @@
         "vi": {
           "stringUnit": {
             "state": "translated",
-            "value": "Chọn các mục hợp lệ để tạo giao dịch."
+            "value": "Chọn các mục hợp lệ để tạo khoản thu chi."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Select valid items to create a transaction."
+            "value": "Select valid items to create a cashflow item."
           }
         },
         "ja": {
