@@ -114,6 +114,13 @@ final class TransactionEditorEdgeCasesTests: XCTestCase {
         )
     }
 
+    func testDebtIntentCreditCardWalletPolicyOnlyAllowsLending() {
+        XCTAssertTrue(TransactionLogic.debtIntentAllowsCreditCardWallet(.lend))
+        XCTAssertFalse(TransactionLogic.debtIntentAllowsCreditCardWallet(.collect))
+        XCTAssertFalse(TransactionLogic.debtIntentAllowsCreditCardWallet(.borrow))
+        XCTAssertFalse(TransactionLogic.debtIntentAllowsCreditCardWallet(.repay))
+    }
+
     func testReceiptPersistencePolicyIsEphemeralForMemberOwnedTransactions() {
         let activeUserID = UUID()
         let memberUserID = UUID()

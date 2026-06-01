@@ -74,6 +74,74 @@ final class TransactionLogicTests: XCTestCase {
         XCTAssertEqual(TransactionLogic.cashflowAmount(for: debtRecord(amountMinor: 100, intent: .repay)), -100)
     }
 
+    func testDebtIntentCreditCardWalletPolicyOnlyAllowsLending() {
+        XCTAssertTrue(TransactionLogic.debtIntentAllowsCreditCardWallet(.lend))
+        XCTAssertFalse(TransactionLogic.debtIntentAllowsCreditCardWallet(.collect))
+        XCTAssertFalse(TransactionLogic.debtIntentAllowsCreditCardWallet(.borrow))
+        XCTAssertFalse(TransactionLogic.debtIntentAllowsCreditCardWallet(.repay))
+    }
+
+    func testCreditCardStatementKeepsDebtLendingChargeAfterCollectionToCashWallet() throws {
+        let calendar = Calendar(identifier: .gregorian)
+        let cardWalletID = UUID()
+        let cashWalletID = UUID()
+        let paymentWalletID = UUID()
+        let statementMonth = try makeDate(year: 2026, month: 2, day: 1, calendar: calendar)
+        let account = PlanningCreditCardAccountSnapshot(
+            id: cardWalletID,
+            walletID: cardWalletID,
+            walletName: "SMBC Card",
+            issuerName: "SMBC",
+            network: .visa,
+            last4: "1234",
+            dueDay: 26,
+            statementClosingDay: 10,
+            paymentSourceWalletID: paymentWalletID,
+            paymentSourceWalletName: "Main",
+            currencyCode: "JPY",
+            currentDebtMinor: 32_456,
+            availableCreditMinor: 67_544,
+            openedAt: try makeDate(year: 2026, month: 1, day: 1, calendar: calendar)
+        )
+        let records = [
+            record(
+                primaryKind: .transfer,
+                amountMinor: 32_456,
+                currencyCode: "JPY",
+                transferSubtype: .debt,
+                debtIntent: .lend,
+                title: TransactionDebtIntent.lend.title,
+                sourceWalletID: cardWalletID,
+                sourceWalletKind: .creditCard,
+                occurredAt: try makeDate(year: 2026, month: 2, day: 12, calendar: calendar)
+            ),
+            record(
+                primaryKind: .transfer,
+                amountMinor: 32_456,
+                currencyCode: "JPY",
+                transferSubtype: .debt,
+                debtIntent: .collect,
+                title: TransactionDebtIntent.collect.title,
+                sourceWalletID: cashWalletID,
+                sourceWalletKind: .cash,
+                occurredAt: try makeDate(year: 2026, month: 2, day: 20, calendar: calendar)
+            )
+        ]
+
+        let statements = PlanningLogic.creditCardStatementItems(
+            accounts: [account],
+            records: records,
+            occurrences: [],
+            statementMonths: [statementMonth],
+            referenceDate: try makeDate(year: 2026, month: 3, day: 10, calendar: calendar),
+            calendar: calendar
+        )
+
+        XCTAssertEqual(statements.first?.amountMinor, 32_456)
+        XCTAssertEqual(statements.first?.status, .pending)
+        XCTAssertEqual(statements.first?.state, .payable)
+    }
+
     func testCounterpartySuggestionsMatchSingleCharacterQueries() {
         let records = [
             debtRecord(
@@ -180,7 +248,9 @@ final class TransactionLogicTests: XCTestCase {
         title: String = "Record",
         counterpartyName: String? = nil,
         normalizedCounterpartyKey: String? = nil,
-        sourceWalletID: UUID = UUID()
+        sourceWalletID: UUID = UUID(),
+        sourceWalletKind: LedgerWalletKind = .cash,
+        occurredAt: Date = Date(timeIntervalSince1970: 1_800_000_000)
     ) -> TransactionRecordSnapshot {
         TransactionRecordSnapshot(
             id: UUID(),
@@ -193,15 +263,24 @@ final class TransactionLogicTests: XCTestCase {
             amountMinor: amountMinor,
             sourceCurrencyCode: currencyCode,
             isArchived: false,
-            occurredAt: Date(timeIntervalSince1970: 1_800_000_000),
-            createdAt: Date(timeIntervalSince1970: 1_800_000_000),
+            occurredAt: occurredAt,
+            createdAt: occurredAt,
             sourceWalletID: sourceWalletID,
-            sourceWalletKind: .cash,
+            sourceWalletKind: sourceWalletKind,
             destinationWalletID: nil,
             destinationWalletKind: nil,
             categoryID: primaryKind == .expense || primaryKind == .income ? UUID() : nil,
             counterpartyName: counterpartyName,
             normalizedCounterpartyKey: normalizedCounterpartyKey
         )
+    }
+
+    private func makeDate(year: Int, month: Int, day: Int, calendar: Calendar) throws -> Date {
+        var components = DateComponents()
+        components.calendar = calendar
+        components.year = year
+        components.month = month
+        components.day = day
+        return try XCTUnwrap(calendar.date(from: components))
     }
 }

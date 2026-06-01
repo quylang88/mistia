@@ -275,7 +275,14 @@ struct ManagementCreditCardStatementView: View {
         allTransactions.filter { tx in
             tx.sourceWallet?.id == wallet.id
                 && tx.entryStatus == .posted
-                && tx.primaryKind == .expense
+                && (
+                    tx.primaryKind == .expense
+                    || (
+                        tx.primaryKind == .transfer
+                        && tx.transferSubtype == .debt
+                        && tx.debtIntent == .lend
+                    )
+                )
                 && calendar.isDate(tx.occurredAt, equalTo: statement.statementMonth, toGranularity: .month)
         }
         .sorted { $0.occurredAt > $1.occurredAt }

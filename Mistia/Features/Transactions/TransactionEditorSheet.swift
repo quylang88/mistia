@@ -157,6 +157,7 @@ private struct CurrencyConversionResolution {
 
 private struct TransactionEditorRenderContext {
     let availableWallets: [LedgerWallet]
+    let availableDebtWallets: [LedgerWallet]
     let availableSourceWalletsForTransfer: [LedgerWallet]
     let availableDestinationWalletsForTransfer: [LedgerWallet]
     let availableFamilyTransferMembers: [FamilyMember]
@@ -604,7 +605,10 @@ struct TransactionEditorSheet: View {
                 Section(L10n.transactions.transactioneditor.debtType) {
                     Picker(L10n.transactions.transactioneditor.debtType, selection: Binding(
                         get: { bindableDraft.debtIntent ?? .lend },
-                        set: { bindableDraft.debtIntent = $0 }
+                        set: {
+                            bindableDraft.debtIntent = $0
+                            clearMismatchedWalletsForCurrentSubject()
+                        }
                     )) {
                         ForEach(debtIntentOptions, id: \.self) { intent in
                             Text(intent.title).tag(intent)
@@ -771,7 +775,7 @@ struct TransactionEditorSheet: View {
                     Section(L10n.transactions.transactioneditor.counterparty) {
                         Picker(L10n.transactions.transactioneditor.walletUsed, selection: $draft.sourceWalletID) {
                             Text(L10n.transactions.transactioneditor.chooseWallet).tag(Optional<UUID>.none)
-                            ForEach(renderContext.availableWallets) { wallet in
+                            ForEach(renderContext.availableDebtWallets) { wallet in
                                 Text(walletPickerTitle(for: wallet, in: renderContext)).tag(Optional(wallet.id))
                             }
                         }
@@ -914,6 +918,9 @@ struct TransactionEditorSheet: View {
             targetOwnerUserID: activeWalletOwnerUserID,
             excludesCreditCards: draft.primaryKind == .income
         )
+        let availableDebtWallets = availableWallets.filter { wallet in
+            wallet.kind != .creditCard || TransactionLogic.debtIntentAllowsCreditCardWallet(draft.debtIntent)
+        }
         let availableSourceWalletsForTransfer = availableWallets.filter { $0.kind != .creditCard }
         let availableDestinationWalletsForTransfer = availableWallets
         let availableFamilyTransferMembers: [FamilyMember]
@@ -999,6 +1006,13 @@ struct TransactionEditorSheet: View {
         } else {
             shouldShowTransferConversionSection
         }
+        let hasNoAvailableWallets: Bool
+        if draft.primaryKind == .transfer, draft.transferSubtype == .debt {
+            hasNoAvailableWallets = availableDebtWallets.isEmpty
+        } else {
+            hasNoAvailableWallets = availableWallets.isEmpty
+        }
+        let shouldShowMissingWalletsState = !target.quickCapture && hasNoAvailableWallets
 
         var walletsByID: [UUID: LedgerWallet] = [:]
         for wallet in availableWallets
@@ -1018,6 +1032,7 @@ struct TransactionEditorSheet: View {
 
         return TransactionEditorRenderContext(
             availableWallets: availableWallets,
+            availableDebtWallets: availableDebtWallets,
             availableSourceWalletsForTransfer: availableSourceWalletsForTransfer,
             availableDestinationWalletsForTransfer: availableDestinationWalletsForTransfer,
             availableFamilyTransferMembers: availableFamilyTransferMembers,
@@ -1025,7 +1040,7 @@ struct TransactionEditorSheet: View {
             availableDestinationWalletsForFamilyTransfer: availableDestinationWalletsForFamilyTransfer,
             selectedCategory: selectedCategory,
             selectedCategoryLabel: selectedCategoryLabel,
-            shouldShowMissingWalletsState: !target.quickCapture && availableWallets.isEmpty,
+            shouldShowMissingWalletsState: shouldShowMissingWalletsState,
             shouldShowConversionSection: shouldShowConversionSection,
             shouldShowDestinationAmountInput: shouldShowDestinationAmountInput,
             walletLabelsByID: walletLabelsByID,
@@ -1048,6 +1063,12 @@ struct TransactionEditorSheet: View {
 
     private var availableWalletsForIncome: [LedgerWallet] {
         availableWallets.filter { $0.kind != .creditCard }
+    }
+
+    private var availableWalletsForDebtIntent: [LedgerWallet] {
+        availableWallets.filter { wallet in
+            wallet.kind != .creditCard || TransactionLogic.debtIntentAllowsCreditCardWallet(draft.debtIntent)
+        }
     }
 
     private var canShowFamilyTransferMode: Bool {
@@ -2262,6 +2283,15 @@ struct TransactionEditorSheet: View {
             return
         }
 
+        if draft.primaryKind == .transfer,
+           draft.transferSubtype == .debt,
+           let sourceWallet = selectedSourceWallet,
+           sourceWallet.kind == .creditCard,
+           !TransactionLogic.debtIntentAllowsCreditCardWallet(draft.debtIntent) {
+            alertMessage = L10n.transactions.transactioneditor.chooseAWalletForThisTransaction
+            return
+        }
+
         let validationRecordSnapshots = postedTransactions
             .filter { $0.id != target.transaction?.id }
             .map(\.snapshot)
@@ -2353,8 +2383,29 @@ struct TransactionEditorSheet: View {
                     )
                     
                     let currentBalance = validationBalanceIndex.balance(for: snapshot)
-                    
-                    if currentBalance - amountMinor < 0 {
+
+                    if sourceWallet.kind == .creditCard {
+                        if let paidStatement = paidCreditCardStatement(
+                            for: sourceWallet,
+                            occurredAt: draft.occurredAt,
+                            transactionRecords: validationRecordSnapshots,
+                            balanceIndex: validationBalanceIndex
+                        ) {
+                            alertMessage = paidStatementExpenseAlertMessage(for: paidStatement)
+                            return
+                        }
+
+                        let availableCredit: Int64
+                        if let profile = sourceWallet.creditCardProfile {
+                            availableCredit = max(profile.creditLimitMinor - currentBalance, 0)
+                        } else {
+                            availableCredit = 0
+                        }
+                        if amountMinor > availableCredit {
+                            alertMessage = L10n.transactions.transactioneditor.theAmountExceedsTheAvailableCreditOn
+                            return
+                        }
+                    } else if currentBalance - amountMinor < 0 {
                         alertMessage = L10n.transactions.transactioneditor.insufficientWalletBalanceToPerformTheTransaction
                         return
                     }
@@ -2914,6 +2965,11 @@ struct TransactionEditorSheet: View {
                   draft.transferSubtype == .internalTransfer {
             availableSourceWalletIDs = Set(availableSourceWalletsForTransfer.map(\.id))
             availableDestinationWalletIDs = Set(availableDestinationWalletsForTransfer.map(\.id))
+        } else if draft.primaryKind == .transfer,
+                  draft.transferSubtype == .debt {
+            let availableDebtWalletIDs = Set(availableWalletsForDebtIntent.map(\.id))
+            availableSourceWalletIDs = availableDebtWalletIDs
+            availableDestinationWalletIDs = []
         } else {
             let availableWalletIDs = Set(availableWallets.map(\.id))
             availableSourceWalletIDs = availableWalletIDs

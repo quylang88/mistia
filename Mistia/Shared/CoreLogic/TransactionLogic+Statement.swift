@@ -325,7 +325,7 @@ nonisolated extension TransactionLogic {
         for transaction in transactions {
             guard transaction.entryStatus == .posted, !transaction.isArchived else { continue }
 
-            if transaction.primaryKind == .expense, let walletID = transaction.sourceWalletID {
+            if isCreditCardStatementCharge(transaction), let walletID = transaction.sourceWalletID {
                 chargesByWalletID[walletID, default: []].append(transaction)
                 continue
             }
@@ -348,6 +348,17 @@ nonisolated extension TransactionLogic {
             chargesByWalletID: chargesByWalletID,
             paymentsByWalletID: paymentsByWalletID
         )
+    }
+
+    private static func isCreditCardStatementCharge(_ transaction: OverviewTransactionSnapshot) -> Bool {
+        if transaction.primaryKind == .expense {
+            return true
+        }
+
+        return transaction.primaryKind == .transfer
+            && transaction.transferSubtype == .debt
+            && transaction.debtIntent == .lend
+            && transaction.sourceWalletKind == .creditCard
     }
 
 

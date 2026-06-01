@@ -897,6 +897,54 @@ final class PlanningLogicTests: XCTestCase {
         XCTAssertEqual(afterClosing.first?.state, .payable)
     }
 
+    func testCreditCardStatementKeepsDebtLendingChargeAfterCollectionToCashWallet() {
+        let cardWalletID = UUID()
+        let cashWalletID = UUID()
+        let paymentWalletID = UUID()
+        let statementMonth = makeDate(year: 2026, month: 2, day: 1)
+        let account = makeCreditCardAccount(
+            walletID: cardWalletID,
+            paymentWalletID: paymentWalletID,
+            dueDay: 26,
+            statementClosingDay: 10
+        )
+        let records = [
+            makeRecord(
+                primaryKind: .transfer,
+                transferSubtype: .debt,
+                debtIntent: .lend,
+                amountMinor: 32_456,
+                occurredAt: makeDate(year: 2026, month: 2, day: 12),
+                categoryID: nil,
+                sourceWalletID: cardWalletID,
+                sourceWalletKind: .creditCard
+            ),
+            makeRecord(
+                primaryKind: .transfer,
+                transferSubtype: .debt,
+                debtIntent: .collect,
+                amountMinor: 32_456,
+                occurredAt: makeDate(year: 2026, month: 2, day: 20),
+                categoryID: nil,
+                sourceWalletID: cashWalletID,
+                sourceWalletKind: .cash
+            )
+        ]
+
+        let statements = PlanningLogic.creditCardStatementItems(
+            accounts: [account],
+            records: records,
+            occurrences: [],
+            statementMonths: [statementMonth],
+            referenceDate: makeDate(year: 2026, month: 3, day: 10),
+            calendar: calendar
+        )
+
+        XCTAssertEqual(statements.first?.amountMinor, 32_456)
+        XCTAssertEqual(statements.first?.status, .pending)
+        XCTAssertEqual(statements.first?.state, .payable)
+    }
+
     func testSelectedDueMonthSummaryCountsCreditStatementByDueMonthBeforeClosing() {
         let cardWalletID = UUID()
         let account = makeCreditCardAccount(
@@ -1464,6 +1512,7 @@ final class PlanningLogicTests: XCTestCase {
         id: UUID = UUID(),
         primaryKind: TransactionPrimaryKind,
         transferSubtype: TransactionTransferSubtype? = nil,
+        debtIntent: TransactionDebtIntent? = nil,
         amountMinor: Int64,
         occurredAt: Date,
         categoryID: UUID?,
@@ -1477,7 +1526,7 @@ final class PlanningLogicTests: XCTestCase {
             id: id,
             primaryKind: primaryKind,
             transferSubtype: transferSubtype,
-            debtIntent: nil,
+            debtIntent: debtIntent,
             entryStatus: .posted,
             title: "Test",
             note: nil,

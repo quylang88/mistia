@@ -307,6 +307,21 @@ nonisolated enum TransactionLogic {
         record.categoryID == MistiaSystemCategoryIdentity.canonicalID(for: .loanRepayment)
     }
 
+    static func debtIntentAllowsCreditCardWallet(_ intent: TransactionDebtIntent?) -> Bool {
+        intent == .lend
+    }
+
+    static func isCreditCardDebtLending(_ record: TransactionRecordSnapshot) -> Bool {
+        record.primaryKind == .transfer
+            && record.transferSubtype == .debt
+            && record.debtIntent == .lend
+            && record.sourceWalletKind == .creditCard
+    }
+
+    static func isCreditCardStatementCharge(_ record: TransactionRecordSnapshot) -> Bool {
+        isExpenseSpending(record) || isCreditCardDebtLending(record)
+    }
+
     static func isCreditCardPayment(_ record: TransactionRecordSnapshot) -> Bool {
         let titleLooksLikeCardPayment = isCreditCardPaymentTitle(record.title)
         if record.primaryKind == .transfer {
@@ -1115,14 +1130,14 @@ nonisolated enum TransactionLogic {
         allTransactions: [TransactionRecordSnapshot],
         calendar: Calendar = MistiaCalendar.current
     ) -> Bool {
-        // Only expenses and internal transfers can be locked by a statement
+        // Only card charges and internal transfers can be locked by a statement.
         guard transaction.primaryKind == .expense || transaction.primaryKind == .transfer else {
             return false
         }
         
         // Find the relevant credit card wallet ID
         let creditCardWalletID: UUID?
-        if transaction.primaryKind == .expense {
+        if transaction.primaryKind == .expense || isCreditCardDebtLending(transaction) {
             // For expenses, the source wallet must be a credit card
             guard transaction.sourceWalletKind == .creditCard else { return false }
             creditCardWalletID = transaction.sourceWalletID

@@ -1644,7 +1644,7 @@ nonisolated enum PlanningLogic {
         for record in records {
             guard record.entryStatus == .posted, !record.isArchived else { continue }
 
-            if TransactionLogic.isExpenseSpending(record), let walletID = record.sourceWalletID {
+            if TransactionLogic.isCreditCardStatementCharge(record), let walletID = record.sourceWalletID {
                 let key = CreditCardStatementIndexKey(
                     walletID: walletID,
                     monthKey: monthKey(for: record.occurredAt, calendar: calendar)
