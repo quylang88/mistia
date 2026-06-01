@@ -166,6 +166,71 @@ private struct PlanningDueRenderSnapshot {
     let installments: [PlanningRecurringDueSnapshot]
 }
 
+private struct PlanningRenderSnapshotBaseCacheKey: Hashable {
+    let activeScope: FamilyContext.Scope
+    let selectedSubjectUserID: UUID?
+    let currentUserID: UUID?
+    let activeLocalProfileUserID: UUID?
+    let signedInUserID: UUID?
+    let familyID: UUID?
+    let selectedMonthStart: TimeInterval
+    let calendarIdentifier: String
+    let calendarTimeZoneIdentifier: String
+    let currencyCode: String
+    let currencyRateMode: String
+    let manualJPYToVNDRate: String
+    let cachedRatesSignature: Int
+    let familyAccessSignature: Int
+    let ownershipSignature: MistiaCollectionChangeSignature
+}
+
+private struct PlanningBudgetRenderSnapshotCacheKey: Hashable {
+    let base: PlanningRenderSnapshotBaseCacheKey
+    let budgetSignature: MistiaCollectionChangeSignature
+    let transactionSignature: MistiaCollectionChangeSignature
+}
+
+private struct PlanningGoalRenderSnapshotCacheKey: Hashable {
+    let base: PlanningRenderSnapshotBaseCacheKey
+    let goalSignature: MistiaCollectionChangeSignature
+}
+
+private struct PlanningDueRenderSnapshotCacheKey: Hashable {
+    let base: PlanningRenderSnapshotBaseCacheKey
+    let transactionSignature: MistiaCollectionChangeSignature
+    let occurrenceSignature: MistiaCollectionChangeSignature
+    let walletSignature: MistiaCollectionChangeSignature
+    let billSignature: MistiaCollectionChangeSignature
+    let installmentSignature: MistiaCollectionChangeSignature
+}
+
+private struct PlanningBudgetRenderSnapshotCache {
+    let key: PlanningBudgetRenderSnapshotCacheKey
+    let snapshot: PlanningBudgetRenderSnapshot
+}
+
+private struct PlanningGoalRenderSnapshotCache {
+    let key: PlanningGoalRenderSnapshotCacheKey
+    let snapshot: PlanningGoalRenderSnapshot
+}
+
+private struct PlanningDueRenderSnapshotCache {
+    let key: PlanningDueRenderSnapshotCacheKey
+    let snapshot: PlanningDueRenderSnapshot
+}
+
+private enum PlanningActiveRenderSnapshotCacheKey: Hashable {
+    case budget(PlanningBudgetRenderSnapshotCacheKey)
+    case due(PlanningDueRenderSnapshotCacheKey)
+    case goals(PlanningGoalRenderSnapshotCacheKey)
+}
+
+private enum PlanningActiveRenderSnapshot {
+    case budget(PlanningBudgetRenderSnapshot)
+    case due(PlanningDueRenderSnapshot)
+    case goals(PlanningGoalRenderSnapshot)
+}
+
 struct PlanningView: View {
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.calendar) private var calendar
@@ -211,6 +276,9 @@ struct PlanningView: View {
     @State private var infoAlert: PlanningInfoAlert?
     @State private var familyOwnerConflictAlert: PlanningFamilyOwnerConflictAlert?
     @State private var memberViewingExitPrompt: FamilyMemberViewingExitPrompt?
+    @State private var budgetRenderSnapshotCache: PlanningBudgetRenderSnapshotCache?
+    @State private var goalRenderSnapshotCache: PlanningGoalRenderSnapshotCache?
+    @State private var dueRenderSnapshotCache: PlanningDueRenderSnapshotCache?
 
     private var cardTint: Color {
         colorScheme == .dark ? .white.opacity(0.022) : .white.opacity(0.14)
@@ -395,6 +463,219 @@ struct PlanningView: View {
             bills: recurringBillDueItems,
             installments: installmentDueItems
         )
+    }
+
+    private func cachedActiveRenderSnapshot(
+        for activeKey: PlanningActiveRenderSnapshotCacheKey
+    ) -> PlanningActiveRenderSnapshot {
+        switch activeKey {
+        case .budget:
+            .budget(cachedBudgetRenderSnapshot(for: activeKey))
+        case .due:
+            .due(cachedDueRenderSnapshot(for: activeKey))
+        case .goals:
+            .goals(cachedGoalRenderSnapshot(for: activeKey))
+        }
+    }
+
+    private func cachedBudgetRenderSnapshot(
+        for activeKey: PlanningActiveRenderSnapshotCacheKey
+    ) -> PlanningBudgetRenderSnapshot {
+        guard case .budget(let key) = activeKey else {
+            return budgetRenderSnapshot()
+        }
+
+        if let budgetRenderSnapshotCache, budgetRenderSnapshotCache.key == key {
+            return budgetRenderSnapshotCache.snapshot
+        }
+
+        return budgetRenderSnapshot()
+    }
+
+    private func cachedGoalRenderSnapshot(
+        for activeKey: PlanningActiveRenderSnapshotCacheKey
+    ) -> PlanningGoalRenderSnapshot {
+        guard case .goals(let key) = activeKey else {
+            return goalRenderSnapshot()
+        }
+
+        if let goalRenderSnapshotCache, goalRenderSnapshotCache.key == key {
+            return goalRenderSnapshotCache.snapshot
+        }
+
+        return goalRenderSnapshot()
+    }
+
+    private func cachedDueRenderSnapshot(
+        for activeKey: PlanningActiveRenderSnapshotCacheKey
+    ) -> PlanningDueRenderSnapshot {
+        guard case .due(let key) = activeKey else {
+            return dueRenderSnapshot()
+        }
+
+        if let dueRenderSnapshotCache, dueRenderSnapshotCache.key == key {
+            return dueRenderSnapshotCache.snapshot
+        }
+
+        return dueRenderSnapshot()
+    }
+
+    private func refreshActiveRenderSnapshotCache(
+        for activeKey: PlanningActiveRenderSnapshotCacheKey,
+        snapshot activeSnapshot: PlanningActiveRenderSnapshot
+    ) {
+        switch (activeKey, activeSnapshot) {
+        case (.budget(let key), .budget(let snapshot)):
+            budgetRenderSnapshotCache = PlanningBudgetRenderSnapshotCache(
+                key: key,
+                snapshot: snapshot
+            )
+        case (.due(let key), .due(let snapshot)):
+            dueRenderSnapshotCache = PlanningDueRenderSnapshotCache(
+                key: key,
+                snapshot: snapshot
+            )
+        case (.goals(let key), .goals(let snapshot)):
+            goalRenderSnapshotCache = PlanningGoalRenderSnapshotCache(
+                key: key,
+                snapshot: snapshot
+            )
+        default:
+            break
+        }
+    }
+
+    private var activeRenderSnapshotCacheKey: PlanningActiveRenderSnapshotCacheKey {
+        switch selectedMode {
+        case .budget:
+            .budget(budgetRenderSnapshotCacheKey)
+        case .due:
+            .due(dueRenderSnapshotCacheKey)
+        case .goals:
+            .goals(goalRenderSnapshotCacheKey)
+        }
+    }
+
+    private var renderSnapshotBaseCacheKey: PlanningRenderSnapshotBaseCacheKey {
+        PlanningRenderSnapshotBaseCacheKey(
+            activeScope: familyContextStore.activeContext.scope,
+            selectedSubjectUserID: familyContextStore.selectedSubjectUserID,
+            currentUserID: familyContextStore.currentUserID,
+            activeLocalProfileUserID: sessionStore.activeLocalProfileUserID,
+            signedInUserID: sessionStore.signedInUserID,
+            familyID: familyContextStore.family?.id,
+            selectedMonthStart: selectedMonth.timeIntervalSince1970,
+            calendarIdentifier: String(describing: calendar.identifier),
+            calendarTimeZoneIdentifier: calendar.timeZone.identifier,
+            currencyCode: currencyCode,
+            currencyRateMode: currencyRateMode,
+            manualJPYToVNDRate: manualJPYToVNDRate,
+            cachedRatesSignature: cachedCurrencyRatesData.hashValue,
+            familyAccessSignature: familyAccessSignature,
+            ownershipSignature: MistiaCollectionChangeSignature.make(
+                ownershipScopes,
+                updatedAt: \.updatedAt,
+                deletedAt: { _ in nil }
+            )
+        )
+    }
+
+    private var budgetRenderSnapshotCacheKey: PlanningBudgetRenderSnapshotCacheKey {
+        PlanningBudgetRenderSnapshotCacheKey(
+            base: renderSnapshotBaseCacheKey,
+            budgetSignature: MistiaCollectionChangeSignature.make(
+                storedBudgets,
+                updatedAt: \.updatedAt,
+                deletedAt: \.deletedAt,
+                isArchived: \.isArchived,
+                remoteVersion: \.remoteVersion
+            ),
+            transactionSignature: MistiaCollectionChangeSignature.make(
+                storedTransactions,
+                updatedAt: \.updatedAt,
+                deletedAt: \.deletedAt,
+                isArchived: \.isArchived,
+                remoteVersion: \.remoteVersion
+            )
+        )
+    }
+
+    private var goalRenderSnapshotCacheKey: PlanningGoalRenderSnapshotCacheKey {
+        PlanningGoalRenderSnapshotCacheKey(
+            base: renderSnapshotBaseCacheKey,
+            goalSignature: MistiaCollectionChangeSignature.make(
+                storedGoals,
+                updatedAt: \.updatedAt,
+                deletedAt: \.deletedAt,
+                isArchived: \.isArchived,
+                remoteVersion: \.remoteVersion
+            )
+        )
+    }
+
+    private var dueRenderSnapshotCacheKey: PlanningDueRenderSnapshotCacheKey {
+        PlanningDueRenderSnapshotCacheKey(
+            base: renderSnapshotBaseCacheKey,
+            transactionSignature: MistiaCollectionChangeSignature.make(
+                storedTransactions,
+                updatedAt: \.updatedAt,
+                deletedAt: \.deletedAt,
+                isArchived: \.isArchived,
+                remoteVersion: \.remoteVersion
+            ),
+            occurrenceSignature: MistiaCollectionChangeSignature.make(
+                storedOccurrences,
+                updatedAt: \.updatedAt,
+                deletedAt: \.deletedAt,
+                remoteVersion: \.remoteVersion
+            ),
+            walletSignature: MistiaCollectionChangeSignature.make(
+                storedWallets,
+                updatedAt: \.updatedAt,
+                deletedAt: \.deletedAt,
+                isArchived: \.isArchived,
+                remoteVersion: \.remoteVersion
+            ),
+            billSignature: MistiaCollectionChangeSignature.make(
+                storedBills,
+                updatedAt: \.updatedAt,
+                deletedAt: \.deletedAt,
+                isArchived: \.isArchived,
+                remoteVersion: \.remoteVersion
+            ),
+            installmentSignature: MistiaCollectionChangeSignature.make(
+                storedInstallments,
+                updatedAt: \.updatedAt,
+                deletedAt: \.deletedAt,
+                isArchived: \.isArchived,
+                remoteVersion: \.remoteVersion
+            )
+        )
+    }
+
+    private var familyAccessSignature: Int {
+        var hasher = Hasher()
+        hasher.combine(familyContextStore.currentMembership?.id)
+        hasher.combine(familyContextStore.currentMembership?.updatedAt.timeIntervalSince1970)
+        hasher.combine(familyContextStore.members.count)
+        for member in familyContextStore.members {
+            hasher.combine(member.membershipID)
+            hasher.combine(member.userID)
+            hasher.combine(member.role.rawValue)
+            hasher.combine(member.hasSyncedCloudData)
+        }
+        hasher.combine(familyContextStore.permissionGrants.count)
+        for grant in familyContextStore.permissionGrants {
+            hasher.combine(grant.id)
+            hasher.combine(grant.granteeUserID)
+            hasher.combine(grant.ownerUserID)
+            hasher.combine(grant.resourceTypeRawValue)
+            hasher.combine(grant.resourceID)
+            hasher.combine(grant.permissionScopeRawValue)
+            hasher.combine(grant.updatedAt.timeIntervalSince1970)
+            hasher.combine(grant.revokedAt?.timeIntervalSince1970)
+        }
+        return hasher.finalize()
     }
 
     private var activeBudgetPlans: [BudgetPlanSnapshot] {
@@ -628,6 +909,8 @@ struct PlanningView: View {
     }
 
     var body: some View {
+        let activeSnapshotKey = activeRenderSnapshotCacheKey
+        let activeSnapshot = cachedActiveRenderSnapshot(for: activeSnapshotKey)
         let memberToolbar = familyContextStore.memberViewingToolbarPresentation
 
         NavigationStack {
@@ -657,9 +940,8 @@ struct PlanningView: View {
                     }
                 }
             ) {
-                switch selectedMode {
-                case .budget:
-                    let tabSnapshot = budgetRenderSnapshot()
+                switch activeSnapshot {
+                case .budget(let tabSnapshot):
                     BudgetTabContent(
                         summary: tabSnapshot.summary,
                         currencyCode: currencyCode,
@@ -684,8 +966,7 @@ struct PlanningView: View {
                             )
                         }
                     )
-                case .due:
-                    let tabSnapshot = dueRenderSnapshot()
+                case .due(let tabSnapshot):
                     DueTabContent(
                         selectedMode: $selectedDueMode,
                         summary: tabSnapshot.summary,
@@ -727,8 +1008,7 @@ struct PlanningView: View {
                             openDuePaymentIfAllowed(item)
                         }
                     )
-                case .goals:
-                    let tabSnapshot = goalRenderSnapshot()
+                case .goals(let tabSnapshot):
                     GoalsTabContent(
                         summary: tabSnapshot.summary,
                         currencyCode: currencyCode,
@@ -845,6 +1125,12 @@ struct PlanningView: View {
                let wallet = storedWallets.first(where: { $0.id == walletID }) {
                 destination = .creditCardStatement(wallet)
             }
+        }
+        .task(id: activeSnapshotKey) {
+            refreshActiveRenderSnapshotCache(
+                for: activeSnapshotKey,
+                snapshot: activeSnapshot
+            )
         }
     }
 
