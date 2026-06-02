@@ -1,3 +1,4 @@
+import CryptoKit
 import Foundation
 
 private enum MistiaSyncSerializationError: LocalizedError {
@@ -772,8 +773,23 @@ nonisolated struct MistiaRemoteSnapshot: Codable {
         guard let data = try? encoder.encode(normalized) else {
             return UUID().uuidString
         }
-        return data.base64EncodedString()
+        return Self.hexDigest(for: data)
     }
+
+    private static func hexDigest(for data: Data) -> String {
+        let digest = SHA256.hash(data: data)
+        var bytes: [UInt8] = []
+        bytes.reserveCapacity(64)
+
+        for byte in digest {
+            bytes.append(hexadecimalBytes[Int(byte >> 4)])
+            bytes.append(hexadecimalBytes[Int(byte & 0x0f)])
+        }
+
+        return String(decoding: bytes, as: UTF8.self)
+    }
+
+    private static let hexadecimalBytes = Array("0123456789abcdef".utf8)
 }
 
 private extension Array where Element: MistiaRemoteRow {
@@ -1283,6 +1299,114 @@ enum MistiaSyncUploadRecord {
     private static func dateString(_ date: Date?) -> String {
         guard let date else { return "" }
         return MistiaISO8601DateCoding.stringWithFractionalSeconds(from: date)
+    }
+}
+
+extension MistiaRemoteSnapshot {
+    var uploadRecords: [MistiaSyncUploadRecord] {
+        uploadRecords(where: { _ in true })
+    }
+
+    func uploadRecords(
+        where shouldInclude: (MistiaSyncUploadRecord) -> Bool
+    ) -> [MistiaSyncUploadRecord] {
+        var records: [MistiaSyncUploadRecord] = []
+        records.reserveCapacity(totalRowCount)
+        appendUploadRecords(to: &records, where: shouldInclude)
+        return records
+    }
+
+    var uploadRecordsByStorageKey: [String: MistiaSyncUploadRecord] {
+        var recordsByKey: [String: MistiaSyncUploadRecord] = [:]
+        recordsByKey.reserveCapacity(totalRowCount)
+        forEachUploadRecord { record in
+            recordsByKey[record.storageKey] = record
+        }
+        return recordsByKey
+    }
+
+    var uploadRecordStorageKeys: Set<String> {
+        var keys: Set<String> = []
+        keys.reserveCapacity(totalRowCount)
+        forEachUploadRecord { record in
+            keys.insert(record.storageKey)
+        }
+        return keys
+    }
+
+    func containsUploadRecord(
+        where predicate: (MistiaSyncUploadRecord) -> Bool
+    ) -> Bool {
+        for row in wallets where predicate(.wallet(row)) { return true }
+        for row in creditCardProfiles where predicate(.creditCardProfile(row)) { return true }
+        for row in categories where predicate(.category(row)) { return true }
+        for row in transactions where predicate(.transaction(row)) { return true }
+        for row in budgetPlans where predicate(.budgetPlan(row)) { return true }
+        for row in savingsGoals where predicate(.savingsGoal(row)) { return true }
+        for row in recurringBillPlans where predicate(.recurringBillPlan(row)) { return true }
+        for row in installmentPlans where predicate(.installmentPlan(row)) { return true }
+        for row in dueOccurrences where predicate(.dueOccurrence(row)) { return true }
+        return false
+    }
+
+    private func forEachUploadRecord(_ body: (MistiaSyncUploadRecord) -> Void) {
+        for row in wallets { body(.wallet(row)) }
+        for row in creditCardProfiles { body(.creditCardProfile(row)) }
+        for row in categories { body(.category(row)) }
+        for row in transactions { body(.transaction(row)) }
+        for row in budgetPlans { body(.budgetPlan(row)) }
+        for row in savingsGoals { body(.savingsGoal(row)) }
+        for row in recurringBillPlans { body(.recurringBillPlan(row)) }
+        for row in installmentPlans { body(.installmentPlan(row)) }
+        for row in dueOccurrences { body(.dueOccurrence(row)) }
+    }
+
+    private func appendUploadRecords(
+        to records: inout [MistiaSyncUploadRecord],
+        where shouldInclude: (MistiaSyncUploadRecord) -> Bool
+    ) {
+        for row in wallets {
+            let record = MistiaSyncUploadRecord.wallet(row)
+            if shouldInclude(record) { records.append(record) }
+        }
+        for row in creditCardProfiles {
+            let record = MistiaSyncUploadRecord.creditCardProfile(row)
+            if shouldInclude(record) { records.append(record) }
+        }
+        for row in categories {
+            let record = MistiaSyncUploadRecord.category(row)
+            if shouldInclude(record) { records.append(record) }
+        }
+        for row in transactions {
+            let record = MistiaSyncUploadRecord.transaction(row)
+            if shouldInclude(record) { records.append(record) }
+        }
+        for row in budgetPlans {
+            let record = MistiaSyncUploadRecord.budgetPlan(row)
+            if shouldInclude(record) { records.append(record) }
+        }
+        for row in savingsGoals {
+            let record = MistiaSyncUploadRecord.savingsGoal(row)
+            if shouldInclude(record) { records.append(record) }
+        }
+        for row in recurringBillPlans {
+            let record = MistiaSyncUploadRecord.recurringBillPlan(row)
+            if shouldInclude(record) { records.append(record) }
+        }
+        for row in installmentPlans {
+            let record = MistiaSyncUploadRecord.installmentPlan(row)
+            if shouldInclude(record) { records.append(record) }
+        }
+        for row in dueOccurrences {
+            let record = MistiaSyncUploadRecord.dueOccurrence(row)
+            if shouldInclude(record) { records.append(record) }
+        }
+    }
+}
+
+extension MistiaSyncUploadRecord {
+    var storageKey: String {
+        "\(entity.rawValue):\(id.uuidString.lowercased())"
     }
 }
 

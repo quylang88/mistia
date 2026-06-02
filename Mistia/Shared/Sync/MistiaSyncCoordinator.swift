@@ -167,9 +167,10 @@ final class SyncCoordinator {
             )
             let mergedSnapshot = try await fetchReconciledSnapshot(session: session)
             onProgressUpdate?(0.9)
+            let mergedCount = mergedSnapshot.activeRowCount
             try applySnapshot(mergedSnapshot)
             onProgressUpdate?(1.0)
-            return .seeded(mergedSnapshot.activeRowCount)
+            return .seeded(mergedCount)
         }
 
         if localCount == 0 || choice == .useCloud {
@@ -178,9 +179,10 @@ final class SyncCoordinator {
             onProgressUpdate?(0.3)
             let freshSnapshot = try await fetchReconciledSnapshot(session: session)
             onProgressUpdate?(0.6)
+            let freshCount = freshSnapshot.activeRowCount
             try applySnapshot(freshSnapshot)
             onProgressUpdate?(1.0)
-            return .pulled(freshSnapshot.activeRowCount)
+            return .pulled(freshCount)
         }
 
         switch choice {
@@ -207,9 +209,10 @@ final class SyncCoordinator {
         onProgressUpdate?(0.85)
         let mergedSnapshot = try await fetchReconciledSnapshot(session: session)
         onProgressUpdate?(0.9)
+        let mergedCount = mergedSnapshot.activeRowCount
         try applySnapshot(mergedSnapshot)
         onProgressUpdate?(1.0)
-        return .synced(mergedSnapshot.activeRowCount)
+        return .synced(mergedCount)
     }
 
     func sync(session: SupabaseAuthSession) async throws -> MistiaSyncResult {
@@ -273,15 +276,16 @@ final class SyncCoordinator {
 
         let snapshot = rawRemoteSnapshot
         let previousFingerprint = lastSnapshotFingerprint
+        let snapshotActiveCount = snapshot.activeRowCount
         let snapshotFingerprint = try applySnapshot(snapshot)
         onProgressUpdate?(1.0)
 
         if seededMissingRows && remoteWasEmpty {
-            return .seeded(snapshot.activeRowCount)
+            return .seeded(snapshotActiveCount)
         }
 
         if snapshotFingerprint != previousFingerprint {
-            return (pushedMutations || seededMissingRows) ? .synced(snapshot.activeRowCount) : .pulled(snapshot.activeRowCount)
+            return (pushedMutations || seededMissingRows) ? .synced(snapshotActiveCount) : .pulled(snapshotActiveCount)
         }
 
         return (pushedMutations || seededMissingRows) ? .pushedOnly : .idle
@@ -815,8 +819,8 @@ final class SyncCoordinator {
         progressStart: Double,
         progressEnd: Double
     ) async throws {
-        let remoteByID = remoteSnapshot.recordsByKey
-        let localRecords = hierarchicalSorted(localSnapshot.allRecords)
+        let remoteByID = remoteSnapshot.uploadRecordsByStorageKey
+        let localRecords = hierarchicalSorted(localSnapshot.uploadRecords)
         let total = localRecords.count
 
         for (index, localRecord) in localRecords.enumerated() {
@@ -872,9 +876,9 @@ final class SyncCoordinator {
         progressStart: Double,
         progressEnd: Double
     ) async throws {
-        let remoteByKey = remoteSnapshot.recordsByKey
-        let localByKey = localSnapshot.recordsByKey
-        let localRecords = hierarchicalSorted(localSnapshot.allRecords).filter { $0.deletedAt == nil }
+        let remoteByKey = remoteSnapshot.uploadRecordsByStorageKey
+        let localByKey = localSnapshot.uploadRecordsByStorageKey
+        let localRecords = hierarchicalSorted(localSnapshot.uploadRecords(where: { $0.deletedAt == nil }))
         let total = localRecords.count
 
         for (index, localRecord) in localRecords.enumerated() {
@@ -893,7 +897,7 @@ final class SyncCoordinator {
             )
         }
 
-        for remoteRecord in remoteSnapshot.allRecords where localByKey[remoteRecord.storageKey] == nil {
+        for remoteRecord in remoteSnapshot.uploadRecords where localByKey[remoteRecord.storageKey] == nil {
             _ = try await remoteStore.conditionalDelete(
                 entity: remoteRecord.entity,
                 recordID: remoteRecord.id,
@@ -913,8 +917,8 @@ final class SyncCoordinator {
         progressStart: Double,
         progressEnd: Double
     ) async throws {
-        let remoteKeys = Set(remoteSnapshot.allRecords.map(\.storageKey))
-        let localOnly = hierarchicalSorted(localSnapshot.allRecords.filter { !remoteKeys.contains($0.storageKey) && $0.deletedAt == nil })
+        let remoteKeys = remoteSnapshot.uploadRecordStorageKeys
+        let localOnly = hierarchicalSorted(localSnapshot.uploadRecords(where: { !remoteKeys.contains($0.storageKey) && $0.deletedAt == nil }))
         let total = localOnly.count
 
         for (index, localRecord) in localOnly.enumerated() {
@@ -1076,8 +1080,8 @@ final class SyncCoordinator {
         localSnapshot: MistiaRemoteSnapshot,
         remoteSnapshot: MistiaRemoteSnapshot
     ) -> Bool {
-        let remoteKeys = Set(remoteSnapshot.allRecords.map(\.storageKey))
-        return localSnapshot.allRecords.contains { record in
+        let remoteKeys = remoteSnapshot.uploadRecordStorageKeys
+        return localSnapshot.containsUploadRecord { record in
             record.deletedAt == nil && !remoteKeys.contains(record.storageKey)
         }
     }
@@ -1296,9 +1300,9 @@ final class SyncCoordinator {
         progressStart: Double,
         progressEnd: Double
     ) async throws -> Bool {
-        let remoteByKey = remoteSnapshot.recordsByKey
+        let remoteByKey = remoteSnapshot.uploadRecordsByStorageKey
         let locallyNewer = hierarchicalSorted(
-            localSnapshot.allRecords.filter { localRecord in
+            localSnapshot.uploadRecords(where: { localRecord in
                 guard let remoteRecord = remoteByKey[localRecord.storageKey] else {
                     return false
                 }
@@ -1306,7 +1310,7 @@ final class SyncCoordinator {
                     return false
                 }
                 return preferredAuthority(localDraft: localRecord, remoteRecord: remoteRecord) == .local
-            }
+            })
         )
 
         guard !locallyNewer.isEmpty else {
@@ -1334,13 +1338,17 @@ final class SyncCoordinator {
 
     @discardableResult
     private func applySnapshot(_ snapshot: MistiaRemoteSnapshot) throws -> String {
+        let fingerprint = snapshot.fingerprint
+        guard fingerprint != lastSnapshotFingerprint else {
+            return fingerprint
+        }
+
         try MistiaSyncLocalStore.applySnapshotIncrementally(
             snapshot,
             shouldPruneMissing: false,
             protectedRecordIDs: queuedMutationIDs(),
             in: modelContainer
         )
-        let fingerprint = snapshot.fingerprint
         lastSnapshotFingerprint = fingerprint
         return fingerprint
     }
@@ -1771,28 +1779,4 @@ private enum RecordAuthority {
     case local
     case remote
     case unresolved
-}
-
-private extension MistiaRemoteSnapshot {
-    var allRecords: [MistiaSyncUploadRecord] {
-        wallets.map(MistiaSyncUploadRecord.wallet)
-            + creditCardProfiles.map(MistiaSyncUploadRecord.creditCardProfile)
-            + categories.map(MistiaSyncUploadRecord.category)
-            + transactions.map(MistiaSyncUploadRecord.transaction)
-            + budgetPlans.map(MistiaSyncUploadRecord.budgetPlan)
-            + savingsGoals.map(MistiaSyncUploadRecord.savingsGoal)
-            + recurringBillPlans.map(MistiaSyncUploadRecord.recurringBillPlan)
-            + installmentPlans.map(MistiaSyncUploadRecord.installmentPlan)
-            + dueOccurrences.map(MistiaSyncUploadRecord.dueOccurrence)
-    }
-
-    var recordsByKey: [String: MistiaSyncUploadRecord] {
-        Dictionary(allRecords.map { ($0.storageKey, $0) }, uniquingKeysWith: { _, latest in latest })
-    }
-}
-
-private extension MistiaSyncUploadRecord {
-    var storageKey: String {
-        "\(entity.rawValue):\(id.uuidString.lowercased())"
-    }
 }

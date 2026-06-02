@@ -24,6 +24,56 @@ final class SyncCoordinatorFamilyCloudFirstTests: XCTestCase {
         XCTAssertEqual(outbox.allMutations.first?.deviceID, deviceID)
     }
 
+    func testRemoteSnapshotFingerprintIsCompactAndOrderIndependent() {
+        let userID = UUID()
+        let walletA = remoteWallet(
+            id: UUID(),
+            userID: userID,
+            name: "First wallet",
+            syncVersion: 1
+        )
+        let walletB = remoteWallet(
+            id: UUID(),
+            userID: userID,
+            name: "Second wallet",
+            syncVersion: 2
+        )
+        let forward = remoteSnapshot(wallets: [walletA, walletB])
+        let reversed = remoteSnapshot(wallets: [walletB, walletA])
+
+        XCTAssertEqual(forward.fingerprint, reversed.fingerprint)
+        XCTAssertEqual(forward.fingerprint.count, 64)
+        XCTAssertNotNil(forward.fingerprint.range(of: "^[0-9a-f]{64}$", options: .regularExpression))
+
+        var changedWallet = walletB
+        changedWallet.name = "Changed wallet"
+        XCTAssertNotEqual(forward.fingerprint, remoteSnapshot(wallets: [walletA, changedWallet]).fingerprint)
+    }
+
+    func testRemoteSnapshotUploadRecordIndexKeepsLatestDuplicateByStorageKey() {
+        let userID = UUID()
+        let walletID = UUID()
+        let older = remoteWallet(
+            id: walletID,
+            userID: userID,
+            name: "Older wallet",
+            syncVersion: 1
+        )
+        var latest = older
+        latest.name = "Latest wallet"
+        latest.syncVersion = 2
+
+        let snapshot = remoteSnapshot(wallets: [older, latest])
+        let key = MistiaSyncUploadRecord.wallet(older).storageKey
+
+        XCTAssertEqual(snapshot.uploadRecordStorageKeys, [key])
+        guard case .wallet(let indexedWallet) = snapshot.uploadRecordsByStorageKey[key] else {
+            return XCTFail("Expected indexed wallet record")
+        }
+        XCTAssertEqual(indexedWallet.name, "Latest wallet")
+        XCTAssertEqual(indexedWallet.syncVersion, 2)
+    }
+
     func testFamilyCloudFirstPushRequiresRefreshWhenRemoteVersionChanged() async throws {
         let viewerUserID = UUID()
         let memberUserID = UUID()
@@ -209,6 +259,49 @@ final class SyncCoordinatorFamilyCloudFirstTests: XCTestCase {
         XCTAssertEqual(remoteStore.familyNotificationEvents.first?.resourceType, .transaction)
         XCTAssertEqual(remoteStore.familyNotificationEvents.first?.resourceID, transactionID)
         XCTAssertFalse(outbox.contains(entity: .transaction, recordID: transactionID))
+    }
+
+    private func remoteWallet(
+        id: UUID,
+        userID: UUID,
+        name: String,
+        syncVersion: Int64
+    ) -> RemoteLedgerWallet {
+        let now = Date(timeIntervalSince1970: 1_770_000_000)
+        return RemoteLedgerWallet(
+            userID: userID,
+            id: id,
+            name: name,
+            kindRawValue: LedgerWalletKind.cash.rawValue,
+            iconSymbolName: "banknote",
+            iconColorHex: "#34C759",
+            currencyCode: "JPY",
+            openingBalanceMinor: 0,
+            institutionDisplayName: nil,
+            institutionPresetKey: nil,
+            sortOrder: 0,
+            isArchived: false,
+            archivedAt: nil,
+            createdAt: now,
+            updatedAt: now,
+            deletedAt: nil,
+            syncVersion: syncVersion,
+            lastModifiedByDeviceID: UUID()
+        )
+    }
+
+    private func remoteSnapshot(wallets: [RemoteLedgerWallet]) -> MistiaRemoteSnapshot {
+        MistiaRemoteSnapshot(
+            wallets: wallets,
+            creditCardProfiles: [],
+            categories: [],
+            transactions: [],
+            budgetPlans: [],
+            savingsGoals: [],
+            recurringBillPlans: [],
+            installmentPlans: [],
+            dueOccurrences: []
+        )
     }
 
     private func makeContainer() throws -> ModelContainer {
