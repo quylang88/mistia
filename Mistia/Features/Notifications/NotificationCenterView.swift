@@ -64,9 +64,50 @@ struct NotificationCenterResourceIndex {
     }
 }
 
+struct NotificationCenterMetadataIndex {
+    private let stringMetadataByRowID: [UUID: [String: String]]
+    private let objectMetadataByRowID: [UUID: [String: Any]]
+
+    init(rows: [AppNotificationRecord]) {
+        var stringMetadataByRowID: [UUID: [String: String]] = [:]
+        var objectMetadataByRowID: [UUID: [String: Any]] = [:]
+        stringMetadataByRowID.reserveCapacity(rows.count)
+        objectMetadataByRowID.reserveCapacity(rows.count)
+
+        for row in rows {
+            guard let metadataJSON = row.metadataJSON,
+                  let data = metadataJSON.data(using: .utf8),
+                  let metadata = try? JSONSerialization.jsonObject(with: data)
+            else {
+                continue
+            }
+
+            if let objectMetadata = metadata as? [String: Any] {
+                objectMetadataByRowID[row.id] = objectMetadata
+            }
+
+            if let stringMetadata = metadata as? [String: String] {
+                stringMetadataByRowID[row.id] = stringMetadata
+            }
+        }
+
+        self.stringMetadataByRowID = stringMetadataByRowID
+        self.objectMetadataByRowID = objectMetadataByRowID
+    }
+
+    func stringMetadata(for row: AppNotificationRecord) -> [String: String]? {
+        stringMetadataByRowID[row.id]
+    }
+
+    func objectMetadata(for row: AppNotificationRecord) -> [String: Any]? {
+        objectMetadataByRowID[row.id]
+    }
+}
+
 private struct NotificationCenterRenderSnapshot {
     let visibleRows: [AppNotificationRecord]
     let resourceIndex: NotificationCenterResourceIndex
+    let metadataIndex: NotificationCenterMetadataIndex
 }
 
 struct NotificationCenterView: View {
@@ -112,13 +153,15 @@ struct NotificationCenterView: View {
     }
 
     private var renderSnapshot: NotificationCenterRenderSnapshot {
-        NotificationCenterRenderSnapshot(
+        let visibleRows = self.visibleRows
+        return NotificationCenterRenderSnapshot(
             visibleRows: visibleRows,
             resourceIndex: NotificationCenterResourceIndex(
                 wallets: storedWallets,
                 categories: storedCategories,
                 bills: storedBills
-            )
+            ),
+            metadataIndex: NotificationCenterMetadataIndex(rows: visibleRows)
         )
     }
 
@@ -140,7 +183,8 @@ struct NotificationCenterView: View {
             content: {
                 content(
                     rows: snapshot.visibleRows,
-                    resourceIndex: snapshot.resourceIndex
+                    resourceIndex: snapshot.resourceIndex,
+                    metadataIndex: snapshot.metadataIndex
                 )
             }
         )
@@ -200,7 +244,8 @@ struct NotificationCenterView: View {
 
     private func content(
         rows visibleRows: [AppNotificationRecord],
-        resourceIndex: NotificationCenterResourceIndex
+        resourceIndex: NotificationCenterResourceIndex,
+        metadataIndex: NotificationCenterMetadataIndex
     ) -> some View {
         Group {
             if visibleRows.isEmpty {
@@ -208,7 +253,11 @@ struct NotificationCenterView: View {
             } else {
                 VStack(spacing: 0) {
                     ForEach(visibleRows) { row in
-                        notificationRow(row, resourceIndex: resourceIndex)
+                        notificationRow(
+                            row,
+                            resourceIndex: resourceIndex,
+                            metadataIndex: metadataIndex
+                        )
                             .onTapGesture { handleRowTap(row, resourceIndex: resourceIndex) }
                     }
                 }
@@ -237,7 +286,8 @@ struct NotificationCenterView: View {
     @ViewBuilder
     private func notificationRow(
         _ row: AppNotificationRecord,
-        resourceIndex: NotificationCenterResourceIndex
+        resourceIndex: NotificationCenterResourceIndex,
+        metadataIndex: NotificationCenterMetadataIndex
     ) -> some View {
         HStack(alignment: .top, spacing: 14) {
             ZStack(alignment: .bottom) {
@@ -252,7 +302,7 @@ struct NotificationCenterView: View {
 
             VStack(alignment: .leading, spacing: 4) {
                 HStack(alignment: .firstTextBaseline, spacing: 8) {
-                    Text(notificationTitle(for: row))
+                    Text(notificationTitle(for: row, metadataIndex: metadataIndex))
                         .font(.system(size: 15, weight: .semibold, design: .rounded))
                         .foregroundStyle(.primary)
 
@@ -263,7 +313,11 @@ struct NotificationCenterView: View {
                         .foregroundStyle(.secondary)
                 }
 
-                Text(notificationBody(for: row, resourceIndex: resourceIndex))
+                Text(notificationBody(
+                    for: row,
+                    resourceIndex: resourceIndex,
+                    metadataIndex: metadataIndex
+                ))
                     .font(.system(size: 14, weight: row.isRead ? .regular : .medium, design: .rounded))
                     .foregroundStyle(row.isRead ? .secondary : .primary)
                     .fixedSize(horizontal: false, vertical: true)
@@ -601,7 +655,10 @@ struct NotificationCenterView: View {
         UIImpactFeedbackGenerator(style: approve ? .light : .soft).impactOccurred()
     }
 
-    private func notificationTitle(for row: AppNotificationRecord) -> String {
+    private func notificationTitle(
+        for row: AppNotificationRecord,
+        metadataIndex: NotificationCenterMetadataIndex
+    ) -> String {
         switch row.kind {
         case .permissionRequestReceived, .familyTransactionRequestReceived:
             if row.actionState == .approved {
@@ -636,10 +693,8 @@ struct NotificationCenterView: View {
             return L10n.notifications.notificationcenter.revokedValueAccess(String(describing: resource))
             
         case .familyActivity:
-            if let metadataJSON = row.metadataJSON,
-               let data = metadataJSON.data(using: .utf8),
-               let dict = try? JSONSerialization.jsonObject(with: data) as? [String: String],
-               dict["joined_user_id"] != nil || dict["invite_id"] != nil {
+            if let metadata = metadataIndex.stringMetadata(for: row),
+               metadata["joined_user_id"] != nil || metadata["invite_id"] != nil {
                 return L10n.notifications.notificationcenter.newMember
             }
             return row.title
@@ -651,7 +706,8 @@ struct NotificationCenterView: View {
 
     private func notificationBody(
         for row: AppNotificationRecord,
-        resourceIndex: NotificationCenterResourceIndex
+        resourceIndex: NotificationCenterResourceIndex,
+        metadataIndex: NotificationCenterMetadataIndex
     ) -> String {
         switch row.kind {
         case .permissionRequestReceived, .familyTransactionRequestReceived:
@@ -674,7 +730,11 @@ struct NotificationCenterView: View {
             
             let scope = row.permissionScope?.localizedActionName ?? ""
             let resourceType = row.resourceType?.localizedName ?? ""
-            let resourceName = resolvedResourceName(for: row, resourceIndex: resourceIndex) ?? ""
+            let resourceName = resolvedResourceName(
+                for: row,
+                resourceIndex: resourceIndex,
+                metadataIndex: metadataIndex
+            ) ?? ""
             let resourceDetail = resourceName.isEmpty ? resourceType : "\(resourceType) (\(resourceName))"
             
             if !scope.isEmpty {
@@ -686,7 +746,11 @@ struct NotificationCenterView: View {
             let actorName = familyContextStore.displayName(for: row.actorUserID)
                 ?? L10n.notifications.notificationcenter.theOwner
             let resourceType = row.resourceType?.localizedName ?? ""
-            if let resourceName = resolvedResourceName(for: row, resourceIndex: resourceIndex) {
+            if let resourceName = resolvedResourceName(
+                for: row,
+                resourceIndex: resourceIndex,
+                metadataIndex: metadataIndex
+            ) {
                 return L10n.notifications.notificationcenter.valueRevokedYourAccessToValueValue(String(describing: actorName), String(describing: resourceType), String(describing: resourceName))
             }
             return row.body
@@ -695,16 +759,13 @@ struct NotificationCenterView: View {
             let actorName = familyContextStore.displayName(for: row.actorUserID)
                 ?? L10n.notifications.notificationcenter.aMember
             
-            if let metadataJSON = row.metadataJSON,
-               let data = metadataJSON.data(using: .utf8),
-               let dict = try? JSONSerialization.jsonObject(with: data) as? [String: String] {
-                
-                if dict["joined_user_id"] != nil || dict["invite_id"] != nil {
+            if let metadata = metadataIndex.stringMetadata(for: row) {
+                if metadata["joined_user_id"] != nil || metadata["invite_id"] != nil {
                     // This is a join notification. Use backend body which is already good.
                     return row.body
                 }
                 
-                if let actionRaw = dict["action"] {
+                if let actionRaw = metadata["action"] {
                     let actionLabel: String
                     switch actionRaw {
                     case "created": actionLabel = L10n.notifications.notificationcenter.created
@@ -714,12 +775,16 @@ struct NotificationCenterView: View {
                     }
                     
                     let resourceType = row.resourceType?.localizedName ?? ""
-                    let resourceName = resolvedResourceName(for: row, resourceIndex: resourceIndex) ?? ""
+                    let resourceName = resolvedResourceName(
+                        for: row,
+                        resourceIndex: resourceIndex,
+                        metadataIndex: metadataIndex
+                    ) ?? ""
                     let resourceDetail = resourceName.isEmpty ? resourceType : "\(resourceType) (\(resourceName))"
                     
-                    if let amountMinorStr = dict["amount_minor"],
+                    if let amountMinorStr = metadata["amount_minor"],
                        let amountMinor = Int64(amountMinorStr),
-                       let currencyCode = dict["currency_code"] {
+                       let currencyCode = metadata["currency_code"] {
                         let amountText = amountMinor.formattedCurrency(code: currencyCode)
                         return L10n.notifications.notificationcenter.valueValueValueWorthValue(String(describing: actorName), String(describing: actionLabel), String(describing: resourceDetail), String(describing: amountText))
                     }
@@ -736,7 +801,8 @@ struct NotificationCenterView: View {
 
     private func resolvedResourceName(
         for row: AppNotificationRecord,
-        resourceIndex: NotificationCenterResourceIndex
+        resourceIndex: NotificationCenterResourceIndex,
+        metadataIndex: NotificationCenterMetadataIndex
     ) -> String? {
         if let wallet = walletResource(for: row, resourceIndex: resourceIndex) {
             return wallet.name
@@ -748,15 +814,13 @@ struct NotificationCenterView: View {
             return bill.name
         }
         
-        if let metadataJSON = row.metadataJSON,
-           let data = metadataJSON.data(using: .utf8),
-           let dict = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
-            return dict["wallet_name"] as? String
-                ?? dict["category_name"] as? String
-                ?? dict["bill_name"] as? String
-                ?? dict["transaction_title"] as? String
-                ?? dict["goal_name"] as? String
-                ?? dict["installment_name"] as? String
+        if let metadata = metadataIndex.objectMetadata(for: row) {
+            return metadata["wallet_name"] as? String
+                ?? metadata["category_name"] as? String
+                ?? metadata["bill_name"] as? String
+                ?? metadata["transaction_title"] as? String
+                ?? metadata["goal_name"] as? String
+                ?? metadata["installment_name"] as? String
         }
         
         return nil

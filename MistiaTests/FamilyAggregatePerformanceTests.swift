@@ -123,6 +123,42 @@ final class FamilyAggregatePerformanceTests: XCTestCase {
         XCTAssertNil(index.bill(id: billID, resourceType: .card))
     }
 
+    func testNotificationMetadataIndexDecodesMetadataOncePerRow() {
+        let stringRow = AppNotificationRecord(
+            key: "string-metadata",
+            title: "Family",
+            body: "Family activity",
+            kind: .familyActivity,
+            source: .family,
+            metadataJSON: #"{"action":"created","wallet_name":"Cash"}"#
+        )
+        let mixedRow = AppNotificationRecord(
+            key: "mixed-metadata",
+            title: "Family",
+            body: "Family activity",
+            kind: .familyActivity,
+            source: .family,
+            metadataJSON: #"{"wallet_name":"Savings","amount_minor":1200}"#
+        )
+        let invalidRow = AppNotificationRecord(
+            key: "invalid-metadata",
+            title: "Family",
+            body: "Family activity",
+            kind: .familyActivity,
+            source: .family,
+            metadataJSON: #"{"wallet_name":"Broken""#
+        )
+
+        let index = NotificationCenterMetadataIndex(rows: [stringRow, mixedRow, invalidRow])
+
+        XCTAssertEqual(index.stringMetadata(for: stringRow)?["action"], "created")
+        XCTAssertEqual(index.objectMetadata(for: stringRow)?["wallet_name"] as? String, "Cash")
+        XCTAssertNil(index.stringMetadata(for: mixedRow))
+        XCTAssertEqual(index.objectMetadata(for: mixedRow)?["wallet_name"] as? String, "Savings")
+        XCTAssertNil(index.stringMetadata(for: invalidRow))
+        XCTAssertNil(index.objectMetadata(for: invalidRow))
+    }
+
     private func makeDate(year: Int, month: Int, day: Int) -> Date {
         var components = DateComponents()
         components.calendar = calendar

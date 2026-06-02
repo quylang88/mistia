@@ -228,6 +228,16 @@ struct MistiaCategoryPickerSheet: View {
     @State private var expandedSectionIDs: Set<UUID> = []
     @FocusState private var isSearchFieldFocused: Bool
 
+    private struct RenderSnapshot {
+        let isSearching: Bool
+        let filteredAllSections: [FilteredSection]
+        let visibleFeaturedCategories: [TransactionCategory]
+        let visibleRecentCategories: [TransactionCategory]
+        let visibleFavoriteCategories: [TransactionCategory]
+        let searchResults: [TransactionCategory]
+        let isEmptyInCurrentMode: Bool
+    }
+
     init(
         title: String,
         selectedCategoryID: UUID?,
@@ -282,51 +292,18 @@ struct MistiaCategoryPickerSheet: View {
     }
 
     var body: some View {
+        let snapshot = renderSnapshot
+
         NavigationStack {
             VStack(spacing: 0) {
                 headerControls
 
-                if isEmptyInCurrentMode {
+                if snapshot.isEmptyInCurrentMode {
                     emptyState
                 } else {
                     ScrollView {
                         LazyVStack(alignment: .leading, spacing: 18) {
-                            if isSearching {
-                                quickSection(
-                                    title: L10n.core.ui.mistiacategorypicker.searchResults,
-                                    categories: searchResults,
-                                    subtitleProvider: searchResultSubtitle
-                                )
-                            } else {
-                                switch mode {
-                                case .recent:
-                                    if let featuredSectionTitle, !visibleFeaturedCategories.isEmpty {
-                                        quickSection(
-                                            title: featuredSectionTitle,
-                                            categories: visibleFeaturedCategories,
-                                            subtitleProvider: featuredSubtitle ?? quickModeSubtitle
-                                        )
-                                    }
-
-                                    if !visibleRecentCategories.isEmpty {
-                                        quickSection(
-                                            title: L10n.core.ui.mistiacategorypicker.mostUsedInTheLastDays,
-                                            categories: visibleRecentCategories,
-                                            subtitleProvider: quickModeSubtitle
-                                        )
-                                    }
-                                case .favorites:
-                                    if !visibleFavoriteCategories.isEmpty {
-                                        quickSection(
-                                            title: L10n.core.ui.mistiacategorypicker.favoriteCategories,
-                                            categories: visibleFavoriteCategories,
-                                            subtitleProvider: quickModeSubtitle
-                                        )
-                                    }
-                                case .all:
-                                    allSectionsContent
-                                }
-                            }
+                            pickerContent(snapshot)
                         }
                         .padding(.horizontal, 16)
                         .padding(.vertical, 16)
@@ -347,6 +324,46 @@ struct MistiaCategoryPickerSheet: View {
                         dismiss()
                     }
                 }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func pickerContent(_ snapshot: RenderSnapshot) -> some View {
+        if snapshot.isSearching {
+            quickSection(
+                title: L10n.core.ui.mistiacategorypicker.searchResults,
+                categories: snapshot.searchResults,
+                subtitleProvider: searchResultSubtitle
+            )
+        } else {
+            switch mode {
+            case .recent:
+                if let featuredSectionTitle, !snapshot.visibleFeaturedCategories.isEmpty {
+                    quickSection(
+                        title: featuredSectionTitle,
+                        categories: snapshot.visibleFeaturedCategories,
+                        subtitleProvider: featuredSubtitle ?? quickModeSubtitle
+                    )
+                }
+
+                if !snapshot.visibleRecentCategories.isEmpty {
+                    quickSection(
+                        title: L10n.core.ui.mistiacategorypicker.mostUsedInTheLastDays,
+                        categories: snapshot.visibleRecentCategories,
+                        subtitleProvider: quickModeSubtitle
+                    )
+                }
+            case .favorites:
+                if !snapshot.visibleFavoriteCategories.isEmpty {
+                    quickSection(
+                        title: L10n.core.ui.mistiacategorypicker.favoriteCategories,
+                        categories: snapshot.visibleFavoriteCategories,
+                        subtitleProvider: quickModeSubtitle
+                    )
+                }
+            case .all:
+                allSectionsContent(snapshot.filteredAllSections)
             }
         }
     }
@@ -417,7 +434,7 @@ struct MistiaCategoryPickerSheet: View {
         .background(Color(UIColor.systemGroupedBackground))
     }
 
-    private var allSectionsContent: some View {
+    private func allSectionsContent(_ filteredAllSections: [FilteredSection]) -> some View {
         VStack(spacing: 0) {
             ForEach(Array(filteredAllSections.enumerated()), id: \.element.id) { index, section in
                 VStack(spacing: 0) {
@@ -598,8 +615,58 @@ struct MistiaCategoryPickerSheet: View {
         .contentShape(Rectangle())
     }
 
-    private var filteredAllSections: [FilteredSection] {
+    private var renderSnapshot: RenderSnapshot {
+        let isSearching = self.isSearching
         let normalizedQuery = normalizedSearchQuery
+        let filteredAllSections = filteredAllSections(normalizedQuery: normalizedQuery)
+        let visibleFeaturedCategories: [TransactionCategory]
+        if featuredSectionTitle != nil {
+            visibleFeaturedCategories = filteredQuickCategories(
+                from: featuredCategories,
+                normalizedQuery: normalizedQuery
+            )
+        } else {
+            visibleFeaturedCategories = []
+        }
+        let featuredIDs = Set(visibleFeaturedCategories.map(\.id))
+        let visibleRecentCategories = filteredQuickCategories(
+            from: recentCategories,
+            normalizedQuery: normalizedQuery
+        )
+        .filter { !featuredIDs.contains($0.id) }
+        let visibleFavoriteCategories = filteredQuickCategories(
+            from: favoriteCategories,
+            normalizedQuery: normalizedQuery
+        )
+        let searchResults = isSearching
+            ? searchResults(from: filteredAllSections)
+            : []
+        let isEmptyInCurrentMode: Bool
+        if isSearching {
+            isEmptyInCurrentMode = searchResults.isEmpty
+        } else {
+            switch mode {
+            case .recent:
+                isEmptyInCurrentMode = visibleFeaturedCategories.isEmpty && visibleRecentCategories.isEmpty
+            case .favorites:
+                isEmptyInCurrentMode = visibleFavoriteCategories.isEmpty
+            case .all:
+                isEmptyInCurrentMode = filteredAllSections.isEmpty
+            }
+        }
+
+        return RenderSnapshot(
+            isSearching: isSearching,
+            filteredAllSections: filteredAllSections,
+            visibleFeaturedCategories: visibleFeaturedCategories,
+            visibleRecentCategories: visibleRecentCategories,
+            visibleFavoriteCategories: visibleFavoriteCategories,
+            searchResults: searchResults,
+            isEmptyInCurrentMode: isEmptyInCurrentMode
+        )
+    }
+
+    private func filteredAllSections(normalizedQuery: String) -> [FilteredSection] {
         return sections.compactMap { section -> FilteredSection? in
             let parentMatches = searchIndex.matches(section.parent, normalizedQuery: normalizedQuery)
             let children = section.children.filter { child in
@@ -622,26 +689,14 @@ struct MistiaCategoryPickerSheet: View {
         }
     }
 
-    private func filteredQuickCategories(from categories: [TransactionCategory]) -> [TransactionCategory] {
-        let normalizedQuery = normalizedSearchQuery
+    private func filteredQuickCategories(
+        from categories: [TransactionCategory],
+        normalizedQuery: String
+    ) -> [TransactionCategory] {
         return categories.filter { searchIndex.matches($0, normalizedQuery: normalizedQuery) }
     }
 
-    private var visibleFeaturedCategories: [TransactionCategory] {
-        guard featuredSectionTitle != nil else { return [] }
-        return filteredQuickCategories(from: featuredCategories)
-    }
-
-    private var visibleRecentCategories: [TransactionCategory] {
-        let featuredIDs = Set(visibleFeaturedCategories.map(\.id))
-        return filteredQuickCategories(from: recentCategories).filter { !featuredIDs.contains($0.id) }
-    }
-
-    private var visibleFavoriteCategories: [TransactionCategory] {
-        filteredQuickCategories(from: favoriteCategories)
-    }
-
-    private var searchResults: [TransactionCategory] {
+    private func searchResults(from filteredAllSections: [FilteredSection]) -> [TransactionCategory] {
         var seenCategoryIDs: Set<UUID> = []
 
         return filteredAllSections.flatMap { section -> [TransactionCategory] in
@@ -665,21 +720,6 @@ struct MistiaCategoryPickerSheet: View {
         return category.parentCategory.map { displayName(for: $0) }
             ?? quickModeSubtitle(category)
             ?? allModeSubtitle(category)
-    }
-
-    private var isEmptyInCurrentMode: Bool {
-        if isSearching {
-            return searchResults.isEmpty
-        }
-
-        switch mode {
-        case .recent:
-            return visibleFeaturedCategories.isEmpty && visibleRecentCategories.isEmpty
-        case .favorites:
-            return visibleFavoriteCategories.isEmpty
-        case .all:
-            return filteredAllSections.isEmpty
-        }
     }
 
     private var emptyState: some View {
