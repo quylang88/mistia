@@ -1582,17 +1582,9 @@ struct TransactionEditorSheet: View {
                                 analyzeCurrentReceiptDraft()
                             } label: {
                                 Image(systemName: "sparkles")
-                                    .font(.system(size: 16, weight: .semibold))
-                                    .foregroundStyle(receiptAnalysisControlState == .enabled ? accentColor : .secondary)
-                                    .frame(width: 38, height: 38)
-                                    .background(
-                                        Circle()
-                                            .fill(
-                                                receiptAnalysisControlState == .enabled
-                                                    ? accentColor.opacity(0.12)
-                                                    : Color.secondary.opacity(0.08)
-                                            )
-                                    )
+                                    .font(.system(size: 18, weight: .semibold))
+                                    .foregroundStyle(receiptAnalysisControlState == .enabled ? Color.orange : .secondary)
+                                    .frame(width: 40, height: 40)
                             }
                             .buttonStyle(.borderless)
                             .disabled(receiptAnalysisControlState != .enabled)
@@ -1603,9 +1595,9 @@ struct TransactionEditorSheet: View {
                             removeReceiptDraft()
                         } label: {
                             Image(systemName: "trash")
-                                .font(.system(size: 16, weight: .semibold))
+                                .font(.system(size: 18, weight: .semibold))
                                 .foregroundStyle(.red)
-                                .frame(width: 36, height: 36)
+                                .frame(width: 40, height: 40)
                         }
                         .buttonStyle(.borderless)
                         .accessibilityLabel(L10n.transactions.transactioneditor.removeImage)
