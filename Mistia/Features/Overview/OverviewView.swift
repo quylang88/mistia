@@ -4,7 +4,6 @@ import SwiftUI
 
 private enum OverviewNavigationDestination: String, Identifiable {
     case profile
-    case notificationCenter
 
     var id: String { rawValue }
 }
@@ -621,9 +620,7 @@ struct OverviewView: View {
                 titleDisplayMode: .large,
                 pinnedHeader: { EmptyView() },
                 trailingAccessory: {
-                    MistiaNotificationBellButton {
-                        destination = .notificationCenter
-                    }
+                    MistiaNotificationBellLink()
                 }
             ) {
                 OverviewHeroCard(
@@ -650,8 +647,6 @@ struct OverviewView: View {
                 switch route {
                 case .profile:
                     ManagementAccountView()
-                case .notificationCenter:
-                    NotificationCenterView()
                 }
             }
             .navigationDestination(item: $statementTarget) { target in

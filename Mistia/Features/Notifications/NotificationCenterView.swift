@@ -343,11 +343,11 @@ enum NotificationCenterGrouping {
         }
     }
 
-    static func bottomAnchoredDetailItems(
+    static func topAnchoredDetailItems(
         for rows: [NotificationCenterDetailRowSnapshot],
         calendar: Calendar
     ) -> [NotificationCenterDetailItem] {
-        detailDaySections(for: rows, calendar: calendar)
+        topAnchoredDetailDaySections(for: rows, calendar: calendar)
             .flatMap { section in
                 [
                     NotificationCenterDetailItem(
@@ -363,7 +363,7 @@ enum NotificationCenterGrouping {
             }
     }
 
-    private static func detailDaySections(
+    private static func topAnchoredDetailDaySections(
         for rows: [NotificationCenterDetailRowSnapshot],
         calendar: Calendar
     ) -> [(id: Date, rows: [NotificationCenterDetailRowSnapshot])] {
@@ -374,10 +374,10 @@ enum NotificationCenterGrouping {
             rowsByDay[calendar.startOfDay(for: row.createdAt), default: []].append(row)
         }
 
-        return rowsByDay.keys.sorted().map { day in
+        return rowsByDay.keys.sorted(by: >).map { day in
             (
                 id: day,
-                rows: (rowsByDay[day] ?? []).sorted(by: ascendingDetailSort)
+                rows: (rowsByDay[day] ?? []).sorted(by: descendingDetailSort)
             )
         }
     }
@@ -413,12 +413,12 @@ enum NotificationCenterGrouping {
         return lhs.key.localizedStandardCompare(rhs.key) == .orderedAscending
     }
 
-    nonisolated private static func ascendingDetailSort(
+    nonisolated private static func descendingDetailSort(
         _ lhs: NotificationCenterDetailRowSnapshot,
         _ rhs: NotificationCenterDetailRowSnapshot
     ) -> Bool {
         if lhs.createdAt != rhs.createdAt {
-            return lhs.createdAt < rhs.createdAt
+            return lhs.createdAt > rhs.createdAt
         }
         return lhs.key.localizedStandardCompare(rhs.key) == .orderedAscending
     }
@@ -436,117 +436,34 @@ private struct NotificationCenterGroupRoute: Identifiable {
     let id: NotificationCenterGroupID
     let title: String
     let unreadRowIDs: [UUID]
+    let detailItems: [NotificationCenterDetailItem]
+    let resourceIndex: NotificationCenterResourceIndex
 
     init(
         id: NotificationCenterGroupID,
         title: String,
-        unreadRowIDs: [UUID]
+        unreadRowIDs: [UUID],
+        detailItems: [NotificationCenterDetailItem],
+        resourceIndex: NotificationCenterResourceIndex
     ) {
         self.id = id
         self.title = title
         self.unreadRowIDs = unreadRowIDs
+        self.detailItems = detailItems
+        self.resourceIndex = resourceIndex
     }
 }
 
-private struct NotificationGroupScreenEdgeBackGesture: UIViewRepresentable {
-    let isEnabled: Bool
-    let onBack: @MainActor () -> Void
-
-    func makeUIView(context: Context) -> UIView {
-        let view = EdgePanHostView(frame: .zero)
-        view.backgroundColor = .clear
-        view.isUserInteractionEnabled = true
-        context.coordinator.update(isEnabled: isEnabled, onBack: onBack)
-        context.coordinator.attach(to: view)
-        return view
+extension NotificationCenterGroupRoute: Hashable {
+    static func == (
+        lhs: NotificationCenterGroupRoute,
+        rhs: NotificationCenterGroupRoute
+    ) -> Bool {
+        lhs.id == rhs.id
     }
 
-    func updateUIView(_ uiView: UIView, context: Context) {
-        context.coordinator.update(isEnabled: isEnabled, onBack: onBack)
-    }
-
-    static func dismantleUIView(_ uiView: UIView, coordinator: Coordinator) {
-        coordinator.detach()
-    }
-
-    func makeCoordinator() -> Coordinator {
-        Coordinator(isEnabled: isEnabled, onBack: onBack)
-    }
-
-    final class EdgePanHostView: UIView {
-        private let activeWidth: CGFloat = 44
-
-        override func point(inside point: CGPoint, with event: UIEvent?) -> Bool {
-            point.x >= 0 && point.x <= activeWidth && point.y >= 0 && point.y <= bounds.height
-        }
-    }
-
-    final class Coordinator: NSObject, UIGestureRecognizerDelegate {
-        private var isEnabled: Bool
-        private var onBack: @MainActor () -> Void
-        private var gestures: [UIGestureRecognizer] = []
-
-        init(isEnabled: Bool, onBack: @escaping @MainActor () -> Void) {
-            self.isEnabled = isEnabled
-            self.onBack = onBack
-        }
-
-        func update(isEnabled: Bool, onBack: @escaping @MainActor () -> Void) {
-            self.isEnabled = isEnabled
-            self.onBack = onBack
-            gestures.forEach { $0.isEnabled = isEnabled }
-        }
-
-        func attach(to view: UIView) {
-            detach()
-
-            let edgeGesture = UIScreenEdgePanGestureRecognizer(target: self, action: #selector(handleEdgePan(_:)))
-            edgeGesture.edges = .left
-            edgeGesture.cancelsTouchesInView = false
-            edgeGesture.delegate = self
-            edgeGesture.isEnabled = isEnabled
-            view.addGestureRecognizer(edgeGesture)
-
-            let panGesture = UIPanGestureRecognizer(target: self, action: #selector(handleEdgePan(_:)))
-            panGesture.cancelsTouchesInView = false
-            panGesture.delegate = self
-            panGesture.isEnabled = isEnabled
-            view.addGestureRecognizer(panGesture)
-
-            gestures = [edgeGesture, panGesture]
-        }
-
-        func detach() {
-            for gesture in gestures {
-                gesture.view?.removeGestureRecognizer(gesture)
-            }
-            gestures = []
-        }
-
-        @objc private func handleEdgePan(_ gesture: UIPanGestureRecognizer) {
-            guard isEnabled, gesture.state == .ended || gesture.state == .recognized else { return }
-            let translation = gesture.translation(in: gesture.view)
-            let velocity = gesture.velocity(in: gesture.view)
-            guard translation.x >= 28 || velocity.x >= 260 else { return }
-
-            Task { @MainActor [onBack] in
-                onBack()
-            }
-        }
-
-        func gestureRecognizerShouldBegin(_ gestureRecognizer: UIGestureRecognizer) -> Bool {
-            guard isEnabled else { return false }
-            guard let panGesture = gestureRecognizer as? UIPanGestureRecognizer else { return true }
-            let velocity = panGesture.velocity(in: gestureRecognizer.view)
-            return velocity.x > 0 && abs(velocity.x) > abs(velocity.y)
-        }
-
-        func gestureRecognizer(
-            _ gestureRecognizer: UIGestureRecognizer,
-            shouldRecognizeSimultaneouslyWith otherGestureRecognizer: UIGestureRecognizer
-        ) -> Bool {
-            false
-        }
+    func hash(into hasher: inout Hasher) {
+        hasher.combine(id)
     }
 }
 
@@ -587,8 +504,7 @@ struct NotificationCenterView: View {
     @State private var transferTarget: TransactionEditorTarget?
     @State private var responseErrorAlert: NotificationResponseErrorAlert?
     @State private var selectedGroupRoute: NotificationCenterGroupRoute?
-    @State private var selectedGroupDetailItems: [NotificationCenterDetailItem] = []
-    @State private var selectedGroupResourceIndex = NotificationCenterResourceIndex(wallets: [], categories: [], bills: [])
+    @State private var pendingGroupDetailSnapshotRefresh = false
     @State private var renderSnapshotCache: NotificationCenterRenderSnapshot?
 
     private var visibleRows: [AppNotificationRecord] {
@@ -625,19 +541,9 @@ struct NotificationCenterView: View {
     }
 
     var body: some View {
-        let snapshot = renderSnapshotCache ?? emptyRenderSnapshot
+        let snapshot = selectedGroupRoute == nil ? renderSnapshotCache ?? emptyRenderSnapshot : emptyRenderSnapshot
 
-        Group {
-            if let selectedGroupRoute {
-                notificationGroupDetailScreen(
-                    selectedGroupRoute,
-                    detailItems: selectedGroupDetailItems,
-                    resourceIndex: selectedGroupResourceIndex
-                )
-            } else {
-                notificationGroupListScreen(snapshot)
-            }
-        }
+        notificationGroupListScreen(snapshot)
         .task {
             try? MistiaNotificationDebugFixtures.seedNotificationGroupsIfNeeded(
                 modelContext: modelContext,
@@ -678,29 +584,52 @@ struct NotificationCenterView: View {
         .onDisappear {
             uiState.requestQuickCreateHidden(false, id: viewID)
         }
+        .background {
+            NotificationGroupNativePushPresenter(
+                route: $selectedGroupRoute,
+                calendar: calendar,
+                onMarkGroupAsRead: { rowIDs in
+                    await markGroupAsReadAfterOpening(rowIDs)
+                },
+                onRowTap: { rowID, resourceIndex in
+                    handleRowTap(rowID: rowID, resourceIndex: resourceIndex)
+                },
+                onRespond: { rowID, approve in
+                    respond(to: rowID, approve: approve)
+                },
+                onDismiss: {
+                    handleGroupDetailDisappear()
+                }
+            )
+            .frame(width: 0, height: 0)
+        }
     }
 
     private func notificationGroupListScreen(_ snapshot: NotificationCenterRenderSnapshot) -> some View {
-        MistiaPinnedTopBarScaffold(
-            tone: .standard,
-            title: L10n.notifications.notificationcenter.notifications,
-            embedsInNavigationStack: false,
-            showsLeadingAvatar: false,
-            leadingSystemImage: "chevron.left",
-            trailingSystemImage: nil,
-            hidesSystemBackButton: true,
-            onLeadingTap: { dismiss() },
-            onRefresh: { await refreshInbox(triggeredByPull: true) },
-            pinnedHeader: { EmptyView() },
-            trailingAccessory: { trailingMenu },
-            content: {
+        ZStack {
+            Color(UIColor.systemGroupedBackground)
+                .ignoresSafeArea()
+
+            ScrollView(.vertical, showsIndicators: true) {
                 content(
                     groups: snapshot.groupSummaries,
                     resourceIndex: snapshot.resourceIndex,
                     metadataIndex: snapshot.metadataIndex
                 )
+                .padding(.top, 8)
+                .padding(.bottom, 22)
             }
-        )
+            .refreshable {
+                await refreshInbox(triggeredByPull: true)
+            }
+        }
+        .navigationTitle(L10n.notifications.notificationcenter.notifications)
+        .navigationBarTitleDisplayMode(.large)
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                notificationActionsMenu
+            }
+        }
     }
 
     @MainActor
@@ -708,13 +637,8 @@ struct NotificationCenterView: View {
         renderSnapshotCache = makeRenderSnapshot()
     }
 
-    private var trailingMenu: some View {
-        MistiaHeaderCircleMenu(label: {
-            Image(systemName: "ellipsis")
-                .font(.system(size: 17, weight: .bold))
-                .symbolRenderingMode(.monochrome)
-                .foregroundStyle(.primary)
-        }) {
+    private var notificationActionsMenu: some View {
+        Menu {
             Button {
                 markAllAsRead()
             } label: {
@@ -723,6 +647,8 @@ struct NotificationCenterView: View {
                     systemImage: "envelope.open"
                 )
             }
+        } label: {
+            Image(systemName: "ellipsis.circle")
         }
         .accessibilityLabel(L10n.notifications.notificationcenter.notificationActions)
     }
@@ -738,16 +664,16 @@ struct NotificationCenterView: View {
             } else {
                 VStack(spacing: 0) {
                     ForEach(Array(groups.enumerated()), id: \.element.id) { index, group in
-                        Button {
-                            openGroup(
-                                group,
-                                resourceIndex: resourceIndex,
-                                metadataIndex: metadataIndex
-                            )
-                        } label: {
-                            notificationGroupRow(group, metadataIndex: metadataIndex)
-                        }
-                        .buttonStyle(MistiaPressableButtonStyle(cornerRadius: 18, tint: group.id.accentColor))
+                        notificationGroupRow(group, metadataIndex: metadataIndex)
+                            .onTapGesture {
+                                selectedGroupRoute = groupRoute(
+                                    for: group,
+                                    resourceIndex: resourceIndex,
+                                    metadataIndex: metadataIndex
+                                )
+                            }
+                            .accessibilityElement(children: .combine)
+                            .accessibilityAddTraits(.isButton)
 
                         if index < groups.count - 1 {
                             Divider().padding(.leading, 76)
@@ -812,239 +738,6 @@ struct NotificationCenterView: View {
                 .foregroundStyle(.secondary)
                 .lineLimit(1)
         }
-    }
-
-    private func notificationGroupDetailScreen(
-        _ route: NotificationCenterGroupRoute,
-        detailItems: [NotificationCenterDetailItem],
-        resourceIndex: NotificationCenterResourceIndex
-    ) -> some View {
-        ZStack {
-            Color(UIColor.systemGroupedBackground)
-                .ignoresSafeArea()
-
-            VStack(spacing: 0) {
-                notificationGroupDetailHeader(title: route.title)
-
-                notificationGroupDetailList(
-                    detailItems: detailItems,
-                    resourceIndex: resourceIndex
-                )
-            }
-        }
-        .overlay(alignment: .leading) {
-            NotificationGroupScreenEdgeBackGesture(isEnabled: selectedGroupRoute != nil) {
-                closeGroupDetail()
-            }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .ignoresSafeArea()
-        }
-        .toolbar(.hidden, for: .navigationBar)
-        .navigationBarBackButtonHidden(true)
-        .task(id: route.id) {
-            await markGroupAsReadAfterOpening(route.unreadRowIDs)
-        }
-    }
-
-    private func notificationGroupDetailHeader(title: String) -> some View {
-        HStack(spacing: 12) {
-            MistiaHeaderCircleButton(action: closeGroupDetail) {
-                Image(systemName: "chevron.left")
-                    .font(.system(size: 17, weight: .bold))
-                    .symbolRenderingMode(.monochrome)
-                    .foregroundStyle(.primary)
-            }
-            .accessibilityLabel(L10n.notifications.notificationcenter.notifications)
-
-            Spacer(minLength: 6)
-
-            Text(title)
-                .font(.system(size: 17, weight: .semibold, design: .rounded))
-                .foregroundStyle(.primary)
-                .lineLimit(1)
-                .minimumScaleFactor(0.82)
-
-            Spacer(minLength: 6)
-
-            Color.clear
-                .frame(width: 44, height: 44)
-        }
-        .padding(.horizontal, 18)
-        .padding(.top, 8)
-        .padding(.bottom, 8)
-    }
-
-    private func notificationGroupDetailList(
-        detailItems: [NotificationCenterDetailItem],
-        resourceIndex: NotificationCenterResourceIndex
-    ) -> some View {
-        ScrollViewReader { proxy in
-            ScrollView(.vertical, showsIndicators: true) {
-                LazyVStack(alignment: .leading, spacing: 10) {
-                    if detailItems.isEmpty {
-                        ProgressView()
-                            .frame(maxWidth: .infinity)
-                            .padding(.top, 40)
-                    } else {
-                        ForEach(detailItems) { item in
-                            notificationDetailItem(
-                                item,
-                                resourceIndex: resourceIndex
-                            )
-                        }
-                    }
-                }
-                .padding(.horizontal, 16)
-                .padding(.top, 12)
-                .padding(.bottom, 14)
-            }
-            .background(Color(UIColor.systemGroupedBackground).ignoresSafeArea())
-            .onAppear {
-                scrollDetailToBottom(proxy, itemID: detailItems.last?.id)
-            }
-            .onChange(of: detailItems.last?.id) { _, itemID in
-                scrollDetailToBottom(proxy, itemID: itemID)
-            }
-        }
-    }
-
-    private func scrollDetailToBottom(
-        _ proxy: ScrollViewProxy,
-        itemID: String?
-    ) {
-        guard let itemID else { return }
-        proxy.scrollTo(itemID, anchor: .bottom)
-    }
-
-    @ViewBuilder
-    private func notificationDetailItem(
-        _ item: NotificationCenterDetailItem,
-        resourceIndex: NotificationCenterResourceIndex
-    ) -> some View {
-        switch item.kind {
-        case .dayHeader(let day):
-            notificationDayHeader(day)
-        case .row(let row):
-            notificationDetailRow(
-                row,
-                resourceIndex: resourceIndex
-            )
-        }
-    }
-
-    private func notificationDayHeader(_ day: Date) -> some View {
-        Text(notificationSectionTitle(for: day))
-            .font(.system(size: 13, weight: .semibold, design: .rounded))
-            .foregroundStyle(.secondary)
-            .padding(.horizontal, 4)
-            .padding(.top, 8)
-    }
-
-    private func notificationDetailRow(
-        _ row: NotificationCenterDetailRowSnapshot,
-        resourceIndex: NotificationCenterResourceIndex
-    ) -> some View {
-        HStack(alignment: .top, spacing: 12) {
-            notificationIcon(row.icon)
-                .frame(width: 36, height: 36)
-                .padding(.top, 2)
-
-            VStack(alignment: .leading, spacing: 8) {
-                Text(row.title)
-                    .font(.system(size: 15.5, weight: .semibold, design: .rounded))
-                    .foregroundStyle(.primary)
-                    .fixedSize(horizontal: false, vertical: true)
-
-                Text(row.body)
-                    .font(.system(size: 14, weight: .regular, design: .rounded))
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-
-                notificationDetailActions(for: row, resourceIndex: resourceIndex)
-
-                HStack {
-                    Spacer(minLength: 0)
-
-                    Text(row.createdAt, style: .time)
-                        .font(.system(size: 11.5, weight: .semibold, design: .rounded))
-                        .foregroundStyle(.tertiary)
-                }
-            }
-        }
-        .padding(14)
-        .background(
-            Color(UIColor.secondarySystemGroupedBackground),
-            in: RoundedRectangle(cornerRadius: 18, style: .continuous)
-        )
-        .contentShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
-        .onTapGesture {
-            handleRowTap(rowID: row.id, resourceIndex: resourceIndex)
-        }
-    }
-
-    @ViewBuilder
-    private func notificationDetailActions(
-        for row: NotificationCenterDetailRowSnapshot,
-        resourceIndex: NotificationCenterResourceIndex
-    ) -> some View {
-        switch row.action {
-        case .permissionResponse:
-            HStack(spacing: 8) {
-                Button {
-                    respond(to: row.id, approve: true)
-                } label: {
-                    Label(
-                        L10n.notifications.notificationcenter.approve,
-                        systemImage: "checkmark.circle.fill"
-                    )
-                }
-                .buttonStyle(NotificationDetailActionButtonStyle(foreground: notificationPurpleAccent))
-
-                Button(role: .destructive) {
-                    respond(to: row.id, approve: false)
-                } label: {
-                    Label(
-                        L10n.notifications.notificationcenter.reject,
-                        systemImage: "xmark.circle.fill"
-                    )
-                }
-                .buttonStyle(NotificationDetailActionButtonStyle(foreground: .red))
-            }
-            .padding(.top, 2)
-        case .primary(let title, let systemImage):
-            notificationDetailSingleActionButton(
-                title: title,
-                systemImage: systemImage,
-                row: row,
-                resourceIndex: resourceIndex
-            )
-        case nil:
-            EmptyView()
-        }
-    }
-
-    private func notificationDetailSingleActionButton(
-        title: String,
-        systemImage: String,
-        row: NotificationCenterDetailRowSnapshot,
-        resourceIndex: NotificationCenterResourceIndex
-    ) -> some View {
-        Button {
-            handleRowTap(rowID: row.id, resourceIndex: resourceIndex)
-        } label: {
-            Label(title, systemImage: systemImage)
-                .lineLimit(1)
-                .minimumScaleFactor(0.75)
-        }
-        .buttonStyle(NotificationDetailActionButtonStyle(foreground: notificationPurpleAccent))
-        .padding(.top, 2)
-    }
-
-    private func notificationSectionTitle(for day: Date) -> String {
-        let referenceDay = calendar.startOfDay(for: Date())
-        let dayDelta = calendar.dateComponents([.day], from: day, to: referenceDay).day ?? 0
-        return MistiaDateFormatting.relativeDayLabel(for: dayDelta)
-            ?? MistiaDateFormatting.fullDateString(for: day, calendar: calendar)
     }
 
     private func badgeText(for unreadCount: Int) -> String {
@@ -1209,38 +902,6 @@ struct NotificationCenterView: View {
                         .font(.system(size: 14, weight: .bold))
                         .foregroundStyle(config.color)
                 }
-            }
-        }
-    }
-
-    @ViewBuilder
-    private func notificationIcon(_ snapshot: NotificationCenterIconSnapshot) -> some View {
-        switch snapshot {
-        case .finance(let icon, let colorHex):
-            MistiaFinanceIconView(
-                icon: icon,
-                fallbackColor: Color(hex: colorHex),
-                size: 32
-            )
-        case .asset(let name, let color):
-            ZStack {
-                Circle()
-                    .fill(color.opacity(0.12))
-
-                Image(name)
-                    .resizable()
-                    .aspectRatio(contentMode: .fit)
-                    .frame(width: 16, height: 16)
-                    .foregroundStyle(color)
-            }
-        case .symbol(let systemImage, let color):
-            ZStack {
-                Circle()
-                    .fill(color.opacity(0.12))
-
-                Image(systemName: systemImage)
-                    .font(.system(size: 14, weight: .bold))
-                    .foregroundStyle(color)
             }
         }
     }
@@ -1449,53 +1110,33 @@ struct NotificationCenterView: View {
         }
     }
 
-    private func openGroup(
-        _ group: NotificationCenterGroupSummary,
+    private func groupRoute(
+        for group: NotificationCenterGroupSummary,
         resourceIndex: NotificationCenterResourceIndex,
         metadataIndex: NotificationCenterMetadataIndex
-    ) {
+    ) -> NotificationCenterGroupRoute {
         let unreadRowIDs = group.rows
             .filter { !$0.isRead || $0.readAt == nil }
             .map(\.id)
-        selectedGroupDetailItems = []
-        selectedGroupResourceIndex = resourceIndex
-        let route = NotificationCenterGroupRoute(
-            id: group.id,
-            title: group.id.title,
-            unreadRowIDs: unreadRowIDs
-        )
-        selectedGroupRoute = route
-
-        Task { @MainActor in
-            await Task.yield()
-            guard selectedGroupRoute?.id == group.id else {
-                return
-            }
-            let detailRows = group.rows.map { row in
-                detailRowSnapshot(
-                    for: row,
-                    resourceIndex: resourceIndex,
-                    metadataIndex: metadataIndex
-                )
-            }
-            selectedGroupDetailItems = NotificationCenterGrouping.bottomAnchoredDetailItems(
-                for: detailRows,
-                calendar: calendar
+        let detailRows = group.rows.map { row in
+            detailRowSnapshot(
+                for: row,
+                resourceIndex: resourceIndex,
+                metadataIndex: metadataIndex
             )
         }
-    }
+        let detailItems = NotificationCenterGrouping.topAnchoredDetailItems(
+            for: detailRows,
+            calendar: calendar
+        )
 
-    @MainActor
-    private func closeGroupDetail() {
-        selectedGroupRoute = nil
-        resetGroupDetailState()
-    }
-
-    @MainActor
-    private func resetGroupDetailState() {
-        selectedGroupDetailItems = []
-        selectedGroupResourceIndex = NotificationCenterResourceIndex(wallets: [], categories: [], bills: [])
-        refreshRenderSnapshotCache()
+        return NotificationCenterGroupRoute(
+            id: group.id,
+            title: group.id.title,
+            unreadRowIDs: unreadRowIDs,
+            detailItems: detailItems,
+            resourceIndex: resourceIndex
+        )
     }
 
     @MainActor
@@ -1507,19 +1148,34 @@ struct NotificationCenterView: View {
             .filter { !$0.isRead || $0.readAt == nil }
         guard !unreadRows.isEmpty else { return }
 
-        let needsRemoteReadSync = markAsRead(
+        guard let remoteIDs = try? MistiaNotificationStore.markAsRead(
             unreadRows,
-            updatesBadgeCount: false,
-            pushesRemoteReadState: false
-        )
+            in: modelContext,
+            updatesBadgeCount: false
+        ) else {
+            return
+        }
 
         MistiaNotificationStore.updateAppBadgeCount(
             in: modelContext,
             userID: sessionStore.activeLocalProfileUserID
         )
-        if needsRemoteReadSync {
+        if !remoteIDs.isEmpty {
             pushNotificationReadState()
         }
+        if selectedGroupRoute == nil {
+            refreshRenderSnapshotCache()
+        } else {
+            pendingGroupDetailSnapshotRefresh = true
+        }
+    }
+
+    @MainActor
+    private func handleGroupDetailDisappear() {
+        guard pendingGroupDetailSnapshotRefresh else {
+            return
+        }
+        pendingGroupDetailSnapshotRefresh = false
         refreshRenderSnapshotCache()
     }
 
@@ -1999,11 +1655,10 @@ private enum MistiaNotificationDebugFixtures {
     }
 }
 
-struct MistiaNotificationBellButton: View {
+struct MistiaNotificationBellLink: View {
+    @Environment(\.colorScheme) private var colorScheme
     @Environment(SessionStore.self) private var sessionStore
     @Query private var rows: [AppNotificationRecord]
-
-    let action: () -> Void
 
     private var unreadCount: Int {
         MistiaNotificationStore.unreadCount(
@@ -2015,54 +1670,406 @@ struct MistiaNotificationBellButton: View {
     var body: some View {
         let unreadCount = unreadCount
 
-        MistiaHeaderCircleButton(action: action) {
-            ZStack(alignment: .topTrailing) {
-                Image(systemName: "bell")
-                    .font(.system(size: 17, weight: .bold))
-                    .symbolRenderingMode(.monochrome)
-                    .foregroundStyle(.primary)
-
-                if unreadCount > 0 {
-                    Text(badgeText(for: unreadCount))
-                        .font(.system(size: unreadCount > 99 ? 7 : 8, weight: .heavy, design: .rounded))
-                        .foregroundStyle(.white)
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.7)
-                        .padding(.horizontal, unreadCount > 9 ? 3 : 0)
-                        .frame(minWidth: 13, minHeight: 13)
-                        .background(MistiaAccent.expense.color, in: Capsule())
-                        .offset(x: 9, y: -9)
-                        .accessibilityLabel(
-                            L10n.notifications.notificationcenter.valueUnreadNotifications(String(describing: unreadCount))
-                        )
+        Group {
+            if #available(iOS 26.0, *) {
+                NavigationLink {
+                    NotificationCenterView()
+                } label: {
+                    MistiaCircleGlassButtonLabel {
+                        bellContent(unreadCount: unreadCount)
+                    }
                 }
+                .buttonStyle(.glass(nativeGlassStyle))
+                .buttonBorderShape(.circle)
+            } else {
+                NavigationLink {
+                    NotificationCenterView()
+                } label: {
+                    MistiaCircleGlassButtonLabel {
+                        bellContent(unreadCount: unreadCount)
+                    }
+                    .background {
+                        MistiaCircleGlassBackground(
+                            tint: colorScheme == .dark ? .white.opacity(0.12) : .white.opacity(0.30),
+                            interactive: true
+                        )
+                    }
+                }
+                .buttonStyle(.plain)
             }
         }
+        .hoverEffect(.highlight)
+        .accessibilityLabel(accessibilityLabel(unreadCount: unreadCount))
     }
 
     private func badgeText(for unreadCount: Int) -> String {
         unreadCount > 99 ? "99+" : "\(unreadCount)"
     }
+
+    @available(iOS 26.0, *)
+    private var nativeGlassStyle: Glass {
+        Glass.regular
+            .interactive()
+    }
+
+    private func accessibilityLabel(unreadCount: Int) -> String {
+        guard unreadCount > 0 else {
+            return L10n.notifications.notificationcenter.notifications
+        }
+        return L10n.notifications.notificationcenter.valueUnreadNotifications(String(describing: unreadCount))
+    }
+
+    private func bellContent(unreadCount: Int) -> some View {
+        ZStack(alignment: .topTrailing) {
+            Image(systemName: "bell")
+                .font(.system(size: 17, weight: .bold))
+                .symbolRenderingMode(.monochrome)
+                .foregroundStyle(.primary)
+
+            if unreadCount > 0 {
+                Text(badgeText(for: unreadCount))
+                    .font(.system(size: unreadCount > 99 ? 7 : 8, weight: .heavy, design: .rounded))
+                    .foregroundStyle(.white)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.7)
+                    .padding(.horizontal, unreadCount > 9 ? 3 : 0)
+                    .frame(minWidth: 13, minHeight: 13)
+                    .background(MistiaAccent.expense.color, in: Capsule())
+                    .offset(x: 9, y: -9)
+                    .accessibilityHidden(true)
+            }
+        }
+    }
 }
 
-private struct NotificationDetailActionButtonStyle: ButtonStyle {
+private struct NotificationGroupNativePushPresenter: UIViewControllerRepresentable {
+    @Binding var route: NotificationCenterGroupRoute?
+
+    let calendar: Calendar
+    let onMarkGroupAsRead: ([UUID]) async -> Void
+    let onRowTap: (UUID, NotificationCenterResourceIndex) -> Void
+    let onRespond: (UUID, Bool) -> Void
+    let onDismiss: () -> Void
+
+    func makeUIViewController(context: Context) -> PresenterViewController {
+        PresenterViewController()
+    }
+
+    func updateUIViewController(_ uiViewController: PresenterViewController, context: Context) {
+        uiViewController.update(
+            route: route,
+            calendar: calendar,
+            onMarkGroupAsRead: onMarkGroupAsRead,
+            onRowTap: onRowTap,
+            onRespond: onRespond,
+            onDismiss: {
+                route = nil
+                onDismiss()
+            }
+        )
+    }
+
+    final class PresenterViewController: UIViewController {
+        private var presentedRouteID: NotificationCenterGroupID?
+
+        func update(
+            route: NotificationCenterGroupRoute?,
+            calendar: Calendar,
+            onMarkGroupAsRead: @escaping ([UUID]) async -> Void,
+            onRowTap: @escaping (UUID, NotificationCenterResourceIndex) -> Void,
+            onRespond: @escaping (UUID, Bool) -> Void,
+            onDismiss: @escaping () -> Void
+        ) {
+            guard let route else {
+                presentedRouteID = nil
+                return
+            }
+            guard presentedRouteID != route.id else { return }
+
+            presentedRouteID = route.id
+            DispatchQueue.main.async { [weak self] in
+                guard let self, self.presentedRouteID == route.id else { return }
+                guard let navigationController = self.navigationController else { return }
+
+                let detail = NotificationGroupDetailScreen(
+                    route,
+                    calendar: calendar,
+                    onMarkGroupAsRead: onMarkGroupAsRead,
+                    onRowTap: onRowTap,
+                    onRespond: onRespond,
+                    onDisappear: {}
+                )
+                let host = HostingController(rootView: detail, routeID: route.id) { [weak self] in
+                    self?.presentedRouteID = nil
+                    onDismiss()
+                }
+                host.title = route.title
+                navigationController.pushViewController(host, animated: true)
+            }
+        }
+    }
+
+    final class HostingController: UIHostingController<NotificationGroupDetailScreen> {
+        private let routeID: NotificationCenterGroupID
+        private let onNativePop: () -> Void
+
+        init(
+            rootView: NotificationGroupDetailScreen,
+            routeID: NotificationCenterGroupID,
+            onNativePop: @escaping () -> Void
+        ) {
+            self.routeID = routeID
+            self.onNativePop = onNativePop
+            super.init(rootView: rootView)
+        }
+
+        @available(*, unavailable)
+        @MainActor dynamic required init?(coder aDecoder: NSCoder) {
+            fatalError("init(coder:) has not been implemented")
+        }
+
+        override func viewDidDisappear(_ animated: Bool) {
+            super.viewDidDisappear(animated)
+            if isMovingFromParent || navigationController?.viewControllers.contains(self) == false {
+                onNativePop()
+            }
+        }
+    }
+}
+
+private struct NotificationGroupDetailScreen: View {
     @Environment(\.colorScheme) private var colorScheme
 
-    let foreground: Color
+    let route: NotificationCenterGroupRoute
+    let calendar: Calendar
+    let onMarkGroupAsRead: ([UUID]) async -> Void
+    let onRowTap: (UUID, NotificationCenterResourceIndex) -> Void
+    let onRespond: (UUID, Bool) -> Void
+    let onDisappear: () -> Void
 
-    private var fill: Color {
+    private var notificationPurpleAccent: Color {
+        colorScheme == .dark ? MistiaAccent.lightPurple.color : MistiaAccent.purple.color
+    }
+
+    private var actionFill: Color {
         colorScheme == .dark ? .white.opacity(0.11) : .black.opacity(0.07)
     }
 
-    func makeBody(configuration: Configuration) -> some View {
-        configuration.label
+    init(
+        _ route: NotificationCenterGroupRoute,
+        calendar: Calendar,
+        onMarkGroupAsRead: @escaping ([UUID]) async -> Void,
+        onRowTap: @escaping (UUID, NotificationCenterResourceIndex) -> Void,
+        onRespond: @escaping (UUID, Bool) -> Void,
+        onDisappear: @escaping () -> Void
+    ) {
+        self.route = route
+        self.calendar = calendar
+        self.onMarkGroupAsRead = onMarkGroupAsRead
+        self.onRowTap = onRowTap
+        self.onRespond = onRespond
+        self.onDisappear = onDisappear
+    }
+
+    var body: some View {
+        ZStack {
+            Color(UIColor.systemGroupedBackground)
+                .ignoresSafeArea()
+
+            detailList
+        }
+        .navigationTitle(route.title)
+        .navigationBarTitleDisplayMode(.inline)
+        .task(id: route.id) {
+            await onMarkGroupAsRead(route.unreadRowIDs)
+        }
+        .onDisappear(perform: onDisappear)
+    }
+
+    private var detailList: some View {
+        List {
+            if route.detailItems.isEmpty {
+                ProgressView()
+                    .frame(maxWidth: .infinity)
+                    .padding(.top, 40)
+                    .listRowBackground(Color.clear)
+                    .listRowSeparator(.hidden)
+            } else {
+                ForEach(route.detailItems) { item in
+                    detailItem(item)
+                        .listRowInsets(EdgeInsets(top: 5, leading: 16, bottom: 5, trailing: 16))
+                        .listRowBackground(Color.clear)
+                        .listRowSeparator(.hidden)
+            }
+            }
+        }
+        .listStyle(.plain)
+        .scrollContentBackground(.hidden)
+        .background(Color(UIColor.systemGroupedBackground).ignoresSafeArea())
+    }
+
+    @ViewBuilder
+    private func detailItem(_ item: NotificationCenterDetailItem) -> some View {
+        switch item.kind {
+        case .dayHeader(let day):
+            dayHeader(day)
+        case .row(let row):
+            detailRow(row)
+        }
+    }
+
+    private func dayHeader(_ day: Date) -> some View {
+        Text(sectionTitle(for: day))
+            .font(.system(size: 13, weight: .semibold, design: .rounded))
+            .foregroundStyle(.secondary)
+            .padding(.horizontal, 4)
+            .padding(.top, 8)
+    }
+
+    private func detailRow(_ row: NotificationCenterDetailRowSnapshot) -> some View {
+        HStack(alignment: .top, spacing: 12) {
+            notificationIcon(row.icon)
+                .frame(width: 36, height: 36)
+                .padding(.top, 2)
+
+            VStack(alignment: .leading, spacing: 8) {
+                Text(row.title)
+                    .font(.system(size: 15.5, weight: .semibold, design: .rounded))
+                    .foregroundStyle(.primary)
+                    .fixedSize(horizontal: false, vertical: true)
+
+                Text(row.body)
+                    .font(.system(size: 14, weight: .regular, design: .rounded))
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+
+                detailActions(for: row)
+
+                HStack {
+                    Spacer(minLength: 0)
+
+                    Text(row.createdAt, style: .time)
+                        .font(.system(size: 11.5, weight: .semibold, design: .rounded))
+                        .foregroundStyle(.tertiary)
+                }
+            }
+        }
+        .padding(14)
+        .background(
+            Color(UIColor.secondarySystemGroupedBackground),
+            in: RoundedRectangle(cornerRadius: 18, style: .continuous)
+        )
+        .contentShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .onTapGesture {
+            onRowTap(row.id, route.resourceIndex)
+        }
+    }
+
+    @ViewBuilder
+    private func detailActions(for row: NotificationCenterDetailRowSnapshot) -> some View {
+        switch row.action {
+        case .permissionResponse:
+            HStack(spacing: 8) {
+                actionPill(
+                    title: L10n.notifications.notificationcenter.approve,
+                    systemImage: "checkmark.circle.fill",
+                    foreground: notificationPurpleAccent
+                ) {
+                    onRespond(row.id, true)
+                }
+
+                actionPill(
+                    title: L10n.notifications.notificationcenter.reject,
+                    systemImage: "xmark.circle.fill",
+                    foreground: .red
+                ) {
+                    onRespond(row.id, false)
+                }
+            }
+            .padding(.top, 2)
+        case .primary(let title, let systemImage):
+            singleActionButton(
+                title: title,
+                systemImage: systemImage,
+                row: row
+            )
+        case nil:
+            EmptyView()
+        }
+    }
+
+    private func singleActionButton(
+        title: String,
+        systemImage: String,
+        row: NotificationCenterDetailRowSnapshot
+    ) -> some View {
+        actionPill(
+            title: title,
+            systemImage: systemImage,
+            foreground: notificationPurpleAccent
+        ) {
+            onRowTap(row.id, route.resourceIndex)
+        }
+        .padding(.top, 2)
+    }
+
+    private func actionPill(
+        title: String,
+        systemImage: String,
+        foreground: Color,
+        action: @escaping () -> Void
+    ) -> some View {
+        Label(title, systemImage: systemImage)
             .font(.system(size: 13, weight: .semibold, design: .rounded))
             .foregroundStyle(foreground)
+            .lineLimit(1)
+            .minimumScaleFactor(0.75)
             .padding(.horizontal, 12)
             .padding(.vertical, 8)
-            .background(fill, in: Capsule())
-            .opacity(configuration.isPressed ? 0.72 : 1)
-            .scaleEffect(configuration.isPressed ? 0.98 : 1)
+            .background(actionFill, in: Capsule())
+            .contentShape(Capsule())
+            .onTapGesture(perform: action)
+            .accessibilityElement(children: .combine)
+            .accessibilityAddTraits(.isButton)
+    }
+
+    private func sectionTitle(for day: Date) -> String {
+        let referenceDay = calendar.startOfDay(for: Date())
+        let dayDelta = calendar.dateComponents([.day], from: day, to: referenceDay).day ?? 0
+        return MistiaDateFormatting.relativeDayLabel(for: dayDelta)
+            ?? MistiaDateFormatting.fullDateString(for: day, calendar: calendar)
+    }
+
+    @ViewBuilder
+    private func notificationIcon(_ snapshot: NotificationCenterIconSnapshot) -> some View {
+        switch snapshot {
+        case .finance(let icon, let colorHex):
+            MistiaFinanceIconView(
+                icon: icon,
+                fallbackColor: Color(hex: colorHex),
+                size: 32
+            )
+        case .asset(let name, let color):
+            ZStack {
+                Circle()
+                    .fill(color.opacity(0.12))
+
+                Image(name)
+                    .resizable()
+                    .aspectRatio(contentMode: .fit)
+                    .frame(width: 16, height: 16)
+                    .foregroundStyle(color)
+            }
+        case .symbol(let systemImage, let color):
+            ZStack {
+                Circle()
+                    .fill(color.opacity(0.12))
+
+                Image(systemName: systemImage)
+                    .font(.system(size: 14, weight: .bold))
+                    .foregroundStyle(color)
+            }
+        }
     }
 }
 
