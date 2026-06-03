@@ -575,15 +575,18 @@ enum MistiaNotificationStore {
 
     static func markAsRead(
         _ rows: [AppNotificationRecord],
-        in context: ModelContext
+        in context: ModelContext,
+        updatesBadgeCount: Bool = true
     ) throws -> [UUID] {
         let now = Date()
         var remoteIDs: [UUID] = []
+        var didUpdateReadState = false
 
         for row in rows where !row.isRead || row.readAt == nil {
             row.isRead = true
             row.readAt = row.readAt ?? now
             row.updatedAt = now
+            didUpdateReadState = true
 
             if row.source == .family {
                 row.needsReadSync = true
@@ -591,8 +594,14 @@ enum MistiaNotificationStore {
             }
         }
 
+        guard didUpdateReadState else {
+            return []
+        }
+
         try context.save()
-        updateAppBadgeCount(in: context, userID: rows.first?.recipientUserID)
+        if updatesBadgeCount {
+            updateAppBadgeCount(in: context, userID: rows.first?.recipientUserID)
+        }
         return remoteIDs
     }
 

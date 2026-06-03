@@ -1484,6 +1484,25 @@ nonisolated enum L10n {
             static func created(language: MistiaAppLanguage) -> String { L10n.tr("notifications.notificationcenter.created", vi: "vừa tạo mới", en: "created", ja: "作成", language: language) }
             static var deleted: String { L10n.tr("notifications.notificationcenter.deleted", vi: "vừa xóa", en: "deleted", ja: "削除") }
             static func deleted(language: MistiaAppLanguage) -> String { L10n.tr("notifications.notificationcenter.deleted", vi: "vừa xóa", en: "deleted", ja: "削除", language: language) }
+
+            nonisolated enum group {
+                static var access: String { L10n.tr("notifications.notificationcenter.group.access", vi: "Quyền truy cập", en: "Access", ja: "アクセス権") }
+                static func access(language: MistiaAppLanguage) -> String { L10n.tr("notifications.notificationcenter.group.access", vi: "Quyền truy cập", en: "Access", ja: "アクセス権", language: language) }
+                static var actionRequests: String { L10n.tr("notifications.notificationcenter.group.actionRequests", vi: "Yêu cầu cần xử lý", en: "Requests to review", ja: "確認が必要な依頼") }
+                static func actionRequests(language: MistiaAppLanguage) -> String { L10n.tr("notifications.notificationcenter.group.actionRequests", vi: "Yêu cầu cần xử lý", en: "Requests to review", ja: "確認が必要な依頼", language: language) }
+                static var bills: String { L10n.tr("notifications.notificationcenter.group.bills", vi: "Hóa đơn & khoản trả", en: "Bills & payments", ja: "請求と支払い") }
+                static func bills(language: MistiaAppLanguage) -> String { L10n.tr("notifications.notificationcenter.group.bills", vi: "Hóa đơn & khoản trả", en: "Bills & payments", ja: "請求と支払い", language: language) }
+                static var budgets: String { L10n.tr("notifications.notificationcenter.group.budgets", vi: "Ngân sách", en: "Budgets", ja: "予算") }
+                static func budgets(language: MistiaAppLanguage) -> String { L10n.tr("notifications.notificationcenter.group.budgets", vi: "Ngân sách", en: "Budgets", ja: "予算", language: language) }
+                static var creditCards: String { L10n.tr("notifications.notificationcenter.group.creditCards", vi: "Thẻ tín dụng", en: "Credit cards", ja: "クレジットカード") }
+                static func creditCards(language: MistiaAppLanguage) -> String { L10n.tr("notifications.notificationcenter.group.creditCards", vi: "Thẻ tín dụng", en: "Credit cards", ja: "クレジットカード", language: language) }
+                static var familyCashflow: String { L10n.tr("notifications.notificationcenter.group.familyCashflow", vi: "Thu chi gia đình", en: "Family cashflow", ja: "家族の収支") }
+                static func familyCashflow(language: MistiaAppLanguage) -> String { L10n.tr("notifications.notificationcenter.group.familyCashflow", vi: "Thu chi gia đình", en: "Family cashflow", ja: "家族の収支", language: language) }
+                static var familyData: String { L10n.tr("notifications.notificationcenter.group.familyData", vi: "Dữ liệu gia đình", en: "Family data", ja: "家族データ") }
+                static func familyData(language: MistiaAppLanguage) -> String { L10n.tr("notifications.notificationcenter.group.familyData", vi: "Dữ liệu gia đình", en: "Family data", ja: "家族データ", language: language) }
+                static var wallets: String { L10n.tr("notifications.notificationcenter.group.wallets", vi: "Ví", en: "Wallets", ja: "ウォレット") }
+                static func wallets(language: MistiaAppLanguage) -> String { L10n.tr("notifications.notificationcenter.group.wallets", vi: "Ví", en: "Wallets", ja: "ウォレット", language: language) }
+            }
             static var markAllAsRead: String { L10n.tr("notifications.notificationcenter.markAllAsRead", vi: "Đọc hết", en: "Mark all as read", ja: "すべて既読") }
             static func markAllAsRead(language: MistiaAppLanguage) -> String { L10n.tr("notifications.notificationcenter.markAllAsRead", vi: "Đọc hết", en: "Mark all as read", ja: "すべて既読", language: language) }
             static var member: String { L10n.tr("notifications.notificationcenter.member", vi: "Thành viên", en: "Member", ja: "メンバー") }

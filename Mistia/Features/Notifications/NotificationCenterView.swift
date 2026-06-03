@@ -104,13 +104,353 @@ struct NotificationCenterMetadataIndex {
     }
 }
 
+enum NotificationCenterGroupID: String, CaseIterable, Identifiable {
+    case actionRequests
+    case access
+    case familyCashflow
+    case familyData
+    case bills
+    case creditCards
+    case wallets
+    case budgets
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .actionRequests:
+            L10n.notifications.notificationcenter.group.actionRequests
+        case .access:
+            L10n.notifications.notificationcenter.group.access
+        case .familyCashflow:
+            L10n.notifications.notificationcenter.group.familyCashflow
+        case .familyData:
+            L10n.notifications.notificationcenter.group.familyData
+        case .bills:
+            L10n.notifications.notificationcenter.group.bills
+        case .creditCards:
+            L10n.notifications.notificationcenter.group.creditCards
+        case .wallets:
+            L10n.notifications.notificationcenter.group.wallets
+        case .budgets:
+            L10n.notifications.notificationcenter.group.budgets
+        }
+    }
+
+    var systemImage: String {
+        switch self {
+        case .actionRequests:
+            "checkmark.circle.fill"
+        case .access:
+            "lock.fill"
+        case .familyCashflow:
+            "person.2.fill"
+        case .familyData:
+            "folder.fill"
+        case .bills:
+            "calendar.badge.clock"
+        case .creditCards:
+            "creditcard.fill"
+        case .wallets:
+            "tray.and.arrow.down.fill"
+        case .budgets:
+            "chart.pie.fill"
+        }
+    }
+
+    var accentColor: Color {
+        switch self {
+        case .actionRequests:
+            MistiaAccent.purple.color
+        case .access:
+            Color(red: 0.33, green: 0.36, blue: 0.82)
+        case .familyCashflow:
+            Color(red: 0.18, green: 0.67, blue: 0.62)
+        case .familyData:
+            Color(red: 0.20, green: 0.49, blue: 0.86)
+        case .bills:
+            .orange
+        case .creditCards:
+            Color(red: 0.43, green: 0.23, blue: 0.76)
+        case .wallets:
+            Color(red: 0.18, green: 0.58, blue: 0.34)
+        case .budgets:
+            .mint
+        }
+    }
+}
+
+struct NotificationCenterGroupSummary: Identifiable {
+    let id: NotificationCenterGroupID
+    let rows: [AppNotificationRecord]
+    let latestRow: AppNotificationRecord
+    let unreadCount: Int
+}
+
+struct NotificationCenterDaySection: Identifiable {
+    let id: Date
+    let rows: [AppNotificationRecord]
+}
+
+enum NotificationCenterIconSnapshot {
+    case finance(icon: String, colorHex: String)
+    case asset(name: String, color: Color)
+    case symbol(systemImage: String, color: Color)
+
+    static var fallback: NotificationCenterIconSnapshot {
+        .symbol(systemImage: "bell.fill", color: .secondary)
+    }
+}
+
+enum NotificationCenterDetailAction {
+    case permissionResponse
+    case primary(title: String, systemImage: String)
+}
+
+struct NotificationCenterDetailRowSnapshot: Identifiable {
+    let id: UUID
+    let key: String
+    let createdAt: Date
+    let title: String
+    let body: String
+    let icon: NotificationCenterIconSnapshot
+    let action: NotificationCenterDetailAction?
+}
+
+struct NotificationCenterDetailItem: Identifiable {
+    enum Kind {
+        case dayHeader(Date)
+        case row(NotificationCenterDetailRowSnapshot)
+    }
+
+    let id: String
+    let kind: Kind
+}
+
+enum NotificationCenterGrouping {
+    static func groupID(for row: AppNotificationRecord) -> NotificationCenterGroupID? {
+        switch row.kind {
+        case .dueSoon:
+            nil
+
+        case .permissionRequestReceived:
+            row.actionState == .pending ? .actionRequests : .access
+
+        case .familyTransactionRequestReceived:
+            row.actionState == .pending ? .actionRequests : .familyCashflow
+
+        case .permissionRequestApproved,
+             .permissionRequestRejected,
+             .permissionRevoked,
+             .permissionPolicyChanged,
+             .accessIssue:
+            .access
+
+        case .familyTransactionRequestApproved,
+             .familyTransactionRequestRejected:
+            .familyCashflow
+
+        case .familyActivity:
+            familyActivityGroup(for: row.resourceType)
+
+        case .billPaymentRequired,
+             .billAutoPaymentSucceeded,
+             .billAutoPaymentFailed,
+             .billOverdue:
+            .bills
+
+        case .creditCardStatementReady,
+             .creditCardAutoPaymentSucceeded,
+             .creditCardAutoPaymentFailed:
+            .creditCards
+
+        case .lowWallet:
+            .wallets
+
+        case .budgetWarning:
+            .budgets
+
+        case .familyPlaceholder:
+            .familyData
+        }
+    }
+
+    static func summaries(for rows: [AppNotificationRecord]) -> [NotificationCenterGroupSummary] {
+        var rowsByGroup: [NotificationCenterGroupID: [AppNotificationRecord]] = [:]
+        rowsByGroup.reserveCapacity(NotificationCenterGroupID.allCases.count)
+
+        for row in rows {
+            guard let groupID = groupID(for: row) else { continue }
+            rowsByGroup[groupID, default: []].append(row)
+        }
+
+        return NotificationCenterGroupID.allCases.compactMap { groupID in
+            guard let rows = rowsByGroup[groupID], !rows.isEmpty else { return nil }
+            let sortedRows = rows.sorted(by: ascendingNotificationSort)
+            guard let latestRow = sortedRows.last else { return nil }
+            return NotificationCenterGroupSummary(
+                id: groupID,
+                rows: sortedRows,
+                latestRow: latestRow,
+                unreadCount: sortedRows.filter { !$0.isRead }.count
+            )
+        }
+        .sorted { lhs, rhs in
+            descendingNotificationSort(lhs.latestRow, rhs.latestRow)
+        }
+    }
+
+    static func summary(
+        for groupID: NotificationCenterGroupID,
+        in rows: [AppNotificationRecord]
+    ) -> NotificationCenterGroupSummary? {
+        var groupRows: [AppNotificationRecord] = []
+        groupRows.reserveCapacity(rows.count)
+
+        for row in rows where self.groupID(for: row) == groupID {
+            groupRows.append(row)
+        }
+
+        guard !groupRows.isEmpty else { return nil }
+        let sortedRows = groupRows.sorted(by: ascendingNotificationSort)
+        guard let latestRow = sortedRows.last else { return nil }
+
+        return NotificationCenterGroupSummary(
+            id: groupID,
+            rows: sortedRows,
+            latestRow: latestRow,
+            unreadCount: sortedRows.filter { !$0.isRead }.count
+        )
+    }
+
+    static func daySections(
+        for rows: [AppNotificationRecord],
+        calendar: Calendar
+    ) -> [NotificationCenterDaySection] {
+        var rowsByDay: [Date: [AppNotificationRecord]] = [:]
+        rowsByDay.reserveCapacity(rows.count)
+
+        for row in rows {
+            rowsByDay[calendar.startOfDay(for: row.createdAt), default: []].append(row)
+        }
+
+        return rowsByDay.keys.sorted().map { day in
+            NotificationCenterDaySection(
+                id: day,
+                rows: (rowsByDay[day] ?? []).sorted(by: ascendingNotificationSort)
+            )
+        }
+    }
+
+    static func bottomAnchoredDetailItems(
+        for rows: [NotificationCenterDetailRowSnapshot],
+        calendar: Calendar
+    ) -> [NotificationCenterDetailItem] {
+        detailDaySections(for: rows, calendar: calendar)
+            .reversed()
+            .flatMap { section in
+                section.rows.reversed().map { row in
+                    NotificationCenterDetailItem(
+                        id: "row-\(row.id.uuidString)",
+                        kind: .row(row)
+                    )
+                } + [
+                    NotificationCenterDetailItem(
+                        id: "day-\(section.id.timeIntervalSinceReferenceDate)",
+                        kind: .dayHeader(section.id)
+                    )
+                ]
+            }
+    }
+
+    private static func detailDaySections(
+        for rows: [NotificationCenterDetailRowSnapshot],
+        calendar: Calendar
+    ) -> [(id: Date, rows: [NotificationCenterDetailRowSnapshot])] {
+        var rowsByDay: [Date: [NotificationCenterDetailRowSnapshot]] = [:]
+        rowsByDay.reserveCapacity(rows.count)
+
+        for row in rows {
+            rowsByDay[calendar.startOfDay(for: row.createdAt), default: []].append(row)
+        }
+
+        return rowsByDay.keys.sorted().map { day in
+            (
+                id: day,
+                rows: (rowsByDay[day] ?? []).sorted(by: ascendingDetailSort)
+            )
+        }
+    }
+
+    private static func familyActivityGroup(
+        for resourceType: MistiaFamilyNotificationResourceType?
+    ) -> NotificationCenterGroupID {
+        switch resourceType {
+        case .transaction, .familyTransfer, .debt:
+            .familyCashflow
+        case .wallet, .category, .budget, .goal, .card, .bill, .due, .installment, .permission, nil:
+            .familyData
+        }
+    }
+
+    nonisolated private static func ascendingNotificationSort(
+        _ lhs: AppNotificationRecord,
+        _ rhs: AppNotificationRecord
+    ) -> Bool {
+        if lhs.createdAt != rhs.createdAt {
+            return lhs.createdAt < rhs.createdAt
+        }
+        return lhs.key.localizedStandardCompare(rhs.key) == .orderedAscending
+    }
+
+    nonisolated private static func descendingNotificationSort(
+        _ lhs: AppNotificationRecord,
+        _ rhs: AppNotificationRecord
+    ) -> Bool {
+        if lhs.createdAt != rhs.createdAt {
+            return lhs.createdAt > rhs.createdAt
+        }
+        return lhs.key.localizedStandardCompare(rhs.key) == .orderedAscending
+    }
+
+    nonisolated private static func ascendingDetailSort(
+        _ lhs: NotificationCenterDetailRowSnapshot,
+        _ rhs: NotificationCenterDetailRowSnapshot
+    ) -> Bool {
+        if lhs.createdAt != rhs.createdAt {
+            return lhs.createdAt < rhs.createdAt
+        }
+        return lhs.key.localizedStandardCompare(rhs.key) == .orderedAscending
+    }
+}
+
 private struct NotificationCenterRenderSnapshot {
     let visibleRows: [AppNotificationRecord]
+    let rowByID: [UUID: AppNotificationRecord]
+    let groupSummaries: [NotificationCenterGroupSummary]
     let resourceIndex: NotificationCenterResourceIndex
     let metadataIndex: NotificationCenterMetadataIndex
 }
 
+private struct NotificationCenterGroupRoute: Identifiable {
+    let id: NotificationCenterGroupID
+    let title: String
+    let unreadRowIDs: [UUID]
+
+    init(
+        id: NotificationCenterGroupID,
+        title: String,
+        unreadRowIDs: [UUID]
+    ) {
+        self.id = id
+        self.title = title
+        self.unreadRowIDs = unreadRowIDs
+    }
+}
+
 struct NotificationCenterView: View {
+    private static let groupReadDelayNanoseconds: UInt64 = 350_000_000
+
     @Environment(\.calendar) private var calendar
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.dismiss) private var dismiss
@@ -144,6 +484,10 @@ struct NotificationCenterView: View {
     @State private var duePaymentOriginRow: AppNotificationRecord?
     @State private var transferTarget: TransactionEditorTarget?
     @State private var responseErrorAlert: NotificationResponseErrorAlert?
+    @State private var selectedGroupRoute: NotificationCenterGroupRoute?
+    @State private var selectedGroupDetailItems: [NotificationCenterDetailItem] = []
+    @State private var selectedGroupResourceIndex = NotificationCenterResourceIndex(wallets: [], categories: [], bills: [])
+    @State private var renderSnapshotCache: NotificationCenterRenderSnapshot?
 
     private var visibleRows: [AppNotificationRecord] {
         MistiaNotificationStore.visibleRows(
@@ -152,10 +496,23 @@ struct NotificationCenterView: View {
         )
     }
 
-    private var renderSnapshot: NotificationCenterRenderSnapshot {
+    private var emptyRenderSnapshot: NotificationCenterRenderSnapshot {
+        NotificationCenterRenderSnapshot(
+            visibleRows: [],
+            rowByID: [:],
+            groupSummaries: [],
+            resourceIndex: NotificationCenterResourceIndex(wallets: [], categories: [], bills: []),
+            metadataIndex: NotificationCenterMetadataIndex(rows: [])
+        )
+    }
+
+    private func makeRenderSnapshot() -> NotificationCenterRenderSnapshot {
         let visibleRows = self.visibleRows
+        let rowByID = Dictionary(uniqueKeysWithValues: visibleRows.map { ($0.id, $0) })
         return NotificationCenterRenderSnapshot(
             visibleRows: visibleRows,
+            rowByID: rowByID,
+            groupSummaries: NotificationCenterGrouping.summaries(for: visibleRows),
             resourceIndex: NotificationCenterResourceIndex(
                 wallets: storedWallets,
                 categories: storedCategories,
@@ -166,31 +523,29 @@ struct NotificationCenterView: View {
     }
 
     var body: some View {
-        let snapshot = renderSnapshot
+        let snapshot = renderSnapshotCache ?? emptyRenderSnapshot
 
-        MistiaPinnedTopBarScaffold(
-            tone: .standard,
-            title: L10n.notifications.notificationcenter.notifications,
-            embedsInNavigationStack: false,
-            showsLeadingAvatar: false,
-            leadingSystemImage: "chevron.left",
-            trailingSystemImage: nil,
-            hidesSystemBackButton: true,
-            onLeadingTap: { dismiss() },
-            onRefresh: { await refreshInbox(triggeredByPull: true) },
-            pinnedHeader: { EmptyView() },
-            trailingAccessory: { trailingMenu },
-            content: {
-                content(
-                    rows: snapshot.visibleRows,
-                    resourceIndex: snapshot.resourceIndex,
-                    metadataIndex: snapshot.metadataIndex
+        Group {
+            if let selectedGroupRoute {
+                notificationGroupDetailScreen(
+                    selectedGroupRoute,
+                    detailItems: selectedGroupDetailItems,
+                    resourceIndex: selectedGroupResourceIndex
                 )
+            } else {
+                notificationGroupListScreen(snapshot)
             }
-        )
+        }
         .task {
+            try? MistiaNotificationDebugFixtures.seedNotificationGroupsIfNeeded(
+                modelContext: modelContext,
+                sessionStore: sessionStore
+            )
+            refreshRenderSnapshotCache()
             await refreshInbox(triggeredByPull: false)
         }
+        .onChange(of: familyEnabled) { _, _ in refreshRenderSnapshotCache() }
+        .onChange(of: sessionStore.activeLocalProfileUserID) { _, _ in refreshRenderSnapshotCache() }
         .onAppear {
             uiState.requestQuickCreateHidden(true, id: viewID)
         }
@@ -223,6 +578,34 @@ struct NotificationCenterView: View {
         }
     }
 
+    private func notificationGroupListScreen(_ snapshot: NotificationCenterRenderSnapshot) -> some View {
+        MistiaPinnedTopBarScaffold(
+            tone: .standard,
+            title: L10n.notifications.notificationcenter.notifications,
+            embedsInNavigationStack: false,
+            showsLeadingAvatar: false,
+            leadingSystemImage: "chevron.left",
+            trailingSystemImage: nil,
+            hidesSystemBackButton: true,
+            onLeadingTap: { dismiss() },
+            onRefresh: { await refreshInbox(triggeredByPull: true) },
+            pinnedHeader: { EmptyView() },
+            trailingAccessory: { trailingMenu },
+            content: {
+                content(
+                    groups: snapshot.groupSummaries,
+                    resourceIndex: snapshot.resourceIndex,
+                    metadataIndex: snapshot.metadataIndex
+                )
+            }
+        )
+    }
+
+    @MainActor
+    private func refreshRenderSnapshotCache() {
+        renderSnapshotCache = makeRenderSnapshot()
+    }
+
     private var trailingMenu: some View {
         MistiaHeaderCircleMenu(label: {
             Image(systemName: "ellipsis")
@@ -243,26 +626,308 @@ struct NotificationCenterView: View {
     }
 
     private func content(
-        rows visibleRows: [AppNotificationRecord],
+        groups: [NotificationCenterGroupSummary],
         resourceIndex: NotificationCenterResourceIndex,
         metadataIndex: NotificationCenterMetadataIndex
     ) -> some View {
         Group {
-            if visibleRows.isEmpty {
+            if groups.isEmpty {
                 emptyState
             } else {
                 VStack(spacing: 0) {
-                    ForEach(visibleRows) { row in
-                        notificationRow(
-                            row,
-                            resourceIndex: resourceIndex,
-                            metadataIndex: metadataIndex
-                        )
-                            .onTapGesture { handleRowTap(row, resourceIndex: resourceIndex) }
+                    ForEach(Array(groups.enumerated()), id: \.element.id) { index, group in
+                        Button {
+                            openGroup(
+                                group,
+                                resourceIndex: resourceIndex,
+                                metadataIndex: metadataIndex
+                            )
+                        } label: {
+                            notificationGroupRow(group, metadataIndex: metadataIndex)
+                        }
+                        .buttonStyle(MistiaPressableButtonStyle(cornerRadius: 18, tint: group.id.accentColor))
+
+                        if index < groups.count - 1 {
+                            Divider().padding(.leading, 76)
+                        }
                     }
                 }
             }
         }
+    }
+
+    private func notificationGroupRow(
+        _ group: NotificationCenterGroupSummary,
+        metadataIndex: NotificationCenterMetadataIndex
+    ) -> some View {
+        HStack(spacing: 14) {
+            ZStack {
+                Circle()
+                    .fill(group.id.accentColor)
+
+                Image(systemName: group.id.systemImage)
+                    .font(.system(size: 22, weight: .bold))
+                    .symbolRenderingMode(.monochrome)
+                    .foregroundStyle(.white)
+            }
+            .frame(width: 48, height: 48)
+
+            VStack(alignment: .leading, spacing: 5) {
+                Text(group.id.title)
+                    .font(.system(size: 16, weight: .semibold, design: .rounded))
+                    .foregroundStyle(.primary)
+                    .lineLimit(1)
+
+                Text(notificationTitle(for: group.latestRow, metadataIndex: metadataIndex))
+                    .font(.system(size: 13.5, weight: .medium, design: .rounded))
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+            }
+
+            Spacer(minLength: 10)
+
+            groupTrailingAccessory(group)
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 13)
+        .contentShape(Rectangle())
+    }
+
+    @ViewBuilder
+    private func groupTrailingAccessory(_ group: NotificationCenterGroupSummary) -> some View {
+        if group.unreadCount > 0 {
+            Text(badgeText(for: group.unreadCount))
+                .font(.system(size: group.unreadCount > 99 ? 9 : 11, weight: .heavy, design: .rounded))
+                .foregroundStyle(.white)
+                .lineLimit(1)
+                .minimumScaleFactor(0.72)
+                .padding(.horizontal, group.unreadCount > 9 ? 6 : 0)
+                .frame(minWidth: 22, minHeight: 22)
+                .background(MistiaAccent.expense.color, in: Capsule())
+        } else {
+            Text(MistiaDateFormatting.relativeTimeLabel(for: group.latestRow.createdAt))
+                .font(.system(size: 12, weight: .semibold, design: .rounded))
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+        }
+    }
+
+    private func notificationGroupDetailScreen(
+        _ route: NotificationCenterGroupRoute,
+        detailItems: [NotificationCenterDetailItem],
+        resourceIndex: NotificationCenterResourceIndex
+    ) -> some View {
+        ZStack {
+            Color(UIColor.systemGroupedBackground)
+                .ignoresSafeArea()
+
+            VStack(spacing: 0) {
+                notificationGroupDetailHeader(title: route.title)
+
+                notificationGroupDetailList(
+                    detailItems: detailItems,
+                    resourceIndex: resourceIndex
+                )
+            }
+        }
+        .toolbar(.hidden, for: .navigationBar)
+        .navigationBarBackButtonHidden(true)
+        .task(id: route.id) {
+            await markGroupAsReadAfterOpening(route.unreadRowIDs)
+        }
+    }
+
+    private func notificationGroupDetailHeader(title: String) -> some View {
+        HStack(spacing: 12) {
+            MistiaHeaderCircleButton(action: closeGroupDetail) {
+                Image(systemName: "chevron.left")
+                    .font(.system(size: 17, weight: .bold))
+                    .symbolRenderingMode(.monochrome)
+                    .foregroundStyle(.primary)
+            }
+            .accessibilityLabel(L10n.notifications.notificationcenter.notifications)
+
+            Spacer(minLength: 6)
+
+            Text(title)
+                .font(.system(size: 17, weight: .semibold, design: .rounded))
+                .foregroundStyle(.primary)
+                .lineLimit(1)
+                .minimumScaleFactor(0.82)
+
+            Spacer(minLength: 6)
+
+            Color.clear
+                .frame(width: 44, height: 44)
+        }
+        .padding(.horizontal, 18)
+        .padding(.top, 8)
+        .padding(.bottom, 8)
+        .background(Color(UIColor.systemGroupedBackground))
+    }
+
+    private func notificationGroupDetailList(
+        detailItems: [NotificationCenterDetailItem],
+        resourceIndex: NotificationCenterResourceIndex
+    ) -> some View {
+        ScrollView(.vertical, showsIndicators: true) {
+            LazyVStack(alignment: .leading, spacing: 10) {
+                if detailItems.isEmpty {
+                    ProgressView()
+                        .frame(maxWidth: .infinity)
+                        .padding(.top, 80)
+                        .scaleEffect(x: 1, y: -1, anchor: .center)
+                } else {
+                    ForEach(detailItems) { item in
+                        notificationDetailItem(
+                            item,
+                            resourceIndex: resourceIndex
+                        )
+                        .scaleEffect(x: 1, y: -1, anchor: .center)
+                    }
+                }
+            }
+            .padding(.horizontal, 16)
+            .padding(.top, 42)
+            .padding(.bottom, 14)
+        }
+        .scaleEffect(x: 1, y: -1, anchor: .center)
+        .background(Color(UIColor.systemGroupedBackground).ignoresSafeArea())
+    }
+
+    @ViewBuilder
+    private func notificationDetailItem(
+        _ item: NotificationCenterDetailItem,
+        resourceIndex: NotificationCenterResourceIndex
+    ) -> some View {
+        switch item.kind {
+        case .dayHeader(let day):
+            notificationDayHeader(day)
+        case .row(let row):
+            notificationDetailRow(
+                row,
+                resourceIndex: resourceIndex
+            )
+        }
+    }
+
+    private func notificationDayHeader(_ day: Date) -> some View {
+        Text(notificationSectionTitle(for: day))
+            .font(.system(size: 13, weight: .semibold, design: .rounded))
+            .foregroundStyle(.secondary)
+            .padding(.horizontal, 4)
+            .padding(.top, 8)
+    }
+
+    private func notificationDetailRow(
+        _ row: NotificationCenterDetailRowSnapshot,
+        resourceIndex: NotificationCenterResourceIndex
+    ) -> some View {
+        HStack(alignment: .top, spacing: 12) {
+            notificationIcon(row.icon)
+                .frame(width: 36, height: 36)
+                .padding(.top, 2)
+
+            VStack(alignment: .leading, spacing: 8) {
+                Text(row.title)
+                    .font(.system(size: 15.5, weight: .semibold, design: .rounded))
+                    .foregroundStyle(.primary)
+                    .fixedSize(horizontal: false, vertical: true)
+
+                Text(row.body)
+                    .font(.system(size: 14, weight: .regular, design: .rounded))
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+
+                notificationDetailActions(for: row, resourceIndex: resourceIndex)
+
+                HStack {
+                    Spacer(minLength: 0)
+
+                    Text(row.createdAt, style: .time)
+                        .font(.system(size: 11.5, weight: .semibold, design: .rounded))
+                        .foregroundStyle(.tertiary)
+                }
+            }
+        }
+        .padding(14)
+        .background(
+            Color(UIColor.secondarySystemGroupedBackground),
+            in: RoundedRectangle(cornerRadius: 18, style: .continuous)
+        )
+        .contentShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .onTapGesture {
+            handleRowTap(rowID: row.id, resourceIndex: resourceIndex)
+        }
+    }
+
+    @ViewBuilder
+    private func notificationDetailActions(
+        for row: NotificationCenterDetailRowSnapshot,
+        resourceIndex: NotificationCenterResourceIndex
+    ) -> some View {
+        switch row.action {
+        case .permissionResponse:
+            HStack(spacing: 8) {
+                Button {
+                    respond(to: row.id, approve: true)
+                } label: {
+                    Label(
+                        L10n.notifications.notificationcenter.approve,
+                        systemImage: "checkmark.circle.fill"
+                    )
+                }
+                .buttonStyle(NotificationDetailActionButtonStyle(foreground: notificationPurpleAccent))
+
+                Button(role: .destructive) {
+                    respond(to: row.id, approve: false)
+                } label: {
+                    Label(
+                        L10n.notifications.notificationcenter.reject,
+                        systemImage: "xmark.circle.fill"
+                    )
+                }
+                .buttonStyle(NotificationDetailActionButtonStyle(foreground: .red))
+            }
+            .padding(.top, 2)
+        case .primary(let title, let systemImage):
+            notificationDetailSingleActionButton(
+                title: title,
+                systemImage: systemImage,
+                row: row,
+                resourceIndex: resourceIndex
+            )
+        case nil:
+            EmptyView()
+        }
+    }
+
+    private func notificationDetailSingleActionButton(
+        title: String,
+        systemImage: String,
+        row: NotificationCenterDetailRowSnapshot,
+        resourceIndex: NotificationCenterResourceIndex
+    ) -> some View {
+        Button {
+            handleRowTap(rowID: row.id, resourceIndex: resourceIndex)
+        } label: {
+            Label(title, systemImage: systemImage)
+                .lineLimit(1)
+                .minimumScaleFactor(0.75)
+        }
+        .buttonStyle(NotificationDetailActionButtonStyle(foreground: notificationPurpleAccent))
+        .padding(.top, 2)
+    }
+
+    private func notificationSectionTitle(for day: Date) -> String {
+        let referenceDay = calendar.startOfDay(for: Date())
+        let dayDelta = calendar.dateComponents([.day], from: day, to: referenceDay).day ?? 0
+        return MistiaDateFormatting.relativeDayLabel(for: dayDelta)
+            ?? MistiaDateFormatting.fullDateString(for: day, calendar: calendar)
+    }
+
+    private func badgeText(for unreadCount: Int) -> String {
+        unreadCount > 99 ? "99+" : "\(unreadCount)"
     }
     
     private var emptyState: some View {
@@ -427,6 +1092,38 @@ struct NotificationCenterView: View {
         }
     }
 
+    @ViewBuilder
+    private func notificationIcon(_ snapshot: NotificationCenterIconSnapshot) -> some View {
+        switch snapshot {
+        case .finance(let icon, let colorHex):
+            MistiaFinanceIconView(
+                icon: icon,
+                fallbackColor: Color(hex: colorHex),
+                size: 32
+            )
+        case .asset(let name, let color):
+            ZStack {
+                Circle()
+                    .fill(color.opacity(0.12))
+
+                Image(name)
+                    .resizable()
+                    .aspectRatio(contentMode: .fit)
+                    .frame(width: 16, height: 16)
+                    .foregroundStyle(color)
+            }
+        case .symbol(let systemImage, let color):
+            ZStack {
+                Circle()
+                    .fill(color.opacity(0.12))
+
+                Image(systemName: systemImage)
+                    .font(.system(size: 14, weight: .bold))
+                    .foregroundStyle(color)
+            }
+        }
+    }
+
     private func topUpActionRow(
         for row: AppNotificationRecord,
         resourceIndex: NotificationCenterResourceIndex
@@ -505,6 +1202,86 @@ struct NotificationCenterView: View {
         }
     }
 
+    private func detailRowSnapshot(
+        for row: AppNotificationRecord,
+        resourceIndex: NotificationCenterResourceIndex,
+        metadataIndex: NotificationCenterMetadataIndex
+    ) -> NotificationCenterDetailRowSnapshot {
+        NotificationCenterDetailRowSnapshot(
+            id: row.id,
+            key: row.key,
+            createdAt: row.createdAt,
+            title: notificationTitle(for: row, metadataIndex: metadataIndex),
+            body: notificationBody(for: row, resourceIndex: resourceIndex, metadataIndex: metadataIndex),
+            icon: iconSnapshot(for: row, resourceIndex: resourceIndex),
+            action: detailAction(for: row)
+        )
+    }
+
+    private func iconSnapshot(
+        for row: AppNotificationRecord,
+        resourceIndex: NotificationCenterResourceIndex
+    ) -> NotificationCenterIconSnapshot {
+        if let bill = billPlan(for: row, resourceIndex: resourceIndex) {
+            let iconSymbolName = bill.category?.iconSymbolName ?? bill.iconSymbolName
+            let iconColorHex = bill.category?.iconColorHex ?? MistiaFinanceIconRegistry.defaultColorHex(for: iconSymbolName)
+            return .finance(icon: iconSymbolName, colorHex: iconColorHex)
+        }
+
+        if let category = categoryResource(for: row, resourceIndex: resourceIndex) {
+            return .finance(icon: category.iconSymbolName, colorHex: category.iconColorHex)
+        }
+
+        if let wallet = walletResource(for: row, resourceIndex: resourceIndex) {
+            return .finance(icon: wallet.iconSymbolName, colorHex: wallet.iconColorHex)
+        }
+
+        let config = iconConfig(for: row)
+        if let assetName = config.assetName {
+            return .asset(name: assetName, color: config.color)
+        }
+        return .symbol(systemImage: config.systemImage ?? "bell.fill", color: config.color)
+    }
+
+    private func detailAction(for row: AppNotificationRecord) -> NotificationCenterDetailAction? {
+        if row.isRespondableFamilyRequest {
+            return .permissionResponse
+        }
+
+        if row.opensTopUpTransfer {
+            return .primary(
+                title: L10n.notifications.notificationcenter.tapToAddFundsToWallet,
+                systemImage: "arrow.down.to.line.compact"
+            )
+        }
+
+        if let actionHint = actionHint(for: row) {
+            return .primary(
+                title: actionHint,
+                systemImage: row.opensCreditCardStatement ? "doc.text.fill" : "checkmark.circle.fill"
+            )
+        }
+
+        return nil
+    }
+
+    private func rowRecord(for id: UUID) -> AppNotificationRecord? {
+        if let row = renderSnapshotCache?.rowByID[id] {
+            return row
+        }
+        return rows.first { $0.id == id }
+    }
+
+    private func handleRowTap(
+        rowID: UUID,
+        resourceIndex: NotificationCenterResourceIndex
+    ) {
+        guard let row = rowRecord(for: rowID) else {
+            return
+        }
+        handleRowTap(row, resourceIndex: resourceIndex)
+    }
+
     private func handleRowTap(
         _ row: AppNotificationRecord,
         resourceIndex: NotificationCenterResourceIndex
@@ -549,6 +1326,74 @@ struct NotificationCenterView: View {
                 )
             }
         }
+    }
+
+    private func openGroup(
+        _ group: NotificationCenterGroupSummary,
+        resourceIndex: NotificationCenterResourceIndex,
+        metadataIndex: NotificationCenterMetadataIndex
+    ) {
+        let unreadRowIDs = group.rows
+            .filter { !$0.isRead || $0.readAt == nil }
+            .map(\.id)
+        selectedGroupDetailItems = []
+        selectedGroupResourceIndex = resourceIndex
+        selectedGroupRoute = NotificationCenterGroupRoute(
+            id: group.id,
+            title: group.id.title,
+            unreadRowIDs: unreadRowIDs
+        )
+
+        Task { @MainActor in
+            await Task.yield()
+            guard selectedGroupRoute?.id == group.id else {
+                return
+            }
+            let detailRows = group.rows.map { row in
+                detailRowSnapshot(
+                    for: row,
+                    resourceIndex: resourceIndex,
+                    metadataIndex: metadataIndex
+                )
+            }
+            selectedGroupDetailItems = NotificationCenterGrouping.bottomAnchoredDetailItems(
+                for: detailRows,
+                calendar: calendar
+            )
+        }
+    }
+
+    @MainActor
+    private func closeGroupDetail() {
+        selectedGroupRoute = nil
+        selectedGroupDetailItems = []
+        selectedGroupResourceIndex = NotificationCenterResourceIndex(wallets: [], categories: [], bills: [])
+        refreshRenderSnapshotCache()
+    }
+
+    @MainActor
+    private func markGroupAsReadAfterOpening(_ rowIDs: [UUID]) async {
+        try? await Task.sleep(nanoseconds: Self.groupReadDelayNanoseconds)
+
+        let unreadRows = rowIDs
+            .compactMap(rowRecord(for:))
+            .filter { !$0.isRead || $0.readAt == nil }
+        guard !unreadRows.isEmpty else { return }
+
+        let needsRemoteReadSync = markAsRead(
+            unreadRows,
+            updatesBadgeCount: false,
+            pushesRemoteReadState: false
+        )
+
+        MistiaNotificationStore.updateAppBadgeCount(
+            in: modelContext,
+            userID: sessionStore.activeLocalProfileUserID
+        )
+        if needsRemoteReadSync {
+            pushNotificationReadState()
+        }
+        refreshRenderSnapshotCache()
     }
 
     private func dueOwnerUserID(for payload: DueNotificationActionPayload) -> UUID? {
@@ -598,8 +1443,35 @@ struct NotificationCenterView: View {
     }
 
     private func markAsRead(_ row: AppNotificationRecord) {
-        guard let remoteIDs = try? MistiaNotificationStore.markAsRead([row], in: modelContext),
-              !remoteIDs.isEmpty else { return }
+        markAsRead([row])
+    }
+
+    @discardableResult
+    private func markAsRead(
+        _ rows: [AppNotificationRecord],
+        updatesBadgeCount: Bool = true,
+        pushesRemoteReadState: Bool = true
+    ) -> Bool {
+        let unreadRows = rows.filter { !$0.isRead || $0.readAt == nil }
+        guard !unreadRows.isEmpty,
+              let remoteIDs = try? MistiaNotificationStore.markAsRead(
+                unreadRows,
+                in: modelContext,
+                updatesBadgeCount: updatesBadgeCount
+              ) else {
+            return false
+        }
+        refreshRenderSnapshotCache()
+        guard !remoteIDs.isEmpty else {
+            return false
+        }
+        if pushesRemoteReadState {
+            pushNotificationReadState()
+        }
+        return true
+    }
+
+    private func pushNotificationReadState() {
         Task {
             await familyContextStore.pushNotificationReadState(sessionStore: sessionStore)
         }
@@ -616,6 +1488,13 @@ struct NotificationCenterView: View {
         Task {
             await familyContextStore.pushNotificationReadState(sessionStore: sessionStore)
         }
+    }
+
+    private func respond(to rowID: UUID, approve: Bool) {
+        guard let row = rowRecord(for: rowID) else {
+            return
+        }
+        respond(to: row, approve: approve)
     }
 
     private func respond(to row: AppNotificationRecord, approve: Bool) {
@@ -893,6 +1772,7 @@ struct NotificationCenterView: View {
             calendar: calendar
         )
         await familyContextStore.refreshNotifications(sessionStore: sessionStore)
+        refreshRenderSnapshotCache()
     }
 
     private var notificationPurpleAccent: Color {
@@ -918,6 +1798,77 @@ struct NotificationCenterView: View {
         resourceIndex: NotificationCenterResourceIndex
     ) -> LedgerWallet? {
         resourceIndex.wallet(id: row.resourceID, resourceType: row.resourceType)
+    }
+}
+
+private enum MistiaNotificationDebugFixtures {
+    static func seedNotificationGroupsIfNeeded(
+        modelContext: ModelContext,
+        sessionStore: SessionStore
+    ) throws {
+        #if DEBUG
+        guard ProcessInfo.processInfo.environment["MISTIA_NOTIFICATION_DEBUG_SAMPLE_DATA"] == "1" else {
+            return
+        }
+
+        let requestedCount = Int(ProcessInfo.processInfo.environment["MISTIA_NOTIFICATION_DEBUG_SAMPLE_COUNT"] ?? "") ?? 1_500
+        let sampleCount = max(32, min(requestedCount, 5_000))
+        let existingKeys = Set(
+            try modelContext.fetch(FetchDescriptor<AppNotificationRecord>())
+                .map(\.key)
+                .filter { $0.hasPrefix("debug.notification.group.") }
+        )
+        guard existingKeys.isEmpty else {
+            return
+        }
+
+        let now = Date()
+        let calendar = MistiaCalendar.current
+        let recipientUserID = sessionStore.activeLocalProfileUserID
+        let groupSeeds: [(kind: MistiaAppNotificationKind, resourceType: MistiaFamilyNotificationResourceType?, title: String)] = [
+            (.creditCardStatementReady, .card, "Debug card statement"),
+            (.billPaymentRequired, .bill, "Debug bill payment"),
+            (.budgetWarning, .budget, "Debug budget warning"),
+            (.lowWallet, .wallet, "Debug low wallet"),
+            (.familyActivity, .transaction, "Debug family transaction"),
+            (.permissionRequestReceived, .permission, "Debug permission request"),
+            (.familyPlaceholder, nil, "Debug family data"),
+            (.creditCardAutoPaymentFailed, .card, "Debug card payment failed")
+        ]
+
+        for index in 0..<sampleCount {
+            let seed = groupSeeds[index % groupSeeds.count]
+            let createdAt = calendar.date(
+                byAdding: .minute,
+                value: -index,
+                to: now
+            ) ?? now
+            let actionState: MistiaNotificationActionState? = seed.kind == .permissionRequestReceived
+                ? .pending
+                : .informational
+
+            modelContext.insert(AppNotificationRecord(
+                key: "debug.notification.group.\(index)",
+                createdAt: createdAt,
+                updatedAt: createdAt,
+                title: "\(seed.title) \(index)",
+                body: "Debug notification body \(index)",
+                kind: seed.kind,
+                source: .system,
+                isRead: index % 4 == 0,
+                recipientUserID: recipientUserID,
+                resourceType: seed.resourceType,
+                resourceID: UUID(),
+                permissionScope: seed.kind == .permissionRequestReceived ? .edit : nil,
+                permissionRequestID: seed.kind == .permissionRequestReceived ? UUID() : nil,
+                actionState: actionState,
+                metadataJSON: "{\"actorName\":\"Debug User\",\"resourceName\":\"Debug Resource \(index)\",\"amountText\":\"¥\(index + 1)\"}"
+            ))
+        }
+
+        try modelContext.save()
+        MistiaNotificationStore.updateAppBadgeCount(in: modelContext, userID: recipientUserID)
+        #endif
     }
 }
 
@@ -964,6 +1915,27 @@ struct MistiaNotificationBellButton: View {
 
     private func badgeText(for unreadCount: Int) -> String {
         unreadCount > 99 ? "99+" : "\(unreadCount)"
+    }
+}
+
+private struct NotificationDetailActionButtonStyle: ButtonStyle {
+    @Environment(\.colorScheme) private var colorScheme
+
+    let foreground: Color
+
+    private var fill: Color {
+        colorScheme == .dark ? .white.opacity(0.11) : .black.opacity(0.07)
+    }
+
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .font(.system(size: 13, weight: .semibold, design: .rounded))
+            .foregroundStyle(foreground)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
+            .background(fill, in: Capsule())
+            .opacity(configuration.isPressed ? 0.72 : 1)
+            .scaleEffect(configuration.isPressed ? 0.98 : 1)
     }
 }
 
