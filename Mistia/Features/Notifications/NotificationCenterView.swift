@@ -287,7 +287,7 @@ enum NotificationCenterGrouping {
 
         return NotificationCenterGroupID.allCases.compactMap { groupID in
             guard let rows = rowsByGroup[groupID], !rows.isEmpty else { return nil }
-            let sortedRows = rows.sorted(by: ascendingNotificationSort)
+            let sortedRows = rows.sorted(by: oldestNotificationFirst)
             guard let latestRow = sortedRows.last else { return nil }
             return NotificationCenterGroupSummary(
                 id: groupID,
@@ -297,7 +297,7 @@ enum NotificationCenterGrouping {
             )
         }
         .sorted { lhs, rhs in
-            descendingNotificationSort(lhs.latestRow, rhs.latestRow)
+            newestNotificationFirst(lhs.latestRow, rhs.latestRow)
         }
     }
 
@@ -313,7 +313,7 @@ enum NotificationCenterGrouping {
         }
 
         guard !groupRows.isEmpty else { return nil }
-        let sortedRows = groupRows.sorted(by: ascendingNotificationSort)
+        let sortedRows = groupRows.sorted(by: oldestNotificationFirst)
         guard let latestRow = sortedRows.last else { return nil }
 
         return NotificationCenterGroupSummary(
@@ -338,16 +338,16 @@ enum NotificationCenterGrouping {
         return rowsByDay.keys.sorted().map { day in
             NotificationCenterDaySection(
                 id: day,
-                rows: (rowsByDay[day] ?? []).sorted(by: ascendingNotificationSort)
+                rows: (rowsByDay[day] ?? []).sorted(by: oldestNotificationFirst)
             )
         }
     }
 
-    static func topAnchoredDetailItems(
+    static func detailItems(
         for rows: [NotificationCenterDetailRowSnapshot],
         calendar: Calendar
     ) -> [NotificationCenterDetailItem] {
-        topAnchoredDetailDaySections(for: rows, calendar: calendar)
+        detailSections(for: rows, calendar: calendar)
             .flatMap { section in
                 [
                     NotificationCenterDetailItem(
@@ -363,7 +363,7 @@ enum NotificationCenterGrouping {
             }
     }
 
-    private static func topAnchoredDetailDaySections(
+    private static func detailSections(
         for rows: [NotificationCenterDetailRowSnapshot],
         calendar: Calendar
     ) -> [(id: Date, rows: [NotificationCenterDetailRowSnapshot])] {
@@ -374,10 +374,10 @@ enum NotificationCenterGrouping {
             rowsByDay[calendar.startOfDay(for: row.createdAt), default: []].append(row)
         }
 
-        return rowsByDay.keys.sorted(by: >).map { day in
+        return rowsByDay.keys.sorted(by: newestDayFirst).map { day in
             (
                 id: day,
-                rows: (rowsByDay[day] ?? []).sorted(by: descendingDetailSort)
+                rows: (rowsByDay[day] ?? []).sorted(by: newestDetailRowFirst)
             )
         }
     }
@@ -393,7 +393,7 @@ enum NotificationCenterGrouping {
         }
     }
 
-    nonisolated private static func ascendingNotificationSort(
+    nonisolated private static func oldestNotificationFirst(
         _ lhs: AppNotificationRecord,
         _ rhs: AppNotificationRecord
     ) -> Bool {
@@ -403,7 +403,7 @@ enum NotificationCenterGrouping {
         return lhs.key.localizedStandardCompare(rhs.key) == .orderedAscending
     }
 
-    nonisolated private static func descendingNotificationSort(
+    nonisolated private static func newestNotificationFirst(
         _ lhs: AppNotificationRecord,
         _ rhs: AppNotificationRecord
     ) -> Bool {
@@ -413,7 +413,7 @@ enum NotificationCenterGrouping {
         return lhs.key.localizedStandardCompare(rhs.key) == .orderedAscending
     }
 
-    nonisolated private static func descendingDetailSort(
+    nonisolated private static func newestDetailRowFirst(
         _ lhs: NotificationCenterDetailRowSnapshot,
         _ rhs: NotificationCenterDetailRowSnapshot
     ) -> Bool {
@@ -421,6 +421,10 @@ enum NotificationCenterGrouping {
             return lhs.createdAt > rhs.createdAt
         }
         return lhs.key.localizedStandardCompare(rhs.key) == .orderedAscending
+    }
+
+    nonisolated private static func newestDayFirst(_ lhs: Date, _ rhs: Date) -> Bool {
+        lhs > rhs
     }
 }
 
@@ -432,7 +436,7 @@ private struct NotificationCenterRenderSnapshot {
     let metadataIndex: NotificationCenterMetadataIndex
 }
 
-private struct NotificationCenterGroupRoute: Identifiable {
+struct NotificationCenterGroupRoute: Identifiable {
     let id: NotificationCenterGroupID
     let title: String
     let unreadRowIDs: [UUID]
@@ -506,21 +510,12 @@ struct NotificationCenterView: View {
     @State private var selectedGroupRoute: NotificationCenterGroupRoute?
     @State private var pendingGroupDetailSnapshotRefresh = false
     @State private var renderSnapshotCache: NotificationCenterRenderSnapshot?
+    @State private var isVisible = false
 
     private var visibleRows: [AppNotificationRecord] {
         MistiaNotificationStore.visibleRows(
             rows,
             userID: sessionStore.activeLocalProfileUserID
-        )
-    }
-
-    private var emptyRenderSnapshot: NotificationCenterRenderSnapshot {
-        NotificationCenterRenderSnapshot(
-            visibleRows: [],
-            rowByID: [:],
-            groupSummaries: [],
-            resourceIndex: NotificationCenterResourceIndex(wallets: [], categories: [], bills: []),
-            metadataIndex: NotificationCenterMetadataIndex(rows: [])
         )
     }
 
@@ -541,9 +536,9 @@ struct NotificationCenterView: View {
     }
 
     var body: some View {
-        let snapshot = selectedGroupRoute == nil ? renderSnapshotCache ?? emptyRenderSnapshot : emptyRenderSnapshot
+        let snapshot = renderSnapshotCache ?? makeRenderSnapshot()
 
-        notificationGroupListScreen(snapshot)
+        screen(snapshot)
         .task {
             try? MistiaNotificationDebugFixtures.seedNotificationGroupsIfNeeded(
                 modelContext: modelContext,
@@ -579,15 +574,20 @@ struct NotificationCenterView: View {
             )
         }
         .onAppear {
+            isVisible = true
             uiState.requestQuickCreateHidden(true, id: viewID)
         }
         .onDisappear {
-            uiState.requestQuickCreateHidden(false, id: viewID)
+            isVisible = false
+            if selectedGroupRoute == nil {
+                uiState.requestQuickCreateHidden(false, id: viewID)
+            }
         }
         .background {
             NotificationGroupNativePushPresenter(
                 route: $selectedGroupRoute,
                 calendar: calendar,
+                uiState: uiState,
                 onMarkGroupAsRead: { rowIDs in
                     await markGroupAsReadAfterOpening(rowIDs)
                 },
@@ -605,13 +605,13 @@ struct NotificationCenterView: View {
         }
     }
 
-    private func notificationGroupListScreen(_ snapshot: NotificationCenterRenderSnapshot) -> some View {
+    private func screen(_ snapshot: NotificationCenterRenderSnapshot) -> some View {
         ZStack {
             Color(UIColor.systemGroupedBackground)
                 .ignoresSafeArea()
 
             ScrollView(.vertical, showsIndicators: true) {
-                content(
+                groupList(
                     groups: snapshot.groupSummaries,
                     resourceIndex: snapshot.resourceIndex,
                     metadataIndex: snapshot.metadataIndex
@@ -648,12 +648,14 @@ struct NotificationCenterView: View {
                 )
             }
         } label: {
-            Image(systemName: "ellipsis.circle")
+            Image(systemName: "ellipsis")
+                .frame(width: 32, height: 32)
+                .contentShape(Rectangle())
         }
         .accessibilityLabel(L10n.notifications.notificationcenter.notificationActions)
     }
 
-    private func content(
+    private func groupList(
         groups: [NotificationCenterGroupSummary],
         resourceIndex: NotificationCenterResourceIndex,
         metadataIndex: NotificationCenterMetadataIndex
@@ -664,9 +666,9 @@ struct NotificationCenterView: View {
             } else {
                 VStack(spacing: 0) {
                     ForEach(Array(groups.enumerated()), id: \.element.id) { index, group in
-                        notificationGroupRow(group, metadataIndex: metadataIndex)
+                        groupRow(group, metadataIndex: metadataIndex)
                             .onTapGesture {
-                                selectedGroupRoute = groupRoute(
+                                selectedGroupRoute = makeRoute(
                                     for: group,
                                     resourceIndex: resourceIndex,
                                     metadataIndex: metadataIndex
@@ -684,7 +686,7 @@ struct NotificationCenterView: View {
         }
     }
 
-    private func notificationGroupRow(
+    private func groupRow(
         _ group: NotificationCenterGroupSummary,
         metadataIndex: NotificationCenterMetadataIndex
     ) -> some View {
@@ -714,7 +716,7 @@ struct NotificationCenterView: View {
 
             Spacer(minLength: 10)
 
-            groupTrailingAccessory(group)
+            groupAccessory(group)
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 13)
@@ -722,7 +724,7 @@ struct NotificationCenterView: View {
     }
 
     @ViewBuilder
-    private func groupTrailingAccessory(_ group: NotificationCenterGroupSummary) -> some View {
+    private func groupAccessory(_ group: NotificationCenterGroupSummary) -> some View {
         if group.unreadCount > 0 {
             Text(badgeText(for: group.unreadCount))
                 .font(.system(size: group.unreadCount > 99 ? 9 : 11, weight: .heavy, design: .rounded))
@@ -984,7 +986,7 @@ struct NotificationCenterView: View {
         }
     }
 
-    private func detailRowSnapshot(
+    private func makeDetailRow(
         for row: AppNotificationRecord,
         resourceIndex: NotificationCenterResourceIndex,
         metadataIndex: NotificationCenterMetadataIndex
@@ -995,12 +997,12 @@ struct NotificationCenterView: View {
             createdAt: row.createdAt,
             title: notificationTitle(for: row, metadataIndex: metadataIndex),
             body: notificationBody(for: row, resourceIndex: resourceIndex, metadataIndex: metadataIndex),
-            icon: iconSnapshot(for: row, resourceIndex: resourceIndex),
-            action: detailAction(for: row)
+            icon: makeIcon(for: row, resourceIndex: resourceIndex),
+            action: makeAction(for: row)
         )
     }
 
-    private func iconSnapshot(
+    private func makeIcon(
         for row: AppNotificationRecord,
         resourceIndex: NotificationCenterResourceIndex
     ) -> NotificationCenterIconSnapshot {
@@ -1025,7 +1027,7 @@ struct NotificationCenterView: View {
         return .symbol(systemImage: config.systemImage ?? "bell.fill", color: config.color)
     }
 
-    private func detailAction(for row: AppNotificationRecord) -> NotificationCenterDetailAction? {
+    private func makeAction(for row: AppNotificationRecord) -> NotificationCenterDetailAction? {
         if row.isRespondableFamilyRequest {
             return .permissionResponse
         }
@@ -1110,7 +1112,7 @@ struct NotificationCenterView: View {
         }
     }
 
-    private func groupRoute(
+    private func makeRoute(
         for group: NotificationCenterGroupSummary,
         resourceIndex: NotificationCenterResourceIndex,
         metadataIndex: NotificationCenterMetadataIndex
@@ -1119,13 +1121,13 @@ struct NotificationCenterView: View {
             .filter { !$0.isRead || $0.readAt == nil }
             .map(\.id)
         let detailRows = group.rows.map { row in
-            detailRowSnapshot(
+            makeDetailRow(
                 for: row,
                 resourceIndex: resourceIndex,
                 metadataIndex: metadataIndex
             )
         }
-        let detailItems = NotificationCenterGrouping.topAnchoredDetailItems(
+        let detailItems = NotificationCenterGrouping.detailItems(
             for: detailRows,
             calendar: calendar
         )
@@ -1172,6 +1174,9 @@ struct NotificationCenterView: View {
 
     @MainActor
     private func handleGroupDetailDisappear() {
+        if !isVisible {
+            uiState.requestQuickCreateHidden(false, id: viewID)
+        }
         guard pendingGroupDetailSnapshotRefresh else {
             return
         }
@@ -1746,6 +1751,7 @@ private struct NotificationGroupNativePushPresenter: UIViewControllerRepresentab
     @Binding var route: NotificationCenterGroupRoute?
 
     let calendar: Calendar
+    let uiState: MistiaUIState
     let onMarkGroupAsRead: ([UUID]) async -> Void
     let onRowTap: (UUID, NotificationCenterResourceIndex) -> Void
     let onRespond: (UUID, Bool) -> Void
@@ -1759,6 +1765,7 @@ private struct NotificationGroupNativePushPresenter: UIViewControllerRepresentab
         uiViewController.update(
             route: route,
             calendar: calendar,
+            uiState: uiState,
             onMarkGroupAsRead: onMarkGroupAsRead,
             onRowTap: onRowTap,
             onRespond: onRespond,
@@ -1775,6 +1782,7 @@ private struct NotificationGroupNativePushPresenter: UIViewControllerRepresentab
         func update(
             route: NotificationCenterGroupRoute?,
             calendar: Calendar,
+            uiState: MistiaUIState,
             onMarkGroupAsRead: @escaping ([UUID]) async -> Void,
             onRowTap: @escaping (UUID, NotificationCenterResourceIndex) -> Void,
             onRespond: @escaping (UUID, Bool) -> Void,
@@ -1794,10 +1802,10 @@ private struct NotificationGroupNativePushPresenter: UIViewControllerRepresentab
                 let detail = NotificationGroupDetailScreen(
                     route,
                     calendar: calendar,
+                    uiState: uiState,
                     onMarkGroupAsRead: onMarkGroupAsRead,
                     onRowTap: onRowTap,
-                    onRespond: onRespond,
-                    onDisappear: {}
+                    onRespond: onRespond
                 )
                 let host = HostingController(rootView: detail, routeID: route.id) { [weak self] in
                     self?.presentedRouteID = nil
@@ -1832,242 +1840,6 @@ private struct NotificationGroupNativePushPresenter: UIViewControllerRepresentab
             super.viewDidDisappear(animated)
             if isMovingFromParent || navigationController?.viewControllers.contains(self) == false {
                 onNativePop()
-            }
-        }
-    }
-}
-
-private struct NotificationGroupDetailScreen: View {
-    @Environment(\.colorScheme) private var colorScheme
-
-    let route: NotificationCenterGroupRoute
-    let calendar: Calendar
-    let onMarkGroupAsRead: ([UUID]) async -> Void
-    let onRowTap: (UUID, NotificationCenterResourceIndex) -> Void
-    let onRespond: (UUID, Bool) -> Void
-    let onDisappear: () -> Void
-
-    private var notificationPurpleAccent: Color {
-        colorScheme == .dark ? MistiaAccent.lightPurple.color : MistiaAccent.purple.color
-    }
-
-    private var actionFill: Color {
-        colorScheme == .dark ? .white.opacity(0.11) : .black.opacity(0.07)
-    }
-
-    init(
-        _ route: NotificationCenterGroupRoute,
-        calendar: Calendar,
-        onMarkGroupAsRead: @escaping ([UUID]) async -> Void,
-        onRowTap: @escaping (UUID, NotificationCenterResourceIndex) -> Void,
-        onRespond: @escaping (UUID, Bool) -> Void,
-        onDisappear: @escaping () -> Void
-    ) {
-        self.route = route
-        self.calendar = calendar
-        self.onMarkGroupAsRead = onMarkGroupAsRead
-        self.onRowTap = onRowTap
-        self.onRespond = onRespond
-        self.onDisappear = onDisappear
-    }
-
-    var body: some View {
-        ZStack {
-            Color(UIColor.systemGroupedBackground)
-                .ignoresSafeArea()
-
-            detailList
-        }
-        .navigationTitle(route.title)
-        .navigationBarTitleDisplayMode(.inline)
-        .task(id: route.id) {
-            await onMarkGroupAsRead(route.unreadRowIDs)
-        }
-        .onDisappear(perform: onDisappear)
-    }
-
-    private var detailList: some View {
-        List {
-            if route.detailItems.isEmpty {
-                ProgressView()
-                    .frame(maxWidth: .infinity)
-                    .padding(.top, 40)
-                    .listRowBackground(Color.clear)
-                    .listRowSeparator(.hidden)
-            } else {
-                ForEach(route.detailItems) { item in
-                    detailItem(item)
-                        .listRowInsets(EdgeInsets(top: 5, leading: 16, bottom: 5, trailing: 16))
-                        .listRowBackground(Color.clear)
-                        .listRowSeparator(.hidden)
-            }
-            }
-        }
-        .listStyle(.plain)
-        .scrollContentBackground(.hidden)
-        .background(Color(UIColor.systemGroupedBackground).ignoresSafeArea())
-    }
-
-    @ViewBuilder
-    private func detailItem(_ item: NotificationCenterDetailItem) -> some View {
-        switch item.kind {
-        case .dayHeader(let day):
-            dayHeader(day)
-        case .row(let row):
-            detailRow(row)
-        }
-    }
-
-    private func dayHeader(_ day: Date) -> some View {
-        Text(sectionTitle(for: day))
-            .font(.system(size: 13, weight: .semibold, design: .rounded))
-            .foregroundStyle(.secondary)
-            .padding(.horizontal, 4)
-            .padding(.top, 8)
-    }
-
-    private func detailRow(_ row: NotificationCenterDetailRowSnapshot) -> some View {
-        HStack(alignment: .top, spacing: 12) {
-            notificationIcon(row.icon)
-                .frame(width: 36, height: 36)
-                .padding(.top, 2)
-
-            VStack(alignment: .leading, spacing: 8) {
-                Text(row.title)
-                    .font(.system(size: 15.5, weight: .semibold, design: .rounded))
-                    .foregroundStyle(.primary)
-                    .fixedSize(horizontal: false, vertical: true)
-
-                Text(row.body)
-                    .font(.system(size: 14, weight: .regular, design: .rounded))
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-
-                detailActions(for: row)
-
-                HStack {
-                    Spacer(minLength: 0)
-
-                    Text(row.createdAt, style: .time)
-                        .font(.system(size: 11.5, weight: .semibold, design: .rounded))
-                        .foregroundStyle(.tertiary)
-                }
-            }
-        }
-        .padding(14)
-        .background(
-            Color(UIColor.secondarySystemGroupedBackground),
-            in: RoundedRectangle(cornerRadius: 18, style: .continuous)
-        )
-        .contentShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
-        .onTapGesture {
-            onRowTap(row.id, route.resourceIndex)
-        }
-    }
-
-    @ViewBuilder
-    private func detailActions(for row: NotificationCenterDetailRowSnapshot) -> some View {
-        switch row.action {
-        case .permissionResponse:
-            HStack(spacing: 8) {
-                actionPill(
-                    title: L10n.notifications.notificationcenter.approve,
-                    systemImage: "checkmark.circle.fill",
-                    foreground: notificationPurpleAccent
-                ) {
-                    onRespond(row.id, true)
-                }
-
-                actionPill(
-                    title: L10n.notifications.notificationcenter.reject,
-                    systemImage: "xmark.circle.fill",
-                    foreground: .red
-                ) {
-                    onRespond(row.id, false)
-                }
-            }
-            .padding(.top, 2)
-        case .primary(let title, let systemImage):
-            singleActionButton(
-                title: title,
-                systemImage: systemImage,
-                row: row
-            )
-        case nil:
-            EmptyView()
-        }
-    }
-
-    private func singleActionButton(
-        title: String,
-        systemImage: String,
-        row: NotificationCenterDetailRowSnapshot
-    ) -> some View {
-        actionPill(
-            title: title,
-            systemImage: systemImage,
-            foreground: notificationPurpleAccent
-        ) {
-            onRowTap(row.id, route.resourceIndex)
-        }
-        .padding(.top, 2)
-    }
-
-    private func actionPill(
-        title: String,
-        systemImage: String,
-        foreground: Color,
-        action: @escaping () -> Void
-    ) -> some View {
-        Label(title, systemImage: systemImage)
-            .font(.system(size: 13, weight: .semibold, design: .rounded))
-            .foregroundStyle(foreground)
-            .lineLimit(1)
-            .minimumScaleFactor(0.75)
-            .padding(.horizontal, 12)
-            .padding(.vertical, 8)
-            .background(actionFill, in: Capsule())
-            .contentShape(Capsule())
-            .onTapGesture(perform: action)
-            .accessibilityElement(children: .combine)
-            .accessibilityAddTraits(.isButton)
-    }
-
-    private func sectionTitle(for day: Date) -> String {
-        let referenceDay = calendar.startOfDay(for: Date())
-        let dayDelta = calendar.dateComponents([.day], from: day, to: referenceDay).day ?? 0
-        return MistiaDateFormatting.relativeDayLabel(for: dayDelta)
-            ?? MistiaDateFormatting.fullDateString(for: day, calendar: calendar)
-    }
-
-    @ViewBuilder
-    private func notificationIcon(_ snapshot: NotificationCenterIconSnapshot) -> some View {
-        switch snapshot {
-        case .finance(let icon, let colorHex):
-            MistiaFinanceIconView(
-                icon: icon,
-                fallbackColor: Color(hex: colorHex),
-                size: 32
-            )
-        case .asset(let name, let color):
-            ZStack {
-                Circle()
-                    .fill(color.opacity(0.12))
-
-                Image(name)
-                    .resizable()
-                    .aspectRatio(contentMode: .fit)
-                    .frame(width: 16, height: 16)
-                    .foregroundStyle(color)
-            }
-        case .symbol(let systemImage, let color):
-            ZStack {
-                Circle()
-                    .fill(color.opacity(0.12))
-
-                Image(systemName: systemImage)
-                    .font(.system(size: 14, weight: .bold))
-                    .foregroundStyle(color)
             }
         }
     }
