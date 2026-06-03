@@ -188,6 +188,18 @@ struct NotificationCenterGroupSummary: Identifiable {
     let unreadCount: Int
 }
 
+private struct NotificationCenterGroupedRows {
+    var rows: [AppNotificationRecord] = []
+    var unreadCount = 0
+
+    mutating func append(_ row: AppNotificationRecord) {
+        rows.append(row)
+        if !row.isRead {
+            unreadCount += 1
+        }
+    }
+}
+
 struct NotificationCenterDaySection: Identifiable {
     let id: Date
     let rows: [AppNotificationRecord]
@@ -277,23 +289,23 @@ enum NotificationCenterGrouping {
     }
 
     static func summaries(for rows: [AppNotificationRecord]) -> [NotificationCenterGroupSummary] {
-        var rowsByGroup: [NotificationCenterGroupID: [AppNotificationRecord]] = [:]
+        var rowsByGroup: [NotificationCenterGroupID: NotificationCenterGroupedRows] = [:]
         rowsByGroup.reserveCapacity(NotificationCenterGroupID.allCases.count)
 
         for row in rows {
             guard let groupID = groupID(for: row) else { continue }
-            rowsByGroup[groupID, default: []].append(row)
+            rowsByGroup[groupID, default: NotificationCenterGroupedRows()].append(row)
         }
 
         return NotificationCenterGroupID.allCases.compactMap { groupID in
-            guard let rows = rowsByGroup[groupID], !rows.isEmpty else { return nil }
-            let sortedRows = rows.sorted(by: oldestNotificationFirst)
+            guard let groupedRows = rowsByGroup[groupID], !groupedRows.rows.isEmpty else { return nil }
+            let sortedRows = groupedRows.rows.sorted(by: oldestNotificationFirst)
             guard let latestRow = sortedRows.last else { return nil }
             return NotificationCenterGroupSummary(
                 id: groupID,
                 rows: sortedRows,
                 latestRow: latestRow,
-                unreadCount: sortedRows.filter { !$0.isRead }.count
+                unreadCount: groupedRows.unreadCount
             )
         }
         .sorted { lhs, rhs in
@@ -305,22 +317,22 @@ enum NotificationCenterGrouping {
         for groupID: NotificationCenterGroupID,
         in rows: [AppNotificationRecord]
     ) -> NotificationCenterGroupSummary? {
-        var groupRows: [AppNotificationRecord] = []
-        groupRows.reserveCapacity(rows.count)
+        var groupedRows = NotificationCenterGroupedRows()
+        groupedRows.rows.reserveCapacity(rows.count)
 
         for row in rows where self.groupID(for: row) == groupID {
-            groupRows.append(row)
+            groupedRows.append(row)
         }
 
-        guard !groupRows.isEmpty else { return nil }
-        let sortedRows = groupRows.sorted(by: oldestNotificationFirst)
+        guard !groupedRows.rows.isEmpty else { return nil }
+        let sortedRows = groupedRows.rows.sorted(by: oldestNotificationFirst)
         guard let latestRow = sortedRows.last else { return nil }
 
         return NotificationCenterGroupSummary(
             id: groupID,
             rows: sortedRows,
             latestRow: latestRow,
-            unreadCount: sortedRows.filter { !$0.isRead }.count
+            unreadCount: groupedRows.unreadCount
         )
     }
 
@@ -521,7 +533,12 @@ struct NotificationCenterView: View {
 
     private func makeRenderSnapshot() -> NotificationCenterRenderSnapshot {
         let visibleRows = self.visibleRows
-        let rowByID = Dictionary(uniqueKeysWithValues: visibleRows.map { ($0.id, $0) })
+        var rowByID: [UUID: AppNotificationRecord] = [:]
+        rowByID.reserveCapacity(visibleRows.count)
+        for row in visibleRows {
+            rowByID[row.id] = row
+        }
+
         return NotificationCenterRenderSnapshot(
             visibleRows: visibleRows,
             rowByID: rowByID,

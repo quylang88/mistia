@@ -60,6 +60,93 @@ final class MistiaSyncOutboxTests: XCTestCase {
         XCTAssertTrue(outbox.allMutations.isEmpty)
     }
 
+    func testBatchEnqueueKeepsLastIncomingMutationForSameRecord() throws {
+        let suiteName = makeDefaultsSuiteName()
+        let defaults = try makeDefaults(suiteName: suiteName)
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+
+        let outbox = MistiaSyncOutbox(defaults: defaults, key: "mistia-sync-outbox-batch-dedupe-test")
+        let userID = UUID()
+        let recordID = UUID()
+        let preserved = MistiaSyncMutation(
+            entity: .wallet,
+            recordID: UUID(),
+            subjectUserID: userID,
+            kind: .upsert,
+            modifiedAt: Date(timeIntervalSince1970: 5)
+        )
+        let existing = MistiaSyncMutation(
+            entity: .category,
+            recordID: recordID,
+            subjectUserID: userID,
+            kind: .upsert,
+            modifiedAt: Date(timeIntervalSince1970: 10)
+        )
+        let firstIncoming = MistiaSyncMutation(
+            entity: .category,
+            recordID: recordID,
+            subjectUserID: userID,
+            kind: .upsert,
+            modifiedAt: Date(timeIntervalSince1970: 20)
+        )
+        let lastIncoming = MistiaSyncMutation(
+            entity: .category,
+            recordID: recordID,
+            subjectUserID: userID,
+            kind: .delete,
+            modifiedAt: Date(timeIntervalSince1970: 15)
+        )
+
+        outbox.enqueue([preserved, existing])
+        outbox.enqueue([firstIncoming, lastIncoming])
+
+        XCTAssertEqual(outbox.allMutations, [preserved, lastIncoming])
+    }
+
+    func testRewriteRecordIDsCollapsesMappedCategoryCollisions() throws {
+        let suiteName = makeDefaultsSuiteName()
+        let defaults = try makeDefaults(suiteName: suiteName)
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+
+        let outbox = MistiaSyncOutbox(defaults: defaults, key: "mistia-sync-outbox-rewrite-dedupe-test")
+        let userID = UUID()
+        let sourceID = UUID()
+        let destinationID = UUID()
+        let olderDestination = MistiaSyncMutation(
+            entity: .category,
+            recordID: destinationID,
+            subjectUserID: userID,
+            kind: .upsert,
+            modifiedAt: Date(timeIntervalSince1970: 10),
+            baseVersion: 1
+        )
+        let newerSource = MistiaSyncMutation(
+            entity: .category,
+            recordID: sourceID,
+            subjectUserID: userID,
+            kind: .delete,
+            modifiedAt: Date(timeIntervalSince1970: 20),
+            baseVersion: 2
+        )
+
+        outbox.enqueue([olderDestination, newerSource])
+        outbox.rewriteRecordIDs(entity: .category, mappings: [sourceID: destinationID])
+
+        XCTAssertEqual(
+            outbox.allMutations,
+            [
+                MistiaSyncMutation(
+                    entity: .category,
+                    recordID: destinationID,
+                    subjectUserID: userID,
+                    kind: .delete,
+                    modifiedAt: Date(timeIntervalSince1970: 20),
+                    baseVersion: 2
+                )
+            ]
+        )
+    }
+
     private func makeDefaultsSuiteName() -> String {
         "MistiaSyncOutboxTests.\(UUID().uuidString)"
     }

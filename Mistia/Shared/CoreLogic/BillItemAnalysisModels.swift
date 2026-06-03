@@ -638,15 +638,8 @@ private extension KeyedDecodingContainer {
             return date
         }
 
-        let formatter = DateFormatter()
-        formatter.calendar = Calendar(identifier: .gregorian)
-        formatter.locale = Locale(identifier: "en_US_POSIX")
-        formatter.timeZone = .current
-        for format in ["yyyy-MM-dd'T'HH:mm:ss", "yyyy-MM-dd'T'HH:mm", "yyyy-MM-dd HH:mm:ss", "yyyy-MM-dd HH:mm", "yyyy-MM-dd"] {
-            formatter.dateFormat = format
-            if let date = formatter.date(from: value) {
-                return date
-            }
+        if let date = BillItemFallbackDateParser.shared.date(from: value) {
+            return date
         }
 
         throw DecodingError.dataCorruptedError(
@@ -654,6 +647,42 @@ private extension KeyedDecodingContainer {
             in: self,
             debugDescription: "Invalid bill date: \(value)"
         )
+    }
+}
+
+nonisolated private final class BillItemFallbackDateParser: @unchecked Sendable {
+    static let shared = BillItemFallbackDateParser()
+
+    private let formatter: DateFormatter
+    private let formats = [
+        "yyyy-MM-dd'T'HH:mm:ss",
+        "yyyy-MM-dd'T'HH:mm",
+        "yyyy-MM-dd HH:mm:ss",
+        "yyyy-MM-dd HH:mm",
+        "yyyy-MM-dd"
+    ]
+    private let lock = NSLock()
+
+    private init() {
+        let formatter = DateFormatter()
+        formatter.calendar = Calendar(identifier: .gregorian)
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.timeZone = .autoupdatingCurrent
+        self.formatter = formatter
+    }
+
+    func date(from value: String) -> Date? {
+        lock.lock()
+        defer { lock.unlock() }
+
+        for format in formats {
+            formatter.dateFormat = format
+            if let date = formatter.date(from: value) {
+                return date
+            }
+        }
+
+        return nil
     }
 }
 

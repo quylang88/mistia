@@ -74,6 +74,33 @@ final class BillItemAnalysisTests: XCTestCase {
         XCTAssertEqual(result.quota?.usedCount, 2)
     }
 
+    func testDecodesFallbackBillDateFormats() throws {
+        let result = try decode("""
+        {
+          "merchant_name": "スーパー玉出",
+          "total_minor": 1100,
+          "currency_code": "JPY",
+          "occurred_at": "2026-05-19 21:34",
+          "wallet_id": "\(walletID.uuidString)",
+          "multiple_bills_detected": false,
+          "confidence": 0.92,
+          "missing_fields": [],
+          "raw_text": "スーパー玉出 合計 1100",
+          "items": []
+        }
+        """)
+
+        let components = Calendar.current.dateComponents(
+            [.year, .month, .day, .hour, .minute],
+            from: try XCTUnwrap(result.occurredAt)
+        )
+        XCTAssertEqual(components.year, 2026)
+        XCTAssertEqual(components.month, 5)
+        XCTAssertEqual(components.day, 19)
+        XCTAssertEqual(components.hour, 21)
+        XCTAssertEqual(components.minute, 34)
+    }
+
     func testDecodesDiscountRecordAsNegativeAmountWithoutCategory() throws {
         let result = try decode("""
         {

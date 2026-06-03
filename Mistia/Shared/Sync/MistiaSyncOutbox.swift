@@ -75,6 +75,20 @@ struct MistiaSyncMutation: Codable, Hashable, Identifiable {
     }
 }
 
+private struct MistiaSyncMutationStorageKey: Hashable {
+    let entity: MistiaSyncEntity
+    let recordID: UUID
+
+    init(entity: MistiaSyncEntity, recordID: UUID) {
+        self.entity = entity
+        self.recordID = recordID
+    }
+
+    init(_ mutation: MistiaSyncMutation) {
+        self.init(entity: mutation.entity, recordID: mutation.recordID)
+    }
+}
+
 final class MistiaSyncOutbox {
     private let defaults: UserDefaults
     private let key: String
@@ -96,8 +110,9 @@ final class MistiaSyncOutbox {
     }
 
     func enqueue(_ mutation: MistiaSyncMutation) {
+        let mutationKey = MistiaSyncMutationStorageKey(mutation)
         var mutations = load()
-        mutations.removeAll { $0.entity == mutation.entity && $0.recordID == mutation.recordID }
+        mutations.removeAll { MistiaSyncMutationStorageKey($0) == mutationKey }
         mutations.append(mutation)
         save(mutations.sorted { $0.modifiedAt < $1.modifiedAt })
     }
@@ -105,21 +120,28 @@ final class MistiaSyncOutbox {
     func enqueue(_ mutations: [MistiaSyncMutation]) {
         guard !mutations.isEmpty else { return }
 
-        var stored = load()
-        for mutation in mutations {
-            stored.removeAll { $0.entity == mutation.entity && $0.recordID == mutation.recordID }
-            stored.append(mutation)
+        let incoming = deduplicatedIncomingMutations(mutations)
+        var incomingKeys: Set<MistiaSyncMutationStorageKey> = []
+        incomingKeys.reserveCapacity(incoming.count)
+        for mutation in incoming {
+            incomingKeys.insert(MistiaSyncMutationStorageKey(mutation))
         }
+
+        var stored = load()
+        stored.removeAll { incomingKeys.contains(MistiaSyncMutationStorageKey($0)) }
+        stored.reserveCapacity(stored.count + incoming.count)
+        stored.append(contentsOf: incoming)
 
         save(stored.sorted { $0.modifiedAt < $1.modifiedAt })
     }
 
     func remove(_ mutation: MistiaSyncMutation) {
-        save(load().filter { $0.id != mutation.id })
+        remove(entity: mutation.entity, recordID: mutation.recordID)
     }
 
     func remove(entity: MistiaSyncEntity, recordID: UUID) {
-        save(load().filter { !($0.entity == entity && $0.recordID == recordID) })
+        let mutationKey = MistiaSyncMutationStorageKey(entity: entity, recordID: recordID)
+        save(load().filter { MistiaSyncMutationStorageKey($0) != mutationKey })
     }
 
     func clear() {
@@ -129,16 +151,19 @@ final class MistiaSyncOutbox {
     }
 
     func contains(entity: MistiaSyncEntity, recordID: UUID) -> Bool {
-        load().contains { $0.entity == entity && $0.recordID == recordID }
+        let mutationKey = MistiaSyncMutationStorageKey(entity: entity, recordID: recordID)
+        return load().contains { MistiaSyncMutationStorageKey($0) == mutationKey }
     }
 
     func rewriteRecordIDs(entity: MistiaSyncEntity, mappings: [UUID: UUID]) {
         guard !mappings.isEmpty else { return }
 
-        var rewrittenByID: [String: MistiaSyncMutation] = [:]
-        for mutation in load() {
+        let stored = load()
+        var rewrittenByKey: [MistiaSyncMutationStorageKey: MistiaSyncMutation] = [:]
+        rewrittenByKey.reserveCapacity(stored.count)
+        for mutation in stored {
             guard mutation.entity == entity, let replacementID = mappings[mutation.recordID] else {
-                rewrittenByID[mutation.id] = mutation
+                rewrittenByKey[MistiaSyncMutationStorageKey(mutation)] = mutation
                 continue
             }
 
@@ -151,15 +176,35 @@ final class MistiaSyncOutbox {
                 baseVersion: mutation.baseVersion,
                 deviceID: mutation.deviceID
             )
+            let rewrittenKey = MistiaSyncMutationStorageKey(rewritten)
 
-            if let existing = rewrittenByID[rewritten.id] {
-                rewrittenByID[rewritten.id] = preferredMutation(existing, rewritten)
+            if let existing = rewrittenByKey[rewrittenKey] {
+                rewrittenByKey[rewrittenKey] = preferredMutation(existing, rewritten)
             } else {
-                rewrittenByID[rewritten.id] = rewritten
+                rewrittenByKey[rewrittenKey] = rewritten
             }
         }
 
-        save(rewrittenByID.values.sorted { $0.modifiedAt < $1.modifiedAt })
+        save(rewrittenByKey.values.sorted { $0.modifiedAt < $1.modifiedAt })
+    }
+
+    private func deduplicatedIncomingMutations(
+        _ mutations: [MistiaSyncMutation]
+    ) -> [MistiaSyncMutation] {
+        var seenKeys: Set<MistiaSyncMutationStorageKey> = []
+        seenKeys.reserveCapacity(mutations.count)
+        var deduplicated: [MistiaSyncMutation] = []
+        deduplicated.reserveCapacity(mutations.count)
+
+        for mutation in mutations.reversed() {
+            guard seenKeys.insert(MistiaSyncMutationStorageKey(mutation)).inserted else {
+                continue
+            }
+            deduplicated.append(mutation)
+        }
+
+        deduplicated.reverse()
+        return deduplicated
     }
 
     private func load() -> [MistiaSyncMutation] {
