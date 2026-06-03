@@ -1,5 +1,6 @@
 import SwiftData
 import SwiftUI
+import UIKit
 
 struct NotificationCenterResourceIndex {
     private let walletsByID: [UUID: LedgerWallet]
@@ -347,19 +348,18 @@ enum NotificationCenterGrouping {
         calendar: Calendar
     ) -> [NotificationCenterDetailItem] {
         detailDaySections(for: rows, calendar: calendar)
-            .reversed()
             .flatMap { section in
-                section.rows.reversed().map { row in
-                    NotificationCenterDetailItem(
-                        id: "row-\(row.id.uuidString)",
-                        kind: .row(row)
-                    )
-                } + [
+                [
                     NotificationCenterDetailItem(
                         id: "day-\(section.id.timeIntervalSinceReferenceDate)",
                         kind: .dayHeader(section.id)
                     )
-                ]
+                ] + section.rows.map { row in
+                    NotificationCenterDetailItem(
+                        id: "row-\(row.id.uuidString)",
+                        kind: .row(row)
+                    )
+                }
             }
     }
 
@@ -445,6 +445,108 @@ private struct NotificationCenterGroupRoute: Identifiable {
         self.id = id
         self.title = title
         self.unreadRowIDs = unreadRowIDs
+    }
+}
+
+private struct NotificationGroupScreenEdgeBackGesture: UIViewRepresentable {
+    let isEnabled: Bool
+    let onBack: @MainActor () -> Void
+
+    func makeUIView(context: Context) -> UIView {
+        let view = EdgePanHostView(frame: .zero)
+        view.backgroundColor = .clear
+        view.isUserInteractionEnabled = true
+        context.coordinator.update(isEnabled: isEnabled, onBack: onBack)
+        context.coordinator.attach(to: view)
+        return view
+    }
+
+    func updateUIView(_ uiView: UIView, context: Context) {
+        context.coordinator.update(isEnabled: isEnabled, onBack: onBack)
+    }
+
+    static func dismantleUIView(_ uiView: UIView, coordinator: Coordinator) {
+        coordinator.detach()
+    }
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator(isEnabled: isEnabled, onBack: onBack)
+    }
+
+    final class EdgePanHostView: UIView {
+        private let activeWidth: CGFloat = 44
+
+        override func point(inside point: CGPoint, with event: UIEvent?) -> Bool {
+            point.x >= 0 && point.x <= activeWidth && point.y >= 0 && point.y <= bounds.height
+        }
+    }
+
+    final class Coordinator: NSObject, UIGestureRecognizerDelegate {
+        private var isEnabled: Bool
+        private var onBack: @MainActor () -> Void
+        private var gestures: [UIGestureRecognizer] = []
+
+        init(isEnabled: Bool, onBack: @escaping @MainActor () -> Void) {
+            self.isEnabled = isEnabled
+            self.onBack = onBack
+        }
+
+        func update(isEnabled: Bool, onBack: @escaping @MainActor () -> Void) {
+            self.isEnabled = isEnabled
+            self.onBack = onBack
+            gestures.forEach { $0.isEnabled = isEnabled }
+        }
+
+        func attach(to view: UIView) {
+            detach()
+
+            let edgeGesture = UIScreenEdgePanGestureRecognizer(target: self, action: #selector(handleEdgePan(_:)))
+            edgeGesture.edges = .left
+            edgeGesture.cancelsTouchesInView = false
+            edgeGesture.delegate = self
+            edgeGesture.isEnabled = isEnabled
+            view.addGestureRecognizer(edgeGesture)
+
+            let panGesture = UIPanGestureRecognizer(target: self, action: #selector(handleEdgePan(_:)))
+            panGesture.cancelsTouchesInView = false
+            panGesture.delegate = self
+            panGesture.isEnabled = isEnabled
+            view.addGestureRecognizer(panGesture)
+
+            gestures = [edgeGesture, panGesture]
+        }
+
+        func detach() {
+            for gesture in gestures {
+                gesture.view?.removeGestureRecognizer(gesture)
+            }
+            gestures = []
+        }
+
+        @objc private func handleEdgePan(_ gesture: UIPanGestureRecognizer) {
+            guard isEnabled, gesture.state == .ended || gesture.state == .recognized else { return }
+            let translation = gesture.translation(in: gesture.view)
+            let velocity = gesture.velocity(in: gesture.view)
+            guard translation.x >= 28 || velocity.x >= 260 else { return }
+
+            Task { @MainActor [onBack] in
+                onBack()
+            }
+        }
+
+        func gestureRecognizerShouldBegin(_ gestureRecognizer: UIGestureRecognizer) -> Bool {
+            guard isEnabled else { return false }
+            guard let panGesture = gestureRecognizer as? UIPanGestureRecognizer else { return true }
+            let velocity = panGesture.velocity(in: gestureRecognizer.view)
+            return velocity.x > 0 && abs(velocity.x) > abs(velocity.y)
+        }
+
+        func gestureRecognizer(
+            _ gestureRecognizer: UIGestureRecognizer,
+            shouldRecognizeSimultaneouslyWith otherGestureRecognizer: UIGestureRecognizer
+        ) -> Bool {
+            false
+        }
     }
 }
 
@@ -546,12 +648,6 @@ struct NotificationCenterView: View {
         }
         .onChange(of: familyEnabled) { _, _ in refreshRenderSnapshotCache() }
         .onChange(of: sessionStore.activeLocalProfileUserID) { _, _ in refreshRenderSnapshotCache() }
-        .onAppear {
-            uiState.requestQuickCreateHidden(true, id: viewID)
-        }
-        .onDisappear {
-            uiState.requestQuickCreateHidden(false, id: viewID)
-        }
         .navigationDestination(item: $statementTarget) { target in
             ManagementCreditCardStatementView(wallet: target.wallet, initialMonth: target.month)
         }
@@ -575,6 +671,12 @@ struct NotificationCenterView: View {
                 message: Text(alert.message),
                 dismissButton: .default(Text(L10n.common.ok))
             )
+        }
+        .onAppear {
+            uiState.requestQuickCreateHidden(true, id: viewID)
+        }
+        .onDisappear {
+            uiState.requestQuickCreateHidden(false, id: viewID)
         }
     }
 
@@ -730,6 +832,13 @@ struct NotificationCenterView: View {
                 )
             }
         }
+        .overlay(alignment: .leading) {
+            NotificationGroupScreenEdgeBackGesture(isEnabled: selectedGroupRoute != nil) {
+                closeGroupDetail()
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .ignoresSafeArea()
+        }
         .toolbar(.hidden, for: .navigationBar)
         .navigationBarBackButtonHidden(true)
         .task(id: route.id) {
@@ -763,36 +872,48 @@ struct NotificationCenterView: View {
         .padding(.horizontal, 18)
         .padding(.top, 8)
         .padding(.bottom, 8)
-        .background(Color(UIColor.systemGroupedBackground))
     }
 
     private func notificationGroupDetailList(
         detailItems: [NotificationCenterDetailItem],
         resourceIndex: NotificationCenterResourceIndex
     ) -> some View {
-        ScrollView(.vertical, showsIndicators: true) {
-            LazyVStack(alignment: .leading, spacing: 10) {
-                if detailItems.isEmpty {
-                    ProgressView()
-                        .frame(maxWidth: .infinity)
-                        .padding(.top, 80)
-                        .scaleEffect(x: 1, y: -1, anchor: .center)
-                } else {
-                    ForEach(detailItems) { item in
-                        notificationDetailItem(
-                            item,
-                            resourceIndex: resourceIndex
-                        )
-                        .scaleEffect(x: 1, y: -1, anchor: .center)
+        ScrollViewReader { proxy in
+            ScrollView(.vertical, showsIndicators: true) {
+                LazyVStack(alignment: .leading, spacing: 10) {
+                    if detailItems.isEmpty {
+                        ProgressView()
+                            .frame(maxWidth: .infinity)
+                            .padding(.top, 40)
+                    } else {
+                        ForEach(detailItems) { item in
+                            notificationDetailItem(
+                                item,
+                                resourceIndex: resourceIndex
+                            )
+                        }
                     }
                 }
+                .padding(.horizontal, 16)
+                .padding(.top, 12)
+                .padding(.bottom, 14)
             }
-            .padding(.horizontal, 16)
-            .padding(.top, 42)
-            .padding(.bottom, 14)
+            .background(Color(UIColor.systemGroupedBackground).ignoresSafeArea())
+            .onAppear {
+                scrollDetailToBottom(proxy, itemID: detailItems.last?.id)
+            }
+            .onChange(of: detailItems.last?.id) { _, itemID in
+                scrollDetailToBottom(proxy, itemID: itemID)
+            }
         }
-        .scaleEffect(x: 1, y: -1, anchor: .center)
-        .background(Color(UIColor.systemGroupedBackground).ignoresSafeArea())
+    }
+
+    private func scrollDetailToBottom(
+        _ proxy: ScrollViewProxy,
+        itemID: String?
+    ) {
+        guard let itemID else { return }
+        proxy.scrollTo(itemID, anchor: .bottom)
     }
 
     @ViewBuilder
@@ -1338,11 +1459,12 @@ struct NotificationCenterView: View {
             .map(\.id)
         selectedGroupDetailItems = []
         selectedGroupResourceIndex = resourceIndex
-        selectedGroupRoute = NotificationCenterGroupRoute(
+        let route = NotificationCenterGroupRoute(
             id: group.id,
             title: group.id.title,
             unreadRowIDs: unreadRowIDs
         )
+        selectedGroupRoute = route
 
         Task { @MainActor in
             await Task.yield()
@@ -1366,6 +1488,11 @@ struct NotificationCenterView: View {
     @MainActor
     private func closeGroupDetail() {
         selectedGroupRoute = nil
+        resetGroupDetailState()
+    }
+
+    @MainActor
+    private func resetGroupDetailState() {
         selectedGroupDetailItems = []
         selectedGroupResourceIndex = NotificationCenterResourceIndex(wallets: [], categories: [], bills: [])
         refreshRenderSnapshotCache()

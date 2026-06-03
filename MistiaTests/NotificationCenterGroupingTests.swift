@@ -101,7 +101,7 @@ final class NotificationCenterGroupingTests: XCTestCase {
         XCTAssertEqual(sections.flatMap(\.rows).last?.key, "newest")
     }
 
-    func testBottomAnchoredDetailItemsRenderNewestFirstForFlippedScrollView() throws {
+    func testBottomAnchoredDetailItemsKeepNewestAtBottomForNativeScrollView() throws {
         let newest = notification(
             key: "newest",
             createdAt: makeDate(year: 2026, month: 5, day: 24, hour: 18),
@@ -132,8 +132,8 @@ final class NotificationCenterGroupingTests: XCTestCase {
             return nil
         }
 
-        XCTAssertEqual(renderedRowKeys, ["newest", "middle", "oldest"])
-        XCTAssertEqual(renderedRowKeys.reversed(), ["oldest", "middle", "newest"])
+        XCTAssertEqual(renderedRowKeys, ["oldest", "middle", "newest"])
+        XCTAssertEqual(renderedRowKeys.last, "newest")
     }
 
     private func notification(
