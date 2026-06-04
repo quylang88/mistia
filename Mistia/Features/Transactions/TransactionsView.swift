@@ -1684,9 +1684,15 @@ private struct TransactionRow: View {
                 }
                 return source
             case .debt:
-                let wallet = transaction.sourceWallet?.name ?? L10n.transactions.transactions.noWalletSelected
                 let person = transaction.counterpartyName ?? L10n.transactions.transactions.unknownName
                 let intent = record.debtIntent?.title ?? L10n.transactions.transactions.debt
+                if TransactionLogic.isPaidForDebt(record) {
+                    if let category = transaction.category?.localizedDisplayName {
+                        return "\(person) • \(intent) • \(L10n.transactions.transactioneditor.borrowPaidFor) • \(category)"
+                    }
+                    return "\(person) • \(intent) • \(L10n.transactions.transactioneditor.borrowPaidFor)"
+                }
+                let wallet = transaction.sourceWallet?.name ?? L10n.transactions.transactions.noWalletSelected
                 return "\(person) • \(intent) • \(wallet)"
             case nil:
                 return L10n.transactions.transactions.transfer
@@ -1728,6 +1734,9 @@ private struct TransactionRow: View {
         case .income:
             return MistiaAccent.income.color
         case .transfer:
+            if TransactionLogic.isPaidForExpenseDebt(record) {
+                return MistiaAccent.expense.color
+            }
             if record.transferSubtype == .debt {
                 return debtIntentTint(record.debtIntent)
             }
@@ -1757,6 +1766,9 @@ private struct TransactionRow: View {
         case .income:
             return "+" + raw
         case .transfer:
+            if TransactionLogic.isPaidForExpenseDebt(record) {
+                return "-" + raw
+            }
             let cashflow = TransactionLogic.cashflowAmount(for: record)
             if cashflow > 0 {
                 return "+" + raw

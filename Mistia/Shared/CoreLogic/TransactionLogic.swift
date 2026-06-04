@@ -336,9 +336,27 @@ nonisolated enum TransactionLogic {
     }
 
     static func isExpenseSpending(_ record: TransactionRecordSnapshot) -> Bool {
-        record.primaryKind == .expense
+        if isPaidForExpenseDebt(record) {
+            return true
+        }
+
+        return record.primaryKind == .expense
             && !isAdjustment(record)
             && !isCreditCardPayment(record)
+            && !isInstallmentPayment(record)
+    }
+
+    static func isPaidForDebt(_ record: TransactionRecordSnapshot) -> Bool {
+        record.primaryKind == .transfer
+            && record.transferSubtype == .debt
+            && record.debtIntent == .borrow
+            && record.sourceWalletID == nil
+    }
+
+    static func isPaidForExpenseDebt(_ record: TransactionRecordSnapshot) -> Bool {
+        isPaidForDebt(record)
+            && record.categoryID != nil
+            && !isAdjustment(record)
             && !isInstallmentPayment(record)
     }
 
@@ -877,7 +895,7 @@ nonisolated enum TransactionLogic {
                 case .lend, .repay:
                     -record.amountMinor
                 case .collect, .borrow:
-                    record.amountMinor
+                    isPaidForDebt(record) ? 0 : record.amountMinor
                 case nil:
                     0
                 }
@@ -908,7 +926,7 @@ nonisolated enum TransactionLogic {
             case .familyTransfer:
                 return record.sourceWalletID != nil
             case .debt:
-                return record.sourceWalletID != nil
+                return (record.sourceWalletID != nil || isPaidForDebt(record))
                     && record.debtIntent != nil
                     && record.normalizedCounterpartyKey != nil
             case nil:

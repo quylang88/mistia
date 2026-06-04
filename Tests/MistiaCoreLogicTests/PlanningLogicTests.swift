@@ -99,6 +99,103 @@ final class PlanningLogicTests: XCTestCase {
         XCTAssertEqual(summary.remainingDailyAllowanceMinor, 775)
     }
 
+    func testBudgetRowsCountPaidForBorrowDebtOnlyWhenCategorized() {
+        let selectedMonth = makeDate(year: 2026, month: 4, day: 1)
+        let foodCategory = UUID()
+
+        let rows = PlanningLogic.budgetRows(
+            plans: [
+                BudgetPlanSnapshot(
+                    id: UUID(),
+                    categoryID: foodCategory,
+                    categoryName: "Ăn uống",
+                    categoryIconSymbolName: "fork.knife",
+                    categoryColorHex: "#FF9F1C",
+                    limitMinor: 10_000,
+                    rolloverEnabled: false,
+                    currencyCode: "JPY",
+                    monthAnchor: selectedMonth
+                )
+            ],
+            records: [
+                makeRecord(
+                    primaryKind: .transfer,
+                    transferSubtype: .debt,
+                    debtIntent: .borrow,
+                    amountMinor: 4_000,
+                    occurredAt: makeDate(year: 2026, month: 4, day: 5),
+                    categoryID: foodCategory,
+                    sourceWalletID: nil,
+                    sourceCurrencyCode: "JPY"
+                ),
+                makeRecord(
+                    primaryKind: .transfer,
+                    transferSubtype: .debt,
+                    debtIntent: .borrow,
+                    amountMinor: 9_000,
+                    occurredAt: makeDate(year: 2026, month: 4, day: 6),
+                    categoryID: nil,
+                    sourceWalletID: nil,
+                    sourceCurrencyCode: "JPY"
+                )
+            ],
+            selectedMonth: selectedMonth,
+            referenceDate: makeDate(year: 2026, month: 4, day: 10),
+            calendar: calendar
+        )
+
+        XCTAssertEqual(rows.first?.spentMinor, 4_000)
+    }
+
+    func testBudgetRowsCountFamilyPaidForBorrowDebtOnlyWhenCategorized() {
+        let selectedMonth = makeDate(year: 2026, month: 4, day: 1)
+        let foodCategory = UUID()
+
+        let rows = PlanningLogic.budgetRows(
+            plans: [
+                BudgetPlanSnapshot(
+                    id: UUID(),
+                    categoryID: foodCategory,
+                    categoryName: "Ăn uống",
+                    categoryIconSymbolName: "fork.knife",
+                    categoryColorHex: "#FF9F1C",
+                    limitMinor: 10_000,
+                    rolloverEnabled: false,
+                    currencyCode: "JPY",
+                    monthAnchor: selectedMonth,
+                    includesFamilySpending: true
+                )
+            ],
+            records: [],
+            selectedMonth: selectedMonth,
+            referenceDate: makeDate(year: 2026, month: 4, day: 10),
+            calendar: calendar,
+            familyTransactions: [
+                makeFamilyBudgetTransaction(
+                    primaryKind: .transfer,
+                    transferSubtype: .debt,
+                    debtIntent: .borrow,
+                    amountMinor: 4_000,
+                    occurredAt: makeDate(year: 2026, month: 4, day: 5),
+                    categoryName: "Ăn uống",
+                    categoryParentName: nil
+                ),
+                makeFamilyBudgetTransaction(
+                    primaryKind: .transfer,
+                    transferSubtype: .debt,
+                    debtIntent: .borrow,
+                    amountMinor: 9_000,
+                    occurredAt: makeDate(year: 2026, month: 4, day: 6),
+                    categoryName: nil,
+                    categoryParentName: nil
+                )
+            ],
+            familySpendingAvailable: true
+        )
+
+        XCTAssertEqual(rows.first?.spentMinor, 4_000)
+    }
+
     func testBudgetPaceWarnsWhenEarlyMonthSpendingIsMoreThanFifteenPercentAhead() {
         let assessment = PlanningLogic.budgetPaceAssessment(
             spentMinor: 25_000,
@@ -1914,8 +2011,9 @@ final class PlanningLogicTests: XCTestCase {
         occurredAt: Date,
         categoryID: UUID?,
         categoryParentID: UUID? = nil,
-        sourceWalletID: UUID = UUID(),
+        sourceWalletID: UUID? = UUID(),
         sourceWalletKind: LedgerWalletKind = .cash,
+        sourceCurrencyCode: String? = nil,
         destinationWalletID: UUID? = nil,
         destinationWalletKind: LedgerWalletKind? = nil
     ) -> TransactionRecordSnapshot {
@@ -1928,6 +2026,7 @@ final class PlanningLogicTests: XCTestCase {
             title: "Test",
             note: nil,
             amountMinor: amountMinor,
+            sourceCurrencyCode: sourceCurrencyCode,
             occurredAt: occurredAt,
             createdAt: occurredAt,
             sourceWalletID: sourceWalletID,
@@ -2010,6 +2109,10 @@ final class PlanningLogicTests: XCTestCase {
         categoryParentName: String?,
         currencyCode: String = "JPY"
     ) -> FamilyAggregateTransactionSnapshot {
+        let isPaidForDebt = primaryKind == .transfer
+            && transferSubtype == .debt
+            && debtIntent == .borrow
+        let categoryID = categoryName == nil ? nil : UUID()
         let record = TransactionRecordSnapshot(
             id: UUID(),
             primaryKind: primaryKind,
@@ -2022,11 +2125,11 @@ final class PlanningLogicTests: XCTestCase {
             sourceCurrencyCode: currencyCode,
             occurredAt: occurredAt,
             createdAt: occurredAt,
-            sourceWalletID: UUID(),
+            sourceWalletID: isPaidForDebt ? nil : UUID(),
             sourceWalletKind: sourceWalletKind,
             destinationWalletID: destinationWalletKind == nil ? nil : UUID(),
             destinationWalletKind: destinationWalletKind,
-            categoryID: nil,
+            categoryID: categoryID,
             counterpartyName: nil,
             normalizedCounterpartyKey: nil
         )
@@ -2036,7 +2139,7 @@ final class PlanningLogicTests: XCTestCase {
             categoryName: categoryName,
             categoryParentName: categoryParentName,
             occurredAt: occurredAt,
-            kind: familyTransactionKind(for: primaryKind),
+            kind: TransactionLogic.isPaidForExpenseDebt(record) ? .expense : familyTransactionKind(for: primaryKind),
             amountMinor: amountMinor,
             currencyCode: currencyCode,
             isCreditCardPayment: TransactionLogic.isCreditCardPayment(record),

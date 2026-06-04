@@ -22776,19 +22776,19 @@
         "vi": {
           "stringUnit": {
             "state": "translated",
-            "value": "Đi vay"
+            "value": "Nợ phải trả"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Borrow"
+            "value": "Payable"
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "借りる"
+            "value": "未払金"
           }
         }
       }
@@ -31923,6 +31923,50 @@
         }
       }
     },
+    "transactions.transactioneditor.borrowPaidFor": {
+      "localizations": {
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Được trả hộ"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Paid for me"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "立て替えてもらう"
+          }
+        }
+      }
+    },
+    "transactions.transactioneditor.borrowReceiveIntoWallet": {
+      "localizations": {
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nhận tiền vào ví"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Receive into wallet"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ウォレットに受け取る"
+          }
+        }
+      }
+    },
     "transactions.transactioneditor.category": {
       "localizations": {
         "vi": {
@@ -32451,6 +32495,28 @@
         }
       }
     },
+    "transactions.transactioneditor.countAsExpense": {
+      "localizations": {
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tính vào chi tiêu"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Count as expense"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "支出に含める"
+          }
+        }
+      }
+    },
     "transactions.transactioneditor.counterparty": {
       "localizations": {
         "vi": {
@@ -32469,6 +32535,28 @@
           "stringUnit": {
             "state": "translated",
             "value": "相手"
+          }
+        }
+      }
+    },
+    "transactions.transactioneditor.currency": {
+      "localizations": {
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Loại tiền"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Currency"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "通貨"
           }
         }
       }

@@ -564,6 +564,48 @@ final class TransactionEditorEdgeCasesTests: XCTestCase {
         XCTAssertFalse(TransactionLogic.isTransactionComplete(record))
     }
 
+    func testPaidForBorrowDebtCanBeCompleteWithoutWallet() {
+        let record = makeRecord(
+            primaryKind: .transfer,
+            transferSubtype: .debt,
+            debtIntent: .borrow,
+            amountMinor: 1000,
+            occurredAt: Date(),
+            counterpartyName: "Minh"
+        )
+
+        XCTAssertTrue(TransactionLogic.isTransactionComplete(record))
+    }
+
+    func testDraftPaidForBorrowDebtCanBeCompleteWithoutWallet() {
+        let record = makeRecord(
+            primaryKind: .transfer,
+            transferSubtype: .debt,
+            debtIntent: .borrow,
+            entryStatus: .draft,
+            amountMinor: 1000,
+            occurredAt: Date(),
+            counterpartyName: "Minh"
+        )
+
+        XCTAssertTrue(TransactionLogic.isTransactionComplete(record))
+    }
+
+    func testReceiveIntoWalletBorrowDebtRemainsCompleteWithWallet() {
+        let record = makeRecord(
+            primaryKind: .transfer,
+            transferSubtype: .debt,
+            debtIntent: .borrow,
+            amountMinor: 1000,
+            occurredAt: Date(),
+            sourceWalletID: UUID(),
+            sourceWalletKind: .cash,
+            counterpartyName: "Minh"
+        )
+
+        XCTAssertTrue(TransactionLogic.isTransactionComplete(record))
+    }
+
     // MARK: - Category Edge Cases
 
     func testExpenseWithParentCategoryInsteadOfChild() {

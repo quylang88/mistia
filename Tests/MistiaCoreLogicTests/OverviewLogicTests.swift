@@ -351,6 +351,49 @@ final class OverviewLogicTests: XCTestCase {
         XCTAssertEqual(page.slices.map(\.name), ["Đi chợ"])
     }
 
+    func testPaidForBorrowDebtWithCategoryCountsInOverviewSpending() {
+        let grocery = UUID()
+        let uncategorizedPaidFor = makeOverviewTransaction(
+            primaryKind: .transfer,
+            transferSubtype: .debt,
+            debtIntent: .borrow,
+            title: "Được trả hộ",
+            amountMinor: 9_000,
+            sourceCurrencyCode: "JPY",
+            occurredAt: makeDate(year: 2026, month: 4, day: 4),
+            counterpartyName: "Minh"
+        )
+        let categorizedPaidFor = makeOverviewTransaction(
+            primaryKind: .transfer,
+            transferSubtype: .debt,
+            debtIntent: .borrow,
+            title: "Được trả hộ",
+            amountMinor: 4_000,
+            sourceCurrencyCode: "JPY",
+            occurredAt: makeDate(year: 2026, month: 4, day: 5),
+            categoryID: grocery,
+            categoryName: "Đi chợ",
+            counterpartyName: "Minh"
+        )
+
+        let monthly = OverviewLogic.monthlyCashflowPages(
+            from: [categorizedPaidFor, uncategorizedPaidFor],
+            currencyCode: "JPY",
+            referenceDate: makeDate(year: 2026, month: 4, day: 20),
+            calendar: calendar
+        )
+        let categoryPage = OverviewLogic.categorySpendingMonth(
+            from: [categorizedPaidFor, uncategorizedPaidFor],
+            selectedMonth: makeDate(year: 2026, month: 4, day: 15),
+            currencyCode: "JPY",
+            calendar: calendar
+        )
+
+        XCTAssertEqual(monthly.map(\.expenseMinor), [4_000])
+        XCTAssertEqual(categoryPage.totalExpenseMinor, 4_000)
+        XCTAssertEqual(categoryPage.slices.map(\.name), ["Đi chợ"])
+    }
+
     func testCategorySpendingDrilldownIncludesChildAndDirectParentTransactions() {
         let foodParent = UUID()
         let grocery = UUID()
@@ -1138,8 +1181,11 @@ final class OverviewLogicTests: XCTestCase {
 
     private func makeTransactionRecord(
         primaryKind: TransactionPrimaryKind,
+        transferSubtype: TransactionTransferSubtype? = nil,
+        debtIntent: TransactionDebtIntent? = nil,
         amountMinor: Int64,
         occurredAt: Date,
+        sourceCurrencyCode: String? = nil,
         sourceWalletID: UUID? = UUID(),
         sourceWalletKind: LedgerWalletKind? = .cash,
         categoryID: UUID? = nil,
@@ -1148,12 +1194,13 @@ final class OverviewLogicTests: XCTestCase {
         TransactionRecordSnapshot(
             id: UUID(),
             primaryKind: primaryKind,
-            transferSubtype: nil,
-            debtIntent: nil,
+            transferSubtype: transferSubtype,
+            debtIntent: debtIntent,
             entryStatus: .posted,
             title: "Test",
             note: nil,
             amountMinor: amountMinor,
+            sourceCurrencyCode: sourceCurrencyCode,
             occurredAt: occurredAt,
             createdAt: occurredAt,
             sourceWalletID: sourceWalletID,
@@ -1170,8 +1217,10 @@ final class OverviewLogicTests: XCTestCase {
     private func makeOverviewTransaction(
         primaryKind: TransactionPrimaryKind,
         transferSubtype: TransactionTransferSubtype? = nil,
+        debtIntent: TransactionDebtIntent? = nil,
         title: String,
         amountMinor: Int64,
+        sourceCurrencyCode: String? = nil,
         occurredAt: Date,
         isArchived: Bool = false,
         sourceWalletID: UUID? = nil,
@@ -1187,17 +1236,19 @@ final class OverviewLogicTests: XCTestCase {
         categoryParentID: UUID? = nil,
         categoryParentName: String? = nil,
         categoryParentIconSymbolName: String? = nil,
-        categoryParentColorHex: String? = nil
+        categoryParentColorHex: String? = nil,
+        counterpartyName: String? = nil
     ) -> OverviewTransactionSnapshot {
         OverviewTransactionSnapshot(
             id: UUID(),
             primaryKind: primaryKind,
             transferSubtype: transferSubtype,
-            debtIntent: nil,
+            debtIntent: debtIntent,
             entryStatus: .posted,
             title: title,
             note: nil,
             amountMinor: amountMinor,
+            sourceCurrencyCode: sourceCurrencyCode,
             occurredAt: occurredAt,
             createdAt: occurredAt,
             sourceWalletID: sourceWalletID,
@@ -1214,7 +1265,7 @@ final class OverviewLogicTests: XCTestCase {
             categoryParentName: categoryParentName,
             categoryParentIconSymbolName: categoryParentIconSymbolName,
             categoryParentColorHex: categoryParentColorHex,
-            counterpartyName: nil,
+            counterpartyName: counterpartyName,
             isArchived: isArchived
         )
     }

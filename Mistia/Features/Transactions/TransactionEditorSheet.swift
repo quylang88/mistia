@@ -111,6 +111,22 @@ private enum TransactionEditorFocusedField: Hashable {
     case counterparty
 }
 
+fileprivate enum BorrowDebtEntryMode: String, CaseIterable, Identifiable {
+    case receiveIntoWallet
+    case paidFor
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .receiveIntoWallet:
+            L10n.transactions.transactioneditor.borrowReceiveIntoWallet
+        case .paidFor:
+            L10n.transactions.transactioneditor.borrowPaidFor
+        }
+    }
+}
+
 private struct FamilyTransferDraftPayload {
     let recipientUserID: UUID
     let sourceWalletID: UUID
@@ -608,6 +624,10 @@ struct TransactionEditorSheet: View {
                         get: { bindableDraft.debtIntent ?? .lend },
                         set: {
                             bindableDraft.debtIntent = $0
+                            if $0 != .borrow {
+                                bindableDraft.borrowDebtEntryMode = .receiveIntoWallet
+                                bindableDraft.paidForCountsAsExpense = false
+                            }
                             clearMismatchedWalletsForCurrentSubject()
                         }
                     )) {
@@ -619,6 +639,29 @@ struct TransactionEditorSheet: View {
                     .disabled(target.prefill?.lockedDebtIntent != nil || isExistingDebtTransaction)
                     .listRowInsets(EdgeInsets())
                     .listRowBackground(Color.clear)
+
+                    if draft.debtIntent == .borrow {
+                        MistiaNativeSegmentedControl(
+                            selection: Binding(
+                                get: { bindableDraft.borrowDebtEntryMode },
+                                set: { mode in
+                                    bindableDraft.borrowDebtEntryMode = mode
+                                    if mode == .paidFor {
+                                        bindableDraft.sourceWalletID = nil
+                                    } else {
+                                        bindableDraft.paidForCountsAsExpense = false
+                                        bindableDraft.categoryID = nil
+                                    }
+                                    clearMismatchedWalletsForCurrentSubject()
+                                }
+                            ),
+                            options: BorrowDebtEntryMode.allCases,
+                            title: { $0.title }
+                        )
+                        .disabled(isExistingDebtTransaction)
+                        .listRowInsets(EdgeInsets())
+                        .listRowBackground(Color.clear)
+                    }
                 }
             }
 
@@ -774,13 +817,51 @@ struct TransactionEditorSheet: View {
                     }
                 } else {
                     Section(L10n.transactions.transactioneditor.counterparty) {
-                        Picker(L10n.transactions.transactioneditor.walletUsed, selection: $draft.sourceWalletID) {
-                            Text(L10n.transactions.transactioneditor.chooseWallet).tag(Optional<UUID>.none)
-                            ForEach(renderContext.availableDebtWallets) { wallet in
-                                Text(walletPickerTitle(for: wallet, in: renderContext)).tag(Optional(wallet.id))
+                        if draft.debtIntent == .borrow,
+                           draft.borrowDebtEntryMode == .paidFor {
+                            Picker(L10n.transactions.transactioneditor.currency, selection: $draft.paidForCurrencyCode) {
+                                ForEach(MistiaCurrencySettings.enabledCurrencyCodes(), id: \.self) { code in
+                                    Text(code).tag(code)
+                                }
                             }
+                            .pickerStyle(.menu)
+
+                            Toggle(L10n.transactions.transactioneditor.countAsExpense, isOn: Binding(
+                                get: { bindableDraft.paidForCountsAsExpense },
+                                set: { isOn in
+                                    bindableDraft.paidForCountsAsExpense = isOn
+                                    if !isOn {
+                                        bindableDraft.categoryID = nil
+                                    }
+                                }
+                            ))
+
+                            if draft.paidForCountsAsExpense {
+                                Button {
+                                    showsCategoryPicker = true
+                                } label: {
+                                    HStack {
+                                        Text(L10n.transactions.transactioneditor.category)
+                                            .foregroundStyle(.primary)
+                                        Spacer()
+                                        Text(renderContext.selectedCategoryLabel)
+                                            .foregroundStyle(renderContext.selectedCategory == nil ? .tertiary : .secondary)
+                                        Image(systemName: "chevron.right")
+                                            .font(.system(size: 11, weight: .bold))
+                                            .foregroundStyle(.tertiary)
+                                    }
+                                }
+                                .buttonStyle(MistiaPressableButtonStyle(cornerRadius: 20))
+                            }
+                        } else {
+                            Picker(L10n.transactions.transactioneditor.walletUsed, selection: $draft.sourceWalletID) {
+                                Text(L10n.transactions.transactioneditor.chooseWallet).tag(Optional<UUID>.none)
+                                ForEach(renderContext.availableDebtWallets) { wallet in
+                                    Text(walletPickerTitle(for: wallet, in: renderContext)).tag(Optional(wallet.id))
+                                }
+                            }
+                            .pickerStyle(.menu)
                         }
-                        .pickerStyle(.menu)
 
                     TextField(
                         L10n.transactions.transactioneditor.counterpartyName,
@@ -1009,7 +1090,12 @@ struct TransactionEditorSheet: View {
             shouldShowTransferConversionSection
         }
         let hasNoAvailableWallets: Bool
-        if draft.primaryKind == .transfer, draft.transferSubtype == .debt {
+        if draft.primaryKind == .transfer,
+           draft.transferSubtype == .debt,
+           draft.debtIntent == .borrow,
+           draft.borrowDebtEntryMode == .paidFor {
+            hasNoAvailableWallets = false
+        } else if draft.primaryKind == .transfer, draft.transferSubtype == .debt {
             hasNoAvailableWallets = availableDebtWallets.isEmpty
         } else {
             hasNoAvailableWallets = availableWallets.isEmpty
@@ -1466,12 +1552,26 @@ struct TransactionEditorSheet: View {
         availableCategories.first(where: { $0.id == draft.categoryID })
     }
 
+    private var isPaidForBorrowDraft: Bool {
+        draft.primaryKind == .transfer
+            && draft.transferSubtype == .debt
+            && draft.debtIntent == .borrow
+            && draft.borrowDebtEntryMode == .paidFor
+    }
+
+    private var paidForCurrencyCode: String {
+        MistiaCurrencyLogic.normalizedCode(draft.paidForCurrencyCode)
+    }
+
     private var selectedConversionMode: MistiaCurrencyConversionMode {
         MistiaCurrencyConversionMode(rawValue: draft.conversionModeRawValue) ?? .appRate
     }
 
     private var sourceCurrencyCodeForDraft: String {
-        selectedSourceWallet?.currencyCode ?? "JPY"
+        if isPaidForBorrowDraft {
+            return paidForCurrencyCode
+        }
+        return selectedSourceWallet?.currencyCode ?? "JPY"
     }
 
     private var destinationCurrencyCodeForDraft: String? {
@@ -2255,7 +2355,7 @@ struct TransactionEditorSheet: View {
             return
         }
 
-        guard !availableWallets.isEmpty else {
+        guard !availableWallets.isEmpty || isPaidForBorrowDraft else {
             alertMessage = L10n.transactions.transactioneditor.youDonTHaveAnyWalletsAvailable
             return
         }
@@ -2364,7 +2464,22 @@ struct TransactionEditorSheet: View {
                 }
 
             case .debt:
-                if draft.debtIntent == .lend || draft.debtIntent == .repay {
+                guard draft.debtIntent != nil else {
+                    alertMessage = L10n.transactions.transactioneditor.chooseADebtType
+                    return
+                }
+
+                guard TransactionLogic.normalizeCounterpartyName(draft.counterpartyName) != nil else {
+                    alertMessage = L10n.transactions.transactioneditor.enterTheCounterpartyName
+                    return
+                }
+
+                if isPaidForBorrowDraft {
+                    if draft.paidForCountsAsExpense, selectedCategory == nil {
+                        alertMessage = L10n.transactions.transactioneditor.chooseACategoryForThisTransaction
+                        return
+                    }
+                } else if draft.debtIntent == .lend || draft.debtIntent == .repay {
                     guard let sourceWallet = selectedSourceWallet else {
                         alertMessage = L10n.transactions.transactioneditor.chooseTheWalletUsedForThisDebt
                         return
@@ -2518,14 +2633,21 @@ struct TransactionEditorSheet: View {
                 alertMessage = L10n.transactions.transactioneditor.couldnTCreateFamilyTransfer
                 return
             case .debt:
-                guard let sourceWallet = selectedSourceWallet else {
-                    alertMessage = L10n.transactions.transactioneditor.chooseTheWalletUsedForThisDebt
-                    return
-                }
-
                 guard let debtIntent = draft.debtIntent else {
                     alertMessage = L10n.transactions.transactioneditor.chooseADebtType
                     return
+                }
+
+                let isPaidForBorrow = debtIntent == .borrow && draft.borrowDebtEntryMode == .paidFor
+                let sourceWallet: LedgerWallet?
+                if isPaidForBorrow {
+                    sourceWallet = nil
+                } else {
+                    guard let selectedSourceWallet else {
+                        alertMessage = L10n.transactions.transactioneditor.chooseTheWalletUsedForThisDebt
+                        return
+                    }
+                    sourceWallet = selectedSourceWallet
                 }
 
                 guard let counterpartyName = draft.counterpartyName.nilIfBlank,
@@ -2535,15 +2657,26 @@ struct TransactionEditorSheet: View {
                     return
                 }
 
+                let category: TransactionCategory?
+                if isPaidForBorrow && draft.paidForCountsAsExpense {
+                    guard let selectedCategory else {
+                        alertMessage = L10n.transactions.transactioneditor.chooseACategoryForThisTransaction
+                        return
+                    }
+                    category = selectedCategory
+                } else {
+                    category = nil
+                }
+
                 transaction.title = draft.title.nilIfBlank ?? debtIntent.title
                 transaction.sourceWallet = sourceWallet
                 transaction.destinationWallet = nil
-                transaction.category = nil
+                transaction.category = category
                 transaction.transferSubtype = .debt
                 transaction.debtIntent = debtIntent
                 transaction.counterpartyName = counterpartyName
                 transaction.normalizedCounterpartyKey = normalizedCounterpartyKey
-                transaction.sourceCurrencyCode = sourceWallet.currencyCode
+                transaction.sourceCurrencyCode = isPaidForBorrow ? paidForCurrencyCode : sourceWallet?.currencyCode
                 transaction.destinationCurrencyCode = nil
                 transaction.destinationAmountMinor = nil
                 transaction.reportingCurrencyCode = nil
@@ -2566,7 +2699,7 @@ struct TransactionEditorSheet: View {
             return
         }
 
-        let canonicalOwnerUserID = walletOwnerUserID(for: transaction.sourceWallet)
+        let canonicalOwnerUserID = persistenceOwnerUserID(for: transaction)
         persist(
             transaction: transaction,
             completion: .savedTransaction,
@@ -2846,6 +2979,15 @@ struct TransactionEditorSheet: View {
         transactionOwnerMap[transaction.id]
             ?? walletOwnerUserID(for: transaction.sourceWallet)
             ?? walletOwnerUserID(for: transaction.destinationWallet)
+            ?? currentSelfUserID
+    }
+
+    private func persistenceOwnerUserID(for transaction: LedgerTransaction) -> UUID? {
+        transactionOwnerMap[transaction.id]
+            ?? walletOwnerUserID(for: transaction.sourceWallet)
+            ?? walletOwnerUserID(for: transaction.destinationWallet)
+            ?? target.subjectUserIDOverride
+            ?? familyContextStore.selectedSubjectUserID
             ?? currentSelfUserID
     }
 
@@ -3255,6 +3397,9 @@ private struct TransactionReceiptImagePicker: UIViewControllerRepresentable {
     var primaryKind: TransactionPrimaryKind = .expense
     var transferSubtype: TransactionTransferSubtype? = nil
     var debtIntent: TransactionDebtIntent? = nil
+    fileprivate var borrowDebtEntryMode: BorrowDebtEntryMode = .receiveIntoWallet
+    var paidForCurrencyCode: String = "JPY"
+    var paidForCountsAsExpense: Bool = false
     var title: String = ""
     var amountText: String = ""
     var destinationAmountText: String = ""
@@ -3273,6 +3418,15 @@ private struct TransactionReceiptImagePicker: UIViewControllerRepresentable {
             self.primaryKind = transaction.primaryKind
             self.transferSubtype = transaction.transferSubtype
             self.debtIntent = transaction.debtIntent
+            self.borrowDebtEntryMode = transaction.debtIntent == .borrow && transaction.sourceWallet == nil
+                ? .paidFor
+                : .receiveIntoWallet
+            self.paidForCurrencyCode = MistiaCurrencyLogic.normalizedCode(
+                transaction.sourceCurrencyCode ?? MistiaCurrencySettings.primaryCurrencyCode()
+            )
+            self.paidForCountsAsExpense = transaction.debtIntent == .borrow
+                && transaction.sourceWallet == nil
+                && transaction.category != nil
             self.title = transaction.title
             self.amountText = "\(transaction.amountMinor)"
             self.destinationAmountText = transaction.destinationAmountMinor.map(String.init) ?? ""
@@ -3295,6 +3449,9 @@ private struct TransactionReceiptImagePicker: UIViewControllerRepresentable {
             self.debtIntent = target.initialKind == .transfer
                 ? (prefill?.lockedDebtIntent ?? .lend)
                 : nil
+            self.borrowDebtEntryMode = .receiveIntoWallet
+            self.paidForCurrencyCode = MistiaCurrencySettings.primaryCurrencyCode()
+            self.paidForCountsAsExpense = false
             self.title = prefill?.title ?? ""
             self.amountText = prefill?.amountMinor.map(String.init) ?? ""
             self.destinationAmountText = ""

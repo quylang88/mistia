@@ -223,7 +223,7 @@ enum FamilyScopedData {
                 categoryName: transaction.category?.localizedDisplayName,
                 categoryParentName: transaction.category?.parentCategory?.localizedDisplayName,
                 occurredAt: transaction.occurredAt,
-                kind: familyAggregateKind(for: transaction.primaryKind),
+                kind: familyAggregateKind(for: record),
                 amountMinor: abs(transaction.amountMinor),
                 currencyCode: record.sourceCurrencyCode ?? transaction.sourceWallet?.currencyCode ?? "JPY",
                 isCreditCardPayment: TransactionLogic.isCreditCardPayment(record),
@@ -252,9 +252,13 @@ enum FamilyScopedData {
     }
 
     private static func familyAggregateKind(
-        for primaryKind: TransactionPrimaryKind
+        for record: TransactionRecordSnapshot
     ) -> FamilyAggregateTransactionSnapshot.Kind {
-        switch primaryKind {
+        if TransactionLogic.isPaidForExpenseDebt(record) {
+            return .expense
+        }
+
+        switch record.primaryKind {
         case .expense:
             return .expense
         case .income:

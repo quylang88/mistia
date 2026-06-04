@@ -813,12 +813,36 @@ nonisolated enum OverviewLogic {
     private static func isCategorySpendingTransaction(
         _ transaction: OverviewTransactionSnapshot
     ) -> Bool {
-        transaction.entryStatus == .posted
-            && transaction.primaryKind == .expense
+        guard transaction.entryStatus == .posted, !transaction.isArchived else {
+            return false
+        }
+
+        if isPaidForExpenseDebt(transaction) {
+            return true
+        }
+
+        return transaction.primaryKind == .expense
             && !isAdjustment(transaction)
             && !isCreditCardPayment(transaction)
             && !isInstallmentPayment(transaction)
-            && !transaction.isArchived
+    }
+
+    private static func isPaidForDebt(
+        _ transaction: OverviewTransactionSnapshot
+    ) -> Bool {
+        transaction.primaryKind == .transfer
+            && transaction.transferSubtype == .debt
+            && transaction.debtIntent == .borrow
+            && transaction.sourceWalletID == nil
+    }
+
+    private static func isPaidForExpenseDebt(
+        _ transaction: OverviewTransactionSnapshot
+    ) -> Bool {
+        isPaidForDebt(transaction)
+            && transaction.categoryID != nil
+            && !isAdjustment(transaction)
+            && !isInstallmentPayment(transaction)
     }
 
     private static func isAdjustment(
@@ -1270,6 +1294,12 @@ nonisolated enum OverviewLogic {
             case .familyTransfer:
                 return transaction.destinationWalletID == nil ? .income : .expense
             case .debt:
+                if isPaidForExpenseDebt(transaction) {
+                    return .expense
+                }
+                if isPaidForDebt(transaction) {
+                    return .neutral
+                }
                 switch transaction.debtIntent {
                 case .borrow, .collect:
                     return .income

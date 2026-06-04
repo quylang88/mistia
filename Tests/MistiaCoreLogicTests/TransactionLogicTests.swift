@@ -305,6 +305,52 @@ final class TransactionLogicTests: XCTestCase {
         XCTAssertEqual(index.balance(for: recipientWallet), 8_000)
     }
 
+    func testPaidForBorrowDebtDoesNotChangeWalletBalanceOrCashflow() {
+        let wallet = TransactionWalletSnapshot(
+            id: UUID(),
+            kind: .bank,
+            openingBalanceMinor: 20_000
+        )
+        let record = makeRecord(
+            primaryKind: .transfer,
+            transferSubtype: .debt,
+            debtIntent: .borrow,
+            amountMinor: 4_000,
+            occurredAt: Date(timeIntervalSince1970: 1_774_051_200),
+            sourceCurrencyCode: "JPY",
+            counterpartyName: "Minh"
+        )
+
+        let index = TransactionLogic.walletBalanceIndex(wallets: [wallet], records: [record])
+
+        XCTAssertTrue(TransactionLogic.isPaidForDebt(record))
+        XCTAssertFalse(TransactionLogic.isPaidForExpenseDebt(record))
+        XCTAssertEqual(TransactionLogic.cashflowAmount(for: record), 0)
+        XCTAssertEqual(index.balance(for: wallet), 20_000)
+        XCTAssertEqual(TransactionLogic.effectiveBalance(for: wallet, records: [record]), 20_000)
+    }
+
+    func testPaidForBorrowDebtWithCategoryCountsAsExpenseSpending() {
+        let categoryID = UUID()
+        let record = makeRecord(
+            primaryKind: .transfer,
+            transferSubtype: .debt,
+            debtIntent: .borrow,
+            amountMinor: 4_000,
+            occurredAt: Date(timeIntervalSince1970: 1_774_051_200),
+            sourceCurrencyCode: "JPY",
+            categoryID: categoryID,
+            counterpartyName: "Minh"
+        )
+
+        let summary = TransactionLogic.summary(for: [record])
+
+        XCTAssertTrue(TransactionLogic.isPaidForDebt(record))
+        XCTAssertTrue(TransactionLogic.isPaidForExpenseDebt(record))
+        XCTAssertEqual(summary.expenseMinor, 4_000)
+        XCTAssertEqual(summary.incomeMinor, 0)
+    }
+
     func testDebtAggregationTracksBothDirectionsWithNormalizedNames() {
         let walletID = UUID()
         let now = Date(timeIntervalSince1970: 1_742_646_400)
@@ -365,6 +411,39 @@ final class TransactionLogicTests: XCTestCase {
         XCTAssertEqual(positions[1].displayName, "Minh")
         XCTAssertEqual(positions[1].netMinor, -2_500)
         XCTAssertFalse(positions[1].isReceivable)
+    }
+
+    func testPaidForBorrowDebtIsPayableAndRepaymentReducesSamePosition() {
+        let walletID = UUID()
+        let now = Date(timeIntervalSince1970: 1_774_051_200)
+        let records = [
+            makeRecord(
+                primaryKind: .transfer,
+                transferSubtype: .debt,
+                debtIntent: .borrow,
+                amountMinor: 4_000,
+                occurredAt: now,
+                sourceCurrencyCode: "JPY",
+                counterpartyName: "Minh"
+            ),
+            makeRecord(
+                primaryKind: .transfer,
+                transferSubtype: .debt,
+                debtIntent: .repay,
+                amountMinor: 1_500,
+                occurredAt: now.addingTimeInterval(60),
+                sourceWalletID: walletID,
+                sourceWalletKind: .bank,
+                sourceCurrencyCode: "JPY",
+                counterpartyName: "minh"
+            )
+        ]
+
+        let position = TransactionLogic.openDebtPositions(from: records).first
+
+        XCTAssertEqual(position?.displayName, "Minh")
+        XCTAssertEqual(position?.netMinor, -2_500)
+        XCTAssertEqual(position?.preferredWalletID, nil)
     }
 
     func testDraftDoesNotAffectSummaryBalanceAndDraftSectionComesFirst() {

@@ -2082,7 +2082,7 @@ private struct FamilyOverviewDataHost: View {
                     categoryName: transaction.category?.localizedDisplayName,
                     categoryParentName: transaction.category?.parentCategory?.localizedDisplayName,
                     occurredAt: transaction.occurredAt,
-                    kind: transaction.primaryKind.familyAggregateKind,
+                    kind: record.familyAggregateKind,
                     amountMinor: abs(transaction.amountMinor),
                     currencyCode: record.sourceCurrencyCode ?? transaction.sourceWallet?.currencyCode ?? "JPY",
                     isCreditCardPayment: TransactionLogic.isCreditCardPayment(record),
@@ -4220,15 +4220,19 @@ private extension LedgerWalletKind {
     }
 }
 
-private extension TransactionPrimaryKind {
+private extension TransactionRecordSnapshot {
     var familyAggregateKind: FamilyAggregateTransactionSnapshot.Kind {
-        switch self {
+        if TransactionLogic.isPaidForExpenseDebt(self) {
+            return .expense
+        }
+
+        switch primaryKind {
         case .expense:
-            .expense
+            return .expense
         case .income:
-            .income
+            return .income
         case .transfer:
-            .transfer
+            return .transfer
         }
     }
 }
