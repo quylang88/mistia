@@ -66,7 +66,8 @@ struct MistiaApp: App {
                         )
                         await MistiaDueMaintenance.run(
                             modelContext: sessionStore.currentModelContainer.mainContext,
-                            sessionStore: sessionStore
+                            sessionStore: sessionStore,
+                            familyContextStore: store
                         )
                     }
                     familyContextStore.setModelContainer(sessionStore.currentModelContainer)
@@ -143,6 +144,16 @@ struct MistiaApp: App {
             print("Failed to clean up expired archived data: \(error)")
         }
 
+        do {
+            let context = sessionStore.currentModelContainer.mainContext
+            try PlanningBudgetSnapshotMaintenance.populateMissingCategorySnapshots(
+                modelContext: context,
+                sessionStore: sessionStore
+            )
+        } catch {
+            print("Failed to populate budget category snapshots: \(error)")
+        }
+
         _ = await sessionStore.runDeferredStartupSyncIfNeeded()
         await MistiaCurrencyRateMaintenance.refreshIfNeeded()
         await runCategoryTranslationMaintenance()
@@ -161,7 +172,8 @@ struct MistiaApp: App {
     private func runDueMaintenance() async {
         await MistiaDueMaintenance.run(
             modelContext: sessionStore.currentModelContainer.mainContext,
-            sessionStore: sessionStore
+            sessionStore: sessionStore,
+            familyContextStore: familyContextStore
         )
     }
 }

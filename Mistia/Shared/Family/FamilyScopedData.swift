@@ -174,6 +174,65 @@ enum FamilyScopedData {
         }
     }
 
+    static func visibleTransactionsForCurrentFamilyFinancial(
+        _ transactions: [LedgerTransaction],
+        scopeSnapshot: ScopeSnapshot,
+        familyMemberUserIDs: Set<UUID>,
+        signedInUserID: UUID?
+    ) -> [LedgerTransaction] {
+        guard !familyMemberUserIDs.isEmpty else { return [] }
+
+        let walletOwnerMap = scopeSnapshot.ownerMap(for: .wallet)
+        let transactionOwnerMap = scopeSnapshot.ownerMap(for: .transaction)
+        return transactions.filter { transaction in
+            guard transaction.deletedAt == nil, !transaction.isArchived else {
+                return false
+            }
+            let ownerUserID = transactionOwnerUserID(
+                for: transaction,
+                transactionOwnerMap: transactionOwnerMap,
+                walletOwnerMap: walletOwnerMap
+            ) ?? signedInUserID
+            guard let ownerUserID else { return false }
+            return familyMemberUserIDs.contains(ownerUserID)
+        }
+    }
+
+    static func familyBudgetTransactionSnapshots(
+        from transactions: [LedgerTransaction],
+        scopeSnapshot: ScopeSnapshot,
+        familyMemberUserIDs: Set<UUID>,
+        signedInUserID: UUID?
+    ) -> [FamilyAggregateTransactionSnapshot] {
+        let walletOwnerMap = scopeSnapshot.ownerMap(for: .wallet)
+        let transactionOwnerMap = scopeSnapshot.ownerMap(for: .transaction)
+        return visibleTransactionsForCurrentFamilyFinancial(
+            transactions,
+            scopeSnapshot: scopeSnapshot,
+            familyMemberUserIDs: familyMemberUserIDs,
+            signedInUserID: signedInUserID
+        )
+        .map { transaction in
+            let record = transaction.planningRecordSnapshot
+            return FamilyAggregateTransactionSnapshot(
+                ownerUserID: transactionOwnerUserID(
+                    for: transaction,
+                    transactionOwnerMap: transactionOwnerMap,
+                    walletOwnerMap: walletOwnerMap
+                ) ?? signedInUserID ?? UUID(),
+                categoryName: transaction.category?.localizedDisplayName,
+                categoryParentName: transaction.category?.parentCategory?.localizedDisplayName,
+                occurredAt: transaction.occurredAt,
+                kind: familyAggregateKind(for: transaction.primaryKind),
+                amountMinor: abs(transaction.amountMinor),
+                currencyCode: record.sourceCurrencyCode ?? transaction.sourceWallet?.currencyCode ?? "JPY",
+                isCreditCardPayment: TransactionLogic.isCreditCardPayment(record),
+                isAdjustment: TransactionLogic.isAdjustment(record),
+                isInstallmentPayment: TransactionLogic.isInstallmentPayment(record)
+            )
+        }
+    }
+
     private static func transactionOwnerUserID(
         for transaction: LedgerTransaction,
         transactionOwnerMap: [UUID: UUID],
@@ -190,6 +249,19 @@ enum FamilyScopedData {
     ) -> UUID? {
         guard let walletID else { return nil }
         return ownerMap[walletID]
+    }
+
+    private static func familyAggregateKind(
+        for primaryKind: TransactionPrimaryKind
+    ) -> FamilyAggregateTransactionSnapshot.Kind {
+        switch primaryKind {
+        case .expense:
+            return .expense
+        case .income:
+            return .income
+        case .transfer:
+            return .transfer
+        }
     }
 
 }

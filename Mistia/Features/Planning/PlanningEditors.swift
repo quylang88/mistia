@@ -22,6 +22,8 @@ struct PlanningBudgetEditorSheet: View {
     @State private var draft: PlanningBudgetDraft
     @State private var alertMessage: String?
     @State private var showsArchiveConfirmation = false
+    @State private var showsFamilySpendingConfirmation = false
+    @State private var isRefreshingFamilySpending = false
     @State private var showsCategoryPicker = false
 
     init(target: PlanningBudgetEditorTarget) {
@@ -89,6 +91,45 @@ struct PlanningBudgetEditorSheet: View {
         target.budget?.currencyCode ?? currencyCode
     }
 
+    private var targetMonthAnchor: Date {
+        PlanningLogic.startOfMonth(for: target.selectedMonth)
+    }
+
+    private var currentMonthAnchor: Date {
+        PlanningLogic.startOfMonth(for: .now)
+    }
+
+    private var isPastBudgetRecord: Bool {
+        target.budget != nil && targetMonthAnchor < currentMonthAnchor
+    }
+
+    private var isCurrentBudgetRecord: Bool {
+        target.budget != nil && targetMonthAnchor == currentMonthAnchor
+    }
+
+    private var shouldShowFamilySpendingToggle: Bool {
+        familyContextStore.family != nil && familyContextStore.members.count >= 2
+    }
+
+    private var isFamilySpendingToggleDisabled: Bool {
+        isPastBudgetRecord
+            || draft.includesFamilySpending
+            || selectedCategory == nil
+            || !sessionStore.canPerformRemoteActions
+            || isRefreshingFamilySpending
+    }
+
+    private var familySpendingBinding: Binding<Bool> {
+        Binding(
+            get: { draft.includesFamilySpending },
+            set: { newValue in
+                guard newValue else { return }
+                guard !draft.includesFamilySpending else { return }
+                showsFamilySpendingConfirmation = true
+            }
+        )
+    }
+
     private var targetOwnerUserID: UUID? {
         if let budget = target.budget,
            let ownerUserID = budgetOwnerMap[budget.id] {
@@ -150,9 +191,11 @@ struct PlanningBudgetEditorSheet: View {
                         }
                     }
                     .buttonStyle(MistiaPressableButtonStyle(cornerRadius: 20))
+                    .disabled(isPastBudgetRecord)
 
                     TextField(L10n.planning.planning.budgetAmount, text: $draft.limitText)
                         .keyboardType(.numberPad)
+                        .disabled(isPastBudgetRecord)
 
                     LabeledContent(L10n.planning.planning.cycle) {
                         Text(L10n.planning.planning.monthly)
@@ -162,6 +205,14 @@ struct PlanningBudgetEditorSheet: View {
                     Toggle(L10n.planning.planning.rollover, isOn: $draft.rolloverEnabled)
                         .tint(MistiaAccent.purple.color)
                         .toggleStyle(.switch)
+                        .disabled(isPastBudgetRecord)
+
+                    if shouldShowFamilySpendingToggle {
+                        Toggle(L10n.planning.planning.includeFamilySpending, isOn: familySpendingBinding)
+                            .tint(MistiaAccent.purple.color)
+                            .toggleStyle(.switch)
+                            .disabled(isFamilySpendingToggleDisabled)
+                    }
                 }
 
                 if target.budget != nil {
@@ -169,7 +220,7 @@ struct PlanningBudgetEditorSheet: View {
                         Button(role: .destructive) {
                             showsArchiveConfirmation = true
                         } label: {
-                            Text(L10n.planning.planning.archiveBudget)
+                            Text(isCurrentBudgetRecord ? L10n.planning.planning.deleteBudget : L10n.planning.planning.archiveBudget)
                                 .foregroundStyle(Color.red.opacity(0.9))
                         }
                     }
@@ -181,11 +232,15 @@ struct PlanningBudgetEditorSheet: View {
             .toolbar {
                 PlanningEditorToolbar(
                     onClose: { dismiss() },
-                    onSave: save
+                    onSave: save,
+                    canSave: !isPastBudgetRecord
                 )
             }
         }
         .planningAlert(message: $alertMessage)
+        .onAppear {
+            syncFamilySpendingDraftWithSelectedCategory()
+        }
         .sheet(isPresented: $showsCategoryPicker) {
             MistiaCategoryPickerSheet(
                 title: L10n.planning.planning.chooseCategory,
@@ -204,24 +259,46 @@ struct PlanningBudgetEditorSheet: View {
                 }
             ) { category in
                 draft.categoryID = category.id
+                syncFamilySpendingDraft(with: category)
             }
         }
         .confirmationDialog(
-            L10n.planning.planning.archiveThisBudget,
+            isCurrentBudgetRecord ? L10n.planning.planning.deleteThisBudget : L10n.planning.planning.archiveThisBudget,
             isPresented: $showsArchiveConfirmation,
             titleVisibility: .visible
         ) {
-            Button(L10n.planning.planning.archive, role: .destructive) {
-                archiveBudget()
+            Button(isCurrentBudgetRecord ? L10n.planning.planning.delete : L10n.planning.planning.archive, role: .destructive) {
+                if isCurrentBudgetRecord {
+                    deleteCurrentBudget()
+                } else {
+                    archiveBudget()
+                }
             }
 
             Button(L10n.common.cancel, role: .cancel) { }
         } message: {
-            Text(L10n.planning.planning.archivedBudgetsWillNoLongerAppearIn)
+            Text(isCurrentBudgetRecord ? L10n.planning.planning.deleteCurrentBudgetMessage : L10n.planning.planning.archivedBudgetsWillNoLongerAppearIn)
+        }
+        .alert(
+            L10n.planning.planning.enableFamilyBudgetDataTitle,
+            isPresented: $showsFamilySpendingConfirmation
+        ) {
+            Button(L10n.planning.planning.enableFamilyBudgetDataConfirm) {
+                Task { await confirmFamilySpendingEnable() }
+            }
+
+            Button(L10n.planning.planning.enableFamilyBudgetDataCancel, role: .cancel) { }
+        } message: {
+            Text(L10n.planning.planning.enableFamilyBudgetDataMessage)
         }
     }
 
     private func save() {
+        guard !isPastBudgetRecord else {
+            alertMessage = L10n.planning.planning.pastBudgetReadOnlyReference
+            return
+        }
+
         guard let category = selectedCategory
         else {
             alertMessage = L10n.planning.planning.chooseACategoryBeforeSaving
@@ -234,7 +311,10 @@ struct PlanningBudgetEditorSheet: View {
             return
         }
 
-        let monthAnchor = PlanningLogic.startOfMonth(for: target.selectedMonth)
+        let monthAnchor = targetMonthAnchor
+        let branchScopeCategory = branchScopeCategory(for: category)
+        let enablesFamilySpending = draft.includesFamilySpending
+            || branchScopeCategory?.familyBudgetSpendingEnabled == true
         let hasDuplicate = visibleStoredBudgets.contains(where: { budget in
             guard !budget.isArchived else { return false }
             guard budget.id != target.budget?.id else { return false }
@@ -269,11 +349,14 @@ struct PlanningBudgetEditorSheet: View {
             budget.limitMinor = limitMinor
             budget.rolloverEnabled = draft.rolloverEnabled
             budget.monthAnchor = monthAnchor
+            budget.includesFamilySpending = enablesFamilySpending
+            budget.refreshCategorySnapshot()
             budget.updatedAt = now
             budgetForSync = budget
         } else {
             let budget = BudgetPlan(
                 category: category,
+                includesFamilySpending: enablesFamilySpending,
                 monthAnchor: monthAnchor,
                 limitMinor: limitMinor,
                 rolloverEnabled: draft.rolloverEnabled,
@@ -281,14 +364,25 @@ struct PlanningBudgetEditorSheet: View {
                 createdAt: now,
                 updatedAt: now
             )
+            budget.refreshCategorySnapshot()
             modelContext.insert(budget)
             budgetForSync = budget
         }
+
+        let familyScopeUpdates = applyFamilyScopeIfNeeded(
+            branchCategoryID: category.branchCategoryID,
+            branchScopeCategory: branchScopeCategory,
+            monthAnchor: monthAnchor,
+            enablesFamilySpending: enablesFamilySpending,
+            now: now,
+            savedBudget: budgetForSync
+        )
 
         let autoCreatedParentBudget = autoCreateParentBudgetIfNeeded(
             for: category,
             savedBudget: budgetForSync,
             monthAnchor: monthAnchor,
+            includesFamilySpending: enablesFamilySpending,
             now: now
         )
 
@@ -306,6 +400,20 @@ struct PlanningBudgetEditorSheet: View {
                     modifiedAt: autoCreatedParentBudget.updatedAt
                 )
             }
+            for budget in familyScopeUpdates {
+                sessionStore.recordUpsert(
+                    entity: .budgetPlan,
+                    recordID: budget.id,
+                    modifiedAt: budget.updatedAt
+                )
+            }
+            if enablesFamilySpending, let branchScopeCategory {
+                sessionStore.recordUpsert(
+                    entity: .category,
+                    recordID: branchScopeCategory.id,
+                    modifiedAt: branchScopeCategory.updatedAt
+                )
+            }
             dismiss()
         } catch {
             alertMessage = L10n.planning.planning.couldnTSaveThisBudgetRightNow + " \(error.localizedDescription)"
@@ -316,6 +424,7 @@ struct PlanningBudgetEditorSheet: View {
         for category: TransactionCategory,
         savedBudget: BudgetPlan,
         monthAnchor: Date,
+        includesFamilySpending: Bool,
         now: Date
     ) -> BudgetPlan? {
         guard category.isChildCategory else { return nil }
@@ -340,6 +449,7 @@ struct PlanningBudgetEditorSheet: View {
         }
         let parentBudget = BudgetPlan(
             category: parentCategory,
+            includesFamilySpending: includesFamilySpending,
             monthAnchor: monthAnchor,
             limitMinor: totalLimitMinor,
             rolloverEnabled: false,
@@ -347,6 +457,7 @@ struct PlanningBudgetEditorSheet: View {
             createdAt: now,
             updatedAt: now
         )
+        parentBudget.refreshCategorySnapshot()
         modelContext.insert(parentBudget)
         return parentBudget
     }
@@ -389,6 +500,84 @@ struct PlanningBudgetEditorSheet: View {
         return budgets
     }
 
+    private func branchScopeCategory(for category: TransactionCategory) -> TransactionCategory? {
+        if category.isParentCategory {
+            return category
+        }
+        return category.parentCategory
+            ?? visibleStoredCategories.first { $0.id == category.branchCategoryID && $0.isParentCategory }
+            ?? category
+    }
+
+    private func syncFamilySpendingDraftWithSelectedCategory() {
+        guard let selectedCategory else { return }
+        syncFamilySpendingDraft(with: selectedCategory)
+    }
+
+    private func syncFamilySpendingDraft(with category: TransactionCategory) {
+        guard !draft.includesFamilySpending else { return }
+        draft.includesFamilySpending = branchScopeCategory(for: category)?.familyBudgetSpendingEnabled == true
+    }
+
+    private func applyFamilyScopeIfNeeded(
+        branchCategoryID: UUID,
+        branchScopeCategory: TransactionCategory?,
+        monthAnchor: Date,
+        enablesFamilySpending: Bool,
+        now: Date,
+        savedBudget: BudgetPlan
+    ) -> [BudgetPlan] {
+        guard enablesFamilySpending else { return [] }
+
+        branchScopeCategory?.familyBudgetSpendingEnabled = true
+        branchScopeCategory?.updatedAt = now
+
+        var updatedBudgets: [BudgetPlan] = []
+        for budget in visibleStoredBudgets {
+            guard budget.id != savedBudget.id,
+                  budget.deletedAt == nil,
+                  !budget.isArchived,
+                  PlanningLogic.startOfMonth(for: budget.monthAnchor) == monthAnchor,
+                  budget.category?.branchCategoryID == branchCategoryID,
+                  !budget.includesFamilySpending
+            else {
+                continue
+            }
+            budget.includesFamilySpending = true
+            budget.refreshCategorySnapshot()
+            budget.updatedAt = now
+            updatedBudgets.append(budget)
+        }
+
+        return updatedBudgets
+    }
+
+    @MainActor
+    private func confirmFamilySpendingEnable() async {
+        guard selectedCategory != nil else {
+            alertMessage = L10n.planning.planning.chooseACategoryBeforeSaving
+            return
+        }
+        guard sessionStore.canPerformRemoteActions else {
+            alertMessage = L10n.planning.planning.familyBudgetDataNeedsInternet
+            return
+        }
+
+        isRefreshingFamilySpending = true
+        let refreshed = await familyContextStore.refresh(sessionStore: sessionStore)
+        isRefreshingFamilySpending = false
+
+        guard refreshed,
+              familyContextStore.family != nil,
+              familyContextStore.members.count >= 2
+        else {
+            alertMessage = L10n.planning.planning.familyBudgetDataRefreshFailed
+            return
+        }
+
+        draft.includesFamilySpending = true
+    }
+
     private func allocationValidationMessage(
         _ result: PlanningBudgetAllocationValidationResult
     ) -> String {
@@ -404,6 +593,10 @@ struct PlanningBudgetEditorSheet: View {
 
     private func archiveBudget() {
         guard let budget = target.budget else { return }
+        guard isPastBudgetRecord else {
+            alertMessage = L10n.planning.planning.currentBudgetCanBeDeleted
+            return
+        }
         let now = Date()
         budget.isArchived = true
         budget.updatedAt = now
@@ -421,7 +614,71 @@ struct PlanningBudgetEditorSheet: View {
         }
     }
 
+    private func deleteCurrentBudget() {
+        guard let budget = target.budget else { return }
+        guard isCurrentBudgetRecord else {
+            alertMessage = L10n.planning.planning.pastBudgetCanOnlyBeArchived
+            return
+        }
+
+        let now = Date()
+        let branchCategory = budget.category.flatMap(branchScopeCategory(for:))
+        let branchCategoryID = budget.category?.branchCategoryID
+        budget.markDeleted(at: now)
+        let shouldResetFamilyScope = shouldResetFamilyScopeAfterDeletingBudget(
+            deletedBudget: budget,
+            branchCategoryID: branchCategoryID,
+            monthAnchor: targetMonthAnchor
+        )
+        if shouldResetFamilyScope {
+            branchCategory?.familyBudgetSpendingEnabled = false
+            branchCategory?.updatedAt = now
+        }
+
+        do {
+            try modelContext.save()
+            sessionStore.recordDelete(
+                entity: .budgetPlan,
+                recordID: budget.id,
+                modifiedAt: now
+            )
+            if shouldResetFamilyScope, let branchCategory {
+                sessionStore.recordUpsert(
+                    entity: .category,
+                    recordID: branchCategory.id,
+                    modifiedAt: now
+                )
+            }
+            dismiss()
+        } catch {
+            alertMessage = L10n.planning.planning.couldnTDeleteThisBudgetRightNow + " \(error.localizedDescription)"
+        }
+    }
+
+    private func shouldResetFamilyScopeAfterDeletingBudget(
+        deletedBudget: BudgetPlan,
+        branchCategoryID: UUID?,
+        monthAnchor: Date
+    ) -> Bool {
+        guard let branchCategoryID else { return false }
+        return visibleStoredBudgets.contains { budget in
+            guard budget.id != deletedBudget.id,
+                  budget.deletedAt == nil,
+                  !budget.isArchived,
+                  PlanningLogic.startOfMonth(for: budget.monthAnchor) == monthAnchor,
+                  budget.category?.branchCategoryID == branchCategoryID
+            else {
+                return false
+            }
+            return true
+        } == false
+    }
+
     private var selectedCategoryLabel: String {
+        if let snapshotLabel = target.budget?.localizedCategoryPathSnapshot() {
+            return snapshotLabel
+        }
+
         guard let selectedCategory else {
             return L10n.planning.planning.chooseCategory
         }
@@ -1883,6 +2140,7 @@ struct PlanningCreditCardEditorSheet: View {
 private struct PlanningEditorToolbar: ToolbarContent {
     let onClose: () -> Void
     let onSave: () -> Void
+    var canSave: Bool = true
 
     var body: some ToolbarContent {
         ToolbarItem(placement: .topBarLeading) {
@@ -1901,9 +2159,10 @@ private struct PlanningEditorToolbar: ToolbarContent {
             } label: {
                 Image(systemName: "checkmark")
                     .font(.system(size: 14, weight: .bold))
-                    .foregroundStyle(Color(red: 0.88, green: 0.78, blue: 1.0))
+                    .foregroundStyle(canSave ? Color(red: 0.88, green: 0.78, blue: 1.0) : .secondary)
                     .frame(width: 30, height: 30)
             }
+            .disabled(!canSave)
             .buttonStyle(.glassProminent)
             .buttonBorderShape(.circle)
             .tint(Color(red: 0.43, green: 0.23, blue: 0.76))
@@ -1990,11 +2249,13 @@ private struct PlanningBudgetDraft {
     var categoryID: UUID?
     var limitText: String
     var rolloverEnabled: Bool
+    var includesFamilySpending: Bool
 
     init(budget: BudgetPlan?) {
         categoryID = budget?.category?.id
         limitText = budget.map { String($0.limitMinor) } ?? ""
         rolloverEnabled = budget?.rolloverEnabled ?? false
+        includesFamilySpending = budget?.includesFamilySpending ?? false
     }
 }
 

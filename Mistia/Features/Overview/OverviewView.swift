@@ -171,6 +171,12 @@ struct OverviewView: View {
             storedTransactions,
             scopeSnapshot: scopeSnapshot
         )
+        let familyTransactions = FamilyScopedData.familyBudgetTransactionSnapshots(
+            from: storedTransactions,
+            scopeSnapshot: scopeSnapshot,
+            familyMemberUserIDs: currentFamilyMemberUserIDs,
+            signedInUserID: sessionStore.activeLocalProfileUserID
+        )
         let visibleWallets = FamilyScopedData.visible(
             storedWallets,
             entity: .wallet,
@@ -255,6 +261,8 @@ struct OverviewView: View {
             currencyCode: currencyCode,
             balanceIndex: balanceIndex,
             exchangeRates: appExchangeRates,
+            familyTransactions: familyTransactions,
+            familySpendingAvailable: isFamilyBudgetSpendingAvailable,
             referenceDate: .now,
             calendar: calendar
         )
@@ -387,6 +395,15 @@ struct OverviewView: View {
             hasher.combine(grant.revokedAt?.timeIntervalSince1970)
         }
         return hasher.finalize()
+    }
+
+    private var isFamilyBudgetSpendingAvailable: Bool {
+        familyContextStore.family != nil && familyContextStore.members.count >= 2
+    }
+
+    private var currentFamilyMemberUserIDs: Set<UUID> {
+        guard isFamilyBudgetSpendingAvailable else { return [] }
+        return Set(familyContextStore.members.map(\.userID))
     }
 
     private var transactionsByID: [UUID: LedgerTransaction] {

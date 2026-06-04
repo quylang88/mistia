@@ -21,13 +21,16 @@ struct MistiaDueMaintenanceSnapshot {
     let activeBudgets: [BudgetPlan]
     let activeBills: [RecurringBillPlan]
     let activeTransactionRecords: [TransactionRecordSnapshot]
+    let familyBudgetTransactions: [FamilyAggregateTransactionSnapshot]
+    let familyBudgetSpendingAvailable: Bool
     let activeOccurrenceSnapshots: [PlanningDueOccurrenceSnapshot]
     let walletByID: [UUID: LedgerWallet]
     let balanceIndex: TransactionWalletBalanceIndex
 
     static func make(
         modelContext: ModelContext,
-        sessionStore: SessionStore
+        sessionStore: SessionStore,
+        familyContextStore: FamilyContextStore? = nil
     ) -> MistiaDueMaintenanceSnapshot? {
         guard let activeUserID = sessionStore.activeLocalProfileUserID else { return nil }
 
@@ -93,6 +96,24 @@ struct MistiaDueMaintenanceSnapshot {
             (billOwnerMap[$0.id] ?? activeUserID) == activeUserID
         }
         let activeTransactionRecords = activeTransactions.map(\.planningRecordSnapshot)
+        let familyBudgetSpendingAvailable = familyContextStore?.family != nil
+            && (familyContextStore?.members.count ?? 0) >= 2
+        let familyBudgetTransactions: [FamilyAggregateTransactionSnapshot]
+        if let familyContextStore, familyBudgetSpendingAvailable {
+            let scopeSnapshot = FamilyScopedData.ScopeSnapshot(
+                scopes: ownershipScopes,
+                familyContextStore: familyContextStore,
+                sessionStore: sessionStore
+            )
+            familyBudgetTransactions = FamilyScopedData.familyBudgetTransactionSnapshots(
+                from: storedTransactions,
+                scopeSnapshot: scopeSnapshot,
+                familyMemberUserIDs: Set(familyContextStore.members.map(\.userID)),
+                signedInUserID: activeUserID
+            )
+        } else {
+            familyBudgetTransactions = []
+        }
         let activeOccurrenceSnapshots = activeOccurrences.map(\.planningSnapshot)
         let walletByID = Dictionary(activeWallets.map { ($0.id, $0) }, uniquingKeysWith: latestWallet)
         let balanceIndex = TransactionLogic.walletBalanceIndex(
@@ -125,6 +146,8 @@ struct MistiaDueMaintenanceSnapshot {
             activeBudgets: activeBudgets,
             activeBills: activeBills,
             activeTransactionRecords: activeTransactionRecords,
+            familyBudgetTransactions: familyBudgetTransactions,
+            familyBudgetSpendingAvailable: familyBudgetSpendingAvailable,
             activeOccurrenceSnapshots: activeOccurrenceSnapshots,
             walletByID: walletByID,
             balanceIndex: balanceIndex
@@ -146,12 +169,14 @@ enum MistiaDueMaintenance {
     static func run(
         modelContext: ModelContext,
         sessionStore: SessionStore,
+        familyContextStore: FamilyContextStore? = nil,
         referenceDate: Date = .now,
         calendar: Calendar = MistiaCalendar.current
     ) async {
         guard let snapshot = MistiaDueMaintenanceSnapshot.make(
             modelContext: modelContext,
-            sessionStore: sessionStore
+            sessionStore: sessionStore,
+            familyContextStore: familyContextStore
         ) else { return }
 
         await MistiaCreditCardStatementMaintenance.run(
@@ -206,6 +231,8 @@ private enum MistiaBudgetReminderMaintenance {
             transactionRecords: snapshot.activeTransactionRecords,
             referenceDate: referenceDate,
             calendar: calendar,
+            familyTransactions: snapshot.familyBudgetTransactions,
+            familySpendingAvailable: snapshot.familyBudgetSpendingAvailable,
             includesStable: true,
             maximumCount: nil
         )

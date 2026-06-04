@@ -3,6 +3,7 @@ import SwiftUI
 
 enum MistiaRestoreError: Error {
     case duplicatePayment
+    case categoryDependency
 }
 
 private enum ArchivedItemSelection: Hashable {
@@ -16,6 +17,20 @@ private struct ArchivedSyncMutation {
     let id: UUID
     let updatedAt: Date
     let subjectUserIDOverride: UUID?
+}
+
+private struct CategoryDeleteBlockers {
+    let transactionCount: Int
+    let billCount: Int
+    let currentBudgetCount: Int
+    let childCategoryCount: Int
+
+    var isEmpty: Bool {
+        transactionCount == 0
+            && billCount == 0
+            && currentBudgetCount == 0
+            && childCategoryCount == 0
+    }
 }
 
 private struct ArchivedTransactionDescriptor {
@@ -50,6 +65,18 @@ struct ManagementArchivedItemsView: View {
 
     @Query(filter: #Predicate<TransactionCategory> { $0.isArchived == true && $0.deletedAt == nil })
     private var archivedCategories: [TransactionCategory]
+
+    @Query
+    private var allCategories: [TransactionCategory]
+
+    @Query
+    private var allTransactions: [LedgerTransaction]
+
+    @Query
+    private var allBills: [RecurringBillPlan]
+
+    @Query
+    private var allBudgets: [BudgetPlan]
 
     @Query
     private var ownershipScopes: [OwnedRecordScope]
@@ -531,7 +558,7 @@ struct ManagementArchivedItemsView: View {
                     prepareWalletMutation(wallet, action: action, at: now, mutations: &mutations)
                 case .category(let id):
                     guard let category = ownArchivedCategories.first(where: { $0.id == id }) else { continue }
-                    prepareCategoryMutation(category, action: action, at: now, mutations: &mutations)
+                    try prepareCategoryMutation(category, action: action, at: now, mutations: &mutations)
                 }
             }
 
@@ -644,7 +671,20 @@ struct ManagementArchivedItemsView: View {
         action: ArchivedMutationAction,
         at date: Date,
         mutations: inout [ArchivedSyncMutation]
-    ) {
+    ) throws {
+        if action == .delete {
+            let blockers = categoryDeleteBlockers(for: category)
+            guard blockers.isEmpty else {
+                alertMessage = L10n.management.managementarchiveditems.categoryDeleteBlockedWithCounts(
+                    String(describing: blockers.transactionCount),
+                    String(describing: blockers.billCount),
+                    String(describing: blockers.currentBudgetCount),
+                    String(describing: blockers.childCategoryCount)
+                )
+                throw MistiaRestoreError.categoryDependency
+            }
+        }
+
         switch action {
         case .restore:
             category.isArchived = false
@@ -661,6 +701,32 @@ struct ManagementArchivedItemsView: View {
                 updatedAt: category.updatedAt,
                 subjectUserIDOverride: categoryOwnerUserID(for: category)
             )
+        )
+    }
+
+    private func categoryDeleteBlockers(for category: TransactionCategory) -> CategoryDeleteBlockers {
+        let currentMonth = PlanningLogic.startOfMonth(for: .now)
+        let transactionCount = allTransactions.filter {
+            $0.deletedAt == nil && $0.category?.id == category.id
+        }.count
+        let billCount = allBills.filter {
+            $0.deletedAt == nil && $0.category?.id == category.id
+        }.count
+        let currentBudgetCount = allBudgets.filter {
+            $0.deletedAt == nil
+                && !$0.isArchived
+                && PlanningLogic.startOfMonth(for: $0.monthAnchor) == currentMonth
+                && $0.category?.id == category.id
+        }.count
+        let childCategoryCount = allCategories.filter {
+            $0.deletedAt == nil && $0.parentCategory?.id == category.id
+        }.count
+
+        return CategoryDeleteBlockers(
+            transactionCount: transactionCount,
+            billCount: billCount,
+            currentBudgetCount: currentBudgetCount,
+            childCategoryCount: childCategoryCount
         )
     }
 

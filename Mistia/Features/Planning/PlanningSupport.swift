@@ -268,22 +268,162 @@ enum PlanningPersistenceSupport {
 
 extension BudgetPlan {
     func planningSnapshot(calendar: Calendar = MistiaCalendar.current) -> BudgetPlanSnapshot {
-        BudgetPlanSnapshot(
+        let snapshotCategoryName = localizedCategoryNameSnapshot()
+        let snapshotParentName = localizedCategoryParentNameSnapshot()
+        return BudgetPlanSnapshot(
             id: id,
-            categoryID: category?.id,
-            categoryName: category?.localizedDisplayName ?? L10n.planning.planning.deletedCategory,
-            categoryIconSymbolName: category?.iconSymbolName ?? "questionmark.circle.fill",
-            categoryColorHex: category?.iconColorHex ?? "#8A8A8E",
+            categoryID: categoryIDSnapshot ?? category?.id,
+            categoryName: snapshotCategoryName ?? category?.localizedDisplayName ?? L10n.planning.planning.deletedCategory,
+            categoryIconSymbolName: categoryIconSymbolNameSnapshot ?? category?.iconSymbolName ?? "questionmark.circle.fill",
+            categoryColorHex: categoryColorHexSnapshot ?? category?.iconColorHex ?? "#8A8A8E",
             limitMinor: limitMinor,
             rolloverEnabled: rolloverEnabled,
             currencyCode: currencyCode,
             monthAnchor: PlanningLogic.startOfMonth(for: monthAnchor, calendar: calendar),
-            categoryParentID: category?.parentCategory?.id,
-            categoryParentName: category?.parentCategory?.localizedDisplayName,
-            categoryParentIconSymbolName: category?.parentCategory?.iconSymbolName,
-            categoryParentColorHex: category?.parentCategory?.iconColorHex,
-            categoryIsParent: category?.isParentCategory ?? false
+            categoryParentID: categoryParentIDSnapshot ?? category?.parentCategory?.id,
+            categoryParentName: snapshotParentName ?? category?.parentCategory?.localizedDisplayName,
+            categoryParentIconSymbolName: categoryParentIconSymbolNameSnapshot ?? category?.parentCategory?.iconSymbolName,
+            categoryParentColorHex: categoryParentColorHexSnapshot ?? category?.parentCategory?.iconColorHex,
+            categoryIsParent: categoryIsParentSnapshotRawValue ?? category?.isParentCategory ?? false,
+            includesFamilySpending: includesFamilySpending
         )
+    }
+
+    func refreshCategorySnapshot() {
+        guard let category else { return }
+
+        categoryIDSnapshot = category.id
+        categoryNameSnapshot = category.name
+        categoryNameEnglishSnapshot = category.nameEnglish
+        categoryNameJapaneseSnapshot = category.nameJapanese
+        categoryIconSymbolNameSnapshot = category.iconSymbolName
+        categoryColorHexSnapshot = category.iconColorHex
+        categoryHierarchyRoleSnapshotRawValue = category.hierarchyRole.rawValue
+        categoryIsParentSnapshotRawValue = category.isParentCategory
+
+        if let parent = category.parentCategory {
+            categoryParentIDSnapshot = parent.id
+            categoryParentNameSnapshot = parent.name
+            categoryParentNameEnglishSnapshot = parent.nameEnglish
+            categoryParentNameJapaneseSnapshot = parent.nameJapanese
+            categoryParentIconSymbolNameSnapshot = parent.iconSymbolName
+            categoryParentColorHexSnapshot = parent.iconColorHex
+            categoryPathSnapshot = "\(parent.name) / \(category.name)"
+            categoryPathEnglishSnapshot = joinedCategoryPath(
+                parent: parent.nameEnglish,
+                child: category.nameEnglish
+            )
+            categoryPathJapaneseSnapshot = joinedCategoryPath(
+                parent: parent.nameJapanese,
+                child: category.nameJapanese
+            )
+        } else {
+            categoryParentIDSnapshot = nil
+            categoryParentNameSnapshot = nil
+            categoryParentNameEnglishSnapshot = nil
+            categoryParentNameJapaneseSnapshot = nil
+            categoryParentIconSymbolNameSnapshot = nil
+            categoryParentColorHexSnapshot = nil
+            categoryPathSnapshot = category.name
+            categoryPathEnglishSnapshot = category.nameEnglish
+            categoryPathJapaneseSnapshot = category.nameJapanese
+        }
+    }
+
+    func localizedCategoryPathSnapshot(
+        for language: MistiaAppLanguage = .current
+    ) -> String? {
+        switch language {
+        case .vietnamese:
+            return nonBlankSnapshot(categoryPathSnapshot) ?? localizedCategoryNameSnapshot(for: language)
+        case .english:
+            return nonBlankSnapshot(categoryPathEnglishSnapshot)
+                ?? nonBlankSnapshot(categoryPathSnapshot)
+                ?? localizedCategoryNameSnapshot(for: language)
+        case .japanese:
+            return nonBlankSnapshot(categoryPathJapaneseSnapshot)
+                ?? nonBlankSnapshot(categoryPathSnapshot)
+                ?? localizedCategoryNameSnapshot(for: language)
+        }
+    }
+
+    private func localizedCategoryNameSnapshot(
+        for language: MistiaAppLanguage = .current
+    ) -> String? {
+        switch language {
+        case .vietnamese:
+            return nonBlankSnapshot(categoryNameSnapshot)
+        case .english:
+            return nonBlankSnapshot(categoryNameEnglishSnapshot) ?? nonBlankSnapshot(categoryNameSnapshot)
+        case .japanese:
+            return nonBlankSnapshot(categoryNameJapaneseSnapshot) ?? nonBlankSnapshot(categoryNameSnapshot)
+        }
+    }
+
+    private func localizedCategoryParentNameSnapshot(
+        for language: MistiaAppLanguage = .current
+    ) -> String? {
+        switch language {
+        case .vietnamese:
+            return nonBlankSnapshot(categoryParentNameSnapshot)
+        case .english:
+            return nonBlankSnapshot(categoryParentNameEnglishSnapshot) ?? nonBlankSnapshot(categoryParentNameSnapshot)
+        case .japanese:
+            return nonBlankSnapshot(categoryParentNameJapaneseSnapshot) ?? nonBlankSnapshot(categoryParentNameSnapshot)
+        }
+    }
+
+    private func joinedCategoryPath(parent: String?, child: String?) -> String? {
+        guard let parent = nonBlankSnapshot(parent),
+              let child = nonBlankSnapshot(child)
+        else {
+            return nil
+        }
+        return "\(parent) / \(child)"
+    }
+
+    private func nonBlankSnapshot(_ value: String?) -> String? {
+        guard let trimmed = value?.trimmingCharacters(in: .whitespacesAndNewlines),
+              !trimmed.isEmpty
+        else {
+            return nil
+        }
+        return trimmed
+    }
+}
+
+enum PlanningBudgetSnapshotMaintenance {
+    @MainActor
+    static func populateMissingCategorySnapshots(
+        modelContext: ModelContext,
+        sessionStore: SessionStore
+    ) throws {
+        let budgets = try modelContext.fetch(FetchDescriptor<BudgetPlan>())
+        let now = Date()
+        var updatedBudgets: [BudgetPlan] = []
+
+        for budget in budgets {
+            guard budget.deletedAt == nil,
+                  budget.category != nil,
+                  budget.categoryIDSnapshot == nil || budget.categoryNameSnapshot == nil
+            else {
+                continue
+            }
+
+            budget.refreshCategorySnapshot()
+            budget.updatedAt = now
+            updatedBudgets.append(budget)
+        }
+
+        guard !updatedBudgets.isEmpty else { return }
+        try modelContext.save()
+        for budget in updatedBudgets {
+            sessionStore.recordUpsert(
+                entity: .budgetPlan,
+                recordID: budget.id,
+                modifiedAt: budget.updatedAt
+            )
+        }
     }
 }
 

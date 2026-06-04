@@ -502,6 +502,234 @@ final class PlanningLogicTests: XCTestCase {
         XCTAssertEqual(summary.spentMinor, 4_000)
     }
 
+    func testBudgetBranchRowsUseFamilySpendingWhenParentScopeEnabled() {
+        let selectedMonth = makeDate(year: 2026, month: 4, day: 1)
+        let referenceDate = makeDate(year: 2026, month: 4, day: 10)
+        let livingParent = UUID()
+        let foodCategory = UUID()
+
+        let rows = PlanningLogic.budgetBranchRows(
+            plans: [
+                makeBudget(
+                    categoryID: livingParent,
+                    categoryName: "Sinh hoạt",
+                    limitMinor: 35_000,
+                    monthAnchor: selectedMonth,
+                    categoryIsParent: true,
+                    includesFamilySpending: true
+                )
+            ],
+            records: [
+                makeRecord(
+                    primaryKind: .expense,
+                    amountMinor: 6_000,
+                    occurredAt: makeDate(year: 2026, month: 4, day: 5),
+                    categoryID: foodCategory,
+                    categoryParentID: livingParent
+                )
+            ],
+            selectedMonth: selectedMonth,
+            referenceDate: referenceDate,
+            calendar: calendar,
+            familyTransactions: [
+                makeFamilyBudgetTransaction(
+                    amountMinor: 6_000,
+                    occurredAt: makeDate(year: 2026, month: 4, day: 5),
+                    categoryName: "Ăn uống",
+                    categoryParentName: "Sinh hoạt"
+                ),
+                makeFamilyBudgetTransaction(
+                    amountMinor: 4_000,
+                    occurredAt: makeDate(year: 2026, month: 4, day: 7),
+                    categoryName: "Ăn uống",
+                    categoryParentName: "  sinh   HOẠT  "
+                ),
+                makeFamilyBudgetTransaction(
+                    amountMinor: 8_000,
+                    occurredAt: makeDate(year: 2026, month: 4, day: 8),
+                    categoryName: "Giải trí",
+                    categoryParentName: nil
+                ),
+                makeFamilyBudgetTransaction(
+                    primaryKind: .income,
+                    amountMinor: 9_000,
+                    occurredAt: makeDate(year: 2026, month: 4, day: 9),
+                    categoryName: "Sinh hoạt",
+                    categoryParentName: nil
+                ),
+                makeFamilyBudgetTransaction(
+                    title: "Card payment",
+                    amountMinor: 3_000,
+                    occurredAt: makeDate(year: 2026, month: 4, day: 9),
+                    sourceWalletKind: .cash,
+                    destinationWalletKind: .creditCard,
+                    categoryName: "Sinh hoạt",
+                    categoryParentName: nil
+                ),
+                makeFamilyBudgetTransaction(
+                    amountMinor: 2_000,
+                    occurredAt: makeDate(year: 2026, month: 5, day: 1),
+                    categoryName: "Sinh hoạt",
+                    categoryParentName: nil
+                )
+            ],
+            familySpendingAvailable: true
+        )
+
+        XCTAssertEqual(rows.count, 1)
+        XCTAssertEqual(rows[0].spentMinor, 10_000)
+        XCTAssertEqual(rows[0].limitMinor, 35_000)
+    }
+
+    func testBudgetBranchRowsUseFamilySpendingWhenChildScopeEnabled() {
+        let selectedMonth = makeDate(year: 2026, month: 4, day: 1)
+        let referenceDate = makeDate(year: 2026, month: 4, day: 10)
+        let livingParent = UUID()
+        let foodCategory = UUID()
+
+        let rows = PlanningLogic.budgetBranchRows(
+            plans: [
+                makeBudget(
+                    categoryID: foodCategory,
+                    categoryName: "Ăn uống",
+                    limitMinor: 10_000,
+                    monthAnchor: selectedMonth,
+                    categoryParentID: livingParent,
+                    categoryParentName: "Sinh hoạt",
+                    categoryParentIconSymbolName: "house.fill",
+                    categoryParentColorHex: "#5A6C7D",
+                    includesFamilySpending: true
+                )
+            ],
+            records: [
+                makeRecord(
+                    primaryKind: .expense,
+                    amountMinor: 3_000,
+                    occurredAt: makeDate(year: 2026, month: 4, day: 5),
+                    categoryID: foodCategory,
+                    categoryParentID: livingParent
+                )
+            ],
+            selectedMonth: selectedMonth,
+            referenceDate: referenceDate,
+            calendar: calendar,
+            familyTransactions: [
+                makeFamilyBudgetTransaction(
+                    amountMinor: 3_000,
+                    occurredAt: makeDate(year: 2026, month: 4, day: 5),
+                    categoryName: "Ăn uống",
+                    categoryParentName: "Sinh hoạt"
+                ),
+                makeFamilyBudgetTransaction(
+                    amountMinor: 6_000,
+                    occurredAt: makeDate(year: 2026, month: 4, day: 6),
+                    categoryName: " ăn    UỐNG ",
+                    categoryParentName: "Sinh hoạt"
+                ),
+                makeFamilyBudgetTransaction(
+                    amountMinor: 5_000,
+                    occurredAt: makeDate(year: 2026, month: 4, day: 7),
+                    categoryName: "Nhà ở",
+                    categoryParentName: "Sinh hoạt"
+                )
+            ],
+            familySpendingAvailable: true
+        )
+
+        XCTAssertEqual(rows.count, 1)
+        XCTAssertEqual(rows[0].mode, .childOnly)
+        XCTAssertEqual(rows[0].spentMinor, 9_000)
+        XCTAssertEqual(rows[0].limitMinor, 10_000)
+    }
+
+    func testBudgetBranchRowsWithFamilyScopeUnavailableUsesPersonalSpending() {
+        let selectedMonth = makeDate(year: 2026, month: 4, day: 1)
+        let referenceDate = makeDate(year: 2026, month: 4, day: 10)
+        let livingParent = UUID()
+        let foodCategory = UUID()
+
+        let rows = PlanningLogic.budgetBranchRows(
+            plans: [
+                makeBudget(
+                    categoryID: foodCategory,
+                    categoryName: "Ăn uống",
+                    limitMinor: 10_000,
+                    monthAnchor: selectedMonth,
+                    categoryParentID: livingParent,
+                    categoryParentName: "Sinh hoạt",
+                    includesFamilySpending: true
+                )
+            ],
+            records: [
+                makeRecord(
+                    primaryKind: .expense,
+                    amountMinor: 3_000,
+                    occurredAt: makeDate(year: 2026, month: 4, day: 5),
+                    categoryID: foodCategory,
+                    categoryParentID: livingParent
+                )
+            ],
+            selectedMonth: selectedMonth,
+            referenceDate: referenceDate,
+            calendar: calendar,
+            familyTransactions: [
+                makeFamilyBudgetTransaction(
+                    amountMinor: 8_000,
+                    occurredAt: makeDate(year: 2026, month: 4, day: 6),
+                    categoryName: "Ăn uống",
+                    categoryParentName: "Sinh hoạt"
+                )
+            ],
+            familySpendingAvailable: false
+        )
+
+        XCTAssertEqual(rows[0].spentMinor, 3_000)
+    }
+
+    func testBudgetBranchRowsWithoutFamilyScopeIgnoreFamilyTransactions() {
+        let selectedMonth = makeDate(year: 2026, month: 4, day: 1)
+        let referenceDate = makeDate(year: 2026, month: 4, day: 10)
+        let livingParent = UUID()
+        let foodCategory = UUID()
+
+        let rows = PlanningLogic.budgetBranchRows(
+            plans: [
+                makeBudget(
+                    categoryID: foodCategory,
+                    categoryName: "Ăn uống",
+                    limitMinor: 10_000,
+                    monthAnchor: selectedMonth,
+                    categoryParentID: livingParent,
+                    categoryParentName: "Sinh hoạt",
+                    categoryParentIconSymbolName: "house.fill",
+                    categoryParentColorHex: "#5A6C7D"
+                )
+            ],
+            records: [
+                makeRecord(
+                    primaryKind: .expense,
+                    amountMinor: 3_000,
+                    occurredAt: makeDate(year: 2026, month: 4, day: 5),
+                    categoryID: foodCategory,
+                    categoryParentID: livingParent
+                )
+            ],
+            selectedMonth: selectedMonth,
+            referenceDate: referenceDate,
+            calendar: calendar,
+            familyTransactions: [
+                makeFamilyBudgetTransaction(
+                    amountMinor: 8_000,
+                    occurredAt: makeDate(year: 2026, month: 4, day: 6),
+                    categoryName: "Ăn uống",
+                    categoryParentName: "Sinh hoạt"
+                )
+            ]
+        )
+
+        XCTAssertEqual(rows[0].spentMinor, 3_000)
+    }
+
     func testBudgetAllocationValidationAllowsChildOnlyAndCapsExistingParent() {
         let selectedMonth = makeDate(year: 2026, month: 4, day: 1)
         let livingParent = UUID()
@@ -1747,7 +1975,8 @@ final class PlanningLogicTests: XCTestCase {
         categoryParentName: String? = nil,
         categoryParentIconSymbolName: String? = nil,
         categoryParentColorHex: String? = nil,
-        categoryIsParent: Bool = false
+        categoryIsParent: Bool = false,
+        includesFamilySpending: Bool = false
     ) -> BudgetPlanSnapshot {
         BudgetPlanSnapshot(
             id: id,
@@ -1763,8 +1992,68 @@ final class PlanningLogicTests: XCTestCase {
             categoryParentName: categoryParentName,
             categoryParentIconSymbolName: categoryParentIconSymbolName,
             categoryParentColorHex: categoryParentColorHex,
-            categoryIsParent: categoryIsParent
+            categoryIsParent: categoryIsParent,
+            includesFamilySpending: includesFamilySpending
         )
+    }
+
+    private func makeFamilyBudgetTransaction(
+        primaryKind: TransactionPrimaryKind = .expense,
+        transferSubtype: TransactionTransferSubtype? = nil,
+        debtIntent: TransactionDebtIntent? = nil,
+        title: String = "Test",
+        amountMinor: Int64,
+        occurredAt: Date,
+        sourceWalletKind: LedgerWalletKind = .cash,
+        destinationWalletKind: LedgerWalletKind? = nil,
+        categoryName: String?,
+        categoryParentName: String?,
+        currencyCode: String = "JPY"
+    ) -> FamilyAggregateTransactionSnapshot {
+        let record = TransactionRecordSnapshot(
+            id: UUID(),
+            primaryKind: primaryKind,
+            transferSubtype: transferSubtype,
+            debtIntent: debtIntent,
+            entryStatus: .posted,
+            title: title,
+            note: nil,
+            amountMinor: amountMinor,
+            sourceCurrencyCode: currencyCode,
+            occurredAt: occurredAt,
+            createdAt: occurredAt,
+            sourceWalletID: UUID(),
+            sourceWalletKind: sourceWalletKind,
+            destinationWalletID: destinationWalletKind == nil ? nil : UUID(),
+            destinationWalletKind: destinationWalletKind,
+            categoryID: nil,
+            counterpartyName: nil,
+            normalizedCounterpartyKey: nil
+        )
+
+        return FamilyAggregateTransactionSnapshot(
+            ownerUserID: UUID(),
+            categoryName: categoryName,
+            categoryParentName: categoryParentName,
+            occurredAt: occurredAt,
+            kind: familyTransactionKind(for: primaryKind),
+            amountMinor: amountMinor,
+            currencyCode: currencyCode,
+            isCreditCardPayment: TransactionLogic.isCreditCardPayment(record),
+            isAdjustment: TransactionLogic.isAdjustment(record),
+            isInstallmentPayment: TransactionLogic.isInstallmentPayment(record)
+        )
+    }
+
+    private func familyTransactionKind(for primaryKind: TransactionPrimaryKind) -> FamilyAggregateTransactionSnapshot.Kind {
+        switch primaryKind {
+        case .expense:
+            return .expense
+        case .income:
+            return .income
+        case .transfer:
+            return .transfer
+        }
     }
 
     private func makeCreditCardAccount(

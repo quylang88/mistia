@@ -217,6 +217,7 @@ nonisolated struct RemoteTransactionCategory: MistiaRemoteRow {
     var iconSymbolName: String
     var iconColorHex: String
     var isFavorite: Bool
+    var familyBudgetSpendingEnabled: Bool
     var parentCategoryID: UUID?
     var hierarchyRoleRawValue: String?
     var systemKey: String?
@@ -240,6 +241,7 @@ nonisolated struct RemoteTransactionCategory: MistiaRemoteRow {
         iconSymbolName: String,
         iconColorHex: String,
         isFavorite: Bool,
+        familyBudgetSpendingEnabled: Bool = false,
         parentCategoryID: UUID?,
         hierarchyRoleRawValue: String?,
         systemKey: String?,
@@ -262,6 +264,7 @@ nonisolated struct RemoteTransactionCategory: MistiaRemoteRow {
         self.iconSymbolName = iconSymbolName
         self.iconColorHex = iconColorHex
         self.isFavorite = isFavorite
+        self.familyBudgetSpendingEnabled = familyBudgetSpendingEnabled
         self.parentCategoryID = parentCategoryID
         self.hierarchyRoleRawValue = hierarchyRoleRawValue
         self.systemKey = systemKey
@@ -286,6 +289,7 @@ nonisolated struct RemoteTransactionCategory: MistiaRemoteRow {
         case iconSymbolName = "icon_symbol_name"
         case iconColorHex = "icon_color_hex"
         case isFavorite = "is_favorite"
+        case familyBudgetSpendingEnabled = "family_budget_spending_enabled"
         case parentCategoryID = "parent_category_id"
         case hierarchyRoleRawValue = "hierarchy_role_raw_value"
         case systemKey = "system_key"
@@ -311,6 +315,7 @@ nonisolated struct RemoteTransactionCategory: MistiaRemoteRow {
         iconSymbolName = try container.decode(String.self, forKey: .iconSymbolName)
         iconColorHex = try container.decode(String.self, forKey: .iconColorHex)
         isFavorite = try container.decodeIfPresent(Bool.self, forKey: .isFavorite) ?? false
+        familyBudgetSpendingEnabled = try container.decodeIfPresent(Bool.self, forKey: .familyBudgetSpendingEnabled) ?? false
         parentCategoryID = try container.decodeIfPresent(UUID.self, forKey: .parentCategoryID)
         hierarchyRoleRawValue = try container.decodeIfPresent(String.self, forKey: .hierarchyRoleRawValue)
         systemKey = try container.decodeIfPresent(String.self, forKey: .systemKey)
@@ -443,6 +448,24 @@ nonisolated struct RemoteBudgetPlan: MistiaRemoteRow {
     var userID: UUID
     var id: UUID
     var categoryID: UUID?
+    var categoryIDSnapshot: UUID?
+    var categoryNameSnapshot: String?
+    var categoryNameEnglishSnapshot: String?
+    var categoryNameJapaneseSnapshot: String?
+    var categoryPathSnapshot: String?
+    var categoryPathEnglishSnapshot: String?
+    var categoryPathJapaneseSnapshot: String?
+    var categoryIconSymbolNameSnapshot: String?
+    var categoryColorHexSnapshot: String?
+    var categoryParentIDSnapshot: UUID?
+    var categoryParentNameSnapshot: String?
+    var categoryParentNameEnglishSnapshot: String?
+    var categoryParentNameJapaneseSnapshot: String?
+    var categoryParentIconSymbolNameSnapshot: String?
+    var categoryParentColorHexSnapshot: String?
+    var categoryHierarchyRoleSnapshotRawValue: String?
+    var categoryIsParentSnapshot: Bool?
+    var includesFamilySpending: Bool
     var monthAnchor: Date
     var limitMinor: Int64
     var rolloverEnabled: Bool
@@ -454,10 +477,94 @@ nonisolated struct RemoteBudgetPlan: MistiaRemoteRow {
     var syncVersion: Int64
     var lastModifiedByDeviceID: UUID?
 
+    init(
+        userID: UUID,
+        id: UUID,
+        categoryID: UUID?,
+        categoryIDSnapshot: UUID? = nil,
+        categoryNameSnapshot: String? = nil,
+        categoryNameEnglishSnapshot: String? = nil,
+        categoryNameJapaneseSnapshot: String? = nil,
+        categoryPathSnapshot: String? = nil,
+        categoryPathEnglishSnapshot: String? = nil,
+        categoryPathJapaneseSnapshot: String? = nil,
+        categoryIconSymbolNameSnapshot: String? = nil,
+        categoryColorHexSnapshot: String? = nil,
+        categoryParentIDSnapshot: UUID? = nil,
+        categoryParentNameSnapshot: String? = nil,
+        categoryParentNameEnglishSnapshot: String? = nil,
+        categoryParentNameJapaneseSnapshot: String? = nil,
+        categoryParentIconSymbolNameSnapshot: String? = nil,
+        categoryParentColorHexSnapshot: String? = nil,
+        categoryHierarchyRoleSnapshotRawValue: String? = nil,
+        categoryIsParentSnapshot: Bool? = nil,
+        includesFamilySpending: Bool = false,
+        monthAnchor: Date,
+        limitMinor: Int64,
+        rolloverEnabled: Bool,
+        currencyCode: String,
+        isArchived: Bool,
+        createdAt: Date,
+        updatedAt: Date,
+        deletedAt: Date?,
+        syncVersion: Int64,
+        lastModifiedByDeviceID: UUID?
+    ) {
+        self.userID = userID
+        self.id = id
+        self.categoryID = categoryID
+        self.categoryIDSnapshot = categoryIDSnapshot
+        self.categoryNameSnapshot = categoryNameSnapshot
+        self.categoryNameEnglishSnapshot = categoryNameEnglishSnapshot
+        self.categoryNameJapaneseSnapshot = categoryNameJapaneseSnapshot
+        self.categoryPathSnapshot = categoryPathSnapshot
+        self.categoryPathEnglishSnapshot = categoryPathEnglishSnapshot
+        self.categoryPathJapaneseSnapshot = categoryPathJapaneseSnapshot
+        self.categoryIconSymbolNameSnapshot = categoryIconSymbolNameSnapshot
+        self.categoryColorHexSnapshot = categoryColorHexSnapshot
+        self.categoryParentIDSnapshot = categoryParentIDSnapshot
+        self.categoryParentNameSnapshot = categoryParentNameSnapshot
+        self.categoryParentNameEnglishSnapshot = categoryParentNameEnglishSnapshot
+        self.categoryParentNameJapaneseSnapshot = categoryParentNameJapaneseSnapshot
+        self.categoryParentIconSymbolNameSnapshot = categoryParentIconSymbolNameSnapshot
+        self.categoryParentColorHexSnapshot = categoryParentColorHexSnapshot
+        self.categoryHierarchyRoleSnapshotRawValue = categoryHierarchyRoleSnapshotRawValue
+        self.categoryIsParentSnapshot = categoryIsParentSnapshot
+        self.includesFamilySpending = includesFamilySpending
+        self.monthAnchor = monthAnchor
+        self.limitMinor = limitMinor
+        self.rolloverEnabled = rolloverEnabled
+        self.currencyCode = currencyCode
+        self.isArchived = isArchived
+        self.createdAt = createdAt
+        self.updatedAt = updatedAt
+        self.deletedAt = deletedAt
+        self.syncVersion = syncVersion
+        self.lastModifiedByDeviceID = lastModifiedByDeviceID
+    }
+
     enum CodingKeys: String, CodingKey {
         case userID = "user_id"
         case id
         case categoryID = "category_id"
+        case categoryIDSnapshot = "category_id_snapshot"
+        case categoryNameSnapshot = "category_name_snapshot"
+        case categoryNameEnglishSnapshot = "category_name_english_snapshot"
+        case categoryNameJapaneseSnapshot = "category_name_japanese_snapshot"
+        case categoryPathSnapshot = "category_path_snapshot"
+        case categoryPathEnglishSnapshot = "category_path_english_snapshot"
+        case categoryPathJapaneseSnapshot = "category_path_japanese_snapshot"
+        case categoryIconSymbolNameSnapshot = "category_icon_symbol_name_snapshot"
+        case categoryColorHexSnapshot = "category_color_hex_snapshot"
+        case categoryParentIDSnapshot = "category_parent_id_snapshot"
+        case categoryParentNameSnapshot = "category_parent_name_snapshot"
+        case categoryParentNameEnglishSnapshot = "category_parent_name_english_snapshot"
+        case categoryParentNameJapaneseSnapshot = "category_parent_name_japanese_snapshot"
+        case categoryParentIconSymbolNameSnapshot = "category_parent_icon_symbol_name_snapshot"
+        case categoryParentColorHexSnapshot = "category_parent_color_hex_snapshot"
+        case categoryHierarchyRoleSnapshotRawValue = "category_hierarchy_role_snapshot_raw_value"
+        case categoryIsParentSnapshot = "category_is_parent_snapshot"
+        case includesFamilySpending = "includes_family_spending"
         case monthAnchor = "month_anchor"
         case limitMinor = "limit_minor"
         case rolloverEnabled = "rollover_enabled"
@@ -468,6 +575,41 @@ nonisolated struct RemoteBudgetPlan: MistiaRemoteRow {
         case deletedAt = "deleted_at"
         case syncVersion = "sync_version"
         case lastModifiedByDeviceID = "last_modified_by_device_id"
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        userID = try container.decode(UUID.self, forKey: .userID)
+        id = try container.decode(UUID.self, forKey: .id)
+        categoryID = try container.decodeIfPresent(UUID.self, forKey: .categoryID)
+        categoryIDSnapshot = try container.decodeIfPresent(UUID.self, forKey: .categoryIDSnapshot)
+        categoryNameSnapshot = try container.decodeIfPresent(String.self, forKey: .categoryNameSnapshot)
+        categoryNameEnglishSnapshot = try container.decodeIfPresent(String.self, forKey: .categoryNameEnglishSnapshot)
+        categoryNameJapaneseSnapshot = try container.decodeIfPresent(String.self, forKey: .categoryNameJapaneseSnapshot)
+        categoryPathSnapshot = try container.decodeIfPresent(String.self, forKey: .categoryPathSnapshot)
+        categoryPathEnglishSnapshot = try container.decodeIfPresent(String.self, forKey: .categoryPathEnglishSnapshot)
+        categoryPathJapaneseSnapshot = try container.decodeIfPresent(String.self, forKey: .categoryPathJapaneseSnapshot)
+        categoryIconSymbolNameSnapshot = try container.decodeIfPresent(String.self, forKey: .categoryIconSymbolNameSnapshot)
+        categoryColorHexSnapshot = try container.decodeIfPresent(String.self, forKey: .categoryColorHexSnapshot)
+        categoryParentIDSnapshot = try container.decodeIfPresent(UUID.self, forKey: .categoryParentIDSnapshot)
+        categoryParentNameSnapshot = try container.decodeIfPresent(String.self, forKey: .categoryParentNameSnapshot)
+        categoryParentNameEnglishSnapshot = try container.decodeIfPresent(String.self, forKey: .categoryParentNameEnglishSnapshot)
+        categoryParentNameJapaneseSnapshot = try container.decodeIfPresent(String.self, forKey: .categoryParentNameJapaneseSnapshot)
+        categoryParentIconSymbolNameSnapshot = try container.decodeIfPresent(String.self, forKey: .categoryParentIconSymbolNameSnapshot)
+        categoryParentColorHexSnapshot = try container.decodeIfPresent(String.self, forKey: .categoryParentColorHexSnapshot)
+        categoryHierarchyRoleSnapshotRawValue = try container.decodeIfPresent(String.self, forKey: .categoryHierarchyRoleSnapshotRawValue)
+        categoryIsParentSnapshot = try container.decodeIfPresent(Bool.self, forKey: .categoryIsParentSnapshot)
+        includesFamilySpending = try container.decodeIfPresent(Bool.self, forKey: .includesFamilySpending) ?? false
+        monthAnchor = try container.decode(Date.self, forKey: .monthAnchor)
+        limitMinor = try container.decode(Int64.self, forKey: .limitMinor)
+        rolloverEnabled = try container.decode(Bool.self, forKey: .rolloverEnabled)
+        currencyCode = try container.decode(String.self, forKey: .currencyCode)
+        isArchived = try container.decode(Bool.self, forKey: .isArchived)
+        createdAt = try container.decode(Date.self, forKey: .createdAt)
+        updatedAt = try container.decode(Date.self, forKey: .updatedAt)
+        deletedAt = try container.decodeIfPresent(Date.self, forKey: .deletedAt)
+        syncVersion = try container.decode(Int64.self, forKey: .syncVersion)
+        lastModifiedByDeviceID = try container.decodeIfPresent(UUID.self, forKey: .lastModifiedByDeviceID)
     }
 }
 
@@ -1023,6 +1165,7 @@ enum MistiaSyncUploadRecord {
                 row.iconSymbolName,
                 row.iconColorHex,
                 row.isFavorite ? "1" : "0",
+                row.familyBudgetSpendingEnabled ? "1" : "0",
                 row.parentCategoryID?.uuidString.lowercased() ?? "",
                 row.hierarchyRoleRawValue ?? "",
                 row.systemKey ?? "",
@@ -1066,6 +1209,24 @@ enum MistiaSyncUploadRecord {
             return [
                 entity.rawValue,
                 row.categoryID?.uuidString.lowercased() ?? "",
+                row.categoryIDSnapshot?.uuidString.lowercased() ?? "",
+                row.categoryNameSnapshot ?? "",
+                row.categoryNameEnglishSnapshot ?? "",
+                row.categoryNameJapaneseSnapshot ?? "",
+                row.categoryPathSnapshot ?? "",
+                row.categoryPathEnglishSnapshot ?? "",
+                row.categoryPathJapaneseSnapshot ?? "",
+                row.categoryIconSymbolNameSnapshot ?? "",
+                row.categoryColorHexSnapshot ?? "",
+                row.categoryParentIDSnapshot?.uuidString.lowercased() ?? "",
+                row.categoryParentNameSnapshot ?? "",
+                row.categoryParentNameEnglishSnapshot ?? "",
+                row.categoryParentNameJapaneseSnapshot ?? "",
+                row.categoryParentIconSymbolNameSnapshot ?? "",
+                row.categoryParentColorHexSnapshot ?? "",
+                row.categoryHierarchyRoleSnapshotRawValue ?? "",
+                row.categoryIsParentSnapshot.map { $0 ? "1" : "0" } ?? "",
+                row.includesFamilySpending ? "1" : "0",
                 Self.dateString(row.monthAnchor),
                 "\(row.limitMinor)",
                 row.rolloverEnabled ? "1" : "0",

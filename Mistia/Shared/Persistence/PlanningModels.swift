@@ -5,6 +5,24 @@ import SwiftData
 final class BudgetPlan {
     @Attribute(.unique) var id: UUID
     @Relationship(deleteRule: .nullify) var category: TransactionCategory?
+    var categoryIDSnapshot: UUID?
+    var categoryNameSnapshot: String?
+    var categoryNameEnglishSnapshot: String?
+    var categoryNameJapaneseSnapshot: String?
+    var categoryPathSnapshot: String?
+    var categoryPathEnglishSnapshot: String?
+    var categoryPathJapaneseSnapshot: String?
+    var categoryIconSymbolNameSnapshot: String?
+    var categoryColorHexSnapshot: String?
+    var categoryParentIDSnapshot: UUID?
+    var categoryParentNameSnapshot: String?
+    var categoryParentNameEnglishSnapshot: String?
+    var categoryParentNameJapaneseSnapshot: String?
+    var categoryParentIconSymbolNameSnapshot: String?
+    var categoryParentColorHexSnapshot: String?
+    var categoryHierarchyRoleSnapshotRawValue: String?
+    var categoryIsParentSnapshotRawValue: Bool?
+    var includesFamilySpendingRawValue: Bool?
     var monthAnchor: Date
     var limitMinor: Int64
     var rolloverEnabled: Bool
@@ -18,6 +36,24 @@ final class BudgetPlan {
     init(
         id: UUID = UUID(),
         category: TransactionCategory? = nil,
+        categoryIDSnapshot: UUID? = nil,
+        categoryNameSnapshot: String? = nil,
+        categoryNameEnglishSnapshot: String? = nil,
+        categoryNameJapaneseSnapshot: String? = nil,
+        categoryPathSnapshot: String? = nil,
+        categoryPathEnglishSnapshot: String? = nil,
+        categoryPathJapaneseSnapshot: String? = nil,
+        categoryIconSymbolNameSnapshot: String? = nil,
+        categoryColorHexSnapshot: String? = nil,
+        categoryParentIDSnapshot: UUID? = nil,
+        categoryParentNameSnapshot: String? = nil,
+        categoryParentNameEnglishSnapshot: String? = nil,
+        categoryParentNameJapaneseSnapshot: String? = nil,
+        categoryParentIconSymbolNameSnapshot: String? = nil,
+        categoryParentColorHexSnapshot: String? = nil,
+        categoryHierarchyRoleSnapshotRawValue: String? = nil,
+        categoryIsParentSnapshotRawValue: Bool? = nil,
+        includesFamilySpending: Bool = false,
         monthAnchor: Date,
         limitMinor: Int64,
         rolloverEnabled: Bool = false,
@@ -30,6 +66,24 @@ final class BudgetPlan {
     ) {
         self.id = id
         self.category = category
+        self.categoryIDSnapshot = categoryIDSnapshot
+        self.categoryNameSnapshot = categoryNameSnapshot
+        self.categoryNameEnglishSnapshot = categoryNameEnglishSnapshot
+        self.categoryNameJapaneseSnapshot = categoryNameJapaneseSnapshot
+        self.categoryPathSnapshot = categoryPathSnapshot
+        self.categoryPathEnglishSnapshot = categoryPathEnglishSnapshot
+        self.categoryPathJapaneseSnapshot = categoryPathJapaneseSnapshot
+        self.categoryIconSymbolNameSnapshot = categoryIconSymbolNameSnapshot
+        self.categoryColorHexSnapshot = categoryColorHexSnapshot
+        self.categoryParentIDSnapshot = categoryParentIDSnapshot
+        self.categoryParentNameSnapshot = categoryParentNameSnapshot
+        self.categoryParentNameEnglishSnapshot = categoryParentNameEnglishSnapshot
+        self.categoryParentNameJapaneseSnapshot = categoryParentNameJapaneseSnapshot
+        self.categoryParentIconSymbolNameSnapshot = categoryParentIconSymbolNameSnapshot
+        self.categoryParentColorHexSnapshot = categoryParentColorHexSnapshot
+        self.categoryHierarchyRoleSnapshotRawValue = categoryHierarchyRoleSnapshotRawValue
+        self.categoryIsParentSnapshotRawValue = categoryIsParentSnapshotRawValue
+        self.includesFamilySpendingRawValue = includesFamilySpending
         self.monthAnchor = monthAnchor
         self.limitMinor = limitMinor
         self.rolloverEnabled = rolloverEnabled
@@ -39,6 +93,11 @@ final class BudgetPlan {
         self.updatedAt = updatedAt
         self.deletedAt = deletedAt
         self.remoteVersion = remoteVersion
+    }
+
+    var includesFamilySpending: Bool {
+        get { includesFamilySpendingRawValue ?? false }
+        set { includesFamilySpendingRawValue = newValue }
     }
 }
 

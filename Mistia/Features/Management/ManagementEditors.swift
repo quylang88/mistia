@@ -636,6 +636,10 @@ struct ManagementCategoryEditorSheet: View {
     @Environment(SessionStore.self) private var sessionStore
     @Query
     private var storedCategories: [TransactionCategory]
+    @Query
+    private var storedBudgets: [BudgetPlan]
+    @Query
+    private var storedBills: [RecurringBillPlan]
 
     let target: ManagementCategoryEditorTarget
 
@@ -893,6 +897,17 @@ struct ManagementCategoryEditorSheet: View {
             let previousKind = category.kind
             let previousParentID = category.parentCategory?.id
             let previousRole = category.hierarchyRole
+            let hasRestrictedCategoryChanges = categoryHasRestrictedChanges(
+                category: category,
+                trimmedName: trimmedName,
+                selectedParentCategory: selectedParentCategory
+            )
+            if hasRestrictedCategoryChanges,
+               currentMonthBudgetCount(inBranchOf: category) > 0 {
+                alertMessage = L10n.management.management.categoryBudgetBranchCurrentMonthBlock
+                return
+            }
+
             category.name = fallbackName.name
             category.nameEnglish = fallbackName.nameEnglish
             category.nameJapanese = fallbackName.nameJapanese
@@ -1028,13 +1043,13 @@ struct ManagementCategoryEditorSheet: View {
     private func archiveCategory() {
         guard let category = target.category else { return }
 
-        let hasActiveChildren = storedCategories.contains { candidate in
-            candidate.deletedAt == nil
-                && !candidate.isArchived
-                && candidate.parentCategory?.id == category.id
-        }
-        if category.isParentCategory && hasActiveChildren {
-            alertMessage = L10n.management.management.thisParentCategoryStillHasActiveChild
+        let currentBudgetCount = currentMonthBudgetCount(inBranchOf: category)
+        let activeRecurringBillCount = activeRecurringBillCount(inBranchOf: category)
+        guard currentBudgetCount == 0, activeRecurringBillCount == 0 else {
+            alertMessage = L10n.management.management.categoryArchiveBlockedWithCounts(
+                String(describing: currentBudgetCount),
+                String(describing: activeRecurringBillCount)
+            )
             return
         }
 
@@ -1053,6 +1068,45 @@ struct ManagementCategoryEditorSheet: View {
         } catch {
             alertMessage = L10n.management.management.couldnTSaveTheArchiveState + " \(error.localizedDescription)"
         }
+    }
+
+    private func categoryHasRestrictedChanges(
+        category: TransactionCategory,
+        trimmedName: String,
+        selectedParentCategory: TransactionCategory?
+    ) -> Bool {
+        trimmedName != category.localizedDisplayName
+            || draft.kind != category.kind
+            || selectedParentCategory?.id != category.parentCategory?.id
+            || draft.hierarchyRole != category.hierarchyRole
+    }
+
+    private func currentMonthBudgetCount(inBranchOf category: TransactionCategory) -> Int {
+        let currentMonth = PlanningLogic.startOfMonth(for: .now)
+        let branchID = category.branchCategoryID
+        return storedBudgets.filter { budget in
+            guard budget.deletedAt == nil,
+                  !budget.isArchived,
+                  PlanningLogic.startOfMonth(for: budget.monthAnchor) == currentMonth,
+                  budget.category?.branchCategoryID == branchID
+            else {
+                return false
+            }
+            return true
+        }.count
+    }
+
+    private func activeRecurringBillCount(inBranchOf category: TransactionCategory) -> Int {
+        let branchID = category.branchCategoryID
+        return storedBills.filter { bill in
+            guard bill.deletedAt == nil,
+                  !bill.isArchived,
+                  bill.category?.branchCategoryID == branchID
+            else {
+                return false
+            }
+            return true
+        }.count
     }
 
     private func nextSortOrder(

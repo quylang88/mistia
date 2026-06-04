@@ -301,6 +301,8 @@ nonisolated enum OverviewLogic {
         currencyCode: String,
         balanceIndex: TransactionWalletBalanceIndex? = nil,
         exchangeRates: [MistiaExchangeRate] = [],
+        familyTransactions: [FamilyAggregateTransactionSnapshot] = [],
+        familySpendingAvailable: Bool = true,
         referenceDate: Date = .now,
         calendar: Calendar = MistiaCalendar.current
     ) -> OverviewDashboardSnapshot {
@@ -320,7 +322,9 @@ nonisolated enum OverviewLogic {
                 transactionRecords: transactionRecords,
                 referenceDate: referenceDate,
                 calendar: calendar,
-                exchangeRates: exchangeRates
+                exchangeRates: exchangeRates,
+                familyTransactions: familyTransactions,
+                familySpendingAvailable: familySpendingAvailable
             ),
             dueAlerts: dueAlerts(
                 creditCardDues: creditCardDues,
@@ -1008,6 +1012,8 @@ nonisolated enum OverviewLogic {
         referenceDate: Date = .now,
         calendar: Calendar = MistiaCalendar.current,
         exchangeRates: [MistiaExchangeRate] = [],
+        familyTransactions: [FamilyAggregateTransactionSnapshot] = [],
+        familySpendingAvailable: Bool = true,
         includesStable: Bool = false,
         maximumCount: Int? = 3
     ) -> [OverviewBudgetAlertSnapshot] {
@@ -1018,7 +1024,9 @@ nonisolated enum OverviewLogic {
             selectedMonth: selectedMonth,
             referenceDate: referenceDate,
             calendar: calendar,
-            exchangeRates: exchangeRates
+            exchangeRates: exchangeRates,
+            familyTransactions: familyTransactions,
+            familySpendingAvailable: familySpendingAvailable
         )
 
         let sortedRows = rows

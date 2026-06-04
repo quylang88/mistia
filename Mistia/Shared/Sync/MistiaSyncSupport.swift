@@ -375,6 +375,7 @@ private extension MistiaSyncUploadRecord {
                 field("icon", L10n.shared.sync.mistiasync.icon, local.iconSymbolName, remote.iconSymbolName)
                 field("color", L10n.shared.sync.mistiasync.color, local.iconColorHex, remote.iconColorHex)
                 field("favorite", L10n.shared.sync.mistiasync.favorite, yesNo(local.isFavorite), yesNo(remote.isFavorite))
+                field("familyBudget", L10n.shared.sync.mistiasync.familyBudget, yesNo(local.familyBudgetSpendingEnabled), yesNo(remote.familyBudgetSpendingEnabled))
                 field("parent", L10n.shared.sync.mistiasync.parentCategory, uuid(local.parentCategoryID), uuid(remote.parentCategoryID))
                 field("role", L10n.shared.sync.mistiasync.hierarchyRole, local.hierarchyRoleRawValue, remote.hierarchyRoleRawValue)
                 field("systemKey", L10n.shared.sync.mistiasync.systemKey, local.systemKey, remote.systemKey)
@@ -405,6 +406,9 @@ private extension MistiaSyncUploadRecord {
         case (.budgetPlan(let local), .budgetPlan(let remote)):
             return MistiaSyncConflictDifferenceBuilder.build {
                 field("category", L10n.shared.sync.mistiasync.category2, uuid(local.categoryID), uuid(remote.categoryID))
+                field("categorySnapshot", L10n.shared.sync.mistiasync.categorySnapshot, local.categoryNameSnapshot, remote.categoryNameSnapshot)
+                field("parentSnapshot", L10n.shared.sync.mistiasync.parentSnapshot, local.categoryParentNameSnapshot, remote.categoryParentNameSnapshot)
+                field("familyBudget", L10n.shared.sync.mistiasync.familyBudget, yesNo(local.includesFamilySpending), yesNo(remote.includesFamilySpending))
                 field("month", L10n.shared.sync.mistiasync.month, date(local.monthAnchor), date(remote.monthAnchor))
                 field("limit", L10n.shared.sync.mistiasync.limit, currency(local.limitMinor, code: local.currencyCode), currency(remote.limitMinor, code: remote.currencyCode))
                 field("rollover", L10n.shared.sync.mistiasync.rollover, yesNo(local.rolloverEnabled), yesNo(remote.rolloverEnabled))

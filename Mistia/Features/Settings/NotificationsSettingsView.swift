@@ -263,7 +263,8 @@ struct NotificationsSettingsView: View {
         guard notificationsEnabled else { return }
         await MistiaDueMaintenance.run(
             modelContext: modelContext,
-            sessionStore: sessionStore
+            sessionStore: sessionStore,
+            familyContextStore: familyContextStore
         )
     }
 

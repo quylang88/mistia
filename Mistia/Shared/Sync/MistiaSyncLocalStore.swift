@@ -314,10 +314,11 @@ enum MistiaSyncLocalStore {
                 nameEnglish: parentKey.englishTitle,
                 nameJapanese: parentKey.japaneseTitle,
                 kindRawValue: parentKey.kind.rawValue,
-                iconSymbolName: parentKey.iconSymbolName,
-                iconColorHex: MistiaIconColorPalette.presetHex(forDefault: parentKey.iconColorHex),
-                isFavorite: false,
-                parentCategoryID: nil,
+            iconSymbolName: parentKey.iconSymbolName,
+            iconColorHex: MistiaIconColorPalette.presetHex(forDefault: parentKey.iconColorHex),
+            isFavorite: false,
+            familyBudgetSpendingEnabled: false,
+            parentCategoryID: nil,
                 hierarchyRoleRawValue: TransactionCategoryHierarchyRole.parent.rawValue,
                 systemKey: parentKey.rawValue,
                 isSystem: true,
@@ -1430,6 +1431,7 @@ enum MistiaSyncLocalStore {
             iconSymbolName: row.iconSymbolName,
             iconColorHex: row.iconColorHex,
             isFavorite: row.isFavorite,
+            familyBudgetSpendingEnabled: row.familyBudgetSpendingEnabled,
             hierarchyRole: row.hierarchyRoleRawValue.flatMap(TransactionCategoryHierarchyRole.init(rawValue:)),
             systemKey: row.systemKey,
             isSystem: row.isSystem,
@@ -1455,6 +1457,7 @@ enum MistiaSyncLocalStore {
         category.iconSymbolName = row.iconSymbolName
         category.iconColorHex = row.iconColorHex
         category.isFavorite = row.isFavorite
+        category.familyBudgetSpendingEnabled = row.familyBudgetSpendingEnabled
         category.hierarchyRoleRawValue = row.hierarchyRoleRawValue
         category.systemKey = row.systemKey
         category.isSystem = row.isSystem
@@ -1976,6 +1979,24 @@ enum MistiaSyncLocalStore {
         let budget = budgetByID[row.id] ?? BudgetPlan(
             id: row.id,
             category: row.categoryID.flatMap { categoryByID[$0] },
+            categoryIDSnapshot: row.categoryIDSnapshot,
+            categoryNameSnapshot: row.categoryNameSnapshot,
+            categoryNameEnglishSnapshot: row.categoryNameEnglishSnapshot,
+            categoryNameJapaneseSnapshot: row.categoryNameJapaneseSnapshot,
+            categoryPathSnapshot: row.categoryPathSnapshot,
+            categoryPathEnglishSnapshot: row.categoryPathEnglishSnapshot,
+            categoryPathJapaneseSnapshot: row.categoryPathJapaneseSnapshot,
+            categoryIconSymbolNameSnapshot: row.categoryIconSymbolNameSnapshot,
+            categoryColorHexSnapshot: row.categoryColorHexSnapshot,
+            categoryParentIDSnapshot: row.categoryParentIDSnapshot,
+            categoryParentNameSnapshot: row.categoryParentNameSnapshot,
+            categoryParentNameEnglishSnapshot: row.categoryParentNameEnglishSnapshot,
+            categoryParentNameJapaneseSnapshot: row.categoryParentNameJapaneseSnapshot,
+            categoryParentIconSymbolNameSnapshot: row.categoryParentIconSymbolNameSnapshot,
+            categoryParentColorHexSnapshot: row.categoryParentColorHexSnapshot,
+            categoryHierarchyRoleSnapshotRawValue: row.categoryHierarchyRoleSnapshotRawValue,
+            categoryIsParentSnapshotRawValue: row.categoryIsParentSnapshot,
+            includesFamilySpending: row.includesFamilySpending,
             monthAnchor: row.monthAnchor,
             limitMinor: row.limitMinor,
             rolloverEnabled: row.rolloverEnabled,
@@ -1993,6 +2014,24 @@ enum MistiaSyncLocalStore {
         }
 
         budget.category = row.categoryID.flatMap { categoryByID[$0] }
+        budget.categoryIDSnapshot = row.categoryIDSnapshot
+        budget.categoryNameSnapshot = row.categoryNameSnapshot
+        budget.categoryNameEnglishSnapshot = row.categoryNameEnglishSnapshot
+        budget.categoryNameJapaneseSnapshot = row.categoryNameJapaneseSnapshot
+        budget.categoryPathSnapshot = row.categoryPathSnapshot
+        budget.categoryPathEnglishSnapshot = row.categoryPathEnglishSnapshot
+        budget.categoryPathJapaneseSnapshot = row.categoryPathJapaneseSnapshot
+        budget.categoryIconSymbolNameSnapshot = row.categoryIconSymbolNameSnapshot
+        budget.categoryColorHexSnapshot = row.categoryColorHexSnapshot
+        budget.categoryParentIDSnapshot = row.categoryParentIDSnapshot
+        budget.categoryParentNameSnapshot = row.categoryParentNameSnapshot
+        budget.categoryParentNameEnglishSnapshot = row.categoryParentNameEnglishSnapshot
+        budget.categoryParentNameJapaneseSnapshot = row.categoryParentNameJapaneseSnapshot
+        budget.categoryParentIconSymbolNameSnapshot = row.categoryParentIconSymbolNameSnapshot
+        budget.categoryParentColorHexSnapshot = row.categoryParentColorHexSnapshot
+        budget.categoryHierarchyRoleSnapshotRawValue = row.categoryHierarchyRoleSnapshotRawValue
+        budget.categoryIsParentSnapshotRawValue = row.categoryIsParentSnapshot
+        budget.includesFamilySpending = row.includesFamilySpending
         budget.monthAnchor = row.monthAnchor
         budget.limitMinor = row.limitMinor
         budget.rolloverEnabled = row.rolloverEnabled
@@ -2593,6 +2632,7 @@ private extension RemoteTransactionCategory {
         self.iconSymbolName = category.iconSymbolName
         self.iconColorHex = category.iconColorHex
         self.isFavorite = category.isFavorite
+        self.familyBudgetSpendingEnabled = category.familyBudgetSpendingEnabled
         self.parentCategoryID = mistiaCloudCategoryID(for: category.parentCategory, userID: userID)
         self.hierarchyRoleRawValue = category.hierarchyRoleRawValue
         self.systemKey = category.systemKey
@@ -2691,6 +2731,24 @@ private extension RemoteBudgetPlan {
             userID: userID,
             id: plan.id,
             categoryID: mistiaCloudCategoryID(for: plan.category, userID: userID),
+            categoryIDSnapshot: plan.categoryIDSnapshot,
+            categoryNameSnapshot: plan.categoryNameSnapshot,
+            categoryNameEnglishSnapshot: plan.categoryNameEnglishSnapshot,
+            categoryNameJapaneseSnapshot: plan.categoryNameJapaneseSnapshot,
+            categoryPathSnapshot: plan.categoryPathSnapshot,
+            categoryPathEnglishSnapshot: plan.categoryPathEnglishSnapshot,
+            categoryPathJapaneseSnapshot: plan.categoryPathJapaneseSnapshot,
+            categoryIconSymbolNameSnapshot: plan.categoryIconSymbolNameSnapshot,
+            categoryColorHexSnapshot: plan.categoryColorHexSnapshot,
+            categoryParentIDSnapshot: plan.categoryParentIDSnapshot,
+            categoryParentNameSnapshot: plan.categoryParentNameSnapshot,
+            categoryParentNameEnglishSnapshot: plan.categoryParentNameEnglishSnapshot,
+            categoryParentNameJapaneseSnapshot: plan.categoryParentNameJapaneseSnapshot,
+            categoryParentIconSymbolNameSnapshot: plan.categoryParentIconSymbolNameSnapshot,
+            categoryParentColorHexSnapshot: plan.categoryParentColorHexSnapshot,
+            categoryHierarchyRoleSnapshotRawValue: plan.categoryHierarchyRoleSnapshotRawValue,
+            categoryIsParentSnapshot: plan.categoryIsParentSnapshotRawValue,
+            includesFamilySpending: plan.includesFamilySpending,
             monthAnchor: plan.monthAnchor,
             limitMinor: plan.limitMinor,
             rolloverEnabled: plan.rolloverEnabled,

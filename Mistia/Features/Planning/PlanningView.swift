@@ -333,6 +333,12 @@ struct PlanningView: View {
             storedTransactions,
             scopeSnapshot: scopeSnapshot
         )
+        let familyTransactions = FamilyScopedData.familyBudgetTransactionSnapshots(
+            from: storedTransactions,
+            scopeSnapshot: scopeSnapshot,
+            familyMemberUserIDs: currentFamilyMemberUserIDs,
+            signedInUserID: sessionStore.activeLocalProfileUserID
+        )
         let transactionSnapshots = visibleTransactions.map(\.planningRecordSnapshot)
         let activeBudgetPlans = visibleBudgets
             .filter { !$0.isArchived && PlanningLogic.startOfMonth(for: $0.monthAnchor, calendar: calendar) == selectedMonth }
@@ -343,7 +349,9 @@ struct PlanningView: View {
             selectedMonth: selectedMonth,
             referenceDate: .now,
             calendar: calendar,
-            exchangeRates: appExchangeRates
+            exchangeRates: appExchangeRates,
+            familyTransactions: familyTransactions,
+            familySpendingAvailable: isFamilyBudgetSpendingAvailable
         )
 
         return PlanningBudgetRenderSnapshot(
@@ -674,6 +682,15 @@ struct PlanningView: View {
             hasher.combine(grant.revokedAt?.timeIntervalSince1970)
         }
         return hasher.finalize()
+    }
+
+    private var isFamilyBudgetSpendingAvailable: Bool {
+        familyContextStore.family != nil && familyContextStore.members.count >= 2
+    }
+
+    private var currentFamilyMemberUserIDs: Set<UUID> {
+        guard isFamilyBudgetSpendingAvailable else { return [] }
+        return Set(familyContextStore.members.map(\.userID))
     }
 
     private var activeBudgetPlans: [BudgetPlanSnapshot] {
@@ -1131,6 +1148,14 @@ struct PlanningView: View {
     }
 
     private func openBudgetAddIfAllowed() {
+        guard selectedMonth >= PlanningLogic.startOfMonth(for: .now, calendar: calendar) else {
+            infoAlert = PlanningInfoAlert(
+                title: L10n.planning.planning.budgets,
+                message: L10n.planning.planning.pastBudgetReadOnlyReference
+            )
+            return
+        }
+
         let ownerUserID = selectedSubjectUserID
         guard canCreate(ownerUserID: ownerUserID, resourceType: .budget) else {
             presentCreatePermissionPrompt(

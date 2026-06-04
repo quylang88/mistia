@@ -1573,6 +1573,7 @@ struct NotificationCenterView: View {
         await MistiaDueMaintenance.run(
             modelContext: modelContext,
             sessionStore: sessionStore,
+            familyContextStore: familyContextStore,
             referenceDate: .now,
             calendar: calendar
         )
