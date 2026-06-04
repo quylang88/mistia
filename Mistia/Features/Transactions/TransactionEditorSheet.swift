@@ -826,10 +826,11 @@ struct TransactionEditorSheet: View {
 
             if let transaction = target.transaction, !transaction.isArchived, !isFamilyTransferDetail {
                 Section {
-                    MistiaArchiveSection(
+                    MistiaDestructiveActionSection(
                         buttonTitle: L10n.transactions.transactioneditor.archiveTransaction,
                         descriptionText: L10n.transactions.transactioneditor.archivedTransactionsWillNoLongerAppearIn,
-                        popupMessage: L10n.transactions.transactioneditor.thisTransactionWillBeArchivedArchivedTransactions
+                        popupMessage: L10n.transactions.transactioneditor.thisTransactionWillBeArchivedArchivedTransactions,
+                        confirmationButtonTitle: L10n.common.archive
                     ) {
                         archiveTransaction()
                     }

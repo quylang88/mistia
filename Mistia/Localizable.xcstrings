@@ -749,6 +749,28 @@
         }
       }
     },
+    "common.archive": {
+      "localizations": {
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Lưu trữ"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Archive"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "アーカイブ"
+          }
+        }
+      }
+    },
     "common.delete": {
       "localizations": {
         "vi": {
@@ -6584,19 +6606,19 @@
         "vi": {
           "stringUnit": {
             "state": "translated",
-            "value": "Nhánh danh mục này đang được dùng bởi ngân sách tháng hiện tại. Hãy xóa hẳn các ngân sách tháng này trước khi đổi tên hoặc cấu trúc."
+            "value": "Nhánh danh mục này đang được dùng bởi ngân sách tháng hiện tại. Hãy xóa các ngân sách tháng này trước khi đổi tên hoặc cấu trúc."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "This category branch is used by a current-month budget. Permanently delete those budgets before changing the name or structure."
+            "value": "This category branch is used by a current-month budget. Delete those budgets before changing the name or structure."
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "このカテゴリ枝は当月の予算で使用されています。名前や構造を変更する前に、その月の予算を完全に削除してください。"
+            "value": "このカテゴリ枝は当月の予算で使用されています。名前や構造を変更する前に、その月の予算を削除してください。"
           }
         }
       }
@@ -15846,7 +15868,7 @@
         "vi": {
           "stringUnit": {
             "state": "translated",
-            "value": "Xóa hẳn ngân sách"
+            "value": "Xóa ngân sách"
           }
         },
         "en": {
@@ -15863,56 +15885,12 @@
         }
       }
     },
-    "planning.planning.deleteThisBudget": {
-      "localizations": {
-        "vi": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Xóa hẳn ngân sách này?"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Delete this budget?"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "この予算を削除しますか？"
-          }
-        }
-      }
-    },
-    "planning.planning.delete": {
-      "localizations": {
-        "vi": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Xóa"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Delete"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "削除"
-          }
-        }
-      }
-    },
     "planning.planning.deleteCurrentBudgetMessage": {
       "localizations": {
         "vi": {
           "stringUnit": {
             "state": "translated",
-            "value": "Ngân sách tháng hiện tại sẽ bị xóa hẳn. Nếu đây là ngân sách cuối cùng trong nhánh, dữ liệu gia đình của nhánh sẽ tắt."
+            "value": "Ngân sách tháng hiện tại sẽ bị xóa. Nếu đây là ngân sách cuối cùng trong nhánh, dữ liệu gia đình của nhánh sẽ tắt."
           }
         },
         "en": {
@@ -15929,68 +15907,68 @@
         }
       }
     },
+    "planning.planning.deleteBudgetMessage": {
+      "localizations": {
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ngân sách này sẽ bị xóa."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This budget will be deleted."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "この予算を削除します。"
+          }
+        }
+      }
+    },
     "planning.planning.pastBudgetReadOnlyReference": {
       "localizations": {
         "vi": {
           "stringUnit": {
             "state": "translated",
-            "value": "Ngân sách tháng cũ là bản tham chiếu chỉ đọc. Bạn chỉ có thể lưu trữ ngân sách này."
+            "value": "Ngân sách tháng cũ là bản tham chiếu chỉ đọc."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Past-month budgets are read-only reference records. You can only archive this budget."
+            "value": "Past-month budgets are read-only reference records."
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "過去月の予算は参照用の読み取り専用レコードです。この予算はアーカイブのみ可能です。"
+            "value": "過去月の予算は参照用の読み取り専用レコードです。"
           }
         }
       }
     },
-    "planning.planning.currentBudgetCanBeDeleted": {
+    "planning.planning.couldnTArchiveThisBudgetRightNow": {
       "localizations": {
         "vi": {
           "stringUnit": {
             "state": "translated",
-            "value": "Ngân sách tháng hiện tại cần xóa hẳn thay vì lưu trữ."
+            "value": "Không thể lưu trữ ngân sách lúc này."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Current-month budgets must be deleted instead of archived."
+            "value": "Couldn't archive this budget right now."
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "当月の予算はアーカイブではなく削除してください。"
-          }
-        }
-      }
-    },
-    "planning.planning.pastBudgetCanOnlyBeArchived": {
-      "localizations": {
-        "vi": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Ngân sách tháng cũ chỉ có thể lưu trữ."
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Past-month budgets can only be archived."
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "過去月の予算はアーカイブのみ可能です。"
+            "value": "現在この予算をアーカイブできません。"
           }
         }
       }
@@ -16039,28 +16017,6 @@
         }
       }
     },
-    "planning.planning.archiveThisBudget": {
-      "localizations": {
-        "vi": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Lưu trữ ngân sách này?"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Archive this budget?"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "この予算をアーカイブしますか？"
-          }
-        }
-      }
-    },
     "planning.planning.archivedBillsWillNoLongerAppearIn": {
       "localizations": {
         "vi": {
@@ -16088,19 +16044,19 @@
         "vi": {
           "stringUnit": {
             "state": "translated",
-            "value": "Ngân sách lưu trữ sẽ không còn hiện trong tab Sắp tới."
+            "value": "Ngân sách lưu trữ sẽ không còn hiện trong tab Sắp tới. Mục này sẽ được tự động xóa vĩnh viễn sau 30 ngày."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Archived budgets will no longer appear in Upcoming."
+            "value": "Archived budgets will no longer appear in Upcoming. They will be automatically deleted permanently after 30 days."
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "アーカイブした予算はプラン画面に表示されなくなります。"
+            "value": "アーカイブした予算はプラン画面に表示されなくなり、30日後に自動で完全削除されます。"
           }
         }
       }
@@ -16937,28 +16893,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "現在この請求をアーカイブできません。"
-          }
-        }
-      }
-    },
-    "planning.planning.couldnTArchiveThisBudgetRightNow": {
-      "localizations": {
-        "vi": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Không thể lưu trữ ngân sách lúc này."
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Couldn't archive this budget right now."
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "現在この予算をアーカイブできません。"
           }
         }
       }
@@ -19542,19 +19476,19 @@
         "vi": {
           "stringUnit": {
             "state": "translated",
-            "value": "Từ bây giờ, mọi ngân sách trong nhánh này sẽ tính cả chi tiêu gia đình cùng danh mục. Muốn tắt, bạn phải xóa hẳn ngân sách tháng hiện tại của nhánh."
+            "value": "Từ bây giờ, mọi ngân sách trong nhánh này sẽ tính cả chi tiêu gia đình cùng danh mục. Muốn tắt, bạn phải xóa ngân sách tháng hiện tại của nhánh."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "From now on, every budget in this branch will include family spending in matching categories. To turn it off, you must permanently delete the current-month budgets in this branch."
+            "value": "From now on, every budget in this branch will include family spending in matching categories. To turn it off, you must delete the current-month budgets in this branch."
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "今後、この枝のすべての予算は一致するカテゴリの家族支出も集計します。オフにするには、この枝の当月予算を完全に削除する必要があります。"
+            "value": "今後、この枝のすべての予算は一致するカテゴリの家族支出も集計します。オフにするには、この枝の当月予算を削除する必要があります。"
           }
         }
       }
@@ -20083,6 +20017,28 @@
           "stringUnit": {
             "state": "translated",
             "value": "この請求はアーカイブされます。アーカイブ済みの請求は「アーカイブ済みアイテム」に30日間保持されます。"
+          }
+        }
+      }
+    },
+    "planning.planning.thisBudgetWillBeArchivedArchivedBudgets": {
+      "localizations": {
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ngân sách này sẽ bị lưu trữ. Ngân sách đã lưu trữ sẽ nằm trong \"Mục đã lưu trữ\" và được giữ lại trong 30 ngày."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This budget will be archived. Archived budgets remain in \"Archived items\" for 30 days."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "この予算はアーカイブされます。アーカイブ済みの予算は「アーカイブ済みアイテム」に30日間保持されます。"
           }
         }
       }

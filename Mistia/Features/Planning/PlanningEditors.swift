@@ -21,7 +21,6 @@ struct PlanningBudgetEditorSheet: View {
 
     @State private var draft: PlanningBudgetDraft
     @State private var alertMessage: String?
-    @State private var showsArchiveConfirmation = false
     @State private var showsFamilySpendingConfirmation = false
     @State private var isRefreshingFamilySpending = false
     @State private var showsCategoryPicker = false
@@ -217,11 +216,27 @@ struct PlanningBudgetEditorSheet: View {
 
                 if target.budget != nil {
                     Section {
-                        Button(role: .destructive) {
-                            showsArchiveConfirmation = true
-                        } label: {
-                            Text(isCurrentBudgetRecord ? L10n.planning.planning.deleteBudget : L10n.planning.planning.archiveBudget)
-                                .foregroundStyle(Color.red.opacity(0.9))
+                        if isPastBudgetRecord {
+                            MistiaDestructiveActionSection(
+                                buttonTitle: L10n.planning.planning.archiveBudget,
+                                descriptionText: L10n.planning.planning.archivedBudgetsWillNoLongerAppearIn,
+                                popupMessage: L10n.planning.planning.thisBudgetWillBeArchivedArchivedBudgets,
+                                confirmationButtonTitle: L10n.common.archive
+                            ) {
+                                archiveBudget()
+                            }
+                            .listRowInsets(EdgeInsets())
+                            .listRowBackground(Color.clear)
+                        } else {
+                            MistiaDestructiveActionSection(
+                                buttonTitle: L10n.planning.planning.deleteBudget,
+                                popupMessage: deleteBudgetMessage,
+                                confirmationButtonTitle: L10n.common.delete
+                            ) {
+                                deleteBudget()
+                            }
+                            .listRowInsets(EdgeInsets())
+                            .listRowBackground(Color.clear)
                         }
                     }
                 }
@@ -261,23 +276,6 @@ struct PlanningBudgetEditorSheet: View {
                 draft.categoryID = category.id
                 syncFamilySpendingDraft(with: category)
             }
-        }
-        .confirmationDialog(
-            isCurrentBudgetRecord ? L10n.planning.planning.deleteThisBudget : L10n.planning.planning.archiveThisBudget,
-            isPresented: $showsArchiveConfirmation,
-            titleVisibility: .visible
-        ) {
-            Button(isCurrentBudgetRecord ? L10n.planning.planning.delete : L10n.planning.planning.archive, role: .destructive) {
-                if isCurrentBudgetRecord {
-                    deleteCurrentBudget()
-                } else {
-                    archiveBudget()
-                }
-            }
-
-            Button(L10n.common.cancel, role: .cancel) { }
-        } message: {
-            Text(isCurrentBudgetRecord ? L10n.planning.planning.deleteCurrentBudgetMessage : L10n.planning.planning.archivedBudgetsWillNoLongerAppearIn)
         }
         .alert(
             L10n.planning.planning.enableFamilyBudgetDataTitle,
@@ -591,45 +589,19 @@ struct PlanningBudgetEditorSheet: View {
         }
     }
 
-    private func archiveBudget() {
+    private func deleteBudget() {
         guard let budget = target.budget else { return }
-        guard isPastBudgetRecord else {
-            alertMessage = L10n.planning.planning.currentBudgetCanBeDeleted
-            return
-        }
-        let now = Date()
-        budget.isArchived = true
-        budget.updatedAt = now
-
-        do {
-            try modelContext.save()
-            sessionStore.recordUpsert(
-                entity: .budgetPlan,
-                recordID: budget.id,
-                modifiedAt: now
-            )
-            dismiss()
-        } catch {
-            alertMessage = L10n.planning.planning.couldnTArchiveThisBudgetRightNow + " \(error.localizedDescription)"
-        }
-    }
-
-    private func deleteCurrentBudget() {
-        guard let budget = target.budget else { return }
-        guard isCurrentBudgetRecord else {
-            alertMessage = L10n.planning.planning.pastBudgetCanOnlyBeArchived
-            return
-        }
 
         let now = Date()
         let branchCategory = budget.category.flatMap(branchScopeCategory(for:))
         let branchCategoryID = budget.category?.branchCategoryID
         budget.markDeleted(at: now)
-        let shouldResetFamilyScope = shouldResetFamilyScopeAfterDeletingBudget(
-            deletedBudget: budget,
-            branchCategoryID: branchCategoryID,
-            monthAnchor: targetMonthAnchor
-        )
+        let shouldResetFamilyScope = isCurrentBudgetRecord
+            && shouldResetFamilyScopeAfterDeletingBudget(
+                deletedBudget: budget,
+                branchCategoryID: branchCategoryID,
+                monthAnchor: targetMonthAnchor
+            )
         if shouldResetFamilyScope {
             branchCategory?.familyBudgetSpendingEnabled = false
             branchCategory?.updatedAt = now
@@ -652,6 +624,26 @@ struct PlanningBudgetEditorSheet: View {
             dismiss()
         } catch {
             alertMessage = L10n.planning.planning.couldnTDeleteThisBudgetRightNow + " \(error.localizedDescription)"
+        }
+    }
+
+    private func archiveBudget() {
+        guard let budget = target.budget else { return }
+
+        let now = Date()
+        budget.isArchived = true
+        budget.updatedAt = now
+
+        do {
+            try modelContext.save()
+            sessionStore.recordUpsert(
+                entity: .budgetPlan,
+                recordID: budget.id,
+                modifiedAt: now
+            )
+            dismiss()
+        } catch {
+            alertMessage = L10n.planning.planning.couldnTArchiveThisBudgetRightNow + " \(error.localizedDescription)"
         }
     }
 
@@ -689,6 +681,12 @@ struct PlanningBudgetEditorSheet: View {
 
         let parentName = selectedCategory.parentCategory?.localizedDisplayName ?? selectedCategory.branchDisplayName
         return "\(parentName) / \(selectedCategory.localizedDisplayName)"
+    }
+
+    private var deleteBudgetMessage: String {
+        isCurrentBudgetRecord
+            ? L10n.planning.planning.deleteCurrentBudgetMessage
+            : L10n.planning.planning.deleteBudgetMessage
     }
 }
 
@@ -1143,10 +1141,11 @@ struct PlanningBillEditorSheet: View {
 
                 if target.plan != nil {
                     Section {
-                        MistiaArchiveSection(
+                        MistiaDestructiveActionSection(
                             buttonTitle: L10n.planning.planning.archiveBill,
                             descriptionText: L10n.planning.planning.archivedBillsWillNoLongerAppearIn,
-                            popupMessage: L10n.planning.planning.thisBillWillBeArchivedArchivedBills
+                            popupMessage: L10n.planning.planning.thisBillWillBeArchivedArchivedBills,
+                            confirmationButtonTitle: L10n.common.archive
                         ) {
                             archivePlan()
                         }
@@ -1942,10 +1941,11 @@ struct PlanningCreditCardEditorSheet: View {
 
                 if target.wallet != nil {
                     Section {
-                        MistiaArchiveSection(
+                        MistiaDestructiveActionSection(
                             buttonTitle: L10n.planning.planning.archiveCard,
                             descriptionText: L10n.planning.planning.archivedCardsWillNoLongerAppearIn,
-                            popupMessage: L10n.planning.planning.thisCardWillBeArchivedArchivedCards
+                            popupMessage: L10n.planning.planning.thisCardWillBeArchivedArchivedCards,
+                            confirmationButtonTitle: L10n.common.archive
                         ) {
                             archiveWallet()
                         }

@@ -156,10 +156,11 @@ struct ManagementWalletEditorSheet: View {
 
                 if target.wallet != nil {
                     Section {
-                        MistiaArchiveSection(
+                        MistiaDestructiveActionSection(
                             buttonTitle: L10n.management.management.archiveWallet,
                             descriptionText: L10n.management.management.archivedWalletsWillNoLongerAppearIn,
-                            popupMessage: L10n.management.management.thisWalletWillBeArchivedArchivedWallets
+                            popupMessage: L10n.management.management.thisWalletWillBeArchivedArchivedWallets,
+                            confirmationButtonTitle: L10n.common.archive
                         ) {
                             archiveWallet()
                         }
@@ -634,12 +635,15 @@ struct ManagementCategoryEditorSheet: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
     @Environment(SessionStore.self) private var sessionStore
+    @Environment(FamilyContextStore.self) private var familyContextStore
     @Query
     private var storedCategories: [TransactionCategory]
     @Query
     private var storedBudgets: [BudgetPlan]
     @Query
     private var storedBills: [RecurringBillPlan]
+    @Query
+    private var ownershipScopes: [OwnedRecordScope]
 
     let target: ManagementCategoryEditorTarget
 
@@ -660,7 +664,7 @@ struct ManagementCategoryEditorSheet: View {
 
     private var availableParentCategories: [TransactionCategory] {
         MistiaCategoryHierarchy.parentCategories(
-            from: storedCategories,
+            from: visibleStoredCategories,
             kind: draft.kind,
             includeArchived: false
         )
@@ -669,6 +673,30 @@ struct ManagementCategoryEditorSheet: View {
 
     private var selectedParentCategory: TransactionCategory? {
         availableParentCategories.first(where: { $0.id == draft.parentCategoryID })
+    }
+
+    private var targetOwnerUserID: UUID? {
+        if let category = target.category,
+           let ownerUserID = categoryOwnerMap[category.id] {
+            return ownerUserID
+        }
+
+        return familyContextStore.selectedSubjectUserID
+            ?? sessionStore.activeLocalProfileUserID
+    }
+
+    private var categoryOwnerMap: [UUID: UUID] {
+        MistiaRecordOwnershipStore.ownerMap(from: ownershipScopes, entity: .category)
+    }
+
+    private var visibleStoredCategories: [TransactionCategory] {
+        MistiaRecordOwnershipStore.visibleRecords(
+            storedCategories,
+            entity: .category,
+            ownerMap: categoryOwnerMap,
+            subjectUserID: targetOwnerUserID,
+            signedInUserID: sessionStore.activeLocalProfileUserID
+        )
     }
 
     private var canEditHierarchyRole: Bool {
@@ -771,10 +799,11 @@ struct ManagementCategoryEditorSheet: View {
 
                 if target.category != nil {
                     Section {
-                        MistiaArchiveSection(
+                        MistiaDestructiveActionSection(
                             buttonTitle: L10n.management.management.archiveCategory,
                             descriptionText: L10n.management.management.archivedCategoriesWillNoLongerAppearIn,
-                            popupMessage: L10n.management.management.thisCategoryWillBeArchivedArchivedCategories
+                            popupMessage: L10n.management.management.thisCategoryWillBeArchivedArchivedCategories,
+                            confirmationButtonTitle: L10n.common.archive
                         ) {
                             archiveCategory()
                         }
@@ -1114,7 +1143,7 @@ struct ManagementCategoryEditorSheet: View {
         parentID: UUID?,
         excluding category: TransactionCategory?
     ) -> Int {
-        let maxSort = storedCategories
+        let maxSort = visibleStoredCategories
             .filter {
                 $0.deletedAt == nil
                     && !$0.isArchived

@@ -1,13 +1,29 @@
 import SwiftUI
 
-struct MistiaArchiveSection: View {
+struct MistiaDestructiveActionSection: View {
+    private let cornerRadius: CGFloat = 12
+
     let buttonTitle: String
-    let descriptionText: String
+    let descriptionText: String?
     let popupMessage: String
+    let confirmationButtonTitle: String?
     let action: () -> Void
 
     @State private var showsConfirmation = false
-    @Environment(\.colorScheme) private var colorScheme
+
+    init(
+        buttonTitle: String,
+        descriptionText: String? = nil,
+        popupMessage: String,
+        confirmationButtonTitle: String? = nil,
+        action: @escaping () -> Void
+    ) {
+        self.buttonTitle = buttonTitle
+        self.descriptionText = descriptionText
+        self.popupMessage = popupMessage
+        self.confirmationButtonTitle = confirmationButtonTitle
+        self.action = action
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -15,35 +31,40 @@ struct MistiaArchiveSection: View {
                 showsConfirmation = true
             }) {
                 Text(buttonTitle)
-                    .font(.system(size: 16, weight: .semibold, design: .rounded))
-                    .foregroundStyle(Color.red.opacity(0.9))
-                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .font(.body)
+                    .foregroundStyle(.red)
+                    .frame(maxWidth: .infinity, alignment: .center)
                     .padding(.horizontal, 16)
-                    .padding(.vertical, 14)
-                    .background(
-                        Color(UIColor.secondarySystemGroupedBackground),
-                        in: RoundedRectangle(cornerRadius: 24, style: .continuous)
-                    )
+                    .padding(.vertical, 12)
             }
-            .buttonStyle(MistiaPressableButtonStyle(cornerRadius: 20))
+            .frame(maxWidth: .infinity)
+            .background(
+                Color(UIColor.secondarySystemGroupedBackground),
+                in: RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+            )
+            .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
+            .contentShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
+            .buttonStyle(.plain)
             .confirmationDialog(
                 "",
                 isPresented: $showsConfirmation,
                 titleVisibility: .hidden
             ) {
-                Button(buttonTitle, role: .destructive) {
+                Button(confirmationButtonTitle ?? buttonTitle, role: .destructive) {
                     action()
                 }
                 Button(L10n.common.cancel, role: .cancel) { }
             } message: {
                 Text(popupMessage)
             }
-            
-            Text(descriptionText)
-                .font(.system(size: 13, weight: .regular, design: .rounded))
-                .foregroundStyle(.secondary)
-                .padding(.horizontal, 16)
-                .fixedSize(horizontal: false, vertical: true)
+
+            if let descriptionText {
+                Text(descriptionText)
+                    .font(.system(size: 13, weight: .regular, design: .rounded))
+                    .foregroundStyle(.secondary)
+                    .padding(.horizontal, 16)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
         }
     }
 }
