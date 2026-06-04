@@ -2157,19 +2157,35 @@ private struct PlanningBudgetSummaryCard: View {
                     )
                 }
 
-                HStack(spacing: 14) {
+                LazyVGrid(
+                    columns: [
+                        GridItem(.flexible(), spacing: 14),
+                        GridItem(.flexible(), spacing: 14)
+                    ],
+                    alignment: .leading,
+                    spacing: 14
+                ) {
                     PlanningMetricColumn(
                         title: L10n.planning.planning.spent,
                         value: summary.spentMinor.formattedCurrency(code: currencyCode),
                         tint: MistiaAccent.coral.color
                     )
 
-                    Divider()
-                        .frame(height: 30)
-
                     PlanningMetricColumn(
                         title: L10n.planning.planning.remaining,
                         value: summary.remainingMinor.formattedCurrency(code: currencyCode),
+                        tint: Color(hex: "#2DAA9E")
+                    )
+
+                    PlanningMetricColumn(
+                        title: L10n.planning.planning.projectedEndOfMonth,
+                        value: summary.projectedSpentMinor.formattedCurrency(code: currencyCode),
+                        tint: summaryColor
+                    )
+
+                    PlanningMetricColumn(
+                        title: L10n.planning.planning.availablePerDay,
+                        value: summary.remainingDailyAllowanceMinor.formattedCurrency(code: currencyCode),
                         tint: Color(hex: "#2DAA9E")
                     )
                 }

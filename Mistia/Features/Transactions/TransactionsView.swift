@@ -1162,8 +1162,11 @@ struct TransactionsView: View {
                         }
                     }
                 }
+                .padding(.horizontal, 18)
                 .padding(.vertical, 2)
             }
+            .scrollClipDisabled()
+            .padding(.horizontal, -18)
         }
     }
 

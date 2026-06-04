@@ -232,8 +232,24 @@ nonisolated struct OverviewBudgetAlertSnapshot: Equatable, Identifiable {
     let limitMinor: Int64
     let currencyCode: String
     let progress: Double
-    let daysRemaining: Int
+    let paceAssessment: PlanningBudgetPaceAssessment
     let tint: OverviewTint
+
+    var health: PlanningBudgetHealth {
+        paceAssessment.health
+    }
+
+    var daysRemaining: Int {
+        paceAssessment.daysRemaining
+    }
+
+    var projectedSpentMinor: Int64 {
+        paceAssessment.projectedSpentMinor
+    }
+
+    var remainingDailyAllowanceMinor: Int64 {
+        paceAssessment.remainingDailyAllowanceMinor
+    }
 
     var progressPercentText: String {
         "\(Int((progress * 100).rounded()))%"
@@ -992,8 +1008,7 @@ nonisolated enum OverviewLogic {
         referenceDate: Date = .now,
         calendar: Calendar = MistiaCalendar.current,
         exchangeRates: [MistiaExchangeRate] = [],
-        minimumProgress: Double = 0.5,
-        includesMinimumProgress: Bool = false,
+        includesStable: Bool = false,
         maximumCount: Int? = 3
     ) -> [OverviewBudgetAlertSnapshot] {
         let selectedMonth = PlanningLogic.startOfMonth(for: referenceDate, calendar: calendar)
@@ -1008,11 +1023,12 @@ nonisolated enum OverviewLogic {
 
         let sortedRows = rows
             .filter { row in
-                includesMinimumProgress
-                    ? row.progress >= minimumProgress
-                    : row.progress > minimumProgress
+                includesStable || row.health != .stable
             }
             .sorted { lhs, rhs in
+                if lhs.health != rhs.health {
+                    return budgetHealthRank(lhs.health) > budgetHealthRank(rhs.health)
+                }
                 if lhs.progress != rhs.progress {
                     return lhs.progress > rhs.progress
                 }
@@ -1031,11 +1047,8 @@ nonisolated enum OverviewLogic {
                     limitMinor: row.limitMinor,
                     currencyCode: row.currencyCode,
                     progress: row.progress,
-                    daysRemaining: row.daysRemaining,
-                    tint: budgetTint(
-                        progress: row.progress,
-                        daysRemaining: row.daysRemaining
-                    )
+                    paceAssessment: row.paceAssessment,
+                    tint: budgetTint(health: row.health)
                 )
             }
     }
@@ -1214,16 +1227,26 @@ nonisolated enum OverviewLogic {
         return DateInterval(start: cycleStart, end: cycleEnd)
     }
 
-    private static func budgetTint(progress: Double, daysRemaining: Int) -> OverviewTint {
-        if progress > 0.9 || daysRemaining <= 5 {
-            return .red
+    private static func budgetTint(health: PlanningBudgetHealth) -> OverviewTint {
+        switch health {
+        case .stable:
+            .green
+        case .caution:
+            .orange
+        case .exceeded:
+            .red
         }
+    }
 
-        if progress > 0.75 || daysRemaining <= 10 {
-            return .orange
+    private static func budgetHealthRank(_ health: PlanningBudgetHealth) -> Int {
+        switch health {
+        case .stable:
+            0
+        case .caution:
+            1
+        case .exceeded:
+            2
         }
-
-        return .green
     }
 
     static func cashflowStyle(

@@ -2025,6 +2025,72 @@
         }
       }
     },
+    "core.ui.mistiamonthnavigation.chooseMonth": {
+      "localizations": {
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Chọn tháng"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Choose month"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "月を選択"
+          }
+        }
+      }
+    },
+    "core.ui.mistiamonthnavigation.nextMonth": {
+      "localizations": {
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tháng sau"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Next month"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "翌月"
+          }
+        }
+      }
+    },
+    "core.ui.mistiamonthnavigation.previousMonth": {
+      "localizations": {
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tháng trước"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Previous month"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "前月"
+          }
+        }
+      }
+    },
     "family.family.aFamilyHasOneOwnerInviteA": {
       "localizations": {
         "vi": {
@@ -15907,6 +15973,28 @@
         }
       }
     },
+    "planning.planning.availablePerDay": {
+      "localizations": {
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Có thể chi mỗi ngày"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Available per day"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "1日あたり利用可能"
+          }
+        }
+      }
+    },
     "planning.planning.availableCredit": {
       "localizations": {
         "vi": {
@@ -18873,6 +18961,28 @@
           "stringUnit": {
             "state": "translated",
             "value": "予定"
+          }
+        }
+      }
+    },
+    "planning.planning.projectedEndOfMonth": {
+      "localizations": {
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dự báo cuối tháng"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Projected month-end"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "月末予測"
           }
         }
       }
@@ -25279,28 +25389,6 @@
         }
       }
     },
-    "shared.notifications.mistiaduemaintenance.budgetNearLimit": {
-      "localizations": {
-        "vi": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Ngân sách sắp vượt mức"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Budget near limit"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "予算の上限が近づいています"
-          }
-        }
-      }
-    },
     "shared.notifications.mistiaduemaintenance.budgetOverLimit": {
       "localizations": {
         "vi": {
@@ -25319,6 +25407,50 @@
           "stringUnit": {
             "state": "translated",
             "value": "予算を超過しました"
+          }
+        }
+      }
+    },
+    "shared.notifications.mistiaduemaintenance.budgetSpendingTooFast": {
+      "localizations": {
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Chi tiêu đang nhanh hơn kế hoạch"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Spending is ahead of plan"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "支出ペースが計画を上回っています"
+          }
+        }
+      }
+    },
+    "shared.notifications.mistiaduemaintenance.budgetSpendingTooFastBody": {
+      "localizations": {
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ đang chi nhanh hơn kế hoạch. Dự báo cuối tháng %@; còn có thể chi %@ mỗi ngày."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ is spending ahead of plan. Projected month-end spend is %@; %@ remains available per day."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ の支出ペースが計画を上回っています。月末予測は %@、1日あたり %@ 利用できます。"
           }
         }
       }

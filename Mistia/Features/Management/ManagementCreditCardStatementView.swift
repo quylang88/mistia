@@ -23,7 +23,6 @@ struct ManagementCreditCardStatementView: View {
     @State private var showingAlert = false
     @State private var alertMessage = ""
     @State private var viewID = UUID()
-    @State private var isMonthPickerPresented = false
 
     init(wallet: LedgerWallet, initialMonth: Date? = nil) {
         self.wallet = wallet
@@ -53,13 +52,6 @@ struct ManagementCreditCardStatementView: View {
             referenceDate: .now,
             calendar: calendar
         ).first
-    }
-
-    private var availableMonths: [Date] {
-        let currentMonth = PlanningLogic.startOfMonth(for: .now, calendar: calendar)
-        return (0...24).compactMap { offset in
-            calendar.date(byAdding: .month, value: -offset, to: currentMonth)
-        }
     }
 
     private var dynamicAccentColor: Color {
@@ -109,36 +101,11 @@ struct ManagementCreditCardStatementView: View {
     }
 
     private var monthMenu: some View {
-        Button {
-            isMonthPickerPresented = true
-        } label: {
-            HStack(spacing: 10) {
-                Image(systemName: "calendar")
-                    .font(.system(size: 14, weight: .bold))
-                Text(MistiaDateFormatting.statementMonthYearString(for: selectedMonth, calendar: calendar))
-                    .font(.system(size: 15, weight: .bold, design: .rounded))
-                Spacer(minLength: 8)
-                Image(systemName: "chevron.up.chevron.down")
-                    .font(.system(size: 11, weight: .bold))
-                    .foregroundStyle(.secondary)
-            }
-            .foregroundStyle(.primary)
-            .padding(.horizontal, 14)
-            .padding(.vertical, 11)
-            .background(
-                Color(UIColor.secondarySystemGroupedBackground).opacity(0.66),
-                in: RoundedRectangle(cornerRadius: 16, style: .continuous)
-            )
-        }
-        .buttonStyle(.plain)
-        .sheet(isPresented: $isMonthPickerPresented) {
-            MistiaMonthPickerSheet(
-                selection: $selectedMonth,
-                calendar: calendar,
-                accentColor: MistiaAccent.purple.color
-            )
-            .presentationDetents([.height(280)])
-        }
+        MistiaMonthNavigationControl(
+            selection: $selectedMonth,
+            calendar: calendar,
+            accentColor: MistiaAccent.purple.color
+        )
     }
 
     private func statementHero(_ statement: PlanningCreditCardStatementSnapshot) -> some View {

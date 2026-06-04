@@ -598,11 +598,8 @@ private extension View {
 
 private struct FamilyOverviewPeriodControl: View {
     @Environment(\.calendar) private var calendar
-    @Environment(\.colorScheme) private var colorScheme
     @Binding var timeframe: FamilyTimeframe
     @Binding var selectedMonth: Date
-
-    @State private var isMonthPickerPresented = false
 
     var body: some View {
         VStack(spacing: 10) {
@@ -614,54 +611,16 @@ private struct FamilyOverviewPeriodControl: View {
             .pickerStyle(.segmented)
 
             if timeframe == .month {
-                Button {
-                    isMonthPickerPresented = true
-                } label: {
-                    HStack(spacing: 10) {
-                        Image(systemName: "calendar")
-                            .font(.system(size: 14, weight: .bold))
-
-                        Text(MistiaDateFormatting.statementMonthYearString(for: selectedMonth, calendar: calendar))
-                            .font(.system(size: 15, weight: .bold, design: .rounded))
-                            .lineLimit(1)
-                            .minimumScaleFactor(0.78)
-
-                        Spacer(minLength: 8)
-
-                        Image(systemName: "chevron.up.chevron.down")
-                            .font(.system(size: 11, weight: .bold))
-                            .foregroundStyle(.secondary)
-                    }
-                    .foregroundStyle(.primary)
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 11)
-                    .frame(maxWidth: .infinity)
-                    .background(
-                        monthButtonBackground,
-                        in: RoundedRectangle(cornerRadius: 16, style: .continuous)
-                    )
-                }
-                .buttonStyle(.plain)
+                MistiaMonthNavigationControl(
+                    selection: $selectedMonth,
+                    calendar: calendar,
+                    accentColor: MistiaAccent.purple.color
+                )
                 .transition(.opacity.combined(with: .move(edge: .top)))
-                .sheet(isPresented: $isMonthPickerPresented) {
-                    MistiaMonthPickerSheet(
-                        selection: $selectedMonth,
-                        calendar: calendar,
-                        accentColor: MistiaAccent.purple.color
-                    )
-                    .presentationDetents([.height(280)])
-                    .presentationDragIndicator(.hidden)
-                }
             }
         }
         .padding(.horizontal, 4)
         .animation(.snappy, value: timeframe)
-    }
-
-    private var monthButtonBackground: Color {
-        colorScheme == .dark
-            ? Color(UIColor.secondarySystemGroupedBackground).opacity(0.72)
-            : Color.white.opacity(0.22)
     }
 }
 

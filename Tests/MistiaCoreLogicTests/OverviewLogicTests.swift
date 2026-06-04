@@ -518,9 +518,9 @@ final class OverviewLogicTests: XCTestCase {
         XCTAssertEqual(page.slices.first?.childSlices.map(\.name), ["Đi chợ", "Ăn ngoài"])
     }
 
-    func testBudgetAlertsFilterOverFiftyPercentSortDescendingAndApplyThresholds() {
+    func testBudgetAlertsFilterByPaceSortByHealthAndApplyTint() {
         let selectedMonth = makeDate(year: 2026, month: 4, day: 1)
-        let referenceDate = makeDate(year: 2026, month: 4, day: 24)
+        let referenceDate = makeDate(year: 2026, month: 4, day: 3)
         let foodCategory = UUID()
         let shoppingCategory = UUID()
         let travelCategory = UUID()
@@ -554,10 +554,10 @@ final class OverviewLogicTests: XCTestCase {
         ]
 
         let records = [
-            makeTransactionRecord(primaryKind: .expense, amountMinor: 9_500, occurredAt: makeDate(year: 2026, month: 4, day: 4), categoryID: foodCategory),
-            makeTransactionRecord(primaryKind: .expense, amountMinor: 8_100, occurredAt: makeDate(year: 2026, month: 4, day: 5), categoryID: shoppingCategory),
-            makeTransactionRecord(primaryKind: .expense, amountMinor: 6_000, occurredAt: makeDate(year: 2026, month: 4, day: 6), categoryID: travelCategory),
-            makeTransactionRecord(primaryKind: .expense, amountMinor: 4_000, occurredAt: makeDate(year: 2026, month: 4, day: 7), categoryID: healthCategory)
+            makeTransactionRecord(primaryKind: .expense, amountMinor: 12_000, occurredAt: makeDate(year: 2026, month: 4, day: 2), categoryID: foodCategory),
+            makeTransactionRecord(primaryKind: .expense, amountMinor: 2_500, occurredAt: makeDate(year: 2026, month: 4, day: 2), categoryID: shoppingCategory),
+            makeTransactionRecord(primaryKind: .expense, amountMinor: 1_000, occurredAt: makeDate(year: 2026, month: 4, day: 2), categoryID: travelCategory),
+            makeTransactionRecord(primaryKind: .expense, amountMinor: 400, occurredAt: makeDate(year: 2026, month: 4, day: 2), categoryID: healthCategory)
         ]
 
         let alerts = OverviewLogic.budgetAlerts(
@@ -567,13 +567,14 @@ final class OverviewLogicTests: XCTestCase {
             calendar: calendar
         )
 
-        XCTAssertEqual(alerts.map(\.name), ["An uong", "Mua sam", "Du lich"])
+        XCTAssertEqual(alerts.map(\.name), ["An uong", "Mua sam"])
         XCTAssertEqual(alerts[0].tint, .red)
         XCTAssertEqual(alerts[1].tint, .orange)
-        XCTAssertEqual(alerts[2].tint, .orange)
+        XCTAssertEqual(alerts[0].health, .exceeded)
+        XCTAssertEqual(alerts[1].health, .caution)
     }
 
-    func testBudgetAlertsForNotificationsAreEightyPercentInclusiveAndUnlimited() {
+    func testBudgetAlertsCanIncludeStableRowsForNotificationStateTransitions() {
         let selectedMonth = makeDate(year: 2026, month: 4, day: 1)
         let referenceDate = makeDate(year: 2026, month: 4, day: 24)
         let categoryIDs = (0..<5).map { _ in UUID() }
@@ -599,19 +600,47 @@ final class OverviewLogicTests: XCTestCase {
             transactionRecords: records,
             referenceDate: referenceDate,
             calendar: calendar,
-            minimumProgress: 0.8,
-            includesMinimumProgress: true,
+            includesStable: true,
             maximumCount: nil
         )
 
-        XCTAssertEqual(alerts.map(\.name), ["Budget 0", "Budget 1", "Budget 2", "Budget 3"])
+        XCTAssertEqual(alerts.map(\.name), ["Budget 0", "Budget 1", "Budget 2", "Budget 3", "Budget 4"])
         XCTAssertEqual(alerts[0].tint, .red)
-        XCTAssertEqual(alerts[3].progressPercentText, "80%")
+        XCTAssertEqual(alerts[1].health, .stable)
+        XCTAssertEqual(alerts[4].progressPercentText, "80%")
+    }
+
+    func testBudgetAlertsDoNotWarnWhenNearEndSpendingMatchesPace() {
+        let selectedMonth = makeDate(year: 2026, month: 4, day: 1)
+        let categoryID = UUID()
+
+        let alerts = OverviewLogic.budgetAlerts(
+            budgets: [
+                makeBudget(
+                    categoryID: categoryID,
+                    name: "On pace",
+                    limitMinor: 100_000,
+                    monthAnchor: selectedMonth
+                )
+            ],
+            transactionRecords: [
+                makeTransactionRecord(
+                    primaryKind: .expense,
+                    amountMinor: 80_000,
+                    occurredAt: makeDate(year: 2026, month: 4, day: 20),
+                    categoryID: categoryID
+                )
+            ],
+            referenceDate: makeDate(year: 2026, month: 4, day: 24),
+            calendar: calendar
+        )
+
+        XCTAssertTrue(alerts.isEmpty)
     }
 
     func testBudgetAlertsRollUpChildBudgetsByParentBranch() {
         let selectedMonth = makeDate(year: 2026, month: 4, day: 1)
-        let referenceDate = makeDate(year: 2026, month: 4, day: 24)
+        let referenceDate = makeDate(year: 2026, month: 4, day: 10)
         let livingParent = UUID()
         let travelParent = UUID()
         let foodCategory = UUID()

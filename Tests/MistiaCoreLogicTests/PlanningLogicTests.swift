@@ -87,17 +87,185 @@ final class PlanningLogicTests: XCTestCase {
         )
 
         XCTAssertEqual(rows.map(\.name), ["Ăn uống", "Du lịch"])
-        XCTAssertEqual(rows.first?.tone, .warning) // 0.95 is now .warning (>= 0.8)
+        XCTAssertEqual(rows.first?.tone, .warning)
         XCTAssertEqual(rows.last?.tone, .calm)
 
         let summary = PlanningLogic.budgetSummary(from: rows)
         XCTAssertEqual(summary.totalBudgetMinor, 30_000)
         XCTAssertEqual(summary.spentMinor, 14_500)
         XCTAssertEqual(summary.remainingMinor, 15_500)
-        XCTAssertEqual(summary.health, .stable)
+        XCTAssertEqual(summary.health, .caution)
+        XCTAssertEqual(summary.projectedSpentMinor, 43_500)
+        XCTAssertEqual(summary.remainingDailyAllowanceMinor, 775)
+    }
+
+    func testBudgetPaceWarnsWhenEarlyMonthSpendingIsMoreThanFifteenPercentAhead() {
+        let assessment = PlanningLogic.budgetPaceAssessment(
+            spentMinor: 25_000,
+            limitMinor: 100_000,
+            selectedMonth: makeDate(year: 2026, month: 4, day: 1),
+            referenceDate: makeDate(year: 2026, month: 4, day: 3),
+            calendar: calendar
+        )
+
+        XCTAssertEqual(assessment.health, .caution)
+        XCTAssertEqual(assessment.targetProgress, 0.1, accuracy: 0.0001)
+        XCTAssertEqual(assessment.projectedSpentMinor, 250_000)
+        XCTAssertEqual(assessment.daysRemaining, 27)
+        XCTAssertEqual(assessment.remainingDailyAllowanceMinor, 2_777)
+    }
+
+    func testBudgetPaceUsesFifteenPercentBufferAndHardExceededState() {
+        let withinBuffer = PlanningLogic.budgetPaceAssessment(
+            spentMinor: 11_500,
+            limitMinor: 100_000,
+            totalDays: 30,
+            elapsedDays: 3,
+            daysRemaining: 27,
+            isPastMonth: false,
+            isFutureMonth: false
+        )
+        let beyondBuffer = PlanningLogic.budgetPaceAssessment(
+            spentMinor: 11_501,
+            limitMinor: 100_000,
+            totalDays: 30,
+            elapsedDays: 3,
+            daysRemaining: 27,
+            isPastMonth: false,
+            isFutureMonth: false
+        )
+        let exceeded = PlanningLogic.budgetPaceAssessment(
+            spentMinor: 100_000,
+            limitMinor: 100_000,
+            totalDays: 30,
+            elapsedDays: 3,
+            daysRemaining: 27,
+            isPastMonth: false,
+            isFutureMonth: false
+        )
+
+        XCTAssertEqual(withinBuffer.health, .stable)
+        XCTAssertEqual(beyondBuffer.health, .caution)
+        XCTAssertEqual(exceeded.health, .exceeded)
+    }
+
+    func testBudgetPaceTreatsPastMonthAsActualAndFutureMonthAsStable() {
+        let pastUnderLimit = PlanningLogic.budgetPaceAssessment(
+            spentMinor: 95_000,
+            limitMinor: 100_000,
+            selectedMonth: makeDate(year: 2026, month: 3, day: 1),
+            referenceDate: makeDate(year: 2026, month: 4, day: 10),
+            calendar: calendar
+        )
+        let pastExceeded = PlanningLogic.budgetPaceAssessment(
+            spentMinor: 100_000,
+            limitMinor: 100_000,
+            selectedMonth: makeDate(year: 2026, month: 3, day: 1),
+            referenceDate: makeDate(year: 2026, month: 4, day: 10),
+            calendar: calendar
+        )
+        let future = PlanningLogic.budgetPaceAssessment(
+            spentMinor: 120_000,
+            limitMinor: 100_000,
+            selectedMonth: makeDate(year: 2026, month: 5, day: 1),
+            referenceDate: makeDate(year: 2026, month: 4, day: 10),
+            calendar: calendar
+        )
+
+        XCTAssertEqual(pastUnderLimit.health, .stable)
+        XCTAssertEqual(pastUnderLimit.projectedSpentMinor, 95_000)
+        XCTAssertEqual(pastExceeded.health, .exceeded)
+        XCTAssertEqual(future.health, .stable)
+        XCTAssertEqual(future.elapsedDays, 0)
+        XCTAssertEqual(future.remainingDailyAllowanceMinor, 0)
+    }
+
+    func testBudgetNotificationTransitionResurfacesOnlyOnMeaningfulEscalation() {
+        XCTAssertEqual(
+            PlanningLogic.budgetNotificationTransition(
+                hasExistingNotification: false,
+                previousHealth: nil,
+                currentHealth: .stable
+            ),
+            .none
+        )
+        XCTAssertEqual(
+            PlanningLogic.budgetNotificationTransition(
+                hasExistingNotification: false,
+                previousHealth: nil,
+                currentHealth: .caution
+            ),
+            .create
+        )
+        XCTAssertEqual(
+            PlanningLogic.budgetNotificationTransition(
+                hasExistingNotification: true,
+                previousHealth: .stable,
+                currentHealth: .caution
+            ),
+            .resurface
+        )
+        XCTAssertEqual(
+            PlanningLogic.budgetNotificationTransition(
+                hasExistingNotification: true,
+                previousHealth: .caution,
+                currentHealth: .caution
+            ),
+            .none
+        )
+        XCTAssertEqual(
+            PlanningLogic.budgetNotificationTransition(
+                hasExistingNotification: true,
+                previousHealth: .caution,
+                currentHealth: .exceeded
+            ),
+            .resurface
+        )
+        XCTAssertEqual(
+            PlanningLogic.budgetNotificationTransition(
+                hasExistingNotification: true,
+                previousHealth: .exceeded,
+                currentHealth: .caution
+            ),
+            .updateSilently
+        )
+        XCTAssertEqual(
+            PlanningLogic.budgetNotificationTransition(
+                hasExistingNotification: true,
+                previousHealth: .exceeded,
+                currentHealth: .exceeded
+            ),
+            .none
+        )
+        XCTAssertEqual(
+            PlanningLogic.budgetNotificationTransition(
+                hasExistingNotification: true,
+                previousHealth: nil,
+                currentHealth: .caution
+            ),
+            .resurface
+        )
     }
 
     func testBudgetSummaryConvertsRowsToReportingCurrencyBeforeSumming() {
+        let jpyPaceAssessment = PlanningLogic.budgetPaceAssessment(
+            spentMinor: 50,
+            limitMinor: 100,
+            totalDays: 30,
+            elapsedDays: 21,
+            daysRemaining: 9,
+            isPastMonth: false,
+            isFutureMonth: false
+        )
+        let vndPaceAssessment = PlanningLogic.budgetPaceAssessment(
+            spentMinor: 8_250,
+            limitMinor: 16_500,
+            totalDays: 30,
+            elapsedDays: 21,
+            daysRemaining: 9,
+            isPastMonth: false,
+            isFutureMonth: false
+        )
         let rows = [
             PlanningBudgetRowSnapshot(
                 id: UUID(),
@@ -108,8 +276,7 @@ final class PlanningLogicTests: XCTestCase {
                 spentMinor: 50,
                 limitMinor: 100,
                 currencyCode: "JPY",
-                daysRemaining: 10,
-                isPastMonth: false
+                paceAssessment: jpyPaceAssessment
             ),
             PlanningBudgetRowSnapshot(
                 id: UUID(),
@@ -120,8 +287,7 @@ final class PlanningLogicTests: XCTestCase {
                 spentMinor: 8_250,
                 limitMinor: 16_500,
                 currencyCode: "VND",
-                daysRemaining: 10,
-                isPastMonth: false
+                paceAssessment: vndPaceAssessment
             )
         ]
 
@@ -134,6 +300,9 @@ final class PlanningLogicTests: XCTestCase {
         XCTAssertEqual(summary.totalBudgetMinor, 200)
         XCTAssertEqual(summary.spentMinor, 100)
         XCTAssertEqual(summary.remainingMinor, 100)
+        XCTAssertEqual(summary.projectedSpentMinor, 143)
+        XCTAssertEqual(summary.remainingDailyAllowanceMinor, 11)
+        XCTAssertEqual(summary.health, .stable)
     }
 
     func testGoalRowsPickNearestGoalAndComputeMonthlyContribution() {

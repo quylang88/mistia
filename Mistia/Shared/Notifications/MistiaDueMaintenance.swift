@@ -206,8 +206,7 @@ private enum MistiaBudgetReminderMaintenance {
             transactionRecords: snapshot.activeTransactionRecords,
             referenceDate: referenceDate,
             calendar: calendar,
-            minimumProgress: 0.8,
-            includesMinimumProgress: true,
+            includesStable: true,
             maximumCount: nil
         )
 
@@ -236,10 +235,7 @@ private enum MistiaBudgetReminderMaintenance {
         modelContext: ModelContext
     ) -> Bool {
         let key = "mistia.budget.warning.\(alert.id.uuidString.lowercased()).\(monthKey)"
-        let title = alert.progress >= 1
-            ? L10n.shared.notifications.mistiaduemaintenance.budgetOverLimit
-            : L10n.shared.notifications.mistiaduemaintenance.budgetNearLimit
-        let body = L10n.shared.notifications.mistiaduemaintenance.valueUsedValueValueValue(String(describing: alert.name), String(describing: alert.spentMinor.formattedCurrency(code: alert.currencyCode)), String(describing: alert.limitMinor.formattedCurrency(code: alert.currencyCode)), String(describing: alert.progressPercentText))
+        let metadataJSON = budgetWarningMetadataJSON(health: alert.health)
 
         let existing = (try? modelContext.fetch(
             FetchDescriptor<AppNotificationRecord>(
@@ -248,30 +244,110 @@ private enum MistiaBudgetReminderMaintenance {
         ))?.first
 
         if let existing {
-            existing.title = title
-            existing.body = body
-            existing.kind = .budgetWarning
-            existing.source = .system
-            existing.recipientUserID = recipientUserID
-            existing.resourceType = .category
-            existing.resourceID = alert.id
-            existing.updatedAt = .now
-            return true
-        } else {
-            modelContext.insert(AppNotificationRecord(
-                key: key,
-                createdAt: .now,
-                updatedAt: .now,
-                title: title,
-                body: body,
-                kind: .budgetWarning,
-                source: .system,
-                isRead: false,
-                recipientUserID: recipientUserID,
-                resourceType: .category,
-                resourceID: alert.id
-            ))
-            return true
+            let previousHealth = budgetWarningHealth(from: existing.metadataJSON)
+            switch PlanningLogic.budgetNotificationTransition(
+                hasExistingNotification: true,
+                previousHealth: previousHealth,
+                currentHealth: alert.health
+            ) {
+            case .none:
+                return false
+            case .create:
+                return false
+            case .updateSilently:
+                if alert.health != .stable {
+                    let presentation = budgetWarningPresentation(for: alert)
+                    existing.title = presentation.title
+                    existing.body = presentation.body
+                }
+                existing.metadataJSON = metadataJSON
+                existing.updatedAt = .now
+                return true
+            case .resurface:
+                let presentation = budgetWarningPresentation(for: alert)
+                existing.title = presentation.title
+                existing.body = presentation.body
+                existing.kind = .budgetWarning
+                existing.source = .system
+                existing.recipientUserID = recipientUserID
+                existing.resourceType = .category
+                existing.resourceID = alert.id
+                existing.metadataJSON = metadataJSON
+                existing.updatedAt = .now
+                existing.createdAt = .now
+                existing.isRead = false
+                existing.readAt = nil
+                return true
+            }
         }
+
+        guard PlanningLogic.budgetNotificationTransition(
+            hasExistingNotification: false,
+            previousHealth: nil,
+            currentHealth: alert.health
+        ) == .create else { return false }
+        let presentation = budgetWarningPresentation(for: alert)
+        modelContext.insert(AppNotificationRecord(
+            key: key,
+            createdAt: .now,
+            updatedAt: .now,
+            title: presentation.title,
+            body: presentation.body,
+            kind: .budgetWarning,
+            source: .system,
+            isRead: false,
+            recipientUserID: recipientUserID,
+            resourceType: .category,
+            resourceID: alert.id,
+            metadataJSON: metadataJSON
+        ))
+        return true
+    }
+
+    private static func budgetWarningPresentation(
+        for alert: OverviewBudgetAlertSnapshot
+    ) -> (title: String, body: String) {
+        switch alert.health {
+        case .stable, .caution:
+            return (
+                L10n.shared.notifications.mistiaduemaintenance.budgetSpendingTooFast,
+                L10n.shared.notifications.mistiaduemaintenance.budgetSpendingTooFastBody(
+                    alert.name,
+                    alert.projectedSpentMinor.formattedCurrency(code: alert.currencyCode),
+                    alert.remainingDailyAllowanceMinor.formattedCurrency(code: alert.currencyCode)
+                )
+            )
+        case .exceeded:
+            return (
+                L10n.shared.notifications.mistiaduemaintenance.budgetOverLimit,
+                L10n.shared.notifications.mistiaduemaintenance.valueUsedValueValueValue(
+                    alert.name,
+                    alert.spentMinor.formattedCurrency(code: alert.currencyCode),
+                    alert.limitMinor.formattedCurrency(code: alert.currencyCode),
+                    alert.progressPercentText
+                )
+            )
+        }
+    }
+
+    private static func budgetWarningMetadataJSON(health: PlanningBudgetHealth) -> String? {
+        guard let data = try? JSONSerialization.data(
+            withJSONObject: ["budget_pace_health": health.rawValue],
+            options: [.sortedKeys]
+        ) else {
+            return nil
+        }
+        return String(data: data, encoding: .utf8)
+    }
+
+    private static func budgetWarningHealth(from metadataJSON: String?) -> PlanningBudgetHealth? {
+        guard let metadataJSON,
+              let data = metadataJSON.data(using: .utf8),
+              let metadata = try? JSONSerialization.jsonObject(with: data) as? [String: String],
+              let rawValue = metadata["budget_pace_health"]
+        else {
+            return nil
+        }
+        return PlanningBudgetHealth(rawValue: rawValue)
     }
 }

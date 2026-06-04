@@ -88,6 +88,26 @@ nonisolated enum PlanningBudgetHealth: String, Equatable {
     }
 }
 
+nonisolated struct PlanningBudgetPaceAssessment: Equatable {
+    let health: PlanningBudgetHealth
+    let tone: PlanningBudgetTone
+    let targetProgress: Double
+    let projectedSpentMinor: Int64
+    let remainingDailyAllowanceMinor: Int64
+    let totalDays: Int
+    let elapsedDays: Int
+    let daysRemaining: Int
+    let isPastMonth: Bool
+    let isFutureMonth: Bool
+}
+
+nonisolated enum PlanningBudgetNotificationTransition: Equatable {
+    case none
+    case create
+    case updateSilently
+    case resurface
+}
+
 nonisolated struct PlanningBudgetRowSnapshot: Equatable, Identifiable {
     let id: UUID
     let categoryID: UUID?
@@ -97,8 +117,37 @@ nonisolated struct PlanningBudgetRowSnapshot: Equatable, Identifiable {
     let spentMinor: Int64
     let limitMinor: Int64
     let currencyCode: String
-    let daysRemaining: Int
-    let isPastMonth: Bool
+    let paceAssessment: PlanningBudgetPaceAssessment
+
+    init(
+        id: UUID,
+        categoryID: UUID?,
+        name: String,
+        iconSymbolName: String,
+        colorHex: String,
+        spentMinor: Int64,
+        limitMinor: Int64,
+        currencyCode: String,
+        paceAssessment: PlanningBudgetPaceAssessment
+    ) {
+        self.id = id
+        self.categoryID = categoryID
+        self.name = name
+        self.iconSymbolName = iconSymbolName
+        self.colorHex = colorHex
+        self.spentMinor = spentMinor
+        self.limitMinor = limitMinor
+        self.currencyCode = currencyCode
+        self.paceAssessment = paceAssessment
+    }
+
+    var daysRemaining: Int {
+        paceAssessment.daysRemaining
+    }
+
+    var isPastMonth: Bool {
+        paceAssessment.isPastMonth
+    }
 
     var progress: Double {
         guard limitMinor > 0 else { return 0 }
@@ -110,11 +159,11 @@ nonisolated struct PlanningBudgetRowSnapshot: Equatable, Identifiable {
     }
 
     var health: PlanningBudgetHealth {
-        PlanningLogic.health(forProgress: progress)
+        paceAssessment.health
     }
 
     var tone: PlanningBudgetTone {
-        PlanningLogic.tone(forProgress: progress)
+        paceAssessment.tone
     }
 }
 
@@ -122,7 +171,19 @@ nonisolated struct PlanningBudgetSummarySnapshot: Equatable {
     let totalBudgetMinor: Int64
     let spentMinor: Int64
     let remainingMinor: Int64
-    let health: PlanningBudgetHealth
+    let paceAssessment: PlanningBudgetPaceAssessment
+
+    var health: PlanningBudgetHealth {
+        paceAssessment.health
+    }
+
+    var projectedSpentMinor: Int64 {
+        paceAssessment.projectedSpentMinor
+    }
+
+    var remainingDailyAllowanceMinor: Int64 {
+        paceAssessment.remainingDailyAllowanceMinor
+    }
 
     var progress: Double {
         guard totalBudgetMinor > 0 else { return 0 }
@@ -149,14 +210,21 @@ nonisolated struct PlanningBudgetBranchRowSnapshot: Equatable, Identifiable {
     let spentMinor: Int64
     let limitMinor: Int64
     let currencyCode: String
-    let daysRemaining: Int
-    let isPastMonth: Bool
+    let paceAssessment: PlanningBudgetPaceAssessment
     let mode: PlanningBudgetBranchMode
     let parentBudgetID: UUID?
     let primaryBudgetID: UUID?
     let allocatedChildLimitMinor: Int64
     let unallocatedLimitMinor: Int64
     let childRows: [PlanningBudgetRowSnapshot]
+
+    var daysRemaining: Int {
+        paceAssessment.daysRemaining
+    }
+
+    var isPastMonth: Bool {
+        paceAssessment.isPastMonth
+    }
 
     var progress: Double {
         guard limitMinor > 0 else { return 0 }
@@ -168,11 +236,11 @@ nonisolated struct PlanningBudgetBranchRowSnapshot: Equatable, Identifiable {
     }
 
     var health: PlanningBudgetHealth {
-        PlanningLogic.health(forProgress: progress)
+        paceAssessment.health
     }
 
     var tone: PlanningBudgetTone {
-        PlanningLogic.tone(forProgress: progress)
+        paceAssessment.tone
     }
 }
 
@@ -540,28 +608,190 @@ extension PlanningDuePaymentError: LocalizedError {
 }
 
 nonisolated enum PlanningLogic {
-    static func health(forProgress progress: Double) -> PlanningBudgetHealth {
-        if progress >= 1.0 {
-            return .exceeded
+    static let budgetPaceCautionMultiplier = 1.15
+
+    static func budgetPaceAssessment(
+        spentMinor: Int64,
+        limitMinor: Int64,
+        selectedMonth: Date,
+        referenceDate: Date = .now,
+        calendar: Calendar = MistiaCalendar.current
+    ) -> PlanningBudgetPaceAssessment {
+        let selectedMonthStart = startOfMonth(for: selectedMonth, calendar: calendar)
+        let referenceMonthStart = startOfMonth(for: referenceDate, calendar: calendar)
+        let totalDays = calendar.range(of: .day, in: .month, for: selectedMonthStart)?.count ?? 30
+
+        if selectedMonthStart < referenceMonthStart {
+            return budgetPaceAssessment(
+                spentMinor: spentMinor,
+                limitMinor: limitMinor,
+                totalDays: totalDays,
+                elapsedDays: totalDays,
+                daysRemaining: 0,
+                isPastMonth: true,
+                isFutureMonth: false
+            )
         }
 
-        if progress >= 0.6 {
-            return .caution
+        if selectedMonthStart > referenceMonthStart {
+            return budgetPaceAssessment(
+                spentMinor: spentMinor,
+                limitMinor: limitMinor,
+                totalDays: totalDays,
+                elapsedDays: 0,
+                daysRemaining: totalDays,
+                isPastMonth: false,
+                isFutureMonth: true
+            )
         }
 
-        return .stable
+        let elapsedDays = min(max(calendar.component(.day, from: referenceDate), 1), totalDays)
+        return budgetPaceAssessment(
+            spentMinor: spentMinor,
+            limitMinor: limitMinor,
+            totalDays: totalDays,
+            elapsedDays: elapsedDays,
+            daysRemaining: totalDays - elapsedDays,
+            isPastMonth: false,
+            isFutureMonth: false
+        )
     }
 
-    static func tone(forProgress progress: Double) -> PlanningBudgetTone {
-        if progress >= 1.0 {
-            return .critical
+    static func budgetNotificationTransition(
+        hasExistingNotification: Bool,
+        previousHealth: PlanningBudgetHealth?,
+        currentHealth: PlanningBudgetHealth
+    ) -> PlanningBudgetNotificationTransition {
+        guard hasExistingNotification else {
+            return currentHealth == .stable ? .none : .create
         }
 
-        if progress >= 0.8 {
-            return .warning
+        guard let previousHealth else {
+            return currentHealth == .stable ? .updateSilently : .resurface
         }
 
-        return .calm
+        guard previousHealth != currentHealth else {
+            return .none
+        }
+
+        if currentHealth == .stable {
+            return .updateSilently
+        }
+
+        if previousHealth == .stable || (previousHealth == .caution && currentHealth == .exceeded) {
+            return .resurface
+        }
+
+        return .updateSilently
+    }
+
+    static func budgetPaceAssessment(
+        spentMinor: Int64,
+        limitMinor: Int64,
+        totalDays: Int,
+        elapsedDays: Int,
+        daysRemaining: Int,
+        isPastMonth: Bool,
+        isFutureMonth: Bool
+    ) -> PlanningBudgetPaceAssessment {
+        let normalizedTotalDays = max(totalDays, 1)
+        let normalizedElapsedDays = min(max(elapsedDays, 0), normalizedTotalDays)
+        let normalizedRemainingDays = max(daysRemaining, 0)
+        let remainingMinor = max(limitMinor - spentMinor, 0)
+        let targetProgress: Double
+        let projectedSpentMinor: Int64
+
+        if isPastMonth {
+            targetProgress = 1
+            projectedSpentMinor = max(spentMinor, 0)
+        } else if isFutureMonth {
+            targetProgress = 0
+            projectedSpentMinor = max(spentMinor, 0)
+        } else {
+            targetProgress = Double(normalizedElapsedDays) / Double(normalizedTotalDays)
+            projectedSpentMinor = projectedBudgetSpending(
+                spentMinor: spentMinor,
+                elapsedDays: normalizedElapsedDays,
+                totalDays: normalizedTotalDays
+            )
+        }
+
+        let health: PlanningBudgetHealth
+        if isFutureMonth {
+            health = .stable
+        } else if limitMinor > 0, spentMinor >= limitMinor {
+            health = .exceeded
+        } else if isPastMonth || limitMinor <= 0 || targetProgress <= 0 {
+            health = .stable
+        } else {
+            let progress = Double(max(spentMinor, 0)) / Double(limitMinor)
+            health = progress > targetProgress * budgetPaceCautionMultiplier ? .caution : .stable
+        }
+
+        return PlanningBudgetPaceAssessment(
+            health: health,
+            tone: tone(forHealth: health),
+            targetProgress: targetProgress,
+            projectedSpentMinor: projectedSpentMinor,
+            remainingDailyAllowanceMinor: normalizedRemainingDays > 0
+                ? remainingMinor / Int64(normalizedRemainingDays)
+                : 0,
+            totalDays: normalizedTotalDays,
+            elapsedDays: normalizedElapsedDays,
+            daysRemaining: normalizedRemainingDays,
+            isPastMonth: isPastMonth,
+            isFutureMonth: isFutureMonth
+        )
+    }
+
+    private static func tone(forHealth health: PlanningBudgetHealth) -> PlanningBudgetTone {
+        switch health {
+        case .stable:
+            .calm
+        case .caution:
+            .warning
+        case .exceeded:
+            .critical
+        }
+    }
+
+    private static func projectedBudgetSpending(
+        spentMinor: Int64,
+        elapsedDays: Int,
+        totalDays: Int
+    ) -> Int64 {
+        guard spentMinor > 0, elapsedDays > 0 else { return max(spentMinor, 0) }
+        let projected = Double(spentMinor) / Double(elapsedDays) * Double(totalDays)
+        guard projected < Double(Int64.max) else { return Int64.max }
+        return Int64(projected.rounded())
+    }
+
+    private static func summaryPaceAssessment(
+        spentMinor: Int64,
+        limitMinor: Int64,
+        rowPaceAssessment: PlanningBudgetPaceAssessment?
+    ) -> PlanningBudgetPaceAssessment {
+        guard let rowPaceAssessment else {
+            return budgetPaceAssessment(
+                spentMinor: spentMinor,
+                limitMinor: limitMinor,
+                totalDays: 1,
+                elapsedDays: 0,
+                daysRemaining: 0,
+                isPastMonth: false,
+                isFutureMonth: true
+            )
+        }
+
+        return budgetPaceAssessment(
+            spentMinor: spentMinor,
+            limitMinor: limitMinor,
+            totalDays: rowPaceAssessment.totalDays,
+            elapsedDays: rowPaceAssessment.elapsedDays,
+            daysRemaining: rowPaceAssessment.daysRemaining,
+            isPastMonth: rowPaceAssessment.isPastMonth,
+            isFutureMonth: rowPaceAssessment.isFutureMonth
+        )
     }
 
     static func budgetRows(
@@ -586,9 +816,6 @@ nonisolated enum PlanningLogic {
                 && record.occurredAt < monthInterval.end
         }, by: \.categoryID)
 
-        let remainingDays = daysRemainingInMonth(for: selectedMonth, referenceDate: referenceDate, calendar: calendar)
-        let isPastMonth = isPastMonth(selectedMonth, referenceDate: referenceDate, calendar: calendar)
-
         return plans
             .map { plan in
                 let spent = spentByCategory[plan.categoryID]?
@@ -599,6 +826,13 @@ nonisolated enum PlanningLogic {
                             exchangeRates: exchangeRates
                         )
                     } ?? 0
+                let paceAssessment = budgetPaceAssessment(
+                    spentMinor: spent,
+                    limitMinor: plan.limitMinor,
+                    selectedMonth: selectedMonth,
+                    referenceDate: referenceDate,
+                    calendar: calendar
+                )
 
                 return PlanningBudgetRowSnapshot(
                     id: plan.id,
@@ -609,8 +843,7 @@ nonisolated enum PlanningLogic {
                     spentMinor: spent,
                     limitMinor: plan.limitMinor,
                     currencyCode: plan.currencyCode,
-                    daysRemaining: remainingDays,
-                    isPastMonth: isPastMonth
+                    paceAssessment: paceAssessment
                 )
             }
             .sorted { lhs, rhs in
@@ -646,12 +879,17 @@ nonisolated enum PlanningLogic {
             )
         }
         let remaining = max(totalBudget - spent, 0)
+        let paceAssessment = summaryPaceAssessment(
+            spentMinor: spent,
+            limitMinor: totalBudget,
+            rowPaceAssessment: rows.first?.paceAssessment
+        )
 
         return PlanningBudgetSummarySnapshot(
             totalBudgetMinor: totalBudget,
             spentMinor: spent,
             remainingMinor: remaining,
-            health: health(forProgress: totalBudget > 0 ? Double(spent) / Double(totalBudget) : 0)
+            paceAssessment: paceAssessment
         )
     }
 
@@ -680,9 +918,6 @@ nonisolated enum PlanningLogic {
             record.categoryParentID ?? record.categoryID
         }
 
-        let remainingDays = daysRemainingInMonth(for: selectedMonth, referenceDate: referenceDate, calendar: calendar)
-        let isPastMonth = isPastMonth(selectedMonth, referenceDate: referenceDate, calendar: calendar)
-
         return Dictionary(grouping: plans) { $0.branchCategoryID }
             .compactMap { branchID, branchPlans in
                 guard let branchID else { return nil }
@@ -702,6 +937,13 @@ nonisolated enum PlanningLogic {
                                     exchangeRates: exchangeRates
                                 )
                             } ?? 0
+                        let paceAssessment = budgetPaceAssessment(
+                            spentMinor: spent,
+                            limitMinor: plan.limitMinor,
+                            selectedMonth: selectedMonth,
+                            referenceDate: referenceDate,
+                            calendar: calendar
+                        )
 
                         return PlanningBudgetRowSnapshot(
                             id: plan.id,
@@ -712,8 +954,7 @@ nonisolated enum PlanningLogic {
                             spentMinor: spent,
                             limitMinor: plan.limitMinor,
                             currencyCode: plan.currencyCode,
-                            daysRemaining: remainingDays,
-                            isPastMonth: isPastMonth
+                            paceAssessment: paceAssessment
                         )
                     }
                     .sorted { lhs, rhs in
@@ -740,6 +981,13 @@ nonisolated enum PlanningLogic {
                             exchangeRates: exchangeRates
                         )
                     }
+                    let paceAssessment = budgetPaceAssessment(
+                        spentMinor: spent,
+                        limitMinor: parentPlan.limitMinor,
+                        selectedMonth: selectedMonth,
+                        referenceDate: referenceDate,
+                        calendar: calendar
+                    )
 
                     return PlanningBudgetBranchRowSnapshot(
                         id: branchID,
@@ -750,8 +998,7 @@ nonisolated enum PlanningLogic {
                         spentMinor: spent,
                         limitMinor: parentPlan.limitMinor,
                         currencyCode: parentPlan.currencyCode,
-                        daysRemaining: remainingDays,
-                        isPastMonth: isPastMonth,
+                        paceAssessment: paceAssessment,
                         mode: childRows.isEmpty ? .parentOnly : .parentWithChildren,
                         parentBudgetID: parentPlan.id,
                         primaryBudgetID: parentPlan.id,
@@ -771,8 +1018,7 @@ nonisolated enum PlanningLogic {
                         spentMinor: childRow.spentMinor,
                         limitMinor: childRow.limitMinor,
                         currencyCode: childRow.currencyCode,
-                        daysRemaining: childRow.daysRemaining,
-                        isPastMonth: childRow.isPastMonth,
+                        paceAssessment: childRow.paceAssessment,
                         mode: .childOnly,
                         parentBudgetID: nil,
                         primaryBudgetID: childRow.id,
@@ -798,6 +1044,13 @@ nonisolated enum PlanningLogic {
                         exchangeRates: exchangeRates
                     )
                 }
+                let paceAssessment = budgetPaceAssessment(
+                    spentMinor: spent,
+                    limitMinor: limit,
+                    selectedMonth: selectedMonth,
+                    referenceDate: referenceDate,
+                    calendar: calendar
+                )
 
                 return PlanningBudgetBranchRowSnapshot(
                     id: branchID,
@@ -808,8 +1061,7 @@ nonisolated enum PlanningLogic {
                     spentMinor: spent,
                     limitMinor: limit,
                     currencyCode: branchTemplate.currencyCode,
-                    daysRemaining: remainingDays,
-                    isPastMonth: isPastMonth,
+                    paceAssessment: paceAssessment,
                     mode: .childOnly,
                     parentBudgetID: nil,
                     primaryBudgetID: nil,
@@ -851,13 +1103,18 @@ nonisolated enum PlanningLogic {
             )
         }
         let remaining = max(totalBudget - spent, 0)
+        let paceAssessment = summaryPaceAssessment(
+            spentMinor: spent,
+            limitMinor: totalBudget,
+            rowPaceAssessment: rows.first?.paceAssessment
+        )
 
         return PlanningBudgetSummarySnapshot(
             totalBudgetMinor: totalBudget,
             spentMinor: spent,
             remainingMinor: remaining,
-            health: health(forProgress: totalBudget > 0 ? Double(spent) / Double(totalBudget) : 0)
-            )
+            paceAssessment: paceAssessment
+        )
     }
 
     static func validateBudgetAllocation(
@@ -2021,25 +2278,6 @@ nonisolated enum PlanningLogic {
         let lhs = startOfMonth(for: selectedMonth, calendar: calendar)
         let rhs = startOfMonth(for: referenceDate, calendar: calendar)
         return lhs < rhs
-    }
-
-    private static func daysRemainingInMonth(
-        for selectedMonth: Date,
-        referenceDate: Date,
-        calendar: Calendar
-    ) -> Int {
-        let monthEnd = endOfMonth(for: selectedMonth, calendar: calendar)
-        if isPastMonth(selectedMonth, referenceDate: referenceDate, calendar: calendar) {
-            return 0
-        }
-
-        if isSameMonth(selectedMonth, other: referenceDate, calendar: calendar) {
-            let start = calendar.startOfDay(for: referenceDate)
-            return max((calendar.dateComponents([.day], from: start, to: monthEnd).day ?? 0) + 1, 0)
-        }
-
-        let monthStart = startOfMonth(for: selectedMonth, calendar: calendar)
-        return (calendar.dateComponents([.day], from: monthStart, to: monthEnd).day ?? 0) + 1
     }
 
     private nonisolated static func dueSort<T: DueSortable>(lhs: T, rhs: T) -> Bool {

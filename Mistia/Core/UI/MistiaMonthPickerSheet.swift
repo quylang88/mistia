@@ -1,20 +1,27 @@
 import SwiftUI
 
 struct MistiaMonthPickerSheet: View {
-    @Environment(\.colorScheme) private var colorScheme
     @Binding var selection: Date
 
     let calendar: Calendar
     let accentColor: Color
+    let bounds: MistiaMonthSelectionBounds
 
     @State private var draftMonth: Int
     @State private var draftYear: Int
 
-    init(selection: Binding<Date>, calendar: Calendar, accentColor: Color) {
+    init(
+        selection: Binding<Date>,
+        calendar: Calendar,
+        accentColor: Color,
+        bounds: MistiaMonthSelectionBounds? = nil
+    ) {
         _selection = selection
         self.calendar = calendar
         self.accentColor = accentColor
-        let initialDate = selection.wrappedValue
+        let resolvedBounds = bounds ?? .standard(calendar: calendar)
+        self.bounds = resolvedBounds
+        let initialDate = resolvedBounds.clamped(selection.wrappedValue, calendar: calendar)
         _draftMonth = State(initialValue: calendar.component(.month, from: initialDate))
         _draftYear = State(initialValue: calendar.component(.year, from: initialDate))
     }
@@ -56,29 +63,30 @@ struct MistiaMonthPickerSheet: View {
     }
 
     private var allowedMonths: [Int] {
-        let currentYear = calendar.component(.year, from: .now)
-        if draftYear < currentYear {
-            return Array(1...12)
-        } else {
-            let currentMonth = calendar.component(.month, from: .now)
-            return Array(1...currentMonth)
+        var lowerBound = 1
+        var upperBound = 12
+        if draftYear == calendar.component(.year, from: bounds.minimumMonth) {
+            lowerBound = calendar.component(.month, from: bounds.minimumMonth)
         }
+        if draftYear == calendar.component(.year, from: bounds.maximumMonth) {
+            upperBound = calendar.component(.month, from: bounds.maximumMonth)
+        }
+        return lowerBound <= upperBound ? Array(lowerBound...upperBound) : []
     }
 
     private var yearOptions: [Int] {
-        let currentYear = calendar.component(.year, from: .now)
-        let lowerBound = currentYear - 10
-        let upperBound = currentYear
+        let lowerBound = calendar.component(.year, from: bounds.minimumMonth)
+        let upperBound = calendar.component(.year, from: bounds.maximumMonth)
         return Array(lowerBound...upperBound)
     }
 
     private func validateDraft() {
-        let currentYear = calendar.component(.year, from: .now)
-        let currentMonth = calendar.component(.month, from: .now)
-        
-        if draftYear == currentYear && draftMonth > currentMonth {
-            draftMonth = currentMonth
-        }
+        guard let date = calendar.date(
+            from: DateComponents(year: draftYear, month: draftMonth, day: 1)
+        ) else { return }
+        let clamped = bounds.clamped(date, calendar: calendar)
+        draftMonth = calendar.component(.month, from: clamped)
+        draftYear = calendar.component(.year, from: clamped)
     }
 
     private func applySelection() {
@@ -86,13 +94,6 @@ struct MistiaMonthPickerSheet: View {
             return
         }
 
-        let startOfTarget = PlanningLogic.startOfMonth(for: date, calendar: calendar)
-        let startOfCurrent = PlanningLogic.startOfMonth(for: .now, calendar: calendar)
-
-        if startOfTarget > startOfCurrent {
-            selection = startOfCurrent
-        } else {
-            selection = startOfTarget
-        }
+        selection = bounds.clamped(date, calendar: calendar)
     }
 }

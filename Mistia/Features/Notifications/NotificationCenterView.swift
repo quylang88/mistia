@@ -141,21 +141,21 @@ enum NotificationCenterGroupID: String, CaseIterable, Identifiable {
     var systemImage: String {
         switch self {
         case .actionRequests:
-            "checkmark.circle.fill"
+            "checklist"
         case .access:
-            "lock.fill"
+            "lock"
         case .familyCashflow:
-            "person.2.fill"
+            "arrow.left.arrow.right.circle"
         case .familyData:
-            "folder.fill"
+            "person.2"
         case .bills:
             "calendar.badge.clock"
         case .creditCards:
-            "creditcard.fill"
+            "creditcard"
         case .wallets:
-            "tray.and.arrow.down.fill"
+            "wallet.pass"
         case .budgets:
-            "chart.pie.fill"
+            "chart.pie"
         }
     }
 

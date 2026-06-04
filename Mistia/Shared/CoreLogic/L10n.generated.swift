@@ -248,6 +248,15 @@ nonisolated enum L10n {
                 static var workStudy: String { L10n.tr("core.ui.mistiaiconpicker.workStudy", vi: "Công việc / học tập", en: "Work / study", ja: "仕事・学習") }
                 static func workStudy(language: MistiaAppLanguage) -> String { L10n.tr("core.ui.mistiaiconpicker.workStudy", vi: "Công việc / học tập", en: "Work / study", ja: "仕事・学習", language: language) }
             }
+
+            nonisolated enum mistiamonthnavigation {
+                static var chooseMonth: String { L10n.tr("core.ui.mistiamonthnavigation.chooseMonth", vi: "Chọn tháng", en: "Choose month", ja: "月を選択") }
+                static func chooseMonth(language: MistiaAppLanguage) -> String { L10n.tr("core.ui.mistiamonthnavigation.chooseMonth", vi: "Chọn tháng", en: "Choose month", ja: "月を選択", language: language) }
+                static var nextMonth: String { L10n.tr("core.ui.mistiamonthnavigation.nextMonth", vi: "Tháng sau", en: "Next month", ja: "翌月") }
+                static func nextMonth(language: MistiaAppLanguage) -> String { L10n.tr("core.ui.mistiamonthnavigation.nextMonth", vi: "Tháng sau", en: "Next month", ja: "翌月", language: language) }
+                static var previousMonth: String { L10n.tr("core.ui.mistiamonthnavigation.previousMonth", vi: "Tháng trước", en: "Previous month", ja: "前月") }
+                static func previousMonth(language: MistiaAppLanguage) -> String { L10n.tr("core.ui.mistiamonthnavigation.previousMonth", vi: "Tháng trước", en: "Previous month", ja: "前月", language: language) }
+            }
         }
     }
 
@@ -1790,6 +1799,8 @@ nonisolated enum L10n {
             static func available(language: MistiaAppLanguage) -> String { L10n.tr("planning.planning.available", vi: "Khả dụng", en: "Available", ja: "利用可能", language: language) }
             static var availableCredit: String { L10n.tr("planning.planning.availableCredit", vi: "Số tiền khả dụng", en: "Available credit", ja: "利用可能額") }
             static func availableCredit(language: MistiaAppLanguage) -> String { L10n.tr("planning.planning.availableCredit", vi: "Số tiền khả dụng", en: "Available credit", ja: "利用可能額", language: language) }
+            static var availablePerDay: String { L10n.tr("planning.planning.availablePerDay", vi: "Có thể chi mỗi ngày", en: "Available per day", ja: "1日あたり利用可能") }
+            static func availablePerDay(language: MistiaAppLanguage) -> String { L10n.tr("planning.planning.availablePerDay", vi: "Có thể chi mỗi ngày", en: "Available per day", ja: "1日あたり利用可能", language: language) }
             static var biUTNgTh: String { L10n.tr("planning.planning.biUTNgTh", vi: "Biểu tượng thẻ", en: "Card icon", ja: "カードアイコン") }
             static func biUTNgTh(language: MistiaAppLanguage) -> String { L10n.tr("planning.planning.biUTNgTh", vi: "Biểu tượng thẻ", en: "Card icon", ja: "カードアイコン", language: language) }
             static var bill: String { L10n.tr("planning.planning.bill", vi: "Hóa đơn", en: "Bill", ja: "請求") }
@@ -2094,6 +2105,8 @@ nonisolated enum L10n {
             static func paymentWallet(language: MistiaAppLanguage) -> String { L10n.tr("planning.planning.paymentWallet", vi: "Ví thanh toán", en: "Payment wallet", ja: "支払いウォレット", language: language) }
             static var planning: String { L10n.tr("planning.planning.planning", vi: "Sắp tới", en: "Upcoming", ja: "予定") }
             static func planning(language: MistiaAppLanguage) -> String { L10n.tr("planning.planning.planning", vi: "Sắp tới", en: "Upcoming", ja: "予定", language: language) }
+            static var projectedEndOfMonth: String { L10n.tr("planning.planning.projectedEndOfMonth", vi: "Dự báo cuối tháng", en: "Projected month-end", ja: "月末予測") }
+            static func projectedEndOfMonth(language: MistiaAppLanguage) -> String { L10n.tr("planning.planning.projectedEndOfMonth", vi: "Dự báo cuối tháng", en: "Projected month-end", ja: "月末予測", language: language) }
             static var recurring: String { L10n.tr("planning.planning.recurring", vi: "Định kỳ", en: "Recurring", ja: "定期") }
             static func recurring(language: MistiaAppLanguage) -> String { L10n.tr("planning.planning.recurring", vi: "Định kỳ", en: "Recurring", ja: "定期", language: language) }
             static var remaining: String { L10n.tr("planning.planning.remaining", vi: "Còn lại", en: "Remaining", ja: "残り") }
@@ -2904,10 +2917,16 @@ nonisolated enum L10n {
             }
 
             nonisolated enum mistiaduemaintenance {
-                static var budgetNearLimit: String { L10n.tr("shared.notifications.mistiaduemaintenance.budgetNearLimit", vi: "Ngân sách sắp vượt mức", en: "Budget near limit", ja: "予算の上限が近づいています") }
-                static func budgetNearLimit(language: MistiaAppLanguage) -> String { L10n.tr("shared.notifications.mistiaduemaintenance.budgetNearLimit", vi: "Ngân sách sắp vượt mức", en: "Budget near limit", ja: "予算の上限が近づいています", language: language) }
                 static var budgetOverLimit: String { L10n.tr("shared.notifications.mistiaduemaintenance.budgetOverLimit", vi: "Ngân sách đã vượt mức", en: "Budget over limit", ja: "予算を超過しました") }
                 static func budgetOverLimit(language: MistiaAppLanguage) -> String { L10n.tr("shared.notifications.mistiaduemaintenance.budgetOverLimit", vi: "Ngân sách đã vượt mức", en: "Budget over limit", ja: "予算を超過しました", language: language) }
+                static var budgetSpendingTooFast: String { L10n.tr("shared.notifications.mistiaduemaintenance.budgetSpendingTooFast", vi: "Chi tiêu đang nhanh hơn kế hoạch", en: "Spending is ahead of plan", ja: "支出ペースが計画を上回っています") }
+                static func budgetSpendingTooFast(language: MistiaAppLanguage) -> String { L10n.tr("shared.notifications.mistiaduemaintenance.budgetSpendingTooFast", vi: "Chi tiêu đang nhanh hơn kế hoạch", en: "Spending is ahead of plan", ja: "支出ペースが計画を上回っています", language: language) }
+                static func budgetSpendingTooFastBody(_ arg1: String, _ arg2: String, _ arg3: String) -> String {
+                    L10n.format("shared.notifications.mistiaduemaintenance.budgetSpendingTooFastBody", vi: "%@ đang chi nhanh hơn kế hoạch. Dự báo cuối tháng %@; còn có thể chi %@ mỗi ngày.", en: "%@ is spending ahead of plan. Projected month-end spend is %@; %@ remains available per day.", ja: "%@ の支出ペースが計画を上回っています。月末予測は %@、1日あたり %@ 利用できます。", arg1, arg2, arg3)
+                }
+                static func budgetSpendingTooFastBody(_ arg1: String, _ arg2: String, _ arg3: String, language: MistiaAppLanguage) -> String {
+                    L10n.format("shared.notifications.mistiaduemaintenance.budgetSpendingTooFastBody", vi: "%@ đang chi nhanh hơn kế hoạch. Dự báo cuối tháng %@; còn có thể chi %@ mỗi ngày.", en: "%@ is spending ahead of plan. Projected month-end spend is %@; %@ remains available per day.", ja: "%@ の支出ペースが計画を上回っています。月末予測は %@、1日あたり %@ 利用できます。", language: language, arg1, arg2, arg3)
+                }
                 static func valueUsedValueValueValue(_ arg1: String, _ arg2: String, _ arg3: String, _ arg4: String) -> String {
                     L10n.format("shared.notifications.mistiaduemaintenance.valueUsedValueValueValue", vi: "%@ đã dùng %@ / %@ (%@).", en: "%@ used %@ / %@ (%@).", ja: "%@ は %@ / %@（%@）を使用しました。", arg1, arg2, arg3, arg4)
                 }
