@@ -519,7 +519,8 @@ enum MistiaFinanceIconRegistry {
 
         assign("ic_fluent_arrow_square_down_24_color", [
             "mistia.flow.expense",
-            "mistia.debt.collect"
+            "mistia.debt.collect",
+            "mistia.debt.borrow"
         ])
 
         assign("ic_fluent_arrow_sync_24_color", [
@@ -531,17 +532,13 @@ enum MistiaFinanceIconRegistry {
 
         assign("ic_fluent_send_24_color", [
             "mistia.category.expense.food.delivery",
-            "mistia.debt.lend"
+            "mistia.debt.lend",
+            "mistia.debt.repay"
         ])
 
         assign("ic_fluent_arrow_square_24_color", [
-            "mistia.debt.borrow",
             "mistia.category.parent.income.liquidation",
             "mistia.category.income.liquidation.sell_used_items"
-        ])
-
-        assign("ic_fluent_checkmark_circle_24_color", [
-            "mistia.debt.repay"
         ])
 
         assign("ic_fluent_building_store_24_color", [

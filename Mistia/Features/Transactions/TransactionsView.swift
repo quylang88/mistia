@@ -2097,7 +2097,6 @@ private struct DebtSettlementSheet: View {
 
     @Query
     private var wallets: [LedgerWallet]
-    @Query private var categories: [TransactionCategory]
     @Query private var ownershipScopes: [OwnedRecordScope]
 
     let target: DebtSettlementSheetTarget
@@ -2203,8 +2202,7 @@ private struct DebtSettlementSheet: View {
                                 ForEach(Array(target.position.relatedRecords.enumerated()), id: \.element.id) { index, record in
                                     DebtSettlementDetailRow(
                                         record: record,
-                                        walletName: walletName(for: record.sourceWalletID),
-                                        categoryName: categoryName(for: record.categoryID)
+                                        walletName: walletName(for: record.sourceWalletID)
                                     )
 
                                     if index < target.position.relatedRecords.count - 1 {
@@ -2277,16 +2275,6 @@ private struct DebtSettlementSheet: View {
         }
 
         return wallet.name
-    }
-
-    private func categoryName(for categoryID: UUID?) -> String? {
-        guard let categoryID,
-              let category = categories.first(where: { $0.id == categoryID })
-        else {
-            return nil
-        }
-
-        return category.localizedDisplayName
     }
 
     private func save() {
@@ -2367,18 +2355,10 @@ private struct DebtSettlementSheet: View {
 private struct DebtSettlementDetailRow: View {
     let record: TransactionRecordSnapshot
     let walletName: String?
-    let categoryName: String?
 
     private var icon: String {
         if TransactionLogic.isPaidForDebt(record) || record.transferSubtype == .debt {
-            switch record.debtIntent {
-            case .lend, .repay:
-                return "arrow.up.right.circle.fill"
-            case .borrow, .collect:
-                return "arrow.down.left.circle.fill"
-            case nil:
-                return "arrow.left.arrow.right.circle.fill"
-            }
+            return record.debtIntent?.financeIconToken ?? TransactionTransferSubtype.debt.financeIconToken
         }
 
         return switch record.primaryKind {
@@ -2461,9 +2441,6 @@ private struct DebtSettlementDetailRow: View {
         let intent = record.debtIntent?.title ?? L10n.transactions.transactions.debt
 
         if TransactionLogic.isPaidForDebt(record) {
-            if let categoryName {
-                return "\(intent) • \(L10n.transactions.transactioneditor.borrowPaidFor) • \(categoryName)"
-            }
             return "\(intent) • \(L10n.transactions.transactioneditor.borrowPaidFor)"
         }
 
@@ -2484,11 +2461,11 @@ private struct DebtSettlementDetailRow: View {
                     .foregroundStyle(.primary)
                     .lineLimit(1)
                 Text(subtitle)
-                    .font(.system(size: 12, weight: .medium, design: .rounded))
+                    .font(.system(size: 12, weight: .regular, design: .rounded))
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
                 Text(MistiaDateFormatting.dateTimeString(for: record.occurredAt))
-                    .font(.system(size: 12, weight: .medium, design: .rounded))
+                    .font(.system(size: 12, weight: .regular, design: .rounded))
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
             }
