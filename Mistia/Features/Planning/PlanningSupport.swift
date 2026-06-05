@@ -536,7 +536,9 @@ extension LedgerTransaction {
             destinationWalletID: destinationWallet?.id,
             destinationWalletKind: destinationWallet?.kind,
             categoryID: category?.id,
+            categoryName: category?.localizedDisplayName,
             categoryParentID: category?.parentCategory?.id,
+            categoryParentName: category?.parentCategory?.localizedDisplayName,
             counterpartyName: counterpartyName,
             normalizedCounterpartyKey: normalizedCounterpartyKey
         )

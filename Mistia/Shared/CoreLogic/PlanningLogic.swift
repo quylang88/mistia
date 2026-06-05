@@ -207,6 +207,8 @@ nonisolated enum PlanningBudgetBranchMode: Equatable {
 nonisolated struct PlanningBudgetSpendingIndex {
     private let personalRecordsByCategory: [UUID: [TransactionRecordSnapshot]]
     private let personalRecordsByBranch: [UUID: [TransactionRecordSnapshot]]
+    private let personalRecordsByCategoryKey: [String: [TransactionRecordSnapshot]]
+    private let personalRecordsByBranchKey: [String: [TransactionRecordSnapshot]]
     private let familyTransactionsByCategoryKey: [String: [FamilyAggregateTransactionSnapshot]]
 
     init(
@@ -230,6 +232,8 @@ nonisolated struct PlanningBudgetSpendingIndex {
 
         var recordsByCategory: [UUID: [TransactionRecordSnapshot]] = [:]
         var recordsByBranch: [UUID: [TransactionRecordSnapshot]] = [:]
+        var recordsByCategoryKey: [String: [TransactionRecordSnapshot]] = [:]
+        var recordsByBranchKey: [String: [TransactionRecordSnapshot]] = [:]
         for record in expenseRecordsInMonth {
             if let categoryID = record.categoryID {
                 recordsByCategory[categoryID, default: []].append(record)
@@ -237,10 +241,24 @@ nonisolated struct PlanningBudgetSpendingIndex {
             if let branchID = record.categoryParentID ?? record.categoryID {
                 recordsByBranch[branchID, default: []].append(record)
             }
+            if let categoryName = record.categoryName {
+                let key = FamilyLogic.normalizedFamilyGroupingName(categoryName)
+                if !key.isEmpty {
+                    recordsByCategoryKey[key, default: []].append(record)
+                }
+            }
+            for branchName in [record.categoryParentName, record.categoryName].compactMap(\.self) {
+                let key = FamilyLogic.normalizedFamilyGroupingName(branchName)
+                if !key.isEmpty {
+                    recordsByBranchKey[key, default: []].append(record)
+                }
+            }
         }
 
         self.personalRecordsByCategory = recordsByCategory
         self.personalRecordsByBranch = recordsByBranch
+        self.personalRecordsByCategoryKey = recordsByCategoryKey
+        self.personalRecordsByBranchKey = recordsByBranchKey
 
         var familyIndex: [String: [FamilyAggregateTransactionSnapshot]] = [:]
         guard let monthInterval else {
@@ -269,34 +287,51 @@ nonisolated struct PlanningBudgetSpendingIndex {
 
     func personalSpentForCategory(
         _ categoryID: UUID?,
+        categoryName: String,
         currencyCode: String,
         exchangeRates: [MistiaExchangeRate]
     ) -> Int64 {
-        guard let categoryID else { return 0 }
-        return personalRecordsByCategory[categoryID]?
-            .reduce(into: Int64.zero) { partial, record in
-                partial += PlanningLogic.reportingAmount(
-                    for: record,
-                    currencyCode: currencyCode,
-                    exchangeRates: exchangeRates
-                )
-            } ?? 0
+        let categoryRecords = categoryID.flatMap { personalRecordsByCategory[$0] } ?? []
+        let key = FamilyLogic.normalizedFamilyGroupingName(categoryName)
+        let nameRecords = key.isEmpty ? [] : personalRecordsByCategoryKey[key] ?? []
+        return personalSpent(
+            records: categoryRecords + nameRecords,
+            currencyCode: currencyCode,
+            exchangeRates: exchangeRates
+        )
     }
 
     func personalSpentForBranch(
         _ branchID: UUID?,
+        branchName: String,
         currencyCode: String,
         exchangeRates: [MistiaExchangeRate]
     ) -> Int64 {
-        guard let branchID else { return 0 }
-        return personalRecordsByBranch[branchID]?
+        let branchRecords = branchID.flatMap { personalRecordsByBranch[$0] } ?? []
+        let key = FamilyLogic.normalizedFamilyGroupingName(branchName)
+        let nameRecords = key.isEmpty ? [] : personalRecordsByBranchKey[key] ?? []
+        return personalSpent(
+            records: branchRecords + nameRecords,
+            currencyCode: currencyCode,
+            exchangeRates: exchangeRates
+        )
+    }
+
+    private func personalSpent(
+        records: [TransactionRecordSnapshot],
+        currencyCode: String,
+        exchangeRates: [MistiaExchangeRate]
+    ) -> Int64 {
+        var seenRecordIDs = Set<UUID>()
+        return records
             .reduce(into: Int64.zero) { partial, record in
+                guard seenRecordIDs.insert(record.id).inserted else { return }
                 partial += PlanningLogic.reportingAmount(
                     for: record,
                     currencyCode: currencyCode,
                     exchangeRates: exchangeRates
                 )
-            } ?? 0
+            }
     }
 
     func familySpentForCategoryName(
@@ -959,6 +994,7 @@ nonisolated enum PlanningLogic {
                     )
                     : spendingIndex.personalSpentForCategory(
                         plan.categoryID,
+                        categoryName: plan.categoryName,
                         currencyCode: plan.currencyCode,
                         exchangeRates: exchangeRates
                     )
@@ -1066,6 +1102,7 @@ nonisolated enum PlanningLogic {
                             )
                             : spendingIndex.personalSpentForCategory(
                                 plan.categoryID,
+                                categoryName: plan.categoryName,
                                 currencyCode: plan.currencyCode,
                                 exchangeRates: exchangeRates
                             )
@@ -1107,6 +1144,7 @@ nonisolated enum PlanningLogic {
                         )
                         : spendingIndex.personalSpentForBranch(
                             branchID,
+                            branchName: parentPlan.branchCategoryName,
                             currencyCode: parentPlan.currencyCode,
                             exchangeRates: exchangeRates
                         )

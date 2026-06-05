@@ -48,7 +48,9 @@ nonisolated struct TransactionRecordSnapshot: Equatable, Identifiable {
     let destinationWalletID: UUID?
     let destinationWalletKind: LedgerWalletKind?
     let categoryID: UUID?
+    let categoryName: String?
     let categoryParentID: UUID?
+    let categoryParentName: String?
     let counterpartyName: String?
     let normalizedCounterpartyKey: String?
 
@@ -78,7 +80,9 @@ nonisolated struct TransactionRecordSnapshot: Equatable, Identifiable {
         destinationWalletID: UUID?,
         destinationWalletKind: LedgerWalletKind?,
         categoryID: UUID?,
+        categoryName: String? = nil,
         categoryParentID: UUID? = nil,
+        categoryParentName: String? = nil,
         counterpartyName: String?,
         normalizedCounterpartyKey: String?
     ) {
@@ -107,7 +111,9 @@ nonisolated struct TransactionRecordSnapshot: Equatable, Identifiable {
         self.destinationWalletID = destinationWalletID
         self.destinationWalletKind = destinationWalletKind
         self.categoryID = categoryID
+        self.categoryName = categoryName
         self.categoryParentID = categoryParentID
+        self.categoryParentName = categoryParentName
         self.counterpartyName = counterpartyName
         self.normalizedCounterpartyKey = normalizedCounterpartyKey
     }

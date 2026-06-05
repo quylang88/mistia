@@ -239,6 +239,43 @@ final class FamilyAggregatePerformanceTests: XCTestCase {
         XCTAssertEqual(branchRow.spentMinor, 102_000)
     }
 
+    func testBudgetBranchRowsMatchPersonalSpendingByCategoryNameWhenIDsDiffer() {
+        let month = makeDate(year: 2026, month: 6, day: 1)
+        let referenceDate = makeDate(year: 2026, month: 6, day: 15)
+        let budgetCategoryID = UUID()
+        let transactionCategoryID = UUID()
+        let parentID = UUID()
+
+        let rows = PlanningLogic.budgetBranchRows(
+            plans: [
+                makeBudgetPlan(
+                    categoryID: budgetCategoryID,
+                    categoryName: "Food",
+                    parentID: parentID,
+                    parentName: "Living",
+                    limitMinor: 100_000,
+                    monthAnchor: month,
+                    includesFamilySpending: false
+                )
+            ],
+            records: [
+                makeExpenseRecord(
+                    amountMinor: 42_000,
+                    occurredAt: makeDate(year: 2026, month: 6, day: 4),
+                    categoryID: transactionCategoryID,
+                    categoryName: " food ",
+                    parentID: parentID,
+                    parentName: "Living"
+                )
+            ],
+            selectedMonth: month,
+            referenceDate: referenceDate,
+            calendar: calendar
+        )
+
+        XCTAssertEqual(rows.first?.spentMinor, 42_000)
+    }
+
     private func makeDate(year: Int, month: Int, day: Int) -> Date {
         var components = DateComponents()
         components.calendar = calendar
@@ -280,7 +317,9 @@ final class FamilyAggregatePerformanceTests: XCTestCase {
         amountMinor: Int64,
         occurredAt: Date,
         categoryID: UUID,
-        parentID: UUID
+        categoryName: String? = nil,
+        parentID: UUID,
+        parentName: String? = nil
     ) -> TransactionRecordSnapshot {
         TransactionRecordSnapshot(
             id: UUID(),
@@ -299,7 +338,9 @@ final class FamilyAggregatePerformanceTests: XCTestCase {
             destinationWalletID: nil,
             destinationWalletKind: nil,
             categoryID: categoryID,
+            categoryName: categoryName,
             categoryParentID: parentID,
+            categoryParentName: parentName,
             counterpartyName: nil,
             normalizedCounterpartyKey: nil
         )

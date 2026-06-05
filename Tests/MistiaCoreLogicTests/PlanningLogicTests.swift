@@ -599,6 +599,39 @@ final class PlanningLogicTests: XCTestCase {
         XCTAssertEqual(summary.spentMinor, 4_000)
     }
 
+    func testBudgetBranchRowsMatchPersonalSpendingByCategoryNameWhenIDsDiffer() {
+        let selectedMonth = makeDate(year: 2026, month: 4, day: 1)
+        let referenceDate = makeDate(year: 2026, month: 4, day: 10)
+        let budgetCategoryID = UUID()
+        let transactionCategoryID = UUID()
+
+        let rows = PlanningLogic.budgetBranchRows(
+            plans: [
+                makeBudget(
+                    categoryID: budgetCategoryID,
+                    categoryName: "Ăn uống",
+                    limitMinor: 10_000,
+                    monthAnchor: selectedMonth
+                )
+            ],
+            records: [
+                makeRecord(
+                    primaryKind: .expense,
+                    amountMinor: 4_500,
+                    occurredAt: makeDate(year: 2026, month: 4, day: 5),
+                    categoryID: transactionCategoryID,
+                    categoryName: " ăn    UỐNG "
+                )
+            ],
+            selectedMonth: selectedMonth,
+            referenceDate: referenceDate,
+            calendar: calendar
+        )
+
+        XCTAssertEqual(rows.count, 1)
+        XCTAssertEqual(rows[0].spentMinor, 4_500)
+    }
+
     func testBudgetBranchRowsUseFamilySpendingWhenParentScopeEnabled() {
         let selectedMonth = makeDate(year: 2026, month: 4, day: 1)
         let referenceDate = makeDate(year: 2026, month: 4, day: 10)
@@ -2010,7 +2043,9 @@ final class PlanningLogicTests: XCTestCase {
         amountMinor: Int64,
         occurredAt: Date,
         categoryID: UUID?,
+        categoryName: String? = nil,
         categoryParentID: UUID? = nil,
+        categoryParentName: String? = nil,
         sourceWalletID: UUID? = UUID(),
         sourceWalletKind: LedgerWalletKind = .cash,
         sourceCurrencyCode: String? = nil,
@@ -2034,7 +2069,9 @@ final class PlanningLogicTests: XCTestCase {
             destinationWalletID: destinationWalletID,
             destinationWalletKind: destinationWalletKind,
             categoryID: categoryID,
+            categoryName: categoryName,
             categoryParentID: categoryParentID,
+            categoryParentName: categoryParentName,
             counterpartyName: nil,
             normalizedCounterpartyKey: nil
         )
