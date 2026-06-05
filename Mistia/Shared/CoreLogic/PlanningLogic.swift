@@ -1054,12 +1054,11 @@ nonisolated enum PlanningLogic {
                 let childPlans = branchPlans.filter { !$0.categoryIsParent }
                 let branchTemplate = parentPlan ?? childPlans.first
                 guard let branchTemplate else { return nil }
-                let branchIncludesFamilySpending = familySpendingAvailable
-                    && branchPlans.contains(where: \.includesFamilySpending)
-
                 let childRows = childPlans
                     .map { plan in
-                        let spent = branchIncludesFamilySpending
+                        let planIncludesFamilySpending = familySpendingAvailable
+                            && plan.includesFamilySpending
+                        let spent = planIncludesFamilySpending
                             ? spendingIndex.familySpentForCategoryName(
                                 plan.categoryName,
                                 currencyCode: plan.currencyCode,
@@ -1098,7 +1097,9 @@ nonisolated enum PlanningLogic {
                     }
 
                 if let parentPlan {
-                    let spent = branchIncludesFamilySpending
+                    let parentIncludesFamilySpending = familySpendingAvailable
+                        && parentPlan.includesFamilySpending
+                    let spent = parentIncludesFamilySpending
                         ? spendingIndex.familySpentForCategoryName(
                             parentPlan.branchCategoryName,
                             currencyCode: parentPlan.currencyCode,

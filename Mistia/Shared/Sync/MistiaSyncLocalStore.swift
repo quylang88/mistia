@@ -907,6 +907,14 @@ enum MistiaSyncLocalStore {
         let context = ModelContext(container)
         let activeTransactions = try fetchTransactions(context)
             .filter { $0.deletedAt == nil && !$0.isArchived }
+
+        return possibleDuplicateTransactions(from: activeTransactions)
+    }
+
+    static func possibleDuplicateTransactions(
+        from activeTransactions: [LedgerTransaction]
+    ) -> [MistiaSyncPossibleDuplicate] {
+        let sortedTransactions = activeTransactions
             .sorted {
                 if $0.occurredAt != $1.occurredAt {
                     return $0.occurredAt < $1.occurredAt
@@ -916,10 +924,10 @@ enum MistiaSyncLocalStore {
 
         var duplicates: [MistiaSyncPossibleDuplicate] = []
 
-        for index in activeTransactions.indices {
-            let lhs = activeTransactions[index]
-            guard index + 1 < activeTransactions.count else { continue }
-            for rhs in activeTransactions[(index + 1)...] {
+        for index in sortedTransactions.indices {
+            let lhs = sortedTransactions[index]
+            guard index + 1 < sortedTransactions.count else { continue }
+            for rhs in sortedTransactions[(index + 1)...] {
                 let secondsApart = abs(lhs.occurredAt.timeIntervalSince(rhs.occurredAt))
                 if secondsApart > 86_400 { break }
                 guard lhs.id != rhs.id else { continue }

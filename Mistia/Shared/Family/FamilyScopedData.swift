@@ -67,6 +67,13 @@ enum FamilyScopedData {
         )
     }
 
+    static func usesAggregateFamilyBudgetSpending(
+        isFamilyBudgetSpendingAvailable: Bool,
+        familyContextStore _: FamilyContextStore
+    ) -> Bool {
+        isFamilyBudgetSpendingAvailable
+    }
+
     static func visibleForFamilyOverview<Record: MistiaOwnedRecord>(
         _ records: [Record],
         entity: MistiaSyncEntity,

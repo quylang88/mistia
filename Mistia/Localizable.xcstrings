@@ -11815,6 +11815,116 @@
         }
       }
     },
+    "management.managementauth.possibleDuplicateFirstRecord": {
+      "localizations": {
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bản ghi 1"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Record 1"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "レコード1"
+          }
+        }
+      }
+    },
+    "management.managementauth.possibleDuplicatePair": {
+      "localizations": {
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cặp thu chi có thể trùng"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Possible duplicate pair"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "重複の可能性があるペア"
+          }
+        }
+      }
+    },
+    "management.managementauth.possibleDuplicateSameDaySameAmountSameWallet": {
+      "localizations": {
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cùng ngày, cùng số tiền và cùng ví."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Same day, same amount, and same wallet."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "同じ日付、同じ金額、同じウォレットです。"
+          }
+        }
+      }
+    },
+    "management.managementauth.possibleDuplicateSecondRecord": {
+      "localizations": {
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bản ghi 2"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Record 2"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "レコード2"
+          }
+        }
+      }
+    },
+    "management.managementauth.possibleDuplicateSimilarText": {
+      "localizations": {
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cùng ngày, cùng số tiền, cùng ví và nội dung gần giống."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Same day, same amount, same wallet, and similar text."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "同じ日付、同じ金額、同じウォレットで、内容も似ています。"
+          }
+        }
+      }
+    },
     "management.managementauth.profile": {
       "localizations": {
         "vi": {

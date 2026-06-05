@@ -159,6 +159,86 @@ final class FamilyAggregatePerformanceTests: XCTestCase {
         XCTAssertNil(index.objectMetadata(for: invalidRow))
     }
 
+    func testBudgetBranchRowsUseFamilySpendingPerBudgetPlan() {
+        let month = makeDate(year: 2026, month: 6, day: 1)
+        let referenceDate = makeDate(year: 2026, month: 6, day: 15)
+        let foodCategoryID = UUID()
+        let commuteCategoryID = UUID()
+        let livingBranchID = UUID()
+
+        let rows = PlanningLogic.budgetBranchRows(
+            plans: [
+                makeBudgetPlan(
+                    categoryID: foodCategoryID,
+                    categoryName: "Food",
+                    parentID: livingBranchID,
+                    parentName: "Living",
+                    limitMinor: 100_000,
+                    monthAnchor: month,
+                    includesFamilySpending: false
+                ),
+                makeBudgetPlan(
+                    categoryID: commuteCategoryID,
+                    categoryName: "Commute",
+                    parentID: livingBranchID,
+                    parentName: "Living",
+                    limitMinor: 80_000,
+                    monthAnchor: month,
+                    includesFamilySpending: true
+                )
+            ],
+            records: [
+                makeExpenseRecord(
+                    amountMinor: 42_000,
+                    occurredAt: makeDate(year: 2026, month: 6, day: 4),
+                    categoryID: foodCategoryID,
+                    parentID: livingBranchID
+                )
+            ],
+            selectedMonth: month,
+            referenceDate: referenceDate,
+            calendar: calendar,
+            familyTransactions: [
+                FamilyAggregateTransactionSnapshot(
+                    ownerUserID: UUID(),
+                    categoryName: "Commute",
+                    categoryParentName: "Living",
+                    occurredAt: makeDate(year: 2026, month: 6, day: 6),
+                    kind: .expense,
+                    amountMinor: 31_000,
+                    currencyCode: "JPY"
+                ),
+                FamilyAggregateTransactionSnapshot(
+                    ownerUserID: UUID(),
+                    categoryName: "Commute",
+                    categoryParentName: "Living",
+                    occurredAt: makeDate(year: 2026, month: 6, day: 7),
+                    kind: .expense,
+                    amountMinor: 29_000,
+                    currencyCode: "JPY"
+                )
+            ],
+            familySpendingAvailable: true
+        )
+
+        guard let branchRow = rows.first else {
+            XCTFail("Expected a budget branch row")
+            return
+        }
+        guard let foodRow = branchRow.childRows.first(where: { $0.categoryID == foodCategoryID }) else {
+            XCTFail("Expected Food child row")
+            return
+        }
+        guard let commuteRow = branchRow.childRows.first(where: { $0.categoryID == commuteCategoryID }) else {
+            XCTFail("Expected Commute child row")
+            return
+        }
+
+        XCTAssertEqual(foodRow.spentMinor, 42_000)
+        XCTAssertEqual(commuteRow.spentMinor, 60_000)
+        XCTAssertEqual(branchRow.spentMinor, 102_000)
+    }
+
     private func makeDate(year: Int, month: Int, day: Int) -> Date {
         var components = DateComponents()
         components.calendar = calendar
@@ -167,5 +247,61 @@ final class FamilyAggregatePerformanceTests: XCTestCase {
         components.month = month
         components.day = day
         return calendar.date(from: components) ?? .distantPast
+    }
+
+    private func makeBudgetPlan(
+        categoryID: UUID,
+        categoryName: String,
+        parentID: UUID,
+        parentName: String,
+        limitMinor: Int64,
+        monthAnchor: Date,
+        includesFamilySpending: Bool
+    ) -> BudgetPlanSnapshot {
+        BudgetPlanSnapshot(
+            id: UUID(),
+            categoryID: categoryID,
+            categoryName: categoryName,
+            categoryIconSymbolName: "circle.fill",
+            categoryColorHex: "#3366FF",
+            limitMinor: limitMinor,
+            rolloverEnabled: false,
+            currencyCode: "JPY",
+            monthAnchor: monthAnchor,
+            categoryParentID: parentID,
+            categoryParentName: parentName,
+            categoryParentIconSymbolName: "square.fill",
+            categoryParentColorHex: "#111111",
+            includesFamilySpending: includesFamilySpending
+        )
+    }
+
+    private func makeExpenseRecord(
+        amountMinor: Int64,
+        occurredAt: Date,
+        categoryID: UUID,
+        parentID: UUID
+    ) -> TransactionRecordSnapshot {
+        TransactionRecordSnapshot(
+            id: UUID(),
+            primaryKind: .expense,
+            transferSubtype: nil,
+            debtIntent: nil,
+            entryStatus: .posted,
+            title: "Expense",
+            note: nil,
+            amountMinor: amountMinor,
+            sourceCurrencyCode: "JPY",
+            occurredAt: occurredAt,
+            createdAt: occurredAt,
+            sourceWalletID: UUID(),
+            sourceWalletKind: .cash,
+            destinationWalletID: nil,
+            destinationWalletKind: nil,
+            categoryID: categoryID,
+            categoryParentID: parentID,
+            counterpartyName: nil,
+            normalizedCounterpartyKey: nil
+        )
     }
 }

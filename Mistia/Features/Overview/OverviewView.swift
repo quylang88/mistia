@@ -177,6 +177,10 @@ struct OverviewView: View {
             familyMemberUserIDs: currentFamilyMemberUserIDs,
             signedInUserID: sessionStore.activeLocalProfileUserID
         )
+        let usesAggregateFamilyBudgetSpending = FamilyScopedData.usesAggregateFamilyBudgetSpending(
+            isFamilyBudgetSpendingAvailable: isFamilyBudgetSpendingAvailable,
+            familyContextStore: familyContextStore
+        )
         let visibleWallets = FamilyScopedData.visible(
             storedWallets,
             entity: .wallet,
@@ -261,8 +265,8 @@ struct OverviewView: View {
             currencyCode: currencyCode,
             balanceIndex: balanceIndex,
             exchangeRates: appExchangeRates,
-            familyTransactions: familyTransactions,
-            familySpendingAvailable: isFamilyBudgetSpendingAvailable,
+            familyTransactions: usesAggregateFamilyBudgetSpending ? familyTransactions : [],
+            familySpendingAvailable: usesAggregateFamilyBudgetSpending,
             referenceDate: .now,
             calendar: calendar
         )

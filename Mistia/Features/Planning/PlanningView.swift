@@ -339,6 +339,10 @@ struct PlanningView: View {
             familyMemberUserIDs: currentFamilyMemberUserIDs,
             signedInUserID: sessionStore.activeLocalProfileUserID
         )
+        let usesAggregateFamilyBudgetSpending = FamilyScopedData.usesAggregateFamilyBudgetSpending(
+            isFamilyBudgetSpendingAvailable: isFamilyBudgetSpendingAvailable,
+            familyContextStore: familyContextStore
+        )
         let transactionSnapshots = visibleTransactions.map(\.planningRecordSnapshot)
         let activeBudgetPlans = visibleBudgets
             .filter { !$0.isArchived && PlanningLogic.startOfMonth(for: $0.monthAnchor, calendar: calendar) == selectedMonth }
@@ -350,8 +354,8 @@ struct PlanningView: View {
             referenceDate: .now,
             calendar: calendar,
             exchangeRates: appExchangeRates,
-            familyTransactions: familyTransactions,
-            familySpendingAvailable: isFamilyBudgetSpendingAvailable
+            familyTransactions: usesAggregateFamilyBudgetSpending ? familyTransactions : [],
+            familySpendingAvailable: usesAggregateFamilyBudgetSpending
         )
 
         return PlanningBudgetRenderSnapshot(

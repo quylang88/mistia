@@ -176,6 +176,36 @@ final class FamilyScopedDataTests: XCTestCase {
         XCTAssertTrue(familyContextStore.canRequestSystemCategoryUse(ownerUserID: memberUserID))
     }
 
+    func testMemberContextCanUseAggregateFamilyBudgetSpendingWhenBudgetRequestsIt() throws {
+        let selfUserID = UUID()
+        let memberUserID = UUID()
+        let container = try makeContainer()
+        let familyContextStore = makeFamilyContextStore(container: container, currentUserID: selfUserID)
+        let familyID = try XCTUnwrap(familyContextStore.currentMembership?.familyID)
+        familyContextStore.members = [
+            makeMember(familyID: familyID, userID: selfUserID, hasSyncedCloudData: true, isCurrentUser: true),
+            makeMember(familyID: familyID, userID: memberUserID, hasSyncedCloudData: true, isCurrentUser: false)
+        ]
+
+        familyContextStore.activeContext = FamilyContext(scope: .member(userID: memberUserID))
+
+        XCTAssertTrue(
+            FamilyScopedData.usesAggregateFamilyBudgetSpending(
+                isFamilyBudgetSpendingAvailable: true,
+                familyContextStore: familyContextStore
+            )
+        )
+
+        familyContextStore.activeContext = .personalSelf
+
+        XCTAssertTrue(
+            FamilyScopedData.usesAggregateFamilyBudgetSpending(
+                isFamilyBudgetSpendingAvailable: true,
+                familyContextStore: familyContextStore
+            )
+        )
+    }
+
     private func visibleHistoryIDs(
         _ transactions: [LedgerTransaction],
         audits: [TransactionAuditRecord],
