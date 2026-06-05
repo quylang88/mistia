@@ -215,28 +215,22 @@ struct PlanningBudgetEditorSheet: View {
                 }
 
                 if target.budget != nil {
-                    Section {
-                        if isPastBudgetRecord {
-                            MistiaDestructiveActionSection(
-                                buttonTitle: L10n.planning.planning.archiveBudget,
-                                descriptionText: L10n.planning.planning.archivedBudgetsWillNoLongerAppearIn,
-                                popupMessage: L10n.planning.planning.thisBudgetWillBeArchivedArchivedBudgets,
-                                confirmationButtonTitle: L10n.common.archive
-                            ) {
-                                archiveBudget()
-                            }
-                            .listRowInsets(EdgeInsets())
-                            .listRowBackground(Color.clear)
-                        } else {
-                            MistiaDestructiveActionSection(
-                                buttonTitle: L10n.planning.planning.deleteBudget,
-                                popupMessage: deleteBudgetMessage,
-                                confirmationButtonTitle: L10n.common.delete
-                            ) {
-                                deleteBudget()
-                            }
-                            .listRowInsets(EdgeInsets())
-                            .listRowBackground(Color.clear)
+                    if isPastBudgetRecord {
+                        MistiaDestructiveActionSection(
+                            buttonTitle: L10n.planning.planning.archiveBudget,
+                            descriptionText: L10n.planning.planning.archivedBudgetsWillNoLongerAppearIn,
+                            popupMessage: L10n.planning.planning.thisBudgetWillBeArchivedArchivedBudgets,
+                            confirmationButtonTitle: L10n.common.archive
+                        ) {
+                            archiveBudget()
+                        }
+                    } else {
+                        MistiaDestructiveActionSection(
+                            buttonTitle: L10n.planning.planning.deleteBudget,
+                            popupMessage: deleteBudgetMessage,
+                            confirmationButtonTitle: L10n.common.delete
+                        ) {
+                            deleteBudget()
                         }
                     }
                 }
@@ -1140,17 +1134,13 @@ struct PlanningBillEditorSheet: View {
                 }
 
                 if target.plan != nil {
-                    Section {
-                        MistiaDestructiveActionSection(
-                            buttonTitle: L10n.planning.planning.archiveBill,
-                            descriptionText: L10n.planning.planning.archivedBillsWillNoLongerAppearIn,
-                            popupMessage: L10n.planning.planning.thisBillWillBeArchivedArchivedBills,
-                            confirmationButtonTitle: L10n.common.archive
-                        ) {
-                            archivePlan()
-                        }
-                        .listRowInsets(EdgeInsets())
-                        .listRowBackground(Color.clear)
+                    MistiaDestructiveActionSection(
+                        buttonTitle: L10n.planning.planning.archiveBill,
+                        descriptionText: L10n.planning.planning.archivedBillsWillNoLongerAppearIn,
+                        popupMessage: L10n.planning.planning.thisBillWillBeArchivedArchivedBills,
+                        confirmationButtonTitle: L10n.common.archive
+                    ) {
+                        archivePlan()
                     }
                 }
             }
@@ -1940,17 +1930,13 @@ struct PlanningCreditCardEditorSheet: View {
 
 
                 if target.wallet != nil {
-                    Section {
-                        MistiaDestructiveActionSection(
-                            buttonTitle: L10n.planning.planning.archiveCard,
-                            descriptionText: L10n.planning.planning.archivedCardsWillNoLongerAppearIn,
-                            popupMessage: L10n.planning.planning.thisCardWillBeArchivedArchivedCards,
-                            confirmationButtonTitle: L10n.common.archive
-                        ) {
-                            archiveWallet()
-                        }
-                        .listRowInsets(EdgeInsets())
-                        .listRowBackground(Color.clear)
+                    MistiaDestructiveActionSection(
+                        buttonTitle: L10n.planning.planning.archiveCard,
+                        descriptionText: L10n.planning.planning.archivedCardsWillNoLongerAppearIn,
+                        popupMessage: L10n.planning.planning.thisCardWillBeArchivedArchivedCards,
+                        confirmationButtonTitle: L10n.common.archive
+                    ) {
+                        archiveWallet()
                     }
                 }
             }

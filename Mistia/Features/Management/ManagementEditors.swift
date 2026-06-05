@@ -155,17 +155,13 @@ struct ManagementWalletEditorSheet: View {
                 }
 
                 if target.wallet != nil {
-                    Section {
-                        MistiaDestructiveActionSection(
-                            buttonTitle: L10n.management.management.archiveWallet,
-                            descriptionText: L10n.management.management.archivedWalletsWillNoLongerAppearIn,
-                            popupMessage: L10n.management.management.thisWalletWillBeArchivedArchivedWallets,
-                            confirmationButtonTitle: L10n.common.archive
-                        ) {
-                            archiveWallet()
-                        }
-                        .listRowInsets(EdgeInsets())
-                        .listRowBackground(Color.clear)
+                    MistiaDestructiveActionSection(
+                        buttonTitle: L10n.management.management.archiveWallet,
+                        descriptionText: L10n.management.management.archivedWalletsWillNoLongerAppearIn,
+                        popupMessage: L10n.management.management.thisWalletWillBeArchivedArchivedWallets,
+                        confirmationButtonTitle: L10n.common.archive
+                    ) {
+                        archiveWallet()
                     }
                 }
             }
@@ -798,17 +794,13 @@ struct ManagementCategoryEditorSheet: View {
                 }
 
                 if target.category != nil {
-                    Section {
-                        MistiaDestructiveActionSection(
-                            buttonTitle: L10n.management.management.archiveCategory,
-                            descriptionText: L10n.management.management.archivedCategoriesWillNoLongerAppearIn,
-                            popupMessage: L10n.management.management.thisCategoryWillBeArchivedArchivedCategories,
-                            confirmationButtonTitle: L10n.common.archive
-                        ) {
-                            archiveCategory()
-                        }
-                        .listRowInsets(EdgeInsets())
-                        .listRowBackground(Color.clear)
+                    MistiaDestructiveActionSection(
+                        buttonTitle: L10n.management.management.archiveCategory,
+                        descriptionText: L10n.management.management.archivedCategoriesWillNoLongerAppearIn,
+                        popupMessage: L10n.management.management.thisCategoryWillBeArchivedArchivedCategories,
+                        confirmationButtonTitle: L10n.common.archive
+                    ) {
+                        archiveCategory()
                     }
                 }
             }

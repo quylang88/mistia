@@ -906,17 +906,13 @@ struct TransactionEditorSheet: View {
             }
 
             if let transaction = target.transaction, !transaction.isArchived, !isFamilyTransferDetail {
-                Section {
-                    MistiaDestructiveActionSection(
-                        buttonTitle: L10n.transactions.transactioneditor.archiveTransaction,
-                        descriptionText: L10n.transactions.transactioneditor.archivedTransactionsWillNoLongerAppearIn,
-                        popupMessage: L10n.transactions.transactioneditor.thisTransactionWillBeArchivedArchivedTransactions,
-                        confirmationButtonTitle: L10n.common.archive
-                    ) {
-                        archiveTransaction()
-                    }
-                    .listRowInsets(EdgeInsets())
-                    .listRowBackground(Color.clear)
+                MistiaDestructiveActionSection(
+                    buttonTitle: L10n.transactions.transactioneditor.archiveTransaction,
+                    descriptionText: L10n.transactions.transactioneditor.archivedTransactionsWillNoLongerAppearIn,
+                    popupMessage: L10n.transactions.transactioneditor.thisTransactionWillBeArchivedArchivedTransactions,
+                    confirmationButtonTitle: L10n.common.archive
+                ) {
+                    archiveTransaction()
                 }
                 .disabled(isAdjustment)
                 .opacity(isAdjustment ? 0.6 : 1.0)

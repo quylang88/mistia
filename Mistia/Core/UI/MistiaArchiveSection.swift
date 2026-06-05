@@ -1,8 +1,6 @@
 import SwiftUI
 
 struct MistiaDestructiveActionSection: View {
-    private let cornerRadius: CGFloat = 12
-
     let buttonTitle: String
     let descriptionText: String?
     let popupMessage: String
@@ -26,7 +24,7 @@ struct MistiaDestructiveActionSection: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        Section {
             Button(action: {
                 showsConfirmation = true
             }) {
@@ -34,16 +32,7 @@ struct MistiaDestructiveActionSection: View {
                     .font(.body)
                     .foregroundStyle(.red)
                     .frame(maxWidth: .infinity, alignment: .center)
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 12)
             }
-            .frame(maxWidth: .infinity)
-            .background(
-                Color(UIColor.secondarySystemGroupedBackground),
-                in: RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-            )
-            .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
-            .contentShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
             .buttonStyle(.plain)
             .confirmationDialog(
                 "",
@@ -57,12 +46,9 @@ struct MistiaDestructiveActionSection: View {
             } message: {
                 Text(popupMessage)
             }
-
+        } footer: {
             if let descriptionText {
                 Text(descriptionText)
-                    .font(.system(size: 13, weight: .regular, design: .rounded))
-                    .foregroundStyle(.secondary)
-                    .padding(.horizontal, 16)
                     .fixedSize(horizontal: false, vertical: true)
             }
         }
