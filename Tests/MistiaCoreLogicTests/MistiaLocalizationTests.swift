@@ -132,6 +132,17 @@ final class MistiaLocalizationTests: XCTestCase {
         )
     }
 
+    func testDateTimeFormattingUsesFullVietnameseDateWords() {
+        XCTAssertEqual(
+            MistiaDateFormatting.dateTimeString(
+                for: referenceDate,
+                language: .vietnamese,
+                calendar: gregorianCalendar
+            ),
+            "ngày 2 tháng 4, năm 2026, 12:00"
+        )
+    }
+
     func testRemoteDateEncodingKeepsUTCInstantWhileFormattingInPhoneTimezone() throws {
         let japanCalendar = MistiaCalendar.gregorian(
             locale: Locale(identifier: "ja_JP"),

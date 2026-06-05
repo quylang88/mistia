@@ -171,11 +171,20 @@ nonisolated enum MistiaDateFormatting {
         language: MistiaAppLanguage = .current,
         calendar: Calendar? = nil
     ) -> String {
-        formatterCache.string(
+        let dateFormat: String
+        switch language {
+        case .vietnamese:
+            dateFormat = "'ngày' d 'tháng' M, 'năm' yyyy, HH:mm"
+        case .english:
+            dateFormat = "MMMM d, yyyy, HH:mm"
+        case .japanese:
+            dateFormat = "yyyy年M月d日 HH:mm"
+        }
+        return formatterCache.string(
             from: date,
             language: language,
             calendar: calendar,
-            style: .dateTimeMediumShort
+            style: .dateFormat(dateFormat)
         )
     }
 
@@ -331,9 +340,6 @@ nonisolated private final class MistiaDateFormatterCache: @unchecked Sendable {
         switch style {
         case .dateFormat(let dateFormat):
             formatter.dateFormat = dateFormat
-        case .dateTimeMediumShort:
-            formatter.dateStyle = .medium
-            formatter.timeStyle = .short
         case .localizedTemplate(let template):
             formatter.setLocalizedDateFormatFromTemplate(template)
         }
@@ -353,7 +359,6 @@ nonisolated private struct MistiaDateFormatterCacheKey: Hashable {
 
 nonisolated private enum MistiaDateFormatterCacheStyle: Hashable {
     case dateFormat(String)
-    case dateTimeMediumShort
     case localizedTemplate(String)
 }
 

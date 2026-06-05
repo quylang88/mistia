@@ -2150,13 +2150,6 @@ private struct DebtSettlementSheet: View {
         selectedWallet == nil || parsedAmountMinor <= 0 || parsedAmountMinor > target.amountMinor
     }
 
-    private var detailSummary: String {
-        L10n.transactions.debtsettlement.detailSummary(
-            String(describing: target.position.relatedRecords.count),
-            target.amountMinor.formattedCurrency(code: target.position.currencyCode)
-        )
-    }
-
     var body: some View {
         NavigationStack {
             Form {
@@ -2214,35 +2207,15 @@ private struct DebtSettlementSheet: View {
 
                                     if index < target.position.relatedRecords.count - 1 {
                                         Divider()
-                                            .padding(.leading, 44)
+                                            .padding(.leading, 46)
                                     }
                                 }
                             }
-                            .padding(.top, 6)
                         } label: {
-                            VStack(alignment: .leading, spacing: 4) {
-                                Text(L10n.transactions.debtsettlement.detail)
-                                    .font(.system(size: 15, weight: .semibold, design: .rounded))
-                                Text(detailSummary)
-                                    .font(.system(size: 12.5, weight: .medium, design: .rounded))
-                                    .foregroundStyle(.secondary)
-                            }
+                            Text(L10n.transactions.debtsettlement.detail)
+                                .font(.system(size: 15, weight: .semibold, design: .rounded))
                         }
                     }
-                }
-
-                Section {
-                    DuePaymentPrimaryActionButton(
-                        title: L10n.common.save,
-                        isDisabled: isSaveDisabled
-                    ) {
-                        save()
-                    }
-                    .padding(.horizontal, 16)
-                    .padding(.top, 8)
-                    .padding(.bottom, 4)
-                    .listRowInsets(EdgeInsets())
-                    .listRowBackground(Color.clear)
                 }
             }
             .navigationTitle(target.intent.title)
@@ -2256,6 +2229,22 @@ private struct DebtSettlementSheet: View {
                             .font(.system(size: 16, weight: .semibold))
                             .foregroundStyle(.secondary)
                     }
+                }
+
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button {
+                        save()
+                    } label: {
+                        Image(systemName: "checkmark")
+                            .font(.system(size: 14, weight: .bold))
+                            .foregroundStyle(MistiaAccent.checkmarkPurple.color)
+                            .frame(width: 30, height: 30)
+                    }
+                    .buttonStyle(.glassProminent)
+                    .buttonBorderShape(.circle)
+                    .tint(MistiaAccent.purple.color)
+                    .disabled(isSaveDisabled)
+                    .opacity(isSaveDisabled ? 0.45 : 1)
                 }
             }
         }
@@ -2367,6 +2356,24 @@ private struct DebtSettlementDetailRow: View {
     let record: TransactionRecordSnapshot
     let walletTitle: String?
 
+    private var icon: String {
+        switch record.primaryKind {
+        case .expense, .income:
+            record.primaryKind.financeIconToken
+        case .transfer:
+            switch record.transferSubtype {
+            case .internalTransfer:
+                TransactionTransferSubtype.internalTransfer.financeIconToken
+            case .familyTransfer:
+                TransactionTransferSubtype.familyTransfer.financeIconToken
+            case .debt:
+                TransactionTransferSubtype.debt.financeIconToken
+            case nil:
+                record.primaryKind.financeIconToken
+            }
+        }
+    }
+
     private var tint: Color {
         debtIntentTint(record.debtIntent)
     }
@@ -2375,21 +2382,60 @@ private struct DebtSettlementDetailRow: View {
         MistiaCurrencyLogic.normalizedCode(record.sourceCurrencyCode)
     }
 
-    var body: some View {
-        HStack(alignment: .top, spacing: 12) {
-            MistiaFinanceIconView(
-                icon: record.debtIntent?.financeIconToken ?? "mistia.flow.transfer.debt",
-                fallbackColor: tint,
-                size: 32
-            )
+    private var title: String {
+        if let trimmed = record.title.nilIfBlank {
+            return trimmed
+        }
 
-            VStack(alignment: .leading, spacing: 3) {
-                Text(record.debtIntent?.title ?? L10n.transactions.transactions.debt)
+        switch record.primaryKind {
+        case .expense:
+            return L10n.transactions.transactions.expenseNeedsDetails
+        case .income:
+            return L10n.transactions.transactions.incomeNeedsDetails
+        case .transfer:
+            switch record.transferSubtype {
+            case .internalTransfer:
+                return L10n.transactions.transactions.internalTransfer
+            case .familyTransfer:
+                return L10n.shared.corelogic.financeenums.family
+            case .debt:
+                return record.debtIntent?.title ?? L10n.transactions.transactions.debt
+            case nil:
+                return L10n.transactions.transactions.transferNeedsDetails
+            }
+        }
+    }
+
+    private var amountText: String {
+        let raw = record.amountMinor.formattedCurrency(code: currencyCode)
+
+        if TransactionLogic.isPaidForExpenseDebt(record) {
+            return "-" + raw
+        }
+
+        let cashflow = TransactionLogic.cashflowAmount(for: record)
+        if cashflow > 0 {
+            return "+" + raw
+        }
+        if cashflow < 0 {
+            return "-" + raw
+        }
+        return raw
+    }
+
+    var body: some View {
+        HStack(alignment: .center, spacing: 12) {
+            TransactionIconTile(icon: icon, tint: tint)
+
+            VStack(alignment: .leading, spacing: 4) {
+                Text(title)
                     .font(.system(size: 14, weight: .semibold, design: .rounded))
                     .foregroundStyle(.primary)
+                    .lineLimit(1)
                 Text(MistiaDateFormatting.dateTimeString(for: record.occurredAt))
                     .font(.system(size: 12, weight: .medium, design: .rounded))
                     .foregroundStyle(.secondary)
+                    .lineLimit(1)
                 if let walletTitle {
                     Text(verbatim: walletTitle)
                         .font(.system(size: 12, weight: .medium, design: .rounded))
@@ -2400,13 +2446,13 @@ private struct DebtSettlementDetailRow: View {
 
             Spacer(minLength: 10)
 
-            Text(record.amountMinor.formattedCurrency(code: currencyCode))
+            Text(amountText)
                 .font(.system(size: 14, weight: .bold, design: .rounded))
                 .foregroundStyle(tint)
                 .lineLimit(1)
                 .minimumScaleFactor(0.74)
         }
-        .padding(.vertical, 8)
+        .padding(.vertical, 10)
     }
 }
 

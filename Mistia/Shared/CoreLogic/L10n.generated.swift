@@ -3772,12 +3772,6 @@ nonisolated enum L10n {
             static func amountExceedsOutstanding(language: MistiaAppLanguage) -> String { L10n.tr("transactions.debtsettlement.amountExceedsOutstanding", vi: "Số tiền không được lớn hơn khoản đang mở.", en: "The amount cannot be greater than the open loan balance.", ja: "金額は未決済の債務を超えられません。", language: language) }
             static var detail: String { L10n.tr("transactions.debtsettlement.detail", vi: "Chi tiết", en: "Details", ja: "詳細") }
             static func detail(language: MistiaAppLanguage) -> String { L10n.tr("transactions.debtsettlement.detail", vi: "Chi tiết", en: "Details", ja: "詳細", language: language) }
-            static func detailSummary(_ arg1: String, _ arg2: String) -> String {
-                L10n.format("transactions.debtsettlement.detailSummary", vi: "%@ dòng • đang mở %@", en: "%@ rows • open %@", ja: "%@件・未決済 %@", arg1, arg2)
-            }
-            static func detailSummary(_ arg1: String, _ arg2: String, language: MistiaAppLanguage) -> String {
-                L10n.format("transactions.debtsettlement.detailSummary", vi: "%@ dòng • đang mở %@", en: "%@ rows • open %@", ja: "%@件・未決済 %@", language: language, arg1, arg2)
-            }
         }
 
         nonisolated enum transactioneditor {
