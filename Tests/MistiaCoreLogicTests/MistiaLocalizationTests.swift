@@ -132,14 +132,30 @@ final class MistiaLocalizationTests: XCTestCase {
         )
     }
 
-    func testDateTimeFormattingUsesFullVietnameseDateWords() {
+    func testDateTimeFormattingUsesLocaleSpecificTimestampOrder() {
         XCTAssertEqual(
             MistiaDateFormatting.dateTimeString(
                 for: referenceDate,
                 language: .vietnamese,
                 calendar: gregorianCalendar
             ),
-            "ngày 2 tháng 4, năm 2026, 12:00"
+            "12:00 ngày 2 tháng 4, năm 2026"
+        )
+        XCTAssertEqual(
+            MistiaDateFormatting.dateTimeString(
+                for: referenceDate,
+                language: .english,
+                calendar: gregorianCalendar
+            ),
+            "2026-04-02 12:00"
+        )
+        XCTAssertEqual(
+            MistiaDateFormatting.dateTimeString(
+                for: referenceDate,
+                language: .japanese,
+                calendar: gregorianCalendar
+            ),
+            "2026年4月2日 12:00"
         )
     }
 

@@ -2097,6 +2097,7 @@ private struct DebtSettlementSheet: View {
 
     @Query
     private var wallets: [LedgerWallet]
+    @Query private var categories: [TransactionCategory]
     @Query private var ownershipScopes: [OwnedRecordScope]
 
     let target: DebtSettlementSheetTarget
@@ -2202,7 +2203,8 @@ private struct DebtSettlementSheet: View {
                                 ForEach(Array(target.position.relatedRecords.enumerated()), id: \.element.id) { index, record in
                                     DebtSettlementDetailRow(
                                         record: record,
-                                        walletTitle: walletTitle(for: record.sourceWalletID)
+                                        walletName: walletName(for: record.sourceWalletID),
+                                        categoryName: categoryName(for: record.categoryID)
                                     )
 
                                     if index < target.position.relatedRecords.count - 1 {
@@ -2213,7 +2215,7 @@ private struct DebtSettlementSheet: View {
                             }
                         } label: {
                             Text(L10n.transactions.debtsettlement.detail)
-                                .font(.system(size: 15, weight: .semibold, design: .rounded))
+                                .font(.system(size: 17, weight: .semibold, design: .rounded))
                         }
                     }
                 }
@@ -2267,14 +2269,24 @@ private struct DebtSettlementSheet: View {
         }
     }
 
-    private func walletTitle(for walletID: UUID?) -> String? {
+    private func walletName(for walletID: UUID?) -> String? {
         guard let walletID,
               let wallet = wallets.first(where: { $0.id == walletID })
         else {
             return nil
         }
 
-        return walletPickerAccess.title(for: wallet)
+        return wallet.name
+    }
+
+    private func categoryName(for categoryID: UUID?) -> String? {
+        guard let categoryID,
+              let category = categories.first(where: { $0.id == categoryID })
+        else {
+            return nil
+        }
+
+        return category.localizedDisplayName
     }
 
     private func save() {
@@ -2354,10 +2366,22 @@ private struct DebtSettlementSheet: View {
 
 private struct DebtSettlementDetailRow: View {
     let record: TransactionRecordSnapshot
-    let walletTitle: String?
+    let walletName: String?
+    let categoryName: String?
 
     private var icon: String {
-        switch record.primaryKind {
+        if TransactionLogic.isPaidForDebt(record) || record.transferSubtype == .debt {
+            switch record.debtIntent {
+            case .lend, .repay:
+                return "arrow.up.right.circle.fill"
+            case .borrow, .collect:
+                return "arrow.down.left.circle.fill"
+            case nil:
+                return "arrow.left.arrow.right.circle.fill"
+            }
+        }
+
+        return switch record.primaryKind {
         case .expense, .income:
             record.primaryKind.financeIconToken
         case .transfer:
@@ -2423,32 +2447,57 @@ private struct DebtSettlementDetailRow: View {
         return raw
     }
 
+    private var cashflowColor: Color {
+        if TransactionLogic.isPaidForExpenseDebt(record) {
+            return MistiaAccent.expense.color
+        }
+        if record.transferSubtype == .debt {
+            return debtIntentTint(record.debtIntent)
+        }
+        return tint
+    }
+
+    private var subtitle: String {
+        let intent = record.debtIntent?.title ?? L10n.transactions.transactions.debt
+
+        if TransactionLogic.isPaidForDebt(record) {
+            if let categoryName {
+                return "\(intent) • \(L10n.transactions.transactioneditor.borrowPaidFor) • \(categoryName)"
+            }
+            return "\(intent) • \(L10n.transactions.transactioneditor.borrowPaidFor)"
+        }
+
+        if let walletName {
+            return "\(intent) • \(walletName)"
+        }
+
+        return intent
+    }
+
     var body: some View {
         HStack(alignment: .center, spacing: 12) {
             TransactionIconTile(icon: icon, tint: tint)
 
-            VStack(alignment: .leading, spacing: 4) {
+            VStack(alignment: .leading, spacing: 5) {
                 Text(title)
                     .font(.system(size: 14, weight: .semibold, design: .rounded))
                     .foregroundStyle(.primary)
+                    .lineLimit(1)
+                Text(subtitle)
+                    .font(.system(size: 12, weight: .medium, design: .rounded))
+                    .foregroundStyle(.secondary)
                     .lineLimit(1)
                 Text(MistiaDateFormatting.dateTimeString(for: record.occurredAt))
                     .font(.system(size: 12, weight: .medium, design: .rounded))
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
-                if let walletTitle {
-                    Text(verbatim: walletTitle)
-                        .font(.system(size: 12, weight: .medium, design: .rounded))
-                        .foregroundStyle(.secondary)
-                        .lineLimit(1)
-                }
             }
 
             Spacer(minLength: 10)
 
             Text(amountText)
                 .font(.system(size: 14, weight: .bold, design: .rounded))
-                .foregroundStyle(tint)
+                .foregroundStyle(cashflowColor)
                 .lineLimit(1)
                 .minimumScaleFactor(0.74)
         }

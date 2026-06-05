@@ -174,9 +174,9 @@ nonisolated enum MistiaDateFormatting {
         let dateFormat: String
         switch language {
         case .vietnamese:
-            dateFormat = "'ngày' d 'tháng' M, 'năm' yyyy, HH:mm"
+            dateFormat = "HH:mm 'ngày' d 'tháng' M, yyyy"
         case .english:
-            dateFormat = "MMMM d, yyyy, HH:mm"
+            dateFormat = "yyyy-MM-dd HH:mm"
         case .japanese:
             dateFormat = "yyyy年M月d日 HH:mm"
         }
