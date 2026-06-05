@@ -32825,6 +32825,50 @@
         }
       }
     },
+    "transactions.debtsettlement.detail": {
+      "localizations": {
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Chi tiết"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Details"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "詳細"
+          }
+        }
+      }
+    },
+    "transactions.debtsettlement.detailSummary": {
+      "localizations": {
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ dòng • đang mở %@"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ rows • open %@"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@件・未決済 %@"
+          }
+        }
+      }
+    },
     "transactions.transactioneditor.expenseName": {
       "localizations": {
         "vi": {
@@ -35087,6 +35131,28 @@
           "stringUnit": {
             "state": "translated",
             "value": "%@ 件"
+          }
+        }
+      }
+    },
+    "transactions.transactions.person": {
+      "localizations": {
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Người"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Person"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "相手"
           }
         }
       }

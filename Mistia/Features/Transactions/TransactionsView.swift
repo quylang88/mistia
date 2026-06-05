@@ -155,6 +155,7 @@ private struct TransactionsListSnapshotCacheKey: Hashable {
     let walletID: UUID?
     let categoryID: UUID?
     let transferSubtypeRawValue: String?
+    let counterpartyDebtKey: String?
     let statusScopeRawValue: String
     let minAmountMinor: Int64?
     let maxAmountMinor: Int64?
@@ -172,6 +173,11 @@ private struct TransactionsListSnapshotCacheKey: Hashable {
     let transactionSignature: MistiaCollectionChangeSignature
     let ownershipSignature: MistiaCollectionChangeSignature
     let auditSignature: MistiaCollectionChangeSignature
+}
+
+private struct DebtCounterpartyFilterOption: Equatable, Identifiable {
+    let id: String
+    let displayName: String
 }
 
 struct TransactionsView: View {
@@ -449,6 +455,7 @@ struct TransactionsView: View {
             walletID: effectiveFilters.walletID,
             categoryID: effectiveFilters.categoryID,
             transferSubtypeRawValue: effectiveFilters.transferSubtype?.rawValue,
+            counterpartyDebtKey: effectiveFilters.counterpartyDebtKey,
             statusScopeRawValue: effectiveFilters.statusScope.rawValue,
             minAmountMinor: effectiveFilters.minAmountMinor,
             maxAmountMinor: effectiveFilters.maxAmountMinor,
@@ -495,6 +502,7 @@ struct TransactionsView: View {
             walletID: filters.walletID,
             categoryID: filters.categoryID,
             transferSubtypeRawValue: filters.transferSubtype?.rawValue,
+            counterpartyDebtKey: filters.counterpartyDebtKey,
             statusScopeRawValue: filters.statusScope.rawValue,
             minAmountMinor: filters.minAmountMinor,
             maxAmountMinor: filters.maxAmountMinor,
@@ -699,9 +707,39 @@ struct TransactionsView: View {
         if filterState.walletID != nil { count += 1 }
         if filterState.categoryID != nil { count += 1 }
         if filterState.transferSubtype != nil { count += 1 }
+        if filterState.counterpartyDebtKey != nil { count += 1 }
         if filterState.minAmountMinor != nil || filterState.maxAmountMinor != nil { count += 1 }
 
         return count
+    }
+
+    private var debtCounterpartyFilterOptions: [DebtCounterpartyFilterOption] {
+        var optionsByKey: [String: DebtCounterpartyFilterOption] = [:]
+
+        for record in activeTransactions.map(\.snapshot) {
+            guard record.entryStatus == .posted,
+                  record.primaryKind == .transfer,
+                  record.transferSubtype == .debt,
+                  let key = record.normalizedCounterpartyKey
+                    ?? TransactionLogic.normalizeCounterpartyName(record.counterpartyName),
+                  !key.isEmpty,
+                  let displayName = record.counterpartyName?.trimmingCharacters(in: .whitespacesAndNewlines),
+                  !displayName.isEmpty
+            else {
+                continue
+            }
+
+            if optionsByKey[key] == nil {
+                optionsByKey[key] = DebtCounterpartyFilterOption(id: key, displayName: displayName)
+            }
+        }
+
+        return optionsByKey.values.sorted {
+            if $0.displayName.localizedCaseInsensitiveCompare($1.displayName) != .orderedSame {
+                return $0.displayName.localizedCaseInsensitiveCompare($1.displayName) == .orderedAscending
+            }
+            return $0.id < $1.id
+        }
     }
 
     private var activeFilterTint: Color {
@@ -1085,6 +1123,34 @@ struct TransactionsView: View {
                     Button(wallet.name) {
                         withAnimation(.snappy) {
                             filterState.walletID = wallet.id
+                        }
+                    }
+                }
+            }
+
+            if !debtCounterpartyFilterOptions.isEmpty {
+                filterMenu(isActive: filterState.counterpartyDebtKey != nil) {
+                    let title = debtCounterpartyFilterOptions
+                        .first { $0.id == filterState.counterpartyDebtKey }?
+                        .displayName ?? L10n.transactions.transactions.person
+                    TransactionToolbarChip(
+                        title: title,
+                        isActive: filterState.counterpartyDebtKey != nil,
+                        trailingIcon: "chevron.up.chevron.down"
+                    )
+                } content: {
+                    Button(L10n.transactions.transactions.all) {
+                        withAnimation(.snappy) {
+                            filterState.counterpartyDebtKey = nil
+                        }
+                    }
+                    ForEach(debtCounterpartyFilterOptions) { option in
+                        Button(option.displayName) {
+                            withAnimation(.snappy) {
+                                selectedSegment = nil
+                                filterState.categoryID = nil
+                                filterState.counterpartyDebtKey = option.id
+                            }
                         }
                     }
                 }
@@ -2038,6 +2104,7 @@ private struct DebtSettlementSheet: View {
     @State private var amountText = ""
     @State private var selectedWalletID: UUID?
     @State private var alertMessage: String?
+    @State private var isDetailExpanded = false
 
     private var tint: Color {
         debtIntentTint(target.intent)
@@ -2081,6 +2148,13 @@ private struct DebtSettlementSheet: View {
 
     private var isSaveDisabled: Bool {
         selectedWallet == nil || parsedAmountMinor <= 0 || parsedAmountMinor > target.amountMinor
+    }
+
+    private var detailSummary: String {
+        L10n.transactions.debtsettlement.detailSummary(
+            String(describing: target.position.relatedRecords.count),
+            target.amountMinor.formattedCurrency(code: target.position.currencyCode)
+        )
     }
 
     var body: some View {
@@ -2128,6 +2202,35 @@ private struct DebtSettlementSheet: View {
                     .pickerStyle(.menu)
                 }
 
+                if !target.position.relatedRecords.isEmpty {
+                    Section {
+                        DisclosureGroup(isExpanded: $isDetailExpanded) {
+                            VStack(spacing: 0) {
+                                ForEach(Array(target.position.relatedRecords.enumerated()), id: \.element.id) { index, record in
+                                    DebtSettlementDetailRow(
+                                        record: record,
+                                        walletTitle: walletTitle(for: record.sourceWalletID)
+                                    )
+
+                                    if index < target.position.relatedRecords.count - 1 {
+                                        Divider()
+                                            .padding(.leading, 44)
+                                    }
+                                }
+                            }
+                            .padding(.top, 6)
+                        } label: {
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text(L10n.transactions.debtsettlement.detail)
+                                    .font(.system(size: 15, weight: .semibold, design: .rounded))
+                                Text(detailSummary)
+                                    .font(.system(size: 12.5, weight: .medium, design: .rounded))
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+                    }
+                }
+
                 Section {
                     DuePaymentPrimaryActionButton(
                         title: L10n.common.save,
@@ -2173,6 +2276,16 @@ private struct DebtSettlementSheet: View {
         } message: {
             if let alertMessage { Text(alertMessage) }
         }
+    }
+
+    private func walletTitle(for walletID: UUID?) -> String? {
+        guard let walletID,
+              let wallet = wallets.first(where: { $0.id == walletID })
+        else {
+            return nil
+        }
+
+        return walletPickerAccess.title(for: wallet)
     }
 
     private func save() {
@@ -2247,6 +2360,53 @@ private struct DebtSettlementSheet: View {
         } catch {
             alertMessage = error.localizedDescription
         }
+    }
+}
+
+private struct DebtSettlementDetailRow: View {
+    let record: TransactionRecordSnapshot
+    let walletTitle: String?
+
+    private var tint: Color {
+        debtIntentTint(record.debtIntent)
+    }
+
+    private var currencyCode: String {
+        MistiaCurrencyLogic.normalizedCode(record.sourceCurrencyCode)
+    }
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 12) {
+            MistiaFinanceIconView(
+                icon: record.debtIntent?.financeIconToken ?? "mistia.flow.transfer.debt",
+                fallbackColor: tint,
+                size: 32
+            )
+
+            VStack(alignment: .leading, spacing: 3) {
+                Text(record.debtIntent?.title ?? L10n.transactions.transactions.debt)
+                    .font(.system(size: 14, weight: .semibold, design: .rounded))
+                    .foregroundStyle(.primary)
+                Text(MistiaDateFormatting.dateTimeString(for: record.occurredAt))
+                    .font(.system(size: 12, weight: .medium, design: .rounded))
+                    .foregroundStyle(.secondary)
+                if let walletTitle {
+                    Text(verbatim: walletTitle)
+                        .font(.system(size: 12, weight: .medium, design: .rounded))
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                }
+            }
+
+            Spacer(minLength: 10)
+
+            Text(record.amountMinor.formattedCurrency(code: currencyCode))
+                .font(.system(size: 14, weight: .bold, design: .rounded))
+                .foregroundStyle(tint)
+                .lineLimit(1)
+                .minimumScaleFactor(0.74)
+        }
+        .padding(.vertical, 8)
     }
 }
 

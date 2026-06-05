@@ -22,7 +22,7 @@ nonisolated struct TransactionWalletBalanceIndex: Equatable {
     }
 }
 
-struct TransactionRecordSnapshot: Equatable, Identifiable {
+nonisolated struct TransactionRecordSnapshot: Equatable, Identifiable {
     let id: UUID
     let primaryKind: TransactionPrimaryKind
     let transferSubtype: TransactionTransferSubtype?
@@ -180,6 +180,7 @@ struct TransactionFilterState: Equatable {
     var walletID: UUID?
     var categoryID: UUID?
     var transferSubtype: TransactionTransferSubtype?
+    var counterpartyDebtKey: String?
     var statusScope: TransactionStatusScope = .all
     var minAmountMinor: Int64?
     var maxAmountMinor: Int64?
@@ -205,12 +206,32 @@ struct TransactionVisibleRecordsPage: Equatable {
     let displayedRecords: [TransactionRecordSnapshot]
 }
 
-struct CounterpartyDebtSnapshot: Equatable, Identifiable {
+nonisolated struct CounterpartyDebtSnapshot: Equatable, Identifiable {
     let id: String
     let displayName: String
+    let normalizedCounterpartyKey: String
     let netMinor: Int64
     let currencyCode: String
     let preferredWalletID: UUID?
+    let relatedRecords: [TransactionRecordSnapshot]
+
+    init(
+        id: String,
+        displayName: String,
+        normalizedCounterpartyKey: String = "",
+        netMinor: Int64,
+        currencyCode: String,
+        preferredWalletID: UUID?,
+        relatedRecords: [TransactionRecordSnapshot] = []
+    ) {
+        self.id = id
+        self.displayName = displayName
+        self.normalizedCounterpartyKey = normalizedCounterpartyKey
+        self.netMinor = netMinor
+        self.currencyCode = currencyCode
+        self.preferredWalletID = preferredWalletID
+        self.relatedRecords = relatedRecords
+    }
 
     var isReceivable: Bool {
         netMinor > 0
@@ -522,13 +543,15 @@ nonisolated enum TransactionLogic {
                 && $0.transferSubtype == .debt
         }
         let grouped = Dictionary(grouping: debtRecords) { record in
-            let counterpartyKey = record.normalizedCounterpartyKey ?? UUID().uuidString
+            let counterpartyKey = record.normalizedCounterpartyKey
+                ?? normalizeCounterpartyName(record.counterpartyName)
+                ?? UUID().uuidString
             let currencyCode = MistiaCurrencyLogic.normalizedCode(record.sourceCurrencyCode)
             return "\(counterpartyKey)|\(currencyCode)"
         }
         return grouped.compactMap { key, groupedRecords in
             guard let first = groupedRecords.first,
-                  let normalizedKey = first.normalizedCounterpartyKey,
+                  let normalizedKey = first.normalizedCounterpartyKey ?? normalizeCounterpartyName(first.counterpartyName),
                   !normalizedKey.isEmpty
             else {
                 return nil
@@ -565,9 +588,11 @@ nonisolated enum TransactionLogic {
                     .compactMap(\.counterpartyName)
                     .first(where: { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty })
                     ?? L10n.shared.corelogic.transaction.unknownName,
+                normalizedCounterpartyKey: normalizedKey,
                 netMinor: total,
                 currencyCode: MistiaCurrencyLogic.normalizedCode(first.sourceCurrencyCode),
-                preferredWalletID: preferredRecord?.sourceWalletID
+                preferredWalletID: preferredRecord?.sourceWalletID,
+                relatedRecords: groupedRecords.sorted(by: recordSort)
             )
         }
         .sorted {
@@ -957,6 +982,18 @@ nonisolated enum TransactionLogic {
         if let transferSubtype = filters.transferSubtype,
            record.transferSubtype != transferSubtype {
             return false
+        }
+
+        if let counterpartyDebtKey = normalizeCounterpartyName(filters.counterpartyDebtKey) {
+            let recordCounterpartyKey = record.normalizedCounterpartyKey
+                ?? normalizeCounterpartyName(record.counterpartyName)
+            guard record.entryStatus == .posted,
+                  record.primaryKind == .transfer,
+                  record.transferSubtype == .debt,
+                  recordCounterpartyKey == counterpartyDebtKey
+            else {
+                return false
+            }
         }
 
         switch filters.statusScope {

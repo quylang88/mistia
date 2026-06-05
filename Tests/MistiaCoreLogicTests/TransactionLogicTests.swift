@@ -406,11 +406,21 @@ final class TransactionLogicTests: XCTestCase {
 
         XCTAssertEqual(positions.count, 2)
         XCTAssertEqual(positions[0].displayName, "Lân")
+        XCTAssertEqual(positions[0].normalizedCounterpartyKey, "lan")
         XCTAssertEqual(positions[0].netMinor, 4_000)
         XCTAssertTrue(positions[0].isReceivable)
+        XCTAssertEqual(
+            positions[0].relatedRecords.map(\.title),
+            ["Cho vay cafe", "Thu nợ"]
+        )
         XCTAssertEqual(positions[1].displayName, "Minh")
+        XCTAssertEqual(positions[1].normalizedCounterpartyKey, "minh")
         XCTAssertEqual(positions[1].netMinor, -2_500)
         XCTAssertFalse(positions[1].isReceivable)
+        XCTAssertEqual(
+            positions[1].relatedRecords.map(\.title),
+            ["Mượn tiền", "Trả nợ"]
+        )
     }
 
     func testPaidForBorrowDebtIsPayableAndRepaymentReducesSamePosition() {
@@ -811,6 +821,68 @@ final class TransactionLogicTests: XCTestCase {
         let visible = TransactionLogic.visibleRecords(
             from: [matching, wrongSubtype, wrongAmount],
             selectedKind: .transfer,
+            filters: filters,
+            referenceDate: referenceDate
+        )
+
+        XCTAssertEqual(visible.map(\.id), [matching.id])
+    }
+
+    func testCounterpartyDebtFilterOnlyIncludesPostedDebtForSelectedPerson() throws {
+        let walletID = UUID()
+        let referenceDate = Date(timeIntervalSince1970: 1_742_646_400)
+        let matching = makeRecord(
+            primaryKind: .transfer,
+            transferSubtype: .debt,
+            debtIntent: .lend,
+            title: "Cho vay Ngoc Anh",
+            amountMinor: 6_000,
+            occurredAt: referenceDate,
+            sourceWalletID: walletID,
+            sourceWalletKind: .bank,
+            counterpartyName: "Ngọc Anh"
+        )
+        let samePersonDraft = makeRecord(
+            primaryKind: .transfer,
+            transferSubtype: .debt,
+            debtIntent: .lend,
+            entryStatus: .draft,
+            title: "Draft Ngoc Anh",
+            amountMinor: 4_000,
+            occurredAt: referenceDate.addingTimeInterval(-60),
+            sourceWalletID: walletID,
+            sourceWalletKind: .bank,
+            counterpartyName: "Ngoc Anh"
+        )
+        let wrongPersonDebt = makeRecord(
+            primaryKind: .transfer,
+            transferSubtype: .debt,
+            debtIntent: .lend,
+            title: "Cho vay Minh",
+            amountMinor: 6_000,
+            occurredAt: referenceDate.addingTimeInterval(-120),
+            sourceWalletID: walletID,
+            sourceWalletKind: .bank,
+            counterpartyName: "Minh"
+        )
+        let nonDebtWithSamePerson = makeRecord(
+            primaryKind: .expense,
+            title: "An toi voi Ngoc Anh",
+            amountMinor: 6_000,
+            occurredAt: referenceDate.addingTimeInterval(-180),
+            sourceWalletID: walletID,
+            sourceWalletKind: .bank,
+            categoryID: UUID(),
+            counterpartyName: "Ngoc Anh"
+        )
+
+        var filters = TransactionFilterState()
+        filters.timeScope = .allTime
+        filters.counterpartyDebtKey = try XCTUnwrap(TransactionLogic.normalizeCounterpartyName("ngọc anh"))
+
+        let visible = TransactionLogic.visibleRecords(
+            from: [matching, samePersonDraft, wrongPersonDebt, nonDebtWithSamePerson],
+            selectedKind: nil,
             filters: filters,
             referenceDate: referenceDate
         )

@@ -6,6 +6,7 @@ final class TransactionLogicTests: XCTestCase {
     func testOpenDebtPositionsAreGroupedByCounterpartyAndCurrency() {
         let personKey = TransactionLogic.normalizeCounterpartyName("An")!
         let lendWalletID = UUID()
+        let now = Date(timeIntervalSince1970: 1_800_000_000)
         let records = [
             debtRecord(
                 amountMinor: 1_000,
@@ -13,29 +14,35 @@ final class TransactionLogicTests: XCTestCase {
                 intent: .lend,
                 counterpartyName: "An",
                 normalizedCounterpartyKey: personKey,
-                sourceWalletID: lendWalletID
+                sourceWalletID: lendWalletID,
+                occurredAt: now
             ),
             debtRecord(
                 amountMinor: 200,
                 currencyCode: "JPY",
                 intent: .collect,
                 counterpartyName: "An",
-                normalizedCounterpartyKey: personKey
+                normalizedCounterpartyKey: personKey,
+                occurredAt: now.addingTimeInterval(-60)
             ),
             debtRecord(
                 amountMinor: 500_000,
                 currencyCode: "VND",
                 intent: .lend,
                 counterpartyName: "An",
-                normalizedCounterpartyKey: personKey
+                normalizedCounterpartyKey: personKey,
+                occurredAt: now.addingTimeInterval(-120)
             )
         ]
 
         let positions = TransactionLogic.openDebtPositions(from: records)
 
         XCTAssertEqual(positions.map(\.currencyCode).sorted(), ["JPY", "VND"])
-        XCTAssertEqual(positions.first { $0.currencyCode == "JPY" }?.netMinor, 800)
-        XCTAssertEqual(positions.first { $0.currencyCode == "JPY" }?.preferredWalletID, lendWalletID)
+        let jpyPosition = positions.first { $0.currencyCode == "JPY" }
+        XCTAssertEqual(jpyPosition?.normalizedCounterpartyKey, personKey)
+        XCTAssertEqual(jpyPosition?.netMinor, 800)
+        XCTAssertEqual(jpyPosition?.preferredWalletID, lendWalletID)
+        XCTAssertEqual(jpyPosition?.relatedRecords.map(\.debtIntent), [.lend, .collect])
         XCTAssertEqual(positions.first { $0.currencyCode == "VND" }?.netMinor, 500_000)
     }
 
@@ -43,14 +50,74 @@ final class TransactionLogicTests: XCTestCase {
         let borrowWalletID = UUID()
         let otherWalletID = UUID()
         let records = [
-            debtRecord(amountMinor: 1_000, intent: .borrow, sourceWalletID: borrowWalletID),
-            debtRecord(amountMinor: 300, intent: .repay, sourceWalletID: otherWalletID)
+            debtRecord(
+                amountMinor: 1_000,
+                intent: .borrow,
+                sourceWalletID: borrowWalletID,
+                occurredAt: Date(timeIntervalSince1970: 1_800_000_000)
+            ),
+            debtRecord(
+                amountMinor: 300,
+                intent: .repay,
+                sourceWalletID: otherWalletID,
+                occurredAt: Date(timeIntervalSince1970: 1_799_999_940)
+            )
         ]
 
         let position = TransactionLogic.openDebtPositions(from: records).first
 
         XCTAssertEqual(position?.netMinor, -700)
         XCTAssertEqual(position?.preferredWalletID, borrowWalletID)
+        XCTAssertEqual(position?.relatedRecords.map(\.debtIntent), [.borrow, .repay])
+    }
+
+    func testCounterpartyDebtFilterOnlyIncludesPostedDebtForSelectedPerson() throws {
+        let walletID = UUID()
+        let key = try XCTUnwrap(TransactionLogic.normalizeCounterpartyName("Ngọc Anh"))
+        let matching = debtRecord(
+            amountMinor: 6_000,
+            intent: .lend,
+            counterpartyName: "Ngọc Anh",
+            normalizedCounterpartyKey: key,
+            sourceWalletID: walletID
+        )
+        let samePersonDraft = debtRecord(
+            amountMinor: 4_000,
+            intent: .lend,
+            entryStatus: .draft,
+            counterpartyName: "Ngoc Anh",
+            normalizedCounterpartyKey: key,
+            sourceWalletID: walletID
+        )
+        let wrongPersonDebt = debtRecord(
+            amountMinor: 6_000,
+            intent: .lend,
+            counterpartyName: "Minh",
+            normalizedCounterpartyKey: TransactionLogic.normalizeCounterpartyName("Minh"),
+            sourceWalletID: walletID
+        )
+        let nonDebtWithSamePerson = record(
+            primaryKind: .expense,
+            amountMinor: 6_000,
+            currencyCode: "JPY",
+            title: "An toi voi Ngoc Anh",
+            counterpartyName: "Ngoc Anh",
+            normalizedCounterpartyKey: key,
+            sourceWalletID: walletID
+        )
+
+        var filters = TransactionFilterState()
+        filters.timeScope = .allTime
+        filters.counterpartyDebtKey = key
+
+        let visible = TransactionLogic.visibleRecords(
+            from: [matching, samePersonDraft, wrongPersonDebt, nonDebtWithSamePerson],
+            selectedKind: nil,
+            filters: filters,
+            referenceDate: Date(timeIntervalSince1970: 1_800_000_000)
+        )
+
+        XCTAssertEqual(visible.map(\.id), [matching.id])
     }
 
     func testOpenReceivableDebtTotalsOnlyIncludeCurrentLendingByCurrency() {
@@ -300,9 +367,11 @@ final class TransactionLogicTests: XCTestCase {
         amountMinor: Int64,
         currencyCode: String = "JPY",
         intent: TransactionDebtIntent,
+        entryStatus: TransactionEntryStatus = .posted,
         counterpartyName: String = "An",
         normalizedCounterpartyKey: String? = TransactionLogic.normalizeCounterpartyName("An"),
-        sourceWalletID: UUID = UUID()
+        sourceWalletID: UUID = UUID(),
+        occurredAt: Date = Date(timeIntervalSince1970: 1_800_000_000)
     ) -> TransactionRecordSnapshot {
         record(
             primaryKind: .transfer,
@@ -310,10 +379,12 @@ final class TransactionLogicTests: XCTestCase {
             currencyCode: currencyCode,
             transferSubtype: .debt,
             debtIntent: intent,
+            entryStatus: entryStatus,
             title: intent.title,
             counterpartyName: counterpartyName,
             normalizedCounterpartyKey: normalizedCounterpartyKey,
-            sourceWalletID: sourceWalletID
+            sourceWalletID: sourceWalletID,
+            occurredAt: occurredAt
         )
     }
 
@@ -323,6 +394,7 @@ final class TransactionLogicTests: XCTestCase {
         currencyCode: String,
         transferSubtype: TransactionTransferSubtype? = nil,
         debtIntent: TransactionDebtIntent? = nil,
+        entryStatus: TransactionEntryStatus = .posted,
         title: String = "Record",
         counterpartyName: String? = nil,
         normalizedCounterpartyKey: String? = nil,
@@ -337,7 +409,7 @@ final class TransactionLogicTests: XCTestCase {
             primaryKind: primaryKind,
             transferSubtype: transferSubtype,
             debtIntent: debtIntent,
-            entryStatus: .posted,
+            entryStatus: entryStatus,
             title: title,
             note: nil,
             amountMinor: amountMinor,
