@@ -139,6 +139,10 @@ struct ManagementView: View {
     @Environment(MistiaUIState.self) private var uiState
 
     @AppStorage(MistiaAppStorageKey.hideQuickCreate) private var hideQuickCreate = false
+    @AppStorage(MistiaCurrencySettings.StorageKey.primaryCurrencyCode) private var primaryCurrencyCode = "JPY"
+    @AppStorage(MistiaCurrencySettings.StorageKey.rateMode) private var currencyRateMode = MistiaCurrencyRateMode.automatic.rawValue
+    @AppStorage(MistiaCurrencySettings.StorageKey.manualJPYToVNDRate) private var manualJPYToVNDRate = ""
+    @AppStorage(MistiaCurrencySettings.StorageKey.cachedRatesData) private var cachedCurrencyRatesData = Data()
 
     @Query(filter: #Predicate<LedgerWallet> { $0.deletedAt == nil })
     private var storedWallets: [LedgerWallet]
@@ -173,6 +177,13 @@ struct ManagementView: View {
 
     private var accentPurple: Color {
         MistiaAccent.purple.color
+    }
+
+    private var appExchangeRates: [MistiaExchangeRate] {
+        _ = currencyRateMode
+        _ = manualJPYToVNDRate
+        _ = cachedCurrencyRatesData
+        return MistiaCurrencySettings.rates()
     }
 
     private let profileLeadingVisualWidth: CGFloat = 50
@@ -375,6 +386,7 @@ struct ManagementView: View {
         let snapshotKey = renderSnapshotCacheKey
         let renderSnapshot = cachedRenderSnapshot(for: snapshotKey)
         let memberToolbar = familyContextStore.memberViewingToolbarPresentation
+        let exchangeRateIndex = MistiaExchangeRateIndex(rates: appExchangeRates)
 
         NavigationStack {
             MistiaPinnedTopBarScaffold(
@@ -399,7 +411,9 @@ struct ManagementView: View {
                 profileSection
                 walletsSection(
                     activeWallets: renderSnapshot.activeWallets,
-                    walletBalancesByID: renderSnapshot.walletBalancesByID
+                    walletBalancesByID: renderSnapshot.walletBalancesByID,
+                    primaryCurrencyCode: primaryCurrencyCode,
+                    exchangeRateIndex: exchangeRateIndex
                 )
                 categoriesSection(visibleCategorySections: renderSnapshot.visibleCategorySections)
             }
@@ -643,7 +657,9 @@ struct ManagementView: View {
 
     private func walletsSection(
         activeWallets: [LedgerWallet],
-        walletBalancesByID: [UUID: Int64]
+        walletBalancesByID: [UUID: Int64],
+        primaryCurrencyCode: String,
+        exchangeRateIndex: MistiaExchangeRateIndex
     ) -> some View {
         ManagementSection(title: L10n.management.management.wallets, titleColor: sectionLabelColor) {
             ManagementCard(tint: cardTint) {
@@ -672,7 +688,9 @@ struct ManagementView: View {
                         ForEach(Array(activeWallets.enumerated()), id: \.element.id) { index, wallet in
                             ManagementWalletRow(
                                 wallet: wallet,
-                                currentBalanceMinor: walletBalancesByID[wallet.id] ?? wallet.openingBalanceMinor
+                                currentBalanceMinor: walletBalancesByID[wallet.id] ?? wallet.openingBalanceMinor,
+                                primaryCurrencyCode: primaryCurrencyCode,
+                                exchangeRateIndex: exchangeRateIndex
                             ) {
                                 if presentFamilyOwnerConflictIfNeeded(entity: .wallet, recordID: wallet.id) {
                                     return
@@ -1402,11 +1420,9 @@ private struct ManagementSignedOutCard: View {
 private struct ManagementWalletRow: View {
     let wallet: LedgerWallet
     let currentBalanceMinor: Int64
+    let primaryCurrencyCode: String
+    let exchangeRateIndex: MistiaExchangeRateIndex
     let action: () -> Void
-    @AppStorage(MistiaCurrencySettings.StorageKey.primaryCurrencyCode) private var primaryCurrencyCode = "JPY"
-    @AppStorage(MistiaCurrencySettings.StorageKey.rateMode) private var currencyRateMode = MistiaCurrencyRateMode.automatic.rawValue
-    @AppStorage(MistiaCurrencySettings.StorageKey.manualJPYToVNDRate) private var manualJPYToVNDRate = ""
-    @AppStorage(MistiaCurrencySettings.StorageKey.cachedRatesData) private var cachedCurrencyRatesData = Data()
     
     private var availableCreditMinor: Int64? {
         guard wallet.kind == .creditCard,
@@ -1481,15 +1497,8 @@ private struct ManagementWalletRow: View {
             amountMinor: balanceAmountMinor,
             sourceCurrencyCode: wallet.currencyCode,
             primaryCurrencyCode: primaryCurrencyCode,
-            rates: exchangeRates
+            rateIndex: exchangeRateIndex
         )
-    }
-
-    private var exchangeRates: [MistiaExchangeRate] {
-        _ = currencyRateMode
-        _ = manualJPYToVNDRate
-        _ = cachedCurrencyRatesData
-        return MistiaCurrencySettings.rates()
     }
 }
 

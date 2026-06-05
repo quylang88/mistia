@@ -15,6 +15,40 @@ nonisolated struct MistiaExchangeRate: Codable, Equatable, Identifiable {
     }
 }
 
+nonisolated struct MistiaExchangeRateIndex: Equatable {
+    private struct Pair: Hashable {
+        let base: String
+        let quote: String
+    }
+
+    private let ratesByPair: [Pair: Decimal]
+
+    init(rates: [MistiaExchangeRate]) {
+        var ratesByPair: [Pair: Decimal] = [:]
+        ratesByPair.reserveCapacity(rates.count)
+
+        for rate in rates {
+            guard let decimal = rate.rateDecimal else { continue }
+            let pair = Pair(
+                base: MistiaCurrencyLogic.normalizedCode(rate.baseCurrencyCode),
+                quote: MistiaCurrencyLogic.normalizedCode(rate.quoteCurrencyCode)
+            )
+            if ratesByPair[pair] == nil {
+                ratesByPair[pair] = decimal
+            }
+        }
+
+        self.ratesByPair = ratesByPair
+    }
+
+    fileprivate func directRate(
+        fromNormalized source: String,
+        toNormalized target: String
+    ) -> Decimal? {
+        ratesByPair[Pair(base: source, quote: target)]
+    }
+}
+
 nonisolated enum MistiaCurrencyConversionMode: String, Codable, CaseIterable, Identifiable {
     case appRate
     case manual
@@ -151,6 +185,28 @@ nonisolated enum MistiaCurrencyLogic {
         return nil
     }
 
+    static func convertedMinorAmount(
+        _ amountMinor: Int64,
+        from sourceCurrencyCode: String,
+        to targetCurrencyCode: String,
+        rateIndex: MistiaExchangeRateIndex
+    ) -> Int64? {
+        let source = normalizedCode(sourceCurrencyCode)
+        let target = normalizedCode(targetCurrencyCode)
+        guard source != target else { return amountMinor }
+
+        if let direct = rateIndex.directRate(fromNormalized: source, toNormalized: target) {
+            return roundedMinorAmount(Decimal(amountMinor) * direct)
+        }
+
+        if let inverse = rateIndex.directRate(fromNormalized: target, toNormalized: source),
+           inverse != 0 {
+            return roundedMinorAmount(Decimal(amountMinor) / inverse)
+        }
+
+        return nil
+    }
+
     static func approximatePrimaryAmountText(
         amountMinor: Int64,
         sourceCurrencyCode: String,
@@ -165,6 +221,28 @@ nonisolated enum MistiaCurrencyLogic {
                 from: source,
                 to: primary,
                 rates: rates
+              )
+        else {
+            return nil
+        }
+
+        return "~" + converted.formattedCurrency(code: primary)
+    }
+
+    static func approximatePrimaryAmountText(
+        amountMinor: Int64,
+        sourceCurrencyCode: String,
+        primaryCurrencyCode: String,
+        rateIndex: MistiaExchangeRateIndex
+    ) -> String? {
+        let source = normalizedCode(sourceCurrencyCode)
+        let primary = normalizedCode(primaryCurrencyCode)
+        guard source != primary,
+              let converted = convertedMinorAmount(
+                amountMinor,
+                from: source,
+                to: primary,
+                rateIndex: rateIndex
               )
         else {
             return nil
@@ -202,6 +280,34 @@ nonisolated enum MistiaCurrencyLogic {
     }
 
     static func reportingMinorAmount(
+        amountMinor: Int64,
+        sourceCurrencyCode: String?,
+        reportingCurrencyCode: String,
+        snapshotAmountMinor: Int64? = nil,
+        snapshotCurrencyCode: String? = nil,
+        rateIndex: MistiaExchangeRateIndex
+    ) -> Int64? {
+        let source = normalizedCode(sourceCurrencyCode)
+        let reporting = normalizedCode(reportingCurrencyCode)
+
+        if source == reporting {
+            return amountMinor
+        }
+
+        if let snapshotAmountMinor,
+           normalizedCode(snapshotCurrencyCode) == reporting {
+            return snapshotAmountMinor
+        }
+
+        return convertedMinorAmount(
+            amountMinor,
+            from: source,
+            to: reporting,
+            rateIndex: rateIndex
+        )
+    }
+
+    static func reportingMinorAmount(
         for record: TransactionRecordSnapshot,
         reportingCurrencyCode: String,
         rates: [MistiaExchangeRate]
@@ -213,6 +319,21 @@ nonisolated enum MistiaCurrencyLogic {
             snapshotAmountMinor: record.reportingAmountMinor,
             snapshotCurrencyCode: record.reportingCurrencyCode,
             rates: rates
+        )
+    }
+
+    static func reportingMinorAmount(
+        for record: TransactionRecordSnapshot,
+        reportingCurrencyCode: String,
+        rateIndex: MistiaExchangeRateIndex
+    ) -> Int64? {
+        reportingMinorAmount(
+            amountMinor: record.amountMinor,
+            sourceCurrencyCode: record.sourceCurrencyCode,
+            reportingCurrencyCode: reportingCurrencyCode,
+            snapshotAmountMinor: record.reportingAmountMinor,
+            snapshotCurrencyCode: record.reportingCurrencyCode,
+            rateIndex: rateIndex
         )
     }
 

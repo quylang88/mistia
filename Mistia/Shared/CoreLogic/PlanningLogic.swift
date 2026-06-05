@@ -289,7 +289,7 @@ nonisolated struct PlanningBudgetSpendingIndex {
         _ categoryID: UUID?,
         categoryName: String,
         currencyCode: String,
-        exchangeRates: [MistiaExchangeRate]
+        rateIndex: MistiaExchangeRateIndex
     ) -> Int64 {
         let categoryRecords = categoryID.flatMap { personalRecordsByCategory[$0] } ?? []
         let key = FamilyLogic.normalizedFamilyGroupingName(categoryName)
@@ -297,7 +297,7 @@ nonisolated struct PlanningBudgetSpendingIndex {
         return personalSpent(
             records: categoryRecords + nameRecords,
             currencyCode: currencyCode,
-            exchangeRates: exchangeRates
+            rateIndex: rateIndex
         )
     }
 
@@ -305,7 +305,7 @@ nonisolated struct PlanningBudgetSpendingIndex {
         _ branchID: UUID?,
         branchName: String,
         currencyCode: String,
-        exchangeRates: [MistiaExchangeRate]
+        rateIndex: MistiaExchangeRateIndex
     ) -> Int64 {
         let branchRecords = branchID.flatMap { personalRecordsByBranch[$0] } ?? []
         let key = FamilyLogic.normalizedFamilyGroupingName(branchName)
@@ -313,14 +313,14 @@ nonisolated struct PlanningBudgetSpendingIndex {
         return personalSpent(
             records: branchRecords + nameRecords,
             currencyCode: currencyCode,
-            exchangeRates: exchangeRates
+            rateIndex: rateIndex
         )
     }
 
     private func personalSpent(
         records: [TransactionRecordSnapshot],
         currencyCode: String,
-        exchangeRates: [MistiaExchangeRate]
+        rateIndex: MistiaExchangeRateIndex
     ) -> Int64 {
         var seenRecordIDs = Set<UUID>()
         return records
@@ -329,7 +329,7 @@ nonisolated struct PlanningBudgetSpendingIndex {
                 partial += PlanningLogic.reportingAmount(
                     for: record,
                     currencyCode: currencyCode,
-                    exchangeRates: exchangeRates
+                    rateIndex: rateIndex
                 )
             }
     }
@@ -337,7 +337,7 @@ nonisolated struct PlanningBudgetSpendingIndex {
     func familySpentForCategoryName(
         _ categoryName: String,
         currencyCode: String,
-        exchangeRates: [MistiaExchangeRate]
+        rateIndex: MistiaExchangeRateIndex
     ) -> Int64 {
         let key = FamilyLogic.normalizedFamilyGroupingName(categoryName)
         guard !key.isEmpty else { return 0 }
@@ -348,7 +348,7 @@ nonisolated struct PlanningBudgetSpendingIndex {
                     amountMinor: transaction.amountMinor,
                     sourceCurrencyCode: transaction.currencyCode,
                     currencyCode: currencyCode,
-                    exchangeRates: exchangeRates
+                    rateIndex: rateIndex
                 )
             } ?? 0
     }
@@ -983,6 +983,7 @@ nonisolated enum PlanningLogic {
             selectedMonth: selectedMonth,
             calendar: calendar
         )
+        let rateIndex = MistiaExchangeRateIndex(rates: exchangeRates)
 
         return plans
             .map { plan in
@@ -990,13 +991,13 @@ nonisolated enum PlanningLogic {
                     ? spendingIndex.familySpentForCategoryName(
                         plan.categoryName,
                         currencyCode: plan.currencyCode,
-                        exchangeRates: exchangeRates
+                        rateIndex: rateIndex
                     )
                     : spendingIndex.personalSpentForCategory(
                         plan.categoryID,
                         categoryName: plan.categoryName,
                         currencyCode: plan.currencyCode,
-                        exchangeRates: exchangeRates
+                        rateIndex: rateIndex
                     )
                 let paceAssessment = budgetPaceAssessment(
                     spentMinor: spent,
@@ -1034,12 +1035,13 @@ nonisolated enum PlanningLogic {
         reportingCurrencyCode: String? = nil,
         exchangeRates: [MistiaExchangeRate] = []
     ) -> PlanningBudgetSummarySnapshot {
+        let rateIndex = MistiaExchangeRateIndex(rates: exchangeRates)
         let totalBudget = rows.reduce(into: Int64.zero) { partial, row in
             partial += reportingAmount(
                 amountMinor: row.limitMinor,
                 sourceCurrencyCode: row.currencyCode,
                 currencyCode: reportingCurrencyCode ?? row.currencyCode,
-                exchangeRates: exchangeRates
+                rateIndex: rateIndex
             )
         }
         let spent = rows.reduce(into: Int64.zero) { partial, row in
@@ -1047,7 +1049,7 @@ nonisolated enum PlanningLogic {
                 amountMinor: row.spentMinor,
                 sourceCurrencyCode: row.currencyCode,
                 currencyCode: reportingCurrencyCode ?? row.currencyCode,
-                exchangeRates: exchangeRates
+                rateIndex: rateIndex
             )
         }
         let remaining = max(totalBudget - spent, 0)
@@ -1081,6 +1083,7 @@ nonisolated enum PlanningLogic {
             selectedMonth: selectedMonth,
             calendar: calendar
         )
+        let rateIndex = MistiaExchangeRateIndex(rates: exchangeRates)
 
         return Dictionary(grouping: plans) { $0.branchCategoryID }
             .compactMap { branchID, branchPlans in
@@ -1098,13 +1101,13 @@ nonisolated enum PlanningLogic {
                             ? spendingIndex.familySpentForCategoryName(
                                 plan.categoryName,
                                 currencyCode: plan.currencyCode,
-                                exchangeRates: exchangeRates
+                                rateIndex: rateIndex
                             )
                             : spendingIndex.personalSpentForCategory(
                                 plan.categoryID,
                                 categoryName: plan.categoryName,
                                 currencyCode: plan.currencyCode,
-                                exchangeRates: exchangeRates
+                                rateIndex: rateIndex
                             )
                         let paceAssessment = budgetPaceAssessment(
                             spentMinor: spent,
@@ -1140,20 +1143,20 @@ nonisolated enum PlanningLogic {
                         ? spendingIndex.familySpentForCategoryName(
                             parentPlan.branchCategoryName,
                             currencyCode: parentPlan.currencyCode,
-                            exchangeRates: exchangeRates
+                            rateIndex: rateIndex
                         )
                         : spendingIndex.personalSpentForBranch(
                             branchID,
                             branchName: parentPlan.branchCategoryName,
                             currencyCode: parentPlan.currencyCode,
-                            exchangeRates: exchangeRates
+                            rateIndex: rateIndex
                         )
                     let allocatedChildLimit = childRows.reduce(into: Int64.zero) { partial, row in
                         partial += reportingAmount(
                             amountMinor: row.limitMinor,
                             sourceCurrencyCode: row.currencyCode,
                             currencyCode: parentPlan.currencyCode,
-                            exchangeRates: exchangeRates
+                            rateIndex: rateIndex
                         )
                     }
                     let paceAssessment = budgetPaceAssessment(
@@ -1208,7 +1211,7 @@ nonisolated enum PlanningLogic {
                         amountMinor: row.spentMinor,
                         sourceCurrencyCode: row.currencyCode,
                         currencyCode: branchTemplate.currencyCode,
-                        exchangeRates: exchangeRates
+                        rateIndex: rateIndex
                     )
                 }
                 let limit = childRows.reduce(into: Int64.zero) { partial, row in
@@ -1216,7 +1219,7 @@ nonisolated enum PlanningLogic {
                         amountMinor: row.limitMinor,
                         sourceCurrencyCode: row.currencyCode,
                         currencyCode: branchTemplate.currencyCode,
-                        exchangeRates: exchangeRates
+                        rateIndex: rateIndex
                     )
                 }
                 let paceAssessment = budgetPaceAssessment(
@@ -1261,12 +1264,13 @@ nonisolated enum PlanningLogic {
         reportingCurrencyCode: String? = nil,
         exchangeRates: [MistiaExchangeRate] = []
     ) -> PlanningBudgetSummarySnapshot {
+        let rateIndex = MistiaExchangeRateIndex(rates: exchangeRates)
         let totalBudget = rows.reduce(into: Int64.zero) { partial, row in
             partial += reportingAmount(
                 amountMinor: row.limitMinor,
                 sourceCurrencyCode: row.currencyCode,
                 currencyCode: reportingCurrencyCode ?? row.currencyCode,
-                exchangeRates: exchangeRates
+                rateIndex: rateIndex
             )
         }
         let spent = rows.reduce(into: Int64.zero) { partial, row in
@@ -1274,7 +1278,7 @@ nonisolated enum PlanningLogic {
                 amountMinor: row.spentMinor,
                 sourceCurrencyCode: row.currencyCode,
                 currencyCode: reportingCurrencyCode ?? row.currencyCode,
-                exchangeRates: exchangeRates
+                rateIndex: rateIndex
             )
         }
         let remaining = max(totalBudget - spent, 0)
@@ -1387,6 +1391,7 @@ nonisolated enum PlanningLogic {
         reportingCurrencyCode: String? = nil,
         exchangeRates: [MistiaExchangeRate] = []
     ) -> PlanningGoalSummarySnapshot {
+        let rateIndex = MistiaExchangeRateIndex(rates: exchangeRates)
         let nearest = rows.max { lhs, rhs in
             if lhs.progress != rhs.progress {
                 return lhs.progress < rhs.progress
@@ -1401,7 +1406,7 @@ nonisolated enum PlanningLogic {
                     amountMinor: row.currentSavedMinor,
                     sourceCurrencyCode: row.currencyCode,
                     currencyCode: reportingCurrencyCode ?? row.currencyCode,
-                    exchangeRates: exchangeRates
+                    rateIndex: rateIndex
                 )
             },
             nearestGoalName: nearest?.name
@@ -1691,6 +1696,7 @@ nonisolated enum PlanningLogic {
         referenceDate: Date = .now,
         calendar: Calendar = MistiaCalendar.current
     ) -> PlanningDueSummarySnapshot {
+        let rateIndex = MistiaExchangeRateIndex(rates: exchangeRates)
         let startOfToday = calendar.startOfDay(for: referenceDate)
         let windowEnd = calendar.date(byAdding: .day, value: 7, to: startOfToday) ?? startOfToday
         let selectedMonthStart = startOfMonth(for: selectedMonth, calendar: calendar)
@@ -1718,7 +1724,7 @@ nonisolated enum PlanningLogic {
                 amountMinor: statement.amountMinor,
                 sourceCurrencyCode: statement.currencyCode,
                 currencyCode: reportingCurrencyCode ?? statement.currencyCode,
-                exchangeRates: exchangeRates
+                rateIndex: rateIndex
             )
         }
         let totalDueRecurring = pendingRecurring.reduce(into: Int64.zero) { partial, item in
@@ -1727,7 +1733,7 @@ nonisolated enum PlanningLogic {
                 amountMinor: amountMinor,
                 sourceCurrencyCode: item.currencyCode,
                 currencyCode: reportingCurrencyCode ?? item.currencyCode,
-                exchangeRates: exchangeRates
+                rateIndex: rateIndex
             )
         }
         let totalDueMinor = totalDueCards + totalDueRecurring
@@ -2365,6 +2371,18 @@ nonisolated enum PlanningLogic {
     }
 
     fileprivate static func reportingAmount(
+        for record: TransactionRecordSnapshot,
+        currencyCode: String,
+        rateIndex: MistiaExchangeRateIndex
+    ) -> Int64 {
+        MistiaCurrencyLogic.reportingMinorAmount(
+            for: record,
+            reportingCurrencyCode: currencyCode,
+            rateIndex: rateIndex
+        ) ?? 0
+    }
+
+    fileprivate static func reportingAmount(
         amountMinor: Int64,
         sourceCurrencyCode: String,
         currencyCode: String,
@@ -2375,6 +2393,20 @@ nonisolated enum PlanningLogic {
             sourceCurrencyCode: sourceCurrencyCode,
             reportingCurrencyCode: currencyCode,
             rates: exchangeRates
+        ) ?? 0
+    }
+
+    fileprivate static func reportingAmount(
+        amountMinor: Int64,
+        sourceCurrencyCode: String,
+        currencyCode: String,
+        rateIndex: MistiaExchangeRateIndex
+    ) -> Int64 {
+        MistiaCurrencyLogic.reportingMinorAmount(
+            amountMinor: amountMinor,
+            sourceCurrencyCode: sourceCurrencyCode,
+            reportingCurrencyCode: currencyCode,
+            rateIndex: rateIndex
         ) ?? 0
     }
 

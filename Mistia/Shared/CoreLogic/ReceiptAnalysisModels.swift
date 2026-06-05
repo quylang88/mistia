@@ -267,24 +267,7 @@ private extension KeyedDecodingContainer where K == ReceiptAnalysisResult.Coding
             return date
         }
 
-        let dateTimeFormatter = DateFormatter()
-        dateTimeFormatter.calendar = Calendar(identifier: .gregorian)
-        dateTimeFormatter.locale = Locale(identifier: "en_US_POSIX")
-        dateTimeFormatter.timeZone = .current
-
-        for format in ["yyyy-MM-dd'T'HH:mm:ss", "yyyy-MM-dd'T'HH:mm", "yyyy-MM-dd HH:mm:ss", "yyyy-MM-dd HH:mm"] {
-            dateTimeFormatter.dateFormat = format
-            if let date = dateTimeFormatter.date(from: value) {
-                return date
-            }
-        }
-
-        let dateOnlyFormatter = DateFormatter()
-        dateOnlyFormatter.calendar = Calendar(identifier: .gregorian)
-        dateOnlyFormatter.locale = Locale(identifier: "en_US_POSIX")
-        dateOnlyFormatter.timeZone = .current
-        dateOnlyFormatter.dateFormat = "yyyy-MM-dd"
-        if let date = dateOnlyFormatter.date(from: value) {
+        if let date = ReceiptFallbackDateParser.shared.date(from: value) {
             return date
         }
 
@@ -300,6 +283,42 @@ private extension KeyedDecodingContainer where K == ReceiptAnalysisResult.Coding
         let value = try decode(String.self, forKey: key).trimmingCharacters(in: .whitespacesAndNewlines)
         guard !value.isEmpty else { return nil }
         return UUID(uuidString: value)
+    }
+}
+
+nonisolated private final class ReceiptFallbackDateParser: @unchecked Sendable {
+    static let shared = ReceiptFallbackDateParser()
+
+    private let formatter: DateFormatter
+    private let formats = [
+        "yyyy-MM-dd'T'HH:mm:ss",
+        "yyyy-MM-dd'T'HH:mm",
+        "yyyy-MM-dd HH:mm:ss",
+        "yyyy-MM-dd HH:mm",
+        "yyyy-MM-dd"
+    ]
+    private let lock = NSLock()
+
+    private init() {
+        let formatter = DateFormatter()
+        formatter.calendar = Calendar(identifier: .gregorian)
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.timeZone = .autoupdatingCurrent
+        self.formatter = formatter
+    }
+
+    func date(from value: String) -> Date? {
+        lock.lock()
+        defer { lock.unlock() }
+
+        for format in formats {
+            formatter.dateFormat = format
+            if let date = formatter.date(from: value) {
+                return date
+            }
+        }
+
+        return nil
     }
 }
 

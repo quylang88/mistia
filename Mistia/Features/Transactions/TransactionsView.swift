@@ -188,6 +188,10 @@ struct TransactionsView: View {
     @Environment(SessionStore.self) private var sessionStore
     @Environment(FamilyContextStore.self) private var familyContextStore
     @AppStorage(MistiaAppStorageKey.currencyCode) private var currencyCode = "JPY"
+    @AppStorage(MistiaCurrencySettings.StorageKey.primaryCurrencyCode) private var primaryCurrencyCode = "JPY"
+    @AppStorage(MistiaCurrencySettings.StorageKey.rateMode) private var currencyRateMode = MistiaCurrencyRateMode.automatic.rawValue
+    @AppStorage(MistiaCurrencySettings.StorageKey.manualJPYToVNDRate) private var manualJPYToVNDRate = ""
+    @AppStorage(MistiaCurrencySettings.StorageKey.cachedRatesData) private var cachedCurrencyRatesData = Data()
 
     @Query(filter: #Predicate<LedgerTransaction> { $0.deletedAt == nil && !$0.isArchived }, sort: \LedgerTransaction.occurredAt, order: .reverse)
     private var storedTransactions: [LedgerTransaction]
@@ -236,6 +240,13 @@ struct TransactionsView: View {
                 }
                 return $0.createdAt < $1.createdAt
             }
+    }
+
+    private var appExchangeRates: [MistiaExchangeRate] {
+        _ = currencyRateMode
+        _ = manualJPYToVNDRate
+        _ = cachedCurrencyRatesData
+        return MistiaCurrencySettings.rates()
     }
 
     private var activeAlert: TransactionsAlertPresentation? {
@@ -768,6 +779,7 @@ struct TransactionsView: View {
         let searchSnapshotKey = transactionSearchSnapshotCacheKey
         let searchSnapshot = cachedTransactionSearchSnapshot(for: searchSnapshotKey)
         let memberToolbar = familyContextStore.memberViewingToolbarPresentation
+        let exchangeRateIndex = MistiaExchangeRateIndex(rates: appExchangeRates)
 
         NavigationStack {
             ZStack {
@@ -810,7 +822,7 @@ struct TransactionsView: View {
                             receivableTotals: listSnapshot.openReceivableDebtTotals
                         )
                     }
-                    transactionsContent(listSnapshot)
+                    transactionsContent(listSnapshot, exchangeRateIndex: exchangeRateIndex)
                 }
 
                 if isSearchSceneVisible {
@@ -821,6 +833,8 @@ struct TransactionsView: View {
                         transactionAuditMap: searchSnapshot?.transactionAuditMap ?? [:],
                         walletOwnerMap: searchSnapshot?.walletOwnerMap ?? [:],
                         transactionOwnerMap: searchSnapshot?.transactionOwnerMap ?? [:],
+                        primaryCurrencyCode: primaryCurrencyCode,
+                        exchangeRateIndex: exchangeRateIndex,
                         onSelect: openTransactionEditorIfAllowed,
                         onLoadMore: loadMoreSearchResultsIfNeeded
                     )
@@ -1246,7 +1260,10 @@ struct TransactionsView: View {
     }
 
     @ViewBuilder
-    private func transactionsContent(_ snapshot: TransactionsListSnapshot) -> some View {
+    private func transactionsContent(
+        _ snapshot: TransactionsListSnapshot,
+        exchangeRateIndex: MistiaExchangeRateIndex
+    ) -> some View {
         if snapshot.activeTransactionCount == 0 {
             TransactionsPlaceholderCard(
                 title: L10n.transactions.transactions.noTransactionsYet,
@@ -1264,7 +1281,9 @@ struct TransactionsView: View {
                     transactionsByID: snapshot.transactionsByID,
                     transactionAuditMap: snapshot.transactionAuditMap,
                     walletOwnerMap: snapshot.walletOwnerMap,
-                    transactionOwnerMap: snapshot.transactionOwnerMap
+                    transactionOwnerMap: snapshot.transactionOwnerMap,
+                    primaryCurrencyCode: primaryCurrencyCode,
+                    exchangeRateIndex: exchangeRateIndex
                 ) { transaction in
                     openTransactionEditorIfAllowed(transaction)
                 }
@@ -1435,6 +1454,8 @@ private struct TransactionsSearchScene: View {
     let transactionAuditMap: [UUID: TransactionAuditRecord]
     let walletOwnerMap: [UUID: UUID]
     let transactionOwnerMap: [UUID: UUID]
+    let primaryCurrencyCode: String
+    let exchangeRateIndex: MistiaExchangeRateIndex
     let onSelect: (LedgerTransaction) -> Void
     let onLoadMore: (Int) -> Void
 
@@ -1489,7 +1510,9 @@ private struct TransactionsSearchScene: View {
                         transactionsByID: transactionsByID,
                         transactionAuditMap: transactionAuditMap,
                         walletOwnerMap: walletOwnerMap,
-                        transactionOwnerMap: transactionOwnerMap
+                        transactionOwnerMap: transactionOwnerMap,
+                        primaryCurrencyCode: primaryCurrencyCode,
+                        exchangeRateIndex: exchangeRateIndex
                     ) { transaction in
                         onSelect(transaction)
                     }
@@ -1594,6 +1617,8 @@ private struct TransactionSectionCard: View {
     let transactionAuditMap: [UUID: TransactionAuditRecord]
     let walletOwnerMap: [UUID: UUID]
     let transactionOwnerMap: [UUID: UUID]
+    let primaryCurrencyCode: String
+    let exchangeRateIndex: MistiaExchangeRateIndex
     let onSelect: (LedgerTransaction) -> Void
 
     private var cardTint: Color {
@@ -1638,7 +1663,9 @@ private struct TransactionSectionCard: View {
                                     hasFamilyOwnerConflict: sessionStore.hasFamilyOwnerPushConflict(
                                         entity: .transaction,
                                         recordID: transaction.id
-                                    )
+                                    ),
+                                    primaryCurrencyCode: primaryCurrencyCode,
+                                    exchangeRateIndex: exchangeRateIndex
                                 )
                                     .padding(.horizontal, 14)
                                     .padding(.vertical, 12)
@@ -1660,10 +1687,6 @@ private struct TransactionSectionCard: View {
 
 private struct TransactionRow: View {
     @Environment(\.colorScheme) private var colorScheme: ColorScheme
-    @AppStorage(MistiaCurrencySettings.StorageKey.primaryCurrencyCode) private var primaryCurrencyCode = "JPY"
-    @AppStorage(MistiaCurrencySettings.StorageKey.rateMode) private var currencyRateMode = MistiaCurrencyRateMode.automatic.rawValue
-    @AppStorage(MistiaCurrencySettings.StorageKey.manualJPYToVNDRate) private var manualJPYToVNDRate = ""
-    @AppStorage(MistiaCurrencySettings.StorageKey.cachedRatesData) private var cachedCurrencyRatesData = Data()
 
     let record: TransactionRecordSnapshot
     let transaction: LedgerTransaction
@@ -1672,6 +1695,8 @@ private struct TransactionRow: View {
     let transactionOwnerMap: [UUID: UUID]
     let familyContextStore: FamilyContextStore
     let hasFamilyOwnerConflict: Bool
+    let primaryCurrencyCode: String
+    let exchangeRateIndex: MistiaExchangeRateIndex
 
     private var icon: String {
         switch record.primaryKind {
@@ -1876,7 +1901,7 @@ private struct TransactionRow: View {
             amountMinor: displayAmountMinor,
             sourceCurrencyCode: displayCurrencyCode,
             primaryCurrencyCode: primaryCurrencyCode,
-            rates: exchangeRates
+            rateIndex: exchangeRateIndex
         )
     }
 
@@ -1896,13 +1921,6 @@ private struct TransactionRow: View {
 
     private var secondaryAmountText: String? {
         transferDestinationAmountText ?? approximatePrimaryAmountText
-    }
-
-    private var exchangeRates: [MistiaExchangeRate] {
-        _ = currencyRateMode
-        _ = manualJPYToVNDRate
-        _ = cachedCurrencyRatesData
-        return MistiaCurrencySettings.rates()
     }
 
     var body: some View {

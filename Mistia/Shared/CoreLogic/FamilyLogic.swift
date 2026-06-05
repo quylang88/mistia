@@ -431,7 +431,9 @@ nonisolated enum FamilyLogic {
         reportingCurrencyCode: String? = nil,
         exchangeRates: [MistiaExchangeRate] = []
     ) -> [FamilyWalletAggregateSnapshot] {
-        Dictionary(grouping: wallets) { wallet in
+        let rateIndex = MistiaExchangeRateIndex(rates: exchangeRates)
+
+        return Dictionary(grouping: wallets) { wallet in
             normalizedFamilyGroupingName(wallet.name)
         }
         .compactMap { key, groupedWallets in
@@ -450,7 +452,7 @@ nonisolated enum FamilyLogic {
                     amountMinor: wallet.currentBalanceMinor,
                     sourceCurrencyCode: wallet.currencyCode,
                     currencyCode: outputCurrencyCode,
-                    exchangeRates: exchangeRates
+                    rateIndex: rateIndex
                 )
             }
             let debt = groupedWallets.reduce(into: Int64.zero) { partial, wallet in
@@ -458,7 +460,7 @@ nonisolated enum FamilyLogic {
                     amountMinor: wallet.debtMinor,
                     sourceCurrencyCode: wallet.currencyCode,
                     currencyCode: outputCurrencyCode,
-                    exchangeRates: exchangeRates
+                    rateIndex: rateIndex
                 )
             }
 
@@ -590,6 +592,7 @@ nonisolated enum FamilyLogic {
             transactions: transactions,
             monthInterval: monthInterval
         )
+        let rateIndex = MistiaExchangeRateIndex(rates: exchangeRates)
 
         let rows = groupedPlans.compactMap { key, groupedPlans -> FamilyBudgetAggregateSnapshot? in
             guard let selectedPlan = prioritizedPlan(
@@ -606,7 +609,7 @@ nonisolated enum FamilyLogic {
                     amountMinor: transaction.amountMinor,
                     sourceCurrencyCode: transaction.currencyCode,
                     currencyCode: selectedPlan.currencyCode,
-                    exchangeRates: exchangeRates
+                    rateIndex: rateIndex
                 )
             } ?? 0
 
@@ -650,7 +653,9 @@ nonisolated enum FamilyLogic {
         memberOrder: [UUID],
         exchangeRates: [MistiaExchangeRate] = []
     ) -> [FamilyGoalAggregateSnapshot] {
-        Dictionary(grouping: goals.filter { !$0.name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }) { goal in
+        let rateIndex = MistiaExchangeRateIndex(rates: exchangeRates)
+
+        return Dictionary(grouping: goals.filter { !$0.name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }) { goal in
             normalizedFamilyGroupingName(goal.name)
         }
         .compactMap { key, groupedGoals -> FamilyGoalAggregateSnapshot? in
@@ -668,7 +673,7 @@ nonisolated enum FamilyLogic {
                     amountMinor: goal.currentSavedMinor,
                     sourceCurrencyCode: goal.currencyCode,
                     currencyCode: selectedGoal.currencyCode,
-                    exchangeRates: exchangeRates
+                    rateIndex: rateIndex
                 )
             }
 
@@ -766,6 +771,7 @@ nonisolated enum FamilyLogic {
         calendar: Calendar = MistiaCalendar.current
     ) -> FamilyAggregateSummary {
         let summaryCurrencyCode = MistiaCurrencyLogic.normalizedCode(reportingCurrencyCode)
+        let rateIndex = MistiaExchangeRateIndex(rates: exchangeRates)
 
         func isVisibleMember(_ userID: UUID) -> Bool {
             visibleMemberIDs?.contains(userID) ?? true
@@ -781,13 +787,13 @@ nonisolated enum FamilyLogic {
                 amountMinor: wallet.balanceMinor,
                 sourceCurrencyCode: wallet.currencyCode,
                 currencyCode: summaryCurrencyCode,
-                exchangeRates: exchangeRates
+                rateIndex: rateIndex
             )
             let debt = reportingAmount(
                 amountMinor: wallet.debtMinor,
                 sourceCurrencyCode: wallet.currencyCode,
                 currencyCode: summaryCurrencyCode,
-                exchangeRates: exchangeRates
+                rateIndex: rateIndex
             )
 
             totalAssetsMinor += max(balance, 0)
@@ -823,7 +829,7 @@ nonisolated enum FamilyLogic {
                 amountMinor: transaction.amountMinor,
                 sourceCurrencyCode: transaction.currencyCode,
                 currencyCode: summaryCurrencyCode,
-                exchangeRates: exchangeRates
+                rateIndex: rateIndex
             )
 
             for index in trendDates.indices where transaction.occurredAt >= trendDates[index] {
@@ -928,6 +934,20 @@ nonisolated enum FamilyLogic {
             sourceCurrencyCode: sourceCurrencyCode,
             reportingCurrencyCode: currencyCode,
             rates: exchangeRates
+        ) ?? 0
+    }
+
+    nonisolated private static func reportingAmount(
+        amountMinor: Int64,
+        sourceCurrencyCode: String,
+        currencyCode: String,
+        rateIndex: MistiaExchangeRateIndex
+    ) -> Int64 {
+        MistiaCurrencyLogic.reportingMinorAmount(
+            amountMinor: amountMinor,
+            sourceCurrencyCode: sourceCurrencyCode,
+            reportingCurrencyCode: currencyCode,
+            rateIndex: rateIndex
         ) ?? 0
     }
 

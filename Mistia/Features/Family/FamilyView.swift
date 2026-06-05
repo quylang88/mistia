@@ -1153,6 +1153,8 @@ private struct FamilyAggregateAccountList: View {
     let rows: [FamilyWalletAggregateSnapshot]
 
     var body: some View {
+        let exchangeRateIndex = MistiaExchangeRateIndex(rates: exchangeRates)
+
         VStack(alignment: .leading, spacing: 12) {
             Text(L10n.family.family.mergedAccounts)
                 .familyOverviewSectionTitleStyle()
@@ -1184,7 +1186,10 @@ private struct FamilyAggregateAccountList: View {
                                     .font(.system(size: 15, weight: .bold, design: .rounded))
                                     .foregroundStyle(amountColor(for: row))
 
-                                if let approximatePrimaryAmountText = approximatePrimaryAmountText(for: row) {
+                                if let approximatePrimaryAmountText = approximatePrimaryAmountText(
+                                    for: row,
+                                    exchangeRateIndex: exchangeRateIndex
+                                ) {
                                     Text(approximatePrimaryAmountText)
                                         .font(.system(size: 11, weight: .semibold, design: .rounded))
                                         .foregroundStyle(.secondary)
@@ -1215,12 +1220,15 @@ private struct FamilyAggregateAccountList: View {
         return MistiaCurrencySettings.rates()
     }
 
-    private func approximatePrimaryAmountText(for row: FamilyWalletAggregateSnapshot) -> String? {
+    private func approximatePrimaryAmountText(
+        for row: FamilyWalletAggregateSnapshot,
+        exchangeRateIndex: MistiaExchangeRateIndex
+    ) -> String? {
         MistiaCurrencyLogic.approximatePrimaryAmountText(
             amountMinor: row.currentBalanceMinor,
             sourceCurrencyCode: row.currencyCode,
             primaryCurrencyCode: primaryCurrencyCode,
-            rates: exchangeRates
+            rateIndex: exchangeRateIndex
         )
     }
 
