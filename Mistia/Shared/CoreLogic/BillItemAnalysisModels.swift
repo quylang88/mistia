@@ -48,6 +48,19 @@ struct BillItemAnalysisItem: Codable, Equatable, Identifiable {
             originalAmountMinor != nil &&
             originalAmountMinor != finalAmountMinor
     }
+    var quantityUnitAmountMinor: Int64? {
+        guard lineType == .purchase,
+              let quantity,
+              quantity > 1,
+              finalAmountMinor > 0 else {
+            return nil
+        }
+        let quantityMinor = Int64(quantity)
+        guard finalAmountMinor % quantityMinor == 0 else {
+            return nil
+        }
+        return finalAmountMinor / quantityMinor
+    }
 
     enum CodingKeys: String, CodingKey {
         case lineID = "line_id"

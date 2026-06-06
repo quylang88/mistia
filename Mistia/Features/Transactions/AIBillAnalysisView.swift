@@ -447,6 +447,10 @@ struct AIBillAnalysisView: View {
                     .font(.caption2)
                     .foregroundStyle(.secondary)
                     .strikethrough()
+            } else if let unitAmountMinor = item.quantityUnitAmountMinor {
+                Text(unitAmountMinor.formattedCurrency(code: currencyCode))
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
             }
             if item.discountAmountMinor > 0 {
                 Text(verbatim: "-\(item.discountAmountMinor.formattedCurrency(code: currencyCode))")

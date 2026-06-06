@@ -153,10 +153,113 @@ Deno.test("normalizeBillItems folds coupon rows even when the model mislabels th
   ].filter((item) => item !== null));
 
   if (items.length !== 1) {
-    throw new Error(`Expected mislabeled CPN row to be folded, got ${items.length} rows`);
+    throw new Error(
+      `Expected mislabeled CPN row to be folded, got ${items.length} rows`,
+    );
   }
-  if (items[0].discount_amount_minor !== 800 || items[0].final_amount_minor !== 0) {
+  if (
+    items[0].discount_amount_minor !== 800 || items[0].final_amount_minor !== 0
+  ) {
     throw new Error(`Unexpected folded item: ${JSON.stringify(items[0])}`);
+  }
+});
+
+Deno.test("normalizeBillItems folds suffix-minus discount rows with repeated product text", () => {
+  const categoryID = "cat-baby";
+  const items = normalizeBillItems([
+    sanitizeBillItem(
+      {
+        line_id: "line-1",
+        raw_line_text: "PAMPERS P-L TPD 800",
+        original_name: "PAMPERS P-L TPD",
+        line_type: "purchase",
+        final_amount_minor: 800,
+        category_id: categoryID,
+        confidence: 0.9,
+        missing_fields: [],
+      },
+      0,
+      new Set([categoryID]),
+    ),
+    sanitizeBillItem(
+      {
+        line_id: "line-2",
+        raw_line_text: "PAMPERS P-L TPD 800-",
+        original_name: "PAMPERS P-L TPD",
+        line_type: "purchase",
+        final_amount_minor: 800,
+        category_id: categoryID,
+        confidence: 0.8,
+        missing_fields: [],
+      },
+      1,
+      new Set([categoryID]),
+    ),
+  ].filter((item) => item !== null));
+
+  if (items.length !== 1) {
+    throw new Error(
+      `Expected suffix-minus row to be folded, got ${items.length} rows`,
+    );
+  }
+  if (
+    items[0].discount_amount_minor !== 800 || items[0].final_amount_minor !== 0
+  ) {
+    throw new Error(`Unexpected folded item: ${JSON.stringify(items[0])}`);
+  }
+});
+
+Deno.test("normalizeBillItems keeps standalone bill-level discounts separate", () => {
+  const categoryID = "cat-household";
+  const items = normalizeBillItems([
+    sanitizeBillItem(
+      {
+        line_id: "line-1",
+        raw_line_text: "DOVE SAKURA 1777",
+        original_name: "DOVE SAKURA",
+        line_type: "purchase",
+        final_amount_minor: 1777,
+        category_id: categoryID,
+        confidence: 0.9,
+        missing_fields: [],
+      },
+      0,
+      new Set([categoryID]),
+    ),
+    sanitizeBillItem(
+      {
+        line_id: "line-2",
+        raw_line_text: "TOTAL COUPON 500-",
+        original_name: "TOTAL COUPON",
+        line_type: "discount",
+        final_amount_minor: -500,
+        discount_amount_minor: 500,
+        confidence: 0.8,
+        missing_fields: [],
+      },
+      1,
+      new Set([categoryID]),
+    ),
+  ].filter((item) => item !== null));
+
+  if (items.length !== 2) {
+    throw new Error(
+      `Expected standalone bill-level discount to stay separate, got ${items.length} rows`,
+    );
+  }
+  if (
+    items[0].discount_amount_minor !== 0 || items[0].final_amount_minor !== 1777
+  ) {
+    throw new Error(
+      `Purchase item was incorrectly mutated: ${JSON.stringify(items[0])}`,
+    );
+  }
+  if (
+    items[1].line_type !== "discount" || items[1].final_amount_minor !== -500
+  ) {
+    throw new Error(
+      `Standalone discount was not preserved: ${JSON.stringify(items[1])}`,
+    );
   }
 });
 
@@ -165,6 +268,7 @@ Deno.test("billItemPromptLines explains Costco-style quantity and adjacent promo
 
   for (
     const expected of [
+      "raw_line_text",
       "quantity",
       "3@",
       "4@",
@@ -173,8 +277,10 @@ Deno.test("billItemPromptLines explains Costco-style quantity and adjacent promo
       "directly below",
       "CPN",
       "coupon",
+      "800-",
       "800-T",
       "Do not autocorrect",
+      "Similar-looking Japanese kana",
       "category_id",
       "closest category",
     ]

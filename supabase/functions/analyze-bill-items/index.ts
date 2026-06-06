@@ -69,6 +69,7 @@ const itemizedBillResponseSchema = {
         type: "OBJECT",
         properties: {
           line_id: { type: "STRING" },
+          raw_line_text: { type: "STRING" },
           original_name: { type: "STRING" },
           translated_name: { type: "STRING", nullable: true },
           line_type: { type: "STRING" },
@@ -85,6 +86,7 @@ const itemizedBillResponseSchema = {
         },
         required: [
           "line_id",
+          "raw_line_text",
           "original_name",
           "translated_name",
           "line_type",
@@ -98,6 +100,7 @@ const itemizedBillResponseSchema = {
         ],
         propertyOrdering: [
           "line_id",
+          "raw_line_text",
           "original_name",
           "translated_name",
           "line_type",
