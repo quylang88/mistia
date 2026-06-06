@@ -13685,6 +13685,50 @@
         }
       }
     },
+    "notifications.notificationcenter.permissionRequestApprovedBody": {
+      "localizations": {
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Yêu cầu đã được chấp nhận. Quyền của thành viên đã được cập nhật."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The request was approved. This member's access has been updated."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "リクエストを承認しました。このメンバーのアクセス権が更新されました。"
+          }
+        }
+      }
+    },
+    "notifications.notificationcenter.permissionRequestRejectedBody": {
+      "localizations": {
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Yêu cầu đã bị từ chối. Quyền của thành viên không thay đổi."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The request was rejected. This member's access was not changed."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "リクエストを拒否しました。このメンバーのアクセス権は変更されていません。"
+          }
+        }
+      }
+    },
     "notifications.notificationcenter.changed": {
       "localizations": {
         "vi": {
@@ -14020,19 +14064,19 @@
         "vi": {
           "stringUnit": {
             "state": "translated",
-            "value": "Mistia sẽ âm thầm đồng bộ thay đổi lên cloud."
+            "value": "Thay đổi đã được lưu."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Mistia will sync the change to cloud in the background."
+            "value": "The change has been saved."
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "Mistia がバックグラウンドでクラウドへ同期します。"
+            "value": "変更を保存しました。"
           }
         }
       }
@@ -14064,19 +14108,19 @@
         "vi": {
           "stringUnit": {
             "state": "translated",
-            "value": "Không có thay đổi nào được đẩy lên cloud."
+            "value": "Yêu cầu đã bị từ chối. Quyền của thành viên không thay đổi."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "No change will be pushed to cloud."
+            "value": "The request was rejected. This member's access was not changed."
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "クラウドへ変更は送信されません。"
+            "value": "リクエストを拒否しました。このメンバーのアクセス権は変更されていません。"
           }
         }
       }
@@ -14429,6 +14473,28 @@
           "stringUnit": {
             "state": "translated",
             "value": "%@のリクエスト%@"
+          }
+        }
+      }
+    },
+    "notifications.notificationcenter.valueJustTransferredValueIntoYourValue": {
+      "localizations": {
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ vừa chuyển %@ vào %@ của bạn."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ just transferred %@ into your %@."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@が%@をあなたの%@へ送金しました。"
           }
         }
       }
@@ -33380,19 +33446,19 @@
         "vi": {
           "stringUnit": {
             "state": "translated",
-            "value": "Khoản chuyển tiền gia đình chỉ dùng để xem chi tiết và không thể sửa, lưu trữ hoặc xóa."
+            "value": "Khoản chuyển tiền gia đình không thể sửa, lưu trữ hoặc xóa sau khi đã tạo."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Family transfer records are detail-only and cannot be edited, archived, or deleted."
+            "value": "Family transfers cannot be edited, archived, or deleted after they are created."
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "家族送金の記録は詳細表示のみで、編集、アーカイブ、削除はできません。"
+            "value": "作成済みの家族送金は編集、アーカイブ、削除できません。"
           }
         }
       }
@@ -34062,19 +34128,19 @@
         "vi": {
           "stringUnit": {
             "state": "translated",
-            "value": "Thu chi này thuộc sao kê đã thanh toán nên không thể sửa đổi hoặc lưu trữ."
+            "value": "Khoản thu chi này thuộc sao kê thẻ tín dụng đã thanh toán nên không thể sửa hoặc lưu trữ."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "This cashflow item is part of a paid statement and cannot be modified or archived."
+            "value": "This cashflow item belongs to a paid credit card statement and cannot be edited or archived."
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "この取引は支払い済みの明細に含まれているため、変更やアーカイブはできません。"
+            "value": "この収支は支払い済みのクレジットカード明細に含まれているため、編集やアーカイブはできません。"
           }
         }
       }

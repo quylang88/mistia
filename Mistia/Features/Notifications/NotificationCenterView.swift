@@ -48,6 +48,14 @@ struct NotificationCenterResourceIndex {
         }
     }
 
+    func wallet(id: UUID?) -> LedgerWallet? {
+        guard let id else {
+            return nil
+        }
+
+        return walletsByID[id]
+    }
+
     func category(id: UUID?, resourceType: MistiaFamilyNotificationResourceType?) -> TransactionCategory? {
         guard resourceType == .category, let id else {
             return nil
@@ -238,6 +246,40 @@ struct NotificationCenterDetailItem: Identifiable {
 
     let id: String
     let kind: Kind
+}
+
+enum NotificationCenterDisplayText {
+    static func permissionResponseBody(approve: Bool) -> String {
+        approve
+            ? L10n.notifications.notificationcenter.permissionRequestApprovedBody
+            : L10n.notifications.notificationcenter.permissionRequestRejectedBody
+    }
+
+    static func familyTransferReceivedBody(
+        actorName: String,
+        walletName: String?,
+        amountText: String?,
+        fallbackBody: String
+    ) -> String {
+        guard let walletName = nonBlank(walletName),
+              let amountText = nonBlank(amountText) else {
+            return fallbackBody
+        }
+
+        return L10n.notifications.notificationcenter.valueJustTransferredValueIntoYourValue(
+            String(describing: actorName),
+            String(describing: amountText),
+            String(describing: walletName)
+        )
+    }
+
+    private static func nonBlank(_ value: String?) -> String? {
+        guard let trimmed = value?.trimmingCharacters(in: .whitespacesAndNewlines),
+              !trimmed.isEmpty else {
+            return nil
+        }
+        return trimmed
+    }
 }
 
 enum NotificationCenterGrouping {
@@ -1450,6 +1492,18 @@ struct NotificationCenterView: View {
                 }
                 
                 if let actionRaw = metadata["action"] {
+                    if actionRaw == "family_transfer" {
+                        return NotificationCenterDisplayText.familyTransferReceivedBody(
+                            actorName: actorName,
+                            walletName: familyTransferDestinationWalletName(
+                                metadata: metadata,
+                                resourceIndex: resourceIndex
+                            ),
+                            amountText: familyTransferAmountText(metadata: metadata),
+                            fallbackBody: row.body
+                        )
+                    }
+
                     let actionLabel: String
                     switch actionRaw {
                     case "created": actionLabel = L10n.notifications.notificationcenter.created
@@ -1526,14 +1580,37 @@ struct NotificationCenterView: View {
     }
 
     private func resolvedPermissionRequestBody(approve: Bool) -> String {
-        approve
-            ? L10n.notifications.notificationcenter.mistiaWillSyncTheChangeToCloud
-            : L10n.notifications.notificationcenter.noChangeWillBePushedToCloud
+        NotificationCenterDisplayText.permissionResponseBody(approve: approve)
     }
 
     private func permissionRequesterName(for row: AppNotificationRecord) -> String {
         familyContextStore.displayName(for: row.actorUserID)
             ?? L10n.notifications.notificationcenter.thisMember
+    }
+
+    private func familyTransferDestinationWalletName(
+        metadata: [String: String],
+        resourceIndex: NotificationCenterResourceIndex
+    ) -> String? {
+        guard let walletID = metadata["destination_wallet_id"].flatMap(UUID.init(uuidString:)) else {
+            return nil
+        }
+
+        return resourceIndex.wallet(id: walletID)?.name
+    }
+
+    private func familyTransferAmountText(metadata: [String: String]) -> String? {
+        let amountMinorText = metadata["destination_amount_minor"] ?? metadata["amount_minor"]
+        let currencyCode = metadata["destination_currency_code"]
+            ?? metadata["currency_code"]
+            ?? metadata["source_currency_code"]
+        guard let amountMinorText,
+              let amountMinor = Int64(amountMinorText),
+              let currencyCode else {
+            return nil
+        }
+
+        return amountMinor.formattedCurrency(code: currencyCode)
     }
 
     private func actionHint(for row: AppNotificationRecord) -> String? {

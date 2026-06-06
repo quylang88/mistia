@@ -136,6 +136,48 @@ final class NotificationCenterGroupingTests: XCTestCase {
         XCTAssertEqual(renderedRowKeys.first, "newest")
     }
 
+    func testPermissionResponseApprovedBodySummarizesUserVisibleResult() {
+        XCTAssertEqual(
+            NotificationCenterDisplayText.permissionResponseBody(approve: true),
+            L10n.notifications.notificationcenter.permissionRequestApprovedBody
+        )
+    }
+
+    func testPermissionResponseRejectedBodySummarizesUserVisibleResult() {
+        XCTAssertEqual(
+            NotificationCenterDisplayText.permissionResponseBody(approve: false),
+            L10n.notifications.notificationcenter.permissionRequestRejectedBody
+        )
+    }
+
+    func testFamilyTransferReceivedBodyNamesWalletAndAmount() {
+        XCTAssertEqual(
+            NotificationCenterDisplayText.familyTransferReceivedBody(
+                actorName: "Linh",
+                walletName: "Ví chính",
+                amountText: "1.000 ¥",
+                fallbackBody: "fallback"
+            ),
+            L10n.notifications.notificationcenter.valueJustTransferredValueIntoYourValue(
+                "Linh",
+                "1.000 ¥",
+                "Ví chính"
+            )
+        )
+    }
+
+    func testFamilyTransferReceivedBodyFallsBackToServerBodyWhenAmountIsMissing() {
+        XCTAssertEqual(
+            NotificationCenterDisplayText.familyTransferReceivedBody(
+                actorName: "Linh",
+                walletName: "Ví chính",
+                amountText: nil,
+                fallbackBody: "Linh đã chuyển tiền vào ví của bạn."
+            ),
+            "Linh đã chuyển tiền vào ví của bạn."
+        )
+    }
+
     private func notification(
         key: String,
         createdAt: Date = Date(timeIntervalSince1970: 1_777_800_000),

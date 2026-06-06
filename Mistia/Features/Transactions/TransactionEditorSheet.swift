@@ -305,6 +305,8 @@ struct TransactionEditorSheet: View {
 
     var body: some View {
         let isLockedByStatement = self.isLockedByStatement
+        let isReadOnlyDetail = isLockedByStatement || isFamilyTransferDetail
+        let areEditorControlsDisabled = isReadOnlyDetail || isSaving || isProcessingReceiptImage
         let renderContext = makeRenderContext()
 
         NavigationStack {
@@ -312,7 +314,7 @@ struct TransactionEditorSheet: View {
                 if isLockedByStatement {
                     Section {
                         HStack(spacing: 12) {
-                            Image(systemName: "lock.fill")
+                            Image(systemName: "creditcard.circle.fill")
                                 .font(.system(size: 14))
                                 .foregroundStyle(.orange)
                                 .padding(8)
@@ -329,7 +331,7 @@ struct TransactionEditorSheet: View {
                 if isFamilyTransferDetail {
                     Section {
                         HStack(spacing: 12) {
-                            Image(systemName: "lock.doc.fill")
+                            Image(systemName: "arrow.left.arrow.right.circle.fill")
                                 .font(.system(size: 14))
                                 .foregroundStyle(MistiaAccent.purple.color)
                                 .padding(8)
@@ -346,14 +348,15 @@ struct TransactionEditorSheet: View {
 
                 if target.quickCapture && target.transaction == nil {
                     quickCaptureContent
+                        .disabled(isSaving || isProcessingReceiptImage)
                 } else {
                     fullEditorContent(renderContext: renderContext)
+                        .disabled(areEditorControlsDisabled)
                 }
             }
             .dismissKeyboardOnTap()
             .navigationTitle(navigationTitle)
             .navigationBarTitleDisplayMode(.inline)
-            .disabled(isLockedByStatement || isFamilyTransferDetail || isSaving || isProcessingReceiptImage)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
                     Button {
