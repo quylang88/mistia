@@ -50,7 +50,7 @@ struct AIBillAnalysisView: View {
             }
             .padding(.horizontal, 18)
             .padding(.top, 16)
-            .padding(.bottom, shouldShowAnalyzeButton ? 116 : 96)
+            .padding(.bottom, shouldShowAnalyzeButton ? 128 : 96)
         }
         .background(Color(UIColor.systemGroupedBackground).ignoresSafeArea())
         .safeAreaInset(edge: .bottom) {
@@ -159,7 +159,7 @@ struct AIBillAnalysisView: View {
     }
 
     private var shouldShowAnalyzeButton: Bool {
-        isAnalyzing || (!bills.isEmpty && hasPendingAnalyzableBills)
+        (isAnalyzing && !bills.isEmpty) || (!bills.isEmpty && hasPendingAnalyzableBills)
     }
 
     private var actionControlForeground: Color {
@@ -248,7 +248,7 @@ struct AIBillAnalysisView: View {
             .disabled(isAnalyzing || !hasPendingAnalyzableBills)
             .padding(.horizontal, 32)
             .padding(.top, 4)
-            .padding(.bottom, 6)
+            .padding(.bottom, 18)
         }
     }
 
@@ -289,7 +289,7 @@ struct AIBillAnalysisView: View {
                             .font(.footnote)
                             .foregroundStyle(.secondary)
                     } else {
-                        Text(statusText(for: bill))
+                        Text(billFileSizeText(for: bill.imageData.count))
                             .font(.footnote)
                             .foregroundStyle(.secondary)
                     }
@@ -297,9 +297,24 @@ struct AIBillAnalysisView: View {
 
                 Spacer()
 
-                if bill.isAnalyzing {
-                    ProgressView()
-                        .controlSize(.small)
+                HStack(spacing: 14) {
+                    if bill.isAnalyzing {
+                        ProgressView()
+                            .controlSize(.small)
+                    }
+
+                    if bill.result == nil {
+                        Button(role: .destructive) {
+                            removeBill(bill.id)
+                        } label: {
+                            Image(systemName: "trash")
+                                .font(.system(size: 18, weight: .semibold))
+                                .foregroundStyle(.red)
+                                .frame(width: 40, height: 40)
+                        }
+                        .buttonStyle(.borderless)
+                        .accessibilityLabel(L10n.transactions.transactioneditor.removeImage)
+                    }
                 }
             }
 
@@ -701,19 +716,16 @@ struct AIBillAnalysisView: View {
         }
     }
 
-    private func statusText(for bill: AIBillDraft) -> String {
-        if bill.isAnalyzing {
-            return L10n.transactions.aibill.analyzing
-        }
-        if bill.failureMessage != nil {
-            return L10n.transactions.aibill.couldnTAnalyzeBill
-        }
-        return L10n.transactions.aibill.analyze
-    }
-
     private func billIndexTitle(for bill: AIBillDraft) -> String {
         guard let index = bills.firstIndex(where: { $0.id == bill.id }) else { return "1" }
         return String(index + 1)
+    }
+
+    private func billFileSizeText(for byteCount: Int) -> String {
+        let formatter = ByteCountFormatter()
+        formatter.allowedUnits = [.useKB, .useMB]
+        formatter.countStyle = .file
+        return formatter.string(fromByteCount: Int64(byteCount))
     }
 
     private func walletPickerTitle(for wallet: LedgerWallet) -> String {
@@ -789,6 +801,19 @@ struct AIBillAnalysisView: View {
         result.items = items
         bills[billIndex].result = result
         selectedIDs.remove(BillItemSelectionID(billID: billID, itemID: itemID))
+        normalizeSelection()
+    }
+
+    private func removeBill(_ billID: UUID) {
+        bills.removeAll { $0.id == billID }
+        selectedIDs = selectedIDs.filter { $0.billID != billID }
+        pendingTransactionItemIDs = pendingTransactionItemIDs.filter { $0.billID != billID }
+        if let activePendingGroupID = pendingTransactionGroupID,
+           !bills.contains(where: { bill in
+               bill.lockedGroups.contains { $0.id == activePendingGroupID }
+           }) {
+            pendingTransactionGroupID = nil
+        }
         normalizeSelection()
     }
 

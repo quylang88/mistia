@@ -318,6 +318,29 @@ Deno.test("billItemPromptLines explains Costco-style quantity and adjacent promo
   }
 });
 
+Deno.test("billItemPromptLines requires full target-language product translations", () => {
+  const text = billItemPromptLines().join("\n");
+
+  for (
+    const expected of [
+      "translated_name must describe the recognizable product type",
+      "target language",
+      "DOVE",
+      "body lotion",
+      "Pampers",
+      "size L",
+      "KLEENEX",
+      "facial tissue",
+      "KORI KRILL OIL",
+      "krill oil supplement",
+    ]
+  ) {
+    if (!text.includes(expected)) {
+      throw new Error(`Prompt is missing translation guidance: ${expected}`);
+    }
+  }
+});
+
 Deno.test("normalizeBillAnalysisItems does not invent discounts to force receipt total", () => {
   const categoryID = "cat-supplement";
   const items = normalizeBillAnalysisItems(
