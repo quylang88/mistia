@@ -32,6 +32,7 @@ struct BillItemAnalysisItem: Codable, Equatable, Identifiable {
     var originalName: String
     var translatedName: String?
     var lineType: BillItemLineType
+    var quantity: Int?
     var originalAmountMinor: Int64?
     var discountAmountMinor: Int64
     var finalAmountMinor: Int64
@@ -47,6 +48,7 @@ struct BillItemAnalysisItem: Codable, Equatable, Identifiable {
         case originalName = "original_name"
         case translatedName = "translated_name"
         case lineType = "line_type"
+        case quantity
         case originalAmountMinor = "original_amount_minor"
         case discountAmountMinor = "discount_amount_minor"
         case finalAmountMinor = "final_amount_minor"
@@ -60,6 +62,7 @@ struct BillItemAnalysisItem: Codable, Equatable, Identifiable {
         originalName: String,
         translatedName: String? = nil,
         lineType: BillItemLineType = .purchase,
+        quantity: Int? = nil,
         originalAmountMinor: Int64? = nil,
         discountAmountMinor: Int64 = 0,
         finalAmountMinor: Int64,
@@ -71,6 +74,7 @@ struct BillItemAnalysisItem: Codable, Equatable, Identifiable {
         self.originalName = originalName.nilIfBlank ?? ""
         self.translatedName = translatedName?.nilIfBlank
         self.lineType = lineType
+        self.quantity = Self.normalizedQuantity(quantity, lineType: lineType)
         self.originalAmountMinor = originalAmountMinor.map { max(0, $0) }
         self.discountAmountMinor = max(0, discountAmountMinor)
         self.finalAmountMinor = lineType == .discount ? min(0, finalAmountMinor) : max(0, finalAmountMinor)
@@ -89,6 +93,8 @@ struct BillItemAnalysisItem: Codable, Equatable, Identifiable {
         let decodedLineType = try container.decodeIfPresent(BillItemLineType.self, forKey: .lineType) ?? .purchase
         let decodedFinalAmount = try container.decodeFlexibleInt64(forKey: .finalAmountMinor, defaultValue: 0)
         lineType = decodedLineType == .discount || decodedFinalAmount < 0 ? .discount : .purchase
+        let decodedQuantity = try container.decodeFlexibleIntIfPresent(forKey: .quantity)
+        quantity = Self.normalizedQuantity(decodedQuantity, lineType: lineType)
         originalAmountMinor = try container.decodeFlexibleInt64IfPresent(forKey: .originalAmountMinor).map { max(0, $0) }
         let decodedDiscountAmount = try container.decodeFlexibleInt64IfPresent(forKey: .discountAmountMinor)
         discountAmountMinor = max(0, decodedDiscountAmount ?? (lineType == .discount ? abs(decodedFinalAmount) : 0))
@@ -96,6 +102,15 @@ struct BillItemAnalysisItem: Codable, Equatable, Identifiable {
         categoryID = lineType == .discount ? nil : try container.decodeUUIDIfPresent(forKey: .categoryID)
         confidence = try container.decodeFlexibleDouble(forKey: .confidence, defaultValue: 0)
         missingFields = try container.decodeStringArrayIfPresent(forKey: .missingFields)
+    }
+
+    private static func normalizedQuantity(_ quantity: Int?, lineType: BillItemLineType) -> Int? {
+        guard lineType != .discount,
+              let quantity,
+              quantity > 1 else {
+            return nil
+        }
+        return quantity
     }
 }
 
@@ -567,6 +582,11 @@ private extension KeyedDecodingContainer {
     func decodeFlexibleInt64IfPresent(forKey key: K) throws -> Int64? {
         guard contains(key), !(try decodeNil(forKey: key)) else { return nil }
         return try decodeFlexibleInt64(forKey: key, defaultValue: 0)
+    }
+
+    func decodeFlexibleIntIfPresent(forKey key: K) throws -> Int? {
+        guard contains(key), !(try decodeNil(forKey: key)) else { return nil }
+        return Int(try decodeFlexibleInt64(forKey: key, defaultValue: 0))
     }
 
     func decodeFlexibleInt64(forKey key: K, defaultValue: Int64) throws -> Int64 {

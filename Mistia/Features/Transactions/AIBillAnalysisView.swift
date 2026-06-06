@@ -369,9 +369,21 @@ struct AIBillAnalysisView: View {
             .disabled(!canSelect && !isSelected)
 
             VStack(alignment: .leading, spacing: 5) {
-                Text(item.originalName)
-                    .font(.system(size: 14, weight: .semibold, design: .rounded))
-                    .foregroundStyle(candidate.isCreated || candidate.isLocked ? .secondary : .primary)
+                HStack(spacing: 6) {
+                    Text(item.originalName)
+                        .font(.system(size: 14, weight: .semibold, design: .rounded))
+                        .foregroundStyle(candidate.isCreated || candidate.isLocked ? .secondary : .primary)
+                        .lineLimit(2)
+
+                    if let quantity = item.quantity, quantity > 1 {
+                        Text(verbatim: "x\(quantity)")
+                            .font(.system(size: 11, weight: .black, design: .rounded))
+                            .foregroundStyle(.secondary)
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 2)
+                            .background(Color(UIColor.tertiarySystemGroupedBackground), in: Capsule())
+                    }
+                }
                 if let translatedName = item.translatedName {
                     Text(translatedName)
                         .font(.footnote)

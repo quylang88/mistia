@@ -4,6 +4,12 @@ import {
   geminiModelNames,
   requestGeminiModelJSON,
 } from "./gemini-model-request.ts"
+import {
+  billItemPromptLines,
+  normalizeBillItems,
+  sanitizeBillItem,
+  type SanitizedItem,
+} from "./bill-item-normalization.ts"
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -41,19 +47,6 @@ type ReceiptQuota = {
   retry_after?: string
 }
 
-type SanitizedItem = {
-  line_id: string
-  original_name: string
-  translated_name: string | null
-  line_type: "purchase" | "discount"
-  original_amount_minor: number | null
-  discount_amount_minor: number
-  final_amount_minor: number
-  category_id: string | null
-  confidence: number
-  missing_fields: string[]
-}
-
 const itemizedBillResponseSchema = {
   type: "OBJECT",
   properties: {
@@ -78,6 +71,7 @@ const itemizedBillResponseSchema = {
           original_name: { type: "STRING" },
           translated_name: { type: "STRING", nullable: true },
           line_type: { type: "STRING" },
+          quantity: { type: "INTEGER", nullable: true },
           original_amount_minor: { type: "INTEGER", nullable: true },
           discount_amount_minor: { type: "INTEGER" },
           final_amount_minor: { type: "INTEGER" },
@@ -93,6 +87,7 @@ const itemizedBillResponseSchema = {
           "original_name",
           "translated_name",
           "line_type",
+          "quantity",
           "original_amount_minor",
           "discount_amount_minor",
           "final_amount_minor",
@@ -105,6 +100,7 @@ const itemizedBillResponseSchema = {
           "original_name",
           "translated_name",
           "line_type",
+          "quantity",
           "original_amount_minor",
           "discount_amount_minor",
           "final_amount_minor",
@@ -227,20 +223,6 @@ function optionalPositiveMinor(value: unknown): number | null {
   return null
 }
 
-function optionalMinor(value: unknown): number | null {
-  if (typeof value === "number" && Number.isFinite(value)) {
-    return Math.round(value)
-  }
-
-  if (typeof value === "string") {
-    const sanitized = value.replace(/[^0-9-]/g, "")
-    const parsed = Number(sanitized)
-    return Number.isFinite(parsed) ? Math.round(parsed) : null
-  }
-
-  return null
-}
-
 function optionalConfidence(value: unknown): number {
   const parsed = typeof value === "number" ? value : typeof value === "string" ? Number(value) : 0
   if (!Number.isFinite(parsed)) return 0
@@ -263,14 +245,6 @@ function missingFieldsFor(result: Record<string, unknown>): string[] {
   if (!result.total_minor) missing.add("totalMinor")
   if (!result.wallet_id) missing.add("walletID")
 
-  return Array.from(missing).sort()
-}
-
-function itemMissingFieldsFor(item: SanitizedItem): string[] {
-  const missing = new Set(item.missing_fields)
-  if (!item.original_name) missing.add("originalName")
-  if (item.line_type === "purchase" && item.final_amount_minor <= 0) missing.add("finalAmountMinor")
-  if (item.line_type === "purchase" && !item.category_id) missing.add("categoryID")
   return Array.from(missing).sort()
 }
 
@@ -309,46 +283,6 @@ function parseModelJSON(text: string): Record<string, unknown> {
     }
     throw new Error("Model response did not contain a JSON object.")
   }
-}
-
-function sanitizeItem(
-  rawItem: unknown,
-  index: number,
-  categoryIDs: Set<string>
-): SanitizedItem | null {
-  if (typeof rawItem !== "object" || rawItem === null) return null
-  const raw = rawItem as Record<string, unknown>
-  const originalName = trimmedString(valueFor(raw, "original_name", "originalName", "name", "item_name", "itemName")) ?? ""
-  const rawLineType = trimmedString(valueFor(raw, "line_type", "lineType", "type"))?.toLowerCase()
-  const rawFinalAmount = optionalMinor(valueFor(raw, "final_amount_minor", "finalAmountMinor", "amount_minor", "amountMinor", "amount"))
-  const isDiscount = rawLineType === "discount"
-    || (rawFinalAmount ?? 0) < 0
-    || /^[-−－]/.test(originalName)
-    || /(値引|割引|クーポン|ｸｰﾎﾟﾝ|割戻|discount|coupon|voucher|giảm giá|khuyến mãi|khuyen mai)/i.test(originalName)
-
-  if (rawFinalAmount === null && !originalName) return null
-
-  const originalAmount = optionalPositiveMinor(valueFor(raw, "original_amount_minor", "originalAmountMinor", "gross_amount_minor", "grossAmountMinor", "original_amount", "originalAmount"))
-  const rawDiscountAmount = optionalPositiveMinor(valueFor(raw, "discount_amount_minor", "discountAmountMinor", "discount_minor", "discountMinor", "discount_amount", "discountAmount"))
-  const discountAmount = rawDiscountAmount ?? (isDiscount ? Math.abs(rawFinalAmount ?? 0) : 0)
-  const finalAmount = isDiscount
-    ? -Math.abs(rawFinalAmount ?? discountAmount)
-    : Math.max(0, rawFinalAmount ?? 0)
-
-  const item: SanitizedItem = {
-    line_id: trimmedString(valueFor(raw, "line_id", "lineID", "lineId", "id")) ?? `line-${index + 1}`,
-    original_name: originalName,
-    translated_name: trimmedString(valueFor(raw, "translated_name", "translatedName", "translation")),
-    line_type: isDiscount ? "discount" : "purchase",
-    original_amount_minor: isDiscount ? null : (originalAmount ?? (finalAmount > 0 ? finalAmount + discountAmount : null)),
-    discount_amount_minor: Math.max(0, discountAmount),
-    final_amount_minor: finalAmount,
-    category_id: isDiscount ? null : optionalID(valueFor(raw, "category_id", "categoryID", "categoryId"), categoryIDs),
-    confidence: optionalConfidence(valueFor(raw, "confidence", "score")),
-    missing_fields: stringArray(valueFor(raw, "missing_fields", "missingFields")),
-  }
-  item.missing_fields = itemMissingFieldsFor(item)
-  return item
 }
 
 function adjustPurchasesToTotal(items: SanitizedItem[], totalMinor: number | null): SanitizedItem[] {
@@ -412,13 +346,14 @@ function sanitizeAnalysis(
 
   let items = Array.isArray(modelResult.items)
     ? modelResult.items
-        .map((item, index) => sanitizeItem(item, index, categoryIDs))
+        .map((item, index) => sanitizeBillItem(item, index, categoryIDs))
         .filter((item): item is SanitizedItem => item !== null)
     : []
 
   if (multipleBillsDetected) {
     items = []
   } else {
+    items = normalizeBillItems(items)
     items = adjustPurchasesToTotal(items, totalMinor)
   }
 
@@ -477,17 +412,7 @@ function buildPrompt(payload: BillItemsRequest): string {
     "You analyze one receipt image for a personal finance app.",
     "The image must contain exactly one receipt/bill. If multiple receipts or bills are visible, set multiple_bills_detected to true, return items as an empty array, include singleBillImage in missing_fields, and do not try to merge them.",
     "Return only JSON with snake_case keys: merchant_name, total_minor, currency_code, occurred_at, wallet_id, multiple_bills_detected, confidence, missing_fields, raw_text, items.",
-    "Each item must have snake_case keys: line_id, original_name, translated_name, line_type, original_amount_minor, discount_amount_minor, final_amount_minor, category_id, confidence, missing_fields.",
-    "line_type must be purchase for purchased items and discount for discount/promotion/coupon/voucher lines.",
-    "List all purchased line items from this one receipt. Exclude change, cash received, payment method lines, tax-only summary lines, subtotal-only lines, loyalty points, and receipt metadata.",
-    "Do not exclude discount, promotion, coupon, or voucher lines. Return them as separate line_type discount records by default when they are visible as separate receipt rows.",
-    "Discount lines often start with -, −, or －, or contain Japanese terms such as 値引, 割引, クーポン, ｸｰﾎﾟﾝ, 特売, 割戻, or Vietnamese/English terms such as Giảm giá, Khuyến mãi, Voucher, Coupon, Discount.",
-    "Preserve original_name exactly as printed. Keep Japanese, Vietnamese, Latin, punctuation, and abbreviations as seen. Do not translate or romanize original_name.",
-    "Always try to translate original_name into the target language when the item language differs from the app language. Translate by product meaning, not only phonetics.",
-    "For food, alcohol, cosmetics, medicine, toiletries, and household goods, infer the real product type from common Japanese/Vietnamese retail terms and translate that type accurately. Keep brands/product names when useful.",
-    "Example for Vietnamese target language: のどごし生 should translate to Bia Nodogoshi Nama, not just Nodogoshi Nama.",
-    "For cosmetics, translate specific product type accurately, such as lotion, cleanser, sunscreen, serum, mascara, shampoo, conditioner, deodorant, or makeup remover.",
-    "Use null for translated_name only when the printed name is already in the target language, is a pure brand/product code, or translation would be effectively identical.",
+    ...billItemPromptLines(),
     "Never translate, romanize, or localize merchant_name. Preserve the exact script printed on the receipt.",
     "The receipt may be Japanese. Carefully read Japanese store names, dates, totals, item rows, discounts, and tax labels.",
     "The receipt may also be Vietnamese. Carefully read Vietnamese store names, dates, totals, item rows, discounts, and VAT labels.",
@@ -504,7 +429,7 @@ function buildPrompt(payload: BillItemsRequest): string {
     "occurred_at must be machine-readable, not localized display text. If date and time are visible, use yyyy-MM-dd'T'HH:mm:ss±HH:mm with the user's time zone offset. If seconds are not visible, use :00 seconds. If only a date is visible, use yyyy-MM-dd. Use null if unclear.",
     "Japanese dates/times like 2026年5月19日 21時34分, 26/05/19 21:34, 2026/5/19 9:34午後 must be normalized.",
     "Vietnamese dates/times like 19/05/2026 21:34, 19-05-26 9:34 CH, Ngày 19 tháng 5 năm 2026 must be normalized.",
-    "category_id and wallet_id must be selected only from the candidate IDs below. Return null if there is not a confident match. Do not invent IDs.",
+    "category_id and wallet_id must be selected only from the candidate IDs below. Do not invent IDs.",
     "If the image is blurry or incomplete, return null for uncertain fields, confidence 0-0.4, and include missing field names. Do not fail or return prose.",
     `User device locale: ${payload.locale_identifier ?? "unknown"}. User time zone: ${payload.time_zone_identifier ?? "Asia/Tokyo"}. Preferred currency: ${payload.currency_code ?? "JPY"}. Target language code: ${payload.target_language_code ?? "current app language"}.`,
     `Category candidates: ${JSON.stringify(categories)}`,
