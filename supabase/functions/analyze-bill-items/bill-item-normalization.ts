@@ -31,6 +31,7 @@ export function billItemPromptLines(): string[] {
     "Discount lines often start with -, −, or －, end with a minus/suffix code like 240-, 240-E, 800-T, or contain Japanese terms such as 値引, 割引, クーポン, ｸｰﾎﾟﾝ, 特売, 割戻, or Vietnamese/English terms such as Giảm giá, Khuyến mãi, Voucher, Coupon, Discount.",
     "Preserve original_name exactly as printed. Keep Japanese, Vietnamese, Latin, punctuation, and abbreviations as seen. Do not translate or romanize original_name.",
     "Do not autocorrect Japanese product text or small kana. For example, if the receipt says ラッフィング, keep ラッフィング and do not change it to ラッピング.",
+    "Treat original_name as OCR transcription, not dictionary correction. Katakana brand and product names can be novel, punny, shortened, or non-dictionary words; keep the printed kana even when a more common word looks similar.",
     "Choose translated_name and category_id from the exact printed original_name/raw_line_text, not from an autocorrected or normalized product name. Similar-looking Japanese kana can be different products.",
     "Always try to translate original_name into the target language when the item language differs from the app language. Translate by product meaning, not only phonetics.",
     "For food, alcohol, cosmetics, medicine, toiletries, and household goods, infer the real product type from common Japanese/Vietnamese retail terms and translate that type accurately. Keep brands/product names when useful.",
@@ -49,7 +50,7 @@ export function sanitizeBillItem(
 ): SanitizedItem | null {
   if (typeof rawItem !== "object" || rawItem === null) return null;
   const raw = rawItem as Record<string, unknown>;
-  const originalName = trimmedString(
+  let originalName = trimmedString(
     valueFor(
       raw,
       "original_name",
@@ -72,6 +73,8 @@ export function sanitizeBillItem(
       "amount",
     ),
   );
+  const rawLineText = rawVisibleLineText(raw);
+  originalName = preservePrintedOriginalName(originalName, rawLineText);
   const rawItemText = rawStringText(raw);
   const isDiscount = rawLineType === "discount" ||
     (rawFinalAmount ?? 0) < 0 ||
@@ -231,7 +234,7 @@ const discountMarkerRegex =
 
 function rawStringText(raw: Record<string, unknown>): string {
   return [
-    valueFor(raw, "raw_line_text", "rawLineText", "line_text", "lineText"),
+    rawVisibleLineText(raw),
     valueFor(raw, "original_name", "originalName", "name", "item_name"),
     valueFor(raw, "quantity_text", "quantityText"),
     valueFor(raw, "original_amount_minor", "originalAmountMinor"),
@@ -240,6 +243,75 @@ function rawStringText(raw: Record<string, unknown>): string {
   ]
     .filter((value): value is string => typeof value === "string")
     .join(" ");
+}
+
+function rawVisibleLineText(raw: Record<string, unknown>): string | null {
+  return trimmedString(
+    valueFor(raw, "raw_line_text", "rawLineText", "line_text", "lineText"),
+  );
+}
+
+function preservePrintedOriginalName(
+  originalName: string,
+  rawLineText: string | null,
+): string {
+  if (!rawLineText || !containsJapaneseKana(originalName)) return originalName;
+
+  const printedName = printedItemNameCandidate(rawLineText);
+  if (
+    !printedName ||
+    printedName === originalName ||
+    !containsJapaneseKana(printedName)
+  ) {
+    return originalName;
+  }
+
+  if (printedName.includes(originalName)) return originalName;
+  if (originalName.includes(printedName)) return printedName;
+
+  const distanceRatio = levenshteinDistance(printedName, originalName) /
+    Math.max(printedName.length, originalName.length);
+  return distanceRatio <= 0.25 ? printedName : originalName;
+}
+
+function printedItemNameCandidate(rawLineText: string): string | null {
+  const candidate = rawLineText
+    .replace(/[¥￥]\s*\d[\d,]*/g, " ")
+    .replace(
+      /(?:^|\s)\d[\d,]*\s*(?:[-−－]\s*[A-Z]?|[A-Z]\s*[-−－])(?=\s|$)/gi,
+      " ",
+    )
+    .replace(/(?:^|\s)\d[\d,]*(?=\s*$)/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  return candidate.length > 0 ? candidate : null;
+}
+
+function containsJapaneseKana(text: string): boolean {
+  return /[\u3040-\u30ff]/u.test(text);
+}
+
+function levenshteinDistance(left: string, right: string): number {
+  const previous = Array.from(
+    { length: right.length + 1 },
+    (_, index) => index,
+  );
+  const current = Array.from({ length: right.length + 1 }, () => 0);
+
+  for (let leftIndex = 1; leftIndex <= left.length; leftIndex++) {
+    current[0] = leftIndex;
+    for (let rightIndex = 1; rightIndex <= right.length; rightIndex++) {
+      const cost = left[leftIndex - 1] === right[rightIndex - 1] ? 0 : 1;
+      current[rightIndex] = Math.min(
+        current[rightIndex - 1] + 1,
+        previous[rightIndex] + 1,
+        previous[rightIndex - 1] + cost,
+      );
+    }
+    previous.splice(0, previous.length, ...current);
+  }
+
+  return previous[right.length];
 }
 
 function stripInternalFields(item: InternalSanitizedItem): SanitizedItem {

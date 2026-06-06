@@ -10,6 +10,13 @@ import {
   sanitizeBillItem,
   type SanitizedItem,
 } from "./bill-item-normalization.ts";
+import {
+  buildReceiptOCRPrompt,
+  ocrContextPromptLines,
+  type ReceiptOCRContext,
+  receiptOCRResponseSchema,
+  sanitizeReceiptOCRResult,
+} from "./literal-ocr.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -458,7 +465,10 @@ function emptyAnalysis(
   };
 }
 
-function buildPrompt(payload: BillItemsRequest): string {
+function buildPrompt(
+  payload: BillItemsRequest,
+  ocrContext: ReceiptOCRContext,
+): string {
   const categories = (payload.categories ?? []).map((category) => ({
     id: category.id,
     name: category.name,
@@ -477,6 +487,7 @@ function buildPrompt(payload: BillItemsRequest): string {
     "You analyze one receipt image for a personal finance app.",
     "The image must contain exactly one receipt/bill. If multiple receipts or bills are visible, set multiple_bills_detected to true, return items as an empty array, include singleBillImage in missing_fields, and do not try to merge them.",
     "Return only JSON with snake_case keys: merchant_name, total_minor, currency_code, occurred_at, wallet_id, multiple_bills_detected, confidence, missing_fields, raw_text, items.",
+    ...ocrContextPromptLines(ocrContext),
     ...billItemPromptLines(),
     "Never translate, romanize, or localize merchant_name. Preserve the exact script printed on the receipt.",
     "The receipt may be Japanese. Carefully read Japanese store names, dates, totals, item rows, discounts, and tax labels.",
@@ -639,6 +650,36 @@ Deno.serve(async (request) => {
   }
 
   try {
+    const ocrResult = await requestGeminiModelJSON({
+      apiKey: geminiAPIKey,
+      models: geminiModels,
+      body: {
+        contents: [
+          {
+            role: "user",
+            parts: [
+              { text: buildReceiptOCRPrompt() },
+              {
+                inlineData: {
+                  mimeType,
+                  data: imageBase64,
+                },
+              },
+            ],
+          },
+        ],
+        generationConfig: {
+          temperature: 0,
+          responseMimeType: "application/json",
+          responseSchema: receiptOCRResponseSchema,
+        },
+      },
+    });
+    const ocrText = extractModelText(ocrResult.body);
+    const ocrContext = ocrText
+      ? sanitizeReceiptOCRResult(parseModelJSON(ocrText))
+      : sanitizeReceiptOCRResult({});
+
     const geminiResult = await requestGeminiModelJSON({
       apiKey: geminiAPIKey,
       models: geminiModels,
@@ -647,7 +688,7 @@ Deno.serve(async (request) => {
           {
             role: "user",
             parts: [
-              { text: buildPrompt(payload) },
+              { text: buildPrompt(payload, ocrContext) },
               {
                 inlineData: {
                   mimeType,

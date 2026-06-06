@@ -263,6 +263,31 @@ Deno.test("normalizeBillItems keeps standalone bill-level discounts separate", (
   }
 });
 
+Deno.test("sanitizeBillItem preserves printed katakana brand text from raw line", () => {
+  const categoryID = "cat-household";
+  const item = sanitizeBillItem(
+    {
+      line_id: "line-1",
+      raw_line_text: "ラッフィング カウオリジナル 1178",
+      original_name: "ラッピング カワオリジナル",
+      line_type: "purchase",
+      final_amount_minor: 1178,
+      category_id: categoryID,
+      confidence: 0.82,
+      missing_fields: [],
+    },
+    0,
+    new Set([categoryID]),
+  );
+
+  if (!item) {
+    throw new Error("Expected item to sanitize");
+  }
+  if (item.original_name !== "ラッフィング カウオリジナル") {
+    throw new Error(`Original name was autocorrected: ${item.original_name}`);
+  }
+});
+
 Deno.test("billItemPromptLines explains Costco-style quantity and adjacent promotion signs", () => {
   const text = billItemPromptLines().join("\n");
 
@@ -280,6 +305,8 @@ Deno.test("billItemPromptLines explains Costco-style quantity and adjacent promo
       "800-",
       "800-T",
       "Do not autocorrect",
+      "OCR transcription",
+      "non-dictionary",
       "Similar-looking Japanese kana",
       "category_id",
       "closest category",
