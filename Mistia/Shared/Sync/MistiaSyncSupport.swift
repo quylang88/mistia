@@ -449,6 +449,12 @@ private extension MistiaSyncUploadRecord {
                 remoteCurrencyCode: remote.currencyCode,
                 localArchived: local.isArchived,
                 remoteArchived: remote.isArchived,
+                localPaused: local.isPaused,
+                remotePaused: remote.isPaused,
+                localPausedAt: local.pausedAt,
+                remotePausedAt: remote.pausedAt,
+                localResumeStartMonth: local.resumeStartMonth,
+                remoteResumeStartMonth: remote.resumeStartMonth,
                 localDeletedAt: local.deletedAt,
                 remoteDeletedAt: remote.deletedAt
             )
@@ -510,6 +516,12 @@ private extension MistiaSyncUploadRecord {
         remoteCurrencyCode: String,
         localArchived: Bool,
         remoteArchived: Bool,
+        localPaused: Bool,
+        remotePaused: Bool,
+        localPausedAt: Date?,
+        remotePausedAt: Date?,
+        localResumeStartMonth: Date?,
+        remoteResumeStartMonth: Date?,
         localDeletedAt: Date?,
         remoteDeletedAt: Date?
     ) -> [MistiaSyncConflictDifference] {
@@ -523,6 +535,9 @@ private extension MistiaSyncUploadRecord {
             field("wallet", L10n.shared.sync.mistiasync.paymentWallet, uuid(localPaymentWalletID), uuid(remotePaymentWalletID))
             field("currency", L10n.shared.sync.mistiasync.currency, localCurrencyCode, remoteCurrencyCode)
             field("archived", L10n.shared.sync.mistiasync.archived2, yesNo(localArchived), yesNo(remoteArchived))
+            field("paused", L10n.shared.sync.mistiasync.paused, yesNo(localPaused), yesNo(remotePaused))
+            field("pausedAt", L10n.shared.sync.mistiasync.pausedAt, date(localPausedAt), date(remotePausedAt))
+            field("resumeStartMonth", L10n.shared.sync.mistiasync.resumeStartMonth, date(localResumeStartMonth), date(remoteResumeStartMonth))
             field("deleted", L10n.shared.sync.mistiasync.deleteStatus, deleted(localDeletedAt), deleted(remoteDeletedAt))
         }
     }

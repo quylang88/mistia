@@ -162,7 +162,6 @@ final class SessionStore {
     var lastErrorMessage: String?
     var lastSyncAt: Date?
     var initialSyncPreview: MistiaInitialSyncPreview?
-    var possibleDuplicateCount = 0
     var isAutoSyncEnabled: Bool
     var authPhase: SessionAuthPhase = .signIn
     var authBanner: SessionAuthBanner?
@@ -935,9 +934,6 @@ final class SessionStore {
 
             try? modelContainer.mainContext.save()
 
-            possibleDuplicateCount = ((try? MistiaSyncLocalStore.possibleDuplicateTransactions(
-                in: modelContainer
-            ).count) ?? 0)
             lastErrorMessage = nil
             setRequiresManualSyncAfterRestore(isConfigured)
 
@@ -974,7 +970,6 @@ final class SessionStore {
             syncCoordinator.clearQueuedMutations()
             initialSyncPreview = nil
             pendingInitialSyncChoice = nil
-            possibleDuplicateCount = 0
             lastSyncAt = nil
 
             if let activeUserID = summary?.userID ?? currentSession?.user.id,
@@ -1547,9 +1542,6 @@ final class SessionStore {
             in: userDefaults,
             profileID: descriptor.id
         )
-        possibleDuplicateCount = ((try? MistiaSyncLocalStore.possibleDuplicateTransactions(
-            in: modelContainer
-        ).count) ?? 0)
     }
 
     private func deleteLocalProfile(
@@ -2278,9 +2270,6 @@ final class SessionStore {
             let result = try await syncCoordinator.sync(session: validSession)
             lastSyncAt = .now
             lastErrorMessage = nil
-            possibleDuplicateCount = ((try? MistiaSyncLocalStore.possibleDuplicateTransactions(
-                in: modelContainer
-            ).count) ?? 0)
 
             if let userID = summary?.userID, let profile = storedProfile(for: userID) {
                 profile.lastSyncAt = lastSyncAt
@@ -2289,13 +2278,9 @@ final class SessionStore {
 
             if showProgress || trigger == .foregroundCatchUp {
                 syncStatusTitle = L10n.shared.session.session.syncCompleted
-                if possibleDuplicateCount > 0 {
-                    syncStatusDetail = result.statusMessage + " " + L10n.shared.session.session.mistiaFoundValuePossibleDuplicateTransactionsAnd(String(describing: possibleDuplicateCount))
-                } else {
-                    syncStatusDetail = pushedFamilyOwnerMutations
-                        ? L10n.shared.session.session.pushedMemberWalletChangesToCloudValue(String(describing: result.statusMessage))
-                        : result.statusMessage
-                }
+                syncStatusDetail = pushedFamilyOwnerMutations
+                    ? L10n.shared.session.session.pushedMemberWalletChangesToCloudValue(String(describing: result.statusMessage))
+                    : result.statusMessage
                 syncStatusSystemImage = "checkmark.icloud"
             }
 
@@ -2412,19 +2397,12 @@ final class SessionStore {
             try normalizeCategoryHierarchyIfNeeded()
             lastSyncAt = .now
             lastErrorMessage = nil
-            possibleDuplicateCount = ((try? MistiaSyncLocalStore.possibleDuplicateTransactions(
-                in: modelContainer
-            ).count) ?? 0)
             
             if showProgress {
                 syncStatusTitle = L10n.shared.session.session.syncCompleted
-                if possibleDuplicateCount > 0 {
-                    syncStatusDetail = result.statusMessage + " " + L10n.shared.session.session.mistiaFoundValuePossibleDuplicateTransactionsAnd(String(describing: possibleDuplicateCount))
-                } else {
-                    syncStatusDetail = pushedFamilyOwnerMutations
-                        ? L10n.shared.session.session.pushedMemberWalletChangesToCloudValue(String(describing: result.statusMessage))
-                        : result.statusMessage
-                }
+                syncStatusDetail = pushedFamilyOwnerMutations
+                    ? L10n.shared.session.session.pushedMemberWalletChangesToCloudValue(String(describing: result.statusMessage))
+                    : result.statusMessage
                 syncStatusSystemImage = "checkmark.icloud"
             }
 
@@ -2783,7 +2761,6 @@ final class SessionStore {
         lastErrorMessage = nil
         remoteUnavailableReason = nil
         initialSyncPreview = nil
-        possibleDuplicateCount = 0
         pendingInitialSyncChoice = nil
         syncCoordinator.clearQueuedMutations()
         clearFamilyOwnerPushConflicts()

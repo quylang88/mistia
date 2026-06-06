@@ -904,55 +904,13 @@ enum MistiaSyncLocalStore {
     static func possibleDuplicateTransactions(
         in container: ModelContainer
     ) throws -> [MistiaSyncPossibleDuplicate] {
-        let context = ModelContext(container)
-        let activeTransactions = try fetchTransactions(context)
-            .filter { $0.deletedAt == nil && !$0.isArchived }
-
-        return possibleDuplicateTransactions(from: activeTransactions)
+        []
     }
 
     static func possibleDuplicateTransactions(
         from activeTransactions: [LedgerTransaction]
     ) -> [MistiaSyncPossibleDuplicate] {
-        let sortedTransactions = activeTransactions
-            .sorted {
-                if $0.occurredAt != $1.occurredAt {
-                    return $0.occurredAt < $1.occurredAt
-                }
-                return $0.createdAt < $1.createdAt
-            }
-
-        var duplicates: [MistiaSyncPossibleDuplicate] = []
-
-        for index in sortedTransactions.indices {
-            let lhs = sortedTransactions[index]
-            guard index + 1 < sortedTransactions.count else { continue }
-            for rhs in sortedTransactions[(index + 1)...] {
-                let secondsApart = abs(lhs.occurredAt.timeIntervalSince(rhs.occurredAt))
-                if secondsApart > 86_400 { break }
-                guard lhs.id != rhs.id else { continue }
-                guard lhs.amountMinor == rhs.amountMinor else { continue }
-                guard lhs.primaryKindRawValue == rhs.primaryKindRawValue else { continue }
-                guard lhs.sourceWallet?.id == rhs.sourceWallet?.id else { continue }
-
-                let lhsText = [lhs.title, lhs.note ?? ""].joined(separator: " ").normalizedForDuplicateCheck
-                let rhsText = [rhs.title, rhs.note ?? ""].joined(separator: " ").normalizedForDuplicateCheck
-                let reason: MistiaSyncPossibleDuplicateReason = (lhsText == rhsText || lhsText.isEmpty || rhsText.isEmpty)
-                    ? .sameDaySameAmountSameWallet
-                    : (lhsText.hasCommonTokens(with: rhsText) ? .sameDaySameAmountSameWalletSimilarText : .sameDaySameAmountSameWallet)
-
-                duplicates.append(
-                    MistiaSyncPossibleDuplicate(
-                        id: [lhs.id.uuidString.lowercased(), rhs.id.uuidString.lowercased()].sorted().joined(separator: ":"),
-                        firstTransactionID: lhs.id,
-                        secondTransactionID: rhs.id,
-                        reason: reason
-                    )
-                )
-            }
-        }
-
-        return duplicates
+        []
     }
 
     static func clearAllData(in container: ModelContainer) throws {
@@ -2137,6 +2095,9 @@ enum MistiaSyncLocalStore {
             paymentWallet: row.paymentWalletID.flatMap { walletByID[$0] },
             currencyCode: row.currencyCode,
             isArchived: row.isArchived,
+            isPaused: row.isPaused,
+            pausedAt: row.pausedAt,
+            resumeStartMonth: row.resumeStartMonth,
             createdAt: row.createdAt,
             updatedAt: row.updatedAt,
             deletedAt: row.deletedAt,
@@ -2166,6 +2127,9 @@ enum MistiaSyncLocalStore {
         plan.paymentWallet = row.paymentWalletID.flatMap { walletByID[$0] }
         plan.currencyCode = row.currencyCode
         plan.isArchived = row.isArchived
+        plan.isPaused = row.isPaused
+        plan.pausedAt = row.pausedAt
+        plan.resumeStartMonth = row.resumeStartMonth
         plan.createdAt = row.createdAt
         plan.updatedAt = row.updatedAt
         plan.deletedAt = row.deletedAt
@@ -2817,6 +2781,9 @@ private extension RemoteRecurringBillPlan {
             paymentWalletID: plan.paymentWallet?.id,
             currencyCode: plan.currencyCode,
             isArchived: plan.isArchived,
+            isPaused: plan.isPaused,
+            pausedAt: plan.pausedAt,
+            resumeStartMonth: plan.resumeStartMonth,
             createdAt: plan.createdAt,
             updatedAt: plan.updatedAt,
             deletedAt: plan.deletedAt,

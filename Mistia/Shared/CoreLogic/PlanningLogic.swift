@@ -582,6 +582,9 @@ nonisolated struct PlanningBillSnapshot: Equatable, Identifiable {
     let autoPayEnabled: Bool
     let autoPayDay: Int?
     let autoPayDate: Date?
+    let isPaused: Bool
+    let pausedAt: Date?
+    let resumeStartMonth: Date?
 
     init(
         id: UUID,
@@ -605,7 +608,10 @@ nonisolated struct PlanningBillSnapshot: Equatable, Identifiable {
         dueDate: Date? = nil,
         autoPayEnabled: Bool = false,
         autoPayDay: Int? = nil,
-        autoPayDate: Date? = nil
+        autoPayDate: Date? = nil,
+        isPaused: Bool = false,
+        pausedAt: Date? = nil,
+        resumeStartMonth: Date? = nil
     ) {
         self.id = id
         self.name = name
@@ -629,6 +635,9 @@ nonisolated struct PlanningBillSnapshot: Equatable, Identifiable {
         self.autoPayEnabled = autoPayEnabled
         self.autoPayDay = autoPayDay
         self.autoPayDate = autoPayDate
+        self.isPaused = isPaused
+        self.pausedAt = pausedAt
+        self.resumeStartMonth = resumeStartMonth
     }
 }
 
@@ -1931,9 +1940,13 @@ nonisolated enum PlanningLogic {
     ) -> RecurringBillWindow? {
         switch bill.scheduleKind {
         case .recurring:
+            guard !bill.isPaused else {
+                return nil
+            }
+            let scheduleAnchor = bill.resumeStartMonth ?? bill.firstScheduledMonth ?? bill.createdAt
             guard isScheduledMonth(
                 selectedMonth: selectedMonth,
-                anchorDate: bill.firstScheduledMonth ?? bill.createdAt,
+                anchorDate: scheduleAnchor,
                 frequencyMonths: bill.frequencyMonths,
                 totalCycles: nil,
                 calendar: calendar

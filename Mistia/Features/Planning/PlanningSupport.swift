@@ -471,7 +471,10 @@ extension RecurringBillPlan {
             dueDate: dueDate,
             autoPayEnabled: autoPayEnabled,
             autoPayDay: autoPayDay,
-            autoPayDate: autoPayDate
+            autoPayDate: autoPayDate,
+            isPaused: isPaused,
+            pausedAt: pausedAt,
+            resumeStartMonth: resumeStartMonth
         )
     }
 }

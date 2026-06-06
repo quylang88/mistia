@@ -172,6 +172,9 @@ final class RecurringBillPlan {
     @Relationship(deleteRule: .nullify) var paymentWallet: LedgerWallet?
     var currencyCode: String
     var isArchived: Bool
+    var isPaused: Bool
+    var pausedAt: Date?
+    var resumeStartMonth: Date?
     var createdAt: Date
     var updatedAt: Date
     var deletedAt: Date?
@@ -197,6 +200,9 @@ final class RecurringBillPlan {
         paymentWallet: LedgerWallet? = nil,
         currencyCode: String = "JPY",
         isArchived: Bool = false,
+        isPaused: Bool = false,
+        pausedAt: Date? = nil,
+        resumeStartMonth: Date? = nil,
         createdAt: Date = .now,
         updatedAt: Date = .now,
         deletedAt: Date? = nil,
@@ -221,6 +227,9 @@ final class RecurringBillPlan {
         self.paymentWallet = paymentWallet
         self.currencyCode = currencyCode
         self.isArchived = isArchived
+        self.isPaused = isPaused
+        self.pausedAt = pausedAt
+        self.resumeStartMonth = resumeStartMonth
         self.createdAt = createdAt
         self.updatedAt = updatedAt
         self.deletedAt = deletedAt

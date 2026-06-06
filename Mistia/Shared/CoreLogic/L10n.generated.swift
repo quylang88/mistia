@@ -1302,18 +1302,6 @@ nonisolated enum L10n {
             static func passwordNeedsAtLeastUppercaseLetter(language: MistiaAppLanguage) -> String { L10n.tr("management.managementauth.passwordNeedsAtLeastUppercaseLetter", vi: "Mật khẩu cần ít nhất 1 chữ viết hoa.", en: "Password needs at least 1 uppercase letter.", ja: "パスワードには大文字を 1 文字以上含めてください。", language: language) }
             static var personalInformation: String { L10n.tr("management.managementauth.personalInformation", vi: "Thông tin cá nhân", en: "Personal information", ja: "個人情報") }
             static func personalInformation(language: MistiaAppLanguage) -> String { L10n.tr("management.managementauth.personalInformation", vi: "Thông tin cá nhân", en: "Personal information", ja: "個人情報", language: language) }
-            static var possibleDuplicateFirstRecord: String { L10n.tr("management.managementauth.possibleDuplicateFirstRecord", vi: "Bản ghi 1", en: "Record 1", ja: "レコード1") }
-            static func possibleDuplicateFirstRecord(language: MistiaAppLanguage) -> String { L10n.tr("management.managementauth.possibleDuplicateFirstRecord", vi: "Bản ghi 1", en: "Record 1", ja: "レコード1", language: language) }
-            static var possibleDuplicatePair: String { L10n.tr("management.managementauth.possibleDuplicatePair", vi: "Cặp thu chi có thể trùng", en: "Possible duplicate pair", ja: "重複の可能性があるペア") }
-            static func possibleDuplicatePair(language: MistiaAppLanguage) -> String { L10n.tr("management.managementauth.possibleDuplicatePair", vi: "Cặp thu chi có thể trùng", en: "Possible duplicate pair", ja: "重複の可能性があるペア", language: language) }
-            static var possibleDuplicateSameDaySameAmountSameWallet: String { L10n.tr("management.managementauth.possibleDuplicateSameDaySameAmountSameWallet", vi: "Cùng ngày, cùng số tiền và cùng ví.", en: "Same day, same amount, and same wallet.", ja: "同じ日付、同じ金額、同じウォレットです。") }
-            static func possibleDuplicateSameDaySameAmountSameWallet(language: MistiaAppLanguage) -> String { L10n.tr("management.managementauth.possibleDuplicateSameDaySameAmountSameWallet", vi: "Cùng ngày, cùng số tiền và cùng ví.", en: "Same day, same amount, and same wallet.", ja: "同じ日付、同じ金額、同じウォレットです。", language: language) }
-            static var possibleDuplicateSecondRecord: String { L10n.tr("management.managementauth.possibleDuplicateSecondRecord", vi: "Bản ghi 2", en: "Record 2", ja: "レコード2") }
-            static func possibleDuplicateSecondRecord(language: MistiaAppLanguage) -> String { L10n.tr("management.managementauth.possibleDuplicateSecondRecord", vi: "Bản ghi 2", en: "Record 2", ja: "レコード2", language: language) }
-            static var possibleDuplicateSimilarText: String { L10n.tr("management.managementauth.possibleDuplicateSimilarText", vi: "Cùng ngày, cùng số tiền, cùng ví và nội dung gần giống.", en: "Same day, same amount, same wallet, and similar text.", ja: "同じ日付、同じ金額、同じウォレットで、内容も似ています。") }
-            static func possibleDuplicateSimilarText(language: MistiaAppLanguage) -> String { L10n.tr("management.managementauth.possibleDuplicateSimilarText", vi: "Cùng ngày, cùng số tiền, cùng ví và nội dung gần giống.", en: "Same day, same amount, same wallet, and similar text.", ja: "同じ日付、同じ金額、同じウォレットで、内容も似ています。", language: language) }
-            static var possibleDuplicatesDetected: String { L10n.tr("management.managementauth.possibleDuplicatesDetected", vi: "Có thu chi có thể bị trùng", en: "Possible duplicates detected", ja: "重複の可能性がある取引があります") }
-            static func possibleDuplicatesDetected(language: MistiaAppLanguage) -> String { L10n.tr("management.managementauth.possibleDuplicatesDetected", vi: "Có thu chi có thể bị trùng", en: "Possible duplicates detected", ja: "重複の可能性がある取引があります", language: language) }
             static var profile: String { L10n.tr("management.managementauth.profile", vi: "Hồ sơ", en: "Profile", ja: "プロフィール") }
             static func profile(language: MistiaAppLanguage) -> String { L10n.tr("management.managementauth.profile", vi: "Hồ sơ", en: "Profile", ja: "プロフィール", language: language) }
             static var reEnterYourPasswordToConfirmIt: String { L10n.tr("management.managementauth.reEnterYourPasswordToConfirmIt", vi: "Nhập lại mật khẩu để xác nhận.", en: "Re-enter your password to confirm it.", ja: "確認のためパスワードを再入力してください。") }
@@ -1441,10 +1429,18 @@ nonisolated enum L10n {
             static func chargesInCycle(language: MistiaAppLanguage) -> String { L10n.tr("management.managementcreditcardstatement.chargesInCycle", vi: "Chi tiêu trong kỳ", en: "Charges in cycle", ja: "期間内の利用", language: language) }
             static var close: String { L10n.tr("management.managementcreditcardstatement.close", vi: "Chốt", en: "Close", ja: "締め") }
             static func close(language: MistiaAppLanguage) -> String { L10n.tr("management.managementcreditcardstatement.close", vi: "Chốt", en: "Close", ja: "締め", language: language) }
+            static var closingDate: String { L10n.tr("management.managementcreditcardstatement.closingDate", vi: "Ngày chốt", en: "Closing date", ja: "締め日") }
+            static func closingDate(language: MistiaAppLanguage) -> String { L10n.tr("management.managementcreditcardstatement.closingDate", vi: "Ngày chốt", en: "Closing date", ja: "締め日", language: language) }
             static var due: String { L10n.tr("management.managementcreditcardstatement.due", vi: "Hạn", en: "To pay", ja: "支払") }
             static func due(language: MistiaAppLanguage) -> String { L10n.tr("management.managementcreditcardstatement.due", vi: "Hạn", en: "To pay", ja: "支払", language: language) }
+            static var dueDate: String { L10n.tr("management.managementcreditcardstatement.dueDate", vi: "Hạn thanh toán", en: "Due date", ja: "支払期限") }
+            static func dueDate(language: MistiaAppLanguage) -> String { L10n.tr("management.managementcreditcardstatement.dueDate", vi: "Hạn thanh toán", en: "Due date", ja: "支払期限", language: language) }
+            static var linkedWallet: String { L10n.tr("management.managementcreditcardstatement.linkedWallet", vi: "Ví liên kết", en: "Linked wallet", ja: "連携ウォレット") }
+            static func linkedWallet(language: MistiaAppLanguage) -> String { L10n.tr("management.managementcreditcardstatement.linkedWallet", vi: "Ví liên kết", en: "Linked wallet", ja: "連携ウォレット", language: language) }
             static var noChargesInThisCycle: String { L10n.tr("management.managementcreditcardstatement.noChargesInThisCycle", vi: "Không có chi tiêu nào trong kỳ này", en: "No charges in this cycle", ja: "この期間の利用はありません") }
             static func noChargesInThisCycle(language: MistiaAppLanguage) -> String { L10n.tr("management.managementcreditcardstatement.noChargesInThisCycle", vi: "Không có chi tiêu nào trong kỳ này", en: "No charges in this cycle", ja: "この期間の利用はありません", language: language) }
+            static var noLinkedWallet: String { L10n.tr("management.managementcreditcardstatement.noLinkedWallet", vi: "Chưa chọn ví liên kết", en: "No linked wallet", ja: "連携ウォレット未設定") }
+            static func noLinkedWallet(language: MistiaAppLanguage) -> String { L10n.tr("management.managementcreditcardstatement.noLinkedWallet", vi: "Chưa chọn ví liên kết", en: "No linked wallet", ja: "連携ウォレット未設定", language: language) }
             static var noPaymentNeeded: String { L10n.tr("management.managementcreditcardstatement.noPaymentNeeded", vi: "Không cần thanh toán", en: "No payment needed", ja: "支払い不要") }
             static func noPaymentNeeded(language: MistiaAppLanguage) -> String { L10n.tr("management.managementcreditcardstatement.noPaymentNeeded", vi: "Không cần thanh toán", en: "No payment needed", ja: "支払い不要", language: language) }
             static var noStatementYet: String { L10n.tr("management.managementcreditcardstatement.noStatementYet", vi: "Chưa có sao kê", en: "No statement yet", ja: "明細はまだありません") }
@@ -1453,18 +1449,24 @@ nonisolated enum L10n {
             static func notClosedYet(language: MistiaAppLanguage) -> String { L10n.tr("management.managementcreditcardstatement.notClosedYet", vi: "Chưa chốt", en: "Not closed yet", ja: "未締め", language: language) }
             static var notice: String { L10n.tr("management.managementcreditcardstatement.notice", vi: "Thông báo", en: "Notice", ja: "お知らせ") }
             static func notice(language: MistiaAppLanguage) -> String { L10n.tr("management.managementcreditcardstatement.notice", vi: "Thông báo", en: "Notice", ja: "お知らせ", language: language) }
+            static var overdue: String { L10n.tr("management.managementcreditcardstatement.overdue", vi: "Quá hạn", en: "Overdue", ja: "延滞") }
+            static func overdue(language: MistiaAppLanguage) -> String { L10n.tr("management.managementcreditcardstatement.overdue", vi: "Quá hạn", en: "Overdue", ja: "延滞", language: language) }
             static var paid: String { L10n.tr("management.managementcreditcardstatement.paid", vi: "Đã thanh toán", en: "Paid", ja: "支払い済み") }
             static func paid(language: MistiaAppLanguage) -> String { L10n.tr("management.managementcreditcardstatement.paid", vi: "Đã thanh toán", en: "Paid", ja: "支払い済み", language: language) }
             static var payEarly: String { L10n.tr("management.managementcreditcardstatement.payEarly", vi: "Thanh toán trước", en: "Pay early", ja: "先に支払う") }
             static func payEarly(language: MistiaAppLanguage) -> String { L10n.tr("management.managementcreditcardstatement.payEarly", vi: "Thanh toán trước", en: "Pay early", ja: "先に支払う", language: language) }
             static var payNow: String { L10n.tr("management.managementcreditcardstatement.payNow", vi: "Thanh toán ngay", en: "Pay now", ja: "今すぐ支払う") }
             static func payNow(language: MistiaAppLanguage) -> String { L10n.tr("management.managementcreditcardstatement.payNow", vi: "Thanh toán ngay", en: "Pay now", ja: "今すぐ支払う", language: language) }
+            static var payable: String { L10n.tr("management.managementcreditcardstatement.payable", vi: "Cần thanh toán", en: "Payable", ja: "支払い可能") }
+            static func payable(language: MistiaAppLanguage) -> String { L10n.tr("management.managementcreditcardstatement.payable", vi: "Cần thanh toán", en: "Payable", ja: "支払い可能", language: language) }
             static var pleaseSetALinkedPaymentWalletFor: String { L10n.tr("management.managementcreditcardstatement.pleaseSetALinkedPaymentWalletFor", vi: "Vui lòng thiết lập ví liên kết cho thẻ này.", en: "Please set a linked payment wallet for this card.", ja: "このカードの連携支払いウォレットを設定してください。") }
             static func pleaseSetALinkedPaymentWalletFor(language: MistiaAppLanguage) -> String { L10n.tr("management.managementcreditcardstatement.pleaseSetALinkedPaymentWalletFor", vi: "Vui lòng thiết lập ví liên kết cho thẻ này.", en: "Please set a linked payment wallet for this card.", ja: "このカードの連携支払いウォレットを設定してください。", language: language) }
             static var spend: String { L10n.tr("management.managementcreditcardstatement.spend", vi: "Chi tiêu", en: "Spend", ja: "利用") }
             static func spend(language: MistiaAppLanguage) -> String { L10n.tr("management.managementcreditcardstatement.spend", vi: "Chi tiêu", en: "Spend", ja: "利用", language: language) }
             static var statementPaid: String { L10n.tr("management.managementcreditcardstatement.statementPaid", vi: "Đã thanh toán sao kê.", en: "Statement paid.", ja: "明細を支払いました。") }
             static func statementPaid(language: MistiaAppLanguage) -> String { L10n.tr("management.managementcreditcardstatement.statementPaid", vi: "Đã thanh toán sao kê.", en: "Statement paid.", ja: "明細を支払いました。", language: language) }
+            static var statementPeriod: String { L10n.tr("management.managementcreditcardstatement.statementPeriod", vi: "Kỳ sao kê", en: "Statement period", ja: "明細期間") }
+            static func statementPeriod(language: MistiaAppLanguage) -> String { L10n.tr("management.managementcreditcardstatement.statementPeriod", vi: "Kỳ sao kê", en: "Statement period", ja: "明細期間", language: language) }
             static var theLinkedWalletBalanceIsNotEnough: String { L10n.tr("management.managementcreditcardstatement.theLinkedWalletBalanceIsNotEnough", vi: "Số dư ví liên kết không đủ để thanh toán sao kê này.", en: "The linked wallet balance is not enough for this statement.", ja: "連携ウォレットの残高がこの明細の支払いに不足しています。") }
             static func theLinkedWalletBalanceIsNotEnough(language: MistiaAppLanguage) -> String { L10n.tr("management.managementcreditcardstatement.theLinkedWalletBalanceIsNotEnough", vi: "Số dư ví liên kết không đủ để thanh toán sao kê này.", en: "The linked wallet balance is not enough for this statement.", ja: "連携ウォレットの残高がこの明細の支払いに不足しています。", language: language) }
             static var thisCardHasNoSpendingDataFor: String { L10n.tr("management.managementcreditcardstatement.thisCardHasNoSpendingDataFor", vi: "Thẻ này chưa có dữ liệu chi tiêu trong tháng đã chọn.", en: "This card has no spending data for the selected month.", ja: "選択した月の利用データはありません。") }
@@ -1899,6 +1901,10 @@ nonisolated enum L10n {
             static func couldnTDeleteThisGoalRightNow(language: MistiaAppLanguage) -> String { L10n.tr("planning.planning.couldnTDeleteThisGoalRightNow", vi: "Không thể xóa mục tiêu lúc này.", en: "Couldn't delete this goal right now.", ja: "現在この目標を削除できません。", language: language) }
             static var couldnTDeleteThisItemRightNow: String { L10n.tr("planning.planning.couldnTDeleteThisItemRightNow", vi: "Không thể xóa khoản này lúc này.", en: "Couldn't delete this item right now.", ja: "現在この項目を削除できません。") }
             static func couldnTDeleteThisItemRightNow(language: MistiaAppLanguage) -> String { L10n.tr("planning.planning.couldnTDeleteThisItemRightNow", vi: "Không thể xóa khoản này lúc này.", en: "Couldn't delete this item right now.", ja: "現在この項目を削除できません。", language: language) }
+            static var couldnTPauseThisBillRightNow: String { L10n.tr("planning.planning.couldnTPauseThisBillRightNow", vi: "Không thể tạm dừng hóa đơn lúc này.", en: "Couldn't pause this bill right now.", ja: "現在この請求を一時停止できません。") }
+            static func couldnTPauseThisBillRightNow(language: MistiaAppLanguage) -> String { L10n.tr("planning.planning.couldnTPauseThisBillRightNow", vi: "Không thể tạm dừng hóa đơn lúc này.", en: "Couldn't pause this bill right now.", ja: "現在この請求を一時停止できません。", language: language) }
+            static var couldnTResumeThisBillRightNow: String { L10n.tr("planning.planning.couldnTResumeThisBillRightNow", vi: "Không thể bắt đầu lại hóa đơn lúc này.", en: "Couldn't resume this bill right now.", ja: "現在この請求を再開できません。") }
+            static func couldnTResumeThisBillRightNow(language: MistiaAppLanguage) -> String { L10n.tr("planning.planning.couldnTResumeThisBillRightNow", vi: "Không thể bắt đầu lại hóa đơn lúc này.", en: "Couldn't resume this bill right now.", ja: "現在この請求を再開できません。", language: language) }
             static var couldnTSaveTheArchiveStateFor: String { L10n.tr("planning.planning.couldnTSaveTheArchiveStateFor", vi: "Không thể lưu trạng thái lưu trữ của thẻ.", en: "Couldn't save the archive state for this card.", ja: "このカードのアーカイブ状態を保存できません。") }
             static func couldnTSaveTheArchiveStateFor(language: MistiaAppLanguage) -> String { L10n.tr("planning.planning.couldnTSaveTheArchiveStateFor", vi: "Không thể lưu trạng thái lưu trữ của thẻ.", en: "Couldn't save the archive state for this card.", ja: "このカードのアーカイブ状態を保存できません。", language: language) }
             static var couldnTSaveThisBillRightNow: String { L10n.tr("planning.planning.couldnTSaveThisBillRightNow", vi: "Không thể lưu hóa đơn lúc này.", en: "Couldn't save this bill right now.", ja: "現在この請求を保存できません。") }
@@ -1931,6 +1937,8 @@ nonisolated enum L10n {
             static func creditLimit(language: MistiaAppLanguage) -> String { L10n.tr("planning.planning.creditLimit", vi: "Hạn mức", en: "Credit limit", ja: "利用限度額", language: language) }
             static var currentAmount: String { L10n.tr("planning.planning.currentAmount", vi: "Số tiền hiện tại", en: "Current amount", ja: "現在額") }
             static func currentAmount(language: MistiaAppLanguage) -> String { L10n.tr("planning.planning.currentAmount", vi: "Số tiền hiện tại", en: "Current amount", ja: "現在額", language: language) }
+            static var currentDebt: String { L10n.tr("planning.planning.currentDebt", vi: "Dư nợ hiện tại", en: "Current debt", ja: "現在の利用額") }
+            static func currentDebt(language: MistiaAppLanguage) -> String { L10n.tr("planning.planning.currentDebt", vi: "Dư nợ hiện tại", en: "Current debt", ja: "現在の利用額", language: language) }
             static var currentMonth: String { L10n.tr("planning.planning.currentMonth", vi: "Tháng hiện tại", en: "Current month", ja: "今月") }
             static func currentMonth(language: MistiaAppLanguage) -> String { L10n.tr("planning.planning.currentMonth", vi: "Tháng hiện tại", en: "Current month", ja: "今月", language: language) }
             static var cycle: String { L10n.tr("planning.planning.cycle", vi: "Chu kỳ", en: "Cycle", ja: "周期") }
@@ -2137,6 +2145,12 @@ nonisolated enum L10n {
             }
             static var pastBudgetReadOnlyReference: String { L10n.tr("planning.planning.pastBudgetReadOnlyReference", vi: "Ngân sách tháng cũ là bản tham chiếu chỉ đọc.", en: "Past-month budgets are read-only reference records.", ja: "過去月の予算は参照用の読み取り専用レコードです。") }
             static func pastBudgetReadOnlyReference(language: MistiaAppLanguage) -> String { L10n.tr("planning.planning.pastBudgetReadOnlyReference", vi: "Ngân sách tháng cũ là bản tham chiếu chỉ đọc.", en: "Past-month budgets are read-only reference records.", ja: "過去月の予算は参照用の読み取り専用レコードです。", language: language) }
+            static var pauseBill: String { L10n.tr("planning.planning.pauseBill", vi: "Tạm dừng hóa đơn", en: "Pause bill", ja: "請求を一時停止") }
+            static func pauseBill(language: MistiaAppLanguage) -> String { L10n.tr("planning.planning.pauseBill", vi: "Tạm dừng hóa đơn", en: "Pause bill", ja: "請求を一時停止", language: language) }
+            static var pauseBillMessage: String { L10n.tr("planning.planning.pauseBillMessage", vi: "Tạm dừng hóa đơn này?", en: "Pause this bill?", ja: "この請求を一時停止しますか？") }
+            static func pauseBillMessage(language: MistiaAppLanguage) -> String { L10n.tr("planning.planning.pauseBillMessage", vi: "Tạm dừng hóa đơn này?", en: "Pause this bill?", ja: "この請求を一時停止しますか？", language: language) }
+            static var pausedBillsWillNoLongerAppearIn: String { L10n.tr("planning.planning.pausedBillsWillNoLongerAppearIn", vi: "Hóa đơn tạm dừng sẽ không xuất hiện trong khoản cần thanh toán, thông báo hoặc tự động thanh toán cho đến khi bắt đầu lại.", en: "Paused bills will not appear in due items, notifications, or auto-pay until resumed.", ja: "一時停止中の請求は、再開するまで支払い予定、通知、自動支払いに表示されません。") }
+            static func pausedBillsWillNoLongerAppearIn(language: MistiaAppLanguage) -> String { L10n.tr("planning.planning.pausedBillsWillNoLongerAppearIn", vi: "Hóa đơn tạm dừng sẽ không xuất hiện trong khoản cần thanh toán, thông báo hoặc tự động thanh toán cho đến khi bắt đầu lại.", en: "Paused bills will not appear in due items, notifications, or auto-pay until resumed.", ja: "一時停止中の請求は、再開するまで支払い予定、通知、自動支払いに表示されません。", language: language) }
             static var pay: String { L10n.tr("planning.planning.pay", vi: "Thanh toán", en: "Pay", ja: "支払う") }
             static func pay(language: MistiaAppLanguage) -> String { L10n.tr("planning.planning.pay", vi: "Thanh toán", en: "Pay", ja: "支払う", language: language) }
             static var payEarly: String { L10n.tr("planning.planning.payEarly", vi: "Thanh toán trước", en: "Pay early", ja: "先に支払う") }
@@ -2177,6 +2191,12 @@ nonisolated enum L10n {
             static func requestSent2(language: MistiaAppLanguage) -> String { L10n.tr("planning.planning.requestSent2", vi: "Đã gửi yêu cầu", en: "Request sent", ja: "リクエスト送信済み", language: language) }
             static var requestUse: String { L10n.tr("planning.planning.requestUse", vi: "Yêu cầu sử dụng", en: "Request use", ja: "使用をリクエスト") }
             static func requestUse(language: MistiaAppLanguage) -> String { L10n.tr("planning.planning.requestUse", vi: "Yêu cầu sử dụng", en: "Request use", ja: "使用をリクエスト", language: language) }
+            static var resumeBill: String { L10n.tr("planning.planning.resumeBill", vi: "Bắt đầu lại", en: "Resume bill", ja: "請求を再開") }
+            static func resumeBill(language: MistiaAppLanguage) -> String { L10n.tr("planning.planning.resumeBill", vi: "Bắt đầu lại", en: "Resume bill", ja: "請求を再開", language: language) }
+            static var resumeBillDescription: String { L10n.tr("planning.planning.resumeBillDescription", vi: "Mistia sẽ tính hóa đơn này trở lại từ tháng hiện tại.", en: "Mistia will start counting this bill again from the current month.", ja: "Mistia は今月からこの請求を再び計算します。") }
+            static func resumeBillDescription(language: MistiaAppLanguage) -> String { L10n.tr("planning.planning.resumeBillDescription", vi: "Mistia sẽ tính hóa đơn này trở lại từ tháng hiện tại.", en: "Mistia will start counting this bill again from the current month.", ja: "Mistia は今月からこの請求を再び計算します。", language: language) }
+            static var resumeBillMessage: String { L10n.tr("planning.planning.resumeBillMessage", vi: "Bắt đầu lại hóa đơn này?", en: "Resume this bill?", ja: "この請求を再開しますか？") }
+            static func resumeBillMessage(language: MistiaAppLanguage) -> String { L10n.tr("planning.planning.resumeBillMessage", vi: "Bắt đầu lại hóa đơn này?", en: "Resume this bill?", ja: "この請求を再開しますか？", language: language) }
             static var rollover: String { L10n.tr("planning.planning.rollover", vi: "Rollover", en: "Rollover", ja: "繰り越し") }
             static func rollover(language: MistiaAppLanguage) -> String { L10n.tr("planning.planning.rollover", vi: "Rollover", en: "Rollover", ja: "繰り越し", language: language) }
             static var sAHAN: String { L10n.tr("planning.planning.sAHAN", vi: "Sửa hóa đơn", en: "Edit bill", ja: "請求書を編集") }
@@ -3468,10 +3488,16 @@ nonisolated enum L10n {
                 static func parentCategory(language: MistiaAppLanguage) -> String { L10n.tr("shared.sync.mistiasync.parentCategory", vi: "Danh mục cha", en: "Parent category", ja: "親カテゴリ", language: language) }
                 static var parentSnapshot: String { L10n.tr("shared.sync.mistiasync.parentSnapshot", vi: "Ảnh chụp danh mục cha", en: "Parent snapshot", ja: "親カテゴリスナップショット") }
                 static func parentSnapshot(language: MistiaAppLanguage) -> String { L10n.tr("shared.sync.mistiasync.parentSnapshot", vi: "Ảnh chụp danh mục cha", en: "Parent snapshot", ja: "親カテゴリスナップショット", language: language) }
+                static var paused: String { L10n.tr("shared.sync.mistiasync.paused", vi: "Tạm dừng", en: "Paused", ja: "一時停止") }
+                static func paused(language: MistiaAppLanguage) -> String { L10n.tr("shared.sync.mistiasync.paused", vi: "Tạm dừng", en: "Paused", ja: "一時停止", language: language) }
+                static var pausedAt: String { L10n.tr("shared.sync.mistiasync.pausedAt", vi: "Tạm dừng lúc", en: "Paused at", ja: "一時停止日時") }
+                static func pausedAt(language: MistiaAppLanguage) -> String { L10n.tr("shared.sync.mistiasync.pausedAt", vi: "Tạm dừng lúc", en: "Paused at", ja: "一時停止日時", language: language) }
                 static var paymentWallet: String { L10n.tr("shared.sync.mistiasync.paymentWallet", vi: "Ví thanh toán", en: "Payment wallet", ja: "支払いウォレット") }
                 static func paymentWallet(language: MistiaAppLanguage) -> String { L10n.tr("shared.sync.mistiasync.paymentWallet", vi: "Ví thanh toán", en: "Payment wallet", ja: "支払いウォレット", language: language) }
                 static var restoreRecord: String { L10n.tr("shared.sync.mistiasync.restoreRecord", vi: "Khôi phục bản trên máy", en: "Restore record", ja: "この端末の内容を復元") }
                 static func restoreRecord(language: MistiaAppLanguage) -> String { L10n.tr("shared.sync.mistiasync.restoreRecord", vi: "Khôi phục bản trên máy", en: "Restore record", ja: "この端末の内容を復元", language: language) }
+                static var resumeStartMonth: String { L10n.tr("shared.sync.mistiasync.resumeStartMonth", vi: "Tháng bắt đầu lại", en: "Resume month", ja: "再開月") }
+                static func resumeStartMonth(language: MistiaAppLanguage) -> String { L10n.tr("shared.sync.mistiasync.resumeStartMonth", vi: "Tháng bắt đầu lại", en: "Resume month", ja: "再開月", language: language) }
                 static var rollover: String { L10n.tr("shared.sync.mistiasync.rollover", vi: "Chuyển dư", en: "Rollover", ja: "繰り越し") }
                 static func rollover(language: MistiaAppLanguage) -> String { L10n.tr("shared.sync.mistiasync.rollover", vi: "Chuyển dư", en: "Rollover", ja: "繰り越し", language: language) }
                 static var saved: String { L10n.tr("shared.sync.mistiasync.saved", vi: "Đã tiết kiệm", en: "Saved", ja: "貯蓄済み") }

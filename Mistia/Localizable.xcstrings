@@ -11793,138 +11793,6 @@
         }
       }
     },
-    "management.managementauth.possibleDuplicatesDetected": {
-      "localizations": {
-        "vi": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Có thu chi có thể bị trùng"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Possible duplicates detected"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "重複の可能性がある取引があります"
-          }
-        }
-      }
-    },
-    "management.managementauth.possibleDuplicateFirstRecord": {
-      "localizations": {
-        "vi": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Bản ghi 1"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Record 1"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "レコード1"
-          }
-        }
-      }
-    },
-    "management.managementauth.possibleDuplicatePair": {
-      "localizations": {
-        "vi": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Cặp thu chi có thể trùng"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Possible duplicate pair"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "重複の可能性があるペア"
-          }
-        }
-      }
-    },
-    "management.managementauth.possibleDuplicateSameDaySameAmountSameWallet": {
-      "localizations": {
-        "vi": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Cùng ngày, cùng số tiền và cùng ví."
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Same day, same amount, and same wallet."
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "同じ日付、同じ金額、同じウォレットです。"
-          }
-        }
-      }
-    },
-    "management.managementauth.possibleDuplicateSecondRecord": {
-      "localizations": {
-        "vi": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Bản ghi 2"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Record 2"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "レコード2"
-          }
-        }
-      }
-    },
-    "management.managementauth.possibleDuplicateSimilarText": {
-      "localizations": {
-        "vi": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Cùng ngày, cùng số tiền, cùng ví và nội dung gần giống."
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Same day, same amount, same wallet, and similar text."
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "同じ日付、同じ金額、同じウォレットで、内容も似ています。"
-          }
-        }
-      }
-    },
     "management.managementauth.profile": {
       "localizations": {
         "vi": {
@@ -13113,6 +12981,28 @@
         }
       }
     },
+    "management.managementcreditcardstatement.closingDate": {
+      "localizations": {
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ngày chốt"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Closing date"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "締め日"
+          }
+        }
+      }
+    },
     "management.managementcreditcardstatement.due": {
       "localizations": {
         "vi": {
@@ -13135,6 +13025,50 @@
         }
       }
     },
+    "management.managementcreditcardstatement.dueDate": {
+      "localizations": {
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hạn thanh toán"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Due date"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "支払期限"
+          }
+        }
+      }
+    },
+    "management.managementcreditcardstatement.linkedWallet": {
+      "localizations": {
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ví liên kết"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Linked wallet"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "連携ウォレット"
+          }
+        }
+      }
+    },
     "management.managementcreditcardstatement.noChargesInThisCycle": {
       "localizations": {
         "vi": {
@@ -13153,6 +13087,28 @@
           "stringUnit": {
             "state": "translated",
             "value": "この期間の利用はありません"
+          }
+        }
+      }
+    },
+    "management.managementcreditcardstatement.noLinkedWallet": {
+      "localizations": {
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Chưa chọn ví liên kết"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No linked wallet"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "連携ウォレット未設定"
           }
         }
       }
@@ -13245,6 +13201,28 @@
         }
       }
     },
+    "management.managementcreditcardstatement.overdue": {
+      "localizations": {
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Quá hạn"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Overdue"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "延滞"
+          }
+        }
+      }
+    },
     "management.managementcreditcardstatement.paid": {
       "localizations": {
         "vi": {
@@ -13263,6 +13241,28 @@
           "stringUnit": {
             "state": "translated",
             "value": "支払い済み"
+          }
+        }
+      }
+    },
+    "management.managementcreditcardstatement.payable": {
+      "localizations": {
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cần thanh toán"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Payable"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "支払い可能"
           }
         }
       }
@@ -13351,6 +13351,28 @@
           "stringUnit": {
             "state": "translated",
             "value": "利用"
+          }
+        }
+      }
+    },
+    "management.managementcreditcardstatement.statementPeriod": {
+      "localizations": {
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kỳ sao kê"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Statement period"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "明細期間"
           }
         }
       }
@@ -17007,6 +17029,50 @@
         }
       }
     },
+    "planning.planning.couldnTPauseThisBillRightNow": {
+      "localizations": {
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Không thể tạm dừng hóa đơn lúc này."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Couldn't pause this bill right now."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "現在この請求を一時停止できません。"
+          }
+        }
+      }
+    },
+    "planning.planning.couldnTResumeThisBillRightNow": {
+      "localizations": {
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Không thể bắt đầu lại hóa đơn lúc này."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Couldn't resume this bill right now."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "現在この請求を再開できません。"
+          }
+        }
+      }
+    },
     "planning.planning.couldnTDeleteThisGoalRightNow": {
       "localizations": {
         "vi": {
@@ -17377,6 +17443,28 @@
           "stringUnit": {
             "state": "translated",
             "value": "利用限度額"
+          }
+        }
+      }
+    },
+    "planning.planning.currentDebt": {
+      "localizations": {
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dư nợ hiện tại"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Current debt"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "現在の利用額"
           }
         }
       }
@@ -19119,6 +19207,72 @@
         }
       }
     },
+    "planning.planning.pauseBill": {
+      "localizations": {
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tạm dừng hóa đơn"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pause bill"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "請求を一時停止"
+          }
+        }
+      }
+    },
+    "planning.planning.pauseBillMessage": {
+      "localizations": {
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tạm dừng hóa đơn này?"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pause this bill?"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "この請求を一時停止しますか？"
+          }
+        }
+      }
+    },
+    "planning.planning.pausedBillsWillNoLongerAppearIn": {
+      "localizations": {
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hóa đơn tạm dừng sẽ không xuất hiện trong khoản cần thanh toán, thông báo hoặc tự động thanh toán cho đến khi bắt đầu lại."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Paused bills will not appear in due items, notifications, or auto-pay until resumed."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "一時停止中の請求は、再開するまで支払い予定、通知、自動支払いに表示されません。"
+          }
+        }
+      }
+    },
     "planning.planning.paymentAmount": {
       "localizations": {
         "vi": {
@@ -19511,6 +19665,72 @@
           "stringUnit": {
             "state": "translated",
             "value": "使用をリクエスト"
+          }
+        }
+      }
+    },
+    "planning.planning.resumeBill": {
+      "localizations": {
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bắt đầu lại"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Resume bill"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "請求を再開"
+          }
+        }
+      }
+    },
+    "planning.planning.resumeBillDescription": {
+      "localizations": {
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mistia sẽ tính hóa đơn này trở lại từ tháng hiện tại."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mistia will start counting this bill again from the current month."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mistia は今月からこの請求を再び計算します。"
+          }
+        }
+      }
+    },
+    "planning.planning.resumeBillMessage": {
+      "localizations": {
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bắt đầu lại hóa đơn này?"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Resume this bill?"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "この請求を再開しますか？"
           }
         }
       }
@@ -30053,6 +30273,50 @@
         }
       }
     },
+    "shared.sync.mistiasync.paused": {
+      "localizations": {
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tạm dừng"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Paused"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "一時停止"
+          }
+        }
+      }
+    },
+    "shared.sync.mistiasync.pausedAt": {
+      "localizations": {
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tạm dừng lúc"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Paused at"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "一時停止日時"
+          }
+        }
+      }
+    },
     "shared.sync.mistiasync.parentCategory": {
       "localizations": {
         "vi": {
@@ -30115,6 +30379,28 @@
           "stringUnit": {
             "state": "translated",
             "value": "この端末の内容を復元"
+          }
+        }
+      }
+    },
+    "shared.sync.mistiasync.resumeStartMonth": {
+      "localizations": {
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tháng bắt đầu lại"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Resume month"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "再開月"
           }
         }
       }

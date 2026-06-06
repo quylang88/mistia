@@ -676,6 +676,9 @@ nonisolated struct RemoteRecurringBillPlan: MistiaRemoteRow {
     var paymentWalletID: UUID?
     var currencyCode: String
     var isArchived: Bool
+    var isPaused: Bool
+    var pausedAt: Date?
+    var resumeStartMonth: Date?
     var createdAt: Date
     var updatedAt: Date
     var deletedAt: Date?
@@ -703,11 +706,48 @@ nonisolated struct RemoteRecurringBillPlan: MistiaRemoteRow {
         case paymentWalletID = "payment_wallet_id"
         case currencyCode = "currency_code"
         case isArchived = "is_archived"
+        case isPaused = "is_paused"
+        case pausedAt = "paused_at"
+        case resumeStartMonth = "resume_start_month"
         case createdAt = "created_at"
         case updatedAt = "updated_at"
         case deletedAt = "deleted_at"
         case syncVersion = "sync_version"
         case lastModifiedByDeviceID = "last_modified_by_device_id"
+    }
+}
+
+extension RemoteRecurringBillPlan {
+    nonisolated init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        userID = try container.decode(UUID.self, forKey: .userID)
+        id = try container.decode(UUID.self, forKey: .id)
+        name = try container.decode(String.self, forKey: .name)
+        iconSymbolName = try container.decode(String.self, forKey: .iconSymbolName)
+        categoryID = try container.decodeIfPresent(UUID.self, forKey: .categoryID)
+        amountMinor = try container.decodeIfPresent(Int64.self, forKey: .amountMinor)
+        dueDay = try container.decode(Int.self, forKey: .dueDay)
+        scheduleKindRawValue = try container.decodeIfPresent(String.self, forKey: .scheduleKindRawValue)
+        paymentStartDay = try container.decodeIfPresent(Int.self, forKey: .paymentStartDay)
+        paymentStartDate = try container.decodeIfPresent(Date.self, forKey: .paymentStartDate)
+        firstScheduledMonth = try container.decodeIfPresent(Date.self, forKey: .firstScheduledMonth)
+        hasExplicitDueDate = try container.decodeIfPresent(Bool.self, forKey: .hasExplicitDueDate)
+        dueDate = try container.decodeIfPresent(Date.self, forKey: .dueDate)
+        autoPayEnabled = try container.decodeIfPresent(Bool.self, forKey: .autoPayEnabled)
+        autoPayDay = try container.decodeIfPresent(Int.self, forKey: .autoPayDay)
+        autoPayDate = try container.decodeIfPresent(Date.self, forKey: .autoPayDate)
+        frequencyMonths = try container.decode(Int.self, forKey: .frequencyMonths)
+        paymentWalletID = try container.decodeIfPresent(UUID.self, forKey: .paymentWalletID)
+        currencyCode = try container.decode(String.self, forKey: .currencyCode)
+        isArchived = try container.decode(Bool.self, forKey: .isArchived)
+        isPaused = try container.decodeIfPresent(Bool.self, forKey: .isPaused) ?? false
+        pausedAt = try container.decodeIfPresent(Date.self, forKey: .pausedAt)
+        resumeStartMonth = try container.decodeIfPresent(Date.self, forKey: .resumeStartMonth)
+        createdAt = try container.decode(Date.self, forKey: .createdAt)
+        updatedAt = try container.decode(Date.self, forKey: .updatedAt)
+        deletedAt = try container.decodeIfPresent(Date.self, forKey: .deletedAt)
+        syncVersion = try container.decode(Int64.self, forKey: .syncVersion)
+        lastModifiedByDeviceID = try container.decodeIfPresent(UUID.self, forKey: .lastModifiedByDeviceID)
     }
 }
 

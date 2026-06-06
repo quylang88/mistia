@@ -524,9 +524,8 @@ struct ManagementAccountView: View {
     }
 
     private var dataManagementBadgeText: String? {
-        let issueCount = activeConflicts.count + sessionStore.possibleDuplicateCount
-        guard issueCount > 0 else { return nil }
-        return "\(issueCount)"
+        guard !activeConflicts.isEmpty else { return nil }
+        return "\(activeConflicts.count)"
     }
 
     private var syncSettingsValue: String {
@@ -2528,193 +2527,15 @@ private struct ManagementConflictSectionHeader: View {
     }
 }
 
-private struct ManagementPossibleDuplicateSectionHeader: View {
-    let count: Int
-    let accent: Color
-
-    var body: some View {
-        HStack(spacing: 10) {
-            Image(systemName: "doc.on.doc.fill")
-                .font(.system(size: 14, weight: .bold))
-                .foregroundStyle(accent)
-                .frame(width: 28, height: 28)
-                .background(accent.opacity(0.12), in: Circle())
-
-            Text(L10n.management.managementauth.possibleDuplicatesDetected)
-                .font(.system(size: 17, weight: .bold, design: .rounded))
-                .foregroundStyle(.primary)
-
-            Spacer(minLength: 8)
-
-            Text(verbatim: "\(count)")
-                .font(.system(size: 12.5, weight: .bold, design: .rounded))
-                .foregroundStyle(.white)
-                .padding(.horizontal, 9)
-                .padding(.vertical, 4)
-                .background(accent, in: Capsule())
-        }
-    }
-}
-
-private struct ManagementPossibleDuplicateCard: View {
-    @Environment(\.colorScheme) private var colorScheme
-
-    let duplicate: MistiaSyncPossibleDuplicate
-    let transactionsByID: [UUID: LedgerTransaction]
-    let accent: Color
-
-    private var firstTransaction: LedgerTransaction? {
-        transactionsByID[duplicate.firstTransactionID]
-    }
-
-    private var secondTransaction: LedgerTransaction? {
-        transactionsByID[duplicate.secondTransactionID]
-    }
-
-    var body: some View {
-        MistiaGlassCard(cornerRadius: 22, tint: cardTint) {
-            VStack(alignment: .leading, spacing: 14) {
-                HStack(alignment: .center, spacing: 12) {
-                    ZStack {
-                        Circle()
-                            .fill(accent.opacity(colorScheme == .dark ? 0.20 : 0.13))
-
-                        Image(systemName: "doc.on.doc.fill")
-                            .font(.system(size: 16, weight: .bold))
-                            .foregroundStyle(accent)
-                    }
-                    .frame(width: 36, height: 36)
-
-                    VStack(alignment: .leading, spacing: 3) {
-                        Text(L10n.management.managementauth.possibleDuplicatePair)
-                            .font(.system(size: 16, weight: .semibold, design: .rounded))
-                            .foregroundStyle(.primary)
-                            .lineLimit(2)
-
-                        Text(reasonTitle)
-                            .font(.system(size: 12.5, weight: .medium, design: .rounded))
-                            .foregroundStyle(.secondary)
-                            .lineLimit(2)
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
-
-                    Spacer(minLength: 8)
-                }
-
-                VStack(spacing: 0) {
-                    ManagementPossibleDuplicateValueRow(
-                        title: L10n.management.managementauth.possibleDuplicateFirstRecord,
-                        value: transactionSummary(firstTransaction)
-                    )
-
-                    Divider()
-                        .padding(.leading, 92)
-
-                    ManagementPossibleDuplicateValueRow(
-                        title: L10n.management.managementauth.possibleDuplicateSecondRecord,
-                        value: transactionSummary(secondTransaction)
-                    )
-                }
-                .padding(.horizontal, 12)
-                .padding(.vertical, 4)
-                .background(Color(UIColor.tertiarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-        }
-    }
-
-    private var reasonTitle: String {
-        switch duplicate.reason {
-        case .sameDaySameAmountSameWallet:
-            L10n.management.managementauth.possibleDuplicateSameDaySameAmountSameWallet
-        case .sameDaySameAmountSameWalletSimilarText:
-            L10n.management.managementauth.possibleDuplicateSimilarText
-        }
-    }
-
-    private var cardTint: Color {
-        colorScheme == .dark
-            ? Color(UIColor.secondarySystemGroupedBackground).opacity(0.96)
-            : accent.opacity(0.10)
-    }
-
-    private func transactionSummary(_ transaction: LedgerTransaction?) -> String {
-        guard let transaction else {
-            return L10n.management.managementauth.nameUnavailable
-        }
-
-        let title = transaction.title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-            ? L10n.management.managementauth.unnamedTransaction
-            : transaction.title
-        let currencyCode = transaction.sourceWallet?.currencyCode
-            ?? transaction.reportingCurrencyCode
-            ?? transaction.destinationCurrencyCode
-            ?? "JPY"
-        return [
-            title,
-            transaction.amountMinor.formattedCurrency(code: currencyCode),
-            MistiaDateFormatting.fullDateString(for: transaction.occurredAt),
-            transaction.sourceWallet?.name
-        ]
-        .compactMap { value -> String? in
-            guard let value else { return nil }
-            let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
-            return trimmed.isEmpty ? nil : trimmed
-        }
-        .joined(separator: " • ")
-    }
-}
-
-private struct ManagementPossibleDuplicateValueRow: View {
-    let title: String
-    let value: String
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text(title)
-                .font(.system(size: 12, weight: .bold, design: .rounded))
-                .foregroundStyle(.secondary)
-                .lineLimit(1)
-
-            Text(value)
-                .font(.system(size: 13, weight: .medium, design: .rounded))
-                .foregroundStyle(.primary)
-                .lineLimit(3)
-                .fixedSize(horizontal: false, vertical: true)
-                .frame(maxWidth: .infinity, alignment: .leading)
-        }
-        .padding(.vertical, 9)
-        .frame(maxWidth: .infinity, alignment: .leading)
-    }
-}
-
 private struct ManagementDataConflictsView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(SessionStore.self) private var sessionStore
     @Query private var storedConflicts: [SyncConflict]
-    @Query(filter: #Predicate<LedgerTransaction> { transaction in
-        transaction.deletedAt == nil && !transaction.isArchived
-    })
-    private var storedTransactions: [LedgerTransaction]
 
     let accent: Color
 
     private var activeConflicts: [SyncConflict] {
         storedConflicts
-    }
-
-    private var possibleDuplicates: [MistiaSyncPossibleDuplicate] {
-        MistiaSyncLocalStore.possibleDuplicateTransactions(from: storedTransactions)
-    }
-
-    private var duplicateReviewCount: Int {
-        possibleDuplicates.count
-    }
-
-    private var transactionsByID: [UUID: LedgerTransaction] {
-        Dictionary(storedTransactions.map { ($0.id, $0) }, uniquingKeysWith: { lhs, rhs in
-            lhs.updatedAt >= rhs.updatedAt ? lhs : rhs
-        })
     }
 
     private var conflictSections: [ManagementSyncConflictSection] {
@@ -2745,15 +2566,7 @@ private struct ManagementDataConflictsView: View {
                 )
             }
 
-            if duplicateReviewCount > 0 {
-                ManagementInlineMessageCard(
-                    title: L10n.management.managementauth.possibleDuplicatesDetected,
-                    message: L10n.management.managementauth.mistiaKeptBothRecordsSafelyThereAre(String(describing: duplicateReviewCount)),
-                    accent: .orange
-                )
-            }
-
-            if activeConflicts.isEmpty && possibleDuplicates.isEmpty {
+            if activeConflicts.isEmpty {
                 ManagementProfilePlaceholderCard(
                     title: L10n.management.managementauth.noConflictsYet,
                     message: L10n.management.managementauth.whenSyncConflictsOrReviewNeededData,
@@ -2762,25 +2575,6 @@ private struct ManagementDataConflictsView: View {
                 )
             } else {
                 VStack(spacing: 20) {
-                    if !possibleDuplicates.isEmpty {
-                        VStack(alignment: .leading, spacing: 12) {
-                            ManagementPossibleDuplicateSectionHeader(
-                                count: possibleDuplicates.count,
-                                accent: .orange
-                            )
-
-                            VStack(spacing: 12) {
-                                ForEach(possibleDuplicates) { duplicate in
-                                    ManagementPossibleDuplicateCard(
-                                        duplicate: duplicate,
-                                        transactionsByID: transactionsByID,
-                                        accent: .orange
-                                    )
-                                }
-                            }
-                        }
-                    }
-
                     ForEach(conflictSections) { section in
                         VStack(alignment: .leading, spacing: 12) {
                             ManagementConflictSectionHeader(section: section, accent: accent)
@@ -3585,13 +3379,11 @@ struct ManagementSyncSettingsView: View {
                         accent: .purple,
                         subtitle: nil,
                         badge: {
-                            let issueCount = storedConflicts.count + sessionStore.possibleDuplicateCount
-                            return issueCount > 0 ? "\(issueCount)" : nil
+                            storedConflicts.isEmpty ? nil : "\(storedConflicts.count)"
                         }(),
                         badgeAccent: .purple
                     ) {
-                        let issueCount = storedConflicts.count + sessionStore.possibleDuplicateCount
-                        if issueCount > 0 {
+                        if !storedConflicts.isEmpty {
                             destination = .dataManagement
                         } else {
                             showsNoConflictsAlert = true

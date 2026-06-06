@@ -2703,6 +2703,8 @@ private struct PlanningDueActionButton: View {
 }
 
 private struct PlanningCreditCardCard: View {
+    @Environment(\.colorScheme) private var colorScheme
+
     let item: PlanningCreditCardAccountSnapshot
     let onOpenStatement: () -> Void
 
@@ -2710,77 +2712,105 @@ private struct PlanningCreditCardCard: View {
         ZStack(alignment: .topLeading) {
             cardBackground
 
-            VStack(alignment: .leading, spacing: 0) {
-                HStack(alignment: .top) {
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text(issuerTitle.uppercased())
-                            .font(.system(size: 11, weight: .bold, design: .rounded))
-                            .foregroundStyle(.white.opacity(0.72))
-                            .lineLimit(1)
-                        Text(item.network.title.uppercased())
-                            .font(.system(size: 18, weight: .black, design: .rounded))
+            VStack(alignment: .leading, spacing: 11) {
+                HStack(alignment: .top, spacing: 12) {
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text(issuerTitle)
+                            .font(.system(size: 15, weight: .bold, design: .rounded))
                             .foregroundStyle(.white)
                             .lineLimit(1)
-                    }
+                            .minimumScaleFactor(0.78)
 
-                    Spacer(minLength: 12)
-
-                    Text(maskedLast4)
-                        .font(.system(size: 14, weight: .bold, design: .rounded))
-                        .foregroundStyle(.white.opacity(0.82))
-                }
-
-                Spacer(minLength: 14)
-
-                VStack(alignment: .leading, spacing: 5) {
-                    Text(item.walletName)
-                        .font(.system(size: 18, weight: .bold, design: .rounded))
-                        .foregroundStyle(.white)
-                        .lineLimit(1)
-
-                    Text(L10n.planning.planning.available)
-                        .font(.system(size: 11.5, weight: .semibold, design: .rounded))
-                        .foregroundStyle(.white.opacity(0.64))
-
-                    Text(item.availableCreditMinor.formattedCurrency(code: item.currencyCode))
-                        .font(.system(size: 25, weight: .black, design: .rounded))
-                        .foregroundStyle(.white)
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.78)
-
-                    Text(paymentSourceText)
-                        .font(.system(size: 11, weight: .semibold, design: .rounded))
-                        .foregroundStyle(.white.opacity(0.64))
-                        .lineLimit(1)
-                }
-
-                Spacer(minLength: 14)
-
-                HStack(alignment: .bottom, spacing: 12) {
-                    HStack(spacing: 10) {
-                        statementMiniLabel(
-                            title: L10n.planning.planning.close,
-                            value: "\(item.statementClosingDay)"
-                        )
-                        statementMiniLabel(
-                            title: L10n.planning.planning.due,
-                            value: "\(item.dueDay)"
-                        )
+                        Text(item.network.title.uppercased())
+                            .font(.system(size: 10.5, weight: .black, design: .rounded))
+                            .foregroundStyle(.white.opacity(0.62))
+                            .lineLimit(1)
                     }
 
                     Spacer(minLength: 10)
+
+                    Text(maskedLast4)
+                        .font(.system(size: 12.5, weight: .black, design: .rounded))
+                        .foregroundStyle(.white.opacity(0.82))
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 6)
+                        .background(.white.opacity(0.10), in: Capsule())
+                }
+
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(L10n.planning.planning.availableCredit)
+                        .font(.system(size: 11.5, weight: .bold, design: .rounded))
+                        .foregroundStyle(.white.opacity(0.62))
+
+                    Text(item.availableCreditMinor.formattedCurrency(code: item.currencyCode))
+                        .font(.system(size: 27, weight: .black, design: .rounded))
+                        .foregroundStyle(.white)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.68)
+                }
+
+                VStack(alignment: .leading, spacing: 8) {
+                    HStack(alignment: .firstTextBaseline, spacing: 8) {
+                        Text(L10n.planning.planning.currentDebt)
+                            .font(.system(size: 11.5, weight: .bold, design: .rounded))
+                            .foregroundStyle(.white.opacity(0.62))
+
+                        Spacer(minLength: 8)
+
+                        Text(debtLimitText)
+                            .font(.system(size: 12, weight: .bold, design: .rounded))
+                            .foregroundStyle(.white.opacity(0.86))
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.72)
+                    }
+
+                    GeometryReader { proxy in
+                        ZStack(alignment: .leading) {
+                            Capsule()
+                                .fill(.white.opacity(0.13))
+                            Capsule()
+                                .fill(MistiaAccent.lightPurple.color)
+                                .frame(width: max(6, proxy.size.width * debtRatio))
+                        }
+                    }
+                    .frame(height: 6)
+
+                    HStack {
+                        Text(utilizationText)
+                            .font(.system(size: 10.5, weight: .bold, design: .rounded))
+                            .foregroundStyle(MistiaAccent.lightPurple.color)
+
+                        Spacer()
+
+                        Text(item.currentDebtMinor.formattedCurrency(code: item.currencyCode))
+                            .font(.system(size: 10.5, weight: .bold, design: .rounded))
+                            .foregroundStyle(.white.opacity(0.62))
+                    }
+                }
+
+                HStack(alignment: .center, spacing: 8) {
+                    statementMiniLabel(
+                        title: L10n.planning.planning.close,
+                        value: "\(item.statementClosingDay)"
+                    )
+                    statementMiniLabel(
+                        title: L10n.planning.planning.due,
+                        value: "\(item.dueDay)"
+                    )
+
+                    Spacer(minLength: 8)
 
                     Button(action: onOpenStatement) {
                         Label(
                             L10n.planning.planning.statement,
                             systemImage: "doc.text"
                         )
-                        .font(.system(size: 12, weight: .bold, design: .rounded))
+                        .font(.system(size: 11.5, weight: .black, design: .rounded))
                         .labelStyle(.titleAndIcon)
                         .foregroundStyle(.white)
                         .padding(.horizontal, 11)
                         .padding(.vertical, 7)
-                        .background(.white.opacity(0.16), in: Capsule())
+                        .background(MistiaAccent.lightPurple.color.opacity(0.36), in: Capsule())
                     }
                     .buttonStyle(.plain)
                 }
@@ -2814,32 +2844,52 @@ private struct PlanningCreditCardCard: View {
         return L10n.planning.planning.noLinkedWallet
     }
 
+    private var creditLimitMinor: Int64 {
+        max(item.currentDebtMinor + item.availableCreditMinor, item.currentDebtMinor)
+    }
+
+    private var debtRatio: Double {
+        guard creditLimitMinor > 0 else { return 0 }
+        return min(max(Double(item.currentDebtMinor) / Double(creditLimitMinor), 0), 1)
+    }
+
+    private var debtLimitText: String {
+        "\(item.currentDebtMinor.formattedCurrency(code: item.currencyCode)) / \(creditLimitMinor.formattedCurrency(code: item.currencyCode))"
+    }
+
+    private var utilizationText: String {
+        "\(Int((debtRatio * 100).rounded()))%"
+    }
+
     private var cardBackground: some View {
         RoundedRectangle(cornerRadius: 24, style: .continuous)
             .fill(
                 LinearGradient(
                     colors: [
-                        Color(hex: "#151922"),
-                        Color(hex: "#3A2B78"),
-                        Color(hex: "#2DAA9E").opacity(0.88)
+                        Color(hex: "#30343B"),
+                        Color(hex: "#1C2027"),
+                        Color(hex: "#111318")
                     ],
                     startPoint: .topLeading,
                     endPoint: .bottomTrailing
                 )
             )
             .overlay(alignment: .topTrailing) {
-                RoundedRectangle(cornerRadius: 18, style: .continuous)
-                    .fill(.white.opacity(0.10))
-                    .frame(width: 92, height: 52)
-                    .rotationEffect(.degrees(-10))
-                    .offset(x: 18, y: 16)
+                RoundedRectangle(cornerRadius: 2, style: .continuous)
+                    .fill(.white.opacity(0.16))
+                    .frame(width: 42, height: 28)
+                    .overlay {
+                        RoundedRectangle(cornerRadius: 2, style: .continuous)
+                            .strokeBorder(.white.opacity(0.24), lineWidth: 0.6)
+                    }
+                    .padding(18)
             }
             .overlay(alignment: .bottomLeading) {
                 Rectangle()
-                    .fill(.white.opacity(0.10))
-                    .frame(height: 34)
-                    .blur(radius: 18)
-                    .offset(y: 14)
+                    .fill(.white.opacity(colorScheme == .dark ? 0.07 : 0.10))
+                    .frame(height: 1)
+                    .padding(.horizontal, 18)
+                    .offset(y: -58)
             }
     }
 
@@ -2847,14 +2897,14 @@ private struct PlanningCreditCardCard: View {
         HStack(spacing: 5) {
             Text(title)
                 .font(.system(size: 10.5, weight: .bold, design: .rounded))
-                .foregroundStyle(.white.opacity(0.62))
+                .foregroundStyle(.white.opacity(0.58))
             Text(value)
                 .font(.system(size: 13.5, weight: .black, design: .rounded))
                 .foregroundStyle(.white)
         }
         .padding(.horizontal, 9)
         .padding(.vertical, 6)
-        .background(.white.opacity(0.13), in: Capsule())
+        .background(.white.opacity(0.11), in: Capsule())
     }
 }
 

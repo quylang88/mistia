@@ -1013,6 +1013,8 @@ struct PlanningBillEditorSheet: View {
     @State private var draft: PlanningBillDraft
     @State private var alertMessage: String?
     @State private var showsCategoryPicker = false
+    @State private var showsPauseConfirmation = false
+    @State private var showsResumeConfirmation = false
 
     init(target: PlanningBillEditorTarget) {
         self.target = target
@@ -1131,6 +1133,66 @@ struct PlanningBillEditorSheet: View {
                         }
                     }
                     .pickerStyle(.menu)
+                }
+
+                if let plan = target.plan,
+                   plan.scheduleKind == .recurring,
+                   draft.scheduleKind == .recurring {
+                    if plan.isPaused {
+                        Section {
+                            Button {
+                                showsResumeConfirmation = true
+                            } label: {
+                                Text(L10n.planning.planning.resumeBill)
+                                    .font(.body)
+                                    .foregroundStyle(MistiaAccent.purple.color)
+                                    .frame(maxWidth: .infinity, alignment: .center)
+                            }
+                            .buttonStyle(.plain)
+                            .confirmationDialog(
+                                "",
+                                isPresented: $showsResumeConfirmation,
+                                titleVisibility: .hidden
+                            ) {
+                                Button(L10n.planning.planning.resumeBill) {
+                                    resumePlan()
+                                }
+                                Button(L10n.common.cancel, role: .cancel) { }
+                            } message: {
+                                Text(L10n.planning.planning.resumeBillMessage)
+                            }
+                        } footer: {
+                            Text(L10n.planning.planning.resumeBillDescription)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                    } else {
+                        Section {
+                            Button {
+                                showsPauseConfirmation = true
+                            } label: {
+                                Text(L10n.planning.planning.pauseBill)
+                                    .font(.body)
+                                    .foregroundStyle(.orange)
+                                    .frame(maxWidth: .infinity, alignment: .center)
+                            }
+                            .buttonStyle(.plain)
+                            .confirmationDialog(
+                                "",
+                                isPresented: $showsPauseConfirmation,
+                                titleVisibility: .hidden
+                            ) {
+                                Button(L10n.planning.planning.pauseBill, role: .destructive) {
+                                    pausePlan()
+                                }
+                                Button(L10n.common.cancel, role: .cancel) { }
+                            } message: {
+                                Text(L10n.planning.planning.pauseBillMessage)
+                            }
+                        } footer: {
+                            Text(L10n.planning.planning.pausedBillsWillNoLongerAppearIn)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                    }
                 }
 
                 if target.plan != nil {
@@ -1315,6 +1377,11 @@ struct PlanningBillEditorSheet: View {
             plan.autoPayDay = normalized.autoPayDay
             plan.autoPayDate = normalized.autoPayDate
             plan.frequencyMonths = normalized.frequencyMonths
+            if draft.scheduleKind == .oneTime {
+                plan.isPaused = false
+                plan.pausedAt = nil
+                plan.resumeStartMonth = nil
+            }
             plan.paymentWallet = wallet
             plan.updatedAt = now
             planForSync = plan
@@ -1467,6 +1534,49 @@ struct PlanningBillEditorSheet: View {
         }
 
         normalizeAutoPayDraft()
+    }
+
+    private func pausePlan() {
+        guard let plan = target.plan, plan.scheduleKind == .recurring else { return }
+        let now = Date()
+        plan.isPaused = true
+        plan.pausedAt = now
+        plan.resumeStartMonth = nil
+        plan.updatedAt = now
+
+        do {
+            try modelContext.save()
+            MistiaRecurringBillMaintenance.resolveNotifications(for: plan.id, modelContext: modelContext)
+            sessionStore.recordUpsert(
+                entity: .recurringBillPlan,
+                recordID: plan.id,
+                modifiedAt: now
+            )
+            dismiss()
+        } catch {
+            alertMessage = L10n.planning.planning.couldnTPauseThisBillRightNow + " \(error.localizedDescription)"
+        }
+    }
+
+    private func resumePlan() {
+        guard let plan = target.plan, plan.scheduleKind == .recurring else { return }
+        let now = Date()
+        plan.isPaused = false
+        plan.pausedAt = nil
+        plan.resumeStartMonth = PlanningLogic.startOfMonth(for: now, calendar: calendar)
+        plan.updatedAt = now
+
+        do {
+            try modelContext.save()
+            sessionStore.recordUpsert(
+                entity: .recurringBillPlan,
+                recordID: plan.id,
+                modifiedAt: now
+            )
+            dismiss()
+        } catch {
+            alertMessage = L10n.planning.planning.couldnTResumeThisBillRightNow + " \(error.localizedDescription)"
+        }
     }
 
     private func archivePlan() {

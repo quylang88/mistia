@@ -39,13 +39,18 @@ enum MistiaRecurringBillMaintenance {
             modelContext: modelContext
         )
 
-        guard !snapshot.activeBills.isEmpty else { return }
+        for bill in snapshot.activeBills where bill.isPaused {
+            resolveNotifications(for: bill.id, modelContext: modelContext)
+        }
+
+        let activeBills = snapshot.activeBills.filter { !$0.isPaused }
+        guard !activeBills.isEmpty else { return }
 
         let selectedMonth = PlanningLogic.startOfMonth(for: referenceDate, calendar: calendar)
         let previousMonth = calendar.date(byAdding: .month, value: -1, to: selectedMonth) ?? selectedMonth
         let startOfToday = calendar.startOfDay(for: referenceDate)
 
-        for bill in snapshot.activeBills {
+        for bill in activeBills {
             let snap = bill.planningSnapshot
             let dueItems = [previousMonth, selectedMonth]
                 .flatMap { month in
@@ -308,6 +313,35 @@ enum MistiaRecurringBillMaintenance {
             where row.key.hasPrefix(prefix)
             && row.key.hasSuffix(suffix)
             && resolvedKinds.contains(row.kind) {
+            row.isRead = true
+            row.readAt = row.readAt ?? now
+            row.actionState = .resolved
+            row.updatedAt = now
+        }
+        try? modelContext.save()
+    }
+
+    static func resolveNotifications(for billID: UUID, modelContext: ModelContext) {
+        let resolvedKinds: [MistiaAppNotificationKind] = [
+            .billPaymentRequired, .billAutoPaymentFailed, .billOverdue
+        ]
+        let billResourceTypeRawValue = MistiaFamilyNotificationResourceType.bill.rawValue
+        let localReminderSourceRawValue = MistiaAppNotificationSource.localReminder.rawValue
+        let systemSourceRawValue = MistiaAppNotificationSource.system.rawValue
+        let existing = (try? modelContext.fetch(
+            FetchDescriptor<AppNotificationRecord>(
+                predicate: #Predicate<AppNotificationRecord> { row in
+                    row.resourceTypeRawValue == billResourceTypeRawValue
+                        && row.resourceID == billID
+                        && (
+                            row.sourceRawValue == localReminderSourceRawValue
+                                || row.sourceRawValue == systemSourceRawValue
+                        )
+                }
+            )
+        )) ?? []
+        let now = Date()
+        for row in existing where resolvedKinds.contains(row.kind) {
             row.isRead = true
             row.readAt = row.readAt ?? now
             row.actionState = .resolved

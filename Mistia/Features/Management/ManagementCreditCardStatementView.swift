@@ -75,8 +75,7 @@ struct ManagementCreditCardStatementView: View {
             monthMenu
 
             if let selectedStatement {
-                statementHero(selectedStatement)
-                statementTimeline(selectedStatement)
+                statementSummary(selectedStatement)
                 transactionSection(
                     title: L10n.management.managementcreditcardstatement.chargesInCycle,
                     emptyText: L10n.management.managementcreditcardstatement.noChargesInThisCycle,
@@ -108,83 +107,121 @@ struct ManagementCreditCardStatementView: View {
         )
     }
 
-    private func statementHero(_ statement: PlanningCreditCardStatementSnapshot) -> some View {
+    private func statementSummary(_ statement: PlanningCreditCardStatementSnapshot) -> some View {
         let state = effectiveState(for: statement)
 
-        return MistiaGlassCard(cornerRadius: 24, tint: dynamicAccentColor.opacity(0.12)) {
-            VStack(alignment: .leading, spacing: 16) {
-                VStack(alignment: .leading, spacing: 6) {
-                    Text(L10n.management.managementcreditcardstatement.totalDue)
-                        .font(.system(size: 13, weight: .bold, design: .rounded))
-                        .foregroundStyle(.secondary)
+        return MistiaBlockCard(cornerRadius: 22, padding: 18) {
+            VStack(alignment: .leading, spacing: 18) {
+                HStack(alignment: .top, spacing: 14) {
+                    VStack(alignment: .leading, spacing: 5) {
+                        Text(L10n.management.managementcreditcardstatement.totalDue)
+                            .font(.system(size: 12.5, weight: .semibold, design: .rounded))
+                            .foregroundStyle(.secondary)
 
-                    Text(statement.amountMinor.formattedCurrency(code: statement.currencyCode))
-                        .font(.system(size: 36, weight: .black, design: .rounded))
-                        .foregroundStyle(.primary)
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.72)
+                        Text(statement.amountMinor.formattedCurrency(code: statement.currencyCode))
+                            .font(.system(size: 34, weight: .black, design: .rounded))
+                            .foregroundStyle(.primary)
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.68)
+                    }
+
+                    Spacer(minLength: 8)
+
+                    statementStatusPill(state)
+                        .padding(.top, 2)
                 }
+
+                VStack(spacing: 0) {
+                    statementDetailRow(
+                        icon: "calendar",
+                        title: L10n.management.managementcreditcardstatement.statementPeriod,
+                        value: MistiaDateFormatting.statementMonthYearString(
+                            for: statement.statementMonth,
+                            calendar: calendar
+                        )
+                    )
+                    Divider().padding(.leading, 34)
+                    statementDetailRow(
+                        icon: "lock.open",
+                        title: L10n.management.managementcreditcardstatement.closingDate,
+                        value: MistiaDateFormatting.shortDateString(for: statement.closingDate)
+                    )
+                    Divider().padding(.leading, 34)
+                    statementDetailRow(
+                        icon: "calendar.badge.clock",
+                        title: L10n.management.managementcreditcardstatement.dueDate,
+                        value: MistiaDateFormatting.shortDateString(for: statement.dueDate)
+                    )
+                    Divider().padding(.leading, 34)
+                    statementDetailRow(
+                        icon: "wallet.pass",
+                        title: L10n.management.managementcreditcardstatement.linkedWallet,
+                        value: linkedWalletText(for: statement)
+                    )
+                }
+                .padding(.vertical, 2)
 
                 Button {
                     performPayment(for: statement)
                 } label: {
-                    HStack {
+                    HStack(spacing: 8) {
                         Image(systemName: paymentButtonIcon(state, amountMinor: statement.amountMinor))
                         Text(paymentButtonTitle(state, amountMinor: statement.amountMinor))
                     }
-                    .font(.system(size: 16, weight: .bold, design: .rounded))
+                    .font(.system(size: 15, weight: .bold, design: .rounded))
                     .frame(maxWidth: .infinity)
-                    .padding(.vertical, 14)
-                    .background(paymentButtonBackground(state), in: Capsule())
+                    .padding(.vertical, 13)
+                    .background(
+                        paymentButtonBackground(state),
+                        in: RoundedRectangle(cornerRadius: 15, style: .continuous)
+                    )
                     .foregroundStyle(paymentButtonForeground(state))
                 }
                 .buttonStyle(.plain)
                 .disabled(!canPay(statement, state: state))
+                .opacity(canPay(statement, state: state) ? 1 : 0.74)
             }
-            .padding(20)
         }
     }
 
-    private func statementTimeline(_ statement: PlanningCreditCardStatementSnapshot) -> some View {
-        HStack(spacing: 10) {
-            timelineItem(
-                title: L10n.management.managementcreditcardstatement.spend,
-                value: MistiaDateFormatting.statementMonthYearString(for: statement.statementMonth, calendar: calendar),
-                color: Color(hex: "#5B7BFF")
-            )
-            timelineItem(
-                title: L10n.management.managementcreditcardstatement.close,
-                value: MistiaDateFormatting.shortDateString(for: statement.closingDate),
-                color: dynamicAccentColor
-            )
-            timelineItem(
-                title: L10n.management.managementcreditcardstatement.due,
-                value: MistiaDateFormatting.shortDateString(for: statement.dueDate),
-                color: Color(hex: "#F59B3F")
-            )
+    private func statementStatusPill(_ state: PlanningCreditCardStatementState) -> some View {
+        HStack(spacing: 6) {
+            Image(systemName: statementStatusIcon(state))
+                .font(.system(size: 11, weight: .bold))
+            Text(statementStatusTitle(state))
+                .font(.system(size: 12, weight: .bold, design: .rounded))
+                .lineLimit(1)
         }
+        .foregroundStyle(statementStatusColor(state))
+        .padding(.horizontal, 10)
+        .padding(.vertical, 7)
+        .background(
+            statementStatusColor(state).opacity(colorScheme == .dark ? 0.18 : 0.12),
+            in: Capsule()
+        )
     }
 
-    private func timelineItem(title: String, value: String, color: Color) -> some View {
-        VStack(alignment: .leading, spacing: 7) {
-            Circle()
-                .fill(color)
-                .frame(width: 9, height: 9)
-            Text(title)
-                .font(.system(size: 11.5, weight: .bold, design: .rounded))
+    private func statementDetailRow(icon: String, title: String, value: String) -> some View {
+        HStack(spacing: 12) {
+            Image(systemName: icon)
+                .font(.system(size: 13, weight: .semibold))
                 .foregroundStyle(.secondary)
+                .frame(width: 22, height: 22)
+
+            Text(title)
+                .font(.system(size: 14, weight: .semibold, design: .rounded))
+                .foregroundStyle(.secondary)
+
+            Spacer(minLength: 12)
+
             Text(value)
-                .font(.system(size: 12.5, weight: .bold, design: .rounded))
+                .font(.system(size: 14, weight: .bold, design: .rounded))
                 .foregroundStyle(.primary)
                 .lineLimit(1)
-                .minimumScaleFactor(0.78)
+                .minimumScaleFactor(0.72)
+                .multilineTextAlignment(.trailing)
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(14)
-        .background(
-            Color(UIColor.secondarySystemGroupedBackground).opacity(0.58),
-            in: RoundedRectangle(cornerRadius: 18, style: .continuous)
-        )
+        .padding(.vertical, 10)
     }
 
     private func transactionSection(
@@ -325,6 +362,53 @@ struct ManagementCreditCardStatementView: View {
         }
     }
 
+    private func linkedWalletText(for statement: PlanningCreditCardStatementSnapshot) -> String {
+        if let name = statement.paymentSourceWalletName?.trimmingCharacters(in: .whitespacesAndNewlines),
+           !name.isEmpty {
+            return name
+        }
+        return L10n.management.managementcreditcardstatement.noLinkedWallet
+    }
+
+    private func statementStatusTitle(_ state: PlanningCreditCardStatementState) -> String {
+        switch state {
+        case .unclosed:
+            return L10n.management.managementcreditcardstatement.notClosedYet
+        case .payable:
+            return L10n.management.managementcreditcardstatement.payable
+        case .overdue:
+            return L10n.management.managementcreditcardstatement.overdue
+        case .paid:
+            return L10n.management.managementcreditcardstatement.paid
+        }
+    }
+
+    private func statementStatusIcon(_ state: PlanningCreditCardStatementState) -> String {
+        switch state {
+        case .unclosed:
+            return "lock.fill"
+        case .payable:
+            return "creditcard.fill"
+        case .overdue:
+            return "exclamationmark.triangle.fill"
+        case .paid:
+            return "checkmark.circle.fill"
+        }
+    }
+
+    private func statementStatusColor(_ state: PlanningCreditCardStatementState) -> Color {
+        switch state {
+        case .unclosed:
+            return .secondary
+        case .payable:
+            return dynamicAccentColor
+        case .overdue:
+            return Color(hex: "#D94841")
+        case .paid:
+            return Color(hex: "#2E9E5B")
+        }
+    }
+
     private func paymentButtonTitle(
         _ state: PlanningCreditCardStatementState,
         amountMinor: Int64
@@ -337,7 +421,7 @@ struct ManagementCreditCardStatementView: View {
         case .unclosed:
             return L10n.management.managementcreditcardstatement.notClosedYet
         case .payable:
-            return L10n.management.managementcreditcardstatement.payEarly
+            return L10n.management.managementcreditcardstatement.payNow
         case .overdue:
             return L10n.management.managementcreditcardstatement.payNow
         case .paid:

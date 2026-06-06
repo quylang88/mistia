@@ -129,6 +129,9 @@ final class MistiaBackupStoreTests: XCTestCase {
         XCTAssertEqual(recurringBills.first?.firstScheduledMonth, makeDate(year: 2026, month: 4, day: 1))
         XCTAssertEqual(recurringBills.first?.autoPayEnabled, true)
         XCTAssertEqual(recurringBills.first?.autoPayDay, 28)
+        XCTAssertEqual(recurringBills.first?.isPaused, true)
+        XCTAssertEqual(recurringBills.first?.pausedAt, makeDate(year: 2026, month: 4, day: 20))
+        XCTAssertEqual(recurringBills.first?.resumeStartMonth, makeDate(year: 2026, month: 7, day: 1))
 
         let installments = try fetchAll(InstallmentPlan.self, in: targetContainer)
         XCTAssertEqual(installments.count, 1)
@@ -430,6 +433,9 @@ final class MistiaBackupStoreTests: XCTestCase {
             hasExplicitDueDate: true,
             autoPayEnabled: true,
             autoPayDay: 28,
+            isPaused: true,
+            pausedAt: makeDate(year: 2026, month: 4, day: 20),
+            resumeStartMonth: makeDate(year: 2026, month: 7, day: 1),
             paymentWallet: cashWallet,
             createdAt: now,
             updatedAt: now
