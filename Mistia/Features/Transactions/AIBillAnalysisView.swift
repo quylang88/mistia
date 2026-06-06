@@ -418,15 +418,18 @@ struct AIBillAnalysisView: View {
                         }
                     }
                 } else {
+                    let isCategoryEditable = mode != .lend && !candidate.isCreated && !candidate.isLocked
                     Button {
                         categoryPickerTarget = AIBillCategoryPickerTarget(billID: bill.id, itemID: item.lineID)
                     } label: {
-                        Text(categoryLabel(for: item.categoryID, renderContext: renderContext))
-                            .font(.footnote)
-                            .foregroundStyle(item.categoryID == nil ? .red : .secondary)
+                        categoryEditLink(
+                            title: categoryLabel(for: item.categoryID, renderContext: renderContext),
+                            isMissing: item.categoryID == nil,
+                            isEditable: isCategoryEditable
+                        )
                     }
                     .buttonStyle(.plain)
-                    .disabled(mode == .lend || candidate.isCreated || candidate.isLocked)
+                    .disabled(!isCategoryEditable)
                 }
             }
 
@@ -743,6 +746,27 @@ struct AIBillAnalysisView: View {
     private func categoryLabel(for category: TransactionCategory) -> String {
         let parentName = category.parentCategory?.localizedDisplayName ?? category.branchDisplayName
         return "\(parentName) / \(category.localizedDisplayName)"
+    }
+
+    private func categoryEditLink(title: String, isMissing: Bool, isEditable: Bool) -> some View {
+        HStack(spacing: 6) {
+            Text(title)
+                .font(.footnote)
+                .lineLimit(1)
+            Image(systemName: "chevron.up.chevron.down")
+                .font(.system(size: 8.5, weight: .bold))
+                .opacity(isEditable ? 0.72 : 0)
+        }
+        .foregroundStyle(categoryLinkColor(isMissing: isMissing, isEditable: isEditable))
+        .contentShape(Rectangle())
+        .opacity(isEditable ? 1 : 0.58)
+    }
+
+    private func categoryLinkColor(isMissing: Bool, isEditable: Bool) -> Color {
+        if !isEditable {
+            return .secondary
+        }
+        return isMissing ? .red : .blue
     }
 
     private func itemIconName(isSelected: Bool, isCreated: Bool, isLocked: Bool) -> String {
