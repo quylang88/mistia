@@ -1,4 +1,9 @@
 import { createClient } from "npm:@supabase/supabase-js@2"
+import {
+  GeminiModelRequestError,
+  geminiModelNames,
+  requestGeminiModelJSON,
+} from "./gemini-model-request.ts"
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -520,6 +525,7 @@ Deno.serve(async (request) => {
   const supabaseAnonKey = Deno.env.get("SUPABASE_ANON_KEY")
   const geminiAPIKey = Deno.env.get("GEMINI_API_KEY")
   const geminiModel = Deno.env.get("GEMINI_RECEIPT_MODEL") ?? "gemini-2.5-flash"
+  const geminiModels = geminiModelNames(geminiModel, Deno.env.get("GEMINI_RECEIPT_FALLBACK_MODELS"))
   const dailyLimit = 20
   const maxImageBytes = parseLimit(Deno.env.get("MISTIA_RECEIPT_AI_MAX_IMAGE_BYTES"), 4 * 1024 * 1024)
   const authHeader = request.headers.get("Authorization")
@@ -607,14 +613,11 @@ Deno.serve(async (request) => {
     )
   }
 
-  const geminiResponse = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/${geminiModel}:generateContent?key=${geminiAPIKey}`,
-    {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
+  try {
+    const geminiResult = await requestGeminiModelJSON({
+      apiKey: geminiAPIKey,
+      models: geminiModels,
+      body: {
         contents: [
           {
             role: "user",
@@ -634,29 +637,18 @@ Deno.serve(async (request) => {
           responseMimeType: "application/json",
           responseSchema: itemizedBillResponseSchema,
         },
-      }),
-    }
-  )
-
-  const geminiBody = await geminiResponse.json().catch(() => ({}))
-  if (!geminiResponse.ok) {
-    const message = typeof geminiBody.error === "object" && geminiBody.error !== null
-      ? (geminiBody.error as Record<string, unknown>).message
-      : null
-    return jsonResponse(
-      { message: typeof message === "string" ? message : "Gemini bill item analysis failed." },
-      502
-    )
-  }
-
-  try {
-    const modelText = extractModelText(geminiBody as Record<string, unknown>)
+      },
+    })
+    const modelText = extractModelText(geminiResult.body)
     if (!modelText) {
       return jsonResponse(emptyAnalysis(payload, quotaPayload))
     }
     const modelResult = parseModelJSON(modelText)
     return jsonResponse(sanitizeAnalysis(modelResult, payload, quotaPayload))
   } catch (error) {
+    if (error instanceof GeminiModelRequestError) {
+      return jsonResponse({ message: error.message }, 502)
+    }
     return jsonResponse(emptyAnalysis(payload, quotaPayload, error instanceof Error ? error.message : String(error)))
   }
 })

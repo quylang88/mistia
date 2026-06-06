@@ -1132,7 +1132,7 @@ struct AIBillAnalysisView: View {
 
 }
 
-private struct AIBillDraft: Identifiable {
+struct AIBillDraft: Identifiable {
     let id = UUID()
     let image: UIImage
     let thumbnail: UIImage
@@ -1197,15 +1197,19 @@ private enum AIBillCameraSource: Identifiable {
     }
 }
 
-private nonisolated enum AIBillImageProcessor {
+nonisolated enum AIBillImageProcessor {
+    private static let maxAnalysisImageBytes = 3_800_000
+    private static let maxAnalysisImageDimension: CGFloat = 1_800
+    private static let minAnalysisImageDimension: CGFloat = 900
+
     static func makeDraft(from data: Data) -> AIBillDraft? {
         guard let image = UIImage(data: data) else { return nil }
         return makeDraft(from: image)
     }
 
     static func makeDraft(from image: UIImage) -> AIBillDraft? {
-        let normalized = normalizedImage(image)
-        guard let imageData = normalized.jpegData(compressionQuality: 0.82),
+        let normalized = scaledImage(image, maxDimension: maxAnalysisImageDimension)
+        guard let imageData = compressedJPEGData(for: normalized),
               let thumbnail = thumbnail(from: normalized) else {
             return nil
         }
@@ -1218,15 +1222,57 @@ private nonisolated enum AIBillImageProcessor {
         )
     }
 
-    private static func normalizedImage(_ image: UIImage) -> UIImage {
-        let maxDimension: CGFloat = 1800
-        let largestSide = max(image.size.width, image.size.height)
-        guard largestSide > maxDimension else { return image }
+    private static func compressedJPEGData(for image: UIImage) -> Data? {
+        var candidateImage = image
+        var candidateMaxDimension = max(image.size.width, image.size.height)
+        var bestData: Data?
 
-        let scale = maxDimension / largestSide
+        while candidateMaxDimension >= minAnalysisImageDimension {
+            let data = qualityAdjustedJPEGData(for: candidateImage)
+            if let data, data.count <= maxAnalysisImageBytes {
+                return data
+            }
+            if let data, bestData == nil || data.count < (bestData?.count ?? .max) {
+                bestData = data
+            }
+
+            candidateMaxDimension *= 0.86
+            candidateImage = scaledImage(image, maxDimension: candidateMaxDimension)
+        }
+
+        if let bestData, bestData.count <= maxAnalysisImageBytes {
+            return bestData
+        }
+        return nil
+    }
+
+    private static func qualityAdjustedJPEGData(for image: UIImage) -> Data? {
+        var quality: CGFloat = 0.82
+        var data = image.jpegData(compressionQuality: quality)
+
+        while let current = data, current.count > maxAnalysisImageBytes, quality > 0.42 {
+            quality -= 0.08
+            data = image.jpegData(compressionQuality: quality)
+        }
+
+        return data
+    }
+
+    private static func scaledImage(_ image: UIImage, maxDimension: CGFloat) -> UIImage {
+        let largestSide = max(image.size.width, image.size.height)
+        guard largestSide > 0 else { return image }
+
+        let scale = min(1, maxDimension / largestSide)
         let targetSize = CGSize(width: image.size.width * scale, height: image.size.height * scale)
-        let renderer = UIGraphicsImageRenderer(size: targetSize)
+
+        let rendererFormat = UIGraphicsImageRendererFormat()
+        rendererFormat.scale = 1
+        rendererFormat.opaque = true
+
+        let renderer = UIGraphicsImageRenderer(size: targetSize, format: rendererFormat)
         return renderer.image { _ in
+            UIColor.white.setFill()
+            UIBezierPath(rect: CGRect(origin: .zero, size: targetSize)).fill()
             image.draw(in: CGRect(origin: .zero, size: targetSize))
         }
     }

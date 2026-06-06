@@ -2865,13 +2865,13 @@ private struct PlanningCreditCardCard: View {
             VStack(alignment: .leading, spacing: 12) {
                 HStack(alignment: .top, spacing: 12) {
                     VStack(alignment: .leading, spacing: 3) {
-                        Text(issuerTitle)
+                        Text(item.walletName)
                             .font(.system(size: 15, weight: .bold, design: .rounded))
                             .foregroundStyle(.white)
                             .lineLimit(1)
                             .minimumScaleFactor(0.78)
 
-                        Text(item.network.title.uppercased())
+                        Text(issuerSubtitle.uppercased())
                             .font(.system(size: 10.5, weight: .black, design: .rounded))
                             .foregroundStyle(.white.opacity(0.70))
                             .lineLimit(1)
@@ -2957,7 +2957,7 @@ private struct PlanningCreditCardCard: View {
         "•••• \(item.last4)"
     }
 
-    private var issuerTitle: String {
+    private var issuerSubtitle: String {
         let trimmed = item.issuerName.trimmingCharacters(in: .whitespacesAndNewlines)
         return trimmed.isEmpty ? item.network.title : trimmed
     }
@@ -2978,13 +2978,6 @@ private struct PlanningCreditCardCard: View {
                     endPoint: .bottomTrailing
                 )
             )
-            .overlay(alignment: .topTrailing) {
-                Circle()
-                    .fill(presentation.accent.opacity(colorScheme == .dark ? 0.34 : 0.28))
-                    .frame(width: 112, height: 112)
-                    .blur(radius: 20)
-                    .offset(x: 34, y: -46)
-            }
             .overlay(alignment: .bottomLeading) {
                 Circle()
                     .fill(.white.opacity(colorScheme == .dark ? 0.08 : 0.14))
