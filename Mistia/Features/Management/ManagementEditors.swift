@@ -85,10 +85,10 @@ struct ManagementWalletEditorSheet: View {
 
                     if target.wallet == nil {
                         if draft.kind == .creditCard {
-                            TextField(L10n.management.management.availableCredit, text: $draft.availableCreditText)
+                            TextField(L10n.management.management.availableCredit, text: $draft.availableCreditText.currencyInputGrouped())
                                 .keyboardType(.numberPad)
                         } else {
-                            TextField(draft.kind.balanceFieldTitle, text: $draft.openingBalanceText)
+                            TextField(draft.kind.balanceFieldTitle, text: $draft.openingBalanceText.currencyInputGrouped())
                                 .keyboardType(.numberPad)
                         }
                     } else {
@@ -272,7 +272,7 @@ struct ManagementWalletEditorSheet: View {
                     draft.last4 = String(newValue.filter(\.isNumber).prefix(4))
                 }
 
-            TextField(L10n.management.management.creditLimit, text: $draft.creditLimitText)
+            TextField(L10n.management.management.creditLimit, text: $draft.creditLimitText.currencyInputGrouped())
                 .keyboardType(.numberPad)
 
             creditCardDayPicker(
@@ -1567,22 +1567,6 @@ private extension String {
         let trimmed = trimmingCharacters(in: .whitespacesAndNewlines)
         return trimmed.isEmpty ? nil : trimmed
     }
-
-    func currencyInputToMinorUnits(currencyCode: String) -> Int64 {
-        let sanitized = replacingOccurrences(
-            of: "[^0-9-]",
-            with: "",
-            options: .regularExpression
-        )
-
-        guard let value = Int64(sanitized) else { return 0 }
-
-        if currencyCode.uppercased() == "JPY" {
-            return value
-        }
-
-        return value
-    }
 }
 
 
@@ -1612,7 +1596,7 @@ struct ManagementBalanceAdjustmentSheet: View {
         NavigationStack {
             Form {
                 Section(wallet.kind == .creditCard ? L10n.management.balanceEditor.availableCreditTitle : L10n.management.balanceEditor.actualBalanceTitle) {
-                    TextField(wallet.kind == .creditCard ? L10n.management.balanceEditor.availableCreditPlaceholder : L10n.management.balanceEditor.currentBalancePlaceholder, text: $newBalanceText)
+                    TextField(wallet.kind == .creditCard ? L10n.management.balanceEditor.availableCreditPlaceholder : L10n.management.balanceEditor.currentBalancePlaceholder, text: $newBalanceText.currencyInputGrouped())
                         .keyboardType(.numberPad)
                 }
 

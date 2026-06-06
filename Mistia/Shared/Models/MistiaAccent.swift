@@ -14,6 +14,10 @@ enum MistiaAccent: String, Codable {
     case expense // Màu rose đỏ của số tiền chi tiêu
     case income // Màu xanh của số tiền thu nhập
     case transfer // Màu trắng xám của số tiền chuyển tiền
+    case debtLend // Màu cho vay
+    case debtCollect // Màu thu nợ
+    case debtBorrow // Màu nợ phải trả
+    case debtRepay // Màu trả nợ
     case lightPurple // Màu tím nhạt cho text thêm hoặc dark mode highlight
     case checkmarkPurple // Màu tím nhạt cho checkmark/button
 
@@ -49,6 +53,14 @@ enum MistiaAccent: String, Codable {
         case .transfer:
             // Màu xám cho chuyển khoản
             Color(red: 0.55, green: 0.58, blue: 0.67)
+        case .debtLend:
+            Color(red: 0.95, green: 0.56, blue: 0.14)
+        case .debtCollect:
+            Color(red: 0.0, green: 0.68, blue: 0.50)
+        case .debtBorrow:
+            Color(red: 0.38, green: 0.58, blue: 1.0)
+        case .debtRepay:
+            Color(red: 1.0, green: 0.34, blue: 0.52)
         case .lightPurple:
             // Màu tím nhạt cho text thêm hoặc dark mode highlight
             Color(red: 0.65, green: 0.45, blue: 0.98)

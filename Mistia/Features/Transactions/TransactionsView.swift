@@ -114,13 +114,13 @@ private enum TransactionsListPaging {
 private func debtIntentTint(_ intent: TransactionDebtIntent?) -> Color {
     switch intent {
     case .lend:
-        MistiaAccent.amber.color
+        MistiaAccent.debtLend.color
     case .collect:
-        MistiaAccent.indigo.color
+        MistiaAccent.debtCollect.color
     case .borrow:
-        MistiaAccent.sky.color
+        MistiaAccent.debtBorrow.color
     case .repay:
-        MistiaAccent.coral.color
+        MistiaAccent.debtRepay.color
     case nil:
         MistiaAccent.slate.color
     }
@@ -2196,7 +2196,7 @@ private struct DebtSettlementSheet: View {
                 Section {
                     TextField(
                         "",
-                        text: $amountText,
+                        text: $amountText.currencyInputGrouped(),
                         prompt: Text(L10n.planning.duepayment.enterAmount)
                             .foregroundStyle(.tertiary)
                     )
@@ -2267,7 +2267,7 @@ private struct DebtSettlementSheet: View {
             }
         }
         .onAppear {
-            amountText = String(target.amountMinor)
+            amountText = MistiaCurrencyInputFormatting.groupedInput(String(target.amountMinor))
             if let preferredWalletID = target.position.preferredWalletID,
                availableWallets.contains(where: { $0.id == preferredWalletID }) {
                 selectedWalletID = preferredWalletID
@@ -2565,22 +2565,6 @@ private extension String {
     var nilIfBlank: String? {
         let trimmed = trimmingCharacters(in: .whitespacesAndNewlines)
         return trimmed.isEmpty ? nil : trimmed
-    }
-
-    func currencyInputToMinorUnits(currencyCode: String) -> Int64 {
-        let sanitized = replacingOccurrences(
-            of: "[^0-9-]",
-            with: "",
-            options: .regularExpression
-        )
-
-        guard let value = Int64(sanitized) else { return 0 }
-
-        if currencyCode.uppercased() == "JPY" {
-            return value
-        }
-
-        return value
     }
 }
 

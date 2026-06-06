@@ -275,7 +275,7 @@ struct DuePaymentSheet: View {
         if target.requiresAmountInput {
             TextField(
                 "",
-                text: $amountText,
+                text: $amountText.currencyInputGrouped(),
                 prompt: Text(L10n.planning.duepayment.enterAmount)
                     .foregroundStyle(.tertiary)
             )
@@ -420,11 +420,6 @@ private extension String {
     var nilIfBlank: String? {
         let trimmed = trimmingCharacters(in: .whitespacesAndNewlines)
         return trimmed.isEmpty ? nil : trimmed
-    }
-
-    func currencyInputToMinorUnits(currencyCode: String) -> Int64 {
-        let sanitized = replacingOccurrences(of: "[^0-9-]", with: "", options: .regularExpression)
-        return Int64(sanitized) ?? 0
     }
 }
 

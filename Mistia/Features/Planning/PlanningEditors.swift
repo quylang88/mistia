@@ -192,7 +192,7 @@ struct PlanningBudgetEditorSheet: View {
                     .buttonStyle(MistiaPressableButtonStyle(cornerRadius: 20))
                     .disabled(isPastBudgetRecord)
 
-                    TextField(L10n.planning.planning.budgetAmount, text: $draft.limitText)
+                    TextField(L10n.planning.planning.budgetAmount, text: $draft.limitText.currencyInputGrouped())
                         .keyboardType(.numberPad)
                         .disabled(isPastBudgetRecord)
 
@@ -806,9 +806,9 @@ struct PlanningGoalEditorSheet: View {
 
                 Section(L10n.planning.planning.goal) {
                     TextField(L10n.planning.planning.goalName, text: $draft.name)
-                    TextField(L10n.planning.planning.targetAmount, text: $draft.targetText)
+                    TextField(L10n.planning.planning.targetAmount, text: $draft.targetText.currencyInputGrouped())
                         .keyboardType(.numberPad)
-                    TextField(L10n.planning.planning.currentAmount, text: $draft.currentText)
+                    TextField(L10n.planning.planning.currentAmount, text: $draft.currentText.currencyInputGrouped())
                         .keyboardType(.numberPad)
                     MistiaDatePickerRow(
                         title: L10n.planning.planning.targetDate,
@@ -1118,7 +1118,7 @@ struct PlanningBillEditorSheet: View {
                     .buttonStyle(MistiaPressableButtonStyle(cornerRadius: 20))
 
                     TextField(L10n.planning.planning.billName, text: $draft.name)
-                    TextField(L10n.planning.planning.amountOptional, text: $draft.amountText)
+                    TextField(L10n.planning.planning.amountOptional, text: $draft.amountText.currencyInputGrouped())
                         .keyboardType(.numberPad)
 
                     Picker(L10n.planning.planning.billType, selection: $draft.scheduleKind) {
@@ -1686,7 +1686,7 @@ struct PlanningInstallmentEditorSheet: View {
 
                 Section(L10n.planning.planning.installmentLoan) {
                     TextField(L10n.planning.planning.name, text: $draft.name)
-                    TextField(L10n.planning.planning.amountPerCycle, text: $draft.amountText)
+                    TextField(L10n.planning.planning.amountPerCycle, text: $draft.amountText.currencyInputGrouped())
                         .keyboardType(.numberPad)
                     Picker(L10n.planning.planning.dueDay, selection: $draft.dueDay) {
                         ForEach(1...31, id: \.self) { day in
@@ -1712,7 +1712,7 @@ struct PlanningInstallmentEditorSheet: View {
 
                 if let dueItem = target.dueItem, dueItem.status == .pending {
                     Section {
-                        TextField(L10n.planning.planning.paymentAmount, text: $paymentAmountText)
+                        TextField(L10n.planning.planning.paymentAmount, text: $paymentAmountText.currencyInputGrouped())
                             .keyboardType(.numberPad)
 
                         Button(L10n.planning.planning.payEarly) {
@@ -2006,9 +2006,9 @@ struct PlanningCreditCardEditorSheet: View {
                         .onChange(of: draft.last4) { _, newValue in
                             draft.last4 = String(newValue.filter(\.isNumber).prefix(4))
                         }
-                    TextField(L10n.planning.planning.availableCredit, text: $draft.availableCreditText)
+                    TextField(L10n.planning.planning.availableCredit, text: $draft.availableCreditText.currencyInputGrouped())
                         .keyboardType(.numberPad)
-                    TextField(L10n.planning.planning.creditLimit, text: $draft.creditLimitText)
+                    TextField(L10n.planning.planning.creditLimit, text: $draft.creditLimitText.currencyInputGrouped())
                         .keyboardType(.numberPad)
                     Picker(L10n.planning.planning.dueDay, selection: $draft.paymentDueDay) {
                         ForEach(paymentDueDayOptions, id: \.self) { day in
@@ -2575,21 +2575,5 @@ private extension String {
     var nilIfBlank: String? {
         let trimmed = trimmingCharacters(in: .whitespacesAndNewlines)
         return trimmed.isEmpty ? nil : trimmed
-    }
-
-    func currencyInputToMinorUnits(currencyCode: String) -> Int64 {
-        let sanitized = replacingOccurrences(
-            of: "[^0-9-]",
-            with: "",
-            options: .regularExpression
-        )
-
-        guard let value = Int64(sanitized) else { return 0 }
-
-        if currencyCode.uppercased() == "JPY" {
-            return value
-        }
-
-        return value
     }
 }

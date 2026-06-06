@@ -37,4 +37,16 @@ final class MistiaLocalizationTests: XCTestCase {
             "2026年4月2日 12:00"
         )
     }
+
+    func testCurrencyInputFormattingGroupsThousandsWhileTyping() {
+        XCTAssertEqual(MistiaCurrencyInputFormatting.groupedInput("1234"), "1,234")
+        XCTAssertEqual(MistiaCurrencyInputFormatting.groupedInput("1234567"), "1,234,567")
+        XCTAssertEqual(MistiaCurrencyInputFormatting.groupedInput("12,34a56"), "123,456")
+        XCTAssertEqual(MistiaCurrencyInputFormatting.groupedInput(""), "")
+    }
+
+    func testCurrencyInputParsingIgnoresGroupingSeparators() {
+        XCTAssertEqual("1,234,567".currencyInputToMinorUnits(currencyCode: "JPY"), 1_234_567)
+        XCTAssertEqual("12,34a56".currencyInputToMinorUnits(currencyCode: "VND"), 123_456)
+    }
 }

@@ -576,7 +576,7 @@ struct TransactionEditorSheet: View {
             }
 
             Section(L10n.transactions.transactioneditor.amount) {
-                TextField(L10n.transactions.transactioneditor.amount, text: $bindableDraft.amountText)
+                TextField(L10n.transactions.transactioneditor.amount, text: $bindableDraft.amountText.currencyInputGrouped())
                     .keyboardType(.numberPad)
             }
 
@@ -707,7 +707,7 @@ struct TransactionEditorSheet: View {
                     .animation(.snappy(duration: 0.2), value: shouldShowTitleSuggestions)
                 }
 
-                TextField(L10n.transactions.transactioneditor.amount, text: $bindableDraft.amountText)
+                TextField(L10n.transactions.transactioneditor.amount, text: $bindableDraft.amountText.currencyInputGrouped())
                     .keyboardType(.numberPad)
 
                 MistiaDatePickerRow(
@@ -727,10 +727,10 @@ struct TransactionEditorSheet: View {
 
                     if selectedConversionMode == .manual {
                         if renderContext.shouldShowDestinationAmountInput {
-                            TextField(L10n.transactions.transactioneditor.destinationAmount, text: $bindableDraft.destinationAmountText)
+                            TextField(L10n.transactions.transactioneditor.destinationAmount, text: $bindableDraft.destinationAmountText.currencyInputGrouped())
                                 .keyboardType(.numberPad)
                         } else {
-                            TextField(L10n.transactions.transactioneditor.convertedAmount, text: $bindableDraft.reportingAmountText)
+                            TextField(L10n.transactions.transactioneditor.convertedAmount, text: $bindableDraft.reportingAmountText.currencyInputGrouped())
                                 .keyboardType(.numberPad)
                         }
                     }
@@ -3476,21 +3476,5 @@ private extension String {
     var nilIfBlank: String? {
         let trimmed = trimmingCharacters(in: .whitespacesAndNewlines)
         return trimmed.isEmpty ? nil : trimmed
-    }
-
-    func currencyInputToMinorUnits(currencyCode: String) -> Int64 {
-        let sanitized = replacingOccurrences(
-            of: "[^0-9-]",
-            with: "",
-            options: .regularExpression
-        )
-
-        guard let value = Int64(sanitized) else { return 0 }
-
-        if currencyCode.uppercased() == "JPY" {
-            return value
-        }
-
-        return value
     }
 }
