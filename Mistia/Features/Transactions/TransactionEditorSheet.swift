@@ -284,7 +284,7 @@ struct TransactionEditorSheet: View {
 
         return TransactionLogic.isLockedByPaidStatement(
             transaction: transactionSnapshot,
-            allTransactions: postedTransactions.map { $0.snapshot }
+            allTransactions: postedTransactions.lazy.map(\.snapshot)
         )
     }
 

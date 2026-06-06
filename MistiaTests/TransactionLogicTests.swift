@@ -287,6 +287,58 @@ final class TransactionLogicTests: XCTestCase {
         )
     }
 
+    func testPaidStatementLockAcceptsLazyTransactionSequences() throws {
+        let calendar = Calendar(identifier: .gregorian)
+        let cardWalletID = UUID()
+        let cashWalletID = UUID()
+        let cardExpense = record(
+            primaryKind: .expense,
+            amountMinor: 12_000,
+            currencyCode: "JPY",
+            sourceWalletID: cardWalletID,
+            sourceWalletKind: .creditCard,
+            occurredAt: try makeDate(year: 2026, month: 2, day: 12, calendar: calendar)
+        )
+        let matchingPayment = record(
+            primaryKind: .transfer,
+            amountMinor: 12_000,
+            currencyCode: "JPY",
+            transferSubtype: .internalTransfer,
+            title: "Card payment 02/2026",
+            sourceWalletID: cashWalletID,
+            sourceWalletKind: .cash,
+            destinationWalletID: cardWalletID,
+            destinationWalletKind: .creditCard,
+            occurredAt: try makeDate(year: 2026, month: 2, day: 26, calendar: calendar)
+        )
+        let laterIrrelevantPayment = record(
+            primaryKind: .transfer,
+            amountMinor: 1_000,
+            currencyCode: "JPY",
+            transferSubtype: .internalTransfer,
+            title: "Card payment 03/2026",
+            sourceWalletID: cashWalletID,
+            sourceWalletKind: .cash,
+            destinationWalletID: cardWalletID,
+            destinationWalletKind: .creditCard,
+            occurredAt: try makeDate(year: 2026, month: 3, day: 26, calendar: calendar)
+        )
+        let counter = SequenceIterationCounter()
+        let sequence = CountingTransactionSequence(
+            records: [matchingPayment, laterIrrelevantPayment],
+            counter: counter
+        )
+
+        XCTAssertTrue(
+            TransactionLogic.isLockedByPaidStatement(
+                transaction: cardExpense,
+                allTransactions: sequence,
+                calendar: calendar
+            )
+        )
+        XCTAssertEqual(counter.nextCalls, 1)
+    }
+
     func testCounterpartySuggestionsMatchSingleCharacterQueries() {
         let records = [
             debtRecord(
@@ -434,5 +486,22 @@ final class TransactionLogicTests: XCTestCase {
         components.month = month
         components.day = day
         return try XCTUnwrap(calendar.date(from: components))
+    }
+
+    private final class SequenceIterationCounter {
+        var nextCalls = 0
+    }
+
+    private struct CountingTransactionSequence: Sequence {
+        let records: [TransactionRecordSnapshot]
+        let counter: SequenceIterationCounter
+
+        func makeIterator() -> AnyIterator<TransactionRecordSnapshot> {
+            var iterator = records.makeIterator()
+            return AnyIterator {
+                counter.nextCalls += 1
+                return iterator.next()
+            }
+        }
     }
 }

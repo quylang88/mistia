@@ -1207,11 +1207,11 @@ nonisolated enum TransactionLogic {
         return lhs.id.uuidString > rhs.id.uuidString
     }
 
-    static func isLockedByPaidStatement(
+    static func isLockedByPaidStatement<Transactions: Sequence>(
         transaction: TransactionRecordSnapshot,
-        allTransactions: [TransactionRecordSnapshot],
+        allTransactions: Transactions,
         calendar: Calendar = MistiaCalendar.current
-    ) -> Bool {
+    ) -> Bool where Transactions.Element == TransactionRecordSnapshot {
         // Only card charges and internal transfers can be locked by a statement.
         guard transaction.primaryKind == .expense || transaction.primaryKind == .transfer else {
             return false
