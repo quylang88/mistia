@@ -1575,41 +1575,36 @@ nonisolated enum PlanningLogic {
             selectedMonthKey: selectedMonthKey
         ) { _ in
             bills.compactMap { bill in
-                let window = recurringBillWindow(
-                    for: bill,
+                makeRecurringBillDueItem(
+                    bill: bill,
+                    occurrence: occurrenceBySourceID[bill.id],
                     selectedMonth: selectedMonth,
                     calendar: calendar
                 )
-                guard let window else { return nil }
-
-                let occurrence = occurrenceBySourceID[bill.id]
-
-                return PlanningRecurringDueSnapshot(
-                    id: bill.id,
-                    sourceKind: .recurringBill,
-                    sourceID: bill.id,
-                    name: bill.name,
-                    iconSymbolName: bill.iconSymbolName,
-                    categorySystemKey: bill.categorySystemKey,
-                    categoryName: bill.categoryName,
-                    categoryIconSymbolName: bill.categoryIconSymbolName,
-                    categoryColorHex: bill.categoryColorHex,
-                    amountMinor: occurrence?.amountMinorSnapshot ?? bill.amountMinor,
-                    paymentStartDate: window.paymentStartDate,
-                    dueDate: window.dueDate,
-                    hasExplicitDueDate: window.hasExplicitDueDate,
-                    scheduleKind: bill.scheduleKind,
-                    frequencyMonths: bill.frequencyMonths,
-                    totalCycles: nil,
-                    paymentWalletID: bill.paymentWalletID,
-                    currencyCode: bill.currencyCode,
-                    status: occurrence?.status ?? .pending,
-                    linkedTransactionID: occurrence?.linkedTransactionID,
-                    autoPayEnabled: bill.autoPayEnabled,
-                    autoPayDate: window.autoPayDate
-                )
             }
         }
+    }
+
+    static func recurringBillDueItem<Occurrences: Sequence>(
+        bill: PlanningBillSnapshot,
+        occurrences: Occurrences,
+        selectedMonth: Date,
+        calendar: Calendar = MistiaCalendar.current
+    ) -> PlanningRecurringDueSnapshot? where Occurrences.Element == PlanningDueOccurrenceSnapshot {
+        let selectedMonthKey = monthKey(for: selectedMonth, calendar: calendar)
+        let occurrence = firstOccurrence(
+            for: .recurringBill,
+            sourceID: bill.id,
+            selectedMonthKey: selectedMonthKey,
+            occurrences: occurrences
+        )
+
+        return makeRecurringBillDueItem(
+            bill: bill,
+            occurrence: occurrence,
+            selectedMonth: selectedMonth,
+            calendar: calendar
+        )
     }
 
     static func recurringBillAmountTotalsByCurrency(
@@ -1655,36 +1650,36 @@ nonisolated enum PlanningLogic {
             selectedMonthKey: selectedMonthKey
         ) { _ in
             plans.compactMap { plan in
-                guard isScheduledMonth(
+                makeInstallmentDueItem(
+                    plan: plan,
+                    occurrence: occurrenceBySourceID[plan.id],
                     selectedMonth: selectedMonth,
-                    anchorDate: plan.createdAt,
-                    frequencyMonths: plan.frequencyMonths,
-                    totalCycles: plan.totalCycles,
                     calendar: calendar
-                ) else {
-                    return nil
-                }
-
-                let occurrence = occurrenceBySourceID[plan.id]
-
-                return PlanningRecurringDueSnapshot(
-                    id: plan.id,
-                    sourceKind: .installment,
-                    sourceID: plan.id,
-                    name: plan.name,
-                    iconSymbolName: plan.iconSymbolName,
-                    categorySystemKey: .loanRepayment,
-                    amountMinor: occurrence?.amountMinorSnapshot ?? plan.amountPerCycleMinor,
-                    dueDate: scheduledDate(dueDay: plan.dueDay, selectedMonth: selectedMonth, calendar: calendar),
-                    frequencyMonths: plan.frequencyMonths,
-                    totalCycles: plan.totalCycles,
-                    paymentWalletID: plan.paymentWalletID,
-                    currencyCode: plan.currencyCode,
-                    status: occurrence?.status ?? .pending,
-                    linkedTransactionID: occurrence?.linkedTransactionID
                 )
             }
         }
+    }
+
+    static func installmentDueItem<Occurrences: Sequence>(
+        plan: PlanningInstallmentSnapshot,
+        occurrences: Occurrences,
+        selectedMonth: Date,
+        calendar: Calendar = MistiaCalendar.current
+    ) -> PlanningRecurringDueSnapshot? where Occurrences.Element == PlanningDueOccurrenceSnapshot {
+        let selectedMonthKey = monthKey(for: selectedMonth, calendar: calendar)
+        let occurrence = firstOccurrence(
+            for: .installment,
+            sourceID: plan.id,
+            selectedMonthKey: selectedMonthKey,
+            occurrences: occurrences
+        )
+
+        return makeInstallmentDueItem(
+            plan: plan,
+            occurrence: occurrence,
+            selectedMonth: selectedMonth,
+            calendar: calendar
+        )
     }
 
     static func dueSummary(
@@ -2443,6 +2438,94 @@ nonisolated enum PlanningLogic {
         }
 
         return result
+    }
+
+    private static func firstOccurrence<Occurrences: Sequence>(
+        for sourceKind: PlanningDueSourceKind,
+        sourceID: UUID,
+        selectedMonthKey: String,
+        occurrences: Occurrences
+    ) -> PlanningDueOccurrenceSnapshot? where Occurrences.Element == PlanningDueOccurrenceSnapshot {
+        for occurrence in occurrences where occurrence.sourceKind == sourceKind
+            && occurrence.sourceID == sourceID
+            && occurrence.selectedMonthKey == selectedMonthKey {
+            return occurrence
+        }
+
+        return nil
+    }
+
+    private static func makeRecurringBillDueItem(
+        bill: PlanningBillSnapshot,
+        occurrence: PlanningDueOccurrenceSnapshot?,
+        selectedMonth: Date,
+        calendar: Calendar
+    ) -> PlanningRecurringDueSnapshot? {
+        let window = recurringBillWindow(
+            for: bill,
+            selectedMonth: selectedMonth,
+            calendar: calendar
+        )
+        guard let window else { return nil }
+
+        return PlanningRecurringDueSnapshot(
+            id: bill.id,
+            sourceKind: .recurringBill,
+            sourceID: bill.id,
+            name: bill.name,
+            iconSymbolName: bill.iconSymbolName,
+            categorySystemKey: bill.categorySystemKey,
+            categoryName: bill.categoryName,
+            categoryIconSymbolName: bill.categoryIconSymbolName,
+            categoryColorHex: bill.categoryColorHex,
+            amountMinor: occurrence?.amountMinorSnapshot ?? bill.amountMinor,
+            paymentStartDate: window.paymentStartDate,
+            dueDate: window.dueDate,
+            hasExplicitDueDate: window.hasExplicitDueDate,
+            scheduleKind: bill.scheduleKind,
+            frequencyMonths: bill.frequencyMonths,
+            totalCycles: nil,
+            paymentWalletID: bill.paymentWalletID,
+            currencyCode: bill.currencyCode,
+            status: occurrence?.status ?? .pending,
+            linkedTransactionID: occurrence?.linkedTransactionID,
+            autoPayEnabled: bill.autoPayEnabled,
+            autoPayDate: window.autoPayDate
+        )
+    }
+
+    private static func makeInstallmentDueItem(
+        plan: PlanningInstallmentSnapshot,
+        occurrence: PlanningDueOccurrenceSnapshot?,
+        selectedMonth: Date,
+        calendar: Calendar
+    ) -> PlanningRecurringDueSnapshot? {
+        guard isScheduledMonth(
+            selectedMonth: selectedMonth,
+            anchorDate: plan.createdAt,
+            frequencyMonths: plan.frequencyMonths,
+            totalCycles: plan.totalCycles,
+            calendar: calendar
+        ) else {
+            return nil
+        }
+
+        return PlanningRecurringDueSnapshot(
+            id: plan.id,
+            sourceKind: .installment,
+            sourceID: plan.id,
+            name: plan.name,
+            iconSymbolName: plan.iconSymbolName,
+            categorySystemKey: .loanRepayment,
+            amountMinor: occurrence?.amountMinorSnapshot ?? plan.amountPerCycleMinor,
+            dueDate: scheduledDate(dueDay: plan.dueDay, selectedMonth: selectedMonth, calendar: calendar),
+            frequencyMonths: plan.frequencyMonths,
+            totalCycles: plan.totalCycles,
+            paymentWalletID: plan.paymentWalletID,
+            currencyCode: plan.currencyCode,
+            status: occurrence?.status ?? .pending,
+            linkedTransactionID: occurrence?.linkedTransactionID
+        )
     }
 
     private static func isScheduledMonth(

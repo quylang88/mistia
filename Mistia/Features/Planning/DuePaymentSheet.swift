@@ -15,6 +15,11 @@ struct DuePaymentSheetTarget: Identifiable {
     let ownerUserID: UUID?
 }
 
+private struct DuePaymentIconPresentation {
+    let symbolName: String
+    let color: Color
+}
+
 // MARK: - Sheet
 
 struct DuePaymentSheet: View {
@@ -53,32 +58,25 @@ struct DuePaymentSheet: View {
 
     private var activeCurrencyCode: String { target.currencyCode }
 
-    private var resolvedDueItem: PlanningRecurringDueSnapshot? {
-        let selectedMonth = selectedMonthDate
-        let occurrenceSnaps = occurrences.map(\.planningSnapshot)
-
+    private func resolvedDueItem(selectedMonth: Date) -> PlanningRecurringDueSnapshot? {
         switch target.sourceKind {
         case .recurringBill:
-            let snap = bills
-                .filter { $0.id == target.sourceID }
-                .map(\.planningSnapshot)
-            return PlanningLogic.recurringBillDueItems(
-                bills: snap,
-                occurrences: occurrenceSnaps,
+            guard let bill = bills.first(where: { $0.id == target.sourceID }) else { return nil }
+            return PlanningLogic.recurringBillDueItem(
+                bill: bill.planningSnapshot,
+                occurrences: occurrences.lazy.map(\.planningSnapshot),
                 selectedMonth: selectedMonth,
                 calendar: calendar
-            ).first
+            )
 
         case .installment:
-            let snap = installments
-                .filter { $0.id == target.sourceID }
-                .map(\.planningSnapshot)
-            return PlanningLogic.installmentDueItems(
-                plans: snap,
-                occurrences: occurrenceSnaps,
+            guard let plan = installments.first(where: { $0.id == target.sourceID }) else { return nil }
+            return PlanningLogic.installmentDueItem(
+                plan: plan.planningSnapshot,
+                occurrences: occurrences.lazy.map(\.planningSnapshot),
                 selectedMonth: selectedMonth,
                 calendar: calendar
-            ).first
+            )
 
         case .creditCard:
             return nil  // credit card uses statement view, not this sheet
@@ -90,24 +88,24 @@ struct DuePaymentSheet: View {
             ?? PlanningLogic.startOfMonth(for: target.dueDate, calendar: calendar)
     }
 
-    private var defaultAmountText: String {
-        guard let item = resolvedDueItem, let amount = item.amountMinor else { return "" }
+    private func defaultAmountText(for dueItem: PlanningRecurringDueSnapshot?) -> String {
+        guard let amount = dueItem?.amountMinor else { return "" }
         return String(amount)
     }
 
-    private var defaultWalletID: UUID? {
+    private func defaultWalletID(for dueItem: PlanningRecurringDueSnapshot?) -> UUID? {
         switch target.sourceKind {
         case .recurringBill, .installment:
-            return resolvedDueItem?.paymentWalletID
+            return dueItem?.paymentWalletID
         case .creditCard:
             return nil
         }
     }
 
-    private var availableWallets: [LedgerWallet] {
+    private func availableWallets(for dueItem: PlanningRecurringDueSnapshot?) -> [LedgerWallet] {
         walletPickerAccess.availableWallets(
             from: wallets,
-            preferredWalletIDs: Set([defaultWalletID, selectedWalletID].compactMap { $0 }),
+            preferredWalletIDs: Set([defaultWalletID(for: dueItem), selectedWalletID].compactMap { $0 }),
             targetOwnerUserID: target.ownerUserID ?? walletPickerAccess.currentSelfUserID,
             excludesCreditCards: target.sourceKind == .installment
         )
@@ -115,14 +113,6 @@ struct DuePaymentSheet: View {
 
     private var parsedAmountInput: Int64? {
         amountText.nilIfBlank?.currencyInputToMinorUnits(currencyCode: activeCurrencyCode)
-    }
-
-    private var selectedWalletName: String {
-        guard let selectedWalletID,
-              let wallet = wallets.first(where: { $0.id == selectedWalletID }) else {
-            return L10n.planning.duepayment.chooseWallet
-        }
-        return wallet.name
     }
 
     private var walletPickerAccess: MistiaWalletPickerAccess {
@@ -133,40 +123,44 @@ struct DuePaymentSheet: View {
         )
     }
 
-    private var resolvedIconSymbolName: String {
-        switch target.sourceKind {
-        case .recurringBill:
-            if let plan = bills.first(where: { $0.id == target.sourceID }) {
-                return plan.category?.iconSymbolName ?? plan.iconSymbolName
-            }
-            return "mistia.plan.bill"
-        case .installment:
-            return installments.first(where: { $0.id == target.sourceID })?.iconSymbolName ?? "mistia.plan.installment"
-        case .creditCard:
-            return "mistia.plan.card_bill"
-        }
-    }
+    private var resolvedIconPresentation: DuePaymentIconPresentation {
+        let fallbackColor = colorScheme == .dark ? MistiaAccent.lightPurple.color : MistiaAccent.purple.color
 
-    private var resolvedIconColor: Color {
         switch target.sourceKind {
         case .recurringBill:
             if let plan = bills.first(where: { $0.id == target.sourceID }) {
-                let hex = plan.category?.iconColorHex ?? MistiaFinanceIconRegistry.defaultColorHex(for: resolvedIconSymbolName)
-                return Color(hex: hex)
+                let symbolName = plan.category?.iconSymbolName ?? plan.iconSymbolName
+                let colorHex = plan.category?.iconColorHex ?? MistiaFinanceIconRegistry.defaultColorHex(for: symbolName)
+                return DuePaymentIconPresentation(
+                    symbolName: symbolName,
+                    color: Color(hex: colorHex)
+                )
             }
+            return DuePaymentIconPresentation(
+                symbolName: "mistia.plan.bill",
+                color: fallbackColor
+            )
         case .installment:
             if let plan = installments.first(where: { $0.id == target.sourceID }) {
-                return Color(hex: MistiaFinanceIconRegistry.defaultColorHex(for: plan.iconSymbolName))
+                return DuePaymentIconPresentation(
+                    symbolName: plan.iconSymbolName,
+                    color: Color(hex: MistiaFinanceIconRegistry.defaultColorHex(for: plan.iconSymbolName))
+                )
             }
+            return DuePaymentIconPresentation(
+                symbolName: "mistia.plan.installment",
+                color: fallbackColor
+            )
         case .creditCard:
-            break
+            return DuePaymentIconPresentation(
+                symbolName: "mistia.plan.card_bill",
+                color: fallbackColor
+            )
         }
-
-        return colorScheme == .dark ? MistiaAccent.lightPurple.color : MistiaAccent.purple.color
     }
 
-    private var payButtonDisabled: Bool {
-        guard resolvedDueItem != nil, selectedWalletID != nil else {
+    private func payButtonDisabled(for dueItem: PlanningRecurringDueSnapshot?) -> Bool {
+        guard dueItem != nil, selectedWalletID != nil else {
             return true
         }
 
@@ -174,7 +168,7 @@ struct DuePaymentSheet: View {
             return (parsedAmountInput ?? 0) <= 0
         }
 
-        return (resolvedDueItem?.amountMinor ?? 0) <= 0
+        return (dueItem?.amountMinor ?? 0) <= 0
     }
 
     private var walletFieldTitle: String {
@@ -184,31 +178,35 @@ struct DuePaymentSheet: View {
     // MARK: - Body
 
     var body: some View {
+        let selectedMonth = selectedMonthDate
+        let dueItem = resolvedDueItem(selectedMonth: selectedMonth)
+        let iconPresentation = resolvedIconPresentation
+
         NavigationStack {
             Form {
                 Section {
                     HStack(spacing: 14) {
                         MistiaFinanceIconView(
-                            icon: resolvedIconSymbolName,
-                            fallbackColor: resolvedIconColor,
+                            icon: iconPresentation.symbolName,
+                            fallbackColor: iconPresentation.color,
                             size: 44
                         )
 
                         VStack(alignment: .leading, spacing: 3) {
                             Text(target.name)
                                 .font(.system(size: 17, weight: .semibold, design: .rounded))
-                            Text(paymentCycleMonthText)
+                            Text(paymentCycleMonthText(selectedMonth: selectedMonth))
                                 .font(.system(size: 13, weight: .semibold, design: .rounded))
                                 .foregroundStyle(.primary)
-                            Text(paymentWindowText)
+                            Text(paymentWindowText(for: dueItem))
                                 .font(.system(size: 13, weight: .medium, design: .rounded))
                                 .foregroundStyle(.secondary)
                         }
                     }
                     .padding(.vertical, 4)
                 }
-                paymentDetailsSection
-                paymentActionSection
+                paymentDetailsSection(dueItem: dueItem, iconColor: iconPresentation.color)
+                paymentActionSection(dueItem: dueItem)
             }
             .navigationTitle(L10n.planning.duepayment.payBill)
             .navigationBarTitleDisplayMode(.inline)
@@ -225,8 +223,8 @@ struct DuePaymentSheet: View {
             }
         }
         .onAppear {
-            amountText = defaultAmountText
-            selectedWalletID = defaultWalletID
+            amountText = defaultAmountText(for: dueItem)
+            selectedWalletID = defaultWalletID(for: dueItem)
         }
         .alert(
             L10n.planning.duepayment.paymentFailed,
@@ -239,10 +237,13 @@ struct DuePaymentSheet: View {
     }
 
     @ViewBuilder
-    private var paymentDetailsSection: some View {
+    private func paymentDetailsSection(
+        dueItem: PlanningRecurringDueSnapshot?,
+        iconColor: Color
+    ) -> some View {
         Section {
-            amountRow
-            walletMenuRow
+            amountRow(dueItem: dueItem, iconColor: iconColor)
+            walletMenuRow(dueItem: dueItem)
         } footer: {
             if target.requiresAmountInput {
                 Text(L10n.planning.duepayment.thisBillHasNoDefaultAmount)
@@ -250,13 +251,13 @@ struct DuePaymentSheet: View {
         }
     }
 
-    private var paymentActionSection: some View {
+    private func paymentActionSection(dueItem: PlanningRecurringDueSnapshot?) -> some View {
         Section {
             DuePaymentPrimaryActionButton(
                 title: L10n.planning.duepayment.payNow,
-                isDisabled: payButtonDisabled
+                isDisabled: payButtonDisabled(for: dueItem)
             ) {
-                pay()
+                pay(dueItem: dueItem)
             }
             .padding(.horizontal, 16)
             .padding(.top, 8)
@@ -267,7 +268,10 @@ struct DuePaymentSheet: View {
     }
 
     @ViewBuilder
-    private var amountRow: some View {
+    private func amountRow(
+        dueItem: PlanningRecurringDueSnapshot?,
+        iconColor: Color
+    ) -> some View {
         if target.requiresAmountInput {
             TextField(
                 "",
@@ -279,10 +283,10 @@ struct DuePaymentSheet: View {
             .font(.system(size: 17, weight: .semibold, design: .rounded))
             .frame(maxWidth: .infinity, alignment: .leading)
             .frame(minHeight: 44)
-        } else if let amount = resolvedDueItem?.amountMinor {
+        } else if let amount = dueItem?.amountMinor {
             Text(amount.formattedCurrency(code: activeCurrencyCode))
                 .font(.system(size: 17, weight: .bold, design: .rounded))
-                .foregroundStyle(resolvedIconColor)
+                .foregroundStyle(iconColor)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .frame(minHeight: 44)
         } else {
@@ -293,18 +297,18 @@ struct DuePaymentSheet: View {
         }
     }
 
-    private var walletMenuRow: some View {
+    private func walletMenuRow(dueItem: PlanningRecurringDueSnapshot?) -> some View {
         Picker(walletFieldTitle, selection: $selectedWalletID) {
             Text(L10n.planning.duepayment.chooseWallet).tag(Optional<UUID>.none)
-            ForEach(availableWallets) { wallet in
+            ForEach(availableWallets(for: dueItem)) { wallet in
                 Text(walletPickerAccess.title(for: wallet)).tag(Optional(wallet.id))
             }
         }
         .pickerStyle(.menu)
     }
 
-    private var paymentWindowText: String {
-        guard let item = resolvedDueItem else {
+    private func paymentWindowText(for item: PlanningRecurringDueSnapshot?) -> String {
+        guard let item else {
             return MistiaDateFormatting.shortDateString(for: target.dueDate)
         }
         if item.hasExplicitDueDate {
@@ -313,10 +317,10 @@ struct DuePaymentSheet: View {
         return MistiaDateFormatting.shortDateString(for: item.paymentStartDate)
     }
 
-    private var paymentCycleMonthText: String {
+    private func paymentCycleMonthText(selectedMonth: Date) -> String {
         L10n.planning.duepayment.paymentCycleMonth(
             MistiaDateFormatting.statementMonthYearString(
-                for: selectedMonthDate,
+                for: selectedMonth,
                 calendar: calendar
             )
         )
@@ -324,8 +328,8 @@ struct DuePaymentSheet: View {
 
     // MARK: - Pay
 
-    private func pay() {
-        guard let dueItem = resolvedDueItem else {
+    private func pay(dueItem: PlanningRecurringDueSnapshot?) {
+        guard let dueItem else {
             alertMessage = L10n.planning.duepayment.couldNotFindTheDueItem
             return
         }
