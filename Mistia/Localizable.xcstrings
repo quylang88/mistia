@@ -19295,24 +19295,46 @@
         }
       }
     },
-    "planning.planning.pauseBillMessage": {
+    "planning.planning.pauseBillAction": {
       "localizations": {
         "vi": {
           "stringUnit": {
             "state": "translated",
-            "value": "Tạm dừng hóa đơn này?"
+            "value": "Tạm dừng"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Pause this bill?"
+            "value": "Pause"
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "この請求を一時停止しますか？"
+            "value": "一時停止"
+          }
+        }
+      }
+    },
+    "planning.planning.pauseBillMessage": {
+      "localizations": {
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hóa đơn này sẽ tạm dừng. Hóa đơn tạm dừng sẽ không xuất hiện trong khoản cần thanh toán, thông báo hoặc tự động thanh toán cho đến khi bắt đầu lại."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This bill will be paused. Paused bills will not appear in due items, notifications, or auto-pay until resumed."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "この請求は一時停止されます。再開するまで支払い予定、通知、自動支払いに表示されません。"
           }
         }
       }
@@ -19335,28 +19357,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "一時停止中の請求"
-          }
-        }
-      }
-    },
-    "planning.planning.pausedBillsWillNoLongerAppearIn": {
-      "localizations": {
-        "vi": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Hóa đơn tạm dừng sẽ không xuất hiện trong khoản cần thanh toán, thông báo hoặc tự động thanh toán cho đến khi bắt đầu lại."
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Paused bills will not appear in due items, notifications, or auto-pay until resumed."
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "一時停止中の請求は、再開するまで支払い予定、通知、自動支払いに表示されません。"
           }
         }
       }
@@ -19779,46 +19779,24 @@
         }
       }
     },
-    "planning.planning.resumeBillDescription": {
-      "localizations": {
-        "vi": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Mistia sẽ tính hóa đơn này trở lại từ tháng hiện tại."
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Mistia will start counting this bill again from the current month."
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Mistia は今月からこの請求を再び計算します。"
-          }
-        }
-      }
-    },
     "planning.planning.resumeBillMessage": {
       "localizations": {
         "vi": {
           "stringUnit": {
             "state": "translated",
-            "value": "Bắt đầu lại hóa đơn này?"
+            "value": "Hóa đơn này sẽ được tính trở lại từ tháng hiện tại."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Resume this bill?"
+            "value": "This bill will be counted again from the current month."
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "この請求を再開しますか？"
+            "value": "この請求は今月から再び計算されます。"
           }
         }
       }

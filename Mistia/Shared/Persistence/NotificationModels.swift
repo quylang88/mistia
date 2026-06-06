@@ -32,7 +32,7 @@ enum MistiaAppNotificationKind: String, Codable, CaseIterable {
     case billOverdue
 }
 
-enum MistiaFamilyNotificationResourceType: String, Codable, CaseIterable {
+nonisolated enum MistiaFamilyNotificationResourceType: String, Codable, CaseIterable {
     case wallet
     case category
     case budget
@@ -76,7 +76,7 @@ enum MistiaFamilyNotificationResourceType: String, Codable, CaseIterable {
     }
 }
 
-enum MistiaFamilyPermissionScope: String, Codable, CaseIterable {
+nonisolated enum MistiaFamilyPermissionScope: String, Codable, CaseIterable {
     case use
     case edit
     case create
@@ -432,7 +432,7 @@ private struct FamilyNotificationMetadataValue: Decodable {
     }
 }
 
-struct FamilyPermissionRequestRemoteRecord: Codable, Identifiable, Equatable {
+nonisolated struct FamilyPermissionRequestRemoteRecord: Codable, Identifiable, Equatable {
     let id: UUID
     let familyID: UUID
     let requesterUserID: UUID

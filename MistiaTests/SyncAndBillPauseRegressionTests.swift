@@ -163,6 +163,19 @@ final class SyncAndBillPauseRegressionTests: XCTestCase {
         XCTAssertEqual(pausedBills.map(\.id), [pausedBill.id])
     }
 
+    func testBillPauseResumeDialogCopyUsesCompactActionsAndDetailedMessages() {
+        XCTAssertEqual(L10n.planning.planning.pauseBill, "Tạm dừng hóa đơn")
+        XCTAssertEqual(L10n.planning.planning.pauseBillAction, "Tạm dừng")
+        XCTAssertEqual(
+            L10n.planning.planning.pauseBillMessage,
+            "Hóa đơn này sẽ tạm dừng. Hóa đơn tạm dừng sẽ không xuất hiện trong khoản cần thanh toán, thông báo hoặc tự động thanh toán cho đến khi bắt đầu lại."
+        )
+        XCTAssertEqual(
+            L10n.planning.planning.resumeBillMessage,
+            "Hóa đơn này sẽ được tính trở lại từ tháng hiện tại."
+        )
+    }
+
     func testLegacyV4RecurringBillStoreOpensWithPauseDefaults() throws {
         let storeURL = temporaryStoreURL()
         defer { try? removeStoreArtifacts(at: storeURL) }

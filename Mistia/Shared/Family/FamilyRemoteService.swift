@@ -189,7 +189,7 @@ extension FamilyRemoteServicing {
     }
 }
 
-struct FamilyGroupRecord: Codable, Identifiable, Equatable {
+nonisolated struct FamilyGroupRecord: Codable, Identifiable, Equatable {
     let id: UUID
     var name: String
     let ownerUserID: UUID
@@ -211,7 +211,7 @@ struct FamilyGroupRecord: Codable, Identifiable, Equatable {
     }
 }
 
-struct FamilyMembershipRecord: Codable, Identifiable, Equatable {
+nonisolated struct FamilyMembershipRecord: Codable, Identifiable, Equatable {
     let id: UUID
     let familyID: UUID
     let userID: UUID
@@ -261,7 +261,7 @@ struct FamilyMembershipRecord: Codable, Identifiable, Equatable {
     }
 }
 
-struct FamilyInviteRecord: Codable, Identifiable, Equatable {
+nonisolated struct FamilyInviteRecord: Codable, Identifiable, Equatable {
     let id: UUID
     let familyID: UUID
     let code: String
@@ -344,7 +344,7 @@ struct FamilySyncStatusRecord: Codable, Equatable {
     }
 }
 
-struct FamilyPermissionGrantRecord: Codable, Identifiable, Equatable {
+nonisolated struct FamilyPermissionGrantRecord: Codable, Identifiable, Equatable {
     let id: UUID
     let familyID: UUID
     let granteeUserID: UUID
@@ -409,7 +409,7 @@ struct FamilyTransferResult: Codable {
     }
 }
 
-struct FamilyMember: Codable, Identifiable, Equatable {
+nonisolated struct FamilyMember: Codable, Identifiable, Equatable {
     let membershipID: UUID
     let familyID: UUID
     let userID: UUID
@@ -466,7 +466,7 @@ struct FamilyInvitePreviewRecord: Codable, Equatable {
     }
 }
 
-struct FamilyStateSnapshot: Codable, Equatable {
+nonisolated struct FamilyStateSnapshot: Codable, Equatable {
     var family: FamilyGroupRecord?
     var currentMembership: FamilyMembershipRecord?
     var members: [FamilyMember]

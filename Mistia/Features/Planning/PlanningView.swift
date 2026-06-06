@@ -1967,26 +1967,18 @@ private struct DueTabContent: View {
             switch selectedMode {
             case .bills:
                 VStack(spacing: 12) {
-                    if bills.isEmpty && !pausedBills.isEmpty {
-                        PlanningListCard {
-                            PlanningFooterAddButton(title: L10n.planning.planning.addBill) {
-                                onAddBill()
-                            }
-                        }
-                    } else {
-                        DueRowsSection(
-                            emptyTitle: L10n.planning.planning.noBillsYet,
-                            emptyMessage: L10n.planning.planning.addInternetUtilitiesOrRecurringBillsTo,
-                            emptySymbols: ["wifi", "bolt.fill", "phone.fill", "plus"],
-                            accent: MistiaAccent.purple.color,
-                            items: bills,
-                            addTitle: L10n.planning.planning.addBill,
-                            referenceDate: referenceDate,
-                            onAdd: onAddBill,
-                            onEdit: onEditBill,
-                            onPay: onPayBill
-                        )
-                    }
+                    DueRowsSection(
+                        emptyTitle: L10n.planning.planning.noBillsYet,
+                        emptyMessage: L10n.planning.planning.addInternetUtilitiesOrRecurringBillsTo,
+                        emptySymbols: ["wifi", "bolt.fill", "phone.fill", "plus"],
+                        accent: MistiaAccent.purple.color,
+                        items: bills,
+                        addTitle: L10n.planning.planning.addBill,
+                        referenceDate: referenceDate,
+                        onAdd: onAddBill,
+                        onEdit: onEditBill,
+                        onPay: onPayBill
+                    )
 
                     if !pausedBills.isEmpty {
                         PausedBillsSection(
@@ -2149,17 +2141,12 @@ private struct PausedBillsSection: View {
                     }
                 }
             }
-
-            Text(L10n.planning.planning.pausedBillsWillNoLongerAppearIn)
-                .font(.system(size: 12.5, weight: .semibold, design: .rounded))
-                .foregroundStyle(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
-                .padding(.horizontal, 8)
         }
     }
 }
 
 private struct PlanningPausedBillRow: View {
+    @Environment(\.colorScheme) private var colorScheme
     let item: PlanningBillSnapshot
     let onTap: () -> Void
     let onResume: () -> Void
@@ -2183,7 +2170,7 @@ private struct PlanningPausedBillRow: View {
 
             Spacer(minLength: 10)
 
-            PlanningDueActionButton(title: L10n.planning.planning.resumeBill) {
+            PlanningDueActionButton(title: L10n.planning.planning.resumeBill, accent: resumeActionAccent) {
                 onResume()
             }
         }
@@ -2198,6 +2185,10 @@ private struct PlanningPausedBillRow: View {
             return amountMinor.formattedCurrency(code: item.currencyCode)
         }
         return L10n.planning.planning.noAmountYet
+    }
+
+    private var resumeActionAccent: Color {
+        colorScheme == .dark ? MistiaAccent.cyan.color : MistiaAccent.teal.color
     }
 }
 
@@ -2804,10 +2795,14 @@ private struct PlanningDueRow: View {
 private struct PlanningDueActionButton: View {
     @Environment(\.colorScheme) private var colorScheme
     let title: String
+    var accent: Color?
     let action: () -> Void
 
-    private var accent: Color {
-        colorScheme == .dark ? MistiaAccent.lightPurple.color : MistiaAccent.purple.color
+    private var resolvedAccent: Color {
+        if let accent {
+            return accent
+        }
+        return colorScheme == .dark ? MistiaAccent.lightPurple.color : MistiaAccent.purple.color
     }
 
     var body: some View {
@@ -2815,29 +2810,29 @@ private struct PlanningDueActionButton: View {
             if #available(iOS 26.0, *) {
                 Button(action: action) {
                     label
-                        .foregroundStyle(accent)
+                        .foregroundStyle(resolvedAccent)
                         .padding(.horizontal, 10)
                         .padding(.vertical, 5)
                 }
                 .buttonStyle(.glass)
                 .buttonBorderShape(.capsule)
                 .controlSize(.small)
-                .tint(accent)
+                .tint(resolvedAccent)
             } else {
                 Button(action: action) {
                     label
-                        .foregroundStyle(accent)
+                        .foregroundStyle(resolvedAccent)
                         .padding(.horizontal, 10)
                         .padding(.vertical, 5)
                         .background {
                             MistiaCapsuleGlassBackground(
-                                tint: accent.opacity(colorScheme == .dark ? 0.18 : 0.12),
+                                tint: resolvedAccent.opacity(colorScheme == .dark ? 0.18 : 0.12),
                                 interactive: true
                             )
                         }
                         .overlay {
                             Capsule()
-                                .strokeBorder(accent.opacity(colorScheme == .dark ? 0.22 : 0.16), lineWidth: 0.8)
+                                .strokeBorder(resolvedAccent.opacity(colorScheme == .dark ? 0.22 : 0.16), lineWidth: 0.8)
                         }
                 }
                 .buttonStyle(.plain)

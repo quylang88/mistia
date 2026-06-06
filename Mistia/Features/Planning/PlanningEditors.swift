@@ -999,6 +999,7 @@ struct PlanningBillEditorSheet: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
     @Environment(\.calendar) private var calendar
+    @Environment(\.colorScheme) private var colorScheme
     @Environment(SessionStore.self) private var sessionStore
     @Environment(FamilyContextStore.self) private var familyContextStore
     @AppStorage(MistiaAppStorageKey.currencyCode) private var currencyCode = "JPY"
@@ -1064,6 +1065,10 @@ struct PlanningBillEditorSheet: View {
 
     private var activeCurrencyCode: String {
         target.plan?.currencyCode ?? target.dueItem?.currencyCode ?? currencyCode
+    }
+
+    private var resumeActionColor: Color {
+        colorScheme == .dark ? MistiaAccent.cyan.color : MistiaAccent.teal.color
     }
 
     private var selectedCategory: TransactionCategory? {
@@ -1145,7 +1150,7 @@ struct PlanningBillEditorSheet: View {
                             } label: {
                                 Text(L10n.planning.planning.resumeBill)
                                     .font(.body)
-                                    .foregroundStyle(MistiaAccent.purple.color)
+                                    .foregroundStyle(resumeActionColor)
                                     .frame(maxWidth: .infinity, alignment: .center)
                             }
                             .buttonStyle(.plain)
@@ -1161,9 +1166,6 @@ struct PlanningBillEditorSheet: View {
                             } message: {
                                 Text(L10n.planning.planning.resumeBillMessage)
                             }
-                        } footer: {
-                            Text(L10n.planning.planning.resumeBillDescription)
-                                .fixedSize(horizontal: false, vertical: true)
                         }
                     } else {
                         Section {
@@ -1181,16 +1183,13 @@ struct PlanningBillEditorSheet: View {
                                 isPresented: $showsPauseConfirmation,
                                 titleVisibility: .hidden
                             ) {
-                                Button(L10n.planning.planning.pauseBill, role: .destructive) {
+                                Button(L10n.planning.planning.pauseBillAction, role: .destructive) {
                                     pausePlan()
                                 }
                                 Button(L10n.common.cancel, role: .cancel) { }
                             } message: {
                                 Text(L10n.planning.planning.pauseBillMessage)
                             }
-                        } footer: {
-                            Text(L10n.planning.planning.pausedBillsWillNoLongerAppearIn)
-                                .fixedSize(horizontal: false, vertical: true)
                         }
                     }
                 }

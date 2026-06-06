@@ -6,7 +6,7 @@ struct FamilyInviteRoute: Codable, Equatable, Identifiable {
     var id: String { token }
 }
 
-enum FamilyInviteStatus: String, Codable, CaseIterable {
+nonisolated enum FamilyInviteStatus: String, Codable, CaseIterable {
     case pending
     case accepted
     case declined

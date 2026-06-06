@@ -45,7 +45,7 @@ enum FamilyMemberViewingToolbarLogic {
     }
 }
 
-enum FamilyRole: CaseIterable, Codable, Hashable, RawRepresentable {
+nonisolated enum FamilyRole: CaseIterable, Codable, Hashable, RawRepresentable {
     typealias RawValue = String
 
     case owner
@@ -94,7 +94,7 @@ enum FamilyRole: CaseIterable, Codable, Hashable, RawRepresentable {
     }
 }
 
-struct FamilyPermissionPolicy: Codable, Equatable, Hashable {
+nonisolated struct FamilyPermissionPolicy: Codable, Equatable, Hashable {
     var canViewFamilyDashboard: Bool
     var canViewOthers: Bool
     var canEditOthers: Bool
