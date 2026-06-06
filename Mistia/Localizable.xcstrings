@@ -19251,6 +19251,28 @@
         }
       }
     },
+    "planning.planning.pausedBills": {
+      "localizations": {
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hóa đơn tạm dừng"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Paused bills"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "一時停止中の請求"
+          }
+        }
+      }
+    },
     "planning.planning.pausedBillsWillNoLongerAppearIn": {
       "localizations": {
         "vi": {

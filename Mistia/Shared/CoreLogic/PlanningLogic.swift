@@ -1594,6 +1594,20 @@ nonisolated enum PlanningLogic {
         }
     }
 
+    static func pausedRecurringBills(
+        from bills: [PlanningBillSnapshot]
+    ) -> [PlanningBillSnapshot] {
+        bills
+            .filter { $0.scheduleKind == .recurring && $0.isPaused }
+            .sorted { lhs, rhs in
+                let nameComparison = lhs.name.localizedStandardCompare(rhs.name)
+                if nameComparison != .orderedSame {
+                    return nameComparison == .orderedAscending
+                }
+                return lhs.createdAt < rhs.createdAt
+            }
+    }
+
     static func recurringBillDueItem<Occurrences: Sequence>(
         bill: PlanningBillSnapshot,
         occurrences: Occurrences,

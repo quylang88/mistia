@@ -1,7 +1,7 @@
 import Foundation
 import SwiftData
 
-private let recurringBillPausedScheduleKindRawValue = "pausedRecurring"
+let recurringBillPausedScheduleKindRawValue = "pausedRecurring"
 
 @Model
 final class BudgetPlan {
@@ -174,6 +174,9 @@ final class RecurringBillPlan {
     @Relationship(deleteRule: .nullify) var paymentWallet: LedgerWallet?
     var currencyCode: String
     var isArchived: Bool
+    var isPaused: Bool = false
+    var pausedAt: Date?
+    var resumeStartMonth: Date?
     var createdAt: Date
     var updatedAt: Date
     var deletedAt: Date?
@@ -226,59 +229,29 @@ final class RecurringBillPlan {
         self.paymentWallet = paymentWallet
         self.currencyCode = currencyCode
         self.isArchived = isArchived
+        if scheduleKind == .recurring {
+            self.isPaused = isPaused
+            self.pausedAt = isPaused ? pausedAt : nil
+            self.resumeStartMonth = resumeStartMonth
+        } else {
+            self.isPaused = false
+            self.pausedAt = nil
+            self.resumeStartMonth = nil
+        }
         self.createdAt = createdAt
         self.updatedAt = updatedAt
         self.deletedAt = deletedAt
         self.remoteVersion = remoteVersion
-        if scheduleKind == .recurring {
-            self.isPaused = isPaused
-            if isPaused {
-                self.pausedAt = pausedAt
-            }
-            self.resumeStartMonth = resumeStartMonth
-        }
     }
 
     var scheduleKind: PlanningBillScheduleKind {
-        get { PlanningBillScheduleKind(rawValue: scheduleKindRawValue ?? "") ?? .recurring }
-        set {
-            if newValue == .recurring,
-               scheduleKindRawValue == recurringBillPausedScheduleKindRawValue {
-                return
-            }
-            scheduleKindRawValue = newValue.rawValue
-        }
-    }
-
-    var isPaused: Bool {
-        get { scheduleKindRawValue == recurringBillPausedScheduleKindRawValue }
-        set {
-            if newValue {
-                guard scheduleKind == .recurring else { return }
-                scheduleKindRawValue = recurringBillPausedScheduleKindRawValue
-            } else if scheduleKindRawValue == recurringBillPausedScheduleKindRawValue {
-                scheduleKindRawValue = PlanningBillScheduleKind.recurring.rawValue
-            }
-        }
-    }
-
-    var pausedAt: Date? {
-        get { isPaused ? paymentStartDate : nil }
-        set {
-            guard scheduleKind == .recurring else { return }
-            paymentStartDate = isPaused ? newValue : nil
-        }
-    }
-
-    var resumeStartMonth: Date? {
         get {
-            guard scheduleKind == .recurring else { return nil }
-            return autoPayDate
+            if scheduleKindRawValue == recurringBillPausedScheduleKindRawValue {
+                return .recurring
+            }
+            return PlanningBillScheduleKind(rawValue: scheduleKindRawValue ?? "") ?? .recurring
         }
-        set {
-            guard scheduleKind == .recurring else { return }
-            autoPayDate = newValue
-        }
+        set { scheduleKindRawValue = newValue.rawValue }
     }
 
     var resolvedPaymentStartDay: Int {

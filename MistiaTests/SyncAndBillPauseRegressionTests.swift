@@ -146,6 +146,23 @@ final class SyncAndBillPauseRegressionTests: XCTestCase {
         XCTAssertEqual(julyItems.first?.paymentStartDate, makeDate(year: 2026, month: 7, day: 5))
     }
 
+    func testPausedRecurringBillsSnapshotContainsOnlyPausedRecurringBills() {
+        let activeBill = makeBill(name: "Active", isPaused: false, resumeStartMonth: nil)
+        let pausedBill = makeBill(name: "Paused", isPaused: true, resumeStartMonth: nil)
+        let oneTimeBill = makeBill(
+            name: "One time",
+            scheduleKind: .oneTime,
+            isPaused: true,
+            resumeStartMonth: nil
+        )
+
+        let pausedBills = PlanningLogic.pausedRecurringBills(
+            from: [activeBill, pausedBill, oneTimeBill]
+        )
+
+        XCTAssertEqual(pausedBills.map(\.id), [pausedBill.id])
+    }
+
     func testLegacyV4RecurringBillStoreOpensWithPauseDefaults() throws {
         let storeURL = temporaryStoreURL()
         defer { try? removeStoreArtifacts(at: storeURL) }
@@ -163,8 +180,80 @@ final class SyncAndBillPauseRegressionTests: XCTestCase {
         XCTAssertNil(bills.first?.resumeStartMonth)
     }
 
+    func testMigrationPlanIncludesRealV5ForBillPauseColumns() {
+        let schemaNames = MistiaMigrationPlan.schemas.map { String(reflecting: $0) }
+        let v4ModelNames = MistiaSchemaV4.models.map { String(reflecting: $0) }
+        let v5ModelNames = MistiaSchemaV5.models.map { String(reflecting: $0) }
+
+        XCTAssertEqual(schemaNames, ["Mistia.MistiaSchemaV4", "Mistia.MistiaSchemaV5"])
+        XCTAssertEqual(MistiaMigrationPlan.stages.count, 1)
+        XCTAssertTrue(v4ModelNames.contains("Mistia.MistiaSchemaV4Models.RecurringBillPlan"))
+        XCTAssertFalse(v4ModelNames.contains("Mistia.RecurringBillPlan"))
+        XCTAssertTrue(v5ModelNames.contains("Mistia.RecurringBillPlan"))
+    }
+
+    func testLegacyV4EncodedPausedBillMigratesToPhysicalPauseColumns() throws {
+        let storeURL = temporaryStoreURL()
+        defer { try? removeStoreArtifacts(at: storeURL) }
+
+        let billID = UUID()
+        let pausedAt = makeDate(year: 2026, month: 2, day: 12)
+        let resumeStartMonth = makeDate(year: 2026, month: 7, day: 1)
+        try createLegacyV4EncodedPausedBillStore(
+            at: storeURL,
+            billID: billID,
+            pausedAt: pausedAt,
+            resumeStartMonth: resumeStartMonth
+        )
+
+        let container = try openCurrentStore(at: storeURL)
+        let bills = try ModelContext(container).fetch(FetchDescriptor<RecurringBillPlan>())
+
+        XCTAssertEqual(bills.map(\.id), [billID])
+        XCTAssertEqual(bills.first?.scheduleKind, .recurring)
+        XCTAssertTrue(bills.first?.isPaused ?? false)
+        XCTAssertEqual(bills.first?.pausedAt, pausedAt)
+        XCTAssertEqual(bills.first?.resumeStartMonth, resumeStartMonth)
+        XCTAssertNil(bills.first?.paymentStartDate)
+        XCTAssertNil(bills.first?.autoPayDate)
+        XCTAssertTrue(try storeFileContains("ZISPAUSED", at: storeURL))
+        XCTAssertTrue(try storeFileContains("ZPAUSEDAT", at: storeURL))
+        XCTAssertTrue(try storeFileContains("ZRESUMESTARTMONTH", at: storeURL))
+
+        let reopenedContainer = try openCurrentStore(at: storeURL)
+        let reopenedBills = try ModelContext(reopenedContainer).fetch(FetchDescriptor<RecurringBillPlan>())
+        XCTAssertEqual(reopenedBills.map(\.id), [billID])
+        XCTAssertTrue(reopenedBills.first?.isPaused ?? false)
+    }
+
+    func testLegacyV4OneTimeBillPreservesPaymentAndAutoPayDates() throws {
+        let storeURL = temporaryStoreURL()
+        defer { try? removeStoreArtifacts(at: storeURL) }
+
+        let billID = UUID()
+        let paymentStartDate = makeDate(year: 2026, month: 7, day: 7)
+        let autoPayDate = makeDate(year: 2026, month: 7, day: 8)
+        try createLegacyV4OneTimeBillStore(
+            at: storeURL,
+            billID: billID,
+            paymentStartDate: paymentStartDate,
+            autoPayDate: autoPayDate
+        )
+
+        let container = try openCurrentStore(at: storeURL)
+        let bills = try ModelContext(container).fetch(FetchDescriptor<RecurringBillPlan>())
+
+        XCTAssertEqual(bills.map(\.id), [billID])
+        XCTAssertEqual(bills.first?.scheduleKind, .oneTime)
+        XCTAssertFalse(bills.first?.isPaused ?? true)
+        XCTAssertNil(bills.first?.pausedAt)
+        XCTAssertNil(bills.first?.resumeStartMonth)
+        XCTAssertEqual(bills.first?.paymentStartDate, paymentStartDate)
+        XCTAssertEqual(bills.first?.autoPayDate, autoPayDate)
+    }
+
     private func makeContainer() throws -> ModelContainer {
-        let schema = Schema(versionedSchema: MistiaSchemaV4.self)
+        let schema = Schema(versionedSchema: MistiaSchemaV5.self)
         let configuration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)
         return try ModelContainer(for: schema, configurations: [configuration])
     }
@@ -175,7 +264,7 @@ final class SyncAndBillPauseRegressionTests: XCTestCase {
         let container = try ModelContainer(for: schema, configurations: [configuration])
         let context = ModelContext(container)
         context.insert(
-            RecurringBillPlan(
+            MistiaSchemaV4.RecurringBillPlan(
                 id: billID,
                 name: "Internet",
                 iconSymbolName: "wifi",
@@ -187,8 +276,62 @@ final class SyncAndBillPauseRegressionTests: XCTestCase {
         try context.save()
     }
 
-    private func openCurrentStore(at storeURL: URL) throws -> ModelContainer {
+    private func createLegacyV4EncodedPausedBillStore(
+        at storeURL: URL,
+        billID: UUID,
+        pausedAt: Date,
+        resumeStartMonth: Date
+    ) throws {
         let schema = Schema(versionedSchema: MistiaSchemaV4.self)
+        let configuration = ModelConfiguration("default", schema: schema, url: storeURL)
+        let container = try ModelContainer(for: schema, configurations: [configuration])
+        let context = ModelContext(container)
+        context.insert(
+            MistiaSchemaV4.RecurringBillPlan(
+                id: billID,
+                name: "Internet",
+                iconSymbolName: "wifi",
+                amountMinor: 4_200,
+                dueDay: 12,
+                scheduleKindRawValue: recurringBillPausedScheduleKindRawValue,
+                paymentStartDate: pausedAt,
+                autoPayDate: resumeStartMonth,
+                frequencyMonths: 1
+            )
+        )
+        try context.save()
+    }
+
+    private func createLegacyV4OneTimeBillStore(
+        at storeURL: URL,
+        billID: UUID,
+        paymentStartDate: Date,
+        autoPayDate: Date
+    ) throws {
+        let schema = Schema(versionedSchema: MistiaSchemaV4.self)
+        let configuration = ModelConfiguration("default", schema: schema, url: storeURL)
+        let container = try ModelContainer(for: schema, configurations: [configuration])
+        let context = ModelContext(container)
+        context.insert(
+            MistiaSchemaV4.RecurringBillPlan(
+                id: billID,
+                name: "Doctor",
+                iconSymbolName: "cross.case.fill",
+                amountMinor: 8_000,
+                dueDay: 8,
+                scheduleKindRawValue: PlanningBillScheduleKind.oneTime.rawValue,
+                paymentStartDate: paymentStartDate,
+                hasExplicitDueDate: false,
+                autoPayEnabled: true,
+                autoPayDate: autoPayDate,
+                frequencyMonths: 1
+            )
+        )
+        try context.save()
+    }
+
+    private func openCurrentStore(at storeURL: URL) throws -> ModelContainer {
+        let schema = Schema(versionedSchema: MistiaSchemaV5.self)
         let configuration = ModelConfiguration("default", schema: schema, url: storeURL)
         return try ModelContainer(
             for: schema,
@@ -208,12 +351,15 @@ final class SyncAndBillPauseRegressionTests: XCTestCase {
     }
 
     private func makeBill(
+        id: UUID = UUID(),
+        name: String = "Gym",
+        scheduleKind: PlanningBillScheduleKind = .recurring,
         isPaused: Bool,
         resumeStartMonth: Date?
     ) -> PlanningBillSnapshot {
         PlanningBillSnapshot(
-            id: UUID(),
-            name: "Gym",
+            id: id,
+            name: name,
             iconSymbolName: MistiaSystemCategoryKey.billing.iconSymbolName,
             categorySystemKey: .billing,
             amountMinor: 9_000,
@@ -222,9 +368,9 @@ final class SyncAndBillPauseRegressionTests: XCTestCase {
             paymentWalletID: UUID(),
             currencyCode: "JPY",
             createdAt: makeDate(year: 2026, month: 1, day: 1),
-            scheduleKind: .recurring,
+            scheduleKind: scheduleKind,
             paymentStartDay: 5,
-            paymentStartDate: nil,
+            paymentStartDate: scheduleKind == .oneTime ? makeDate(year: 2026, month: 7, day: 5) : nil,
             firstScheduledMonth: makeDate(year: 2026, month: 1, day: 1),
             hasExplicitDueDate: false,
             dueDate: nil,
@@ -325,5 +471,10 @@ final class SyncAndBillPauseRegressionTests: XCTestCase {
         for url in contents where url.lastPathComponent.hasPrefix(prefix) {
             try FileManager.default.removeItem(at: url)
         }
+    }
+
+    private func storeFileContains(_ text: String, at storeURL: URL) throws -> Bool {
+        let data = try Data(contentsOf: storeURL)
+        return String(decoding: data, as: UTF8.self).contains(text)
     }
 }

@@ -1546,18 +1546,13 @@ struct PlanningBillEditorSheet: View {
     private func pausePlan() {
         guard let plan = target.plan, plan.scheduleKind == .recurring else { return }
         let now = Date()
-        plan.isPaused = true
-        plan.pausedAt = now
-        plan.resumeStartMonth = nil
-        plan.updatedAt = now
 
         do {
-            try modelContext.save()
-            MistiaRecurringBillMaintenance.resolveNotifications(for: plan.id, modelContext: modelContext)
-            sessionStore.recordUpsert(
-                entity: .recurringBillPlan,
-                recordID: plan.id,
-                modifiedAt: now
+            try PlanningBillPauseActions.pause(
+                plan,
+                modelContext: modelContext,
+                sessionStore: sessionStore,
+                referenceDate: now
             )
             dismiss()
         } catch {
@@ -1568,17 +1563,14 @@ struct PlanningBillEditorSheet: View {
     private func resumePlan() {
         guard let plan = target.plan, plan.scheduleKind == .recurring else { return }
         let now = Date()
-        plan.isPaused = false
-        plan.pausedAt = nil
-        plan.resumeStartMonth = PlanningLogic.startOfMonth(for: now, calendar: calendar)
-        plan.updatedAt = now
 
         do {
-            try modelContext.save()
-            sessionStore.recordUpsert(
-                entity: .recurringBillPlan,
-                recordID: plan.id,
-                modifiedAt: now
+            try PlanningBillPauseActions.resume(
+                plan,
+                modelContext: modelContext,
+                sessionStore: sessionStore,
+                referenceDate: now,
+                calendar: calendar
             )
             dismiss()
         } catch {

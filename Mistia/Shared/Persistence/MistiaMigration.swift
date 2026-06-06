@@ -79,6 +79,22 @@ enum MistiaSchemaV3: VersionedSchema {
 }
 
 enum MistiaSchemaV4: VersionedSchema {
+    typealias LedgerWallet = MistiaSchemaV4Models.LedgerWallet
+    typealias CreditCardProfile = MistiaSchemaV4Models.CreditCardProfile
+    typealias TransactionCategory = MistiaSchemaV4Models.TransactionCategory
+    typealias LedgerTransaction = MistiaSchemaV4Models.LedgerTransaction
+    typealias TransactionReceiptImage = MistiaSchemaV4Models.TransactionReceiptImage
+    typealias BudgetPlan = MistiaSchemaV4Models.BudgetPlan
+    typealias SavingsGoal = MistiaSchemaV4Models.SavingsGoal
+    typealias RecurringBillPlan = MistiaSchemaV4Models.RecurringBillPlan
+    typealias InstallmentPlan = MistiaSchemaV4Models.InstallmentPlan
+    typealias DueOccurrenceRecord = MistiaSchemaV4Models.DueOccurrenceRecord
+    typealias AppNotificationRecord = MistiaSchemaV4Models.AppNotificationRecord
+    typealias SyncConflict = MistiaSchemaV4Models.SyncConflict
+    typealias UserAccountProfile = MistiaSchemaV4Models.UserAccountProfile
+    typealias OwnedRecordScope = MistiaSchemaV4Models.OwnedRecordScope
+    typealias TransactionAuditRecord = MistiaSchemaV4Models.TransactionAuditRecord
+
     static var versionIdentifier: Schema.Version {
         Schema.Version(4, 0, 0)
     }
@@ -104,24 +120,66 @@ enum MistiaSchemaV4: VersionedSchema {
     }
 }
 
+enum MistiaSchemaV5: VersionedSchema {
+    static var versionIdentifier: Schema.Version {
+        Schema.Version(5, 0, 0)
+    }
+
+    static var models: [any PersistentModel.Type] {
+        [
+            LedgerWallet.self,
+            CreditCardProfile.self,
+            TransactionCategory.self,
+            LedgerTransaction.self,
+            BudgetPlan.self,
+            SavingsGoal.self,
+            RecurringBillPlan.self,
+            InstallmentPlan.self,
+            DueOccurrenceRecord.self,
+            AppNotificationRecord.self,
+            SyncConflict.self,
+            UserAccountProfile.self,
+            OwnedRecordScope.self,
+            TransactionAuditRecord.self,
+            TransactionReceiptImage.self
+        ]
+    }
+}
+
 enum MistiaMigrationPlan: SchemaMigrationPlan {
     static var schemas: [any VersionedSchema.Type] {
-        // Older schema declarations in this file reuse the app's live @Model types.
-        // Once those types drift, SwiftData can calculate the same checksum for
-        // multiple historical versions and crash with "Duplicate version checksums
-        // detected" before the store opens.
-        //
-        // Keep only the current persisted schema in the active plan until a future
-        // release introduces properly frozen version-specific model types. Do not
-        // add MistiaSchemaV5 for data-only cleanup or a version-label bump.
         [
-            MistiaSchemaV4.self
+            MistiaSchemaV4.self,
+            MistiaSchemaV5.self
         ]
     }
 
     static var stages: [MigrationStage] {
-        // No staged migration is required while pause state is encoded in existing
-        // recurring-bill columns.
-        []
+        [
+            MigrationStage.custom(
+                fromVersion: MistiaSchemaV4.self,
+                toVersion: MistiaSchemaV5.self,
+                willMigrate: nil,
+                didMigrate: { context in
+                    let descriptor = FetchDescriptor<RecurringBillPlan>()
+                    let bills = try context.fetch(descriptor)
+                    var didUpdate = false
+
+                    for bill in bills where bill.scheduleKindRawValue == recurringBillPausedScheduleKindRawValue {
+                        bill.isPaused = true
+                        bill.pausedAt = bill.paymentStartDate
+                        bill.resumeStartMonth = bill.autoPayDate
+                        bill.scheduleKindRawValue = PlanningBillScheduleKind.recurring.rawValue
+                        bill.paymentStartDate = nil
+                        bill.autoPayDate = nil
+                        didUpdate = true
+                    }
+
+                    if didUpdate {
+                        try context.save()
+                    }
+                }
+            )
+        ]
     }
 }

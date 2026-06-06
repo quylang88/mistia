@@ -162,6 +162,7 @@ private struct PlanningDueRenderSnapshot {
     let summary: PlanningDueSummarySnapshot
     let creditCards: [PlanningCreditCardAccountSnapshot]
     let bills: [PlanningRecurringDueSnapshot]
+    let pausedBills: [PlanningBillSnapshot]
     let installments: [PlanningRecurringDueSnapshot]
 }
 
@@ -442,10 +443,11 @@ struct PlanningView: View {
             referenceDate: .now,
             calendar: calendar
         )
+        let activeVisibleBills = visibleBills.filter { !$0.isArchived }
+        let activeBillSnapshots = activeVisibleBills.map(\.planningSnapshot)
+        let pausedBills = PlanningLogic.pausedRecurringBills(from: activeBillSnapshots)
         let recurringBillDueItems = PlanningLogic.recurringBillDueItems(
-            bills: visibleBills
-                .filter { !$0.isArchived }
-                .map(\.planningSnapshot),
+            bills: activeBillSnapshots,
             occurrences: occurrenceSnapshots,
             selectedMonth: selectedMonth,
             calendar: calendar
@@ -471,6 +473,7 @@ struct PlanningView: View {
             ),
             creditCards: creditCardAccounts,
             bills: recurringBillDueItems,
+            pausedBills: pausedBills,
             installments: installmentDueItems
         )
     }
@@ -992,6 +995,7 @@ struct PlanningView: View {
                         currencyCode: currencyCode,
                         creditCards: tabSnapshot.creditCards,
                         bills: tabSnapshot.bills,
+                        pausedBills: tabSnapshot.pausedBills,
                         installments: tabSnapshot.installments,
                         referenceDate: .now,
                         onAddCreditCard: {
@@ -1011,6 +1015,15 @@ struct PlanningView: View {
                                 plan: storedBills.first(where: { $0.id == item.sourceID }),
                                 dueItem: item
                             )
+                        },
+                        onEditPausedBill: { item in
+                            openBillEditorIfAllowed(
+                                plan: storedBills.first(where: { $0.id == item.id }),
+                                dueItem: nil
+                            )
+                        },
+                        onResumePausedBill: { item in
+                            resumePausedBillIfAllowed(item)
                         },
                         onAddInstallment: {
                             openInstallmentAddIfAllowed()
@@ -1323,6 +1336,41 @@ struct PlanningView: View {
             return
         }
         billEditorTarget = PlanningBillEditorTarget(plan: plan, dueItem: dueItem, selectedMonth: selectedMonth)
+    }
+
+    private func resumePausedBillIfAllowed(_ item: PlanningBillSnapshot) {
+        guard let plan = storedBills.first(where: { $0.id == item.id }) else { return }
+        if presentFamilyOwnerConflictIfNeeded(entity: .recurringBillPlan, recordID: plan.id) {
+            return
+        }
+
+        let ownerUserID = billOwnerMap[plan.id] ?? selectedSubjectUserID
+        guard canEdit(ownerUserID: ownerUserID, resourceType: .bill) else {
+            presentEditPermissionPrompt(
+                ownerUserID: ownerUserID,
+                resourceType: .bill,
+                resourceName: L10n.planning.planning.bills
+            ) {
+                resumePausedBillIfAllowed(item)
+            }
+            return
+        }
+
+        let now = Date()
+        do {
+            try PlanningBillPauseActions.resume(
+                plan,
+                modelContext: modelContext,
+                sessionStore: sessionStore,
+                referenceDate: now,
+                calendar: calendar
+            )
+        } catch {
+            infoAlert = PlanningInfoAlert(
+                title: L10n.planning.planning.bills,
+                message: L10n.planning.planning.couldnTResumeThisBillRightNow + " \(error.localizedDescription)"
+            )
+        }
     }
 
     private func openInstallmentAddIfAllowed() {
@@ -1894,12 +1942,15 @@ private struct DueTabContent: View {
     let currencyCode: String
     let creditCards: [PlanningCreditCardAccountSnapshot]
     let bills: [PlanningRecurringDueSnapshot]
+    let pausedBills: [PlanningBillSnapshot]
     let installments: [PlanningRecurringDueSnapshot]
     let referenceDate: Date
     let onAddCreditCard: () -> Void
     let onEditCreditCard: (PlanningCreditCardAccountSnapshot) -> Void
     let onAddBill: () -> Void
     let onEditBill: (PlanningRecurringDueSnapshot) -> Void
+    let onEditPausedBill: (PlanningBillSnapshot) -> Void
+    let onResumePausedBill: (PlanningBillSnapshot) -> Void
     let onAddInstallment: () -> Void
     let onEditInstallment: (PlanningRecurringDueSnapshot) -> Void
     let onPayBill: (PlanningRecurringDueSnapshot) -> Void
@@ -1915,18 +1966,36 @@ private struct DueTabContent: View {
 
             switch selectedMode {
             case .bills:
-                DueRowsSection(
-                    emptyTitle: L10n.planning.planning.noBillsYet,
-                    emptyMessage: L10n.planning.planning.addInternetUtilitiesOrRecurringBillsTo,
-                    emptySymbols: ["wifi", "bolt.fill", "phone.fill", "plus"],
-                    accent: MistiaAccent.purple.color,
-                    items: bills,
-                    addTitle: L10n.planning.planning.addBill,
-                    referenceDate: referenceDate,
-                    onAdd: onAddBill,
-                    onEdit: onEditBill,
-                    onPay: onPayBill
-                )
+                VStack(spacing: 12) {
+                    if bills.isEmpty && !pausedBills.isEmpty {
+                        PlanningListCard {
+                            PlanningFooterAddButton(title: L10n.planning.planning.addBill) {
+                                onAddBill()
+                            }
+                        }
+                    } else {
+                        DueRowsSection(
+                            emptyTitle: L10n.planning.planning.noBillsYet,
+                            emptyMessage: L10n.planning.planning.addInternetUtilitiesOrRecurringBillsTo,
+                            emptySymbols: ["wifi", "bolt.fill", "phone.fill", "plus"],
+                            accent: MistiaAccent.purple.color,
+                            items: bills,
+                            addTitle: L10n.planning.planning.addBill,
+                            referenceDate: referenceDate,
+                            onAdd: onAddBill,
+                            onEdit: onEditBill,
+                            onPay: onPayBill
+                        )
+                    }
+
+                    if !pausedBills.isEmpty {
+                        PausedBillsSection(
+                            items: pausedBills,
+                            onEdit: onEditPausedBill,
+                            onResume: onResumePausedBill
+                        )
+                    }
+                }
             case .creditCards:
                 CreditCardsSection(
                     items: creditCards,
@@ -2047,6 +2116,88 @@ private struct DueRowsSection: View {
                 }
             }
         }
+    }
+}
+
+private struct PausedBillsSection: View {
+    let items: [PlanningBillSnapshot]
+    let onEdit: (PlanningBillSnapshot) -> Void
+    let onResume: (PlanningBillSnapshot) -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(L10n.planning.planning.pausedBills)
+                .font(.system(size: 13.5, weight: .bold, design: .rounded))
+                .foregroundStyle(.secondary)
+                .textCase(.uppercase)
+                .padding(.horizontal, 4)
+
+            PlanningListCard {
+                ForEach(Array(items.enumerated()), id: \.element.id) { index, item in
+                    PlanningPausedBillRow(
+                        item: item,
+                        onTap: { onEdit(item) },
+                        onResume: { onResume(item) }
+                    )
+                    .padding(.horizontal, 15)
+                    .padding(.vertical, 12)
+
+                    if index < items.count - 1 {
+                        Divider()
+                            .padding(.leading, 52)
+                            .padding(.trailing, 0)
+                    }
+                }
+            }
+
+            Text(L10n.planning.planning.pausedBillsWillNoLongerAppearIn)
+                .font(.system(size: 12.5, weight: .semibold, design: .rounded))
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+                .padding(.horizontal, 8)
+        }
+    }
+}
+
+private struct PlanningPausedBillRow: View {
+    let item: PlanningBillSnapshot
+    let onTap: () -> Void
+    let onResume: () -> Void
+
+    var body: some View {
+        HStack(spacing: 12) {
+            PlanningIconTile(icon: item.iconSymbolName, color: MistiaAccent.purple.color.opacity(0.76))
+
+            VStack(alignment: .leading, spacing: 4) {
+                Text(item.name)
+                    .font(.system(size: 17, weight: .semibold, design: .rounded))
+                    .foregroundStyle(.primary)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.82)
+
+                Text(amountText)
+                    .font(.system(size: 13, weight: .semibold, design: .rounded))
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+            }
+
+            Spacer(minLength: 10)
+
+            PlanningDueActionButton(title: L10n.planning.planning.resumeBill) {
+                onResume()
+            }
+        }
+        .contentShape(Rectangle())
+        .onTapGesture {
+            onTap()
+        }
+    }
+
+    private var amountText: String {
+        if let amountMinor = item.amountMinor {
+            return amountMinor.formattedCurrency(code: item.currencyCode)
+        }
+        return L10n.planning.planning.noAmountYet
     }
 }
 

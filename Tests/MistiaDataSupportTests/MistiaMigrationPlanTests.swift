@@ -35,16 +35,17 @@ final class MistiaMigrationPlanTests: XCTestCase {
         XCTAssertEqual(reopenedBills.first?.autoPayDay, 10)
     }
 
-    func testMigrationPlanDoesNotAddDuplicateV5() {
+    func testMigrationPlanUsesFrozenV4AndRealV5() {
         let schemaNames = MistiaMigrationPlan.schemas.map { String(reflecting: $0) }
+        let v4ModelNames = MistiaSchemaV4.models.map { String(reflecting: $0) }
+        let v5ModelNames = MistiaSchemaV5.models.map { String(reflecting: $0) }
 
         XCTAssertEqual(schemaNames.count, Set(schemaNames).count)
-        XCTAssertEqual(schemaNames, ["MistiaCoreLogic.MistiaSchemaV4"])
-        XCTAssertTrue(MistiaMigrationPlan.stages.isEmpty)
-        XCTAssertFalse(
-            schemaNames.contains { $0.contains("MistiaSchemaV5") },
-            "Do not add V5 unless SwiftData produces a distinct schema checksum; duplicate checksums crash before the container opens."
-        )
+        XCTAssertEqual(schemaNames, ["MistiaCoreLogic.MistiaSchemaV4", "MistiaCoreLogic.MistiaSchemaV5"])
+        XCTAssertEqual(MistiaMigrationPlan.stages.count, 1)
+        XCTAssertTrue(v4ModelNames.contains("MistiaCoreLogic.MistiaSchemaV4Models.RecurringBillPlan"))
+        XCTAssertFalse(v4ModelNames.contains("MistiaCoreLogic.RecurringBillPlan"))
+        XCTAssertTrue(v5ModelNames.contains("MistiaCoreLogic.RecurringBillPlan"))
     }
 
     func testFamilyTransferRPCMigrationGuardsPermissionsAndWritesBothRows() throws {
@@ -94,7 +95,7 @@ final class MistiaMigrationPlanTests: XCTestCase {
         let container = try ModelContainer(for: schema, configurations: [configuration])
         let context = ModelContext(container)
         context.insert(
-            RecurringBillPlan(
+            MistiaSchemaV4.RecurringBillPlan(
                 id: billID,
                 name: "Internet",
                 iconSymbolName: "wifi",
@@ -107,7 +108,7 @@ final class MistiaMigrationPlanTests: XCTestCase {
     }
 
     private func openCurrentStore(at storeURL: URL) throws -> ModelContainer {
-        let schema = Schema(versionedSchema: MistiaSchemaV4.self)
+        let schema = Schema(versionedSchema: MistiaSchemaV5.self)
         let configuration = ModelConfiguration("default", schema: schema, url: storeURL)
 
         return try ModelContainer(

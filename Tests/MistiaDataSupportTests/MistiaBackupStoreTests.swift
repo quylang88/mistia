@@ -275,14 +275,14 @@ final class MistiaBackupStoreTests: XCTestCase {
 
     func testFreshInMemoryStoreBootsWithCurrentSchema() throws {
         let container = try makeContainer()
-        let schema = Schema(versionedSchema: MistiaSchemaV4.self)
+        let schema = Schema(versionedSchema: MistiaSchemaV5.self)
 
         XCTAssertEqual(schema.entities.count, 15)
         XCTAssertEqual(try MistiaSyncLocalStore.totalObjectCount(in: container), 0)
     }
 
     private func makeContainer() throws -> ModelContainer {
-        let schema = Schema(versionedSchema: MistiaSchemaV4.self)
+        let schema = Schema(versionedSchema: MistiaSchemaV5.self)
         let configuration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)
         return try ModelContainer(for: schema, configurations: [configuration])
     }

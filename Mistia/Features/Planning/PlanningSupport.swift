@@ -52,6 +52,60 @@ struct PlanningBillEditorTarget: Identifiable {
     let selectedMonth: Date
 }
 
+@MainActor
+enum PlanningBillPauseActions {
+    static func pause(
+        _ plan: RecurringBillPlan,
+        modelContext: ModelContext,
+        sessionStore: SessionStore,
+        referenceDate: Date = .now
+    ) throws {
+        guard plan.scheduleKind == .recurring else { return }
+        plan.isPaused = true
+        plan.pausedAt = referenceDate
+        plan.resumeStartMonth = nil
+        plan.updatedAt = referenceDate
+
+        try modelContext.save()
+        MistiaRecurringBillMaintenance.resolveNotifications(for: plan.id, modelContext: modelContext)
+        sessionStore.recordUpsert(
+            entity: .recurringBillPlan,
+            recordID: plan.id,
+            modifiedAt: referenceDate
+        )
+    }
+
+    static func resume(
+        _ plan: RecurringBillPlan,
+        modelContext: ModelContext,
+        sessionStore: SessionStore,
+        referenceDate: Date = .now,
+        calendar: Calendar = MistiaCalendar.current
+    ) throws {
+        guard plan.scheduleKind == .recurring else { return }
+        plan.isPaused = false
+        plan.pausedAt = nil
+        plan.resumeStartMonth = PlanningLogic.startOfMonth(for: referenceDate, calendar: calendar)
+        plan.updatedAt = referenceDate
+
+        try modelContext.save()
+        sessionStore.recordUpsert(
+            entity: .recurringBillPlan,
+            recordID: plan.id,
+            modifiedAt: referenceDate
+        )
+
+        Task { @MainActor in
+            await MistiaRecurringBillMaintenance.run(
+                modelContext: modelContext,
+                sessionStore: sessionStore,
+                referenceDate: referenceDate,
+                calendar: calendar
+            )
+        }
+    }
+}
+
 struct PlanningInstallmentEditorTarget: Identifiable {
     let id = UUID()
     let plan: InstallmentPlan?
