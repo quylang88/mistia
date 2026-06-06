@@ -161,25 +161,58 @@ struct ManagementCreditCardStatementView: View {
                 }
                 .padding(.vertical, 2)
 
+                paymentActionButton(for: statement, state: state)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func paymentActionButton(
+        for statement: PlanningCreditCardStatementSnapshot,
+        state: PlanningCreditCardStatementState
+    ) -> some View {
+        if canPay(statement, state: state) {
+            if #available(iOS 26, *) {
                 Button {
                     performPayment(for: statement)
                 } label: {
-                    HStack(spacing: 8) {
-                        Image(systemName: paymentButtonIcon(state, amountMinor: statement.amountMinor))
-                        Text(paymentButtonTitle(state, amountMinor: statement.amountMinor))
-                    }
-                    .font(.system(size: 15, weight: .bold, design: .rounded))
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 13)
-                    .background(
-                        paymentButtonBackground(state),
-                        in: RoundedRectangle(cornerRadius: 15, style: .continuous)
+                    Label(
+                        L10n.management.managementcreditcardstatement.payNow,
+                        systemImage: state == .overdue ? "exclamationmark.circle.fill" : "creditcard.fill"
                     )
-                    .foregroundStyle(paymentButtonForeground(state))
+                    .font(.system(size: 16, weight: .bold, design: .rounded))
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 10)
+                }
+                .buttonStyle(.glassProminent)
+                .buttonBorderShape(.capsule)
+                .tint(state == .overdue ? Color(hex: "#F45C7E") : dynamicAccentColor)
+            } else {
+                Button {
+                    performPayment(for: statement)
+                } label: {
+                    Label(
+                        L10n.management.managementcreditcardstatement.payNow,
+                        systemImage: state == .overdue ? "exclamationmark.circle.fill" : "creditcard.fill"
+                    )
+                    .font(.system(size: 15.5, weight: .bold, design: .rounded))
+                    .foregroundStyle(.white)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 14)
+                    .background(
+                        LinearGradient(
+                            colors: paymentActionGradientColors(for: state),
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        ),
+                        in: Capsule()
+                    )
+                    .overlay {
+                        Capsule()
+                            .strokeBorder(.white.opacity(0.16), lineWidth: 1)
+                    }
                 }
                 .buttonStyle(.plain)
-                .disabled(!canPay(statement, state: state))
-                .opacity(canPay(statement, state: state) ? 1 : 0.74)
             }
         }
     }
@@ -409,64 +442,11 @@ struct ManagementCreditCardStatementView: View {
         }
     }
 
-    private func paymentButtonTitle(
-        _ state: PlanningCreditCardStatementState,
-        amountMinor: Int64
-    ) -> String {
-        if amountMinor <= 0, state != .unclosed {
-            return L10n.management.managementcreditcardstatement.noPaymentNeeded
+    private func paymentActionGradientColors(for state: PlanningCreditCardStatementState) -> [Color] {
+        if state == .overdue {
+            return [Color(hex: "#FF6A8D"), Color(hex: "#D94841")]
         }
-
-        switch state {
-        case .unclosed:
-            return L10n.management.managementcreditcardstatement.notClosedYet
-        case .payable:
-            return L10n.management.managementcreditcardstatement.payNow
-        case .overdue:
-            return L10n.management.managementcreditcardstatement.payNow
-        case .paid:
-            return L10n.management.managementcreditcardstatement.paid
-        }
-    }
-
-    private func paymentButtonIcon(
-        _ state: PlanningCreditCardStatementState,
-        amountMinor: Int64
-    ) -> String {
-        if amountMinor <= 0, state != .unclosed {
-            return "checkmark.circle.fill"
-        }
-
-        switch state {
-        case .unclosed:
-            return "lock.fill"
-        case .payable:
-            return "creditcard.fill"
-        case .paid:
-            return "checkmark.circle.fill"
-        case .overdue:
-            return "exclamationmark.circle.fill"
-        }
-    }
-
-    private func paymentButtonBackground(_ state: PlanningCreditCardStatementState) -> Color {
-        switch state {
-        case .payable:
-            return dynamicAccentColor
-        case .overdue:
-            return Color(hex: "#F45C7E")
-        case .unclosed, .paid:
-            return Color(UIColor.secondarySystemGroupedBackground).opacity(0.72)
-        }
-    }
-
-    private func paymentButtonForeground(_ state: PlanningCreditCardStatementState) -> AnyShapeStyle {
-        switch state {
-        case .payable, .overdue:
-            return AnyShapeStyle(Color.white)
-        case .unclosed, .paid:
-            return AnyShapeStyle(Color.secondary)
-        }
+        return [MistiaAccent.lightPurple.color, dynamicAccentColor]
     }
 
 }

@@ -331,12 +331,23 @@ struct TransactionEditorSheet: View {
                 if isFamilyTransferDetail {
                     Section {
                         HStack(spacing: 12) {
-                            Image(systemName: "arrow.left.arrow.right.circle.fill")
-                                .font(.system(size: 14))
-                                .foregroundStyle(MistiaAccent.purple.color)
-                                .padding(8)
-                                .background(MistiaAccent.purple.color.opacity(0.1))
-                                .clipShape(Circle())
+                            ZStack(alignment: .bottomTrailing) {
+                                Image(systemName: "person.2.fill")
+                                    .font(.system(size: 14, weight: .bold))
+                                Image(systemName: "lock.fill")
+                                    .font(.system(size: 7.5, weight: .black))
+                                    .foregroundStyle(Color(hex: "#071F22"))
+                                    .padding(3)
+                                    .background(Color(hex: "#71F3E7"), in: Circle())
+                                    .offset(x: 4, y: 4)
+                            }
+                            .foregroundStyle(Color(hex: "#71F3E7"))
+                            .frame(width: 32, height: 32)
+                            .background(Color(hex: "#0FA3A3").opacity(0.22), in: Circle())
+                            .overlay {
+                                Circle()
+                                    .strokeBorder(Color(hex: "#71F3E7").opacity(0.20), lineWidth: 0.8)
+                            }
 
                             Text(L10n.transactions.transactioneditor.familyTransferReadOnlyNotice)
                                 .font(.system(size: 13, weight: .medium, design: .rounded))

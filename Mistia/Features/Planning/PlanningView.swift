@@ -2854,11 +2854,15 @@ private struct PlanningCreditCardCard: View {
     let item: PlanningCreditCardAccountSnapshot
     let onOpenStatement: () -> Void
 
+    private var presentation: CreditCardNetworkPresentation {
+        CreditCardNetworkPresentation(network: item.network)
+    }
+
     var body: some View {
-        ZStack(alignment: .topLeading) {
+        ZStack(alignment: .top) {
             cardBackground
 
-            VStack(alignment: .leading, spacing: 11) {
+            VStack(alignment: .leading, spacing: 12) {
                 HStack(alignment: .top, spacing: 12) {
                     VStack(alignment: .leading, spacing: 3) {
                         Text(issuerTitle)
@@ -2869,94 +2873,69 @@ private struct PlanningCreditCardCard: View {
 
                         Text(item.network.title.uppercased())
                             .font(.system(size: 10.5, weight: .black, design: .rounded))
-                            .foregroundStyle(.white.opacity(0.62))
+                            .foregroundStyle(.white.opacity(0.70))
                             .lineLimit(1)
                     }
 
                     Spacer(minLength: 10)
 
-                    Text(maskedLast4)
-                        .font(.system(size: 12.5, weight: .black, design: .rounded))
-                        .foregroundStyle(.white.opacity(0.82))
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 6)
-                        .background(.white.opacity(0.10), in: Capsule())
+                    VStack(alignment: .trailing, spacing: 7) {
+                        CreditCardNetworkLogoMark(network: item.network)
+                            .frame(width: 66, height: 38)
+
+                        Text(maskedLast4)
+                            .font(.system(size: 12, weight: .black, design: .rounded))
+                            .foregroundStyle(.white.opacity(0.84))
+                    }
                 }
 
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(L10n.planning.planning.availableCredit)
+                HStack(alignment: .bottom, spacing: 12) {
+                    amountBlock(
+                        title: L10n.planning.planning.availableCredit,
+                        value: item.availableCreditMinor.formattedCurrency(code: item.currencyCode),
+                        isPrimary: true
+                    )
+
+                    amountBlock(
+                        title: L10n.planning.planning.currentDebt,
+                        value: item.currentDebtMinor.formattedCurrency(code: item.currencyCode),
+                        isPrimary: false
+                    )
+                }
+
+                HStack(spacing: 7) {
+                    Image(systemName: "wallet.pass.fill")
+                        .font(.system(size: 11, weight: .bold))
+                        .foregroundStyle(.white.opacity(0.68))
+
+                    Text(paymentSourceText)
                         .font(.system(size: 11.5, weight: .bold, design: .rounded))
-                        .foregroundStyle(.white.opacity(0.62))
-
-                    Text(item.availableCreditMinor.formattedCurrency(code: item.currencyCode))
-                        .font(.system(size: 27, weight: .black, design: .rounded))
-                        .foregroundStyle(.white)
+                        .foregroundStyle(.white.opacity(0.76))
                         .lineLimit(1)
-                        .minimumScaleFactor(0.68)
+                        .minimumScaleFactor(0.76)
                 }
-
-                VStack(alignment: .leading, spacing: 8) {
-                    HStack(alignment: .firstTextBaseline, spacing: 8) {
-                        Text(L10n.planning.planning.currentDebt)
-                            .font(.system(size: 11.5, weight: .bold, design: .rounded))
-                            .foregroundStyle(.white.opacity(0.62))
-
-                        Spacer(minLength: 8)
-
-                        Text(debtLimitText)
-                            .font(.system(size: 12, weight: .bold, design: .rounded))
-                            .foregroundStyle(.white.opacity(0.86))
-                            .lineLimit(1)
-                            .minimumScaleFactor(0.72)
-                    }
-
-                    GeometryReader { proxy in
-                        ZStack(alignment: .leading) {
-                            Capsule()
-                                .fill(.white.opacity(0.13))
-                            Capsule()
-                                .fill(MistiaAccent.lightPurple.color)
-                                .frame(width: max(6, proxy.size.width * debtRatio))
-                        }
-                    }
-                    .frame(height: 6)
-
-                    HStack {
-                        Text(utilizationText)
-                            .font(.system(size: 10.5, weight: .bold, design: .rounded))
-                            .foregroundStyle(MistiaAccent.lightPurple.color)
-
-                        Spacer()
-
-                        Text(item.currentDebtMinor.formattedCurrency(code: item.currencyCode))
-                            .font(.system(size: 10.5, weight: .bold, design: .rounded))
-                            .foregroundStyle(.white.opacity(0.62))
-                    }
-                }
+                .padding(.horizontal, 10)
+                .padding(.vertical, 7)
+                .background(.white.opacity(colorScheme == .dark ? 0.13 : 0.16), in: Capsule())
 
                 HStack(alignment: .center, spacing: 8) {
-                    statementMiniLabel(
-                        title: L10n.planning.planning.close,
-                        value: "\(item.statementClosingDay)"
-                    )
-                    statementMiniLabel(
-                        title: L10n.planning.planning.due,
-                        value: "\(item.dueDay)"
-                    )
+                    statementMiniLabel(title: L10n.planning.planning.close, value: "\(item.statementClosingDay)")
+                    statementMiniLabel(title: L10n.planning.planning.due, value: "\(item.dueDay)")
 
                     Spacer(minLength: 8)
 
                     Button(action: onOpenStatement) {
-                        Label(
-                            L10n.planning.planning.statement,
-                            systemImage: "doc.text"
-                        )
-                        .font(.system(size: 11.5, weight: .black, design: .rounded))
-                        .labelStyle(.titleAndIcon)
-                        .foregroundStyle(.white)
-                        .padding(.horizontal, 11)
-                        .padding(.vertical, 7)
-                        .background(MistiaAccent.lightPurple.color.opacity(0.36), in: Capsule())
+                        Label(L10n.planning.planning.statement, systemImage: "doc.text.fill")
+                            .font(.system(size: 11.5, weight: .black, design: .rounded))
+                            .labelStyle(.titleAndIcon)
+                            .foregroundStyle(.white)
+                            .padding(.horizontal, 11)
+                            .padding(.vertical, 7)
+                            .background(.white.opacity(0.18), in: Capsule())
+                            .overlay {
+                                Capsule()
+                                    .strokeBorder(.white.opacity(0.16), lineWidth: 0.8)
+                            }
                     }
                     .buttonStyle(.plain)
                 }
@@ -2985,72 +2964,183 @@ private struct PlanningCreditCardCard: View {
 
     private var paymentSourceText: String {
         if let name = item.paymentSourceWalletName?.trimmingCharacters(in: .whitespacesAndNewlines), !name.isEmpty {
-            return L10n.planning.planning.linkedWalletValue(String(describing: name))
+            return L10n.planning.planning.linkedWalletValue(name)
         }
         return L10n.planning.planning.noLinkedWallet
-    }
-
-    private var creditLimitMinor: Int64 {
-        max(item.currentDebtMinor + item.availableCreditMinor, item.currentDebtMinor)
-    }
-
-    private var debtRatio: Double {
-        guard creditLimitMinor > 0 else { return 0 }
-        return min(max(Double(item.currentDebtMinor) / Double(creditLimitMinor), 0), 1)
-    }
-
-    private var debtLimitText: String {
-        "\(item.currentDebtMinor.formattedCurrency(code: item.currencyCode)) / \(creditLimitMinor.formattedCurrency(code: item.currencyCode))"
-    }
-
-    private var utilizationText: String {
-        "\(Int((debtRatio * 100).rounded()))%"
     }
 
     private var cardBackground: some View {
         RoundedRectangle(cornerRadius: 24, style: .continuous)
             .fill(
                 LinearGradient(
-                    colors: [
-                        Color(hex: "#30343B"),
-                        Color(hex: "#1C2027"),
-                        Color(hex: "#111318")
-                    ],
+                    colors: presentation.gradientColors,
                     startPoint: .topLeading,
                     endPoint: .bottomTrailing
                 )
             )
             .overlay(alignment: .topTrailing) {
-                RoundedRectangle(cornerRadius: 2, style: .continuous)
-                    .fill(.white.opacity(0.16))
-                    .frame(width: 42, height: 28)
-                    .overlay {
-                        RoundedRectangle(cornerRadius: 2, style: .continuous)
-                            .strokeBorder(.white.opacity(0.24), lineWidth: 0.6)
-                    }
-                    .padding(18)
+                Circle()
+                    .fill(presentation.accent.opacity(colorScheme == .dark ? 0.34 : 0.28))
+                    .frame(width: 112, height: 112)
+                    .blur(radius: 20)
+                    .offset(x: 34, y: -46)
             }
             .overlay(alignment: .bottomLeading) {
-                Rectangle()
-                    .fill(.white.opacity(colorScheme == .dark ? 0.07 : 0.10))
-                    .frame(height: 1)
-                    .padding(.horizontal, 18)
-                    .offset(y: -58)
+                Circle()
+                    .fill(.white.opacity(colorScheme == .dark ? 0.08 : 0.14))
+                    .frame(width: 150, height: 150)
+                    .blur(radius: 28)
+                    .offset(x: -48, y: 50)
             }
+    }
+
+    private func amountBlock(title: String, value: String, isPrimary: Bool) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(title)
+                .font(.system(size: 11, weight: .bold, design: .rounded))
+                .foregroundStyle(.white.opacity(isPrimary ? 0.70 : 0.62))
+                .lineLimit(1)
+
+            Text(value)
+                .font(.system(size: isPrimary ? 24 : 16, weight: .black, design: .rounded))
+                .foregroundStyle(.white)
+                .lineLimit(1)
+                .minimumScaleFactor(isPrimary ? 0.62 : 0.70)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, isPrimary ? 0 : 10)
+        .padding(.vertical, isPrimary ? 0 : 8)
+        .background {
+            if !isPrimary {
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .fill(.white.opacity(colorScheme == .dark ? 0.11 : 0.15))
+            }
+        }
     }
 
     private func statementMiniLabel(title: String, value: String) -> some View {
         HStack(spacing: 5) {
             Text(title)
                 .font(.system(size: 10.5, weight: .bold, design: .rounded))
-                .foregroundStyle(.white.opacity(0.58))
+                .foregroundStyle(.white.opacity(0.64))
             Text(value)
                 .font(.system(size: 13.5, weight: .black, design: .rounded))
                 .foregroundStyle(.white)
         }
         .padding(.horizontal, 9)
         .padding(.vertical, 6)
-        .background(.white.opacity(0.11), in: Capsule())
+        .background(.white.opacity(0.14), in: Capsule())
+    }
+}
+
+private struct CreditCardNetworkPresentation {
+    let gradientColors: [Color]
+    let accent: Color
+
+    init(network: CreditCardNetwork) {
+        switch network {
+        case .visa:
+            gradientColors = [Color(hex: "#1A5BD7"), Color(hex: "#1744A7"), Color(hex: "#0C255F")]
+            accent = Color(hex: "#F4C542")
+        case .mastercard:
+            gradientColors = [Color(hex: "#D43C2F"), Color(hex: "#F2932E"), Color(hex: "#682A79")]
+            accent = Color(hex: "#FFB347")
+        case .jcb:
+            gradientColors = [Color(hex: "#1B78B5"), Color(hex: "#17985F"), Color(hex: "#D43C4A")]
+            accent = Color(hex: "#FFFFFF")
+        case .americanExpress:
+            gradientColors = [Color(hex: "#2FB7C7"), Color(hex: "#1B77B6"), Color(hex: "#164B83")]
+            accent = Color(hex: "#D9F6FF")
+        case .unionPay:
+            gradientColors = [Color(hex: "#C92237"), Color(hex: "#1968B3"), Color(hex: "#0C8A5A")]
+            accent = Color(hex: "#FFFFFF")
+        case .other:
+            gradientColors = [Color(hex: "#556270"), Color(hex: "#4E7A87"), Color(hex: "#2A3A46")]
+            accent = MistiaAccent.lightPurple.color
+        }
+    }
+}
+
+private struct CreditCardNetworkLogoMark: View {
+    let network: CreditCardNetwork
+
+    var body: some View {
+        ZStack {
+            switch network {
+            case .visa:
+                Text("VISA")
+                    .font(.system(size: 18, weight: .black, design: .rounded))
+                    .italic()
+                    .foregroundStyle(Color(hex: "#243D92"))
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 6)
+                    .background(.white, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+            case .mastercard:
+                ZStack {
+                    Circle()
+                        .fill(Color(hex: "#EB001B"))
+                        .frame(width: 30, height: 30)
+                        .offset(x: -9)
+                    Circle()
+                        .fill(Color(hex: "#F79E1B"))
+                        .frame(width: 30, height: 30)
+                        .offset(x: 9)
+                    Text("MC")
+                        .font(.system(size: 9, weight: .black, design: .rounded))
+                        .foregroundStyle(.white)
+                }
+            case .jcb:
+                HStack(spacing: 2) {
+                    logoStripe("J", color: Color(hex: "#1B78B5"))
+                    logoStripe("C", color: Color(hex: "#1E9C5F"))
+                    logoStripe("B", color: Color(hex: "#D13C4A"))
+                }
+            case .americanExpress:
+                VStack(spacing: -1) {
+                    Text("AMEX")
+                        .font(.system(size: 13, weight: .black, design: .rounded))
+                    Text("CARD")
+                        .font(.system(size: 7, weight: .black, design: .rounded))
+                }
+                .foregroundStyle(.white)
+                .frame(width: 54, height: 34)
+                .background(Color(hex: "#2178B8"), in: RoundedRectangle(cornerRadius: 7, style: .continuous))
+                .overlay {
+                    RoundedRectangle(cornerRadius: 7, style: .continuous)
+                        .strokeBorder(.white.opacity(0.72), lineWidth: 1)
+                }
+            case .unionPay:
+                HStack(spacing: -4) {
+                    RoundedRectangle(cornerRadius: 5, style: .continuous)
+                        .fill(Color(hex: "#D61F35"))
+                    RoundedRectangle(cornerRadius: 5, style: .continuous)
+                        .fill(Color(hex: "#1B68B3"))
+                    RoundedRectangle(cornerRadius: 5, style: .continuous)
+                        .fill(Color(hex: "#0E8A56"))
+                }
+                .frame(width: 52, height: 31)
+                .overlay {
+                    Text("UP")
+                        .font(.system(size: 11, weight: .black, design: .rounded))
+                        .foregroundStyle(.white)
+                }
+            case .other:
+                Image(systemName: "creditcard.fill")
+                    .font(.system(size: 24, weight: .bold))
+                    .foregroundStyle(.white)
+                    .frame(width: 54, height: 34)
+                    .background(.white.opacity(0.16), in: RoundedRectangle(cornerRadius: 9, style: .continuous))
+            }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .trailing)
+    }
+
+    private func logoStripe(_ text: String, color: Color) -> some View {
+        Text(text)
+            .font(.system(size: 15, weight: .black, design: .rounded))
+            .foregroundStyle(.white)
+            .frame(width: 18, height: 32)
+            .background(color, in: RoundedRectangle(cornerRadius: 5, style: .continuous))
     }
 }
 
