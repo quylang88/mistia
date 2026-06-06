@@ -2075,6 +2075,9 @@ enum MistiaSyncLocalStore {
     ) throws {
         let resolvedCategory = row.categoryID.flatMap { categoryByID[$0] }
         let normalizedIconSymbolName = resolvedCategory?.iconSymbolName ?? row.iconSymbolName
+        let scheduleKind = PlanningBillScheduleKind(rawValue: row.scheduleKindRawValue ?? "") ?? .recurring
+        let paymentStartDate = scheduleKind == .oneTime ? row.paymentStartDate : nil
+        let autoPayDate = scheduleKind == .oneTime ? row.autoPayDate : nil
         let plan = recurringByID[row.id] ?? RecurringBillPlan(
             id: row.id,
             name: row.name,
@@ -2082,15 +2085,15 @@ enum MistiaSyncLocalStore {
             category: resolvedCategory,
             amountMinor: row.amountMinor,
             dueDay: row.dueDay,
-            scheduleKind: PlanningBillScheduleKind(rawValue: row.scheduleKindRawValue ?? "") ?? .recurring,
+            scheduleKind: scheduleKind,
             paymentStartDay: row.paymentStartDay,
-            paymentStartDate: row.paymentStartDate,
+            paymentStartDate: paymentStartDate,
             firstScheduledMonth: row.firstScheduledMonth,
             hasExplicitDueDate: row.hasExplicitDueDate,
             dueDate: row.dueDate,
             autoPayEnabled: row.autoPayEnabled ?? false,
             autoPayDay: row.autoPayDay,
-            autoPayDate: row.autoPayDate,
+            autoPayDate: autoPayDate,
             frequencyMonths: row.frequencyMonths,
             paymentWallet: row.paymentWalletID.flatMap { walletByID[$0] },
             currencyCode: row.currencyCode,
@@ -2114,15 +2117,15 @@ enum MistiaSyncLocalStore {
         plan.category = resolvedCategory
         plan.amountMinor = row.amountMinor
         plan.dueDay = row.dueDay
-        plan.scheduleKind = PlanningBillScheduleKind(rawValue: row.scheduleKindRawValue ?? "") ?? .recurring
+        plan.scheduleKind = scheduleKind
         plan.paymentStartDay = row.paymentStartDay ?? row.dueDay
-        plan.paymentStartDate = row.paymentStartDate
+        plan.paymentStartDate = paymentStartDate
         plan.firstScheduledMonth = row.firstScheduledMonth
         plan.hasExplicitDueDate = row.hasExplicitDueDate ?? false
         plan.dueDate = row.dueDate
         plan.autoPayEnabled = row.autoPayEnabled ?? false
         plan.autoPayDay = row.autoPayDay
-        plan.autoPayDate = row.autoPayDate
+        plan.autoPayDate = autoPayDate
         plan.frequencyMonths = row.frequencyMonths
         plan.paymentWallet = row.paymentWalletID.flatMap { walletByID[$0] }
         plan.currencyCode = row.currencyCode
@@ -2760,6 +2763,7 @@ private extension RemoteSavingsGoal {
 
 private extension RemoteRecurringBillPlan {
     init(local plan: RecurringBillPlan, userID: UUID, categoryID: UUID?) {
+        let scheduleKind = plan.scheduleKind
         self.init(
             userID: userID,
             id: plan.id,
@@ -2768,15 +2772,15 @@ private extension RemoteRecurringBillPlan {
             categoryID: categoryID,
             amountMinor: plan.amountMinor,
             dueDay: plan.dueDay,
-            scheduleKindRawValue: plan.scheduleKind.rawValue,
+            scheduleKindRawValue: scheduleKind.rawValue,
             paymentStartDay: plan.resolvedPaymentStartDay,
-            paymentStartDate: plan.paymentStartDate,
+            paymentStartDate: scheduleKind == .oneTime ? plan.paymentStartDate : nil,
             firstScheduledMonth: plan.firstScheduledMonth,
             hasExplicitDueDate: plan.resolvedHasExplicitDueDate,
             dueDate: plan.dueDate,
             autoPayEnabled: plan.autoPayEnabled,
             autoPayDay: plan.autoPayDay,
-            autoPayDate: plan.autoPayDate,
+            autoPayDate: scheduleKind == .oneTime ? plan.autoPayDate : nil,
             frequencyMonths: plan.frequencyMonths,
             paymentWalletID: plan.paymentWallet?.id,
             currencyCode: plan.currencyCode,

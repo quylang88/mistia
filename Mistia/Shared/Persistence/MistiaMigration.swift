@@ -120,9 +120,8 @@ enum MistiaMigrationPlan: SchemaMigrationPlan {
     }
 
     static var stages: [MigrationStage] {
-        // No staged migration is required for current V4 stores. If a future V5 is
-        // needed, add it only with a real, distinct SwiftData checksum and a
-        // regression test that opens a V4 store without duplicate checksum failure.
+        // No staged migration is required while pause state is encoded in existing
+        // recurring-bill columns.
         []
     }
 }

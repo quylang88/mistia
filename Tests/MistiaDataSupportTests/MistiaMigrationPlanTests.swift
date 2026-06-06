@@ -5,7 +5,7 @@ import XCTest
 
 @MainActor
 final class MistiaMigrationPlanTests: XCTestCase {
-    func testV4StoreOpensWithoutDuplicateVersionChecksums() throws {
+    func testV4StoreOpensWithPauseDefaults() throws {
         let storeURL = temporaryStoreURL()
         defer { try? removeStoreArtifacts(at: storeURL) }
 
@@ -21,6 +21,9 @@ final class MistiaMigrationPlanTests: XCTestCase {
         XCTAssertEqual(bills.first?.scheduleKind, .recurring)
         XCTAssertEqual(bills.first?.resolvedPaymentStartDay, 12)
         XCTAssertFalse(bills.first?.resolvedHasExplicitDueDate ?? true)
+        XCTAssertFalse(bills.first?.isPaused ?? true)
+        XCTAssertNil(bills.first?.pausedAt)
+        XCTAssertNil(bills.first?.resumeStartMonth)
 
         bills.first?.autoPayEnabled = true
         bills.first?.autoPayDay = 10

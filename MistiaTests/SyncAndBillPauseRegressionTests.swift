@@ -146,10 +146,55 @@ final class SyncAndBillPauseRegressionTests: XCTestCase {
         XCTAssertEqual(julyItems.first?.paymentStartDate, makeDate(year: 2026, month: 7, day: 5))
     }
 
+    func testLegacyV4RecurringBillStoreOpensWithPauseDefaults() throws {
+        let storeURL = temporaryStoreURL()
+        defer { try? removeStoreArtifacts(at: storeURL) }
+
+        let billID = UUID()
+        try createLegacyV4BillStore(at: storeURL, billID: billID)
+
+        let container = try openCurrentStore(at: storeURL)
+        let bills = try ModelContext(container).fetch(FetchDescriptor<RecurringBillPlan>())
+
+        XCTAssertEqual(bills.map(\.id), [billID])
+        XCTAssertEqual(bills.first?.name, "Internet")
+        XCTAssertFalse(bills.first?.isPaused ?? true)
+        XCTAssertNil(bills.first?.pausedAt)
+        XCTAssertNil(bills.first?.resumeStartMonth)
+    }
+
     private func makeContainer() throws -> ModelContainer {
         let schema = Schema(versionedSchema: MistiaSchemaV4.self)
         let configuration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)
         return try ModelContainer(for: schema, configurations: [configuration])
+    }
+
+    private func createLegacyV4BillStore(at storeURL: URL, billID: UUID) throws {
+        let schema = Schema(versionedSchema: MistiaSchemaV4.self)
+        let configuration = ModelConfiguration("default", schema: schema, url: storeURL)
+        let container = try ModelContainer(for: schema, configurations: [configuration])
+        let context = ModelContext(container)
+        context.insert(
+            RecurringBillPlan(
+                id: billID,
+                name: "Internet",
+                iconSymbolName: "wifi",
+                amountMinor: 4_200,
+                dueDay: 12,
+                frequencyMonths: 1
+            )
+        )
+        try context.save()
+    }
+
+    private func openCurrentStore(at storeURL: URL) throws -> ModelContainer {
+        let schema = Schema(versionedSchema: MistiaSchemaV4.self)
+        let configuration = ModelConfiguration("default", schema: schema, url: storeURL)
+        return try ModelContainer(
+            for: schema,
+            migrationPlan: MistiaMigrationPlan.self,
+            configurations: [configuration]
+        )
     }
 
     private func makeWallet() -> LedgerWallet {
@@ -261,5 +306,24 @@ final class SyncAndBillPauseRegressionTests: XCTestCase {
 
     private func makeDate(year: Int, month: Int, day: Int) -> Date {
         calendar.date(from: DateComponents(year: year, month: month, day: day))!
+    }
+
+    private func temporaryStoreURL() -> URL {
+        FileManager.default.temporaryDirectory
+            .appending(path: "mistia-bill-pause-migration-\(UUID().uuidString.lowercased())")
+            .appendingPathExtension("store")
+    }
+
+    private func removeStoreArtifacts(at storeURL: URL) throws {
+        let directoryURL = storeURL.deletingLastPathComponent()
+        let prefix = storeURL.lastPathComponent
+        let contents = try FileManager.default.contentsOfDirectory(
+            at: directoryURL,
+            includingPropertiesForKeys: nil
+        )
+
+        for url in contents where url.lastPathComponent.hasPrefix(prefix) {
+            try FileManager.default.removeItem(at: url)
+        }
     }
 }

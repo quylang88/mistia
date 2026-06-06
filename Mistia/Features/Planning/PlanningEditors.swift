@@ -1362,6 +1362,9 @@ struct PlanningBillEditorSheet: View {
         let planForSync: RecurringBillPlan
 
         if let plan = target.plan {
+            let existingIsPaused = plan.isPaused
+            let existingPausedAt = plan.pausedAt
+            let existingResumeStartMonth = plan.resumeStartMonth
             plan.name = trimmedName
             plan.iconSymbolName = selectedCategory.iconSymbolName
             plan.category = selectedCategory
@@ -1377,7 +1380,11 @@ struct PlanningBillEditorSheet: View {
             plan.autoPayDay = normalized.autoPayDay
             plan.autoPayDate = normalized.autoPayDate
             plan.frequencyMonths = normalized.frequencyMonths
-            if draft.scheduleKind == .oneTime {
+            if draft.scheduleKind == .recurring {
+                plan.isPaused = existingIsPaused
+                plan.pausedAt = existingPausedAt
+                plan.resumeStartMonth = existingResumeStartMonth
+            } else {
                 plan.isPaused = false
                 plan.pausedAt = nil
                 plan.resumeStartMonth = nil

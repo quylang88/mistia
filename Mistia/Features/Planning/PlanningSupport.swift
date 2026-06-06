@@ -448,6 +448,7 @@ extension RecurringBillPlan {
         let resolvedCategorySystemKey =
             category?.mistiaSystemCategoryKey
             ?? MistiaFinanceIconRegistry.categoryKey(for: iconSymbolName)
+        let resolvedScheduleKind = scheduleKind
 
         return PlanningBillSnapshot(
             id: id,
@@ -463,15 +464,15 @@ extension RecurringBillPlan {
             paymentWalletID: paymentWallet?.id,
             currencyCode: currencyCode,
             createdAt: createdAt,
-            scheduleKind: scheduleKind,
+            scheduleKind: resolvedScheduleKind,
             paymentStartDay: resolvedPaymentStartDay,
-            paymentStartDate: paymentStartDate,
+            paymentStartDate: resolvedScheduleKind == .oneTime ? paymentStartDate : nil,
             firstScheduledMonth: firstScheduledMonth,
             hasExplicitDueDate: resolvedHasExplicitDueDate,
             dueDate: dueDate,
             autoPayEnabled: autoPayEnabled,
             autoPayDay: autoPayDay,
-            autoPayDate: autoPayDate,
+            autoPayDate: resolvedScheduleKind == .oneTime ? autoPayDate : nil,
             isPaused: isPaused,
             pausedAt: pausedAt,
             resumeStartMonth: resumeStartMonth
