@@ -42,6 +42,12 @@ struct BillItemAnalysisItem: Codable, Equatable, Identifiable {
 
     var id: String { lineID }
     var transactionAmountMinor: Int64 { finalAmountMinor }
+    var showsDiscountBreakdown: Bool {
+        lineType == .purchase &&
+            discountAmountMinor > 0 &&
+            originalAmountMinor != nil &&
+            originalAmountMinor != finalAmountMinor
+    }
 
     enum CodingKeys: String, CodingKey {
         case lineID = "line_id"

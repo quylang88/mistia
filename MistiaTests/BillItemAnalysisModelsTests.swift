@@ -25,5 +25,36 @@ final class BillItemAnalysisModelsTests: XCTestCase {
         XCTAssertEqual(item.originalAmountMinor, 11_392)
         XCTAssertEqual(item.discountAmountMinor, 240)
         XCTAssertEqual(item.finalAmountMinor, 11_152)
+        XCTAssertEqual(item.quantityUnitAmountMinor, 2_788)
+    }
+
+    func testItemDoesNotShowDiscountBreakdownForQuantityOnlyRows() {
+        let item = BillItemAnalysisItem(
+            lineID: "line-1",
+            originalName: "KORI KRILL OIL152C",
+            lineType: .purchase,
+            quantity: 3,
+            originalAmountMinor: 8_544,
+            discountAmountMinor: 0,
+            finalAmountMinor: 8_544,
+            confidence: 0.9
+        )
+
+        XCTAssertFalse(item.showsDiscountBreakdown)
+        XCTAssertEqual(item.quantityUnitAmountMinor, 2_848)
+    }
+
+    func testItemShowsDiscountBreakdownOnlyForExplicitDiscounts() {
+        let item = BillItemAnalysisItem(
+            lineID: "line-1",
+            originalName: "PAMPERS P-L TPD",
+            lineType: .purchase,
+            originalAmountMinor: 800,
+            discountAmountMinor: 67,
+            finalAmountMinor: 733,
+            confidence: 0.9
+        )
+
+        XCTAssertTrue(item.showsDiscountBreakdown)
     }
 }

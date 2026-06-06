@@ -19,10 +19,12 @@ export function billItemPromptLines(): string[] {
     "For Costco-style receipts, a line like 3@ or 4@ directly below the product name means the product row quantity is x3 or x4; do not treat the quantity marker as a separate item.",
     "line_type must be purchase for purchased items and discount for standalone bill-level discount/promotion/coupon/voucher lines.",
     "List all purchased line items from this one receipt. Exclude change, cash received, payment method lines, tax-only summary lines, subtotal-only lines, loyalty points, and receipt metadata.",
-    "A discount or promotion line directly below a purchased item, especially one starting with ※, -, −, or － or ending with a minus marker like 240-, 900-, 240-E, is an item-level discount for the purchase immediately above it.",
+    "A discount or promotion line directly below a purchased item, especially one starting with ※, -, −, or － or ending with a minus marker like 240-, 900-, 240-E, 800-T, or 800T-, is an item-level discount for the purchase immediately above it.",
+    "On Costco and similar receipts, CPN, COUPON, coupon, voucher, member discount, markdown, promotion, promo, OFF, SALE, 値引, 割引, クーポン, ｸｰﾎﾟﾝ, 特売, 割戻, and similar abbreviations can mark coupon or promotion discount lines.",
+    "If the coupon/discount line below repeats the same brand or product text as the row above, attach it to that product row even when the discount amount uses suffix codes such as -T or -E.",
     "For item-level discount lines directly below a purchased item, do not return a separate discount item. Fold the discount into the purchase row: original_amount_minor is the pre-discount row total, discount_amount_minor is positive, and final_amount_minor is original_amount_minor minus discount_amount_minor.",
     "Return a separate line_type discount item only for standalone bill-level discounts that are not clearly attached to the purchase immediately above them.",
-    "Discount lines often start with -, −, or －, or contain Japanese terms such as 値引, 割引, クーポン, ｸｰﾎﾟﾝ, 特売, 割戻, or Vietnamese/English terms such as Giảm giá, Khuyến mãi, Voucher, Coupon, Discount.",
+    "Discount lines often start with -, −, or －, end with a minus/suffix code like 240-, 240-E, 800-T, or contain Japanese terms such as 値引, 割引, クーポン, ｸｰﾎﾟﾝ, 特売, 割戻, or Vietnamese/English terms such as Giảm giá, Khuyến mãi, Voucher, Coupon, Discount.",
     "Preserve original_name exactly as printed. Keep Japanese, Vietnamese, Latin, punctuation, and abbreviations as seen. Do not translate or romanize original_name.",
     "Always try to translate original_name into the target language when the item language differs from the app language. Translate by product meaning, not only phonetics.",
     "For food, alcohol, cosmetics, medicine, toiletries, and household goods, infer the real product type from common Japanese/Vietnamese retail terms and translate that type accurately. Keep brands/product names when useful.",
@@ -67,7 +69,7 @@ export function sanitizeBillItem(
   const isDiscount = rawLineType === "discount" ||
     (rawFinalAmount ?? 0) < 0 ||
     /^[-−－]/.test(originalName) ||
-    /(値引|割引|クーポン|ｸｰﾎﾟﾝ|割戻|discount|coupon|voucher|giảm giá|khuyến mãi|khuyen mai)/i
+    /(値引|割引|クーポン|ｸｰﾎﾟﾝ|割戻|特売|特価|値下|cpn|coupon|voucher|discount|promo|promotion|markdown|off|sale|giảm giá|khuyến mãi|khuyen mai)/i
       .test(originalName);
 
   if (rawFinalAmount === null && !originalName) return null;
@@ -162,6 +164,13 @@ export function normalizeBillItems(items: SanitizedItem[]): SanitizedItem[] {
   return normalized;
 }
 
+export function normalizeBillAnalysisItems(
+  items: SanitizedItem[],
+  _totalMinor: number | null,
+): SanitizedItem[] {
+  return normalizeBillItems(items);
+}
+
 function shouldFoldIntoPreviousPurchase(
   item: SanitizedItem,
   previous: SanitizedItem | undefined,
@@ -177,7 +186,13 @@ function shouldFoldIntoPreviousPurchase(
 function itemMissingFieldsFor(item: SanitizedItem): string[] {
   const missing = new Set(item.missing_fields);
   if (!item.original_name) missing.add("originalName");
-  if (item.line_type === "purchase" && item.final_amount_minor <= 0) {
+  const hasExplicitFullDiscount = item.line_type === "purchase" &&
+    (item.original_amount_minor ?? 0) > 0 &&
+    item.discount_amount_minor >= (item.original_amount_minor ?? 0);
+  if (
+    item.line_type === "purchase" && item.final_amount_minor <= 0 &&
+    !hasExplicitFullDiscount
+  ) {
     missing.add("finalAmountMinor");
   }
   if (item.line_type === "purchase" && !item.category_id) {
@@ -218,9 +233,16 @@ function optionalMinor(value: unknown): number | null {
   }
 
   if (typeof value === "string") {
-    const sanitized = value.replace(/[^0-9-]/g, "");
-    const parsed = Number(sanitized);
-    return Number.isFinite(parsed) ? Math.round(parsed) : null;
+    const trimmed = value.trim();
+    const hasNegativePrefix = /^[-−－]/.test(trimmed);
+    const hasNegativeSuffix = /[-−－]\s*[A-ZＡ-Ｚ]?\s*$/i.test(trimmed) ||
+      /[A-ZＡ-Ｚ]\s*[-−－]\s*$/i.test(trimmed);
+    const digits = trimmed.replace(/[^0-9]/g, "");
+    if (!digits) return null;
+    const parsed = Number(digits);
+    if (!Number.isFinite(parsed)) return null;
+    const amount = Math.round(parsed);
+    return hasNegativePrefix || hasNegativeSuffix ? -amount : amount;
   }
 
   return null;

@@ -1,5 +1,6 @@
 import {
   billItemPromptLines,
+  normalizeBillAnalysisItems,
   normalizeBillItems,
   sanitizeBillItem,
 } from "./bill-item-normalization.ts";
@@ -62,6 +63,103 @@ Deno.test("normalizeBillItems folds adjacent promotion discounts into the previo
   }
 });
 
+Deno.test("normalizeBillItems folds Costco CPN suffix-minus rows into the previous matching purchase", () => {
+  const categoryID = "cat-baby";
+  const items = normalizeBillItems([
+    sanitizeBillItem(
+      {
+        line_id: "line-1",
+        original_name: "PAMPERS P-L TPD",
+        translated_name: "Tã Pampers P-L TPD",
+        line_type: "purchase",
+        final_amount_minor: 800,
+        category_id: categoryID,
+        confidence: 0.9,
+        missing_fields: [],
+      },
+      0,
+      new Set([categoryID]),
+    ),
+    sanitizeBillItem(
+      {
+        line_id: "line-2",
+        original_name: "PAMPERS P-L TPD CPN",
+        line_type: "discount",
+        final_amount_minor: "800-T",
+        confidence: 0.9,
+        missing_fields: [],
+      },
+      1,
+      new Set([categoryID]),
+    ),
+  ].filter((item) => item !== null));
+
+  if (items.length !== 1) {
+    throw new Error(`Expected CPN row to be folded, got ${items.length} rows`);
+  }
+  const item = items[0];
+  if (item.original_amount_minor !== 800) {
+    throw new Error(
+      `Unexpected original amount: ${item.original_amount_minor}`,
+    );
+  }
+  if (item.discount_amount_minor !== 800) {
+    throw new Error(
+      `Unexpected discount amount: ${item.discount_amount_minor}`,
+    );
+  }
+  if (item.final_amount_minor !== 0) {
+    throw new Error(`Unexpected final amount: ${item.final_amount_minor}`);
+  }
+  if (item.missing_fields.includes("finalAmountMinor")) {
+    throw new Error(
+      `Fully discounted item should keep final amount: ${
+        JSON.stringify(item.missing_fields)
+      }`,
+    );
+  }
+});
+
+Deno.test("normalizeBillItems folds coupon rows even when the model mislabels them as purchases", () => {
+  const categoryID = "cat-baby";
+  const items = normalizeBillItems([
+    sanitizeBillItem(
+      {
+        line_id: "line-1",
+        original_name: "PAMPERS P-L TPD",
+        line_type: "purchase",
+        final_amount_minor: 800,
+        category_id: categoryID,
+        confidence: 0.9,
+        missing_fields: [],
+      },
+      0,
+      new Set([categoryID]),
+    ),
+    sanitizeBillItem(
+      {
+        line_id: "line-2",
+        original_name: "PAMPERS P-L TPD",
+        raw_line_text: "PAMPERS P-L TPD CPN 800-T",
+        line_type: "purchase",
+        final_amount_minor: 800,
+        category_id: categoryID,
+        confidence: 0.8,
+        missing_fields: [],
+      },
+      1,
+      new Set([categoryID]),
+    ),
+  ].filter((item) => item !== null));
+
+  if (items.length !== 1) {
+    throw new Error(`Expected mislabeled CPN row to be folded, got ${items.length} rows`);
+  }
+  if (items[0].discount_amount_minor !== 800 || items[0].final_amount_minor !== 0) {
+    throw new Error(`Unexpected folded item: ${JSON.stringify(items[0])}`);
+  }
+});
+
 Deno.test("billItemPromptLines explains Costco-style quantity and adjacent promotion signs", () => {
   const text = billItemPromptLines().join("\n");
 
@@ -73,6 +171,10 @@ Deno.test("billItemPromptLines explains Costco-style quantity and adjacent promo
       "x3",
       "item-level discount",
       "directly below",
+      "CPN",
+      "coupon",
+      "800-T",
+      "Do not autocorrect",
       "category_id",
       "closest category",
     ]
@@ -80,5 +182,58 @@ Deno.test("billItemPromptLines explains Costco-style quantity and adjacent promo
     if (!text.includes(expected)) {
       throw new Error(`Prompt is missing guidance: ${expected}`);
     }
+  }
+});
+
+Deno.test("normalizeBillAnalysisItems does not invent discounts to force receipt total", () => {
+  const categoryID = "cat-supplement";
+  const items = normalizeBillAnalysisItems(
+    [
+      sanitizeBillItem(
+        {
+          line_id: "line-1",
+          original_name: "KORI KRILL OIL152C",
+          line_type: "purchase",
+          quantity: 3,
+          original_amount_minor: 8544,
+          discount_amount_minor: 0,
+          final_amount_minor: 8544,
+          category_id: categoryID,
+          confidence: 0.9,
+          missing_fields: [],
+        },
+        0,
+        new Set([categoryID]),
+      ),
+      sanitizeBillItem(
+        {
+          line_id: "line-2",
+          original_name: "KORI KRILL OIL152C",
+          line_type: "purchase",
+          quantity: 4,
+          original_amount_minor: 11392,
+          discount_amount_minor: 0,
+          final_amount_minor: 11392,
+          category_id: categoryID,
+          confidence: 0.9,
+          missing_fields: [],
+        },
+        1,
+        new Set([categoryID]),
+      ),
+    ].filter((item) => item !== null),
+    31523,
+  );
+
+  if (
+    items[0].discount_amount_minor !== 0 || items[0].final_amount_minor !== 8544
+  ) {
+    throw new Error(`First item was mutated: ${JSON.stringify(items[0])}`);
+  }
+  if (
+    items[1].discount_amount_minor !== 0 ||
+    items[1].final_amount_minor !== 11392
+  ) {
+    throw new Error(`Second item was mutated: ${JSON.stringify(items[1])}`);
   }
 });

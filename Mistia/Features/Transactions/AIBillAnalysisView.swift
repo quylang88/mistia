@@ -441,8 +441,8 @@ struct AIBillAnalysisView: View {
     @ViewBuilder
     private func itemAmountColumn(_ item: BillItemAnalysisItem, currencyCode: String) -> some View {
         if item.lineType == .purchase {
-            if let originalAmountMinor = item.originalAmountMinor,
-               originalAmountMinor != item.finalAmountMinor {
+            if item.showsDiscountBreakdown,
+               let originalAmountMinor = item.originalAmountMinor {
                 Text(originalAmountMinor.formattedCurrency(code: currencyCode))
                     .font(.caption2)
                     .foregroundStyle(.secondary)
