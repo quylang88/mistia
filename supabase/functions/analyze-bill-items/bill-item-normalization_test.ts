@@ -295,8 +295,10 @@ Deno.test("billItemPromptLines explains Costco-style quantity and adjacent promo
     const expected of [
       "raw_line_text",
       "quantity",
+      "1@",
       "3@",
       "4@",
+      "never 30 or 40",
       "x3",
       "item-level discount",
       "directly below",
@@ -315,6 +317,70 @@ Deno.test("billItemPromptLines explains Costco-style quantity and adjacent promo
     if (!text.includes(expected)) {
       throw new Error(`Prompt is missing guidance: ${expected}`);
     }
+  }
+});
+
+Deno.test("sanitizeBillItem corrects suspicious multiplied quantities from visible at-mark markers", () => {
+  const categoryID = "cat-supplement";
+  const cases = [
+    { raw_line_text: "KORI KRILL OIL 2@ 5696", quantity: 20, expected: 2 },
+    { raw_line_text: "KORI KRILL OIL 3@ 8544", quantity: 30, expected: 3 },
+    { raw_line_text: "KORI KRILL OIL 4@ 11392", quantity: 40, expected: 4 },
+    { raw_line_text: "KORI KRILL OIL @2 5696", quantity: 20, expected: 2 },
+    { raw_line_text: "KORI KRILL OIL ×3 8544", quantity: 30, expected: 3 },
+  ];
+
+  for (const testCase of cases) {
+    const item = sanitizeBillItem(
+      {
+        line_id: `line-${testCase.expected}`,
+        raw_line_text: testCase.raw_line_text,
+        original_name: "KORI KRILL OIL",
+        line_type: "purchase",
+        quantity: testCase.quantity,
+        final_amount_minor: 1000,
+        category_id: categoryID,
+        confidence: 0.9,
+        missing_fields: [],
+      },
+      0,
+      new Set([categoryID]),
+    );
+
+    if (!item) {
+      throw new Error("Expected item to sanitize");
+    }
+    if (item.quantity !== testCase.expected) {
+      throw new Error(
+        `Expected ${testCase.expected} for ${testCase.raw_line_text}, got ${item.quantity}`,
+      );
+    }
+  }
+});
+
+Deno.test("sanitizeBillItem does not clamp real two digit visible quantities", () => {
+  const categoryID = "cat-supplement";
+  const item = sanitizeBillItem(
+    {
+      line_id: "line-12",
+      raw_line_text: "KORI KRILL OIL 12@ 34176",
+      original_name: "KORI KRILL OIL",
+      line_type: "purchase",
+      quantity: 12,
+      final_amount_minor: 34176,
+      category_id: categoryID,
+      confidence: 0.9,
+      missing_fields: [],
+    },
+    0,
+    new Set([categoryID]),
+  );
+
+  if (!item) {
+    throw new Error("Expected item to sanitize");
+  }
+  if (item.quantity !== 12) {
+    throw new Error(`Expected quantity 12, got ${item.quantity}`);
   }
 });
 

@@ -496,6 +496,172 @@ final class BillItemAnalysisTests: XCTestCase {
         XCTAssertEqual(snapshot.selectableIDs(mode: .lend), [sameGroup.id, differentCategory.id])
     }
 
+    func testQuantitySelectionCanLockPartialMultipackAndLeaveRemainingQuantity() throws {
+        let item = BillItemAnalysisItem(
+            lineID: "multipack",
+            originalName: "A",
+            lineType: .purchase,
+            quantity: 5,
+            originalAmountMinor: 500,
+            discountAmountMinor: 0,
+            finalAmountMinor: 500,
+            categoryID: categoryID,
+            confidence: 0.9
+        )
+        let selectionID = BillItemSelectionID(billID: billID, itemID: item.lineID)
+        let selectedSnapshot = BillItemSelectionSnapshot(
+            bills: [
+                BillItemSelectionBillSnapshot(
+                    billID: billID,
+                    walletID: walletID,
+                    merchantName: "Store",
+                    occurredAt: nil,
+                    items: [item],
+                    createdAllocations: [:],
+                    lockedGroups: []
+                )
+            ],
+            selectedQuantities: [selectionID: 3]
+        )
+
+        let selectedCandidate = try XCTUnwrap(selectedSnapshot.selectedCandidates.first)
+        XCTAssertEqual(selectedCandidate.totalQuantity, 5)
+        XCTAssertEqual(selectedCandidate.availableQuantity, 5)
+        XCTAssertEqual(selectedCandidate.selectedQuantity, 3)
+        XCTAssertEqual(selectedCandidate.amountMinor, 300)
+
+        let group = try XCTUnwrap(BillItemSelectionLogic.lockedGroup(
+            for: selectedSnapshot.selectedCandidates,
+            mode: .expense,
+            id: UUID(uuidString: "99999999-9999-9999-9999-999999999999")!
+        ))
+        XCTAssertEqual(group.itemAllocations[selectionID]?.quantity, 3)
+        XCTAssertEqual(group.amountMinor, 300)
+
+        let remainingSnapshot = BillItemSelectionSnapshot(
+            bills: [
+                BillItemSelectionBillSnapshot(
+                    billID: billID,
+                    walletID: walletID,
+                    merchantName: "Store",
+                    occurredAt: nil,
+                    items: [item],
+                    createdAllocations: [:],
+                    lockedGroups: [group]
+                )
+            ],
+            selectedQuantities: [:]
+        )
+
+        let remainingCandidate = try XCTUnwrap(remainingSnapshot.candidatesByID[selectionID])
+        XCTAssertEqual(remainingCandidate.lockedQuantity, 3)
+        XCTAssertEqual(remainingCandidate.availableQuantity, 2)
+        XCTAssertEqual(remainingCandidate.amountMinor, 200)
+        XCTAssertTrue(remainingSnapshot.selectableIDs(mode: .expense).contains(selectionID))
+    }
+
+    func testQuantitySelectionAllocatesRemaindersDeterministically() throws {
+        let item = BillItemAnalysisItem(
+            lineID: "uneven",
+            originalName: "A",
+            lineType: .purchase,
+            quantity: 3,
+            originalAmountMinor: 100,
+            discountAmountMinor: 0,
+            finalAmountMinor: 100,
+            categoryID: categoryID,
+            confidence: 0.9
+        )
+        let selectionID = BillItemSelectionID(billID: billID, itemID: item.lineID)
+        let selectedSnapshot = BillItemSelectionSnapshot(
+            bills: [
+                BillItemSelectionBillSnapshot(
+                    billID: billID,
+                    walletID: walletID,
+                    merchantName: "Store",
+                    occurredAt: nil,
+                    items: [item],
+                    createdAllocations: [:],
+                    lockedGroups: []
+                )
+            ],
+            selectedQuantities: [selectionID: 2]
+        )
+        let group = try XCTUnwrap(BillItemSelectionLogic.lockedGroup(
+            for: selectedSnapshot.selectedCandidates,
+            mode: .expense
+        ))
+
+        XCTAssertEqual(group.itemAllocations[selectionID]?.quantity, 2)
+        XCTAssertEqual(group.itemAllocations[selectionID]?.amountMinor, 67)
+        XCTAssertEqual(group.amountMinor, 67)
+
+        let createdSnapshot = BillItemSelectionSnapshot(
+            bills: [
+                BillItemSelectionBillSnapshot(
+                    billID: billID,
+                    walletID: walletID,
+                    merchantName: "Store",
+                    occurredAt: nil,
+                    items: [item],
+                    createdAllocations: ["uneven": group.itemAllocations[selectionID]!],
+                    lockedGroups: []
+                )
+            ],
+            selectedQuantities: [:]
+        )
+        let remainingCandidate = try XCTUnwrap(createdSnapshot.candidatesByID[selectionID])
+        XCTAssertEqual(remainingCandidate.createdQuantity, 2)
+        XCTAssertEqual(remainingCandidate.availableQuantity, 1)
+        XCTAssertEqual(remainingCandidate.amountMinor, 33)
+        XCTAssertEqual((group.itemAllocations[selectionID]?.amountMinor ?? 0) + remainingCandidate.amountMinor, 100)
+    }
+
+    func testQuantitySelectionRulesStillRequireSameCategoryForExpense() throws {
+        let first = BillItemAnalysisItem(
+            lineID: "a",
+            originalName: "A",
+            lineType: .purchase,
+            quantity: 5,
+            originalAmountMinor: 500,
+            discountAmountMinor: 0,
+            finalAmountMinor: 500,
+            categoryID: categoryID,
+            confidence: 0.9
+        )
+        let second = BillItemAnalysisItem(
+            lineID: "b",
+            originalName: "B",
+            lineType: .purchase,
+            quantity: 5,
+            originalAmountMinor: 500,
+            discountAmountMinor: 0,
+            finalAmountMinor: 500,
+            categoryID: otherCategoryID,
+            confidence: 0.9
+        )
+        let firstID = BillItemSelectionID(billID: billID, itemID: first.lineID)
+        let secondID = BillItemSelectionID(billID: billID, itemID: second.lineID)
+
+        let snapshot = BillItemSelectionSnapshot(
+            bills: [
+                BillItemSelectionBillSnapshot(
+                    billID: billID,
+                    walletID: walletID,
+                    merchantName: "Store",
+                    occurredAt: nil,
+                    items: [first, second],
+                    createdAllocations: [:],
+                    lockedGroups: []
+                )
+            ],
+            selectedQuantities: [firstID: 2]
+        )
+
+        XCTAssertFalse(snapshot.selectableIDs(mode: .expense).contains(secondID))
+        XCTAssertTrue(snapshot.selectableIDs(mode: .lend).contains(secondID))
+    }
+
     func testAllocatesDiscountRecordAcrossPurchaseItemsAndClearsDiscountLine() throws {
         let first = BillItemAnalysisItem(
             lineID: "a",

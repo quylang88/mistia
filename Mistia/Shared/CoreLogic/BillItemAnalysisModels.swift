@@ -239,12 +239,27 @@ struct BillItemSelectionID: Hashable, Codable, Equatable {
     let itemID: String
 }
 
+struct BillItemQuantityAllocation: Hashable, Codable, Equatable {
+    var quantity: Int
+    var amountMinor: Int64
+
+    init(quantity: Int, amountMinor: Int64) {
+        self.quantity = max(0, quantity)
+        self.amountMinor = amountMinor
+    }
+}
+
 struct BillItemSelectionCandidate: Hashable, Codable, Equatable {
     let id: BillItemSelectionID
     let walletID: UUID?
     let categoryID: UUID?
     let lineType: BillItemLineType
     let amountMinor: Int64
+    let totalQuantity: Int
+    let availableQuantity: Int
+    let selectedQuantity: Int
+    let createdQuantity: Int
+    let lockedQuantity: Int
     let merchantName: String?
     let occurredAt: Date?
     let isCreated: Bool
@@ -256,6 +271,11 @@ struct BillItemSelectionCandidate: Hashable, Codable, Equatable {
         categoryID: UUID?,
         lineType: BillItemLineType = .purchase,
         amountMinor: Int64,
+        totalQuantity: Int = 1,
+        availableQuantity: Int? = nil,
+        selectedQuantity: Int = 0,
+        createdQuantity: Int = 0,
+        lockedQuantity: Int = 0,
         merchantName: String? = nil,
         occurredAt: Date? = nil,
         isCreated: Bool = false,
@@ -266,18 +286,72 @@ struct BillItemSelectionCandidate: Hashable, Codable, Equatable {
         self.categoryID = lineType == .discount ? nil : categoryID
         self.lineType = lineType
         self.amountMinor = amountMinor
+        self.totalQuantity = max(1, totalQuantity)
+        self.createdQuantity = max(0, createdQuantity)
+        self.lockedQuantity = max(0, lockedQuantity)
+        self.availableQuantity = max(0, availableQuantity ?? (isCreated || isLocked ? 0 : self.totalQuantity))
+        self.selectedQuantity = min(max(0, selectedQuantity), self.availableQuantity)
         self.merchantName = merchantName?.nilIfBlank
         self.occurredAt = occurredAt
-        self.isCreated = isCreated
-        self.isLocked = isLocked
+        self.isCreated = isCreated || (self.availableQuantity == 0 && self.createdQuantity > 0)
+        self.isLocked = isLocked || (self.availableQuantity == 0 && self.lockedQuantity > 0)
+    }
+
+    func representing(_ allocation: BillItemQuantityAllocation) -> BillItemSelectionCandidate {
+        BillItemSelectionCandidate(
+            id: id,
+            walletID: walletID,
+            categoryID: categoryID,
+            lineType: lineType,
+            amountMinor: allocation.amountMinor,
+            totalQuantity: totalQuantity,
+            availableQuantity: allocation.quantity,
+            selectedQuantity: allocation.quantity,
+            createdQuantity: createdQuantity,
+            lockedQuantity: lockedQuantity,
+            merchantName: merchantName,
+            occurredAt: occurredAt,
+            isCreated: isCreated,
+            isLocked: isLocked
+        )
     }
 }
 
 struct BillItemLockedGroup: Equatable, Hashable, Identifiable {
     let id: UUID
     let mode: BillItemTransactionMode
-    let itemIDs: Set<BillItemSelectionID>
+    let itemAllocations: [BillItemSelectionID: BillItemQuantityAllocation]
     let amountMinor: Int64
+
+    var itemIDs: Set<BillItemSelectionID> {
+        Set(itemAllocations.keys)
+    }
+
+    init(
+        id: UUID,
+        mode: BillItemTransactionMode,
+        itemAllocations: [BillItemSelectionID: BillItemQuantityAllocation],
+        amountMinor: Int64
+    ) {
+        self.id = id
+        self.mode = mode
+        self.itemAllocations = itemAllocations.filter { $0.value.quantity > 0 }
+        self.amountMinor = amountMinor
+    }
+
+    init(
+        id: UUID,
+        mode: BillItemTransactionMode,
+        itemIDs: Set<BillItemSelectionID>,
+        amountMinor: Int64
+    ) {
+        self.init(
+            id: id,
+            mode: mode,
+            itemAllocations: Dictionary(uniqueKeysWithValues: itemIDs.map { ($0, BillItemQuantityAllocation(quantity: 1, amountMinor: amountMinor)) }),
+            amountMinor: amountMinor
+        )
+    }
 }
 
 struct BillItemTransactionDraft: Equatable {
@@ -298,8 +372,46 @@ struct BillItemSelectionBillSnapshot: Equatable {
     let merchantName: String?
     let occurredAt: Date?
     let items: [BillItemAnalysisItem]
-    let createdItemIDs: Set<String>
+    let createdAllocations: [String: BillItemQuantityAllocation]
     let lockedGroups: [BillItemLockedGroup]
+
+    init(
+        billID: UUID,
+        walletID: UUID?,
+        merchantName: String?,
+        occurredAt: Date?,
+        items: [BillItemAnalysisItem],
+        createdAllocations: [String: BillItemQuantityAllocation],
+        lockedGroups: [BillItemLockedGroup]
+    ) {
+        self.billID = billID
+        self.walletID = walletID
+        self.merchantName = merchantName
+        self.occurredAt = occurredAt
+        self.items = items
+        self.createdAllocations = createdAllocations
+        self.lockedGroups = lockedGroups
+    }
+
+    init(
+        billID: UUID,
+        walletID: UUID?,
+        merchantName: String?,
+        occurredAt: Date?,
+        items: [BillItemAnalysisItem],
+        createdItemIDs: Set<String>,
+        lockedGroups: [BillItemLockedGroup]
+    ) {
+        self.init(
+            billID: billID,
+            walletID: walletID,
+            merchantName: merchantName,
+            occurredAt: occurredAt,
+            items: items,
+            createdAllocations: Dictionary(uniqueKeysWithValues: createdItemIDs.map { ($0, BillItemQuantityAllocation(quantity: 1, amountMinor: 0)) }),
+            lockedGroups: lockedGroups
+        )
+    }
 }
 
 struct BillItemSelectionSnapshot: Equatable {
@@ -310,10 +422,11 @@ struct BillItemSelectionSnapshot: Equatable {
     let allCandidates: [BillItemSelectionCandidate]
     let selectedCandidates: [BillItemSelectionCandidate]
     let selectedIDs: Set<BillItemSelectionID>
+    let selectedQuantities: [BillItemSelectionID: Int]
 
     init(
         bills: [BillItemSelectionBillSnapshot],
-        selectedIDs: Set<BillItemSelectionID>
+        selectedQuantities: [BillItemSelectionID: Int]
     ) {
         var candidatesByBillID: [UUID: [BillItemSelectionCandidate]] = [:]
         var selectedCandidatesByBillID: [UUID: [BillItemSelectionCandidate]] = [:]
@@ -321,33 +434,56 @@ struct BillItemSelectionSnapshot: Equatable {
         var candidatesByID: [BillItemSelectionID: BillItemSelectionCandidate] = [:]
         var allCandidates: [BillItemSelectionCandidate] = []
         var selectedCandidates: [BillItemSelectionCandidate] = []
+        var normalizedSelectedQuantities: [BillItemSelectionID: Int] = [:]
 
         for bill in bills {
             let lockedItemIDs = BillItemSelectionLogic.lockedItemIDs(in: bill.lockedGroups)
             lockedItemIDsByBillID[bill.billID] = lockedItemIDs
+            let lockedAllocations = BillItemSelectionLogic.lockedAllocations(in: bill.lockedGroups)
 
             let candidates = bill.items.map { item in
                 let id = BillItemSelectionID(billID: bill.billID, itemID: item.lineID)
+                let totalQuantity = item.lineType == .purchase ? max(1, item.quantity ?? 1) : 1
+                let createdAllocation = bill.createdAllocations[item.lineID] ?? BillItemQuantityAllocation(quantity: 0, amountMinor: 0)
+                let lockedAllocation = lockedAllocations[id] ?? BillItemQuantityAllocation(quantity: 0, amountMinor: 0)
+                let usedQuantity = min(totalQuantity, createdAllocation.quantity + lockedAllocation.quantity)
+                let availableQuantity = max(0, totalQuantity - usedQuantity)
+                let remainingAmount = max(0, item.transactionAmountMinor - createdAllocation.amountMinor - lockedAllocation.amountMinor)
+                let selectedQuantity = min(max(0, selectedQuantities[id] ?? 0), availableQuantity)
+                let representedQuantity = selectedQuantity > 0 ? selectedQuantity : availableQuantity
+                let representedAmount = BillItemSelectionLogic.allocationAmount(
+                    totalAmountMinor: remainingAmount,
+                    totalQuantity: availableQuantity,
+                    allocatedQuantity: representedQuantity
+                )
                 return BillItemSelectionCandidate(
                     id: id,
                     walletID: bill.walletID,
                     categoryID: item.categoryID,
                     lineType: item.lineType,
-                    amountMinor: item.transactionAmountMinor,
+                    amountMinor: item.lineType == .discount ? item.transactionAmountMinor : representedAmount,
+                    totalQuantity: totalQuantity,
+                    availableQuantity: availableQuantity,
+                    selectedQuantity: item.lineType == .discount ? min(selectedQuantity, 1) : selectedQuantity,
+                    createdQuantity: min(createdAllocation.quantity, totalQuantity),
+                    lockedQuantity: min(lockedAllocation.quantity, totalQuantity),
                     merchantName: bill.merchantName,
                     occurredAt: bill.occurredAt,
-                    isCreated: bill.createdItemIDs.contains(item.lineID),
-                    isLocked: lockedItemIDs.contains(id)
+                    isCreated: availableQuantity == 0 && createdAllocation.quantity > 0,
+                    isLocked: availableQuantity == 0 && lockedItemIDs.contains(id)
                 )
             }
 
             candidatesByBillID[bill.billID] = candidates
-            let selectedForBill = candidates.filter { selectedIDs.contains($0.id) }
+            let selectedForBill = candidates.filter { $0.selectedQuantity > 0 }
             selectedCandidatesByBillID[bill.billID] = selectedForBill
             allCandidates.append(contentsOf: candidates)
             selectedCandidates.append(contentsOf: selectedForBill)
             for candidate in candidates {
                 candidatesByID[candidate.id] = candidate
+                if candidate.selectedQuantity > 0 {
+                    normalizedSelectedQuantities[candidate.id] = candidate.selectedQuantity
+                }
             }
         }
 
@@ -357,7 +493,18 @@ struct BillItemSelectionSnapshot: Equatable {
         self.candidatesByID = candidatesByID
         self.allCandidates = allCandidates
         self.selectedCandidates = selectedCandidates
-        self.selectedIDs = selectedIDs
+        self.selectedQuantities = normalizedSelectedQuantities
+        self.selectedIDs = Set(normalizedSelectedQuantities.keys)
+    }
+
+    init(
+        bills: [BillItemSelectionBillSnapshot],
+        selectedIDs: Set<BillItemSelectionID>
+    ) {
+        self.init(
+            bills: bills,
+            selectedQuantities: Dictionary(uniqueKeysWithValues: selectedIDs.map { ($0, 1) })
+        )
     }
 
     func selectableIDs(mode: BillItemTransactionMode) -> Set<BillItemSelectionID> {
@@ -382,6 +529,20 @@ struct BillItemSelectionSnapshot: Equatable {
 }
 
 enum BillItemSelectionLogic {
+    static func allocationAmount(
+        totalAmountMinor: Int64,
+        totalQuantity: Int,
+        allocatedQuantity: Int
+    ) -> Int64 {
+        let totalQuantity = max(0, totalQuantity)
+        let allocatedQuantity = min(max(0, allocatedQuantity), totalQuantity)
+        guard totalQuantity > 0, allocatedQuantity > 0 else { return 0 }
+
+        let base = totalAmountMinor / Int64(totalQuantity)
+        let remainder = Int(totalAmountMinor % Int64(totalQuantity))
+        return Int64(allocatedQuantity) * base + Int64(min(allocatedQuantity, max(0, remainder)))
+    }
+
     static func canSelect(
         _ candidate: BillItemSelectionCandidate,
         selected: [BillItemSelectionCandidate],
@@ -389,6 +550,7 @@ enum BillItemSelectionLogic {
     ) -> Bool {
         guard !candidate.isCreated,
               !candidate.isLocked,
+              candidate.availableQuantity > 0,
               candidate.amountMinor != 0,
               candidate.walletID != nil else {
             return false
@@ -423,18 +585,35 @@ enum BillItemSelectionLogic {
     }
 
     static func normalizedSelection(
-        _ selection: Set<BillItemSelectionID>,
+        _ selection: [BillItemSelectionID: Int],
         candidates: [BillItemSelectionCandidate],
         mode: BillItemTransactionMode
-    ) -> Set<BillItemSelectionID> {
+    ) -> [BillItemSelectionID: Int] {
         var normalized: [BillItemSelectionCandidate] = []
-        for candidate in candidates where selection.contains(candidate.id) {
+        for candidate in candidates where (selection[candidate.id] ?? 0) > 0 {
             if canSelect(candidate, selected: normalized, mode: mode) {
                 normalized.append(candidate)
             }
         }
 
-        return Set(normalized.map(\.id))
+        return Dictionary(uniqueKeysWithValues: normalized.map { candidate in
+            let quantity = min(max(1, selection[candidate.id] ?? candidate.selectedQuantity), candidate.availableQuantity)
+            return (candidate.id, quantity)
+        })
+    }
+
+    static func normalizedSelection(
+        _ selection: Set<BillItemSelectionID>,
+        candidates: [BillItemSelectionCandidate],
+        mode: BillItemTransactionMode
+    ) -> Set<BillItemSelectionID> {
+        Set(
+            normalizedSelection(
+                Dictionary(uniqueKeysWithValues: selection.map { ($0, 1) }),
+                candidates: candidates,
+                mode: mode
+            ).keys
+        )
     }
 
     static func lockedGroup(
@@ -442,7 +621,7 @@ enum BillItemSelectionLogic {
         mode: BillItemTransactionMode,
         id: UUID = UUID()
     ) -> BillItemLockedGroup? {
-        let candidates = selected.filter { !$0.isCreated && !$0.isLocked && $0.amountMinor != 0 }
+        let candidates = selected.filter { !$0.isCreated && !$0.isLocked && $0.availableQuantity > 0 && $0.selectedQuantity > 0 && $0.amountMinor != 0 }
         let amountMinor = candidates.reduce(Int64.zero) { $0 + $1.amountMinor }
         guard amountMinor > 0,
               !candidates.isEmpty,
@@ -453,7 +632,15 @@ enum BillItemSelectionLogic {
         return BillItemLockedGroup(
             id: id,
             mode: mode,
-            itemIDs: Set(candidates.map(\.id)),
+            itemAllocations: Dictionary(uniqueKeysWithValues: candidates.map { candidate in
+                (
+                    candidate.id,
+                    BillItemQuantityAllocation(
+                        quantity: candidate.selectedQuantity,
+                        amountMinor: candidate.amountMinor
+                    )
+                )
+            }),
             amountMinor: amountMinor
         )
     }
@@ -461,6 +648,18 @@ enum BillItemSelectionLogic {
     static func lockedItemIDs(in groups: [BillItemLockedGroup]) -> Set<BillItemSelectionID> {
         groups.reduce(into: Set<BillItemSelectionID>()) { partial, group in
             partial.formUnion(group.itemIDs)
+        }
+    }
+
+    static func lockedAllocations(in groups: [BillItemLockedGroup]) -> [BillItemSelectionID: BillItemQuantityAllocation] {
+        groups.reduce(into: [:]) { partial, group in
+            for (id, allocation) in group.itemAllocations {
+                let existing = partial[id] ?? BillItemQuantityAllocation(quantity: 0, amountMinor: 0)
+                partial[id] = BillItemQuantityAllocation(
+                    quantity: existing.quantity + allocation.quantity,
+                    amountMinor: existing.amountMinor + allocation.amountMinor
+                )
+            }
         }
     }
 

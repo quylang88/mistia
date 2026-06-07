@@ -19,13 +19,13 @@ struct AIBillAnalysisView: View {
 
     @State private var mode: BillItemTransactionMode = .expense
     @State private var bills: [AIBillDraft] = []
-    @State private var selectedIDs: Set<BillItemSelectionID> = []
+    @State private var selectedQuantities: [BillItemSelectionID: Int] = [:]
     @State private var photoItems: [PhotosPickerItem] = []
     @State private var cameraSource: AIBillCameraSource?
     @State private var alert: AIBillAlert?
     @State private var editorTarget: TransactionEditorTarget?
     @State private var categoryPickerTarget: AIBillCategoryPickerTarget?
-    @State private var pendingTransactionItemIDs: Set<BillItemSelectionID> = []
+    @State private var pendingTransactionAllocations: [BillItemSelectionID: BillItemQuantityAllocation] = [:]
     @State private var pendingTransactionGroupID: UUID?
     @State private var isLoadingPhotos = false
     @State private var isAnalyzing = false
@@ -166,14 +166,6 @@ struct AIBillAnalysisView: View {
         colorScheme == .dark ? MistiaAccent.lightPurple.color : MistiaAccent.purple.color
     }
 
-    private var actionControlFill: Color {
-        colorScheme == .dark ? .white.opacity(0.12) : .black.opacity(0.06)
-    }
-
-    private var actionControlStroke: Color {
-        colorScheme == .dark ? .white.opacity(0.08) : .black.opacity(0.04)
-    }
-
     private var actionSection: some View {
         HStack(spacing: 10) {
             PhotosPicker(
@@ -190,11 +182,10 @@ struct AIBillAnalysisView: View {
                 .font(.system(size: 15, weight: .semibold, design: .rounded))
                 .foregroundStyle(actionControlForeground)
                 .frame(maxWidth: .infinity, minHeight: 46)
-                .background {
-                    actionControlBackground()
-                }
             }
-            .buttonStyle(MistiaPressableButtonStyle(cornerRadius: 16, tint: actionControlForeground))
+            .buttonStyle(.glass)
+            .buttonBorderShape(.capsule)
+            .tint(actionControlForeground)
             .disabled(bills.count >= imageLimit || isAnalyzing || isLoadingPhotos)
 
             if UIImagePickerController.isSourceTypeAvailable(.camera) {
@@ -208,12 +199,11 @@ struct AIBillAnalysisView: View {
                     Image(systemName: "camera.fill")
                         .font(.system(size: 15, weight: .bold))
                         .foregroundStyle(actionControlForeground)
-                        .frame(width: 50, height: 46)
-                        .background {
-                            actionControlBackground()
-                        }
+                        .frame(width: 46, height: 46)
                 }
-                .buttonStyle(MistiaPressableButtonStyle(cornerRadius: 16, tint: actionControlForeground))
+                .buttonStyle(.glass)
+                .buttonBorderShape(.circle)
+                .tint(actionControlForeground)
                 .disabled(isAnalyzing || isLoadingPhotos)
                 .accessibilityLabel(L10n.transactions.transactioneditor.takePhoto)
             }
@@ -250,15 +240,6 @@ struct AIBillAnalysisView: View {
             .padding(.top, 4)
             .padding(.bottom, 18)
         }
-    }
-
-    private func actionControlBackground(cornerRadius: CGFloat = 16) -> some View {
-        RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-            .fill(actionControlFill)
-            .overlay {
-                RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                    .strokeBorder(actionControlStroke, lineWidth: 0.8)
-            }
     }
 
     private var emptyState: some View {
@@ -303,7 +284,7 @@ struct AIBillAnalysisView: View {
                             .controlSize(.small)
                     }
 
-                    if bill.result == nil {
+                    if bill.result == nil, !isAnalyzing, !bill.isAnalyzing {
                         Button(role: .destructive) {
                             removeBill(bill.id)
                         } label: {
@@ -368,7 +349,7 @@ struct AIBillAnalysisView: View {
         let candidateID = BillItemSelectionID(billID: bill.id, itemID: item.lineID)
         let candidate = renderContext.selectionSnapshot.candidatesByID[candidateID]
             ?? fallbackSelectionCandidate(for: item, bill: bill)
-        let isSelected = renderContext.selectionSnapshot.selectedIDs.contains(candidate.id)
+        let isSelected = candidate.selectedQuantity > 0
         let canSelect = renderContext.selectableIDs.contains(candidate.id) || isSelected
 
         return HStack(alignment: .top, spacing: 10) {
@@ -390,14 +371,7 @@ struct AIBillAnalysisView: View {
                         .foregroundStyle(candidate.isCreated || candidate.isLocked ? .secondary : .primary)
                         .lineLimit(2)
 
-                    if let quantity = item.quantity, quantity > 1 {
-                        Text(verbatim: "x\(quantity)")
-                            .font(.system(size: 11, weight: .black, design: .rounded))
-                            .foregroundStyle(.secondary)
-                            .padding(.horizontal, 6)
-                            .padding(.vertical, 2)
-                            .background(Color(UIColor.tertiarySystemGroupedBackground), in: Capsule())
-                    }
+                    quantityControl(for: candidate)
                 }
                 if let translatedName = item.translatedName {
                     Text(translatedName)
@@ -436,7 +410,7 @@ struct AIBillAnalysisView: View {
             Spacer(minLength: 8)
 
             VStack(alignment: .trailing, spacing: 4) {
-                itemAmountColumn(item, currencyCode: bill.currencyCode)
+                itemAmountColumn(item, currencyCode: bill.currencyCode, representedAmountMinor: candidate.amountMinor)
                 if candidate.isCreated {
                     Text(L10n.transactions.aibill.created)
                         .font(.caption2.weight(.semibold))
@@ -457,30 +431,79 @@ struct AIBillAnalysisView: View {
     }
 
     @ViewBuilder
-    private func itemAmountColumn(_ item: BillItemAnalysisItem, currencyCode: String) -> some View {
+    private func quantityControl(for candidate: BillItemSelectionCandidate) -> some View {
+        let displayedQuantity = candidate.selectedQuantity > 0 ? candidate.selectedQuantity : candidate.availableQuantity
+        if candidate.lineType == .purchase, displayedQuantity > 1 {
+            if candidate.availableQuantity >= 2, !candidate.isCreated, !candidate.isLocked {
+                Menu {
+                    ForEach(1...candidate.availableQuantity, id: \.self) { quantity in
+                        Button {
+                            selectQuantity(quantity, for: candidate)
+                        } label: {
+                            HStack {
+                                Text(verbatim: "x\(quantity)")
+                                if candidate.selectedQuantity == quantity {
+                                    Image(systemName: "checkmark")
+                                }
+                            }
+                        }
+                    }
+                } label: {
+                    quantityBadge(displayedQuantity, isSelected: candidate.selectedQuantity > 0)
+                }
+                .menuOrder(.fixed)
+            } else {
+                quantityBadge(displayedQuantity, isSelected: false)
+            }
+        }
+    }
+
+    private func quantityBadge(_ quantity: Int, isSelected: Bool) -> some View {
+        Text(verbatim: "x\(quantity)")
+            .font(.system(size: 11, weight: .black, design: .rounded))
+            .foregroundStyle(isSelected ? MistiaAccent.purple.color : .secondary)
+            .padding(.horizontal, 6)
+            .padding(.vertical, 2)
+            .background(
+                isSelected
+                    ? MistiaAccent.purple.color.opacity(0.14)
+                    : Color(UIColor.tertiarySystemGroupedBackground),
+                in: Capsule()
+            )
+    }
+
+    @ViewBuilder
+    private func itemAmountColumn(
+        _ item: BillItemAnalysisItem,
+        currencyCode: String,
+        representedAmountMinor: Int64? = nil
+    ) -> some View {
+        let finalAmountMinor = representedAmountMinor ?? item.finalAmountMinor
+        let isPartialAmount = representedAmountMinor != nil && representedAmountMinor != item.finalAmountMinor
         if item.lineType == .purchase {
-            if item.showsDiscountBreakdown,
+            if !isPartialAmount,
+               item.showsDiscountBreakdown,
                let originalAmountMinor = item.originalAmountMinor {
                 Text(originalAmountMinor.formattedCurrency(code: currencyCode))
                     .font(.caption2)
                     .foregroundStyle(.secondary)
                     .strikethrough()
-            } else if let unitAmountMinor = item.quantityUnitAmountMinor {
+            } else if !isPartialAmount, let unitAmountMinor = item.quantityUnitAmountMinor {
                 Text(unitAmountMinor.formattedCurrency(code: currencyCode))
                     .font(.caption2)
                     .foregroundStyle(.secondary)
             }
-            if item.discountAmountMinor > 0 {
+            if !isPartialAmount, item.discountAmountMinor > 0 {
                 Text(verbatim: "-\(item.discountAmountMinor.formattedCurrency(code: currencyCode))")
                     .font(.caption2.weight(.semibold))
                     .foregroundStyle(.red)
             }
-            Text(item.finalAmountMinor.formattedCurrency(code: currencyCode))
+            Text(finalAmountMinor.formattedCurrency(code: currencyCode))
                 .font(.system(size: 14, weight: .bold, design: .rounded))
         } else {
-            Text(item.finalAmountMinor.formattedCurrency(code: currencyCode))
+            Text(finalAmountMinor.formattedCurrency(code: currencyCode))
                 .font(.system(size: 14, weight: .bold, design: .rounded))
-                .foregroundStyle(item.finalAmountMinor < 0 ? .red : .secondary)
+                .foregroundStyle(finalAmountMinor < 0 ? .red : .secondary)
         }
     }
 
@@ -505,14 +528,25 @@ struct AIBillAnalysisView: View {
                     .foregroundStyle(.secondary)
             }
             Spacer()
-            Button(L10n.common.cancel) {
+            Button {
                 cancelLockedGroup(group.id, billID: bill.id)
+            } label: {
+                Label(L10n.common.cancel, systemImage: "xmark")
             }
             .font(.caption.weight(.semibold))
-            Button(L10n.transactions.aibill.createTransaction) {
+            .buttonStyle(.glass)
+            .buttonBorderShape(.capsule)
+            .tint(Color.secondary)
+
+            Button {
                 createTransaction(from: group, bill: bill)
+            } label: {
+                Label(L10n.transactions.aibill.createTransaction, systemImage: "plus")
             }
             .font(.caption.weight(.bold))
+            .buttonStyle(.glassProminent)
+            .buttonBorderShape(.capsule)
+            .tint(MistiaAccent.purple.color)
         }
         .padding(10)
         .background {
@@ -538,14 +572,19 @@ struct AIBillAnalysisView: View {
                     .foregroundStyle(.secondary)
             }
             Spacer()
-            Button(L10n.common.ok) {
+            Button {
                 confirmSelectionGroup(for: bill)
+            } label: {
+                Image(systemName: "checkmark")
+                    .font(.system(size: 14, weight: .bold))
+                    .foregroundStyle(MistiaAccent.checkmarkPurple.color)
+                    .frame(width: 30, height: 30)
             }
-            .font(.system(size: 13, weight: .bold, design: .rounded))
             .buttonStyle(.glassProminent)
-            .buttonBorderShape(.capsule)
+            .buttonBorderShape(.circle)
             .tint(MistiaAccent.purple.color)
             .disabled(selectedAmount <= 0)
+            .accessibilityLabel(L10n.common.ok)
         }
         .padding(12)
         .background {
@@ -647,11 +686,11 @@ struct AIBillAnalysisView: View {
                     merchantName: bill.result?.merchantName,
                     occurredAt: bill.result?.occurredAt,
                     items: bill.result?.items ?? [],
-                    createdItemIDs: bill.createdItemIDs,
+                    createdAllocations: bill.createdAllocations,
                     lockedGroups: bill.lockedGroups
                 )
             },
-            selectedIDs: selectedIDs
+            selectedQuantities: selectedQuantities
         )
     }
 
@@ -703,9 +742,12 @@ struct AIBillAnalysisView: View {
             categoryID: item.categoryID,
             lineType: item.lineType,
             amountMinor: item.transactionAmountMinor,
+            totalQuantity: item.quantity ?? 1,
+            availableQuantity: item.quantity ?? 1,
+            selectedQuantity: selectedQuantities[BillItemSelectionID(billID: bill.id, itemID: item.lineID)] ?? 0,
             merchantName: bill.result?.merchantName,
             occurredAt: bill.result?.occurredAt,
-            isCreated: bill.createdItemIDs.contains(item.lineID),
+            isCreated: bill.createdAllocations[item.lineID] != nil,
             isLocked: lockedItemIDs(for: bill).contains(BillItemSelectionID(billID: bill.id, itemID: item.lineID))
         )
     }
@@ -824,14 +866,14 @@ struct AIBillAnalysisView: View {
         }
         result.items = items
         bills[billIndex].result = result
-        selectedIDs.remove(BillItemSelectionID(billID: billID, itemID: itemID))
+        selectedQuantities.removeValue(forKey: BillItemSelectionID(billID: billID, itemID: itemID))
         normalizeSelection()
     }
 
     private func removeBill(_ billID: UUID) {
         bills.removeAll { $0.id == billID }
-        selectedIDs = selectedIDs.filter { $0.billID != billID }
-        pendingTransactionItemIDs = pendingTransactionItemIDs.filter { $0.billID != billID }
+        selectedQuantities = selectedQuantities.filter { $0.key.billID != billID }
+        pendingTransactionAllocations = pendingTransactionAllocations.filter { $0.key.billID != billID }
         if let activePendingGroupID = pendingTransactionGroupID,
            !bills.contains(where: { bill in
                bill.lockedGroups.contains { $0.id == activePendingGroupID }
@@ -843,8 +885,8 @@ struct AIBillAnalysisView: View {
 
     private func toggleSelection(_ candidate: BillItemSelectionCandidate) {
         let snapshot = currentSelectionSnapshot
-        if snapshot.selectedIDs.contains(candidate.id) {
-            selectedIDs.remove(candidate.id)
+        if (snapshot.selectedQuantities[candidate.id] ?? 0) > 0 {
+            selectedQuantities.removeValue(forKey: candidate.id)
             return
         }
 
@@ -856,12 +898,26 @@ struct AIBillAnalysisView: View {
             return
         }
 
-        selectedIDs.insert(candidate.id)
+        selectedQuantities[candidate.id] = max(1, candidate.availableQuantity)
+        normalizeSelection()
+    }
+
+    private func selectQuantity(_ quantity: Int, for candidate: BillItemSelectionCandidate) {
+        let snapshot = currentSelectionSnapshot
+        guard snapshot.selectableIDs(mode: mode).contains(candidate.id) || (snapshot.selectedQuantities[candidate.id] ?? 0) > 0 else {
+            alert = AIBillAlert(
+                title: L10n.transactions.aibill.aiBill,
+                message: L10n.transactions.aibill.noSelectableItems
+            )
+            return
+        }
+        selectedQuantities[candidate.id] = min(max(1, quantity), candidate.availableQuantity)
+        normalizeSelection()
     }
 
     private func normalizeSelection() {
-        selectedIDs = BillItemSelectionLogic.normalizedSelection(
-            selectedIDs,
+        selectedQuantities = BillItemSelectionLogic.normalizedSelection(
+            selectedQuantities,
             candidates: currentSelectionSnapshot.allCandidates,
             mode: mode
         )
@@ -878,7 +934,9 @@ struct AIBillAnalysisView: View {
         }
         guard let billIndex = bills.firstIndex(where: { $0.id == bill.id }) else { return }
         bills[billIndex].lockedGroups.append(group)
-        selectedIDs.subtract(group.itemIDs)
+        for itemID in group.itemIDs {
+            selectedQuantities.removeValue(forKey: itemID)
+        }
         normalizeSelection()
     }
 
@@ -911,9 +969,7 @@ struct AIBillAnalysisView: View {
     }
 
     private func createdAmountMinor(for bill: AIBillDraft) -> Int64 {
-        (bill.result?.items ?? [])
-            .filter { bill.createdItemIDs.contains($0.lineID) }
-            .reduce(Int64.zero) { $0 + $1.transactionAmountMinor }
+        bill.createdAllocations.values.reduce(Int64.zero) { $0 + $1.amountMinor }
     }
 
     private func lockedItemIDs(for bill: AIBillDraft) -> Set<BillItemSelectionID> {
@@ -1136,7 +1192,10 @@ struct AIBillAnalysisView: View {
     }
 
     private func createTransaction(from group: BillItemLockedGroup, bill: AIBillDraft) {
-        let candidates = allSelectionCandidates(for: bill).filter { group.itemIDs.contains($0.id) }
+        let candidates = allSelectionCandidates(for: bill).compactMap { candidate -> BillItemSelectionCandidate? in
+            guard let allocation = group.itemAllocations[candidate.id] else { return nil }
+            return candidate.representing(allocation)
+        }
         guard let draft = BillItemSelectionLogic.transactionDraft(
             for: candidates,
             mode: group.mode,
@@ -1149,7 +1208,7 @@ struct AIBillAnalysisView: View {
             return
         }
 
-        pendingTransactionItemIDs = Set(candidates.map(\.id))
+        pendingTransactionAllocations = group.itemAllocations
         pendingTransactionGroupID = group.id
         let receiptImage = draft.receiptAttachmentBillID.flatMap { billID in
             bills.first(where: { $0.id == billID })?.image
@@ -1180,17 +1239,23 @@ struct AIBillAnalysisView: View {
     }
 
     private func markPendingItemsCreated() {
-        for id in pendingTransactionItemIDs {
+        for (id, allocation) in pendingTransactionAllocations {
             guard let billIndex = bills.firstIndex(where: { $0.id == id.billID }) else { continue }
-            bills[billIndex].createdItemIDs.insert(id.itemID)
+            let existing = bills[billIndex].createdAllocations[id.itemID] ?? BillItemQuantityAllocation(quantity: 0, amountMinor: 0)
+            bills[billIndex].createdAllocations[id.itemID] = BillItemQuantityAllocation(
+                quantity: existing.quantity + allocation.quantity,
+                amountMinor: existing.amountMinor + allocation.amountMinor
+            )
         }
         if let pendingTransactionGroupID {
             for index in bills.indices {
                 bills[index].lockedGroups.removeAll { $0.id == pendingTransactionGroupID }
             }
         }
-        selectedIDs.subtract(pendingTransactionItemIDs)
-        pendingTransactionItemIDs = []
+        for id in pendingTransactionAllocations.keys {
+            selectedQuantities.removeValue(forKey: id)
+        }
+        pendingTransactionAllocations = [:]
         pendingTransactionGroupID = nil
         normalizeSelection()
     }
@@ -1209,7 +1274,7 @@ struct AIBillDraft: Identifiable {
     var isAnalyzing = false
     var isMultipleBillImage = false
     var failureMessage: String?
-    var createdItemIDs: Set<String> = []
+    var createdAllocations: [String: BillItemQuantityAllocation] = [:]
     var lockedGroups: [BillItemLockedGroup] = []
 
     var currencyCode: String {

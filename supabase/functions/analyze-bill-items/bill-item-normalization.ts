@@ -19,8 +19,8 @@ export function billItemPromptLines(): string[] {
   return [
     "Each item must have snake_case keys: line_id, raw_line_text, original_name, translated_name, line_type, quantity, original_amount_minor, discount_amount_minor, final_amount_minor, category_id, confidence, missing_fields.",
     "raw_line_text must preserve the exact visible receipt text for the item row and any directly attached quantity/coupon/discount row. Include CPN, coupon markers, suffix-minus amounts like 800-, 800-T, 240-E, and Japanese kana exactly as printed.",
-    "Keep receipt line order. For quantity markers such as 2@, 3@, 4@, @3, @4, x2, x3, x4, ×2, ×3, or Japanese quantity/count markers, set quantity to that integer. Use null when the receipt shows one item or quantity is unclear.",
-    "For Costco-style receipts, a line like 3@ or 4@ directly below the product name means the product row quantity is x3 or x4; do not treat the quantity marker as a separate item.",
+    "Keep receipt line order. For quantity markers such as 1@, 2@, 3@, 4@, @2, @3, @4, x2, x3, x4, ×2, ×3, or Japanese quantity/count markers, set quantity to that literal integer. 1@ means one item, so use null. 3@ means quantity 3, never 30 or 40; 4@ means quantity 4, never 30 or 40.",
+    "For Costco-style receipts, a line like 3@ or 4@ directly below the product name means the product row quantity is x3 or x4; do not treat the quantity marker as a separate item and never expand it to 30 or 40.",
     "line_type must be purchase for purchased items and discount for standalone bill-level discount/promotion/coupon/voucher lines.",
     "List all purchased line items from this one receipt. Exclude change, cash received, payment method lines, tax-only summary lines, subtotal-only lines, loyalty points, and receipt metadata.",
     "A discount or promotion line directly below a purchased item, especially one starting with ※, -, −, or － or ending with a minus marker like 240-, 900-, 240-E, 800-T, or 800T-, is an item-level discount for the purchase immediately above it.",
@@ -114,6 +114,17 @@ export function sanitizeBillItem(
     ? -Math.abs(rawFinalAmount ?? discountAmount)
     : Math.max(0, rawFinalAmount ?? 0);
 
+  const visibleQuantity = quantityFromVisibleMarker(rawLineText);
+  const rawQuantity = optionalQuantity(
+    valueFor(
+      raw,
+      "quantity",
+      "qty",
+      "count",
+      "quantity_text",
+      "quantityText",
+    ),
+  );
   const item: InternalSanitizedItem = {
     line_id:
       trimmedString(valueFor(raw, "line_id", "lineID", "lineId", "id")) ??
@@ -123,16 +134,7 @@ export function sanitizeBillItem(
       valueFor(raw, "translated_name", "translatedName", "translation"),
     ),
     line_type: isDiscount ? "discount" : "purchase",
-    quantity: isDiscount ? null : optionalQuantity(
-      valueFor(
-        raw,
-        "quantity",
-        "qty",
-        "count",
-        "quantity_text",
-        "quantityText",
-      ),
-    ),
+    quantity: isDiscount ? null : normalizedQuantity(rawQuantity, visibleQuantity),
     original_amount_minor: isDiscount ? null : (originalAmount ??
       (finalAmount > 0 ? finalAmount + discountAmount : null)),
     discount_amount_minor: Math.max(0, discountAmount),
@@ -424,6 +426,46 @@ function optionalQuantity(value: unknown): number | null {
     if (!match) return null;
     const parsed = Number(match[1]);
     return Number.isFinite(parsed) && parsed > 1 ? Math.round(parsed) : null;
+  }
+
+  return null;
+}
+
+function normalizedQuantity(
+  rawQuantity: number | null,
+  visibleQuantity: number | null,
+): number | null {
+  if (visibleQuantity !== null) {
+    if (visibleQuantity <= 1) return null;
+    if (
+      rawQuantity === null ||
+      rawQuantity === visibleQuantity ||
+      rawQuantity === visibleQuantity * 10 &&
+        visibleQuantity >= 2 &&
+        visibleQuantity <= 4
+    ) {
+      return visibleQuantity;
+    }
+  }
+
+  return rawQuantity !== null && rawQuantity > 1 ? rawQuantity : null;
+}
+
+function quantityFromVisibleMarker(value: string | null): number | null {
+  if (!value) return null;
+  const normalized = value.normalize("NFKC");
+  const patterns = [
+    /(?:^|[^\d])(\d{1,2})\s*@(?:[^\d]|$)/,
+    /(?:^|[^\d])@\s*(\d{1,2})(?:[^\d]|$)/,
+    /(?:^|[^\d])[x×]\s*(\d{1,2})(?:[^\d]|$)/i,
+    /(?:^|[^\d])(\d{1,2})\s*(?:個|点|pcs?|本|袋)(?:[^\d]|$)/i,
+  ];
+
+  for (const pattern of patterns) {
+    const match = normalized.match(pattern);
+    if (!match) continue;
+    const parsed = Number(match[1]);
+    if (Number.isFinite(parsed)) return Math.round(parsed);
   }
 
   return null;
