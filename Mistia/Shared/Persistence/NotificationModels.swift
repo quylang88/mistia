@@ -483,7 +483,9 @@ enum MistiaNotificationStore {
             context.delete(row)
         }
         try context.save()
+        #if !SWIFT_PACKAGE
         MistiaNotificationBadgeManager.setBadgeCount(0)
+        #endif
         return rows.count
     }
 
@@ -668,9 +670,15 @@ enum MistiaNotificationStore {
             return false
         }
 
+        #if !SWIFT_PACKAGE
         if row.source == .family, !MistiaNotificationPreferences.familyEnabled(defaults: defaults) {
             return false
         }
+        #else
+        if row.source == .family, !defaults.bool(forKey: "mistia.notifications.group.family.enabled") {
+            return false
+        }
+        #endif
 
         if (row.source == .localReminder || row.source == .system), row.createdAt > referenceDate {
             return false
@@ -747,6 +755,8 @@ enum MistiaNotificationStore {
     ) {
         let rows = (try? context.fetch(FetchDescriptor<AppNotificationRecord>())) ?? []
         let count = unreadCount(rows: rows, userID: userID)
+        #if !SWIFT_PACKAGE
         MistiaNotificationBadgeManager.setBadgeCount(count)
+        #endif
     }
 }

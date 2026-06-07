@@ -330,6 +330,31 @@ final class FamilyLogicTests: XCTestCase {
         XCTAssertEqual(summary.incomeByMember.map(\.amountMinor), [50_000])
     }
 
+    func testAggregateSummarySumsSameNamedCategorySpendingAcrossMembers() {
+        let memberA = UUID()
+        let memberB = UUID()
+        let interval = DateInterval(
+            start: makeDate(year: 2026, month: 4, day: 1),
+            end: makeDate(year: 2026, month: 5, day: 1)
+        )
+
+        let summary = FamilyLogic.aggregateSummary(
+            wallets: [],
+            transactions: [
+                makeFamilyTransaction(ownerUserID: memberA, categoryName: "Ăn uống", amountMinor: 40_000),
+                makeFamilyTransaction(ownerUserID: memberB, categoryName: " ăn   UỐNG ", amountMinor: 35_000)
+            ],
+            selectedInterval: interval,
+            visibleMemberIDs: [memberA, memberB],
+            memberNames: [memberA: "An", memberB: "Binh"],
+            referenceDate: makeDate(year: 2026, month: 4, day: 15),
+            calendar: calendar
+        )
+
+        XCTAssertEqual(summary.expenseByCategory.map(\.label), ["Ăn uống"])
+        XCTAssertEqual(summary.expenseByCategory.map(\.valueMinor), [75_000])
+    }
+
     func testAggregateWalletsByNameSumsMatchingVisibleNames() {
         let memberA = UUID()
         let memberB = UUID()

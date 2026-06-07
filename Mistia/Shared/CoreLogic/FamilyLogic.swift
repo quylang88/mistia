@@ -816,7 +816,7 @@ nonisolated enum FamilyLogic {
         }
         var incomeAfterTrendDate = Array(repeating: Int64.zero, count: trendDates.count)
         var expenseAfterTrendDate = Array(repeating: Int64.zero, count: trendDates.count)
-        var expenseMap: [String: Int64] = [:]
+        var expenseByCategoryMap: [String: (label: String, valueMinor: Int64)] = [:]
         var memberSpendingMap: [UUID: Int64] = [:]
         var memberIncomeMap: [UUID: Int64] = [:]
 
@@ -842,7 +842,15 @@ nonisolated enum FamilyLogic {
 
             guard selectedInterval.contains(transaction.occurredAt) else { continue }
             if isSpending {
-                expenseMap[transaction.categoryName ?? "Other", default: 0] += amount
+                let trimmedCategoryName = transaction.categoryName?
+                    .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+                let categoryLabel = trimmedCategoryName.isEmpty ? "Other" : trimmedCategoryName
+                let categoryKey = normalizedFamilyGroupingName(categoryLabel)
+                let current = expenseByCategoryMap[categoryKey] ?? (label: categoryLabel, valueMinor: 0)
+                expenseByCategoryMap[categoryKey] = (
+                    label: current.label,
+                    valueMinor: current.valueMinor + amount
+                )
 
                 let spendingUserID = transaction.createdByUserID ?? transaction.ownerUserID
                 if isVisibleMember(spendingUserID) {
@@ -870,7 +878,9 @@ nonisolated enum FamilyLogic {
                 return lhs.label.localizedCaseInsensitiveCompare(rhs.label) == .orderedAscending
             }
 
-        let expenseByCategory = expenseMap.map { FamilyDonutSegment(label: $0.key, valueMinor: $0.value, colorHex: nil) }
+        let expenseByCategory = expenseByCategoryMap.map { _, value in
+            FamilyDonutSegment(label: value.label, valueMinor: value.valueMinor, colorHex: nil)
+        }
             .sorted { $0.valueMinor > $1.valueMinor }
 
         let spendingByMember = memberSpendingMap.map { 

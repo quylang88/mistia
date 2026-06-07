@@ -3061,7 +3061,7 @@ private struct CreditCardNetworkLogoMark: View {
         ZStack {
             switch network {
             case .visa:
-                Text("VISA")
+                Text(verbatim: "VISA")
                     .font(.system(size: 18, weight: .black, design: .rounded))
                     .italic()
                     .foregroundStyle(Color(hex: "#243D92"))
@@ -3078,7 +3078,7 @@ private struct CreditCardNetworkLogoMark: View {
                         .fill(Color(hex: "#F79E1B"))
                         .frame(width: 30, height: 30)
                         .offset(x: 9)
-                    Text("MC")
+                    Text(verbatim: "MC")
                         .font(.system(size: 9, weight: .black, design: .rounded))
                         .foregroundStyle(.white)
                 }
@@ -3090,9 +3090,9 @@ private struct CreditCardNetworkLogoMark: View {
                 }
             case .americanExpress:
                 VStack(spacing: -1) {
-                    Text("AMEX")
+                    Text(verbatim: "AMEX")
                         .font(.system(size: 13, weight: .black, design: .rounded))
-                    Text("CARD")
+                    Text(verbatim: "CARD")
                         .font(.system(size: 7, weight: .black, design: .rounded))
                 }
                 .foregroundStyle(.white)
@@ -3113,7 +3113,7 @@ private struct CreditCardNetworkLogoMark: View {
                 }
                 .frame(width: 52, height: 31)
                 .overlay {
-                    Text("UP")
+                    Text(verbatim: "UP")
                         .font(.system(size: 11, weight: .black, design: .rounded))
                         .foregroundStyle(.white)
                 }

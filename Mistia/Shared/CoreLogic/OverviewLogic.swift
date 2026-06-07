@@ -873,24 +873,34 @@ nonisolated enum OverviewLogic {
             && titleLooksLikeCardPayment
     }
 
+    private static func normalizedCategoryName(_ name: String) -> String {
+        name
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .split(whereSeparator: \.isWhitespace)
+            .joined(separator: " ")
+            .lowercased()
+    }
+
     private static func categoryBranchKey(
         for transaction: OverviewTransactionSnapshot
     ) -> String {
-        guard let categoryID = transaction.categoryParentID ?? transaction.categoryID else {
+        let name = transaction.categoryParentName ?? transaction.categoryName ?? ""
+        let normalized = normalizedCategoryName(name)
+        guard !normalized.isEmpty else {
             return uncategorizedSpendingSliceID
         }
-
-        return categorySliceID(for: categoryID)
+        return "category-name-\(normalized)"
     }
 
     private static func categoryChildKey(
         for transaction: OverviewTransactionSnapshot
     ) -> String {
-        guard let categoryID = transaction.categoryID else {
+        let name = transaction.categoryName ?? ""
+        let normalized = normalizedCategoryName(name)
+        guard !normalized.isEmpty else {
             return uncategorizedSpendingSliceID
         }
-
-        return categorySliceID(for: categoryID)
+        return "category-name-\(normalized)"
     }
 
     private static func categorySpendingSlices(

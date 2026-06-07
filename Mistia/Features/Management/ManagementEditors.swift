@@ -898,6 +898,20 @@ struct ManagementCategoryEditorSheet: View {
             return
         }
 
+        let appLanguage = MistiaAppLanguage.current
+        let isDuplicate = storedCategories.contains { otherCategory in
+            guard otherCategory.id != target.category?.id else { return false }
+            guard otherCategory.deletedAt == nil else { return false }
+
+            let otherName = otherCategory.localizedDisplayName(for: appLanguage)
+            return normalizedCategoryName(trimmedName) == normalizedCategoryName(otherName)
+        }
+
+        if isDuplicate {
+            alertMessage = L10n.management.management.categoryNameAlreadyExists
+            return
+        }
+
         isSaving = true
         defer { isSaving = false }
 
@@ -1086,6 +1100,14 @@ struct ManagementCategoryEditorSheet: View {
         } catch {
             alertMessage = L10n.management.management.couldnTSaveTheArchiveState + " \(error.localizedDescription)"
         }
+    }
+
+    private func normalizedCategoryName(_ name: String) -> String {
+        name
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .split(whereSeparator: \.isWhitespace)
+            .joined(separator: " ")
+            .lowercased()
     }
 
     private func categoryHasRestrictedChanges(

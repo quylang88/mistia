@@ -311,6 +311,31 @@ final class OverviewLogicTests: XCTestCase {
         XCTAssertEqual(page.slices[0].childSlices.map(\.amountMinor), [5_000, 3_000])
     }
 
+    func testCategorySpendingMonthSumsSameNamedCategoriesAcrossDifferentIDs() {
+        let page = OverviewLogic.categorySpendingMonth(
+            from: [
+                makeOverviewExpense(
+                    amountMinor: 5_000,
+                    occurredAt: makeDate(year: 2026, month: 4, day: 2),
+                    categoryID: UUID(),
+                    categoryName: "Ăn uống"
+                ),
+                makeOverviewExpense(
+                    amountMinor: 3_000,
+                    occurredAt: makeDate(year: 2026, month: 4, day: 3),
+                    categoryID: UUID(),
+                    categoryName: " ăn   UỐNG "
+                )
+            ],
+            selectedMonth: makeDate(year: 2026, month: 4, day: 15),
+            currencyCode: "JPY",
+            calendar: calendar
+        )
+
+        XCTAssertEqual(page.slices.map(\.name), ["Ăn uống"])
+        XCTAssertEqual(page.slices.map(\.amountMinor), [8_000])
+    }
+
     func testCategorySpendingExcludesNonSpendingExpenseLikePayments() {
         let grocery = UUID()
 
@@ -376,8 +401,28 @@ final class OverviewLogicTests: XCTestCase {
             counterpartyName: "Minh"
         )
 
+        let uncategorizedRecord = makeTransactionRecord(
+            primaryKind: .transfer,
+            transferSubtype: .debt,
+            debtIntent: .borrow,
+            amountMinor: 9_000,
+            occurredAt: makeDate(year: 2026, month: 4, day: 4),
+            sourceWalletID: nil,
+            sourceWalletKind: nil
+        )
+        let categorizedRecord = makeTransactionRecord(
+            primaryKind: .transfer,
+            transferSubtype: .debt,
+            debtIntent: .borrow,
+            amountMinor: 4_000,
+            occurredAt: makeDate(year: 2026, month: 4, day: 5),
+            sourceWalletID: nil,
+            sourceWalletKind: nil,
+            categoryID: grocery
+        )
+
         let monthly = OverviewLogic.monthlyCashflowPages(
-            from: [categorizedPaidFor, uncategorizedPaidFor],
+            from: [categorizedRecord, uncategorizedRecord],
             currencyCode: "JPY",
             referenceDate: makeDate(year: 2026, month: 4, day: 20),
             calendar: calendar

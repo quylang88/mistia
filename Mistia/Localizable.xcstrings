@@ -7503,6 +7503,28 @@
         }
       }
     },
+    "management.management.categoryNameAlreadyExists": {
+      "localizations": {
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tên danh mục này đã tồn tại trong ứng dụng."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This category name already exists in the app."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "このカテゴリ名は既にアプリ内に存在します。"
+          }
+        }
+      }
+    },
     "management.management.enterBankNameManually": {
       "localizations": {
         "vi": {

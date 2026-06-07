@@ -433,10 +433,10 @@ final class MistiaBackupStoreTests: XCTestCase {
             hasExplicitDueDate: true,
             autoPayEnabled: true,
             autoPayDay: 28,
+            paymentWallet: cashWallet,
             isPaused: true,
             pausedAt: makeDate(year: 2026, month: 4, day: 20),
             resumeStartMonth: makeDate(year: 2026, month: 7, day: 1),
-            paymentWallet: cashWallet,
             createdAt: now,
             updatedAt: now
         )
