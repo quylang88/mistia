@@ -2742,21 +2742,40 @@ struct TransactionEditorSheet: View {
         }
     }
 
-    private var transactionRecordSnapshots: [TransactionRecordSnapshot] {
-        postedTransactions.map(\.planningRecordSnapshot)
-    }
-
-    private var dueOccurrenceSnapshots: [PlanningDueOccurrenceSnapshot] {
-        storedDueOccurrences.map(\.planningSnapshot)
-    }
-
     private func paidCreditCardStatement(
         for wallet: LedgerWallet,
         occurredAt: Date,
         transactionRecords: [TransactionRecordSnapshot]? = nil,
         balanceIndex: TransactionWalletBalanceIndex? = nil
     ) -> PlanningCreditCardStatementSnapshot? {
-        let records = transactionRecords ?? transactionRecordSnapshots
+        if let transactionRecords {
+            return paidCreditCardStatement(
+                for: wallet,
+                occurredAt: occurredAt,
+                transactionRecords: transactionRecords,
+                occurrenceSnapshots: storedDueOccurrences.lazy.map(\.planningSnapshot),
+                balanceIndex: balanceIndex
+            )
+        }
+
+        return paidCreditCardStatement(
+            for: wallet,
+            occurredAt: occurredAt,
+            transactionRecords: postedTransactions.lazy.map(\.planningRecordSnapshot),
+            occurrenceSnapshots: storedDueOccurrences.lazy.map(\.planningSnapshot),
+            balanceIndex: balanceIndex
+        )
+    }
+
+    private func paidCreditCardStatement<Records: Sequence, Occurrences: Sequence>(
+        for wallet: LedgerWallet,
+        occurredAt: Date,
+        transactionRecords records: Records,
+        occurrenceSnapshots: Occurrences,
+        balanceIndex: TransactionWalletBalanceIndex? = nil
+    ) -> PlanningCreditCardStatementSnapshot?
+        where Records.Element == TransactionRecordSnapshot,
+              Occurrences.Element == PlanningDueOccurrenceSnapshot {
         let resolvedBalanceIndex = balanceIndex ?? TransactionLogic.walletBalanceIndex(
             wallets: [
                 TransactionWalletSnapshot(
@@ -2775,7 +2794,7 @@ struct TransactionEditorSheet: View {
         return PlanningLogic.paidCreditCardStatementForExpense(
             account: account,
             records: records,
-            occurrences: dueOccurrenceSnapshots,
+            occurrences: occurrenceSnapshots,
             occurredAt: occurredAt,
             referenceDate: .now,
             calendar: calendar

@@ -604,9 +604,9 @@ extension LedgerTransaction {
 }
 
 extension LedgerWallet {
-    func planningCreditCardSnapshot(
-        records: [TransactionRecordSnapshot]
-    ) -> PlanningCreditCardAccountSnapshot? {
+    func planningCreditCardSnapshot<Records: Sequence>(
+        records: Records
+    ) -> PlanningCreditCardAccountSnapshot? where Records.Element == TransactionRecordSnapshot {
         let balanceIndex = TransactionLogic.walletBalanceIndex(
             wallets: [
                 TransactionWalletSnapshot(

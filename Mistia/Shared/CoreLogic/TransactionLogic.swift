@@ -803,21 +803,21 @@ nonisolated enum TransactionLogic {
             .map { $0.suggestion }
     }
 
-    static func effectiveBalance(
+    static func effectiveBalance<Records: Sequence>(
         for wallet: TransactionWalletSnapshot,
-        records: [TransactionRecordSnapshot]
-    ) -> Int64 {
-        records
-            .filter { $0.entryStatus == .posted && !$0.isArchived }
-            .reduce(wallet.openingBalanceMinor) { partialResult, record in
-                partialResult + balanceDelta(for: wallet, record: record)
-            }
+        records: Records
+    ) -> Int64 where Records.Element == TransactionRecordSnapshot {
+        var balance = wallet.openingBalanceMinor
+        for record in records where record.entryStatus == .posted && !record.isArchived {
+            balance += balanceDelta(for: wallet, record: record)
+        }
+        return balance
     }
 
-    static func walletBalanceIndex(
+    static func walletBalanceIndex<Records: Sequence>(
         wallets: [TransactionWalletSnapshot],
-        records: [TransactionRecordSnapshot]
-    ) -> TransactionWalletBalanceIndex {
+        records: Records
+    ) -> TransactionWalletBalanceIndex where Records.Element == TransactionRecordSnapshot {
         var balancesByWalletID: [UUID: Int64] = [:]
         var kindByWalletID: [UUID: LedgerWalletKind] = [:]
 

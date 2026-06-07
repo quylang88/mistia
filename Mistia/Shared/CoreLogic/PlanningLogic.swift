@@ -2151,11 +2151,6 @@ nonisolated enum PlanningLogic {
         calendar: Calendar
     ) -> PlanningCreditCardStatementSnapshot? {
         let monthStart = startOfMonth(for: statementMonth, calendar: calendar)
-        let closingDate = creditCardStatementClosingDate(
-            statementMonth: monthStart,
-            statementClosingDay: account.statementClosingDay,
-            calendar: calendar
-        )
         let dueDate = creditCardStatementDueDate(
             statementMonth: monthStart,
             statementClosingDay: account.statementClosingDay,
@@ -2174,6 +2169,96 @@ nonisolated enum PlanningLogic {
         let computedAmount = computationIndex.amount(
             walletID: account.walletID,
             monthKey: statementMonthKey
+        )
+        return creditCardStatementItem(
+            account: account,
+            statementMonth: monthStart,
+            computedAmount: computedAmount,
+            occurrence: occurrence,
+            sortedPaymentRecords: computationIndex.paymentRecords(walletID: account.walletID),
+            referenceDate: referenceDate,
+            calendar: calendar
+        )
+    }
+
+    private static func creditCardStatementItem<Records: Sequence, Occurrences: Sequence>(
+        account: PlanningCreditCardAccountSnapshot,
+        records: Records,
+        occurrences: Occurrences,
+        statementMonth: Date,
+        referenceDate: Date,
+        calendar: Calendar
+    ) -> PlanningCreditCardStatementSnapshot?
+        where Records.Element == TransactionRecordSnapshot,
+              Occurrences.Element == PlanningDueOccurrenceSnapshot {
+        let monthStart = startOfMonth(for: statementMonth, calendar: calendar)
+        let statementMonthKey = monthKey(for: monthStart, calendar: calendar)
+        let dueDate = creditCardStatementDueDate(
+            statementMonth: monthStart,
+            statementClosingDay: account.statementClosingDay,
+            paymentDueDay: account.dueDay,
+            calendar: calendar
+        )
+        let legacyDueMonthKey = monthKey(for: dueDate, calendar: calendar)
+        let occurrence = firstCreditCardStatementOccurrence(
+            walletID: account.walletID,
+            statementMonthKey: statementMonthKey,
+            legacyDueMonthKey: legacyDueMonthKey,
+            occurrences: occurrences
+        )
+
+        var computedAmount: Int64 = 0
+        var paymentRecords: [TransactionRecordSnapshot] = []
+        for record in records {
+            guard record.entryStatus == .posted, !record.isArchived else { continue }
+
+            if TransactionLogic.isCreditCardStatementCharge(record), let walletID = record.sourceWalletID {
+                if walletID == account.walletID,
+                   monthKey(for: record.occurredAt, calendar: calendar) == statementMonthKey {
+                    computedAmount += record.amountMinor
+                }
+                continue
+            }
+
+            if record.primaryKind == .transfer,
+               record.transferSubtype == .internalTransfer,
+               record.destinationWalletID == account.walletID {
+                paymentRecords.append(record)
+            }
+        }
+        paymentRecords.sort(by: creditCardPaymentRecordSort)
+
+        return creditCardStatementItem(
+            account: account,
+            statementMonth: monthStart,
+            computedAmount: computedAmount,
+            occurrence: occurrence,
+            sortedPaymentRecords: paymentRecords,
+            referenceDate: referenceDate,
+            calendar: calendar
+        )
+    }
+
+    private static func creditCardStatementItem(
+        account: PlanningCreditCardAccountSnapshot,
+        statementMonth: Date,
+        computedAmount: Int64,
+        occurrence: PlanningDueOccurrenceSnapshot?,
+        sortedPaymentRecords: [TransactionRecordSnapshot],
+        referenceDate: Date,
+        calendar: Calendar
+    ) -> PlanningCreditCardStatementSnapshot? {
+        let monthStart = startOfMonth(for: statementMonth, calendar: calendar)
+        let closingDate = creditCardStatementClosingDate(
+            statementMonth: monthStart,
+            statementClosingDay: account.statementClosingDay,
+            calendar: calendar
+        )
+        let dueDate = creditCardStatementDueDate(
+            statementMonth: monthStart,
+            statementClosingDay: account.statementClosingDay,
+            paymentDueDay: account.dueDay,
+            calendar: calendar
         )
         let matchedOccurrence = occurrence.flatMap { occurrence -> PlanningDueOccurrenceSnapshot? in
             guard let snapshotAmount = occurrence.amountMinorSnapshot,
@@ -2197,7 +2282,7 @@ nonisolated enum PlanningLogic {
         let inferredPayment = firstMatchingCreditCardPaymentRecord(
             amountMinor: amount,
             closingDate: closingDate,
-            sortedPaymentRecords: computationIndex.paymentRecords(walletID: account.walletID),
+            sortedPaymentRecords: sortedPaymentRecords,
             calendar: calendar
         )
         let status: PlanningDueOccurrenceStatus =
@@ -2235,6 +2320,27 @@ nonisolated enum PlanningLogic {
             linkedTransactionID: linkedTransactionID,
             state: state
         )
+    }
+
+    private static func firstCreditCardStatementOccurrence<Occurrences: Sequence>(
+        walletID: UUID,
+        statementMonthKey: String,
+        legacyDueMonthKey: String,
+        occurrences: Occurrences
+    ) -> PlanningDueOccurrenceSnapshot? where Occurrences.Element == PlanningDueOccurrenceSnapshot {
+        var legacyDueMonthOccurrence: PlanningDueOccurrenceSnapshot?
+
+        for occurrence in occurrences where occurrence.sourceKind == .creditCard && occurrence.sourceID == walletID {
+            if occurrence.selectedMonthKey == statementMonthKey {
+                return occurrence
+            }
+
+            if occurrence.selectedMonthKey == legacyDueMonthKey, legacyDueMonthOccurrence == nil {
+                legacyDueMonthOccurrence = occurrence
+            }
+        }
+
+        return legacyDueMonthOccurrence
     }
 
     static func creditCardStatementPaymentRecord(
@@ -2322,24 +2428,24 @@ nonisolated enum PlanningLogic {
         return .payable
     }
 
-    static func paidCreditCardStatementForExpense(
+    static func paidCreditCardStatementForExpense<Records: Sequence, Occurrences: Sequence>(
         account: PlanningCreditCardAccountSnapshot,
-        records: [TransactionRecordSnapshot],
-        occurrences: [PlanningDueOccurrenceSnapshot],
+        records: Records,
+        occurrences: Occurrences,
         occurredAt: Date,
         referenceDate: Date = .now,
         calendar: Calendar = MistiaCalendar.current
-    ) -> PlanningCreditCardStatementSnapshot? {
-        let statements = creditCardStatementItems(
-            accounts: [account],
+    ) -> PlanningCreditCardStatementSnapshot?
+        where Records.Element == TransactionRecordSnapshot,
+              Occurrences.Element == PlanningDueOccurrenceSnapshot {
+        guard let statement = creditCardStatementItem(
+            account: account,
             records: records,
             occurrences: occurrences,
-            statementMonths: [occurredAt],
+            statementMonth: occurredAt,
             referenceDate: referenceDate,
             calendar: calendar
-        )
-
-        guard let statement = statements.first, statement.state == .paid else {
+        ), statement.state == .paid else {
             return nil
         }
 
