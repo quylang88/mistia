@@ -465,17 +465,29 @@ struct AIBillAnalysisView: View {
     }
 
     private func quantityBadge(_ quantity: Int, isSelected: Bool) -> some View {
-        Text(verbatim: "x\(quantity)")
+        let selectedForeground = colorScheme == .dark ? Color.white : MistiaAccent.purple.color
+        let selectedBackground = colorScheme == .dark
+            ? MistiaAccent.purple.color.opacity(0.58)
+            : MistiaAccent.purple.color.opacity(0.14)
+        let selectedStroke = colorScheme == .dark
+            ? MistiaAccent.lightPurple.color.opacity(0.72)
+            : MistiaAccent.purple.color.opacity(0.2)
+
+        return Text(verbatim: "x\(quantity)")
             .font(.system(size: 11, weight: .black, design: .rounded))
-            .foregroundStyle(isSelected ? MistiaAccent.purple.color : .secondary)
+            .foregroundStyle(isSelected ? selectedForeground : .secondary)
             .padding(.horizontal, 6)
             .padding(.vertical, 2)
             .background(
                 isSelected
-                    ? MistiaAccent.purple.color.opacity(0.14)
+                    ? selectedBackground
                     : Color(UIColor.tertiarySystemGroupedBackground),
                 in: Capsule()
             )
+            .overlay {
+                Capsule()
+                    .stroke(isSelected ? selectedStroke : .clear, lineWidth: 1)
+            }
     }
 
     @ViewBuilder
@@ -581,9 +593,9 @@ struct AIBillAnalysisView: View {
             Button {
                 confirmSelectionGroup(for: bill)
             } label: {
-                Image(systemName: "checkmark")
+                Image(systemName: "plus")
                     .font(.system(size: 14, weight: .bold))
-                    .foregroundStyle(MistiaAccent.checkmarkPurple.color)
+                    .foregroundStyle(.white)
                     .frame(width: 30, height: 30)
             }
             .buttonStyle(.glassProminent)

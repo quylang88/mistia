@@ -27,6 +27,7 @@ export function billItemPromptLines(): string[] {
     "On Costco and similar receipts, CPN, COUPON, coupon, voucher, member discount, markdown, promotion, promo, OFF, SALE, 値引, 割引, クーポン, ｸｰﾎﾟﾝ, 特売, 割戻, and similar abbreviations can mark coupon or promotion discount lines.",
     "If the coupon/discount line below repeats the same brand, product text, item code, or a strong substring from the row above, attach it to that product row even when the discount amount uses suffix codes such as -T or -E.",
     "For item-level discount lines directly below a purchased item, do not return a separate discount item. Fold the discount into the purchase row: original_amount_minor is the pre-discount row total, discount_amount_minor is positive, and final_amount_minor is original_amount_minor minus discount_amount_minor.",
+    "If raw_line_text contains a purchase amount and an attached coupon/CPN amount, never collapse the pair into one negative bill-level discount. For example, product 3000 followed by CPN 500 must become one purchase row with original_amount_minor 3000, discount_amount_minor 500, and final_amount_minor 2500, not a -2500 discount row.",
     "Return a separate line_type discount item only for standalone bill-level discounts that are not clearly attached to the purchase immediately above them.",
     "Discount lines often start with -, −, or －, end with a minus/suffix code like 240-, 240-E, 800-T, or contain Japanese terms such as 値引, 割引, クーポン, ｸｰﾎﾟﾝ, 特売, 割戻, or Vietnamese/English terms such as Giảm giá, Khuyến mãi, Voucher, Coupon, Discount.",
     "Preserve original_name exactly as printed. Keep Japanese, Vietnamese, Latin, punctuation, and abbreviations as seen. Do not translate or romanize original_name.",
@@ -108,11 +109,22 @@ export function sanitizeBillItem(
       "discountAmount",
     ),
   );
-  const discountAmount = rawDiscountAmount ??
+  const attachedDiscountCorrection = itemLevelDiscountCorrectionFromVisibleText(
+    rawLineText,
+    originalName,
+    rawFinalAmount,
+  );
+  const effectiveIsDiscount = isDiscount && !attachedDiscountCorrection;
+  if (attachedDiscountCorrection) {
+    originalName = attachedDiscountCorrection.originalName;
+  }
+  const discountAmount = attachedDiscountCorrection?.discountAmount ??
+    rawDiscountAmount ??
     (isDiscount ? Math.abs(rawFinalAmount ?? 0) : 0);
-  const finalAmount = isDiscount
-    ? -Math.abs(rawFinalAmount ?? discountAmount)
-    : Math.max(0, rawFinalAmount ?? 0);
+  const finalAmount = attachedDiscountCorrection?.finalAmount ??
+    (effectiveIsDiscount
+      ? -Math.abs(rawFinalAmount ?? discountAmount)
+      : Math.max(0, rawFinalAmount ?? 0));
 
   const visibleQuantity = quantityFromVisibleMarker(rawLineText);
   const rawQuantity = optionalQuantity(
@@ -133,15 +145,18 @@ export function sanitizeBillItem(
     translated_name: trimmedString(
       valueFor(raw, "translated_name", "translatedName", "translation"),
     ),
-    line_type: isDiscount ? "discount" : "purchase",
-    quantity: isDiscount
+    line_type: effectiveIsDiscount ? "discount" : "purchase",
+    quantity: effectiveIsDiscount
       ? null
       : normalizedQuantity(rawQuantity, visibleQuantity),
-    original_amount_minor: isDiscount ? null : (originalAmount ??
-      (finalAmount > 0 ? finalAmount + discountAmount : null)),
+    original_amount_minor: effectiveIsDiscount ? null : (
+      attachedDiscountCorrection?.originalAmount ??
+        originalAmount ??
+        (finalAmount > 0 ? finalAmount + discountAmount : null)
+    ),
     discount_amount_minor: Math.max(0, discountAmount),
     final_amount_minor: finalAmount,
-    category_id: isDiscount ? null : optionalID(
+    category_id: effectiveIsDiscount ? null : optionalID(
       valueFor(raw, "category_id", "categoryID", "categoryId"),
       categoryIDs,
     ),
@@ -237,6 +252,8 @@ function valueFor(raw: Record<string, unknown>, ...keys: string[]): unknown {
 
 const discountMarkerRegex =
   /(値引|割引|クーポン|ｸｰﾎﾟﾝ|割戻|特売|特価|値下|cpn|coupon|voucher|discount|promo|promotion|markdown|off|sale|giảm giá|khuyến mãi|khuyen mai|(?:^|\s)\d[\d,]*\s*(?:[-−－]\s*[A-ZＡ-Ｚ]?|[A-ZＡ-Ｚ]\s*[-−－])(?:\s|$))/i;
+const attachedCouponMarkerRegex =
+  /\b(?:cpn|coupon|voucher|promo|promotion|markdown|off|sale)\b|クーポン|ｸｰﾎﾟﾝ|値引|割引|特売|割戻/i;
 
 function rawStringText(raw: Record<string, unknown>): string {
   return [
@@ -291,6 +308,77 @@ function printedItemNameCandidate(rawLineText: string): string | null {
     .replace(/\s+/g, " ")
     .trim();
   return candidate.length > 0 ? candidate : null;
+}
+
+function itemLevelDiscountCorrectionFromVisibleText(
+  rawLineText: string | null,
+  originalName: string,
+  rawFinalAmount: number | null,
+): {
+  originalName: string;
+  originalAmount: number;
+  discountAmount: number;
+  finalAmount: number;
+} | null {
+  if (!rawLineText || rawFinalAmount === null || rawFinalAmount >= 0) {
+    return null;
+  }
+
+  const normalized = rawLineText.normalize("NFKC");
+  if (!attachedCouponMarkerRegex.test(normalized)) return null;
+
+  const visibleAmounts = visibleMinorAmounts(normalized);
+  const targetFinalAmount = Math.abs(rawFinalAmount);
+  for (const originalAmount of visibleAmounts) {
+    for (const discountAmount of visibleAmounts) {
+      if (originalAmount <= discountAmount) continue;
+      if (originalAmount - discountAmount !== targetFinalAmount) continue;
+
+      const recoveredName = attachedCouponPurchaseName(
+        normalized,
+        originalName,
+      );
+      if (!recoveredName) return null;
+      return {
+        originalName: recoveredName,
+        originalAmount,
+        discountAmount,
+        finalAmount: targetFinalAmount,
+      };
+    }
+  }
+
+  return null;
+}
+
+function visibleMinorAmounts(rawLineText: string): number[] {
+  const seen = new Set<number>();
+  for (const match of rawLineText.matchAll(/\d[\d,]*/g)) {
+    const parsed = Number(match[0].replace(/,/g, ""));
+    if (Number.isFinite(parsed) && parsed > 0) {
+      seen.add(Math.round(parsed));
+    }
+  }
+  return Array.from(seen).sort((left, right) => right - left);
+}
+
+function attachedCouponPurchaseName(
+  rawLineText: string,
+  fallbackName: string,
+): string | null {
+  const productLine = rawLineText
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .find((line) =>
+      line.length > 0 &&
+      !attachedCouponMarkerRegex.test(line) &&
+      !/^[-−－※]/.test(line)
+    );
+  const candidate = printedItemNameCandidate(
+    productLine ?? rawLineText.split(attachedCouponMarkerRegex)[0] ?? "",
+  );
+  const fallback = fallbackName.trim();
+  return candidate ?? (fallback.length > 0 ? fallback : null);
 }
 
 function containsJapaneseKana(text: string): boolean {

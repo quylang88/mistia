@@ -263,6 +263,47 @@ Deno.test("normalizeBillItems keeps standalone bill-level discounts separate", (
   }
 });
 
+Deno.test("sanitizeBillItem recovers purchase plus attached coupon from a collapsed discount row", () => {
+  const categoryID = "cat-food";
+  const item = sanitizeBillItem(
+    {
+      line_id: "line-1",
+      raw_line_text: "SP A 3,000\nSP A CPN 500-",
+      original_name: "SP A",
+      line_type: "discount",
+      final_amount_minor: -2500,
+      discount_amount_minor: 2500,
+      category_id: categoryID,
+      confidence: 0.7,
+      missing_fields: [],
+    },
+    0,
+    new Set([categoryID]),
+  );
+
+  if (!item) {
+    throw new Error("Expected item to sanitize");
+  }
+  if (item.line_type !== "purchase") {
+    throw new Error(`Expected recovered purchase, got ${item.line_type}`);
+  }
+  if (item.original_amount_minor !== 3000) {
+    throw new Error(
+      `Expected original amount 3000, got ${item.original_amount_minor}`,
+    );
+  }
+  if (item.discount_amount_minor !== 500) {
+    throw new Error(
+      `Expected discount amount 500, got ${item.discount_amount_minor}`,
+    );
+  }
+  if (item.final_amount_minor !== 2500) {
+    throw new Error(
+      `Expected final amount 2500, got ${item.final_amount_minor}`,
+    );
+  }
+});
+
 Deno.test("sanitizeBillItem preserves printed katakana brand text from raw line", () => {
   const categoryID = "cat-household";
   const item = sanitizeBillItem(
