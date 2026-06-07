@@ -400,4 +400,250 @@ final class FamilyOverviewCalculatorTests: XCTestCase {
             firstScheduledMonth: month
         )
     }
+
+    func testComputeIncludesPaidLabelForBillsAndLimitsCreditCardUpcomingWindow() {
+        let ownerID = UUID()
+        let month = makeDate(year: 2026, month: 4, day: 1) // Selected month is April
+        let monthInterval = calendar.dateInterval(of: .month, for: month)!
+        let now = makeDate(year: 2026, month: 5, day: 10) // Now is May 10th
+        let transactionDate = makeDate(year: 2026, month: 4, day: 10)
+        
+        // 1. Paid Bill
+        let billID = UUID()
+        let bill = PlanningBillSnapshot(
+            id: billID,
+            name: "Paid Utility",
+            iconSymbolName: "bolt",
+            categorySystemKey: .billing,
+            categoryName: "Utilities",
+            categoryIconSymbolName: "bolt",
+            categoryColorHex: "#0000FF",
+            amountMinor: 5000,
+            dueDay: 15,
+            frequencyMonths: 1,
+            paymentWalletID: nil,
+            currencyCode: "JPY",
+            createdAt: makeDate(year: 2026, month: 1, day: 1),
+            scheduleKind: .recurring,
+            paymentStartDate: makeDate(year: 2026, month: 4, day: 1),
+            firstScheduledMonth: month
+        )
+        let paidOccurrence = PlanningDueOccurrenceSnapshot(
+            id: UUID(),
+            sourceKind: .recurringBill,
+            sourceID: billID,
+            selectedMonthKey: PlanningLogic.monthKey(for: month, calendar: calendar),
+            scheduledDate: makeDate(year: 2026, month: 4, day: 15),
+            amountMinorSnapshot: 5000,
+            status: .paid,
+            linkedTransactionID: UUID()
+        )
+        
+        // 2. Credit Card - Near Due (5 days away) -> should be upcoming
+        let nearCardID = UUID()
+        let nearCard = FamilyOverviewWalletInputSnapshot(
+            id: nearCardID,
+            ownerUserID: ownerID,
+            name: "Near Card",
+            kind: .creditCard,
+            openingBalanceMinor: 0,
+            creditCardProfile: FamilyOverviewCreditCardProfileSnapshot(
+                issuerName: "Bank A",
+                network: .visa,
+                last4: "1234",
+                creditLimitMinor: 100_000,
+                statementClosingDay: 5,
+                paymentDueDay: 15,
+                paymentSourceWalletID: nil,
+                paymentSourceWalletName: nil,
+                autoPayEnabled: false
+            ),
+            currencyCode: "JPY",
+            sortOrder: 0,
+            createdAt: makeDate(year: 2026, month: 1, day: 1)
+        )
+        let nearTransaction = FamilyOverviewTransactionInputSnapshot(
+            record: TransactionRecordSnapshot(
+                id: UUID(),
+                primaryKind: .expense,
+                transferSubtype: nil,
+                debtIntent: nil,
+                entryStatus: .posted,
+                title: "Spend",
+                note: nil,
+                amountMinor: 10_000,
+                sourceCurrencyCode: "JPY",
+                isArchived: false,
+                occurredAt: transactionDate,
+                createdAt: transactionDate,
+                sourceWalletID: nearCardID,
+                sourceWalletKind: .creditCard,
+                destinationWalletID: nil,
+                destinationWalletKind: nil,
+                categoryID: UUID(),
+                counterpartyName: nil,
+                normalizedCounterpartyKey: nil
+            ),
+            overview: OverviewTransactionSnapshot(
+                id: UUID(),
+                primaryKind: .expense,
+                transferSubtype: nil,
+                debtIntent: nil,
+                entryStatus: .posted,
+                title: "Spend",
+                note: nil,
+                amountMinor: 10_000,
+                sourceCurrencyCode: "JPY",
+                occurredAt: transactionDate,
+                createdAt: transactionDate,
+                sourceWalletID: nearCardID,
+                sourceWalletName: "Near Card",
+                sourceWalletKind: .creditCard,
+                destinationWalletID: nil,
+                destinationWalletName: nil,
+                destinationWalletKind: nil,
+                categoryID: UUID(),
+                categoryName: "Shopping",
+                categoryIconSymbolName: "cart",
+                categoryColorHex: "#FF00FF",
+                categoryParentID: nil,
+                categoryParentName: nil,
+                categoryParentIconSymbolName: nil,
+                categoryParentColorHex: nil,
+                counterpartyName: nil,
+                isArchived: false
+            ),
+            aggregate: FamilyAggregateTransactionSnapshot(
+                ownerUserID: ownerID,
+                createdByUserID: ownerID,
+                categoryName: "Shopping",
+                occurredAt: transactionDate,
+                kind: .expense,
+                amountMinor: 10_000,
+                currencyCode: "JPY"
+            )
+        )
+        
+        // 3. Credit Card - Far Due (15 days away) -> should NOT be upcoming
+        let farCardID = UUID()
+        let farCard = FamilyOverviewWalletInputSnapshot(
+            id: farCardID,
+            ownerUserID: ownerID,
+            name: "Far Card",
+            kind: .creditCard,
+            openingBalanceMinor: 0,
+            creditCardProfile: FamilyOverviewCreditCardProfileSnapshot(
+                issuerName: "Bank B",
+                network: .mastercard,
+                last4: "5678",
+                creditLimitMinor: 100_000,
+                statementClosingDay: 5,
+                paymentDueDay: 25,
+                paymentSourceWalletID: nil,
+                paymentSourceWalletName: nil,
+                autoPayEnabled: false
+            ),
+            currencyCode: "JPY",
+            sortOrder: 1,
+            createdAt: makeDate(year: 2026, month: 1, day: 1)
+        )
+        let farTransaction = FamilyOverviewTransactionInputSnapshot(
+            record: TransactionRecordSnapshot(
+                id: UUID(),
+                primaryKind: .expense,
+                transferSubtype: nil,
+                debtIntent: nil,
+                entryStatus: .posted,
+                title: "Spend",
+                note: nil,
+                amountMinor: 10_000,
+                sourceCurrencyCode: "JPY",
+                isArchived: false,
+                occurredAt: transactionDate,
+                createdAt: transactionDate,
+                sourceWalletID: farCardID,
+                sourceWalletKind: .creditCard,
+                destinationWalletID: nil,
+                destinationWalletKind: nil,
+                categoryID: UUID(),
+                counterpartyName: nil,
+                normalizedCounterpartyKey: nil
+            ),
+            overview: OverviewTransactionSnapshot(
+                id: UUID(),
+                primaryKind: .expense,
+                transferSubtype: nil,
+                debtIntent: nil,
+                entryStatus: .posted,
+                title: "Spend",
+                note: nil,
+                amountMinor: 10_000,
+                sourceCurrencyCode: "JPY",
+                occurredAt: transactionDate,
+                createdAt: transactionDate,
+                sourceWalletID: farCardID,
+                sourceWalletName: "Far Card",
+                sourceWalletKind: .creditCard,
+                destinationWalletID: nil,
+                destinationWalletName: nil,
+                destinationWalletKind: nil,
+                categoryID: UUID(),
+                categoryName: "Shopping",
+                categoryIconSymbolName: "cart",
+                categoryColorHex: "#FF00FF",
+                categoryParentID: nil,
+                categoryParentName: nil,
+                categoryParentIconSymbolName: nil,
+                categoryParentColorHex: nil,
+                counterpartyName: nil,
+                isArchived: false
+            ),
+            aggregate: FamilyAggregateTransactionSnapshot(
+                ownerUserID: ownerID,
+                createdByUserID: ownerID,
+                categoryName: "Shopping",
+                occurredAt: transactionDate,
+                kind: .expense,
+                amountMinor: 10_000,
+                currencyCode: "JPY"
+            )
+        )
+
+        let input = FamilyOverviewCalculationInput(
+            now: now,
+            selectedMonth: month,
+            selectedInterval: monthInterval,
+            timeframeTitle: "April 2026",
+            familyMemberUserIDs: [ownerID],
+            memberNames: [ownerID: "Owner"],
+            memberOrder: [ownerID],
+            familyOwnerUserID: ownerID,
+            budgetManagerUserID: ownerID,
+            goalManagerUserID: ownerID,
+            reportingCurrencyCode: "JPY",
+            exchangeRates: [],
+            calendar: calendar,
+            wallets: [nearCard, farCard],
+            transactions: [nearTransaction, farTransaction],
+            budgets: [],
+            goals: [],
+            bills: [bill],
+            installments: [],
+            occurrences: [paidOccurrence]
+        )
+        
+        let result = FamilyOverviewCalculator.compute(input: input)
+        
+        // Verify Bill is Paid
+        let billRow = result.monthlyBillRows.first { $0.title == "Utilities" }
+        XCTAssertNotNil(billRow)
+        XCTAssertTrue(billRow?.isPaid ?? false)
+        
+        // Verify Credit Card statuses
+        let nearCardRow = result.walletRows.first { $0.name == "Near Card" }
+        XCTAssertEqual(nearCardRow?.creditCardStatementStatus, .upcoming)
+        
+        let farCardRow = result.walletRows.first { $0.name == "Far Card" }
+        XCTAssertNil(farCardRow?.creditCardStatementStatus)
+    }
 }

@@ -398,6 +398,7 @@ nonisolated struct FamilyMonthlyBillAggregateSnapshot: Equatable, Identifiable {
     let amountMinor: Int64
     let currencyCode: String
     let sourceCount: Int
+    let isPaid: Bool
 }
 
 nonisolated struct FamilyMonthlyBillTotalSnapshot: Equatable, Identifiable {
@@ -528,7 +529,8 @@ nonisolated enum FamilyLogic {
                         ?? "#8A8A8E",
                     amountMinor: amount,
                     currencyCode: groupKey.currencyCode,
-                    sourceCount: groupedItems.count
+                    sourceCount: groupedItems.count,
+                    isPaid: groupedItems.allSatisfy { $0.status == .paid }
                 )
             }
             .sorted { lhs, rhs in

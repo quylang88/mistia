@@ -104,10 +104,21 @@ enum FamilyOverviewCalculator {
         let creditCardStatementStatusByWalletID: [UUID: FamilyCreditCardStatementStatus] = Dictionary(
             uniqueKeysWithValues: currentMonthCreditCardStatements.compactMap { statement in
                 guard statement.amountMinor > 0 else { return nil }
-                let status: FamilyCreditCardStatementStatus = statement.state == .paid
-                    ? .paid
-                    : .upcoming
-                return (statement.walletID, status)
+                if statement.state == .paid {
+                    return (statement.walletID, .paid)
+                }
+
+                let dayDelta = input.calendar.dateComponents(
+                    [.day],
+                    from: input.calendar.startOfDay(for: input.now),
+                    to: input.calendar.startOfDay(for: statement.dueDate)
+                ).day ?? 0
+
+                if dayDelta >= 0 && dayDelta <= 10 {
+                    return (statement.walletID, .upcoming)
+                }
+
+                return nil
             }
         )
         let walletRows = FamilyLogic.aggregateWalletsByName(

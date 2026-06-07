@@ -1400,19 +1400,27 @@ private struct FamilyUpcomingSection: View {
                             .frame(maxWidth: .infinity)
                     } else {
                         ForEach(Array(rows.enumerated()), id: \.element.id) { index, row in
-                            HStack {
-                                Text(row.name)
-                                    .font(.system(size: 15, weight: .semibold, design: .rounded))
-                                Spacer()
-                                Text(MistiaDateFormatting.shortDateString(for: row.dueDate))
-                                    .font(.system(size: 14, weight: .medium, design: .rounded))
-                                    .foregroundStyle(.secondary)
+                            HStack(spacing: 12) {
+                                MistiaFinanceIconView(
+                                    icon: row.iconSymbolName,
+                                    fallbackColor: row.tint.color,
+                                    size: 32
+                                )
+
+                                HStack {
+                                    Text(row.name)
+                                        .font(.system(size: 15, weight: .semibold, design: .rounded))
+                                    Spacer()
+                                    Text(MistiaDateFormatting.shortDateString(for: row.dueDate))
+                                        .font(.system(size: 14, weight: .medium, design: .rounded))
+                                        .foregroundStyle(.secondary)
+                                }
                             }
                             .padding(.horizontal, 16)
                             .padding(.vertical, 14)
 
                             if index < rows.count - 1 {
-                                Divider().padding(.leading, 16)
+                                Divider().padding(.leading, 60)
                             }
                         }
                     }
@@ -1481,7 +1489,12 @@ private struct FamilyMonthlyBillListSection: View {
                                     Text(row.title)
                                         .font(.system(size: 15, weight: .semibold, design: .rounded))
                                         .foregroundStyle(.primary)
-                                    if row.sourceCount > 1 {
+                                    
+                                    if row.isPaid {
+                                        Text(L10n.planning.planning.paid)
+                                            .font(.system(size: 11, weight: .medium, design: .rounded))
+                                            .foregroundStyle(MistiaAccent.income.color)
+                                    } else if row.sourceCount > 1 {
                                         Text(verbatim: "x\(row.sourceCount)")
                                             .font(.system(size: 11, weight: .semibold, design: .rounded))
                                             .foregroundStyle(.secondary)
