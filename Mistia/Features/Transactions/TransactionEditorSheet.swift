@@ -576,8 +576,7 @@ struct TransactionEditorSheet: View {
             }
 
             Section(L10n.transactions.transactioneditor.amount) {
-                TextField(L10n.transactions.transactioneditor.amount, text: $bindableDraft.amountText.currencyInputGrouped())
-                    .keyboardType(.numberPad)
+                MistiaCurrencyInputField(L10n.transactions.transactioneditor.amount, text: $bindableDraft.amountText)
             }
 
             Section {
@@ -707,8 +706,7 @@ struct TransactionEditorSheet: View {
                     .animation(.snappy(duration: 0.2), value: shouldShowTitleSuggestions)
                 }
 
-                TextField(L10n.transactions.transactioneditor.amount, text: $bindableDraft.amountText.currencyInputGrouped())
-                    .keyboardType(.numberPad)
+                MistiaCurrencyInputField(L10n.transactions.transactioneditor.amount, text: $bindableDraft.amountText)
 
                 MistiaDatePickerRow(
                     title: L10n.transactions.transactioneditor.dateTime,
@@ -727,11 +725,15 @@ struct TransactionEditorSheet: View {
 
                     if selectedConversionMode == .manual {
                         if renderContext.shouldShowDestinationAmountInput {
-                            TextField(L10n.transactions.transactioneditor.destinationAmount, text: $bindableDraft.destinationAmountText.currencyInputGrouped())
-                                .keyboardType(.numberPad)
+                            MistiaCurrencyInputField(
+                                L10n.transactions.transactioneditor.destinationAmount,
+                                text: $bindableDraft.destinationAmountText
+                            )
                         } else {
-                            TextField(L10n.transactions.transactioneditor.convertedAmount, text: $bindableDraft.reportingAmountText.currencyInputGrouped())
-                                .keyboardType(.numberPad)
+                            MistiaCurrencyInputField(
+                                L10n.transactions.transactioneditor.convertedAmount,
+                                text: $bindableDraft.reportingAmountText
+                            )
                         }
                     }
                 }

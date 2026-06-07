@@ -2194,14 +2194,11 @@ private struct DebtSettlementSheet: View {
                 }
 
                 Section {
-                    TextField(
-                        "",
-                        text: $amountText.currencyInputGrouped(),
-                        prompt: Text(L10n.planning.duepayment.enterAmount)
-                            .foregroundStyle(.tertiary)
+                    MistiaCurrencyInputField(
+                        L10n.planning.duepayment.enterAmount,
+                        text: $amountText,
+                        font: .mistiaRounded(size: 17, weight: .semibold)
                     )
-                    .keyboardType(.numberPad)
-                    .font(.system(size: 17, weight: .semibold, design: .rounded))
                     .frame(minHeight: 44)
 
                     Picker(L10n.planning.duepayment.paymentWallet, selection: $selectedWalletID) {

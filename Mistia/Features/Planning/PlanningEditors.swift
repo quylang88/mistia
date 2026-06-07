@@ -192,8 +192,7 @@ struct PlanningBudgetEditorSheet: View {
                     .buttonStyle(MistiaPressableButtonStyle(cornerRadius: 20))
                     .disabled(isPastBudgetRecord)
 
-                    TextField(L10n.planning.planning.budgetAmount, text: $draft.limitText.currencyInputGrouped())
-                        .keyboardType(.numberPad)
+                    MistiaCurrencyInputField(L10n.planning.planning.budgetAmount, text: $draft.limitText)
                         .disabled(isPastBudgetRecord)
 
                     LabeledContent(L10n.planning.planning.cycle) {
@@ -806,10 +805,8 @@ struct PlanningGoalEditorSheet: View {
 
                 Section(L10n.planning.planning.goal) {
                     TextField(L10n.planning.planning.goalName, text: $draft.name)
-                    TextField(L10n.planning.planning.targetAmount, text: $draft.targetText.currencyInputGrouped())
-                        .keyboardType(.numberPad)
-                    TextField(L10n.planning.planning.currentAmount, text: $draft.currentText.currencyInputGrouped())
-                        .keyboardType(.numberPad)
+                    MistiaCurrencyInputField(L10n.planning.planning.targetAmount, text: $draft.targetText)
+                    MistiaCurrencyInputField(L10n.planning.planning.currentAmount, text: $draft.currentText)
                     MistiaDatePickerRow(
                         title: L10n.planning.planning.targetDate,
                         selection: $draft.targetDate,
@@ -1118,8 +1115,7 @@ struct PlanningBillEditorSheet: View {
                     .buttonStyle(MistiaPressableButtonStyle(cornerRadius: 20))
 
                     TextField(L10n.planning.planning.billName, text: $draft.name)
-                    TextField(L10n.planning.planning.amountOptional, text: $draft.amountText.currencyInputGrouped())
-                        .keyboardType(.numberPad)
+                    MistiaCurrencyInputField(L10n.planning.planning.amountOptional, text: $draft.amountText)
 
                     Picker(L10n.planning.planning.billType, selection: $draft.scheduleKind) {
                         ForEach(PlanningBillScheduleKind.allCases) { kind in
@@ -1686,8 +1682,7 @@ struct PlanningInstallmentEditorSheet: View {
 
                 Section(L10n.planning.planning.installmentLoan) {
                     TextField(L10n.planning.planning.name, text: $draft.name)
-                    TextField(L10n.planning.planning.amountPerCycle, text: $draft.amountText.currencyInputGrouped())
-                        .keyboardType(.numberPad)
+                    MistiaCurrencyInputField(L10n.planning.planning.amountPerCycle, text: $draft.amountText)
                     Picker(L10n.planning.planning.dueDay, selection: $draft.dueDay) {
                         ForEach(1...31, id: \.self) { day in
                             Text(L10n.planning.planning.dayValue(String(describing: day))).tag(day)
@@ -1712,8 +1707,7 @@ struct PlanningInstallmentEditorSheet: View {
 
                 if let dueItem = target.dueItem, dueItem.status == .pending {
                     Section {
-                        TextField(L10n.planning.planning.paymentAmount, text: $paymentAmountText.currencyInputGrouped())
-                            .keyboardType(.numberPad)
+                        MistiaCurrencyInputField(L10n.planning.planning.paymentAmount, text: $paymentAmountText)
 
                         Button(L10n.planning.planning.payEarly) {
                             payEarly()
@@ -2006,10 +2000,8 @@ struct PlanningCreditCardEditorSheet: View {
                         .onChange(of: draft.last4) { _, newValue in
                             draft.last4 = String(newValue.filter(\.isNumber).prefix(4))
                         }
-                    TextField(L10n.planning.planning.availableCredit, text: $draft.availableCreditText.currencyInputGrouped())
-                        .keyboardType(.numberPad)
-                    TextField(L10n.planning.planning.creditLimit, text: $draft.creditLimitText.currencyInputGrouped())
-                        .keyboardType(.numberPad)
+                    MistiaCurrencyInputField(L10n.planning.planning.availableCredit, text: $draft.availableCreditText)
+                    MistiaCurrencyInputField(L10n.planning.planning.creditLimit, text: $draft.creditLimitText)
                     Picker(L10n.planning.planning.dueDay, selection: $draft.paymentDueDay) {
                         ForEach(paymentDueDayOptions, id: \.self) { day in
                             Text(L10n.planning.planning.dayValue(String(describing: day))).tag(day)

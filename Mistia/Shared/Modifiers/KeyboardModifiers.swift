@@ -8,16 +8,89 @@ extension View {
     }
 }
 
-extension Binding where Value == String {
-    func currencyInputGrouped() -> Binding<String> {
-        Binding(
-            get: {
-                MistiaCurrencyInputFormatting.groupedInput(wrappedValue)
-            },
-            set: { newValue in
-                wrappedValue = MistiaCurrencyInputFormatting.groupedInput(newValue)
-            }
+struct MistiaCurrencyInputField: UIViewRepresentable {
+    let placeholder: String
+    @Binding var text: String
+    var font: UIFont = .mistiaRounded(size: 17, weight: .regular)
+    var textColor: UIColor = .label
+    var placeholderColor: UIColor = .tertiaryLabel
+
+    init(
+        _ placeholder: String,
+        text: Binding<String>,
+        font: UIFont = .mistiaRounded(size: 17, weight: .regular),
+        textColor: UIColor = .label,
+        placeholderColor: UIColor = .tertiaryLabel
+    ) {
+        self.placeholder = placeholder
+        self._text = text
+        self.font = font
+        self.textColor = textColor
+        self.placeholderColor = placeholderColor
+    }
+
+    func makeUIView(context: Context) -> UITextField {
+        let textField = UITextField(frame: .zero)
+        textField.keyboardType = .numberPad
+        textField.font = font
+        textField.textColor = textColor
+        textField.adjustsFontForContentSizeCategory = true
+        textField.delegate = context.coordinator
+        textField.addTarget(
+            context.coordinator,
+            action: #selector(Coordinator.textDidChange(_:)),
+            for: .editingChanged
         )
+        applyPlaceholder(to: textField)
+        return textField
+    }
+
+    func updateUIView(_ uiView: UITextField, context: Context) {
+        context.coordinator.parent = self
+        uiView.font = font
+        uiView.textColor = textColor
+        applyPlaceholder(to: uiView)
+
+        let grouped = MistiaCurrencyInputFormatting.groupedInput(text)
+        if uiView.text != grouped {
+            uiView.text = grouped
+        }
+    }
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator(parent: self)
+    }
+
+    private func applyPlaceholder(to textField: UITextField) {
+        textField.attributedPlaceholder = NSAttributedString(
+            string: placeholder,
+            attributes: [.foregroundColor: placeholderColor]
+        )
+    }
+
+    final class Coordinator: NSObject, UITextFieldDelegate {
+        var parent: MistiaCurrencyInputField
+
+        init(parent: MistiaCurrencyInputField) {
+            self.parent = parent
+        }
+
+        @objc func textDidChange(_ textField: UITextField) {
+            let grouped = MistiaCurrencyInputFormatting.groupedInput(textField.text ?? "")
+            parent.text = grouped
+
+            if textField.text != grouped {
+                textField.text = grouped
+            }
+        }
+    }
+}
+
+extension UIFont {
+    static func mistiaRounded(size: CGFloat, weight: UIFont.Weight) -> UIFont {
+        let system = UIFont.systemFont(ofSize: size, weight: weight)
+        let descriptor = system.fontDescriptor.withDesign(.rounded) ?? system.fontDescriptor
+        return UIFont(descriptor: descriptor, size: size)
     }
 }
 
@@ -70,6 +143,13 @@ private struct KeyboardDismissTapInstaller: UIViewRepresentable {
         func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer, shouldReceive touch: UITouch) -> Bool {
             guard let view = touch.view else { return true }
             return !view.isInsideKeyboardDismissExcludedArea
+        }
+
+        func gestureRecognizer(
+            _ gestureRecognizer: UIGestureRecognizer,
+            shouldRecognizeSimultaneouslyWith otherGestureRecognizer: UIGestureRecognizer
+        ) -> Bool {
+            true
         }
     }
 }

@@ -85,11 +85,9 @@ struct ManagementWalletEditorSheet: View {
 
                     if target.wallet == nil {
                         if draft.kind == .creditCard {
-                            TextField(L10n.management.management.availableCredit, text: $draft.availableCreditText.currencyInputGrouped())
-                                .keyboardType(.numberPad)
+                            MistiaCurrencyInputField(L10n.management.management.availableCredit, text: $draft.availableCreditText)
                         } else {
-                            TextField(draft.kind.balanceFieldTitle, text: $draft.openingBalanceText.currencyInputGrouped())
-                                .keyboardType(.numberPad)
+                            MistiaCurrencyInputField(draft.kind.balanceFieldTitle, text: $draft.openingBalanceText)
                         }
                     } else {
                         LabeledContent(L10n.management.management.currentBalance) {
@@ -272,8 +270,7 @@ struct ManagementWalletEditorSheet: View {
                     draft.last4 = String(newValue.filter(\.isNumber).prefix(4))
                 }
 
-            TextField(L10n.management.management.creditLimit, text: $draft.creditLimitText.currencyInputGrouped())
-                .keyboardType(.numberPad)
+            MistiaCurrencyInputField(L10n.management.management.creditLimit, text: $draft.creditLimitText)
 
             creditCardDayPicker(
                 title: L10n.management.management.statementClosingDay,
@@ -1596,8 +1593,12 @@ struct ManagementBalanceAdjustmentSheet: View {
         NavigationStack {
             Form {
                 Section(wallet.kind == .creditCard ? L10n.management.balanceEditor.availableCreditTitle : L10n.management.balanceEditor.actualBalanceTitle) {
-                    TextField(wallet.kind == .creditCard ? L10n.management.balanceEditor.availableCreditPlaceholder : L10n.management.balanceEditor.currentBalancePlaceholder, text: $newBalanceText.currencyInputGrouped())
-                        .keyboardType(.numberPad)
+                    MistiaCurrencyInputField(
+                        wallet.kind == .creditCard
+                            ? L10n.management.balanceEditor.availableCreditPlaceholder
+                            : L10n.management.balanceEditor.currentBalancePlaceholder,
+                        text: $newBalanceText
+                    )
                 }
 
                 Section(L10n.management.management.adjustmentReason) {
