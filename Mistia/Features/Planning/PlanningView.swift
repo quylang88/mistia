@@ -187,6 +187,7 @@ private struct PlanningRenderSnapshotBaseCacheKey: Hashable {
 private struct PlanningBudgetRenderSnapshotCacheKey: Hashable {
     let base: PlanningRenderSnapshotBaseCacheKey
     let budgetSignature: MistiaCollectionChangeSignature
+    let categorySignature: MistiaCollectionChangeSignature
     let transactionSignature: MistiaCollectionChangeSignature
 }
 
@@ -345,9 +346,12 @@ struct PlanningView: View {
             familyContextStore: familyContextStore
         )
         let transactionSnapshots = visibleTransactions.map(\.planningRecordSnapshot)
-        let activeBudgetPlans = visibleBudgets
-            .filter { !$0.isArchived && PlanningLogic.startOfMonth(for: $0.monthAnchor, calendar: calendar) == selectedMonth }
-            .map { $0.planningSnapshot(calendar: calendar) }
+        let activeBudgetPlans = PlanningLogic.resolvingFamilySpendingCategoryScopes(
+            plans: visibleBudgets
+                .filter { !$0.isArchived && PlanningLogic.startOfMonth(for: $0.monthAnchor, calendar: calendar) == selectedMonth }
+                .map { $0.planningSnapshot(calendar: calendar) },
+            categoryScopes: familyBudgetSpendingCategoryScopes
+        )
         let rows = PlanningLogic.budgetBranchRows(
             plans: activeBudgetPlans,
             records: transactionSnapshots,
@@ -603,6 +607,13 @@ struct PlanningView: View {
                 isArchived: \.isArchived,
                 remoteVersion: \.remoteVersion
             ),
+            categorySignature: MistiaCollectionChangeSignature.make(
+                storedCategories,
+                updatedAt: \.updatedAt,
+                deletedAt: \.deletedAt,
+                isArchived: \.isArchived,
+                remoteVersion: \.remoteVersion
+            ),
             transactionSignature: MistiaCollectionChangeSignature.make(
                 storedTransactions,
                 updatedAt: \.updatedAt,
@@ -701,19 +712,42 @@ struct PlanningView: View {
     }
 
     private var activeBudgetPlans: [BudgetPlanSnapshot] {
-        visibleBudgets
-            .filter { !$0.isArchived && PlanningLogic.startOfMonth(for: $0.monthAnchor, calendar: calendar) == selectedMonth }
-            .map { $0.planningSnapshot(calendar: calendar) }
+        PlanningLogic.resolvingFamilySpendingCategoryScopes(
+            plans: visibleBudgets
+                .filter { !$0.isArchived && PlanningLogic.startOfMonth(for: $0.monthAnchor, calendar: calendar) == selectedMonth }
+                .map { $0.planningSnapshot(calendar: calendar) },
+            categoryScopes: familyBudgetSpendingCategoryScopes
+        )
+    }
+
+    private var familyBudgetSpendingCategoryScopes: [PlanningFamilyBudgetSpendingCategoryScope] {
+        storedCategories
+            .filter { $0.deletedAt == nil && !$0.isArchived }
+            .map(\.planningFamilyBudgetSpendingScope)
     }
 
     private var budgetRows: [PlanningBudgetBranchRowSnapshot] {
-        PlanningLogic.budgetBranchRows(
+        let scopeSnapshot = makeScopeSnapshot()
+        let familyTransactions = FamilyScopedData.familyBudgetTransactionSnapshots(
+            from: storedTransactions,
+            scopeSnapshot: scopeSnapshot,
+            familyMemberUserIDs: currentFamilyMemberUserIDs,
+            signedInUserID: sessionStore.activeLocalProfileUserID
+        )
+        let usesAggregateFamilyBudgetSpending = FamilyScopedData.usesAggregateFamilyBudgetSpending(
+            isFamilyBudgetSpendingAvailable: isFamilyBudgetSpendingAvailable,
+            familyContextStore: familyContextStore
+        )
+
+        return PlanningLogic.budgetBranchRows(
             plans: activeBudgetPlans,
             records: transactionSnapshots,
             selectedMonth: selectedMonth,
             referenceDate: .now,
             calendar: calendar,
-            exchangeRates: appExchangeRates
+            exchangeRates: appExchangeRates,
+            familyTransactions: usesAggregateFamilyBudgetSpending ? familyTransactions : [],
+            familySpendingAvailable: usesAggregateFamilyBudgetSpending
         )
     }
 

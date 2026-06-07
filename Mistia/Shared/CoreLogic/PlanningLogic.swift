@@ -91,6 +91,35 @@ nonisolated enum PlanningBudgetHealth: String, Equatable {
     }
 }
 
+nonisolated struct PlanningFamilyBudgetSpendingCategoryScope: Equatable {
+    let categoryName: String
+    let categoryParentName: String?
+    let categoryIsParent: Bool
+    let familyBudgetSpendingEnabled: Bool
+
+    init(
+        categoryName: String,
+        categoryParentName: String? = nil,
+        categoryIsParent: Bool,
+        familyBudgetSpendingEnabled: Bool
+    ) {
+        self.categoryName = categoryName
+        self.categoryParentName = categoryParentName
+        self.categoryIsParent = categoryIsParent
+        self.familyBudgetSpendingEnabled = familyBudgetSpendingEnabled
+    }
+
+    var categoryKey: String {
+        FamilyLogic.normalizedFamilyGroupingName(categoryName)
+    }
+
+    var branchKey: String {
+        FamilyLogic.normalizedFamilyGroupingName(
+            categoryIsParent ? categoryName : (categoryParentName ?? categoryName)
+        )
+    }
+}
+
 nonisolated struct PlanningBudgetPaceAssessment: Equatable {
     let health: PlanningBudgetHealth
     let tone: PlanningBudgetTone
@@ -1037,6 +1066,57 @@ nonisolated enum PlanningLogic {
                 }
                 return lhs.name.localizedCaseInsensitiveCompare(rhs.name) == .orderedAscending
             }
+    }
+
+    static func resolvingFamilySpendingCategoryScopes(
+        plans: [BudgetPlanSnapshot],
+        categoryScopes: [PlanningFamilyBudgetSpendingCategoryScope]
+    ) -> [BudgetPlanSnapshot] {
+        plans.map { plan in
+            let includesFamilySpending = plan.includesFamilySpending
+                || familySpendingEnabled(
+                    categoryName: plan.categoryName,
+                    branchCategoryName: plan.branchCategoryName,
+                    categoryScopes: categoryScopes
+                )
+            guard includesFamilySpending != plan.includesFamilySpending else {
+                return plan
+            }
+
+            return BudgetPlanSnapshot(
+                id: plan.id,
+                categoryID: plan.categoryID,
+                categoryName: plan.categoryName,
+                categoryIconSymbolName: plan.categoryIconSymbolName,
+                categoryColorHex: plan.categoryColorHex,
+                limitMinor: plan.limitMinor,
+                rolloverEnabled: plan.rolloverEnabled,
+                currencyCode: plan.currencyCode,
+                monthAnchor: plan.monthAnchor,
+                categoryParentID: plan.categoryParentID,
+                categoryParentName: plan.categoryParentName,
+                categoryParentIconSymbolName: plan.categoryParentIconSymbolName,
+                categoryParentColorHex: plan.categoryParentColorHex,
+                categoryIsParent: plan.categoryIsParent,
+                includesFamilySpending: includesFamilySpending
+            )
+        }
+    }
+
+    static func familySpendingEnabled(
+        categoryName: String,
+        branchCategoryName: String,
+        categoryScopes: [PlanningFamilyBudgetSpendingCategoryScope]
+    ) -> Bool {
+        let categoryKey = FamilyLogic.normalizedFamilyGroupingName(categoryName)
+        let branchKey = FamilyLogic.normalizedFamilyGroupingName(branchCategoryName)
+        guard !categoryKey.isEmpty || !branchKey.isEmpty else { return false }
+
+        return categoryScopes.contains { scope in
+            guard scope.familyBudgetSpendingEnabled else { return false }
+            return (!categoryKey.isEmpty && scope.categoryKey == categoryKey)
+                || (!branchKey.isEmpty && scope.branchKey == branchKey)
+        }
     }
 
     static func budgetSummary(

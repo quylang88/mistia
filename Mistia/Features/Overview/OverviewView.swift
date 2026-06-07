@@ -106,6 +106,7 @@ private struct OverviewRenderSnapshotCacheKey: Hashable {
     let walletSignature: MistiaCollectionChangeSignature
     let transactionSignature: MistiaCollectionChangeSignature
     let budgetSignature: MistiaCollectionChangeSignature
+    let categorySignature: MistiaCollectionChangeSignature
     let billSignature: MistiaCollectionChangeSignature
     let installmentSignature: MistiaCollectionChangeSignature
     let occurrenceSignature: MistiaCollectionChangeSignature
@@ -135,6 +136,8 @@ struct OverviewView: View {
     private var storedWallets: [LedgerWallet]
     @Query(filter: #Predicate<LedgerTransaction> { $0.deletedAt == nil && !$0.isArchived })
     private var storedTransactions: [LedgerTransaction]
+    @Query(filter: #Predicate<TransactionCategory> { $0.deletedAt == nil })
+    private var storedCategories: [TransactionCategory]
     @Query private var ownershipScopes: [OwnedRecordScope]
 
     private struct StatementTarget: Identifiable, Hashable {
@@ -225,12 +228,15 @@ struct OverviewView: View {
             $0.planningCreditCardSnapshot(balanceIndex: balanceIndex)
         }
         let month = currentMonth
-        let activeBudgets = visibleBudgets
-            .filter {
-                !$0.isArchived
-                    && PlanningLogic.startOfMonth(for: $0.monthAnchor, calendar: calendar) == month
-            }
-            .map { $0.planningSnapshot(calendar: calendar) }
+        let activeBudgets = PlanningLogic.resolvingFamilySpendingCategoryScopes(
+            plans: visibleBudgets
+                .filter {
+                    !$0.isArchived
+                        && PlanningLogic.startOfMonth(for: $0.monthAnchor, calendar: calendar) == month
+                }
+                .map { $0.planningSnapshot(calendar: calendar) },
+            categoryScopes: familyBudgetSpendingCategoryScopes
+        )
         let billSnapshots = visibleBills
             .filter { !$0.isArchived }
             .map(\.planningSnapshot)
@@ -343,6 +349,13 @@ struct OverviewView: View {
             ),
             budgetSignature: MistiaCollectionChangeSignature.make(
                 storedBudgets,
+                updatedAt: \.updatedAt,
+                deletedAt: \.deletedAt,
+                isArchived: \.isArchived,
+                remoteVersion: \.remoteVersion
+            ),
+            categorySignature: MistiaCollectionChangeSignature.make(
+                storedCategories,
                 updatedAt: \.updatedAt,
                 deletedAt: \.deletedAt,
                 isArchived: \.isArchived,
@@ -553,6 +566,12 @@ struct OverviewView: View {
             familyContextStore: familyContextStore,
             sessionStore: sessionStore
         )
+    }
+
+    private var familyBudgetSpendingCategoryScopes: [PlanningFamilyBudgetSpendingCategoryScope] {
+        storedCategories
+            .filter { $0.deletedAt == nil && !$0.isArchived }
+            .map(\.planningFamilyBudgetSpendingScope)
     }
 
     private var visibleBills: [RecurringBillPlan] {

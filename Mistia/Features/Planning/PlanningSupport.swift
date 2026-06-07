@@ -40,6 +40,17 @@ enum PlanningBudgetEditorScope {
     }
 }
 
+extension TransactionCategory {
+    var planningFamilyBudgetSpendingScope: PlanningFamilyBudgetSpendingCategoryScope {
+        PlanningFamilyBudgetSpendingCategoryScope(
+            categoryName: localizedDisplayName,
+            categoryParentName: parentCategory?.localizedDisplayName,
+            categoryIsParent: isParentCategory,
+            familyBudgetSpendingEnabled: familyBudgetSpendingEnabled
+        )
+    }
+}
+
 struct PlanningGoalEditorTarget: Identifiable {
     let id = UUID()
     let goal: SavingsGoal?

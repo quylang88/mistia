@@ -171,6 +171,12 @@ struct PlanningBudgetEditorSheet: View {
             .map { $0.planningSnapshot() }
     }
 
+    private var familyBudgetSpendingCategoryScopes: [PlanningFamilyBudgetSpendingCategoryScope] {
+        storedCategories
+            .filter { $0.deletedAt == nil && !$0.isArchived }
+            .map(\.planningFamilyBudgetSpendingScope)
+    }
+
     var body: some View {
         NavigationStack {
             Form {
@@ -305,7 +311,7 @@ struct PlanningBudgetEditorSheet: View {
         let monthAnchor = targetMonthAnchor
         let branchScopeCategory = branchScopeCategory(for: category)
         let enablesFamilySpending = draft.includesFamilySpending
-            || branchScopeCategory?.familyBudgetSpendingEnabled == true
+            || familySpendingEnabled(for: category)
         let hasDuplicate = visibleStoredBudgets.contains(where: { budget in
             guard !budget.isArchived else { return false }
             guard budget.id != target.budget?.id else { return false }
@@ -507,7 +513,15 @@ struct PlanningBudgetEditorSheet: View {
 
     private func syncFamilySpendingDraft(with category: TransactionCategory) {
         guard !draft.includesFamilySpending else { return }
-        draft.includesFamilySpending = branchScopeCategory(for: category)?.familyBudgetSpendingEnabled == true
+        draft.includesFamilySpending = familySpendingEnabled(for: category)
+    }
+
+    private func familySpendingEnabled(for category: TransactionCategory) -> Bool {
+        PlanningLogic.familySpendingEnabled(
+            categoryName: category.localizedDisplayName,
+            branchCategoryName: branchScopeCategory(for: category)?.localizedDisplayName ?? category.localizedDisplayName,
+            categoryScopes: familyBudgetSpendingCategoryScopes
+        )
     }
 
     private func applyFamilyScopeIfNeeded(

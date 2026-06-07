@@ -772,6 +772,71 @@ final class PlanningLogicTests: XCTestCase {
         XCTAssertEqual(rows[0].limitMinor, 10_000)
     }
 
+    func testBudgetBranchRowsUseFamilySpendingWhenSameNamedCategoryScopeEnabled() {
+        let selectedMonth = makeDate(year: 2026, month: 4, day: 1)
+        let referenceDate = makeDate(year: 2026, month: 4, day: 10)
+        let localLivingParent = UUID()
+        let localFoodCategory = UUID()
+
+        let plans = PlanningLogic.resolvingFamilySpendingCategoryScopes(
+            plans: [
+                makeBudget(
+                    categoryID: localFoodCategory,
+                    categoryName: "Ăn uống",
+                    limitMinor: 10_000,
+                    monthAnchor: selectedMonth,
+                    categoryParentID: localLivingParent,
+                    categoryParentName: "Sinh hoạt"
+                )
+            ],
+            categoryScopes: [
+                PlanningFamilyBudgetSpendingCategoryScope(
+                    categoryName: " ăn   UỐNG ",
+                    categoryParentName: " sinh  hoạt ",
+                    categoryIsParent: false,
+                    familyBudgetSpendingEnabled: true
+                )
+            ]
+        )
+
+        let rows = PlanningLogic.budgetBranchRows(
+            plans: plans,
+            records: [
+                makeRecord(
+                    primaryKind: .expense,
+                    amountMinor: 3_000,
+                    occurredAt: makeDate(year: 2026, month: 4, day: 5),
+                    categoryID: localFoodCategory,
+                    categoryName: "Ăn uống",
+                    categoryParentID: localLivingParent,
+                    categoryParentName: "Sinh hoạt"
+                )
+            ],
+            selectedMonth: selectedMonth,
+            referenceDate: referenceDate,
+            calendar: calendar,
+            familyTransactions: [
+                makeFamilyBudgetTransaction(
+                    amountMinor: 3_000,
+                    occurredAt: makeDate(year: 2026, month: 4, day: 5),
+                    categoryName: "Ăn uống",
+                    categoryParentName: "Sinh hoạt"
+                ),
+                makeFamilyBudgetTransaction(
+                    amountMinor: 6_000,
+                    occurredAt: makeDate(year: 2026, month: 4, day: 6),
+                    categoryName: " ăn    UỐNG ",
+                    categoryParentName: "Sinh hoạt"
+                )
+            ],
+            familySpendingAvailable: true
+        )
+
+        XCTAssertEqual(plans.first?.includesFamilySpending, true)
+        XCTAssertEqual(rows.count, 1)
+        XCTAssertEqual(rows[0].spentMinor, 9_000)
+    }
+
     func testBudgetBranchRowsWithFamilyScopeUnavailableUsesPersonalSpending() {
         let selectedMonth = makeDate(year: 2026, month: 4, day: 1)
         let referenceDate = makeDate(year: 2026, month: 4, day: 10)

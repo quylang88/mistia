@@ -8,6 +8,7 @@ struct MistiaDueMaintenanceSnapshot {
     let storedTransactions: [LedgerTransaction]
     let storedOccurrences: [DueOccurrenceRecord]
     let storedBudgets: [BudgetPlan]
+    let storedCategories: [TransactionCategory]
     let storedBills: [RecurringBillPlan]
     let ownershipScopes: [OwnedRecordScope]
     let walletOwnerMap: [UUID: UUID]
@@ -51,6 +52,11 @@ struct MistiaDueMaintenanceSnapshot {
         )) ?? []
         let storedBudgets = (try? modelContext.fetch(
             FetchDescriptor<BudgetPlan>(
+                predicate: #Predicate { $0.deletedAt == nil && !$0.isArchived }
+            )
+        )) ?? []
+        let storedCategories = (try? modelContext.fetch(
+            FetchDescriptor<TransactionCategory>(
                 predicate: #Predicate { $0.deletedAt == nil && !$0.isArchived }
             )
         )) ?? []
@@ -133,6 +139,7 @@ struct MistiaDueMaintenanceSnapshot {
             storedTransactions: storedTransactions,
             storedOccurrences: storedOccurrences,
             storedBudgets: storedBudgets,
+            storedCategories: storedCategories,
             storedBills: storedBills,
             ownershipScopes: ownershipScopes,
             walletOwnerMap: walletOwnerMap,
@@ -222,12 +229,18 @@ private enum MistiaBudgetReminderMaintenance {
         guard !snapshot.activeBudgets.isEmpty else { return }
 
         let selectedMonth = PlanningLogic.startOfMonth(for: referenceDate, calendar: calendar)
+        let familyBudgetSpendingCategoryScopes = snapshot.storedCategories
+            .filter { $0.deletedAt == nil && !$0.isArchived }
+            .map(\.planningFamilyBudgetSpendingScope)
         let alerts = OverviewLogic.budgetAlerts(
-            budgets: snapshot.activeBudgets
-                .filter {
-                    PlanningLogic.startOfMonth(for: $0.monthAnchor, calendar: calendar) == selectedMonth
-                }
-                .map { $0.planningSnapshot(calendar: calendar) },
+            budgets: PlanningLogic.resolvingFamilySpendingCategoryScopes(
+                plans: snapshot.activeBudgets
+                    .filter {
+                        PlanningLogic.startOfMonth(for: $0.monthAnchor, calendar: calendar) == selectedMonth
+                    }
+                    .map { $0.planningSnapshot(calendar: calendar) },
+                categoryScopes: familyBudgetSpendingCategoryScopes
+            ),
             transactionRecords: snapshot.activeTransactionRecords,
             referenceDate: referenceDate,
             calendar: calendar,
