@@ -81,7 +81,13 @@ struct AIBillAnalysisView: View {
                 appendImage(image)
             }
         }
-        .sheet(item: $editorTarget) { target in
+        .sheet(item: $editorTarget, onDismiss: {
+            // Clear pending state if the editor was dismissed without saving
+            if !pendingTransactionAllocations.isEmpty {
+                pendingTransactionAllocations = [:]
+                pendingTransactionGroupID = nil
+            }
+        }) { target in
             TransactionEditorSheet(target: target) { completion in
                 if completion == .savedTransaction {
                     markPendingItemsCreated()

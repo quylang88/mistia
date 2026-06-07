@@ -35866,19 +35866,19 @@
         "vi": {
           "stringUnit": {
             "state": "translated",
-            "value": "Tạo khoản thu chi"
+            "value": "Thêm chi tiêu"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Create cashflow item"
+            "value": "Add expense"
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "収支を作成"
+            "value": "支出を追加"
           }
         }
       }
