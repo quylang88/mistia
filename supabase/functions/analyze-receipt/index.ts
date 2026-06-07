@@ -1,4 +1,5 @@
 import { createClient } from "npm:@supabase/supabase-js@2"
+import { receiptAIDailyLimit } from "../_shared/receipt-ai-quota.ts"
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -316,7 +317,6 @@ Deno.serve(async (request) => {
   const supabaseAnonKey = Deno.env.get("SUPABASE_ANON_KEY")
   const geminiAPIKey = Deno.env.get("GEMINI_API_KEY")
   const geminiModel = Deno.env.get("GEMINI_RECEIPT_MODEL") ?? "gemini-2.5-flash"
-  const dailyLimit = 20
   const maxImageBytes = parseLimit(Deno.env.get("MISTIA_RECEIPT_AI_MAX_IMAGE_BYTES"), 4 * 1024 * 1024)
   const authHeader = request.headers.get("Authorization")
 
@@ -381,7 +381,7 @@ Deno.serve(async (request) => {
   }
 
   const { data: quota, error: quotaError } = await userClient.rpc("consume_receipt_ai_scan_quota", {
-    p_limit: dailyLimit,
+    p_limit: receiptAIDailyLimit,
   })
 
   if (quotaError) {
