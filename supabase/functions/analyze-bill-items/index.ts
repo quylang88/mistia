@@ -650,35 +650,54 @@ Deno.serve(async (request) => {
   }
 
   try {
-    const ocrResult = await requestGeminiModelJSON({
-      apiKey: geminiAPIKey,
-      models: geminiModels,
-      body: {
-        contents: [
-          {
-            role: "user",
-            parts: [
-              { text: buildReceiptOCRPrompt() },
-              {
-                inlineData: {
-                  mimeType,
-                  data: imageBase64,
+    const aiStartedAt = Date.now();
+    let ocrContext = sanitizeReceiptOCRResult({});
+
+    try {
+      const ocrResult = await requestGeminiModelJSON({
+        apiKey: geminiAPIKey,
+        models: geminiModels,
+        body: {
+          contents: [
+            {
+              role: "user",
+              parts: [
+                { text: buildReceiptOCRPrompt() },
+                {
+                  inlineData: {
+                    mimeType,
+                    data: imageBase64,
+                  },
                 },
-              },
-            ],
+              ],
+            },
+          ],
+          generationConfig: {
+            temperature: 0,
+            responseMimeType: "application/json",
+            responseSchema: receiptOCRResponseSchema,
           },
-        ],
-        generationConfig: {
-          temperature: 0,
-          responseMimeType: "application/json",
-          responseSchema: receiptOCRResponseSchema,
         },
-      },
-    });
-    const ocrText = extractModelText(ocrResult.body);
-    const ocrContext = ocrText
-      ? sanitizeReceiptOCRResult(parseModelJSON(ocrText))
-      : sanitizeReceiptOCRResult({});
+        primaryMaxAttempts: 1,
+        retryDelayMs: 0,
+        timeoutMs: 20_000,
+        totalTimeoutMs: 25_000,
+      });
+      const ocrText = extractModelText(ocrResult.body);
+      ocrContext = ocrText
+        ? sanitizeReceiptOCRResult(parseModelJSON(ocrText))
+        : sanitizeReceiptOCRResult({});
+    } catch (error) {
+      console.warn("Bill item OCR context skipped.", {
+        message: error instanceof Error ? error.message : String(error),
+      });
+    }
+
+    const elapsedAIMilliseconds = Date.now() - aiStartedAt;
+    const analysisBudgetMilliseconds = Math.max(
+      45_000,
+      125_000 - elapsedAIMilliseconds,
+    );
 
     const geminiResult = await requestGeminiModelJSON({
       apiKey: geminiAPIKey,
@@ -704,6 +723,10 @@ Deno.serve(async (request) => {
           responseSchema: itemizedBillResponseSchema,
         },
       },
+      primaryMaxAttempts: 1,
+      retryDelayMs: 0,
+      timeoutMs: 70_000,
+      totalTimeoutMs: analysisBudgetMilliseconds,
     });
     const modelText = extractModelText(geminiResult.body);
     if (!modelText) {

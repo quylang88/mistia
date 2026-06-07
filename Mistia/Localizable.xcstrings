@@ -31989,6 +31989,72 @@
         }
       }
     },
+    "shared.sync.receiptanalysis.receiptAITookTooLongTryAgain": {
+      "localizations": {
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "AI đang mất quá lâu để phân tích bill. Hãy thử lại sau."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Receipt AI is taking too long. Try again later."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "レシートAIの解析に時間がかかりすぎています。しばらくしてからもう一度お試しください。"
+          }
+        }
+      }
+    },
+    "shared.sync.receiptanalysis.requestTimedOutCheckNetwork": {
+      "localizations": {
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mạng phản hồi quá chậm. Hãy kiểm tra kết nối và thử lại sau."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The network was too slow to respond. Check your connection and try again."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ネットワークの応答が遅すぎます。接続を確認してからもう一度お試しください。"
+          }
+        }
+      }
+    },
+    "shared.sync.receiptanalysis.unstableNetworkTryAgain": {
+      "localizations": {
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kết nối mạng không ổn định. Hãy kiểm tra mạng và thử lại sau."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The network connection is unstable. Check your connection and try again."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ネットワーク接続が不安定です。接続を確認してからもう一度お試しください。"
+          }
+        }
+      }
+    },
     "shared.sync.receiptanalysis.signInToAnalyzeReceipts": {
       "localizations": {
         "vi": {

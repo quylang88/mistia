@@ -134,7 +134,9 @@ export function sanitizeBillItem(
       valueFor(raw, "translated_name", "translatedName", "translation"),
     ),
     line_type: isDiscount ? "discount" : "purchase",
-    quantity: isDiscount ? null : normalizedQuantity(rawQuantity, visibleQuantity),
+    quantity: isDiscount
+      ? null
+      : normalizedQuantity(rawQuantity, visibleQuantity),
     original_amount_minor: isDiscount ? null : (originalAmount ??
       (finalAmount > 0 ? finalAmount + discountAmount : null)),
     discount_amount_minor: Math.max(0, discountAmount),

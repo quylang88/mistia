@@ -1,12 +1,27 @@
 import Foundation
 
 struct BillItemAnalysisService {
+    private static let requestTimeout: TimeInterval = 140
+    private static let resourceTimeout: TimeInterval = 150
+    private static let urlSession: URLSession = {
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.timeoutIntervalForRequest = requestTimeout
+        configuration.timeoutIntervalForResource = resourceTimeout
+        configuration.waitsForConnectivity = true
+        return URLSession(configuration: configuration)
+    }()
+
     private let configurationProvider: () -> MistiaSyncConfiguration?
+    private let urlSession: URLSession
     private let encoder = JSONEncoder.mistiaRemoteAPIEncoder
     private let decoder = JSONDecoder.mistiaRemoteAPIDecoder
 
-    init(configurationProvider: @escaping () -> MistiaSyncConfiguration? = { MistiaSyncConfiguration.load() }) {
+    init(
+        configurationProvider: @escaping () -> MistiaSyncConfiguration? = { MistiaSyncConfiguration.load() },
+        urlSession: URLSession = Self.urlSession
+    ) {
         self.configurationProvider = configurationProvider
+        self.urlSession = urlSession
     }
 
     func analyzeBillItems(
@@ -24,9 +39,10 @@ struct BillItemAnalysisService {
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.setValue(configuration.anonKey, forHTTPHeaderField: "apikey")
         request.setValue("Bearer \(session.accessToken)", forHTTPHeaderField: "Authorization")
+        request.timeoutInterval = Self.requestTimeout
         request.httpBody = try encoder.encode(payload)
 
-        let (data, response) = try await URLSession.shared.data(for: request)
+        let (data, response) = try await urlSession.data(for: request)
         guard let httpResponse = response as? HTTPURLResponse else {
             throw SupabaseServiceError.invalidResponse
         }
@@ -38,16 +54,8 @@ struct BillItemAnalysisService {
                 throw ReceiptAnalysisServiceError.dailyLimitReached(quota)
             }
 
-            if let error = try? decoder.decode(BillItemAnalysisErrorResponse.self, from: data) {
-                throw SupabaseServiceError.serverMessage(
-                    error.errorDescription ?? error.message ?? fallbackErrorMessage(statusCode: httpResponse.statusCode)
-                )
-            }
-
-            let rawBody = String(data: data, encoding: .utf8)?
-                .trimmingCharacters(in: .whitespacesAndNewlines)
             throw SupabaseServiceError.serverMessage(
-                rawBody?.isEmpty == false ? rawBody! : fallbackErrorMessage(statusCode: httpResponse.statusCode)
+                fallbackErrorMessage(statusCode: httpResponse.statusCode)
             )
         }
 
@@ -62,6 +70,8 @@ struct BillItemAnalysisService {
             L10n.shared.sync.receiptanalysis.theReceiptImageIsTooLargeChoose
         case 429:
             L10n.shared.sync.receiptanalysis.youVeReachedTodaySReceiptScan2
+        case 502, 504:
+            L10n.shared.sync.receiptanalysis.receiptAITookTooLongTryAgain
         default:
             L10n.shared.sync.receiptanalysis.couldnTAnalyzeThisReceiptRightNow
         }

@@ -90,3 +90,43 @@ Deno.test("requestGeminiModelJSON surfaces final nonretryable model error", asyn
     throw new Error(`Unexpected error message: ${error.message}`);
   }
 });
+
+Deno.test("requestGeminiModelJSON aborts a slow model request at its timeout", async () => {
+  const fetcher: typeof fetch = (_input, init) =>
+    new Promise((_resolve, reject) => {
+      const signal = (init as { signal?: AbortSignal } | undefined)?.signal;
+      if (signal?.aborted) {
+        reject(new DOMException("Aborted", "AbortError"));
+        return;
+      }
+      signal?.addEventListener("abort", () => {
+        reject(new DOMException("Aborted", "AbortError"));
+      });
+    });
+
+  let error: unknown;
+  try {
+    await requestGeminiModelJSON({
+      apiKey: "test-key",
+      models: ["gemini-2.5-flash"],
+      body: { contents: [] },
+      fetcher,
+      primaryMaxAttempts: 1,
+      retryDelayMs: 0,
+      timeoutMs: 5,
+      totalTimeoutMs: 5,
+    });
+  } catch (caught) {
+    error = caught;
+  }
+
+  if (!(error instanceof GeminiModelRequestError)) {
+    throw new Error("Expected GeminiModelRequestError");
+  }
+  if (error.status !== 504) {
+    throw new Error(`Expected timeout status 504, got ${error.status}`);
+  }
+  if (!error.message.includes("timed out")) {
+    throw new Error(`Expected timeout message, got ${error.message}`);
+  }
+});

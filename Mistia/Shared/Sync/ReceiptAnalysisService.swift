@@ -78,26 +78,22 @@ struct ReceiptAnalysisService {
         }
     }
 
-    static func limitReachedMessage(for quota: ReceiptAnalysisQuota) -> String {
+    static func limitReachedMessage(
+        for quota: ReceiptAnalysisQuota,
+        language: MistiaAppLanguage = .current
+    ) -> String {
         let retryText: String
         if let retryAfter = quota.retryAfter {
-            retryText = Self.retryDateFormatter.string(from: retryAfter)
+            retryText = MistiaDateFormatting.dateTimeString(for: retryAfter, language: language)
         } else {
-            retryText = L10n.shared.sync.receiptanalysis.theNextDailyReset
+            retryText = L10n.shared.sync.receiptanalysis.theNextDailyReset(language: language)
         }
 
-        return L10n.shared.sync.receiptanalysis.youVeReachedTodaySReceiptScan(String(describing: retryText))
+        return L10n.shared.sync.receiptanalysis.youVeReachedTodaySReceiptScan(
+            String(describing: retryText),
+            language: language
+        )
     }
-
-    private static let retryDateFormatter: DateFormatter = {
-        let formatter = DateFormatter()
-        formatter.calendar = Calendar(identifier: .gregorian)
-        formatter.locale = Locale.autoupdatingCurrent
-        formatter.timeZone = .autoupdatingCurrent
-        formatter.dateStyle = .medium
-        formatter.timeStyle = .short
-        return formatter
-    }()
 }
 
 private struct ReceiptAnalysisErrorResponse: Codable {

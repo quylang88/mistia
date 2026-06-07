@@ -11,7 +11,10 @@ type RequestGeminiModelJSONOptions = {
   models: string[];
   body: Record<string, unknown>;
   fetcher?: typeof fetch;
+  primaryMaxAttempts?: number;
   retryDelayMs?: number;
+  timeoutMs?: number;
+  totalTimeoutMs?: number;
 };
 
 type GeminiModelJSONResult = {
@@ -75,40 +78,81 @@ export async function requestGeminiModelJSON(
   options: RequestGeminiModelJSONOptions,
 ): Promise<GeminiModelJSONResult> {
   const fetcher = options.fetcher ?? fetch;
+  const startedAt = Date.now();
+  const timeoutMs = options.timeoutMs;
+  const totalTimeoutMs = options.totalTimeoutMs;
+  const primaryMaxAttempts = options.primaryMaxAttempts ?? 2;
   const retryDelayMs = options.retryDelayMs ?? 250;
   let lastError: GeminiModelRequestError | null = null;
 
   for (const model of options.models) {
-    const maxAttempts = model === options.models[0] ? 2 : 1;
+    const maxAttempts = model === options.models[0] ? primaryMaxAttempts : 1;
     for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
-      const response = await fetcher(
-        geminiGenerateContentURL(model, options.apiKey),
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify(options.body),
-        },
+      const attemptTimeoutMs = boundedAttemptTimeoutMs(
+        startedAt,
+        timeoutMs,
+        totalTimeoutMs,
       );
-      const responseBody = await response.json().catch(() => ({}));
-      const body = typeof responseBody === "object" && responseBody !== null
-        ? responseBody as Record<string, unknown>
-        : {};
-
-      if (response.ok) {
-        return { body, model };
+      if (attemptTimeoutMs !== undefined && attemptTimeoutMs <= 0) {
+        throw lastError ??
+          timeoutError(model, totalTimeoutMs ?? timeoutMs ?? 0);
       }
 
-      lastError = new GeminiModelRequestError(
-        geminiErrorMessage(body) || "Gemini bill item analysis failed.",
-        response.status,
-        model,
-        body,
-      );
+      let timeoutID: number | undefined;
+      const abortController = attemptTimeoutMs !== undefined
+        ? new AbortController()
+        : undefined;
+      if (
+        abortController && attemptTimeoutMs !== undefined &&
+        attemptTimeoutMs > 0
+      ) {
+        timeoutID = setTimeout(
+          () => abortController.abort(),
+          attemptTimeoutMs,
+        );
+      }
 
-      if (!isGeminiTransientFailure(response.status, body)) {
-        throw lastError;
+      try {
+        const response = await fetcher(
+          geminiGenerateContentURL(model, options.apiKey),
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify(options.body),
+            signal: abortController?.signal,
+          },
+        );
+        const responseBody = await response.json().catch(() => ({}));
+        const body = typeof responseBody === "object" && responseBody !== null
+          ? responseBody as Record<string, unknown>
+          : {};
+
+        if (response.ok) {
+          return { body, model };
+        }
+
+        lastError = new GeminiModelRequestError(
+          geminiErrorMessage(body) || "Gemini bill item analysis failed.",
+          response.status,
+          model,
+          body,
+        );
+
+        if (!isGeminiTransientFailure(response.status, body)) {
+          throw lastError;
+        }
+      } catch (error) {
+        if (error instanceof GeminiModelRequestError) {
+          throw error;
+        }
+
+        lastError = timeoutLikeError(error, model, attemptTimeoutMs);
+      } finally {
+        if (timeoutID !== undefined) {
+          clearTimeout(timeoutID);
+        }
       }
 
       if (attempt < maxAttempts - 1 && retryDelayMs > 0) {
@@ -135,6 +179,58 @@ function geminiErrorMessage(body: unknown): string {
     ? body as GeminiErrorBody
     : {};
   return typeof raw.error?.message === "string" ? raw.error.message : "";
+}
+
+function boundedAttemptTimeoutMs(
+  startedAt: number,
+  timeoutMs?: number,
+  totalTimeoutMs?: number,
+): number | undefined {
+  if (timeoutMs === undefined && totalTimeoutMs === undefined) {
+    return undefined;
+  }
+
+  const remainingTotalMs = totalTimeoutMs === undefined
+    ? Number.POSITIVE_INFINITY
+    : totalTimeoutMs - (Date.now() - startedAt);
+  const boundedTimeoutMs = timeoutMs === undefined
+    ? remainingTotalMs
+    : Math.min(timeoutMs, remainingTotalMs);
+
+  return Math.max(0, Math.floor(boundedTimeoutMs));
+}
+
+function timeoutLikeError(
+  error: unknown,
+  model: string,
+  timeoutMs?: number,
+): GeminiModelRequestError {
+  const isAbortError = typeof error === "object" && error !== null &&
+    "name" in error && error.name === "AbortError";
+  const message = isAbortError && timeoutMs !== undefined
+    ? `Gemini bill item analysis timed out after ${timeoutMs} ms.`
+    : error instanceof Error
+    ? error.message
+    : "Gemini bill item analysis request failed.";
+
+  return new GeminiModelRequestError(
+    message,
+    isAbortError ? 504 : 502,
+    model,
+    {},
+  );
+}
+
+function timeoutError(
+  model: string,
+  timeoutMs: number,
+): GeminiModelRequestError {
+  return new GeminiModelRequestError(
+    `Gemini bill item analysis timed out after ${timeoutMs} ms.`,
+    504,
+    model,
+    {},
+  );
 }
 
 function delay(milliseconds: number): Promise<void> {

@@ -1184,11 +1184,48 @@ struct AIBillAnalysisView: View {
     }
 
     private func analysisErrorMessage(for error: Error) -> String {
+        if case let ReceiptAnalysisServiceError.dailyLimitReached(quota) = error {
+            return ReceiptAnalysisService.limitReachedMessage(for: quota, language: appLanguage)
+        }
+
+        if let urlError = error as? URLError {
+            switch urlError.code {
+            case .timedOut:
+                return L10n.shared.sync.receiptanalysis.requestTimedOutCheckNetwork(language: appLanguage)
+            case .notConnectedToInternet,
+                 .networkConnectionLost,
+                 .cannotConnectToHost,
+                 .cannotFindHost,
+                 .dnsLookupFailed,
+                 .internationalRoamingOff,
+                 .callIsActive,
+                 .dataNotAllowed:
+                return L10n.shared.sync.receiptanalysis.unstableNetworkTryAgain(language: appLanguage)
+            default:
+                break
+            }
+        }
+
+        if let serviceError = error as? SupabaseServiceError {
+            switch serviceError {
+            case .serverMessage(let message):
+                let trimmedMessage = message.trimmingCharacters(in: .whitespacesAndNewlines)
+                return trimmedMessage.isEmpty
+                    ? L10n.shared.sync.receiptanalysis.couldnTAnalyzeThisReceiptRightNow(language: appLanguage)
+                    : trimmedMessage
+            case .configurationMissing, .invalidURL, .invalidResponse:
+                return L10n.shared.sync.receiptanalysis.couldnTAnalyzeThisReceiptRightNow(language: appLanguage)
+            default:
+                return L10n.shared.sync.receiptanalysis.couldnTAnalyzeThisReceiptRightNow(language: appLanguage)
+            }
+        }
+
         if let localizedError = error as? LocalizedError,
            let message = localizedError.errorDescription, !message.isEmpty {
             return message
         }
-        return L10n.transactions.aibill.couldnTAnalyzeBill + " \(error.localizedDescription)"
+
+        return L10n.shared.sync.receiptanalysis.couldnTAnalyzeThisReceiptRightNow(language: appLanguage)
     }
 
     private func createTransaction(from group: BillItemLockedGroup, bill: AIBillDraft) {
