@@ -1,8 +1,8 @@
 import Foundation
 
 struct BillItemAnalysisService {
-    private static let requestTimeout: TimeInterval = 140
-    private static let resourceTimeout: TimeInterval = 150
+    private static let requestTimeout: TimeInterval = 170
+    private static let resourceTimeout: TimeInterval = 180
     private static let urlSession: URLSession = {
         let configuration = URLSessionConfiguration.ephemeral
         configuration.timeoutIntervalForRequest = requestTimeout

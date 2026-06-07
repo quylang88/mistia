@@ -3763,8 +3763,8 @@ nonisolated enum L10n {
             }
             static var couldnTAnalyzeBill: String { L10n.tr("transactions.aibill.couldnTAnalyzeBill", vi: "Không thể phân tích bill này lúc này.", en: "Could not analyze this receipt right now.", ja: "このレシートを解析できませんでした。") }
             static func couldnTAnalyzeBill(language: MistiaAppLanguage) -> String { L10n.tr("transactions.aibill.couldnTAnalyzeBill", vi: "Không thể phân tích bill này lúc này.", en: "Could not analyze this receipt right now.", ja: "このレシートを解析できませんでした。", language: language) }
-            static var createTransaction: String { L10n.tr("transactions.aibill.createTransaction", vi: "Thêm chi tiêu", en: "Add expense", ja: "支出を追加") }
-            static func createTransaction(language: MistiaAppLanguage) -> String { L10n.tr("transactions.aibill.createTransaction", vi: "Thêm chi tiêu", en: "Add expense", ja: "支出を追加", language: language) }
+            static var createTransaction: String { L10n.tr("transactions.aibill.createTransaction", vi: "Thêm", en: "Add", ja: "追加") }
+            static func createTransaction(language: MistiaAppLanguage) -> String { L10n.tr("transactions.aibill.createTransaction", vi: "Thêm", en: "Add", ja: "追加", language: language) }
             static var created: String { L10n.tr("transactions.aibill.created", vi: "Đã tạo", en: "Created", ja: "作成済み") }
             static func created(language: MistiaAppLanguage) -> String { L10n.tr("transactions.aibill.created", vi: "Đã tạo", en: "Created", ja: "作成済み", language: language) }
             static var discardAnalysis: String { L10n.tr("transactions.aibill.discardAnalysis", vi: "Thoát", en: "Leave", ja: "閉じる") }

@@ -374,6 +374,11 @@ function sanitizeAnalysis(
   modelResult: Record<string, unknown>,
   requestPayload: BillItemsRequest,
   quota: ReceiptQuota,
+  ocrContext: ReceiptOCRContext = {
+    raw_text: null,
+    item_lines: [],
+    uncertain_lines: [],
+  },
 ): Record<string, unknown> {
   const categoryIDs = candidateIDSet(requestPayload.categories ?? []);
   const walletIDs = candidateIDSet(requestPayload.wallets ?? []);
@@ -400,7 +405,9 @@ function sanitizeAnalysis(
 
   let items = Array.isArray(modelResult.items)
     ? modelResult.items
-      .map((item, index) => sanitizeBillItem(item, index, categoryIDs))
+      .map((item, index) =>
+        sanitizeBillItem(item, index, categoryIDs, ocrContext.item_lines)
+      )
       .filter((item): item is SanitizedItem => item !== null)
     : [];
 
@@ -680,8 +687,8 @@ Deno.serve(async (request) => {
         },
         primaryMaxAttempts: 1,
         retryDelayMs: 0,
-        timeoutMs: 20_000,
-        totalTimeoutMs: 25_000,
+        timeoutMs: 35_000,
+        totalTimeoutMs: 40_000,
       });
       const ocrText = extractModelText(ocrResult.body);
       ocrContext = ocrText
@@ -695,8 +702,8 @@ Deno.serve(async (request) => {
 
     const elapsedAIMilliseconds = Date.now() - aiStartedAt;
     const analysisBudgetMilliseconds = Math.max(
-      45_000,
-      125_000 - elapsedAIMilliseconds,
+      55_000,
+      140_000 - elapsedAIMilliseconds,
     );
 
     const geminiResult = await requestGeminiModelJSON({
@@ -725,7 +732,7 @@ Deno.serve(async (request) => {
       },
       primaryMaxAttempts: 1,
       retryDelayMs: 0,
-      timeoutMs: 70_000,
+      timeoutMs: 85_000,
       totalTimeoutMs: analysisBudgetMilliseconds,
     });
     const modelText = extractModelText(geminiResult.body);
@@ -733,7 +740,9 @@ Deno.serve(async (request) => {
       return jsonResponse(emptyAnalysis(payload, quotaPayload));
     }
     const modelResult = parseModelJSON(modelText);
-    return jsonResponse(sanitizeAnalysis(modelResult, payload, quotaPayload));
+    return jsonResponse(
+      sanitizeAnalysis(modelResult, payload, quotaPayload, ocrContext),
+    );
   } catch (error) {
     if (error instanceof GeminiModelRequestError) {
       return jsonResponse({ message: error.message }, 502);

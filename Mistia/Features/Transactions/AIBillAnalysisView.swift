@@ -595,7 +595,7 @@ struct AIBillAnalysisView: View {
             } label: {
                 Image(systemName: "plus")
                     .font(.system(size: 14, weight: .bold))
-                    .foregroundStyle(.white)
+                    .foregroundStyle(MistiaAccent.checkmarkPurple.color)
                     .frame(width: 30, height: 30)
             }
             .buttonStyle(.glassProminent)

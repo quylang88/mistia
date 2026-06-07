@@ -329,6 +329,32 @@ Deno.test("sanitizeBillItem preserves printed katakana brand text from raw line"
   }
 });
 
+Deno.test("sanitizeBillItem uses OCR transcript to correct autocorrected katakana", () => {
+  const categoryID = "cat-household";
+  const item = sanitizeBillItem(
+    {
+      line_id: "line-1",
+      raw_line_text: "ラッピング カワオリジナル 1178",
+      original_name: "ラッピング カワオリジナル",
+      line_type: "purchase",
+      final_amount_minor: 1178,
+      category_id: categoryID,
+      confidence: 0.82,
+      missing_fields: [],
+    },
+    0,
+    new Set([categoryID]),
+    ["ラッフィング カウオリジナル 1178"],
+  );
+
+  if (!item) {
+    throw new Error("Expected item to sanitize");
+  }
+  if (item.original_name !== "ラッフィング カウオリジナル") {
+    throw new Error(`OCR text was not preserved: ${item.original_name}`);
+  }
+});
+
 Deno.test("billItemPromptLines explains Costco-style quantity and adjacent promotion signs", () => {
   const text = billItemPromptLines().join("\n");
 
@@ -339,7 +365,10 @@ Deno.test("billItemPromptLines explains Costco-style quantity and adjacent promo
       "1@",
       "3@",
       "4@",
-      "never 30 or 40",
+      "never 10",
+      "never 20",
+      "never 30",
+      "never 40",
       "x3",
       "item-level discount",
       "directly below",
@@ -396,6 +425,52 @@ Deno.test("sanitizeBillItem corrects suspicious multiplied quantities from visib
         `Expected ${testCase.expected} for ${testCase.raw_line_text}, got ${item.quantity}`,
       );
     }
+  }
+});
+
+Deno.test("sanitizeBillItem uses OCR transcript to correct suspicious 1@ and 2@ quantities", () => {
+  const categoryID = "cat-supplement";
+  const singleItem = sanitizeBillItem(
+    {
+      line_id: "line-1",
+      original_name: "KORI KRILL OIL",
+      line_type: "purchase",
+      quantity: 10,
+      final_amount_minor: 5696,
+      category_id: categoryID,
+      confidence: 0.8,
+      missing_fields: [],
+    },
+    0,
+    new Set([categoryID]),
+    ["KORI KRILL OIL 1@ 5696"],
+  );
+  const doubleItem = sanitizeBillItem(
+    {
+      line_id: "line-2",
+      original_name: "KORI KRILL OIL",
+      line_type: "purchase",
+      quantity: 20,
+      final_amount_minor: 11392,
+      category_id: categoryID,
+      confidence: 0.8,
+      missing_fields: [],
+    },
+    0,
+    new Set([categoryID]),
+    ["KORI KRILL OIL 2@ 11392"],
+  );
+
+  if (!singleItem || !doubleItem) {
+    throw new Error("Expected items to sanitize");
+  }
+  if (singleItem.quantity !== null) {
+    throw new Error(
+      `Expected 1@ to stay single/null, got ${singleItem.quantity}`,
+    );
+  }
+  if (doubleItem.quantity !== 2) {
+    throw new Error(`Expected 2@ to become x2, got ${doubleItem.quantity}`);
   }
 });
 

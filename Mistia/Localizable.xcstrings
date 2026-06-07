@@ -35888,19 +35888,19 @@
         "vi": {
           "stringUnit": {
             "state": "translated",
-            "value": "Thêm chi tiêu"
+            "value": "Thêm"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Add expense"
+            "value": "Add"
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "支出を追加"
+            "value": "追加"
           }
         }
       }

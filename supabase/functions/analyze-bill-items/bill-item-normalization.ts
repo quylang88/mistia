@@ -19,7 +19,7 @@ export function billItemPromptLines(): string[] {
   return [
     "Each item must have snake_case keys: line_id, raw_line_text, original_name, translated_name, line_type, quantity, original_amount_minor, discount_amount_minor, final_amount_minor, category_id, confidence, missing_fields.",
     "raw_line_text must preserve the exact visible receipt text for the item row and any directly attached quantity/coupon/discount row. Include CPN, coupon markers, suffix-minus amounts like 800-, 800-T, 240-E, and Japanese kana exactly as printed.",
-    "Keep receipt line order. For quantity markers such as 1@, 2@, 3@, 4@, @2, @3, @4, x2, x3, x4, ×2, ×3, or Japanese quantity/count markers, set quantity to that literal integer. 1@ means one item, so use null. 3@ means quantity 3, never 30 or 40; 4@ means quantity 4, never 30 or 40.",
+    "Keep receipt line order. For quantity markers such as 1@, 2@, 3@, 4@, @2, @3, @4, x2, x3, x4, ×2, ×3, or Japanese quantity/count markers, set quantity to that literal integer. 1@ means one item, so use null, never 10. 2@ means quantity 2, never 20. 3@ means quantity 3, never 30; 4@ means quantity 4, never 40.",
     "For Costco-style receipts, a line like 3@ or 4@ directly below the product name means the product row quantity is x3 or x4; do not treat the quantity marker as a separate item and never expand it to 30 or 40.",
     "line_type must be purchase for purchased items and discount for standalone bill-level discount/promotion/coupon/voucher lines.",
     "List all purchased line items from this one receipt. Exclude change, cash received, payment method lines, tax-only summary lines, subtotal-only lines, loyalty points, and receipt metadata.",
@@ -50,6 +50,7 @@ export function sanitizeBillItem(
   rawItem: unknown,
   index: number,
   categoryIDs: Set<string>,
+  ocrItemLines: string[] = [],
 ): SanitizedItem | null {
   if (typeof rawItem !== "object" || rawItem === null) return null;
   const raw = rawItem as Record<string, unknown>;
@@ -84,6 +85,16 @@ export function sanitizeBillItem(
     /^[-−－]/.test(originalName) ||
     discountMarkerRegex.test(originalName) ||
     discountMarkerRegex.test(rawItemText);
+  const literalOCRLineText = bestLiteralOCRLineText(
+    rawLineText ?? rawItemText,
+    originalName,
+    ocrItemLines,
+  );
+  const effectiveRawLineText = literalOCRLineText ?? rawLineText;
+  originalName = preservePrintedOriginalName(
+    originalName,
+    effectiveRawLineText,
+  );
 
   if (rawFinalAmount === null && !originalName) return null;
 
@@ -110,7 +121,7 @@ export function sanitizeBillItem(
     ),
   );
   const attachedDiscountCorrection = itemLevelDiscountCorrectionFromVisibleText(
-    rawLineText,
+    effectiveRawLineText,
     originalName,
     rawFinalAmount,
   );
@@ -126,7 +137,9 @@ export function sanitizeBillItem(
       ? -Math.abs(rawFinalAmount ?? discountAmount)
       : Math.max(0, rawFinalAmount ?? 0));
 
-  const visibleQuantity = quantityFromVisibleMarker(rawLineText);
+  const visibleQuantity = quantityFromVisibleMarker(
+    effectiveRawLineText ?? rawItemText,
+  );
   const rawQuantity = optionalQuantity(
     valueFor(
       raw,
@@ -165,7 +178,7 @@ export function sanitizeBillItem(
       valueFor(raw, "missing_fields", "missingFields"),
     ),
   };
-  item[rawTextSymbol] = rawItemText;
+  item[rawTextSymbol] = `${effectiveRawLineText ?? ""} ${rawItemText}`.trim();
   item.missing_fields = itemMissingFieldsFor(item);
   return item;
 }
@@ -308,6 +321,50 @@ function printedItemNameCandidate(rawLineText: string): string | null {
     .replace(/\s+/g, " ")
     .trim();
   return candidate.length > 0 ? candidate : null;
+}
+
+function bestLiteralOCRLineText(
+  modelText: string | null,
+  originalName: string,
+  ocrItemLines: string[],
+): string | null {
+  const modelName = printedItemNameCandidate(modelText ?? "") ??
+    originalName.trim();
+  if (!modelName) return null;
+
+  let bestLine: string | null = null;
+  let bestScore = 0;
+  for (const line of ocrItemLines) {
+    const lineName = printedItemNameCandidate(line);
+    if (!lineName) continue;
+    const score = literalOCRMatchScore(modelName, lineName, modelText ?? "");
+    if (score > bestScore) {
+      bestLine = line;
+      bestScore = score;
+    }
+  }
+
+  return bestScore >= 0.65 ? bestLine : null;
+}
+
+function literalOCRMatchScore(
+  modelName: string,
+  ocrName: string,
+  modelText: string,
+): number {
+  const left = modelName.normalize("NFKC").toLowerCase();
+  const right = ocrName.normalize("NFKC").toLowerCase();
+  if (!left || !right) return 0;
+  if (left === right || left.includes(right) || right.includes(left)) return 1;
+  if (hasStrongSharedToken(`${left} ${modelText}`, right)) return 0.9;
+
+  if (containsJapaneseKana(left) && containsJapaneseKana(right)) {
+    const distanceRatio = levenshteinDistance(left, right) /
+      Math.max(left.length, right.length);
+    if (distanceRatio <= 0.25) return 0.9 - distanceRatio;
+  }
+
+  return 0;
 }
 
 function itemLevelDiscountCorrectionFromVisibleText(
