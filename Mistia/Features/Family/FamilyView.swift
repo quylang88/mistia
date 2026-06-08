@@ -425,6 +425,7 @@ private struct FamilyOverviewDataCacheKey: Hashable {
     let cachedRatesSignature: Int
     let referenceDayStart: TimeInterval
     let selectedMonthStart: TimeInterval
+    let localeIdentifier: String
     let membersSignature: Int
     let walletsSignature: MistiaCollectionChangeSignature
     let transactionsSignature: MistiaCollectionChangeSignature
@@ -1973,6 +1974,7 @@ struct FamilyOverviewScreen: View {
 private struct FamilyOverviewDataHost: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.calendar) private var calendar
+    @Environment(\.locale) private var locale
     @Environment(SessionStore.self) private var sessionStore
     @Environment(FamilyContextStore.self) private var familyContextStore
     @AppStorage(MistiaAppStorageKey.currencyCode) private var currencyCode = "JPY"
@@ -2211,6 +2213,7 @@ private struct FamilyOverviewDataHost: View {
             cachedRatesSignature: cachedCurrencyRatesData.hashValue,
             referenceDayStart: calendar.startOfDay(for: .now).timeIntervalSince1970,
             selectedMonthStart: selectedMonth.timeIntervalSince1970,
+            localeIdentifier: locale.identifier,
             membersSignature: membersSignature,
             walletsSignature: MistiaCollectionChangeSignature.make(
                 storedWallets,

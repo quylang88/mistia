@@ -450,7 +450,7 @@ struct ManagementArchivedItemsView: View {
     }
 
     private func transactionTitle(for transaction: LedgerTransaction) -> String {
-        let trimmedTitle = transaction.title.trimmingCharacters(in: .whitespacesAndNewlines)
+        let trimmedTitle = transaction.localizedTransactionTitle.trimmingCharacters(in: .whitespacesAndNewlines)
         if !trimmedTitle.isEmpty {
             return trimmedTitle
         }

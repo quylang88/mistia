@@ -36,6 +36,53 @@ final class TransactionLogicTests: XCTestCase {
         )
     }
 
+    func testStoredGeneratedTransactionTitlesLocalizeForCurrentLanguage() {
+        XCTAssertEqual(
+            TransactionGeneratedTitle.localizedDisplayTitle(
+                rawTitle: "Thu nợ",
+                primaryKind: .transfer,
+                transferSubtype: .debt,
+                debtIntent: .collect,
+                categoryID: nil,
+                language: .japanese
+            ),
+            "回収"
+        )
+        XCTAssertEqual(
+            TransactionGeneratedTitle.localizedDisplayTitle(
+                rawTitle: "Nhận tiền gia đình",
+                primaryKind: .transfer,
+                transferSubtype: .familyTransfer,
+                debtIntent: nil,
+                categoryID: nil,
+                language: .english
+            ),
+            "Family transfer received"
+        )
+        XCTAssertEqual(
+            TransactionGeneratedTitle.localizedDisplayTitle(
+                rawTitle: "Điều chỉnh số dư",
+                primaryKind: .expense,
+                transferSubtype: nil,
+                debtIntent: nil,
+                categoryID: MistiaSystemCategoryIdentity.balanceAdjustmentExpenseID,
+                language: .english
+            ),
+            "Balance adjustment"
+        )
+        XCTAssertEqual(
+            TransactionGeneratedTitle.localizedDisplayTitle(
+                rawTitle: "Thu nợ khách A",
+                primaryKind: .transfer,
+                transferSubtype: .debt,
+                debtIntent: .collect,
+                categoryID: nil,
+                language: .japanese
+            ),
+            "Thu nợ khách A"
+        )
+    }
+
     func testBalanceEngineHandlesAssetsAndCreditCardFlows() {
         let cash = TransactionWalletSnapshot(
             id: UUID(),

@@ -1744,7 +1744,7 @@ private struct OverviewDayTransactionRow: View {
     let currencyCode: String
 
     private var titleText: String {
-        let trimmed = transaction.title.trimmingCharacters(in: .whitespacesAndNewlines)
+        let trimmed = transaction.localizedTransactionTitle.trimmingCharacters(in: .whitespacesAndNewlines)
 
         if !trimmed.isEmpty {
             return trimmed

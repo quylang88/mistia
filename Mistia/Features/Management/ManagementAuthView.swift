@@ -2368,9 +2368,9 @@ private struct ManagementConflictReferenceResolver {
 
     private func transactionName(for id: UUID) -> String? {
         transactions.first { $0.id == id }.map { transaction in
-            let title = transaction.title.isEmpty
+            let title = transaction.localizedTransactionTitle.isEmpty
                 ? L10n.management.managementauth.unnamedTransaction
-                : transaction.title
+                : transaction.localizedTransactionTitle
             let currencyCode = transaction.sourceWallet?.currencyCode ?? transaction.destinationWallet?.currencyCode ?? "JPY"
             return compactConflictName(title, transaction.amountMinor.formattedCurrency(code: currencyCode))
         }

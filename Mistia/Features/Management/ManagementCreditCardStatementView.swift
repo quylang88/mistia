@@ -493,7 +493,9 @@ private struct TransactionRow: View {
     }
 
     private var rowTitle: String {
-        tx.title.isEmpty ? (tx.category?.localizedDisplayName ?? "") : tx.title
+        tx.localizedTransactionTitle.isEmpty
+            ? (tx.category?.localizedDisplayName ?? "")
+            : tx.localizedTransactionTitle
     }
 
     private var amountText: String {

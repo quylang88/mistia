@@ -1373,6 +1373,17 @@ nonisolated enum TransactionLogic {
 }
 
 extension LedgerTransaction {
+    var localizedTransactionTitle: String {
+        TransactionGeneratedTitle.localizedDisplayTitle(
+            rawTitle: title,
+            primaryKind: primaryKind,
+            transferSubtype: transferSubtype,
+            debtIntent: debtIntent,
+            categoryID: category?.id,
+            categorySystemKey: category?.systemKey
+        )
+    }
+
     var snapshot: TransactionRecordSnapshot {
         TransactionRecordSnapshot(
             id: id,
@@ -1380,7 +1391,7 @@ extension LedgerTransaction {
             transferSubtype: transferSubtype,
             debtIntent: debtIntent,
             entryStatus: entryStatus,
-            title: title,
+            title: localizedTransactionTitle,
             note: note,
             amountMinor: amountMinor,
             sourceCurrencyCode: sourceCurrencyCode,

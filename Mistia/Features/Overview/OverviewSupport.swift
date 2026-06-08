@@ -117,7 +117,7 @@ extension LedgerTransaction {
             transferSubtype: transferSubtype,
             debtIntent: debtIntent,
             entryStatus: entryStatus,
-            title: title,
+            title: localizedTransactionTitle,
             note: note,
             amountMinor: amountMinor,
             sourceCurrencyCode: sourceCurrencyCode ?? sourceWallet?.currencyCode,

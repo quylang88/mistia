@@ -163,6 +163,7 @@ private struct TransactionsListSnapshotCacheKey: Hashable {
     let visibleTransactionLimit: Int
     let calendarIdentifier: String
     let calendarTimeZoneIdentifier: String
+    let localeIdentifier: String
     let activeScope: FamilyContext.Scope
     let selectedSubjectUserID: UUID?
     let currentUserID: UUID?
@@ -474,6 +475,7 @@ struct TransactionsView: View {
             visibleTransactionLimit: visibleTransactionLimit,
             calendarIdentifier: String(describing: calendar.identifier),
             calendarTimeZoneIdentifier: calendar.timeZone.identifier,
+            localeIdentifier: locale.identifier,
             activeScope: familyContextStore.activeContext.scope,
             selectedSubjectUserID: familyContextStore.selectedSubjectUserID,
             currentUserID: familyContextStore.currentUserID,
@@ -521,6 +523,7 @@ struct TransactionsView: View {
             visibleTransactionLimit: visibleSearchResultLimit,
             calendarIdentifier: String(describing: calendar.identifier),
             calendarTimeZoneIdentifier: calendar.timeZone.identifier,
+            localeIdentifier: locale.identifier,
             activeScope: familyContextStore.activeContext.scope,
             selectedSubjectUserID: familyContextStore.selectedSubjectUserID,
             currentUserID: familyContextStore.currentUserID,
@@ -1393,7 +1396,7 @@ struct TransactionsView: View {
     }
 
     private func presentTransactionEditPermissionPrompt(_ transaction: LedgerTransaction, ownerUserID: UUID) {
-        let resourceName = transaction.title.nilIfBlank
+        let resourceName = transaction.localizedTransactionTitle.nilIfBlank
             ?? L10n.transactions.transactions.transaction
         let isPending = familyContextStore.hasPendingPermissionRequest(
             ownerUserID: ownerUserID,

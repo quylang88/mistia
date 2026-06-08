@@ -829,7 +829,7 @@ struct ManagementCategoryEditorSheet: View {
                         } else {
                             Image(systemName: "checkmark")
                                 .font(.system(size: 14, weight: .bold))
-                                .foregroundStyle(MistiaAccent.lightPurple.color)
+                                .foregroundStyle(MistiaAccent.checkmarkPurple.color)
                                 .frame(width: 30, height: 30)
                         }
                     }
