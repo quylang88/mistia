@@ -89,6 +89,18 @@ final class MistiaMigrationPlanTests: XCTestCase {
         XCTAssertTrue(migration.contains("grant execute on function public.create_family_transfer(uuid, uuid, uuid, uuid, bigint, timestamptz, text)"))
     }
 
+    func testFamilyTransferLocalizedTitleMigrationAddsClientTitleParameters() throws {
+        let migrationURL = repositoryRootURL()
+            .appending(path: "supabase/migrations/20260608090000_family_transfer_localized_titles.sql")
+        let migration = try String(contentsOf: migrationURL, encoding: .utf8)
+
+        XCTAssertTrue(migration.contains("p_sender_title text default null"))
+        XCTAssertTrue(migration.contains("p_recipient_title text default null"))
+        XCTAssertTrue(migration.contains("coalesce(nullif(trim(p_sender_title), ''), 'Chuyển tiền gia đình')"))
+        XCTAssertTrue(migration.contains("coalesce(nullif(trim(p_recipient_title), ''), 'Nhận tiền gia đình')"))
+        XCTAssertTrue(migration.contains("uuid, uuid, uuid, uuid, bigint, bigint, text, text, text, text, timestamptz, text, text, text"))
+    }
+
     private func createCurrentV4Store(at storeURL: URL, billID: UUID) throws {
         let schema = Schema(versionedSchema: MistiaSchemaV4.self)
         let configuration = ModelConfiguration("default", schema: schema, url: storeURL)

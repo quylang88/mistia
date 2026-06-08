@@ -258,6 +258,7 @@ struct ManagementArchivedItemsView: View {
                     ForEach(ownArchivedTransactions) { transaction in
                         ArchivedTransactionRow(
                             descriptor: descriptor(for: transaction),
+                            archivedAt: transaction.archivedAt,
                             isSelecting: isSelecting,
                             isSelected: selectedItems.contains(.transaction(transaction.id)),
                             onToggleSelection: { toggleSelection(.transaction(transaction.id)) },
@@ -279,6 +280,7 @@ struct ManagementArchivedItemsView: View {
                             subtitle: "\(wallet.kind.title) • \(wallet.currencyCode)",
                             icon: wallet.iconSymbolName,
                             iconTint: Color(hex: wallet.iconColorHex),
+                            archivedAt: wallet.archivedAt,
                             isSelecting: isSelecting,
                             isSelected: selectedItems.contains(.wallet(wallet.id)),
                             onToggleSelection: { toggleSelection(.wallet(wallet.id)) },
@@ -300,6 +302,7 @@ struct ManagementArchivedItemsView: View {
                             subtitle: categorySubtitle(for: category),
                             icon: category.iconSymbolName,
                             iconTint: Color(hex: category.iconColorHex),
+                            archivedAt: category.archivedAt,
                             isSelecting: isSelecting,
                             isSelected: selectedItems.contains(.category(category.id)),
                             onToggleSelection: { toggleSelection(.category(category.id)) },
@@ -764,6 +767,7 @@ private enum ArchivedMutationAction {
 
 private struct ArchivedTransactionRow: View {
     let descriptor: ArchivedTransactionDescriptor
+    let archivedAt: Date?
     let isSelecting: Bool
     let isSelected: Bool
     let onToggleSelection: () -> Void
@@ -776,6 +780,7 @@ private struct ArchivedTransactionRow: View {
             subtitle: descriptor.subtitle,
             icon: descriptor.icon,
             iconTint: descriptor.iconTint,
+            archivedAt: archivedAt,
             isSelecting: isSelecting,
             isSelected: isSelected,
             onToggleSelection: onToggleSelection
@@ -799,6 +804,7 @@ private struct ArchivedDetailRow: View {
     let subtitle: String
     let icon: String
     let iconTint: Color
+    let archivedAt: Date?
     let isSelecting: Bool
     let isSelected: Bool
     let onToggleSelection: () -> Void
@@ -811,6 +817,7 @@ private struct ArchivedDetailRow: View {
             subtitle: subtitle,
             icon: icon,
             iconTint: iconTint,
+            archivedAt: archivedAt,
             isSelecting: isSelecting,
             isSelected: isSelected,
             onToggleSelection: onToggleSelection
@@ -827,6 +834,7 @@ private struct ArchivedBaseRow<TitleAccessory: View, TrailingContent: View>: Vie
     let subtitle: String
     let icon: String
     let iconTint: Color
+    let archivedAt: Date?
     let isSelecting: Bool
     let isSelected: Bool
     let onToggleSelection: () -> Void
@@ -853,6 +861,13 @@ private struct ArchivedBaseRow<TitleAccessory: View, TrailingContent: View>: Vie
                     .font(.system(size: 12.5, weight: .medium, design: .rounded))
                     .foregroundStyle(.secondary)
                     .lineLimit(2)
+
+                if let archivedAt {
+                    Text(retentionText(for: archivedAt))
+                        .font(.system(size: 11.5, weight: .semibold, design: .rounded))
+                        .foregroundStyle(retentionColor(for: archivedAt))
+                        .lineLimit(1)
+                }
             }
 
             Spacer(minLength: 8)
@@ -884,6 +899,15 @@ private struct ArchivedBaseRow<TitleAccessory: View, TrailingContent: View>: Vie
                 onToggleSelection()
             }
         }
+    }
+
+    private func retentionText(for archivedAt: Date) -> String {
+        MistiaArchiveRetention.remainingDaysText(archivedAt: archivedAt)
+    }
+
+    private func retentionColor(for archivedAt: Date) -> Color {
+        let days = MistiaArchiveRetention.daysRemaining(archivedAt: archivedAt)
+        return MistiaArchiveRetention.isUrgent(daysRemaining: days) ? .red : .secondary
     }
 }
 

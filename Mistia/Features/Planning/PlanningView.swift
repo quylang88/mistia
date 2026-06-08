@@ -2739,16 +2739,18 @@ private struct PlanningDueRow: View {
                 }
             }
 
-            HStack {
-                Text(dateWindowText)
-                    .font(.system(size: 12.5, weight: .semibold, design: .rounded))
-                    .foregroundStyle(.secondary)
+            if item.status != .paid {
+                HStack {
+                    Text(dateWindowText)
+                        .font(.system(size: 12.5, weight: .semibold, design: .rounded))
+                        .foregroundStyle(.secondary)
 
-                Spacer()
+                    Spacer()
 
-                Text(dueDetailText)
-                    .font(.system(size: 12.5, weight: .semibold, design: .rounded))
-                    .foregroundStyle(tone.color)
+                    Text(dueDetailText)
+                        .font(.system(size: 12.5, weight: .semibold, design: .rounded))
+                        .foregroundStyle(tone.color)
+                }
             }
         }
         .contentShape(Rectangle())
@@ -2836,7 +2838,7 @@ private struct PlanningDueActionButton: View {
         if let accent {
             return accent
         }
-        return colorScheme == .dark ? MistiaAccent.lightPurple.color : MistiaAccent.purple.color
+        return MistiaAccent.lightPurple.color
     }
 
     var body: some View {

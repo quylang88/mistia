@@ -397,6 +397,8 @@ struct FamilyTransferInput: Encodable, Equatable {
     let exchangeRateDate: String?
     let occurredAt: Date
     let note: String?
+    let senderTitle: String
+    let recipientTitle: String
 }
 
 struct FamilyTransferResult: Codable {
@@ -1680,6 +1682,8 @@ private struct CreateFamilyTransferRPCBody: Encodable {
     let exchangeRateDate: String?
     let occurredAt: Date
     let note: String?
+    let senderTitle: String
+    let recipientTitle: String
 
     init(input: FamilyTransferInput) {
         familyID = input.familyID
@@ -1694,6 +1698,8 @@ private struct CreateFamilyTransferRPCBody: Encodable {
         exchangeRateDate = input.exchangeRateDate
         occurredAt = input.occurredAt
         note = input.note
+        senderTitle = input.senderTitle
+        recipientTitle = input.recipientTitle
     }
 
     enum CodingKeys: String, CodingKey {
@@ -1709,6 +1715,8 @@ private struct CreateFamilyTransferRPCBody: Encodable {
         case exchangeRateDate = "p_exchange_rate_date"
         case occurredAt = "p_occurred_at"
         case note = "p_note"
+        case senderTitle = "p_sender_title"
+        case recipientTitle = "p_recipient_title"
     }
 }
 

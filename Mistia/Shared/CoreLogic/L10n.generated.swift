@@ -265,8 +265,8 @@ nonisolated enum L10n {
     nonisolated enum family {
 
         nonisolated enum family {
-            static var aFamilyHasOneOwnerInviteA: String { L10n.tr("family.family.aFamilyHasOneOwnerInviteA", vi: "Gia đình chỉ có một owner. Hãy mời thành viên rồi nhượng quyền owner từ màn hình thông tin thành viên.", en: "A family has one owner. Invite a member, then transfer ownership from that member's info screen.", ja: "家族の owner は1人です。メンバーとして招待してから、メンバー情報画面で owner を譲渡します。") }
-            static func aFamilyHasOneOwnerInviteA(language: MistiaAppLanguage) -> String { L10n.tr("family.family.aFamilyHasOneOwnerInviteA", vi: "Gia đình chỉ có một owner. Hãy mời thành viên rồi nhượng quyền owner từ màn hình thông tin thành viên.", en: "A family has one owner. Invite a member, then transfer ownership from that member's info screen.", ja: "家族の owner は1人です。メンバーとして招待してから、メンバー情報画面で owner を譲渡します。", language: language) }
+            static var aFamilyHasOneOwnerInviteA: String { L10n.tr("family.family.aFamilyHasOneOwnerInviteA", vi: "Gia đình chỉ có một chủ sở hữu. Hãy mời thành viên rồi nhượng quyền chủ sở hữu từ màn hình thông tin thành viên.", en: "A family has one owner. Invite a member, then transfer ownership from that member's info screen.", ja: "家族のオーナーは1人です。メンバーとして招待してから、メンバー情報画面でオーナーを譲渡します。") }
+            static func aFamilyHasOneOwnerInviteA(language: MistiaAppLanguage) -> String { L10n.tr("family.family.aFamilyHasOneOwnerInviteA", vi: "Gia đình chỉ có một chủ sở hữu. Hãy mời thành viên rồi nhượng quyền chủ sở hữu từ màn hình thông tin thành viên.", en: "A family has one owner. Invite a member, then transfer ownership from that member's info screen.", ja: "家族のオーナーは1人です。メンバーとして招待してから、メンバー情報画面でオーナーを譲渡します。", language: language) }
             static var acceptedMember: String { L10n.tr("family.family.acceptedMember", vi: "Thành viên đã chấp nhận", en: "Accepted member", ja: "承認済みメンバー") }
             static func acceptedMember(language: MistiaAppLanguage) -> String { L10n.tr("family.family.acceptedMember", vi: "Thành viên đã chấp nhận", en: "Accepted member", ja: "承認済みメンバー", language: language) }
             static func acceptedValue(_ value: String) -> String {
@@ -497,8 +497,8 @@ nonisolated enum L10n {
             static func spending(language: MistiaAppLanguage) -> String { L10n.tr("family.family.spending", vi: "Chi tiêu", en: "Spending", ja: "支出", language: language) }
             static var syncingFamily: String { L10n.tr("family.family.syncingFamily", vi: "Đang đồng bộ gia đình", en: "Syncing family", ja: "家族データを同期中") }
             static func syncingFamily(language: MistiaAppLanguage) -> String { L10n.tr("family.family.syncingFamily", vi: "Đang đồng bộ gia đình", en: "Syncing family", ja: "家族データを同期中", language: language) }
-            static var tapTheOwnerSSharedLinkOr: String { L10n.tr("family.family.tapTheOwnerSSharedLinkOr", vi: "Bấm link owner đã chia sẻ, hoặc dán link nếu bạn đã copy.", en: "Tap the owner's shared link, or paste the link if you've copied it.", ja: "owner が共有したリンクを開くか、コピー済みのリンクを貼り付けます。") }
-            static func tapTheOwnerSSharedLinkOr(language: MistiaAppLanguage) -> String { L10n.tr("family.family.tapTheOwnerSSharedLinkOr", vi: "Bấm link owner đã chia sẻ, hoặc dán link nếu bạn đã copy.", en: "Tap the owner's shared link, or paste the link if you've copied it.", ja: "owner が共有したリンクを開くか、コピー済みのリンクを貼り付けます。", language: language) }
+            static var tapTheOwnerSSharedLinkOr: String { L10n.tr("family.family.tapTheOwnerSSharedLinkOr", vi: "Bấm link chủ sở hữu đã chia sẻ, hoặc dán link nếu bạn đã copy.", en: "Tap the owner's shared link, or paste the link if you've copied it.", ja: "オーナーが共有したリンクを開くか、コピー済みのリンクを貼り付けます。") }
+            static func tapTheOwnerSSharedLinkOr(language: MistiaAppLanguage) -> String { L10n.tr("family.family.tapTheOwnerSSharedLinkOr", vi: "Bấm link chủ sở hữu đã chia sẻ, hoặc dán link nếu bạn đã copy.", en: "Tap the owner's shared link, or paste the link if you've copied it.", ja: "オーナーが共有したリンクを開くか、コピー済みのリンクを貼り付けます。", language: language) }
             static var thisInviteLinkIsnTValid: String { L10n.tr("family.family.thisInviteLinkIsnTValid", vi: "Link mời không hợp lệ.", en: "This invite link isn't valid.", ja: "招待リンクが無効です。") }
             static func thisInviteLinkIsnTValid(language: MistiaAppLanguage) -> String { L10n.tr("family.family.thisInviteLinkIsnTValid", vi: "Link mời không hợp lệ.", en: "This invite link isn't valid.", ja: "招待リンクが無効です。", language: language) }
             static var thisMemberWillBeRemovedAndLose: String { L10n.tr("family.family.thisMemberWillBeRemovedAndLose", vi: "Thành viên này sẽ bị xóa khỏi gia đình và không còn quyền truy cập dữ liệu chung.", en: "This member will be removed and lose access to shared data.", ja: "このメンバーは家族から削除され、共有データにアクセスできなくなります。") }
@@ -509,10 +509,10 @@ nonisolated enum L10n {
             static func transactionFilteringIsComingSoon(language: MistiaAppLanguage) -> String { L10n.tr("family.family.transactionFilteringIsComingSoon", vi: "Tính năng lọc thu chi đang được hoàn thiện.", en: "Cashflow filtering is coming soon.", ja: "取引フィルター機能は近日公開予定です。", language: language) }
             static var transactions: String { L10n.tr("family.family.transactions", vi: "Thu chi", en: "Cashflow", ja: "収支") }
             static func transactions(language: MistiaAppLanguage) -> String { L10n.tr("family.family.transactions", vi: "Thu chi", en: "Cashflow", ja: "収支", language: language) }
-            static var transferOwner: String { L10n.tr("family.family.transferOwner", vi: "Nhượng quyền owner", en: "Transfer owner", ja: "owner を譲渡") }
-            static func transferOwner(language: MistiaAppLanguage) -> String { L10n.tr("family.family.transferOwner", vi: "Nhượng quyền owner", en: "Transfer owner", ja: "owner を譲渡", language: language) }
-            static var transferOwner2: String { L10n.tr("family.family.transferOwner2", vi: "Nhượng quyền owner?", en: "Transfer owner?", ja: "owner を譲渡しますか？") }
-            static func transferOwner2(language: MistiaAppLanguage) -> String { L10n.tr("family.family.transferOwner2", vi: "Nhượng quyền owner?", en: "Transfer owner?", ja: "owner を譲渡しますか？", language: language) }
+            static var transferOwner: String { L10n.tr("family.family.transferOwner", vi: "Nhượng quyền chủ sở hữu", en: "Transfer owner", ja: "オーナーを譲渡") }
+            static func transferOwner(language: MistiaAppLanguage) -> String { L10n.tr("family.family.transferOwner", vi: "Nhượng quyền chủ sở hữu", en: "Transfer owner", ja: "オーナーを譲渡", language: language) }
+            static var transferOwner2: String { L10n.tr("family.family.transferOwner2", vi: "Nhượng quyền chủ sở hữu?", en: "Transfer owner?", ja: "オーナーを譲渡しますか？") }
+            static func transferOwner2(language: MistiaAppLanguage) -> String { L10n.tr("family.family.transferOwner2", vi: "Nhượng quyền chủ sở hữu?", en: "Transfer owner?", ja: "オーナーを譲渡しますか？", language: language) }
             static var upcoming: String { L10n.tr("family.family.upcoming", vi: "Sắp đến hạn", en: "Due soon", ja: "間もなく支払") }
             static func upcoming(language: MistiaAppLanguage) -> String { L10n.tr("family.family.upcoming", vi: "Sắp đến hạn", en: "Due soon", ja: "間もなく支払", language: language) }
             static var useInviteLink: String { L10n.tr("family.family.useInviteLink", vi: "Dùng link mời", en: "Use invite link", ja: "招待リンクを使う") }
@@ -526,10 +526,10 @@ nonisolated enum L10n {
                 L10n.format("family.family.valueMembers", vi: "%@ thành viên", en: "%@ members", ja: "%@ 人のメンバー", language: language, value)
             }
             static func valueWillBeTheOnlyOwnerOf(_ value: String) -> String {
-                L10n.format("family.family.valueWillBeTheOnlyOwnerOf", vi: "%@ sẽ là owner duy nhất của gia đình này. Bạn sẽ không còn quyền quản lý thành viên sau khi chuyển.", en: "%@ will be the only owner of this family. You will no longer manage members after transfer.", ja: "%@ がこの家族の唯一の owner になります。譲渡後、あなたはメンバー管理ができません。", value)
+                L10n.format("family.family.valueWillBeTheOnlyOwnerOf", vi: "%@ sẽ là chủ sở hữu duy nhất của gia đình này. Bạn sẽ không còn quyền quản lý thành viên sau khi chuyển.", en: "%@ will be the only owner of this family. You will no longer manage members after transfer.", ja: "%@ がこの家族の唯一のオーナーになります。譲渡後、あなたはメンバー管理ができません。", value)
             }
             static func valueWillBeTheOnlyOwnerOf(_ value: String, language: MistiaAppLanguage) -> String {
-                L10n.format("family.family.valueWillBeTheOnlyOwnerOf", vi: "%@ sẽ là owner duy nhất của gia đình này. Bạn sẽ không còn quyền quản lý thành viên sau khi chuyển.", en: "%@ will be the only owner of this family. You will no longer manage members after transfer.", ja: "%@ がこの家族の唯一の owner になります。譲渡後、あなたはメンバー管理ができません。", language: language, value)
+                L10n.format("family.family.valueWillBeTheOnlyOwnerOf", vi: "%@ sẽ là chủ sở hữu duy nhất của gia đình này. Bạn sẽ không còn quyền quản lý thành viên sau khi chuyển.", en: "%@ will be the only owner of this family. You will no longer manage members after transfer.", ja: "%@ がこの家族の唯一のオーナーになります。譲渡後、あなたはメンバー管理ができません。", language: language, value)
             }
             static var viewDebts: String { L10n.tr("family.family.viewDebts", vi: "Xem vay & cho vay", en: "View loans", ja: "負債を見る") }
             static func viewDebts(language: MistiaAppLanguage) -> String { L10n.tr("family.family.viewDebts", vi: "Xem vay & cho vay", en: "View loans", ja: "負債を見る", language: language) }
@@ -563,8 +563,8 @@ nonisolated enum L10n {
             static func you(language: MistiaAppLanguage) -> String { L10n.tr("family.family.you", vi: "(Bạn)", en: "(You)", ja: "(自分)", language: language) }
             static var youAlreadyHavePendingInvitesYou: String { L10n.tr("family.family.youAlreadyHavePendingInvitesYou", vi: "Bạn đang có 2 lời mời chờ phản hồi. Khi một lời mời hết hạn, bị từ chối, được chấp nhận hoặc thu hồi, bạn có thể tạo link mới.", en: "You already have 2 pending invites. You can create another link after one expires, is declined, accepted, or revoked.", ja: "待機中の招待が2件あります。いずれかが期限切れ、辞退、承認、取り消しになると新しいリンクを作成できます。") }
             static func youAlreadyHavePendingInvitesYou(language: MistiaAppLanguage) -> String { L10n.tr("family.family.youAlreadyHavePendingInvitesYou", vi: "Bạn đang có 2 lời mời chờ phản hồi. Khi một lời mời hết hạn, bị từ chối, được chấp nhận hoặc thu hồi, bạn có thể tạo link mới.", en: "You already have 2 pending invites. You can create another link after one expires, is declined, accepted, or revoked.", ja: "待機中の招待が2件あります。いずれかが期限切れ、辞退、承認、取り消しになると新しいリンクを作成できます。", language: language) }
-            static var youBecomeTheOwnerAndInviteOthers: String { L10n.tr("family.family.youBecomeTheOwnerAndInviteOthers", vi: "Bạn trở thành owner và mời thêm thành viên sau.", en: "You become the owner and invite others later.", ja: "作成者が owner になり、あとでメンバーを招待できます。") }
-            static func youBecomeTheOwnerAndInviteOthers(language: MistiaAppLanguage) -> String { L10n.tr("family.family.youBecomeTheOwnerAndInviteOthers", vi: "Bạn trở thành owner và mời thêm thành viên sau.", en: "You become the owner and invite others later.", ja: "作成者が owner になり、あとでメンバーを招待できます。", language: language) }
+            static var youBecomeTheOwnerAndInviteOthers: String { L10n.tr("family.family.youBecomeTheOwnerAndInviteOthers", vi: "Bạn trở thành chủ sở hữu và mời thêm thành viên sau.", en: "You become the owner and invite others later.", ja: "作成者がオーナーになり、あとでメンバーを招待できます。") }
+            static func youBecomeTheOwnerAndInviteOthers(language: MistiaAppLanguage) -> String { L10n.tr("family.family.youBecomeTheOwnerAndInviteOthers", vi: "Bạn trở thành chủ sở hữu và mời thêm thành viên sau.", en: "You become the owner and invite others later.", ja: "作成者がオーナーになり、あとでメンバーを招待できます。", language: language) }
             static var youCanCheckWhatFamilyMembersCan: String { L10n.tr("family.family.youCanCheckWhatFamilyMembersCan", vi: "Bạn có thể kiểm tra những gì các thành viên trong gia đình có thể truy cập hoặc chia sẻ, đồng thời quản lý cài đặt tài khoản của trẻ em và các kiểm soát của phụ huynh.", en: "You can check what family members can access or share, while managing child account settings and parental controls.", ja: "ファミリーメンバーがアクセスまたは共有できるもの確認でき、お子様のアカウント設定と保護者による制限を管理できます。") }
             static func youCanCheckWhatFamilyMembersCan(language: MistiaAppLanguage) -> String { L10n.tr("family.family.youCanCheckWhatFamilyMembersCan", vi: "Bạn có thể kiểm tra những gì các thành viên trong gia đình có thể truy cập hoặc chia sẻ, đồng thời quản lý cài đặt tài khoản của trẻ em và các kiểm soát của phụ huynh.", en: "You can check what family members can access or share, while managing child account settings and parental controls.", ja: "ファミリーメンバーがアクセスまたは共有できるもの確認でき、お子様のアカウント設定と保護者による制限を管理できます。", language: language) }
             static var youDoNotHaveWalletsToShare: String { L10n.tr("family.family.youDoNotHaveWalletsToShare", vi: "Bạn chưa có ví nào để chia sẻ quyền chỉnh sửa.", en: "You do not have wallets to share edit access for yet.", ja: "編集権限を共有できるウォレットはまだありません。") }
@@ -628,10 +628,10 @@ nonisolated enum L10n {
             static func signInNow(language: MistiaAppLanguage) -> String { L10n.tr("family.familyinviteacceptance.signInNow", vi: "Đăng nhập ngay", en: "Sign in now", ja: "今すぐログイン", language: language) }
             static var signInToViewThisInvite: String { L10n.tr("family.familyinviteacceptance.signInToViewThisInvite", vi: "Đăng nhập để xem lời mời", en: "Sign in to view this invite", ja: "招待を確認するにはログイン") }
             static func signInToViewThisInvite(language: MistiaAppLanguage) -> String { L10n.tr("family.familyinviteacceptance.signInToViewThisInvite", vi: "Đăng nhập để xem lời mời", en: "Sign in to view this invite", ja: "招待を確認するにはログイン", language: language) }
-            static var theOwnerNeedsToCreateANew: String { L10n.tr("family.familyinviteacceptance.theOwnerNeedsToCreateANew", vi: "Owner cần tạo link mới nếu muốn mời lại.", en: "The owner needs to create a new link to invite again.", ja: "再招待するには owner が新しいリンクを作成する必要があります。") }
-            static func theOwnerNeedsToCreateANew(language: MistiaAppLanguage) -> String { L10n.tr("family.familyinviteacceptance.theOwnerNeedsToCreateANew", vi: "Owner cần tạo link mới nếu muốn mời lại.", en: "The owner needs to create a new link to invite again.", ja: "再招待するには owner が新しいリンクを作成する必要があります。", language: language) }
-            static var theOwnerRevokedThisInvite: String { L10n.tr("family.familyinviteacceptance.theOwnerRevokedThisInvite", vi: "Owner đã thu hồi lời mời này.", en: "The owner revoked this invite.", ja: "owner がこの招待を取り消しました。") }
-            static func theOwnerRevokedThisInvite(language: MistiaAppLanguage) -> String { L10n.tr("family.familyinviteacceptance.theOwnerRevokedThisInvite", vi: "Owner đã thu hồi lời mời này.", en: "The owner revoked this invite.", ja: "owner がこの招待を取り消しました。", language: language) }
+            static var theOwnerNeedsToCreateANew: String { L10n.tr("family.familyinviteacceptance.theOwnerNeedsToCreateANew", vi: "Chủ sở hữu cần tạo link mới nếu muốn mời lại.", en: "The owner needs to create a new link to invite again.", ja: "再招待するにはオーナーが新しいリンクを作成する必要があります。") }
+            static func theOwnerNeedsToCreateANew(language: MistiaAppLanguage) -> String { L10n.tr("family.familyinviteacceptance.theOwnerNeedsToCreateANew", vi: "Chủ sở hữu cần tạo link mới nếu muốn mời lại.", en: "The owner needs to create a new link to invite again.", ja: "再招待するにはオーナーが新しいリンクを作成する必要があります。", language: language) }
+            static var theOwnerRevokedThisInvite: String { L10n.tr("family.familyinviteacceptance.theOwnerRevokedThisInvite", vi: "Chủ sở hữu đã thu hồi lời mời này.", en: "The owner revoked this invite.", ja: "オーナーがこの招待を取り消しました。") }
+            static func theOwnerRevokedThisInvite(language: MistiaAppLanguage) -> String { L10n.tr("family.familyinviteacceptance.theOwnerRevokedThisInvite", vi: "Chủ sở hữu đã thu hồi lời mời này.", en: "The owner revoked this invite.", ja: "オーナーがこの招待を取り消しました。", language: language) }
             static var thisAccountCurrentlyBelongsToAnotherFamily: String { L10n.tr("family.familyinviteacceptance.thisAccountCurrentlyBelongsToAnotherFamily", vi: "Tài khoản này đang thuộc một gia đình khác.", en: "This account currently belongs to another family.", ja: "このアカウントは現在別の家族に参加しています。") }
             static func thisAccountCurrentlyBelongsToAnotherFamily(language: MistiaAppLanguage) -> String { L10n.tr("family.familyinviteacceptance.thisAccountCurrentlyBelongsToAnotherFamily", vi: "Tài khoản này đang thuộc một gia đình khác.", en: "This account currently belongs to another family.", ja: "このアカウントは現在別の家族に参加しています。", language: language) }
             static func thisAccountIsAlreadyInValue(_ value: String) -> String {
@@ -1067,6 +1067,12 @@ nonisolated enum L10n {
             static func transfer(language: MistiaAppLanguage) -> String { L10n.tr("management.managementarchiveditems.transfer", vi: "Chuyển tiền", en: "Transfer", ja: "振替", language: language) }
             static var unknownName: String { L10n.tr("management.managementarchiveditems.unknownName", vi: "Không rõ tên", en: "Unknown name", ja: "名前未設定") }
             static func unknownName(language: MistiaAppLanguage) -> String { L10n.tr("management.managementarchiveditems.unknownName", vi: "Không rõ tên", en: "Unknown name", ja: "名前未設定", language: language) }
+            static func valueDaysUntilPermanentDelete(_ value: String) -> String {
+                L10n.format("management.managementarchiveditems.valueDaysUntilPermanentDelete", vi: "Còn lại %@ ngày", en: "%@ days left", ja: "あと%@日", value)
+            }
+            static func valueDaysUntilPermanentDelete(_ value: String, language: MistiaAppLanguage) -> String {
+                L10n.format("management.managementarchiveditems.valueDaysUntilPermanentDelete", vi: "Còn lại %@ ngày", en: "%@ days left", ja: "あと%@日", language: language, value)
+            }
             static func valueSelected(_ value: String) -> String {
                 L10n.format("management.managementarchiveditems.valueSelected", vi: "Đã chọn %@ mục", en: "%@ selected", ja: "%@件を選択", value)
             }
@@ -3826,6 +3832,15 @@ nonisolated enum L10n {
             static func amountExceedsOutstanding(language: MistiaAppLanguage) -> String { L10n.tr("transactions.debtsettlement.amountExceedsOutstanding", vi: "Số tiền không được lớn hơn khoản đang mở.", en: "The amount cannot be greater than the open loan balance.", ja: "金額は未決済の債務を超えられません。", language: language) }
             static var detail: String { L10n.tr("transactions.debtsettlement.detail", vi: "Chi tiết", en: "Details", ja: "詳細") }
             static func detail(language: MistiaAppLanguage) -> String { L10n.tr("transactions.debtsettlement.detail", vi: "Chi tiết", en: "Details", ja: "詳細", language: language) }
+        }
+
+        nonisolated enum generatedTitle {
+            static var balanceAdjustment: String { L10n.tr("transactions.generatedTitle.balanceAdjustment", vi: "Điều chỉnh số dư", en: "Balance adjustment", ja: "残高調整") }
+            static func balanceAdjustment(language: MistiaAppLanguage) -> String { L10n.tr("transactions.generatedTitle.balanceAdjustment", vi: "Điều chỉnh số dư", en: "Balance adjustment", ja: "残高調整", language: language) }
+            static var familyTransferReceived: String { L10n.tr("transactions.generatedTitle.familyTransferReceived", vi: "Nhận tiền gia đình", en: "Family transfer received", ja: "家族送金の受け取り") }
+            static func familyTransferReceived(language: MistiaAppLanguage) -> String { L10n.tr("transactions.generatedTitle.familyTransferReceived", vi: "Nhận tiền gia đình", en: "Family transfer received", ja: "家族送金の受け取り", language: language) }
+            static var familyTransferSent: String { L10n.tr("transactions.generatedTitle.familyTransferSent", vi: "Chuyển tiền gia đình", en: "Family transfer sent", ja: "家族送金") }
+            static func familyTransferSent(language: MistiaAppLanguage) -> String { L10n.tr("transactions.generatedTitle.familyTransferSent", vi: "Chuyển tiền gia đình", en: "Family transfer sent", ja: "家族送金", language: language) }
         }
 
         nonisolated enum transactioneditor {

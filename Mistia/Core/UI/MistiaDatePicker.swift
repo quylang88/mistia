@@ -12,6 +12,7 @@ struct MistiaDatePickerRow: View {
     var selectableRange: AnyRange<Date>? = nil
 
     @Environment(\.calendar) private var calendar
+    @Environment(\.colorScheme) private var colorScheme
     @State private var isPickerPresented = false
 
     var body: some View {
@@ -55,7 +56,7 @@ struct MistiaDatePickerRow: View {
                 .labelsHidden()
                 .environment(\.calendar, calendar)
                 .environment(\.locale, MistiaAppLanguage.current.locale)
-                .tint(MistiaAccent.purple.color)
+                .tint(timePickerTint)
 
                 Button {
                     isPickerPresented = true
@@ -80,6 +81,10 @@ struct MistiaDatePickerRow: View {
 
     private var dateText: String {
         MistiaDateFormatting.fullDateString(for: selection, calendar: calendar)
+    }
+
+    private var timePickerTint: Color {
+        colorScheme == .dark ? MistiaAccent.lightPurple.color : MistiaAccent.purple.color
     }
 }
 

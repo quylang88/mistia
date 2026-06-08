@@ -4,6 +4,50 @@ import XCTest
 final class FamilyOverviewCalculatorTests: XCTestCase {
     private let calendar = Calendar(identifier: .gregorian)
 
+    func testAssetSummaryVisibilityIsLimitedToCurrentMonth() {
+        let now = makeDate(year: 2026, month: 6, day: 8)
+
+        XCTAssertTrue(
+            FamilyOverviewVisibility.showsAssetSummary(
+                selectedMonth: makeDate(year: 2026, month: 6, day: 1),
+                now: now,
+                calendar: calendar
+            )
+        )
+        XCTAssertFalse(
+            FamilyOverviewVisibility.showsAssetSummary(
+                selectedMonth: makeDate(year: 2026, month: 5, day: 1),
+                now: now,
+                calendar: calendar
+            )
+        )
+    }
+
+    func testArchiveRetentionDisplaysRemainingDaysAndUrgency() {
+        let archivedAt = makeDate(year: 2026, month: 6, day: 1)
+        let now = makeDate(year: 2026, month: 6, day: 6)
+
+        XCTAssertEqual(
+            MistiaArchiveRetention.daysRemaining(
+                archivedAt: archivedAt,
+                now: now,
+                calendar: calendar
+            ),
+            25
+        )
+        XCTAssertEqual(
+            MistiaArchiveRetention.remainingDaysText(
+                archivedAt: archivedAt,
+                now: now,
+                calendar: calendar,
+                language: .vietnamese
+            ),
+            "Còn lại 25 ngày"
+        )
+        XCTAssertFalse(MistiaArchiveRetention.isUrgent(daysRemaining: 7))
+        XCTAssertTrue(MistiaArchiveRetention.isUrgent(daysRemaining: 6))
+    }
+
     func testComputeAggregatesFamilyOverviewFromValueSnapshots() {
         let ownerID = UUID()
         let memberID = UUID()
@@ -356,7 +400,7 @@ final class FamilyOverviewCalculatorTests: XCTestCase {
         XCTAssertEqual(result.categorySpendingSnapshot.totalExpenseMinor, 10_000)
         XCTAssertEqual(result.budgetRows.map(\.name), ["Food"])
         XCTAssertEqual(result.monthlyBillRows.first?.amountMinor, 20_000)
-        XCTAssertEqual(result.monthlySpendable.displayMinor, 70_000)
+        XCTAssertEqual(result.monthlySpendable.displayMinor, 0)
     }
 
     private func makeDate(year: Int, month: Int, day: Int) -> Date {

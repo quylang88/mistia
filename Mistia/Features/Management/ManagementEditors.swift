@@ -1681,7 +1681,7 @@ struct ManagementBalanceAdjustmentSheet: View {
 
         let transaction = LedgerTransaction(
             primaryKind: isIncome ? .income : .expense,
-            title: L10n.management.management.balanceAdjustment,
+            title: TransactionGeneratedTitle.balanceAdjustment(),
             note: reason,
             amountMinor: absDiff,
             occurredAt: .now,

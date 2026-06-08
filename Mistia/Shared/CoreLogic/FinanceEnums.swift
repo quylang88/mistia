@@ -1119,15 +1119,19 @@ nonisolated enum TransactionDebtIntent: String, CaseIterable, Identifiable, Coda
     var id: String { rawValue }
 
     var title: String {
+        title(language: .current)
+    }
+
+    func title(language: MistiaAppLanguage) -> String {
         switch self {
         case .lend:
-            L10n.shared.corelogic.financeenums.lend
+            L10n.shared.corelogic.financeenums.lend(language: language)
         case .collect:
-            L10n.shared.corelogic.financeenums.collectDebt
+            L10n.shared.corelogic.financeenums.collectDebt(language: language)
         case .borrow:
-            L10n.shared.corelogic.financeenums.borrow
+            L10n.shared.corelogic.financeenums.borrow(language: language)
         case .repay:
-            L10n.shared.corelogic.financeenums.repay
+            L10n.shared.corelogic.financeenums.repay(language: language)
         }
     }
 

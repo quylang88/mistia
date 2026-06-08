@@ -248,10 +248,20 @@ enum FamilyOverviewCalculator {
             exchangeRates: input.exchangeRates,
             calendar: input.calendar
         )
-        let monthlySpendable = FamilyLogic.monthlySpendable(
-            totalAssetsMinor: summary.totalAssetsMinor,
-            monthlyDueMinor: monthlyDueSummary.totalDueMinor
+        let monthlySpendable = FamilyOverviewVisibility.showsAssetSummary(
+            selectedMonth: input.selectedMonth,
+            now: input.now,
+            calendar: input.calendar
         )
+            ? FamilyLogic.monthlySpendable(
+                totalAssetsMinor: summary.totalAssetsMinor,
+                monthlyDueMinor: monthlyDueSummary.totalDueMinor
+            )
+            : FamilyMonthlySpendableSnapshot(
+                rawMinor: 0,
+                displayMinor: 0,
+                shortfallMinor: 0
+            )
 
         return FamilyOverviewCalculationResult(
             walletRows: walletRows,

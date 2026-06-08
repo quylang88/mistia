@@ -2421,11 +2421,13 @@ private struct FamilyOverviewContent: View {
             selectedMonth: $selectedMonth
         )
 
-        FamilyHeroCard(
-            summary: data.summary,
-            monthlySpendable: data.monthlySpendable,
-            currencyCode: currencyCode
-        )
+        if showsAssetSummary {
+            FamilyHeroCard(
+                summary: data.summary,
+                monthlySpendable: data.monthlySpendable,
+                currencyCode: currencyCode
+            )
+        }
 
         FamilyDistributionSection(
             summary: data.summary,
@@ -2484,6 +2486,10 @@ private struct FamilyOverviewContent: View {
                     FamilyTransactionFilterSheet()
                 }
             }
+    }
+
+    private var showsAssetSummary: Bool {
+        FamilyOverviewVisibility.showsAssetSummary(selectedMonth: selectedMonth)
     }
 }
 

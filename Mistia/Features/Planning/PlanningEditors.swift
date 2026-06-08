@@ -280,7 +280,7 @@ struct PlanningBudgetEditorSheet: View {
             L10n.planning.planning.enableFamilyBudgetDataTitle,
             isPresented: $showsFamilySpendingConfirmation
         ) {
-            Button(L10n.planning.planning.enableFamilyBudgetDataConfirm) {
+            Button(L10n.planning.planning.enableFamilyBudgetDataConfirm, role: .destructive) {
                 Task { await confirmFamilySpendingEnable() }
             }
 

@@ -724,7 +724,9 @@ final class FamilyContextStore {
             exchangeRateProvider: exchangeRateProvider,
             exchangeRateDate: exchangeRateDate,
             occurredAt: occurredAt,
-            note: note
+            note: note,
+            senderTitle: TransactionGeneratedTitle.familyTransferSent(),
+            recipientTitle: TransactionGeneratedTitle.familyTransferReceived()
         )
 
         do {

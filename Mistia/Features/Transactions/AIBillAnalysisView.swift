@@ -564,7 +564,7 @@ struct AIBillAnalysisView: View {
             .font(.caption.weight(.bold))
             .buttonStyle(.glassProminent)
             .buttonBorderShape(.capsule)
-            .tint(MistiaAccent.purple.color)
+            .tint(actionControlForeground)
         }
         .padding(10)
         .background {

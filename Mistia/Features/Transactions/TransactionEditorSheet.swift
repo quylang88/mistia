@@ -2613,7 +2613,7 @@ struct TransactionEditorSheet: View {
                 )
                 guard destinationAmount.isValid else { return }
 
-                transaction.title = draft.title.nilIfBlank ?? L10n.transactions.transactioneditor.internalTransfer
+                transaction.title = draft.title.nilIfBlank ?? TransactionGeneratedTitle.internalTransfer()
                 transaction.sourceWallet = sourceWallet
                 transaction.destinationWallet = destinationWallet
                 transaction.category = nil
@@ -2669,7 +2669,7 @@ struct TransactionEditorSheet: View {
                     category = nil
                 }
 
-                transaction.title = draft.title.nilIfBlank ?? debtIntent.title
+                transaction.title = draft.title.nilIfBlank ?? TransactionGeneratedTitle.debt(debtIntent)
                 transaction.sourceWallet = sourceWallet
                 transaction.destinationWallet = nil
                 transaction.category = category

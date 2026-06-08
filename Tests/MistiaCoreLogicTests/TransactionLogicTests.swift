@@ -13,6 +13,29 @@ final class TransactionLogicTests: XCTestCase {
         super.tearDown()
     }
 
+    func testGeneratedTransactionTitlesUseRequestedLanguage() {
+        XCTAssertEqual(
+            TransactionGeneratedTitle.internalTransfer(language: .english),
+            "Internal transfer"
+        )
+        XCTAssertEqual(
+            TransactionGeneratedTitle.familyTransferSent(language: .vietnamese),
+            "Chuyển tiền gia đình"
+        )
+        XCTAssertEqual(
+            TransactionGeneratedTitle.familyTransferReceived(language: .english),
+            "Family transfer received"
+        )
+        XCTAssertEqual(
+            TransactionGeneratedTitle.balanceAdjustment(language: .japanese),
+            "残高調整"
+        )
+        XCTAssertEqual(
+            TransactionGeneratedTitle.debt(.collect, language: .japanese),
+            "回収"
+        )
+    }
+
     func testBalanceEngineHandlesAssetsAndCreditCardFlows() {
         let cash = TransactionWalletSnapshot(
             id: UUID(),

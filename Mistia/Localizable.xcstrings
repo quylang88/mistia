@@ -2118,7 +2118,7 @@
         "vi": {
           "stringUnit": {
             "state": "translated",
-            "value": "Gia đình chỉ có một owner. Hãy mời thành viên rồi nhượng quyền owner từ màn hình thông tin thành viên."
+            "value": "Gia đình chỉ có một chủ sở hữu. Hãy mời thành viên rồi nhượng quyền chủ sở hữu từ màn hình thông tin thành viên."
           }
         },
         "en": {
@@ -2130,7 +2130,7 @@
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "家族の owner は1人です。メンバーとして招待してから、メンバー情報画面で owner を譲渡します。"
+            "value": "家族のオーナーは1人です。メンバーとして招待してから、メンバー情報画面でオーナーを譲渡します。"
           }
         }
       }
@@ -4274,7 +4274,7 @@
         "vi": {
           "stringUnit": {
             "state": "translated",
-            "value": "Bấm link owner đã chia sẻ, hoặc dán link nếu bạn đã copy."
+            "value": "Bấm link chủ sở hữu đã chia sẻ, hoặc dán link nếu bạn đã copy."
           }
         },
         "en": {
@@ -4286,7 +4286,7 @@
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "owner が共有したリンクを開くか、コピー済みのリンクを貼り付けます。"
+            "value": "オーナーが共有したリンクを開くか、コピー済みのリンクを貼り付けます。"
           }
         }
       }
@@ -4406,7 +4406,7 @@
         "vi": {
           "stringUnit": {
             "state": "translated",
-            "value": "Nhượng quyền owner"
+            "value": "Nhượng quyền chủ sở hữu"
           }
         },
         "en": {
@@ -4418,7 +4418,7 @@
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "owner を譲渡"
+            "value": "オーナーを譲渡"
           }
         }
       }
@@ -4428,7 +4428,7 @@
         "vi": {
           "stringUnit": {
             "state": "translated",
-            "value": "Nhượng quyền owner?"
+            "value": "Nhượng quyền chủ sở hữu?"
           }
         },
         "en": {
@@ -4440,7 +4440,7 @@
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "owner を譲渡しますか？"
+            "value": "オーナーを譲渡しますか？"
           }
         }
       }
@@ -4538,7 +4538,7 @@
         "vi": {
           "stringUnit": {
             "state": "translated",
-            "value": "%@ sẽ là owner duy nhất của gia đình này. Bạn sẽ không còn quyền quản lý thành viên sau khi chuyển."
+            "value": "%@ sẽ là chủ sở hữu duy nhất của gia đình này. Bạn sẽ không còn quyền quản lý thành viên sau khi chuyển."
           }
         },
         "en": {
@@ -4550,7 +4550,7 @@
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "%@ がこの家族の唯一の owner になります。譲渡後、あなたはメンバー管理ができません。"
+            "value": "%@ がこの家族の唯一のオーナーになります。譲渡後、あなたはメンバー管理ができません。"
           }
         }
       }
@@ -4868,7 +4868,7 @@
         "vi": {
           "stringUnit": {
             "state": "translated",
-            "value": "Bạn trở thành owner và mời thêm thành viên sau."
+            "value": "Bạn trở thành chủ sở hữu và mời thêm thành viên sau."
           }
         },
         "en": {
@@ -4880,7 +4880,7 @@
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "作成者が owner になり、あとでメンバーを招待できます。"
+            "value": "作成者がオーナーになり、あとでメンバーを招待できます。"
           }
         }
       }
@@ -5462,7 +5462,7 @@
         "vi": {
           "stringUnit": {
             "state": "translated",
-            "value": "Owner cần tạo link mới nếu muốn mời lại."
+            "value": "Chủ sở hữu cần tạo link mới nếu muốn mời lại."
           }
         },
         "en": {
@@ -5474,7 +5474,7 @@
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "再招待するには owner が新しいリンクを作成する必要があります。"
+            "value": "再招待するにはオーナーが新しいリンクを作成する必要があります。"
           }
         }
       }
@@ -5484,7 +5484,7 @@
         "vi": {
           "stringUnit": {
             "state": "translated",
-            "value": "Owner đã thu hồi lời mời này."
+            "value": "Chủ sở hữu đã thu hồi lời mời này."
           }
         },
         "en": {
@@ -5496,7 +5496,7 @@
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "owner がこの招待を取り消しました。"
+            "value": "オーナーがこの招待を取り消しました。"
           }
         }
       }
@@ -9479,6 +9479,28 @@
           "stringUnit": {
             "state": "translated",
             "value": "%@件を選択"
+          }
+        }
+      }
+    },
+    "management.managementarchiveditems.valueDaysUntilPermanentDelete": {
+      "localizations": {
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Còn lại %@ ngày"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ days left"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "あと%@日"
           }
         }
       }
@@ -32381,6 +32403,72 @@
           "stringUnit": {
             "state": "translated",
             "value": "アプリのレート"
+          }
+        }
+      }
+    },
+    "transactions.generatedTitle.balanceAdjustment": {
+      "localizations": {
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Điều chỉnh số dư"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Balance adjustment"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "残高調整"
+          }
+        }
+      }
+    },
+    "transactions.generatedTitle.familyTransferReceived": {
+      "localizations": {
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nhận tiền gia đình"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Family transfer received"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "家族送金の受け取り"
+          }
+        }
+      }
+    },
+    "transactions.generatedTitle.familyTransferSent": {
+      "localizations": {
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Chuyển tiền gia đình"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Family transfer sent"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "家族送金"
           }
         }
       }
