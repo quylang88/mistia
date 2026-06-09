@@ -69,12 +69,19 @@ enum MistiaCategoryPickerSupport {
                 values.append(parent.localizedDisplayName(for: language))
             }
 
-            if let systemKey = category.mistiaSystemCategoryKey {
-                values.append(contentsOf: systemKey.knownDefaultNames())
+            if let systemKey = category.systemKey,
+               let parsed = MistiaSystemCategoryRegistry.shared.category(for: systemKey) {
+                values.append(contentsOf: parsed.knownDefaultNames())
             }
 
-            if let parentKey = category.mistiaSystemCategoryParentKey {
-                values.append(contentsOf: parentKey.knownDefaultNames())
+            if let parentCategory = category.parentCategory,
+               let parentSystemKey = parentCategory.systemKey,
+               let parsedParent = MistiaSystemCategoryRegistry.shared.category(for: parentSystemKey) {
+                values.append(contentsOf: parsedParent.knownDefaultNames())
+            } else if let systemKey = category.systemKey,
+                      let parentId = MistiaSystemCategoryRegistry.shared.parentId(for: systemKey),
+                      let parsedParent = MistiaSystemCategoryRegistry.shared.category(for: parentId) {
+                values.append(contentsOf: parsedParent.knownDefaultNames())
             }
 
             return Array(Set(values.compactMap { value in

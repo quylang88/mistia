@@ -353,6 +353,25 @@ final class MistiaSystemCategorySyncSupportTests: XCTestCase {
         XCTAssertEqual(transaction.category?.id, currentLocalID)
     }
 
+    func testEnsureSystemCategoryCreatesRecordForDynamicJSONCategory() throws {
+        let container = try makeContainer()
+        let context = container.mainContext
+
+        let key = "test_dynamic_pizza"
+        let category = try MistiaBootstrap.ensureSystemCategory(key, modelContext: context)
+
+        XCTAssertEqual(category.systemKey, key)
+        XCTAssertEqual(category.id, MistiaSystemCategoryIdentity.canonicalID(for: key))
+        XCTAssertEqual(category.name, "Pizza Thử Nghiệm")
+        XCTAssertEqual(category.nameEnglish, "Test Dynamic Pizza")
+        XCTAssertEqual(category.nameJapanese, "テストピザ")
+        XCTAssertEqual(category.iconSymbolName, "mistia.category.expense.food.test_dynamic_pizza")
+        XCTAssertEqual(category.iconColorHex, "#FF0000")
+        XCTAssertEqual(category.hierarchyRole, .child)
+        XCTAssertNotNil(category.parentCategory)
+        XCTAssertEqual(category.parentCategory?.systemKey, "parent_expense_food")
+    }
+
     private func makeContainer() throws -> ModelContainer {
         let schema = Schema(versionedSchema: MistiaSchemaV1.self)
         let configuration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)

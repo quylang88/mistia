@@ -58,6 +58,7 @@ let package = Package(
                 "CoreLogic/MistiaResetSupport.swift",
                 "CoreLogic/MistiaShortcutLogic.swift",
                 "CoreLogic/MistiaSystemCategoryIdentity.swift",
+                "CoreLogic/MistiaSystemCategoryRegistry.swift",
                 "CoreLogic/MistiaWalletPickerAccessLogic.swift",
                 "CoreLogic/OverviewLogic.swift",
                 "CoreLogic/PlanningLogic.swift",
@@ -84,6 +85,9 @@ let package = Package(
                 "Sync/MistiaSyncOutbox.swift",
                 "Sync/MistiaSyncSupport.swift",
                 "Sync/MistiaSystemCategorySyncSupport.swift"
+            ],
+            resources: [
+                .process("CoreLogic/MistiaSystemCategories.json")
             ]
         ),
         .testTarget(

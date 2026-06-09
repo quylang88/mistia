@@ -23,23 +23,15 @@ struct MistiaFinanceIconDescriptor: Hashable {
 
 enum MistiaFinanceIconRegistry {
     static func descriptor(for token: String) -> MistiaFinanceIconDescriptor? {
-        if let category = MistiaSystemCategoryKey.allCases.first(where: { $0.iconSymbolName == token }) {
+        if let category = MistiaSystemCategoryRegistry.shared.allParents
+            .flatMap({ [$0] + ($0.children ?? []) })
+            .first(where: { $0.icon == token }) {
             return descriptor(
                 token: token,
-                fallbackSystemName: category.fallbackSystemName,
-                baseHex: category.iconColorHex,
-                group: category.pickerGroup,
-                badgeSystemName: badge(for: category.pickerGroup)
-            )
-        }
-
-        if let parent = MistiaSystemCategoryParentKey.allCases.first(where: { $0.iconSymbolName == token }) {
-            return descriptor(
-                token: token,
-                fallbackSystemName: parent.fallbackSystemName,
-                baseHex: parent.iconColorHex,
-                group: parent.pickerGroup,
-                badgeSystemName: badge(for: parent.pickerGroup)
+                fallbackSystemName: category.fallbackIcon,
+                baseHex: category.color,
+                group: category.group,
+                badgeSystemName: badge(for: category.group)
             )
         }
 
@@ -59,25 +51,27 @@ enum MistiaFinanceIconRegistry {
     }
 
     static func activeCategoryOptions(for kind: TransactionCategoryKind) -> [MistiaFinancePickerOption] {
-        let parentOptions = MistiaSystemCategoryParentKey.activeDefaults
-            .filter { $0.kind == kind }
-            .map {
-                MistiaFinancePickerOption(
-                    token: $0.iconSymbolName,
-                    title: $0.title,
-                    group: $0.pickerGroup,
-                    defaultColorHex: $0.iconColorHex
-                )
-            }
+        let activeParents = MistiaSystemCategoryRegistry.shared.allParents
+            .filter { $0.active && $0.kind(in: MistiaSystemCategoryRegistry.shared) == kind }
+            
+        let parentOptions = activeParents.map { parent in
+            MistiaFinancePickerOption(
+                token: parent.icon,
+                title: parent.localizedTitle(for: .current),
+                group: parent.group,
+                defaultColorHex: parent.color
+            )
+        }
 
-        let childOptions = MistiaSystemCategoryKey.activeDefaults
-            .filter { $0.kind == kind }
-            .map {
+        let childOptions = activeParents
+            .flatMap { $0.children ?? [] }
+            .filter { $0.active }
+            .map { child in
                 MistiaFinancePickerOption(
-                    token: $0.iconSymbolName,
-                    title: $0.title,
-                    group: $0.pickerGroup,
-                    defaultColorHex: $0.iconColorHex
+                    token: child.icon,
+                    title: child.localizedTitle(for: .current),
+                    group: child.group,
+                    defaultColorHex: child.color
                 )
             }
 

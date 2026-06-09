@@ -56,39 +56,47 @@ nonisolated enum MistiaSystemCategoryIdentity {
     }
 
     static func descriptor(for rawSystemKey: String?) -> MistiaSystemCategoryDescriptor? {
-        guard let rawSystemKey else { return nil }
-
-        if let parentKey = MistiaSystemCategoryParentKey(rawValue: rawSystemKey) {
-            return MistiaSystemCategoryDescriptor(
-                rawSystemKey: rawSystemKey,
-                kind: parentKey.kind,
-                iconSymbolName: parentKey.iconSymbolName,
-                fallbackIconSymbolName: parentKey.fallbackSystemName,
-                iconColorHex: MistiaIconColorPalette.presetHex(forDefault: parentKey.iconColorHex),
-                hierarchyRole: .parent,
-                knownNames: parentKey.knownDefaultNames(),
-                defaultParentSystemKey: nil,
-                startsArchived: false,
-                sortOrder: MistiaSystemCategoryParentKey.activeDefaults.firstIndex(of: parentKey)
-            )
-        }
-
-        guard let systemKey = MistiaSystemCategoryKey(rawValue: rawSystemKey) else {
+        guard let rawSystemKey,
+              let parsed = MistiaSystemCategoryRegistry.shared.category(for: rawSystemKey) else {
             return nil
         }
 
-        return MistiaSystemCategoryDescriptor(
-            rawSystemKey: rawSystemKey,
-            kind: systemKey.kind,
-            iconSymbolName: systemKey.iconSymbolName,
-            fallbackIconSymbolName: systemKey.fallbackSystemName,
-            iconColorHex: MistiaIconColorPalette.presetHex(forDefault: systemKey.iconColorHex),
-            hierarchyRole: .child,
-            knownNames: systemKey.knownDefaultNames(),
-            defaultParentSystemKey: defaultParentKey(for: systemKey).rawValue,
-            startsArchived: !systemKey.isActiveDefault,
-            sortOrder: MistiaSystemCategoryKey.activeDefaults.firstIndex(of: systemKey)
-        )
+        let parentId = MistiaSystemCategoryRegistry.shared.parentId(for: rawSystemKey)
+        let isParent = parentId == nil
+
+        if isParent {
+            let activeParents = MistiaSystemCategoryRegistry.shared.allParents.filter { $0.active }
+            let sortOrder = activeParents.firstIndex(where: { $0.id == rawSystemKey })
+            return MistiaSystemCategoryDescriptor(
+                rawSystemKey: rawSystemKey,
+                kind: parsed.kind(in: MistiaSystemCategoryRegistry.shared),
+                iconSymbolName: parsed.icon,
+                fallbackIconSymbolName: parsed.fallbackIcon,
+                iconColorHex: MistiaIconColorPalette.presetHex(forDefault: parsed.color),
+                hierarchyRole: .parent,
+                knownNames: parsed.knownDefaultNames(),
+                defaultParentSystemKey: nil,
+                startsArchived: false,
+                sortOrder: sortOrder
+            )
+        } else {
+            let activeChildren = MistiaSystemCategoryRegistry.shared.allParents
+                .flatMap { $0.children ?? [] }
+                .filter { $0.active }
+            let sortOrder = activeChildren.firstIndex(where: { $0.id == rawSystemKey })
+            return MistiaSystemCategoryDescriptor(
+                rawSystemKey: rawSystemKey,
+                kind: parsed.kind(in: MistiaSystemCategoryRegistry.shared),
+                iconSymbolName: parsed.icon,
+                fallbackIconSymbolName: parsed.fallbackIcon,
+                iconColorHex: MistiaIconColorPalette.presetHex(forDefault: parsed.color),
+                hierarchyRole: .child,
+                knownNames: parsed.knownDefaultNames(),
+                defaultParentSystemKey: parentId,
+                startsArchived: !parsed.active,
+                sortOrder: sortOrder
+            )
+        }
     }
 
     private static func stableUUID(for value: String) -> UUID {
@@ -113,20 +121,5 @@ nonisolated enum MistiaSystemCategoryIdentity {
         }
     }
 
-    private static func defaultParentKey(
-        for systemKey: MistiaSystemCategoryKey
-    ) -> MistiaSystemCategoryParentKey {
-        systemKey.parentKey ?? uncategorizedParentKey(for: systemKey.kind)
-    }
 
-    private static func uncategorizedParentKey(
-        for kind: TransactionCategoryKind
-    ) -> MistiaSystemCategoryParentKey {
-        switch kind {
-        case .expense:
-            .expenseOther
-        case .income:
-            .incomeOther
-        }
-    }
 }

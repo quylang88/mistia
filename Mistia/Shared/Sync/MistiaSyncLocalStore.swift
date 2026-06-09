@@ -292,8 +292,8 @@ enum MistiaSyncLocalStore {
         remoteCategoryID: UUID,
         subjectUserID: UUID
     ) -> MistiaSyncUploadRecord? {
-        guard let parentKey = MistiaSystemCategoryParentKey.allCases.first(where: { key in
-            let canonicalID = MistiaSystemCategoryIdentity.canonicalID(for: key)
+        guard let parent = MistiaSystemCategoryRegistry.shared.allParents.first(where: { p in
+            let canonicalID = MistiaSystemCategoryIdentity.canonicalID(for: p.id)
             return MistiaSystemCategoryIdentity.cloudScopedID(
                 canonicalCategoryID: canonicalID,
                 ownerUserID: subjectUserID
@@ -303,28 +303,32 @@ enum MistiaSyncLocalStore {
         }
 
         let now = Date()
+        let canonicalParentID = MistiaSystemCategoryIdentity.canonicalID(for: parent.id)
+        let activeParents = MistiaSystemCategoryRegistry.shared.allParents.filter { $0.active }
+        let sortOrder = activeParents.firstIndex(where: { $0.id == parent.id }) ?? 0
+
         return .category(
             RemoteTransactionCategory(
                 userID: subjectUserID,
                 id: MistiaSystemCategoryIdentity.cloudScopedID(
-                    canonicalCategoryID: MistiaSystemCategoryIdentity.canonicalID(for: parentKey),
+                    canonicalCategoryID: canonicalParentID,
                     ownerUserID: subjectUserID
                 ),
-                name: parentKey.legacyVietnameseName,
-                nameEnglish: parentKey.englishTitle,
-                nameJapanese: parentKey.japaneseTitle,
-                kindRawValue: parentKey.kind.rawValue,
-            iconSymbolName: parentKey.iconSymbolName,
-            iconColorHex: MistiaIconColorPalette.presetHex(forDefault: parentKey.iconColorHex),
-            isFavorite: false,
-            familyBudgetSpendingEnabled: false,
-            parentCategoryID: nil,
+                name: parent.translations["vi"] ?? parent.id,
+                nameEnglish: parent.translations["en"] ?? parent.translations["vi"] ?? parent.id,
+                nameJapanese: parent.translations["ja"] ?? parent.translations["vi"] ?? parent.id,
+                kindRawValue: parent.kind(in: MistiaSystemCategoryRegistry.shared).rawValue,
+                iconSymbolName: parent.icon,
+                iconColorHex: MistiaIconColorPalette.presetHex(forDefault: parent.color),
+                isFavorite: false,
+                familyBudgetSpendingEnabled: false,
+                parentCategoryID: nil,
                 hierarchyRoleRawValue: TransactionCategoryHierarchyRole.parent.rawValue,
-                systemKey: parentKey.rawValue,
+                systemKey: parent.id,
                 isSystem: true,
-                sortOrder: MistiaSystemCategoryParentKey.activeDefaults.firstIndex(of: parentKey) ?? 0,
-                isArchived: !parentKey.isActiveDefault,
-                archivedAt: parentKey.isActiveDefault ? nil : now,
+                sortOrder: sortOrder,
+                isArchived: !parent.active,
+                archivedAt: parent.active ? nil : now,
                 createdAt: now,
                 updatedAt: now,
                 deletedAt: nil,
@@ -1450,22 +1454,15 @@ enum MistiaSyncLocalStore {
     ) -> (name: String, nameEnglish: String?, nameJapanese: String?) {
         let trimmedName = row.name.trimmingCharacters(in: .whitespacesAndNewlines)
         if let rawSystemKey = row.systemKey,
-           let parentKey = MistiaSystemCategoryParentKey(rawValue: rawSystemKey),
-           Set(parentKey.knownDefaultNames()).contains(trimmedName) {
+           let parsed = MistiaSystemCategoryRegistry.shared.category(for: rawSystemKey),
+           Set(parsed.knownDefaultNames()).contains(trimmedName) {
+            let vi = parsed.translations["vi"] ?? rawSystemKey
+            let en = parsed.translations["en"] ?? vi
+            let ja = parsed.translations["ja"] ?? vi
             return (
-                parentKey.legacyVietnameseName,
-                nonBlank(row.nameEnglish) ?? parentKey.englishTitle,
-                nonBlank(row.nameJapanese) ?? parentKey.japaneseTitle
-            )
-        }
-
-        if let rawSystemKey = row.systemKey,
-           let categoryKey = MistiaSystemCategoryKey(rawValue: rawSystemKey),
-           Set(categoryKey.knownDefaultNames()).contains(trimmedName) {
-            return (
-                categoryKey.legacyVietnameseName,
-                nonBlank(row.nameEnglish) ?? categoryKey.englishTitle,
-                nonBlank(row.nameJapanese) ?? categoryKey.japaneseTitle
+                vi,
+                nonBlank(row.nameEnglish) ?? en,
+                nonBlank(row.nameJapanese) ?? ja
             )
         }
 
@@ -2447,15 +2444,15 @@ enum MistiaSyncLocalStore {
             return mistiaCloudCategoryID(for: category, userID: userID)
         }
 
-        guard let systemKey = MistiaSystemCategoryKey.allCases.first(where: {
-            $0.iconSymbolName == plan.iconSymbolName
-        }) else {
+        guard let parsed = MistiaSystemCategoryRegistry.shared.allParents
+            .flatMap({ $0.children ?? [] })
+            .first(where: { $0.icon == plan.iconSymbolName }) else {
             return nil
         }
 
         let matchingCategory = categories.first { category in
             guard category.deletedAt == nil else { return false }
-            return category.systemKey == systemKey.rawValue
+            return category.systemKey == parsed.id
         }
         return mistiaCloudCategoryID(for: matchingCategory, userID: userID)
     }
@@ -2627,22 +2624,15 @@ private extension TransactionCategory {
     var syncNameFields: (name: String, nameEnglish: String?, nameJapanese: String?) {
         let trimmedName = name.trimmingCharacters(in: .whitespacesAndNewlines)
         if let systemKey,
-           let parentKey = MistiaSystemCategoryParentKey(rawValue: systemKey),
-           Set(parentKey.knownDefaultNames()).contains(trimmedName) {
+           let parsed = MistiaSystemCategoryRegistry.shared.category(for: systemKey),
+           Set(parsed.knownDefaultNames()).contains(trimmedName) {
+            let vi = parsed.translations["vi"] ?? systemKey
+            let en = parsed.translations["en"] ?? vi
+            let ja = parsed.translations["ja"] ?? vi
             return (
-                parentKey.legacyVietnameseName,
-                nonBlank(nameEnglish) ?? parentKey.englishTitle,
-                nonBlank(nameJapanese) ?? parentKey.japaneseTitle
-            )
-        }
-
-        if let systemKey,
-           let categoryKey = MistiaSystemCategoryKey(rawValue: systemKey),
-           Set(categoryKey.knownDefaultNames()).contains(trimmedName) {
-            return (
-                categoryKey.legacyVietnameseName,
-                nonBlank(nameEnglish) ?? categoryKey.englishTitle,
-                nonBlank(nameJapanese) ?? categoryKey.japaneseTitle
+                vi,
+                nonBlank(nameEnglish) ?? en,
+                nonBlank(nameJapanese) ?? ja
             )
         }
 

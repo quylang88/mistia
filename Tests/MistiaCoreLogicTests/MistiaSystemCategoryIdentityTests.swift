@@ -49,4 +49,18 @@ final class MistiaSystemCategoryIdentityTests: XCTestCase {
         XCTAssertNotNil(legacyFoodDescriptor)
         XCTAssertEqual(legacyFoodDescriptor?.startsArchived, true)
     }
+
+    func testDynamicJSONCategoryDescriptorLoading() {
+        let pizzaDescriptor = MistiaSystemCategoryIdentity.descriptor(for: "test_dynamic_pizza")
+        XCTAssertNotNil(pizzaDescriptor)
+        XCTAssertEqual(pizzaDescriptor?.hierarchyRole, .child)
+        XCTAssertEqual(pizzaDescriptor?.defaultParentSystemKey, "parent_expense_food")
+        XCTAssertEqual(pizzaDescriptor?.iconSymbolName, "mistia.category.expense.food.test_dynamic_pizza")
+        XCTAssertEqual(pizzaDescriptor?.fallbackIconSymbolName, "heart.fill")
+        XCTAssertEqual(pizzaDescriptor?.iconColorHex, MistiaIconColorPalette.presetHex(forDefault: "#FF0000"))
+        XCTAssertEqual(pizzaDescriptor?.startsArchived, false)
+        XCTAssertEqual(pizzaDescriptor?.knownNames.contains("Test Dynamic Pizza"), true)
+        XCTAssertEqual(pizzaDescriptor?.knownNames.contains("Pizza Thử Nghiệm"), true)
+    }
 }
+

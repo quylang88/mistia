@@ -67,7 +67,7 @@ playground.xcworkspace
 QWEN.md
 
 # AI input files
-.ai-input/
+.agent/
 
 # Gemini
 GEMINI.md
