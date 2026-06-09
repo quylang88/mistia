@@ -12,7 +12,7 @@ struct ParsedSystemCategory: Codable, Sendable {
     let translations: [String: String]
     let children: [ParsedSystemCategory]?
 
-    func kind(in registry: MistiaSystemCategoryRegistry) -> TransactionCategoryKind {
+    nonisolated func kind(in registry: MistiaSystemCategoryRegistry) -> TransactionCategoryKind {
         if let kind {
             return kind
         }
@@ -23,21 +23,21 @@ struct ParsedSystemCategory: Codable, Sendable {
         return .expense
     }
 
-    func localizedTitle(for language: MistiaAppLanguage) -> String {
+    nonisolated func localizedTitle(for language: MistiaAppLanguage) -> String {
         translations[language.rawValue] ?? translations["en"] ?? id
     }
 
-    func knownDefaultNames() -> [String] {
+    nonisolated func knownDefaultNames() -> [String] {
         Array(Set([translations["vi"], translations["en"], translations["ja"]].compactMap { $0 } + aliases))
     }
 }
 
 final class MistiaSystemCategoryRegistry: Sendable {
-    static let shared = MistiaSystemCategoryRegistry()
+    nonisolated static let shared = MistiaSystemCategoryRegistry()
 
-    let allParents: [ParsedSystemCategory]
-    private let categoryMap: [String: ParsedSystemCategory]
-    private let parentChildMap: [String: String] // childId -> parentId
+    nonisolated let allParents: [ParsedSystemCategory]
+    nonisolated private let categoryMap: [String: ParsedSystemCategory]
+    nonisolated private let parentChildMap: [String: String] // childId -> parentId
 
     private init() {
         let jsonName = "MistiaSystemCategories"
@@ -77,23 +77,23 @@ final class MistiaSystemCategoryRegistry: Sendable {
         }
     }
 
-    func category(for id: String) -> ParsedSystemCategory? {
+    nonisolated func category(for id: String) -> ParsedSystemCategory? {
         categoryMap[id]
     }
 
-    func parentId(for childId: String) -> String? {
+    nonisolated func parentId(for childId: String) -> String? {
         parentChildMap[childId]
     }
 
-    func allActiveParents() -> [ParsedSystemCategory] {
+    nonisolated func allActiveParents() -> [ParsedSystemCategory] {
         allParents.filter { $0.active }
     }
 
-    func children(forParentId parentId: String) -> [ParsedSystemCategory] {
+    nonisolated func children(forParentId parentId: String) -> [ParsedSystemCategory] {
         categoryMap[parentId]?.children ?? []
     }
 
-    func metadata(forId id: String) -> ParsedSystemCategory? {
+    nonisolated func metadata(forId id: String) -> ParsedSystemCategory? {
         categoryMap[id]
     }
 }
