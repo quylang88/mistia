@@ -193,17 +193,17 @@
       {
         "active" : true,
         "aliases" : [
-
+          "Đi chợ / thực phẩm"
         ],
-        "color" : "#FF0000",
-        "fallbackIcon" : "heart.fill",
+        "color" : "#FF8A4C",
+        "fallbackIcon" : "basket.fill",
         "group" : "food",
-        "icon" : "mistia.category.expense.food.test_dynamic_pizza",
-        "id" : "test_dynamic_pizza",
+        "icon" : "mistia.category.expense.food.grocery",
+        "id" : "grocery",
         "translations" : {
-          "en" : "Test Dynamic Pizza",
-          "ja" : "テストピザ",
-          "vi" : "Pizza Thử Nghiệm"
+          "en" : "Groceries",
+          "ja" : "食料品",
+          "vi" : "Đi chợ"
         }
       },
       {
@@ -284,22 +284,6 @@
           "en" : "Food delivery",
           "ja" : "フードデリバリー",
           "vi" : "Đặt đồ ăn"
-        }
-      },
-      {
-        "active" : true,
-        "aliases" : [
-          "Đi chợ / thực phẩm"
-        ],
-        "color" : "#FF8A4C",
-        "fallbackIcon" : "basket.fill",
-        "group" : "food",
-        "icon" : "mistia.category.expense.food.grocery",
-        "id" : "grocery",
-        "translations" : {
-          "en" : "Groceries",
-          "ja" : "食料品",
-          "vi" : "Đi chợ"
         }
       },
       {
@@ -474,7 +458,7 @@
     "kind" : "expense",
     "translations" : {
       "en" : "Cost of goods",
-      "ja" : "仕入れ",
+      "ja" : "仕入高",
       "vi" : "Tiền hàng"
     }
   },
@@ -708,7 +692,7 @@
         "translations" : {
           "en" : "Extracurricular activities",
           "ja" : "習い事・課外活動",
-          "vi" : "Hoạt động ngoại khóa"
+          "vi" : "Hoạt động vui chơi"
         }
       },
       {
