@@ -119,7 +119,7 @@ enum MistiaShortcutLogic {
                 presentation: MistiaShortcutPresentation(
                     title: L10n.settings.shortcut.option.backupRestore.title,
                     accessibilityLabel: L10n.settings.shortcut.option.backupRestore.accessibility,
-                    icon: .systemImage("externaldrive.fill.badge.icloud"),
+                    icon: .systemImage("externaldrive.badge.icloud"),
                     action: .backupRestore
                 )
             )
@@ -130,7 +130,7 @@ enum MistiaShortcutLogic {
                 presentation: MistiaShortcutPresentation(
                     title: L10n.settings.shortcut.option.archivedItems.title,
                     accessibilityLabel: L10n.settings.shortcut.option.archivedItems.accessibility,
-                    icon: .systemImage("archivebox.fill"),
+                    icon: .systemImage("archivebox"),
                     action: .archivedItems
                 )
             )
@@ -148,7 +148,7 @@ enum MistiaShortcutLogic {
                 presentation: MistiaShortcutPresentation(
                     title: L10n.settings.shortcut.option.familyOverview.title,
                     accessibilityLabel: L10n.settings.shortcut.option.familyOverview.accessibility,
-                    icon: .systemImage("person.2.fill"),
+                    icon: .systemImage("shareplay"),
                     action: .familyOverview(familyID: familyID)
                 )
             )
@@ -191,7 +191,7 @@ enum MistiaShortcutLogic {
                 presentation: MistiaShortcutPresentation(
                     title: L10n.settings.shortcut.option.syncNow.title,
                     accessibilityLabel: L10n.settings.shortcut.option.syncNow.accessibility,
-                    icon: .systemImage("arrow.triangle.2.circlepath.icloud.fill"),
+                    icon: .systemImage("arrow.triangle.2.circlepath.icloud"),
                     action: .syncNow
                 )
             )
@@ -202,7 +202,7 @@ enum MistiaShortcutLogic {
         MistiaShortcutPresentation(
             title: L10n.settings.shortcut.option.backupRestore.title,
             accessibilityLabel: L10n.settings.shortcut.option.backupRestore.accessibility,
-            icon: .systemImage("externaldrive.fill.badge.icloud"),
+            icon: .systemImage("externaldrive.badge.icloud"),
             action: .backupRestore
         )
     }

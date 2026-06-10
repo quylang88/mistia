@@ -213,7 +213,6 @@ enum MistiaFinanceIconRegistry {
 
         assign("ic_fluent_home_24_color", [
             "mistia.category.expense.home_bills.furniture_appliance",
-            "mistia.category.expense.family_children.baby_gear",
             "mistia.category.income.liquidation.liquidate_household",
             "mistia.goal.home"
         ])
@@ -228,14 +227,9 @@ enum MistiaFinanceIconRegistry {
 
         assign("ic_fluent_people_team_24_color", [
             "mistia.category.parent.expense.family_relations",
-            "mistia.category.expense.family_children.child_supplies",
             "mistia.category.expense.family_children.childcare",
             "mistia.category.expense.entertainment_social.parties_gatherings",
             "mistia.category.income.support_gift.subsidy"
-        ])
-
-        assign("ic_fluent_food_24_color", [
-            "mistia.category.expense.family_children.baby_food"
         ])
 
         assign("ic_fluent_gift_24_color", [
@@ -262,7 +256,6 @@ enum MistiaFinanceIconRegistry {
             "mistia.category.expense.family_children.child_medical",
             "mistia.category.parent.expense.health",
             "mistia.category.expense.health.checkup",
-            "mistia.category.expense.health.dental",
             "mistia.category.expense.health.hospital",
             "mistia.category.expense.pet_care.pet_medical"
         ])
@@ -286,7 +279,6 @@ enum MistiaFinanceIconRegistry {
         ])
 
         assign("ic_fluent_receipt_24_color", [
-            "mistia.category.expense.transport_vehicle.tolls",
             "mistia.category.income.refund_adjustment.reimbursement",
             "mistia.category.expense.financial_obligations.fines_fees"
         ])
@@ -309,8 +301,6 @@ enum MistiaFinanceIconRegistry {
         ])
 
         assign("ic_fluent_premium_24_color", [
-            "mistia.category.expense.personal_shopping.clothes",
-            "mistia.category.expense.personal_shopping.footwear",
             "mistia.wallet.credit_card_premium"
         ])
 
@@ -367,7 +357,6 @@ enum MistiaFinanceIconRegistry {
 
         assign("ic_fluent_heart_24_color", [
             "mistia.category.expense.entertainment_social.charity",
-            "mistia.category.expense.family_children.diapers_milk",
             "mistia.category.parent.expense.pet_care",
             "mistia.category.parent.income.support_gift"
         ])
@@ -479,7 +468,6 @@ enum MistiaFinanceIconRegistry {
 
         assign("ic_fluent_reward_24_color", [
             "mistia.category.expense.personal_shopping.accessories",
-            "mistia.category.expense.health.supplements",
             "mistia.category.income.refund_adjustment.cashback",
             "mistia.wallet.credit_card_rewards"
         ])
@@ -547,9 +535,6 @@ enum MistiaFinanceIconRegistry {
             "mistia.category.expense.food.cafe_tea"
         ])
 
-        assign("ic_fluent_scan_type_24_color", [
-            "mistia.category.expense.food.daily_supplies"
-        ])
 
         assign("ic_fluent_send_24_color", [
             "mistia.category.expense.food.delivery"
@@ -634,9 +619,6 @@ enum MistiaFinanceIconRegistry {
             "mistia.category.expense.health.lab_tests"
         ])
 
-        assign("ic_fluent_clipboard_text_edit_24_color", [
-            "mistia.category.expense.health.dental"
-        ])
 
         assign("ic_fluent_globe_shield_24_color", [
             "mistia.category.expense.health.insurance"
@@ -837,6 +819,42 @@ enum MistiaFinanceIconRegistry {
 
         assign("ic_fluent_gift_card_money_24_filled", [
             "mistia.wallet.credit_card_rewards"
+        ])
+
+        assign("ic_fluent_person_walking_24_filled", [
+            "mistia.category.expense.personal_shopping.footwear"
+        ])
+
+        assign("ic_fluent_teddy_bear_24_color", [
+            "mistia.category.expense.family_children.diapers_milk"
+        ])
+
+        assign("ic_fluent_cart_24_filled", [
+            "mistia.category.expense.food.daily_supplies"
+        ])
+
+        assign("ic_fluent_bowl_salad_24_filled", [
+            "mistia.category.expense.family_children.baby_food"
+        ])
+
+        assign("ic_fluent_cube_24_filled", [
+            "mistia.category.expense.family_children.baby_gear"
+        ])
+
+        assign("ic_fluent_backpack_24_filled", [
+            "mistia.category.expense.family_children.child_supplies"
+        ])
+
+        assign("ic_fluent_road_24_filled", [
+            "mistia.category.expense.transport_vehicle.tolls"
+        ])
+
+        assign("ic_fluent_tooth_24_color", [
+            "mistia.category.expense.health.dental"
+        ])
+
+        assign("ic_fluent_pill_24_filled", [
+            "mistia.category.expense.health.supplements"
         ])
 
         return mapping

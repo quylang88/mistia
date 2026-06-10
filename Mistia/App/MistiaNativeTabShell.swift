@@ -411,19 +411,40 @@ final class MistiaNativeTabBarController: UITabBarController, UITabBarController
   private func shortcutSystemImage(_ systemName: String) -> UIImage? {
     let config = UIImage.SymbolConfiguration(pointSize: 22, weight: .medium)
     let image = UIImage(systemName: systemName, withConfiguration: config)
-    if currentShortcutPresentation.action == .receiptScan {
-      return image?.mistiaRasterized(with: currentReceiptShortcutTint)
-    }
-    return image?.withRenderingMode(.alwaysTemplate)
+    return image?.mistiaRasterized(with: currentShortcutTint)
   }
 
-  private var currentReceiptShortcutTint: UIColor {
+  private var currentShortcutTint: UIColor {
     let usesDarkTint =
       currentAppearanceMode == .dark
       || (currentAppearanceMode == .automatic && traitCollection.userInterfaceStyle == .dark)
-    return usesDarkTint
-      ? UIColor(red: 1.0, green: 0.72, blue: 0.28, alpha: 1.0)
-      : UIColor(red: 0.93, green: 0.52, blue: 0.16, alpha: 1.0)
+
+    switch currentShortcutPresentation.action {
+    case .backupRestore:
+      return usesDarkTint
+        ? UIColor(red: 0.40, green: 0.85, blue: 0.75, alpha: 1.0) // #66d8bf
+        : UIColor(red: 0.00, green: 0.65, blue: 0.55, alpha: 1.0) // #00a68c
+    case .archivedItems:
+      return usesDarkTint
+        ? UIColor(red: 0.65, green: 0.68, blue: 0.69, alpha: 1.0) // #a6adb0
+        : UIColor(red: 0.45, green: 0.48, blue: 0.57, alpha: 1.0) // #737b91
+    case .familyOverview:
+      return usesDarkTint
+        ? UIColor(red: 0.55, green: 0.50, blue: 1.00, alpha: 1.0) // #8c80ff
+        : UIColor(red: 0.35, green: 0.30, blue: 0.99, alpha: 1.0) // #594dfc
+    case .memberOverview:
+      return usesDarkTint
+        ? UIColor(red: 1.00, green: 0.46, blue: 0.66, alpha: 1.0) // #ff75a9
+        : UIColor(red: 0.86, green: 0.20, blue: 0.46, alpha: 1.0) // #dc3375
+    case .receiptScan:
+      return usesDarkTint
+        ? UIColor(red: 1.00, green: 0.72, blue: 0.28, alpha: 1.0) // #ffb847
+        : UIColor(red: 0.93, green: 0.52, blue: 0.16, alpha: 1.0) // #ed8529
+    case .syncNow:
+      return usesDarkTint
+        ? UIColor(red: 0.50, green: 0.78, blue: 1.00, alpha: 1.0) // #80c7ff
+        : UIColor(red: 0.20, green: 0.58, blue: 0.90, alpha: 1.0) // #3394e6
+    }
   }
 
   private func findSearchTabButton() -> UIView? {
@@ -440,7 +461,7 @@ final class MistiaNativeTabBarController: UITabBarController, UITabBarController
     iconView?.isHidden = true
 
     let indicator = UIActivityIndicatorView(style: .medium)
-    indicator.color = tabBar.tintColor
+    indicator.color = currentShortcutTint
     indicator.translatesAutoresizingMaskIntoConstraints = false
     tabButton.addSubview(indicator)
 

@@ -21,7 +21,7 @@ final class MistiaShortcutLogicTests: XCTestCase {
 
         XCTAssertEqual(resolution.selection, .backupRestore)
         XCTAssertEqual(resolution.presentation.title, "Sao lưu & Khôi phục")
-        XCTAssertEqual(resolution.presentation.icon, .systemImage("externaldrive.fill.badge.icloud"))
+        XCTAssertEqual(resolution.presentation.icon, .systemImage("externaldrive.badge.icloud"))
         XCTAssertEqual(resolution.presentation.action, .backupRestore)
     }
 
@@ -35,6 +35,38 @@ final class MistiaShortcutLogicTests: XCTestCase {
         XCTAssertEqual(resolution.presentation.title, "Quét bill")
         XCTAssertEqual(resolution.presentation.icon, .systemImage("doc.viewfinder"))
         XCTAssertEqual(resolution.presentation.action, .receiptScan)
+    }
+
+    func testResolveKeepsArchivedItemsSelection() {
+        let resolution = MistiaShortcutLogic.resolve(
+            selection: .archivedItems,
+            input: makeInput()
+        )
+
+        XCTAssertEqual(resolution.selection, .archivedItems)
+        XCTAssertEqual(resolution.presentation.icon, .systemImage("archivebox"))
+        XCTAssertEqual(resolution.presentation.action, .archivedItems)
+    }
+
+    func testResolveKeepsFamilyOverviewSelection() {
+        let resolution = MistiaShortcutLogic.resolve(
+            selection: .familyOverview,
+            input: makeInput()
+        )
+
+        XCTAssertEqual(resolution.selection, .familyOverview)
+        XCTAssertEqual(resolution.presentation.icon, .systemImage("shareplay"))
+    }
+
+    func testResolveKeepsSyncNowSelection() {
+        let resolution = MistiaShortcutLogic.resolve(
+            selection: .syncNow,
+            input: makeInput()
+        )
+
+        XCTAssertEqual(resolution.selection, .syncNow)
+        XCTAssertEqual(resolution.presentation.icon, .systemImage("arrow.triangle.2.circlepath.icloud"))
+        XCTAssertEqual(resolution.presentation.action, .syncNow)
     }
 
     func testRemoteCapablePinnedActionsRequireRemoteAvailability() {
@@ -63,7 +95,7 @@ final class MistiaShortcutLogicTests: XCTestCase {
         XCTAssertEqual(resolution.presentation.title, "Sao lưu & Khôi phục")
         XCTAssertEqual(
             resolution.presentation.icon,
-            .systemImage("externaldrive.fill.badge.icloud")
+            .systemImage("externaldrive.badge.icloud")
         )
     }
 
