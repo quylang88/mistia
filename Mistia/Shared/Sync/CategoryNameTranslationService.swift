@@ -297,9 +297,7 @@ enum CategoryNameTranslationMaintenance {
                     && category.isSystem == false
                     && (category.pendingTranslationSourceName != nil
                         || category.nameEnglish == nil
-                        || category.nameEnglish == ""
-                        || category.nameJapanese == nil
-                        || category.nameJapanese == "")
+                        || category.nameJapanese == nil)
             },
             sortBy: [SortDescriptor(\.updatedAt, order: .reverse)]
         )
