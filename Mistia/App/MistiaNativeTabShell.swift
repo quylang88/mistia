@@ -409,7 +409,7 @@ final class MistiaNativeTabBarController: UITabBarController, UITabBarController
   }
 
   private func shortcutSystemImage(_ systemName: String) -> UIImage? {
-    let config = UIImage.SymbolConfiguration(pointSize: 22, weight: .medium)
+    let config = UIImage.SymbolConfiguration(pointSize: 25, weight: .medium)
     let image = UIImage(systemName: systemName, withConfiguration: config)
     return image?.mistiaRasterized(with: currentShortcutTint)
   }
@@ -488,7 +488,7 @@ final class MistiaNativeTabBarController: UITabBarController, UITabBarController
   }
 
   private func makeShortcutFallbackAvatarImage(initials: String) -> UIImage? {
-    let size = CGSize(width: 28, height: 28)
+    let size = CGSize(width: 36, height: 36)
     let renderer = UIGraphicsImageRenderer(size: size)
     return renderer.image { context in
       let rect = CGRect(origin: .zero, size: size)
@@ -518,7 +518,7 @@ final class MistiaNativeTabBarController: UITabBarController, UITabBarController
       let paragraphStyle = NSMutableParagraphStyle()
       paragraphStyle.alignment = .center
       let attributes: [NSAttributedString.Key: Any] = [
-        .font: UIFont.systemFont(ofSize: 10.5, weight: .heavy),
+        .font: UIFont.systemFont(ofSize: 13, weight: .heavy),
         .foregroundColor: UIColor.white,
         .paragraphStyle: paragraphStyle
       ]
@@ -535,7 +535,7 @@ final class MistiaNativeTabBarController: UITabBarController, UITabBarController
   }
 
   private nonisolated static func makeShortcutAvatarImage(from image: UIImage) -> UIImage? {
-    let size = CGSize(width: 28, height: 28)
+    let size = CGSize(width: 36, height: 36)
     let renderer = UIGraphicsImageRenderer(size: size)
     return renderer.image { _ in
       UIBezierPath(ovalIn: CGRect(origin: .zero, size: size)).addClip()
