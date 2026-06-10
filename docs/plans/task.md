@@ -2,8 +2,9 @@
 
 | Task ID | Description | Status |
 | :--- | :--- | :--- |
-| Task 1 | Update JSON Category Database (MistiaSystemCategories.json) | [x] |
-| Task 2 | Make Category Registry APIs nonisolated | [x] |
-| Task 3 | Clean up test references to test_dynamic_pizza | [x] |
-| Task 4 | Final Verification | [x] |
-| Task 5 | Apply translation updates and parent/child category reordering feedback | [x] |
+| Task 1 | Update localization strings in Localizable.xcstrings | [x] |
+| Task 2 | Regenerate L10n.generated.swift | [x] |
+| Task 3 | Enforce Category Archiving Restrictions in ManagementEditors.swift | [x] |
+| Task 4 | Fix Add Member Button UI & Sheet Presenter in FamilyView.swift | [x] |
+| Task 5 | Update diapers_milk translation in MistiaSystemCategories.json & SQL migration | [x] |
+| Task 6 | Build Verification | [/] |

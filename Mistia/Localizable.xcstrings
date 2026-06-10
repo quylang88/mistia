@@ -6623,6 +6623,94 @@
         }
       }
     },
+    "management.management.categoryArchiveBlockedHasBills": {
+      "localizations": {
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Không thể lưu trữ danh mục này vì đang được liên kết với hóa đơn."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cannot archive this category because it is linked to bills."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "請求書が関連付けられているため、このカテゴリをアーカイブできません。"
+          }
+        }
+      }
+    },
+    "management.management.categoryArchiveBlockedHasBudgets": {
+      "localizations": {
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Không thể lưu trữ danh mục này vì đang được liên kết với ngân sách."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cannot archive this category because it is linked to budgets."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "予算が関連付けられているため、このカテゴリをアーカイブできません。"
+          }
+        }
+      }
+    },
+    "management.management.categoryArchiveBlockedHasChildren": {
+      "localizations": {
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Không thể lưu trữ danh mục này vì vẫn còn các danh mục con đang hoạt động."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cannot archive this category because it still has active subcategories."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "有効なサブカテゴリがまだ存在するため、このカテゴリをアーカイブできません。"
+          }
+        }
+      }
+    },
+    "management.management.categoryArchiveBlockedHasTransactions": {
+      "localizations": {
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Không thể lưu trữ danh mục này vì đang được liên kết với các khoản thu chi."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cannot archive this category because it is linked to transactions."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "取引が関連付けられているため、このカテゴリをアーカイブできません。"
+          }
+        }
+      }
+    },
     "management.management.categoryArchiveBlockedWithCounts": {
       "localizations": {
         "vi": {
@@ -22656,7 +22744,7 @@
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "ミスティアショートカットを有効にするとタブバーに固定ボタンが表示されます。選んだ項目を直接開きます。"
+            "value": "ショートカットを有効にするとタブバーに固定ボタンが表示されます。選んだ項目を直接開きます。"
           }
         }
       }
@@ -23140,7 +23228,7 @@
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "ミスティアショートカット"
+            "value": "ショートカット"
           }
         }
       }

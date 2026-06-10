@@ -1699,6 +1699,9 @@ private struct FamilyOverviewHeader: View {
                                     .font(.system(size: 12, weight: .medium, design: .rounded))
                                     .foregroundStyle(.secondary)
                             }
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 8)
+                            .contentShape(Rectangle())
                         }
                         .buttonStyle(.plain)
                     }
@@ -2418,6 +2421,14 @@ private struct FamilyOverviewContent: View {
             onInviteTap: { activeSheet = .invite }
         )
         .padding(.top, 8)
+        .sheet(item: $activeSheet) { sheet in
+            switch sheet {
+            case .invite:
+                FamilyInviteSheet()
+            case .filterTransactions:
+                FamilyTransactionFilterSheet()
+            }
+        }
 
         FamilyOverviewPeriodControl(
             timeframe: $timeframe,
@@ -2481,14 +2492,6 @@ private struct FamilyOverviewContent: View {
             rows: data.monthlyBillRows,
             totals: data.monthlyBillTotalsByCurrency
         )
-            .sheet(item: $activeSheet) { sheet in
-                switch sheet {
-                case .invite:
-                    FamilyInviteSheet()
-                case .filterTransactions:
-                    FamilyTransactionFilterSheet()
-                }
-            }
     }
 
     private var showsAssetSummary: Bool {

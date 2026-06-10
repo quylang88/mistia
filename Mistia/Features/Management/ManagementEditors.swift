@@ -636,6 +636,8 @@ struct ManagementCategoryEditorSheet: View {
     @Query
     private var storedBills: [RecurringBillPlan]
     @Query
+    private var storedTransactions: [LedgerTransaction]
+    @Query
     private var ownershipScopes: [OwnedRecordScope]
 
     let target: ManagementCategoryEditorTarget
@@ -1075,13 +1077,23 @@ struct ManagementCategoryEditorSheet: View {
     private func archiveCategory() {
         guard let category = target.category else { return }
 
-        let currentBudgetCount = currentMonthBudgetCount(inBranchOf: category)
-        let activeRecurringBillCount = activeRecurringBillCount(inBranchOf: category)
-        guard currentBudgetCount == 0, activeRecurringBillCount == 0 else {
-            alertMessage = L10n.management.management.categoryArchiveBlockedWithCounts(
-                String(describing: currentBudgetCount),
-                String(describing: activeRecurringBillCount)
-            )
+        if storedCategories.contains(where: { $0.parentCategory?.id == category.id && $0.deletedAt == nil && !$0.isArchived }) {
+            alertMessage = L10n.management.management.categoryArchiveBlockedHasChildren
+            return
+        }
+
+        if storedTransactions.contains(where: { $0.category?.id == category.id && $0.deletedAt == nil }) {
+            alertMessage = L10n.management.management.categoryArchiveBlockedHasTransactions
+            return
+        }
+
+        if storedBudgets.contains(where: { $0.category?.id == category.id && $0.deletedAt == nil }) {
+            alertMessage = L10n.management.management.categoryArchiveBlockedHasBudgets
+            return
+        }
+
+        if storedBills.contains(where: { $0.category?.id == category.id && $0.deletedAt == nil }) {
+            alertMessage = L10n.management.management.categoryArchiveBlockedHasBills
             return
         }
 

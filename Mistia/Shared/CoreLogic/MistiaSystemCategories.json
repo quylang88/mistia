@@ -802,8 +802,8 @@
         "icon" : "mistia.category.expense.family_children.diapers_milk",
         "id" : "diapers_milk",
         "translations" : {
-          "en" : "Diapers / milk",
-          "ja" : "おむつ・ミルク",
+          "en" : "Diapers",
+          "ja" : "おむつ",
           "vi" : "Bỉm / tã"
         }
       },

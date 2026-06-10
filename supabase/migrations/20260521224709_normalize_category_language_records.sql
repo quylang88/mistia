@@ -62,7 +62,7 @@ values
   ('child_toys', 'Đồ chơi', 'Toys', 'おもちゃ', 6),
   ('child_tuition', 'Học phí / giữ trẻ / mầm non', 'Tuition / childcare', '学費・保育料', 7),
   ('childcare', 'Trông trẻ / babysitter', 'Babysitting', '保育・ベビーシッター', 8),
-  ('diapers_milk', 'Bỉm / tã', 'Diapers / milk', 'おむつ・ミルク', 9),
+  ('diapers_milk', 'Bỉm / tã', 'Diapers', 'おむつ', 9),
   ('school_books_supplies', 'Sách / học cụ cho bé', 'School books / supplies', '教材・学用品', 10),
   ('family_other', 'Chi khác cho con', 'Other child expenses', 'その他子ども費', 11),
   ('car_wash', 'Rửa xe', 'Car wash', '洗車', 0),
