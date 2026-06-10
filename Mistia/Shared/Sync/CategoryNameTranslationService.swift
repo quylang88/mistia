@@ -295,16 +295,20 @@ enum CategoryNameTranslationMaintenance {
                 category.deletedAt == nil
                     && category.isArchived == false
                     && category.isSystem == false
-                    && (category.pendingTranslationSourceName != nil
-                        || category.nameEnglish == nil
-                        || category.nameJapanese == nil)
             },
             sortBy: [SortDescriptor(\.updatedAt, order: .reverse)]
         )
-        var descriptorCopy = descriptor
-        descriptorCopy.fetchLimit = limit
 
-        return (try? modelContext.fetch(descriptorCopy)) ?? []
+        let fetched = (try? modelContext.fetch(descriptor)) ?? []
+        let candidates = fetched.filter { category in
+            category.pendingTranslationSourceName != nil
+                || category.nameEnglish == nil
+                || category.nameEnglish == ""
+                || category.nameJapanese == nil
+                || category.nameJapanese == ""
+        }
+
+        return Array(candidates.prefix(limit))
     }
 }
 
