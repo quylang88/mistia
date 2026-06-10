@@ -215,11 +215,40 @@ enum MistiaBootstrap {
             categoryBySystemKey[systemKey] = category
         }
 
+        let activeParents = MistiaSystemCategoryRegistry.shared.allParents.filter { $0.active }
+        var expectedSortOrders: [String: Int] = [:]
+        for (index, parent) in activeParents.enumerated() {
+            expectedSortOrders[parent.id] = index
+            let activeChildren = (parent.children ?? []).filter { $0.active }
+            for (childIndex, child) in activeChildren.enumerated() {
+                expectedSortOrders[child.id] = childIndex
+            }
+        }
+
         for systemKey in expectedSystemKeys {
             guard let category = categoryBySystemKey[systemKey] else { return true }
             if isBlank(category.name)
                 || isBlank(category.nameEnglish)
                 || isBlank(category.nameJapanese) {
+                return true
+            }
+
+            guard let parsed = MistiaSystemCategoryRegistry.shared.category(for: systemKey) else {
+                continue
+            }
+
+            if let expectedSort = expectedSortOrders[systemKey], category.sortOrder != expectedSort {
+                return true
+            }
+
+            let expectedEn = parsed.translations["en"] ?? parsed.translations["vi"] ?? parsed.id
+            let expectedJa = parsed.translations["ja"] ?? parsed.translations["vi"] ?? parsed.id
+            if category.nameEnglish != expectedEn || category.nameJapanese != expectedJa {
+                return true
+            }
+
+            let expectedVi = parsed.translations["vi"] ?? parsed.id
+            if category.name != expectedVi && Set(parsed.knownDefaultNames()).contains(category.name.trimmingCharacters(in: .whitespacesAndNewlines)) {
                 return true
             }
         }

@@ -390,22 +390,6 @@
         "aliases" : [
 
         ],
-        "color" : "#8A8A8E",
-        "fallbackIcon" : "creditcard.fill",
-        "group" : "work",
-        "icon" : "mistia.category.expense.cost_of_goods.other_sales_cost",
-        "id" : "other_sales_cost",
-        "translations" : {
-          "en" : "Other selling costs",
-          "ja" : "その他販売費",
-          "vi" : "Chi phí bán hàng khác"
-        }
-      },
-      {
-        "active" : true,
-        "aliases" : [
-
-        ],
         "color" : "#FFB347",
         "fallbackIcon" : "shippingbox.fill",
         "group" : "work",
@@ -447,6 +431,22 @@
           "en" : "Shipping fees",
           "ja" : "配送料",
           "vi" : "Phí vận chuyển hàng"
+        }
+      },
+      {
+        "active" : true,
+        "aliases" : [
+
+        ],
+        "color" : "#8A8A8E",
+        "fallbackIcon" : "creditcard.fill",
+        "group" : "work",
+        "icon" : "mistia.category.expense.cost_of_goods.other_sales_cost",
+        "id" : "other_sales_cost",
+        "translations" : {
+          "en" : "Other selling costs",
+          "ja" : "その他販売費",
+          "vi" : "Chi phí bán hàng khác"
         }
       }
     ],
@@ -682,7 +682,7 @@
       {
         "active" : true,
         "aliases" : [
-
+          "Hoạt động ngoại khóa"
         ],
         "color" : "#2DAA9E",
         "fallbackIcon" : "figure.run",
@@ -690,8 +690,8 @@
         "icon" : "mistia.category.expense.family_children.child_extracurricular",
         "id" : "child_extracurricular",
         "translations" : {
-          "en" : "Extracurricular activities",
-          "ja" : "習い事・課外活動",
+          "en" : "Leisure & play",
+          "ja" : "レジャー・遊び",
           "vi" : "Hoạt động vui chơi"
         }
       },
@@ -810,22 +810,6 @@
       {
         "active" : true,
         "aliases" : [
-          "Chi gia đình khác"
-        ],
-        "color" : "#FF6D8A",
-        "fallbackIcon" : "heart.text.square.fill",
-        "group" : "family",
-        "icon" : "mistia.category.expense.family_children.family_other",
-        "id" : "family_other",
-        "translations" : {
-          "en" : "Other child expenses",
-          "ja" : "その他子ども費",
-          "vi" : "Chi khác cho con"
-        }
-      },
-      {
-        "active" : true,
-        "aliases" : [
           "Sách / dụng cụ học tập"
         ],
         "color" : "#A76BFF",
@@ -837,6 +821,22 @@
           "en" : "School books / supplies",
           "ja" : "教材・学用品",
           "vi" : "Sách / học cụ cho bé"
+        }
+      },
+      {
+        "active" : true,
+        "aliases" : [
+          "Chi gia đình khác"
+        ],
+        "color" : "#FF6D8A",
+        "fallbackIcon" : "heart.text.square.fill",
+        "group" : "family",
+        "icon" : "mistia.category.expense.family_children.family_other",
+        "id" : "family_other",
+        "translations" : {
+          "en" : "Other child expenses",
+          "ja" : "その他子ども費",
+          "vi" : "Chi khác cho con"
         }
       }
     ],
@@ -1771,22 +1771,6 @@
       {
         "active" : true,
         "aliases" : [
-          "Nghĩa vụ khác"
-        ],
-        "color" : "#8A8A8E",
-        "fallbackIcon" : "tray.full.fill",
-        "group" : "finance",
-        "icon" : "mistia.category.expense.financial_obligations.other_obligations",
-        "id" : "other_obligations",
-        "translations" : {
-          "en" : "Other financial obligations",
-          "ja" : "その他金融支払い",
-          "vi" : "Nghĩa vụ tài chính khác"
-        }
-      },
-      {
-        "active" : true,
-        "aliases" : [
 
         ],
         "color" : "#F59B3F",
@@ -1798,6 +1782,22 @@
           "en" : "Taxes / fees",
           "ja" : "税金・手数料",
           "vi" : "Thuế / phí"
+        }
+      },
+      {
+        "active" : true,
+        "aliases" : [
+          "Nghĩa vụ khác"
+        ],
+        "color" : "#8A8A8E",
+        "fallbackIcon" : "tray.full.fill",
+        "group" : "finance",
+        "icon" : "mistia.category.expense.financial_obligations.other_obligations",
+        "id" : "other_obligations",
+        "translations" : {
+          "en" : "Other financial obligations",
+          "ja" : "その他金融支払い",
+          "vi" : "Nghĩa vụ tài chính khác"
         }
       }
     ],
@@ -1872,22 +1872,6 @@
         "aliases" : [
 
         ],
-        "color" : "#8A8A8E",
-        "fallbackIcon" : "tray.full.fill",
-        "group" : "family",
-        "icon" : "mistia.category.expense.pet_care.pet_other",
-        "id" : "pet_other",
-        "translations" : {
-          "en" : "Other pet expenses",
-          "ja" : "その他ペット費",
-          "vi" : "Chi khác cho thú cưng"
-        }
-      },
-      {
-        "active" : true,
-        "aliases" : [
-
-        ],
         "color" : "#5B7BFF",
         "fallbackIcon" : "shippingbox.fill",
         "group" : "family",
@@ -1897,6 +1881,22 @@
           "en" : "Pet supplies",
           "ja" : "ペット用品",
           "vi" : "Đồ dùng thú cưng"
+        }
+      },
+      {
+        "active" : true,
+        "aliases" : [
+
+        ],
+        "color" : "#8A8A8E",
+        "fallbackIcon" : "tray.full.fill",
+        "group" : "family",
+        "icon" : "mistia.category.expense.pet_care.pet_other",
+        "id" : "pet_other",
+        "translations" : {
+          "en" : "Other pet expenses",
+          "ja" : "その他ペット費",
+          "vi" : "Chi khác cho thú cưng"
         }
       }
     ],
@@ -1969,6 +1969,38 @@
       "Thu nhập công việc"
     ],
     "children" : [
+      {
+        "active" : true,
+        "aliases" : [
+          "Lương"
+        ],
+        "color" : "#2DAA9E",
+        "fallbackIcon" : "banknote.fill",
+        "group" : "income",
+        "icon" : "mistia.category.income.salary_work.salary",
+        "id" : "salary",
+        "translations" : {
+          "en" : "Main salary",
+          "ja" : "主給与",
+          "vi" : "Lương chính"
+        }
+      },
+      {
+        "active" : true,
+        "aliases" : [
+
+        ],
+        "color" : "#57B7FF",
+        "fallbackIcon" : "banknote.fill",
+        "group" : "income",
+        "icon" : "mistia.category.income.salary_work.side_salary",
+        "id" : "side_salary",
+        "translations" : {
+          "en" : "Side salary",
+          "ja" : "副収入",
+          "vi" : "Lương phụ"
+        }
+      },
       {
         "active" : true,
         "aliases" : [
@@ -2048,38 +2080,6 @@
           "ja" : "残業代",
           "vi" : "OT / tăng ca"
         }
-      },
-      {
-        "active" : true,
-        "aliases" : [
-          "Lương"
-        ],
-        "color" : "#2DAA9E",
-        "fallbackIcon" : "banknote.fill",
-        "group" : "income",
-        "icon" : "mistia.category.income.salary_work.salary",
-        "id" : "salary",
-        "translations" : {
-          "en" : "Main salary",
-          "ja" : "主給与",
-          "vi" : "Lương chính"
-        }
-      },
-      {
-        "active" : true,
-        "aliases" : [
-
-        ],
-        "color" : "#57B7FF",
-        "fallbackIcon" : "banknote.fill",
-        "group" : "income",
-        "icon" : "mistia.category.income.salary_work.side_salary",
-        "id" : "side_salary",
-        "translations" : {
-          "en" : "Side salary",
-          "ja" : "副収入",
-          "vi" : "Lương phụ"
-        }
       }
     ],
     "color" : "#2DAA9E",
@@ -2137,22 +2137,6 @@
         "aliases" : [
 
         ],
-        "color" : "#8A8A8E",
-        "fallbackIcon" : "tray.full.fill",
-        "group" : "income",
-        "icon" : "mistia.category.income.business.other_business_income",
-        "id" : "other_business_income",
-        "translations" : {
-          "en" : "Other business income",
-          "ja" : "その他事業収入",
-          "vi" : "Thu kinh doanh khác"
-        }
-      },
-      {
-        "active" : true,
-        "aliases" : [
-
-        ],
         "color" : "#F26A5A",
         "fallbackIcon" : "storefront.fill",
         "group" : "income",
@@ -2178,6 +2162,22 @@
           "en" : "Service revenue",
           "ja" : "サービス収入",
           "vi" : "Thu dịch vụ"
+        }
+      },
+      {
+        "active" : true,
+        "aliases" : [
+
+        ],
+        "color" : "#8A8A8E",
+        "fallbackIcon" : "tray.full.fill",
+        "group" : "income",
+        "icon" : "mistia.category.income.business.other_business_income",
+        "id" : "other_business_income",
+        "translations" : {
+          "en" : "Other business income",
+          "ja" : "その他事業収入",
+          "vi" : "Thu kinh doanh khác"
         }
       }
     ],
@@ -2448,22 +2448,6 @@
       {
         "active" : true,
         "aliases" : [
-          "Thu khác từ gia đình"
-        ],
-        "color" : "#A76BFF",
-        "fallbackIcon" : "person.2.fill",
-        "group" : "income",
-        "icon" : "mistia.category.income.support_gift.family_support",
-        "id" : "family_support",
-        "translations" : {
-          "en" : "Family support received",
-          "ja" : "家族からの支援",
-          "vi" : "Gia đình hỗ trợ"
-        }
-      },
-      {
-        "active" : true,
-        "aliases" : [
           "Quà tặng"
         ],
         "color" : "#FF6D8A",
@@ -2524,6 +2508,22 @@
           "ja" : "奨学金・学習支援",
           "vi" : "Học bổng / hỗ trợ học tập"
         }
+      },
+      {
+        "active" : true,
+        "aliases" : [
+          "Thu khác từ gia đình"
+        ],
+        "color" : "#A76BFF",
+        "fallbackIcon" : "person.2.fill",
+        "group" : "income",
+        "icon" : "mistia.category.income.support_gift.family_support",
+        "id" : "family_support",
+        "translations" : {
+          "en" : "Family support received",
+          "ja" : "家族からの支援",
+          "vi" : "Gia đình hỗ trợ"
+        }
       }
     ],
     "color" : "#FF6D8A",
@@ -2565,22 +2565,6 @@
         "aliases" : [
 
         ],
-        "color" : "#8A8A8E",
-        "fallbackIcon" : "tray.full.fill",
-        "group" : "income",
-        "icon" : "mistia.category.income.liquidation.other_liquidation_income",
-        "id" : "other_liquidation_income",
-        "translations" : {
-          "en" : "Other liquidation income",
-          "ja" : "その他売却収入",
-          "vi" : "Thu khác từ thanh lý"
-        }
-      },
-      {
-        "active" : true,
-        "aliases" : [
-
-        ],
         "color" : "#F59B3F",
         "fallbackIcon" : "tag.fill",
         "group" : "income",
@@ -2590,6 +2574,22 @@
           "en" : "Used item sales",
           "ja" : "不用品売却",
           "vi" : "Bán đồ cũ"
+        }
+      },
+      {
+        "active" : true,
+        "aliases" : [
+
+        ],
+        "color" : "#8A8A8E",
+        "fallbackIcon" : "tray.full.fill",
+        "group" : "income",
+        "icon" : "mistia.category.income.liquidation.other_liquidation_income",
+        "id" : "other_liquidation_income",
+        "translations" : {
+          "en" : "Other liquidation income",
+          "ja" : "その他売却収入",
+          "vi" : "Thu khác từ thanh lý"
         }
       }
     ],
