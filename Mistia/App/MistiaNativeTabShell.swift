@@ -927,12 +927,17 @@ extension UIView {
   }
 
   private var allDescendantControls: [UIControl] {
-    subviews.flatMap { subview -> [UIControl] in
-      let nestedControls = subview.allDescendantControls
+    var controls: [UIControl] = []
+    accumulateDescendantControls(in: self, result: &controls)
+    return controls
+  }
+
+  private func accumulateDescendantControls(in view: UIView, result: inout [UIControl]) {
+    for subview in view.subviews {
       if let control = subview as? UIControl {
-        return [control] + nestedControls
+        result.append(control)
       }
-      return nestedControls
+      accumulateDescendantControls(in: subview, result: &result)
     }
   }
 }

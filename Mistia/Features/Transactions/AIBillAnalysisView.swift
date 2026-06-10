@@ -1413,7 +1413,10 @@ nonisolated enum AIBillImageProcessor {
         var bestData: Data?
 
         while candidateMaxDimension >= minAnalysisImageDimension {
-            let data = qualityAdjustedJPEGData(for: candidateImage)
+            var data: Data?
+            autoreleasepool {
+                data = qualityAdjustedJPEGData(for: candidateImage)
+            }
             if let data, data.count <= maxAnalysisImageBytes {
                 return data
             }
@@ -1422,7 +1425,9 @@ nonisolated enum AIBillImageProcessor {
             }
 
             candidateMaxDimension *= 0.86
-            candidateImage = scaledImage(image, maxDimension: candidateMaxDimension)
+            autoreleasepool {
+                candidateImage = scaledImage(image, maxDimension: candidateMaxDimension)
+            }
         }
 
         if let bestData, bestData.count <= maxAnalysisImageBytes {
@@ -1437,7 +1442,9 @@ nonisolated enum AIBillImageProcessor {
 
         while let current = data, current.count > maxAnalysisImageBytes, quality > 0.42 {
             quality -= 0.08
-            data = image.jpegData(compressionQuality: quality)
+            autoreleasepool {
+                data = image.jpegData(compressionQuality: quality)
+            }
         }
 
         return data

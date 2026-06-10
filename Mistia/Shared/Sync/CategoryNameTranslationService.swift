@@ -290,74 +290,23 @@ enum CategoryNameTranslationMaintenance {
         modelContext: ModelContext,
         limit: Int
     ) -> [TransactionCategory] {
-        var pendingDescriptor = FetchDescriptor<TransactionCategory>(
+        let descriptor = FetchDescriptor<TransactionCategory>(
             predicate: #Predicate { category in
                 category.deletedAt == nil
                     && category.isArchived == false
                     && category.isSystem == false
-                    && category.pendingTranslationSourceName != nil
+                    && (category.pendingTranslationSourceName != nil
+                        || category.nameEnglish == nil
+                        || category.nameEnglish == ""
+                        || category.nameJapanese == nil
+                        || category.nameJapanese == "")
             },
             sortBy: [SortDescriptor(\.updatedAt, order: .reverse)]
         )
-        pendingDescriptor.fetchLimit = limit
+        var descriptorCopy = descriptor
+        descriptorCopy.fetchLimit = limit
 
-        var missingEnglishDescriptor = FetchDescriptor<TransactionCategory>(
-            predicate: #Predicate { category in
-                category.deletedAt == nil
-                    && category.isArchived == false
-                    && category.isSystem == false
-                    && category.nameEnglish == nil
-            },
-            sortBy: [SortDescriptor(\.updatedAt, order: .reverse)]
-        )
-        missingEnglishDescriptor.fetchLimit = limit
-
-        var blankEnglishDescriptor = FetchDescriptor<TransactionCategory>(
-            predicate: #Predicate { category in
-                category.deletedAt == nil
-                    && category.isArchived == false
-                    && category.isSystem == false
-                    && category.nameEnglish == ""
-            },
-            sortBy: [SortDescriptor(\.updatedAt, order: .reverse)]
-        )
-        blankEnglishDescriptor.fetchLimit = limit
-
-        var missingJapaneseDescriptor = FetchDescriptor<TransactionCategory>(
-            predicate: #Predicate { category in
-                category.deletedAt == nil
-                    && category.isArchived == false
-                    && category.isSystem == false
-                    && category.nameJapanese == nil
-            },
-            sortBy: [SortDescriptor(\.updatedAt, order: .reverse)]
-        )
-        missingJapaneseDescriptor.fetchLimit = limit
-
-        var blankJapaneseDescriptor = FetchDescriptor<TransactionCategory>(
-            predicate: #Predicate { category in
-                category.deletedAt == nil
-                    && category.isArchived == false
-                    && category.isSystem == false
-                    && category.nameJapanese == ""
-            },
-            sortBy: [SortDescriptor(\.updatedAt, order: .reverse)]
-        )
-        blankJapaneseDescriptor.fetchLimit = limit
-
-        let fetched = ((try? modelContext.fetch(pendingDescriptor)) ?? [])
-            + ((try? modelContext.fetch(missingEnglishDescriptor)) ?? [])
-            + ((try? modelContext.fetch(blankEnglishDescriptor)) ?? [])
-            + ((try? modelContext.fetch(missingJapaneseDescriptor)) ?? [])
-            + ((try? modelContext.fetch(blankJapaneseDescriptor)) ?? [])
-        var categoriesByID: [UUID: TransactionCategory] = [:]
-        for category in fetched {
-            categoriesByID[category.id] = category
-        }
-        return categoriesByID.values
-            .sorted { $0.updatedAt > $1.updatedAt }
-            .prefix(limit)
-            .map { $0 }
+        return (try? modelContext.fetch(descriptorCopy)) ?? []
     }
 }
 
