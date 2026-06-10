@@ -2211,6 +2211,92 @@ private struct FamilyOverviewDataHost: View {
 
     private var overviewDataCacheKey: FamilyOverviewDataCacheKey {
         let selectedMonth = selectedMonth(for: timeframe, now: .now)
+
+        let walletsSig = walletsSignatureCache.signature(for: storedWallets) {
+            MistiaCollectionChangeSignature.make(
+                storedWallets,
+                updatedAt: \.updatedAt,
+                deletedAt: \.deletedAt,
+                isArchived: \.isArchived,
+                remoteVersion: \.remoteVersion
+            )
+        }
+
+        let transactionsSig = transactionsSignatureCache.signature(for: storedTransactions) {
+            MistiaCollectionChangeSignature.make(
+                storedTransactions,
+                updatedAt: \.updatedAt,
+                deletedAt: \.deletedAt,
+                isArchived: \.isArchived,
+                remoteVersion: \.remoteVersion
+            )
+        }
+
+        let budgetsSig = budgetsSignatureCache.signature(for: storedBudgets) {
+            MistiaCollectionChangeSignature.make(
+                storedBudgets,
+                updatedAt: \.updatedAt,
+                deletedAt: \.deletedAt,
+                isArchived: \.isArchived,
+                remoteVersion: \.remoteVersion
+            )
+        }
+
+        let goalsSig = goalsSignatureCache.signature(for: storedGoals) {
+            MistiaCollectionChangeSignature.make(
+                storedGoals,
+                updatedAt: \.updatedAt,
+                deletedAt: \.deletedAt,
+                isArchived: \.isArchived,
+                remoteVersion: \.remoteVersion
+            )
+        }
+
+        let billsSig = billsSignatureCache.signature(for: storedBills) {
+            MistiaCollectionChangeSignature.make(
+                storedBills,
+                updatedAt: \.updatedAt,
+                deletedAt: \.deletedAt,
+                isArchived: \.isArchived,
+                remoteVersion: \.remoteVersion
+            )
+        }
+
+        let installmentsSig = installmentsSignatureCache.signature(for: storedInstallments) {
+            MistiaCollectionChangeSignature.make(
+                storedInstallments,
+                updatedAt: \.updatedAt,
+                deletedAt: \.deletedAt,
+                isArchived: \.isArchived,
+                remoteVersion: \.remoteVersion
+            )
+        }
+
+        let occurrencesSig = occurrencesSignatureCache.signature(for: storedOccurrences) {
+            MistiaCollectionChangeSignature.make(
+                storedOccurrences,
+                updatedAt: \.updatedAt,
+                deletedAt: \.deletedAt,
+                remoteVersion: \.remoteVersion
+            )
+        }
+
+        let ownershipSig = ownershipSignatureCache.signature(for: ownershipScopes) {
+            MistiaCollectionChangeSignature.make(
+                ownershipScopes,
+                updatedAt: \.updatedAt,
+                deletedAt: { _ in nil }
+            )
+        }
+
+        let auditSig = auditSignatureCache.signature(for: transactionAuditRecords) {
+            MistiaCollectionChangeSignature.make(
+                transactionAuditRecords,
+                updatedAt: \.updatedAt,
+                deletedAt: { _ in nil }
+            )
+        }
+
         return FamilyOverviewDataCacheKey(
             timeframeRawValue: timeframe.rawValue,
             activeScope: familyContextStore.activeContext.scope,
@@ -2228,82 +2314,15 @@ private struct FamilyOverviewDataHost: View {
             selectedMonthStart: selectedMonth.timeIntervalSince1970,
             localeIdentifier: locale.identifier,
             membersSignature: membersSignature,
-            walletsSignature: walletsSignatureCache.signature(for: storedWallets) {
-                MistiaCollectionChangeSignature.make(
-                    storedWallets,
-                    updatedAt: \.updatedAt,
-                    deletedAt: \.deletedAt,
-                    isArchived: \.isArchived,
-                    remoteVersion: \.remoteVersion
-                )
-            },
-            transactionsSignature: transactionsSignatureCache.signature(for: storedTransactions) {
-                MistiaCollectionChangeSignature.make(
-                    storedTransactions,
-                    updatedAt: \.updatedAt,
-                    deletedAt: \.deletedAt,
-                    isArchived: \.isArchived,
-                    remoteVersion: \.remoteVersion
-                )
-            },
-            budgetsSignature: budgetsSignatureCache.signature(for: storedBudgets) {
-                MistiaCollectionChangeSignature.make(
-                    storedBudgets,
-                    updatedAt: \.updatedAt,
-                    deletedAt: \.deletedAt,
-                    isArchived: \.isArchived,
-                    remoteVersion: \.remoteVersion
-                )
-            },
-            goalsSignature: goalsSignatureCache.signature(for: storedGoals) {
-                MistiaCollectionChangeSignature.make(
-                    storedGoals,
-                    updatedAt: \.updatedAt,
-                    deletedAt: \.deletedAt,
-                    isArchived: \.isArchived,
-                    remoteVersion: \.remoteVersion
-                )
-            },
-            billsSignature: billsSignatureCache.signature(for: storedBills) {
-                MistiaCollectionChangeSignature.make(
-                    storedBills,
-                    updatedAt: \.updatedAt,
-                    deletedAt: \.deletedAt,
-                    isArchived: \.isArchived,
-                    remoteVersion: \.remoteVersion
-                )
-            },
-            installmentsSignature: installmentsSignatureCache.signature(for: storedInstallments) {
-                MistiaCollectionChangeSignature.make(
-                    storedInstallments,
-                    updatedAt: \.updatedAt,
-                    deletedAt: \.deletedAt,
-                    isArchived: \.isArchived,
-                    remoteVersion: \.remoteVersion
-                )
-            },
-            occurrencesSignature: occurrencesSignatureCache.signature(for: storedOccurrences) {
-                MistiaCollectionChangeSignature.make(
-                    storedOccurrences,
-                    updatedAt: \.updatedAt,
-                    deletedAt: \.deletedAt,
-                    remoteVersion: \.remoteVersion
-                )
-            },
-            ownershipSignature: ownershipSignatureCache.signature(for: ownershipScopes) {
-                MistiaCollectionChangeSignature.make(
-                    ownershipScopes,
-                    updatedAt: \.updatedAt,
-                    deletedAt: { _ in nil }
-                )
-            },
-            auditSignature: auditSignatureCache.signature(for: transactionAuditRecords) {
-                MistiaCollectionChangeSignature.make(
-                    transactionAuditRecords,
-                    updatedAt: \.updatedAt,
-                    deletedAt: { _ in nil }
-                )
-            }
+            walletsSignature: walletsSig,
+            transactionsSignature: transactionsSig,
+            budgetsSignature: budgetsSig,
+            goalsSignature: goalsSig,
+            billsSignature: billsSig,
+            installmentsSignature: installmentsSig,
+            occurrencesSignature: occurrencesSig,
+            ownershipSignature: ownershipSig,
+            auditSignature: auditSig
         )
     }
 
