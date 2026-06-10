@@ -430,8 +430,8 @@ final class MistiaNativeTabBarController: UITabBarController, UITabBarController
         : UIColor(red: 0.45, green: 0.48, blue: 0.57, alpha: 1.0) // #737b91
     case .familyOverview:
       return usesDarkTint
-        ? UIColor(red: 0.55, green: 0.50, blue: 1.00, alpha: 1.0) // #8c80ff
-        : UIColor(red: 0.35, green: 0.30, blue: 0.99, alpha: 1.0) // #594dfc
+        ? UIColor(red: 0.90, green: 0.74, blue: 1.00, alpha: 1.0) // mistiaDarkModeTabTintColor
+        : UIColor(red: 0.43, green: 0.23, blue: 0.76, alpha: 1.0) // mistiaAccentColor
     case .memberOverview:
       return usesDarkTint
         ? UIColor(red: 1.00, green: 0.46, blue: 0.66, alpha: 1.0) // #ff75a9

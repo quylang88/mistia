@@ -148,7 +148,7 @@ enum MistiaShortcutLogic {
                 presentation: MistiaShortcutPresentation(
                     title: L10n.settings.shortcut.option.familyOverview.title,
                     accessibilityLabel: L10n.settings.shortcut.option.familyOverview.accessibility,
-                    icon: .systemImage("shareplay"),
+                    icon: .systemImage("person.3"),
                     action: .familyOverview(familyID: familyID)
                 )
             )

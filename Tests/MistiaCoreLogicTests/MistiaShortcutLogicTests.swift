@@ -55,7 +55,7 @@ final class MistiaShortcutLogicTests: XCTestCase {
         )
 
         XCTAssertEqual(resolution.selection, .familyOverview)
-        XCTAssertEqual(resolution.presentation.icon, .systemImage("shareplay"))
+        XCTAssertEqual(resolution.presentation.icon, .systemImage("person.3"))
     }
 
     func testResolveKeepsSyncNowSelection() {
