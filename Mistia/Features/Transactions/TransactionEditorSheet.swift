@@ -248,6 +248,13 @@ struct TransactionEditorSheet: View {
     @State private var pendingReceiptAnalysisSource: TransactionReceiptAnalysisSource?
     @State private var didApplyReceiptAnalysisToCurrentDraft = false
     @State private var didLoadReceiptDraft = false
+
+    private static let receiptFileSizeFormatter: ByteCountFormatter = {
+        let formatter = ByteCountFormatter()
+        formatter.allowedUnits = [.useKB, .useMB]
+        formatter.countStyle = .file
+        return formatter
+    }()
     @State private var didAutoPresentReceiptScanner = false
     @State private var didApplyReceiptPrefill = false
     @State private var showsFamilyTransferConfirmation = false
@@ -1770,10 +1777,7 @@ struct TransactionEditorSheet: View {
     }
 
     private func receiptFileSizeText(for byteCount: Int) -> String {
-        let formatter = ByteCountFormatter()
-        formatter.allowedUnits = [.useKB, .useMB]
-        formatter.countStyle = .file
-        return formatter.string(fromByteCount: Int64(byteCount))
+        Self.receiptFileSizeFormatter.string(fromByteCount: Int64(byteCount))
     }
 
     private var shouldShowMissingWalletsState: Bool {

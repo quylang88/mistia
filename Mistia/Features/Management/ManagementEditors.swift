@@ -14,6 +14,24 @@ struct ManagementCategoryEditorTarget: Identifiable {
     let preferredParentCategoryID: UUID?
 }
 
+private struct ManagementWalletBalanceSnapshotCacheKey: Hashable {
+    let walletID: UUID
+    let walletKindRawValue: String
+    let openingBalanceMinor: Int64
+    let creditLimitMinor: Int64?
+    let transactionSignature: MistiaCollectionChangeSignature
+}
+
+private struct ManagementWalletBalanceSnapshot {
+    let debtBalanceMinor: Int64
+    let displayBalanceMinor: Int64
+}
+
+private struct ManagementWalletBalanceSnapshotCache {
+    let key: ManagementWalletBalanceSnapshotCacheKey
+    let snapshot: ManagementWalletBalanceSnapshot
+}
+
 struct ManagementWalletEditorSheet: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
@@ -36,6 +54,7 @@ struct ManagementWalletEditorSheet: View {
     // Edge Case 6: Confirmation for changing payment source wallet with debt
     @State private var showingPaymentSourceChangeConfirmation = false
     @State private var pendingPaymentSourceWalletID: UUID?
+    @State private var walletBalanceSnapshotCache: ManagementWalletBalanceSnapshotCache?
 
     init(target: ManagementWalletEditorTarget) {
         self.target = target
@@ -43,6 +62,10 @@ struct ManagementWalletEditorSheet: View {
     }
 
     var body: some View {
+        let balanceSnapshotKey = walletBalanceSnapshotCacheKey
+        let balanceSnapshot = cachedWalletBalanceSnapshot(for: balanceSnapshotKey)
+        let effectiveBalance = balanceSnapshot?.displayBalanceMinor ?? 0
+
         NavigationStack {
             Form {
                 Section(L10n.management.management.identity) {
@@ -251,6 +274,13 @@ struct ManagementWalletEditorSheet: View {
                 )
             }
         }
+        .task(id: balanceSnapshotKey) {
+            guard let balanceSnapshotKey, let balanceSnapshot else {
+                walletBalanceSnapshotCache = nil
+                return
+            }
+            refreshWalletBalanceSnapshotCache(for: balanceSnapshotKey, snapshot: balanceSnapshot)
+        }
     }
 
     private var creditCardFormSection: some View {
@@ -372,18 +402,7 @@ struct ManagementWalletEditorSheet: View {
            let existingWallet = target.wallet,
            let existingProfile = existingWallet.creditCardProfile,
            existingProfile.paymentSourceWallet?.id != draft.paymentSourceWalletID {
-            
-            // Calculate current debt
-            let txDescriptor = FetchDescriptor<LedgerTransaction>()
-            let allTransactions = (try? modelContext.fetch(txDescriptor)) ?? []
-            let records = allTransactions.filter { $0.deletedAt == nil }.map { $0.snapshot }
-
-            let walletSnapshot = TransactionWalletSnapshot(
-                id: existingWallet.id,
-                kind: existingWallet.kind,
-                openingBalanceMinor: existingWallet.openingBalanceMinor
-            )
-            let currentDebt = TransactionLogic.effectiveBalance(for: walletSnapshot, records: records)
+            let currentDebt = currentDebtBalanceSnapshot(for: existingWallet)
 
             if currentDebt > 0 {
                 // Show confirmation dialog
@@ -489,36 +508,82 @@ struct ManagementWalletEditorSheet: View {
         }
     }
 
-    private var effectiveBalance: Int64 {
-        guard let wallet = target.wallet else { return 0 }
-
-        let txDescriptor = FetchDescriptor<LedgerTransaction>()
-        let allTransactions = (try? modelContext.fetch(txDescriptor)) ?? []
-        let records = allTransactions
-            .filter { $0.deletedAt == nil }
-            .map { $0.snapshot }
-
-        let walletSnapshot = TransactionWalletSnapshot(
-            id: wallet.id,
-            kind: wallet.kind,
-            openingBalanceMinor: wallet.openingBalanceMinor
-        )
-
-        let debt = TransactionLogic.effectiveBalance(for: walletSnapshot, records: records)
-        
-        // For credit cards, show available credit (limit - debt), not debt
-        if wallet.kind == .creditCard, let profile = wallet.creditCardProfile {
-            return max(profile.creditLimitMinor - debt, 0)
-        }
-        
-        return debt
-    }
-
     private var canEditWalletCurrency: Bool {
         guard let wallet = target.wallet else { return true }
         return !storedTransactions.contains {
             $0.sourceWallet?.id == wallet.id || $0.destinationWallet?.id == wallet.id
         }
+    }
+
+    private var walletBalanceSnapshotCacheKey: ManagementWalletBalanceSnapshotCacheKey? {
+        guard let wallet = target.wallet else { return nil }
+        return ManagementWalletBalanceSnapshotCacheKey(
+            walletID: wallet.id,
+            walletKindRawValue: wallet.kind.rawValue,
+            openingBalanceMinor: wallet.openingBalanceMinor,
+            creditLimitMinor: wallet.creditCardProfile?.creditLimitMinor,
+            transactionSignature: MistiaCollectionChangeSignature.make(
+                storedTransactions,
+                updatedAt: \.updatedAt,
+                deletedAt: \.deletedAt,
+                isArchived: \.isArchived,
+                remoteVersion: \.remoteVersion
+            )
+        )
+    }
+
+    private func cachedWalletBalanceSnapshot(
+        for key: ManagementWalletBalanceSnapshotCacheKey?
+    ) -> ManagementWalletBalanceSnapshot? {
+        guard let key, let wallet = target.wallet else { return nil }
+        if let walletBalanceSnapshotCache, walletBalanceSnapshotCache.key == key {
+            return walletBalanceSnapshotCache.snapshot
+        }
+        return makeWalletBalanceSnapshot(for: wallet)
+    }
+
+    private func refreshWalletBalanceSnapshotCache(
+        for key: ManagementWalletBalanceSnapshotCacheKey,
+        snapshot: ManagementWalletBalanceSnapshot
+    ) {
+        walletBalanceSnapshotCache = ManagementWalletBalanceSnapshotCache(
+            key: key,
+            snapshot: snapshot
+        )
+    }
+
+    private func currentDebtBalanceSnapshot(for wallet: LedgerWallet) -> Int64 {
+        cachedWalletBalanceSnapshot(for: walletBalanceSnapshotCacheKey)?.debtBalanceMinor
+            ?? currentDebtBalance(for: wallet)
+    }
+
+    private func makeWalletBalanceSnapshot(for wallet: LedgerWallet) -> ManagementWalletBalanceSnapshot {
+        let debt = currentDebtBalance(for: wallet)
+        let displayBalance: Int64
+        if wallet.kind == .creditCard, let profile = wallet.creditCardProfile {
+            displayBalance = max(profile.creditLimitMinor - debt, 0)
+        } else {
+            displayBalance = debt
+        }
+        return ManagementWalletBalanceSnapshot(
+            debtBalanceMinor: debt,
+            displayBalanceMinor: displayBalance
+        )
+    }
+
+    private func currentDebtBalance(for wallet: LedgerWallet) -> Int64 {
+        let walletSnapshot = TransactionWalletSnapshot(
+            id: wallet.id,
+            kind: wallet.kind,
+            openingBalanceMinor: wallet.openingBalanceMinor
+        )
+        return TransactionLogic.effectiveBalance(
+            for: walletSnapshot,
+            records: storedTransactions
+                .lazy
+                .filter { $0.deletedAt == nil }
+                .map(\.snapshot)
+        )
     }
 
     private func updateCreditCardProfile(for wallet: LedgerWallet, now: Date) {
@@ -555,19 +620,7 @@ struct ManagementWalletEditorSheet: View {
 
         // Edge Case 5: Validate cannot archive credit card with outstanding debt
         if wallet.kind == .creditCard {
-            let txDescriptor = FetchDescriptor<LedgerTransaction>()
-            let allTransactions = (try? modelContext.fetch(txDescriptor)) ?? []
-            let records = allTransactions
-                .filter { $0.deletedAt == nil }
-                .map { $0.snapshot }
-
-            let walletSnapshot = TransactionWalletSnapshot(
-                id: wallet.id,
-                kind: wallet.kind,
-                openingBalanceMinor: wallet.openingBalanceMinor
-            )
-
-            let currentDebt = TransactionLogic.effectiveBalance(for: walletSnapshot, records: records)
+            let currentDebt = currentDebtBalanceSnapshot(for: wallet)
 
             if currentDebt > 0 {
                 alertMessage = L10n.management.management.cannotArchiveCreditCardWithOutstandingDebt(String(describing: currentDebt.formattedCurrency(code: wallet.currencyCode)))
@@ -578,24 +631,13 @@ struct ManagementWalletEditorSheet: View {
             let calendar = MistiaCalendar.current
             let currentMonth = PlanningLogic.startOfMonth(for: .now, calendar: calendar)
             let recentMonths = (0...3).compactMap { calendar.date(byAdding: .month, value: -$0, to: currentMonth) }
-
-            for month in recentMonths {
-                let hasPayment = allTransactions.contains { tx in
-                    tx.destinationWallet?.id == wallet.id
-                        && calendar.isDate(tx.occurredAt, equalTo: month, toGranularity: .month)
-                        && TransactionLogic.isCreditCardPayment(tx.snapshot)
-                }
-
-                let hasExpenses = allTransactions.contains { tx in
-                    tx.sourceWallet?.id == wallet.id &&
-                    tx.primaryKind == .expense &&
-                    calendar.isDate(tx.occurredAt, equalTo: month, toGranularity: .month)
-                }
-
-                if hasExpenses && !hasPayment {
-                    alertMessage = L10n.management.management.cannotArchiveCreditCardWithUnpaidStatements
-                    return
-                }
+            if hasRecentUnpaidCreditCardStatement(
+                for: wallet,
+                recentMonths: recentMonths,
+                calendar: calendar
+            ) {
+                alertMessage = L10n.management.management.cannotArchiveCreditCardWithUnpaidStatements
+                return
             }
         }
 
@@ -621,6 +663,37 @@ struct ManagementWalletEditorSheet: View {
             .filter { $0.deletedAt == nil }
             .map(\.sortOrder)
             .max() ?? -1) + 1
+    }
+
+    private func hasRecentUnpaidCreditCardStatement(
+        for wallet: LedgerWallet,
+        recentMonths: [Date],
+        calendar: Calendar
+    ) -> Bool {
+        let recentMonthSet = Set(recentMonths)
+        guard !recentMonthSet.isEmpty else { return false }
+
+        var paymentMonths = Set<Date>()
+        var expenseMonths = Set<Date>()
+
+        for transaction in storedTransactions {
+            let transactionMonth = PlanningLogic.startOfMonth(for: transaction.occurredAt, calendar: calendar)
+            guard recentMonthSet.contains(transactionMonth) else { continue }
+
+            if transaction.destinationWallet?.id == wallet.id,
+               TransactionLogic.isCreditCardPayment(transaction.snapshot) {
+                paymentMonths.insert(transactionMonth)
+            }
+
+            if transaction.sourceWallet?.id == wallet.id,
+               transaction.primaryKind == .expense {
+                expenseMonths.insert(transactionMonth)
+            }
+        }
+
+        return expenseMonths.contains { month in
+            !paymentMonths.contains(month)
+        }
     }
 }
 

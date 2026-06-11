@@ -378,6 +378,16 @@ private struct CurrencySettingsView: View {
     @AppStorage(MistiaCurrencySettings.StorageKey.manualJPYToVNDRate) private var manualJPYToVNDRate = "165"
     @State private var isRefreshingRates = false
 
+    private static let lastUpdatedFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.locale = .autoupdatingCurrent
+        formatter.calendar = .autoupdatingCurrent
+        formatter.timeZone = .autoupdatingCurrent
+        formatter.dateStyle = .medium
+        formatter.timeStyle = .short
+        return formatter
+    }()
+
     private var cardTint: Color {
         colorScheme == .dark ? Color(UIColor.secondarySystemGroupedBackground) : .white.opacity(0.22)
     }
@@ -605,10 +615,7 @@ private struct CurrencySettingsView: View {
             return L10n.settings.currency.notUpdatedYet
         }
 
-        let formatter = DateFormatter()
-        formatter.dateStyle = .medium
-        formatter.timeStyle = .short
-        return L10n.settings.currency.lastUpdatedValue(formatter.string(from: date))
+        return L10n.settings.currency.lastUpdatedValue(Self.lastUpdatedFormatter.string(from: date))
     }
 
     private func textDetailLayout(_ text: String) -> some View {

@@ -34,6 +34,13 @@ struct AIBillAnalysisView: View {
 
     private let imageLimit = 5
 
+    private static let billFileSizeFormatter: ByteCountFormatter = {
+        let formatter = ByteCountFormatter()
+        formatter.allowedUnits = [.useKB, .useMB]
+        formatter.countStyle = .file
+        return formatter
+    }()
+
     var body: some View {
         ScrollView {
             VStack(spacing: 18) {
@@ -785,10 +792,7 @@ struct AIBillAnalysisView: View {
     }
 
     private func billFileSizeText(for byteCount: Int) -> String {
-        let formatter = ByteCountFormatter()
-        formatter.allowedUnits = [.useKB, .useMB]
-        formatter.countStyle = .file
-        return formatter.string(fromByteCount: Int64(byteCount))
+        Self.billFileSizeFormatter.string(fromByteCount: Int64(byteCount))
     }
 
     private func walletPickerTitle(for wallet: LedgerWallet) -> String {
