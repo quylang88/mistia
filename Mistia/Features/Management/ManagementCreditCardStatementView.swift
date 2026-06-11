@@ -1,6 +1,28 @@
 import SwiftData
 import SwiftUI
 
+private struct ManagementCreditCardStatementRenderSnapshot {
+    let statement: PlanningCreditCardStatementSnapshot?
+    let chargeTransactions: [LedgerTransaction]
+    let walletBalancesByID: [UUID: Int64]
+}
+
+private struct ManagementCreditCardStatementRenderSnapshotCache {
+    let key: ManagementCreditCardStatementRenderSnapshotCacheKey
+    let snapshot: ManagementCreditCardStatementRenderSnapshot
+}
+
+private struct ManagementCreditCardStatementRenderSnapshotCacheKey: Hashable {
+    let walletID: UUID
+    let selectedMonthStart: TimeInterval
+    let calendarIdentifier: String
+    let calendarTimeZoneIdentifier: String
+    let walletSignature: MistiaCollectionChangeSignature
+    let transactionSignature: MistiaCollectionChangeSignature
+    let occurrenceSignature: MistiaCollectionChangeSignature
+    let creditCardProfileSignature: Int
+}
+
 struct ManagementCreditCardStatementView: View {
     @Environment(\.calendar) private var calendar
     @Environment(\.colorScheme) private var colorScheme
@@ -23,6 +45,7 @@ struct ManagementCreditCardStatementView: View {
     @State private var showingAlert = false
     @State private var alertMessage = ""
     @State private var viewID = UUID()
+    @State private var renderSnapshotCache: ManagementCreditCardStatementRenderSnapshotCache?
 
     init(wallet: LedgerWallet, initialMonth: Date? = nil) {
         self.wallet = wallet
@@ -30,35 +53,135 @@ struct ManagementCreditCardStatementView: View {
         _selectedMonth = State(initialValue: initialMonth ?? PlanningLogic.startOfMonth(for: .now))
     }
 
-    private var transactionRecords: [TransactionRecordSnapshot] {
-        allTransactions.map(\.planningRecordSnapshot)
-    }
-
-    private var occurrenceSnapshots: [PlanningDueOccurrenceSnapshot] {
-        storedOccurrences.map(\.planningSnapshot)
-    }
-
-    private var accountSnapshot: PlanningCreditCardAccountSnapshot? {
-        wallet.planningCreditCardSnapshot(records: transactionRecords)
-    }
-
-    private var selectedStatement: PlanningCreditCardStatementSnapshot? {
-        guard let accountSnapshot else { return nil }
-        return PlanningLogic.creditCardStatementItems(
-            accounts: [accountSnapshot],
-            records: transactionRecords,
-            occurrences: occurrenceSnapshots,
-            statementMonths: [selectedMonth],
-            referenceDate: .now,
-            calendar: calendar
-        ).first
-    }
-
     private var dynamicAccentColor: Color {
         colorScheme == .dark ? MistiaAccent.lightPurple.color : MistiaAccent.purple.color
     }
 
+    private var renderSnapshot: ManagementCreditCardStatementRenderSnapshot {
+        let transactionRecords = allTransactions.map(\.planningRecordSnapshot)
+        let walletSnapshots = storedWallets.map {
+            TransactionWalletSnapshot(
+                id: $0.id,
+                kind: $0.kind,
+                openingBalanceMinor: $0.openingBalanceMinor
+            )
+        }
+        let balanceIndex = TransactionLogic.walletBalanceIndex(
+            wallets: walletSnapshots,
+            records: transactionRecords
+        )
+        var walletBalancesByID: [UUID: Int64] = [:]
+        walletBalancesByID.reserveCapacity(walletSnapshots.count)
+        for snapshot in walletSnapshots {
+            walletBalancesByID[snapshot.id] = balanceIndex.balance(for: snapshot)
+        }
+
+        let statement: PlanningCreditCardStatementSnapshot?
+        if let accountSnapshot = wallet.planningCreditCardSnapshot(balanceIndex: balanceIndex) {
+            statement = PlanningLogic.creditCardStatementItems(
+                accounts: [accountSnapshot],
+                records: transactionRecords,
+                occurrences: storedOccurrences.map(\.planningSnapshot),
+                statementMonths: [selectedMonth],
+                referenceDate: .now,
+                calendar: calendar
+            ).first
+        } else {
+            statement = nil
+        }
+
+        return ManagementCreditCardStatementRenderSnapshot(
+            statement: statement,
+            chargeTransactions: statement.map(chargeTransactions) ?? [],
+            walletBalancesByID: walletBalancesByID
+        )
+    }
+
+    private func cachedRenderSnapshot(
+        for key: ManagementCreditCardStatementRenderSnapshotCacheKey
+    ) -> ManagementCreditCardStatementRenderSnapshot {
+        if let renderSnapshotCache, renderSnapshotCache.key == key {
+            return renderSnapshotCache.snapshot
+        }
+
+        return renderSnapshot
+    }
+
+    private func refreshRenderSnapshotCache(
+        for key: ManagementCreditCardStatementRenderSnapshotCacheKey,
+        snapshot: ManagementCreditCardStatementRenderSnapshot
+    ) {
+        renderSnapshotCache = ManagementCreditCardStatementRenderSnapshotCache(
+            key: key,
+            snapshot: snapshot
+        )
+    }
+
+    private var renderSnapshotCacheKey: ManagementCreditCardStatementRenderSnapshotCacheKey {
+        ManagementCreditCardStatementRenderSnapshotCacheKey(
+            walletID: wallet.id,
+            selectedMonthStart: PlanningLogic.startOfMonth(for: selectedMonth, calendar: calendar).timeIntervalSince1970,
+            calendarIdentifier: String(describing: calendar.identifier),
+            calendarTimeZoneIdentifier: calendar.timeZone.identifier,
+            walletSignature: MistiaCollectionChangeSignature.make(
+                storedWallets,
+                updatedAt: \.updatedAt,
+                deletedAt: \.deletedAt,
+                isArchived: \.isArchived,
+                remoteVersion: \.remoteVersion
+            ),
+            transactionSignature: MistiaCollectionChangeSignature.make(
+                allTransactions,
+                updatedAt: \.updatedAt,
+                deletedAt: \.deletedAt,
+                isArchived: \.isArchived,
+                remoteVersion: \.remoteVersion
+            ),
+            occurrenceSignature: MistiaCollectionChangeSignature.make(
+                storedOccurrences,
+                updatedAt: \.updatedAt,
+                deletedAt: \.deletedAt,
+                remoteVersion: \.remoteVersion
+            ),
+            creditCardProfileSignature: creditCardProfileSignature
+        )
+    }
+
+    private var creditCardProfileSignature: Int {
+        var hasher = Hasher()
+        hasher.combine(wallet.id)
+        hasher.combine(wallet.kindRawValue)
+        hasher.combine(wallet.isArchived)
+        hasher.combine(wallet.createdAt.timeIntervalSince1970)
+        hasher.combine(wallet.updatedAt.timeIntervalSince1970)
+        hasher.combine(wallet.remoteVersion)
+
+        if let profile = wallet.creditCardProfile {
+            hasher.combine(profile.id)
+            hasher.combine(profile.issuerName)
+            hasher.combine(profile.networkRawValue)
+            hasher.combine(profile.last4)
+            hasher.combine(profile.creditLimitMinor)
+            hasher.combine(profile.statementClosingDay)
+            hasher.combine(profile.paymentDueDay)
+            hasher.combine(profile.autoPayEnabled)
+            hasher.combine(profile.updatedAt.timeIntervalSince1970)
+            hasher.combine(profile.deletedAt?.timeIntervalSince1970)
+            hasher.combine(profile.remoteVersion)
+            hasher.combine(profile.paymentSourceWallet?.id)
+            hasher.combine(profile.paymentSourceWallet?.name)
+            hasher.combine(profile.paymentSourceWallet?.updatedAt.timeIntervalSince1970)
+        } else {
+            hasher.combine("no-credit-card-profile")
+        }
+
+        return hasher.finalize()
+    }
+
     var body: some View {
+        let snapshotKey = renderSnapshotCacheKey
+        let renderSnapshot = cachedRenderSnapshot(for: snapshotKey)
+
         MistiaPinnedTopBarScaffold(
             tone: .muted,
             title: wallet.name,
@@ -74,12 +197,15 @@ struct ManagementCreditCardStatementView: View {
         ) {
             monthMenu
 
-            if let selectedStatement {
-                statementSummary(selectedStatement)
+            if let selectedStatement = renderSnapshot.statement {
+                statementSummary(
+                    selectedStatement,
+                    walletBalancesByID: renderSnapshot.walletBalancesByID
+                )
                 transactionSection(
                     title: L10n.management.managementcreditcardstatement.chargesInCycle,
                     emptyText: L10n.management.managementcreditcardstatement.noChargesInThisCycle,
-                    transactions: chargeTransactions(for: selectedStatement),
+                    transactions: renderSnapshot.chargeTransactions,
                     isLocked: effectiveState(for: selectedStatement) == .paid
                 )
             } else {
@@ -97,6 +223,9 @@ struct ManagementCreditCardStatementView: View {
         .onDisappear {
             uiState.requestQuickCreateHidden(false, id: viewID)
         }
+        .task(id: snapshotKey) {
+            refreshRenderSnapshotCache(for: snapshotKey, snapshot: renderSnapshot)
+        }
     }
 
     private var monthMenu: some View {
@@ -107,7 +236,10 @@ struct ManagementCreditCardStatementView: View {
         )
     }
 
-    private func statementSummary(_ statement: PlanningCreditCardStatementSnapshot) -> some View {
+    private func statementSummary(
+        _ statement: PlanningCreditCardStatementSnapshot,
+        walletBalancesByID: [UUID: Int64]
+    ) -> some View {
         let state = effectiveState(for: statement)
 
         return MistiaBlockCard(cornerRadius: 22, padding: 18) {
@@ -161,7 +293,7 @@ struct ManagementCreditCardStatementView: View {
                 }
                 .padding(.vertical, 2)
 
-                paymentActionButton(for: statement, state: state)
+                paymentActionButton(for: statement, state: state, walletBalancesByID: walletBalancesByID)
             }
         }
     }
@@ -169,12 +301,13 @@ struct ManagementCreditCardStatementView: View {
     @ViewBuilder
     private func paymentActionButton(
         for statement: PlanningCreditCardStatementSnapshot,
-        state: PlanningCreditCardStatementState
+        state: PlanningCreditCardStatementState,
+        walletBalancesByID: [UUID: Int64]
     ) -> some View {
         if canPay(statement, state: state) {
             if #available(iOS 26, *) {
                 Button {
-                    performPayment(for: statement)
+                    performPayment(for: statement, walletBalancesByID: walletBalancesByID)
                 } label: {
                     Label(
                         L10n.management.managementcreditcardstatement.payNow,
@@ -189,7 +322,7 @@ struct ManagementCreditCardStatementView: View {
                 .tint(state == .overdue ? Color(hex: "#F45C7E") : dynamicAccentColor)
             } else {
                 Button {
-                    performPayment(for: statement)
+                    performPayment(for: statement, walletBalancesByID: walletBalancesByID)
                 } label: {
                     Label(
                         L10n.management.managementcreditcardstatement.payNow,
@@ -309,20 +442,23 @@ struct ManagementCreditCardStatementView: View {
     }
 
     private func chargeTransactions(for statement: PlanningCreditCardStatementSnapshot) -> [LedgerTransaction] {
-        allTransactions.filter { tx in
-            tx.sourceWallet?.id == wallet.id
-                && tx.entryStatus == .posted
-                && (
-                    tx.primaryKind == .expense
-                    || (
-                        tx.primaryKind == .transfer
-                        && tx.transferSubtype == .debt
-                        && tx.debtIntent == .lend
-                    )
-                )
-                && calendar.isDate(tx.occurredAt, equalTo: statement.statementMonth, toGranularity: .month)
+        var transactions: [LedgerTransaction] = []
+        for transaction in allTransactions {
+            guard transaction.sourceWallet?.id == statement.walletID,
+                  transaction.entryStatus == .posted,
+                  calendar.isDate(transaction.occurredAt, equalTo: statement.statementMonth, toGranularity: .month),
+                  transaction.primaryKind == .expense || (
+                      transaction.primaryKind == .transfer
+                          && transaction.transferSubtype == .debt
+                          && transaction.debtIntent == .lend
+                  ) else {
+                continue
+            }
+            transactions.append(transaction)
         }
-        .sorted { $0.occurredAt > $1.occurredAt }
+
+        transactions.sort { $0.occurredAt > $1.occurredAt }
+        return transactions
     }
 
     private func effectiveState(for statement: PlanningCreditCardStatementSnapshot) -> PlanningCreditCardStatementState {
@@ -336,7 +472,10 @@ struct ManagementCreditCardStatementView: View {
         statement.amountMinor > 0 && (state == .payable || state == .overdue)
     }
 
-    private func performPayment(for statement: PlanningCreditCardStatementSnapshot) {
+    private func performPayment(
+        for statement: PlanningCreditCardStatementSnapshot,
+        walletBalancesByID: [UUID: Int64]
+    ) {
         let state = effectiveState(for: statement)
         guard canPay(statement, state: state) else { return }
 
@@ -347,13 +486,13 @@ struct ManagementCreditCardStatementView: View {
             return
         }
 
-        let sourceBalanceMinor = TransactionLogic.effectiveBalance(
+        let sourceBalanceMinor = walletBalancesByID[sourceWallet.id] ?? TransactionLogic.effectiveBalance(
             for: TransactionWalletSnapshot(
                 id: sourceWallet.id,
                 kind: sourceWallet.kind,
                 openingBalanceMinor: sourceWallet.openingBalanceMinor
             ),
-            records: allTransactions.map(\.snapshot)
+            records: allTransactions.lazy.map(\.snapshot)
         )
 
         guard sourceBalanceMinor >= statement.amountMinor else {
