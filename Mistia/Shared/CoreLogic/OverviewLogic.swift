@@ -50,6 +50,8 @@ nonisolated struct OverviewTransactionSnapshot: Equatable, Identifiable {
     let title: String
     let note: String?
     let amountMinor: Int64
+    let reportingExpenseMinor: Int64?
+    let reportingIncomeMinor: Int64?
     let sourceCurrencyCode: String?
     let occurredAt: Date
     let createdAt: Date
@@ -79,6 +81,8 @@ nonisolated struct OverviewTransactionSnapshot: Equatable, Identifiable {
         title: String,
         note: String?,
         amountMinor: Int64,
+        reportingExpenseMinor: Int64? = nil,
+        reportingIncomeMinor: Int64? = nil,
         sourceCurrencyCode: String? = nil,
         occurredAt: Date,
         createdAt: Date,
@@ -107,6 +111,8 @@ nonisolated struct OverviewTransactionSnapshot: Equatable, Identifiable {
         self.title = title
         self.note = note
         self.amountMinor = amountMinor
+        self.reportingExpenseMinor = reportingExpenseMinor
+        self.reportingIncomeMinor = reportingIncomeMinor
         self.sourceCurrencyCode = sourceCurrencyCode
         self.occurredAt = occurredAt
         self.createdAt = createdAt
@@ -445,7 +451,7 @@ nonisolated enum OverviewLogic {
         var dailyTotalsByDay: [Date: Int64] = [:]
         var earliestExpenseWeekStart: Date?
 
-        for record in transactionRecords where record.entryStatus == .posted && TransactionLogic.isExpenseSpending(record) {
+        for record in transactionRecords where record.entryStatus == .posted && TransactionLogic.reportedExpenseAmount(for: record) != 0 {
             let day = calendar.startOfDay(for: record.occurredAt)
             dailyTotalsByDay[day, default: 0] += chartSpendingAmount(
                 for: record,
@@ -551,7 +557,7 @@ nonisolated enum OverviewLogic {
         let lastDayExclusive = calendar.date(byAdding: .day, value: 1, to: days.last ?? startOfToday) ?? startOfToday
 
         var totalsByDay: [Date: Int64] = [:]
-        for record in transactionRecords where record.entryStatus == .posted && TransactionLogic.isExpenseSpending(record) {
+        for record in transactionRecords where record.entryStatus == .posted && TransactionLogic.reportedExpenseAmount(for: record) != 0 {
             guard record.occurredAt >= firstDay,
                   record.occurredAt < lastDayExclusive else {
                 continue
@@ -651,9 +657,9 @@ nonisolated enum OverviewLogic {
         var earliestMonthStart: Date?
 
         for record in transactionRecords where record.entryStatus == .posted {
-            let isIncome = record.primaryKind == .income
-            let isExpense = TransactionLogic.isExpenseSpending(record)
-            guard isIncome || isExpense else { continue }
+            let incomeMinor = TransactionLogic.reportedIncomeAmount(for: record)
+            let expenseMinor = TransactionLogic.reportedExpenseAmount(for: record)
+            guard incomeMinor != 0 || expenseMinor != 0 else { continue }
 
             let monthStart = PlanningLogic.startOfMonth(for: record.occurredAt, calendar: calendar)
             guard monthStart <= currentMonthStart else { continue }
@@ -662,11 +668,21 @@ nonisolated enum OverviewLogic {
                 earliestMonthStart = monthStart
             }
 
-            let amount = reportingAmount(for: record, currencyCode: currencyCode, exchangeRates: exchangeRates)
-            if isIncome {
-                totalsByMonth[monthStart, default: (0, 0)].incomeMinor += amount
-            } else {
-                totalsByMonth[monthStart, default: (0, 0)].expenseMinor += amount
+            if incomeMinor != 0 {
+                totalsByMonth[monthStart, default: (0, 0)].incomeMinor += reportingAmount(
+                    amountMinor: incomeMinor,
+                    sourceCurrencyCode: record.sourceCurrencyCode,
+                    currencyCode: currencyCode,
+                    exchangeRates: exchangeRates
+                )
+            }
+            if expenseMinor != 0 {
+                totalsByMonth[monthStart, default: (0, 0)].expenseMinor += reportingAmount(
+                    amountMinor: expenseMinor,
+                    sourceCurrencyCode: record.sourceCurrencyCode,
+                    currencyCode: currencyCode,
+                    exchangeRates: exchangeRates
+                )
             }
         }
 
@@ -772,9 +788,14 @@ nonisolated enum OverviewLogic {
         exchangeRates: [MistiaExchangeRate]
     ) -> Int64 {
         guard let currencyCode else {
-            return record.amountMinor
+            return TransactionLogic.reportedExpenseAmount(for: record)
         }
-        return reportingAmount(for: record, currencyCode: currencyCode, exchangeRates: exchangeRates)
+        return reportingAmount(
+            amountMinor: TransactionLogic.reportedExpenseAmount(for: record),
+            sourceCurrencyCode: record.sourceCurrencyCode,
+            currencyCode: currencyCode,
+            exchangeRates: exchangeRates
+        )
     }
 
     private static func dailyChartValues(
@@ -817,6 +838,10 @@ nonisolated enum OverviewLogic {
             return false
         }
 
+        if let reportingExpenseMinor = transaction.reportingExpenseMinor {
+            return reportingExpenseMinor != 0
+        }
+
         if isPaidForExpenseDebt(transaction) {
             return true
         }
@@ -825,6 +850,15 @@ nonisolated enum OverviewLogic {
             && !isAdjustment(transaction)
             && !isCreditCardPayment(transaction)
             && !isInstallmentPayment(transaction)
+    }
+
+    private static func reportedExpenseAmount(
+        for transaction: OverviewTransactionSnapshot
+    ) -> Int64 {
+        if let reportingExpenseMinor = transaction.reportingExpenseMinor {
+            return reportingExpenseMinor
+        }
+        return isCategorySpendingTransaction(transaction) ? transaction.amountMinor : 0
     }
 
     private static func isPaidForDebt(
@@ -934,7 +968,7 @@ nonisolated enum OverviewLogic {
 
         let amount = transactions.reduce(into: Int64.zero) { partialResult, transaction in
             partialResult += reportingAmount(
-                amountMinor: transaction.amountMinor,
+                amountMinor: reportedExpenseAmount(for: transaction),
                 sourceCurrencyCode: transaction.sourceCurrencyCode,
                 currencyCode: currencyCode,
                 exchangeRates: exchangeRates
@@ -983,7 +1017,7 @@ nonisolated enum OverviewLogic {
 
         let amount = transactions.reduce(into: Int64.zero) { partialResult, transaction in
             partialResult += reportingAmount(
-                amountMinor: transaction.amountMinor,
+                amountMinor: reportedExpenseAmount(for: transaction),
                 sourceCurrencyCode: transaction.sourceCurrencyCode,
                 currencyCode: currencyCode,
                 exchangeRates: exchangeRates

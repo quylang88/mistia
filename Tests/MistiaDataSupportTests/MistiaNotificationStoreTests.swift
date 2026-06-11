@@ -386,7 +386,7 @@ final class MistiaNotificationStoreTests: XCTestCase {
     }
 
     private func makeFullContainer() throws -> ModelContainer {
-        let schema = Schema(versionedSchema: MistiaSchemaV5.self)
+        let schema = Schema(versionedSchema: MistiaSchemaV6.self)
         let configuration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)
         return try ModelContainer(for: schema, configurations: [configuration])
     }

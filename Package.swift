@@ -73,6 +73,7 @@ let package = Package(
                 "Persistence/MistiaLocalProfiles.swift",
                 "Persistence/MistiaMigration.swift",
                 "Persistence/MistiaSchemaV4Models.swift",
+                "Persistence/MistiaSchemaV5Models.swift",
                 "Persistence/NotificationModels.swift",
                 "Persistence/TransactionReceiptImageStore.swift",
                 "Persistence/MistiaRecordOwnership.swift",
@@ -96,7 +97,10 @@ let package = Package(
         ),
         .testTarget(
             name: "MistiaDataSupportTests",
-            dependencies: ["MistiaCoreLogic"]
+            dependencies: ["MistiaCoreLogic"],
+            resources: [
+                .copy("Fixtures")
+            ]
         )
     ]
 )

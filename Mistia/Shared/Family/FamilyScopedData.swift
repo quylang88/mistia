@@ -232,6 +232,8 @@ enum FamilyScopedData {
                 occurredAt: transaction.occurredAt,
                 kind: familyAggregateKind(for: record),
                 amountMinor: abs(transaction.amountMinor),
+                reportingExpenseMinor: record.reportingExpenseMinor,
+                reportingIncomeMinor: record.reportingIncomeMinor,
                 currencyCode: record.sourceCurrencyCode ?? transaction.sourceWallet?.currencyCode ?? "JPY",
                 isCreditCardPayment: TransactionLogic.isCreditCardPayment(record),
                 isAdjustment: TransactionLogic.isAdjustment(record),

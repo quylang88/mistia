@@ -1,4 +1,5 @@
 import Foundation
+import CoreData
 import Observation
 import SwiftData
 
@@ -32,7 +33,7 @@ enum MistiaDataStack {
             userDefaults: UserDefaults = .standard,
             fileManager: FileManager = .default
         ) throws {
-            self.schema = Schema(versionedSchema: MistiaSchemaV5.self)
+            self.schema = Schema(versionedSchema: MistiaSchemaV6.self)
             self.userDefaults = userDefaults
             self.fileManager = fileManager
 
@@ -53,7 +54,7 @@ enum MistiaDataStack {
             userDefaults: UserDefaults = .standard,
             fileManager: FileManager = .default
         ) {
-            self.schema = Schema(versionedSchema: MistiaSchemaV5.self)
+            self.schema = Schema(versionedSchema: MistiaSchemaV6.self)
             self.userDefaults = userDefaults
             self.fileManager = fileManager
             self.modelContainer = fallbackContainer
@@ -303,10 +304,11 @@ enum MistiaDataStack {
             )
             let configuration = ModelConfiguration("default", schema: schema, url: storeURL)
             do {
-                return try ModelContainer(
-                    for: schema,
-                    migrationPlan: MistiaMigrationPlan.self,
-                    configurations: [configuration]
+                return try openContainer(
+                    schema: schema,
+                    configuration: configuration,
+                    storeURL: storeURL,
+                    fileManager: fileManager
                 )
             } catch {
                 throw LaunchIssue(
@@ -472,10 +474,11 @@ enum MistiaDataStack {
 
                 // Try to infer owner from the store
                 let configuration = ModelConfiguration("inference", schema: schema, url: storeURL)
-                guard let container = try? ModelContainer(
-                    for: schema,
-                    migrationPlan: MistiaMigrationPlan.self,
-                    configurations: [configuration]
+                guard let container = try? openContainer(
+                    schema: schema,
+                    configuration: configuration,
+                    storeURL: storeURL,
+                    fileManager: fileManager
                 ) else { continue }
                 let context = ModelContext(container)
                 let profile = (try? context.fetch(FetchDescriptor<UserAccountProfile>()))?.first
@@ -529,6 +532,61 @@ enum MistiaDataStack {
                 .appendingPathComponent("profile")
                 .appendingPathExtension("store")
         }
+
+        static func openContainer(
+            schema: Schema,
+            configuration: ModelConfiguration,
+            storeURL: URL,
+            fileManager: FileManager
+        ) throws -> ModelContainer {
+            // Shipped V5 stores used top-level models. Keep the custom staged
+            // plan only for V4 -> V5, then let SwiftData lightweight-migrate
+            // V5 -> V6 without the staged manager.
+            if shouldRunLegacyCustomMigration(forStoreAt: storeURL, fileManager: fileManager) {
+                try migrateLegacyStoreToV5(at: storeURL)
+            }
+
+            return try ModelContainer(
+                for: schema,
+                configurations: [configuration]
+            )
+        }
+
+        private static func shouldRunLegacyCustomMigration(
+            forStoreAt storeURL: URL,
+            fileManager: FileManager
+        ) -> Bool {
+            guard fileManager.fileExists(atPath: storeURL.path) else { return false }
+            guard let versionIdentifiers = storeVersionIdentifiers(at: storeURL) else { return false }
+            return versionIdentifiers.contains("4.0.0")
+        }
+
+        private static func migrateLegacyStoreToV5(at storeURL: URL) throws {
+            let legacySchema = Schema(versionedSchema: MistiaSchemaV5.self)
+            let legacyConfiguration = ModelConfiguration("default", schema: legacySchema, url: storeURL)
+            _ = try ModelContainer(
+                for: legacySchema,
+                migrationPlan: MistiaMigrationPlan.self,
+                configurations: [legacyConfiguration]
+            )
+        }
+
+        private static func storeVersionIdentifiers(at storeURL: URL) -> Set<String>? {
+            guard let metadata = try? NSPersistentStoreCoordinator.metadataForPersistentStore(
+                ofType: NSSQLiteStoreType,
+                at: storeURL
+            ) else {
+                return nil
+            }
+
+            if let identifiers = metadata[NSStoreModelVersionIdentifiersKey] as? [String] {
+                return Set(identifiers)
+            }
+            if let identifier = metadata[NSStoreModelVersionIdentifiersKey] as? String {
+                return [identifier]
+            }
+            return []
+        }
     }
 
     @MainActor
@@ -536,11 +594,10 @@ enum MistiaDataStack {
         do {
             return try LaunchState()
         } catch {
-            let schema = Schema(versionedSchema: MistiaSchemaV5.self)
+            let schema = Schema(versionedSchema: MistiaSchemaV6.self)
             let fallbackConfiguration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)
             let fallbackContainer = try! ModelContainer(
                 for: schema,
-                migrationPlan: MistiaMigrationPlan.self,
                 configurations: [fallbackConfiguration]
             )
             let launchIssue: LaunchIssue

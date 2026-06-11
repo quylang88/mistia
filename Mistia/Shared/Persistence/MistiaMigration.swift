@@ -121,6 +121,8 @@ enum MistiaSchemaV4: VersionedSchema {
 }
 
 enum MistiaSchemaV5: VersionedSchema {
+    typealias LedgerTransaction = MistiaSchemaV5Models.LedgerTransaction
+
     static var versionIdentifier: Schema.Version {
         Schema.Version(5, 0, 0)
     }
@@ -146,11 +148,40 @@ enum MistiaSchemaV5: VersionedSchema {
     }
 }
 
+enum MistiaSchemaV6: VersionedSchema {
+    static var versionIdentifier: Schema.Version {
+        Schema.Version(6, 0, 0)
+    }
+
+    static var models: [any PersistentModel.Type] {
+        [
+            LedgerWallet.self,
+            CreditCardProfile.self,
+            TransactionCategory.self,
+            LedgerTransaction.self,
+            SettlementGroup.self,
+            SettlementObligation.self,
+            BudgetPlan.self,
+            SavingsGoal.self,
+            RecurringBillPlan.self,
+            InstallmentPlan.self,
+            DueOccurrenceRecord.self,
+            AppNotificationRecord.self,
+            SyncConflict.self,
+            UserAccountProfile.self,
+            OwnedRecordScope.self,
+            TransactionAuditRecord.self,
+            TransactionReceiptImage.self
+        ]
+    }
+}
+
 enum MistiaMigrationPlan: SchemaMigrationPlan {
     static var schemas: [any VersionedSchema.Type] {
         [
             MistiaSchemaV4.self,
-            MistiaSchemaV5.self
+            MistiaSchemaV5.self,
+            MistiaSchemaV6.self
         ]
     }
 

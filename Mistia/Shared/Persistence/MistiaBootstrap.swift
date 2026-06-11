@@ -975,7 +975,7 @@ enum MistiaBootstrap {
             for record in records where recordIDs.contains(record.id) {
                 sessionStore.recordUpsert(entity: entity, recordID: record.id, modifiedAt: record.updatedAt)
             }
-        case .wallet, .creditCardProfile, .category, .savingsGoal, .installmentPlan, .dueOccurrenceRecord:
+        case .wallet, .creditCardProfile, .category, .settlementGroup, .settlementObligation, .savingsGoal, .installmentPlan, .dueOccurrenceRecord:
             break
         }
     }

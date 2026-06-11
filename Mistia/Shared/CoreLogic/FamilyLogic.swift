@@ -326,6 +326,8 @@ nonisolated struct FamilyAggregateTransactionSnapshot: Equatable {
     let occurredAt: Date
     let kind: Kind
     let amountMinor: Int64
+    let reportingExpenseMinor: Int64?
+    let reportingIncomeMinor: Int64?
     let currencyCode: String
     let isCreditCardPayment: Bool
     let isAdjustment: Bool
@@ -339,6 +341,8 @@ nonisolated struct FamilyAggregateTransactionSnapshot: Equatable {
         occurredAt: Date,
         kind: Kind,
         amountMinor: Int64,
+        reportingExpenseMinor: Int64? = nil,
+        reportingIncomeMinor: Int64? = nil,
         currencyCode: String = "JPY",
         isCreditCardPayment: Bool = false,
         isAdjustment: Bool = false,
@@ -351,6 +355,8 @@ nonisolated struct FamilyAggregateTransactionSnapshot: Equatable {
         self.occurredAt = occurredAt
         self.kind = kind
         self.amountMinor = amountMinor
+        self.reportingExpenseMinor = reportingExpenseMinor
+        self.reportingIncomeMinor = reportingIncomeMinor
         self.currencyCode = currencyCode
         self.isCreditCardPayment = isCreditCardPayment
         self.isAdjustment = isAdjustment
@@ -608,7 +614,7 @@ nonisolated enum FamilyLogic {
 
             let spent = spendingTransactionsByCategoryKey[key]?.reduce(into: Int64.zero) { partial, transaction in
                 partial += reportingAmount(
-                    amountMinor: transaction.amountMinor,
+                    amountMinor: reportedExpenseAmount(for: transaction),
                     sourceCurrencyCode: transaction.currencyCode,
                     currencyCode: selectedPlan.currencyCode,
                     rateIndex: rateIndex
@@ -823,27 +829,34 @@ nonisolated enum FamilyLogic {
         var memberIncomeMap: [UUID: Int64] = [:]
 
         for transaction in transactions where isVisibleMember(transaction.ownerUserID) {
-            let isIncome = transaction.kind == .income
-            let isSpending = isExpenseSpending(transaction)
-            guard isIncome || isSpending else { continue }
+            let expenseMinor = reportedExpenseAmount(for: transaction)
+            let incomeMinor = reportedIncomeAmount(for: transaction)
+            guard expenseMinor != 0 || incomeMinor != 0 else { continue }
 
-            let amount = reportingAmount(
-                amountMinor: transaction.amountMinor,
+            let expenseAmount = reportingAmount(
+                amountMinor: expenseMinor,
+                sourceCurrencyCode: transaction.currencyCode,
+                currencyCode: summaryCurrencyCode,
+                rateIndex: rateIndex
+            )
+            let incomeAmount = reportingAmount(
+                amountMinor: incomeMinor,
                 sourceCurrencyCode: transaction.currencyCode,
                 currencyCode: summaryCurrencyCode,
                 rateIndex: rateIndex
             )
 
             for index in trendDates.indices where transaction.occurredAt >= trendDates[index] {
-                if isIncome {
-                    incomeAfterTrendDate[index] += amount
-                } else {
-                    expenseAfterTrendDate[index] += amount
+                if incomeMinor != 0 {
+                    incomeAfterTrendDate[index] += incomeAmount
+                }
+                if expenseMinor != 0 {
+                    expenseAfterTrendDate[index] += expenseAmount
                 }
             }
 
             guard selectedInterval.contains(transaction.occurredAt) else { continue }
-            if isSpending {
+            if expenseMinor != 0 {
                 let trimmedCategoryName = transaction.categoryName?
                     .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
                 let categoryLabel = trimmedCategoryName.isEmpty ? "Other" : trimmedCategoryName
@@ -851,15 +864,16 @@ nonisolated enum FamilyLogic {
                 let current = expenseByCategoryMap[categoryKey] ?? (label: categoryLabel, valueMinor: 0)
                 expenseByCategoryMap[categoryKey] = (
                     label: current.label,
-                    valueMinor: current.valueMinor + amount
+                    valueMinor: current.valueMinor + expenseAmount
                 )
 
                 let spendingUserID = transaction.createdByUserID ?? transaction.ownerUserID
                 if isVisibleMember(spendingUserID) {
-                    memberSpendingMap[spendingUserID, default: 0] += amount
+                    memberSpendingMap[spendingUserID, default: 0] += expenseAmount
                 }
-            } else if isIncome {
-                memberIncomeMap[transaction.ownerUserID, default: 0] += amount
+            }
+            if incomeMinor != 0 {
+                memberIncomeMap[transaction.ownerUserID, default: 0] += incomeAmount
             }
         }
 
@@ -907,10 +921,31 @@ nonisolated enum FamilyLogic {
     }
 
     nonisolated private static func isExpenseSpending(_ transaction: FamilyAggregateTransactionSnapshot) -> Bool {
-        transaction.kind == .expense
+        if let reportingExpenseMinor = transaction.reportingExpenseMinor {
+            return reportingExpenseMinor != 0
+        }
+        return transaction.kind == .expense
             && !transaction.isAdjustment
             && !transaction.isCreditCardPayment
             && !transaction.isInstallmentPayment
+    }
+
+    nonisolated private static func reportedExpenseAmount(
+        for transaction: FamilyAggregateTransactionSnapshot
+    ) -> Int64 {
+        if let reportingExpenseMinor = transaction.reportingExpenseMinor {
+            return reportingExpenseMinor
+        }
+        return isExpenseSpending(transaction) ? transaction.amountMinor : 0
+    }
+
+    nonisolated private static func reportedIncomeAmount(
+        for transaction: FamilyAggregateTransactionSnapshot
+    ) -> Int64 {
+        if let reportingIncomeMinor = transaction.reportingIncomeMinor {
+            return reportingIncomeMinor
+        }
+        return transaction.kind == .income ? transaction.amountMinor : 0
     }
 
     nonisolated private static func budgetSpendingTransactionsByCategoryKey(
@@ -921,7 +956,7 @@ nonisolated enum FamilyLogic {
 
         var result: [String: [FamilyAggregateTransactionSnapshot]] = [:]
         for transaction in transactions {
-            guard isExpenseSpending(transaction),
+            guard reportedExpenseAmount(for: transaction) != 0,
                   transaction.occurredAt >= monthInterval.start,
                   transaction.occurredAt < monthInterval.end else {
                 continue

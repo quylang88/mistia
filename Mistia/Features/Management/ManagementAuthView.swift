@@ -2061,6 +2061,10 @@ private extension MistiaSyncEntity {
             return "creditcard.fill"
         case .category:
             return "square.grid.2x2.fill"
+        case .settlementGroup:
+            return "hourglass.circle.fill"
+        case .settlementObligation:
+            return "person.line.dotted.person.fill"
         case .transaction:
             return "list.bullet.rectangle.portrait.fill"
         case .budgetPlan:

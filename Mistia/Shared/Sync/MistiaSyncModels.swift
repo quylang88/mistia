@@ -359,6 +359,11 @@ nonisolated struct RemoteLedgerTransaction: MistiaRemoteRow {
     var lastModifiedByUserID: UUID
     var counterpartyName: String?
     var normalizedCounterpartyKey: String?
+    var settlementGroupID: UUID?
+    var settlementObligationID: UUID?
+    var settlementRoleRawValue: String?
+    var reportingExpenseMinor: Int64?
+    var reportingIncomeMinor: Int64?
     var sourceWalletID: UUID?
     var destinationWalletID: UUID?
     var categoryID: UUID?
@@ -394,6 +399,11 @@ nonisolated struct RemoteLedgerTransaction: MistiaRemoteRow {
         case lastModifiedByUserID = "last_modified_by_user_id"
         case counterpartyName = "counterparty_name"
         case normalizedCounterpartyKey = "normalized_counterparty_key"
+        case settlementGroupID = "settlement_group_id"
+        case settlementObligationID = "settlement_obligation_id"
+        case settlementRoleRawValue = "settlement_role_raw_value"
+        case reportingExpenseMinor = "reporting_expense_minor"
+        case reportingIncomeMinor = "reporting_income_minor"
         case sourceWalletID = "source_wallet_id"
         case destinationWalletID = "destination_wallet_id"
         case categoryID = "category_id"
@@ -431,6 +441,11 @@ nonisolated struct RemoteLedgerTransaction: MistiaRemoteRow {
         lastModifiedByUserID = try container.decodeIfPresent(UUID.self, forKey: .lastModifiedByUserID) ?? createdByUserID
         counterpartyName = try container.decodeIfPresent(String.self, forKey: .counterpartyName)
         normalizedCounterpartyKey = try container.decodeIfPresent(String.self, forKey: .normalizedCounterpartyKey)
+        settlementGroupID = try container.decodeIfPresent(UUID.self, forKey: .settlementGroupID)
+        settlementObligationID = try container.decodeIfPresent(UUID.self, forKey: .settlementObligationID)
+        settlementRoleRawValue = try container.decodeIfPresent(String.self, forKey: .settlementRoleRawValue)
+        reportingExpenseMinor = try container.decodeIfPresent(Int64.self, forKey: .reportingExpenseMinor)
+        reportingIncomeMinor = try container.decodeIfPresent(Int64.self, forKey: .reportingIncomeMinor)
         sourceWalletID = try container.decodeIfPresent(UUID.self, forKey: .sourceWalletID)
         destinationWalletID = try container.decodeIfPresent(UUID.self, forKey: .destinationWalletID)
         categoryID = try container.decodeIfPresent(UUID.self, forKey: .categoryID)
@@ -439,6 +454,86 @@ nonisolated struct RemoteLedgerTransaction: MistiaRemoteRow {
         archivedAt = try container.decodeIfPresent(Date.self, forKey: .archivedAt)
         syncVersion = try container.decode(Int64.self, forKey: .syncVersion)
         lastModifiedByDeviceID = try container.decodeIfPresent(UUID.self, forKey: .lastModifiedByDeviceID)
+    }
+}
+
+nonisolated struct RemoteSettlementGroup: MistiaRemoteRow {
+    static let entity: MistiaSyncEntity = .settlementGroup
+
+    var userID: UUID
+    var id: UUID
+    var kindRawValue: String
+    var statusRawValue: String
+    var title: String
+    var currencyCode: String
+    var occurredAt: Date
+    var totalMinor: Int64
+    var expectedMinor: Int64
+    var settledMinor: Int64
+    var organizerUserID: UUID?
+    var note: String?
+    var createdAt: Date
+    var updatedAt: Date
+    var deletedAt: Date?
+    var syncVersion: Int64
+    var lastModifiedByDeviceID: UUID?
+
+    enum CodingKeys: String, CodingKey {
+        case userID = "user_id"
+        case id
+        case kindRawValue = "kind_raw_value"
+        case statusRawValue = "status_raw_value"
+        case title
+        case currencyCode = "currency_code"
+        case occurredAt = "occurred_at"
+        case totalMinor = "total_minor"
+        case expectedMinor = "expected_minor"
+        case settledMinor = "settled_minor"
+        case organizerUserID = "organizer_user_id"
+        case note
+        case createdAt = "created_at"
+        case updatedAt = "updated_at"
+        case deletedAt = "deleted_at"
+        case syncVersion = "sync_version"
+        case lastModifiedByDeviceID = "last_modified_by_device_id"
+    }
+}
+
+nonisolated struct RemoteSettlementObligation: MistiaRemoteRow {
+    static let entity: MistiaSyncEntity = .settlementObligation
+
+    var userID: UUID
+    var id: UUID
+    var groupID: UUID
+    var counterpartyName: String
+    var normalizedCounterpartyKey: String?
+    var memberUserID: UUID?
+    var directionRawValue: String
+    var expectedMinor: Int64
+    var settledMinor: Int64
+    var preferredWalletID: UUID?
+    var createdAt: Date
+    var updatedAt: Date
+    var deletedAt: Date?
+    var syncVersion: Int64
+    var lastModifiedByDeviceID: UUID?
+
+    enum CodingKeys: String, CodingKey {
+        case userID = "user_id"
+        case id
+        case groupID = "group_id"
+        case counterpartyName = "counterparty_name"
+        case normalizedCounterpartyKey = "normalized_counterparty_key"
+        case memberUserID = "member_user_id"
+        case directionRawValue = "direction_raw_value"
+        case expectedMinor = "expected_minor"
+        case settledMinor = "settled_minor"
+        case preferredWalletID = "preferred_wallet_id"
+        case createdAt = "created_at"
+        case updatedAt = "updated_at"
+        case deletedAt = "deleted_at"
+        case syncVersion = "sync_version"
+        case lastModifiedByDeviceID = "last_modified_by_device_id"
     }
 }
 
@@ -849,6 +944,8 @@ nonisolated struct MistiaRemoteSnapshot: Codable {
     let wallets: [RemoteLedgerWallet]
     let creditCardProfiles: [RemoteCreditCardProfile]
     let categories: [RemoteTransactionCategory]
+    let settlementGroups: [RemoteSettlementGroup]
+    let settlementObligations: [RemoteSettlementObligation]
     let transactions: [RemoteLedgerTransaction]
     let budgetPlans: [RemoteBudgetPlan]
     let savingsGoals: [RemoteSavingsGoal]
@@ -860,6 +957,8 @@ nonisolated struct MistiaRemoteSnapshot: Codable {
         wallets: [],
         creditCardProfiles: [],
         categories: [],
+        settlementGroups: [],
+        settlementObligations: [],
         transactions: [],
         budgetPlans: [],
         savingsGoals: [],
@@ -872,6 +971,8 @@ nonisolated struct MistiaRemoteSnapshot: Codable {
         wallets.count
             + creditCardProfiles.count
             + categories.count
+            + settlementGroups.count
+            + settlementObligations.count
             + transactions.count
             + budgetPlans.count
             + savingsGoals.count
@@ -884,6 +985,8 @@ nonisolated struct MistiaRemoteSnapshot: Codable {
         wallets.activeRemoteRowCount
             + creditCardProfiles.activeRemoteRowCount
             + categories.activeRemoteRowCount
+            + settlementGroups.activeRemoteRowCount
+            + settlementObligations.activeRemoteRowCount
             + transactions.activeRemoteRowCount
             + budgetPlans.activeRemoteRowCount
             + savingsGoals.activeRemoteRowCount
@@ -912,6 +1015,14 @@ nonisolated struct MistiaRemoteSnapshot: Codable {
         transactions.filter { $0.deletedAt == nil }
     }
 
+    var activeSettlementGroups: [RemoteSettlementGroup] {
+        settlementGroups.filter { $0.deletedAt == nil }
+    }
+
+    var activeSettlementObligations: [RemoteSettlementObligation] {
+        settlementObligations.filter { $0.deletedAt == nil }
+    }
+
     var activeBudgetPlans: [RemoteBudgetPlan] {
         budgetPlans.filter { $0.deletedAt == nil }
     }
@@ -937,6 +1048,8 @@ nonisolated struct MistiaRemoteSnapshot: Codable {
             wallets: wallets.sorted { $0.id.uuidString < $1.id.uuidString },
             creditCardProfiles: creditCardProfiles.sorted { $0.id.uuidString < $1.id.uuidString },
             categories: categories.sorted { $0.id.uuidString < $1.id.uuidString },
+            settlementGroups: settlementGroups.sorted { $0.id.uuidString < $1.id.uuidString },
+            settlementObligations: settlementObligations.sorted { $0.id.uuidString < $1.id.uuidString },
             transactions: transactions.sorted { $0.id.uuidString < $1.id.uuidString },
             budgetPlans: budgetPlans.sorted { $0.id.uuidString < $1.id.uuidString },
             savingsGoals: savingsGoals.sorted { $0.id.uuidString < $1.id.uuidString },
@@ -988,6 +1101,8 @@ enum MistiaSyncUploadRecord {
     case wallet(RemoteLedgerWallet)
     case creditCardProfile(RemoteCreditCardProfile)
     case category(RemoteTransactionCategory)
+    case settlementGroup(RemoteSettlementGroup)
+    case settlementObligation(RemoteSettlementObligation)
     case transaction(RemoteLedgerTransaction)
     case budgetPlan(RemoteBudgetPlan)
     case savingsGoal(RemoteSavingsGoal)
@@ -1003,6 +1118,10 @@ enum MistiaSyncUploadRecord {
             .creditCardProfile
         case .category:
             .category
+        case .settlementGroup:
+            .settlementGroup
+        case .settlementObligation:
+            .settlementObligation
         case .transaction:
             .transaction
         case .budgetPlan:
@@ -1025,6 +1144,10 @@ enum MistiaSyncUploadRecord {
         case .creditCardProfile(let row):
             row.id
         case .category(let row):
+            row.id
+        case .settlementGroup(let row):
+            row.id
+        case .settlementObligation(let row):
             row.id
         case .transaction(let row):
             row.id
@@ -1049,6 +1172,10 @@ enum MistiaSyncUploadRecord {
             row.updatedAt
         case .category(let row):
             row.updatedAt
+        case .settlementGroup(let row):
+            row.updatedAt
+        case .settlementObligation(let row):
+            row.updatedAt
         case .transaction(let row):
             row.updatedAt
         case .budgetPlan(let row):
@@ -1071,6 +1198,10 @@ enum MistiaSyncUploadRecord {
         case .creditCardProfile(let row):
             row.userID
         case .category(let row):
+            row.userID
+        case .settlementGroup(let row):
+            row.userID
+        case .settlementObligation(let row):
             row.userID
         case .transaction(let row):
             row.userID
@@ -1095,6 +1226,10 @@ enum MistiaSyncUploadRecord {
             row.deletedAt
         case .category(let row):
             row.deletedAt
+        case .settlementGroup(let row):
+            row.deletedAt
+        case .settlementObligation(let row):
+            row.deletedAt
         case .transaction(let row):
             row.deletedAt
         case .budgetPlan(let row):
@@ -1118,6 +1253,10 @@ enum MistiaSyncUploadRecord {
             row.syncVersion
         case .category(let row):
             row.syncVersion
+        case .settlementGroup(let row):
+            row.syncVersion
+        case .settlementObligation(let row):
+            row.syncVersion
         case .transaction(let row):
             row.syncVersion
         case .budgetPlan(let row):
@@ -1140,6 +1279,10 @@ enum MistiaSyncUploadRecord {
         case .creditCardProfile(let row):
             row.lastModifiedByDeviceID
         case .category(let row):
+            row.lastModifiedByDeviceID
+        case .settlementGroup(let row):
+            row.lastModifiedByDeviceID
+        case .settlementObligation(let row):
             row.lastModifiedByDeviceID
         case .transaction(let row):
             row.lastModifiedByDeviceID
@@ -1215,8 +1358,36 @@ enum MistiaSyncUploadRecord {
                 Self.dateString(row.archivedAt),
                 Self.dateString(row.deletedAt)
             ].joined(separator: "|")
-        case .transaction(let row):
+        case .settlementGroup(let row):
             return [
+                entity.rawValue,
+                row.kindRawValue,
+                row.statusRawValue,
+                row.title,
+                row.currencyCode,
+                Self.dateString(row.occurredAt),
+                "\(row.totalMinor)",
+                "\(row.expectedMinor)",
+                "\(row.settledMinor)",
+                row.organizerUserID?.uuidString.lowercased() ?? "",
+                row.note ?? "",
+                Self.dateString(row.deletedAt)
+            ].joined(separator: "|")
+        case .settlementObligation(let row):
+            return [
+                entity.rawValue,
+                row.groupID.uuidString.lowercased(),
+                row.counterpartyName,
+                row.normalizedCounterpartyKey ?? "",
+                row.memberUserID?.uuidString.lowercased() ?? "",
+                row.directionRawValue,
+                "\(row.expectedMinor)",
+                "\(row.settledMinor)",
+                row.preferredWalletID?.uuidString.lowercased() ?? "",
+                Self.dateString(row.deletedAt)
+            ].joined(separator: "|")
+        case .transaction(let row):
+            let fields: [String] = [
                 entity.rawValue,
                 row.primaryKindRawValue,
                 row.transferSubtypeRawValue ?? "",
@@ -1238,13 +1409,19 @@ enum MistiaSyncUploadRecord {
                 Self.dateString(row.occurredAt),
                 row.counterpartyName ?? "",
                 row.normalizedCounterpartyKey ?? "",
+                row.settlementGroupID?.uuidString.lowercased() ?? "",
+                row.settlementObligationID?.uuidString.lowercased() ?? "",
+                row.settlementRoleRawValue ?? "",
+                row.reportingExpenseMinor.map(String.init) ?? "",
+                row.reportingIncomeMinor.map(String.init) ?? "",
                 row.sourceWalletID?.uuidString.lowercased() ?? "",
                 row.destinationWalletID?.uuidString.lowercased() ?? "",
                 row.categoryID?.uuidString.lowercased() ?? "",
                 row.isArchived ? "1" : "0",
                 Self.dateString(row.archivedAt),
                 Self.dateString(row.deletedAt)
-            ].joined(separator: "|")
+            ]
+            return fields.joined(separator: "|")
         case .budgetPlan(let row):
             return [
                 entity.rawValue,
@@ -1340,6 +1517,10 @@ enum MistiaSyncUploadRecord {
             return row.issuerName.isEmpty ? row.last4 : row.issuerName
         case .category(let row):
             return row.name
+        case .settlementGroup(let row):
+            return row.title
+        case .settlementObligation(let row):
+            return row.counterpartyName
         case .transaction(let row):
             if row.title.isEmpty {
                 return L10n.shared.sync.mistiasync.unnamedTransaction
@@ -1366,7 +1547,7 @@ enum MistiaSyncUploadRecord {
         guard !mappings.isEmpty else { return self }
 
         switch self {
-        case .wallet, .creditCardProfile, .savingsGoal, .installmentPlan, .dueOccurrence:
+        case .wallet, .creditCardProfile, .settlementGroup, .settlementObligation, .savingsGoal, .installmentPlan, .dueOccurrence:
             return self
         case .category(var row):
             if let replacementID = mappings[row.id] {
@@ -1412,6 +1593,14 @@ enum MistiaSyncUploadRecord {
             row.syncVersion = nextVersion
             row.lastModifiedByDeviceID = deviceID
             return .category(row)
+        case .settlementGroup(var row):
+            row.syncVersion = nextVersion
+            row.lastModifiedByDeviceID = deviceID
+            return .settlementGroup(row)
+        case .settlementObligation(var row):
+            row.syncVersion = nextVersion
+            row.lastModifiedByDeviceID = deviceID
+            return .settlementObligation(row)
         case .transaction(var row):
             row.syncVersion = nextVersion
             row.lastModifiedByDeviceID = deviceID
@@ -1449,6 +1638,10 @@ enum MistiaSyncUploadRecord {
             data = try encoder.encode(row)
         case .category(let row):
             data = try encoder.encode(row)
+        case .settlementGroup(let row):
+            data = try encoder.encode(row)
+        case .settlementObligation(let row):
+            data = try encoder.encode(row)
         case .transaction(let row):
             data = try encoder.encode(row)
         case .budgetPlan(let row):
@@ -1482,6 +1675,10 @@ enum MistiaSyncUploadRecord {
             return .creditCardProfile(try decoder.decode(RemoteCreditCardProfile.self, from: data))
         case .category:
             return .category(try decoder.decode(RemoteTransactionCategory.self, from: data))
+        case .settlementGroup:
+            return .settlementGroup(try decoder.decode(RemoteSettlementGroup.self, from: data))
+        case .settlementObligation:
+            return .settlementObligation(try decoder.decode(RemoteSettlementObligation.self, from: data))
         case .transaction:
             return .transaction(try decoder.decode(RemoteLedgerTransaction.self, from: data))
         case .budgetPlan:
@@ -1541,6 +1738,8 @@ extension MistiaRemoteSnapshot {
         for row in wallets where predicate(.wallet(row)) { return true }
         for row in creditCardProfiles where predicate(.creditCardProfile(row)) { return true }
         for row in categories where predicate(.category(row)) { return true }
+        for row in settlementGroups where predicate(.settlementGroup(row)) { return true }
+        for row in settlementObligations where predicate(.settlementObligation(row)) { return true }
         for row in transactions where predicate(.transaction(row)) { return true }
         for row in budgetPlans where predicate(.budgetPlan(row)) { return true }
         for row in savingsGoals where predicate(.savingsGoal(row)) { return true }
@@ -1554,6 +1753,8 @@ extension MistiaRemoteSnapshot {
         for row in wallets { body(.wallet(row)) }
         for row in creditCardProfiles { body(.creditCardProfile(row)) }
         for row in categories { body(.category(row)) }
+        for row in settlementGroups { body(.settlementGroup(row)) }
+        for row in settlementObligations { body(.settlementObligation(row)) }
         for row in transactions { body(.transaction(row)) }
         for row in budgetPlans { body(.budgetPlan(row)) }
         for row in savingsGoals { body(.savingsGoal(row)) }
@@ -1576,6 +1777,14 @@ extension MistiaRemoteSnapshot {
         }
         for row in categories {
             let record = MistiaSyncUploadRecord.category(row)
+            if shouldInclude(record) { records.append(record) }
+        }
+        for row in settlementGroups {
+            let record = MistiaSyncUploadRecord.settlementGroup(row)
+            if shouldInclude(record) { records.append(record) }
+        }
+        for row in settlementObligations {
+            let record = MistiaSyncUploadRecord.settlementObligation(row)
             if shouldInclude(record) { records.append(record) }
         }
         for row in transactions {
@@ -1620,6 +1829,10 @@ extension MistiaSyncEntity {
             return L10n.shared.sync.mistiasync.creditCard
         case .category:
             return L10n.shared.sync.mistiasync.category
+        case .settlementGroup:
+            return "Settlement"
+        case .settlementObligation:
+            return "Settlement obligation"
         case .transaction:
             return L10n.shared.sync.mistiasync.transaction
         case .budgetPlan:

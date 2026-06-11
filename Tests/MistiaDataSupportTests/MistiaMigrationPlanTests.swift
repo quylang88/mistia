@@ -35,17 +35,26 @@ final class MistiaMigrationPlanTests: XCTestCase {
         XCTAssertEqual(reopenedBills.first?.autoPayDay, 10)
     }
 
-    func testMigrationPlanUsesFrozenV4AndRealV5() {
+    func testMigrationPlanUsesFrozenLegacySchemasAndCurrentV6() {
         let schemaNames = MistiaMigrationPlan.schemas.map { String(reflecting: $0) }
         let v4ModelNames = MistiaSchemaV4.models.map { String(reflecting: $0) }
         let v5ModelNames = MistiaSchemaV5.models.map { String(reflecting: $0) }
+        let v6ModelNames = MistiaSchemaV6.models.map { String(reflecting: $0) }
 
         XCTAssertEqual(schemaNames.count, Set(schemaNames).count)
-        XCTAssertEqual(schemaNames, ["MistiaCoreLogic.MistiaSchemaV4", "MistiaCoreLogic.MistiaSchemaV5"])
+        XCTAssertEqual(schemaNames, [
+            "MistiaCoreLogic.MistiaSchemaV4",
+            "MistiaCoreLogic.MistiaSchemaV5",
+            "MistiaCoreLogic.MistiaSchemaV6"
+        ])
         XCTAssertEqual(MistiaMigrationPlan.stages.count, 1)
         XCTAssertTrue(v4ModelNames.contains("MistiaCoreLogic.MistiaSchemaV4Models.RecurringBillPlan"))
         XCTAssertFalse(v4ModelNames.contains("MistiaCoreLogic.RecurringBillPlan"))
         XCTAssertTrue(v5ModelNames.contains("MistiaCoreLogic.RecurringBillPlan"))
+        XCTAssertTrue(v5ModelNames.contains("MistiaCoreLogic.MistiaSchemaV5Models.LedgerTransaction"))
+        XCTAssertTrue(v6ModelNames.contains("MistiaCoreLogic.LedgerTransaction"))
+        XCTAssertTrue(v6ModelNames.contains("MistiaCoreLogic.SettlementGroup"))
+        XCTAssertTrue(v6ModelNames.contains("MistiaCoreLogic.SettlementObligation"))
     }
 
     func testFamilyTransferRPCMigrationGuardsPermissionsAndWritesBothRows() throws {
@@ -120,13 +129,14 @@ final class MistiaMigrationPlanTests: XCTestCase {
     }
 
     private func openCurrentStore(at storeURL: URL) throws -> ModelContainer {
-        let schema = Schema(versionedSchema: MistiaSchemaV5.self)
+        let schema = Schema(versionedSchema: MistiaSchemaV6.self)
         let configuration = ModelConfiguration("default", schema: schema, url: storeURL)
 
-        return try ModelContainer(
-            for: schema,
-            migrationPlan: MistiaMigrationPlan.self,
-            configurations: [configuration]
+        return try MistiaDataStack.LaunchState.openContainer(
+            schema: schema,
+            configuration: configuration,
+            storeURL: storeURL,
+            fileManager: .default
         )
     }
 

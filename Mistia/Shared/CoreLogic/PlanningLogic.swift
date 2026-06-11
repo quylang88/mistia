@@ -249,7 +249,7 @@ nonisolated struct PlanningBudgetSpendingIndex {
         let monthInterval = calendar.dateInterval(of: .month, for: selectedMonth)
         let expenseRecordsInMonth = records.filter { record in
             guard record.entryStatus == .posted,
-                  TransactionLogic.isExpenseSpending(record),
+                  TransactionLogic.reportedExpenseAmount(for: record) != 0,
                   let monthInterval
             else {
                 return false
@@ -2572,7 +2572,8 @@ nonisolated enum PlanningLogic {
         exchangeRates: [MistiaExchangeRate]
     ) -> Int64 {
         MistiaCurrencyLogic.reportingMinorAmount(
-            for: record,
+            amountMinor: TransactionLogic.reportedExpenseAmount(for: record),
+            sourceCurrencyCode: record.sourceCurrencyCode,
             reportingCurrencyCode: currencyCode,
             rates: exchangeRates
         ) ?? 0
@@ -2584,7 +2585,8 @@ nonisolated enum PlanningLogic {
         rateIndex: MistiaExchangeRateIndex
     ) -> Int64 {
         MistiaCurrencyLogic.reportingMinorAmount(
-            for: record,
+            amountMinor: TransactionLogic.reportedExpenseAmount(for: record),
+            sourceCurrencyCode: record.sourceCurrencyCode,
             reportingCurrencyCode: currencyCode,
             rateIndex: rateIndex
         ) ?? 0

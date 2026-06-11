@@ -193,16 +193,25 @@ final class SyncAndBillPauseRegressionTests: XCTestCase {
         XCTAssertNil(bills.first?.resumeStartMonth)
     }
 
-    func testMigrationPlanIncludesRealV5ForBillPauseColumns() {
+    func testMigrationPlanIncludesFrozenLegacySchemasAndCurrentV6() {
         let schemaNames = MistiaMigrationPlan.schemas.map { String(reflecting: $0) }
         let v4ModelNames = MistiaSchemaV4.models.map { String(reflecting: $0) }
         let v5ModelNames = MistiaSchemaV5.models.map { String(reflecting: $0) }
+        let v6ModelNames = MistiaSchemaV6.models.map { String(reflecting: $0) }
 
-        XCTAssertEqual(schemaNames, ["Mistia.MistiaSchemaV4", "Mistia.MistiaSchemaV5"])
+        XCTAssertEqual(schemaNames, [
+            "Mistia.MistiaSchemaV4",
+            "Mistia.MistiaSchemaV5",
+            "Mistia.MistiaSchemaV6"
+        ])
         XCTAssertEqual(MistiaMigrationPlan.stages.count, 1)
         XCTAssertTrue(v4ModelNames.contains("Mistia.MistiaSchemaV4Models.RecurringBillPlan"))
         XCTAssertFalse(v4ModelNames.contains("Mistia.RecurringBillPlan"))
         XCTAssertTrue(v5ModelNames.contains("Mistia.RecurringBillPlan"))
+        XCTAssertTrue(v5ModelNames.contains("Mistia.MistiaSchemaV5Models.LedgerTransaction"))
+        XCTAssertTrue(v6ModelNames.contains("Mistia.LedgerTransaction"))
+        XCTAssertTrue(v6ModelNames.contains("Mistia.SettlementGroup"))
+        XCTAssertTrue(v6ModelNames.contains("Mistia.SettlementObligation"))
     }
 
     func testLegacyV4EncodedPausedBillMigratesToPhysicalPauseColumns() throws {
@@ -266,7 +275,7 @@ final class SyncAndBillPauseRegressionTests: XCTestCase {
     }
 
     private func makeContainer() throws -> ModelContainer {
-        let schema = Schema(versionedSchema: MistiaSchemaV5.self)
+        let schema = Schema(versionedSchema: MistiaSchemaV6.self)
         let configuration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)
         return try ModelContainer(for: schema, configurations: [configuration])
     }
@@ -344,12 +353,13 @@ final class SyncAndBillPauseRegressionTests: XCTestCase {
     }
 
     private func openCurrentStore(at storeURL: URL) throws -> ModelContainer {
-        let schema = Schema(versionedSchema: MistiaSchemaV5.self)
+        let schema = Schema(versionedSchema: MistiaSchemaV6.self)
         let configuration = ModelConfiguration("default", schema: schema, url: storeURL)
-        return try ModelContainer(
-            for: schema,
-            migrationPlan: MistiaMigrationPlan.self,
-            configurations: [configuration]
+        return try MistiaDataStack.LaunchState.openContainer(
+            schema: schema,
+            configuration: configuration,
+            storeURL: storeURL,
+            fileManager: .default
         )
     }
 

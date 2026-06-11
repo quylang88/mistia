@@ -120,6 +120,8 @@ extension LedgerTransaction {
             title: localizedTransactionTitle,
             note: note,
             amountMinor: amountMinor,
+            reportingExpenseMinor: reportingExpenseMinor,
+            reportingIncomeMinor: reportingIncomeMinor,
             sourceCurrencyCode: sourceCurrencyCode ?? sourceWallet?.currencyCode,
             occurredAt: occurredAt,
             createdAt: createdAt,

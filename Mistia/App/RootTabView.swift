@@ -168,6 +168,10 @@ struct RootTabView: View {
           }
             .presentationDetents(destination == .note ? [.medium, .large] : [.large])
             .presentationDragIndicator(.hidden)
+        case .settlement(let target):
+          SettlementEditorSheet(target: target)
+            .presentationDetents([.large])
+            .presentationDragIndicator(.hidden)
         }
       }
       .task(id: shortcutNormalizationKey) {
@@ -295,7 +299,7 @@ struct RootTabView: View {
   }
 
   private var quickCreateDestinations: [MistiaQuickCreateDestination] {
-    var destinations: [MistiaQuickCreateDestination] = [.expense, .income, .transfer]
+    var destinations: [MistiaQuickCreateDestination] = [.expense, .income, .transfer, .resale, .sharedExpense]
     destinations.append(.receipt)
     return destinations
   }
@@ -351,6 +355,9 @@ struct RootTabView: View {
     DispatchQueue.main.asyncAfter(deadline: .now() + quickCreateMenuDuration) {
       if destination == .receipt {
         showsReceiptSourceDialog = true
+      } else if let settlementTarget = destination.settlementTarget {
+        selectedTab = .transactions
+        activeSheet = .settlement(settlementTarget)
       } else {
         activeSheet = .quickCreate(destination, nil)
       }
@@ -497,6 +504,8 @@ struct RootTabView: View {
       )
     case .note:
       return TransactionEditorTarget(initialKind: .expense, quickCapture: true, subjectUserIDOverride: subjectUserID)
+    case .resale, .sharedExpense:
+      fatalError("Settlement destinations are presented with SettlementEditorSheet.")
     }
   }
 
@@ -547,11 +556,14 @@ struct RootTabView: View {
 
 private enum RootSheet: Identifiable {
   case quickCreate(MistiaQuickCreateDestination, TransactionReceiptInitialSource?)
+  case settlement(SettlementEditorTarget)
 
   var id: String {
     switch self {
     case .quickCreate(let destination, let receiptInitialSource):
       "quick-create-\(destination.rawValue)-\(receiptInitialSource?.rawValue ?? "none")"
+    case .settlement(let target):
+      "settlement-\(target.rawValue)"
     }
   }
 }
@@ -589,6 +601,8 @@ private enum MistiaQuickCreateDestination: String, CaseIterable, Identifiable {
   case expense
   case income
   case transfer
+  case resale
+  case sharedExpense
   case receipt
   case note
 
@@ -602,6 +616,10 @@ private enum MistiaQuickCreateDestination: String, CaseIterable, Identifiable {
       L10n.app.roottab.income
     case .transfer:
       L10n.app.roottab.transfer
+    case .resale:
+      L10n.transactions.settlement.addResale
+    case .sharedExpense:
+      L10n.transactions.settlement.addSharedExpense
     case .receipt:
       L10n.app.roottab.scanReceipt
     case .note:
@@ -617,6 +635,10 @@ private enum MistiaQuickCreateDestination: String, CaseIterable, Identifiable {
       L10n.app.roottab.recordIncomeToUpdateYourBalance
     case .transfer:
       L10n.app.roottab.moveMoneyInternallyOrTrackDebt
+    case .resale:
+      L10n.transactions.settlement.resaleQuickCreateSubtitle
+    case .sharedExpense:
+      L10n.transactions.settlement.sharedExpenseQuickCreateSubtitle
     case .receipt:
       L10n.app.roottab.chooseCameraOrPhotoUploadForAI
     case .note:
@@ -632,6 +654,10 @@ private enum MistiaQuickCreateDestination: String, CaseIterable, Identifiable {
       L10n.app.roottab.theIncomeFlowWillConnectFromThis
     case .transfer:
       L10n.app.roottab.transfersBetweenSourcesWillBeConnectedHere
+    case .resale:
+      L10n.transactions.settlement.resaleQuickCreateSubtitle
+    case .sharedExpense:
+      L10n.transactions.settlement.sharedExpenseQuickCreateSubtitle
     case .receipt:
       L10n.app.roottab.receiptScanOpensTheTransactionModalAnd
     case .note:
@@ -647,6 +673,10 @@ private enum MistiaQuickCreateDestination: String, CaseIterable, Identifiable {
       "arrow.down.left"
     case .transfer:
       "arrow.left.arrow.right"
+    case .resale:
+      "cart.badge.clock"
+    case .sharedExpense:
+      "person.3.sequence"
     case .receipt:
       "doc.viewfinder"
     case .note:
@@ -656,6 +686,17 @@ private enum MistiaQuickCreateDestination: String, CaseIterable, Identifiable {
 
   var accent: Color {
     Color(red: 0.43, green: 0.23, blue: 0.76)
+  }
+
+  var settlementTarget: SettlementEditorTarget? {
+    switch self {
+    case .resale:
+      return .resale
+    case .sharedExpense:
+      return .sharedExpense
+    case .expense, .income, .transfer, .receipt, .note:
+      return nil
+    }
   }
 }
 

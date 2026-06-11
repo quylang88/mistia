@@ -31,6 +31,11 @@ nonisolated struct TransactionRecordSnapshot: Equatable, Identifiable {
     let title: String
     let note: String?
     let amountMinor: Int64
+    let settlementGroupID: UUID?
+    let settlementObligationID: UUID?
+    let settlementRole: SettlementTransactionRole?
+    let reportingExpenseMinor: Int64?
+    let reportingIncomeMinor: Int64?
     let sourceCurrencyCode: String?
     let destinationCurrencyCode: String?
     let destinationAmountMinor: Int64?
@@ -63,6 +68,11 @@ nonisolated struct TransactionRecordSnapshot: Equatable, Identifiable {
         title: String,
         note: String?,
         amountMinor: Int64,
+        settlementGroupID: UUID? = nil,
+        settlementObligationID: UUID? = nil,
+        settlementRole: SettlementTransactionRole? = nil,
+        reportingExpenseMinor: Int64? = nil,
+        reportingIncomeMinor: Int64? = nil,
         sourceCurrencyCode: String? = nil,
         destinationCurrencyCode: String? = nil,
         destinationAmountMinor: Int64? = nil,
@@ -94,6 +104,11 @@ nonisolated struct TransactionRecordSnapshot: Equatable, Identifiable {
         self.title = title
         self.note = note
         self.amountMinor = amountMinor
+        self.settlementGroupID = settlementGroupID
+        self.settlementObligationID = settlementObligationID
+        self.settlementRole = settlementRole
+        self.reportingExpenseMinor = reportingExpenseMinor
+        self.reportingIncomeMinor = reportingIncomeMinor
         self.sourceCurrencyCode = sourceCurrencyCode
         self.destinationCurrencyCode = destinationCurrencyCode
         self.destinationAmountMinor = destinationAmountMinor
@@ -260,6 +275,165 @@ nonisolated struct TransactionCrossCurrencyTransferDestinationDisplay: Equatable
     let style: TransactionCrossCurrencyTransferDestinationDisplayStyle
 }
 
+nonisolated struct SettlementResaleReceiptAllocation: Equatable {
+    let expenseOffsetMinor: Int64
+    let incomeMinor: Int64
+    let settledMinor: Int64
+    let remainingReceivableMinor: Int64
+}
+
+nonisolated struct SettlementParticipantInput: Equatable, Identifiable {
+    let id: UUID
+    let name: String
+    let paidMinor: Int64
+    let shareOverrideMinor: Int64?
+
+    init(
+        id: UUID = UUID(),
+        name: String,
+        paidMinor: Int64,
+        shareOverrideMinor: Int64? = nil
+    ) {
+        self.id = id
+        self.name = name
+        self.paidMinor = max(paidMinor, 0)
+        self.shareOverrideMinor = shareOverrideMinor.map { max($0, 0) }
+    }
+}
+
+nonisolated struct SettlementParticipantResult: Equatable, Identifiable {
+    let id: UUID
+    let name: String
+    let paidMinor: Int64
+    let shareMinor: Int64
+    let netMinor: Int64
+}
+
+nonisolated struct SettlementSuggestion: Equatable {
+    let payerID: UUID
+    let receiverID: UUID
+    let amountMinor: Int64
+}
+
+nonisolated struct SettlementSharedExpenseResult: Equatable {
+    let totalPaidMinor: Int64
+    let participants: [SettlementParticipantResult]
+    let suggestions: [SettlementSuggestion]
+}
+
+nonisolated enum SettlementLogic {
+    static func resaleReceiptAllocation(
+        costMinor: Int64,
+        saleMinor: Int64,
+        priorReceiptMinor: Int64,
+        paymentMinor: Int64
+    ) -> SettlementResaleReceiptAllocation {
+        let cost = max(costMinor, 0)
+        let sale = max(saleMinor, 0)
+        let prior = min(max(priorReceiptMinor, 0), sale)
+        let payment = min(max(paymentMinor, 0), max(sale - prior, 0))
+        let settled = prior + payment
+        let costRecoveredBeforePayment = min(prior, cost)
+        let costRecoveredAfterPayment = min(settled, cost)
+        let expenseOffset = max(costRecoveredAfterPayment - costRecoveredBeforePayment, 0)
+        let income = max(payment - expenseOffset, 0)
+
+        return SettlementResaleReceiptAllocation(
+            expenseOffsetMinor: expenseOffset,
+            incomeMinor: income,
+            settledMinor: settled,
+            remainingReceivableMinor: max(sale - settled, 0)
+        )
+    }
+
+    static func sharedExpenseSettlement(
+        participants: [SettlementParticipantInput],
+        organizerID: UUID
+    ) -> SettlementSharedExpenseResult {
+        let totalPaid = participants.reduce(into: Int64.zero) { partial, participant in
+            partial += participant.paidMinor
+        }
+        guard !participants.isEmpty else {
+            return SettlementSharedExpenseResult(totalPaidMinor: 0, participants: [], suggestions: [])
+        }
+
+        let explicitShareTotal = participants.reduce(into: Int64.zero) { partial, participant in
+            partial += participant.shareOverrideMinor ?? 0
+        }
+        let participantsNeedingEqualShare = participants.filter { $0.shareOverrideMinor == nil }
+        let remainingShareTotal = max(totalPaid - explicitShareTotal, 0)
+        let equalShare = participantsNeedingEqualShare.isEmpty
+            ? Int64.zero
+            : remainingShareTotal / Int64(participantsNeedingEqualShare.count)
+        let remainder = participantsNeedingEqualShare.isEmpty
+            ? Int64.zero
+            : remainingShareTotal % Int64(participantsNeedingEqualShare.count)
+
+        var assignedRemainder = false
+        let results = participants.map { participant in
+            var share = participant.shareOverrideMinor ?? equalShare
+            if participant.shareOverrideMinor == nil,
+               !assignedRemainder,
+               remainder > 0,
+               participant.id == organizerID {
+                share += remainder
+                assignedRemainder = true
+            }
+            return SettlementParticipantResult(
+                id: participant.id,
+                name: participant.name,
+                paidMinor: participant.paidMinor,
+                shareMinor: share,
+                netMinor: participant.paidMinor - share
+            )
+        }
+
+        let suggestions = settlementSuggestions(from: results)
+        return SettlementSharedExpenseResult(
+            totalPaidMinor: totalPaid,
+            participants: results,
+            suggestions: suggestions
+        )
+    }
+
+    private static func settlementSuggestions(
+        from participants: [SettlementParticipantResult]
+    ) -> [SettlementSuggestion] {
+        var payers = participants
+            .filter { $0.netMinor < 0 }
+            .map { (id: $0.id, amount: -$0.netMinor) }
+        var receivers = participants
+            .filter { $0.netMinor > 0 }
+            .map { (id: $0.id, amount: $0.netMinor) }
+        var suggestions: [SettlementSuggestion] = []
+        var payerIndex = 0
+        var receiverIndex = 0
+
+        while payerIndex < payers.count, receiverIndex < receivers.count {
+            let amount = min(payers[payerIndex].amount, receivers[receiverIndex].amount)
+            if amount > 0 {
+                suggestions.append(
+                    SettlementSuggestion(
+                        payerID: payers[payerIndex].id,
+                        receiverID: receivers[receiverIndex].id,
+                        amountMinor: amount
+                    )
+                )
+            }
+            payers[payerIndex].amount -= amount
+            receivers[receiverIndex].amount -= amount
+            if payers[payerIndex].amount == 0 {
+                payerIndex += 1
+            }
+            if receivers[receiverIndex].amount == 0 {
+                receiverIndex += 1
+            }
+        }
+
+        return suggestions
+    }
+}
+
 nonisolated enum TransactionLogic {
     static func crossCurrencyTransferDestinationDisplay(
         for record: TransactionRecordSnapshot
@@ -373,6 +547,20 @@ nonisolated enum TransactionLogic {
             && !isInstallmentPayment(record)
     }
 
+    static func reportedExpenseAmount(for record: TransactionRecordSnapshot) -> Int64 {
+        if let reportingExpenseMinor = record.reportingExpenseMinor {
+            return reportingExpenseMinor
+        }
+        return isExpenseSpending(record) ? record.amountMinor : 0
+    }
+
+    static func reportedIncomeAmount(for record: TransactionRecordSnapshot) -> Int64 {
+        if let reportingIncomeMinor = record.reportingIncomeMinor {
+            return reportingIncomeMinor
+        }
+        return record.primaryKind == .income ? record.amountMinor : 0
+    }
+
     static func isPaidForDebt(_ record: TransactionRecordSnapshot) -> Bool {
         record.primaryKind == .transfer
             && record.transferSubtype == .debt
@@ -458,12 +646,8 @@ nonisolated enum TransactionLogic {
             case .draft:
                 draftCount += 1
             case .posted:
-                if isExpenseSpending(record) {
-                    expenseMinor += record.amountMinor
-                }
-                if record.primaryKind == .income {
-                    incomeMinor += record.amountMinor
-                }
+                expenseMinor += reportedExpenseAmount(for: record)
+                incomeMinor += reportedIncomeAmount(for: record)
             }
         }
 
@@ -1394,6 +1578,11 @@ extension LedgerTransaction {
             title: localizedTransactionTitle,
             note: note,
             amountMinor: amountMinor,
+            settlementGroupID: settlementGroupID,
+            settlementObligationID: settlementObligationID,
+            settlementRole: settlementRole,
+            reportingExpenseMinor: reportingExpenseMinor,
+            reportingIncomeMinor: reportingIncomeMinor,
             sourceCurrencyCode: sourceCurrencyCode,
             destinationCurrencyCode: destinationCurrencyCode,
             destinationAmountMinor: destinationAmountMinor,

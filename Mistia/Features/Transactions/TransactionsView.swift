@@ -198,6 +198,10 @@ struct TransactionsView: View {
     private var storedTransactions: [LedgerTransaction]
     @Query private var storedWallets: [LedgerWallet]
     @Query private var storedCategories: [TransactionCategory]
+    @Query(filter: #Predicate<SettlementGroup> { $0.deletedAt == nil }, sort: \SettlementGroup.occurredAt, order: .reverse)
+    private var storedSettlementGroups: [SettlementGroup]
+    @Query(filter: #Predicate<SettlementObligation> { $0.deletedAt == nil }, sort: \SettlementObligation.updatedAt, order: .reverse)
+    private var storedSettlementObligations: [SettlementObligation]
     @Query private var ownershipScopes: [OwnedRecordScope]
     @Query private var transactionAuditRecords: [TransactionAuditRecord]
 
@@ -213,6 +217,8 @@ struct TransactionsView: View {
     @State private var exportErrorMessage: String?
     @State private var destination: TransactionsNavigationDestination?
     @State private var debtSettlementTarget: DebtSettlementSheetTarget?
+    @State private var settlementEditorTarget: SettlementEditorTarget?
+    @State private var settlementDetailTarget: SettlementDetailSheetTarget?
     @State private var permissionPrompt: TransactionsPermissionPrompt?
     @State private var infoAlert: TransactionsInfoAlert?
     @State private var familyOwnerConflictAlert: TransactionsFamilyOwnerConflictAlert?
@@ -328,6 +334,64 @@ struct TransactionsView: View {
             familyContextStore: familyContextStore,
             sessionStore: sessionStore
         )
+    }
+
+    private var visibleSettlementGroups: [SettlementGroup] {
+        FamilyScopedData.visible(
+            storedSettlementGroups,
+            entity: .settlementGroup,
+            scopes: ownershipScopes,
+            familyContextStore: familyContextStore,
+            sessionStore: sessionStore
+        )
+    }
+
+    private var visibleSettlementObligations: [SettlementObligation] {
+        FamilyScopedData.visible(
+            storedSettlementObligations,
+            entity: .settlementObligation,
+            scopes: ownershipScopes,
+            familyContextStore: familyContextStore,
+            sessionStore: sessionStore
+        )
+    }
+
+    private var openSettlementItems: [PendingSettlementChipSnapshot] {
+        let groupsByID = Dictionary(
+            uniqueKeysWithValues: visibleSettlementGroups.map { ($0.id, $0) }
+        )
+
+        return visibleSettlementObligations
+            .compactMap { obligation -> PendingSettlementChipSnapshot? in
+                guard obligation.deletedAt == nil,
+                      obligation.remainingMinor > 0,
+                      let group = groupsByID[obligation.groupID],
+                      group.deletedAt == nil,
+                      group.status != .settled else {
+                    return nil
+                }
+
+                return PendingSettlementChipSnapshot(
+                    id: obligation.id,
+                    groupID: group.id,
+                    title: group.title,
+                    kind: group.kind,
+                    direction: obligation.direction,
+                    counterpartyName: obligation.counterpartyName,
+                    currencyCode: MistiaCurrencyLogic.normalizedCode(group.currencyCode),
+                    expectedMinor: obligation.expectedMinor,
+                    settledMinor: obligation.settledMinor,
+                    preferredWalletID: obligation.preferredWalletID,
+                    occurredAt: group.occurredAt,
+                    updatedAt: max(group.updatedAt, obligation.updatedAt)
+                )
+            }
+            .sorted {
+                if $0.updatedAt != $1.updatedAt {
+                    return $0.updatedAt > $1.updatedAt
+                }
+                return $0.occurredAt > $1.occurredAt
+            }
     }
 
     private var transactionAuditMap: [UUID: TransactionAuditRecord] {
@@ -783,6 +847,7 @@ struct TransactionsView: View {
         let searchSnapshot = cachedTransactionSearchSnapshot(for: searchSnapshotKey)
         let memberToolbar = familyContextStore.memberViewingToolbarPresentation
         let exchangeRateIndex = MistiaExchangeRateIndex(rates: appExchangeRates)
+        let openSettlementItems = self.openSettlementItems
 
         NavigationStack {
             ZStack {
@@ -824,6 +889,9 @@ struct TransactionsView: View {
                             listSnapshot.openDebtPositions,
                             receivableTotals: listSnapshot.openReceivableDebtTotals
                         )
+                    }
+                    if !openSettlementItems.isEmpty {
+                        openSettlementSection(openSettlementItems)
                     }
                     transactionsContent(listSnapshot, exchangeRateIndex: exchangeRateIndex)
                 }
@@ -872,6 +940,16 @@ struct TransactionsView: View {
         }
         .sheet(item: $debtSettlementTarget) { target in
             DebtSettlementSheet(target: target)
+                .presentationDetents([.large])
+                .presentationDragIndicator(.hidden)
+        }
+        .sheet(item: $settlementEditorTarget) { target in
+            SettlementEditorSheet(target: target)
+                .presentationDetents([.large])
+                .presentationDragIndicator(.hidden)
+        }
+        .sheet(item: $settlementDetailTarget) { target in
+            SettlementDetailSheet(target: target)
                 .presentationDetents([.large])
                 .presentationDragIndicator(.hidden)
         }
@@ -984,6 +1062,22 @@ struct TransactionsView: View {
                 Label(
                     L10n.transactions.transactions.creditCardStatement,
                     systemImage: "creditcard.and.123"
+                )
+            }
+
+            Divider()
+
+            Button(action: { settlementEditorTarget = .resale }) {
+                Label(
+                    L10n.transactions.settlement.addResale,
+                    systemImage: "cart.badge.clock"
+                )
+            }
+
+            Button(action: { settlementEditorTarget = .sharedExpense }) {
+                Label(
+                    L10n.transactions.settlement.addSharedExpense,
+                    systemImage: "person.3.sequence"
                 )
             }
         }
@@ -1253,11 +1347,72 @@ struct TransactionsView: View {
         }
     }
 
+    private func openSettlementSection(
+        _ items: [PendingSettlementChipSnapshot]
+    ) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(alignment: .firstTextBaseline, spacing: 10) {
+                Text(L10n.transactions.settlement.openSettlements)
+                    .font(.system(size: 13, weight: .bold, design: .rounded))
+                    .foregroundStyle(.secondary)
+                    .textCase(.uppercase)
+                    .tracking(0.6)
+
+                Spacer(minLength: 12)
+
+                if let total = formattedReceivableSettlementTotal(items) {
+                    Text(verbatim: total)
+                        .font(.system(size: 15, weight: .bold, design: .rounded))
+                        .foregroundStyle(MistiaAccent.income.color)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.72)
+                }
+            }
+            .padding(.horizontal, 2)
+
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 10) {
+                    ForEach(items) { item in
+                        PendingSettlementChip(item: item) {
+                            settlementDetailTarget = SettlementDetailSheetTarget(item: item)
+                        }
+                    }
+                }
+                .padding(.horizontal, 18)
+                .padding(.vertical, 2)
+            }
+            .scrollClipDisabled()
+            .padding(.horizontal, -18)
+        }
+    }
+
     private func formattedReceivableDebtTotal(
         _ totals: [PlanningCurrencyAmountTotalSnapshot]
     ) -> String? {
         guard !totals.isEmpty else { return nil }
         return totals
+            .map { $0.amountMinor.formattedCurrency(code: $0.currencyCode) }
+            .joined(separator: " / ")
+    }
+
+    private func formattedReceivableSettlementTotal(
+        _ items: [PendingSettlementChipSnapshot]
+    ) -> String? {
+        let receivableTotals = Dictionary(
+            grouping: items.filter(\.isReceivable),
+            by: \.currencyCode
+        )
+        .map { currencyCode, items in
+            PlanningCurrencyAmountTotalSnapshot(
+                currencyCode: currencyCode,
+                amountMinor: items.reduce(Int64(0)) { $0 + $1.remainingMinor }
+            )
+        }
+        .filter { $0.amountMinor > 0 }
+        .sorted { $0.currencyCode < $1.currencyCode }
+
+        guard !receivableTotals.isEmpty else { return nil }
+        return receivableTotals
             .map { $0.amountMinor.formattedCurrency(code: $0.currencyCode) }
             .joined(separator: " / ")
     }

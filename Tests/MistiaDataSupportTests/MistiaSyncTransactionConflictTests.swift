@@ -147,8 +147,96 @@ final class MistiaSyncTransactionConflictTests: XCTestCase {
         XCTAssertEqual(restoredBill.resumeStartMonth, makeDate(year: 2026, month: 7, day: 1))
     }
 
+    func testSettlementModelsAndTransactionReportingFieldsRoundTripThroughSyncSnapshot() throws {
+        let userID = UUID()
+        let wallet = makeWallet()
+        let groupID = UUID()
+        let obligationID = UUID()
+        let transactionID = UUID()
+        let sourceContainer = try makeContainer()
+        let sourceContext = ModelContext(sourceContainer)
+        let occurredAt = makeDate(year: 2026, month: 7, day: 10)
+
+        let group = SettlementGroup(
+            id: groupID,
+            kind: .resale,
+            status: .open,
+            title: "Camera resale",
+            currencyCode: "JPY",
+            occurredAt: occurredAt,
+            totalMinor: 1_000,
+            expectedMinor: 1_500,
+            settledMinor: 0,
+            organizerUserID: userID,
+            createdAt: occurredAt,
+            updatedAt: occurredAt
+        )
+        let obligation = SettlementObligation(
+            id: obligationID,
+            groupID: groupID,
+            counterpartyName: "Buyer",
+            normalizedCounterpartyKey: "buyer",
+            direction: .receivable,
+            expectedMinor: 1_500,
+            preferredWalletID: wallet.id,
+            createdAt: occurredAt,
+            updatedAt: occurredAt
+        )
+        let transaction = LedgerTransaction(
+            id: transactionID,
+            primaryKind: .income,
+            title: "Payment",
+            amountMinor: 1_500,
+            settlementGroupID: groupID,
+            settlementObligationID: obligationID,
+            settlementRole: .resaleReceipt,
+            reportingExpenseMinor: -1_000,
+            reportingIncomeMinor: 500,
+            sourceCurrencyCode: "JPY",
+            occurredAt: occurredAt,
+            updatedAt: occurredAt,
+            sourceWallet: wallet
+        )
+
+        sourceContext.insert(wallet)
+        sourceContext.insert(group)
+        sourceContext.insert(obligation)
+        sourceContext.insert(transaction)
+        try sourceContext.save()
+
+        let snapshot = try MistiaSyncLocalStore.exportSnapshot(for: userID, from: sourceContainer)
+        XCTAssertEqual(snapshot.settlementGroups.first?.id, groupID)
+        XCTAssertEqual(snapshot.settlementObligations.first?.id, obligationID)
+        XCTAssertEqual(snapshot.transactions.first?.settlementRoleRawValue, SettlementTransactionRole.resaleReceipt.rawValue)
+        XCTAssertEqual(snapshot.transactions.first?.reportingExpenseMinor, -1_000)
+        XCTAssertEqual(snapshot.transactions.first?.reportingIncomeMinor, 500)
+
+        let targetContainer = try makeContainer()
+        try MistiaSyncLocalStore.applySnapshotIncrementally(
+            snapshot,
+            shouldPruneMissing: false,
+            protectedRecordIDs: [],
+            in: targetContainer
+        )
+
+        let targetContext = ModelContext(targetContainer)
+        let restoredGroup = try XCTUnwrap(try targetContext.fetch(FetchDescriptor<SettlementGroup>()).first)
+        let restoredObligation = try XCTUnwrap(try targetContext.fetch(FetchDescriptor<SettlementObligation>()).first)
+        let restoredTransaction = try XCTUnwrap(try targetContext.fetch(FetchDescriptor<LedgerTransaction>()).first)
+
+        XCTAssertEqual(restoredGroup.id, groupID)
+        XCTAssertEqual(restoredGroup.kind, .resale)
+        XCTAssertEqual(restoredObligation.groupID, groupID)
+        XCTAssertEqual(restoredObligation.direction, .receivable)
+        XCTAssertEqual(restoredTransaction.settlementGroupID, groupID)
+        XCTAssertEqual(restoredTransaction.settlementObligationID, obligationID)
+        XCTAssertEqual(restoredTransaction.settlementRole, .resaleReceipt)
+        XCTAssertEqual(restoredTransaction.reportingExpenseMinor, -1_000)
+        XCTAssertEqual(restoredTransaction.reportingIncomeMinor, 500)
+    }
+
     private func makeContainer() throws -> ModelContainer {
-        let schema = Schema(versionedSchema: MistiaSchemaV5.self)
+        let schema = Schema(versionedSchema: MistiaSchemaV6.self)
         let configuration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)
         return try ModelContainer(for: schema, configurations: [configuration])
     }

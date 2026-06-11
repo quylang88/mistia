@@ -33573,6 +33573,272 @@
         }
       }
     },
+    "transactions.settlement.addResale": {
+      "localizations": {
+        "vi": { "stringUnit": { "state": "translated", "value": "Bán lại / thu sau" } },
+        "en": { "stringUnit": { "state": "translated", "value": "Resale / collect later" } },
+        "ja": { "stringUnit": { "state": "translated", "value": "転売・後で回収" } }
+      }
+    },
+    "transactions.settlement.addSharedExpense": {
+      "localizations": {
+        "vi": { "stringUnit": { "state": "translated", "value": "Chia chi phí" } },
+        "en": { "stringUnit": { "state": "translated", "value": "Split expense" } },
+        "ja": { "stringUnit": { "state": "translated", "value": "割り勘" } }
+      }
+    },
+    "transactions.settlement.amountExceedsOpenSettlement": {
+      "localizations": {
+        "vi": { "stringUnit": { "state": "translated", "value": "Số tiền không được lớn hơn khoản đang chờ." } },
+        "en": { "stringUnit": { "state": "translated", "value": "The amount cannot be greater than the open settlement." } },
+        "ja": { "stringUnit": { "state": "translated", "value": "金額は未決済額を超えられません。" } }
+      }
+    },
+    "transactions.settlement.buyerName": {
+      "localizations": {
+        "vi": { "stringUnit": { "state": "translated", "value": "Người mua" } },
+        "en": { "stringUnit": { "state": "translated", "value": "Buyer" } },
+        "ja": { "stringUnit": { "state": "translated", "value": "購入者" } }
+      }
+    },
+    "transactions.settlement.category": {
+      "localizations": {
+        "vi": { "stringUnit": { "state": "translated", "value": "Danh mục" } },
+        "en": { "stringUnit": { "state": "translated", "value": "Category" } },
+        "ja": { "stringUnit": { "state": "translated", "value": "カテゴリ" } }
+      }
+    },
+    "transactions.settlement.enterAmountsGreaterThanZero": {
+      "localizations": {
+        "vi": { "stringUnit": { "state": "translated", "value": "Nhập số tiền lớn hơn 0." } },
+        "en": { "stringUnit": { "state": "translated", "value": "Enter amounts greater than 0." } },
+        "ja": { "stringUnit": { "state": "translated", "value": "0 より大きい金額を入力してください。" } }
+      }
+    },
+    "transactions.settlement.enterCounterparty": {
+      "localizations": {
+        "vi": { "stringUnit": { "state": "translated", "value": "Nhập tên người liên quan." } },
+        "en": { "stringUnit": { "state": "translated", "value": "Enter the counterparty name." } },
+        "ja": { "stringUnit": { "state": "translated", "value": "相手の名前を入力してください。" } }
+      }
+    },
+    "transactions.settlement.enterTitle": {
+      "localizations": {
+        "vi": { "stringUnit": { "state": "translated", "value": "Nhập tên khoản này." } },
+        "en": { "stringUnit": { "state": "translated", "value": "Enter a title for this item." } },
+        "ja": { "stringUnit": { "state": "translated", "value": "この項目の名前を入力してください。" } }
+      }
+    },
+    "transactions.settlement.eventName": {
+      "localizations": {
+        "vi": { "stringUnit": { "state": "translated", "value": "Tên buổi / sự kiện" } },
+        "en": { "stringUnit": { "state": "translated", "value": "Event name" } },
+        "ja": { "stringUnit": { "state": "translated", "value": "イベント名" } }
+      }
+    },
+    "transactions.settlement.expectedProfit": {
+      "localizations": {
+        "vi": { "stringUnit": { "state": "translated", "value": "Lợi nhuận dự kiến" } },
+        "en": { "stringUnit": { "state": "translated", "value": "Expected profit" } },
+        "ja": { "stringUnit": { "state": "translated", "value": "見込み利益" } }
+      }
+    },
+    "transactions.settlement.history": {
+      "localizations": {
+        "vi": { "stringUnit": { "state": "translated", "value": "Lịch sử" } },
+        "en": { "stringUnit": { "state": "translated", "value": "History" } },
+        "ja": { "stringUnit": { "state": "translated", "value": "履歴" } }
+      }
+    },
+    "transactions.settlement.itemName": {
+      "localizations": {
+        "vi": { "stringUnit": { "state": "translated", "value": "Tên món / sản phẩm" } },
+        "en": { "stringUnit": { "state": "translated", "value": "Item or product name" } },
+        "ja": { "stringUnit": { "state": "translated", "value": "品目・商品名" } }
+      }
+    },
+    "transactions.settlement.noSettlementNeeded": {
+      "localizations": {
+        "vi": { "stringUnit": { "state": "translated", "value": "Không cần thanh toán thêm." } },
+        "en": { "stringUnit": { "state": "translated", "value": "No extra settlement needed." } },
+        "ja": { "stringUnit": { "state": "translated", "value": "追加の精算は不要です。" } }
+      }
+    },
+    "transactions.settlement.openSettlements": {
+      "localizations": {
+        "vi": { "stringUnit": { "state": "translated", "value": "Chờ thu / chờ trả" } },
+        "en": { "stringUnit": { "state": "translated", "value": "Pending settlements" } },
+        "ja": { "stringUnit": { "state": "translated", "value": "未精算" } }
+      }
+    },
+    "transactions.settlement.paid": {
+      "localizations": {
+        "vi": { "stringUnit": { "state": "translated", "value": "Đã trả" } },
+        "en": { "stringUnit": { "state": "translated", "value": "Paid" } },
+        "ja": { "stringUnit": { "state": "translated", "value": "支払い済み" } }
+      }
+    },
+    "transactions.settlement.paidAmount": {
+      "localizations": {
+        "vi": { "stringUnit": { "state": "translated", "value": "Đã trả" } },
+        "en": { "stringUnit": { "state": "translated", "value": "Paid" } },
+        "ja": { "stringUnit": { "state": "translated", "value": "支払い済み" } }
+      }
+    },
+    "transactions.settlement.participantName": {
+      "localizations": {
+        "vi": { "stringUnit": { "state": "translated", "value": "Tên" } },
+        "en": { "stringUnit": { "state": "translated", "value": "Name" } },
+        "ja": { "stringUnit": { "state": "translated", "value": "名前" } }
+      }
+    },
+    "transactions.settlement.participants": {
+      "localizations": {
+        "vi": { "stringUnit": { "state": "translated", "value": "Người tham gia" } },
+        "en": { "stringUnit": { "state": "translated", "value": "Participants" } },
+        "ja": { "stringUnit": { "state": "translated", "value": "参加者" } }
+      }
+    },
+    "transactions.settlement.purchaseCost": {
+      "localizations": {
+        "vi": { "stringUnit": { "state": "translated", "value": "Giá mua" } },
+        "en": { "stringUnit": { "state": "translated", "value": "Purchase cost" } },
+        "ja": { "stringUnit": { "state": "translated", "value": "仕入れ額" } }
+      }
+    },
+    "transactions.settlement.purchaseWallet": {
+      "localizations": {
+        "vi": { "stringUnit": { "state": "translated", "value": "Ví đã trả" } },
+        "en": { "stringUnit": { "state": "translated", "value": "Paid from wallet" } },
+        "ja": { "stringUnit": { "state": "translated", "value": "支払い元ウォレット" } }
+      }
+    },
+    "transactions.settlement.receiveWallet": {
+      "localizations": {
+        "vi": { "stringUnit": { "state": "translated", "value": "Ví sẽ nhận" } },
+        "en": { "stringUnit": { "state": "translated", "value": "Receive to wallet" } },
+        "ja": { "stringUnit": { "state": "translated", "value": "受け取り先ウォレット" } }
+      }
+    },
+    "transactions.settlement.recordPayment": {
+      "localizations": {
+        "vi": { "stringUnit": { "state": "translated", "value": "Ghi nhận thanh toán" } },
+        "en": { "stringUnit": { "state": "translated", "value": "Record payment" } },
+        "ja": { "stringUnit": { "state": "translated", "value": "支払いを記録" } }
+      }
+    },
+    "transactions.settlement.resaleQuickCreateSubtitle": {
+      "localizations": {
+        "vi": { "stringUnit": { "state": "translated", "value": "Tạo khoản chờ thu và chỉ ghi lời khi tiền về." } },
+        "en": { "stringUnit": { "state": "translated", "value": "Create a receivable and report profit only when cash arrives." } },
+        "ja": { "stringUnit": { "state": "translated", "value": "未収を作成し、入金時だけ利益として計上します。" } }
+      }
+    },
+    "transactions.settlement.resaleReceiptTitle": {
+      "localizations": {
+        "vi": { "stringUnit": { "state": "translated", "value": "Thu bán lại" } },
+        "en": { "stringUnit": { "state": "translated", "value": "Resale receipt" } },
+        "ja": { "stringUnit": { "state": "translated", "value": "転売入金" } }
+      }
+    },
+    "transactions.settlement.resaleTitle": {
+      "localizations": {
+        "vi": { "stringUnit": { "state": "translated", "value": "Bán lại / thu sau" } },
+        "en": { "stringUnit": { "state": "translated", "value": "Resale / collect later" } },
+        "ja": { "stringUnit": { "state": "translated", "value": "転売・後で回収" } }
+      }
+    },
+    "transactions.settlement.salePrice": {
+      "localizations": {
+        "vi": { "stringUnit": { "state": "translated", "value": "Giá bán" } },
+        "en": { "stringUnit": { "state": "translated", "value": "Sale price" } },
+        "ja": { "stringUnit": { "state": "translated", "value": "販売額" } }
+      }
+    },
+    "transactions.settlement.settled": {
+      "localizations": {
+        "vi": { "stringUnit": { "state": "translated", "value": "Đã thanh toán" } },
+        "en": { "stringUnit": { "state": "translated", "value": "Settled" } },
+        "ja": { "stringUnit": { "state": "translated", "value": "精算済み" } }
+      }
+    },
+    "transactions.settlement.settlementNotFound": {
+      "localizations": {
+        "vi": { "stringUnit": { "state": "translated", "value": "Không tìm thấy khoản chờ thu / chờ trả này." } },
+        "en": { "stringUnit": { "state": "translated", "value": "This pending settlement could not be found." } },
+        "ja": { "stringUnit": { "state": "translated", "value": "この未精算項目が見つかりません。" } }
+      }
+    },
+    "transactions.settlement.settlementSuggestions": {
+      "localizations": {
+        "vi": { "stringUnit": { "state": "translated", "value": "Gợi ý thanh toán" } },
+        "en": { "stringUnit": { "state": "translated", "value": "Settlement suggestions" } },
+        "ja": { "stringUnit": { "state": "translated", "value": "精算候補" } }
+      }
+    },
+    "transactions.settlement.share": {
+      "localizations": {
+        "vi": { "stringUnit": { "state": "translated", "value": "Phần chia" } },
+        "en": { "stringUnit": { "state": "translated", "value": "Share" } },
+        "ja": { "stringUnit": { "state": "translated", "value": "負担分" } }
+      }
+    },
+    "transactions.settlement.sharedExpensePaymentTitle": {
+      "localizations": {
+        "vi": { "stringUnit": { "state": "translated", "value": "Trả phần chia" } },
+        "en": { "stringUnit": { "state": "translated", "value": "Split expense payment" } },
+        "ja": { "stringUnit": { "state": "translated", "value": "割り勘支払い" } }
+      }
+    },
+    "transactions.settlement.sharedExpenseQuickCreateSubtitle": {
+      "localizations": {
+        "vi": { "stringUnit": { "state": "translated", "value": "Nhập ai đã trả bao nhiêu để tính phần cần thu/trả." } },
+        "en": { "stringUnit": { "state": "translated", "value": "Enter who paid what and calculate what to collect or pay." } },
+        "ja": { "stringUnit": { "state": "translated", "value": "誰がいくら払ったかを入力して、回収・支払い額を計算します。" } }
+      }
+    },
+    "transactions.settlement.sharedExpenseReceiptTitle": {
+      "localizations": {
+        "vi": { "stringUnit": { "state": "translated", "value": "Nhận hoàn chi phí" } },
+        "en": { "stringUnit": { "state": "translated", "value": "Expense reimbursement" } },
+        "ja": { "stringUnit": { "state": "translated", "value": "費用精算の受取" } }
+      }
+    },
+    "transactions.settlement.sharedExpenseTitle": {
+      "localizations": {
+        "vi": { "stringUnit": { "state": "translated", "value": "Chia chi phí" } },
+        "en": { "stringUnit": { "state": "translated", "value": "Split expense" } },
+        "ja": { "stringUnit": { "state": "translated", "value": "割り勘" } }
+      }
+    },
+    "transactions.settlement.splitSummary": {
+      "localizations": {
+        "vi": { "stringUnit": { "state": "translated", "value": "Kết quả chia" } },
+        "en": { "stringUnit": { "state": "translated", "value": "Split summary" } },
+        "ja": { "stringUnit": { "state": "translated", "value": "割り勘結果" } }
+      }
+    },
+    "transactions.settlement.theyWillPay": {
+      "localizations": {
+        "vi": { "stringUnit": { "state": "translated", "value": "Sẽ trả bạn" } },
+        "en": { "stringUnit": { "state": "translated", "value": "Will pay you" } },
+        "ja": { "stringUnit": { "state": "translated", "value": "あなたへ支払い予定" } }
+      }
+    },
+    "transactions.settlement.totalPaid": {
+      "localizations": {
+        "vi": { "stringUnit": { "state": "translated", "value": "Tổng đã trả" } },
+        "en": { "stringUnit": { "state": "translated", "value": "Total paid" } },
+        "ja": { "stringUnit": { "state": "translated", "value": "支払い合計" } }
+      }
+    },
+    "transactions.settlement.youWillPay": {
+      "localizations": {
+        "vi": { "stringUnit": { "state": "translated", "value": "Bạn sẽ trả" } },
+        "en": { "stringUnit": { "state": "translated", "value": "You will pay" } },
+        "ja": { "stringUnit": { "state": "translated", "value": "あなたが支払い予定" } }
+      }
+    },
     "transactions.transactioneditor.expenseName": {
       "localizations": {
         "vi": {

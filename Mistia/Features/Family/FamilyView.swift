@@ -2120,6 +2120,8 @@ private struct FamilyOverviewDataHost: View {
                     occurredAt: transaction.occurredAt,
                     kind: record.familyAggregateKind,
                     amountMinor: abs(transaction.amountMinor),
+                    reportingExpenseMinor: record.reportingExpenseMinor,
+                    reportingIncomeMinor: record.reportingIncomeMinor,
                     currencyCode: record.sourceCurrencyCode ?? transaction.sourceWallet?.currencyCode ?? "JPY",
                     isCreditCardPayment: TransactionLogic.isCreditCardPayment(record),
                     isAdjustment: TransactionLogic.isAdjustment(record),
@@ -4340,4 +4342,3 @@ final class GenericSignatureCache<Record> {
         return newSignature
     }
 }
-

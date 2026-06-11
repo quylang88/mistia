@@ -245,6 +245,11 @@ final class LedgerTransaction {
     var title: String
     var note: String?
     var amountMinor: Int64
+    var settlementGroupID: UUID?
+    var settlementObligationID: UUID?
+    var settlementRoleRawValue: String?
+    var reportingExpenseMinor: Int64?
+    var reportingIncomeMinor: Int64?
     var sourceCurrencyCode: String?
     var destinationCurrencyCode: String?
     var destinationAmountMinor: Int64?
@@ -277,6 +282,11 @@ final class LedgerTransaction {
         title: String = "",
         note: String? = nil,
         amountMinor: Int64,
+        settlementGroupID: UUID? = nil,
+        settlementObligationID: UUID? = nil,
+        settlementRole: SettlementTransactionRole? = nil,
+        reportingExpenseMinor: Int64? = nil,
+        reportingIncomeMinor: Int64? = nil,
         sourceCurrencyCode: String? = nil,
         destinationCurrencyCode: String? = nil,
         destinationAmountMinor: Int64? = nil,
@@ -307,6 +317,11 @@ final class LedgerTransaction {
         self.title = title
         self.note = note
         self.amountMinor = amountMinor
+        self.settlementGroupID = settlementGroupID
+        self.settlementObligationID = settlementObligationID
+        self.settlementRoleRawValue = settlementRole?.rawValue
+        self.reportingExpenseMinor = reportingExpenseMinor
+        self.reportingIncomeMinor = reportingIncomeMinor
         self.sourceCurrencyCode = sourceCurrencyCode
         self.destinationCurrencyCode = destinationCurrencyCode
         self.destinationAmountMinor = destinationAmountMinor
@@ -355,9 +370,138 @@ final class LedgerTransaction {
         }
     }
 
+    var settlementRole: SettlementTransactionRole? {
+        get {
+            guard let settlementRoleRawValue else { return nil }
+            return SettlementTransactionRole(rawValue: settlementRoleRawValue)
+        }
+        set {
+            settlementRoleRawValue = newValue?.rawValue
+        }
+    }
+
     var entryStatus: TransactionEntryStatus {
         get { TransactionEntryStatus(rawValue: entryStatusRawValue) ?? .posted }
         set { entryStatusRawValue = newValue.rawValue }
+    }
+}
+
+@Model
+final class SettlementGroup {
+    @Attribute(.unique) var id: UUID
+    var kindRawValue: String
+    var statusRawValue: String
+    var title: String
+    var currencyCode: String
+    var occurredAt: Date
+    var totalMinor: Int64
+    var expectedMinor: Int64
+    var settledMinor: Int64
+    var organizerUserID: UUID?
+    var note: String?
+    var createdAt: Date
+    var updatedAt: Date
+    var deletedAt: Date?
+    var remoteVersion: Int64
+
+    init(
+        id: UUID = UUID(),
+        kind: SettlementKind,
+        status: SettlementStatus = .open,
+        title: String,
+        currencyCode: String = "JPY",
+        occurredAt: Date = .now,
+        totalMinor: Int64,
+        expectedMinor: Int64,
+        settledMinor: Int64 = 0,
+        organizerUserID: UUID? = nil,
+        note: String? = nil,
+        createdAt: Date = .now,
+        updatedAt: Date = .now,
+        deletedAt: Date? = nil,
+        remoteVersion: Int64 = 0
+    ) {
+        self.id = id
+        self.kindRawValue = kind.rawValue
+        self.statusRawValue = status.rawValue
+        self.title = title
+        self.currencyCode = currencyCode
+        self.occurredAt = occurredAt
+        self.totalMinor = max(totalMinor, 0)
+        self.expectedMinor = max(expectedMinor, 0)
+        self.settledMinor = max(settledMinor, 0)
+        self.organizerUserID = organizerUserID
+        self.note = note
+        self.createdAt = createdAt
+        self.updatedAt = updatedAt
+        self.deletedAt = deletedAt
+        self.remoteVersion = remoteVersion
+    }
+
+    var kind: SettlementKind {
+        get { SettlementKind(rawValue: kindRawValue) ?? .sharedExpense }
+        set { kindRawValue = newValue.rawValue }
+    }
+
+    var status: SettlementStatus {
+        get { SettlementStatus(rawValue: statusRawValue) ?? .open }
+        set { statusRawValue = newValue.rawValue }
+    }
+}
+
+@Model
+final class SettlementObligation {
+    @Attribute(.unique) var id: UUID
+    var groupID: UUID
+    var counterpartyName: String
+    var normalizedCounterpartyKey: String?
+    var memberUserID: UUID?
+    var directionRawValue: String
+    var expectedMinor: Int64
+    var settledMinor: Int64
+    var preferredWalletID: UUID?
+    var createdAt: Date
+    var updatedAt: Date
+    var deletedAt: Date?
+    var remoteVersion: Int64
+
+    init(
+        id: UUID = UUID(),
+        groupID: UUID,
+        counterpartyName: String,
+        normalizedCounterpartyKey: String? = nil,
+        memberUserID: UUID? = nil,
+        direction: SettlementDirection,
+        expectedMinor: Int64,
+        settledMinor: Int64 = 0,
+        preferredWalletID: UUID? = nil,
+        createdAt: Date = .now,
+        updatedAt: Date = .now,
+        deletedAt: Date? = nil,
+        remoteVersion: Int64 = 0
+    ) {
+        self.id = id
+        self.groupID = groupID
+        self.counterpartyName = counterpartyName
+        self.normalizedCounterpartyKey = normalizedCounterpartyKey
+        self.memberUserID = memberUserID
+        self.directionRawValue = direction.rawValue
+        self.expectedMinor = max(expectedMinor, 0)
+        self.settledMinor = max(settledMinor, 0)
+        self.preferredWalletID = preferredWalletID
+        self.createdAt = createdAt
+        self.updatedAt = updatedAt
+        self.deletedAt = deletedAt
+        self.remoteVersion = remoteVersion
+    }
+
+    var direction: SettlementDirection {
+        get { SettlementDirection(rawValue: directionRawValue) ?? .receivable }
+        set { directionRawValue = newValue.rawValue }
+    }
+
+    var remainingMinor: Int64 {
+        max(expectedMinor - settledMinor, 0)
     }
 }
 

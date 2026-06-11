@@ -1071,7 +1071,7 @@ final class SyncCoordinator {
             row.categoryID
         case .recurringBillPlan(let row):
             row.categoryID
-        case .wallet, .creditCardProfile, .category, .savingsGoal, .installmentPlan, .dueOccurrence:
+        case .wallet, .creditCardProfile, .category, .settlementGroup, .settlementObligation, .savingsGoal, .installmentPlan, .dueOccurrence:
             nil
         }
     }
@@ -1741,6 +1741,16 @@ final class SyncCoordinator {
             row.syncVersion = max(remoteVersion, row.syncVersion)
             row.lastModifiedByDeviceID = nil
             return .category(row)
+        case .settlementGroup(var row):
+            row.deletedAt = deletedAt
+            row.syncVersion = max(remoteVersion, row.syncVersion)
+            row.lastModifiedByDeviceID = nil
+            return .settlementGroup(row)
+        case .settlementObligation(var row):
+            row.deletedAt = deletedAt
+            row.syncVersion = max(remoteVersion, row.syncVersion)
+            row.lastModifiedByDeviceID = nil
+            return .settlementObligation(row)
         case .transaction(var row):
             row.deletedAt = deletedAt
             row.syncVersion = max(remoteVersion, row.syncVersion)

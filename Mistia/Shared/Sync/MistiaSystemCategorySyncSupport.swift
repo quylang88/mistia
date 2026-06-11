@@ -168,6 +168,8 @@ enum MistiaSystemCategorySyncSupport {
             wallets: snapshot.wallets,
             creditCardProfiles: snapshot.creditCardProfiles,
             categories: categories,
+            settlementGroups: snapshot.settlementGroups,
+            settlementObligations: snapshot.settlementObligations,
             transactions: snapshot.transactions.map { $0.replacingCategoryReferences(replacementByID) },
             budgetPlans: snapshot.budgetPlans.map { $0.replacingCategoryReferences(replacementByID) },
             savingsGoals: snapshot.savingsGoals,

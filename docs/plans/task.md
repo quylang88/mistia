@@ -2,8 +2,9 @@
 
 | Task ID | Description | Status |
 | :--- | :--- | :--- |
-| Task 1 | Tab Bar Layout Subview Traversal Optimization in MistiaNativeTabShell.swift | [x] |
-| Task 2 | SwiftUI Query Signature Caching in FamilyView.swift | [x] |
-| Task 3 | Image Processing Autoreleasepool in AIBillAnalysisView.swift | [x] |
-| Task 4 | Database Query Consolidation in CategoryNameTranslationService.swift | [x] |
-| Task 5 | Build and Test Verification | [x] |
+| Task 1 | Inspect settlement persistence, sync, reporting, and transaction UI integration points | [x] |
+| Task 2 | Add failing core tests for settlement allocation, split math, and reporting overrides | [x] |
+| Task 3 | Implement settlement enums, models, migration fields, and core accounting helpers | [x] |
+| Task 4 | Wire transaction/reporting/sync paths while preserving Vay & cho vay semantics | [x] |
+| Task 5 | Add Transactions UI flows, settlement strip/detail sheet, and localized copy | [x] |
+| Task 6 | Regenerate localization and run focused validation/build checks | [x] |
