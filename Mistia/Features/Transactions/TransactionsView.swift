@@ -1436,7 +1436,7 @@ struct TransactionsView: View {
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 10) {
                     ForEach(events) { event in
-                        PreparingSettlementCompactChip(event: event) {
+                        PreparingSettlementCompactChip(event: event, showsIcon: false) {
                             preparingSettlementTarget = PreparingSettlementEventSheetTarget(groupID: event.id)
                         }
                     }

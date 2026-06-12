@@ -33643,6 +33643,13 @@
         "ja": { "stringUnit": { "state": "translated", "value": "新しい支出を追加するか、既存の支出を選んで、このイベントで支払った金額を記録します。" } }
       }
     },
+    "transactions.settlement.addParticipantsInEventEditor": {
+      "localizations": {
+        "vi": { "stringUnit": { "state": "translated", "value": "Thêm người tham gia trong sự kiện trước khi chia chi phí." } },
+        "en": { "stringUnit": { "state": "translated", "value": "Add participants to the event before splitting costs." } },
+        "ja": { "stringUnit": { "state": "translated", "value": "費用を分ける前に、イベントに参加者を追加してください。" } }
+      }
+    },
     "transactions.settlement.addParticipant": {
       "localizations": {
         "vi": { "stringUnit": { "state": "translated", "value": "Thêm người" } },
@@ -33722,9 +33729,9 @@
     },
     "transactions.settlement.enterParticipant": {
       "localizations": {
-        "vi": { "stringUnit": { "state": "translated", "value": "Thêm ít nhất một người liên quan." } },
-        "en": { "stringUnit": { "state": "translated", "value": "Add at least one related person." } },
-        "ja": { "stringUnit": { "state": "translated", "value": "関係者を 1 人以上追加してください。" } }
+        "vi": { "stringUnit": { "state": "translated", "value": "Thêm ít nhất một người tham gia." } },
+        "en": { "stringUnit": { "state": "translated", "value": "Add at least one participant." } },
+        "ja": { "stringUnit": { "state": "translated", "value": "参加者を 1 人以上追加してください。" } }
       }
     },
     "transactions.settlement.enterTitle": {
@@ -33785,9 +33792,9 @@
     },
     "transactions.settlement.noParticipantsYet": {
       "localizations": {
-        "vi": { "stringUnit": { "state": "translated", "value": "Chưa có người liên quan" } },
-        "en": { "stringUnit": { "state": "translated", "value": "No related people yet" } },
-        "ja": { "stringUnit": { "state": "translated", "value": "関係者なし" } }
+        "vi": { "stringUnit": { "state": "translated", "value": "Chưa có người tham gia" } },
+        "en": { "stringUnit": { "state": "translated", "value": "No participants yet" } },
+        "ja": { "stringUnit": { "state": "translated", "value": "参加者なし" } }
       }
     },
     "transactions.settlement.noBillsYet": {
@@ -33897,9 +33904,9 @@
     },
     "transactions.settlement.relatedPeople": {
       "localizations": {
-        "vi": { "stringUnit": { "state": "translated", "value": "Người liên quan" } },
-        "en": { "stringUnit": { "state": "translated", "value": "Related people" } },
-        "ja": { "stringUnit": { "state": "translated", "value": "関係者" } }
+        "vi": { "stringUnit": { "state": "translated", "value": "Người tham gia" } },
+        "en": { "stringUnit": { "state": "translated", "value": "Participants" } },
+        "ja": { "stringUnit": { "state": "translated", "value": "参加者" } }
       }
     },
     "transactions.settlement.resaleQuickCreateSubtitle": {

@@ -3864,6 +3864,8 @@ nonisolated enum L10n {
             static func addNewExpense(language: MistiaAppLanguage) -> String { L10n.tr("transactions.settlement.addNewExpense", vi: "Thêm chi tiêu mới", en: "New expense", ja: "新しい支出", language: language) }
             static var addParticipant: String { L10n.tr("transactions.settlement.addParticipant", vi: "Thêm người", en: "Add person", ja: "人を追加") }
             static func addParticipant(language: MistiaAppLanguage) -> String { L10n.tr("transactions.settlement.addParticipant", vi: "Thêm người", en: "Add person", ja: "人を追加", language: language) }
+            static var addParticipantsInEventEditor: String { L10n.tr("transactions.settlement.addParticipantsInEventEditor", vi: "Thêm người tham gia trong sự kiện trước khi chia chi phí.", en: "Add participants to the event before splitting costs.", ja: "費用を分ける前に、イベントに参加者を追加してください。") }
+            static func addParticipantsInEventEditor(language: MistiaAppLanguage) -> String { L10n.tr("transactions.settlement.addParticipantsInEventEditor", vi: "Thêm người tham gia trong sự kiện trước khi chia chi phí.", en: "Add participants to the event before splitting costs.", ja: "費用を分ける前に、イベントに参加者を追加してください。", language: language) }
             static var addResale: String { L10n.tr("transactions.settlement.addResale", vi: "Bán lại / thu sau", en: "Resale / collect later", ja: "転売・後で回収") }
             static func addResale(language: MistiaAppLanguage) -> String { L10n.tr("transactions.settlement.addResale", vi: "Bán lại / thu sau", en: "Resale / collect later", ja: "転売・後で回収", language: language) }
             static var addSharedExpense: String { L10n.tr("transactions.settlement.addSharedExpense", vi: "Sự kiện", en: "Event", ja: "イベント") }
@@ -3898,8 +3900,8 @@ nonisolated enum L10n {
             static func enterCounterparty(language: MistiaAppLanguage) -> String { L10n.tr("transactions.settlement.enterCounterparty", vi: "Nhập tên người liên quan.", en: "Enter the counterparty name.", ja: "相手の名前を入力してください。", language: language) }
             static var enterEventName: String { L10n.tr("transactions.settlement.enterEventName", vi: "Nhập tên sự kiện.", en: "Enter the event name.", ja: "イベント名を入力してください。") }
             static func enterEventName(language: MistiaAppLanguage) -> String { L10n.tr("transactions.settlement.enterEventName", vi: "Nhập tên sự kiện.", en: "Enter the event name.", ja: "イベント名を入力してください。", language: language) }
-            static var enterParticipant: String { L10n.tr("transactions.settlement.enterParticipant", vi: "Thêm ít nhất một người liên quan.", en: "Add at least one related person.", ja: "関係者を 1 人以上追加してください。") }
-            static func enterParticipant(language: MistiaAppLanguage) -> String { L10n.tr("transactions.settlement.enterParticipant", vi: "Thêm ít nhất một người liên quan.", en: "Add at least one related person.", ja: "関係者を 1 人以上追加してください。", language: language) }
+            static var enterParticipant: String { L10n.tr("transactions.settlement.enterParticipant", vi: "Thêm ít nhất một người tham gia.", en: "Add at least one participant.", ja: "参加者を 1 人以上追加してください。") }
+            static func enterParticipant(language: MistiaAppLanguage) -> String { L10n.tr("transactions.settlement.enterParticipant", vi: "Thêm ít nhất một người tham gia.", en: "Add at least one participant.", ja: "参加者を 1 人以上追加してください。", language: language) }
             static var enterTitle: String { L10n.tr("transactions.settlement.enterTitle", vi: "Nhập tên khoản này.", en: "Enter a title for this item.", ja: "この項目の名前を入力してください。") }
             static func enterTitle(language: MistiaAppLanguage) -> String { L10n.tr("transactions.settlement.enterTitle", vi: "Nhập tên khoản này.", en: "Enter a title for this item.", ja: "この項目の名前を入力してください。", language: language) }
             static var eventBills: String { L10n.tr("transactions.settlement.eventBills", vi: "Chi tiêu của sự kiện", en: "Event expenses", ja: "イベント支出") }
@@ -3916,8 +3918,8 @@ nonisolated enum L10n {
             static func itemName(language: MistiaAppLanguage) -> String { L10n.tr("transactions.settlement.itemName", vi: "Tên món / sản phẩm", en: "Item or product name", ja: "品目・商品名", language: language) }
             static var noBillsYet: String { L10n.tr("transactions.settlement.noBillsYet", vi: "Chưa có chi tiêu", en: "No expenses yet", ja: "支出はまだありません") }
             static func noBillsYet(language: MistiaAppLanguage) -> String { L10n.tr("transactions.settlement.noBillsYet", vi: "Chưa có chi tiêu", en: "No expenses yet", ja: "支出はまだありません", language: language) }
-            static var noParticipantsYet: String { L10n.tr("transactions.settlement.noParticipantsYet", vi: "Chưa có người liên quan", en: "No related people yet", ja: "関係者なし") }
-            static func noParticipantsYet(language: MistiaAppLanguage) -> String { L10n.tr("transactions.settlement.noParticipantsYet", vi: "Chưa có người liên quan", en: "No related people yet", ja: "関係者なし", language: language) }
+            static var noParticipantsYet: String { L10n.tr("transactions.settlement.noParticipantsYet", vi: "Chưa có người tham gia", en: "No participants yet", ja: "参加者なし") }
+            static func noParticipantsYet(language: MistiaAppLanguage) -> String { L10n.tr("transactions.settlement.noParticipantsYet", vi: "Chưa có người tham gia", en: "No participants yet", ja: "参加者なし", language: language) }
             static var noSettlementNeeded: String { L10n.tr("transactions.settlement.noSettlementNeeded", vi: "Không cần thanh toán thêm.", en: "No extra settlement needed.", ja: "追加の精算は不要です。") }
             static func noSettlementNeeded(language: MistiaAppLanguage) -> String { L10n.tr("transactions.settlement.noSettlementNeeded", vi: "Không cần thanh toán thêm.", en: "No extra settlement needed.", ja: "追加の精算は不要です。", language: language) }
             static var note: String { L10n.tr("transactions.settlement.note", vi: "Ghi chú", en: "Note", ja: "メモ") }
@@ -3946,8 +3948,8 @@ nonisolated enum L10n {
             static func receiveWallet(language: MistiaAppLanguage) -> String { L10n.tr("transactions.settlement.receiveWallet", vi: "Ví sẽ nhận", en: "Receive to wallet", ja: "受け取り先ウォレット", language: language) }
             static var recordPayment: String { L10n.tr("transactions.settlement.recordPayment", vi: "Ghi nhận thanh toán", en: "Record payment", ja: "支払いを記録") }
             static func recordPayment(language: MistiaAppLanguage) -> String { L10n.tr("transactions.settlement.recordPayment", vi: "Ghi nhận thanh toán", en: "Record payment", ja: "支払いを記録", language: language) }
-            static var relatedPeople: String { L10n.tr("transactions.settlement.relatedPeople", vi: "Người liên quan", en: "Related people", ja: "関係者") }
-            static func relatedPeople(language: MistiaAppLanguage) -> String { L10n.tr("transactions.settlement.relatedPeople", vi: "Người liên quan", en: "Related people", ja: "関係者", language: language) }
+            static var relatedPeople: String { L10n.tr("transactions.settlement.relatedPeople", vi: "Người tham gia", en: "Participants", ja: "参加者") }
+            static func relatedPeople(language: MistiaAppLanguage) -> String { L10n.tr("transactions.settlement.relatedPeople", vi: "Người tham gia", en: "Participants", ja: "参加者", language: language) }
             static var resaleQuickCreateSubtitle: String { L10n.tr("transactions.settlement.resaleQuickCreateSubtitle", vi: "Tạo khoản chờ thu và chỉ ghi lời khi tiền về.", en: "Create a receivable and report profit only when cash arrives.", ja: "未収を作成し、入金時だけ利益として計上します。") }
             static func resaleQuickCreateSubtitle(language: MistiaAppLanguage) -> String { L10n.tr("transactions.settlement.resaleQuickCreateSubtitle", vi: "Tạo khoản chờ thu và chỉ ghi lời khi tiền về.", en: "Create a receivable and report profit only when cash arrives.", ja: "未収を作成し、入金時だけ利益として計上します。", language: language) }
             static var resaleReceiptTitle: String { L10n.tr("transactions.settlement.resaleReceiptTitle", vi: "Thu bán lại", en: "Resale receipt", ja: "転売入金") }

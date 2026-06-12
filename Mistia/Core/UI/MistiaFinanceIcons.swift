@@ -123,6 +123,7 @@ enum MistiaFinanceIconRegistry {
         "mistia.flow.transfer.internal": descriptor(token: "mistia.flow.transfer.internal", fallbackSystemName: "arrow.left.arrow.right.circle.fill", baseHex: "#5B7BFF", group: .finance, badgeSystemName: "building.columns.fill"),
         "mistia.flow.transfer.family": descriptor(token: "mistia.flow.transfer.family", fallbackSystemName: "person.2.fill", baseHex: "#A76BFF", group: .finance, badgeSystemName: "arrow.left.arrow.right"),
         "mistia.flow.transfer.debt": descriptor(token: "mistia.flow.transfer.debt", fallbackSystemName: "person.2.wave.2.fill", baseHex: "#FF8A4C", group: .finance, badgeSystemName: "person.fill"),
+        "mistia.settlement.event": descriptor(token: "mistia.settlement.event", fallbackSystemName: "calendar.badge.clock", baseHex: "#5B7BFF", group: .planning, badgeSystemName: "person.2.fill"),
         "mistia.debt.lend": descriptor(token: "mistia.debt.lend", fallbackSystemName: "arrow.up.right.circle.fill", baseHex: "#FF7A59", group: .finance, badgeSystemName: "hand.raised.fill"),
         "mistia.debt.collect": descriptor(token: "mistia.debt.collect", fallbackSystemName: "arrow.down.left.circle.fill", baseHex: "#2DAA9E", group: .finance, badgeSystemName: "tray.full.fill"),
         "mistia.debt.borrow": descriptor(token: "mistia.debt.borrow", fallbackSystemName: "tray.and.arrow.down.fill", baseHex: "#5B7BFF", group: .finance, badgeSystemName: "person.crop.circle.badge.plus"),
@@ -480,7 +481,8 @@ enum MistiaFinanceIconRegistry {
         assign("ic_fluent_calendar_clock_24_color", [
             "mistia.category.income.salary_work.overtime",
             "mistia.plan.bill",
-            "mistia.plan.payment"
+            "mistia.plan.payment",
+            "mistia.settlement.event"
         ])
 
         assign("ic_fluent_calendar_sync_24_color", [

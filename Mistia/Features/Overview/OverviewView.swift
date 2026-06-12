@@ -708,11 +708,8 @@ struct OverviewView: View {
                 if !preparingEvents.isEmpty {
                     OverviewPreparingSettlementSection(
                         events: preparingEvents,
-                        onCalculate: { event in
+                        onSelect: { event in
                             preparingSettlementTarget = PreparingSettlementEventSheetTarget(groupID: event.id)
-                        },
-                        onEdit: { event in
-                            settlementEditorTarget = .editSharedExpense(event.id)
                         }
                     )
                 }
@@ -2059,60 +2056,56 @@ private struct RecentTransactionsSection: View {
 
 private struct OverviewPreparingSettlementSection: View {
     let events: [PreparingSettlementEventSnapshot]
-    let onCalculate: (PreparingSettlementEventSnapshot) -> Void
-    let onEdit: (PreparingSettlementEventSnapshot) -> Void
+    let onSelect: (PreparingSettlementEventSnapshot) -> Void
 
     var body: some View {
         OverviewSection(title: L10n.transactions.settlement.ongoingEvents) {
             VStack(spacing: 0) {
                 ForEach(Array(events.prefix(3).enumerated()), id: \.element.id) { index, event in
-                    VStack(alignment: .leading, spacing: 12) {
-                        HStack(alignment: .top, spacing: 12) {
-                            OverviewIcon(icon: "calendar.badge.clock", tint: MistiaAccent.purple.color)
-                            VStack(alignment: .leading, spacing: 5) {
-                                Text(event.title)
+                    Button {
+                        onSelect(event)
+                    } label: {
+                        VStack(alignment: .leading, spacing: 10) {
+                            HStack(alignment: .top, spacing: 12) {
+                                OverviewIcon(icon: "mistia.settlement.event", tint: MistiaAccent.purple.color)
+                                VStack(alignment: .leading, spacing: 5) {
+                                    Text(event.title)
+                                        .font(.system(size: 16, weight: .bold, design: .rounded))
+                                        .foregroundStyle(.primary)
+                                        .lineLimit(1)
+                                    Text(participantText(for: event))
+                                        .font(.system(size: 12, weight: .semibold, design: .rounded))
+                                        .foregroundStyle(.secondary)
+                                        .lineLimit(2)
+                                }
+                                Spacer(minLength: 8)
+                                Text(event.totalPaidMinor.formattedCurrency(code: event.currencyCode))
                                     .font(.system(size: 16, weight: .bold, design: .rounded))
+                                    .foregroundStyle(MistiaAccent.expense.color)
                                     .lineLimit(1)
-                                Text(participantText(for: event))
+                                    .minimumScaleFactor(0.75)
+                            }
+
+                            HStack(spacing: 8) {
+                                Text(L10n.transactions.settlement.billCountValue(String(event.billCount)))
+                                    .font(.system(size: 12, weight: .bold, design: .rounded))
+                                    .foregroundStyle(.secondary)
+                                Spacer(minLength: 8)
+                                Image(systemName: "chevron.right")
+                                    .font(.system(size: 11, weight: .bold))
+                                    .foregroundStyle(.tertiary)
+                            }
+
+                            if let note = trimmedNote(for: event) {
+                                Text(note)
                                     .font(.system(size: 12, weight: .semibold, design: .rounded))
                                     .foregroundStyle(.secondary)
                                     .lineLimit(2)
                             }
-                            Spacer()
-                            Text(event.totalPaidMinor.formattedCurrency(code: event.currencyCode))
-                                .font(.system(size: 16, weight: .bold, design: .rounded))
-                                .foregroundStyle(MistiaAccent.expense.color)
-                                .lineLimit(1)
-                                .minimumScaleFactor(0.75)
                         }
-
-                        HStack(spacing: 8) {
-                            Label(L10n.transactions.settlement.billCountValue(String(event.billCount)), systemImage: "receipt")
-                                .font(.system(size: 12, weight: .bold, design: .rounded))
-                                .foregroundStyle(.secondary)
-                            Spacer()
-                            Button {
-                                onEdit(event)
-                            } label: {
-                                Label(L10n.management.management.edit, systemImage: "pencil")
-                            }
-                            .buttonStyle(.bordered)
-                            Button {
-                                onCalculate(event)
-                            } label: {
-                                Label(L10n.transactions.settlement.calculateSplit, systemImage: "function")
-                            }
-                            .buttonStyle(.borderedProminent)
-                        }
-                        .font(.system(size: 12, weight: .bold, design: .rounded))
-
-                        if let note = trimmedNote(for: event) {
-                            Text(note)
-                                .font(.system(size: 12, weight: .semibold, design: .rounded))
-                                .foregroundStyle(.secondary)
-                                .lineLimit(2)
-                        }
+                        .contentShape(Rectangle())
                     }
+                    .buttonStyle(MistiaPressableButtonStyle(cornerRadius: 18, tint: MistiaAccent.purple.color))
                     .padding(.horizontal, 14)
                     .padding(.vertical, 13)
 

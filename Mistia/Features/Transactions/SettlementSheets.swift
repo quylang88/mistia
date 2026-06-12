@@ -106,6 +106,7 @@ struct PendingSettlementChip: View {
 
 struct PreparingSettlementCompactChip: View {
     let event: PreparingSettlementEventSnapshot
+    var showsIcon: Bool = true
     let action: () -> Void
 
     private var participantText: String {
@@ -118,11 +119,13 @@ struct PreparingSettlementCompactChip: View {
     var body: some View {
         Button(action: action) {
             HStack(spacing: 12) {
-                MistiaFinanceIconView(
-                    icon: "calendar.badge.clock",
-                    fallbackColor: MistiaAccent.purple.color,
-                    size: 36
-                )
+                if showsIcon {
+                    MistiaFinanceIconView(
+                        icon: "mistia.settlement.event",
+                        fallbackColor: MistiaAccent.purple.color,
+                        size: 36
+                    )
+                }
 
                 VStack(alignment: .leading, spacing: 4) {
                     Text(event.title)
@@ -150,7 +153,7 @@ struct PreparingSettlementCompactChip: View {
             }
             .padding(.horizontal, 12)
             .padding(.vertical, 11)
-            .frame(width: 230, alignment: .leading)
+            .frame(width: showsIcon ? 230 : 206, alignment: .leading)
             .background {
                 RoundedRectangle(cornerRadius: 16, style: .continuous)
                     .fill(.regularMaterial)
@@ -1356,7 +1359,7 @@ struct SettlementEditorSheet: View {
             group.currencyCode = activeCurrencyCode
             group.note = eventNote.trimmingCharacters(in: .whitespacesAndNewlines).nilIfBlank
             group.updatedAt = now
-            shouldDismissAfterSave = false
+            shouldDismissAfterSave = true
         case .resale:
             return
         }
@@ -1992,8 +1995,15 @@ struct SettlementSplitCalculatorSheet: View {
 
                 Section(L10n.transactions.settlement.participants) {
                     if nonSelfParticipants.isEmpty {
-                        Text(L10n.transactions.settlement.noParticipantsYet)
-                            .foregroundStyle(.secondary)
+                        SettlementEventExpenseEmptyState(
+                            title: L10n.transactions.settlement.noParticipantsYet,
+                            message: L10n.transactions.settlement.addParticipantsInEventEditor,
+                            buttonTitle: nil,
+                            accent: MistiaAccent.purple.color,
+                            symbols: ["person.2.fill", "calendar.badge.clock", "checklist"]
+                        )
+                        .listRowInsets(EdgeInsets(top: 0, leading: 0, bottom: 0, trailing: 0))
+                        .listRowBackground(Color.clear)
                     } else {
                         ForEach(nonSelfParticipants) { participant in
                             SharedExpenseParticipantPaidInputRow(
@@ -2906,10 +2916,10 @@ private struct SettlementEventExpenseEmptyState: View {
 
     let title: String
     let message: String
-    let buttonTitle: String
+    let buttonTitle: String?
     let accent: Color
     let symbols: [String]
-    let action: () -> Void
+    var action: (() -> Void)? = nil
 
     private var cardTint: Color {
         colorScheme == .dark ? .white.opacity(0.018) : .white.opacity(0.12)
