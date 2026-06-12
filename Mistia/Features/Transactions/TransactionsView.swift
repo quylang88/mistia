@@ -2501,21 +2501,34 @@ struct DebtSettlementSheet: View {
                     .padding(.vertical, 4)
                 }
 
-                Section {
-                    MistiaCurrencyInputField(
-                        L10n.planning.duepayment.enterAmount,
-                        text: $amountText,
-                        font: .mistiaRounded(size: 17, weight: .semibold)
-                    )
-                    .frame(minHeight: 44)
+                if target.amountMinor > 0 {
+                    Section {
+                        MistiaCurrencyInputField(
+                            L10n.planning.duepayment.enterAmount,
+                            text: $amountText,
+                            font: .mistiaRounded(size: 17, weight: .semibold)
+                        )
+                        .frame(minHeight: 44)
 
-                    Picker(L10n.planning.duepayment.paymentWallet, selection: $selectedWalletID) {
-                        Text(L10n.planning.duepayment.chooseWallet).tag(Optional<UUID>.none)
-                        ForEach(availableWallets) { wallet in
-                            Text(walletPickerAccess.title(for: wallet)).tag(Optional(wallet.id))
+                        Picker(L10n.planning.duepayment.paymentWallet, selection: $selectedWalletID) {
+                            Text(L10n.planning.duepayment.chooseWallet).tag(Optional<UUID>.none)
+                            ForEach(availableWallets) { wallet in
+                                Text(walletPickerAccess.title(for: wallet)).tag(Optional(wallet.id))
+                            }
                         }
+                        .pickerStyle(.menu)
                     }
-                    .pickerStyle(.menu)
+                } else {
+                    Section {
+                        HStack {
+                            Spacer()
+                            Text("Khoản nợ này đã được thanh toán hoàn tất")
+                                .font(.system(size: 15, weight: .semibold, design: .rounded))
+                                .foregroundStyle(.secondary)
+                            Spacer()
+                        }
+                        .padding(.vertical, 8)
+                    }
                 }
 
                 if !target.position.relatedRecords.isEmpty {
@@ -2555,19 +2568,21 @@ struct DebtSettlementSheet: View {
                 }
 
                 ToolbarItem(placement: .topBarTrailing) {
-                    Button {
-                        save()
-                    } label: {
-                        Image(systemName: "checkmark")
-                            .font(.system(size: 14, weight: .bold))
-                            .foregroundStyle(MistiaAccent.checkmarkPurple.color)
-                            .frame(width: 30, height: 30)
+                    if target.amountMinor > 0 {
+                        Button {
+                            save()
+                        } label: {
+                            Image(systemName: "checkmark")
+                                .font(.system(size: 14, weight: .bold))
+                                .foregroundStyle(MistiaAccent.checkmarkPurple.color)
+                                .frame(width: 30, height: 30)
+                        }
+                        .buttonStyle(.glassProminent)
+                        .buttonBorderShape(.circle)
+                        .tint(MistiaAccent.purple.color)
+                        .disabled(isSaveDisabled)
+                        .opacity(isSaveDisabled ? 0.45 : 1)
                     }
-                    .buttonStyle(.glassProminent)
-                    .buttonBorderShape(.circle)
-                    .tint(MistiaAccent.purple.color)
-                    .disabled(isSaveDisabled)
-                    .opacity(isSaveDisabled ? 0.45 : 1)
                 }
             }
         }
