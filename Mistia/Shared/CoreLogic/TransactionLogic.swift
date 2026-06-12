@@ -197,6 +197,7 @@ nonisolated enum TransactionReceiptAnalysisControlState: Equatable {
 
 struct TransactionFilterState: Equatable {
     var isAdjustmentOnly: Bool = false
+    var isEventOnly: Bool = false
     var timeScope: TransactionTimeScope = .thisMonth
     var walletID: UUID?
     var categoryID: UUID?
@@ -1638,6 +1639,8 @@ nonisolated enum TransactionLogic {
     ) -> Bool {
         if filters.isAdjustmentOnly {
             guard isAdjustment(record) else { return false }
+        } else if filters.isEventOnly {
+            guard record.settlementGroupID != nil else { return false }
         } else if selectedKind != nil, isAdjustment(record) {
             return false
         }
