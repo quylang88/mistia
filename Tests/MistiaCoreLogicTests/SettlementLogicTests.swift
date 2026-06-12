@@ -108,6 +108,30 @@ final class SettlementLogicTests: XCTestCase {
         XCTAssertEqual(events.first?.lastUpdatedAt, later)
     }
 
+    func testParticipantSuggestionRecordsUseOnlyCurrentOwnerTransactions() {
+        let currentUserID = UUID(uuidString: "00000000-0000-0000-0000-00000000C001")!
+        let familyMemberID = UUID(uuidString: "00000000-0000-0000-0000-00000000C002")!
+        let currentRecord = debtRecord(counterpartyName: "An")
+        let familyRecord = debtRecord(counterpartyName: "Anh")
+        let unscopedLocalRecord = debtRecord(counterpartyName: "Aoi")
+        let records = [currentRecord, familyRecord, unscopedLocalRecord]
+
+        let scopedRecords = SettlementLogic.participantSuggestionRecords(
+            from: records,
+            transactionOwnerMap: [
+                currentRecord.id: currentUserID,
+                familyRecord.id: familyMemberID
+            ],
+            currentUserID: currentUserID
+        )
+
+        XCTAssertEqual(scopedRecords.map(\.id), [currentRecord.id, unscopedLocalRecord.id])
+        let suggestionTitles = TransactionLogic.counterpartySuggestions(from: scopedRecords, query: "a").map(\.title)
+        XCTAssertTrue(suggestionTitles.contains("An"))
+        XCTAssertTrue(suggestionTitles.contains("Aoi"))
+        XCTAssertFalse(suggestionTitles.contains("Anh"))
+    }
+
     func testFinalizationInputsUseSelfPaidTotalFromLinkedBills() {
         let groupID = UUID(uuidString: "00000000-0000-0000-0000-00000000B001")!
         let selfParticipant = SettlementParticipantRecordSnapshot(
@@ -321,6 +345,29 @@ final class SettlementLogicTests: XCTestCase {
             categoryID: UUID(),
             counterpartyName: nil,
             normalizedCounterpartyKey: nil
+        )
+    }
+
+    private func debtRecord(counterpartyName: String) -> TransactionRecordSnapshot {
+        let now = Date(timeIntervalSince1970: 1_778_400_000)
+        return TransactionRecordSnapshot(
+            id: UUID(),
+            primaryKind: .transfer,
+            transferSubtype: .debt,
+            debtIntent: .lend,
+            entryStatus: .posted,
+            title: "Debt",
+            note: nil,
+            amountMinor: 1_000,
+            occurredAt: now,
+            createdAt: now,
+            sourceWalletID: UUID(),
+            sourceWalletKind: .cash,
+            destinationWalletID: nil,
+            destinationWalletKind: nil,
+            categoryID: nil,
+            counterpartyName: counterpartyName,
+            normalizedCounterpartyKey: TransactionLogic.normalizeCounterpartyName(counterpartyName)
         )
     }
 }

@@ -198,6 +198,8 @@ struct SettlementEditorSheet: View {
     @State private var billSearchTarget: SharedExpenseBillSearchTarget?
     @State private var showingBillAddOptions = false
     @FocusState private var focusedParticipantRowID: UUID?
+    @State private var hiddenParticipantSuggestionRowID: UUID?
+    @State private var hiddenParticipantSuggestionQuery = ""
 
     private var walletPickerAccess: MistiaWalletPickerAccess {
         MistiaWalletPickerAccess(
@@ -374,12 +376,23 @@ struct SettlementEditorSheet: View {
     }
 
     private var participantNameSuggestions: [TransactionTitleSuggestion] {
-        let focusedRow = focusedParticipantRowID.flatMap { id in
-            participantRows.first { $0.id == id }
+        guard let rowID = focusedParticipantRowID,
+              let focusedRow = participantRows.first(where: { $0.id == rowID }) else {
+            return []
         }
-        let query = focusedRow?.name ?? participantRows.last?.name ?? ""
+        let query = focusedRow.name
+        if rowID == hiddenParticipantSuggestionRowID,
+           query.trimmingCharacters(in: .whitespacesAndNewlines) == hiddenParticipantSuggestionQuery {
+            return []
+        }
+        let suggestionRecords = SettlementLogic.participantSuggestionRecords(
+            from: transactions.map(\.snapshot),
+            transactionOwnerMap: transactionOwnerMap,
+            walletOwnerMap: walletOwnerMap,
+            currentUserID: activeOwnerUserID
+        )
         return TransactionLogic.counterpartySuggestions(
-            from: transactions.prefix(500).map(\.snapshot),
+            from: suggestionRecords,
             query: query,
             limit: 5
         )
@@ -669,6 +682,12 @@ struct SettlementEditorSheet: View {
                 TextField(L10n.transactions.settlement.participantName, text: $row.name)
                     .textInputAutocapitalization(.words)
                     .focused($focusedParticipantRowID, equals: row.id)
+                    .onChange(of: row.name) { _, newValue in
+                        clearHiddenParticipantSuggestionIfNeeded(
+                            rowID: row.id,
+                            query: newValue
+                        )
+                    }
                     .onSubmit {
                         ensureTrailingParticipantRow()
                     }
@@ -773,7 +792,7 @@ struct SettlementEditorSheet: View {
             ) {
                 showingBillAddOptions = true
             }
-            .listRowInsets(EdgeInsets(top: 10, leading: 12, bottom: 10, trailing: 12))
+            .listRowInsets(EdgeInsets(top: 0, leading: 0, bottom: 0, trailing: 0))
             .listRowBackground(Color.clear)
         } else {
             VStack(spacing: 0) {
@@ -806,6 +825,8 @@ struct SettlementEditorSheet: View {
                 ) {
                     showingBillAddOptions = true
                 }
+                .padding(.horizontal, 14)
+                .padding(.vertical, 14)
             }
             .listRowInsets(EdgeInsets(top: 0, leading: 0, bottom: 0, trailing: 0))
         }
@@ -937,22 +958,43 @@ struct SettlementEditorSheet: View {
 
     private func removeParticipantRow(_ id: UUID) {
         guard participantRows.count > 1 else { return }
+        let removedFocusedRow = focusedParticipantRowID == id
         participantRows.removeAll { $0.id == id }
         if participantRows.isEmpty {
             participantRows = [SharedExpenseParticipantDraft(name: "", paidText: "")]
         }
+        if removedFocusedRow {
+            focusedParticipantRowID = nil
+        }
+        if hiddenParticipantSuggestionRowID == id {
+            hiddenParticipantSuggestionRowID = nil
+            hiddenParticipantSuggestionQuery = ""
+        }
     }
 
     private func applyParticipantSuggestion(_ name: String) {
+        let targetIndex: Int?
         if let focusedParticipantRowID,
            let index = participantRows.firstIndex(where: { $0.id == focusedParticipantRowID }) {
-            participantRows[index].name = name
+            targetIndex = index
         } else if let index = participantRows.lastIndex(where: { $0.name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }) {
-            participantRows[index].name = name
+            targetIndex = index
         } else {
-            participantRows.append(SharedExpenseParticipantDraft(name: name, paidText: ""))
+            targetIndex = participantRows.indices.last
         }
-        ensureTrailingParticipantRow()
+        guard let targetIndex else { return }
+        participantRows[targetIndex].name = name
+        hiddenParticipantSuggestionRowID = participantRows[targetIndex].id
+        hiddenParticipantSuggestionQuery = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        focusedParticipantRowID = participantRows[targetIndex].id
+    }
+
+    private func clearHiddenParticipantSuggestionIfNeeded(rowID: UUID, query: String) {
+        guard rowID == hiddenParticipantSuggestionRowID else { return }
+        if query.trimmingCharacters(in: .whitespacesAndNewlines) != hiddenParticipantSuggestionQuery {
+            hiddenParticipantSuggestionRowID = nil
+            hiddenParticipantSuggestionQuery = ""
+        }
     }
 
     private func beginAddingBill(mode: SharedExpenseBillDraftMode) {

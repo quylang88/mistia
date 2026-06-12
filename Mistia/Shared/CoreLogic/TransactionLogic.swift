@@ -447,6 +447,41 @@ nonisolated enum SettlementLogic {
             }
     }
 
+    static func participantSuggestionRecords(
+        from records: [TransactionRecordSnapshot],
+        transactionOwnerMap: [UUID: UUID],
+        walletOwnerMap: [UUID: UUID] = [:],
+        currentUserID: UUID?,
+        limit: Int = 500
+    ) -> [TransactionRecordSnapshot] {
+        guard limit > 0 else { return [] }
+
+        var scopedRecords: [TransactionRecordSnapshot] = []
+        scopedRecords.reserveCapacity(min(records.count, limit))
+        for record in records {
+            if let currentUserID {
+                let ownerUserID = transactionOwnerMap[record.id]
+                    ?? ownerUserID(forWalletID: record.sourceWalletID, ownerMap: walletOwnerMap)
+                    ?? ownerUserID(forWalletID: record.destinationWalletID, ownerMap: walletOwnerMap)
+                    ?? currentUserID
+                guard ownerUserID == currentUserID else { continue }
+            }
+            scopedRecords.append(record)
+            if scopedRecords.count == limit {
+                break
+            }
+        }
+        return scopedRecords
+    }
+
+    private static func ownerUserID(
+        forWalletID walletID: UUID?,
+        ownerMap: [UUID: UUID]
+    ) -> UUID? {
+        guard let walletID else { return nil }
+        return ownerMap[walletID]
+    }
+
     static func sharedExpenseInputsForFinalization(
         selfParticipant: SettlementParticipantRecordSnapshot,
         participants: [SettlementParticipantRecordSnapshot],
