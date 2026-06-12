@@ -1865,6 +1865,99 @@ private struct SharedExpenseTransactionSearchSheet: View {
             }
         }
     }
+struct ParticipantSettlementProgress: Identifiable {
+    let id: UUID
+    let displayName: String
+    let normalizedKey: String
+    let hasDebt: Bool
+    let isReceivable: Bool
+    let originalAmount: Int64
+    let paidAmount: Int64
+    let remainingAmount: Int64
+    let isSettled: Bool
+}
+
+private struct ParticipantSettlementProgressRow: View {
+    let progress: ParticipantSettlementProgress
+    let currencyCode: String
+    
+    private var isReceivable: Bool {
+        progress.isReceivable
+    }
+    
+    private var amountColor: Color {
+        if !progress.hasDebt || progress.isSettled {
+            return MistiaAccent.income.color
+        }
+        return isReceivable ? MistiaAccent.debtLend.color : MistiaAccent.debtBorrow.color
+    }
+    
+    private var icon: String {
+        if !progress.hasDebt || progress.isSettled {
+            return "checkmark.circle.fill"
+        }
+        return isReceivable ? TransactionDebtIntent.lend.financeIconToken : TransactionDebtIntent.borrow.financeIconToken
+    }
+    
+    private var title: String {
+        progress.displayName
+    }
+    
+    private var subtitle: String {
+        if !progress.hasDebt {
+            return "Đã thanh toán xong (Không có nợ)"
+        }
+        if progress.isSettled {
+            return "Đã thanh toán xong"
+        }
+        
+        let paidFormatted = progress.paidAmount.formattedCurrency(code: currencyCode)
+        let remainingFormatted = progress.remainingAmount.formattedCurrency(code: currencyCode)
+        
+        if isReceivable {
+            return "Đã trả: \(paidFormatted) • Còn lại: \(remainingFormatted)"
+        } else {
+            return "Bạn đã trả: \(paidFormatted) • Còn lại: \(remainingFormatted)"
+        }
+    }
+    
+    private var amountText: String {
+        if !progress.hasDebt || progress.isSettled {
+            return "Đã xong"
+        }
+        let remainingFormatted = progress.remainingAmount.formattedCurrency(code: currencyCode)
+        return isReceivable ? "+\(remainingFormatted)" : "-\(remainingFormatted)"
+    }
+    
+    var body: some View {
+        HStack(spacing: 12) {
+            MistiaFinanceIconView(
+                icon: icon,
+                fallbackColor: amountColor,
+                size: 36
+            )
+            
+            VStack(alignment: .leading, spacing: 3) {
+                Text(title)
+                    .font(.system(size: 16, weight: .semibold, design: .rounded))
+                    .foregroundStyle(.primary)
+                    .lineLimit(1)
+                Text(subtitle)
+                    .font(.system(size: 12, weight: .medium, design: .rounded))
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+            }
+            
+            Spacer(minLength: 12)
+            
+            Text(amountText)
+                .font(.system(size: 15, weight: .bold, design: .rounded))
+                .foregroundStyle(amountColor)
+                .lineLimit(1)
+                .minimumScaleFactor(0.72)
+        }
+        .contentShape(Rectangle())
+    }
 }
 
 struct SettlementSplitCalculatorSheet: View {
@@ -1891,6 +1984,7 @@ struct SettlementSplitCalculatorSheet: View {
     @State private var alertMessage: String?
     @State private var eventEditorTarget: SettlementEditorTarget?
     @State private var debtSettlementTarget: DebtSettlementSheetTarget?
+    @State private var showsResetConfirmation = false
 
     private var group: SettlementGroup? {
         groups.first(where: { $0.id == target.groupID })
@@ -1987,6 +2081,131 @@ struct SettlementSplitCalculatorSheet: View {
         return ownerMap[target.groupID] ?? group?.organizerUserID ?? familyContextStore.selectedSubjectUserID ?? sessionStore.activeLocalProfileUserID
     }
 
+    private var isFinalized: Bool {
+        if let status = group?.status {
+            return status == .open || status == .partiallySettled || status == .settled
+        }
+        return false
+    }
+
+    private func participantSettlementProgressList() -> [ParticipantSettlementProgress] {
+        nonSelfParticipants.map { participant in
+            let name = participant.displayName
+            let key = participant.normalizedKey ?? TransactionLogic.normalizeCounterpartyName(name) ?? ""
+            
+            let participantTxs = transactions.filter {
+                $0.settlementGroupID == target.groupID
+                    && $0.transferSubtype == .debt
+                    && ($0.normalizedCounterpartyKey ?? TransactionLogic.normalizeCounterpartyName($0.counterpartyName)) == key
+                    && $0.deletedAt == nil
+                    && !$0.isArchived
+            }
+            
+            let principalTx = participantTxs.first {
+                $0.settlementRole == .sharedExpenseReceivable || $0.settlementRole == .sharedExpensePayable
+            }
+            
+            if let principalTx {
+                let isReceivable = principalTx.settlementRole == .sharedExpenseReceivable
+                let originalAmount = principalTx.amountMinor
+                let paidAmount = participantTxs
+                    .filter { $0.settlementRole == .sharedExpenseReceipt || $0.settlementRole == .sharedExpensePayment }
+                    .reduce(0) { $0 + $1.amountMinor }
+                let remainingAmount = max(0, originalAmount - paidAmount)
+                return ParticipantSettlementProgress(
+                    id: participant.id,
+                    displayName: name,
+                    normalizedKey: key,
+                    hasDebt: true,
+                    isReceivable: isReceivable,
+                    originalAmount: originalAmount,
+                    paidAmount: paidAmount,
+                    remainingAmount: remainingAmount,
+                    isSettled: remainingAmount == 0
+                )
+            } else {
+                return ParticipantSettlementProgress(
+                    id: participant.id,
+                    displayName: name,
+                    normalizedKey: key,
+                    hasDebt: false,
+                    isReceivable: false,
+                    originalAmount: 0,
+                    paidAmount: 0,
+                    remainingAmount: 0,
+                    isSettled: true
+                )
+            }
+        }
+    }
+
+    private func openDebtSettlement(forParticipantKey normalizedKey: String, displayName: String) {
+        guard let position = debtPosition(forParticipantKey: normalizedKey, displayName: displayName) else {
+            return
+        }
+        debtSettlementTarget = DebtSettlementSheetTarget(position: position)
+    }
+
+    private func debtPosition(
+        forParticipantKey normalizedKey: String,
+        displayName: String
+    ) -> CounterpartyDebtSnapshot? {
+        let existingRecords = transactions
+            .filter {
+                $0.settlementGroupID == target.groupID
+                    && $0.transferSubtype == .debt
+                    && ($0.normalizedCounterpartyKey ?? TransactionLogic.normalizeCounterpartyName($0.counterpartyName)) == normalizedKey
+                    && $0.deletedAt == nil
+                    && !$0.isArchived
+            }
+            .map(\.snapshot)
+        
+        let netMinor = existingRecords.reduce(Int64.zero) { total, record in
+            switch record.debtIntent {
+            case .lend:
+                return total + record.amountMinor
+            case .collect:
+                return total - record.amountMinor
+            case .borrow:
+                return total - record.amountMinor
+            case .repay:
+                return total + record.amountMinor
+            case nil:
+                return total
+            }
+        }
+        guard netMinor != 0 else { return nil }
+
+        return CounterpartyDebtSnapshot(
+            id: "\(normalizedKey)|\(currencyCode)|\(target.groupID.uuidString)",
+            displayName: displayName,
+            normalizedCounterpartyKey: normalizedKey,
+            netMinor: netMinor,
+            currencyCode: currencyCode,
+            preferredWalletID: linkedBills.first?.sourceWallet?.id ?? wallets.first?.id,
+            relatedRecords: existingRecords.sorted { $0.occurredAt > $1.occurredAt }
+        )
+    }
+
+    private func resetSplitToPreparing() {
+        guard let group else { return }
+        let now = Date()
+        let groupTxs = transactions.filter { $0.settlementGroupID == group.id && $0.deletedAt == nil }
+        for tx in groupTxs {
+            tx.deletedAt = now
+            tx.isArchived = true
+        }
+        group.expectedMinor = 0
+        group.settledMinor = 0
+        group.status = .preparing
+        group.updatedAt = now
+        do {
+            try modelContext.save()
+        } catch {
+            alertMessage = error.localizedDescription
+        }
+    }
+
     var body: some View {
         NavigationStack {
             Form {
@@ -2005,52 +2224,77 @@ struct SettlementSplitCalculatorSheet: View {
                     } label: {
                         Label(L10n.management.management.edit, systemImage: "pencil")
                     }
-                }
 
-                Section(L10n.transactions.settlement.participants) {
-                    if nonSelfParticipants.isEmpty {
-                        SettlementEventExpenseEmptyState(
-                            title: L10n.transactions.settlement.noParticipantsYet,
-                            message: L10n.transactions.settlement.addParticipantsInEventEditor,
-                            buttonTitle: nil,
-                            accent: MistiaAccent.purple.color,
-                            symbols: ["person.2.fill", "calendar.badge.clock", "checklist"]
-                        )
-                        .listRowInsets(EdgeInsets(top: 0, leading: 0, bottom: 0, trailing: 0))
-                        .listRowBackground(Color.clear)
-                    } else {
-                        ForEach(nonSelfParticipants) { participant in
-                            SharedExpenseParticipantPaidInputRow(
-                                participant: participant,
-                                currencyCode: currencyCode,
-                                paidText: paidTextBinding(for: participant)
-                            )
+                    if isFinalized {
+                        Button(role: .destructive) {
+                            showsResetConfirmation = true
+                        } label: {
+                            Label("Chia lại chi phí", systemImage: "arrow.counterclockwise")
                         }
                     }
                 }
 
-                Section(L10n.transactions.settlement.sharedExpenseTitle) {
-                    if !allInputsProvided {
-                        Text("Vui lòng nhập số tiền cho tất cả người tham gia để chia chi phí.")
-                            .foregroundStyle(.secondary)
-                            .italic()
-                            .font(.system(size: 14, design: .rounded))
-                    } else if suggestionsForSelf.isEmpty {
-                        Text(L10n.transactions.settlement.noSettlementNeeded)
-                            .foregroundStyle(.secondary)
-                    } else {
-                        ForEach(Array(suggestionsForSelf.enumerated()), id: \.offset) { _, suggestion in
-                            Button {
-                                openDebtSettlement(for: suggestion)
-                            } label: {
-                                SharedExpenseSuggestionActionRow(
-                                    suggestion: suggestion,
-                                    selfParticipantID: selfParticipant?.id,
-                                    name: name(for: suggestion.payerID == selfParticipant?.id ? suggestion.receiverID : suggestion.payerID),
-                                    currencyCode: currencyCode
+                if isFinalized {
+                    Section("Tiến độ thanh toán") {
+                        ForEach(participantSettlementProgressList()) { progress in
+                            if progress.hasDebt && !progress.isSettled {
+                                Button {
+                                    openDebtSettlement(forParticipantKey: progress.normalizedKey, displayName: progress.displayName)
+                                } label: {
+                                    ParticipantSettlementProgressRow(progress: progress, currencyCode: currencyCode)
+                                }
+                                .buttonStyle(.plain)
+                            } else {
+                                ParticipantSettlementProgressRow(progress: progress, currencyCode: currencyCode)
+                            }
+                        }
+                    }
+                } else {
+                    Section(L10n.transactions.settlement.participants) {
+                        if nonSelfParticipants.isEmpty {
+                            SettlementEventExpenseEmptyState(
+                                title: L10n.transactions.settlement.noParticipantsYet,
+                                message: L10n.transactions.settlement.addParticipantsInEventEditor,
+                                buttonTitle: nil,
+                                accent: MistiaAccent.purple.color,
+                                symbols: ["person.2.fill", "calendar.badge.clock", "checklist"]
+                            )
+                            .listRowInsets(EdgeInsets(top: 0, leading: 0, bottom: 0, trailing: 0))
+                            .listRowBackground(Color.clear)
+                        } else {
+                            ForEach(nonSelfParticipants) { participant in
+                                SharedExpenseParticipantPaidInputRow(
+                                    participant: participant,
+                                    currencyCode: currencyCode,
+                                    paidText: paidTextBinding(for: participant)
                                 )
                             }
-                            .buttonStyle(.plain)
+                        }
+                    }
+
+                    Section(L10n.transactions.settlement.sharedExpenseTitle) {
+                        if !allInputsProvided {
+                            Text("Vui lòng nhập số tiền cho tất cả người tham gia để chia chi phí.")
+                                .foregroundStyle(.secondary)
+                                .italic()
+                                .font(.system(size: 14, design: .rounded))
+                        } else if suggestionsForSelf.isEmpty {
+                            Text(L10n.transactions.settlement.noSettlementNeeded)
+                                .foregroundStyle(.secondary)
+                        } else {
+                            ForEach(Array(suggestionsForSelf.enumerated()), id: \.offset) { _, suggestion in
+                                Button {
+                                    openDebtSettlement(for: suggestion)
+                                } label: {
+                                    SharedExpenseSuggestionActionRow(
+                                        suggestion: suggestion,
+                                        selfParticipantID: selfParticipant?.id,
+                                        name: name(for: suggestion.payerID == selfParticipant?.id ? suggestion.receiverID : suggestion.payerID),
+                                        currencyCode: currencyCode
+                                    )
+                                }
+                                .buttonStyle(.plain)
+                            }
                         }
                     }
                 }
@@ -2068,19 +2312,21 @@ struct SettlementSplitCalculatorSheet: View {
                     }
                 }
                 ToolbarItem(placement: .topBarTrailing) {
-                    Button {
-                        finalizeSplit()
-                    } label: {
-                        Image(systemName: "checkmark")
-                            .font(.system(size: 14, weight: .bold))
-                            .foregroundStyle(MistiaAccent.checkmarkPurple.color)
-                            .frame(width: 30, height: 30)
+                    if !isFinalized {
+                        Button {
+                            finalizeSplit()
+                        } label: {
+                            Image(systemName: "checkmark")
+                                .font(.system(size: 14, weight: .bold))
+                                .foregroundStyle(MistiaAccent.checkmarkPurple.color)
+                                .frame(width: 30, height: 30)
+                        }
+                        .buttonStyle(.glassProminent)
+                        .buttonBorderShape(.circle)
+                        .tint(MistiaAccent.purple.color)
+                        .disabled(nonSelfParticipants.isEmpty || !allInputsProvided)
+                        .opacity((nonSelfParticipants.isEmpty || !allInputsProvided) ? 0.45 : 1)
                     }
-                    .buttonStyle(.glassProminent)
-                    .buttonBorderShape(.circle)
-                    .tint(MistiaAccent.purple.color)
-                    .disabled(nonSelfParticipants.isEmpty || !allInputsProvided)
-                    .opacity((nonSelfParticipants.isEmpty || !allInputsProvided) ? 0.45 : 1)
                 }
             }
         }
@@ -2105,6 +2351,17 @@ struct SettlementSplitCalculatorSheet: View {
             if let alertMessage {
                 Text(alertMessage)
             }
+        }
+        .alert(
+            "Chia lại chi phí?",
+            isPresented: $showsResetConfirmation
+        ) {
+            Button("Hủy", role: .cancel) {}
+            Button("Đồng ý", role: .destructive) {
+                resetSplitToPreparing()
+            }
+        } message: {
+            Text("Hành động này sẽ xóa toàn bộ tiến độ thanh toán của sự kiện hiện tại và đưa về trạng thái nhập liệu.")
         }
     }
 
