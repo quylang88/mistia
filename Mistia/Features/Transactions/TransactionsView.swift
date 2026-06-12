@@ -418,6 +418,15 @@ struct TransactionsView: View {
         )
     }
 
+    private var allEvents: [PreparingSettlementEventSnapshot] {
+        SettlementLogic.allEventSnapshots(
+            groups: visibleSettlementGroups.map(\.recordSnapshot),
+            participants: visibleSettlementParticipants.map(\.recordSnapshot),
+            records: activeTransactions.map(\.snapshot)
+        )
+        .sorted { $0.occurredAt > $1.occurredAt }
+    }
+
     private var transactionAuditMap: [UUID: TransactionAuditRecord] {
         TransactionAuditStore.auditMap(from: transactionAuditRecords)
     }
@@ -910,19 +919,67 @@ struct TransactionsView: View {
                         .padding(.trailing, -12)
                     }
                 ) {
-                    if !preparingSettlementEvents.isEmpty {
-                        preparingSettlementSection(preparingSettlementEvents)
+                    if selectedSegment == .event {
+                        let events = allEvents
+                        if events.isEmpty {
+                            MistiaEmptyStateContent(
+                                title: "Chưa có sự kiện nào",
+                                message: "Các sự kiện chia chi phí sẽ xuất hiện ở đây.",
+                                buttonTitle: nil,
+                                accent: MistiaAccent.purple.color,
+                                symbols: ["calendar", "person.2.fill"]
+                            )
+                            .padding(.top, 40)
+                        } else {
+                            VStack(alignment: .leading, spacing: 10) {
+                                Text("Sự kiện chia chi phí")
+                                    .font(.system(size: 13, weight: .bold, design: .rounded))
+                                    .foregroundStyle(.secondary)
+                                    .textCase(.uppercase)
+                                    .tracking(0.6)
+                                    .padding(.horizontal, 2)
+                                
+                                MistiaBlockCard(
+                                    cornerRadius: 22,
+                                    tint: Color(UIColor.secondarySystemGroupedBackground),
+                                    padding: 0
+                                ) {
+                                    VStack(spacing: 0) {
+                                        ForEach(Array(events.enumerated()), id: \.element.id) { index, event in
+                                            Button {
+                                                preparingSettlementTarget = PreparingSettlementEventSheetTarget(groupID: event.id)
+                                            } label: {
+                                                EventCashflowRow(event: event)
+                                                    .padding(.horizontal, 14)
+                                                    .padding(.vertical, 12)
+                                            }
+                                            .buttonStyle(MistiaPressableButtonStyle(cornerRadius: 18))
+                                            
+                                            if index < events.count - 1 {
+                                                Divider()
+                                                    .padding(.leading, 52)
+                                                    .padding(.trailing, 0)
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    } else {
+                        if !preparingSettlementEvents.isEmpty {
+                            preparingSettlementSection(preparingSettlementEvents)
+                        }
+                        if !listSnapshot.openDebtPositions.isEmpty {
+                            outstandingDebtSection(
+                                listSnapshot.openDebtPositions,
+                                receivableTotals: listSnapshot.openReceivableDebtTotals
+                            )
+                        }
+                        if !openSettlementItems.isEmpty {
+                            openSettlementSection(openSettlementItems)
+                        }
+                        transactionsContent(listSnapshot, exchangeRateIndex: exchangeRateIndex)
                     }
-                    if !listSnapshot.openDebtPositions.isEmpty {
-                        outstandingDebtSection(
-                            listSnapshot.openDebtPositions,
-                            receivableTotals: listSnapshot.openReceivableDebtTotals
-                        )
-                    }
-                    if !openSettlementItems.isEmpty {
-                        openSettlementSection(openSettlementItems)
-                    }
-                    transactionsContent(listSnapshot, exchangeRateIndex: exchangeRateIndex)
                 }
 
                 if isSearchSceneVisible {
@@ -1303,7 +1360,7 @@ struct TransactionsView: View {
                 }
             }
 
-            if selectedSegment?.kind != .transfer && selectedSegment != .adjustment {
+            if selectedSegment?.kind != .transfer && selectedSegment != .adjustment && selectedSegment != .event {
                 filterMenu(isActive: filterState.categoryID != nil) {
                     let title = activeCategories.first { $0.id == filterState.categoryID }?.localizedDisplayName
                         ?? L10n.transactions.transactions.category
@@ -2892,5 +2949,50 @@ private extension String {
 private extension Int64 {
     var positiveOrNil: Int64? {
         self > 0 ? self : nil
+    }
+}
+
+private struct EventCashflowRow: View {
+    let event: PreparingSettlementEventSnapshot
+
+    private var participantText: String {
+        if event.participantNames.isEmpty {
+            return L10n.transactions.settlement.noParticipantsYet
+        }
+        return event.participantNames.joined(separator: ", ")
+    }
+
+    var body: some View {
+        HStack(spacing: 12) {
+            TransactionIconTile(
+                icon: "mistia.settlement.event",
+                tint: MistiaAccent.purple.color
+            )
+
+            VStack(alignment: .leading, spacing: 4) {
+                Text(event.title)
+                    .font(.system(size: 15, weight: .bold, design: .rounded))
+                    .foregroundStyle(.primary)
+                    .lineLimit(1)
+
+                Text(participantText)
+                    .font(.system(size: 11.5, weight: .semibold, design: .rounded))
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+
+                Text(L10n.transactions.settlement.billCountValue(String(event.billCount)))
+                    .font(.system(size: 11, weight: .bold, design: .rounded))
+                    .foregroundStyle(.tertiary)
+            }
+
+            Spacer(minLength: 8)
+
+            Text(event.totalPaidMinor.formattedCurrency(code: event.currencyCode))
+                .font(.system(size: 14, weight: .bold, design: .rounded))
+                .foregroundStyle(MistiaAccent.expense.color)
+                .lineLimit(1)
+                .minimumScaleFactor(0.72)
+        }
+        .contentShape(Rectangle())
     }
 }
