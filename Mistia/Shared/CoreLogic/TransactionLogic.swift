@@ -444,7 +444,7 @@ nonisolated enum SettlementLogic {
         }
 
         return groups
-            .filter { $0.kind == .sharedExpense && $0.status == .preparing && !$0.isArchived }
+            .filter { $0.kind == .sharedExpense && $0.status != .settled && !$0.isArchived }
             .map { group in
                 let groupParticipants = participantsByGroupID[group.id] ?? []
                 let visibleParticipantNames = groupParticipants
