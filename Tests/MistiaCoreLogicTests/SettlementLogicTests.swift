@@ -295,6 +295,68 @@ final class SettlementLogicTests: XCTestCase {
         XCTAssertTrue(result.suggestions.isEmpty)
     }
 
+    func testSharedExpensePaidReportingAllocationsReduceOriginalEventExpenseToSelfShare() {
+        let eventID = UUID(uuidString: "00000000-0000-0000-0000-00000000D101")!
+        let now = Date(timeIntervalSince1970: 1_778_400_000)
+        let bill = settlementExpenseRecord(
+            groupID: eventID,
+            title: "Dinner",
+            amountMinor: 8_000,
+            occurredAt: now
+        )
+
+        let allocations = SettlementLogic.sharedExpensePaidReportingAllocations(
+            records: [bill],
+            selfShareMinor: 5_000
+        )
+
+        XCTAssertEqual(
+            allocations,
+            [
+                SettlementExpenseReportingAllocation(
+                    transactionID: bill.id,
+                    reportingExpenseMinor: 5_000
+                )
+            ]
+        )
+    }
+
+    func testSharedExpensePaidReportingAllocationsCanIncreaseAndDistributeMultipleBills() {
+        let eventID = UUID(uuidString: "00000000-0000-0000-0000-00000000D102")!
+        let now = Date(timeIntervalSince1970: 1_778_400_000)
+        let first = settlementExpenseRecord(
+            groupID: eventID,
+            title: "Taxi",
+            amountMinor: 1_000,
+            occurredAt: now
+        )
+        let second = settlementExpenseRecord(
+            groupID: eventID,
+            title: "Hotel",
+            amountMinor: 2_000,
+            occurredAt: now.addingTimeInterval(60)
+        )
+
+        let allocations = SettlementLogic.sharedExpensePaidReportingAllocations(
+            records: [second, first],
+            selfShareMinor: 5_000
+        )
+
+        XCTAssertEqual(
+            allocations,
+            [
+                SettlementExpenseReportingAllocation(
+                    transactionID: first.id,
+                    reportingExpenseMinor: 1_666
+                ),
+                SettlementExpenseReportingAllocation(
+                    transactionID: second.id,
+                    reportingExpenseMinor: 3_334
+                )
+            ]
+        )
+    }
+
     func testSettlementReportingOverridesCashflowKind() {
         let receipt = TransactionRecordSnapshot(
             id: UUID(),
@@ -324,13 +386,14 @@ final class SettlementLogicTests: XCTestCase {
         XCTAssertEqual(TransactionLogic.summary(for: [receipt]).incomeMinor, 0)
     }
 
-    func testSharedExpenseReceiptOffsetsLinkedEventExpense() {
+    func testSharedExpenseReceiptDoesNotChangeAlreadySplitEventExpense() {
         let eventID = UUID(uuidString: "00000000-0000-0000-0000-00000000D001")!
         let now = Date(timeIntervalSince1970: 1_778_400_000)
         let paid = settlementExpenseRecord(
             groupID: eventID,
             title: "Dinner",
             amountMinor: 8_000,
+            reportingExpenseMinor: 4_000,
             occurredAt: now
         )
         let receipt = sharedExpenseDebtSettlementRecord(
@@ -346,13 +409,14 @@ final class SettlementLogicTests: XCTestCase {
 
         let summary = TransactionLogic.summary(for: [paid, receipt])
 
-        XCTAssertEqual(TransactionLogic.reportedExpenseAmount(for: receipt), -4_000)
+        XCTAssertEqual(TransactionLogic.reportedExpenseAmount(for: paid), 4_000)
+        XCTAssertEqual(TransactionLogic.reportedExpenseAmount(for: receipt), 0)
         XCTAssertEqual(TransactionLogic.reportedIncomeAmount(for: receipt), 0)
         XCTAssertEqual(summary.expenseMinor, 4_000)
         XCTAssertEqual(summary.incomeMinor, 0)
     }
 
-    func testSharedExpenseRepaymentCountsAsActualEventExpense() {
+    func testSharedExpenseRepaymentDoesNotDoubleCountAlreadySplitEventExpense() {
         let eventID = UUID(uuidString: "00000000-0000-0000-0000-00000000D002")!
         let now = Date(timeIntervalSince1970: 1_778_400_000)
         let repayment = sharedExpenseDebtSettlementRecord(
@@ -368,9 +432,9 @@ final class SettlementLogicTests: XCTestCase {
 
         let summary = TransactionLogic.summary(for: [repayment])
 
-        XCTAssertEqual(TransactionLogic.reportedExpenseAmount(for: repayment), 4_000)
+        XCTAssertEqual(TransactionLogic.reportedExpenseAmount(for: repayment), 0)
         XCTAssertEqual(TransactionLogic.reportedIncomeAmount(for: repayment), 0)
-        XCTAssertEqual(summary.expenseMinor, 4_000)
+        XCTAssertEqual(summary.expenseMinor, 0)
         XCTAssertEqual(summary.incomeMinor, 0)
     }
 
@@ -398,7 +462,7 @@ final class SettlementLogicTests: XCTestCase {
                     settlementGroupID: eventID,
                     settlementRole: .sharedExpenseReceipt,
                     amountMinor: 4_000,
-                    reportingExpenseMinor: -4_000,
+                    reportingExpenseMinor: 0,
                     reportingIncomeMinor: 0
                 ),
                 SettlementDebtPaymentAllocation(
@@ -447,7 +511,7 @@ final class SettlementLogicTests: XCTestCase {
                     settlementGroupID: eventID,
                     settlementRole: .sharedExpenseReceipt,
                     amountMinor: 4_000,
-                    reportingExpenseMinor: -4_000,
+                    reportingExpenseMinor: 0,
                     reportingIncomeMinor: 0
                 ),
                 SettlementDebtPaymentAllocation(
@@ -472,6 +536,7 @@ final class SettlementLogicTests: XCTestCase {
         groupID: UUID,
         title: String,
         amountMinor: Int64,
+        reportingExpenseMinor: Int64? = nil,
         occurredAt: Date
     ) -> TransactionRecordSnapshot {
         TransactionRecordSnapshot(
@@ -485,6 +550,8 @@ final class SettlementLogicTests: XCTestCase {
             amountMinor: amountMinor,
             settlementGroupID: groupID,
             settlementRole: .sharedExpensePaid,
+            reportingExpenseMinor: reportingExpenseMinor,
+            reportingIncomeMinor: 0,
             sourceCurrencyCode: "JPY",
             occurredAt: occurredAt,
             createdAt: occurredAt,

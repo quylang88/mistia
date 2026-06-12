@@ -439,6 +439,61 @@ final class OverviewLogicTests: XCTestCase {
         XCTAssertEqual(categoryPage.slices.map(\.name), ["Đi chợ"])
     }
 
+    func testSplitEventExpenseChartsUseResponsibilityAndDoNotCreateIncome() {
+        let categoryID = UUID()
+        let eventDate = makeDate(year: 2026, month: 4, day: 10, hour: 12)
+        let receiptDate = makeDate(year: 2026, month: 4, day: 11, hour: 9)
+        let splitEventExpense = makeTransactionRecord(
+            primaryKind: .expense,
+            amountMinor: 8_000,
+            reportingExpenseMinor: 5_000,
+            reportingIncomeMinor: 0,
+            occurredAt: eventDate,
+            categoryID: categoryID
+        )
+        let eventReceipt = makeTransactionRecord(
+            primaryKind: .transfer,
+            transferSubtype: .debt,
+            debtIntent: .collect,
+            amountMinor: 3_000,
+            reportingExpenseMinor: 0,
+            reportingIncomeMinor: 0,
+            occurredAt: receiptDate
+        )
+        let categoryPage = OverviewLogic.categorySpendingMonth(
+            from: [
+                makeOverviewExpense(
+                    amountMinor: 8_000,
+                    reportingExpenseMinor: 5_000,
+                    reportingIncomeMinor: 0,
+                    occurredAt: eventDate,
+                    categoryID: categoryID,
+                    categoryName: "Ăn uống"
+                )
+            ],
+            selectedMonth: makeDate(year: 2026, month: 4, day: 15),
+            currencyCode: "JPY",
+            calendar: calendar
+        )
+        let monthly = OverviewLogic.monthlyCashflowPages(
+            from: [splitEventExpense, eventReceipt],
+            currencyCode: "JPY",
+            referenceDate: makeDate(year: 2026, month: 4, day: 20),
+            calendar: calendar
+        )
+        let week = OverviewLogic.weeklySpendingPages(
+            from: [splitEventExpense, eventReceipt],
+            referenceDate: makeDate(year: 2026, month: 4, day: 12),
+            calendar: calendar
+        )
+
+        XCTAssertEqual(categoryPage.totalExpenseMinor, 5_000)
+        XCTAssertEqual(categoryPage.slices.map(\.amountMinor), [5_000])
+        XCTAssertEqual(monthly.map(\.expenseMinor), [5_000])
+        XCTAssertEqual(monthly.map(\.incomeMinor), [0])
+        XCTAssertEqual(week.last?.points.map(\.valueMinor), [0, 0, 0, 0, 5_000, 0, 0])
+    }
+
     func testCategorySpendingDrilldownIncludesChildAndDirectParentTransactions() {
         let foodParent = UUID()
         let grocery = UUID()
@@ -1229,6 +1284,8 @@ final class OverviewLogicTests: XCTestCase {
         transferSubtype: TransactionTransferSubtype? = nil,
         debtIntent: TransactionDebtIntent? = nil,
         amountMinor: Int64,
+        reportingExpenseMinor: Int64? = nil,
+        reportingIncomeMinor: Int64? = nil,
         occurredAt: Date,
         sourceCurrencyCode: String? = nil,
         sourceWalletID: UUID? = UUID(),
@@ -1245,6 +1302,8 @@ final class OverviewLogicTests: XCTestCase {
             title: "Test",
             note: nil,
             amountMinor: amountMinor,
+            reportingExpenseMinor: reportingExpenseMinor,
+            reportingIncomeMinor: reportingIncomeMinor,
             sourceCurrencyCode: sourceCurrencyCode,
             occurredAt: occurredAt,
             createdAt: occurredAt,
@@ -1265,6 +1324,8 @@ final class OverviewLogicTests: XCTestCase {
         debtIntent: TransactionDebtIntent? = nil,
         title: String,
         amountMinor: Int64,
+        reportingExpenseMinor: Int64? = nil,
+        reportingIncomeMinor: Int64? = nil,
         sourceCurrencyCode: String? = nil,
         occurredAt: Date,
         isArchived: Bool = false,
@@ -1293,6 +1354,8 @@ final class OverviewLogicTests: XCTestCase {
             title: title,
             note: nil,
             amountMinor: amountMinor,
+            reportingExpenseMinor: reportingExpenseMinor,
+            reportingIncomeMinor: reportingIncomeMinor,
             sourceCurrencyCode: sourceCurrencyCode,
             occurredAt: occurredAt,
             createdAt: occurredAt,
@@ -1340,6 +1403,8 @@ final class OverviewLogicTests: XCTestCase {
 
     private func makeOverviewExpense(
         amountMinor: Int64,
+        reportingExpenseMinor: Int64? = nil,
+        reportingIncomeMinor: Int64? = nil,
         occurredAt: Date,
         categoryID: UUID? = nil,
         categoryName: String? = nil,
@@ -1355,6 +1420,8 @@ final class OverviewLogicTests: XCTestCase {
             primaryKind: .expense,
             title: categoryName ?? "Expense",
             amountMinor: amountMinor,
+            reportingExpenseMinor: reportingExpenseMinor,
+            reportingIncomeMinor: reportingIncomeMinor,
             occurredAt: occurredAt,
             isArchived: isArchived,
             categoryID: categoryID,

@@ -5,6 +5,7 @@ struct MistiaDestructiveActionSection: View {
     let descriptionText: String?
     let popupMessage: String
     let confirmationButtonTitle: String?
+    let showsCancelButton: Bool
     let action: () -> Void
 
     @State private var showsConfirmation = false
@@ -14,12 +15,14 @@ struct MistiaDestructiveActionSection: View {
         descriptionText: String? = nil,
         popupMessage: String,
         confirmationButtonTitle: String? = nil,
+        showsCancelButton: Bool = true,
         action: @escaping () -> Void
     ) {
         self.buttonTitle = buttonTitle
         self.descriptionText = descriptionText
         self.popupMessage = popupMessage
         self.confirmationButtonTitle = confirmationButtonTitle
+        self.showsCancelButton = showsCancelButton
         self.action = action
     }
 
@@ -42,7 +45,9 @@ struct MistiaDestructiveActionSection: View {
                 Button(confirmationButtonTitle ?? buttonTitle, role: .destructive) {
                     action()
                 }
-                Button(L10n.common.cancel, role: .cancel) { }
+                if showsCancelButton {
+                    Button(L10n.common.cancel, role: .cancel) { }
+                }
             } message: {
                 Text(popupMessage)
             }

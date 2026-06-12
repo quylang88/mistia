@@ -880,7 +880,7 @@ struct TransactionsView: View {
                             .padding(.top, 40)
                         } else {
                             VStack(alignment: .leading, spacing: 10) {
-                                Text("Sự kiện chia chi phí")
+                                Text(L10n.transactions.settlement.splitExpenseEventLabel)
                                     .font(.system(size: 13, weight: .bold, design: .rounded))
                                     .foregroundStyle(.secondary)
                                     .textCase(.uppercase)
@@ -1609,6 +1609,8 @@ struct TransactionsSearchScene: View {
     let primaryCurrencyCode: String
     let exchangeRateIndex: MistiaExchangeRateIndex
     var showsExpenseMinusSign: Bool = true
+    var displaysSnapshotWithoutSearchQuery: Bool = false
+    var searchNoResultsMessage: String = L10n.transactions.transactions.searchNoResultsMessage
     let onSelect: (LedgerTransaction) -> Void
     let onLoadMore: (Int) -> Void
 
@@ -1639,7 +1641,7 @@ struct TransactionsSearchScene: View {
 
     @ViewBuilder
     private var searchContent: some View {
-        if !hasSearchQuery {
+        if !hasSearchQuery && !displaysSnapshotWithoutSearchQuery {
             MistiaEmptyStateContent(
                 title: L10n.transactions.transactions.searchEmptyTitle,
                 message: L10n.transactions.transactions.searchEmptyMessage,
@@ -1649,13 +1651,15 @@ struct TransactionsSearchScene: View {
             .padding(.top, 44)
         } else if let snapshot {
             if snapshot.sections.isEmpty {
-                MistiaEmptyStateContent(
-                    title: L10n.transactions.transactions.noMatchingResults,
-                    message: L10n.transactions.transactions.searchNoResultsMessage,
-                    buttonTitle: nil,
-                    symbols: ["magnifyingglass", "xmark.circle.fill", "list.bullet.rectangle"]
-                )
-                .padding(.top, 44)
+                if hasSearchQuery {
+                    MistiaEmptyStateContent(
+                        title: L10n.transactions.transactions.noMatchingResults,
+                        message: searchNoResultsMessage,
+                        buttonTitle: nil,
+                        symbols: ["magnifyingglass", "xmark.circle.fill", "list.bullet.rectangle"]
+                    )
+                    .padding(.top, 44)
+                }
             } else {
                 ForEach(snapshot.sections) { section in
                     TransactionSectionCard(
@@ -2392,7 +2396,7 @@ struct DebtSettlementSheet: View {
                     Section {
                         HStack {
                             Spacer()
-                            Text("Khoản nợ này đã được thanh toán hoàn tất")
+                            Text(L10n.transactions.settlement.debtFullySettled)
                                 .font(.system(size: 15, weight: .semibold, design: .rounded))
                                 .foregroundStyle(.secondary)
                             Spacer()

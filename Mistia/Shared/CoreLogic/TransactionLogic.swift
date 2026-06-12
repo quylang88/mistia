@@ -296,6 +296,11 @@ nonisolated struct SettlementDebtPaymentAllocation: Equatable {
     let reportingIncomeMinor: Int64
 }
 
+nonisolated struct SettlementExpenseReportingAllocation: Equatable {
+    let transactionID: UUID
+    let reportingExpenseMinor: Int64
+}
+
 nonisolated struct SettlementGroupRecordSnapshot: Equatable, Identifiable {
     let id: UUID
     let kind: SettlementKind
@@ -652,14 +657,44 @@ nonisolated enum SettlementLogic {
         settlementIntent: TransactionDebtIntent,
         amountMinor: Int64
     ) -> SettlementDebtReportingOverride {
-        let amount = max(amountMinor, 0)
         switch settlementIntent {
-        case .collect:
-            return SettlementDebtReportingOverride(expenseMinor: -amount, incomeMinor: 0)
-        case .repay:
-            return SettlementDebtReportingOverride(expenseMinor: amount, incomeMinor: 0)
-        case .lend, .borrow:
+        case .collect, .repay, .lend, .borrow:
             return SettlementDebtReportingOverride(expenseMinor: 0, incomeMinor: 0)
+        }
+    }
+
+    static func sharedExpensePaidReportingAllocations(
+        records: [TransactionRecordSnapshot],
+        selfShareMinor: Int64
+    ) -> [SettlementExpenseReportingAllocation] {
+        let eventBills = records
+            .filter(isSharedExpenseEventBill)
+            .sorted {
+                if $0.occurredAt != $1.occurredAt {
+                    return $0.occurredAt < $1.occurredAt
+                }
+                return $0.id.uuidString < $1.id.uuidString
+            }
+        let totalPaidMinor = eventBills.reduce(Int64.zero) { total, record in
+            total + max(record.amountMinor, 0)
+        }
+        let targetExpenseMinor = max(selfShareMinor, 0)
+        guard totalPaidMinor > 0, !eventBills.isEmpty else { return [] }
+
+        var allocatedMinor = Int64.zero
+        return eventBills.enumerated().map { index, record in
+            let amountMinor = max(record.amountMinor, 0)
+            let reportingExpenseMinor: Int64
+            if index == eventBills.count - 1 {
+                reportingExpenseMinor = targetExpenseMinor - allocatedMinor
+            } else {
+                reportingExpenseMinor = amountMinor * targetExpenseMinor / totalPaidMinor
+                allocatedMinor += reportingExpenseMinor
+            }
+            return SettlementExpenseReportingAllocation(
+                transactionID: record.id,
+                reportingExpenseMinor: reportingExpenseMinor
+            )
         }
     }
 
