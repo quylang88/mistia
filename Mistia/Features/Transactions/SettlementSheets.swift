@@ -1596,6 +1596,10 @@ private struct SharedExpenseTransactionSearchSheet: View {
             activeTransactionCount: transactions.count,
             visibleRecordCount: records.count,
             displayedRecordCount: records.count,
+            hasAdjustments: false,
+            debtCounterpartyFilterOptions: [],
+            preparingSettlementEvents: [],
+            allSettlementEvents: [],
             openDebtPositions: [],
             openReceivableDebtTotals: [],
             sections: TransactionLogic.sections(
@@ -1887,17 +1891,12 @@ struct SettlementSplitCalculatorSheet: View {
     }
 
     private func participantSettlementProgressList() -> [ParticipantSettlementProgress] {
-        nonSelfParticipants.map { participant in
+        let transactionsByParticipantKey = settlementDebtTransactionsByParticipantKey()
+
+        return nonSelfParticipants.map { participant in
             let name = participant.displayName
             let key = participant.normalizedKey ?? TransactionLogic.normalizeCounterpartyName(name) ?? ""
-            
-            let participantTxs = transactions.filter {
-                $0.settlementGroupID == target.groupID
-                    && $0.transferSubtype == .debt
-                    && ($0.normalizedCounterpartyKey ?? TransactionLogic.normalizeCounterpartyName($0.counterpartyName)) == key
-                    && $0.deletedAt == nil
-                    && !$0.isArchived
-            }
+            let participantTxs = transactionsByParticipantKey[key] ?? []
             
             let principalTx = participantTxs.first {
                 $0.settlementRole == .sharedExpenseReceivable || $0.settlementRole == .sharedExpensePayable
@@ -1906,9 +1905,14 @@ struct SettlementSplitCalculatorSheet: View {
             if let principalTx {
                 let isReceivable = principalTx.settlementRole == .sharedExpenseReceivable
                 let originalAmount = principalTx.amountMinor
-                let paidAmount = participantTxs
-                    .filter { $0.settlementRole == .sharedExpenseReceipt || $0.settlementRole == .sharedExpensePayment }
-                    .reduce(0) { $0 + $1.amountMinor }
+                let paidAmount = participantTxs.reduce(Int64.zero) { total, transaction in
+                    guard transaction.settlementRole == .sharedExpenseReceipt
+                        || transaction.settlementRole == .sharedExpensePayment
+                    else {
+                        return total
+                    }
+                    return total + transaction.amountMinor
+                }
                 let remainingAmount = max(0, originalAmount - paidAmount)
                 return ParticipantSettlementProgress(
                     id: participant.id,
@@ -1935,6 +1939,27 @@ struct SettlementSplitCalculatorSheet: View {
                 )
             }
         }
+    }
+
+    private func settlementDebtTransactionsByParticipantKey() -> [String: [LedgerTransaction]] {
+        var transactionsByKey: [String: [LedgerTransaction]] = [:]
+        transactionsByKey.reserveCapacity(nonSelfParticipants.count)
+
+        for transaction in transactions {
+            guard transaction.settlementGroupID == target.groupID,
+                  transaction.transferSubtype == .debt,
+                  transaction.deletedAt == nil,
+                  !transaction.isArchived,
+                  let key = transaction.normalizedCounterpartyKey
+                    ?? TransactionLogic.normalizeCounterpartyName(transaction.counterpartyName)
+            else {
+                continue
+            }
+
+            transactionsByKey[key, default: []].append(transaction)
+        }
+
+        return transactionsByKey
     }
 
     private func openDebtSettlement(forParticipantKey normalizedKey: String, displayName: String) {

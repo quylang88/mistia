@@ -133,6 +133,10 @@ struct TransactionsListSnapshot {
     let activeTransactionCount: Int
     let visibleRecordCount: Int
     let displayedRecordCount: Int
+    let hasAdjustments: Bool
+    let debtCounterpartyFilterOptions: [DebtCounterpartyFilterOption]
+    let preparingSettlementEvents: [PreparingSettlementEventSnapshot]
+    let allSettlementEvents: [PreparingSettlementEventSnapshot]
     let openDebtPositions: [CounterpartyDebtSnapshot]
     let openReceivableDebtTotals: [PlanningCurrencyAmountTotalSnapshot]
     let sections: [TransactionSectionSnapshot]
@@ -175,11 +179,13 @@ private struct TransactionsListSnapshotCacheKey: Hashable {
     let familyID: UUID?
     let familyAccessSignature: Int
     let transactionSignature: MistiaCollectionChangeSignature
+    let settlementGroupSignature: MistiaCollectionChangeSignature?
+    let settlementParticipantSignature: MistiaCollectionChangeSignature?
     let ownershipSignature: MistiaCollectionChangeSignature
     let auditSignature: MistiaCollectionChangeSignature
 }
 
-private struct DebtCounterpartyFilterOption: Equatable, Identifiable {
+struct DebtCounterpartyFilterOption: Equatable, Identifiable {
     let id: String
     let displayName: String
 }
@@ -305,10 +311,6 @@ struct TransactionsView: View {
         }
     }
 
-    private var activeCategories: [TransactionCategory] {
-        activeCategorySections.map(\.parent) + activeCategorySections.flatMap(\.children)
-    }
-
     private var visibleTransactions: [LedgerTransaction] {
         FamilyScopedData.visibleTransactionsForHistory(
             storedTransactions,
@@ -359,23 +361,6 @@ struct TransactionsView: View {
         )
     }
 
-    private var preparingSettlementEvents: [PreparingSettlementEventSnapshot] {
-        SettlementLogic.preparingEventSnapshots(
-            groups: visibleSettlementGroups.map(\.recordSnapshot),
-            participants: visibleSettlementParticipants.map(\.recordSnapshot),
-            records: activeTransactions.map(\.snapshot)
-        )
-    }
-
-    private var allEvents: [PreparingSettlementEventSnapshot] {
-        SettlementLogic.allEventSnapshots(
-            groups: visibleSettlementGroups.map(\.recordSnapshot),
-            participants: visibleSettlementParticipants.map(\.recordSnapshot),
-            records: activeTransactions.map(\.snapshot)
-        )
-        .sorted { $0.occurredAt > $1.occurredAt }
-    }
-
     private var transactionAuditMap: [UUID: TransactionAuditRecord] {
         TransactionAuditStore.auditMap(from: transactionAuditRecords)
     }
@@ -383,6 +368,8 @@ struct TransactionsView: View {
     private var transactionListSnapshot: TransactionsListSnapshot {
         let activeTransactions = self.activeTransactions
         let records = activeTransactions.map(\.snapshot)
+        let settlementGroupSnapshots = visibleSettlementGroups.map(\.recordSnapshot)
+        let settlementParticipantSnapshots = visibleSettlementParticipants.map(\.recordSnapshot)
         let page = TransactionLogic.visibleRecordsPage(
             from: records,
             selectedKind: selectedSegment?.kind,
@@ -401,6 +388,19 @@ struct TransactionsView: View {
             activeTransactionCount: activeTransactions.count,
             visibleRecordCount: page.totalCount,
             displayedRecordCount: displayedRecords.count,
+            hasAdjustments: records.contains { TransactionLogic.isAdjustment($0) },
+            debtCounterpartyFilterOptions: debtCounterpartyFilterOptions(from: records),
+            preparingSettlementEvents: SettlementLogic.preparingEventSnapshots(
+                groups: settlementGroupSnapshots,
+                participants: settlementParticipantSnapshots,
+                records: records
+            ),
+            allSettlementEvents: SettlementLogic.allEventSnapshots(
+                groups: settlementGroupSnapshots,
+                participants: settlementParticipantSnapshots,
+                records: records
+            )
+            .sorted { $0.occurredAt > $1.occurredAt },
             openDebtPositions: openDebtPositions,
             openReceivableDebtTotals: TransactionLogic.openReceivableDebtTotalsByCurrency(
                 from: openDebtPositions
@@ -444,6 +444,10 @@ struct TransactionsView: View {
             activeTransactionCount: activeTransactions.count,
             visibleRecordCount: page.totalCount,
             displayedRecordCount: displayedRecords.count,
+            hasAdjustments: false,
+            debtCounterpartyFilterOptions: [],
+            preparingSettlementEvents: [],
+            allSettlementEvents: [],
             openDebtPositions: [],
             openReceivableDebtTotals: [],
             sections: TransactionLogic.sections(
@@ -536,6 +540,19 @@ struct TransactionsView: View {
                 isArchived: \.isArchived,
                 remoteVersion: \.remoteVersion
             ),
+            settlementGroupSignature: MistiaCollectionChangeSignature.make(
+                storedSettlementGroups,
+                updatedAt: \.updatedAt,
+                deletedAt: \.deletedAt,
+                isArchived: \.isArchived,
+                remoteVersion: \.remoteVersion
+            ),
+            settlementParticipantSignature: MistiaCollectionChangeSignature.make(
+                storedSettlementParticipants,
+                updatedAt: \.updatedAt,
+                deletedAt: \.deletedAt,
+                remoteVersion: \.remoteVersion
+            ),
             ownershipSignature: MistiaCollectionChangeSignature.make(
                 ownershipScopes,
                 updatedAt: \.updatedAt,
@@ -584,6 +601,8 @@ struct TransactionsView: View {
                 isArchived: \.isArchived,
                 remoteVersion: \.remoteVersion
             ),
+            settlementGroupSignature: nil,
+            settlementParticipantSignature: nil,
             ownershipSignature: MistiaCollectionChangeSignature.make(
                 ownershipScopes,
                 updatedAt: \.updatedAt,
@@ -628,10 +647,6 @@ struct TransactionsView: View {
 
     private var transactionOwnerMap: [UUID: UUID] {
         MistiaRecordOwnershipStore.ownerMap(from: ownershipScopes, entity: .transaction)
-    }
-
-    private var snapshotRecords: [TransactionRecordSnapshot] {
-        activeTransactions.map { $0.snapshot }
     }
 
     private var transactionRecords: [TransactionRecordSnapshot] {
@@ -756,28 +771,13 @@ struct TransactionsView: View {
         }
     }
 
-    private var hasAdjustments: Bool {
-        snapshotRecords.contains { TransactionLogic.isAdjustment($0) }
-    }
-
-    private var activeFilterCount: Int {
-        var count = 0
-
-        if selectedSegment != nil { count += 1 }
-        if filterState.timeScope != .allTime { count += 1 }
-        if filterState.walletID != nil { count += 1 }
-        if filterState.categoryID != nil { count += 1 }
-        if filterState.transferSubtype != nil { count += 1 }
-        if filterState.counterpartyDebtKey != nil { count += 1 }
-        if filterState.minAmountMinor != nil || filterState.maxAmountMinor != nil { count += 1 }
-
-        return count
-    }
-
-    private var debtCounterpartyFilterOptions: [DebtCounterpartyFilterOption] {
+    private func debtCounterpartyFilterOptions(
+        from records: [TransactionRecordSnapshot]
+    ) -> [DebtCounterpartyFilterOption] {
         var optionsByKey: [String: DebtCounterpartyFilterOption] = [:]
+        optionsByKey.reserveCapacity(8)
 
-        for record in activeTransactions.map(\.snapshot) {
+        for record in records {
             guard record.entryStatus == .posted,
                   record.primaryKind == .transfer,
                   record.transferSubtype == .debt,
@@ -801,6 +801,20 @@ struct TransactionsView: View {
             }
             return $0.id < $1.id
         }
+    }
+
+    private var activeFilterCount: Int {
+        var count = 0
+
+        if selectedSegment != nil { count += 1 }
+        if filterState.timeScope != .allTime { count += 1 }
+        if filterState.walletID != nil { count += 1 }
+        if filterState.categoryID != nil { count += 1 }
+        if filterState.transferSubtype != nil { count += 1 }
+        if filterState.counterpartyDebtKey != nil { count += 1 }
+        if filterState.minAmountMinor != nil || filterState.maxAmountMinor != nil { count += 1 }
+
+        return count
     }
 
     private var activeFilterTint: Color {
@@ -830,7 +844,6 @@ struct TransactionsView: View {
         let searchSnapshot = cachedTransactionSearchSnapshot(for: searchSnapshotKey)
         let memberToolbar = familyContextStore.memberViewingToolbarPresentation
         let exchangeRateIndex = MistiaExchangeRateIndex(rates: appExchangeRates)
-        let preparingSettlementEvents = self.preparingSettlementEvents
 
         NavigationStack {
             ZStack {
@@ -858,7 +871,7 @@ struct TransactionsView: View {
                     headerBehavior: .scrollsThenPins,
                     pinnedHeader: {
                         VStack(alignment: .leading, spacing: 8) {
-                            unifiedFilterRow
+                            unifiedFilterRow(listSnapshot)
                         }
                             .zIndex(99)
                     },
@@ -868,7 +881,7 @@ struct TransactionsView: View {
                     }
                 ) {
                     if selectedSegment == .event {
-                        let events = allEvents
+                        let events = listSnapshot.allSettlementEvents
                         if events.isEmpty {
                             MistiaEmptyStateContent(
                                 title: "Chưa có sự kiện nào",
@@ -914,8 +927,8 @@ struct TransactionsView: View {
                             }
                         }
                     } else {
-                        if !preparingSettlementEvents.isEmpty {
-                            preparingSettlementSection(preparingSettlementEvents)
+                        if !listSnapshot.preparingSettlementEvents.isEmpty {
+                            preparingSettlementSection(listSnapshot.preparingSettlementEvents)
                         }
                         if !listSnapshot.openDebtPositions.isEmpty {
                             outstandingDebtSection(
@@ -1126,15 +1139,15 @@ struct TransactionsView: View {
         }
     }
 
-    private var unifiedFilterRow: some View {
+    private func unifiedFilterRow(_ snapshot: TransactionsListSnapshot) -> some View {
         ScrollView(.horizontal, showsIndicators: false) {
             Group {
                 if #available(iOS 26, *) {
                     GlassEffectContainer(spacing: 10) {
-                        filterChipsHStack
+                        filterChipsHStack(snapshot)
                     }
                 } else {
-                    filterChipsHStack
+                    filterChipsHStack(snapshot)
                 }
             }
             .padding(.horizontal, 18)
@@ -1168,8 +1181,13 @@ struct TransactionsView: View {
         }
     }
 
-    private var filterChipsHStack: some View {
-        HStack(spacing: 8) {
+    private func filterChipsHStack(_ snapshot: TransactionsListSnapshot) -> some View {
+        let debtCounterpartyFilterOptions = snapshot.debtCounterpartyFilterOptions
+        let activeWallets = self.activeWallets
+        let activeCategorySections = self.activeCategorySections
+        let activeCategories = activeCategorySections.map(\.parent) + activeCategorySections.flatMap(\.children)
+
+        return HStack(spacing: 8) {
             if activeFilterCount > 0 {
                 filterMenu(isActive: true) {
                     HStack(spacing: 4) {
@@ -1215,7 +1233,7 @@ struct TransactionsView: View {
                     }
                 }
                 ForEach(TransactionSegment.allCases, id: \.self) { segment in
-                    if segment != .adjustment || hasAdjustments {
+                    if segment != .adjustment || snapshot.hasAdjustments {
                         Button(segment.title) {
                             withAnimation(.snappy) {
                                 selectedSegment = segment
