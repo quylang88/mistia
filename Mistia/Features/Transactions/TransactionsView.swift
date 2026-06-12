@@ -5,6 +5,7 @@ private enum TransactionSegment: String, CaseIterable, Hashable {
     case expense
     case income
     case transfer
+    case event
     case adjustment
 
     var title: String {
@@ -15,6 +16,8 @@ private enum TransactionSegment: String, CaseIterable, Hashable {
             L10n.transactions.transactions.income2
         case .transfer:
             L10n.transactions.transactions.transfer
+        case .event:
+            "Sự kiện"
         case .adjustment:
             L10n.transactions.transactions.adjustment
         }
@@ -32,7 +35,7 @@ private enum TransactionSegment: String, CaseIterable, Hashable {
             return .income
         case .transfer:
             return .transfer
-        case .adjustment:
+        case .event, .adjustment:
             return nil
         }
     }
@@ -777,6 +780,7 @@ struct TransactionsView: View {
         var effective = filterState
         effective.searchText = ""
         effective.isAdjustmentOnly = selectedSegment == .adjustment
+        effective.isEventOnly = selectedSegment == .event
         return effective
     }
 
