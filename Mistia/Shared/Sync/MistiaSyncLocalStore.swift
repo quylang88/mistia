@@ -31,10 +31,6 @@ enum MistiaSyncLocalStore {
         lhs.updatedAt >= rhs.updatedAt ? lhs : rhs
     }
 
-    nonisolated private static func latestSettlementObligation(_ lhs: SettlementObligation, _ rhs: SettlementObligation) -> SettlementObligation {
-        lhs.updatedAt >= rhs.updatedAt ? lhs : rhs
-    }
-
     nonisolated private static func latestBudget(_ lhs: BudgetPlan, _ rhs: BudgetPlan) -> BudgetPlan {
         lhs.updatedAt >= rhs.updatedAt ? lhs : rhs
     }
@@ -74,7 +70,6 @@ enum MistiaSyncLocalStore {
             + fetchCategories(context).count
             + fetchSettlementGroups(context).count
             + fetchSettlementParticipants(context).count
-            + fetchSettlementObligations(context).count
             + fetchTransactions(context).count
             + fetchTransactionAudits(context).count
             + fetchBudgetPlans(context).count
@@ -100,9 +95,6 @@ enum MistiaSyncLocalStore {
             return true
         }
         if try fetchActiveSettlementParticipant(context) != nil {
-            return true
-        }
-        if try fetchActiveSettlementObligation(context) != nil {
             return true
         }
         if try fetchActiveBudgetPlan(context) != nil {
@@ -164,7 +156,6 @@ enum MistiaSyncLocalStore {
         let categoryOwnerMap = MistiaRecordOwnershipStore.ownerMap(from: ownershipScopes, entity: .category)
         let settlementGroupOwnerMap = MistiaRecordOwnershipStore.ownerMap(from: ownershipScopes, entity: .settlementGroup)
         let settlementParticipantOwnerMap = MistiaRecordOwnershipStore.ownerMap(from: ownershipScopes, entity: .settlementParticipant)
-        let settlementObligationOwnerMap = MistiaRecordOwnershipStore.ownerMap(from: ownershipScopes, entity: .settlementObligation)
         let transactionOwnerMap = MistiaRecordOwnershipStore.ownerMap(from: ownershipScopes, entity: .transaction)
         let budgetOwnerMap = MistiaRecordOwnershipStore.ownerMap(from: ownershipScopes, entity: .budgetPlan)
         let goalOwnerMap = MistiaRecordOwnershipStore.ownerMap(from: ownershipScopes, entity: .savingsGoal)
@@ -181,8 +172,6 @@ enum MistiaSyncLocalStore {
             .filter { settlementGroupOwnerMap[$0.id] == nil || settlementGroupOwnerMap[$0.id] == userID }
         let settlementParticipants = try fetchSettlementParticipants(context)
             .filter { settlementParticipantOwnerMap[$0.id] == nil || settlementParticipantOwnerMap[$0.id] == userID }
-        let settlementObligations = try fetchSettlementObligations(context)
-            .filter { settlementObligationOwnerMap[$0.id] == nil || settlementObligationOwnerMap[$0.id] == userID }
         let budgetPlans = try fetchBudgetPlans(context)
             .filter { budgetOwnerMap[$0.id] == nil || budgetOwnerMap[$0.id] == userID }
         let savingsGoals = try fetchSavingsGoals(context)
@@ -202,7 +191,6 @@ enum MistiaSyncLocalStore {
             categories: categories.map { RemoteTransactionCategory(local: $0, userID: userID) },
             settlementGroups: settlementGroups.map { RemoteSettlementGroup(local: $0, userID: userID) },
             settlementParticipants: settlementParticipants.map { RemoteSettlementParticipant(local: $0, userID: userID) },
-            settlementObligations: settlementObligations.map { RemoteSettlementObligation(local: $0, userID: userID) },
             transactions: transactions.map {
                 RemoteLedgerTransaction(
                     local: $0,
@@ -279,11 +267,6 @@ enum MistiaSyncLocalStore {
                 return nil
             }
             return .settlementParticipant(RemoteSettlementParticipant(local: participant, userID: subjectUserID))
-        case .settlementObligation:
-            guard let obligation = try fetchSettlementObligation(id: mutation.recordID, context) else {
-                return nil
-            }
-            return .settlementObligation(RemoteSettlementObligation(local: obligation, userID: subjectUserID))
         case .budgetPlan:
             guard let plan = try fetchBudgetPlan(id: mutation.recordID, context) else {
                 return nil
@@ -409,8 +392,6 @@ enum MistiaSyncLocalStore {
             return try fetchSettlementGroup(id: recordID, context)?.remoteVersion ?? 0
         case .settlementParticipant:
             return try fetchSettlementParticipant(id: recordID, context)?.remoteVersion ?? 0
-        case .settlementObligation:
-            return try fetchSettlementObligation(id: recordID, context)?.remoteVersion ?? 0
         case .budgetPlan:
             return try fetchBudgetPlan(id: recordID, context)?.remoteVersion ?? 0
         case .savingsGoal:
@@ -432,7 +413,6 @@ enum MistiaSyncLocalStore {
         try fetchCategories(context).forEach { $0.remoteVersion = 0 }
         try fetchSettlementGroups(context).forEach { $0.remoteVersion = 0 }
         try fetchSettlementParticipants(context).forEach { $0.remoteVersion = 0 }
-        try fetchSettlementObligations(context).forEach { $0.remoteVersion = 0 }
         try fetchTransactions(context).forEach { $0.remoteVersion = 0 }
         try fetchBudgetPlans(context).forEach { $0.remoteVersion = 0 }
         try fetchSavingsGoals(context).forEach { $0.remoteVersion = 0 }
@@ -481,7 +461,6 @@ enum MistiaSyncLocalStore {
         let creditProfiles = try fetchCreditCardProfiles(context)
         let settlementGroups = try fetchSettlementGroups(context)
         let settlementParticipants = try fetchSettlementParticipants(context)
-        let settlementObligations = try fetchSettlementObligations(context)
         let transactions = try fetchTransactions(context)
         let budgetPlans = try fetchBudgetPlans(context)
         let savingsGoals = try fetchSavingsGoals(context)
@@ -493,7 +472,6 @@ enum MistiaSyncLocalStore {
         var profileByID = Dictionary(creditProfiles.map { ($0.id, $0) }, uniquingKeysWith: latestCreditProfile)
         var settlementGroupByID = Dictionary(settlementGroups.map { ($0.id, $0) }, uniquingKeysWith: latestSettlementGroup)
         var settlementParticipantByID = Dictionary(settlementParticipants.map { ($0.id, $0) }, uniquingKeysWith: latestSettlementParticipant)
-        var settlementObligationByID = Dictionary(settlementObligations.map { ($0.id, $0) }, uniquingKeysWith: latestSettlementObligation)
         var transactionByID = Dictionary(transactions.map { ($0.id, $0) }, uniquingKeysWith: latestTransaction)
         var budgetByID = Dictionary(budgetPlans.map { ($0.id, $0) }, uniquingKeysWith: latestBudget)
         var goalByID = Dictionary(savingsGoals.map { ($0.id, $0) }, uniquingKeysWith: latestGoal)
@@ -577,17 +555,6 @@ enum MistiaSyncLocalStore {
                 preserveLocalNewerRows: preserveLocalNewerRows
             ) else { continue }
             try upsertSettlementParticipant(row, context: context, participantByID: &settlementParticipantByID)
-        }
-
-        for row in snapshot.settlementObligations {
-            guard shouldApplyRemoteRow(
-                row,
-                entity: .settlementObligation,
-                existing: settlementObligationByID[row.id],
-                protectedRecordIDs: protectedRecordIDs,
-                preserveLocalNewerRows: preserveLocalNewerRows
-            ) else { continue }
-            try upsertSettlementObligation(row, context: context, obligationByID: &settlementObligationByID)
         }
 
         for row in transactionRows {
@@ -700,12 +667,6 @@ enum MistiaSyncLocalStore {
                 context: context
             )
             pruneRecordsMissingFromRemote(
-                existing: settlementObligations,
-                remoteIDs: Set(snapshot.settlementObligations.map(\.id)),
-                protectedRecordIDs: protectedRecordIDs,
-                context: context
-            )
-            pruneRecordsMissingFromRemote(
                 existing: transactions,
                 remoteIDs: Set(transactionRows.map(\.id)),
                 protectedRecordIDs: protectedRecordIDs,
@@ -812,12 +773,6 @@ enum MistiaSyncLocalStore {
                 uniquingKeysWith: latestSettlementParticipant
             )
             try upsertSettlementParticipant(row, context: context, participantByID: &participantByID)
-        case .settlementObligation(let row):
-            var obligationByID = Dictionary(
-                try fetchSettlementObligations(context).map { ($0.id, $0) },
-                uniquingKeysWith: latestSettlementObligation
-            )
-            try upsertSettlementObligation(row, context: context, obligationByID: &obligationByID)
         case .budgetPlan(let row):
             var budgetByID = Dictionary(
                 try fetchBudgetPlans(context).map { ($0.id, $0) },
@@ -1088,7 +1043,6 @@ enum MistiaSyncLocalStore {
         let categoryOwnerMap = MistiaRecordOwnershipStore.ownerMap(from: ownershipScopes, entity: .category)
         let settlementGroupOwnerMap = MistiaRecordOwnershipStore.ownerMap(from: ownershipScopes, entity: .settlementGroup)
         let settlementParticipantOwnerMap = MistiaRecordOwnershipStore.ownerMap(from: ownershipScopes, entity: .settlementParticipant)
-        let settlementObligationOwnerMap = MistiaRecordOwnershipStore.ownerMap(from: ownershipScopes, entity: .settlementObligation)
         let transactionOwnerMap = MistiaRecordOwnershipStore.ownerMap(from: ownershipScopes, entity: .transaction)
         let budgetOwnerMap = MistiaRecordOwnershipStore.ownerMap(from: ownershipScopes, entity: .budgetPlan)
         let goalOwnerMap = MistiaRecordOwnershipStore.ownerMap(from: ownershipScopes, entity: .savingsGoal)
@@ -1101,7 +1055,6 @@ enum MistiaSyncLocalStore {
         let categories = try fetchCategories(context).filter { $0.deletedAt == nil }
         let settlementGroups = try fetchSettlementGroups(context).filter { $0.deletedAt == nil }
         let settlementParticipants = try fetchSettlementParticipants(context).filter { $0.deletedAt == nil }
-        let settlementObligations = try fetchSettlementObligations(context).filter { $0.deletedAt == nil }
         let transactions = try fetchTransactions(context).filter { $0.deletedAt == nil }
         let budgetPlans = try fetchBudgetPlans(context).filter { $0.deletedAt == nil }
         let savingsGoals = try fetchSavingsGoals(context).filter { $0.deletedAt == nil }
@@ -1149,14 +1102,6 @@ enum MistiaSyncLocalStore {
                     userID: settlementParticipantOwnerMap[participant.id] ?? fallbackOwnerUserID
                 )
                 row.syncVersion = participant.remoteVersion
-                return row
-            },
-            settlementObligations: settlementObligations.map { obligation in
-                var row = RemoteSettlementObligation(
-                    local: obligation,
-                    userID: settlementObligationOwnerMap[obligation.id] ?? fallbackOwnerUserID
-                )
-                row.syncVersion = obligation.remoteVersion
                 return row
             },
             transactions: transactions.map { transaction in
@@ -1221,7 +1166,6 @@ enum MistiaSyncLocalStore {
             .category: Set(snapshot.categories.map(\.id)),
             .settlementGroup: Set(snapshot.settlementGroups.map(\.id)),
             .settlementParticipant: Set(snapshot.settlementParticipants.map(\.id)),
-            .settlementObligation: Set(snapshot.settlementObligations.map(\.id)),
             .transaction: Set(snapshot.transactions.map(\.id)),
             .budgetPlan: Set(snapshot.budgetPlans.map(\.id)),
             .savingsGoal: Set(snapshot.savingsGoals.map(\.id)),
@@ -1329,10 +1273,6 @@ enum MistiaSyncLocalStore {
         }
 
         for record in try fetchBudgetPlans(context) {
-            context.delete(record)
-        }
-
-        for record in try fetchSettlementObligations(context) {
             context.delete(record)
         }
 
@@ -2223,54 +2163,6 @@ enum MistiaSyncLocalStore {
         )
     }
 
-    private static func upsertSettlementObligation(
-        _ row: RemoteSettlementObligation,
-        context: ModelContext,
-        obligationByID: inout [UUID: SettlementObligation]
-    ) throws {
-        let obligation = obligationByID[row.id] ?? SettlementObligation(
-            id: row.id,
-            groupID: row.groupID,
-            counterpartyName: row.counterpartyName,
-            normalizedCounterpartyKey: row.normalizedCounterpartyKey,
-            memberUserID: row.memberUserID,
-            direction: SettlementDirection(rawValue: row.directionRawValue) ?? .receivable,
-            expectedMinor: row.expectedMinor,
-            settledMinor: row.settledMinor,
-            preferredWalletID: row.preferredWalletID,
-            createdAt: row.createdAt,
-            updatedAt: row.updatedAt,
-            deletedAt: row.deletedAt,
-            remoteVersion: row.syncVersion
-        )
-
-        if obligationByID[row.id] == nil {
-            context.insert(obligation)
-            obligationByID[row.id] = obligation
-        }
-
-        obligation.groupID = row.groupID
-        obligation.counterpartyName = row.counterpartyName
-        obligation.normalizedCounterpartyKey = row.normalizedCounterpartyKey
-        obligation.memberUserID = row.memberUserID
-        obligation.directionRawValue = row.directionRawValue
-        obligation.expectedMinor = row.expectedMinor
-        obligation.settledMinor = row.settledMinor
-        obligation.preferredWalletID = row.preferredWalletID
-        obligation.createdAt = row.createdAt
-        obligation.updatedAt = row.updatedAt
-        obligation.deletedAt = row.deletedAt
-        obligation.remoteVersion = row.syncVersion
-
-        try MistiaRecordOwnershipStore.upsert(
-            entity: .settlementObligation,
-            recordID: row.id,
-            ownerUserID: row.userID,
-            updatedAt: row.updatedAt,
-            context: context
-        )
-    }
-
     private static func upsertBudget(
         _ row: RemoteBudgetPlan,
         context: ModelContext,
@@ -2743,32 +2635,6 @@ enum MistiaSyncLocalStore {
         try context.fetch(FetchDescriptor<SettlementParticipant>())
     }
 
-    private static func fetchSettlementObligation(id: UUID, _ context: ModelContext) throws -> SettlementObligation? {
-        try fetchFirst(
-            FetchDescriptor<SettlementObligation>(
-                predicate: #Predicate<SettlementObligation> { obligation in
-                    obligation.id == id
-                }
-            ),
-            context: context
-        )
-    }
-
-    private static func fetchActiveSettlementObligation(_ context: ModelContext) throws -> SettlementObligation? {
-        try fetchFirst(
-            FetchDescriptor<SettlementObligation>(
-                predicate: #Predicate<SettlementObligation> { obligation in
-                    obligation.deletedAt == nil
-                }
-            ),
-            context: context
-        )
-    }
-
-    private static func fetchSettlementObligations(_ context: ModelContext) throws -> [SettlementObligation] {
-        try context.fetch(FetchDescriptor<SettlementObligation>())
-    }
-
     private static func fetchTransactionAudits(_ context: ModelContext) throws -> [TransactionAuditRecord] {
         try context.fetch(FetchDescriptor<TransactionAuditRecord>())
     }
@@ -3153,26 +3019,6 @@ private extension RemoteSettlementParticipant {
     }
 }
 
-private extension RemoteSettlementObligation {
-    init(local obligation: SettlementObligation, userID: UUID) {
-        self.userID = userID
-        self.id = obligation.id
-        self.groupID = obligation.groupID
-        self.counterpartyName = obligation.counterpartyName
-        self.normalizedCounterpartyKey = obligation.normalizedCounterpartyKey
-        self.memberUserID = obligation.memberUserID
-        self.directionRawValue = obligation.directionRawValue
-        self.expectedMinor = obligation.expectedMinor
-        self.settledMinor = obligation.settledMinor
-        self.preferredWalletID = obligation.preferredWalletID
-        self.createdAt = obligation.createdAt
-        self.updatedAt = obligation.updatedAt
-        self.deletedAt = obligation.deletedAt
-        self.syncVersion = max(obligation.remoteVersion, 1)
-        self.lastModifiedByDeviceID = nil
-    }
-}
-
 private extension RemoteBudgetPlan {
     init(local plan: BudgetPlan, userID: UUID) {
         self.init(
@@ -3393,7 +3239,6 @@ struct MistiaBackupValidationSummary {
     let categoryCount: Int
     let settlementGroupCount: Int
     let settlementParticipantCount: Int
-    let settlementObligationCount: Int
     let transactionCount: Int
     let budgetPlanCount: Int
     let savingsGoalCount: Int
@@ -3411,7 +3256,6 @@ struct MistiaBackupValidationSummary {
             + categoryCount
             + settlementGroupCount
             + settlementParticipantCount
-            + settlementObligationCount
             + transactionCount
             + budgetPlanCount
             + savingsGoalCount
@@ -3656,7 +3500,6 @@ private extension MistiaBackupValidationSummary {
             categoryCount: envelope.snapshot.categories.count,
             settlementGroupCount: envelope.snapshot.settlementGroups.count,
             settlementParticipantCount: envelope.snapshot.settlementParticipants.count,
-            settlementObligationCount: envelope.snapshot.settlementObligations.count,
             transactionCount: envelope.snapshot.transactions.count,
             budgetPlanCount: envelope.snapshot.budgetPlans.count,
             savingsGoalCount: envelope.snapshot.savingsGoals.count,

@@ -170,7 +170,6 @@ enum MistiaSystemCategorySyncSupport {
             categories: categories,
             settlementGroups: snapshot.settlementGroups,
             settlementParticipants: snapshot.settlementParticipants,
-            settlementObligations: snapshot.settlementObligations,
             transactions: snapshot.transactions.map { $0.replacingCategoryReferences(replacementByID) },
             budgetPlans: snapshot.budgetPlans.map { $0.replacingCategoryReferences(replacementByID) },
             savingsGoals: snapshot.savingsGoals,

@@ -134,6 +134,34 @@ fileprivate enum BorrowDebtEntryMode: String, CaseIterable, Identifiable {
     }
 }
 
+fileprivate enum DebtCreationEntryKind: String, CaseIterable, Identifiable {
+    case lend
+    case borrow
+    case resale
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .lend:
+            TransactionDebtIntent.lend.title
+        case .borrow:
+            TransactionDebtIntent.borrow.title
+        case .resale:
+            L10n.transactions.transactioneditor.resaleCreditSale
+        }
+    }
+
+    var debtIntent: TransactionDebtIntent {
+        switch self {
+        case .lend, .resale:
+            .lend
+        case .borrow:
+            .borrow
+        }
+    }
+}
+
 private struct FamilyTransferDraftPayload {
     let recipientUserID: UUID
     let sourceWalletID: UUID
@@ -642,27 +670,55 @@ struct TransactionEditorSheet: View {
 
             if draft.primaryKind == .transfer, draft.transferSubtype == .debt {
                 Section(L10n.transactions.transactioneditor.debtType) {
-                    Picker(L10n.transactions.transactioneditor.debtType, selection: Binding(
-                        get: { bindableDraft.debtIntent ?? .lend },
-                        set: {
-                            bindableDraft.debtIntent = $0
-                            if $0 != .borrow {
-                                bindableDraft.borrowDebtEntryMode = .receiveIntoWallet
-                                bindableDraft.paidForCountsAsExpense = false
+                    if usesExistingDebtIntentPicker {
+                        Picker(L10n.transactions.transactioneditor.debtType, selection: Binding(
+                            get: { bindableDraft.debtIntent ?? .lend },
+                            set: {
+                                bindableDraft.debtIntent = $0
+                                if $0 != .borrow {
+                                    bindableDraft.borrowDebtEntryMode = .receiveIntoWallet
+                                    bindableDraft.paidForCountsAsExpense = false
+                                }
+                                clearMismatchedWalletsForCurrentSubject()
                             }
-                            clearMismatchedWalletsForCurrentSubject()
+                        )) {
+                            ForEach(debtIntentOptions, id: \.self) { intent in
+                                Text(intent.title).tag(intent)
+                            }
                         }
-                    )) {
-                        ForEach(debtIntentOptions, id: \.self) { intent in
-                            Text(intent.title).tag(intent)
-                        }
+                        .pickerStyle(.segmented)
+                        .disabled(target.prefill?.lockedDebtIntent != nil || isExistingDebtTransaction)
+                        .listRowInsets(EdgeInsets())
+                        .listRowBackground(Color.clear)
+                    } else {
+                        MistiaNativeSegmentedControl(
+                            selection: Binding(
+                                get: { bindableDraft.debtEntryKind },
+                                set: { kind in
+                                    bindableDraft.debtEntryKind = kind
+                                    bindableDraft.debtIntent = kind.debtIntent
+                                    if kind != .borrow {
+                                        bindableDraft.borrowDebtEntryMode = .receiveIntoWallet
+                                        bindableDraft.paidForCountsAsExpense = false
+                                    }
+                                    if kind == .resale {
+                                        bindableDraft.sourceWalletID = nil
+                                        bindableDraft.categoryID = nil
+                                    } else {
+                                        bindableDraft.purchaseCostText = ""
+                                    }
+                                    clearMismatchedWalletsForCurrentSubject()
+                                }
+                            ),
+                            options: debtCreationEntryKindOptions,
+                            title: { $0.title }
+                        )
+                        .disabled(isExistingDebtTransaction)
+                        .listRowInsets(EdgeInsets())
+                        .listRowBackground(Color.clear)
                     }
-                    .pickerStyle(.segmented)
-                    .disabled(target.prefill?.lockedDebtIntent != nil || isExistingDebtTransaction)
-                    .listRowInsets(EdgeInsets())
-                    .listRowBackground(Color.clear)
 
-                    if draft.debtIntent == .borrow {
+                    if draft.debtEntryKind == .borrow {
                         MistiaNativeSegmentedControl(
                             selection: Binding(
                                 get: { bindableDraft.borrowDebtEntryMode },
@@ -695,10 +751,10 @@ struct TransactionEditorSheet: View {
                 }
             }
 
-            Section(L10n.transactions.transactioneditor.mainDetails) {
-                if let titleFieldPlaceholder {
+            if isResaleDebtDraft {
+                Section(L10n.transactions.transactioneditor.resaleInformationSection) {
                     VStack(alignment: .leading, spacing: 10) {
-                        TextField(titleFieldPlaceholder, text: $bindableDraft.title)
+                        TextField(L10n.transactions.transactioneditor.resaleItemName, text: $bindableDraft.title)
                             .focused($focusedField, equals: .title)
                             .textInputAutocapitalization(.words)
                             .autocorrectionDisabled()
@@ -724,15 +780,93 @@ struct TransactionEditorSheet: View {
                         }
                     }
                     .animation(.snappy(duration: 0.2), value: shouldShowTitleSuggestions)
+
+                    TextField(
+                        L10n.transactions.transactioneditor.resaleBuyerName,
+                        text: $bindableDraft.counterpartyName
+                    )
+                    .focused($focusedField, equals: .counterparty)
+                    .textInputAutocapitalization(.words)
+                    .autocorrectionDisabled()
+                    .onChange(of: focusedField) { _, newValue in
+                        if newValue == .counterparty {
+                            suppressCounterpartySuggestions = false
+                        }
+                        scheduleCounterpartySuggestionsRefresh()
+                    }
+                    .onChange(of: bindableDraft.counterpartyName) { _, _ in
+                        if isApplyingCounterpartySuggestion {
+                            isApplyingCounterpartySuggestion = false
+                            cachedCounterpartySuggestions = []
+                        } else {
+                            suppressCounterpartySuggestions = false
+                            scheduleCounterpartySuggestionsRefresh()
+                        }
+                    }
+
+                    if shouldShowCounterpartySuggestions {
+                        counterpartySuggestionsPanel
+                            .transition(.move(edge: .top).combined(with: .opacity))
+                    }
+
+                    MistiaDatePickerRow(
+                        title: L10n.transactions.transactioneditor.dateTime,
+                        selection: $bindableDraft.occurredAt,
+                        mode: .dateAndTime
+                    )
                 }
 
-                MistiaCurrencyInputField(L10n.transactions.transactioneditor.amount, text: $bindableDraft.amountText)
+                Section(L10n.transactions.transactioneditor.resaleAmountSection) {
+                    MistiaCurrencyInputField(
+                        L10n.transactions.transactioneditor.resalePurchasePrice,
+                        text: $bindableDraft.purchaseCostText
+                    )
 
-                MistiaDatePickerRow(
-                    title: L10n.transactions.transactioneditor.dateTime,
-                    selection: $bindableDraft.occurredAt,
-                    mode: .dateAndTime
-                )
+                    MistiaCurrencyInputField(
+                        L10n.transactions.transactioneditor.resaleSalePrice,
+                        text: $bindableDraft.amountText
+                    )
+                }
+            } else {
+                Section(L10n.transactions.transactioneditor.mainDetails) {
+                    if let titleFieldPlaceholder {
+                        VStack(alignment: .leading, spacing: 10) {
+                            TextField(titleFieldPlaceholder, text: $bindableDraft.title)
+                                .focused($focusedField, equals: .title)
+                                .textInputAutocapitalization(.words)
+                                .autocorrectionDisabled()
+                                .onChange(of: focusedField) { _, newValue in
+                                    if newValue == .title {
+                                        suppressTitleSuggestions = false
+                                    }
+                                    scheduleTitleSuggestionsRefresh()
+                                }
+                                .onChange(of: bindableDraft.title) { _, _ in
+                                    if isApplyingTitleSuggestion {
+                                        isApplyingTitleSuggestion = false
+                                        cachedTitleSuggestions = []
+                                    } else {
+                                        suppressTitleSuggestions = false
+                                        scheduleTitleSuggestionsRefresh()
+                                    }
+                                }
+
+                            if shouldShowTitleSuggestions {
+                                titleSuggestionsPanel
+                                    .transition(.move(edge: .top).combined(with: .opacity))
+                            }
+                        }
+                        .animation(.snappy(duration: 0.2), value: shouldShowTitleSuggestions)
+                    }
+
+                    MistiaCurrencyInputField(L10n.transactions.transactioneditor.amount, text: $bindableDraft.amountText)
+
+                    MistiaDatePickerRow(
+                        title: L10n.transactions.transactioneditor.dateTime,
+                        selection: $bindableDraft.occurredAt,
+                        mode: .dateAndTime
+                    )
+                }
             }
 
             if renderContext.shouldShowConversionSection {
@@ -839,6 +973,32 @@ struct TransactionEditorSheet: View {
                                 .font(.footnote)
                                 .foregroundStyle(.secondary)
                         }
+                    }
+                } else if isResaleDebtDraft {
+                    Section(L10n.transactions.transactioneditor.resaleWalletCategorySection) {
+                        Picker(L10n.transactions.transactioneditor.wallet, selection: $draft.sourceWalletID) {
+                            Text(L10n.transactions.transactioneditor.chooseWallet).tag(Optional<UUID>.none)
+                            ForEach(renderContext.availableDebtWallets) { wallet in
+                                Text(walletPickerTitle(for: wallet, in: renderContext)).tag(Optional(wallet.id))
+                            }
+                        }
+                        .pickerStyle(.menu)
+
+                        Button {
+                            showsCategoryPicker = true
+                        } label: {
+                            HStack {
+                                Text(L10n.transactions.transactioneditor.category)
+                                    .foregroundStyle(.primary)
+                                Spacer()
+                                Text(renderContext.selectedCategoryLabel)
+                                    .foregroundStyle(renderContext.selectedCategory == nil ? .tertiary : .secondary)
+                                Image(systemName: "chevron.right")
+                                    .font(.system(size: 11, weight: .bold))
+                                    .foregroundStyle(.tertiary)
+                            }
+                        }
+                        .buttonStyle(MistiaPressableButtonStyle(cornerRadius: 20))
                     }
                 } else {
                     Section(L10n.transactions.transactioneditor.counterparty) {
@@ -1310,6 +1470,18 @@ struct TransactionEditorSheet: View {
 
         return TransactionDebtIntent.allCases
     }
+
+    private var debtCreationEntryKindOptions: [DebtCreationEntryKind] {
+        [.lend, .borrow, .resale]
+    }
+
+    private var usesExistingDebtIntentPicker: Bool {
+        if target.prefill?.lockedDebtIntent != nil {
+            return true
+        }
+        guard isExistingDebtTransaction else { return false }
+        return target.transaction?.settlementRole != .resaleReceivable
+    }
     
     private var availableSourceWalletsForTransfer: [LedgerWallet] {
         // Credit cards cannot be source wallet for transfers (cannot send money)
@@ -1578,6 +1750,12 @@ struct TransactionEditorSheet: View {
             && draft.transferSubtype == .debt
             && draft.debtIntent == .borrow
             && draft.borrowDebtEntryMode == .paidFor
+    }
+
+    private var isResaleDebtDraft: Bool {
+        draft.primaryKind == .transfer
+            && draft.transferSubtype == .debt
+            && draft.debtEntryKind == .resale
     }
 
     private var paidForCurrencyCode: String {
@@ -2492,7 +2670,72 @@ struct TransactionEditorSheet: View {
                     return
                 }
 
-                if isPaidForBorrowDraft {
+                if isResaleDebtDraft {
+                    guard draft.title.nilIfBlank != nil else {
+                        alertMessage = L10n.transactions.transactioneditor.enterResaleItemName
+                        return
+                    }
+
+                    guard let purchaseCostMinor = draft.purchaseCostMinor, purchaseCostMinor > 0 else {
+                        alertMessage = L10n.transactions.transactioneditor.enterResalePurchasePrice
+                        return
+                    }
+
+                    guard let sourceWallet = selectedSourceWallet else {
+                        alertMessage = L10n.transactions.transactioneditor.chooseTheWalletUsedForThisDebt
+                        return
+                    }
+
+                    guard let category = selectedCategory else {
+                        alertMessage = L10n.transactions.transactioneditor.chooseACategoryForThisTransaction
+                        return
+                    }
+
+                    guard category.isChildCategory else {
+                        alertMessage = L10n.transactions.transactioneditor.expensesAndIncomeMustUseAChild
+                        return
+                    }
+
+                    let walletOwnerUserID = walletOwnerUserID(for: sourceWallet)
+                    guard categoryOwnerUserID(for: category) == walletOwnerUserID else {
+                        alertMessage = L10n.transactions.transactioneditor.familyWalletsMustUseACategoryFrom
+                        return
+                    }
+
+                    let snapshot = TransactionWalletSnapshot(
+                        id: sourceWallet.id,
+                        kind: sourceWallet.kind,
+                        openingBalanceMinor: sourceWallet.openingBalanceMinor
+                    )
+
+                    let currentBalance = validationBalanceIndex.balance(for: snapshot)
+
+                    if sourceWallet.kind == .creditCard {
+                        if let paidStatement = paidCreditCardStatement(
+                            for: sourceWallet,
+                            occurredAt: draft.occurredAt,
+                            transactionRecords: validationRecordSnapshots,
+                            balanceIndex: validationBalanceIndex
+                        ) {
+                            alertMessage = paidStatementExpenseAlertMessage(for: paidStatement)
+                            return
+                        }
+
+                        let availableCredit: Int64
+                        if let profile = sourceWallet.creditCardProfile {
+                            availableCredit = max(profile.creditLimitMinor - currentBalance, 0)
+                        } else {
+                            availableCredit = 0
+                        }
+                        if purchaseCostMinor > availableCredit {
+                            alertMessage = L10n.transactions.transactioneditor.theAmountExceedsTheAvailableCreditOn
+                            return
+                        }
+                    } else if currentBalance - purchaseCostMinor < 0 {
+                        alertMessage = L10n.transactions.transactioneditor.insufficientWalletBalanceToPerformTheTransaction
+                        return
+                    }
+                } else if isPaidForBorrowDraft {
                     if draft.paidForCountsAsExpense, selectedCategory == nil {
                         alertMessage = L10n.transactions.transactioneditor.chooseACategoryForThisTransaction
                         return
@@ -2651,7 +2894,10 @@ struct TransactionEditorSheet: View {
                 alertMessage = L10n.transactions.transactioneditor.couldnTCreateFamilyTransfer
                 return
             case .debt:
-                guard let debtIntent = draft.debtIntent else {
+                let isResaleDebt = isResaleDebtDraft
+                let purchaseCostMinor = draft.purchaseCostMinor
+                let resolvedDebtIntent = isResaleDebt ? TransactionDebtIntent.lend : draft.debtIntent
+                guard let debtIntent = resolvedDebtIntent else {
                     alertMessage = L10n.transactions.transactioneditor.chooseADebtType
                     return
                 }
@@ -2676,7 +2922,13 @@ struct TransactionEditorSheet: View {
                 }
 
                 let category: TransactionCategory?
-                if isPaidForBorrow && draft.paidForCountsAsExpense {
+                if isResaleDebt {
+                    guard let selectedCategory else {
+                        alertMessage = L10n.transactions.transactioneditor.chooseACategoryForThisTransaction
+                        return
+                    }
+                    category = selectedCategory
+                } else if isPaidForBorrow && draft.paidForCountsAsExpense {
                     guard let selectedCategory else {
                         alertMessage = L10n.transactions.transactioneditor.chooseACategoryForThisTransaction
                         return
@@ -2686,7 +2938,9 @@ struct TransactionEditorSheet: View {
                     category = nil
                 }
 
-                transaction.title = draft.title.nilIfBlank ?? TransactionGeneratedTitle.debt(debtIntent)
+                transaction.title = isResaleDebt
+                    ? draft.title.nilIfBlank ?? L10n.transactions.transactioneditor.resaleCreditSale
+                    : draft.title.nilIfBlank ?? TransactionGeneratedTitle.debt(debtIntent)
                 transaction.sourceWallet = sourceWallet
                 transaction.destinationWallet = nil
                 transaction.category = category
@@ -2703,6 +2957,17 @@ struct TransactionEditorSheet: View {
                 transaction.exchangeRateDecimalString = nil
                 transaction.exchangeRateProvider = nil
                 transaction.exchangeRateDate = nil
+                if isResaleDebt {
+                    guard let purchaseCostMinor, purchaseCostMinor > 0 else {
+                        alertMessage = L10n.transactions.transactioneditor.enterResalePurchasePrice
+                        return
+                    }
+                    transaction.settlementGroupID = nil
+                    transaction.settlementObligationID = nil
+                    transaction.settlementRole = .resaleReceivable
+                    transaction.reportingExpenseMinor = purchaseCostMinor
+                    transaction.reportingIncomeMinor = 0
+                }
             }
         }
 
@@ -3177,15 +3442,20 @@ struct TransactionEditorSheet: View {
         switch draft.transferSubtype ?? .internalTransfer {
         case .internalTransfer:
             draft.debtIntent = nil
+            draft.debtEntryKind = .lend
+            draft.purchaseCostText = ""
             draft.familyRecipientUserID = nil
         case .familyTransfer:
             draft.debtIntent = nil
+            draft.debtEntryKind = .lend
+            draft.purchaseCostText = ""
             draft.counterpartyName = ""
         case .debt:
             draft.destinationWalletID = nil
             draft.familyRecipientUserID = nil
             if draft.debtIntent == nil {
-                draft.debtIntent = .lend
+                draft.debtEntryKind = .lend
+                draft.debtIntent = draft.debtEntryKind.debtIntent
             }
         }
 
@@ -3442,11 +3712,13 @@ private struct TransactionReceiptImagePicker: UIViewControllerRepresentable {
     var primaryKind: TransactionPrimaryKind = .expense
     var transferSubtype: TransactionTransferSubtype? = nil
     var debtIntent: TransactionDebtIntent? = nil
+    fileprivate var debtEntryKind: DebtCreationEntryKind = .lend
     fileprivate var borrowDebtEntryMode: BorrowDebtEntryMode = .receiveIntoWallet
     var paidForCurrencyCode: String = "JPY"
     var paidForCountsAsExpense: Bool = false
     var title: String = ""
     var amountText: String = ""
+    var purchaseCostText: String = ""
     var destinationAmountText: String = ""
     var reportingAmountText: String = ""
     var conversionModeRawValue: String = MistiaCurrencyConversionMode.appRate.rawValue
@@ -3463,6 +3735,13 @@ private struct TransactionReceiptImagePicker: UIViewControllerRepresentable {
             self.primaryKind = transaction.primaryKind
             self.transferSubtype = transaction.transferSubtype
             self.debtIntent = transaction.debtIntent
+            if transaction.settlementRole == .resaleReceivable {
+                self.debtEntryKind = .resale
+            } else if transaction.debtIntent == .borrow {
+                self.debtEntryKind = .borrow
+            } else {
+                self.debtEntryKind = .lend
+            }
             self.borrowDebtEntryMode = transaction.debtIntent == .borrow && transaction.sourceWallet == nil
                 ? .paidFor
                 : .receiveIntoWallet
@@ -3474,6 +3753,9 @@ private struct TransactionReceiptImagePicker: UIViewControllerRepresentable {
                 && transaction.category != nil
             self.title = transaction.title
             self.amountText = "\(transaction.amountMinor)"
+            self.purchaseCostText = transaction.settlementRole == .resaleReceivable
+                ? transaction.reportingExpenseMinor.map(String.init) ?? ""
+                : ""
             self.destinationAmountText = transaction.destinationAmountMinor.map(String.init) ?? ""
             self.reportingAmountText = transaction.reportingAmountMinor.map(String.init) ?? ""
             self.conversionModeRawValue = transaction.conversionModeRawValue ?? MistiaCurrencyConversionMode.appRate.rawValue
@@ -3494,11 +3776,13 @@ private struct TransactionReceiptImagePicker: UIViewControllerRepresentable {
             self.debtIntent = target.initialKind == .transfer
                 ? (prefill?.lockedDebtIntent ?? .lend)
                 : nil
+            self.debtEntryKind = self.debtIntent == .borrow ? .borrow : .lend
             self.borrowDebtEntryMode = .receiveIntoWallet
             self.paidForCurrencyCode = MistiaCurrencySettings.primaryCurrencyCode()
             self.paidForCountsAsExpense = false
             self.title = prefill?.title ?? ""
             self.amountText = prefill?.amountMinor.map(String.init) ?? ""
+            self.purchaseCostText = ""
             self.destinationAmountText = ""
             self.reportingAmountText = ""
             self.conversionModeRawValue = MistiaCurrencyConversionMode.appRate.rawValue
@@ -3514,6 +3798,11 @@ private struct TransactionReceiptImagePicker: UIViewControllerRepresentable {
 
     var amountMinor: Int64? {
         let parsed = amountText.currencyInputToMinorUnits(currencyCode: "JPY")
+        return parsed > 0 ? parsed : nil
+    }
+
+    var purchaseCostMinor: Int64? {
+        let parsed = purchaseCostText.currencyInputToMinorUnits(currencyCode: "JPY")
         return parsed > 0 ? parsed : nil
     }
 }

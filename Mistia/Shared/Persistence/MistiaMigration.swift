@@ -161,7 +161,6 @@ enum MistiaSchemaV6: VersionedSchema {
             LedgerTransaction.self,
             SettlementGroup.self,
             SettlementParticipant.self,
-            SettlementObligation.self,
             BudgetPlan.self,
             SavingsGoal.self,
             RecurringBillPlan.self,

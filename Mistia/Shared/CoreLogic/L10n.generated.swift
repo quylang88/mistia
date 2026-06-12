@@ -3866,8 +3866,6 @@ nonisolated enum L10n {
             static func addParticipant(language: MistiaAppLanguage) -> String { L10n.tr("transactions.settlement.addParticipant", vi: "Thêm người", en: "Add person", ja: "人を追加", language: language) }
             static var addParticipantsInEventEditor: String { L10n.tr("transactions.settlement.addParticipantsInEventEditor", vi: "Thêm người tham gia trong sự kiện trước khi chia chi phí.", en: "Add participants to the event before splitting costs.", ja: "費用を分ける前に、イベントに参加者を追加してください。") }
             static func addParticipantsInEventEditor(language: MistiaAppLanguage) -> String { L10n.tr("transactions.settlement.addParticipantsInEventEditor", vi: "Thêm người tham gia trong sự kiện trước khi chia chi phí.", en: "Add participants to the event before splitting costs.", ja: "費用を分ける前に、イベントに参加者を追加してください。", language: language) }
-            static var addResale: String { L10n.tr("transactions.settlement.addResale", vi: "Bán lại / thu sau", en: "Resale / collect later", ja: "転売・後で回収") }
-            static func addResale(language: MistiaAppLanguage) -> String { L10n.tr("transactions.settlement.addResale", vi: "Bán lại / thu sau", en: "Resale / collect later", ja: "転売・後で回収", language: language) }
             static var addSharedExpense: String { L10n.tr("transactions.settlement.addSharedExpense", vi: "Sự kiện", en: "Event", ja: "イベント") }
             static func addSharedExpense(language: MistiaAppLanguage) -> String { L10n.tr("transactions.settlement.addSharedExpense", vi: "Sự kiện", en: "Event", ja: "イベント", language: language) }
             static var amount: String { L10n.tr("transactions.settlement.amount", vi: "Số tiền", en: "Amount", ja: "金額") }
@@ -3882,8 +3880,6 @@ nonisolated enum L10n {
             }
             static var billName: String { L10n.tr("transactions.settlement.billName", vi: "Tên bill", en: "Bill name", ja: "支出名") }
             static func billName(language: MistiaAppLanguage) -> String { L10n.tr("transactions.settlement.billName", vi: "Tên bill", en: "Bill name", ja: "支出名", language: language) }
-            static var buyerName: String { L10n.tr("transactions.settlement.buyerName", vi: "Người mua", en: "Buyer", ja: "購入者") }
-            static func buyerName(language: MistiaAppLanguage) -> String { L10n.tr("transactions.settlement.buyerName", vi: "Người mua", en: "Buyer", ja: "購入者", language: language) }
             static var calculateSplit: String { L10n.tr("transactions.settlement.calculateSplit", vi: "Tính chia", en: "Calculate split", ja: "割り勘計算") }
             static func calculateSplit(language: MistiaAppLanguage) -> String { L10n.tr("transactions.settlement.calculateSplit", vi: "Tính chia", en: "Calculate split", ja: "割り勘計算", language: language) }
             static var category: String { L10n.tr("transactions.settlement.category", vi: "Danh mục", en: "Category", ja: "カテゴリ") }
@@ -3910,12 +3906,8 @@ nonisolated enum L10n {
             static func eventName(language: MistiaAppLanguage) -> String { L10n.tr("transactions.settlement.eventName", vi: "Tên sự kiện", en: "Event name", ja: "イベント名", language: language) }
             static var eventTitle: String { L10n.tr("transactions.settlement.eventTitle", vi: "Sự kiện", en: "Event", ja: "イベント") }
             static func eventTitle(language: MistiaAppLanguage) -> String { L10n.tr("transactions.settlement.eventTitle", vi: "Sự kiện", en: "Event", ja: "イベント", language: language) }
-            static var expectedProfit: String { L10n.tr("transactions.settlement.expectedProfit", vi: "Lợi nhuận dự kiến", en: "Expected profit", ja: "見込み利益") }
-            static func expectedProfit(language: MistiaAppLanguage) -> String { L10n.tr("transactions.settlement.expectedProfit", vi: "Lợi nhuận dự kiến", en: "Expected profit", ja: "見込み利益", language: language) }
             static var history: String { L10n.tr("transactions.settlement.history", vi: "Lịch sử", en: "History", ja: "履歴") }
             static func history(language: MistiaAppLanguage) -> String { L10n.tr("transactions.settlement.history", vi: "Lịch sử", en: "History", ja: "履歴", language: language) }
-            static var itemName: String { L10n.tr("transactions.settlement.itemName", vi: "Tên món / sản phẩm", en: "Item or product name", ja: "品目・商品名") }
-            static func itemName(language: MistiaAppLanguage) -> String { L10n.tr("transactions.settlement.itemName", vi: "Tên món / sản phẩm", en: "Item or product name", ja: "品目・商品名", language: language) }
             static var noBillsYet: String { L10n.tr("transactions.settlement.noBillsYet", vi: "Chưa có chi tiêu", en: "No expenses yet", ja: "支出はまだありません") }
             static func noBillsYet(language: MistiaAppLanguage) -> String { L10n.tr("transactions.settlement.noBillsYet", vi: "Chưa có chi tiêu", en: "No expenses yet", ja: "支出はまだありません", language: language) }
             static var noParticipantsYet: String { L10n.tr("transactions.settlement.noParticipantsYet", vi: "Chưa có người tham gia", en: "No participants yet", ja: "参加者なし") }
@@ -3940,24 +3932,10 @@ nonisolated enum L10n {
             static func participants(language: MistiaAppLanguage) -> String { L10n.tr("transactions.settlement.participants", vi: "Người tham gia", en: "Participants", ja: "参加者", language: language) }
             static var prepareEventTitle: String { L10n.tr("transactions.settlement.prepareEventTitle", vi: "Chuẩn bị sự kiện", en: "Prepare event", ja: "イベント準備") }
             static func prepareEventTitle(language: MistiaAppLanguage) -> String { L10n.tr("transactions.settlement.prepareEventTitle", vi: "Chuẩn bị sự kiện", en: "Prepare event", ja: "イベント準備", language: language) }
-            static var purchaseCost: String { L10n.tr("transactions.settlement.purchaseCost", vi: "Giá mua", en: "Purchase cost", ja: "仕入れ額") }
-            static func purchaseCost(language: MistiaAppLanguage) -> String { L10n.tr("transactions.settlement.purchaseCost", vi: "Giá mua", en: "Purchase cost", ja: "仕入れ額", language: language) }
-            static var purchaseWallet: String { L10n.tr("transactions.settlement.purchaseWallet", vi: "Ví đã trả", en: "Paid from wallet", ja: "支払い元ウォレット") }
-            static func purchaseWallet(language: MistiaAppLanguage) -> String { L10n.tr("transactions.settlement.purchaseWallet", vi: "Ví đã trả", en: "Paid from wallet", ja: "支払い元ウォレット", language: language) }
-            static var receiveWallet: String { L10n.tr("transactions.settlement.receiveWallet", vi: "Ví sẽ nhận", en: "Receive to wallet", ja: "受け取り先ウォレット") }
-            static func receiveWallet(language: MistiaAppLanguage) -> String { L10n.tr("transactions.settlement.receiveWallet", vi: "Ví sẽ nhận", en: "Receive to wallet", ja: "受け取り先ウォレット", language: language) }
             static var recordPayment: String { L10n.tr("transactions.settlement.recordPayment", vi: "Ghi nhận thanh toán", en: "Record payment", ja: "支払いを記録") }
             static func recordPayment(language: MistiaAppLanguage) -> String { L10n.tr("transactions.settlement.recordPayment", vi: "Ghi nhận thanh toán", en: "Record payment", ja: "支払いを記録", language: language) }
             static var relatedPeople: String { L10n.tr("transactions.settlement.relatedPeople", vi: "Người tham gia", en: "Participants", ja: "参加者") }
             static func relatedPeople(language: MistiaAppLanguage) -> String { L10n.tr("transactions.settlement.relatedPeople", vi: "Người tham gia", en: "Participants", ja: "参加者", language: language) }
-            static var resaleQuickCreateSubtitle: String { L10n.tr("transactions.settlement.resaleQuickCreateSubtitle", vi: "Tạo khoản chờ thu và chỉ ghi lời khi tiền về.", en: "Create a receivable and report profit only when cash arrives.", ja: "未収を作成し、入金時だけ利益として計上します。") }
-            static func resaleQuickCreateSubtitle(language: MistiaAppLanguage) -> String { L10n.tr("transactions.settlement.resaleQuickCreateSubtitle", vi: "Tạo khoản chờ thu và chỉ ghi lời khi tiền về.", en: "Create a receivable and report profit only when cash arrives.", ja: "未収を作成し、入金時だけ利益として計上します。", language: language) }
-            static var resaleReceiptTitle: String { L10n.tr("transactions.settlement.resaleReceiptTitle", vi: "Thu bán lại", en: "Resale receipt", ja: "転売入金") }
-            static func resaleReceiptTitle(language: MistiaAppLanguage) -> String { L10n.tr("transactions.settlement.resaleReceiptTitle", vi: "Thu bán lại", en: "Resale receipt", ja: "転売入金", language: language) }
-            static var resaleTitle: String { L10n.tr("transactions.settlement.resaleTitle", vi: "Bán lại / thu sau", en: "Resale / collect later", ja: "転売・後で回収") }
-            static func resaleTitle(language: MistiaAppLanguage) -> String { L10n.tr("transactions.settlement.resaleTitle", vi: "Bán lại / thu sau", en: "Resale / collect later", ja: "転売・後で回収", language: language) }
-            static var salePrice: String { L10n.tr("transactions.settlement.salePrice", vi: "Giá bán", en: "Sale price", ja: "販売額") }
-            static func salePrice(language: MistiaAppLanguage) -> String { L10n.tr("transactions.settlement.salePrice", vi: "Giá bán", en: "Sale price", ja: "販売額", language: language) }
             static var savedBills: String { L10n.tr("transactions.settlement.savedBills", vi: "Chi tiêu đã lưu", en: "Saved expenses", ja: "保存済み支出") }
             static func savedBills(language: MistiaAppLanguage) -> String { L10n.tr("transactions.settlement.savedBills", vi: "Chi tiêu đã lưu", en: "Saved expenses", ja: "保存済み支出", language: language) }
             static var searchExpense: String { L10n.tr("transactions.settlement.searchExpense", vi: "Tìm chi tiêu", en: "Search expense", ja: "支出を検索") }
@@ -4095,6 +4073,10 @@ nonisolated enum L10n {
             static func enterAnAmountGreaterThanTo(language: MistiaAppLanguage) -> String { L10n.tr("transactions.transactioneditor.enterAnAmountGreaterThanTo", vi: "Nhập số tiền lớn hơn 0 để lưu ghi nhanh.", en: "Enter an amount greater than 0 to save the quick capture.", ja: "クイック記録を保存するには 0 より大きい金額を入力してください。", language: language) }
             static var enterManually: String { L10n.tr("transactions.transactioneditor.enterManually", vi: "Tự nhập", en: "Manual", ja: "手入力") }
             static func enterManually(language: MistiaAppLanguage) -> String { L10n.tr("transactions.transactioneditor.enterManually", vi: "Tự nhập", en: "Manual", ja: "手入力", language: language) }
+            static var enterResaleItemName: String { L10n.tr("transactions.transactioneditor.enterResaleItemName", vi: "Nhập tên món bán.", en: "Enter the item name.", ja: "品名を入力してください。") }
+            static func enterResaleItemName(language: MistiaAppLanguage) -> String { L10n.tr("transactions.transactioneditor.enterResaleItemName", vi: "Nhập tên món bán.", en: "Enter the item name.", ja: "品名を入力してください。", language: language) }
+            static var enterResalePurchasePrice: String { L10n.tr("transactions.transactioneditor.enterResalePurchasePrice", vi: "Nhập giá mua lớn hơn 0.", en: "Enter a purchase price greater than 0.", ja: "0 より大きい仕入れ価格を入力してください。") }
+            static func enterResalePurchasePrice(language: MistiaAppLanguage) -> String { L10n.tr("transactions.transactioneditor.enterResalePurchasePrice", vi: "Nhập giá mua lớn hơn 0.", en: "Enter a purchase price greater than 0.", ja: "0 より大きい仕入れ価格を入力してください。", language: language) }
             static var enterTheConvertedAmountOrRefreshRates: String { L10n.tr("transactions.transactioneditor.enterTheConvertedAmountOrRefreshRates", vi: "Nhập số tiền quy đổi hoặc cập nhật tỷ giá trước khi lưu.", en: "Enter the converted amount or refresh rates before saving.", ja: "保存する前に換算額を入力するかレートを更新してください。") }
             static func enterTheConvertedAmountOrRefreshRates(language: MistiaAppLanguage) -> String { L10n.tr("transactions.transactioneditor.enterTheConvertedAmountOrRefreshRates", vi: "Nhập số tiền quy đổi hoặc cập nhật tỷ giá trước khi lưu.", en: "Enter the converted amount or refresh rates before saving.", ja: "保存する前に換算額を入力するかレートを更新してください。", language: language) }
             static var enterTheCounterpartyName: String { L10n.tr("transactions.transactioneditor.enterTheCounterpartyName", vi: "Nhập tên người liên quan.", en: "Enter the counterparty name.", ja: "相手の名前を入力してください。") }
@@ -4163,6 +4145,22 @@ nonisolated enum L10n {
             }
             static var requestTransferPermissionTitle: String { L10n.tr("transactions.transactioneditor.requestTransferPermissionTitle", vi: "Yêu cầu quyền chuyển tiền", en: "Request transfer access", ja: "送金権限をリクエスト") }
             static func requestTransferPermissionTitle(language: MistiaAppLanguage) -> String { L10n.tr("transactions.transactioneditor.requestTransferPermissionTitle", vi: "Yêu cầu quyền chuyển tiền", en: "Request transfer access", ja: "送金権限をリクエスト", language: language) }
+            static var resaleAmountSection: String { L10n.tr("transactions.transactioneditor.resaleAmountSection", vi: "Số tiền", en: "Amounts", ja: "金額") }
+            static func resaleAmountSection(language: MistiaAppLanguage) -> String { L10n.tr("transactions.transactioneditor.resaleAmountSection", vi: "Số tiền", en: "Amounts", ja: "金額", language: language) }
+            static var resaleBuyerName: String { L10n.tr("transactions.transactioneditor.resaleBuyerName", vi: "Người mua", en: "Buyer", ja: "購入者") }
+            static func resaleBuyerName(language: MistiaAppLanguage) -> String { L10n.tr("transactions.transactioneditor.resaleBuyerName", vi: "Người mua", en: "Buyer", ja: "購入者", language: language) }
+            static var resaleCreditSale: String { L10n.tr("transactions.transactioneditor.resaleCreditSale", vi: "Bán chịu", en: "Credit sale", ja: "掛け売り") }
+            static func resaleCreditSale(language: MistiaAppLanguage) -> String { L10n.tr("transactions.transactioneditor.resaleCreditSale", vi: "Bán chịu", en: "Credit sale", ja: "掛け売り", language: language) }
+            static var resaleInformationSection: String { L10n.tr("transactions.transactioneditor.resaleInformationSection", vi: "Thông tin", en: "Details", ja: "詳細") }
+            static func resaleInformationSection(language: MistiaAppLanguage) -> String { L10n.tr("transactions.transactioneditor.resaleInformationSection", vi: "Thông tin", en: "Details", ja: "詳細", language: language) }
+            static var resaleItemName: String { L10n.tr("transactions.transactioneditor.resaleItemName", vi: "Tên món bán", en: "Item name", ja: "品名") }
+            static func resaleItemName(language: MistiaAppLanguage) -> String { L10n.tr("transactions.transactioneditor.resaleItemName", vi: "Tên món bán", en: "Item name", ja: "品名", language: language) }
+            static var resalePurchasePrice: String { L10n.tr("transactions.transactioneditor.resalePurchasePrice", vi: "Giá mua", en: "Purchase price", ja: "仕入れ価格") }
+            static func resalePurchasePrice(language: MistiaAppLanguage) -> String { L10n.tr("transactions.transactioneditor.resalePurchasePrice", vi: "Giá mua", en: "Purchase price", ja: "仕入れ価格", language: language) }
+            static var resaleSalePrice: String { L10n.tr("transactions.transactioneditor.resaleSalePrice", vi: "Giá bán", en: "Sale price", ja: "販売価格") }
+            static func resaleSalePrice(language: MistiaAppLanguage) -> String { L10n.tr("transactions.transactioneditor.resaleSalePrice", vi: "Giá bán", en: "Sale price", ja: "販売価格", language: language) }
+            static var resaleWalletCategorySection: String { L10n.tr("transactions.transactioneditor.resaleWalletCategorySection", vi: "Ví & danh mục", en: "Wallet & category", ja: "ウォレットとカテゴリ") }
+            static func resaleWalletCategorySection(language: MistiaAppLanguage) -> String { L10n.tr("transactions.transactioneditor.resaleWalletCategorySection", vi: "Ví & danh mục", en: "Wallet & category", ja: "ウォレットとカテゴリ", language: language) }
             static var saveDraft: String { L10n.tr("transactions.transactioneditor.saveDraft", vi: "Lưu nháp", en: "Save draft", ja: "下書きを保存") }
             static func saveDraft(language: MistiaAppLanguage) -> String { L10n.tr("transactions.transactioneditor.saveDraft", vi: "Lưu nháp", en: "Save draft", ja: "下書きを保存", language: language) }
             static var saveFastFinishLater: String { L10n.tr("transactions.transactioneditor.saveFastFinishLater", vi: "Lưu nhanh rồi hoàn thiện sau", en: "Save fast, finish later", ja: "すばやく保存して後で仕上げる") }

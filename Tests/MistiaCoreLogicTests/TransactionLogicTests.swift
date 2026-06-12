@@ -421,6 +421,42 @@ final class TransactionLogicTests: XCTestCase {
         XCTAssertEqual(summary.incomeMinor, 0)
     }
 
+    func testResaleReceivableUsesSalePriceForDebtAndPurchaseCostForWalletReporting() {
+        let wallet = TransactionWalletSnapshot(
+            id: UUID(),
+            kind: .cash,
+            openingBalanceMinor: 10_000
+        )
+        let record = makeRecord(
+            primaryKind: .transfer,
+            transferSubtype: .debt,
+            debtIntent: .lend,
+            title: "Bán chịu máy ảnh",
+            amountMinor: 1_500,
+            occurredAt: Date(timeIntervalSince1970: 1_774_051_200),
+            sourceWalletID: wallet.id,
+            sourceWalletKind: wallet.kind,
+            sourceCurrencyCode: "JPY",
+            settlementRole: .resaleReceivable,
+            reportingExpenseMinor: 1_000,
+            reportingIncomeMinor: 0,
+            categoryID: UUID(),
+            counterpartyName: "Lan"
+        )
+
+        let summary = TransactionLogic.summary(for: [record])
+        let position = TransactionLogic.openDebtPositions(from: [record]).first
+        let index = TransactionLogic.walletBalanceIndex(wallets: [wallet], records: [record])
+
+        XCTAssertTrue(TransactionLogic.isResaleReceivableDebtPrincipal(record))
+        XCTAssertEqual(position?.netMinor, 1_500)
+        XCTAssertEqual(summary.expenseMinor, 1_000)
+        XCTAssertEqual(summary.incomeMinor, 0)
+        XCTAssertEqual(TransactionLogic.cashflowAmount(for: record), -1_000)
+        XCTAssertEqual(index.balance(for: wallet), 9_000)
+        XCTAssertEqual(TransactionLogic.effectiveBalance(for: wallet, records: [record]), 9_000)
+    }
+
     func testDebtAggregationTracksBothDirectionsWithNormalizedNames() {
         let walletID = UUID()
         let now = Date(timeIntervalSince1970: 1_742_646_400)
@@ -1111,6 +1147,9 @@ final class TransactionLogicTests: XCTestCase {
         exchangeRateDecimalString: String? = nil,
         exchangeRateProvider: String? = nil,
         exchangeRateDate: String? = nil,
+        settlementRole: SettlementTransactionRole? = nil,
+        reportingExpenseMinor: Int64? = nil,
+        reportingIncomeMinor: Int64? = nil,
         categoryID: UUID? = nil,
         counterpartyName: String? = nil
     ) -> TransactionRecordSnapshot {
@@ -1123,6 +1162,9 @@ final class TransactionLogicTests: XCTestCase {
             title: title,
             note: nil,
             amountMinor: amountMinor,
+            settlementRole: settlementRole,
+            reportingExpenseMinor: reportingExpenseMinor,
+            reportingIncomeMinor: reportingIncomeMinor,
             sourceCurrencyCode: sourceCurrencyCode,
             destinationCurrencyCode: destinationCurrencyCode,
             destinationAmountMinor: destinationAmountMinor,

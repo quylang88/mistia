@@ -528,62 +528,6 @@ final class SettlementParticipant {
 }
 
 @Model
-final class SettlementObligation {
-    @Attribute(.unique) var id: UUID
-    var groupID: UUID
-    var counterpartyName: String
-    var normalizedCounterpartyKey: String?
-    var memberUserID: UUID?
-    var directionRawValue: String
-    var expectedMinor: Int64
-    var settledMinor: Int64
-    var preferredWalletID: UUID?
-    var createdAt: Date
-    var updatedAt: Date
-    var deletedAt: Date?
-    var remoteVersion: Int64
-
-    init(
-        id: UUID = UUID(),
-        groupID: UUID,
-        counterpartyName: String,
-        normalizedCounterpartyKey: String? = nil,
-        memberUserID: UUID? = nil,
-        direction: SettlementDirection,
-        expectedMinor: Int64,
-        settledMinor: Int64 = 0,
-        preferredWalletID: UUID? = nil,
-        createdAt: Date = .now,
-        updatedAt: Date = .now,
-        deletedAt: Date? = nil,
-        remoteVersion: Int64 = 0
-    ) {
-        self.id = id
-        self.groupID = groupID
-        self.counterpartyName = counterpartyName
-        self.normalizedCounterpartyKey = normalizedCounterpartyKey
-        self.memberUserID = memberUserID
-        self.directionRawValue = direction.rawValue
-        self.expectedMinor = max(expectedMinor, 0)
-        self.settledMinor = max(settledMinor, 0)
-        self.preferredWalletID = preferredWalletID
-        self.createdAt = createdAt
-        self.updatedAt = updatedAt
-        self.deletedAt = deletedAt
-        self.remoteVersion = remoteVersion
-    }
-
-    var direction: SettlementDirection {
-        get { SettlementDirection(rawValue: directionRawValue) ?? .receivable }
-        set { directionRawValue = newValue.rawValue }
-    }
-
-    var remainingMinor: Int64 {
-        max(expectedMinor - settledMinor, 0)
-    }
-}
-
-@Model
 final class TransactionReceiptImage {
     @Attribute(.unique) var id: UUID
     var transactionID: UUID

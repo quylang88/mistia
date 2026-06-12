@@ -2065,8 +2065,6 @@ private extension MistiaSyncEntity {
             return "hourglass.circle.fill"
         case .settlementParticipant:
             return "person.2.fill"
-        case .settlementObligation:
-            return "person.line.dotted.person.fill"
         case .transaction:
             return "list.bullet.rectangle.portrait.fill"
         case .budgetPlan:

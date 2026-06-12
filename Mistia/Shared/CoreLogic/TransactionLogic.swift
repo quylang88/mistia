@@ -290,6 +290,7 @@ nonisolated struct SettlementDebtReportingOverride: Equatable {
 
 nonisolated struct SettlementDebtPaymentAllocation: Equatable {
     let settlementGroupID: UUID?
+    let settlementRole: SettlementTransactionRole?
     let amountMinor: Int64
     let reportingExpenseMinor: Int64
     let reportingIncomeMinor: Int64
@@ -673,6 +674,7 @@ nonisolated enum SettlementLogic {
             return [
                 SettlementDebtPaymentAllocation(
                     settlementGroupID: nil,
+                    settlementRole: nil,
                     amountMinor: payment,
                     reportingExpenseMinor: 0,
                     reportingIncomeMinor: 0
@@ -722,6 +724,7 @@ nonisolated enum SettlementLogic {
             allocations.append(
                 SettlementDebtPaymentAllocation(
                     settlementGroupID: eventOpenAmount.groupID,
+                    settlementRole: settlementIntent == .collect ? .sharedExpenseReceipt : .sharedExpensePayment,
                     amountMinor: allocated,
                     reportingExpenseMinor: override.expenseMinor,
                     reportingIncomeMinor: override.incomeMinor
@@ -730,10 +733,21 @@ nonisolated enum SettlementLogic {
             remaining -= allocated
         }
 
+        if settlementIntent == .collect,
+           remaining > 0,
+           let resaleAllocation = resaleDebtPaymentAllocation(
+            from: records,
+            paymentMinor: remaining
+           ) {
+            allocations.append(resaleAllocation)
+            remaining -= resaleAllocation.amountMinor
+        }
+
         if remaining > 0 {
             allocations.append(
                 SettlementDebtPaymentAllocation(
                     settlementGroupID: nil,
+                    settlementRole: nil,
                     amountMinor: remaining,
                     reportingExpenseMinor: 0,
                     reportingIncomeMinor: 0
@@ -742,6 +756,66 @@ nonisolated enum SettlementLogic {
         }
 
         return allocations
+    }
+
+    private static func resaleDebtPaymentAllocation(
+        from records: [TransactionRecordSnapshot],
+        paymentMinor: Int64
+    ) -> SettlementDebtPaymentAllocation? {
+        var remainingPayment = max(paymentMinor, 0)
+        guard remainingPayment > 0 else { return nil }
+
+        var priorReceiptMinor = records.reduce(Int64.zero) { total, record in
+            guard record.transferSubtype == .debt,
+                  record.debtIntent == .collect,
+                  record.settlementRole == .resaleReceipt
+            else {
+                return total
+            }
+            return total + max(record.amountMinor, 0)
+        }
+
+        var allocatedMinor = Int64.zero
+        var expenseOffsetMinor = Int64.zero
+        var incomeMinor = Int64.zero
+        let principalRecords = records
+            .filter(TransactionLogic.isResaleReceivableDebtPrincipal)
+            .sorted {
+                if $0.occurredAt != $1.occurredAt {
+                    return $0.occurredAt < $1.occurredAt
+                }
+                return $0.id.uuidString < $1.id.uuidString
+            }
+
+        for principal in principalRecords where remainingPayment > 0 {
+            let saleMinor = max(principal.amountMinor, 0)
+            guard saleMinor > 0 else { continue }
+            let consumedPrior = min(priorReceiptMinor, saleMinor)
+            priorReceiptMinor -= consumedPrior
+            let openMinor = max(saleMinor - consumedPrior, 0)
+            guard openMinor > 0 else { continue }
+
+            let payment = min(openMinor, remainingPayment)
+            let allocation = resaleReceiptAllocation(
+                costMinor: TransactionLogic.resaleReceivablePurchaseCostMinor(for: principal),
+                saleMinor: saleMinor,
+                priorReceiptMinor: consumedPrior,
+                paymentMinor: payment
+            )
+            allocatedMinor += payment
+            expenseOffsetMinor += allocation.expenseOffsetMinor
+            incomeMinor += allocation.incomeMinor
+            remainingPayment -= payment
+        }
+
+        guard allocatedMinor > 0 else { return nil }
+        return SettlementDebtPaymentAllocation(
+            settlementGroupID: nil,
+            settlementRole: .resaleReceipt,
+            amountMinor: allocatedMinor,
+            reportingExpenseMinor: -expenseOffsetMinor,
+            reportingIncomeMinor: incomeMinor
+        )
     }
 
     static func sharedExpenseSettlement(
@@ -970,6 +1044,20 @@ nonisolated enum TransactionLogic {
         record.primaryKind == .transfer
             && record.transferSubtype == .debt
             && (record.settlementRole == .sharedExpenseReceivable || record.settlementRole == .sharedExpensePayable)
+    }
+
+    static func isResaleReceivableDebtPrincipal(_ record: TransactionRecordSnapshot) -> Bool {
+        record.primaryKind == .transfer
+            && record.transferSubtype == .debt
+            && record.debtIntent == .lend
+            && record.settlementRole == .resaleReceivable
+    }
+
+    static func resaleReceivablePurchaseCostMinor(for record: TransactionRecordSnapshot) -> Int64 {
+        guard isResaleReceivableDebtPrincipal(record) else {
+            return max(record.amountMinor, 0)
+        }
+        return max(record.reportingExpenseMinor ?? 0, 0)
     }
 
     static func isPaidForExpenseDebt(_ record: TransactionRecordSnapshot) -> Bool {
@@ -1473,6 +1561,15 @@ nonisolated enum TransactionLogic {
                     guard !isSharedExpenseDebtPrincipal(record) else {
                         break
                     }
+                    if isResaleReceivableDebtPrincipal(record) {
+                        applyDelta(
+                            walletID: record.sourceWalletID,
+                            explicitKind: record.sourceWalletKind,
+                            amount: resaleReceivablePurchaseCostMinor(for: record),
+                            delta: { kind, amount in outgoingDelta(for: kind, amount: amount) }
+                        )
+                        break
+                    }
                     switch record.debtIntent {
                     case .lend, .repay:
                         applyDelta(
@@ -1503,6 +1600,10 @@ nonisolated enum TransactionLogic {
     static func cashflowAmount(for record: TransactionRecordSnapshot) -> Int64 {
         if isSharedExpenseDebtPrincipal(record) {
             return 0
+        }
+
+        if isResaleReceivableDebtPrincipal(record) {
+            return -resaleReceivablePurchaseCostMinor(for: record)
         }
 
         switch record.primaryKind {
@@ -1754,6 +1855,12 @@ nonisolated enum TransactionLogic {
                     : outgoingDelta(for: wallet.kind, amount: record.amountMinor)
             case .debt:
                 guard record.sourceWalletID == wallet.id else { return 0 }
+                if isResaleReceivableDebtPrincipal(record) {
+                    return outgoingDelta(
+                        for: wallet.kind,
+                        amount: resaleReceivablePurchaseCostMinor(for: record)
+                    )
+                }
 
                 switch record.debtIntent {
                 case .lend, .repay:

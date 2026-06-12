@@ -132,10 +132,6 @@ extension SettlementParticipant: MistiaSyncLocalRecord {
     static let syncEntity: MistiaSyncEntity = .settlementParticipant
 }
 
-extension SettlementObligation: MistiaSyncLocalRecord {
-    static let syncEntity: MistiaSyncEntity = .settlementObligation
-}
-
 extension BudgetPlan: MistiaSyncLocalRecord {
     static let syncEntity: MistiaSyncEntity = .budgetPlan
 }
@@ -308,16 +304,6 @@ private extension MistiaSyncUploadRecord {
                     date(row.updatedAt)
                 )
             )
-        case .settlementObligation(let row):
-            return MistiaSyncConflictRecordSummary(
-                title: row.counterpartyName,
-                detail: compactJoined(
-                    row.directionRawValue,
-                    number(row.expectedMinor - row.settledMinor),
-                    version(row.syncVersion),
-                    date(row.updatedAt)
-                )
-            )
         case .budgetPlan(let row):
             return MistiaSyncConflictRecordSummary(
                 title: compactJoined(L10n.shared.sync.mistiasync.budget2, currency(row.limitMinor, code: row.currencyCode)),
@@ -467,15 +453,6 @@ private extension MistiaSyncUploadRecord {
                 field("member", L10n.shared.sync.mistiasync.sourceWallet, uuid(local.memberUserID), uuid(remote.memberUserID))
                 field("self", L10n.shared.sync.mistiasync.status, yesNo(local.isSelf), yesNo(remote.isSelf))
                 field("sortOrder", L10n.shared.sync.mistiasync.kind, String(local.sortOrder), String(remote.sortOrder))
-                field("deleted", L10n.shared.sync.mistiasync.deleteStatus, deleted(local.deletedAt), deleted(remote.deletedAt))
-            }
-        case (.settlementObligation(let local), .settlementObligation(let remote)):
-            return MistiaSyncConflictDifferenceBuilder.build {
-                field("counterparty", L10n.shared.sync.mistiasync.counterparty, local.counterpartyName, remote.counterpartyName)
-                field("direction", L10n.shared.sync.mistiasync.kind, local.directionRawValue, remote.directionRawValue)
-                field("expected", L10n.shared.sync.mistiasync.amount, number(local.expectedMinor), number(remote.expectedMinor))
-                field("settled", L10n.shared.sync.mistiasync.saved, number(local.settledMinor), number(remote.settledMinor))
-                field("wallet", L10n.shared.sync.mistiasync.paymentWallet, uuid(local.preferredWalletID), uuid(remote.preferredWalletID))
                 field("deleted", L10n.shared.sync.mistiasync.deleteStatus, deleted(local.deletedAt), deleted(remote.deletedAt))
             }
         case (.budgetPlan(let local), .budgetPlan(let remote)):

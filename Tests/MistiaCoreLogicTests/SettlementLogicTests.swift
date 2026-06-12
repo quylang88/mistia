@@ -396,13 +396,71 @@ final class SettlementLogicTests: XCTestCase {
             [
                 SettlementDebtPaymentAllocation(
                     settlementGroupID: eventID,
+                    settlementRole: .sharedExpenseReceipt,
                     amountMinor: 4_000,
                     reportingExpenseMinor: -4_000,
                     reportingIncomeMinor: 0
                 ),
                 SettlementDebtPaymentAllocation(
                     settlementGroupID: nil,
+                    settlementRole: nil,
                     amountMinor: 1_000,
+                    reportingExpenseMinor: 0,
+                    reportingIncomeMinor: 0
+                )
+            ]
+        )
+    }
+
+    func testDebtSettlementAllocatesEventThenResaleThenGenericDebt() {
+        let eventID = UUID(uuidString: "00000000-0000-0000-0000-00000000D004")!
+        let now = Date(timeIntervalSince1970: 1_778_400_000)
+        let eventDebt = sharedExpenseDebtPrincipalRecord(
+            groupID: eventID,
+            debtIntent: .lend,
+            amountMinor: 4_000,
+            occurredAt: now
+        )
+        let resaleDebt = resaleDebtPrincipalRecord(
+            saleMinor: 3_000,
+            costMinor: 2_000,
+            occurredAt: now.addingTimeInterval(60)
+        )
+        let resalePriorReceipt = resaleDebtReceiptRecord(
+            amountMinor: 500,
+            reportingExpenseMinor: -500,
+            reportingIncomeMinor: 0,
+            occurredAt: now.addingTimeInterval(120)
+        )
+        let outsideDebt = debtRecord(counterpartyName: "B", amountMinor: 3_000)
+
+        let allocations = SettlementLogic.sharedExpenseDebtPaymentAllocations(
+            from: [outsideDebt, resalePriorReceipt, resaleDebt, eventDebt],
+            settlementIntent: .collect,
+            paymentMinor: 7_000
+        )
+
+        XCTAssertEqual(
+            allocations,
+            [
+                SettlementDebtPaymentAllocation(
+                    settlementGroupID: eventID,
+                    settlementRole: .sharedExpenseReceipt,
+                    amountMinor: 4_000,
+                    reportingExpenseMinor: -4_000,
+                    reportingIncomeMinor: 0
+                ),
+                SettlementDebtPaymentAllocation(
+                    settlementGroupID: nil,
+                    settlementRole: .resaleReceipt,
+                    amountMinor: 2_500,
+                    reportingExpenseMinor: -1_500,
+                    reportingIncomeMinor: 1_000
+                ),
+                SettlementDebtPaymentAllocation(
+                    settlementGroupID: nil,
+                    settlementRole: nil,
+                    amountMinor: 500,
                     reportingExpenseMinor: 0,
                     reportingIncomeMinor: 0
                 )
@@ -490,6 +548,67 @@ final class SettlementLogicTests: XCTestCase {
             settlementRole: debtIntent == .collect ? .sharedExpenseReceipt : .sharedExpensePayment,
             reportingExpenseMinor: reportingExpenseMinor,
             reportingIncomeMinor: 0,
+            sourceCurrencyCode: "JPY",
+            occurredAt: occurredAt,
+            createdAt: occurredAt,
+            sourceWalletID: UUID(),
+            sourceWalletKind: .cash,
+            destinationWalletID: nil,
+            destinationWalletKind: nil,
+            categoryID: nil,
+            counterpartyName: "B",
+            normalizedCounterpartyKey: "b"
+        )
+    }
+
+    private func resaleDebtPrincipalRecord(
+        saleMinor: Int64,
+        costMinor: Int64,
+        occurredAt: Date
+    ) -> TransactionRecordSnapshot {
+        TransactionRecordSnapshot(
+            id: UUID(),
+            primaryKind: .transfer,
+            transferSubtype: .debt,
+            debtIntent: .lend,
+            entryStatus: .posted,
+            title: "Bán chịu",
+            note: nil,
+            amountMinor: saleMinor,
+            settlementRole: .resaleReceivable,
+            reportingExpenseMinor: costMinor,
+            reportingIncomeMinor: 0,
+            sourceCurrencyCode: "JPY",
+            occurredAt: occurredAt,
+            createdAt: occurredAt,
+            sourceWalletID: UUID(),
+            sourceWalletKind: .cash,
+            destinationWalletID: nil,
+            destinationWalletKind: nil,
+            categoryID: UUID(),
+            counterpartyName: "B",
+            normalizedCounterpartyKey: "b"
+        )
+    }
+
+    private func resaleDebtReceiptRecord(
+        amountMinor: Int64,
+        reportingExpenseMinor: Int64,
+        reportingIncomeMinor: Int64,
+        occurredAt: Date
+    ) -> TransactionRecordSnapshot {
+        TransactionRecordSnapshot(
+            id: UUID(),
+            primaryKind: .transfer,
+            transferSubtype: .debt,
+            debtIntent: .collect,
+            entryStatus: .posted,
+            title: "Thu bán chịu",
+            note: nil,
+            amountMinor: amountMinor,
+            settlementRole: .resaleReceipt,
+            reportingExpenseMinor: reportingExpenseMinor,
+            reportingIncomeMinor: reportingIncomeMinor,
             sourceCurrencyCode: "JPY",
             occurredAt: occurredAt,
             createdAt: occurredAt,

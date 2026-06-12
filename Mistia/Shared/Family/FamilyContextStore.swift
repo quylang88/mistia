@@ -1380,7 +1380,6 @@ final class FamilyContextStore {
             categories: reconciledFinanceSnapshot.categories,
             settlementGroups: reconciledFinanceSnapshot.settlementGroups,
             settlementParticipants: reconciledFinanceSnapshot.settlementParticipants,
-            settlementObligations: reconciledFinanceSnapshot.settlementObligations,
             transactions: [],
             budgetPlans: reconciledFinanceSnapshot.budgetPlans,
             savingsGoals: reconciledFinanceSnapshot.savingsGoals,

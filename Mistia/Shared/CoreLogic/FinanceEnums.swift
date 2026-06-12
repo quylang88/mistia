@@ -721,7 +721,6 @@ nonisolated enum TransactionDebtIntent: String, CaseIterable, Identifiable, Coda
 }
 
 nonisolated enum SettlementKind: String, CaseIterable, Identifiable, Codable {
-    case resale
     case sharedExpense
 
     var id: String { rawValue }
@@ -737,20 +736,13 @@ nonisolated enum SettlementStatus: String, CaseIterable, Identifiable, Codable {
 }
 
 nonisolated enum SettlementTransactionRole: String, CaseIterable, Identifiable, Codable {
-    case resalePurchase
+    case resaleReceivable
     case resaleReceipt
     case sharedExpensePaid
     case sharedExpenseReceivable
     case sharedExpensePayable
     case sharedExpenseReceipt
     case sharedExpensePayment
-
-    var id: String { rawValue }
-}
-
-nonisolated enum SettlementDirection: String, CaseIterable, Identifiable, Codable {
-    case receivable
-    case payable
 
     var id: String { rawValue }
 }

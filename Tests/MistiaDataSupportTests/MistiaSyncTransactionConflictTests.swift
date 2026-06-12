@@ -151,7 +151,6 @@ final class MistiaSyncTransactionConflictTests: XCTestCase {
         let userID = UUID()
         let wallet = makeWallet()
         let groupID = UUID()
-        let obligationID = UUID()
         let participantID = UUID()
         let transactionID = UUID()
         let sourceContainer = try makeContainer()
@@ -160,12 +159,12 @@ final class MistiaSyncTransactionConflictTests: XCTestCase {
 
         let group = SettlementGroup(
             id: groupID,
-            kind: .resale,
+            kind: .sharedExpense,
             status: .open,
-            title: "Camera resale",
+            title: "Dinner split",
             currencyCode: "JPY",
             occurredAt: occurredAt,
-            totalMinor: 1_000,
+            totalMinor: 3_000,
             expectedMinor: 1_500,
             settledMinor: 0,
             organizerUserID: userID,
@@ -175,35 +174,23 @@ final class MistiaSyncTransactionConflictTests: XCTestCase {
         let participant = SettlementParticipant(
             id: participantID,
             groupID: groupID,
-            displayName: "Buyer",
-            normalizedKey: "buyer",
+            displayName: "Friend",
+            normalizedKey: "friend",
             memberUserID: nil,
             isSelf: false,
             sortOrder: 1,
             createdAt: occurredAt,
             updatedAt: occurredAt
         )
-        let obligation = SettlementObligation(
-            id: obligationID,
-            groupID: groupID,
-            counterpartyName: "Buyer",
-            normalizedCounterpartyKey: "buyer",
-            direction: .receivable,
-            expectedMinor: 1_500,
-            preferredWalletID: wallet.id,
-            createdAt: occurredAt,
-            updatedAt: occurredAt
-        )
         let transaction = LedgerTransaction(
             id: transactionID,
             primaryKind: .income,
-            title: "Payment",
+            title: "Shared expense receipt",
             amountMinor: 1_500,
             settlementGroupID: groupID,
-            settlementObligationID: obligationID,
-            settlementRole: .resaleReceipt,
-            reportingExpenseMinor: -1_000,
-            reportingIncomeMinor: 500,
+            settlementRole: .sharedExpenseReceipt,
+            reportingExpenseMinor: -1_500,
+            reportingIncomeMinor: 0,
             sourceCurrencyCode: "JPY",
             occurredAt: occurredAt,
             updatedAt: occurredAt,
@@ -213,17 +200,15 @@ final class MistiaSyncTransactionConflictTests: XCTestCase {
         sourceContext.insert(wallet)
         sourceContext.insert(group)
         sourceContext.insert(participant)
-        sourceContext.insert(obligation)
         sourceContext.insert(transaction)
         try sourceContext.save()
 
         let snapshot = try MistiaSyncLocalStore.exportSnapshot(for: userID, from: sourceContainer)
         XCTAssertEqual(snapshot.settlementGroups.first?.id, groupID)
         XCTAssertEqual(snapshot.settlementParticipants.first?.id, participantID)
-        XCTAssertEqual(snapshot.settlementObligations.first?.id, obligationID)
-        XCTAssertEqual(snapshot.transactions.first?.settlementRoleRawValue, SettlementTransactionRole.resaleReceipt.rawValue)
-        XCTAssertEqual(snapshot.transactions.first?.reportingExpenseMinor, -1_000)
-        XCTAssertEqual(snapshot.transactions.first?.reportingIncomeMinor, 500)
+        XCTAssertEqual(snapshot.transactions.first?.settlementRoleRawValue, SettlementTransactionRole.sharedExpenseReceipt.rawValue)
+        XCTAssertEqual(snapshot.transactions.first?.reportingExpenseMinor, -1_500)
+        XCTAssertEqual(snapshot.transactions.first?.reportingIncomeMinor, 0)
 
         let targetContainer = try makeContainer()
         try MistiaSyncLocalStore.applySnapshotIncrementally(
@@ -236,21 +221,18 @@ final class MistiaSyncTransactionConflictTests: XCTestCase {
         let targetContext = ModelContext(targetContainer)
         let restoredGroup = try XCTUnwrap(try targetContext.fetch(FetchDescriptor<SettlementGroup>()).first)
         let restoredParticipant = try XCTUnwrap(try targetContext.fetch(FetchDescriptor<SettlementParticipant>()).first)
-        let restoredObligation = try XCTUnwrap(try targetContext.fetch(FetchDescriptor<SettlementObligation>()).first)
         let restoredTransaction = try XCTUnwrap(try targetContext.fetch(FetchDescriptor<LedgerTransaction>()).first)
 
         XCTAssertEqual(restoredGroup.id, groupID)
-        XCTAssertEqual(restoredGroup.kind, .resale)
+        XCTAssertEqual(restoredGroup.kind, .sharedExpense)
         XCTAssertEqual(restoredParticipant.groupID, groupID)
-        XCTAssertEqual(restoredParticipant.displayName, "Buyer")
+        XCTAssertEqual(restoredParticipant.displayName, "Friend")
         XCTAssertFalse(restoredParticipant.isSelf)
-        XCTAssertEqual(restoredObligation.groupID, groupID)
-        XCTAssertEqual(restoredObligation.direction, .receivable)
         XCTAssertEqual(restoredTransaction.settlementGroupID, groupID)
-        XCTAssertEqual(restoredTransaction.settlementObligationID, obligationID)
-        XCTAssertEqual(restoredTransaction.settlementRole, .resaleReceipt)
-        XCTAssertEqual(restoredTransaction.reportingExpenseMinor, -1_000)
-        XCTAssertEqual(restoredTransaction.reportingIncomeMinor, 500)
+        XCTAssertNil(restoredTransaction.settlementObligationID)
+        XCTAssertEqual(restoredTransaction.settlementRole, .sharedExpenseReceipt)
+        XCTAssertEqual(restoredTransaction.reportingExpenseMinor, -1_500)
+        XCTAssertEqual(restoredTransaction.reportingIncomeMinor, 0)
     }
 
     private func makeContainer() throws -> ModelContainer {

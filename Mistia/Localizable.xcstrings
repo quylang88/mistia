@@ -33529,6 +33529,50 @@
         }
       }
     },
+    "transactions.transactioneditor.enterResaleItemName": {
+      "localizations": {
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nhập tên món bán."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Enter the item name."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "品名を入力してください。"
+          }
+        }
+      }
+    },
+    "transactions.transactioneditor.enterResalePurchasePrice": {
+      "localizations": {
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nhập giá mua lớn hơn 0."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Enter a purchase price greater than 0."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "0 より大きい仕入れ価格を入力してください。"
+          }
+        }
+      }
+    },
     "transactions.debtsettlement.amountExceedsOutstanding": {
       "localizations": {
         "vi": {
@@ -33573,13 +33617,6 @@
         }
       }
     },
-    "transactions.settlement.addResale": {
-      "localizations": {
-        "vi": { "stringUnit": { "state": "translated", "value": "Bán lại / thu sau" } },
-        "en": { "stringUnit": { "state": "translated", "value": "Resale / collect later" } },
-        "ja": { "stringUnit": { "state": "translated", "value": "転売・後で回収" } }
-      }
-    },
     "transactions.settlement.addSharedExpense": {
       "localizations": {
         "vi": { "stringUnit": { "state": "translated", "value": "Sự kiện" } },
@@ -33592,13 +33629,6 @@
         "vi": { "stringUnit": { "state": "translated", "value": "Số tiền không được lớn hơn khoản đang chờ." } },
         "en": { "stringUnit": { "state": "translated", "value": "The amount cannot be greater than the open settlement." } },
         "ja": { "stringUnit": { "state": "translated", "value": "金額は未決済額を超えられません。" } }
-      }
-    },
-    "transactions.settlement.buyerName": {
-      "localizations": {
-        "vi": { "stringUnit": { "state": "translated", "value": "Người mua" } },
-        "en": { "stringUnit": { "state": "translated", "value": "Buyer" } },
-        "ja": { "stringUnit": { "state": "translated", "value": "購入者" } }
       }
     },
     "transactions.settlement.category": {
@@ -33762,13 +33792,6 @@
         "ja": { "stringUnit": { "state": "translated", "value": "イベントを編集" } }
       }
     },
-    "transactions.settlement.expectedProfit": {
-      "localizations": {
-        "vi": { "stringUnit": { "state": "translated", "value": "Lợi nhuận dự kiến" } },
-        "en": { "stringUnit": { "state": "translated", "value": "Expected profit" } },
-        "ja": { "stringUnit": { "state": "translated", "value": "見込み利益" } }
-      }
-    },
     "transactions.settlement.history": {
       "localizations": {
         "vi": { "stringUnit": { "state": "translated", "value": "Lịch sử" } },
@@ -33781,13 +33804,6 @@
         "vi": { "stringUnit": { "state": "translated", "value": "Chi tiêu của sự kiện" } },
         "en": { "stringUnit": { "state": "translated", "value": "Event expenses" } },
         "ja": { "stringUnit": { "state": "translated", "value": "イベント支出" } }
-      }
-    },
-    "transactions.settlement.itemName": {
-      "localizations": {
-        "vi": { "stringUnit": { "state": "translated", "value": "Tên món / sản phẩm" } },
-        "en": { "stringUnit": { "state": "translated", "value": "Item or product name" } },
-        "ja": { "stringUnit": { "state": "translated", "value": "品目・商品名" } }
       }
     },
     "transactions.settlement.noParticipantsYet": {
@@ -33874,27 +33890,6 @@
         "ja": { "stringUnit": { "state": "translated", "value": "イベント準備" } }
       }
     },
-    "transactions.settlement.purchaseCost": {
-      "localizations": {
-        "vi": { "stringUnit": { "state": "translated", "value": "Giá mua" } },
-        "en": { "stringUnit": { "state": "translated", "value": "Purchase cost" } },
-        "ja": { "stringUnit": { "state": "translated", "value": "仕入れ額" } }
-      }
-    },
-    "transactions.settlement.purchaseWallet": {
-      "localizations": {
-        "vi": { "stringUnit": { "state": "translated", "value": "Ví đã trả" } },
-        "en": { "stringUnit": { "state": "translated", "value": "Paid from wallet" } },
-        "ja": { "stringUnit": { "state": "translated", "value": "支払い元ウォレット" } }
-      }
-    },
-    "transactions.settlement.receiveWallet": {
-      "localizations": {
-        "vi": { "stringUnit": { "state": "translated", "value": "Ví sẽ nhận" } },
-        "en": { "stringUnit": { "state": "translated", "value": "Receive to wallet" } },
-        "ja": { "stringUnit": { "state": "translated", "value": "受け取り先ウォレット" } }
-      }
-    },
     "transactions.settlement.recordPayment": {
       "localizations": {
         "vi": { "stringUnit": { "state": "translated", "value": "Ghi nhận thanh toán" } },
@@ -33907,34 +33902,6 @@
         "vi": { "stringUnit": { "state": "translated", "value": "Người tham gia" } },
         "en": { "stringUnit": { "state": "translated", "value": "Participants" } },
         "ja": { "stringUnit": { "state": "translated", "value": "参加者" } }
-      }
-    },
-    "transactions.settlement.resaleQuickCreateSubtitle": {
-      "localizations": {
-        "vi": { "stringUnit": { "state": "translated", "value": "Tạo khoản chờ thu và chỉ ghi lời khi tiền về." } },
-        "en": { "stringUnit": { "state": "translated", "value": "Create a receivable and report profit only when cash arrives." } },
-        "ja": { "stringUnit": { "state": "translated", "value": "未収を作成し、入金時だけ利益として計上します。" } }
-      }
-    },
-    "transactions.settlement.resaleReceiptTitle": {
-      "localizations": {
-        "vi": { "stringUnit": { "state": "translated", "value": "Thu bán lại" } },
-        "en": { "stringUnit": { "state": "translated", "value": "Resale receipt" } },
-        "ja": { "stringUnit": { "state": "translated", "value": "転売入金" } }
-      }
-    },
-    "transactions.settlement.resaleTitle": {
-      "localizations": {
-        "vi": { "stringUnit": { "state": "translated", "value": "Bán lại / thu sau" } },
-        "en": { "stringUnit": { "state": "translated", "value": "Resale / collect later" } },
-        "ja": { "stringUnit": { "state": "translated", "value": "転売・後で回収" } }
-      }
-    },
-    "transactions.settlement.salePrice": {
-      "localizations": {
-        "vi": { "stringUnit": { "state": "translated", "value": "Giá bán" } },
-        "en": { "stringUnit": { "state": "translated", "value": "Sale price" } },
-        "ja": { "stringUnit": { "state": "translated", "value": "販売額" } }
       }
     },
     "transactions.settlement.settled": {
@@ -34683,6 +34650,182 @@
           "stringUnit": {
             "state": "translated",
             "value": "レシート画像"
+          }
+        }
+      }
+    },
+    "transactions.transactioneditor.resaleCreditSale": {
+      "localizations": {
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bán chịu"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Credit sale"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "掛け売り"
+          }
+        }
+      }
+    },
+    "transactions.transactioneditor.resaleInformationSection": {
+      "localizations": {
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Thông tin"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Details"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "詳細"
+          }
+        }
+      }
+    },
+    "transactions.transactioneditor.resaleAmountSection": {
+      "localizations": {
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Số tiền"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Amounts"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "金額"
+          }
+        }
+      }
+    },
+    "transactions.transactioneditor.resaleWalletCategorySection": {
+      "localizations": {
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ví & danh mục"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Wallet & category"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ウォレットとカテゴリ"
+          }
+        }
+      }
+    },
+    "transactions.transactioneditor.resaleItemName": {
+      "localizations": {
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tên món bán"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Item name"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "品名"
+          }
+        }
+      }
+    },
+    "transactions.transactioneditor.resaleBuyerName": {
+      "localizations": {
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Người mua"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Buyer"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "購入者"
+          }
+        }
+      }
+    },
+    "transactions.transactioneditor.resalePurchasePrice": {
+      "localizations": {
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Giá mua"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Purchase price"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "仕入れ価格"
+          }
+        }
+      }
+    },
+    "transactions.transactioneditor.resaleSalePrice": {
+      "localizations": {
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Giá bán"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sale price"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "販売価格"
           }
         }
       }

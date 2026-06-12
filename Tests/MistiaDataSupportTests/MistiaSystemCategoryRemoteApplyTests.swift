@@ -102,7 +102,7 @@ final class MistiaSystemCategoryRemoteApplyTests: XCTestCase {
                 )
             ],
             settlementGroups: [],
-            settlementObligations: [],
+            settlementParticipants: [],
             transactions: [],
             budgetPlans: [],
             savingsGoals: [],

@@ -6,7 +6,6 @@ enum MistiaSyncEntity: String, CaseIterable, Codable, Hashable {
     case category = "transaction_categories"
     case settlementGroup = "settlement_groups"
     case settlementParticipant = "settlement_participants"
-    case settlementObligation = "settlement_obligations"
     case transaction = "ledger_transactions"
     case budgetPlan = "budget_plans"
     case savingsGoal = "savings_goals"
@@ -23,7 +22,6 @@ enum MistiaSyncEntity: String, CaseIterable, Codable, Hashable {
         case .creditCardProfile: 30
         case .settlementGroup: 35
         case .settlementParticipant: 36
-        case .settlementObligation: 37
         case .transaction: 40
         case .budgetPlan: 50
         case .savingsGoal: 60
