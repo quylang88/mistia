@@ -447,6 +447,76 @@ final class SettlementGroup {
         get { SettlementStatus(rawValue: statusRawValue) ?? .open }
         set { statusRawValue = newValue.rawValue }
     }
+
+    var recordSnapshot: SettlementGroupRecordSnapshot {
+        SettlementGroupRecordSnapshot(
+            id: id,
+            kind: kind,
+            status: status,
+            title: title,
+            currencyCode: currencyCode,
+            occurredAt: occurredAt,
+            totalMinor: totalMinor,
+            expectedMinor: expectedMinor,
+            settledMinor: settledMinor,
+            note: note,
+            updatedAt: updatedAt
+        )
+    }
+}
+
+@Model
+final class SettlementParticipant {
+    @Attribute(.unique) var id: UUID
+    var groupID: UUID
+    var displayName: String
+    var normalizedKey: String?
+    var memberUserID: UUID?
+    var isSelf: Bool
+    var sortOrder: Int
+    var createdAt: Date
+    var updatedAt: Date
+    var deletedAt: Date?
+    var remoteVersion: Int64
+
+    init(
+        id: UUID = UUID(),
+        groupID: UUID,
+        displayName: String,
+        normalizedKey: String? = nil,
+        memberUserID: UUID? = nil,
+        isSelf: Bool = false,
+        sortOrder: Int = 0,
+        createdAt: Date = .now,
+        updatedAt: Date = .now,
+        deletedAt: Date? = nil,
+        remoteVersion: Int64 = 0
+    ) {
+        self.id = id
+        self.groupID = groupID
+        self.displayName = displayName
+        self.normalizedKey = normalizedKey
+        self.memberUserID = memberUserID
+        self.isSelf = isSelf
+        self.sortOrder = sortOrder
+        self.createdAt = createdAt
+        self.updatedAt = updatedAt
+        self.deletedAt = deletedAt
+        self.remoteVersion = remoteVersion
+    }
+
+    var recordSnapshot: SettlementParticipantRecordSnapshot {
+        SettlementParticipantRecordSnapshot(
+            id: id,
+            groupID: groupID,
+            displayName: displayName,
+            normalizedKey: normalizedKey,
+            memberUserID: memberUserID,
+            isSelf: isSelf,
+            sortOrder: sortOrder,
+            updatedAt: updatedAt
+        )
+    }
 }
 
 @Model

@@ -282,6 +282,63 @@ nonisolated struct SettlementResaleReceiptAllocation: Equatable {
     let remainingReceivableMinor: Int64
 }
 
+nonisolated struct SettlementGroupRecordSnapshot: Equatable, Identifiable {
+    let id: UUID
+    let kind: SettlementKind
+    let status: SettlementStatus
+    let title: String
+    let currencyCode: String
+    let occurredAt: Date
+    let totalMinor: Int64
+    let expectedMinor: Int64
+    let settledMinor: Int64
+    let note: String?
+    let updatedAt: Date
+}
+
+nonisolated struct SettlementParticipantRecordSnapshot: Equatable, Identifiable {
+    let id: UUID
+    let groupID: UUID
+    let displayName: String
+    let normalizedKey: String?
+    let memberUserID: UUID?
+    let isSelf: Bool
+    let sortOrder: Int
+    let updatedAt: Date
+
+    init(
+        id: UUID,
+        groupID: UUID,
+        displayName: String,
+        normalizedKey: String? = nil,
+        memberUserID: UUID? = nil,
+        isSelf: Bool,
+        sortOrder: Int,
+        updatedAt: Date
+    ) {
+        self.id = id
+        self.groupID = groupID
+        self.displayName = displayName
+        self.normalizedKey = normalizedKey
+        self.memberUserID = memberUserID
+        self.isSelf = isSelf
+        self.sortOrder = sortOrder
+        self.updatedAt = updatedAt
+    }
+}
+
+nonisolated struct PreparingSettlementEventSnapshot: Equatable, Identifiable {
+    let id: UUID
+    let title: String
+    let currencyCode: String
+    let totalPaidMinor: Int64
+    let billCount: Int
+    let participantNames: [String]
+    let note: String?
+    let occurredAt: Date
+    let lastUpdatedAt: Date
+}
+
 nonisolated struct SettlementParticipantInput: Equatable, Identifiable {
     let id: UUID
     let name: String
@@ -322,6 +379,124 @@ nonisolated struct SettlementSharedExpenseResult: Equatable {
 }
 
 nonisolated enum SettlementLogic {
+    static func canSavePreparingEvent(
+        title: String,
+        participantNames: [String]
+    ) -> Bool {
+        let trimmedTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmedTitle.isEmpty else { return false }
+
+        return participantNames.contains {
+            !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        }
+    }
+
+    static func preparingEventSnapshots(
+        groups: [SettlementGroupRecordSnapshot],
+        participants: [SettlementParticipantRecordSnapshot],
+        records: [TransactionRecordSnapshot]
+    ) -> [PreparingSettlementEventSnapshot] {
+        let participantsByGroupID = Dictionary(grouping: participants) { $0.groupID }
+        let recordsByGroupID = Dictionary(
+            grouping: records.filter(isSharedExpenseEventBill)
+        ) { record in
+            record.settlementGroupID ?? UUID()
+        }
+
+        return groups
+            .filter { $0.kind == .sharedExpense && $0.status == .preparing }
+            .map { group in
+                let groupParticipants = participantsByGroupID[group.id] ?? []
+                let visibleParticipantNames = groupParticipants
+                    .filter { !$0.isSelf }
+                    .sorted(by: participantSort)
+                    .map(\.displayName)
+                    .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+                    .filter { !$0.isEmpty }
+                let billRecords = recordsByGroupID[group.id] ?? []
+                let totalPaid = billRecords.reduce(Int64.zero) { total, record in
+                    total + max(record.amountMinor, 0)
+                }
+                let latestRecordDate = billRecords.map(\.occurredAt).max()
+                let latestParticipantDate = groupParticipants.map(\.updatedAt).max()
+                let lastUpdatedAt = [
+                    group.updatedAt,
+                    latestRecordDate,
+                    latestParticipantDate
+                ]
+                    .compactMap { $0 }
+                    .max() ?? group.updatedAt
+
+                return PreparingSettlementEventSnapshot(
+                    id: group.id,
+                    title: group.title,
+                    currencyCode: group.currencyCode,
+                    totalPaidMinor: totalPaid,
+                    billCount: billRecords.count,
+                    participantNames: visibleParticipantNames,
+                    note: group.note,
+                    occurredAt: group.occurredAt,
+                    lastUpdatedAt: lastUpdatedAt
+                )
+            }
+            .sorted {
+                if $0.lastUpdatedAt != $1.lastUpdatedAt {
+                    return $0.lastUpdatedAt > $1.lastUpdatedAt
+                }
+                return $0.occurredAt > $1.occurredAt
+            }
+    }
+
+    static func sharedExpenseInputsForFinalization(
+        selfParticipant: SettlementParticipantRecordSnapshot,
+        participants: [SettlementParticipantRecordSnapshot],
+        records: [TransactionRecordSnapshot]
+    ) -> [SettlementParticipantInput] {
+        let groupID = selfParticipant.groupID
+        let selfPaidMinor = records
+            .filter { $0.settlementGroupID == groupID && isSharedExpenseEventBill($0) }
+            .reduce(Int64.zero) { total, record in
+                total + max(record.amountMinor, 0)
+            }
+
+        let selfInput = SettlementParticipantInput(
+            id: selfParticipant.id,
+            name: selfParticipant.displayName,
+            paidMinor: selfPaidMinor
+        )
+        let otherInputs = participants
+            .filter { $0.groupID == groupID && !$0.isSelf }
+            .sorted(by: participantSort)
+            .map {
+                SettlementParticipantInput(
+                    id: $0.id,
+                    name: $0.displayName,
+                    paidMinor: 0
+                )
+            }
+
+        return [selfInput] + otherInputs
+    }
+
+    private static func isSharedExpenseEventBill(
+        _ record: TransactionRecordSnapshot
+    ) -> Bool {
+        record.settlementGroupID != nil
+            && record.settlementRole == .sharedExpensePaid
+            && record.entryStatus == .posted
+            && !record.isArchived
+    }
+
+    private static func participantSort(
+        lhs: SettlementParticipantRecordSnapshot,
+        rhs: SettlementParticipantRecordSnapshot
+    ) -> Bool {
+        if lhs.sortOrder != rhs.sortOrder {
+            return lhs.sortOrder < rhs.sortOrder
+        }
+        return lhs.displayName.localizedCaseInsensitiveCompare(rhs.displayName) == .orderedAscending
+    }
+
     static func resaleReceiptAllocation(
         costMinor: Int64,
         saleMinor: Int64,

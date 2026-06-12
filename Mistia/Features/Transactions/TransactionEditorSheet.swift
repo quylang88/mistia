@@ -66,8 +66,12 @@ struct TransactionEditorTarget: Identifiable {
     let startsReceiptScan: Bool
     let receiptInitialSource: TransactionReceiptInitialSource?
     let receiptPersistencePolicy: TransactionReceiptPersistencePolicy
+    let stagesTransactionOnSave: Bool
 
-    init(transaction: LedgerTransaction) {
+    init(
+        transaction: LedgerTransaction,
+        stagesTransactionOnSave: Bool = false
+    ) {
         self.transaction = transaction
         self.initialKind = transaction.primaryKind
         self.quickCapture = false
@@ -77,6 +81,7 @@ struct TransactionEditorTarget: Identifiable {
         self.startsReceiptScan = false
         self.receiptInitialSource = nil
         self.receiptPersistencePolicy = .persistLocally
+        self.stagesTransactionOnSave = stagesTransactionOnSave
     }
 
     init(
@@ -87,7 +92,8 @@ struct TransactionEditorTarget: Identifiable {
         subjectUserIDOverride: UUID? = nil,
         startsReceiptScan: Bool = false,
         receiptInitialSource: TransactionReceiptInitialSource? = nil,
-        receiptPersistencePolicy: TransactionReceiptPersistencePolicy = .persistLocally
+        receiptPersistencePolicy: TransactionReceiptPersistencePolicy = .persistLocally,
+        stagesTransactionOnSave: Bool = false
     ) {
         self.transaction = nil
         self.initialKind = initialKind
@@ -98,6 +104,7 @@ struct TransactionEditorTarget: Identifiable {
         self.startsReceiptScan = startsReceiptScan || receiptInitialSource != nil
         self.receiptInitialSource = receiptInitialSource ?? (startsReceiptScan ? .cameraPreferred : nil)
         self.receiptPersistencePolicy = receiptPersistencePolicy
+        self.stagesTransactionOnSave = stagesTransactionOnSave
     }
 }
 
@@ -214,6 +221,7 @@ struct TransactionEditorSheet: View {
 
     let target: TransactionEditorTarget
     var onComplete: (TransactionEditorCompletion) -> Void = { _ in }
+    var onStageTransaction: (LedgerTransaction) -> Void = { _ in }
 
     @State private var draft: TransactionFormDraft
     @State private var alertMessage: String?
@@ -263,10 +271,12 @@ struct TransactionEditorSheet: View {
 
     init(
         target: TransactionEditorTarget,
-        onComplete: @escaping (TransactionEditorCompletion) -> Void = { _ in }
+        onComplete: @escaping (TransactionEditorCompletion) -> Void = { _ in },
+        onStageTransaction: @escaping (LedgerTransaction) -> Void = { _ in }
     ) {
         self.target = target
         self.onComplete = onComplete
+        self.onStageTransaction = onStageTransaction
         _draft = State(initialValue: TransactionFormDraft(target: target))
     }
 
@@ -2691,6 +2701,13 @@ struct TransactionEditorSheet: View {
                 transaction.exchangeRateProvider = nil
                 transaction.exchangeRateDate = nil
             }
+        }
+
+        if target.stagesTransactionOnSave {
+            onStageTransaction(transaction)
+            onComplete(.savedTransaction)
+            dismiss()
+            return
         }
 
         if target.transaction == nil {

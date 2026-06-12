@@ -39,6 +39,7 @@ extension LedgerWallet: MistiaOwnedRecord {}
 extension CreditCardProfile: MistiaOwnedRecord {}
 extension TransactionCategory: MistiaOwnedRecord {}
 extension SettlementGroup: MistiaOwnedRecord {}
+extension SettlementParticipant: MistiaOwnedRecord {}
 extension SettlementObligation: MistiaOwnedRecord {}
 extension LedgerTransaction: MistiaOwnedRecord {}
 extension BudgetPlan: MistiaOwnedRecord {}

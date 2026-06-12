@@ -2144,6 +2144,7 @@ final class SessionStore {
             || hasRemoteBackedRecord(CreditCardProfile.self, in: context, predicate: #Predicate<CreditCardProfile> { $0.remoteVersion > 0 })
             || hasRemoteBackedRecord(TransactionCategory.self, in: context, predicate: #Predicate<TransactionCategory> { $0.remoteVersion > 0 })
             || hasRemoteBackedRecord(SettlementGroup.self, in: context, predicate: #Predicate<SettlementGroup> { $0.remoteVersion > 0 })
+            || hasRemoteBackedRecord(SettlementParticipant.self, in: context, predicate: #Predicate<SettlementParticipant> { $0.remoteVersion > 0 })
             || hasRemoteBackedRecord(SettlementObligation.self, in: context, predicate: #Predicate<SettlementObligation> { $0.remoteVersion > 0 })
             || hasRemoteBackedRecord(LedgerTransaction.self, in: context, predicate: #Predicate<LedgerTransaction> { $0.remoteVersion > 0 })
             || hasRemoteBackedRecord(BudgetPlan.self, in: context, predicate: #Predicate<BudgetPlan> { $0.remoteVersion > 0 })

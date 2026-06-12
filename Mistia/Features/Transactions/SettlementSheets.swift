@@ -1,11 +1,21 @@
 import SwiftData
 import SwiftUI
 
-enum SettlementEditorTarget: String, Identifiable {
+enum SettlementEditorTarget: Identifiable, Equatable {
     case resale
-    case sharedExpense
+    case newSharedExpense
+    case editSharedExpense(UUID)
 
-    var id: String { rawValue }
+    var id: String {
+        switch self {
+        case .resale:
+            return "resale"
+        case .newSharedExpense:
+            return "newSharedExpense"
+        case .editSharedExpense(let id):
+            return "editSharedExpense-\(id.uuidString)"
+        }
+    }
 }
 
 struct PendingSettlementChipSnapshot: Identifiable, Hashable {
@@ -35,6 +45,12 @@ struct SettlementDetailSheetTarget: Identifiable {
     let item: PendingSettlementChipSnapshot
 
     var id: UUID { item.id }
+}
+
+struct PreparingSettlementEventSheetTarget: Identifiable, Hashable {
+    let groupID: UUID
+
+    var id: UUID { groupID }
 }
 
 struct PendingSettlementChip: View {
@@ -88,6 +104,57 @@ struct PendingSettlementChip: View {
     }
 }
 
+struct PreparingSettlementCompactChip: View {
+    let event: PreparingSettlementEventSnapshot
+    let action: () -> Void
+
+    private var participantText: String {
+        if event.participantNames.isEmpty {
+            return L10n.transactions.settlement.noParticipantsYet
+        }
+        return event.participantNames.prefix(3).joined(separator: ", ")
+    }
+
+    var body: some View {
+        Button(action: action) {
+            VStack(alignment: .leading, spacing: 7) {
+                HStack(spacing: 7) {
+                    Image(systemName: "calendar.badge.clock")
+                        .font(.system(size: 13, weight: .bold))
+                        .foregroundStyle(MistiaAccent.purple.color)
+                    Text(event.title)
+                        .font(.system(size: 15, weight: .bold, design: .rounded))
+                        .foregroundStyle(.primary)
+                        .lineLimit(1)
+                }
+
+                Text(participantText)
+                    .font(.system(size: 11.5, weight: .semibold, design: .rounded))
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+
+                HStack(spacing: 8) {
+                    Text(event.totalPaidMinor.formattedCurrency(code: event.currencyCode))
+                        .font(.system(size: 15, weight: .bold, design: .rounded))
+                        .foregroundStyle(MistiaAccent.expense.color)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.72)
+
+                    Text(L10n.transactions.settlement.billCountValue(String(event.billCount)))
+                        .font(.system(size: 11, weight: .bold, design: .rounded))
+                        .foregroundStyle(.secondary)
+                }
+            }
+            .padding(14)
+            .frame(width: 190, alignment: .leading)
+            .background {
+                MistiaBlockCardBackground(tint: MistiaAccent.purple.color.opacity(0.12), cornerRadius: 22)
+            }
+        }
+        .buttonStyle(MistiaPressableButtonStyle(cornerRadius: 22, tint: MistiaAccent.purple.color))
+    }
+}
+
 struct SettlementEditorSheet: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
@@ -96,7 +163,16 @@ struct SettlementEditorSheet: View {
 
     @Query private var wallets: [LedgerWallet]
     @Query private var categories: [TransactionCategory]
+    @Query(filter: #Predicate<LedgerTransaction> { $0.deletedAt == nil }, sort: \LedgerTransaction.occurredAt, order: .reverse)
+    private var transactions: [LedgerTransaction]
+    @Query
+    private var transactionAuditRecords: [TransactionAuditRecord]
+    @Query(filter: #Predicate<SettlementGroup> { $0.deletedAt == nil })
+    private var settlementGroups: [SettlementGroup]
+    @Query(filter: #Predicate<SettlementParticipant> { $0.deletedAt == nil }, sort: \SettlementParticipant.sortOrder)
+    private var settlementParticipants: [SettlementParticipant]
     @Query private var ownershipScopes: [OwnedRecordScope]
+    @AppStorage(MistiaCurrencySettings.StorageKey.primaryCurrencyCode) private var primaryCurrencyCode = "JPY"
 
     let target: SettlementEditorTarget
 
@@ -110,13 +186,16 @@ struct SettlementEditorSheet: View {
 
     @State private var eventTitle = ""
     @State private var participantRows: [SharedExpenseParticipantDraft] = [
-        SharedExpenseParticipantDraft(name: "A", paidText: ""),
-        SharedExpenseParticipantDraft(name: "B", paidText: ""),
-        SharedExpenseParticipantDraft(name: "C", paidText: "")
+        SharedExpenseParticipantDraft(name: "", paidText: "")
     ]
     @State private var selectedSharedWalletID: UUID?
     @State private var selectedSharedCategoryID: UUID?
+    @State private var eventNote = ""
+    @State private var billRows: [SharedExpenseBillDraft] = [SharedExpenseBillDraft()]
+    @State private var hasLoadedSharedExpenseDraft = false
     @State private var alertMessage: String?
+    @State private var billEditorTarget: SharedExpenseBillEditorTarget?
+    @State private var billSearchTarget: SharedExpenseBillSearchTarget?
 
     private var walletPickerAccess: MistiaWalletPickerAccess {
         MistiaWalletPickerAccess(
@@ -150,10 +229,23 @@ struct SettlementEditorSheet: View {
         availableWallets.first(where: { $0.id == selectedSharedWalletID })
     }
 
+    private var editingSharedExpenseGroupID: UUID? {
+        if case .editSharedExpense(let groupID) = target {
+            return groupID
+        }
+        return nil
+    }
+
+    private var editingSharedExpenseGroup: SettlementGroup? {
+        guard let editingSharedExpenseGroupID else { return nil }
+        return settlementGroups.first(where: { $0.id == editingSharedExpenseGroupID })
+    }
+
     private var activeCurrencyCode: String {
         MistiaCurrencyLogic.normalizedCode(
             selectedPurchaseWallet?.currencyCode
                 ?? selectedSharedWallet?.currencyCode
+                ?? editingSharedExpenseGroup?.currencyCode
                 ?? availableWallets.first?.currencyCode
                 ?? "JPY"
         )
@@ -204,6 +296,105 @@ struct SettlementEditorSheet: View {
         expenseCategories.first(where: { $0.id == selectedSharedCategoryID })
     }
 
+    private var linkedSharedExpenseBills: [LedgerTransaction] {
+        guard let groupID = editingSharedExpenseGroupID else { return [] }
+        return transactions
+            .filter {
+                $0.settlementGroupID == groupID
+                    && $0.settlementRole == .sharedExpensePaid
+                    && $0.deletedAt == nil
+                    && !$0.isArchived
+            }
+            .sorted {
+                if $0.occurredAt != $1.occurredAt {
+                    return $0.occurredAt > $1.occurredAt
+                }
+                return $0.updatedAt > $1.updatedAt
+            }
+    }
+
+    private var attachableExpenseTransactions: [LedgerTransaction] {
+        visibleTransactionsForBillSearch
+            .filter { transaction in
+                guard transaction.deletedAt == nil,
+                      !transaction.isArchived,
+                      transaction.entryStatus == .posted,
+                      transaction.primaryKind == .expense,
+                      transaction.settlementGroupID == nil else {
+                    return false
+                }
+                return transaction.sourceWallet != nil && transaction.category != nil
+            }
+            .sorted {
+                if $0.occurredAt != $1.occurredAt {
+                    return $0.occurredAt > $1.occurredAt
+                }
+                return $0.updatedAt > $1.updatedAt
+            }
+    }
+
+    private var visibleTransactionsForBillSearch: [LedgerTransaction] {
+        FamilyScopedData.visibleTransactionsForHistory(
+            transactions,
+            audits: transactionAuditRecords,
+            scopes: ownershipScopes,
+            familyContextStore: familyContextStore,
+            sessionStore: sessionStore
+        )
+    }
+
+    private var transactionAuditMap: [UUID: TransactionAuditRecord] {
+        TransactionAuditStore.auditMap(from: transactionAuditRecords)
+    }
+
+    private var walletOwnerMap: [UUID: UUID] {
+        MistiaRecordOwnershipStore.ownerMap(from: ownershipScopes, entity: .wallet)
+    }
+
+    private var transactionOwnerMap: [UUID: UUID] {
+        MistiaRecordOwnershipStore.ownerMap(from: ownershipScopes, entity: .transaction)
+    }
+
+    private var visibleParticipantRows: [SharedExpenseParticipantDraft] {
+        participantRows.filter {
+            !$0.name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        }
+    }
+
+    private var preparationBillTotalMinor: Int64 {
+        let savedTotal = linkedSharedExpenseBills.reduce(Int64(0)) { $0 + max($1.amountMinor, 0) }
+        let draftTotal = billRows.reduce(Int64(0)) { partial, row in
+            partial + row.stagedExpenseAmountMinor
+        }
+        let existingTotal = billRows.reduce(Int64(0)) { partial, row in
+            guard row.mode == .existingExpense,
+                  let existingID = row.existingTransactionID,
+                  let transaction = attachableExpenseTransactions.first(where: { $0.id == existingID }) else {
+                return partial
+            }
+            return partial + max(transaction.amountMinor, 0)
+        }
+        return savedTotal + draftTotal + existingTotal
+    }
+
+    private var selfParticipantDisplayName: String {
+        let candidate = sessionStore.summary?.displayName
+            ?? familyContextStore.displayName(for: activeOwnerUserID)
+            ?? familyContextStore.displayName(for: sessionStore.activeLocalProfileUserID)
+            ?? L10n.transactions.settlement.selfParticipantName
+        let trimmed = candidate.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? L10n.transactions.settlement.selfParticipantName : trimmed
+    }
+
+    private var participantNameSuggestions: [TransactionTitleSuggestion] {
+        let query = participantRows.last?.name ?? ""
+        return TransactionLogic.counterpartySuggestions(
+            from: transactions.prefix(500).map(\.snapshot),
+            query: query,
+            limit: 5
+        )
+    }
+
     private var sharedParticipants: [SettlementParticipantInput] {
         participantRows.compactMap { row in
             let name = row.name.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -248,67 +439,75 @@ struct SettlementEditorSheet: View {
                 || selectedPurchaseWallet == nil
                 || selectedReceiveWallet == nil
                 || selectedCategory == nil
-        case .sharedExpense:
-            let validParticipants = sharedParticipants.count >= 2
-            let hasTotal = sharedParticipants.reduce(Int64(0)) { $0 + $1.paidMinor } > 0
-            let needsWalletForPaidAmount = currentUserPaidMinor > 0
-            return eventTitle.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-                || !validParticipants
-                || !hasTotal
-                || (needsWalletForPaidAmount && (selectedSharedWallet == nil || selectedSharedCategory == nil))
+        case .newSharedExpense, .editSharedExpense:
+            return !SettlementLogic.canSavePreparingEvent(
+                title: eventTitle,
+                participantNames: participantRows.map(\.name)
+            )
         }
     }
 
     var body: some View {
-        NavigationStack {
-            Form {
-                switch target {
-                case .resale:
+        switch target {
+        case .resale:
+            NavigationStack {
+                Form {
                     resaleForm
-                case .sharedExpense:
-                    sharedExpenseForm
                 }
-            }
-            .navigationTitle(navigationTitle)
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .topBarLeading) {
-                    Button {
-                        dismiss()
-                    } label: {
-                        Image(systemName: "xmark")
-                            .font(.system(size: 16, weight: .semibold))
-                            .foregroundStyle(.secondary)
+                .navigationTitle(navigationTitle)
+                .navigationBarTitleDisplayMode(.inline)
+                .toolbar {
+                    ToolbarItem(placement: .topBarLeading) {
+                        Button {
+                            dismiss()
+                        } label: {
+                            Image(systemName: "xmark")
+                                .font(.system(size: 16, weight: .semibold))
+                                .foregroundStyle(.secondary)
+                        }
                     }
-                }
 
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button {
-                        save()
-                    } label: {
-                        Image(systemName: "checkmark")
-                            .font(.system(size: 14, weight: .bold))
-                            .foregroundStyle(MistiaAccent.checkmarkPurple.color)
-                            .frame(width: 30, height: 30)
+                    ToolbarItem(placement: .topBarTrailing) {
+                        Button {
+                            save()
+                        } label: {
+                            Image(systemName: "checkmark")
+                                .font(.system(size: 14, weight: .bold))
+                                .foregroundStyle(MistiaAccent.checkmarkPurple.color)
+                                .frame(width: 30, height: 30)
+                        }
+                        .buttonStyle(.glassProminent)
+                        .buttonBorderShape(.circle)
+                        .tint(MistiaAccent.purple.color)
+                        .disabled(isSaveDisabled)
+                        .opacity(isSaveDisabled ? 0.45 : 1)
                     }
-                    .buttonStyle(.glassProminent)
-                    .buttonBorderShape(.circle)
-                    .tint(MistiaAccent.purple.color)
-                    .disabled(isSaveDisabled)
-                    .opacity(isSaveDisabled ? 0.45 : 1)
                 }
             }
-        }
-        .onAppear(perform: applyInitialDefaults)
-        .alert(
-            L10n.transactions.transactioneditor.canTSaveYet,
-            isPresented: Binding(get: { alertMessage != nil }, set: { if !$0 { alertMessage = nil } })
-        ) {
-            Button(L10n.common.ok, role: .cancel) {}
-        } message: {
-            if let alertMessage {
-                Text(alertMessage)
+            .onAppear(perform: applyInitialDefaults)
+            .alert(
+                L10n.transactions.transactioneditor.canTSaveYet,
+                isPresented: Binding(get: { alertMessage != nil }, set: { if !$0 { alertMessage = nil } })
+            ) {
+                Button(L10n.common.ok, role: .cancel) {}
+            } message: {
+                if let alertMessage {
+                    Text(alertMessage)
+                }
             }
+        case .newSharedExpense, .editSharedExpense:
+            sharedExpensePreparationBody
+                .onAppear(perform: applyInitialDefaults)
+                .alert(
+                    L10n.transactions.transactioneditor.canTSaveYet,
+                    isPresented: Binding(get: { alertMessage != nil }, set: { if !$0 { alertMessage = nil } })
+                ) {
+                    Button(L10n.common.ok, role: .cancel) {}
+                } message: {
+                    if let alertMessage {
+                        Text(alertMessage)
+                    }
+                }
         }
     }
 
@@ -316,8 +515,10 @@ struct SettlementEditorSheet: View {
         switch target {
         case .resale:
             return L10n.transactions.settlement.resaleTitle
-        case .sharedExpense:
+        case .newSharedExpense:
             return L10n.transactions.settlement.sharedExpenseTitle
+        case .editSharedExpense:
+            return L10n.transactions.settlement.prepareEventTitle
         }
     }
 
@@ -362,71 +563,274 @@ struct SettlementEditorSheet: View {
         }
     }
 
-    private var sharedExpenseForm: some View {
-        Group {
-            Section {
-                TextField(L10n.transactions.settlement.eventName, text: $eventTitle)
+    private var sharedExpensePreparationBody: some View {
+        NavigationStack {
+            ZStack {
+                Color(UIColor.systemGroupedBackground)
+                    .ignoresSafeArea()
+
+                ScrollView(.vertical, showsIndicators: false) {
+                    VStack(alignment: .leading, spacing: 18) {
+                        preparationSection(title: L10n.transactions.settlement.eventName) {
+                            sharedExpenseEventCard
+                        }
+                        preparationSection(title: L10n.transactions.settlement.relatedPeople) {
+                            sharedExpenseParticipantsCard
+                        }
+                        if !linkedSharedExpenseBills.isEmpty {
+                            preparationSection(title: L10n.transactions.settlement.savedBills) {
+                                savedBillsCard
+                            }
+                        }
+                        preparationSection(title: L10n.transactions.settlement.eventBills) {
+                            draftBillsCard
+                        }
+                        preparationSection(title: L10n.transactions.settlement.totalPaid) {
+                            sharedExpenseTotalCard
+                        }
+                        preparationSection(title: L10n.transactions.settlement.note) {
+                            sharedExpenseNoteCard
+                        }
+                    }
+                    .padding(.horizontal, 18)
+                    .padding(.top, 16)
+                    .padding(.bottom, 32)
+                }
             }
-
-            Section {
-                ForEach($participantRows) { $row in
-                    HStack(spacing: 12) {
-                        TextField(L10n.transactions.settlement.participantName, text: $row.name)
-                            .textInputAutocapitalization(.words)
-
-                        MistiaCurrencyInputField(
-                            L10n.transactions.settlement.paidAmount,
-                            text: $row.paidText,
-                            font: .mistiaRounded(size: 15, weight: .semibold)
-                        )
-                        .frame(width: 132, height: 44)
+            .navigationTitle(navigationTitle)
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    Button {
+                        dismiss()
+                    } label: {
+                        Image(systemName: "xmark")
+                            .font(.system(size: 16, weight: .semibold))
+                            .foregroundStyle(.secondary)
                     }
                 }
-            } header: {
-                Text(L10n.transactions.settlement.participants)
-            } footer: {
-                Text(
-                    "\(L10n.transactions.settlement.totalPaid): \(sharedResult.totalPaidMinor.formattedCurrency(code: activeCurrencyCode))"
-                )
-            }
 
-            if currentUserPaidMinor > 0 {
-                Section {
-                    walletPicker(
-                        title: L10n.transactions.settlement.purchaseWallet,
-                        selection: $selectedSharedWalletID
-                    )
-                    categoryPicker(selection: $selectedSharedCategoryID)
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button {
+                        save()
+                    } label: {
+                        Image(systemName: "checkmark")
+                            .font(.system(size: 14, weight: .bold))
+                            .foregroundStyle(MistiaAccent.checkmarkPurple.color)
+                            .frame(width: 30, height: 30)
+                    }
+                    .buttonStyle(.glassProminent)
+                    .buttonBorderShape(.circle)
+                    .tint(MistiaAccent.purple.color)
+                    .disabled(isSaveDisabled)
+                    .opacity(isSaveDisabled ? 0.45 : 1)
                 }
             }
-
-            Section {
-                ForEach(sharedResult.participants) { participant in
-                    SharedExpenseParticipantResultRow(
-                        participant: participant,
-                        currencyCode: activeCurrencyCode
-                    )
+            .toolbarBackground(Color(UIColor.systemGroupedBackground), for: .navigationBar)
+            .toolbarBackground(.visible, for: .navigationBar)
+        }
+        .presentationBackground(Color(UIColor.systemGroupedBackground))
+        .sheet(item: $billEditorTarget) { target in
+            TransactionEditorSheet(
+                target: transactionEditorTarget(for: target.rowID),
+                onStageTransaction: { transaction in
+                    applyStagedTransaction(transaction, toBillRow: target.rowID)
                 }
-            } header: {
-                Text(L10n.transactions.settlement.splitSummary)
+            )
+            .presentationDetents([.large])
+            .presentationDragIndicator(.hidden)
+        }
+        .sheet(item: $billSearchTarget) { target in
+            SharedExpenseTransactionSearchSheet(
+                transactions: attachableExpenseTransactions.filter { transaction in
+                    !billRows.contains {
+                        $0.id != target.rowID && $0.existingTransactionID == transaction.id
+                    }
+                },
+                transactionsByID: Dictionary(
+                    uniqueKeysWithValues: attachableExpenseTransactions.map { ($0.id, $0) }
+                ),
+                transactionAuditMap: transactionAuditMap,
+                walletOwnerMap: walletOwnerMap,
+                transactionOwnerMap: transactionOwnerMap,
+                primaryCurrencyCode: primaryCurrencyCode,
+                exchangeRateIndex: MistiaExchangeRateIndex(rates: MistiaCurrencySettings.rates())
+            ) { transaction in
+                applyExistingTransaction(transaction, toBillRow: target.rowID)
+                billSearchTarget = nil
             }
+            .presentationDetents([.large])
+            .presentationDragIndicator(.hidden)
+        }
+    }
 
-            Section {
-                if currentUserSuggestionRows.isEmpty {
-                    Text(L10n.transactions.settlement.noSettlementNeeded)
-                        .foregroundStyle(.secondary)
-                } else {
-                    ForEach(Array(currentUserSuggestionRows.enumerated()), id: \.offset) { _, suggestion in
-                        HStack {
-                            Text(verbatim: "\(sharedParticipantName(for: suggestion.payerID)) → \(sharedParticipantName(for: suggestion.receiverID))")
-                            Spacer()
-                            Text(suggestion.amountMinor.formattedCurrency(code: activeCurrencyCode))
-                                .fontWeight(.semibold)
+    private func preparationSection<Content: View>(
+        title: String,
+        @ViewBuilder content: () -> Content
+    ) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(title)
+                .font(.system(size: 13, weight: .bold, design: .rounded))
+                .foregroundStyle(.secondary)
+                .padding(.horizontal, 4)
+            content()
+        }
+    }
+
+    private var sharedExpenseEventCard: some View {
+        MistiaBlockCard(cornerRadius: 22, padding: 16) {
+            VStack(alignment: .leading, spacing: 12) {
+                TextField(L10n.transactions.settlement.eventName, text: $eventTitle)
+                    .font(.system(size: 20, weight: .bold, design: .rounded))
+                    .textInputAutocapitalization(.sentences)
+            }
+        }
+    }
+
+    private var sharedExpenseParticipantsCard: some View {
+        MistiaBlockCard(cornerRadius: 22, padding: 16) {
+            VStack(alignment: .leading, spacing: 14) {
+                HStack {
+                    Spacer()
+                    Button {
+                        participantRows.append(SharedExpenseParticipantDraft(name: "", paidText: ""))
+                    } label: {
+                        Image(systemName: "plus.circle.fill")
+                            .font(.system(size: 20, weight: .bold))
+                    }
+                    .buttonStyle(.plain)
+                }
+
+                ForEach($participantRows) { $row in
+                    HStack(spacing: 10) {
+                        TextField(L10n.transactions.settlement.participantName, text: $row.name)
+                            .textInputAutocapitalization(.words)
+                            .font(.system(size: 16, weight: .semibold, design: .rounded))
+                            .onSubmit {
+                                ensureTrailingParticipantRow()
+                            }
+
+                        Button {
+                            removeParticipantRow(row.id)
+                        } label: {
+                            Image(systemName: "minus.circle.fill")
+                                .font(.system(size: 18, weight: .semibold))
+                                .foregroundStyle(.secondary)
+                        }
+                        .buttonStyle(.plain)
+                        .opacity(participantRows.count > 1 ? 1 : 0)
+                    }
+                    .padding(.vertical, 8)
+                    .overlay(alignment: .bottom) {
+                        Divider()
+                    }
+                }
+
+                if !participantNameSuggestions.isEmpty {
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(spacing: 8) {
+                            ForEach(participantNameSuggestions) { suggestion in
+                                Button {
+                                    applyParticipantSuggestion(suggestion.title)
+                                } label: {
+                                    Text(suggestion.title)
+                                        .font(.system(size: 12, weight: .semibold, design: .rounded))
+                                        .padding(.horizontal, 10)
+                                        .padding(.vertical, 7)
+                                        .background(Capsule().fill(MistiaAccent.purple.color.opacity(0.14)))
+                                }
+                                .buttonStyle(.plain)
+                            }
                         }
                     }
                 }
-            } header: {
-                Text(L10n.transactions.settlement.settlementSuggestions)
+            }
+        }
+    }
+
+    private var savedBillsCard: some View {
+        MistiaBlockCard(cornerRadius: 22, padding: 16) {
+            VStack(alignment: .leading, spacing: 12) {
+                ForEach(linkedSharedExpenseBills) { bill in
+                    HStack(spacing: 12) {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(bill.title)
+                                .font(.system(size: 15, weight: .semibold, design: .rounded))
+                                .lineLimit(1)
+                            Text(bill.occurredAt.formatted(date: .abbreviated, time: .omitted))
+                                .font(.system(size: 11, weight: .semibold, design: .rounded))
+                                .foregroundStyle(.secondary)
+                        }
+                        Spacer()
+                        Text(bill.amountMinor.formattedCurrency(code: bill.sourceCurrencyCode ?? activeCurrencyCode))
+                            .font(.system(size: 14, weight: .bold, design: .rounded))
+                        Button {
+                            detachBill(bill)
+                        } label: {
+                            Image(systemName: "link.badge.minus")
+                                .font(.system(size: 16, weight: .semibold))
+                                .foregroundStyle(.secondary)
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+            }
+        }
+    }
+
+    private var draftBillsCard: some View {
+        MistiaBlockCard(cornerRadius: 22, padding: 16) {
+            VStack(alignment: .leading, spacing: 14) {
+                HStack {
+                    Spacer()
+                    Button {
+                        addBillRow()
+                    } label: {
+                        Image(systemName: "plus.circle.fill")
+                            .font(.system(size: 20, weight: .bold))
+                    }
+                    .buttonStyle(.plain)
+                }
+
+                ForEach($billRows) { $row in
+                    SharedExpenseBillDraftRow(
+                        row: $row,
+                        existingTransactions: attachableExpenseTransactions,
+                        transactionTitle: existingTransactionLabel(for:),
+                        currencyCode: activeCurrencyCode,
+                        onCreateNew: { billEditorTarget = SharedExpenseBillEditorTarget(rowID: row.id) },
+                        onSearchExisting: { billSearchTarget = SharedExpenseBillSearchTarget(rowID: row.id) },
+                        onRemove: { removeBillRow(row.id) }
+                    )
+                }
+            }
+        }
+    }
+
+    private var sharedExpenseTotalCard: some View {
+        MistiaBlockCard(cornerRadius: 22, padding: 16) {
+            HStack {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(L10n.transactions.settlement.billCountValue(String(linkedSharedExpenseBills.count + billRows.filter(\.hasContent).count)))
+                        .font(.system(size: 12, weight: .semibold, design: .rounded))
+                        .foregroundStyle(.secondary)
+                }
+                Spacer()
+                Text(preparationBillTotalMinor.formattedCurrency(code: activeCurrencyCode))
+                    .font(.system(size: 22, weight: .bold, design: .rounded))
+                    .foregroundStyle(MistiaAccent.expense.color)
+                    .minimumScaleFactor(0.75)
+                    .lineLimit(1)
+            }
+        }
+    }
+
+    private var sharedExpenseNoteCard: some View {
+        MistiaBlockCard(cornerRadius: 22, padding: 16) {
+            VStack(alignment: .leading, spacing: 10) {
+                TextField(L10n.transactions.settlement.notePlaceholder, text: $eventNote, axis: .vertical)
+                    .lineLimit(3...6)
+                    .font(.system(size: 15, weight: .regular, design: .rounded))
             }
         }
     }
@@ -461,11 +865,56 @@ struct SettlementEditorSheet: View {
         return category.localizedDisplayName
     }
 
+    private func existingTransactionLabel(for transaction: LedgerTransaction) -> String {
+        "\(transaction.localizedTransactionTitle) • \(transaction.amountMinor.formattedCurrency(code: transaction.sourceCurrencyCode ?? activeCurrencyCode))"
+    }
+
+    private func transactionEditorTarget(for rowID: UUID) -> TransactionEditorTarget {
+        let stagedTransaction = billRows.first(where: { $0.id == rowID })?.stagedTransaction
+        if let stagedTransaction {
+            return TransactionEditorTarget(
+                transaction: stagedTransaction,
+                stagesTransactionOnSave: true
+            )
+        }
+        return TransactionEditorTarget(
+            initialKind: .expense,
+            prefill: TransactionEditorPrefill(
+                title: nil,
+                amountMinor: nil,
+                occurredAt: Date(),
+                sourceWalletID: selectedSharedWalletID,
+                categoryID: selectedSharedCategoryID
+            ),
+            subjectUserIDOverride: activeOwnerUserID,
+            stagesTransactionOnSave: true
+        )
+    }
+
+    private func applyStagedTransaction(_ transaction: LedgerTransaction, toBillRow rowID: UUID) {
+        guard let index = billRows.firstIndex(where: { $0.id == rowID }) else { return }
+        billRows[index].mode = .newExpense
+        billRows[index].stagedTransaction = transaction
+        billRows[index].existingTransactionID = nil
+        selectedSharedWalletID = transaction.sourceWallet?.id ?? selectedSharedWalletID
+        selectedSharedCategoryID = transaction.category?.id ?? selectedSharedCategoryID
+    }
+
+    private func applyExistingTransaction(_ transaction: LedgerTransaction, toBillRow rowID: UUID) {
+        guard let index = billRows.firstIndex(where: { $0.id == rowID }) else { return }
+        billRows[index].mode = .existingExpense
+        billRows[index].existingTransactionID = transaction.id
+        billRows[index].stagedTransaction = nil
+    }
+
     private func sharedParticipantName(for id: UUID) -> String {
         sharedParticipantNameByID[id] ?? L10n.transactions.settlement.participantName
     }
 
     private func applyInitialDefaults() {
+        if !hasLoadedSharedExpenseDraft {
+            loadSharedExpenseDraftIfNeeded()
+        }
         if selectedPurchaseWalletID == nil {
             selectedPurchaseWalletID = availableWallets.first?.id
         }
@@ -481,13 +930,226 @@ struct SettlementEditorSheet: View {
         if selectedSharedCategoryID == nil {
             selectedSharedCategoryID = selectedCategoryID ?? expenseCategories.first?.id
         }
+        if billRows.isEmpty {
+            billRows = [SharedExpenseBillDraft()]
+        }
+    }
+
+    private func loadSharedExpenseDraftIfNeeded() {
+        hasLoadedSharedExpenseDraft = true
+        guard case .editSharedExpense = target,
+              let group = editingSharedExpenseGroup else {
+            return
+        }
+
+        eventTitle = group.title
+        eventNote = group.note ?? ""
+        let rows = settlementParticipants
+            .filter { $0.groupID == group.id && !$0.isSelf && $0.deletedAt == nil }
+            .sorted {
+                if $0.sortOrder != $1.sortOrder { return $0.sortOrder < $1.sortOrder }
+                return $0.displayName.localizedCaseInsensitiveCompare($1.displayName) == .orderedAscending
+            }
+            .map { SharedExpenseParticipantDraft(id: $0.id, name: $0.displayName, paidText: "") }
+        participantRows = rows.isEmpty ? [SharedExpenseParticipantDraft(name: "", paidText: "")] : rows + [SharedExpenseParticipantDraft(name: "", paidText: "")]
+        selectedSharedWalletID = linkedSharedExpenseBills.first?.sourceWallet?.id ?? availableWallets.first?.id
+        selectedSharedCategoryID = linkedSharedExpenseBills.first?.category?.id ?? expenseCategories.first?.id
+        billRows = [SharedExpenseBillDraft()]
+    }
+
+    private func ensureTrailingParticipantRow() {
+        guard participantRows.last?.name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false else { return }
+        participantRows.append(SharedExpenseParticipantDraft(name: "", paidText: ""))
+    }
+
+    private func removeParticipantRow(_ id: UUID) {
+        guard participantRows.count > 1 else { return }
+        participantRows.removeAll { $0.id == id }
+        if participantRows.isEmpty {
+            participantRows = [SharedExpenseParticipantDraft(name: "", paidText: "")]
+        }
+    }
+
+    private func applyParticipantSuggestion(_ name: String) {
+        if let index = participantRows.lastIndex(where: { $0.name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }) {
+            participantRows[index].name = name
+        } else {
+            participantRows.append(SharedExpenseParticipantDraft(name: name, paidText: ""))
+        }
+        ensureTrailingParticipantRow()
+    }
+
+    private func addBillRow() {
+        billRows.append(SharedExpenseBillDraft())
+    }
+
+    private func removeBillRow(_ id: UUID) {
+        billRows.removeAll { $0.id == id }
+        if billRows.isEmpty {
+            addBillRow()
+        }
+    }
+
+    private func normalizedParticipantNames() -> [String] {
+        var seen: Set<String> = []
+        var names: [String] = []
+        for row in participantRows {
+            let name = row.name.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !name.isEmpty else { continue }
+            let key = TransactionLogic.normalizeCounterpartyName(name) ?? name.localizedLowercase
+            guard !seen.contains(key) else { continue }
+            seen.insert(key)
+            names.append(name)
+        }
+        return names
+    }
+
+    private func resolvedSharedExpenseOwnerUserID() -> UUID? {
+        for row in billRows where row.mode == .newExpense {
+            if let wallet = row.stagedTransaction?.sourceWallet,
+               let owner = walletPickerAccess.walletOwnerUserID(for: wallet) {
+                return owner
+            }
+        }
+        if let selectedSharedWallet,
+           let owner = walletPickerAccess.walletOwnerUserID(for: selectedSharedWallet) {
+            return owner
+        }
+        return activeOwnerUserID
+    }
+
+    private func upsertPreparingParticipants(
+        groupID: UUID,
+        participantNames: [String],
+        ownerUserID: UUID?,
+        modifiedAt: Date
+    ) -> [SettlementParticipant] {
+        let existing = settlementParticipants.filter { $0.groupID == groupID }
+        let selfParticipant = existing.first(where: { $0.isSelf }) ?? SettlementParticipant(
+            groupID: groupID,
+            displayName: selfParticipantDisplayName,
+            normalizedKey: TransactionLogic.normalizeCounterpartyName(selfParticipantDisplayName),
+            memberUserID: ownerUserID,
+            isSelf: true,
+            sortOrder: 0,
+            createdAt: modifiedAt,
+            updatedAt: modifiedAt
+        )
+        if existing.first(where: { $0.id == selfParticipant.id }) == nil {
+            modelContext.insert(selfParticipant)
+        }
+        selfParticipant.displayName = selfParticipantDisplayName
+        selfParticipant.normalizedKey = TransactionLogic.normalizeCounterpartyName(selfParticipantDisplayName)
+        selfParticipant.memberUserID = ownerUserID
+        selfParticipant.isSelf = true
+        selfParticipant.sortOrder = 0
+        selfParticipant.deletedAt = nil
+        selfParticipant.updatedAt = modifiedAt
+
+        var participants = [selfParticipant]
+        let existingByKey = Dictionary(
+            existing.filter { !$0.isSelf }.compactMap { participant -> (String, SettlementParticipant)? in
+                let key = participant.normalizedKey ?? TransactionLogic.normalizeCounterpartyName(participant.displayName)
+                guard let key else { return nil }
+                return (key, participant)
+            },
+            uniquingKeysWith: { lhs, rhs in lhs.updatedAt >= rhs.updatedAt ? lhs : rhs }
+        )
+        var activeKeys: Set<String> = []
+
+        for (offset, name) in participantNames.enumerated() {
+            let key = TransactionLogic.normalizeCounterpartyName(name) ?? name.localizedLowercase
+            activeKeys.insert(key)
+            let participant = existingByKey[key] ?? SettlementParticipant(
+                groupID: groupID,
+                displayName: name,
+                normalizedKey: key,
+                memberUserID: nil,
+                isSelf: false,
+                sortOrder: offset + 1,
+                createdAt: modifiedAt,
+                updatedAt: modifiedAt
+            )
+            if existing.first(where: { $0.id == participant.id }) == nil {
+                modelContext.insert(participant)
+            }
+            participant.groupID = groupID
+            participant.displayName = name
+            participant.normalizedKey = key
+            participant.isSelf = false
+            participant.sortOrder = offset + 1
+            participant.deletedAt = nil
+            participant.updatedAt = modifiedAt
+            participants.append(participant)
+        }
+
+        for participant in existing where !participant.isSelf {
+            let key = participant.normalizedKey ?? TransactionLogic.normalizeCounterpartyName(participant.displayName)
+            if key.map(activeKeys.contains) != true {
+                participant.deletedAt = modifiedAt
+                participant.updatedAt = modifiedAt
+                participants.append(participant)
+            }
+        }
+
+        if let ownerUserID {
+            for participant in participants {
+                try? MistiaRecordOwnershipStore.upsert(
+                    entity: .settlementParticipant,
+                    recordID: participant.id,
+                    ownerUserID: ownerUserID,
+                    updatedAt: modifiedAt,
+                    context: modelContext
+                )
+            }
+        }
+
+        return participants
+    }
+
+    private func makeSharedExpenseBillTransaction(
+        from row: SharedExpenseBillDraft,
+        groupID: UUID,
+        defaultTitle: String,
+        now: Date
+    ) -> LedgerTransaction? {
+        guard let transaction = row.stagedTransaction,
+              transaction.amountMinor > 0,
+              transaction.sourceWallet != nil,
+              transaction.category != nil else {
+            return nil
+        }
+
+        transaction.primaryKind = .expense
+        transaction.entryStatus = .posted
+        if transaction.title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            transaction.title = defaultTitle
+        }
+        transaction.settlementGroupID = groupID
+        transaction.settlementObligationID = nil
+        transaction.settlementRole = .sharedExpensePaid
+        transaction.reportingExpenseMinor = max(transaction.amountMinor, 0)
+        transaction.reportingIncomeMinor = 0
+        transaction.updatedAt = now
+        return transaction
+    }
+
+    private func transactionsForTotal(groupID: UUID, createdTransactions: [LedgerTransaction]) -> [LedgerTransaction] {
+        let existing = transactions.filter {
+            $0.settlementGroupID == groupID
+                && $0.settlementRole == .sharedExpensePaid
+                && $0.deletedAt == nil
+                && !$0.isArchived
+        }
+        let existingIDs = Set(existing.map(\.id))
+        return existing + createdTransactions.filter { !existingIDs.contains($0.id) }
     }
 
     private func save() {
         switch target {
         case .resale:
             saveResale()
-        case .sharedExpense:
+        case .newSharedExpense, .editSharedExpense:
             saveSharedExpense()
         }
     }
@@ -574,84 +1236,97 @@ struct SettlementEditorSheet: View {
             alertMessage = L10n.transactions.settlement.enterTitle
             return
         }
-        guard sharedParticipants.count >= 2,
-              sharedResult.totalPaidMinor > 0 else {
-            alertMessage = L10n.transactions.settlement.enterAmountsGreaterThanZero
+        let participantNames = normalizedParticipantNames()
+        guard !participantNames.isEmpty else {
+            alertMessage = L10n.transactions.settlement.enterParticipant
             return
         }
 
         let now = Date()
-        let ownerUserID = selectedSharedWallet.flatMap { walletPickerAccess.walletOwnerUserID(for: $0) } ?? activeOwnerUserID
-        let group = SettlementGroup(
-            kind: .sharedExpense,
-            title: title,
-            currencyCode: activeCurrencyCode,
-            occurredAt: now,
-            totalMinor: sharedResult.totalPaidMinor,
-            expectedMinor: currentUserSuggestionRows.reduce(Int64(0)) { $0 + $1.amountMinor },
-            organizerUserID: ownerUserID,
-            createdAt: now,
-            updatedAt: now
-        )
+        let ownerUserID = resolvedSharedExpenseOwnerUserID()
+        let group: SettlementGroup
+        let shouldDismissAfterSave: Bool
 
-        let currentUserParticipantID = participantRows.first?.id
-        let obligations = currentUserSuggestionRows.compactMap { suggestion -> SettlementObligation? in
-            guard let currentUserParticipantID else { return nil }
-            let isReceivable = suggestion.receiverID == currentUserParticipantID
-            let counterpartyID = isReceivable ? suggestion.payerID : suggestion.receiverID
-            let counterpartyName = sharedParticipantName(for: counterpartyID)
-            return SettlementObligation(
-                groupID: group.id,
-                counterpartyName: counterpartyName,
-                normalizedCounterpartyKey: TransactionLogic.normalizeCounterpartyName(counterpartyName),
-                direction: isReceivable ? .receivable : .payable,
-                expectedMinor: suggestion.amountMinor,
-                preferredWalletID: selectedSharedWalletID,
+        switch target {
+        case .newSharedExpense:
+            group = SettlementGroup(
+                kind: .sharedExpense,
+                status: .preparing,
+                title: title,
+                currencyCode: activeCurrencyCode,
+                occurredAt: now,
+                totalMinor: 0,
+                expectedMinor: 0,
+                settledMinor: 0,
+                organizerUserID: ownerUserID,
+                note: eventNote.trimmingCharacters(in: .whitespacesAndNewlines).nilIfBlank,
                 createdAt: now,
                 updatedAt: now
             )
-        }
-
-        var transactions: [LedgerTransaction] = []
-        if currentUserPaidMinor > 0 {
-            guard let selectedSharedWallet else {
-                alertMessage = L10n.transactions.transactioneditor.chooseAWalletForThisTransaction
+            modelContext.insert(group)
+            shouldDismissAfterSave = true
+        case .editSharedExpense:
+            guard let existingGroup = editingSharedExpenseGroup else {
+                alertMessage = L10n.transactions.settlement.settlementNotFound
                 return
             }
-            guard let selectedSharedCategory else {
-                alertMessage = L10n.transactions.transactioneditor.chooseCategory
-                return
-            }
-            transactions.append(
-                LedgerTransaction(
-                    primaryKind: .expense,
-                    entryStatus: .posted,
-                    title: title,
-                    amountMinor: currentUserPaidMinor,
-                    settlementGroupID: group.id,
-                    settlementRole: .sharedExpensePaid,
-                    reportingExpenseMinor: currentUserPaidMinor,
-                    reportingIncomeMinor: 0,
-                    sourceCurrencyCode: MistiaCurrencyLogic.normalizedCode(selectedSharedWallet.currencyCode),
-                    occurredAt: now,
-                    createdAt: now,
-                    updatedAt: now,
-                    sourceWallet: selectedSharedWallet,
-                    category: selectedSharedCategory
-                )
-            )
+            group = existingGroup
+            group.title = title
+            group.currencyCode = activeCurrencyCode
+            group.note = eventNote.trimmingCharacters(in: .whitespacesAndNewlines).nilIfBlank
+            group.updatedAt = now
+            shouldDismissAfterSave = false
+        case .resale:
+            return
         }
 
-        if obligations.isEmpty, transactions.isEmpty {
-            group.status = .settled
-        }
-
-        persistNewSettlement(
-            group: group,
-            obligations: obligations,
-            transactions: transactions,
+        let participants = upsertPreparingParticipants(
+            groupID: group.id,
+            participantNames: participantNames,
             ownerUserID: ownerUserID,
             modifiedAt: now
+        )
+
+        var transactions: [LedgerTransaction] = []
+        var attachedTransactions: [LedgerTransaction] = []
+
+        for row in billRows {
+            switch row.mode {
+            case .newExpense:
+                guard let transaction = makeSharedExpenseBillTransaction(from: row, groupID: group.id, defaultTitle: title, now: now) else {
+                    continue
+                }
+                modelContext.insert(transaction)
+                transactions.append(transaction)
+            case .existingExpense:
+                guard let existingID = row.existingTransactionID,
+                      let transaction = attachableExpenseTransactions.first(where: { $0.id == existingID }) else {
+                    continue
+                }
+                transaction.settlementGroupID = group.id
+                transaction.settlementRole = .sharedExpensePaid
+                transaction.reportingExpenseMinor = max(transaction.amountMinor, 0)
+                transaction.reportingIncomeMinor = 0
+                transaction.updatedAt = now
+                attachedTransactions.append(transaction)
+            }
+        }
+
+        let linkedTotal = transactionsForTotal(groupID: group.id, createdTransactions: transactions)
+            .reduce(Int64(0)) { $0 + max($1.amountMinor, 0) }
+        group.totalMinor = linkedTotal
+        group.expectedMinor = 0
+        group.settledMinor = 0
+        group.status = .preparing
+        group.updatedAt = now
+
+        persistPreparedSharedExpense(
+            group: group,
+            participants: participants,
+            transactions: transactions + attachedTransactions,
+            ownerUserID: ownerUserID,
+            modifiedAt: now,
+            dismissAfterSave: shouldDismissAfterSave
         )
     }
 
@@ -711,6 +1386,7 @@ struct SettlementEditorSheet: View {
             try modelContext.save()
             queueUpserts(
                 group: group,
+                participants: [],
                 obligations: obligations,
                 transactions: transactions,
                 ownerUserID: ownerUserID,
@@ -722,8 +1398,134 @@ struct SettlementEditorSheet: View {
         }
     }
 
+    private func persistPreparedSharedExpense(
+        group: SettlementGroup,
+        participants: [SettlementParticipant],
+        transactions: [LedgerTransaction],
+        ownerUserID: UUID?,
+        modifiedAt: Date,
+        dismissAfterSave: Bool
+    ) {
+        do {
+            if let ownerUserID {
+                try MistiaRecordOwnershipStore.upsert(
+                    entity: .settlementGroup,
+                    recordID: group.id,
+                    ownerUserID: ownerUserID,
+                    updatedAt: modifiedAt,
+                    context: modelContext
+                )
+                for participant in participants {
+                    try MistiaRecordOwnershipStore.upsert(
+                        entity: .settlementParticipant,
+                        recordID: participant.id,
+                        ownerUserID: ownerUserID,
+                        updatedAt: modifiedAt,
+                        context: modelContext
+                    )
+                }
+            }
+
+            let actorUserID = sessionStore.activeLocalProfileUserID ?? ownerUserID
+            for transaction in transactions {
+                if let actorUserID {
+                    try TransactionAuditStore.upsert(
+                        transactionID: transaction.id,
+                        createdByUserID: actorUserID,
+                        lastModifiedByUserID: actorUserID,
+                        updatedAt: modifiedAt,
+                        context: modelContext
+                    )
+                }
+                if let transactionOwnerUserID = transaction.sourceWallet.flatMap({ walletPickerAccess.walletOwnerUserID(for: $0) }) ?? ownerUserID {
+                    try MistiaRecordOwnershipStore.upsert(
+                        entity: .transaction,
+                        recordID: transaction.id,
+                        ownerUserID: transactionOwnerUserID,
+                        updatedAt: modifiedAt,
+                        context: modelContext
+                    )
+                }
+            }
+
+            try modelContext.save()
+            queueUpserts(
+                group: group,
+                participants: participants,
+                obligations: [],
+                transactions: transactions,
+                ownerUserID: ownerUserID,
+                modifiedAt: modifiedAt
+            )
+            if dismissAfterSave {
+                dismiss()
+            } else {
+                billRows = [SharedExpenseBillDraft()]
+            }
+        } catch {
+            alertMessage = error.localizedDescription
+        }
+    }
+
+    private func detachBill(_ bill: LedgerTransaction) {
+        guard let groupID = bill.settlementGroupID,
+              let group = settlementGroups.first(where: { $0.id == groupID }) else {
+            return
+        }
+
+        let now = Date()
+        let ownerUserID = bill.sourceWallet.flatMap { walletPickerAccess.walletOwnerUserID(for: $0) } ?? activeOwnerUserID
+        bill.settlementGroupID = nil
+        bill.settlementObligationID = nil
+        bill.settlementRoleRawValue = nil
+        bill.reportingExpenseMinor = nil
+        bill.reportingIncomeMinor = nil
+        bill.updatedAt = now
+        group.totalMinor = transactions
+            .filter {
+                $0.id != bill.id
+                    && $0.settlementGroupID == groupID
+                    && $0.settlementRole == .sharedExpensePaid
+                    && $0.deletedAt == nil
+                    && !$0.isArchived
+            }
+            .reduce(Int64(0)) { $0 + max($1.amountMinor, 0) }
+        group.updatedAt = now
+
+        do {
+            if let ownerUserID {
+                try MistiaRecordOwnershipStore.upsert(
+                    entity: .transaction,
+                    recordID: bill.id,
+                    ownerUserID: ownerUserID,
+                    updatedAt: now,
+                    context: modelContext
+                )
+                try MistiaRecordOwnershipStore.upsert(
+                    entity: .settlementGroup,
+                    recordID: group.id,
+                    ownerUserID: ownerUserID,
+                    updatedAt: now,
+                    context: modelContext
+                )
+            }
+            try modelContext.save()
+            queueUpserts(
+                group: group,
+                participants: [],
+                obligations: [],
+                transactions: [bill],
+                ownerUserID: ownerUserID,
+                modifiedAt: now
+            )
+        } catch {
+            alertMessage = error.localizedDescription
+        }
+    }
+
     private func queueUpserts(
         group: SettlementGroup,
+        participants: [SettlementParticipant] = [],
         obligations: [SettlementObligation],
         transactions: [LedgerTransaction],
         ownerUserID: UUID?,
@@ -740,6 +1542,18 @@ struct SettlementEditorSheet: View {
                 baseVersion: group.remoteVersion
             )
         ]
+        mutations.append(
+            contentsOf: participants.map {
+                MistiaSyncMutation(
+                    entity: .settlementParticipant,
+                    recordID: $0.id,
+                    subjectUserID: ownerUserID,
+                    kind: .upsert,
+                    modifiedAt: modifiedAt,
+                    baseVersion: $0.remoteVersion
+                )
+            }
+        )
         mutations.append(
             contentsOf: obligations.map {
                 MistiaSyncMutation(
@@ -764,6 +1578,526 @@ struct SettlementEditorSheet: View {
                 )
             }
         )
+        sessionStore.recordMutations(mutations)
+        if ownerUserID != sessionStore.activeLocalProfileUserID {
+            Task { @MainActor in
+                _ = await sessionStore.pushQueuedFamilyOwnerChangesNow()
+            }
+        }
+    }
+}
+
+private struct SharedExpenseBillEditorTarget: Identifiable, Hashable {
+    let rowID: UUID
+
+    var id: UUID { rowID }
+}
+
+private struct SharedExpenseBillSearchTarget: Identifiable, Hashable {
+    let rowID: UUID
+
+    var id: UUID { rowID }
+}
+
+private struct SharedExpenseTransactionSearchSheet: View {
+    @Environment(\.dismiss) private var dismiss
+    @State private var searchText = ""
+
+    let transactions: [LedgerTransaction]
+    let transactionsByID: [UUID: LedgerTransaction]
+    let transactionAuditMap: [UUID: TransactionAuditRecord]
+    let walletOwnerMap: [UUID: UUID]
+    let transactionOwnerMap: [UUID: UUID]
+    let primaryCurrencyCode: String
+    let exchangeRateIndex: MistiaExchangeRateIndex
+    let onSelect: (LedgerTransaction) -> Void
+
+    private var snapshot: TransactionsListSnapshot? {
+        let trimmed = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
+        let records = filteredTransactions(searchText: trimmed).map(\.snapshot)
+        return TransactionsListSnapshot(
+            activeTransactionCount: transactions.count,
+            visibleRecordCount: records.count,
+            displayedRecordCount: records.count,
+            openDebtPositions: [],
+            openReceivableDebtTotals: [],
+            sections: TransactionLogic.sections(
+                from: records,
+                assumesSortedByRecency: true
+            ),
+            transactionsByID: transactionsByID,
+            transactionAuditMap: transactionAuditMap,
+            walletOwnerMap: walletOwnerMap,
+            transactionOwnerMap: transactionOwnerMap
+        )
+    }
+
+    var body: some View {
+        NavigationStack {
+            TransactionsSearchScene(
+                searchText: effectiveSearchText,
+                snapshot: snapshot,
+                transactionsByID: transactionsByID,
+                transactionAuditMap: transactionAuditMap,
+                walletOwnerMap: walletOwnerMap,
+                transactionOwnerMap: transactionOwnerMap,
+                primaryCurrencyCode: primaryCurrencyCode,
+                exchangeRateIndex: exchangeRateIndex,
+                onSelect: onSelect,
+                onLoadMore: { _ in }
+            )
+            .navigationTitle(L10n.transactions.settlement.searchCashflow)
+            .navigationBarTitleDisplayMode(.inline)
+            .searchable(
+                text: $searchText,
+                placement: .navigationBarDrawer(displayMode: .always),
+                prompt: L10n.transactions.transactions.searchTransactionName
+            )
+            .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    Button {
+                        dismiss()
+                    } label: {
+                        Image(systemName: "xmark")
+                            .font(.system(size: 16, weight: .semibold))
+                            .foregroundStyle(.secondary)
+                    }
+                }
+            }
+        }
+        .presentationBackground(Color(UIColor.systemGroupedBackground))
+    }
+
+    private var effectiveSearchText: String {
+        searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            ? "."
+            : searchText
+    }
+
+    private func filteredTransactions(searchText: String) -> [LedgerTransaction] {
+        guard !searchText.isEmpty else {
+            return transactions
+        }
+
+        let normalized = searchText.folding(options: [.diacriticInsensitive, .caseInsensitive], locale: .current)
+        return transactions.filter { transaction in
+            [
+                transaction.localizedTransactionTitle,
+                transaction.note ?? "",
+                transaction.category?.localizedDisplayName ?? "",
+                transaction.sourceWallet?.name ?? "",
+                transaction.counterpartyName ?? ""
+            ]
+            .contains {
+                $0.folding(options: [.diacriticInsensitive, .caseInsensitive], locale: .current)
+                    .contains(normalized)
+            }
+        }
+    }
+}
+
+struct SettlementSplitCalculatorSheet: View {
+    @Environment(\.dismiss) private var dismiss
+    @Environment(\.modelContext) private var modelContext
+    @Environment(SessionStore.self) private var sessionStore
+    @Environment(FamilyContextStore.self) private var familyContextStore
+
+    @Query(filter: #Predicate<SettlementGroup> { $0.deletedAt == nil })
+    private var groups: [SettlementGroup]
+    @Query(filter: #Predicate<SettlementParticipant> { $0.deletedAt == nil }, sort: \SettlementParticipant.sortOrder)
+    private var participants: [SettlementParticipant]
+    @Query(filter: #Predicate<LedgerTransaction> { $0.deletedAt == nil && !$0.isArchived })
+    private var transactions: [LedgerTransaction]
+    @Query(filter: #Predicate<LedgerWallet> { $0.deletedAt == nil && !$0.isArchived })
+    private var wallets: [LedgerWallet]
+    @Query private var ownershipScopes: [OwnedRecordScope]
+
+    let target: PreparingSettlementEventSheetTarget
+    let onEdit: (UUID) -> Void
+
+    @State private var additionalRows: [SharedExpenseParticipantDraft] = []
+    @State private var alertMessage: String?
+
+    private var group: SettlementGroup? {
+        groups.first(where: { $0.id == target.groupID })
+    }
+
+    private var groupParticipants: [SettlementParticipant] {
+        participants
+            .filter { $0.groupID == target.groupID && $0.deletedAt == nil }
+            .sorted {
+                if $0.sortOrder != $1.sortOrder { return $0.sortOrder < $1.sortOrder }
+                return $0.displayName.localizedCaseInsensitiveCompare($1.displayName) == .orderedAscending
+            }
+    }
+
+    private var selfParticipant: SettlementParticipant? {
+        groupParticipants.first(where: \.isSelf)
+    }
+
+    private var nonSelfParticipants: [SettlementParticipant] {
+        groupParticipants.filter { !$0.isSelf }
+    }
+
+    private var linkedBills: [LedgerTransaction] {
+        transactions
+            .filter {
+                $0.settlementGroupID == target.groupID
+                    && $0.settlementRole == .sharedExpensePaid
+                    && $0.entryStatus == .posted
+            }
+            .sorted {
+                if $0.occurredAt != $1.occurredAt { return $0.occurredAt > $1.occurredAt }
+                return $0.updatedAt > $1.updatedAt
+            }
+    }
+
+    private var selfPaidMinor: Int64 {
+        linkedBills.reduce(Int64(0)) { $0 + max($1.amountMinor, 0) }
+    }
+
+    private var currencyCode: String {
+        MistiaCurrencyLogic.normalizedCode(group?.currencyCode ?? linkedBills.first?.sourceCurrencyCode ?? "JPY")
+    }
+
+    private var participantInputs: [SettlementParticipantInput] {
+        guard let selfParticipant else { return [] }
+        var inputs = [
+            SettlementParticipantInput(
+                id: selfParticipant.id,
+                name: selfParticipant.displayName,
+                paidMinor: selfPaidMinor
+            )
+        ]
+        inputs += nonSelfParticipants.map {
+            SettlementParticipantInput(id: $0.id, name: $0.displayName, paidMinor: 0)
+        }
+        inputs += additionalRows.compactMap { row in
+            guard let name = row.name.trimmingCharacters(in: .whitespacesAndNewlines).nilIfBlank else { return nil }
+            return SettlementParticipantInput(id: row.id, name: name, paidMinor: 0)
+        }
+        return inputs
+    }
+
+    private var splitResult: SettlementSharedExpenseResult {
+        SettlementLogic.sharedExpenseSettlement(
+            participants: participantInputs,
+            organizerID: selfParticipant?.id ?? UUID()
+        )
+    }
+
+    private var suggestionsForSelf: [SettlementSuggestion] {
+        guard let selfID = selfParticipant?.id else { return [] }
+        return splitResult.suggestions.filter {
+            $0.payerID == selfID || $0.receiverID == selfID
+        }
+    }
+
+    private var participantNameByID: [UUID: String] {
+        Dictionary(uniqueKeysWithValues: participantInputs.map { ($0.id, $0.name) })
+    }
+
+    private var ownerUserID: UUID? {
+        let ownerMap = MistiaRecordOwnershipStore.ownerMap(from: ownershipScopes, entity: .settlementGroup)
+        return ownerMap[target.groupID] ?? group?.organizerUserID ?? familyContextStore.selectedSubjectUserID ?? sessionStore.activeLocalProfileUserID
+    }
+
+    var body: some View {
+        NavigationStack {
+            ZStack {
+                Color(UIColor.systemGroupedBackground)
+                    .ignoresSafeArea()
+
+                ScrollView(.vertical, showsIndicators: false) {
+                    VStack(alignment: .leading, spacing: 18) {
+                        summaryCard
+                        peopleCard
+                        suggestionsCard
+                    }
+                    .padding(.horizontal, 18)
+                    .padding(.top, 16)
+                    .padding(.bottom, 32)
+                }
+            }
+            .navigationTitle(group?.title ?? L10n.transactions.settlement.sharedExpenseTitle)
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    Button {
+                        dismiss()
+                    } label: {
+                        Image(systemName: "xmark")
+                            .font(.system(size: 16, weight: .semibold))
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button {
+                        finalizeSplit()
+                    } label: {
+                        Image(systemName: "checkmark")
+                            .font(.system(size: 14, weight: .bold))
+                            .foregroundStyle(MistiaAccent.checkmarkPurple.color)
+                            .frame(width: 30, height: 30)
+                    }
+                    .buttonStyle(.glassProminent)
+                    .buttonBorderShape(.circle)
+                    .tint(MistiaAccent.purple.color)
+                    .disabled(participantInputs.count < 2)
+                    .opacity(participantInputs.count < 2 ? 0.45 : 1)
+                }
+            }
+        }
+        .presentationBackground(Color(UIColor.systemGroupedBackground))
+        .alert(
+            L10n.transactions.transactioneditor.canTSaveYet,
+            isPresented: Binding(get: { alertMessage != nil }, set: { if !$0 { alertMessage = nil } })
+        ) {
+            Button(L10n.common.ok, role: .cancel) {}
+        } message: {
+            if let alertMessage {
+                Text(alertMessage)
+            }
+        }
+    }
+
+    private var summaryCard: some View {
+        MistiaBlockCard(cornerRadius: 22, padding: 16) {
+            VStack(alignment: .leading, spacing: 14) {
+                HStack(alignment: .firstTextBaseline) {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(L10n.transactions.settlement.totalPaid)
+                            .font(.system(size: 12, weight: .bold, design: .rounded))
+                            .foregroundStyle(.secondary)
+                            .textCase(.uppercase)
+                        Text(selfPaidMinor.formattedCurrency(code: currencyCode))
+                            .font(.system(size: 28, weight: .bold, design: .rounded))
+                            .foregroundStyle(MistiaAccent.expense.color)
+                    }
+                    Spacer()
+                    Button {
+                        onEdit(target.groupID)
+                        dismiss()
+                    } label: {
+                        Label(L10n.management.management.edit, systemImage: "pencil")
+                            .font(.system(size: 13, weight: .bold, design: .rounded))
+                    }
+                    .buttonStyle(.bordered)
+                }
+
+                Text(L10n.transactions.settlement.selfPaidLocked)
+                    .font(.system(size: 12, weight: .semibold, design: .rounded))
+                    .foregroundStyle(.secondary)
+            }
+        }
+    }
+
+    private var peopleCard: some View {
+        MistiaBlockCard(cornerRadius: 22, padding: 16) {
+            VStack(alignment: .leading, spacing: 12) {
+                HStack {
+                    Text(L10n.transactions.settlement.participants)
+                        .font(.system(size: 13, weight: .bold, design: .rounded))
+                        .foregroundStyle(.secondary)
+                        .textCase(.uppercase)
+                    Spacer()
+                    Button {
+                        additionalRows.append(SharedExpenseParticipantDraft(name: "", paidText: ""))
+                    } label: {
+                        Image(systemName: "plus.circle.fill")
+                            .font(.system(size: 20, weight: .bold))
+                    }
+                    .buttonStyle(.plain)
+                }
+
+                ForEach(splitResult.participants) { participant in
+                    SharedExpenseParticipantResultRow(
+                        participant: participant,
+                        currencyCode: currencyCode
+                    )
+                }
+
+                ForEach($additionalRows) { $row in
+                    TextField(L10n.transactions.settlement.participantName, text: $row.name)
+                        .textInputAutocapitalization(.words)
+                        .font(.system(size: 15, weight: .semibold, design: .rounded))
+                        .padding(.vertical, 8)
+                        .overlay(alignment: .bottom) { Divider() }
+                }
+            }
+        }
+    }
+
+    private var suggestionsCard: some View {
+        MistiaBlockCard(cornerRadius: 22, padding: 16) {
+            VStack(alignment: .leading, spacing: 12) {
+                Text(L10n.transactions.settlement.settlementSuggestions)
+                    .font(.system(size: 13, weight: .bold, design: .rounded))
+                    .foregroundStyle(.secondary)
+                    .textCase(.uppercase)
+
+                if suggestionsForSelf.isEmpty {
+                    Text(L10n.transactions.settlement.noSettlementNeeded)
+                        .font(.system(size: 14, weight: .semibold, design: .rounded))
+                        .foregroundStyle(.secondary)
+                } else {
+                    ForEach(Array(suggestionsForSelf.enumerated()), id: \.offset) { _, suggestion in
+                        HStack {
+                            Text(verbatim: "\(name(for: suggestion.payerID)) → \(name(for: suggestion.receiverID))")
+                                .font(.system(size: 14, weight: .semibold, design: .rounded))
+                            Spacer()
+                            Text(suggestion.amountMinor.formattedCurrency(code: currencyCode))
+                                .font(.system(size: 14, weight: .bold, design: .rounded))
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    private func name(for id: UUID) -> String {
+        participantNameByID[id] ?? L10n.transactions.settlement.participantName
+    }
+
+    private func finalizeSplit() {
+        guard let group, let selfParticipant else {
+            alertMessage = L10n.transactions.settlement.settlementNotFound
+            return
+        }
+        guard participantInputs.count >= 2 else {
+            alertMessage = L10n.transactions.settlement.enterParticipant
+            return
+        }
+
+        let now = Date()
+        let ownerUserID = ownerUserID
+        let newParticipants = upsertAdditionalParticipants(groupID: group.id, ownerUserID: ownerUserID, modifiedAt: now)
+        let currentSelfID = selfParticipant.id
+        let obligations = suggestionsForSelf.compactMap { suggestion -> SettlementObligation? in
+            let isReceivable = suggestion.receiverID == currentSelfID
+            let counterpartyID = isReceivable ? suggestion.payerID : suggestion.receiverID
+            let counterpartyName = name(for: counterpartyID)
+            return SettlementObligation(
+                groupID: group.id,
+                counterpartyName: counterpartyName,
+                normalizedCounterpartyKey: TransactionLogic.normalizeCounterpartyName(counterpartyName),
+                direction: isReceivable ? .receivable : .payable,
+                expectedMinor: suggestion.amountMinor,
+                preferredWalletID: wallets.first?.id,
+                createdAt: now,
+                updatedAt: now
+            )
+        }
+
+        obligations.forEach(modelContext.insert)
+        group.expectedMinor = obligations.reduce(Int64(0)) { $0 + $1.expectedMinor }
+        group.settledMinor = 0
+        group.status = obligations.isEmpty ? .settled : .open
+        group.updatedAt = now
+
+        do {
+            if let ownerUserID {
+                try MistiaRecordOwnershipStore.upsert(
+                    entity: .settlementGroup,
+                    recordID: group.id,
+                    ownerUserID: ownerUserID,
+                    updatedAt: now,
+                    context: modelContext
+                )
+                for participant in newParticipants {
+                    try MistiaRecordOwnershipStore.upsert(
+                        entity: .settlementParticipant,
+                        recordID: participant.id,
+                        ownerUserID: ownerUserID,
+                        updatedAt: now,
+                        context: modelContext
+                    )
+                }
+                for obligation in obligations {
+                    try MistiaRecordOwnershipStore.upsert(
+                        entity: .settlementObligation,
+                        recordID: obligation.id,
+                        ownerUserID: ownerUserID,
+                        updatedAt: now,
+                        context: modelContext
+                    )
+                }
+            }
+            try modelContext.save()
+            queueFinalization(group: group, participants: newParticipants, obligations: obligations, ownerUserID: ownerUserID, modifiedAt: now)
+            dismiss()
+        } catch {
+            alertMessage = error.localizedDescription
+        }
+    }
+
+    private func upsertAdditionalParticipants(
+        groupID: UUID,
+        ownerUserID: UUID?,
+        modifiedAt: Date
+    ) -> [SettlementParticipant] {
+        let existingKeys = Set(groupParticipants.compactMap { $0.normalizedKey ?? TransactionLogic.normalizeCounterpartyName($0.displayName) })
+        var result: [SettlementParticipant] = []
+        var sortOrder = (groupParticipants.map(\.sortOrder).max() ?? 0) + 1
+
+        for row in additionalRows {
+            guard let name = row.name.trimmingCharacters(in: .whitespacesAndNewlines).nilIfBlank else { continue }
+            let key = TransactionLogic.normalizeCounterpartyName(name) ?? name.localizedLowercase
+            guard !existingKeys.contains(key) else { continue }
+            let participant = SettlementParticipant(
+                groupID: groupID,
+                displayName: name,
+                normalizedKey: key,
+                isSelf: false,
+                sortOrder: sortOrder,
+                createdAt: modifiedAt,
+                updatedAt: modifiedAt
+            )
+            sortOrder += 1
+            modelContext.insert(participant)
+            result.append(participant)
+        }
+        return result
+    }
+
+    private func queueFinalization(
+        group: SettlementGroup,
+        participants: [SettlementParticipant],
+        obligations: [SettlementObligation],
+        ownerUserID: UUID?,
+        modifiedAt: Date
+    ) {
+        guard let ownerUserID else { return }
+        var mutations = [
+            MistiaSyncMutation(
+                entity: .settlementGroup,
+                recordID: group.id,
+                subjectUserID: ownerUserID,
+                kind: .upsert,
+                modifiedAt: modifiedAt,
+                baseVersion: group.remoteVersion
+            )
+        ]
+        mutations += participants.map {
+            MistiaSyncMutation(
+                entity: .settlementParticipant,
+                recordID: $0.id,
+                subjectUserID: ownerUserID,
+                kind: .upsert,
+                modifiedAt: modifiedAt,
+                baseVersion: $0.remoteVersion
+            )
+        }
+        mutations += obligations.map {
+            MistiaSyncMutation(
+                entity: .settlementObligation,
+                recordID: $0.id,
+                subjectUserID: ownerUserID,
+                kind: .upsert,
+                modifiedAt: modifiedAt,
+                baseVersion: $0.remoteVersion
+            )
+        }
         sessionStore.recordMutations(mutations)
         if ownerUserID != sessionStore.activeLocalProfileUserID {
             Task { @MainActor in
@@ -1179,6 +2513,142 @@ private struct SharedExpenseParticipantDraft: Identifiable, Hashable {
     }
 }
 
+private enum SharedExpenseBillDraftMode: String, CaseIterable, Identifiable {
+    case newExpense
+    case existingExpense
+
+    var id: String { rawValue }
+}
+
+private struct SharedExpenseBillDraft: Identifiable, Hashable {
+    let id: UUID
+    var mode: SharedExpenseBillDraftMode
+    var stagedTransaction: LedgerTransaction?
+    var existingTransactionID: UUID?
+
+    init(
+        id: UUID = UUID(),
+        mode: SharedExpenseBillDraftMode = .newExpense,
+        stagedTransaction: LedgerTransaction? = nil,
+        existingTransactionID: UUID? = nil
+    ) {
+        self.id = id
+        self.mode = mode
+        self.stagedTransaction = stagedTransaction
+        self.existingTransactionID = existingTransactionID
+    }
+
+    var hasContent: Bool {
+        switch mode {
+        case .newExpense:
+            return stagedTransaction != nil
+        case .existingExpense:
+            return existingTransactionID != nil
+        }
+    }
+
+    var stagedExpenseAmountMinor: Int64 {
+        guard mode == .newExpense else { return 0 }
+        return max(stagedTransaction?.amountMinor ?? 0, 0)
+    }
+}
+
+private struct SharedExpenseBillDraftRow: View {
+    @Binding var row: SharedExpenseBillDraft
+
+    let existingTransactions: [LedgerTransaction]
+    let transactionTitle: (LedgerTransaction) -> String
+    let currencyCode: String
+    let onCreateNew: () -> Void
+    let onSearchExisting: () -> Void
+    let onRemove: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(spacing: 10) {
+                Picker(String(), selection: $row.mode) {
+                    Text(L10n.transactions.settlement.addNewExpense).tag(SharedExpenseBillDraftMode.newExpense)
+                    Text(L10n.transactions.settlement.chooseExistingExpense).tag(SharedExpenseBillDraftMode.existingExpense)
+                }
+                .pickerStyle(.segmented)
+
+                Button(action: onRemove) {
+                    Image(systemName: "minus.circle.fill")
+                        .font(.system(size: 18, weight: .semibold))
+                        .foregroundStyle(.secondary)
+                }
+                .buttonStyle(.plain)
+            }
+
+            switch row.mode {
+            case .newExpense:
+                billActionButton(
+                    title: L10n.transactions.settlement.addNewExpense,
+                    value: selectedStagedTransaction.map(transactionSummary) ?? L10n.transactions.settlement.tapToAddExpense,
+                    systemImage: "plus.circle.fill",
+                    action: onCreateNew
+                )
+            case .existingExpense:
+                billActionButton(
+                    title: L10n.transactions.settlement.chooseExistingExpense,
+                    value: selectedExistingTransaction.map(transactionTitle) ?? L10n.transactions.settlement.searchCashflow,
+                    systemImage: "magnifyingglass.circle.fill",
+                    action: onSearchExisting
+                )
+            }
+        }
+        .padding(.vertical, 12)
+        .overlay(alignment: .bottom) {
+            Divider()
+        }
+    }
+
+    private var selectedStagedTransaction: LedgerTransaction? {
+        row.stagedTransaction
+    }
+
+    private var selectedExistingTransaction: LedgerTransaction? {
+        existingTransactions.first(where: { $0.id == row.existingTransactionID })
+    }
+
+    private func transactionSummary(_ transaction: LedgerTransaction) -> String {
+        "\(transaction.localizedTransactionTitle) • \(transaction.amountMinor.formattedCurrency(code: transaction.sourceCurrencyCode ?? currencyCode))"
+    }
+
+    private func billActionButton(
+        title: String,
+        value: String,
+        systemImage: String,
+        action: @escaping () -> Void
+    ) -> some View {
+        Button(action: action) {
+            HStack(spacing: 8) {
+                Image(systemName: systemImage)
+                    .font(.system(size: 13, weight: .bold))
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(title)
+                        .font(.system(size: 10, weight: .bold, design: .rounded))
+                        .foregroundStyle(.secondary)
+                    Text(value)
+                        .font(.system(size: 13, weight: .semibold, design: .rounded))
+                        .lineLimit(1)
+                }
+                Spacer(minLength: 4)
+                Image(systemName: "chevron.up.chevron.down")
+                    .font(.system(size: 10, weight: .bold))
+                    .foregroundStyle(.secondary)
+            }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 9)
+            .background {
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .fill(Color.primary.opacity(0.06))
+            }
+        }
+        .buttonStyle(.plain)
+    }
+}
+
 private struct SharedExpenseParticipantResultRow: View {
     let participant: SettlementParticipantResult
     let currencyCode: String
@@ -1274,5 +2744,12 @@ private struct SettlementHistoryRow: View {
     private var nonBlankTitle: String {
         let trimmed = transaction.title.trimmingCharacters(in: .whitespacesAndNewlines)
         return trimmed.isEmpty ? L10n.transactions.settlement.recordPayment : trimmed
+    }
+}
+
+private extension String {
+    var nilIfBlank: String? {
+        let trimmed = trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? nil : trimmed
     }
 }

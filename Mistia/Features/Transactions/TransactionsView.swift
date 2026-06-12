@@ -126,7 +126,7 @@ private func debtIntentTint(_ intent: TransactionDebtIntent?) -> Color {
     }
 }
 
-private struct TransactionsListSnapshot {
+struct TransactionsListSnapshot {
     let activeTransactionCount: Int
     let visibleRecordCount: Int
     let displayedRecordCount: Int
@@ -200,6 +200,8 @@ struct TransactionsView: View {
     @Query private var storedCategories: [TransactionCategory]
     @Query(filter: #Predicate<SettlementGroup> { $0.deletedAt == nil }, sort: \SettlementGroup.occurredAt, order: .reverse)
     private var storedSettlementGroups: [SettlementGroup]
+    @Query(filter: #Predicate<SettlementParticipant> { $0.deletedAt == nil }, sort: \SettlementParticipant.sortOrder)
+    private var storedSettlementParticipants: [SettlementParticipant]
     @Query(filter: #Predicate<SettlementObligation> { $0.deletedAt == nil }, sort: \SettlementObligation.updatedAt, order: .reverse)
     private var storedSettlementObligations: [SettlementObligation]
     @Query private var ownershipScopes: [OwnedRecordScope]
@@ -218,6 +220,7 @@ struct TransactionsView: View {
     @State private var destination: TransactionsNavigationDestination?
     @State private var debtSettlementTarget: DebtSettlementSheetTarget?
     @State private var settlementEditorTarget: SettlementEditorTarget?
+    @State private var preparingSettlementTarget: PreparingSettlementEventSheetTarget?
     @State private var settlementDetailTarget: SettlementDetailSheetTarget?
     @State private var permissionPrompt: TransactionsPermissionPrompt?
     @State private var infoAlert: TransactionsInfoAlert?
@@ -346,6 +349,16 @@ struct TransactionsView: View {
         )
     }
 
+    private var visibleSettlementParticipants: [SettlementParticipant] {
+        FamilyScopedData.visible(
+            storedSettlementParticipants,
+            entity: .settlementParticipant,
+            scopes: ownershipScopes,
+            familyContextStore: familyContextStore,
+            sessionStore: sessionStore
+        )
+    }
+
     private var visibleSettlementObligations: [SettlementObligation] {
         FamilyScopedData.visible(
             storedSettlementObligations,
@@ -392,6 +405,14 @@ struct TransactionsView: View {
                 }
                 return $0.occurredAt > $1.occurredAt
             }
+    }
+
+    private var preparingSettlementEvents: [PreparingSettlementEventSnapshot] {
+        SettlementLogic.preparingEventSnapshots(
+            groups: visibleSettlementGroups.map(\.recordSnapshot),
+            participants: visibleSettlementParticipants.map(\.recordSnapshot),
+            records: activeTransactions.map(\.snapshot)
+        )
     }
 
     private var transactionAuditMap: [UUID: TransactionAuditRecord] {
@@ -848,6 +869,7 @@ struct TransactionsView: View {
         let memberToolbar = familyContextStore.memberViewingToolbarPresentation
         let exchangeRateIndex = MistiaExchangeRateIndex(rates: appExchangeRates)
         let openSettlementItems = self.openSettlementItems
+        let preparingSettlementEvents = self.preparingSettlementEvents
 
         NavigationStack {
             ZStack {
@@ -884,6 +906,9 @@ struct TransactionsView: View {
                         .padding(.trailing, -12)
                     }
                 ) {
+                    if !preparingSettlementEvents.isEmpty {
+                        preparingSettlementSection(preparingSettlementEvents)
+                    }
                     if !listSnapshot.openDebtPositions.isEmpty {
                         outstandingDebtSection(
                             listSnapshot.openDebtPositions,
@@ -947,6 +972,13 @@ struct TransactionsView: View {
             SettlementEditorSheet(target: target)
                 .presentationDetents([.large])
                 .presentationDragIndicator(.hidden)
+        }
+        .sheet(item: $preparingSettlementTarget) { target in
+            SettlementSplitCalculatorSheet(target: target) { groupID in
+                settlementEditorTarget = .editSharedExpense(groupID)
+            }
+            .presentationDetents([.large])
+            .presentationDragIndicator(.hidden)
         }
         .sheet(item: $settlementDetailTarget) { target in
             SettlementDetailSheet(target: target)
@@ -1074,7 +1106,7 @@ struct TransactionsView: View {
                 )
             }
 
-            Button(action: { settlementEditorTarget = .sharedExpense }) {
+            Button(action: { settlementEditorTarget = .newSharedExpense }) {
                 Label(
                     L10n.transactions.settlement.addSharedExpense,
                     systemImage: "person.3.sequence"
@@ -1386,6 +1418,37 @@ struct TransactionsView: View {
         }
     }
 
+    private func preparingSettlementSection(
+        _ events: [PreparingSettlementEventSnapshot]
+    ) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(alignment: .firstTextBaseline, spacing: 10) {
+                Text(L10n.transactions.settlement.ongoingEvents)
+                    .font(.system(size: 13, weight: .bold, design: .rounded))
+                    .foregroundStyle(.secondary)
+                    .textCase(.uppercase)
+                    .tracking(0.6)
+
+                Spacer(minLength: 12)
+            }
+            .padding(.horizontal, 2)
+
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 10) {
+                    ForEach(events) { event in
+                        PreparingSettlementCompactChip(event: event) {
+                            preparingSettlementTarget = PreparingSettlementEventSheetTarget(groupID: event.id)
+                        }
+                    }
+                }
+                .padding(.horizontal, 18)
+                .padding(.vertical, 2)
+            }
+            .scrollClipDisabled()
+            .padding(.horizontal, -18)
+        }
+    }
+
     private func formattedReceivableDebtTotal(
         _ totals: [PlanningCurrencyAmountTotalSnapshot]
     ) -> String? {
@@ -1605,7 +1668,7 @@ struct TransactionsView: View {
     }
 }
 
-private struct TransactionsSearchScene: View {
+struct TransactionsSearchScene: View {
     let searchText: String
     let snapshot: TransactionsListSnapshot?
     let transactionsByID: [UUID: LedgerTransaction]
@@ -1766,7 +1829,7 @@ private struct TransactionSummaryMetric: View {
     }
 }
 
-private struct TransactionSectionCard: View {
+struct TransactionSectionCard: View {
     @Environment(\.colorScheme) private var colorScheme
     @Environment(FamilyContextStore.self) private var familyContextStore
     @Environment(SessionStore.self) private var sessionStore

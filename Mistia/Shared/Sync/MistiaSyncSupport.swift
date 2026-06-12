@@ -128,6 +128,10 @@ extension SettlementGroup: MistiaSyncLocalRecord {
     static let syncEntity: MistiaSyncEntity = .settlementGroup
 }
 
+extension SettlementParticipant: MistiaSyncLocalRecord {
+    static let syncEntity: MistiaSyncEntity = .settlementParticipant
+}
+
 extension SettlementObligation: MistiaSyncLocalRecord {
     static let syncEntity: MistiaSyncEntity = .settlementObligation
 }
@@ -293,6 +297,17 @@ private extension MistiaSyncUploadRecord {
                     date(row.updatedAt)
                 )
             )
+        case .settlementParticipant(let row):
+            return MistiaSyncConflictRecordSummary(
+                title: row.displayName,
+                detail: compactJoined(
+                    uuid(row.groupID),
+                    row.isSelf ? "self" : nil,
+                    String(row.sortOrder),
+                    version(row.syncVersion),
+                    date(row.updatedAt)
+                )
+            )
         case .settlementObligation(let row):
             return MistiaSyncConflictRecordSummary(
                 title: row.counterpartyName,
@@ -442,6 +457,16 @@ private extension MistiaSyncUploadRecord {
                 field("total", L10n.shared.sync.mistiasync.amount, currency(local.totalMinor, code: local.currencyCode), currency(remote.totalMinor, code: remote.currencyCode))
                 field("expected", L10n.shared.sync.mistiasync.amount, currency(local.expectedMinor, code: local.currencyCode), currency(remote.expectedMinor, code: remote.currencyCode))
                 field("settled", L10n.shared.sync.mistiasync.saved, currency(local.settledMinor, code: local.currencyCode), currency(remote.settledMinor, code: remote.currencyCode))
+                field("deleted", L10n.shared.sync.mistiasync.deleteStatus, deleted(local.deletedAt), deleted(remote.deletedAt))
+            }
+        case (.settlementParticipant(let local), .settlementParticipant(let remote)):
+            return MistiaSyncConflictDifferenceBuilder.build {
+                field("group", L10n.shared.sync.mistiasync.kind, uuid(local.groupID), uuid(remote.groupID))
+                field("displayName", L10n.shared.sync.mistiasync.title, local.displayName, remote.displayName)
+                field("normalizedKey", L10n.shared.sync.mistiasync.counterparty, local.normalizedKey, remote.normalizedKey)
+                field("member", L10n.shared.sync.mistiasync.sourceWallet, uuid(local.memberUserID), uuid(remote.memberUserID))
+                field("self", L10n.shared.sync.mistiasync.status, yesNo(local.isSelf), yesNo(remote.isSelf))
+                field("sortOrder", L10n.shared.sync.mistiasync.kind, String(local.sortOrder), String(remote.sortOrder))
                 field("deleted", L10n.shared.sync.mistiasync.deleteStatus, deleted(local.deletedAt), deleted(remote.deletedAt))
             }
         case (.settlementObligation(let local), .settlementObligation(let remote)):

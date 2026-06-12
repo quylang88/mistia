@@ -2063,6 +2063,8 @@ private extension MistiaSyncEntity {
             return "square.grid.2x2.fill"
         case .settlementGroup:
             return "hourglass.circle.fill"
+        case .settlementParticipant:
+            return "person.2.fill"
         case .settlementObligation:
             return "person.line.dotted.person.fill"
         case .transaction:

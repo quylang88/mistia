@@ -563,7 +563,7 @@ private enum RootSheet: Identifiable {
     case .quickCreate(let destination, let receiptInitialSource):
       "quick-create-\(destination.rawValue)-\(receiptInitialSource?.rawValue ?? "none")"
     case .settlement(let target):
-      "settlement-\(target.rawValue)"
+      "settlement-\(target.id)"
     }
   }
 }
@@ -693,7 +693,7 @@ private enum MistiaQuickCreateDestination: String, CaseIterable, Identifiable {
     case .resale:
       return .resale
     case .sharedExpense:
-      return .sharedExpense
+      return .newSharedExpense
     case .expense, .income, .transfer, .receipt, .note:
       return nil
     }

@@ -728,6 +728,7 @@ nonisolated enum SettlementKind: String, CaseIterable, Identifiable, Codable {
 }
 
 nonisolated enum SettlementStatus: String, CaseIterable, Identifiable, Codable {
+    case preparing
     case open
     case partiallySettled
     case settled

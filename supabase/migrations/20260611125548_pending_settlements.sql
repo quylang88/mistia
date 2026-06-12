@@ -29,9 +29,25 @@ create table if not exists public.settlement_groups (
   constraint settlement_groups_kind_check
     check (kind_raw_value in ('resale', 'sharedExpense')),
   constraint settlement_groups_status_check
-    check (status_raw_value in ('open', 'partiallySettled', 'settled')),
+    check (status_raw_value in ('preparing', 'open', 'partiallySettled', 'settled')),
   constraint settlement_groups_settled_not_above_expected
     check (settled_minor <= expected_minor)
+);
+
+create table if not exists public.settlement_participants (
+  id uuid primary key,
+  user_id uuid not null references auth.users(id) on delete cascade,
+  group_id uuid not null references public.settlement_groups(id) on delete cascade,
+  display_name text not null default '',
+  normalized_key text,
+  member_user_id uuid references auth.users(id) on delete set null,
+  is_self boolean not null default false,
+  sort_order integer not null default 0,
+  created_at timestamptz not null default timezone('utc'::text, now()),
+  updated_at timestamptz not null default timezone('utc'::text, now()),
+  deleted_at timestamptz,
+  sync_version bigint not null default 1,
+  last_modified_by_device_id uuid
 );
 
 create table if not exists public.settlement_obligations (
@@ -92,6 +108,12 @@ create index if not exists settlement_groups_status_idx
   on public.settlement_groups(user_id, status_raw_value, updated_at desc)
   where deleted_at is null;
 
+create index if not exists settlement_participants_user_id_idx
+  on public.settlement_participants(user_id, updated_at desc);
+
+create index if not exists settlement_participants_group_id_idx
+  on public.settlement_participants(group_id, sort_order, updated_at desc);
+
 create index if not exists settlement_obligations_user_id_idx
   on public.settlement_obligations(user_id, updated_at desc);
 
@@ -115,17 +137,25 @@ create trigger settlement_groups_set_updated_at
 before update on public.settlement_groups
 for each row execute function public.set_updated_at();
 
+drop trigger if exists settlement_participants_set_updated_at on public.settlement_participants;
+create trigger settlement_participants_set_updated_at
+before update on public.settlement_participants
+for each row execute function public.set_updated_at();
+
 drop trigger if exists settlement_obligations_set_updated_at on public.settlement_obligations;
 create trigger settlement_obligations_set_updated_at
 before update on public.settlement_obligations
 for each row execute function public.set_updated_at();
 
 grant select, insert, update, delete on table public.settlement_groups to authenticated;
+grant select, insert, update, delete on table public.settlement_participants to authenticated;
 grant select, insert, update, delete on table public.settlement_obligations to authenticated;
 grant select, insert, update, delete on table public.settlement_groups to service_role;
+grant select, insert, update, delete on table public.settlement_participants to service_role;
 grant select, insert, update, delete on table public.settlement_obligations to service_role;
 
 alter table public.settlement_groups enable row level security;
+alter table public.settlement_participants enable row level security;
 alter table public.settlement_obligations enable row level security;
 
 drop policy if exists "settlement_groups_owned_all" on public.settlement_groups;
@@ -139,6 +169,21 @@ with check (auth.uid() = user_id);
 drop policy if exists "settlement_groups_family_select" on public.settlement_groups;
 create policy "settlement_groups_family_select"
 on public.settlement_groups
+for select
+to authenticated
+using (public.has_family_finance_view_access(user_id, false));
+
+drop policy if exists "settlement_participants_owned_all" on public.settlement_participants;
+create policy "settlement_participants_owned_all"
+on public.settlement_participants
+for all
+to authenticated
+using (auth.uid() = user_id)
+with check (auth.uid() = user_id);
+
+drop policy if exists "settlement_participants_family_select" on public.settlement_participants;
+create policy "settlement_participants_family_select"
+on public.settlement_participants
 for select
 to authenticated
 using (public.has_family_finance_view_access(user_id, false));
@@ -171,6 +216,7 @@ as $$
         or exists (select 1 from public.credit_card_profiles where user_id = p_user_id limit 1)
         or exists (select 1 from public.transaction_categories where user_id = p_user_id limit 1)
         or exists (select 1 from public.settlement_groups where user_id = p_user_id limit 1)
+        or exists (select 1 from public.settlement_participants where user_id = p_user_id limit 1)
         or exists (select 1 from public.settlement_obligations where user_id = p_user_id limit 1)
         or exists (select 1 from public.ledger_transactions where user_id = p_user_id limit 1)
         or exists (select 1 from public.budget_plans where user_id = p_user_id limit 1)

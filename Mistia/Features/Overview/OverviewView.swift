@@ -138,6 +138,10 @@ struct OverviewView: View {
     private var storedTransactions: [LedgerTransaction]
     @Query(filter: #Predicate<TransactionCategory> { $0.deletedAt == nil })
     private var storedCategories: [TransactionCategory]
+    @Query(filter: #Predicate<SettlementGroup> { $0.deletedAt == nil }, sort: \SettlementGroup.occurredAt, order: .reverse)
+    private var storedSettlementGroups: [SettlementGroup]
+    @Query(filter: #Predicate<SettlementParticipant> { $0.deletedAt == nil }, sort: \SettlementParticipant.sortOrder)
+    private var storedSettlementParticipants: [SettlementParticipant]
     @Query private var ownershipScopes: [OwnedRecordScope]
 
     private struct StatementTarget: Identifiable, Hashable {
@@ -151,6 +155,8 @@ struct OverviewView: View {
     @State private var destination: OverviewNavigationDestination?
     @State private var statementTarget: StatementTarget?
     @State private var duePaymentTarget: DuePaymentSheetTarget?
+    @State private var settlementEditorTarget: SettlementEditorTarget?
+    @State private var preparingSettlementTarget: PreparingSettlementEventSheetTarget?
     @State private var permissionPrompt: OverviewPermissionPrompt?
     @State private var infoAlert: OverviewInfoAlert?
     @State private var memberViewingExitPrompt: FamilyMemberViewingExitPrompt?
@@ -458,6 +464,14 @@ struct OverviewView: View {
         visibleWallets.compactMap(\.overviewWalletSnapshot)
     }
 
+    private var overviewPreparingSettlementEvents: [PreparingSettlementEventSnapshot] {
+        SettlementLogic.preparingEventSnapshots(
+            groups: visibleSettlementGroups.map(\.recordSnapshot),
+            participants: visibleSettlementParticipants.map(\.recordSnapshot),
+            records: visibleTransactions.map(\.snapshot)
+        )
+    }
+
     private var activeBudgetPlans: [BudgetPlanSnapshot] {
         visibleBudgets
             .filter {
@@ -568,6 +582,26 @@ struct OverviewView: View {
         )
     }
 
+    private var visibleSettlementGroups: [SettlementGroup] {
+        FamilyScopedData.visible(
+            storedSettlementGroups,
+            entity: .settlementGroup,
+            scopes: ownershipScopes,
+            familyContextStore: familyContextStore,
+            sessionStore: sessionStore
+        )
+    }
+
+    private var visibleSettlementParticipants: [SettlementParticipant] {
+        FamilyScopedData.visible(
+            storedSettlementParticipants,
+            entity: .settlementParticipant,
+            scopes: ownershipScopes,
+            familyContextStore: familyContextStore,
+            sessionStore: sessionStore
+        )
+    }
+
     private var familyBudgetSpendingCategoryScopes: [PlanningFamilyBudgetSpendingCategoryScope] {
         storedCategories
             .filter { $0.deletedAt == nil && !$0.isArchived }
@@ -638,6 +672,7 @@ struct OverviewView: View {
         let snapshotKey = renderSnapshotCacheKey
         let renderSnapshot = cachedRenderSnapshot(for: snapshotKey)
         let memberToolbar = familyContextStore.memberViewingToolbarPresentation
+        let preparingEvents = overviewPreparingSettlementEvents
 
         NavigationStack {
             MistiaPinnedTopBarScaffold(
@@ -670,6 +705,17 @@ struct OverviewView: View {
                         openExpenseDay(date, transactionsByDay: renderSnapshot.postedExpenseTransactionsByDay)
                     }
                 )
+                if !preparingEvents.isEmpty {
+                    OverviewPreparingSettlementSection(
+                        events: preparingEvents,
+                        onCalculate: { event in
+                            preparingSettlementTarget = PreparingSettlementEventSheetTarget(groupID: event.id)
+                        },
+                        onEdit: { event in
+                            settlementEditorTarget = .editSharedExpense(event.id)
+                        }
+                    )
+                }
                 if !renderSnapshot.dashboard.budgetAlerts.isEmpty {
                     BudgetFocusSection(rows: renderSnapshot.dashboard.budgetAlerts)
                 }
@@ -711,6 +757,18 @@ struct OverviewView: View {
             TransactionEditorSheet(target: target)
                 .presentationDetents([.large])
                 .presentationDragIndicator(.hidden)
+        }
+        .sheet(item: $settlementEditorTarget) { target in
+            SettlementEditorSheet(target: target)
+                .presentationDetents([.large])
+                .presentationDragIndicator(.hidden)
+        }
+        .sheet(item: $preparingSettlementTarget) { target in
+            SettlementSplitCalculatorSheet(target: target) { groupID in
+                settlementEditorTarget = .editSharedExpense(groupID)
+            }
+            .presentationDetents([.large])
+            .presentationDragIndicator(.hidden)
         }
         .sheet(item: $duePaymentTarget) { target in
             DuePaymentSheet(target: target)
@@ -1996,6 +2054,88 @@ private struct RecentTransactionsSection: View {
                 }
             }
         }
+    }
+}
+
+private struct OverviewPreparingSettlementSection: View {
+    let events: [PreparingSettlementEventSnapshot]
+    let onCalculate: (PreparingSettlementEventSnapshot) -> Void
+    let onEdit: (PreparingSettlementEventSnapshot) -> Void
+
+    var body: some View {
+        OverviewSection(title: L10n.transactions.settlement.ongoingEvents) {
+            VStack(spacing: 0) {
+                ForEach(Array(events.prefix(3).enumerated()), id: \.element.id) { index, event in
+                    VStack(alignment: .leading, spacing: 12) {
+                        HStack(alignment: .top, spacing: 12) {
+                            OverviewIcon(icon: "calendar.badge.clock", tint: MistiaAccent.purple.color)
+                            VStack(alignment: .leading, spacing: 5) {
+                                Text(event.title)
+                                    .font(.system(size: 16, weight: .bold, design: .rounded))
+                                    .lineLimit(1)
+                                Text(participantText(for: event))
+                                    .font(.system(size: 12, weight: .semibold, design: .rounded))
+                                    .foregroundStyle(.secondary)
+                                    .lineLimit(2)
+                            }
+                            Spacer()
+                            Text(event.totalPaidMinor.formattedCurrency(code: event.currencyCode))
+                                .font(.system(size: 16, weight: .bold, design: .rounded))
+                                .foregroundStyle(MistiaAccent.expense.color)
+                                .lineLimit(1)
+                                .minimumScaleFactor(0.75)
+                        }
+
+                        HStack(spacing: 8) {
+                            Label(L10n.transactions.settlement.billCountValue(String(event.billCount)), systemImage: "receipt")
+                                .font(.system(size: 12, weight: .bold, design: .rounded))
+                                .foregroundStyle(.secondary)
+                            Spacer()
+                            Button {
+                                onEdit(event)
+                            } label: {
+                                Label(L10n.management.management.edit, systemImage: "pencil")
+                            }
+                            .buttonStyle(.bordered)
+                            Button {
+                                onCalculate(event)
+                            } label: {
+                                Label(L10n.transactions.settlement.calculateSplit, systemImage: "function")
+                            }
+                            .buttonStyle(.borderedProminent)
+                        }
+                        .font(.system(size: 12, weight: .bold, design: .rounded))
+
+                        if let note = trimmedNote(for: event) {
+                            Text(note)
+                                .font(.system(size: 12, weight: .semibold, design: .rounded))
+                                .foregroundStyle(.secondary)
+                                .lineLimit(2)
+                        }
+                    }
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 13)
+
+                    if index < min(events.count, 3) - 1 {
+                        Divider()
+                            .padding(.leading, 48)
+                    }
+                }
+            }
+        }
+    }
+
+    private func participantText(for event: PreparingSettlementEventSnapshot) -> String {
+        event.participantNames.isEmpty
+            ? L10n.transactions.settlement.noParticipantsYet
+            : event.participantNames.joined(separator: ", ")
+    }
+
+    private func trimmedNote(for event: PreparingSettlementEventSnapshot) -> String? {
+        guard let note = event.note?.trimmingCharacters(in: .whitespacesAndNewlines), !note.isEmpty else {
+            return nil
+        }
+        return note
     }
 }
 

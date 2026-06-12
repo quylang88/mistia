@@ -54,7 +54,23 @@ final class MistiaMigrationPlanTests: XCTestCase {
         XCTAssertTrue(v5ModelNames.contains("MistiaCoreLogic.MistiaSchemaV5Models.LedgerTransaction"))
         XCTAssertTrue(v6ModelNames.contains("MistiaCoreLogic.LedgerTransaction"))
         XCTAssertTrue(v6ModelNames.contains("MistiaCoreLogic.SettlementGroup"))
+        XCTAssertTrue(v6ModelNames.contains("MistiaCoreLogic.SettlementParticipant"))
         XCTAssertTrue(v6ModelNames.contains("MistiaCoreLogic.SettlementObligation"))
+    }
+
+    func testPendingSettlementsMigrationIncludesPreparingParticipantsAndStatus() throws {
+        let migrationURL = repositoryRootURL()
+            .appending(path: "supabase/migrations/20260611125548_pending_settlements.sql")
+        let migration = try String(contentsOf: migrationURL, encoding: .utf8)
+
+        XCTAssertTrue(migration.contains("create table if not exists public.settlement_participants"))
+        XCTAssertTrue(migration.contains("kind_raw_value in ('resale', 'sharedExpense')"))
+        XCTAssertTrue(migration.contains("status_raw_value in ('preparing', 'open', 'partiallySettled', 'settled')"))
+        XCTAssertTrue(migration.contains("display_name text not null default ''"))
+        XCTAssertTrue(migration.contains("normalized_key text"))
+        XCTAssertTrue(migration.contains("is_self boolean not null default false"))
+        XCTAssertTrue(migration.contains("settlement_participants_group_id_idx"))
+        XCTAssertTrue(migration.contains("settlement_participants_family_select"))
     }
 
     func testFamilyTransferRPCMigrationGuardsPermissionsAndWritesBothRows() throws {

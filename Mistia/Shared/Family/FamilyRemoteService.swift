@@ -837,6 +837,7 @@ struct FamilyRemoteService: FamilyRemoteServicing {
                 creditCardProfiles: [],
                 categories: [],
                 settlementGroups: [],
+                settlementParticipants: [],
                 settlementObligations: [],
                 transactions: [],
                 budgetPlans: [],
@@ -864,6 +865,11 @@ struct FamilyRemoteService: FamilyRemoteServicing {
         )
         async let settlementGroups: [RemoteSettlementGroup] = fetchFinanceRows(
             path: MistiaSyncEntity.settlementGroup.tableName,
+            userIDs: userIDs,
+            session: session
+        )
+        async let settlementParticipants: [RemoteSettlementParticipant] = fetchFinanceRows(
+            path: MistiaSyncEntity.settlementParticipant.tableName,
             userIDs: userIDs,
             session: session
         )
@@ -904,6 +910,7 @@ struct FamilyRemoteService: FamilyRemoteServicing {
             creditCardProfiles: try await profiles,
             categories: try await categories,
             settlementGroups: try await settlementGroups,
+            settlementParticipants: try await settlementParticipants,
             settlementObligations: try await settlementObligations,
             transactions: try await transactions,
             budgetPlans: try await budgets,

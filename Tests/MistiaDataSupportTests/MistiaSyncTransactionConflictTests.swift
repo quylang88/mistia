@@ -152,6 +152,7 @@ final class MistiaSyncTransactionConflictTests: XCTestCase {
         let wallet = makeWallet()
         let groupID = UUID()
         let obligationID = UUID()
+        let participantID = UUID()
         let transactionID = UUID()
         let sourceContainer = try makeContainer()
         let sourceContext = ModelContext(sourceContainer)
@@ -168,6 +169,17 @@ final class MistiaSyncTransactionConflictTests: XCTestCase {
             expectedMinor: 1_500,
             settledMinor: 0,
             organizerUserID: userID,
+            createdAt: occurredAt,
+            updatedAt: occurredAt
+        )
+        let participant = SettlementParticipant(
+            id: participantID,
+            groupID: groupID,
+            displayName: "Buyer",
+            normalizedKey: "buyer",
+            memberUserID: nil,
+            isSelf: false,
+            sortOrder: 1,
             createdAt: occurredAt,
             updatedAt: occurredAt
         )
@@ -200,12 +212,14 @@ final class MistiaSyncTransactionConflictTests: XCTestCase {
 
         sourceContext.insert(wallet)
         sourceContext.insert(group)
+        sourceContext.insert(participant)
         sourceContext.insert(obligation)
         sourceContext.insert(transaction)
         try sourceContext.save()
 
         let snapshot = try MistiaSyncLocalStore.exportSnapshot(for: userID, from: sourceContainer)
         XCTAssertEqual(snapshot.settlementGroups.first?.id, groupID)
+        XCTAssertEqual(snapshot.settlementParticipants.first?.id, participantID)
         XCTAssertEqual(snapshot.settlementObligations.first?.id, obligationID)
         XCTAssertEqual(snapshot.transactions.first?.settlementRoleRawValue, SettlementTransactionRole.resaleReceipt.rawValue)
         XCTAssertEqual(snapshot.transactions.first?.reportingExpenseMinor, -1_000)
@@ -221,11 +235,15 @@ final class MistiaSyncTransactionConflictTests: XCTestCase {
 
         let targetContext = ModelContext(targetContainer)
         let restoredGroup = try XCTUnwrap(try targetContext.fetch(FetchDescriptor<SettlementGroup>()).first)
+        let restoredParticipant = try XCTUnwrap(try targetContext.fetch(FetchDescriptor<SettlementParticipant>()).first)
         let restoredObligation = try XCTUnwrap(try targetContext.fetch(FetchDescriptor<SettlementObligation>()).first)
         let restoredTransaction = try XCTUnwrap(try targetContext.fetch(FetchDescriptor<LedgerTransaction>()).first)
 
         XCTAssertEqual(restoredGroup.id, groupID)
         XCTAssertEqual(restoredGroup.kind, .resale)
+        XCTAssertEqual(restoredParticipant.groupID, groupID)
+        XCTAssertEqual(restoredParticipant.displayName, "Buyer")
+        XCTAssertFalse(restoredParticipant.isSelf)
         XCTAssertEqual(restoredObligation.groupID, groupID)
         XCTAssertEqual(restoredObligation.direction, .receivable)
         XCTAssertEqual(restoredTransaction.settlementGroupID, groupID)

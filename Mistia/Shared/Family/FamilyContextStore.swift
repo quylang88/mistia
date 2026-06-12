@@ -1379,6 +1379,7 @@ final class FamilyContextStore {
             creditCardProfiles: reconciledFinanceSnapshot.creditCardProfiles,
             categories: reconciledFinanceSnapshot.categories,
             settlementGroups: reconciledFinanceSnapshot.settlementGroups,
+            settlementParticipants: reconciledFinanceSnapshot.settlementParticipants,
             settlementObligations: reconciledFinanceSnapshot.settlementObligations,
             transactions: [],
             budgetPlans: reconciledFinanceSnapshot.budgetPlans,

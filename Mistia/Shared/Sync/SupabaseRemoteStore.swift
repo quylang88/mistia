@@ -63,6 +63,7 @@ struct SupabaseRemoteStore: MistiaRemoteStore {
         let profiles: [RemoteCreditCardProfile] = try await fetchRows(entity: .creditCardProfile, subjectUserID: subjectUserID, session: session)
         let categories: [RemoteTransactionCategory] = try await fetchRows(entity: .category, subjectUserID: subjectUserID, session: session)
         let settlementGroups: [RemoteSettlementGroup] = try await fetchRows(entity: .settlementGroup, subjectUserID: subjectUserID, session: session)
+        let settlementParticipants: [RemoteSettlementParticipant] = try await fetchRows(entity: .settlementParticipant, subjectUserID: subjectUserID, session: session)
         let settlementObligations: [RemoteSettlementObligation] = try await fetchRows(entity: .settlementObligation, subjectUserID: subjectUserID, session: session)
         let transactions: [RemoteLedgerTransaction] = try await fetchRows(entity: .transaction, subjectUserID: subjectUserID, session: session)
         let budgetPlans: [RemoteBudgetPlan] = try await fetchRows(entity: .budgetPlan, subjectUserID: subjectUserID, session: session)
@@ -76,6 +77,7 @@ struct SupabaseRemoteStore: MistiaRemoteStore {
             creditCardProfiles: profiles,
             categories: categories,
             settlementGroups: settlementGroups,
+            settlementParticipants: settlementParticipants,
             settlementObligations: settlementObligations,
             transactions: transactions,
             budgetPlans: budgetPlans,
@@ -101,6 +103,8 @@ struct SupabaseRemoteStore: MistiaRemoteStore {
             return try await fetchSingleRow(entity: entity, recordID: recordID, subjectUserID: subjectUserID, session: session).map(MistiaSyncUploadRecord.category)
         case .settlementGroup:
             return try await fetchSingleRow(entity: entity, recordID: recordID, subjectUserID: subjectUserID, session: session).map(MistiaSyncUploadRecord.settlementGroup)
+        case .settlementParticipant:
+            return try await fetchSingleRow(entity: entity, recordID: recordID, subjectUserID: subjectUserID, session: session).map(MistiaSyncUploadRecord.settlementParticipant)
         case .settlementObligation:
             return try await fetchSingleRow(entity: entity, recordID: recordID, subjectUserID: subjectUserID, session: session).map(MistiaSyncUploadRecord.settlementObligation)
         case .transaction:
@@ -136,6 +140,8 @@ struct SupabaseRemoteStore: MistiaRemoteStore {
             return .category(try await createRow(row, entity: .category, subjectUserID: subjectUserID, session: session))
         case .settlementGroup(let row):
             return .settlementGroup(try await createRow(row, entity: .settlementGroup, subjectUserID: subjectUserID, session: session))
+        case .settlementParticipant(let row):
+            return .settlementParticipant(try await createRow(row, entity: .settlementParticipant, subjectUserID: subjectUserID, session: session))
         case .settlementObligation(let row):
             return .settlementObligation(try await createRow(row, entity: .settlementObligation, subjectUserID: subjectUserID, session: session))
         case .transaction(let row):
@@ -174,6 +180,8 @@ struct SupabaseRemoteStore: MistiaRemoteStore {
             return try await updateRow(row, entity: .category, expectedVersion: expectedVersion, subjectUserID: subjectUserID, session: session).map(MistiaSyncUploadRecord.category)
         case .settlementGroup(let row):
             return try await updateRow(row, entity: .settlementGroup, expectedVersion: expectedVersion, subjectUserID: subjectUserID, session: session).map(MistiaSyncUploadRecord.settlementGroup)
+        case .settlementParticipant(let row):
+            return try await updateRow(row, entity: .settlementParticipant, expectedVersion: expectedVersion, subjectUserID: subjectUserID, session: session).map(MistiaSyncUploadRecord.settlementParticipant)
         case .settlementObligation(let row):
             return try await updateRow(row, entity: .settlementObligation, expectedVersion: expectedVersion, subjectUserID: subjectUserID, session: session).map(MistiaSyncUploadRecord.settlementObligation)
         case .transaction(let row):
@@ -255,6 +263,9 @@ struct SupabaseRemoteStore: MistiaRemoteStore {
         case .settlementGroup:
             let rows: [RemoteSettlementGroup] = try await performRequest(request: request)
             return rows.first.map(MistiaSyncUploadRecord.settlementGroup)
+        case .settlementParticipant:
+            let rows: [RemoteSettlementParticipant] = try await performRequest(request: request)
+            return rows.first.map(MistiaSyncUploadRecord.settlementParticipant)
         case .settlementObligation:
             let rows: [RemoteSettlementObligation] = try await performRequest(request: request)
             return rows.first.map(MistiaSyncUploadRecord.settlementObligation)
@@ -293,6 +304,8 @@ struct SupabaseRemoteStore: MistiaRemoteStore {
             return .category(try await upsertRow(row, entity: .category, subjectUserID: subjectUserID, session: session))
         case .settlementGroup(let row):
             return .settlementGroup(try await upsertRow(row, entity: .settlementGroup, subjectUserID: subjectUserID, session: session))
+        case .settlementParticipant(let row):
+            return .settlementParticipant(try await upsertRow(row, entity: .settlementParticipant, subjectUserID: subjectUserID, session: session))
         case .settlementObligation(let row):
             return .settlementObligation(try await upsertRow(row, entity: .settlementObligation, subjectUserID: subjectUserID, session: session))
         case .transaction(let row):
