@@ -2861,6 +2861,17 @@ struct SettlementDetailSheet: View {
                         }
                         .pickerStyle(.menu)
                     }
+                } else {
+                    Section {
+                        HStack {
+                            Spacer()
+                            Text("Khoản nợ này đã được thanh toán hoàn tất")
+                                .font(.system(size: 15, weight: .semibold, design: .rounded))
+                                .foregroundStyle(.secondary)
+                            Spacer()
+                        }
+                        .padding(.vertical, 8)
+                    }
                 }
 
                 if !historyRows.isEmpty {
@@ -2887,19 +2898,21 @@ struct SettlementDetailSheet: View {
                 }
 
                 ToolbarItem(placement: .topBarTrailing) {
-                    Button {
-                        save()
-                    } label: {
-                        Image(systemName: "checkmark")
-                            .font(.system(size: 14, weight: .bold))
-                            .foregroundStyle(MistiaAccent.checkmarkPurple.color)
-                            .frame(width: 30, height: 30)
+                    if target.item.remainingMinor > 0 {
+                        Button {
+                            save()
+                        } label: {
+                            Image(systemName: "checkmark")
+                                .font(.system(size: 14, weight: .bold))
+                                .foregroundStyle(MistiaAccent.checkmarkPurple.color)
+                                .frame(width: 30, height: 30)
+                        }
+                        .buttonStyle(.glassProminent)
+                        .buttonBorderShape(.circle)
+                        .tint(MistiaAccent.purple.color)
+                        .disabled(isSaveDisabled)
+                        .opacity(isSaveDisabled ? 0.45 : 1)
                     }
-                    .buttonStyle(.glassProminent)
-                    .buttonBorderShape(.circle)
-                    .tint(MistiaAccent.purple.color)
-                    .disabled(isSaveDisabled)
-                    .opacity(isSaveDisabled ? 0.45 : 1)
                 }
             }
         }
