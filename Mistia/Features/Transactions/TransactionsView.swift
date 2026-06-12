@@ -849,7 +849,7 @@ struct TransactionsView: View {
             ZStack {
                 MistiaPinnedTopBarScaffold(
                     tone: .standard,
-                    title: L10n.transactions.transactions.transactions,
+                    title: isSearchSceneVisible ? "" : L10n.transactions.transactions.transactions,
                     embedsInNavigationStack: false,
                     showsLeadingAvatar: memberToolbar != nil,
                     leadingInitials: memberToolbar?.initials ?? "MI",
@@ -867,7 +867,7 @@ struct TransactionsView: View {
                     },
                     contentSpacing: 18,
                     contentBottomPadding: 150,
-                    titleDisplayMode: .large,
+                    titleDisplayMode: isSearchSceneVisible ? .inline : .large,
                     headerBehavior: .scrollsThenPins,
                     pinnedHeader: {
                         VStack(alignment: .leading, spacing: 8) {

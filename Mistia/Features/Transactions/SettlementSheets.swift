@@ -1579,6 +1579,7 @@ private struct SharedExpenseBillSearchTarget: Identifiable, Hashable {
 private struct SharedExpenseTransactionSearchSheet: View {
     @Environment(\.dismiss) private var dismiss
     @State private var searchText = ""
+    @State private var isSearchPresented = false
 
     let transactions: [LedgerTransaction]
     let transactionsByID: [UUID: LedgerTransaction]
@@ -1632,15 +1633,29 @@ private struct SharedExpenseTransactionSearchSheet: View {
             )
             .searchable(
                 text: $searchText,
+                isPresented: $isSearchPresented,
                 placement: .navigationBarDrawer(displayMode: .always),
                 prompt: L10n.transactions.settlement.searchExpenseNamePrompt
             )
-            .onChange(of: searchText) { oldValue, newValue in
-                if !oldValue.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
-                   newValue.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            .onChange(of: isSearchPresented) { _, newValue in
+                if !newValue {
                     dismiss()
                 }
             }
+            .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    Button {
+                        dismiss()
+                    } label: {
+                        Image(systemName: "xmark")
+                            .font(.system(size: 16, weight: .semibold))
+                            .foregroundStyle(.secondary)
+                    }
+                }
+            }
+        }
+        .onAppear {
+            isSearchPresented = true
         }
         .presentationBackground(Color(UIColor.systemGroupedBackground))
     }
