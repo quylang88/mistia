@@ -1877,7 +1877,7 @@ struct TransactionSectionCard: View {
                             Button {
                                 onSelect(transaction)
                             } label: {
-                                TransactionRow(
+                                TransactionCashflowRow(
                                     record: row,
                                     transaction: transaction,
                                     auditRecord: transactionAuditMap[transaction.id],
@@ -1910,7 +1910,7 @@ struct TransactionSectionCard: View {
     }
 }
 
-private struct TransactionRow: View {
+struct TransactionCashflowRow: View {
     @Environment(\.colorScheme) private var colorScheme: ColorScheme
 
     let record: TransactionRecordSnapshot

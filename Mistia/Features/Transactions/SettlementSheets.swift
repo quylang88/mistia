@@ -725,29 +725,40 @@ struct SettlementEditorSheet: View {
 
     @ViewBuilder
     private var savedBillsContent: some View {
-        ForEach(linkedSharedExpenseBills) { bill in
-            HStack(spacing: 12) {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(bill.title)
-                        .font(.system(size: 15, weight: .semibold, design: .rounded))
-                        .lineLimit(1)
-                    Text(bill.occurredAt.formatted(date: .abbreviated, time: .omitted))
-                        .font(.system(size: 11, weight: .semibold, design: .rounded))
-                        .foregroundStyle(.secondary)
+        VStack(spacing: 0) {
+            ForEach(Array(linkedSharedExpenseBills.enumerated()), id: \.element.id) { index, bill in
+                HStack(alignment: .center, spacing: 10) {
+                    TransactionCashflowRow(
+                        record: bill.snapshot,
+                        transaction: bill,
+                        auditRecord: transactionAuditMap[bill.id],
+                        walletOwnerMap: walletOwnerMap,
+                        transactionOwnerMap: transactionOwnerMap,
+                        familyContextStore: familyContextStore,
+                        hasFamilyOwnerConflict: false,
+                        primaryCurrencyCode: primaryCurrencyCode,
+                        exchangeRateIndex: MistiaExchangeRateIndex(rates: MistiaCurrencySettings.rates())
+                    )
+
+                    Button {
+                        detachBill(bill)
+                    } label: {
+                        Image(systemName: "link.badge.minus")
+                            .font(.system(size: 16, weight: .semibold))
+                            .foregroundStyle(.secondary)
+                    }
+                    .buttonStyle(.plain)
                 }
-                Spacer()
-                Text(bill.amountMinor.formattedCurrency(code: bill.sourceCurrencyCode ?? activeCurrencyCode))
-                    .font(.system(size: 14, weight: .bold, design: .rounded))
-                Button {
-                    detachBill(bill)
-                } label: {
-                    Image(systemName: "link.badge.minus")
-                        .font(.system(size: 16, weight: .semibold))
-                        .foregroundStyle(.secondary)
+                .padding(.horizontal, 14)
+                .padding(.vertical, 12)
+
+                if index < linkedSharedExpenseBills.count - 1 {
+                    Divider()
+                        .padding(.leading, 52)
                 }
-                .buttonStyle(.plain)
             }
         }
+        .listRowInsets(EdgeInsets(top: 0, leading: 0, bottom: 0, trailing: 0))
     }
 
     @ViewBuilder
@@ -763,25 +774,31 @@ struct SettlementEditorSheet: View {
                 showingBillAddOptions = true
             }
             .listRowInsets(EdgeInsets(top: 10, leading: 12, bottom: 10, trailing: 12))
+            .listRowBackground(Color.clear)
         } else {
             VStack(spacing: 0) {
                 ForEach(billRows.indices, id: \.self) { index in
                     SharedExpenseBillDraftRow(
                         row: $billRows[index],
                         existingTransactions: attachableExpenseTransactions,
-                        transactionTitle: existingTransactionLabel(for:),
+                        transactionAuditMap: transactionAuditMap,
+                        walletOwnerMap: walletOwnerMap,
+                        transactionOwnerMap: transactionOwnerMap,
+                        primaryCurrencyCode: primaryCurrencyCode,
+                        exchangeRateIndex: MistiaExchangeRateIndex(rates: MistiaCurrencySettings.rates()),
+                        familyContextStore: familyContextStore,
                         currencyCode: activeCurrencyCode,
                         onRemove: { removeBillRow(billRows[index].id) }
                     )
 
                     if index < billRows.count - 1 {
                         Divider()
-                            .padding(.leading, 46)
+                            .padding(.leading, 52)
                     }
                 }
 
                 Divider()
-                    .padding(.leading, 46)
+                    .padding(.leading, 52)
 
                 MistiaFooterAddButton(
                     title: L10n.transactions.settlement.addExpense,
@@ -789,8 +806,6 @@ struct SettlementEditorSheet: View {
                 ) {
                     showingBillAddOptions = true
                 }
-                .padding(.horizontal, 2)
-                .padding(.vertical, 12)
             }
             .listRowInsets(EdgeInsets(top: 0, leading: 0, bottom: 0, trailing: 0))
         }
@@ -2539,56 +2554,25 @@ private struct SettlementEventExpenseEmptyState: View {
     let symbols: [String]
     let action: () -> Void
 
-    private var symbolFillOpacity: Double {
-        colorScheme == .dark ? 0.22 : 0.10
-    }
-
-    private var buttonFill: Color {
-        colorScheme == .dark ? .white.opacity(0.12) : .black.opacity(0.08)
+    private var cardTint: Color {
+        colorScheme == .dark ? .white.opacity(0.018) : .white.opacity(0.12)
     }
 
     var body: some View {
-        VStack(spacing: 10) {
-            HStack(spacing: 8) {
-                ForEach(Array(symbols.enumerated()), id: \.offset) { index, symbol in
-                    ZStack {
-                        Circle()
-                            .fill(accent.opacity(symbolFillOpacity + Double(index) * 0.02))
-                        Image(systemName: symbol)
-                            .font(.system(size: 12, weight: .bold))
-                            .foregroundStyle(accent)
-                    }
-                    .frame(width: 30, height: 30)
-                }
-            }
-
-            VStack(spacing: 4) {
-                Text(title)
-                    .font(.system(size: 16, weight: .bold, design: .rounded))
-                    .foregroundStyle(.primary)
-                Text(message)
-                    .font(.system(size: 12.5, weight: .medium, design: .rounded))
-                    .foregroundStyle(.secondary)
-                    .multilineTextAlignment(.center)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-
-            Button(action: action) {
-                Text(buttonTitle)
-                    .font(.system(size: 15, weight: .bold, design: .rounded))
-                    .foregroundStyle(accent)
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 11)
-                    .background {
-                        Capsule()
-                            .fill(buttonFill)
-                    }
-            }
-            .buttonStyle(MistiaPressableButtonStyle(cornerRadius: 22, tint: accent))
+        MistiaBlockCard(
+            cornerRadius: 24,
+            tint: cardTint,
+            padding: 0
+        ) {
+            MistiaEmptyStateContent(
+                title: title,
+                message: message,
+                buttonTitle: buttonTitle,
+                accent: accent,
+                symbols: symbols,
+                action: action
+            )
         }
-        .padding(.horizontal, 8)
-        .padding(.vertical, 8)
-        .frame(maxWidth: .infinity)
     }
 }
 
@@ -2596,37 +2580,32 @@ private struct SharedExpenseBillDraftRow: View {
     @Binding var row: SharedExpenseBillDraft
 
     let existingTransactions: [LedgerTransaction]
-    let transactionTitle: (LedgerTransaction) -> String
+    let transactionAuditMap: [UUID: TransactionAuditRecord]
+    let walletOwnerMap: [UUID: UUID]
+    let transactionOwnerMap: [UUID: UUID]
+    let primaryCurrencyCode: String
+    let exchangeRateIndex: MistiaExchangeRateIndex
+    let familyContextStore: FamilyContextStore
     let currencyCode: String
     let onRemove: () -> Void
 
     var body: some View {
-        HStack(alignment: .center, spacing: 12) {
-            ZStack {
-                Circle()
-                    .fill(MistiaAccent.expense.color.opacity(0.12))
-                Image(systemName: row.mode == .newExpense ? "receipt.fill" : "link")
-                    .font(.system(size: 15, weight: .bold))
-                    .foregroundStyle(MistiaAccent.expense.color)
+        HStack(alignment: .center, spacing: 10) {
+            if let transaction = selectedTransaction {
+                TransactionCashflowRow(
+                    record: transaction.snapshot,
+                    transaction: transaction,
+                    auditRecord: transactionAuditMap[transaction.id],
+                    walletOwnerMap: walletOwnerMap,
+                    transactionOwnerMap: transactionOwnerMap,
+                    familyContextStore: familyContextStore,
+                    hasFamilyOwnerConflict: false,
+                    primaryCurrencyCode: primaryCurrencyCode,
+                    exchangeRateIndex: exchangeRateIndex
+                )
+            } else {
+                placeholderContent
             }
-            .frame(width: 34, height: 34)
-
-            VStack(alignment: .leading, spacing: 3) {
-                Text(primaryText)
-                    .font(.system(size: 15.5, weight: .semibold, design: .rounded))
-                    .foregroundStyle(.primary)
-                    .lineLimit(1)
-                Text(row.mode == .newExpense ? L10n.transactions.settlement.addNewExpense : L10n.transactions.settlement.chooseExistingExpense)
-                    .font(.system(size: 12, weight: .semibold, design: .rounded))
-                    .foregroundStyle(.secondary)
-            }
-
-            Spacer(minLength: 8)
-
-            Text(amountText)
-                .font(.system(size: 15, weight: .bold, design: .rounded))
-                .foregroundStyle(MistiaAccent.expense.color)
-                .lineLimit(1)
 
             Button(action: onRemove) {
                 Image(systemName: "minus.circle.fill")
@@ -2636,7 +2615,7 @@ private struct SharedExpenseBillDraftRow: View {
             .buttonStyle(.plain)
         }
         .padding(.horizontal, 14)
-        .padding(.vertical, 11)
+        .padding(.vertical, 12)
     }
 
     private var selectedStagedTransaction: LedgerTransaction? {
@@ -2647,28 +2626,43 @@ private struct SharedExpenseBillDraftRow: View {
         existingTransactions.first(where: { $0.id == row.existingTransactionID })
     }
 
-    private var primaryText: String {
+    private var selectedTransaction: LedgerTransaction? {
         switch row.mode {
         case .newExpense:
-            selectedStagedTransaction?.localizedTransactionTitle ?? L10n.transactions.settlement.addNewExpense
+            selectedStagedTransaction
         case .existingExpense:
-            selectedExistingTransaction.map(transactionTitle) ?? L10n.transactions.settlement.searchExpense
+            selectedExistingTransaction
         }
     }
 
-    private var amountText: String {
-        switch row.mode {
-        case .newExpense:
-            guard let transaction = selectedStagedTransaction else {
-                return Int64(0).formattedCurrency(code: currencyCode)
+    private var placeholderContent: some View {
+        HStack(spacing: 12) {
+            MistiaFinanceIconView(
+                icon: row.mode == .newExpense ? "receipt.fill" : "link",
+                fallbackColor: MistiaAccent.expense.color,
+                size: 34
+            )
+
+            VStack(alignment: .leading, spacing: 6) {
+                Text(row.mode == .newExpense ? L10n.transactions.settlement.addNewExpense : L10n.transactions.settlement.searchExpense)
+                    .font(.system(size: 16, weight: .semibold, design: .rounded))
+                    .foregroundStyle(.primary)
+                    .lineLimit(1)
+
+                Text(row.mode == .newExpense ? L10n.transactions.settlement.addNewExpense : L10n.transactions.settlement.chooseExistingExpense)
+                    .font(.system(size: 12, weight: .medium, design: .rounded))
+                    .foregroundStyle(.secondary)
+                    .lineLimit(2)
             }
-            return transaction.amountMinor.formattedCurrency(code: transaction.sourceCurrencyCode ?? currencyCode)
-        case .existingExpense:
-            guard let transaction = selectedExistingTransaction else {
-                return Int64(0).formattedCurrency(code: currencyCode)
+
+            Spacer(minLength: 8)
+
+            Text(Int64(0).formattedCurrency(code: currencyCode))
+                .font(.system(size: 16, weight: .bold, design: .rounded))
+                .foregroundStyle(MistiaAccent.expense.color)
+                .lineLimit(1)
+                .minimumScaleFactor(0.74)
             }
-            return transaction.amountMinor.formattedCurrency(code: transaction.sourceCurrencyCode ?? currencyCode)
-        }
     }
 }
 
