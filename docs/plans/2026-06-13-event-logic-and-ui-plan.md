@@ -123,7 +123,32 @@ git commit -m "feat: add isEventOnly to TransactionFilterState"
 
 ---
 
-### Task 4: Add Event Segment to TransactionSegment
+### Task 4: Verify Event Icon Registry (No changes needed)
+**Files:**
+- Verify: `Mistia/Core/UI/MistiaFinanceIcons.swift`
+
+**Step 1: Verification**
+Verify that `"mistia.settlement.event"` is registered as follows:
+- Explicit descriptor uses `"calendar.badge.clock"` fallback:
+```swift
+        "mistia.settlement.event": descriptor(token: "mistia.settlement.event", fallbackSystemName: "calendar.badge.clock", baseHex: "#5B7BFF", group: .planning, badgeSystemName: "person.2.fill"),
+```
+- Assigned to `"ic_fluent_calendar_clock_24_color"`:
+```swift
+        assign("ic_fluent_calendar_clock_24_color", [
+            "mistia.category.income.salary_work.overtime",
+            "mistia.plan.bill",
+            "mistia.plan.payment",
+            "mistia.settlement.event"
+        ])
+```
+
+**Step 2: Commit**
+No commit required for this task.
+
+---
+
+### Task 5: Add Event Segment to TransactionSegment
 **Files:**
 - Modify: `Mistia/Features/Transactions/TransactionsView.swift:4-40`, `Mistia/Features/Transactions/TransactionsView.swift:777-781`
 
@@ -188,7 +213,7 @@ git commit -m "feat: add event segment to TransactionSegment"
 
 ---
 
-### Task 5: Render Event List when Event Segment Selected
+### Task 6: Render Event List when Event Segment Selected
 **Files:**
 - Modify: `Mistia/Features/Transactions/TransactionsView.swift` (add `EventCashflowRow` view, update `body` list content)
 
@@ -328,7 +353,7 @@ git commit -m "feat: render event list for event segment in TransactionsView"
 
 ---
 
-### Task 6: Implement Participant Settlement Progress in Calculator Sheet
+### Task 7: Implement Participant Settlement Progress and Reset Split in Calculator Sheet
 **Files:**
 - Modify: `Mistia/Features/Transactions/SettlementSheets.swift` (Update `SettlementSplitCalculatorSheet` logic & views)
 
@@ -540,24 +565,73 @@ Add helper properties/methods inside `SettlementSplitCalculatorSheet`:
     }
 ```
 
-Update `Form` in `SettlementSplitCalculatorSheet` to conditionally show/hide inputs and progress:
+    private func resetSplitToPreparing() {
+        guard let group else { return }
+        let now = Date()
+        let groupTxs = transactions.filter { $0.settlementGroupID == group.id && $0.deletedAt == nil }
+        for tx in groupTxs {
+            tx.deletedAt = now
+            tx.isArchived = true
+        }
+        group.expectedMinor = 0
+        group.settledMinor = 0
+        group.status = .preparing
+        group.updatedAt = now
+        do {
+            try modelContext.save()
+        } catch {
+            alertMessage = error.localizedDescription
+        }
+    }
+```
+
+Update `Form` in `SettlementSplitCalculatorSheet` to conditionally show/hide inputs and progress, and show recalculate split button and confirmation:
 ```swift
-                if !isFinalized {
-                    Section(L10n.transactions.settlement.participants) {
-                        if nonSelfParticipants.isEmpty {
-                            SettlementEventExpenseEmptyState(...)
-                        } else {
-                            ForEach(nonSelfParticipants) { participant in
-                                SharedExpenseParticipantPaidInputRow(
-                                    participant: participant,
-                                    currencyCode: currencyCode,
-                                    paidText: paidTextBinding(for: participant)
-                                )
-                            }
+    @State private var showsResetConfirmation = false
+```
+In `Form`:
+```swift
+                Section {
+                    HStack(alignment: .firstTextBaseline) {
+                        Text(L10n.transactions.settlement.totalPaid)
+                            .foregroundStyle(.secondary)
+                        Spacer()
+                        Text(selfPaidMinor.formattedCurrency(code: currencyCode))
+                            .font(.system(size: 17, weight: .bold, design: .rounded))
+                            .foregroundStyle(MistiaAccent.expense.color)
+                    }
+
+                    Button {
+                        eventEditorTarget = .editSharedExpense(target.groupID)
+                    } label: {
+                        Label(L10n.management.management.edit, systemImage: "pencil")
+                    }
+                    
+                    if isFinalized {
+                        Button(role: .destructive) {
+                            showsResetConfirmation = true
+                        } label: {
+                            Label("Chia lại chi phí", systemImage: "arrow.counterclockwise")
                         }
                     }
                 }
-
+```
+And add alert at the end of calculator body:
+```swift
+        .alert(
+            "Chia lại chi phí?",
+            isPresented: $showsResetConfirmation
+        ) {
+            Button("Hủy", role: .cancel) {}
+            Button("Đồng ý", role: .destructive) {
+                resetSplitToPreparing()
+            }
+        } message: {
+            Text("Hành động này sẽ xóa toàn bộ tiến độ thanh toán của sự kiện hiện tại và đưa về trạng thái nhập liệu.")
+        }
+```
+And show progress list:
+```swift
                 Section(isFinalized ? "Tiến độ thanh toán" : L10n.transactions.settlement.sharedExpenseTitle) {
                     if isFinalized {
                         ForEach(participantSettlementProgressList()) { progress in
@@ -613,12 +687,12 @@ Hide the checkmark toolbar item when finalized:
 **Step 2: Commit**
 ```bash
 git add Mistia/Features/Transactions/SettlementSheets.swift
-git commit -m "feat: show settlement progress in calculator sheet when event is finalized"
+git commit -m "feat: support progress progress rendering and resplitting in calculator sheet"
 ```
 
 ---
 
-### Task 7: Lock Editing in SettlementDetailSheet when Completed
+### Task 8: Lock Editing in SettlementDetailSheet when Completed
 **Files:**
 - Modify: `Mistia/Features/Transactions/SettlementSheets.swift:2590-2646`
 
@@ -684,7 +758,7 @@ git commit -m "feat: lock editing in SettlementDetailSheet when obligation is co
 
 ---
 
-### Task 8: Lock Editing in DebtSettlementSheet when Completed
+### Task 9: Lock Editing in DebtSettlementSheet when Completed
 **Files:**
 - Modify: `Mistia/Features/Transactions/TransactionsView.swift:2443-2511`
 
@@ -750,7 +824,7 @@ git commit -m "feat: lock editing in DebtSettlementSheet when debt is completed"
 
 ---
 
-### Task 9: Align Empty State in NotificationCenterView
+### Task 10: Align Empty State in NotificationCenterView
 **Files:**
 - Modify: `Mistia/Features/Notifications/NotificationCenterView.swift:808-824`
 

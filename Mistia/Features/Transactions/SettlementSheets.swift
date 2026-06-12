@@ -1865,6 +1865,8 @@ private struct SharedExpenseTransactionSearchSheet: View {
             }
         }
     }
+}
+
 struct ParticipantSettlementProgress: Identifiable {
     let id: UUID
     let displayName: String
