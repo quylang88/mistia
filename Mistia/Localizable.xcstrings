@@ -33615,6 +33615,20 @@
         "ja": { "stringUnit": { "state": "translated", "value": "新しい支出" } }
       }
     },
+    "transactions.settlement.addBill": {
+      "localizations": {
+        "vi": { "stringUnit": { "state": "translated", "value": "Thêm bill" } },
+        "en": { "stringUnit": { "state": "translated", "value": "Add bill" } },
+        "ja": { "stringUnit": { "state": "translated", "value": "支出行を追加" } }
+      }
+    },
+    "transactions.settlement.addParticipant": {
+      "localizations": {
+        "vi": { "stringUnit": { "state": "translated", "value": "Thêm người" } },
+        "en": { "stringUnit": { "state": "translated", "value": "Add person" } },
+        "ja": { "stringUnit": { "state": "translated", "value": "人を追加" } }
+      }
+    },
     "transactions.settlement.tapToAddExpense": {
       "localizations": {
         "vi": { "stringUnit": { "state": "translated", "value": "Chạm để mở modal thêm chi tiêu" } },
@@ -33697,6 +33711,13 @@
         "vi": { "stringUnit": { "state": "translated", "value": "Tên buổi / sự kiện" } },
         "en": { "stringUnit": { "state": "translated", "value": "Event name" } },
         "ja": { "stringUnit": { "state": "translated", "value": "イベント名" } }
+      }
+    },
+    "transactions.settlement.eventTitle": {
+      "localizations": {
+        "vi": { "stringUnit": { "state": "translated", "value": "Sự kiện" } },
+        "en": { "stringUnit": { "state": "translated", "value": "Event" } },
+        "ja": { "stringUnit": { "state": "translated", "value": "イベント" } }
       }
     },
     "transactions.settlement.expectedProfit": {

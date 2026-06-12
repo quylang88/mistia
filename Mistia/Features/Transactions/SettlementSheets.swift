@@ -361,22 +361,6 @@ struct SettlementEditorSheet: View {
         }
     }
 
-    private var preparationBillTotalMinor: Int64 {
-        let savedTotal = linkedSharedExpenseBills.reduce(Int64(0)) { $0 + max($1.amountMinor, 0) }
-        let draftTotal = billRows.reduce(Int64(0)) { partial, row in
-            partial + row.stagedExpenseAmountMinor
-        }
-        let existingTotal = billRows.reduce(Int64(0)) { partial, row in
-            guard row.mode == .existingExpense,
-                  let existingID = row.existingTransactionID,
-                  let transaction = attachableExpenseTransactions.first(where: { $0.id == existingID }) else {
-                return partial
-            }
-            return partial + max(transaction.amountMinor, 0)
-        }
-        return savedTotal + draftTotal + existingTotal
-    }
-
     private var selfParticipantDisplayName: String {
         let candidate = sessionStore.summary?.displayName
             ?? familyContextStore.displayName(for: activeOwnerUserID)
@@ -515,10 +499,8 @@ struct SettlementEditorSheet: View {
         switch target {
         case .resale:
             return L10n.transactions.settlement.resaleTitle
-        case .newSharedExpense:
-            return L10n.transactions.settlement.sharedExpenseTitle
-        case .editSharedExpense:
-            return L10n.transactions.settlement.prepareEventTitle
+        case .newSharedExpense, .editSharedExpense:
+            return L10n.transactions.settlement.eventTitle
         }
     }
 
@@ -565,38 +547,46 @@ struct SettlementEditorSheet: View {
 
     private var sharedExpensePreparationBody: some View {
         NavigationStack {
-            ZStack {
-                Color(UIColor.systemGroupedBackground)
-                    .ignoresSafeArea()
+            Form {
+                Section(L10n.transactions.settlement.eventName) {
+                    TextField(L10n.transactions.settlement.eventName, text: $eventTitle)
+                        .textInputAutocapitalization(.sentences)
+                }
 
-                ScrollView(.vertical, showsIndicators: false) {
-                    VStack(alignment: .leading, spacing: 18) {
-                        preparationSection(title: L10n.transactions.settlement.eventName) {
-                            sharedExpenseEventCard
-                        }
-                        preparationSection(title: L10n.transactions.settlement.relatedPeople) {
-                            sharedExpenseParticipantsCard
-                        }
-                        if !linkedSharedExpenseBills.isEmpty {
-                            preparationSection(title: L10n.transactions.settlement.savedBills) {
-                                savedBillsCard
-                            }
-                        }
-                        preparationSection(title: L10n.transactions.settlement.eventBills) {
-                            draftBillsCard
-                        }
-                        preparationSection(title: L10n.transactions.settlement.totalPaid) {
-                            sharedExpenseTotalCard
-                        }
-                        preparationSection(title: L10n.transactions.settlement.note) {
-                            sharedExpenseNoteCard
-                        }
+                Section {
+                    sharedExpenseParticipantsContent
+                } header: {
+                    sectionHeader(
+                        title: L10n.transactions.settlement.relatedPeople,
+                        accessibilityLabel: L10n.transactions.settlement.addParticipant
+                    ) {
+                        participantRows.append(SharedExpenseParticipantDraft(name: "", paidText: ""))
                     }
-                    .padding(.horizontal, 18)
-                    .padding(.top, 16)
-                    .padding(.bottom, 32)
+                }
+
+                if !linkedSharedExpenseBills.isEmpty {
+                    Section(L10n.transactions.settlement.savedBills) {
+                        savedBillsContent
+                    }
+                }
+
+                Section {
+                    draftBillsContent
+                } header: {
+                    sectionHeader(
+                        title: L10n.transactions.settlement.eventBills,
+                        accessibilityLabel: L10n.transactions.settlement.addBill
+                    ) {
+                        addBillRow()
+                    }
+                }
+
+                Section(L10n.transactions.settlement.note) {
+                    TextField(L10n.transactions.settlement.notePlaceholder, text: $eventNote, axis: .vertical)
+                        .lineLimit(3...6)
                 }
             }
+            .dismissKeyboardOnTap()
             .navigationTitle(navigationTitle)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -664,174 +654,105 @@ struct SettlementEditorSheet: View {
         }
     }
 
-    private func preparationSection<Content: View>(
+    @ViewBuilder
+    private var sharedExpenseParticipantsContent: some View {
+        ForEach($participantRows) { $row in
+            HStack(spacing: 10) {
+                TextField(L10n.transactions.settlement.participantName, text: $row.name)
+                    .textInputAutocapitalization(.words)
+                    .onSubmit {
+                        ensureTrailingParticipantRow()
+                    }
+
+                if participantRows.count > 1 {
+                    Button {
+                        removeParticipantRow(row.id)
+                    } label: {
+                        Image(systemName: "minus.circle.fill")
+                            .foregroundStyle(.secondary)
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+        }
+
+        if !participantNameSuggestions.isEmpty {
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 8) {
+                    ForEach(participantNameSuggestions) { suggestion in
+                        Button {
+                            applyParticipantSuggestion(suggestion.title)
+                        } label: {
+                            Text(suggestion.title)
+                                .font(.system(size: 12, weight: .semibold, design: .rounded))
+                                .padding(.horizontal, 10)
+                                .padding(.vertical, 7)
+                                .background(Capsule().fill(MistiaAccent.purple.color.opacity(0.14)))
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+                .padding(.vertical, 3)
+            }
+        }
+    }
+
+    private func sectionHeader(
         title: String,
-        @ViewBuilder content: () -> Content
+        accessibilityLabel: String,
+        action: @escaping () -> Void
     ) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
+        HStack {
             Text(title)
-                .font(.system(size: 13, weight: .bold, design: .rounded))
-                .foregroundStyle(.secondary)
-                .padding(.horizontal, 4)
-            content()
-        }
-    }
-
-    private var sharedExpenseEventCard: some View {
-        MistiaBlockCard(cornerRadius: 22, padding: 16) {
-            VStack(alignment: .leading, spacing: 12) {
-                TextField(L10n.transactions.settlement.eventName, text: $eventTitle)
-                    .font(.system(size: 20, weight: .bold, design: .rounded))
-                    .textInputAutocapitalization(.sentences)
+            Spacer()
+            Button(action: action) {
+                Image(systemName: "plus.circle.fill")
+                    .font(.system(size: 17, weight: .semibold))
             }
+            .buttonStyle(.plain)
+            .accessibilityLabel(accessibilityLabel)
         }
     }
 
-    private var sharedExpenseParticipantsCard: some View {
-        MistiaBlockCard(cornerRadius: 22, padding: 16) {
-            VStack(alignment: .leading, spacing: 14) {
-                HStack {
-                    Spacer()
-                    Button {
-                        participantRows.append(SharedExpenseParticipantDraft(name: "", paidText: ""))
-                    } label: {
-                        Image(systemName: "plus.circle.fill")
-                            .font(.system(size: 20, weight: .bold))
-                    }
-                    .buttonStyle(.plain)
-                }
-
-                ForEach($participantRows) { $row in
-                    HStack(spacing: 10) {
-                        TextField(L10n.transactions.settlement.participantName, text: $row.name)
-                            .textInputAutocapitalization(.words)
-                            .font(.system(size: 16, weight: .semibold, design: .rounded))
-                            .onSubmit {
-                                ensureTrailingParticipantRow()
-                            }
-
-                        Button {
-                            removeParticipantRow(row.id)
-                        } label: {
-                            Image(systemName: "minus.circle.fill")
-                                .font(.system(size: 18, weight: .semibold))
-                                .foregroundStyle(.secondary)
-                        }
-                        .buttonStyle(.plain)
-                        .opacity(participantRows.count > 1 ? 1 : 0)
-                    }
-                    .padding(.vertical, 8)
-                    .overlay(alignment: .bottom) {
-                        Divider()
-                    }
-                }
-
-                if !participantNameSuggestions.isEmpty {
-                    ScrollView(.horizontal, showsIndicators: false) {
-                        HStack(spacing: 8) {
-                            ForEach(participantNameSuggestions) { suggestion in
-                                Button {
-                                    applyParticipantSuggestion(suggestion.title)
-                                } label: {
-                                    Text(suggestion.title)
-                                        .font(.system(size: 12, weight: .semibold, design: .rounded))
-                                        .padding(.horizontal, 10)
-                                        .padding(.vertical, 7)
-                                        .background(Capsule().fill(MistiaAccent.purple.color.opacity(0.14)))
-                                }
-                                .buttonStyle(.plain)
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    }
-
-    private var savedBillsCard: some View {
-        MistiaBlockCard(cornerRadius: 22, padding: 16) {
-            VStack(alignment: .leading, spacing: 12) {
-                ForEach(linkedSharedExpenseBills) { bill in
-                    HStack(spacing: 12) {
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text(bill.title)
-                                .font(.system(size: 15, weight: .semibold, design: .rounded))
-                                .lineLimit(1)
-                            Text(bill.occurredAt.formatted(date: .abbreviated, time: .omitted))
-                                .font(.system(size: 11, weight: .semibold, design: .rounded))
-                                .foregroundStyle(.secondary)
-                        }
-                        Spacer()
-                        Text(bill.amountMinor.formattedCurrency(code: bill.sourceCurrencyCode ?? activeCurrencyCode))
-                            .font(.system(size: 14, weight: .bold, design: .rounded))
-                        Button {
-                            detachBill(bill)
-                        } label: {
-                            Image(systemName: "link.badge.minus")
-                                .font(.system(size: 16, weight: .semibold))
-                                .foregroundStyle(.secondary)
-                        }
-                        .buttonStyle(.plain)
-                    }
-                }
-            }
-        }
-    }
-
-    private var draftBillsCard: some View {
-        MistiaBlockCard(cornerRadius: 22, padding: 16) {
-            VStack(alignment: .leading, spacing: 14) {
-                HStack {
-                    Spacer()
-                    Button {
-                        addBillRow()
-                    } label: {
-                        Image(systemName: "plus.circle.fill")
-                            .font(.system(size: 20, weight: .bold))
-                    }
-                    .buttonStyle(.plain)
-                }
-
-                ForEach($billRows) { $row in
-                    SharedExpenseBillDraftRow(
-                        row: $row,
-                        existingTransactions: attachableExpenseTransactions,
-                        transactionTitle: existingTransactionLabel(for:),
-                        currencyCode: activeCurrencyCode,
-                        onCreateNew: { billEditorTarget = SharedExpenseBillEditorTarget(rowID: row.id) },
-                        onSearchExisting: { billSearchTarget = SharedExpenseBillSearchTarget(rowID: row.id) },
-                        onRemove: { removeBillRow(row.id) }
-                    )
-                }
-            }
-        }
-    }
-
-    private var sharedExpenseTotalCard: some View {
-        MistiaBlockCard(cornerRadius: 22, padding: 16) {
-            HStack {
+    @ViewBuilder
+    private var savedBillsContent: some View {
+        ForEach(linkedSharedExpenseBills) { bill in
+            HStack(spacing: 12) {
                 VStack(alignment: .leading, spacing: 4) {
-                    Text(L10n.transactions.settlement.billCountValue(String(linkedSharedExpenseBills.count + billRows.filter(\.hasContent).count)))
-                        .font(.system(size: 12, weight: .semibold, design: .rounded))
+                    Text(bill.title)
+                        .font(.system(size: 15, weight: .semibold, design: .rounded))
+                        .lineLimit(1)
+                    Text(bill.occurredAt.formatted(date: .abbreviated, time: .omitted))
+                        .font(.system(size: 11, weight: .semibold, design: .rounded))
                         .foregroundStyle(.secondary)
                 }
                 Spacer()
-                Text(preparationBillTotalMinor.formattedCurrency(code: activeCurrencyCode))
-                    .font(.system(size: 22, weight: .bold, design: .rounded))
-                    .foregroundStyle(MistiaAccent.expense.color)
-                    .minimumScaleFactor(0.75)
-                    .lineLimit(1)
+                Text(bill.amountMinor.formattedCurrency(code: bill.sourceCurrencyCode ?? activeCurrencyCode))
+                    .font(.system(size: 14, weight: .bold, design: .rounded))
+                Button {
+                    detachBill(bill)
+                } label: {
+                    Image(systemName: "link.badge.minus")
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundStyle(.secondary)
+                }
+                .buttonStyle(.plain)
             }
         }
     }
 
-    private var sharedExpenseNoteCard: some View {
-        MistiaBlockCard(cornerRadius: 22, padding: 16) {
-            VStack(alignment: .leading, spacing: 10) {
-                TextField(L10n.transactions.settlement.notePlaceholder, text: $eventNote, axis: .vertical)
-                    .lineLimit(3...6)
-                    .font(.system(size: 15, weight: .regular, design: .rounded))
-            }
+    @ViewBuilder
+    private var draftBillsContent: some View {
+        ForEach($billRows) { $row in
+            SharedExpenseBillDraftRow(
+                row: $row,
+                existingTransactions: attachableExpenseTransactions,
+                transactionTitle: existingTransactionLabel(for:),
+                currencyCode: activeCurrencyCode,
+                onCreateNew: { billEditorTarget = SharedExpenseBillEditorTarget(rowID: row.id) },
+                onSearchExisting: { billSearchTarget = SharedExpenseBillSearchTarget(rowID: row.id) },
+                onRemove: { removeBillRow(row.id) }
+            )
         }
     }
 
@@ -2564,8 +2485,8 @@ private struct SharedExpenseBillDraftRow: View {
     let onRemove: () -> Void
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack(spacing: 10) {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 8) {
                 Picker(String(), selection: $row.mode) {
                     Text(L10n.transactions.settlement.addNewExpense).tag(SharedExpenseBillDraftMode.newExpense)
                     Text(L10n.transactions.settlement.chooseExistingExpense).tag(SharedExpenseBillDraftMode.existingExpense)
@@ -2585,22 +2506,17 @@ private struct SharedExpenseBillDraftRow: View {
                 billActionButton(
                     title: L10n.transactions.settlement.addNewExpense,
                     value: selectedStagedTransaction.map(transactionSummary) ?? L10n.transactions.settlement.tapToAddExpense,
-                    systemImage: "plus.circle.fill",
                     action: onCreateNew
                 )
             case .existingExpense:
                 billActionButton(
                     title: L10n.transactions.settlement.chooseExistingExpense,
                     value: selectedExistingTransaction.map(transactionTitle) ?? L10n.transactions.settlement.searchCashflow,
-                    systemImage: "magnifyingglass.circle.fill",
                     action: onSearchExisting
                 )
             }
         }
-        .padding(.vertical, 12)
-        .overlay(alignment: .bottom) {
-            Divider()
-        }
+        .padding(.vertical, 6)
     }
 
     private var selectedStagedTransaction: LedgerTransaction? {
@@ -2618,32 +2534,25 @@ private struct SharedExpenseBillDraftRow: View {
     private func billActionButton(
         title: String,
         value: String,
-        systemImage: String,
         action: @escaping () -> Void
     ) -> some View {
         Button(action: action) {
-            HStack(spacing: 8) {
-                Image(systemName: systemImage)
-                    .font(.system(size: 13, weight: .bold))
+            HStack(spacing: 12) {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(title)
-                        .font(.system(size: 10, weight: .bold, design: .rounded))
-                        .foregroundStyle(.secondary)
+                        .font(.system(size: 15, weight: .semibold, design: .rounded))
+                        .foregroundStyle(.primary)
                     Text(value)
-                        .font(.system(size: 13, weight: .semibold, design: .rounded))
+                        .font(.system(size: 12, weight: .semibold, design: .rounded))
+                        .foregroundStyle(.secondary)
                         .lineLimit(1)
                 }
-                Spacer(minLength: 4)
+                Spacer(minLength: 8)
                 Image(systemName: "chevron.up.chevron.down")
                     .font(.system(size: 10, weight: .bold))
                     .foregroundStyle(.secondary)
             }
-            .padding(.horizontal, 10)
-            .padding(.vertical, 9)
-            .background {
-                RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .fill(Color.primary.opacity(0.06))
-            }
+            .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
     }
