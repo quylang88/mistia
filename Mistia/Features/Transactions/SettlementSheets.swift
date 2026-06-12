@@ -191,11 +191,12 @@ struct SettlementEditorSheet: View {
     @State private var selectedSharedWalletID: UUID?
     @State private var selectedSharedCategoryID: UUID?
     @State private var eventNote = ""
-    @State private var billRows: [SharedExpenseBillDraft] = [SharedExpenseBillDraft()]
+    @State private var billRows: [SharedExpenseBillDraft] = []
     @State private var hasLoadedSharedExpenseDraft = false
     @State private var alertMessage: String?
     @State private var billEditorTarget: SharedExpenseBillEditorTarget?
     @State private var billSearchTarget: SharedExpenseBillSearchTarget?
+    @State private var showingBillAddOptions = false
 
     private var walletPickerAccess: MistiaWalletPickerAccess {
         MistiaWalletPickerAccess(
@@ -570,15 +571,8 @@ struct SettlementEditorSheet: View {
                     }
                 }
 
-                Section {
+                Section(L10n.transactions.settlement.eventBills) {
                     draftBillsContent
-                } header: {
-                    sectionHeader(
-                        title: L10n.transactions.settlement.eventBills,
-                        accessibilityLabel: L10n.transactions.settlement.addBill
-                    ) {
-                        addBillRow()
-                    }
                 }
 
                 Section(L10n.transactions.settlement.note) {
@@ -620,7 +614,7 @@ struct SettlementEditorSheet: View {
             .toolbarBackground(.visible, for: .navigationBar)
         }
         .presentationBackground(Color(UIColor.systemGroupedBackground))
-        .sheet(item: $billEditorTarget) { target in
+        .sheet(item: $billEditorTarget, onDismiss: removeIncompleteBillRows) { target in
             TransactionEditorSheet(
                 target: transactionEditorTarget(for: target.rowID),
                 onStageTransaction: { transaction in
@@ -630,7 +624,7 @@ struct SettlementEditorSheet: View {
             .presentationDetents([.large])
             .presentationDragIndicator(.hidden)
         }
-        .sheet(item: $billSearchTarget) { target in
+        .sheet(item: $billSearchTarget, onDismiss: removeIncompleteBillRows) { target in
             SharedExpenseTransactionSearchSheet(
                 transactions: attachableExpenseTransactions.filter { transaction in
                     !billRows.contains {
@@ -651,6 +645,19 @@ struct SettlementEditorSheet: View {
             }
             .presentationDetents([.large])
             .presentationDragIndicator(.hidden)
+        }
+        .confirmationDialog(
+            L10n.transactions.settlement.addExpenseToEvent,
+            isPresented: $showingBillAddOptions,
+            titleVisibility: .visible
+        ) {
+            Button(L10n.transactions.settlement.addNewExpense) {
+                beginAddingBill(mode: .newExpense)
+            }
+            Button(L10n.transactions.settlement.chooseExistingExpense) {
+                beginAddingBill(mode: .existingExpense)
+            }
+            Button(L10n.common.cancel, role: .cancel) {}
         }
     }
 
@@ -743,16 +750,47 @@ struct SettlementEditorSheet: View {
 
     @ViewBuilder
     private var draftBillsContent: some View {
-        ForEach($billRows) { $row in
-            SharedExpenseBillDraftRow(
-                row: $row,
-                existingTransactions: attachableExpenseTransactions,
-                transactionTitle: existingTransactionLabel(for:),
-                currencyCode: activeCurrencyCode,
-                onCreateNew: { billEditorTarget = SharedExpenseBillEditorTarget(rowID: row.id) },
-                onSearchExisting: { billSearchTarget = SharedExpenseBillSearchTarget(rowID: row.id) },
-                onRemove: { removeBillRow(row.id) }
-            )
+        if billRows.isEmpty {
+            MistiaEmptyStateContent(
+                title: L10n.transactions.settlement.noBillsYet,
+                message: L10n.transactions.settlement.addExpensesToTrackEventCost,
+                buttonTitle: L10n.transactions.settlement.addExpense,
+                accent: MistiaAccent.purple.color,
+                symbols: ["receipt.fill", "wallet.pass.fill", "person.2.fill"]
+            ) {
+                showingBillAddOptions = true
+            }
+            .padding(.vertical, 8)
+        } else {
+            VStack(spacing: 0) {
+                ForEach(billRows.indices, id: \.self) { index in
+                    SharedExpenseBillDraftRow(
+                        row: $billRows[index],
+                        existingTransactions: attachableExpenseTransactions,
+                        transactionTitle: existingTransactionLabel(for:),
+                        currencyCode: activeCurrencyCode,
+                        onRemove: { removeBillRow(billRows[index].id) }
+                    )
+
+                    if index < billRows.count - 1 {
+                        Divider()
+                            .padding(.leading, 46)
+                    }
+                }
+
+                Divider()
+                    .padding(.leading, 46)
+
+                MistiaFooterAddButton(
+                    title: L10n.transactions.settlement.addExpense,
+                    accent: MistiaAccent.purple.color
+                ) {
+                    showingBillAddOptions = true
+                }
+                .padding(.horizontal, 2)
+                .padding(.vertical, 12)
+            }
+            .listRowInsets(EdgeInsets(top: 0, leading: 0, bottom: 0, trailing: 0))
         }
     }
 
@@ -851,9 +889,6 @@ struct SettlementEditorSheet: View {
         if selectedSharedCategoryID == nil {
             selectedSharedCategoryID = selectedCategoryID ?? expenseCategories.first?.id
         }
-        if billRows.isEmpty {
-            billRows = [SharedExpenseBillDraft()]
-        }
     }
 
     private func loadSharedExpenseDraftIfNeeded() {
@@ -875,7 +910,7 @@ struct SettlementEditorSheet: View {
         participantRows = rows.isEmpty ? [SharedExpenseParticipantDraft(name: "", paidText: "")] : rows + [SharedExpenseParticipantDraft(name: "", paidText: "")]
         selectedSharedWalletID = linkedSharedExpenseBills.first?.sourceWallet?.id ?? availableWallets.first?.id
         selectedSharedCategoryID = linkedSharedExpenseBills.first?.category?.id ?? expenseCategories.first?.id
-        billRows = [SharedExpenseBillDraft()]
+        billRows = []
     }
 
     private func ensureTrailingParticipantRow() {
@@ -900,15 +935,23 @@ struct SettlementEditorSheet: View {
         ensureTrailingParticipantRow()
     }
 
-    private func addBillRow() {
-        billRows.append(SharedExpenseBillDraft())
+    private func beginAddingBill(mode: SharedExpenseBillDraftMode) {
+        let row = SharedExpenseBillDraft(mode: mode)
+        billRows.append(row)
+        switch mode {
+        case .newExpense:
+            billEditorTarget = SharedExpenseBillEditorTarget(rowID: row.id)
+        case .existingExpense:
+            billSearchTarget = SharedExpenseBillSearchTarget(rowID: row.id)
+        }
     }
 
     private func removeBillRow(_ id: UUID) {
         billRows.removeAll { $0.id == id }
-        if billRows.isEmpty {
-            addBillRow()
-        }
+    }
+
+    private func removeIncompleteBillRows() {
+        billRows.removeAll { !$0.hasContent }
     }
 
     private func normalizedParticipantNames() -> [String] {
@@ -1381,7 +1424,7 @@ struct SettlementEditorSheet: View {
             if dismissAfterSave {
                 dismiss()
             } else {
-                billRows = [SharedExpenseBillDraft()]
+                billRows = []
             }
         } catch {
             alertMessage = error.localizedDescription
@@ -2480,43 +2523,45 @@ private struct SharedExpenseBillDraftRow: View {
     let existingTransactions: [LedgerTransaction]
     let transactionTitle: (LedgerTransaction) -> String
     let currencyCode: String
-    let onCreateNew: () -> Void
-    let onSearchExisting: () -> Void
     let onRemove: () -> Void
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack(spacing: 8) {
-                Picker(String(), selection: $row.mode) {
-                    Text(L10n.transactions.settlement.addNewExpense).tag(SharedExpenseBillDraftMode.newExpense)
-                    Text(L10n.transactions.settlement.chooseExistingExpense).tag(SharedExpenseBillDraftMode.existingExpense)
-                }
-                .pickerStyle(.segmented)
+        HStack(alignment: .center, spacing: 12) {
+            ZStack {
+                Circle()
+                    .fill(MistiaAccent.expense.color.opacity(0.12))
+                Image(systemName: row.mode == .newExpense ? "receipt.fill" : "link")
+                    .font(.system(size: 15, weight: .bold))
+                    .foregroundStyle(MistiaAccent.expense.color)
+            }
+            .frame(width: 34, height: 34)
 
-                Button(action: onRemove) {
-                    Image(systemName: "minus.circle.fill")
-                        .font(.system(size: 18, weight: .semibold))
-                        .foregroundStyle(.secondary)
-                }
-                .buttonStyle(.plain)
+            VStack(alignment: .leading, spacing: 3) {
+                Text(primaryText)
+                    .font(.system(size: 15.5, weight: .semibold, design: .rounded))
+                    .foregroundStyle(.primary)
+                    .lineLimit(1)
+                Text(row.mode == .newExpense ? L10n.transactions.settlement.addNewExpense : L10n.transactions.settlement.chooseExistingExpense)
+                    .font(.system(size: 12, weight: .semibold, design: .rounded))
+                    .foregroundStyle(.secondary)
             }
 
-            switch row.mode {
-            case .newExpense:
-                billActionButton(
-                    title: L10n.transactions.settlement.addNewExpense,
-                    value: selectedStagedTransaction.map(transactionSummary) ?? L10n.transactions.settlement.tapToAddExpense,
-                    action: onCreateNew
-                )
-            case .existingExpense:
-                billActionButton(
-                    title: L10n.transactions.settlement.chooseExistingExpense,
-                    value: selectedExistingTransaction.map(transactionTitle) ?? L10n.transactions.settlement.searchCashflow,
-                    action: onSearchExisting
-                )
+            Spacer(minLength: 8)
+
+            Text(amountText)
+                .font(.system(size: 15, weight: .bold, design: .rounded))
+                .foregroundStyle(MistiaAccent.expense.color)
+                .lineLimit(1)
+
+            Button(action: onRemove) {
+                Image(systemName: "minus.circle.fill")
+                    .font(.system(size: 18, weight: .semibold))
+                    .foregroundStyle(.secondary)
             }
+            .buttonStyle(.plain)
         }
-        .padding(.vertical, 6)
+        .padding(.horizontal, 14)
+        .padding(.vertical, 11)
     }
 
     private var selectedStagedTransaction: LedgerTransaction? {
@@ -2527,34 +2572,28 @@ private struct SharedExpenseBillDraftRow: View {
         existingTransactions.first(where: { $0.id == row.existingTransactionID })
     }
 
-    private func transactionSummary(_ transaction: LedgerTransaction) -> String {
-        "\(transaction.localizedTransactionTitle) • \(transaction.amountMinor.formattedCurrency(code: transaction.sourceCurrencyCode ?? currencyCode))"
+    private var primaryText: String {
+        switch row.mode {
+        case .newExpense:
+            selectedStagedTransaction?.localizedTransactionTitle ?? L10n.transactions.settlement.addNewExpense
+        case .existingExpense:
+            selectedExistingTransaction.map(transactionTitle) ?? L10n.transactions.settlement.searchCashflow
+        }
     }
 
-    private func billActionButton(
-        title: String,
-        value: String,
-        action: @escaping () -> Void
-    ) -> some View {
-        Button(action: action) {
-            HStack(spacing: 12) {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(title)
-                        .font(.system(size: 15, weight: .semibold, design: .rounded))
-                        .foregroundStyle(.primary)
-                    Text(value)
-                        .font(.system(size: 12, weight: .semibold, design: .rounded))
-                        .foregroundStyle(.secondary)
-                        .lineLimit(1)
-                }
-                Spacer(minLength: 8)
-                Image(systemName: "chevron.up.chevron.down")
-                    .font(.system(size: 10, weight: .bold))
-                    .foregroundStyle(.secondary)
+    private var amountText: String {
+        switch row.mode {
+        case .newExpense:
+            guard let transaction = selectedStagedTransaction else {
+                return Int64(0).formattedCurrency(code: currencyCode)
             }
-            .contentShape(Rectangle())
+            return transaction.amountMinor.formattedCurrency(code: transaction.sourceCurrencyCode ?? currencyCode)
+        case .existingExpense:
+            guard let transaction = selectedExistingTransaction else {
+                return Int64(0).formattedCurrency(code: currencyCode)
+            }
+            return transaction.amountMinor.formattedCurrency(code: transaction.sourceCurrencyCode ?? currencyCode)
         }
-        .buttonStyle(.plain)
     }
 }
 

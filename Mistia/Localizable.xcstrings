@@ -33622,6 +33622,27 @@
         "ja": { "stringUnit": { "state": "translated", "value": "支出行を追加" } }
       }
     },
+    "transactions.settlement.addExpense": {
+      "localizations": {
+        "vi": { "stringUnit": { "state": "translated", "value": "Thêm chi tiêu" } },
+        "en": { "stringUnit": { "state": "translated", "value": "Add expense" } },
+        "ja": { "stringUnit": { "state": "translated", "value": "支出を追加" } }
+      }
+    },
+    "transactions.settlement.addExpenseToEvent": {
+      "localizations": {
+        "vi": { "stringUnit": { "state": "translated", "value": "Thêm chi tiêu vào sự kiện" } },
+        "en": { "stringUnit": { "state": "translated", "value": "Add expense to event" } },
+        "ja": { "stringUnit": { "state": "translated", "value": "イベントに支出を追加" } }
+      }
+    },
+    "transactions.settlement.addExpensesToTrackEventCost": {
+      "localizations": {
+        "vi": { "stringUnit": { "state": "translated", "value": "Thêm chi tiêu mới hoặc chọn thu chi có sẵn để lưu chi phí bạn đã trả cho sự kiện." } },
+        "en": { "stringUnit": { "state": "translated", "value": "Add a new expense or choose an existing cashflow item to track what you paid for this event." } },
+        "ja": { "stringUnit": { "state": "translated", "value": "新しい支出を追加するか、既存の収支を選んで、このイベントで支払った金額を記録します。" } }
+      }
+    },
     "transactions.settlement.addParticipant": {
       "localizations": {
         "vi": { "stringUnit": { "state": "translated", "value": "Thêm người" } },
@@ -33753,6 +33774,13 @@
         "vi": { "stringUnit": { "state": "translated", "value": "Chưa có người liên quan" } },
         "en": { "stringUnit": { "state": "translated", "value": "No related people yet" } },
         "ja": { "stringUnit": { "state": "translated", "value": "関係者なし" } }
+      }
+    },
+    "transactions.settlement.noBillsYet": {
+      "localizations": {
+        "vi": { "stringUnit": { "state": "translated", "value": "Chưa có bill" } },
+        "en": { "stringUnit": { "state": "translated", "value": "No bills yet" } },
+        "ja": { "stringUnit": { "state": "translated", "value": "支出はまだありません" } }
       }
     },
     "transactions.settlement.noSettlementNeeded": {
