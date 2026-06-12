@@ -806,21 +806,13 @@ struct NotificationCenterView: View {
     }
     
     private var emptyState: some View {
-        VStack(spacing: 14) {
-            VStack(alignment: .leading, spacing: 8) {
-                Text(L10n.notifications.notificationcenter.noNotificationsYet)
-                .font(.system(.headline, design: .rounded))
-
-                Text(L10n.notifications.notificationcenter.permissionRequestsAndFamilyActivityWillAppear)
-                .descriptionTextStyle()
-                .foregroundStyle(.secondary)
-            }
-            .padding(16)
-            .background(
-                Color(UIColor.secondarySystemGroupedBackground).opacity(0.62),
-                in: RoundedRectangle(cornerRadius: 22, style: .continuous)
-            )
-        }
+        MistiaEmptyStateContent(
+            title: L10n.notifications.notificationcenter.noNotificationsYet,
+            message: L10n.notifications.notificationcenter.permissionRequestsAndFamilyActivityWillAppear,
+            buttonTitle: nil,
+            accent: MistiaAccent.purple.color,
+            symbols: ["bell.slash.fill", "bell.badge", "envelope.badge"]
+        )
     }
     
     @ViewBuilder
