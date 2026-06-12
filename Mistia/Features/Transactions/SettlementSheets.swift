@@ -765,7 +765,8 @@ struct SettlementEditorSheet: View {
 
     @ViewBuilder
     private var draftBillsContent: some View {
-        if linkedSharedExpenseBills.isEmpty && billRows.isEmpty {
+        let contentfulBillRows = billRows.filter { $0.hasContent }
+        if linkedSharedExpenseBills.isEmpty && contentfulBillRows.isEmpty {
             SettlementEventExpenseEmptyState(
                 title: L10n.transactions.settlement.noBillsYet,
                 message: L10n.transactions.settlement.addExpensesToTrackEventCost,
@@ -780,60 +781,62 @@ struct SettlementEditorSheet: View {
         } else {
             VStack(spacing: 0) {
                 ForEach(Array(linkedSharedExpenseBills.enumerated()), id: \.element.id) { index, bill in
-                HStack(alignment: .center, spacing: 10) {
-                    Button {
-                        billEditorTarget = SharedExpenseBillEditorTarget(transactionID: bill.id)
-                    } label: {
-                        TransactionCashflowRow(
-                            record: bill.snapshot,
-                            transaction: bill,
-                            auditRecord: transactionAuditMap[bill.id],
-                            walletOwnerMap: walletOwnerMap,
-                            transactionOwnerMap: transactionOwnerMap,
-                            familyContextStore: familyContextStore,
-                            hasFamilyOwnerConflict: false,
-                            primaryCurrencyCode: primaryCurrencyCode,
-                            exchangeRateIndex: MistiaExchangeRateIndex(rates: MistiaCurrencySettings.rates())
-                        )
+                    HStack(alignment: .center, spacing: 10) {
+                        Button {
+                            billEditorTarget = SharedExpenseBillEditorTarget(transactionID: bill.id)
+                        } label: {
+                            TransactionCashflowRow(
+                                record: bill.snapshot,
+                                transaction: bill,
+                                auditRecord: transactionAuditMap[bill.id],
+                                walletOwnerMap: walletOwnerMap,
+                                transactionOwnerMap: transactionOwnerMap,
+                                familyContextStore: familyContextStore,
+                                hasFamilyOwnerConflict: false,
+                                primaryCurrencyCode: primaryCurrencyCode,
+                                exchangeRateIndex: MistiaExchangeRateIndex(rates: MistiaCurrencySettings.rates())
+                            )
+                        }
+                        .buttonStyle(.plain)
+
+                        Button {
+                            detachBill(bill)
+                        } label: {
+                            Image(systemName: "link.badge.minus")
+                                .font(.system(size: 16, weight: .semibold))
+                                .foregroundStyle(.secondary)
+                        }
+                        .buttonStyle(.plain)
                     }
-                    .buttonStyle(.plain)
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 12)
 
-                    Button {
-                        detachBill(bill)
-                    } label: {
-                        Image(systemName: "link.badge.minus")
-                            .font(.system(size: 16, weight: .semibold))
-                            .foregroundStyle(.secondary)
-                    }
-                    .buttonStyle(.plain)
-                }
-                .padding(.horizontal, 14)
-                .padding(.vertical, 12)
-
-                if index < linkedSharedExpenseBills.count - 1 || !billRows.isEmpty {
-                    Divider()
-                        .padding(.leading, 52)
-                }
-            }
-
-                ForEach(billRows.indices, id: \.self) { index in
-                    SharedExpenseBillDraftRow(
-                        row: $billRows[index],
-                        existingTransactions: attachableExpenseTransactions,
-                        transactionAuditMap: transactionAuditMap,
-                        walletOwnerMap: walletOwnerMap,
-                        transactionOwnerMap: transactionOwnerMap,
-                        primaryCurrencyCode: primaryCurrencyCode,
-                        exchangeRateIndex: MistiaExchangeRateIndex(rates: MistiaCurrencySettings.rates()),
-                        familyContextStore: familyContextStore,
-                        currencyCode: activeCurrencyCode,
-                        onTap: { billEditorTarget = SharedExpenseBillEditorTarget(rowID: billRows[index].id) },
-                        onRemove: { removeBillRow(billRows[index].id) }
-                    )
-
-                    if index < billRows.count - 1 {
+                    if index < linkedSharedExpenseBills.count - 1 || !contentfulBillRows.isEmpty {
                         Divider()
                             .padding(.leading, 52)
+                    }
+                }
+
+                ForEach(billRows.indices, id: \.self) { index in
+                    if billRows[index].hasContent {
+                        SharedExpenseBillDraftRow(
+                            row: $billRows[index],
+                            existingTransactions: attachableExpenseTransactions,
+                            transactionAuditMap: transactionAuditMap,
+                            walletOwnerMap: walletOwnerMap,
+                            transactionOwnerMap: transactionOwnerMap,
+                            primaryCurrencyCode: primaryCurrencyCode,
+                            exchangeRateIndex: MistiaExchangeRateIndex(rates: MistiaCurrencySettings.rates()),
+                            familyContextStore: familyContextStore,
+                            currencyCode: activeCurrencyCode,
+                            onTap: { billEditorTarget = SharedExpenseBillEditorTarget(rowID: billRows[index].id) },
+                            onRemove: { removeBillRow(billRows[index].id) }
+                        )
+
+                        if index + 1 < billRows.count && billRows[(index + 1)...].contains(where: \.hasContent) {
+                            Divider()
+                                .padding(.leading, 52)
+                        }
                     }
                 }
 
@@ -1007,7 +1010,7 @@ struct SettlementEditorSheet: View {
                 return $0.displayName.localizedCaseInsensitiveCompare($1.displayName) == .orderedAscending
             }
             .map { SharedExpenseParticipantDraft(id: $0.id, name: $0.displayName, paidText: "") }
-        participantRows = rows.isEmpty ? [SharedExpenseParticipantDraft(name: "", paidText: "")] : rows + [SharedExpenseParticipantDraft(name: "", paidText: "")]
+        participantRows = rows.isEmpty ? [SharedExpenseParticipantDraft(name: "", paidText: "")] : rows
         selectedSharedWalletID = linkedSharedExpenseBills.first?.sourceWallet?.id ?? availableWallets.first?.id
         selectedSharedCategoryID = linkedSharedExpenseBills.first?.category?.id ?? expenseCategories.first?.id
         billRows = []
@@ -1931,6 +1934,16 @@ struct SettlementSplitCalculatorSheet: View {
         MistiaCurrencyLogic.normalizedCode(group?.currencyCode ?? linkedBills.first?.sourceCurrencyCode ?? "JPY")
     }
 
+    private var allInputsProvided: Bool {
+        guard !nonSelfParticipants.isEmpty else { return false }
+        return nonSelfParticipants.allSatisfy {
+            if let text = paidTextsByParticipantID[$0.id] {
+                return !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            }
+            return false
+        }
+    }
+
     private var participantInputs: [SettlementParticipantInput] {
         guard let selfParticipant else { return [] }
         var inputs = [
@@ -1944,7 +1957,7 @@ struct SettlementSplitCalculatorSheet: View {
             SettlementParticipantInput(
                 id: $0.id,
                 name: $0.displayName,
-                paidMinor: paidTextsByParticipantID[$0.id, default: "0"].currencyInputToMinorUnits(currencyCode: currencyCode)
+                paidMinor: paidTextsByParticipantID[$0.id, default: ""].currencyInputToMinorUnits(currencyCode: currencyCode)
             )
         }
         return inputs
@@ -1958,6 +1971,7 @@ struct SettlementSplitCalculatorSheet: View {
     }
 
     private var suggestionsForSelf: [SettlementSuggestion] {
+        guard allInputsProvided else { return [] }
         guard let selfID = selfParticipant?.id else { return [] }
         return splitResult.suggestions.filter {
             $0.payerID == selfID || $0.receiverID == selfID
@@ -2016,7 +2030,12 @@ struct SettlementSplitCalculatorSheet: View {
                 }
 
                 Section(L10n.transactions.settlement.sharedExpenseTitle) {
-                    if suggestionsForSelf.isEmpty {
+                    if !allInputsProvided {
+                        Text("Vui lòng nhập số tiền cho tất cả người tham gia để chia chi phí.")
+                            .foregroundStyle(.secondary)
+                            .italic()
+                            .font(.system(size: 14, design: .rounded))
+                    } else if suggestionsForSelf.isEmpty {
                         Text(L10n.transactions.settlement.noSettlementNeeded)
                             .foregroundStyle(.secondary)
                     } else {
@@ -2060,8 +2079,8 @@ struct SettlementSplitCalculatorSheet: View {
                     .buttonStyle(.glassProminent)
                     .buttonBorderShape(.circle)
                     .tint(MistiaAccent.purple.color)
-                    .disabled(nonSelfParticipants.isEmpty)
-                    .opacity(nonSelfParticipants.isEmpty ? 0.45 : 1)
+                    .disabled(nonSelfParticipants.isEmpty || !allInputsProvided)
+                    .opacity((nonSelfParticipants.isEmpty || !allInputsProvided) ? 0.45 : 1)
                 }
             }
         }
@@ -2122,14 +2141,14 @@ struct SettlementSplitCalculatorSheet: View {
 
     private func paidTextBinding(for participant: SettlementParticipant) -> Binding<String> {
         Binding(
-            get: { paidTextsByParticipantID[participant.id, default: "0"] },
+            get: { paidTextsByParticipantID[participant.id, default: ""] },
             set: { paidTextsByParticipantID[participant.id] = $0 }
         )
     }
 
     private func initializePaidInputsIfNeeded() {
         for participant in nonSelfParticipants where paidTextsByParticipantID[participant.id] == nil {
-            paidTextsByParticipantID[participant.id] = "0"
+            paidTextsByParticipantID[participant.id] = ""
         }
     }
 

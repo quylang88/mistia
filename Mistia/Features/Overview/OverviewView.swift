@@ -2065,42 +2065,44 @@ private struct OverviewPreparingSettlementSection: View {
                     Button {
                         onSelect(event)
                     } label: {
-                        VStack(alignment: .leading, spacing: 10) {
-                            HStack(alignment: .top, spacing: 12) {
-                                OverviewIcon(icon: "mistia.settlement.event", tint: MistiaAccent.purple.color)
-                                VStack(alignment: .leading, spacing: 5) {
-                                    Text(event.title)
-                                        .font(.system(size: 16, weight: .bold, design: .rounded))
-                                        .foregroundStyle(.primary)
-                                        .lineLimit(1)
-                                    Text(participantText(for: event))
+                        HStack(alignment: .center, spacing: 12) {
+                            OverviewIcon(icon: "mistia.settlement.event", tint: MistiaAccent.purple.color)
+                            
+                            VStack(alignment: .leading, spacing: 5) {
+                                Text(event.title)
+                                    .font(.system(size: 16, weight: .bold, design: .rounded))
+                                    .foregroundStyle(.primary)
+                                    .lineLimit(1)
+                                
+                                Text(participantText(for: event))
+                                    .font(.system(size: 12, weight: .semibold, design: .rounded))
+                                    .foregroundStyle(.secondary)
+                                    .lineLimit(2)
+                                
+                                Text(L10n.transactions.settlement.billCountValue(String(event.billCount)))
+                                    .font(.system(size: 12, weight: .bold, design: .rounded))
+                                    .foregroundStyle(.secondary)
+                                
+                                if let note = trimmedNote(for: event) {
+                                    Text(note)
                                         .font(.system(size: 12, weight: .semibold, design: .rounded))
                                         .foregroundStyle(.secondary)
                                         .lineLimit(2)
                                 }
-                                Spacer(minLength: 8)
+                            }
+                            
+                            Spacer(minLength: 8)
+                            
+                            HStack(spacing: 8) {
                                 Text(event.totalPaidMinor.formattedCurrency(code: event.currencyCode))
                                     .font(.system(size: 16, weight: .bold, design: .rounded))
                                     .foregroundStyle(MistiaAccent.expense.color)
                                     .lineLimit(1)
                                     .minimumScaleFactor(0.75)
-                            }
-
-                            HStack(spacing: 8) {
-                                Text(L10n.transactions.settlement.billCountValue(String(event.billCount)))
-                                    .font(.system(size: 12, weight: .bold, design: .rounded))
-                                    .foregroundStyle(.secondary)
-                                Spacer(minLength: 8)
+                                
                                 Image(systemName: "chevron.right")
                                     .font(.system(size: 11, weight: .bold))
                                     .foregroundStyle(.tertiary)
-                            }
-
-                            if let note = trimmedNote(for: event) {
-                                Text(note)
-                                    .font(.system(size: 12, weight: .semibold, design: .rounded))
-                                    .foregroundStyle(.secondary)
-                                    .lineLimit(2)
                             }
                         }
                         .contentShape(Rectangle())
@@ -2119,9 +2121,11 @@ private struct OverviewPreparingSettlementSection: View {
     }
 
     private func participantText(for event: PreparingSettlementEventSnapshot) -> String {
-        event.participantNames.isEmpty
-            ? L10n.transactions.settlement.noParticipantsYet
-            : event.participantNames.joined(separator: ", ")
+        if event.participantNames.isEmpty {
+            return L10n.transactions.settlement.noParticipantsYet
+        } else {
+            return "\(event.participantNames.count) người: \(event.participantNames.joined(separator: ", "))"
+        }
     }
 
     private func trimmedNote(for event: PreparingSettlementEventSnapshot) -> String? {
