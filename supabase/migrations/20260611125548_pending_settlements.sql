@@ -24,6 +24,8 @@ create table if not exists public.settlement_groups (
   created_at timestamptz not null default timezone('utc'::text, now()),
   updated_at timestamptz not null default timezone('utc'::text, now()),
   deleted_at timestamptz,
+  is_archived boolean not null default false,
+  archived_at timestamptz,
   sync_version bigint not null default 1,
   last_modified_by_device_id uuid,
   constraint settlement_groups_kind_check

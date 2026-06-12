@@ -33748,6 +33748,13 @@
         "ja": { "stringUnit": { "state": "translated", "value": "イベント" } }
       }
     },
+    "transactions.settlement.editEventTitle": {
+      "localizations": {
+        "vi": { "stringUnit": { "state": "translated", "value": "Sửa sự kiện" } },
+        "en": { "stringUnit": { "state": "translated", "value": "Edit event" } },
+        "ja": { "stringUnit": { "state": "translated", "value": "イベントを編集" } }
+      }
+    },
     "transactions.settlement.expectedProfit": {
       "localizations": {
         "vi": { "stringUnit": { "state": "translated", "value": "Lợi nhuận dự kiến" } },

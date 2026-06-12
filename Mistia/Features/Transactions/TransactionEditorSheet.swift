@@ -222,6 +222,7 @@ struct TransactionEditorSheet: View {
     let target: TransactionEditorTarget
     var onComplete: (TransactionEditorCompletion) -> Void = { _ in }
     var onStageTransaction: (LedgerTransaction) -> Void = { _ in }
+    var onPersistedTransaction: (LedgerTransaction) -> Void = { _ in }
 
     @State private var draft: TransactionFormDraft
     @State private var alertMessage: String?
@@ -272,11 +273,13 @@ struct TransactionEditorSheet: View {
     init(
         target: TransactionEditorTarget,
         onComplete: @escaping (TransactionEditorCompletion) -> Void = { _ in },
-        onStageTransaction: @escaping (LedgerTransaction) -> Void = { _ in }
+        onStageTransaction: @escaping (LedgerTransaction) -> Void = { _ in },
+        onPersistedTransaction: @escaping (LedgerTransaction) -> Void = { _ in }
     ) {
         self.target = target
         self.onComplete = onComplete
         self.onStageTransaction = onStageTransaction
+        self.onPersistedTransaction = onPersistedTransaction
         _draft = State(initialValue: TransactionFormDraft(target: target))
     }
 
@@ -2880,6 +2883,7 @@ struct TransactionEditorSheet: View {
             }
 
             try modelContext.save()
+            onPersistedTransaction(transaction)
             if let subjectUserIDOverride {
                 sessionStore.recordUpsert(
                     entity: .transaction,

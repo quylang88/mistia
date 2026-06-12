@@ -66,6 +66,8 @@ final class MistiaMigrationPlanTests: XCTestCase {
         XCTAssertTrue(migration.contains("create table if not exists public.settlement_participants"))
         XCTAssertTrue(migration.contains("kind_raw_value in ('resale', 'sharedExpense')"))
         XCTAssertTrue(migration.contains("status_raw_value in ('preparing', 'open', 'partiallySettled', 'settled')"))
+        XCTAssertTrue(migration.contains("is_archived boolean not null default false"))
+        XCTAssertTrue(migration.contains("archived_at timestamptz"))
         XCTAssertTrue(migration.contains("display_name text not null default ''"))
         XCTAssertTrue(migration.contains("normalized_key text"))
         XCTAssertTrue(migration.contains("is_self boolean not null default false"))

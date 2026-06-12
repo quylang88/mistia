@@ -740,6 +740,8 @@ nonisolated enum SettlementTransactionRole: String, CaseIterable, Identifiable, 
     case resalePurchase
     case resaleReceipt
     case sharedExpensePaid
+    case sharedExpenseReceivable
+    case sharedExpensePayable
     case sharedExpenseReceipt
     case sharedExpensePayment
 

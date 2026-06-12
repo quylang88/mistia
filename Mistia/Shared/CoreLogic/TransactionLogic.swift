@@ -282,6 +282,18 @@ nonisolated struct SettlementResaleReceiptAllocation: Equatable {
     let remainingReceivableMinor: Int64
 }
 
+nonisolated struct SettlementDebtReportingOverride: Equatable {
+    let expenseMinor: Int64
+    let incomeMinor: Int64
+}
+
+nonisolated struct SettlementDebtPaymentAllocation: Equatable {
+    let settlementGroupID: UUID?
+    let amountMinor: Int64
+    let reportingExpenseMinor: Int64
+    let reportingIncomeMinor: Int64
+}
+
 nonisolated struct SettlementGroupRecordSnapshot: Equatable, Identifiable {
     let id: UUID
     let kind: SettlementKind
@@ -294,6 +306,38 @@ nonisolated struct SettlementGroupRecordSnapshot: Equatable, Identifiable {
     let settledMinor: Int64
     let note: String?
     let updatedAt: Date
+    let isArchived: Bool
+    let archivedAt: Date?
+
+    init(
+        id: UUID,
+        kind: SettlementKind,
+        status: SettlementStatus,
+        title: String,
+        currencyCode: String,
+        occurredAt: Date,
+        totalMinor: Int64,
+        expectedMinor: Int64,
+        settledMinor: Int64,
+        note: String?,
+        updatedAt: Date,
+        isArchived: Bool = false,
+        archivedAt: Date? = nil
+    ) {
+        self.id = id
+        self.kind = kind
+        self.status = status
+        self.title = title
+        self.currencyCode = currencyCode
+        self.occurredAt = occurredAt
+        self.totalMinor = totalMinor
+        self.expectedMinor = expectedMinor
+        self.settledMinor = settledMinor
+        self.note = note
+        self.updatedAt = updatedAt
+        self.isArchived = isArchived
+        self.archivedAt = archivedAt
+    }
 }
 
 nonisolated struct SettlementParticipantRecordSnapshot: Equatable, Identifiable {
@@ -384,11 +428,7 @@ nonisolated enum SettlementLogic {
         participantNames: [String]
     ) -> Bool {
         let trimmedTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmedTitle.isEmpty else { return false }
-
-        return participantNames.contains {
-            !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-        }
+        return !trimmedTitle.isEmpty
     }
 
     static func preparingEventSnapshots(
@@ -404,7 +444,7 @@ nonisolated enum SettlementLogic {
         }
 
         return groups
-            .filter { $0.kind == .sharedExpense && $0.status == .preparing }
+            .filter { $0.kind == .sharedExpense && $0.status == .preparing && !$0.isArchived }
             .map { group in
                 let groupParticipants = participantsByGroupID[group.id] ?? []
                 let visibleParticipantNames = groupParticipants
@@ -554,6 +594,103 @@ nonisolated enum SettlementLogic {
             settledMinor: settled,
             remainingReceivableMinor: max(sale - settled, 0)
         )
+    }
+
+    static func sharedExpenseDebtReportingOverride(
+        settlementIntent: TransactionDebtIntent,
+        amountMinor: Int64
+    ) -> SettlementDebtReportingOverride {
+        let amount = max(amountMinor, 0)
+        switch settlementIntent {
+        case .collect:
+            return SettlementDebtReportingOverride(expenseMinor: -amount, incomeMinor: 0)
+        case .repay:
+            return SettlementDebtReportingOverride(expenseMinor: amount, incomeMinor: 0)
+        case .lend, .borrow:
+            return SettlementDebtReportingOverride(expenseMinor: 0, incomeMinor: 0)
+        }
+    }
+
+    static func sharedExpenseDebtPaymentAllocations(
+        from records: [TransactionRecordSnapshot],
+        settlementIntent: TransactionDebtIntent,
+        paymentMinor: Int64
+    ) -> [SettlementDebtPaymentAllocation] {
+        let payment = max(paymentMinor, 0)
+        guard payment > 0 else { return [] }
+        guard settlementIntent == .collect || settlementIntent == .repay else {
+            return [
+                SettlementDebtPaymentAllocation(
+                    settlementGroupID: nil,
+                    amountMinor: payment,
+                    reportingExpenseMinor: 0,
+                    reportingIncomeMinor: 0
+                )
+            ]
+        }
+
+        let principalIntent: TransactionDebtIntent = settlementIntent == .collect ? .lend : .borrow
+        let paymentIntent: TransactionDebtIntent = settlementIntent
+        let groupedEventRecords = Dictionary(
+            grouping: records.filter { record in
+                record.settlementGroupID != nil
+                    && record.transferSubtype == .debt
+                    && (record.debtIntent == principalIntent || record.debtIntent == paymentIntent)
+            }
+        ) { record in
+            record.settlementGroupID ?? UUID()
+        }
+
+        let eventOpenAmounts: [(groupID: UUID, amount: Int64, occurredAt: Date)] = groupedEventRecords.compactMap { groupID, groupedRecords in
+            let principal = groupedRecords.reduce(Int64.zero) { total, record in
+                record.debtIntent == principalIntent ? total + max(record.amountMinor, 0) : total
+            }
+            let settled = groupedRecords.reduce(Int64.zero) { total, record in
+                record.debtIntent == paymentIntent ? total + max(record.amountMinor, 0) : total
+            }
+            let open = max(principal - settled, 0)
+            guard open > 0 else { return nil }
+            let firstOccurredAt = groupedRecords.map(\.occurredAt).min() ?? .distantFuture
+            return (groupID: groupID, amount: open, occurredAt: firstOccurredAt)
+        }
+        .sorted {
+            if $0.occurredAt != $1.occurredAt {
+                return $0.occurredAt < $1.occurredAt
+            }
+            return $0.groupID.uuidString < $1.groupID.uuidString
+        }
+
+        var remaining = payment
+        var allocations: [SettlementDebtPaymentAllocation] = []
+        for eventOpenAmount in eventOpenAmounts where remaining > 0 {
+            let allocated = min(eventOpenAmount.amount, remaining)
+            let override = sharedExpenseDebtReportingOverride(
+                settlementIntent: settlementIntent,
+                amountMinor: allocated
+            )
+            allocations.append(
+                SettlementDebtPaymentAllocation(
+                    settlementGroupID: eventOpenAmount.groupID,
+                    amountMinor: allocated,
+                    reportingExpenseMinor: override.expenseMinor,
+                    reportingIncomeMinor: override.incomeMinor
+                )
+            )
+            remaining -= allocated
+        }
+
+        if remaining > 0 {
+            allocations.append(
+                SettlementDebtPaymentAllocation(
+                    settlementGroupID: nil,
+                    amountMinor: remaining,
+                    reportingExpenseMinor: 0,
+                    reportingIncomeMinor: 0
+                )
+            )
+        }
+
+        return allocations
     }
 
     static func sharedExpenseSettlement(
@@ -776,6 +913,12 @@ nonisolated enum TransactionLogic {
             && record.transferSubtype == .debt
             && record.debtIntent == .borrow
             && record.sourceWalletID == nil
+    }
+
+    static func isSharedExpenseDebtPrincipal(_ record: TransactionRecordSnapshot) -> Bool {
+        record.primaryKind == .transfer
+            && record.transferSubtype == .debt
+            && (record.settlementRole == .sharedExpenseReceivable || record.settlementRole == .sharedExpensePayable)
     }
 
     static func isPaidForExpenseDebt(_ record: TransactionRecordSnapshot) -> Bool {
@@ -1276,6 +1419,9 @@ nonisolated enum TransactionLogic {
                             : { kind, amount in outgoingDelta(for: kind, amount: amount) }
                     )
                 case .debt:
+                    guard !isSharedExpenseDebtPrincipal(record) else {
+                        break
+                    }
                     switch record.debtIntent {
                     case .lend, .repay:
                         applyDelta(
@@ -1304,28 +1450,32 @@ nonisolated enum TransactionLogic {
     }
 
     static func cashflowAmount(for record: TransactionRecordSnapshot) -> Int64 {
+        if isSharedExpenseDebtPrincipal(record) {
+            return 0
+        }
+
         switch record.primaryKind {
         case .expense:
-            -record.amountMinor
+            return -record.amountMinor
         case .income:
-            record.amountMinor
+            return record.amountMinor
         case .transfer:
             switch record.transferSubtype {
             case .internalTransfer:
-                0
+                return 0
             case .familyTransfer:
-                record.destinationWalletID == nil ? record.amountMinor : -record.amountMinor
+                return record.destinationWalletID == nil ? record.amountMinor : -record.amountMinor
             case .debt:
                 switch record.debtIntent {
                 case .lend, .repay:
-                    -record.amountMinor
+                    return -record.amountMinor
                 case .collect, .borrow:
-                    isPaidForDebt(record) ? 0 : record.amountMinor
+                    return isPaidForDebt(record) ? 0 : record.amountMinor
                 case nil:
-                    0
+                    return 0
                 }
             case nil:
-                0
+                return 0
             }
         }
     }
@@ -1351,7 +1501,7 @@ nonisolated enum TransactionLogic {
             case .familyTransfer:
                 return record.sourceWalletID != nil
             case .debt:
-                return (record.sourceWalletID != nil || isPaidForDebt(record))
+                return (record.sourceWalletID != nil || isPaidForDebt(record) || isSharedExpenseDebtPrincipal(record))
                     && record.debtIntent != nil
                     && record.normalizedCounterpartyKey != nil
             case nil:

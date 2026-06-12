@@ -2143,7 +2143,9 @@ enum MistiaSyncLocalStore {
             createdAt: row.createdAt,
             updatedAt: row.updatedAt,
             deletedAt: row.deletedAt,
-            remoteVersion: row.syncVersion
+            remoteVersion: row.syncVersion,
+            isArchived: row.isArchived,
+            archivedAt: row.archivedAt
         )
 
         if groupByID[row.id] == nil {
@@ -2165,6 +2167,8 @@ enum MistiaSyncLocalStore {
         group.updatedAt = row.updatedAt
         group.deletedAt = row.deletedAt
         group.remoteVersion = row.syncVersion
+        group.isArchived = row.isArchived
+        group.archivedAt = row.archivedAt
 
         try MistiaRecordOwnershipStore.upsert(
             entity: .settlementGroup,
@@ -3124,6 +3128,8 @@ private extension RemoteSettlementGroup {
         self.createdAt = group.createdAt
         self.updatedAt = group.updatedAt
         self.deletedAt = group.deletedAt
+        self.isArchived = group.isArchived
+        self.archivedAt = group.archivedAt
         self.syncVersion = max(group.remoteVersion, 1)
         self.lastModifiedByDeviceID = nil
     }

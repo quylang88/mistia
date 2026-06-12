@@ -475,6 +475,8 @@ nonisolated struct RemoteSettlementGroup: MistiaRemoteRow {
     var createdAt: Date
     var updatedAt: Date
     var deletedAt: Date?
+    var isArchived: Bool
+    var archivedAt: Date?
     var syncVersion: Int64
     var lastModifiedByDeviceID: UUID?
 
@@ -494,6 +496,8 @@ nonisolated struct RemoteSettlementGroup: MistiaRemoteRow {
         case createdAt = "created_at"
         case updatedAt = "updated_at"
         case deletedAt = "deleted_at"
+        case isArchived = "is_archived"
+        case archivedAt = "archived_at"
         case syncVersion = "sync_version"
         case lastModifiedByDeviceID = "last_modified_by_device_id"
     }

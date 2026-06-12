@@ -3890,6 +3890,8 @@ nonisolated enum L10n {
             static func chooseExistingExpense(language: MistiaAppLanguage) -> String { L10n.tr("transactions.settlement.chooseExistingExpense", vi: "Chọn chi tiêu có sẵn", en: "Existing expense", ja: "既存の支出", language: language) }
             static var chooseExpense: String { L10n.tr("transactions.settlement.chooseExpense", vi: "Chọn chi tiêu", en: "Choose expense", ja: "支出を選択") }
             static func chooseExpense(language: MistiaAppLanguage) -> String { L10n.tr("transactions.settlement.chooseExpense", vi: "Chọn chi tiêu", en: "Choose expense", ja: "支出を選択", language: language) }
+            static var editEventTitle: String { L10n.tr("transactions.settlement.editEventTitle", vi: "Sửa sự kiện", en: "Edit event", ja: "イベントを編集") }
+            static func editEventTitle(language: MistiaAppLanguage) -> String { L10n.tr("transactions.settlement.editEventTitle", vi: "Sửa sự kiện", en: "Edit event", ja: "イベントを編集", language: language) }
             static var enterAmountsGreaterThanZero: String { L10n.tr("transactions.settlement.enterAmountsGreaterThanZero", vi: "Nhập số tiền lớn hơn 0.", en: "Enter amounts greater than 0.", ja: "0 より大きい金額を入力してください。") }
             static func enterAmountsGreaterThanZero(language: MistiaAppLanguage) -> String { L10n.tr("transactions.settlement.enterAmountsGreaterThanZero", vi: "Nhập số tiền lớn hơn 0.", en: "Enter amounts greater than 0.", ja: "0 より大きい金額を入力してください。", language: language) }
             static var enterCounterparty: String { L10n.tr("transactions.settlement.enterCounterparty", vi: "Nhập tên người liên quan.", en: "Enter the counterparty name.", ja: "相手の名前を入力してください。") }

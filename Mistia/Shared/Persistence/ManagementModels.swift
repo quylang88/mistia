@@ -403,6 +403,8 @@ final class SettlementGroup {
     var updatedAt: Date
     var deletedAt: Date?
     var remoteVersion: Int64
+    var isArchived: Bool
+    var archivedAt: Date?
 
     init(
         id: UUID = UUID(),
@@ -419,7 +421,9 @@ final class SettlementGroup {
         createdAt: Date = .now,
         updatedAt: Date = .now,
         deletedAt: Date? = nil,
-        remoteVersion: Int64 = 0
+        remoteVersion: Int64 = 0,
+        isArchived: Bool = false,
+        archivedAt: Date? = nil
     ) {
         self.id = id
         self.kindRawValue = kind.rawValue
@@ -436,6 +440,8 @@ final class SettlementGroup {
         self.updatedAt = updatedAt
         self.deletedAt = deletedAt
         self.remoteVersion = remoteVersion
+        self.isArchived = isArchived
+        self.archivedAt = archivedAt
     }
 
     var kind: SettlementKind {
@@ -460,7 +466,9 @@ final class SettlementGroup {
             expectedMinor: expectedMinor,
             settledMinor: settledMinor,
             note: note,
-            updatedAt: updatedAt
+            updatedAt: updatedAt,
+            isArchived: isArchived,
+            archivedAt: archivedAt
         )
     }
 }

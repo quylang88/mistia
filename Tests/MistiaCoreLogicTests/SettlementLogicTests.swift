@@ -2,23 +2,29 @@ import XCTest
 @testable import MistiaCoreLogic
 
 final class SettlementLogicTests: XCTestCase {
-    func testPreparingEventRequiresTitleAndNonSelfParticipantButAllowsNoBills() {
+    func testPreparingEventRequiresOnlyTitleAndAllowsNoParticipantsOrBills() {
         XCTAssertTrue(
             SettlementLogic.canSavePreparingEvent(
                 title: "Trip",
                 participantNames: ["Linh"]
             )
         )
-        XCTAssertFalse(
+        XCTAssertTrue(
             SettlementLogic.canSavePreparingEvent(
-                title: "",
-                participantNames: ["Linh"]
+                title: "Trip",
+                participantNames: []
+            )
+        )
+        XCTAssertTrue(
+            SettlementLogic.canSavePreparingEvent(
+                title: "Trip",
+                participantNames: ["   "]
             )
         )
         XCTAssertFalse(
             SettlementLogic.canSavePreparingEvent(
-                title: "Trip",
-                participantNames: ["   "]
+                title: "",
+                participantNames: ["Linh"]
             )
         )
     }
@@ -318,6 +324,92 @@ final class SettlementLogicTests: XCTestCase {
         XCTAssertEqual(TransactionLogic.summary(for: [receipt]).incomeMinor, 0)
     }
 
+    func testSharedExpenseReceiptOffsetsLinkedEventExpense() {
+        let eventID = UUID(uuidString: "00000000-0000-0000-0000-00000000D001")!
+        let now = Date(timeIntervalSince1970: 1_778_400_000)
+        let paid = settlementExpenseRecord(
+            groupID: eventID,
+            title: "Dinner",
+            amountMinor: 8_000,
+            occurredAt: now
+        )
+        let receipt = sharedExpenseDebtSettlementRecord(
+            groupID: eventID,
+            debtIntent: .collect,
+            amountMinor: 4_000,
+            reportingExpenseMinor: SettlementLogic.sharedExpenseDebtReportingOverride(
+                settlementIntent: .collect,
+                amountMinor: 4_000
+            ).expenseMinor,
+            occurredAt: now.addingTimeInterval(60)
+        )
+
+        let summary = TransactionLogic.summary(for: [paid, receipt])
+
+        XCTAssertEqual(TransactionLogic.reportedExpenseAmount(for: receipt), -4_000)
+        XCTAssertEqual(TransactionLogic.reportedIncomeAmount(for: receipt), 0)
+        XCTAssertEqual(summary.expenseMinor, 4_000)
+        XCTAssertEqual(summary.incomeMinor, 0)
+    }
+
+    func testSharedExpenseRepaymentCountsAsActualEventExpense() {
+        let eventID = UUID(uuidString: "00000000-0000-0000-0000-00000000D002")!
+        let now = Date(timeIntervalSince1970: 1_778_400_000)
+        let repayment = sharedExpenseDebtSettlementRecord(
+            groupID: eventID,
+            debtIntent: .repay,
+            amountMinor: 4_000,
+            reportingExpenseMinor: SettlementLogic.sharedExpenseDebtReportingOverride(
+                settlementIntent: .repay,
+                amountMinor: 4_000
+            ).expenseMinor,
+            occurredAt: now
+        )
+
+        let summary = TransactionLogic.summary(for: [repayment])
+
+        XCTAssertEqual(TransactionLogic.reportedExpenseAmount(for: repayment), 4_000)
+        XCTAssertEqual(TransactionLogic.reportedIncomeAmount(for: repayment), 0)
+        XCTAssertEqual(summary.expenseMinor, 4_000)
+        XCTAssertEqual(summary.incomeMinor, 0)
+    }
+
+    func testDebtSettlementAllocatesEventLinkedDebtBeforeOutsideDebt() {
+        let eventID = UUID(uuidString: "00000000-0000-0000-0000-00000000D003")!
+        let now = Date(timeIntervalSince1970: 1_778_400_000)
+        let eventDebt = sharedExpenseDebtPrincipalRecord(
+            groupID: eventID,
+            debtIntent: .lend,
+            amountMinor: 4_000,
+            occurredAt: now
+        )
+        let outsideDebt = debtRecord(counterpartyName: "B", amountMinor: 3_000)
+
+        let allocations = SettlementLogic.sharedExpenseDebtPaymentAllocations(
+            from: [outsideDebt, eventDebt],
+            settlementIntent: .collect,
+            paymentMinor: 5_000
+        )
+
+        XCTAssertEqual(
+            allocations,
+            [
+                SettlementDebtPaymentAllocation(
+                    settlementGroupID: eventID,
+                    amountMinor: 4_000,
+                    reportingExpenseMinor: -4_000,
+                    reportingIncomeMinor: 0
+                ),
+                SettlementDebtPaymentAllocation(
+                    settlementGroupID: nil,
+                    amountMinor: 1_000,
+                    reportingExpenseMinor: 0,
+                    reportingIncomeMinor: 0
+                )
+            ]
+        )
+    }
+
     private func settlementExpenseRecord(
         groupID: UUID,
         title: String,
@@ -348,7 +440,70 @@ final class SettlementLogicTests: XCTestCase {
         )
     }
 
-    private func debtRecord(counterpartyName: String) -> TransactionRecordSnapshot {
+    private func sharedExpenseDebtPrincipalRecord(
+        groupID: UUID,
+        debtIntent: TransactionDebtIntent,
+        amountMinor: Int64,
+        occurredAt: Date
+    ) -> TransactionRecordSnapshot {
+        TransactionRecordSnapshot(
+            id: UUID(),
+            primaryKind: .transfer,
+            transferSubtype: .debt,
+            debtIntent: debtIntent,
+            entryStatus: .posted,
+            title: debtIntent.title,
+            note: nil,
+            amountMinor: amountMinor,
+            settlementGroupID: groupID,
+            settlementRole: debtIntent == .lend ? .sharedExpenseReceivable : .sharedExpensePayable,
+            sourceCurrencyCode: "JPY",
+            occurredAt: occurredAt,
+            createdAt: occurredAt,
+            sourceWalletID: UUID(),
+            sourceWalletKind: .cash,
+            destinationWalletID: nil,
+            destinationWalletKind: nil,
+            categoryID: nil,
+            counterpartyName: "B",
+            normalizedCounterpartyKey: "b"
+        )
+    }
+
+    private func sharedExpenseDebtSettlementRecord(
+        groupID: UUID,
+        debtIntent: TransactionDebtIntent,
+        amountMinor: Int64,
+        reportingExpenseMinor: Int64,
+        occurredAt: Date
+    ) -> TransactionRecordSnapshot {
+        TransactionRecordSnapshot(
+            id: UUID(),
+            primaryKind: .transfer,
+            transferSubtype: .debt,
+            debtIntent: debtIntent,
+            entryStatus: .posted,
+            title: debtIntent.title,
+            note: nil,
+            amountMinor: amountMinor,
+            settlementGroupID: groupID,
+            settlementRole: debtIntent == .collect ? .sharedExpenseReceipt : .sharedExpensePayment,
+            reportingExpenseMinor: reportingExpenseMinor,
+            reportingIncomeMinor: 0,
+            sourceCurrencyCode: "JPY",
+            occurredAt: occurredAt,
+            createdAt: occurredAt,
+            sourceWalletID: UUID(),
+            sourceWalletKind: .cash,
+            destinationWalletID: nil,
+            destinationWalletKind: nil,
+            categoryID: nil,
+            counterpartyName: "B",
+            normalizedCounterpartyKey: "b"
+        )
+    }
+
+    private func debtRecord(counterpartyName: String, amountMinor: Int64 = 1_000) -> TransactionRecordSnapshot {
         let now = Date(timeIntervalSince1970: 1_778_400_000)
         return TransactionRecordSnapshot(
             id: UUID(),
@@ -358,7 +513,7 @@ final class SettlementLogicTests: XCTestCase {
             entryStatus: .posted,
             title: "Debt",
             note: nil,
-            amountMinor: 1_000,
+            amountMinor: amountMinor,
             occurredAt: now,
             createdAt: now,
             sourceWalletID: UUID(),

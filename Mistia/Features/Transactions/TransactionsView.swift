@@ -2283,39 +2283,59 @@ private struct OutstandingDebtChip: View {
     let action: () -> Void
 
     private var tint: Color {
-        debtIntentTint(position.isReceivable ? .collect : .repay)
+        debtIntentTint(position.isReceivable ? .lend : .borrow)
     }
 
     var body: some View {
         Button(action: action) {
-            VStack(alignment: .leading, spacing: 6) {
-                Text(position.displayName)
-                    .font(.system(size: 15, weight: .bold, design: .rounded))
-                    .foregroundStyle(.primary)
-
-                Text(
-                    position.isReceivable
-                        ? L10n.transactions.transactions.theyOweYou
-                        : L10n.transactions.transactions.youOwe
+            HStack(spacing: 12) {
+                MistiaFinanceIconView(
+                    icon: (position.isReceivable ? TransactionDebtIntent.lend : TransactionDebtIntent.borrow).financeIconToken,
+                    fallbackColor: tint,
+                    size: 36
                 )
+
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(position.displayName)
+                        .font(.system(size: 15, weight: .bold, design: .rounded))
+                        .foregroundStyle(.primary)
+                        .lineLimit(1)
+
+                    Text(
+                        position.isReceivable
+                            ? L10n.transactions.transactions.theyOweYou
+                            : L10n.transactions.transactions.youOwe
+                    )
                     .font(.system(size: 11.5, weight: .semibold, design: .rounded))
                     .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                }
+
+                Spacer(minLength: 8)
 
                 Text(abs(position.netMinor).formattedCurrency(code: position.currencyCode))
-                    .font(.system(size: 15, weight: .bold, design: .rounded))
+                    .font(.system(size: 14, weight: .bold, design: .rounded))
                     .foregroundStyle(tint)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.72)
             }
-            .padding(14)
-            .frame(width: 150, alignment: .leading)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 11)
+            .frame(width: 220, alignment: .leading)
             .background {
-                MistiaBlockCardBackground(tint: tint.opacity(0.14), cornerRadius: 22)
+                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                    .fill(.regularMaterial)
+                    .overlay {
+                        RoundedRectangle(cornerRadius: 16, style: .continuous)
+                            .strokeBorder(.quaternary, lineWidth: 0.6)
+                    }
             }
         }
-        .buttonStyle(MistiaPressableButtonStyle(cornerRadius: 22, tint: tint))
+        .buttonStyle(MistiaPressableButtonStyle(cornerRadius: 16, tint: tint))
     }
 }
 
-private struct DebtSettlementSheetTarget: Identifiable {
+struct DebtSettlementSheetTarget: Identifiable {
     let id: String
     let position: CounterpartyDebtSnapshot
 
@@ -2333,7 +2353,7 @@ private struct DebtSettlementSheetTarget: Identifiable {
     }
 }
 
-private struct DebtSettlementSheet: View {
+struct DebtSettlementSheet: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
     @Environment(SessionStore.self) private var sessionStore
@@ -2341,6 +2361,7 @@ private struct DebtSettlementSheet: View {
 
     @Query
     private var wallets: [LedgerWallet]
+    @Query private var settlementGroups: [SettlementGroup]
     @Query private var ownershipScopes: [OwnedRecordScope]
 
     let target: DebtSettlementSheetTarget
@@ -2535,52 +2556,93 @@ private struct DebtSettlementSheet: View {
         }
 
         let now = Date()
-        let transaction = LedgerTransaction(
-            primaryKind: .transfer,
-            transferSubtype: .debt,
-            debtIntent: target.intent,
-            entryStatus: .posted,
-            title: target.intent.title,
-            amountMinor: parsedAmountMinor,
-            sourceCurrencyCode: selectedWallet.currencyCode,
-            occurredAt: now,
-            createdAt: now,
-            updatedAt: now,
-            sourceWallet: selectedWallet,
-            counterpartyName: target.position.displayName,
-            normalizedCounterpartyKey: TransactionLogic.normalizeCounterpartyName(target.position.displayName)
+        let allocations = SettlementLogic.sharedExpenseDebtPaymentAllocations(
+            from: target.position.relatedRecords,
+            settlementIntent: target.intent,
+            paymentMinor: parsedAmountMinor
         )
+        let transactions = allocations.map { allocation in
+            LedgerTransaction(
+                primaryKind: .transfer,
+                transferSubtype: .debt,
+                debtIntent: target.intent,
+                entryStatus: .posted,
+                title: target.intent.title,
+                amountMinor: allocation.amountMinor,
+                settlementGroupID: allocation.settlementGroupID,
+                settlementRole: allocation.settlementGroupID == nil
+                    ? nil
+                    : (target.intent == .collect ? .sharedExpenseReceipt : .sharedExpensePayment),
+                reportingExpenseMinor: allocation.reportingExpenseMinor,
+                reportingIncomeMinor: allocation.reportingIncomeMinor,
+                sourceCurrencyCode: selectedWallet.currencyCode,
+                occurredAt: now,
+                createdAt: now,
+                updatedAt: now,
+                sourceWallet: selectedWallet,
+                counterpartyName: target.position.displayName,
+                normalizedCounterpartyKey: TransactionLogic.normalizeCounterpartyName(target.position.displayName)
+            )
+        }
 
-        modelContext.insert(transaction)
+        transactions.forEach(modelContext.insert)
+        updateSharedExpenseGroupsAfterDebtPayment(allocations: allocations, transactions: transactions, modifiedAt: now)
 
         do {
             let ownerUserID = walletPickerAccess.walletOwnerUserID(for: selectedWallet)
             let actorUserID = sessionStore.activeLocalProfileUserID ?? ownerUserID
             if let actorUserID {
-                try TransactionAuditStore.upsert(
-                    transactionID: transaction.id,
-                    createdByUserID: actorUserID,
-                    lastModifiedByUserID: actorUserID,
-                    updatedAt: now,
-                    context: modelContext
-                )
+                for transaction in transactions {
+                    try TransactionAuditStore.upsert(
+                        transactionID: transaction.id,
+                        createdByUserID: actorUserID,
+                        lastModifiedByUserID: actorUserID,
+                        updatedAt: now,
+                        context: modelContext
+                    )
+                }
             }
             if let ownerUserID {
-                try MistiaRecordOwnershipStore.upsert(
-                    entity: .transaction,
-                    recordID: transaction.id,
-                    ownerUserID: ownerUserID,
-                    updatedAt: now,
-                    context: modelContext
-                )
+                for transaction in transactions {
+                    try MistiaRecordOwnershipStore.upsert(
+                        entity: .transaction,
+                        recordID: transaction.id,
+                        ownerUserID: ownerUserID,
+                        updatedAt: now,
+                        context: modelContext
+                    )
+                }
+                for groupID in Set(allocations.compactMap(\.settlementGroupID)) {
+                    if let group = settlementGroups.first(where: { $0.id == groupID }) {
+                        try MistiaRecordOwnershipStore.upsert(
+                            entity: .settlementGroup,
+                            recordID: group.id,
+                            ownerUserID: ownerUserID,
+                            updatedAt: now,
+                            context: modelContext
+                        )
+                    }
+                }
             }
             try modelContext.save()
-            sessionStore.recordUpsert(
-                entity: .transaction,
-                recordID: transaction.id,
-                modifiedAt: transaction.updatedAt,
-                subjectUserIDOverride: ownerUserID
-            )
+            for transaction in transactions {
+                sessionStore.recordUpsert(
+                    entity: .transaction,
+                    recordID: transaction.id,
+                    modifiedAt: transaction.updatedAt,
+                    subjectUserIDOverride: ownerUserID
+                )
+            }
+            for groupID in Set(allocations.compactMap(\.settlementGroupID)) {
+                if let group = settlementGroups.first(where: { $0.id == groupID }) {
+                    sessionStore.recordUpsert(
+                        entity: .settlementGroup,
+                        recordID: group.id,
+                        modifiedAt: group.updatedAt,
+                        subjectUserIDOverride: ownerUserID
+                    )
+                }
+            }
             if let ownerUserID, ownerUserID != sessionStore.activeLocalProfileUserID {
                 Task { @MainActor in
                     _ = await sessionStore.pushQueuedFamilyOwnerChangesNow()
@@ -2589,6 +2651,38 @@ private struct DebtSettlementSheet: View {
             dismiss()
         } catch {
             alertMessage = error.localizedDescription
+        }
+    }
+
+    private func updateSharedExpenseGroupsAfterDebtPayment(
+        allocations: [SettlementDebtPaymentAllocation],
+        transactions: [LedgerTransaction],
+        modifiedAt: Date
+    ) {
+        let affectedGroupIDs = Set(allocations.compactMap(\.settlementGroupID))
+        guard !affectedGroupIDs.isEmpty else { return }
+
+        let newSnapshots = transactions.map(\.snapshot)
+        for groupID in affectedGroupIDs {
+            guard let group = settlementGroups.first(where: { $0.id == groupID }) else { continue }
+            let groupRecords = target.position.relatedRecords.filter { $0.settlementGroupID == groupID } + newSnapshots.filter { $0.settlementGroupID == groupID }
+            let principalIntent: TransactionDebtIntent = target.intent == .collect ? .lend : .borrow
+            let paymentIntent: TransactionDebtIntent = target.intent
+            let expected = groupRecords.reduce(Int64.zero) { total, record in
+                record.debtIntent == principalIntent ? total + max(record.amountMinor, 0) : total
+            }
+            let settled = min(
+                expected,
+                groupRecords.reduce(Int64.zero) { total, record in
+                    record.debtIntent == paymentIntent ? total + max(record.amountMinor, 0) : total
+                }
+            )
+            group.expectedMinor = max(group.expectedMinor, expected)
+            group.settledMinor = settled
+            group.status = settled >= max(group.expectedMinor, expected) ? .settled : (settled > 0 ? .partiallySettled : .open)
+            group.isArchived = group.status == .settled
+            group.archivedAt = group.status == .settled ? (group.archivedAt ?? modifiedAt) : nil
+            group.updatedAt = modifiedAt
         }
     }
 }
