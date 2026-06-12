@@ -33582,9 +33582,9 @@
     },
     "transactions.settlement.addSharedExpense": {
       "localizations": {
-        "vi": { "stringUnit": { "state": "translated", "value": "Chia chi phí" } },
-        "en": { "stringUnit": { "state": "translated", "value": "Split expense" } },
-        "ja": { "stringUnit": { "state": "translated", "value": "割り勘" } }
+        "vi": { "stringUnit": { "state": "translated", "value": "Sự kiện" } },
+        "en": { "stringUnit": { "state": "translated", "value": "Event" } },
+        "ja": { "stringUnit": { "state": "translated", "value": "イベント" } }
       }
     },
     "transactions.settlement.amountExceedsOpenSettlement": {
@@ -33638,9 +33638,9 @@
     },
     "transactions.settlement.addExpensesToTrackEventCost": {
       "localizations": {
-        "vi": { "stringUnit": { "state": "translated", "value": "Thêm chi tiêu mới hoặc chọn thu chi có sẵn để lưu chi phí bạn đã trả cho sự kiện." } },
-        "en": { "stringUnit": { "state": "translated", "value": "Add a new expense or choose an existing cashflow item to track what you paid for this event." } },
-        "ja": { "stringUnit": { "state": "translated", "value": "新しい支出を追加するか、既存の収支を選んで、このイベントで支払った金額を記録します。" } }
+        "vi": { "stringUnit": { "state": "translated", "value": "Thêm chi tiêu mới hoặc chọn chi tiêu có sẵn để lưu chi phí bạn đã trả cho sự kiện." } },
+        "en": { "stringUnit": { "state": "translated", "value": "Add a new expense or choose an existing expense to track what you paid for this event." } },
+        "ja": { "stringUnit": { "state": "translated", "value": "新しい支出を追加するか、既存の支出を選んで、このイベントで支払った金額を記録します。" } }
       }
     },
     "transactions.settlement.addParticipant": {
@@ -33713,6 +33713,13 @@
         "ja": { "stringUnit": { "state": "translated", "value": "相手の名前を入力してください。" } }
       }
     },
+    "transactions.settlement.enterEventName": {
+      "localizations": {
+        "vi": { "stringUnit": { "state": "translated", "value": "Nhập tên sự kiện." } },
+        "en": { "stringUnit": { "state": "translated", "value": "Enter the event name." } },
+        "ja": { "stringUnit": { "state": "translated", "value": "イベント名を入力してください。" } }
+      }
+    },
     "transactions.settlement.enterParticipant": {
       "localizations": {
         "vi": { "stringUnit": { "state": "translated", "value": "Thêm ít nhất một người liên quan." } },
@@ -33729,7 +33736,7 @@
     },
     "transactions.settlement.eventName": {
       "localizations": {
-        "vi": { "stringUnit": { "state": "translated", "value": "Tên buổi / sự kiện" } },
+        "vi": { "stringUnit": { "state": "translated", "value": "Tên sự kiện" } },
         "en": { "stringUnit": { "state": "translated", "value": "Event name" } },
         "ja": { "stringUnit": { "state": "translated", "value": "イベント名" } }
       }
@@ -33757,8 +33764,8 @@
     },
     "transactions.settlement.eventBills": {
       "localizations": {
-        "vi": { "stringUnit": { "state": "translated", "value": "Bill của sự kiện" } },
-        "en": { "stringUnit": { "state": "translated", "value": "Event bills" } },
+        "vi": { "stringUnit": { "state": "translated", "value": "Chi tiêu của sự kiện" } },
+        "en": { "stringUnit": { "state": "translated", "value": "Event expenses" } },
         "ja": { "stringUnit": { "state": "translated", "value": "イベント支出" } }
       }
     },
@@ -33778,8 +33785,8 @@
     },
     "transactions.settlement.noBillsYet": {
       "localizations": {
-        "vi": { "stringUnit": { "state": "translated", "value": "Chưa có bill" } },
-        "en": { "stringUnit": { "state": "translated", "value": "No bills yet" } },
+        "vi": { "stringUnit": { "state": "translated", "value": "Chưa có chi tiêu" } },
+        "en": { "stringUnit": { "state": "translated", "value": "No expenses yet" } },
         "ja": { "stringUnit": { "state": "translated", "value": "支出はまだありません" } }
       }
     },
@@ -33939,8 +33946,8 @@
     },
     "transactions.settlement.savedBills": {
       "localizations": {
-        "vi": { "stringUnit": { "state": "translated", "value": "Bill đã lưu" } },
-        "en": { "stringUnit": { "state": "translated", "value": "Saved bills" } },
+        "vi": { "stringUnit": { "state": "translated", "value": "Chi tiêu đã lưu" } },
+        "en": { "stringUnit": { "state": "translated", "value": "Saved expenses" } },
         "ja": { "stringUnit": { "state": "translated", "value": "保存済み支出" } }
       }
     },
@@ -33981,8 +33988,8 @@
     },
     "transactions.settlement.selfPaidLocked": {
       "localizations": {
-        "vi": { "stringUnit": { "state": "translated", "value": "Số tiền của bạn lấy từ các bill đã lưu. Bấm Sửa để thay đổi bill." } },
-        "en": { "stringUnit": { "state": "translated", "value": "Your paid amount comes from saved bills. Tap Edit to change bills." } },
+        "vi": { "stringUnit": { "state": "translated", "value": "Số tiền của bạn lấy từ các chi tiêu đã lưu. Bấm Sửa để thay đổi." } },
+        "en": { "stringUnit": { "state": "translated", "value": "Your paid amount comes from saved expenses. Tap Edit to change them." } },
         "ja": { "stringUnit": { "state": "translated", "value": "あなたの支払額は保存済み支出から計算されます。変更するには編集します。" } }
       }
     },
@@ -33993,11 +34000,11 @@
         "ja": { "stringUnit": { "state": "translated", "value": "自分" } }
       }
     },
-    "transactions.settlement.searchCashflow": {
+    "transactions.settlement.searchExpense": {
       "localizations": {
-        "vi": { "stringUnit": { "state": "translated", "value": "Tìm thu chi" } },
-        "en": { "stringUnit": { "state": "translated", "value": "Search cashflow" } },
-        "ja": { "stringUnit": { "state": "translated", "value": "収支を検索" } }
+        "vi": { "stringUnit": { "state": "translated", "value": "Tìm chi tiêu" } },
+        "en": { "stringUnit": { "state": "translated", "value": "Search expense" } },
+        "ja": { "stringUnit": { "state": "translated", "value": "支出を検索" } }
       }
     },
     "transactions.settlement.splitSummary": {

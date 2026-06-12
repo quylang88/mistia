@@ -197,6 +197,7 @@ struct SettlementEditorSheet: View {
     @State private var billEditorTarget: SharedExpenseBillEditorTarget?
     @State private var billSearchTarget: SharedExpenseBillSearchTarget?
     @State private var showingBillAddOptions = false
+    @FocusState private var focusedParticipantRowID: UUID?
 
     private var walletPickerAccess: MistiaWalletPickerAccess {
         MistiaWalletPickerAccess(
@@ -321,7 +322,8 @@ struct SettlementEditorSheet: View {
                       !transaction.isArchived,
                       transaction.entryStatus == .posted,
                       transaction.primaryKind == .expense,
-                      transaction.settlementGroupID == nil else {
+                      transaction.settlementGroupID == nil,
+                      TransactionLogic.isExpenseSpending(transaction.snapshot) else {
                     return false
                 }
                 return transaction.sourceWallet != nil && transaction.category != nil
@@ -372,7 +374,10 @@ struct SettlementEditorSheet: View {
     }
 
     private var participantNameSuggestions: [TransactionTitleSuggestion] {
-        let query = participantRows.last?.name ?? ""
+        let focusedRow = focusedParticipantRowID.flatMap { id in
+            participantRows.first { $0.id == id }
+        }
+        let query = focusedRow?.name ?? participantRows.last?.name ?? ""
         return TransactionLogic.counterpartySuggestions(
             from: transactions.prefix(500).map(\.snapshot),
             query: query,
@@ -606,12 +611,8 @@ struct SettlementEditorSheet: View {
                     .buttonStyle(.glassProminent)
                     .buttonBorderShape(.circle)
                     .tint(MistiaAccent.purple.color)
-                    .disabled(isSaveDisabled)
-                    .opacity(isSaveDisabled ? 0.45 : 1)
                 }
             }
-            .toolbarBackground(Color(UIColor.systemGroupedBackground), for: .navigationBar)
-            .toolbarBackground(.visible, for: .navigationBar)
         }
         .presentationBackground(Color(UIColor.systemGroupedBackground))
         .sheet(item: $billEditorTarget, onDismiss: removeIncompleteBillRows) { target in
@@ -667,6 +668,7 @@ struct SettlementEditorSheet: View {
             HStack(spacing: 10) {
                 TextField(L10n.transactions.settlement.participantName, text: $row.name)
                     .textInputAutocapitalization(.words)
+                    .focused($focusedParticipantRowID, equals: row.id)
                     .onSubmit {
                         ensureTrailingParticipantRow()
                     }
@@ -751,16 +753,16 @@ struct SettlementEditorSheet: View {
     @ViewBuilder
     private var draftBillsContent: some View {
         if billRows.isEmpty {
-            MistiaEmptyStateContent(
+            SettlementEventExpenseEmptyState(
                 title: L10n.transactions.settlement.noBillsYet,
                 message: L10n.transactions.settlement.addExpensesToTrackEventCost,
                 buttonTitle: L10n.transactions.settlement.addExpense,
                 accent: MistiaAccent.purple.color,
-                symbols: ["receipt.fill", "wallet.pass.fill", "person.2.fill"]
+                symbols: ["receipt.fill", "wallet.pass.fill", "person.2.fill", "plus"]
             ) {
                 showingBillAddOptions = true
             }
-            .padding(.vertical, 8)
+            .listRowInsets(EdgeInsets(top: 10, leading: 12, bottom: 10, trailing: 12))
         } else {
             VStack(spacing: 0) {
                 ForEach(billRows.indices, id: \.self) { index in
@@ -927,7 +929,10 @@ struct SettlementEditorSheet: View {
     }
 
     private func applyParticipantSuggestion(_ name: String) {
-        if let index = participantRows.lastIndex(where: { $0.name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }) {
+        if let focusedParticipantRowID,
+           let index = participantRows.firstIndex(where: { $0.id == focusedParticipantRowID }) {
+            participantRows[index].name = name
+        } else if let index = participantRows.lastIndex(where: { $0.name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }) {
             participantRows[index].name = name
         } else {
             participantRows.append(SharedExpenseParticipantDraft(name: name, paidText: ""))
@@ -1197,7 +1202,7 @@ struct SettlementEditorSheet: View {
     private func saveSharedExpense() {
         let title = eventTitle.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !title.isEmpty else {
-            alertMessage = L10n.transactions.settlement.enterTitle
+            alertMessage = L10n.transactions.settlement.enterEventName
             return
         }
         let participantNames = normalizedParticipantNames()
@@ -1565,6 +1570,7 @@ private struct SharedExpenseBillSearchTarget: Identifiable, Hashable {
 
 private struct SharedExpenseTransactionSearchSheet: View {
     @Environment(\.dismiss) private var dismiss
+    @FocusState private var isSearchFocused: Bool
     @State private var searchText = ""
 
     let transactions: [LedgerTransaction]
@@ -1607,18 +1613,20 @@ private struct SharedExpenseTransactionSearchSheet: View {
                 transactionOwnerMap: transactionOwnerMap,
                 primaryCurrencyCode: primaryCurrencyCode,
                 exchangeRateIndex: exchangeRateIndex,
+                showsExpenseMinusSign: false,
                 onSelect: onSelect,
                 onLoadMore: { _ in }
             )
-            .navigationTitle(L10n.transactions.settlement.searchCashflow)
+            .navigationTitle(L10n.transactions.settlement.searchExpense)
             .navigationBarTitleDisplayMode(.inline)
             .searchable(
                 text: $searchText,
                 placement: .navigationBarDrawer(displayMode: .always),
                 prompt: L10n.transactions.transactions.searchTransactionName
             )
+            .searchFocused($isSearchFocused)
             .toolbar {
-                ToolbarItem(placement: .topBarLeading) {
+                ToolbarItem(placement: .topBarTrailing) {
                     Button {
                         dismiss()
                     } label: {
@@ -1627,6 +1635,10 @@ private struct SharedExpenseTransactionSearchSheet: View {
                             .foregroundStyle(.secondary)
                     }
                 }
+            }
+            .task {
+                await Task.yield()
+                isSearchFocused = true
             }
         }
         .presentationBackground(Color(UIColor.systemGroupedBackground))
@@ -2517,6 +2529,69 @@ private struct SharedExpenseBillDraft: Identifiable, Hashable {
     }
 }
 
+private struct SettlementEventExpenseEmptyState: View {
+    @Environment(\.colorScheme) private var colorScheme
+
+    let title: String
+    let message: String
+    let buttonTitle: String
+    let accent: Color
+    let symbols: [String]
+    let action: () -> Void
+
+    private var symbolFillOpacity: Double {
+        colorScheme == .dark ? 0.22 : 0.10
+    }
+
+    private var buttonFill: Color {
+        colorScheme == .dark ? .white.opacity(0.12) : .black.opacity(0.08)
+    }
+
+    var body: some View {
+        VStack(spacing: 10) {
+            HStack(spacing: 8) {
+                ForEach(Array(symbols.enumerated()), id: \.offset) { index, symbol in
+                    ZStack {
+                        Circle()
+                            .fill(accent.opacity(symbolFillOpacity + Double(index) * 0.02))
+                        Image(systemName: symbol)
+                            .font(.system(size: 12, weight: .bold))
+                            .foregroundStyle(accent)
+                    }
+                    .frame(width: 30, height: 30)
+                }
+            }
+
+            VStack(spacing: 4) {
+                Text(title)
+                    .font(.system(size: 16, weight: .bold, design: .rounded))
+                    .foregroundStyle(.primary)
+                Text(message)
+                    .font(.system(size: 12.5, weight: .medium, design: .rounded))
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            Button(action: action) {
+                Text(buttonTitle)
+                    .font(.system(size: 15, weight: .bold, design: .rounded))
+                    .foregroundStyle(accent)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 11)
+                    .background {
+                        Capsule()
+                            .fill(buttonFill)
+                    }
+            }
+            .buttonStyle(MistiaPressableButtonStyle(cornerRadius: 22, tint: accent))
+        }
+        .padding(.horizontal, 8)
+        .padding(.vertical, 8)
+        .frame(maxWidth: .infinity)
+    }
+}
+
 private struct SharedExpenseBillDraftRow: View {
     @Binding var row: SharedExpenseBillDraft
 
@@ -2577,7 +2652,7 @@ private struct SharedExpenseBillDraftRow: View {
         case .newExpense:
             selectedStagedTransaction?.localizedTransactionTitle ?? L10n.transactions.settlement.addNewExpense
         case .existingExpense:
-            selectedExistingTransaction.map(transactionTitle) ?? L10n.transactions.settlement.searchCashflow
+            selectedExistingTransaction.map(transactionTitle) ?? L10n.transactions.settlement.searchExpense
         }
     }
 

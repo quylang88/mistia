@@ -356,7 +356,6 @@ struct RootTabView: View {
       if destination == .receipt {
         showsReceiptSourceDialog = true
       } else if let settlementTarget = destination.settlementTarget {
-        selectedTab = .transactions
         activeSheet = .settlement(settlementTarget)
       } else {
         activeSheet = .quickCreate(destination, nil)

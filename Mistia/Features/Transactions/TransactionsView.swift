@@ -1677,6 +1677,7 @@ struct TransactionsSearchScene: View {
     let transactionOwnerMap: [UUID: UUID]
     let primaryCurrencyCode: String
     let exchangeRateIndex: MistiaExchangeRateIndex
+    var showsExpenseMinusSign: Bool = true
     let onSelect: (LedgerTransaction) -> Void
     let onLoadMore: (Int) -> Void
 
@@ -1733,7 +1734,8 @@ struct TransactionsSearchScene: View {
                         walletOwnerMap: walletOwnerMap,
                         transactionOwnerMap: transactionOwnerMap,
                         primaryCurrencyCode: primaryCurrencyCode,
-                        exchangeRateIndex: exchangeRateIndex
+                        exchangeRateIndex: exchangeRateIndex,
+                        showsExpenseMinusSign: showsExpenseMinusSign
                     ) { transaction in
                         onSelect(transaction)
                     }
@@ -1840,6 +1842,7 @@ struct TransactionSectionCard: View {
     let transactionOwnerMap: [UUID: UUID]
     let primaryCurrencyCode: String
     let exchangeRateIndex: MistiaExchangeRateIndex
+    var showsExpenseMinusSign: Bool = true
     let onSelect: (LedgerTransaction) -> Void
 
     private var cardTint: Color {
@@ -1886,7 +1889,8 @@ struct TransactionSectionCard: View {
                                         recordID: transaction.id
                                     ),
                                     primaryCurrencyCode: primaryCurrencyCode,
-                                    exchangeRateIndex: exchangeRateIndex
+                                    exchangeRateIndex: exchangeRateIndex,
+                                    showsExpenseMinusSign: showsExpenseMinusSign
                                 )
                                     .padding(.horizontal, 14)
                                     .padding(.vertical, 12)
@@ -1918,6 +1922,7 @@ private struct TransactionRow: View {
     let hasFamilyOwnerConflict: Bool
     let primaryCurrencyCode: String
     let exchangeRateIndex: MistiaExchangeRateIndex
+    var showsExpenseMinusSign: Bool = true
 
     private var icon: String {
         switch record.primaryKind {
@@ -2074,7 +2079,7 @@ private struct TransactionRow: View {
 
         switch record.primaryKind {
         case .expense:
-            return "-" + raw
+            return showsExpenseMinusSign ? "-" + raw : raw
         case .income:
             return "+" + raw
         case .transfer:
