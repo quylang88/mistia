@@ -80,6 +80,7 @@ private struct OverviewRenderSnapshot {
     let dashboard: OverviewDashboardSnapshot
     let transactionsByID: [UUID: LedgerTransaction]
     let postedExpenseTransactionsByDay: [Date: [LedgerTransaction]]
+    let preparingSettlementEvents: [PreparingSettlementEventSnapshot]
 }
 
 private struct OverviewRenderSnapshotCache {
@@ -87,7 +88,7 @@ private struct OverviewRenderSnapshotCache {
     let snapshot: OverviewRenderSnapshot
 }
 
-private struct OverviewRenderSnapshotCacheKey: Hashable {
+struct OverviewRenderSnapshotCacheKey: Hashable {
     let activeScope: FamilyContext.Scope
     let selectedSubjectUserID: UUID?
     let currentUserID: UUID?
@@ -110,6 +111,8 @@ private struct OverviewRenderSnapshotCacheKey: Hashable {
     let billSignature: MistiaCollectionChangeSignature
     let installmentSignature: MistiaCollectionChangeSignature
     let occurrenceSignature: MistiaCollectionChangeSignature
+    let settlementGroupSignature: MistiaCollectionChangeSignature
+    let settlementParticipantSignature: MistiaCollectionChangeSignature
     let ownershipSignature: MistiaCollectionChangeSignature
 }
 
@@ -215,9 +218,20 @@ struct OverviewView: View {
             entity: .dueOccurrenceRecord,
             scopeSnapshot: scopeSnapshot
         )
+        let visibleSettlementGroups = FamilyScopedData.visible(
+            storedSettlementGroups,
+            entity: .settlementGroup,
+            scopeSnapshot: scopeSnapshot
+        )
+        let visibleSettlementParticipants = FamilyScopedData.visible(
+            storedSettlementParticipants,
+            entity: .settlementParticipant,
+            scopeSnapshot: scopeSnapshot
+        )
 
         let transactionRecords = visibleTransactions.map(\.planningRecordSnapshot)
         let overviewTransactions = visibleTransactions.map(\.overviewSnapshot)
+        let transactionSnapshots = visibleTransactions.map(\.snapshot)
         let occurrenceSnapshots = visibleOccurrences.map(\.planningSnapshot)
         let walletSnapshots = visibleWallets.compactMap(\.overviewWalletSnapshot)
         let balanceIndex = TransactionLogic.walletBalanceIndex(
@@ -296,11 +310,17 @@ struct OverviewView: View {
         .mapValues { transactions in
             transactions.sorted(by: sortTransactionsByRecency)
         }
+        let preparingSettlementEvents = SettlementLogic.preparingEventSnapshots(
+            groups: visibleSettlementGroups.map(\.recordSnapshot),
+            participants: visibleSettlementParticipants.map(\.recordSnapshot),
+            records: transactionSnapshots
+        )
 
         return OverviewRenderSnapshot(
             dashboard: dashboard,
             transactionsByID: transactionsByID,
-            postedExpenseTransactionsByDay: expenseTransactionsByDay
+            postedExpenseTransactionsByDay: expenseTransactionsByDay,
+            preparingSettlementEvents: preparingSettlementEvents
         )
     }
 
@@ -387,6 +407,19 @@ struct OverviewView: View {
                 deletedAt: \.deletedAt,
                 remoteVersion: \.remoteVersion
             ),
+            settlementGroupSignature: MistiaCollectionChangeSignature.make(
+                storedSettlementGroups,
+                updatedAt: \.updatedAt,
+                deletedAt: \.deletedAt,
+                isArchived: \.isArchived,
+                remoteVersion: \.remoteVersion
+            ),
+            settlementParticipantSignature: MistiaCollectionChangeSignature.make(
+                storedSettlementParticipants,
+                updatedAt: \.updatedAt,
+                deletedAt: \.deletedAt,
+                remoteVersion: \.remoteVersion
+            ),
             ownershipSignature: MistiaCollectionChangeSignature.make(
                 ownershipScopes,
                 updatedAt: \.updatedAt,
@@ -462,14 +495,6 @@ struct OverviewView: View {
 
     private var walletSnapshots: [OverviewWalletSnapshot] {
         visibleWallets.compactMap(\.overviewWalletSnapshot)
-    }
-
-    private var overviewPreparingSettlementEvents: [PreparingSettlementEventSnapshot] {
-        SettlementLogic.preparingEventSnapshots(
-            groups: visibleSettlementGroups.map(\.recordSnapshot),
-            participants: visibleSettlementParticipants.map(\.recordSnapshot),
-            records: visibleTransactions.map(\.snapshot)
-        )
     }
 
     private var activeBudgetPlans: [BudgetPlanSnapshot] {
@@ -582,26 +607,6 @@ struct OverviewView: View {
         )
     }
 
-    private var visibleSettlementGroups: [SettlementGroup] {
-        FamilyScopedData.visible(
-            storedSettlementGroups,
-            entity: .settlementGroup,
-            scopes: ownershipScopes,
-            familyContextStore: familyContextStore,
-            sessionStore: sessionStore
-        )
-    }
-
-    private var visibleSettlementParticipants: [SettlementParticipant] {
-        FamilyScopedData.visible(
-            storedSettlementParticipants,
-            entity: .settlementParticipant,
-            scopes: ownershipScopes,
-            familyContextStore: familyContextStore,
-            sessionStore: sessionStore
-        )
-    }
-
     private var familyBudgetSpendingCategoryScopes: [PlanningFamilyBudgetSpendingCategoryScope] {
         storedCategories
             .filter { $0.deletedAt == nil && !$0.isArchived }
@@ -672,7 +677,7 @@ struct OverviewView: View {
         let snapshotKey = renderSnapshotCacheKey
         let renderSnapshot = cachedRenderSnapshot(for: snapshotKey)
         let memberToolbar = familyContextStore.memberViewingToolbarPresentation
-        let preparingEvents = overviewPreparingSettlementEvents
+        let preparingEvents = renderSnapshot.preparingSettlementEvents
 
         NavigationStack {
             MistiaPinnedTopBarScaffold(

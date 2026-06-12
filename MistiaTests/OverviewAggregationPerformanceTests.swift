@@ -99,6 +99,33 @@ final class OverviewAggregationPerformanceTests: XCTestCase {
         XCTAssertEqual(pages.map(\.expenseMinor), [2_000, 3_000])
     }
 
+    func testOverviewRenderSnapshotCacheKeyInvalidatesWhenSettlementDataChanges() {
+        let baselineGroups = collectionSignature(updatedAt: 100, remoteVersion: 1)
+        let changedGroups = collectionSignature(updatedAt: 200, remoteVersion: 2)
+        let baselineParticipants = collectionSignature(updatedAt: 300, remoteVersion: 1)
+        let changedParticipants = collectionSignature(updatedAt: 400, remoteVersion: 2)
+
+        let baseline = overviewCacheKey(
+            settlementGroupSignature: baselineGroups,
+            settlementParticipantSignature: baselineParticipants
+        )
+
+        XCTAssertNotEqual(
+            baseline,
+            overviewCacheKey(
+                settlementGroupSignature: changedGroups,
+                settlementParticipantSignature: baselineParticipants
+            )
+        )
+        XCTAssertNotEqual(
+            baseline,
+            overviewCacheKey(
+                settlementGroupSignature: baselineGroups,
+                settlementParticipantSignature: changedParticipants
+            )
+        )
+    }
+
     private func transactionRecord(
         primaryKind: TransactionPrimaryKind = .expense,
         amountMinor: Int64,
@@ -162,6 +189,52 @@ final class OverviewAggregationPerformanceTests: XCTestCase {
             categoryParentColorHex: categoryParentID == nil ? nil : "#111111",
             counterpartyName: nil,
             isArchived: false
+        )
+    }
+
+    private func overviewCacheKey(
+        settlementGroupSignature: MistiaCollectionChangeSignature,
+        settlementParticipantSignature: MistiaCollectionChangeSignature
+    ) -> OverviewRenderSnapshotCacheKey {
+        OverviewRenderSnapshotCacheKey(
+            activeScope: .personalSelf,
+            selectedSubjectUserID: nil,
+            currentUserID: nil,
+            activeLocalProfileUserID: nil,
+            signedInUserID: nil,
+            familyID: nil,
+            currentMonthStart: 1_777_000_000,
+            calendarIdentifier: "gregorian",
+            calendarTimeZoneIdentifier: "UTC",
+            localeIdentifier: "en_US",
+            currencyCode: "JPY",
+            currencyRateMode: MistiaCurrencyRateMode.automatic.rawValue,
+            manualJPYToVNDRate: "",
+            cachedRatesSignature: 0,
+            familyAccessSignature: 0,
+            walletSignature: .empty,
+            transactionSignature: .empty,
+            budgetSignature: .empty,
+            categorySignature: .empty,
+            billSignature: .empty,
+            installmentSignature: .empty,
+            occurrenceSignature: .empty,
+            settlementGroupSignature: settlementGroupSignature,
+            settlementParticipantSignature: settlementParticipantSignature,
+            ownershipSignature: .empty
+        )
+    }
+
+    private func collectionSignature(
+        updatedAt: TimeInterval,
+        remoteVersion: Int64
+    ) -> MistiaCollectionChangeSignature {
+        MistiaCollectionChangeSignature(
+            count: 1,
+            latestUpdatedAt: updatedAt,
+            latestDeletedAt: nil,
+            latestRemoteVersion: remoteVersion,
+            archivedCount: 0
         )
     }
 
