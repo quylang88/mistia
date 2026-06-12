@@ -487,6 +487,56 @@ nonisolated enum SettlementLogic {
             }
     }
 
+    static func allEventSnapshots(
+        groups: [SettlementGroupRecordSnapshot],
+        participants: [SettlementParticipantRecordSnapshot],
+        records: [TransactionRecordSnapshot]
+    ) -> [PreparingSettlementEventSnapshot] {
+        let participantsByGroupID = Dictionary(grouping: participants) { $0.groupID }
+        let recordsByGroupID = Dictionary(
+            grouping: records.filter(isSharedExpenseEventBill)
+        ) { record in
+            record.settlementGroupID ?? UUID()
+        }
+
+        return groups
+            .filter { $0.kind == .sharedExpense && !$0.isArchived }
+            .map { group in
+                let groupParticipants = participantsByGroupID[group.id] ?? []
+                let visibleParticipantNames = groupParticipants
+                    .filter { !$0.isSelf }
+                    .sorted(by: participantSort)
+                    .map(\.displayName)
+                    .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+                    .filter { !$0.isEmpty }
+                let billRecords = recordsByGroupID[group.id] ?? []
+                let totalPaid = billRecords.reduce(Int64.zero) { total, record in
+                    total + max(record.amountMinor, 0)
+                }
+                let latestRecordDate = billRecords.map(\.occurredAt).max()
+                let latestParticipantDate = groupParticipants.map(\.updatedAt).max()
+                let lastUpdatedAt = [
+                    group.updatedAt,
+                    latestRecordDate,
+                    latestParticipantDate
+                ]
+                    .compactMap { $0 }
+                    .max() ?? group.updatedAt
+
+                return PreparingSettlementEventSnapshot(
+                    id: group.id,
+                    title: group.title,
+                    currencyCode: group.currencyCode,
+                    totalPaidMinor: totalPaid,
+                    billCount: billRecords.count,
+                    participantNames: visibleParticipantNames,
+                    note: group.note,
+                    occurredAt: group.occurredAt,
+                    lastUpdatedAt: lastUpdatedAt
+                )
+            }
+    }
+
     static func participantSuggestionRecords(
         from records: [TransactionRecordSnapshot],
         transactionOwnerMap: [UUID: UUID],
