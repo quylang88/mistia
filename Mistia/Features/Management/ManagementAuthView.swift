@@ -2962,14 +2962,13 @@ private struct ManagementEditProfileNameEditorView: View {
     var body: some View {
         MistiaModalScaffold(
             title: L10n.management.managementauth.fullName,
-            accent: MistiaAccent.purple.color
+            accent: MistiaAccent.purple.color,
+            dismissGuardConfiguration: MistiaDismissGuardConfiguration(
+                mode: .editing,
+                hasUnsavedChanges: composedDisplayName != displayName
+            )
         ) {
-            displayName = [
-                familyName.trimmingCharacters(in: .whitespacesAndNewlines),
-                givenName.trimmingCharacters(in: .whitespacesAndNewlines)
-            ]
-                .filter { !$0.isEmpty }
-                .joined(separator: " ")
+            displayName = composedDisplayName
             onSave(displayName)
         } content: {
             ManagementProfileListCard(tint: cardTint) {
@@ -3002,6 +3001,15 @@ private struct ManagementEditProfileNameEditorView: View {
 
         let family = components.dropLast().joined(separator: " ")
         return (family, last)
+    }
+
+    private var composedDisplayName: String {
+        [
+            familyName.trimmingCharacters(in: .whitespacesAndNewlines),
+            givenName.trimmingCharacters(in: .whitespacesAndNewlines)
+        ]
+            .filter { !$0.isEmpty }
+            .joined(separator: " ")
     }
 }
 
@@ -3060,7 +3068,11 @@ private struct ManagementEditProfileBirthdayEditorView: View {
     var body: some View {
         MistiaModalScaffold(
             title: L10n.management.managementauth.birthday,
-            accent: MistiaAccent.purple.color
+            accent: MistiaAccent.purple.color,
+            dismissGuardConfiguration: MistiaDismissGuardConfiguration(
+                mode: .editing,
+                hasUnsavedChanges: draftBirthday != birthday
+            )
         ) {
             birthday = draftBirthday
             hasBirthday = true

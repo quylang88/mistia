@@ -253,6 +253,7 @@ struct TransactionEditorSheet: View {
     var onPersistedTransaction: (LedgerTransaction) -> Void = { _ in }
 
     @State private var draft: TransactionFormDraft
+    private let initialDraftSnapshot: TransactionFormDraftDismissalSnapshot
     @State private var alertMessage: String?
     private var isAdjustment: Bool {
         if let transaction = target.transaction {
@@ -308,7 +309,9 @@ struct TransactionEditorSheet: View {
         self.onComplete = onComplete
         self.onStageTransaction = onStageTransaction
         self.onPersistedTransaction = onPersistedTransaction
-        _draft = State(initialValue: TransactionFormDraft(target: target))
+        let initialDraft = TransactionFormDraft(target: target)
+        self.initialDraftSnapshot = initialDraft.dismissalSnapshot
+        _draft = State(initialValue: initialDraft)
     }
 
     private var isLockedByStatement: Bool {
@@ -349,6 +352,26 @@ struct TransactionEditorSheet: View {
     private var isExistingDebtTransaction: Bool {
         guard let transaction = target.transaction else { return false }
         return transaction.primaryKind == .transfer && transaction.transferSubtype == .debt
+    }
+
+    private var dismissGuardConfiguration: MistiaDismissGuardConfiguration {
+        MistiaDismissGuardConfiguration(
+            mode: target.transaction == nil ? .creating : .editing,
+            hasUnsavedChanges: hasUnsavedChangesForDismissal
+        )
+    }
+
+    private var hasUnsavedChangesForDismissal: Bool {
+        guard !isLockedByStatement, !isFamilyTransferDetail else { return false }
+
+        let receiptChanged = receiptDraft?.isChanged == true || shouldDeleteReceiptOnSave
+        if target.transaction == nil {
+            return draft.dismissalSnapshot.hasMeaningfulCreationInput
+                || draft.dismissalSnapshot != initialDraftSnapshot
+                || receiptChanged
+        }
+
+        return draft.dismissalSnapshot != initialDraftSnapshot || receiptChanged
     }
 
     var body: some View {
@@ -407,14 +430,10 @@ struct TransactionEditorSheet: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
-                    Button {
-                        dismiss()
-                    } label: {
-                        Image(systemName: "xmark")
-                            .font(.system(size: 16, weight: .semibold))
-                            .foregroundStyle(.secondary)
-                    }
-                    .disabled(isSaving)
+                    MistiaGuardedDismissButton(
+                        configuration: dismissGuardConfiguration,
+                        isDisabled: isSaving
+                    )
                 }
 
                 ToolbarItem(placement: .topBarTrailing) {
@@ -442,6 +461,7 @@ struct TransactionEditorSheet: View {
                 }
             }
         }
+        .mistiaUnsavedChangesDismissGuard(configuration: dismissGuardConfiguration)
         .alert(
             L10n.transactions.transactioneditor.confirmFamilyTransferTitle,
             isPresented: $showsFamilyTransferConfirmation
@@ -3584,6 +3604,46 @@ private struct TransactionReceiptPreviewItem: Identifiable {
     let image: UIImage
 }
 
+private struct TransactionFormDraftDismissalSnapshot: Equatable {
+    var primaryKind: TransactionPrimaryKind
+    var transferSubtype: TransactionTransferSubtype?
+    var debtIntent: TransactionDebtIntent?
+    var debtEntryKind: DebtCreationEntryKind
+    var borrowDebtEntryMode: BorrowDebtEntryMode
+    var paidForCurrencyCode: String
+    var paidForCountsAsExpense: Bool
+    var title: String
+    var amountText: String
+    var purchaseCostText: String
+    var destinationAmountText: String
+    var reportingAmountText: String
+    var conversionModeRawValue: String
+    var note: String
+    var occurredAt: Date
+    var sourceWalletID: UUID?
+    var destinationWalletID: UUID?
+    var categoryID: UUID?
+    var familyRecipientUserID: UUID?
+    var counterpartyName: String
+
+    var hasMeaningfulCreationInput: Bool {
+        [
+            title,
+            amountText,
+            purchaseCostText,
+            destinationAmountText,
+            reportingAmountText,
+            note,
+            counterpartyName
+        ]
+            .contains { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+            || sourceWalletID != nil
+            || destinationWalletID != nil
+            || categoryID != nil
+            || familyRecipientUserID != nil
+    }
+}
+
 private nonisolated enum TransactionReceiptImageProcessor {
     static func makeDraft(from image: UIImage) -> TransactionReceiptDraft? {
         let previewImage = scaledImage(image, maxDimension: 1_800)
@@ -3804,6 +3864,31 @@ private struct TransactionReceiptImagePicker: UIViewControllerRepresentable {
     var purchaseCostMinor: Int64? {
         let parsed = purchaseCostText.currencyInputToMinorUnits(currencyCode: "JPY")
         return parsed > 0 ? parsed : nil
+    }
+
+    fileprivate var dismissalSnapshot: TransactionFormDraftDismissalSnapshot {
+        TransactionFormDraftDismissalSnapshot(
+            primaryKind: primaryKind,
+            transferSubtype: transferSubtype,
+            debtIntent: debtIntent,
+            debtEntryKind: debtEntryKind,
+            borrowDebtEntryMode: borrowDebtEntryMode,
+            paidForCurrencyCode: paidForCurrencyCode,
+            paidForCountsAsExpense: paidForCountsAsExpense,
+            title: title,
+            amountText: amountText,
+            purchaseCostText: purchaseCostText,
+            destinationAmountText: destinationAmountText,
+            reportingAmountText: reportingAmountText,
+            conversionModeRawValue: conversionModeRawValue,
+            note: note,
+            occurredAt: occurredAt,
+            sourceWalletID: sourceWalletID,
+            destinationWalletID: destinationWalletID,
+            categoryID: categoryID,
+            familyRecipientUserID: familyRecipientUserID,
+            counterpartyName: counterpartyName
+        )
     }
 }
 

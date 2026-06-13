@@ -68,14 +68,13 @@ struct AIBillAnalysisView: View {
         .navigationBarBackButtonHidden(true)
         .toolbar {
             ToolbarItem(placement: .topBarLeading) {
-                Button {
-                    requestDismiss()
-                } label: {
+                MistiaGuardedDismissButton(configuration: dismissGuardConfiguration) {
                     Image(systemName: "chevron.left")
                         .font(.system(size: 16, weight: .semibold))
                 }
             }
         }
+        .mistiaUnsavedChangesDismissGuard(configuration: dismissGuardConfiguration)
         .onChange(of: photoItems) { _, newItems in
             guard !newItems.isEmpty else { return }
             imageProcessingTask = Task { await loadPhotoItems(newItems) }
@@ -173,6 +172,13 @@ struct AIBillAnalysisView: View {
 
     private var shouldShowAnalyzeButton: Bool {
         (isAnalyzing && !bills.isEmpty) || (!bills.isEmpty && hasPendingAnalyzableBills)
+    }
+
+    private var dismissGuardConfiguration: MistiaDismissGuardConfiguration {
+        MistiaDismissGuardConfiguration(
+            mode: .creating,
+            hasUnsavedChanges: hasTransientAnalysis
+        )
     }
 
     private var actionControlForeground: Color {

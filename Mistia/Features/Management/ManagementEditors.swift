@@ -47,6 +47,7 @@ struct ManagementWalletEditorSheet: View {
     let target: ManagementWalletEditorTarget
 
     @State private var draft: WalletDraft
+    private let initialDraft: WalletDraft
     @State private var showsIconPicker = false
     @State private var showsBalanceAdjustment = false
     @State private var showsBankPicker = false
@@ -58,7 +59,16 @@ struct ManagementWalletEditorSheet: View {
 
     init(target: ManagementWalletEditorTarget) {
         self.target = target
-        _draft = State(initialValue: WalletDraft(wallet: target.wallet, defaultKind: target.defaultKind))
+        let initialDraft = WalletDraft(wallet: target.wallet, defaultKind: target.defaultKind)
+        self.initialDraft = initialDraft
+        _draft = State(initialValue: initialDraft)
+    }
+
+    private var dismissGuardConfiguration: MistiaDismissGuardConfiguration {
+        MistiaDismissGuardConfiguration(
+            mode: target.wallet == nil ? .creating : .editing,
+            hasUnsavedChanges: draft != initialDraft
+        )
     }
 
     var body: some View {
@@ -191,13 +201,7 @@ struct ManagementWalletEditorSheet: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
-                    Button {
-                        dismiss()
-                    } label: {
-                        Image(systemName: "xmark")
-                            .font(.system(size: 16, weight: .semibold))
-                            .foregroundStyle(.secondary)
-                    }
+                    MistiaGuardedDismissButton(configuration: dismissGuardConfiguration)
                 }
 
                 ToolbarItem(placement: .topBarTrailing) {
@@ -215,6 +219,7 @@ struct ManagementWalletEditorSheet: View {
                 }
             }
         }
+        .mistiaUnsavedChangesDismissGuard(configuration: dismissGuardConfiguration)
         .sheet(isPresented: $showsIconPicker) {
             ManagementIconPickerSheet(
                 title: L10n.management.management.biUTNgV,
@@ -716,6 +721,7 @@ struct ManagementCategoryEditorSheet: View {
     let target: ManagementCategoryEditorTarget
 
     @State private var draft: CategoryDraft
+    private let initialDraft: CategoryDraft
     @State private var showsIconPicker = false
     @State private var showsParentPicker = false
     @State private var alertMessage: String?
@@ -723,11 +729,20 @@ struct ManagementCategoryEditorSheet: View {
 
     init(target: ManagementCategoryEditorTarget) {
         self.target = target
-        _draft = State(initialValue: CategoryDraft(
+        let initialDraft = CategoryDraft(
             category: target.category,
             defaultKind: target.defaultKind,
             preferredParentCategoryID: target.preferredParentCategoryID
-        ))
+        )
+        self.initialDraft = initialDraft
+        _draft = State(initialValue: initialDraft)
+    }
+
+    private var dismissGuardConfiguration: MistiaDismissGuardConfiguration {
+        MistiaDismissGuardConfiguration(
+            mode: target.category == nil ? .creating : .editing,
+            hasUnsavedChanges: draft != initialDraft
+        )
     }
 
     private var availableParentCategories: [TransactionCategory] {
@@ -881,13 +896,7 @@ struct ManagementCategoryEditorSheet: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
-                    Button {
-                        dismiss()
-                    } label: {
-                        Image(systemName: "xmark")
-                            .font(.system(size: 16, weight: .semibold))
-                            .foregroundStyle(.secondary)
-                    }
+                    MistiaGuardedDismissButton(configuration: dismissGuardConfiguration)
                 }
 
                 ToolbarItem(placement: .topBarTrailing) {
@@ -915,6 +924,7 @@ struct ManagementCategoryEditorSheet: View {
                 }
             }
         }
+        .mistiaUnsavedChangesDismissGuard(configuration: dismissGuardConfiguration)
         .sheet(isPresented: $showsIconPicker) {
             ManagementIconPickerSheet(
                 title: L10n.management.management.biUTNgDanhMC,
@@ -1291,6 +1301,7 @@ private struct ManagementBankPickerSheet: View {
 
     let selectedBankKey: String?
     let onSelect: (JapaneseBankPreset?, String) -> Void
+    private let initialManualName: String
 
     @State private var searchText = ""
     @State private var manualName: String
@@ -1302,7 +1313,15 @@ private struct ManagementBankPickerSheet: View {
     ) {
         self.selectedBankKey = selectedBankKey
         self.onSelect = onSelect
+        self.initialManualName = initialManualName
         _manualName = State(initialValue: initialManualName)
+    }
+
+    private var dismissGuardConfiguration: MistiaDismissGuardConfiguration {
+        MistiaDismissGuardConfiguration(
+            mode: .editing,
+            hasUnsavedChanges: manualName != initialManualName
+        )
     }
 
     var body: some View {
@@ -1344,12 +1363,13 @@ private struct ManagementBankPickerSheet: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
-                    Button(L10n.management.management.close) {
-                        dismiss()
+                    MistiaGuardedDismissButton(configuration: dismissGuardConfiguration) {
+                        Text(L10n.management.management.close)
                     }
                 }
             }
         }
+        .mistiaUnsavedChangesDismissGuard(configuration: dismissGuardConfiguration)
     }
 
     private var filteredBanks: [JapaneseBankPreset] {
@@ -1478,7 +1498,7 @@ private struct ManagementBalanceEditButton: View {
     }
 }
 
-private struct WalletDraft {
+private struct WalletDraft: Equatable {
     static let defaultStatementClosingDay = 10
     static let defaultPaymentDueDay = 26
 
@@ -1612,7 +1632,7 @@ private struct WalletDraft {
     }
 }
 
-private struct CategoryDraft {
+private struct CategoryDraft: Equatable {
     var name: String
     var kind: TransactionCategoryKind
     var hierarchyRole: TransactionCategoryHierarchyRole
@@ -1696,6 +1716,14 @@ struct ManagementBalanceAdjustmentSheet: View {
         _newBalanceText = State(initialValue: "\(currentBalance)")
     }
 
+    private var dismissGuardConfiguration: MistiaDismissGuardConfiguration {
+        MistiaDismissGuardConfiguration(
+            mode: .creating,
+            hasUnsavedChanges: newBalanceText != "\(currentBalance)"
+                || !reason.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        )
+    }
+
     var body: some View {
         NavigationStack {
             Form {
@@ -1718,8 +1746,8 @@ struct ManagementBalanceAdjustmentSheet: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
-                    Button(L10n.common.cancel) {
-                        dismiss()
+                    MistiaGuardedDismissButton(configuration: dismissGuardConfiguration) {
+                        Text(L10n.common.cancel)
                     }
                 }
 
@@ -1739,6 +1767,7 @@ struct ManagementBalanceAdjustmentSheet: View {
                 Text(L10n.management.management.thisAdjustmentCannotBeUndoneAreYou)
             }
         }
+        .mistiaUnsavedChangesDismissGuard(configuration: dismissGuardConfiguration)
     }
 
     private func save() {

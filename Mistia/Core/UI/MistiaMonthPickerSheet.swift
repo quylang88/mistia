@@ -30,6 +30,10 @@ struct MistiaMonthPickerSheet: View {
         MistiaModalScaffold(
             title: L10n.planning.planning.chooseMonth,
             accent: accentColor,
+            dismissGuardConfiguration: MistiaDismissGuardConfiguration(
+                mode: .editing,
+                hasUnsavedChanges: draftDate != bounds.clamped(selection, calendar: calendar)
+            ),
             onSave: applySelection
         ) {
             HStack(spacing: 0) {
@@ -78,6 +82,12 @@ struct MistiaMonthPickerSheet: View {
         let lowerBound = calendar.component(.year, from: bounds.minimumMonth)
         let upperBound = calendar.component(.year, from: bounds.maximumMonth)
         return Array(lowerBound...upperBound)
+    }
+
+    private var draftDate: Date {
+        calendar.date(from: DateComponents(year: draftYear, month: draftMonth, day: 1))
+            .map { bounds.clamped($0, calendar: calendar) }
+            ?? bounds.clamped(selection, calendar: calendar)
     }
 
     private func validateDraft() {

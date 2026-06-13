@@ -115,6 +115,7 @@ struct SettlementEditorSheet: View {
     @State private var eventNote = ""
     @State private var billRows: [SharedExpenseBillDraft] = []
     @State private var hasLoadedSharedExpenseDraft = false
+    @State private var dismissBaselineSnapshot: SharedExpenseDraftDismissalSnapshot?
     @State private var alertMessage: String?
     @State private var billEditorTarget: SharedExpenseBillEditorTarget?
     @State private var billSearchTarget: SharedExpenseBillSearchTarget?
@@ -344,6 +345,41 @@ struct SettlementEditorSheet: View {
         }
     }
 
+    private var dismissGuardConfiguration: MistiaDismissGuardConfiguration {
+        MistiaDismissGuardConfiguration(
+            mode: target == .newSharedExpense ? .creating : .editing,
+            hasUnsavedChanges: hasUnsavedChangesForDismissal
+        )
+    }
+
+    private var hasUnsavedChangesForDismissal: Bool {
+        guard let dismissBaselineSnapshot else { return false }
+        return sharedExpenseDismissalSnapshot != dismissBaselineSnapshot
+    }
+
+    private var sharedExpenseDismissalSnapshot: SharedExpenseDraftDismissalSnapshot {
+        SharedExpenseDraftDismissalSnapshot(
+            eventTitle: eventTitle.trimmingCharacters(in: .whitespacesAndNewlines),
+            participantRows: participantRows.map {
+                SharedExpenseParticipantDismissalSnapshot(
+                    id: $0.id,
+                    name: $0.name.trimmingCharacters(in: .whitespacesAndNewlines)
+                )
+            },
+            selectedSharedWalletID: selectedSharedWalletID,
+            selectedSharedCategoryID: selectedSharedCategoryID,
+            eventNote: eventNote.trimmingCharacters(in: .whitespacesAndNewlines),
+            billRows: billRows.map {
+                SharedExpenseBillDismissalSnapshot(
+                    id: $0.id,
+                    mode: $0.mode,
+                    hasStagedTransaction: $0.stagedTransaction != nil,
+                    existingTransactionID: $0.existingTransactionID
+                )
+            }
+        )
+    }
+
     var body: some View {
         switch target {
         case .newSharedExpense, .editSharedExpense:
@@ -416,13 +452,7 @@ struct SettlementEditorSheet: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
-                    Button {
-                        dismiss()
-                    } label: {
-                        Image(systemName: "xmark")
-                            .font(.system(size: 16, weight: .semibold))
-                            .foregroundStyle(.secondary)
-                    }
+                    MistiaGuardedDismissButton(configuration: dismissGuardConfiguration)
                 }
 
                 ToolbarItem(placement: .topBarTrailing) {
@@ -440,6 +470,7 @@ struct SettlementEditorSheet: View {
                 }
             }
         }
+        .mistiaUnsavedChangesDismissGuard(configuration: dismissGuardConfiguration)
         .presentationBackground(Color(UIColor.systemGroupedBackground))
         .sheet(item: $billEditorTarget, onDismiss: removeIncompleteBillRows) { target in
             TransactionEditorSheet(
@@ -787,6 +818,9 @@ struct SettlementEditorSheet: View {
         }
         if selectedSharedCategoryID == nil {
             selectedSharedCategoryID = expenseCategories.first?.id
+        }
+        if dismissBaselineSnapshot == nil {
+            dismissBaselineSnapshot = sharedExpenseDismissalSnapshot
         }
     }
 
@@ -1798,6 +1832,7 @@ struct SettlementSplitCalculatorSheet: View {
 
     @State private var additionalRows: [SharedExpenseParticipantDraft] = []
     @State private var paidTextsByParticipantID: [UUID: String] = [:]
+    @State private var dismissBaselinePaidTextsByParticipantID: [UUID: String] = [:]
     @State private var alertMessage: String?
     @State private var eventEditorTarget: SettlementEditorTarget?
     @State private var debtSettlementTarget: DebtSettlementSheetTarget?
@@ -1903,6 +1938,13 @@ struct SettlementSplitCalculatorSheet: View {
             return status == .open || status == .partiallySettled || status == .settled
         }
         return false
+    }
+
+    private var dismissGuardConfiguration: MistiaDismissGuardConfiguration {
+        MistiaDismissGuardConfiguration(
+            mode: .editing,
+            hasUnsavedChanges: !isFinalized && paidTextsByParticipantID != dismissBaselinePaidTextsByParticipantID
+        )
     }
 
     private func participantSettlementProgressList() -> [ParticipantSettlementProgress] {
@@ -2068,13 +2110,7 @@ struct SettlementSplitCalculatorSheet: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
-                    Button {
-                        dismiss()
-                    } label: {
-                        Image(systemName: "xmark")
-                            .font(.system(size: 16, weight: .semibold))
-                            .foregroundStyle(.secondary)
-                    }
+                    MistiaGuardedDismissButton(configuration: dismissGuardConfiguration)
                 }
                 ToolbarItem(placement: .topBarTrailing) {
                     if !isFinalized {
@@ -2096,6 +2132,7 @@ struct SettlementSplitCalculatorSheet: View {
             }
         }
         .onAppear(perform: initializePaidInputsIfNeeded)
+        .mistiaUnsavedChangesDismissGuard(configuration: dismissGuardConfiguration)
         .presentationBackground(Color(UIColor.systemGroupedBackground))
         .sheet(item: $eventEditorTarget) { target in
             SettlementEditorSheet(target: target, onEventCancelled: {
@@ -2283,6 +2320,9 @@ struct SettlementSplitCalculatorSheet: View {
     private func initializePaidInputsIfNeeded() {
         for participant in nonSelfParticipants where paidTextsByParticipantID[participant.id] == nil {
             paidTextsByParticipantID[participant.id] = ""
+        }
+        if dismissBaselinePaidTextsByParticipantID.isEmpty {
+            dismissBaselinePaidTextsByParticipantID = paidTextsByParticipantID
         }
     }
 
@@ -2662,6 +2702,27 @@ private struct SharedExpenseParticipantDraft: Identifiable, Hashable {
         self.name = name
         self.paidText = paidText
     }
+}
+
+private struct SharedExpenseParticipantDismissalSnapshot: Equatable {
+    let id: UUID
+    let name: String
+}
+
+private struct SharedExpenseBillDismissalSnapshot: Equatable {
+    let id: UUID
+    let mode: SharedExpenseBillDraftMode
+    let hasStagedTransaction: Bool
+    let existingTransactionID: UUID?
+}
+
+private struct SharedExpenseDraftDismissalSnapshot: Equatable {
+    let eventTitle: String
+    let participantRows: [SharedExpenseParticipantDismissalSnapshot]
+    let selectedSharedWalletID: UUID?
+    let selectedSharedCategoryID: UUID?
+    let eventNote: String
+    let billRows: [SharedExpenseBillDismissalSnapshot]
 }
 
 private enum SharedExpenseBillDraftMode: String, CaseIterable, Identifiable {

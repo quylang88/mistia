@@ -135,6 +135,10 @@ private struct MistiaDatePickerPanel: View {
         MistiaModalScaffold(
             title: title,
             accent: MistiaAccent.purple.color,
+            dismissGuardConfiguration: MistiaDismissGuardConfiguration(
+                mode: .editing,
+                hasUnsavedChanges: draftSelection != AnyRange.clamped(selection, to: selectableRange, calendar: calendar)
+            ),
             onSave: {
                 selection = draftSelection
             }

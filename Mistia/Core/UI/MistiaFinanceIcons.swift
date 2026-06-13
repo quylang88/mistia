@@ -1083,6 +1083,13 @@ struct MistiaFinanceIconPickerSheet: View {
         _draftToken = State(initialValue: selectedToken)
     }
 
+    private var dismissGuardConfiguration: MistiaDismissGuardConfiguration {
+        MistiaDismissGuardConfiguration(
+            mode: .editing,
+            hasUnsavedChanges: draftToken != selectedToken
+        )
+    }
+
     var body: some View {
         NavigationStack {
             ScrollView {
@@ -1137,8 +1144,8 @@ struct MistiaFinanceIconPickerSheet: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
-                    Button(L10n.core.ui.mistiafinanceicons.close) {
-                        dismiss()
+                    MistiaGuardedDismissButton(configuration: dismissGuardConfiguration) {
+                        Text(L10n.core.ui.mistiafinanceicons.close)
                     }
                 }
 
@@ -1151,6 +1158,7 @@ struct MistiaFinanceIconPickerSheet: View {
                 }
             }
         }
+        .mistiaUnsavedChangesDismissGuard(configuration: dismissGuardConfiguration)
     }
 
     private var groupedOptions: [(MistiaFinanceIconGroup, [MistiaFinancePickerOption])] {

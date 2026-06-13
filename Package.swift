@@ -52,6 +52,7 @@ let package = Package(
                 "CoreLogic/L10n.generated.swift",
                 "CoreLogic/MistiaArchiveRetention.swift",
                 "CoreLogic/MistiaCollectionChangeSignature.swift",
+                "CoreLogic/MistiaUnsavedChangesDismissalLogic.swift",
                 "CoreLogic/FamilyOverviewCalculator.swift",
                 "CoreLogic/MistiaLocalization.swift",
                 "CoreLogic/MistiaCalendarSelectionLogic.swift",

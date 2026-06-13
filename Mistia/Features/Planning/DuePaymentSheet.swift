@@ -20,6 +20,11 @@ private struct DuePaymentIconPresentation {
     let color: Color
 }
 
+private struct DuePaymentDismissalSnapshot: Equatable {
+    let amountText: String
+    let selectedWalletID: UUID?
+}
+
 // MARK: - Sheet
 
 struct DuePaymentSheet: View {
@@ -45,6 +50,7 @@ struct DuePaymentSheet: View {
 
     @State private var amountText = ""
     @State private var selectedWalletID: UUID?
+    @State private var dismissBaselineSnapshot: DuePaymentDismissalSnapshot?
     @State private var alertMessage: String?
 
     // MARK: - Init
@@ -175,6 +181,21 @@ struct DuePaymentSheet: View {
         L10n.planning.duepayment.paymentWallet
     }
 
+    private var dismissGuardConfiguration: MistiaDismissGuardConfiguration {
+        MistiaDismissGuardConfiguration(
+            mode: .creating,
+            hasUnsavedChanges: hasUnsavedChangesForDismissal
+        )
+    }
+
+    private var hasUnsavedChangesForDismissal: Bool {
+        guard let dismissBaselineSnapshot else { return false }
+        return DuePaymentDismissalSnapshot(
+            amountText: amountText.trimmingCharacters(in: .whitespacesAndNewlines),
+            selectedWalletID: selectedWalletID
+        ) != dismissBaselineSnapshot
+    }
+
     // MARK: - Body
 
     var body: some View {
@@ -212,20 +233,21 @@ struct DuePaymentSheet: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
-                    Button {
-                        dismiss()
-                    } label: {
-                        Image(systemName: "xmark")
-                            .font(.system(size: 16, weight: .semibold))
-                            .foregroundStyle(.secondary)
-                    }
+                    MistiaGuardedDismissButton(configuration: dismissGuardConfiguration)
                 }
             }
         }
         .onAppear {
             amountText = defaultAmountText(for: dueItem)
             selectedWalletID = defaultWalletID(for: dueItem)
+            if dismissBaselineSnapshot == nil {
+                dismissBaselineSnapshot = DuePaymentDismissalSnapshot(
+                    amountText: amountText.trimmingCharacters(in: .whitespacesAndNewlines),
+                    selectedWalletID: selectedWalletID
+                )
+            }
         }
+        .mistiaUnsavedChangesDismissGuard(configuration: dismissGuardConfiguration)
         .alert(
             L10n.planning.duepayment.paymentFailed,
             isPresented: Binding(get: { alertMessage != nil }, set: { if !$0 { alertMessage = nil } })

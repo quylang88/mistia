@@ -20,6 +20,7 @@ struct PlanningBudgetEditorSheet: View {
     let target: PlanningBudgetEditorTarget
 
     @State private var draft: PlanningBudgetDraft
+    @State private var dismissBaselineDraft: PlanningBudgetDraft
     @State private var alertMessage: String?
     @State private var showsFamilySpendingConfirmation = false
     @State private var isRefreshingFamilySpending = false
@@ -27,7 +28,9 @@ struct PlanningBudgetEditorSheet: View {
 
     init(target: PlanningBudgetEditorTarget) {
         self.target = target
-        _draft = State(initialValue: PlanningBudgetDraft(budget: target.budget))
+        let initialDraft = PlanningBudgetDraft(budget: target.budget)
+        _draft = State(initialValue: initialDraft)
+        _dismissBaselineDraft = State(initialValue: initialDraft)
     }
 
     private var categorySections: [TransactionCategoryGroupSection] {
@@ -177,6 +180,13 @@ struct PlanningBudgetEditorSheet: View {
             .map(\.planningFamilyBudgetSpendingScope)
     }
 
+    private var dismissGuardConfiguration: MistiaDismissGuardConfiguration {
+        MistiaDismissGuardConfiguration(
+            mode: target.budget == nil ? .creating : .editing,
+            hasUnsavedChanges: !isPastBudgetRecord && draft != dismissBaselineDraft
+        )
+    }
+
     var body: some View {
         NavigationStack {
             Form {
@@ -247,13 +257,16 @@ struct PlanningBudgetEditorSheet: View {
                 PlanningEditorToolbar(
                     onClose: { dismiss() },
                     onSave: save,
+                    dismissGuardConfiguration: dismissGuardConfiguration,
                     canSave: !isPastBudgetRecord
                 )
             }
         }
+        .mistiaUnsavedChangesDismissGuard(configuration: dismissGuardConfiguration)
         .planningAlert(message: $alertMessage)
         .onAppear {
             syncFamilySpendingDraftWithSelectedCategory()
+            dismissBaselineDraft = draft
         }
         .sheet(isPresented: $showsCategoryPicker) {
             MistiaCategoryPickerSheet(
@@ -760,13 +773,16 @@ struct PlanningGoalEditorSheet: View {
     let target: PlanningGoalEditorTarget
 
     @State private var draft: PlanningGoalDraft
+    private let initialDraft: PlanningGoalDraft
     @State private var alertMessage: String?
     @State private var showsDeleteConfirmation = false
     @State private var showsIconPicker = false
 
     init(target: PlanningGoalEditorTarget) {
         self.target = target
-        _draft = State(initialValue: PlanningGoalDraft(goal: target.goal))
+        let initialDraft = PlanningGoalDraft(goal: target.goal)
+        self.initialDraft = initialDraft
+        _draft = State(initialValue: initialDraft)
     }
 
     private var availableWallets: [LedgerWallet] {
@@ -802,6 +818,13 @@ struct PlanningGoalEditorSheet: View {
 
     private var activeCurrencyCode: String {
         target.goal?.currencyCode ?? currencyCode
+    }
+
+    private var dismissGuardConfiguration: MistiaDismissGuardConfiguration {
+        MistiaDismissGuardConfiguration(
+            mode: target.goal == nil ? .creating : .editing,
+            hasUnsavedChanges: draft != initialDraft
+        )
     }
 
     var body: some View {
@@ -850,10 +873,12 @@ struct PlanningGoalEditorSheet: View {
             .toolbar {
                 PlanningEditorToolbar(
                     onClose: { dismiss() },
-                    onSave: save
+                    onSave: save,
+                    dismissGuardConfiguration: dismissGuardConfiguration
                 )
             }
         }
+        .mistiaUnsavedChangesDismissGuard(configuration: dismissGuardConfiguration)
         .sheet(isPresented: $showsIconPicker) {
             PlanningIconPickerSheet(
                 title: L10n.planning.planning.iconMCTiU,
@@ -1023,6 +1048,7 @@ struct PlanningBillEditorSheet: View {
     let target: PlanningBillEditorTarget
 
     @State private var draft: PlanningBillDraft
+    private let initialDraft: PlanningBillDraft
     @State private var alertMessage: String?
     @State private var showsCategoryPicker = false
     @State private var showsPauseConfirmation = false
@@ -1037,6 +1063,7 @@ struct PlanningBillEditorSheet: View {
             initialDraft.dueDate = today
             initialDraft.autoPayDate = today
         }
+        self.initialDraft = initialDraft
         _draft = State(initialValue: initialDraft)
     }
 
@@ -1096,6 +1123,13 @@ struct PlanningBillEditorSheet: View {
                 && category.isChildCategory
                 && category.iconSymbolName == draft.iconSymbolName
         }
+    }
+
+    private var dismissGuardConfiguration: MistiaDismissGuardConfiguration {
+        MistiaDismissGuardConfiguration(
+            mode: target.plan == nil ? .creating : .editing,
+            hasUnsavedChanges: draft != initialDraft
+        )
     }
 
     var body: some View {
@@ -1221,10 +1255,12 @@ struct PlanningBillEditorSheet: View {
             .toolbar {
                 PlanningEditorToolbar(
                     onClose: { dismiss() },
-                    onSave: save
+                    onSave: save,
+                    dismissGuardConfiguration: dismissGuardConfiguration
                 )
             }
         }
+        .mistiaUnsavedChangesDismissGuard(configuration: dismissGuardConfiguration)
         .sheet(isPresented: $showsCategoryPicker) {
             PlanningBillCategoryPickerSheet(
                 selectedCategoryID: selectedCategory?.id,
@@ -1631,7 +1667,9 @@ struct PlanningInstallmentEditorSheet: View {
     let target: PlanningInstallmentEditorTarget
 
     @State private var draft: PlanningInstallmentDraft
+    private let initialDraft: PlanningInstallmentDraft
     @State private var paymentAmountText: String
+    private let initialPaymentAmountText: String
     @State private var alertMessage: String?
     @State private var showsDeleteConfirmation = false
     @State private var showsIconPicker = false
@@ -1639,8 +1677,11 @@ struct PlanningInstallmentEditorSheet: View {
     init(target: PlanningInstallmentEditorTarget) {
         self.target = target
         let initialDraft = PlanningInstallmentDraft(plan: target.plan)
+        self.initialDraft = initialDraft
+        let initialPaymentAmountText = target.dueItem?.amountMinor.map(String.init) ?? initialDraft.amountText
+        self.initialPaymentAmountText = initialPaymentAmountText
         _draft = State(initialValue: initialDraft)
-        _paymentAmountText = State(initialValue: target.dueItem?.amountMinor.map(String.init) ?? initialDraft.amountText)
+        _paymentAmountText = State(initialValue: initialPaymentAmountText)
     }
 
     private var availableWallets: [LedgerWallet] {
@@ -1679,6 +1720,13 @@ struct PlanningInstallmentEditorSheet: View {
 
     private var activeCurrencyCode: String {
         target.plan?.currencyCode ?? target.dueItem?.currencyCode ?? currencyCode
+    }
+
+    private var dismissGuardConfiguration: MistiaDismissGuardConfiguration {
+        MistiaDismissGuardConfiguration(
+            mode: target.plan == nil ? .creating : .editing,
+            hasUnsavedChanges: draft != initialDraft || paymentAmountText != initialPaymentAmountText
+        )
     }
 
     var body: some View {
@@ -1747,10 +1795,12 @@ struct PlanningInstallmentEditorSheet: View {
             .toolbar {
                 PlanningEditorToolbar(
                     onClose: { dismiss() },
-                    onSave: save
+                    onSave: save,
+                    dismissGuardConfiguration: dismissGuardConfiguration
                 )
             }
         }
+        .mistiaUnsavedChangesDismissGuard(configuration: dismissGuardConfiguration)
         .sheet(isPresented: $showsIconPicker) {
             PlanningIconPickerSheet(
                 title: L10n.planning.planning.iconKhoNTrGPVay,
@@ -1931,15 +1981,20 @@ struct PlanningCreditCardEditorSheet: View {
     let target: PlanningCreditCardEditorTarget
 
     @State private var draft: PlanningCreditCardDraft
+    private let initialDraft: PlanningCreditCardDraft
     @State private var paymentAmountText: String
+    private let initialPaymentAmountText: String
     @State private var alertMessage: String?
     @State private var showsIconPicker = false
 
     init(target: PlanningCreditCardEditorTarget) {
         self.target = target
         let initialDraft = PlanningCreditCardDraft(wallet: target.wallet)
+        self.initialDraft = initialDraft
+        let initialPaymentAmountText = target.dueItem.map { String($0.amountMinor) } ?? initialDraft.availableCreditText
+        self.initialPaymentAmountText = initialPaymentAmountText
         _draft = State(initialValue: initialDraft)
-        _paymentAmountText = State(initialValue: target.dueItem.map { String($0.amountMinor) } ?? initialDraft.availableCreditText)
+        _paymentAmountText = State(initialValue: initialPaymentAmountText)
     }
 
     private var availablePaymentWallets: [LedgerWallet] {
@@ -1985,6 +2040,13 @@ struct PlanningCreditCardEditorSheet: View {
 
     private var paymentDueDayOptions: [Int] {
         Array((draft.statementClosingDay + 1)...31)
+    }
+
+    private var dismissGuardConfiguration: MistiaDismissGuardConfiguration {
+        MistiaDismissGuardConfiguration(
+            mode: target.wallet == nil ? .creating : .editing,
+            hasUnsavedChanges: draft != initialDraft || paymentAmountText != initialPaymentAmountText
+        )
     }
 
     var body: some View {
@@ -2060,10 +2122,12 @@ struct PlanningCreditCardEditorSheet: View {
             .toolbar {
                 PlanningEditorToolbar(
                     onClose: { dismiss() },
-                    onSave: save
+                    onSave: save,
+                    dismissGuardConfiguration: dismissGuardConfiguration
                 )
             }
         }
+        .mistiaUnsavedChangesDismissGuard(configuration: dismissGuardConfiguration)
         .sheet(isPresented: $showsIconPicker) {
             PlanningIconPickerSheet(
                 title: L10n.planning.planning.biUTNgTh,
@@ -2240,16 +2304,21 @@ struct PlanningCreditCardEditorSheet: View {
 private struct PlanningEditorToolbar: ToolbarContent {
     let onClose: () -> Void
     let onSave: () -> Void
+    var dismissGuardConfiguration: MistiaDismissGuardConfiguration?
     var canSave: Bool = true
 
     var body: some ToolbarContent {
         ToolbarItem(placement: .topBarLeading) {
-            Button {
-                onClose()
-            } label: {
-                Image(systemName: "xmark")
-                    .font(.system(size: 16, weight: .semibold))
-                    .foregroundStyle(.secondary)
+            if let dismissGuardConfiguration {
+                MistiaGuardedDismissButton(configuration: dismissGuardConfiguration)
+            } else {
+                Button {
+                    onClose()
+                } label: {
+                    Image(systemName: "xmark")
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundStyle(.secondary)
+                }
             }
         }
 
@@ -2345,7 +2414,7 @@ private struct PlanningEditorIconPreview: View {
     }
 }
 
-private struct PlanningBudgetDraft {
+private struct PlanningBudgetDraft: Equatable {
     var categoryID: UUID?
     var limitText: String
     var rolloverEnabled: Bool
@@ -2359,7 +2428,7 @@ private struct PlanningBudgetDraft {
     }
 }
 
-private struct PlanningGoalDraft {
+private struct PlanningGoalDraft: Equatable {
     var name: String
     var targetText: String
     var currentText: String
@@ -2379,7 +2448,7 @@ private struct PlanningGoalDraft {
     }
 }
 
-private struct PlanningBillDraft {
+private struct PlanningBillDraft: Equatable {
     var name: String
     var amountText: String
     var scheduleKind: PlanningBillScheduleKind
@@ -2471,7 +2540,7 @@ private extension PlanningBillScheduleKind {
     }
 }
 
-private struct PlanningInstallmentDraft {
+private struct PlanningInstallmentDraft: Equatable {
     var name: String
     var amountText: String
     var dueDay: Int
@@ -2493,7 +2562,7 @@ private struct PlanningInstallmentDraft {
     }
 }
 
-private struct PlanningCreditCardDraft {
+private struct PlanningCreditCardDraft: Equatable {
     static let defaultPaymentDueDay = 26
     static let defaultStatementClosingDay = 10
 

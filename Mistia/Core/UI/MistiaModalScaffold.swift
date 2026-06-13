@@ -6,6 +6,7 @@ struct MistiaModalScaffold<Title: View, Content: View>: View {
 
     let titleView: Title
     let accent: Color
+    let dismissGuardConfiguration: MistiaDismissGuardConfiguration?
     let onSave: () -> Void
     let content: Content
 
@@ -20,17 +21,19 @@ struct MistiaModalScaffold<Title: View, Content: View>: View {
     init(
         @ViewBuilder titleView: () -> Title,
         accent: Color,
+        dismissGuardConfiguration: MistiaDismissGuardConfiguration? = nil,
         onSave: @escaping () -> Void,
         @ViewBuilder content: () -> Content
     ) {
         self.titleView = titleView()
         self.accent = accent
+        self.dismissGuardConfiguration = dismissGuardConfiguration
         self.onSave = onSave
         self.content = content()
     }
 
     var body: some View {
-        NavigationStack {
+        let modalContent = NavigationStack {
             ZStack {
                 groupedBackground
                     .ignoresSafeArea()
@@ -51,12 +54,16 @@ struct MistiaModalScaffold<Title: View, Content: View>: View {
                 }
 
                 ToolbarItem(placement: .topBarLeading) {
-                    Button {
-                        dismiss()
-                    } label: {
-                        Image(systemName: "xmark")
-                            .font(.system(size: 16, weight: .semibold))
-                            .foregroundStyle(.secondary)
+                    if let dismissGuardConfiguration {
+                        MistiaGuardedDismissButton(configuration: dismissGuardConfiguration)
+                    } else {
+                        Button {
+                            dismiss()
+                        } label: {
+                            Image(systemName: "xmark")
+                                .font(.system(size: 16, weight: .semibold))
+                                .foregroundStyle(.secondary)
+                        }
                     }
                 }
 
@@ -81,6 +88,12 @@ struct MistiaModalScaffold<Title: View, Content: View>: View {
             .toolbarBackground(.visible, for: .navigationBar)
         }
         .presentationBackground(groupedBackground)
+
+        if let dismissGuardConfiguration {
+            modalContent.mistiaUnsavedChangesDismissGuard(configuration: dismissGuardConfiguration)
+        } else {
+            modalContent
+        }
     }
 }
 
@@ -88,6 +101,7 @@ extension MistiaModalScaffold where Title == Text {
     init(
         title: String,
         accent: Color,
+        dismissGuardConfiguration: MistiaDismissGuardConfiguration? = nil,
         onSave: @escaping () -> Void,
         @ViewBuilder content: () -> Content
     ) {
@@ -97,6 +111,7 @@ extension MistiaModalScaffold where Title == Text {
                     .font(.system(size: 17, weight: .bold, design: .rounded))
             },
             accent: accent,
+            dismissGuardConfiguration: dismissGuardConfiguration,
             onSave: onSave,
             content: content
         )

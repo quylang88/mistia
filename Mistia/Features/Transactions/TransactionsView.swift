@@ -2306,6 +2306,11 @@ struct DebtSettlementSheetTarget: Identifiable {
     }
 }
 
+private struct DebtSettlementDismissalSnapshot: Equatable {
+    let amountText: String
+    let selectedWalletID: UUID?
+}
+
 struct DebtSettlementSheet: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
@@ -2321,6 +2326,7 @@ struct DebtSettlementSheet: View {
 
     @State private var amountText = ""
     @State private var selectedWalletID: UUID?
+    @State private var dismissBaselineSnapshot: DebtSettlementDismissalSnapshot?
     @State private var alertMessage: String?
     @State private var isDetailExpanded = false
 
@@ -2366,6 +2372,21 @@ struct DebtSettlementSheet: View {
 
     private var isSaveDisabled: Bool {
         selectedWallet == nil || parsedAmountMinor <= 0 || parsedAmountMinor > target.amountMinor
+    }
+
+    private var dismissGuardConfiguration: MistiaDismissGuardConfiguration {
+        MistiaDismissGuardConfiguration(
+            mode: .creating,
+            hasUnsavedChanges: hasUnsavedChangesForDismissal
+        )
+    }
+
+    private var hasUnsavedChangesForDismissal: Bool {
+        guard let dismissBaselineSnapshot else { return false }
+        return DebtSettlementDismissalSnapshot(
+            amountText: amountText.trimmingCharacters(in: .whitespacesAndNewlines),
+            selectedWalletID: selectedWalletID
+        ) != dismissBaselineSnapshot
     }
 
     var body: some View {
@@ -2450,13 +2471,7 @@ struct DebtSettlementSheet: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
-                    Button {
-                        dismiss()
-                    } label: {
-                        Image(systemName: "xmark")
-                            .font(.system(size: 16, weight: .semibold))
-                            .foregroundStyle(.secondary)
-                    }
+                    MistiaGuardedDismissButton(configuration: dismissGuardConfiguration)
                 }
 
                 ToolbarItem(placement: .topBarTrailing) {
@@ -2486,7 +2501,14 @@ struct DebtSettlementSheet: View {
             } else {
                 selectedWalletID = availableWallets.first?.id
             }
+            if dismissBaselineSnapshot == nil {
+                dismissBaselineSnapshot = DebtSettlementDismissalSnapshot(
+                    amountText: amountText.trimmingCharacters(in: .whitespacesAndNewlines),
+                    selectedWalletID: selectedWalletID
+                )
+            }
         }
+        .mistiaUnsavedChangesDismissGuard(configuration: dismissGuardConfiguration)
         .alert(
             L10n.transactions.transactioneditor.canTSaveYet,
             isPresented: Binding(get: { alertMessage != nil }, set: { if !$0 { alertMessage = nil } })

@@ -2995,6 +2995,13 @@ private struct FamilyCreateSheet: View {
     @State private var familyName = ""
     @FocusState private var focusedField: FamilySheetFocusedField?
 
+    private var dismissGuardConfiguration: MistiaDismissGuardConfiguration {
+        MistiaDismissGuardConfiguration(
+            mode: .creating,
+            hasUnsavedChanges: !familyName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        )
+    }
+
     var body: some View {
         NavigationStack {
             Form {
@@ -3017,13 +3024,7 @@ private struct FamilyCreateSheet: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
-                    Button {
-                        dismiss()
-                    } label: {
-                        Image(systemName: "xmark")
-                            .font(.system(size: 16, weight: .semibold))
-                            .foregroundStyle(.secondary)
-                    }
+                    MistiaGuardedDismissButton(configuration: dismissGuardConfiguration)
                 }
 
                 ToolbarItem(placement: .topBarTrailing) {
@@ -3048,6 +3049,7 @@ private struct FamilyCreateSheet: View {
                 }
             }
         }
+        .mistiaUnsavedChangesDismissGuard(configuration: dismissGuardConfiguration)
         .task {
             guard focusedField == nil else { return }
             try? await Task.sleep(for: .milliseconds(150))
@@ -3066,6 +3068,13 @@ private struct FamilyJoinSheet: View {
     @State private var inviteLink = ""
     @State private var validationMessage: String?
     @FocusState private var focusedField: FamilySheetFocusedField?
+
+    private var dismissGuardConfiguration: MistiaDismissGuardConfiguration {
+        MistiaDismissGuardConfiguration(
+            mode: .creating,
+            hasUnsavedChanges: !inviteLink.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        )
+    }
 
     var body: some View {
         NavigationStack {
@@ -3104,13 +3113,7 @@ private struct FamilyJoinSheet: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
-                    Button {
-                        dismiss()
-                    } label: {
-                        Image(systemName: "xmark")
-                            .font(.system(size: 16, weight: .semibold))
-                            .foregroundStyle(.secondary)
-                    }
+                    MistiaGuardedDismissButton(configuration: dismissGuardConfiguration)
                 }
 
                 ToolbarItem(placement: .topBarTrailing) {
@@ -3138,6 +3141,7 @@ private struct FamilyJoinSheet: View {
                 }
             }
         }
+        .mistiaUnsavedChangesDismissGuard(configuration: dismissGuardConfiguration)
         .task {
             guard focusedField == nil else { return }
             try? await Task.sleep(for: .milliseconds(150))
@@ -3733,6 +3737,13 @@ private struct FamilySharingSheet: View {
     @State private var isApplyingSharingChanges = false
     @State private var sharingErrorMessage: String?
 
+    private var dismissGuardConfiguration: MistiaDismissGuardConfiguration {
+        MistiaDismissGuardConfiguration(
+            mode: .editing,
+            hasUnsavedChanges: hasStagedSharingChanges
+        )
+    }
+
     private var ownerUserID: UUID? {
         sessionStore.activeLocalProfileUserID ?? sessionStore.signedInUserID
     }
@@ -3920,15 +3931,11 @@ private struct FamilySharingSheet: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
-                    Button {
-                        dismiss()
-                    } label: {
-                        Image(systemName: "xmark")
-                            .font(.system(size: 16, weight: .semibold))
-                            .foregroundStyle(.secondary)
-                    }
+                    MistiaGuardedDismissButton(
+                        configuration: dismissGuardConfiguration,
+                        isDisabled: isApplyingSharingChanges
+                    )
                     .accessibilityLabel(L10n.family.family.close)
-                    .disabled(isApplyingSharingChanges)
                 }
 
                 ToolbarItem(placement: .topBarTrailing) {
@@ -3958,6 +3965,7 @@ private struct FamilySharingSheet: View {
                 }
             }
         }
+        .mistiaUnsavedChangesDismissGuard(configuration: dismissGuardConfiguration)
     }
 
     @ViewBuilder
@@ -4185,6 +4193,13 @@ private struct FamilyPermissionsSheet: View {
         _policy = State(initialValue: member.policy)
     }
 
+    private var dismissGuardConfiguration: MistiaDismissGuardConfiguration {
+        MistiaDismissGuardConfiguration(
+            mode: .editing,
+            hasUnsavedChanges: role != member.role || policy != member.policy
+        )
+    }
+
     var body: some View {
         NavigationStack {
             Form {
@@ -4236,8 +4251,8 @@ private struct FamilyPermissionsSheet: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
-                    Button(L10n.common.cancel) {
-                        dismiss()
+                    MistiaGuardedDismissButton(configuration: dismissGuardConfiguration) {
+                        Text(L10n.common.cancel)
                     }
                 }
 
@@ -4257,6 +4272,7 @@ private struct FamilyPermissionsSheet: View {
                 }
             }
         }
+        .mistiaUnsavedChangesDismissGuard(configuration: dismissGuardConfiguration)
         .onChange(of: role) { _, newRole in
             policy = FamilyPermissionPolicy.preset(for: newRole)
         }

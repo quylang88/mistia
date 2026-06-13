@@ -243,6 +243,8 @@ struct MistiaIconPickerSheet: View {
 
     let title: String
     let onSave: (String, String) -> Void
+    private let initialSymbolName: String
+    private let initialColorHex: String
 
     @State private var selectedSymbolName: String
     @State private var selectedColorHex: String
@@ -262,6 +264,8 @@ struct MistiaIconPickerSheet: View {
         self.title = title
         self.onSave = onSave
         let normalizedSelectedColorHex = MistiaIconColorPalette.pickerSelectionHex(forStored: selectedColorHex)
+        self.initialSymbolName = selectedSymbolName
+        self.initialColorHex = normalizedSelectedColorHex
         _selectedSymbolName = State(initialValue: selectedSymbolName)
         _selectedColorHex = State(initialValue: normalizedSelectedColorHex)
         _selectedGroupID = State(initialValue: MistiaIconCatalog.initialGroup(for: selectedSymbolName))
@@ -274,6 +278,13 @@ struct MistiaIconPickerSheet: View {
 
     private var selectedColor: Color {
         Color(hex: selectedColorHex)
+    }
+
+    private var dismissGuardConfiguration: MistiaDismissGuardConfiguration {
+        MistiaDismissGuardConfiguration(
+            mode: .editing,
+            hasUnsavedChanges: selectedSymbolName != initialSymbolName || selectedColorHex != initialColorHex
+        )
     }
 
     var body: some View {
@@ -363,13 +374,7 @@ struct MistiaIconPickerSheet: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
-                    Button {
-                        dismiss()
-                    } label: {
-                        Image(systemName: "xmark")
-                            .font(.system(size: 16, weight: .semibold))
-                            .foregroundStyle(.secondary)
-                    }
+                    MistiaGuardedDismissButton(configuration: dismissGuardConfiguration)
                 }
 
                 ToolbarItem(placement: .topBarTrailing) {
@@ -388,6 +393,7 @@ struct MistiaIconPickerSheet: View {
                 }
             }
         }
+        .mistiaUnsavedChangesDismissGuard(configuration: dismissGuardConfiguration)
     }
 
     @ViewBuilder
