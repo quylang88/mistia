@@ -2,7 +2,7 @@ import Foundation
 import SwiftData
 
 @Model
-final class OwnedRecordScope {
+nonisolated final class OwnedRecordScope {
     @Attribute(.unique) var id: String
     var entityRawValue: String
     var recordID: UUID
@@ -31,23 +31,23 @@ final class OwnedRecordScope {
     }
 }
 
-protocol MistiaOwnedRecord {
+nonisolated protocol MistiaOwnedRecord {
     var id: UUID { get }
 }
 
-extension LedgerWallet: MistiaOwnedRecord {}
-extension CreditCardProfile: MistiaOwnedRecord {}
-extension TransactionCategory: MistiaOwnedRecord {}
-extension SettlementGroup: MistiaOwnedRecord {}
-extension SettlementParticipant: MistiaOwnedRecord {}
-extension LedgerTransaction: MistiaOwnedRecord {}
-extension BudgetPlan: MistiaOwnedRecord {}
-extension SavingsGoal: MistiaOwnedRecord {}
-extension RecurringBillPlan: MistiaOwnedRecord {}
-extension InstallmentPlan: MistiaOwnedRecord {}
-extension DueOccurrenceRecord: MistiaOwnedRecord {}
+nonisolated extension LedgerWallet: MistiaOwnedRecord {}
+nonisolated extension CreditCardProfile: MistiaOwnedRecord {}
+nonisolated extension TransactionCategory: MistiaOwnedRecord {}
+nonisolated extension SettlementGroup: MistiaOwnedRecord {}
+nonisolated extension SettlementParticipant: MistiaOwnedRecord {}
+nonisolated extension LedgerTransaction: MistiaOwnedRecord {}
+nonisolated extension BudgetPlan: MistiaOwnedRecord {}
+nonisolated extension SavingsGoal: MistiaOwnedRecord {}
+nonisolated extension RecurringBillPlan: MistiaOwnedRecord {}
+nonisolated extension InstallmentPlan: MistiaOwnedRecord {}
+nonisolated extension DueOccurrenceRecord: MistiaOwnedRecord {}
 
-enum MistiaRecordOwnershipStore {
+nonisolated enum MistiaRecordOwnershipStore {
     static func ownerMap(
         from scopes: [OwnedRecordScope],
         entity: MistiaSyncEntity

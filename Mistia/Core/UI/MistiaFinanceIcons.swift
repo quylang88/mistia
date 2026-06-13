@@ -21,7 +21,7 @@ struct MistiaFinanceIconDescriptor: Hashable {
     let badgeSystemName: String?
 }
 
-enum MistiaFinanceIconRegistry {
+nonisolated enum MistiaFinanceIconRegistry {
     static func descriptor(for token: String) -> MistiaFinanceIconDescriptor? {
         if let category = MistiaSystemCategoryRegistry.shared.allParents
             .flatMap({ [$0] + ($0.children ?? []) })

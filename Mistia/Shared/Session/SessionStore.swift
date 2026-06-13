@@ -96,10 +96,10 @@ private struct PendingAuthenticationState {
     let prompt: SessionPendingAuthenticationPrompt
 }
 
-private enum SessionSyncTrigger {
+enum SessionSyncTrigger: Equatable {
     case manual
     case automaticLoop
-    case foregroundCatchUp
+    case initial
     case backgroundRefresh
 }
 
@@ -186,17 +186,14 @@ final class SessionStore {
     @ObservationIgnored private var currentSession: SupabaseAuthSession?
     @ObservationIgnored private var legacyLocalModeProfileUserID: UUID?
     @ObservationIgnored private var didBootstrap = false
-    @ObservationIgnored private var liveSyncTask: Task<Void, Never>?
     @ObservationIgnored private var isSyncInFlight = false
-    @ObservationIgnored private var autoSyncPaused = false
     @ObservationIgnored private var shouldShowSyncProgress = false
     @ObservationIgnored private var syncStartTime: Date?
     @ObservationIgnored var requiresInitialSync = false
     @ObservationIgnored private var requiresManualSyncAfterRestore: Bool
     @ObservationIgnored private var pendingInitialSyncChoice: MistiaInitialSyncChoice?
     @ObservationIgnored private var subjectUserIDProvider: (() -> UUID?)?
-    @ObservationIgnored private var postSyncRefreshHandler: (() async -> Void)?
-    @ObservationIgnored private var queuedAutoSyncTask: Task<Void, Never>?
+    @ObservationIgnored private var postSyncRefreshHandler: ((SessionSyncTrigger) async -> Void)?
     @ObservationIgnored private var pendingQueuedAutoSync = false
     @ObservationIgnored private var queuedFamilyOwnerPushTask: Task<Void, Never>?
     @ObservationIgnored private var pendingFamilyOwnerPush = false
@@ -440,11 +437,11 @@ final class SessionStore {
         subjectUserIDProvider = provider
     }
 
-    func setPostSyncRefreshHandler(_ handler: (() async -> Void)?) {
+    func setPostSyncRefreshHandler(_ handler: ((SessionSyncTrigger) async -> Void)?) {
         postSyncRefreshHandler = handler
     }
 
-    func handleSceneDidBecomeActive(runsForegroundCatchUp: Bool = true) {
+    func handleSceneDidBecomeActive() {
         if requiresInitialSync && hasCompletedCloudSyncHistory() {
             requiresInitialSync = false
             initialSyncPreview = nil
@@ -452,12 +449,6 @@ final class SessionStore {
         }
         updateAutoSyncLoopState()
         scheduleFamilyOwnerOutboxRecoveryIfNeeded()
-
-        guard runsForegroundCatchUp else { return }
-        guard shouldRunForegroundCatchUp() else { return }
-        Task {
-            _ = await runMergeSync(trigger: .foregroundCatchUp, showProgress: false)
-        }
     }
 
     func handleSceneDidEnterBackground() {
@@ -565,8 +556,7 @@ final class SessionStore {
 
     func runDeferredStartupSyncIfNeeded() async -> Bool {
         await validateRestoredSessionInBackgroundIfNeeded()
-        guard shouldRunForegroundCatchUp() else { return false }
-        return await runMergeSync(trigger: .foregroundCatchUp, showProgress: false)
+        return false
     }
 
     func signIn(email: String, password: String) async {
@@ -695,7 +685,6 @@ final class SessionStore {
     }
 
     func signOut() async {
-        stopLiveSyncLoop()
         isWorking = true
         lastErrorMessage = nil
         let activeSession = currentSession
@@ -721,7 +710,6 @@ final class SessionStore {
     }
 
     func signOutAndDeleteLocalData() async {
-        stopLiveSyncLoop()
         isWorking = true
         lastErrorMessage = nil
         let activeSession = currentSession
@@ -758,7 +746,6 @@ final class SessionStore {
     }
 
     func deleteAccountKeepingLocalData() async {
-        stopLiveSyncLoop()
         isWorking = true
         lastErrorMessage = nil
         await beginAuthTransition()
@@ -800,13 +787,11 @@ final class SessionStore {
         }
 
         if isManual {
-            pauseAutoSyncLoop()
             isManualSyncInProgress = true
         }
         defer {
             if isManual {
                 isManualSyncInProgress = false
-                resumeAutoSyncLoop()
             }
         }
 
@@ -899,7 +884,6 @@ final class SessionStore {
             throw MistiaBackupStoreError.syncInProgress
         }
 
-        pauseAutoSyncLoop()
         cancelQueuedAutoSync()
         syncCoordinator.clearQueuedMutations()
 
@@ -958,7 +942,6 @@ final class SessionStore {
 
         isWorking = true
         lastErrorMessage = nil
-        pauseAutoSyncLoop()
         cancelQueuedAutoSync()
         syncCoordinator.clearQueuedMutations()
         setAutoSyncEnabled(false)
@@ -1025,8 +1008,6 @@ final class SessionStore {
         case .disconnected:
             reconnectValidationTask?.cancel()
             reconnectValidationTask = nil
-            queuedAutoSyncTask?.cancel()
-            queuedAutoSyncTask = nil
             if isSignedIn {
                 applySignedInOfflineState()
             }
@@ -1812,7 +1793,6 @@ final class SessionStore {
     }
 
     private func applyConfigurationMissingState() {
-        stopLiveSyncLoop()
         reconnectValidationTask?.cancel()
         reconnectValidationTask = nil
         MistiaSyncBackgroundScheduler.shared.cancelPendingRefresh()
@@ -1847,7 +1827,6 @@ final class SessionStore {
     }
 
     private func applySignedOutState(preservingBanner: Bool = false) {
-        stopLiveSyncLoop()
         reconnectValidationTask?.cancel()
         reconnectValidationTask = nil
         MistiaSyncBackgroundScheduler.shared.cancelPendingRefresh()
@@ -2169,39 +2148,6 @@ final class SessionStore {
         return ((try? context.fetch(descriptor)) ?? []).isEmpty == false
     }
 
-    private func startLiveSyncLoop() {
-        stopLiveSyncLoop()
-        liveSyncTask = Task { [weak self] in
-            while let self, !Task.isCancelled {
-                let delay = max(5, self.nextAutomaticSyncDate?.timeIntervalSinceNow ?? Self.AUTOMATIC_SYNC_INTERVAL)
-                try? await Task.sleep(for: .seconds(delay))
-                guard !Task.isCancelled else { return }
-
-                guard !self.autoSyncPaused, self.isReadyForAutomaticSync else {
-                    continue
-                }
-                guard self.lastSyncAt.map({ Date().timeIntervalSince($0) >= Self.AUTOMATIC_SYNC_INTERVAL }) ?? true else {
-                    continue
-                }
-
-                _ = await self.runMergeSync(trigger: .automaticLoop, showProgress: false)
-            }
-        }
-    }
-
-    private func stopLiveSyncLoop() {
-        liveSyncTask?.cancel()
-        liveSyncTask = nil
-    }
-
-    private func pauseAutoSyncLoop() {
-        autoSyncPaused = true
-    }
-
-    private func resumeAutoSyncLoop() {
-        autoSyncPaused = false
-    }
-
     private func updateAutoSyncLoopState() {
         if requiresInitialSync && hasCompletedCloudSyncHistory() {
             requiresInitialSync = false
@@ -2210,12 +2156,10 @@ final class SessionStore {
         }
 
         guard isReadyForAutomaticSync else {
-            stopLiveSyncLoop()
             MistiaSyncBackgroundScheduler.shared.cancelPendingRefresh()
             return
         }
 
-        startLiveSyncLoop()
         MistiaSyncBackgroundScheduler.shared.scheduleNextRefresh(after: nextAutomaticSyncDate)
     }
 
@@ -2226,7 +2170,7 @@ final class SessionStore {
     }
 
     private func runInitialSyncFlow(showProgress: Bool = true) async -> Bool {
-        return await drainSyncQueue(showProgress: showProgress)
+        return await drainSyncQueue(showProgress: showProgress, trigger: .initial)
     }
 
     private func runMergeSync(
@@ -2278,7 +2222,7 @@ final class SessionStore {
                 try? modelContainer.mainContext.save()
             }
 
-            if showProgress || trigger == .foregroundCatchUp {
+            if showProgress {
                 syncStatusTitle = L10n.shared.session.session.syncCompleted
                 syncStatusDetail = pushedFamilyOwnerMutations
                     ? L10n.shared.session.session.pushedMemberWalletChangesToCloudValue(String(describing: result.statusMessage))
@@ -2291,7 +2235,7 @@ final class SessionStore {
             }
 
             if let postSyncRefreshHandler {
-                await postSyncRefreshHandler()
+                await postSyncRefreshHandler(trigger)
             }
 
             updateAutoSyncLoopState()
@@ -2300,7 +2244,7 @@ final class SessionStore {
             }
             return true
         } catch {
-            if showProgress || trigger == .manual || trigger == .foregroundCatchUp {
+            if showProgress || trigger == .manual {
                 applySyncErrorState(error)
                 if showProgress {
                     try? await Task.sleep(for: .seconds(0.5))
@@ -2313,7 +2257,10 @@ final class SessionStore {
         }
     }
 
-    private func drainSyncQueue(showProgress: Bool = true) async -> Bool {
+    private func drainSyncQueue(
+        showProgress: Bool = true,
+        trigger: SessionSyncTrigger
+    ) async -> Bool {
         isSyncInFlight = true
         
         if showProgress {
@@ -2414,7 +2361,7 @@ final class SessionStore {
             }
 
             if let postSyncRefreshHandler {
-                await postSyncRefreshHandler()
+                await postSyncRefreshHandler(trigger)
             }
 
             if showProgress {
@@ -2598,8 +2545,6 @@ final class SessionStore {
         }
 
         pendingQueuedAutoSync = true
-        queuedAutoSyncTask?.cancel()
-        queuedAutoSyncTask = nil
         updateAutoSyncLoopState()
     }
 
@@ -2609,28 +2554,6 @@ final class SessionStore {
         } else {
             cancelQueuedAutoSync()
         }
-    }
-
-    private func flushQueuedAutoSyncIfAllowed() async {
-        guard pendingQueuedAutoSync else { return }
-
-        guard isAutoSyncEnabled, canManageSync, !requiresInitialSync, !requiresManualSyncAfterRestore else {
-            cancelQueuedAutoSync()
-            return
-        }
-
-        guard !isSyncInFlight else {
-            queuedAutoSyncTask?.cancel()
-            queuedAutoSyncTask = Task { [weak self] in
-                try? await Task.sleep(for: Self.QUEUED_AUTO_SYNC_DEBOUNCE)
-                await self?.flushQueuedAutoSyncIfAllowed()
-            }
-            return
-        }
-
-        pendingQueuedAutoSync = false
-        queuedAutoSyncTask = nil
-        _ = await syncNow(isManual: false)
     }
 
     private func scheduleQueuedFamilyOwnerPushIfAllowed() {
@@ -2742,8 +2665,6 @@ final class SessionStore {
 
     private func cancelQueuedAutoSync() {
         pendingQueuedAutoSync = false
-        queuedAutoSyncTask?.cancel()
-        queuedAutoSyncTask = nil
     }
 
     private func cancelQueuedFamilyOwnerPush() {

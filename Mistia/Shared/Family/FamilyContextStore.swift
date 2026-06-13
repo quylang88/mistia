@@ -7,7 +7,7 @@ enum FamilyRefreshSource {
     case familyOverview
     case contextSwitch
     case userInitiated
-    case postManualSync
+    case postSync
 }
 
 private enum FamilyAccessibleFinanceScope {
@@ -46,12 +46,14 @@ final class FamilyContextStore {
     var lastErrorMessage: String?
     var isLoading = false
     var isRefreshingLatest = false
+    var refreshingMemberUserID: UUID?
     var isSwitchingContext = false
     var didBootstrap = false
 
     @ObservationIgnored private let service: any FamilyRemoteServicing
     @ObservationIgnored private let launchState: MistiaDataStack.LaunchState?
     @ObservationIgnored private var modelContainer: ModelContainer
+    @ObservationIgnored private var persistenceWorker: MistiaSyncPersistenceWorker
     @ObservationIgnored private var refreshTask: Task<Bool, Never>?
     @ObservationIgnored private var latestRefreshTask: Task<Void, Never>?
     @ObservationIgnored private var metadataRefreshTask: Task<Bool, Never>?
@@ -59,6 +61,8 @@ final class FamilyContextStore {
     @ObservationIgnored private var lastLatestRefreshCompletedAt: Date?
     @ObservationIgnored private var lastMetadataRefreshCompletedAt: Date?
     @ObservationIgnored private var avatarHydrationTask: Task<Void, Never>?
+    @ObservationIgnored private var memberFinanceRefreshTask: Task<Void, Never>?
+    @ObservationIgnored private var memberFinanceRefreshGeneration: UUID?
     private var pendingPermissionRequestKeys: Set<FamilyPendingPermissionRequestKey> = []
     private var pendingPermissionRequests: [FamilyPermissionRequestRemoteRecord] = []
 
@@ -68,6 +72,7 @@ final class FamilyContextStore {
         service: any FamilyRemoteServicing
     ) {
         self.modelContainer = modelContainer
+        self.persistenceWorker = MistiaSyncPersistenceWorker(modelContainer: modelContainer)
         self.launchState = launchState
         self.service = service
         if let token = UserDefaults.standard.string(forKey: Self.pendingInviteTokenKey),
@@ -129,6 +134,11 @@ final class FamilyContextStore {
     var isViewingOtherMemberContext: Bool {
         guard case .member(let userID) = activeContext.scope else { return false }
         return userID != currentUserID
+    }
+
+    var isRefreshingViewedMemberFinance: Bool {
+        guard case .member(let userID) = activeContext.scope else { return false }
+        return refreshingMemberUserID == userID
     }
 
     var viewedMember: FamilyMember? {
@@ -205,6 +215,7 @@ final class FamilyContextStore {
 
     func setModelContainer(_ modelContainer: ModelContainer) {
         self.modelContainer = modelContainer
+        persistenceWorker = MistiaSyncPersistenceWorker(modelContainer: modelContainer)
     }
 
     @discardableResult
@@ -336,7 +347,7 @@ final class FamilyContextStore {
             await coalescedLatestFamilyDataRefresh(sessionStore: sessionStore)
         case .userInitiated:
             await coalescedLatestFamilyDataRefresh(sessionStore: sessionStore)
-        case .postManualSync:
+        case .postSync:
             await refresh(sessionStore: sessionStore)
             lastLatestRefreshCompletedAt = Date()
         }
@@ -468,11 +479,61 @@ final class FamilyContextStore {
         memberUserID: UUID,
         preserveLocalNewerRows: Bool = true
     ) async {
-        await refreshAccessibleFinance(
-            sessionStore: sessionStore,
-            userIDs: [memberUserID],
-            preserveLocalNewerRows: preserveLocalNewerRows
-        )
+        setModelContainer(sessionStore.currentModelContainer)
+
+        if refreshingMemberUserID == memberUserID, let memberFinanceRefreshTask {
+            await memberFinanceRefreshTask.value
+            return
+        }
+
+        memberFinanceRefreshTask?.cancel()
+        let generation = UUID()
+        memberFinanceRefreshGeneration = generation
+        refreshingMemberUserID = memberUserID
+
+        let task = Task { @MainActor [weak self] in
+            guard let self else { return }
+            await self.performMemberFinanceRefresh(
+                sessionStore: sessionStore,
+                memberUserID: memberUserID,
+                preserveLocalNewerRows: preserveLocalNewerRows,
+                generation: generation
+            )
+        }
+        memberFinanceRefreshTask = task
+        await task.value
+
+        guard memberFinanceRefreshGeneration == generation else { return }
+        memberFinanceRefreshTask = nil
+        memberFinanceRefreshGeneration = nil
+        refreshingMemberUserID = nil
+    }
+
+    private func performMemberFinanceRefresh(
+        sessionStore: SessionStore,
+        memberUserID: UUID,
+        preserveLocalNewerRows: Bool,
+        generation: UUID
+    ) async {
+        guard let session = await prepareRemoteSession(using: sessionStore) else { return }
+
+        do {
+            try Task.checkCancellation()
+            try await refreshAccessibleFinance(
+                sessionStore: sessionStore,
+                session: session,
+                userIDs: [memberUserID],
+                preserveLocalNewerRows: preserveLocalNewerRows
+            )
+            try Task.checkCancellation()
+            guard memberFinanceRefreshGeneration == generation else { return }
+            lastErrorMessage = nil
+        } catch is CancellationError {
+            return
+        } catch {
+            guard memberFinanceRefreshGeneration == generation else { return }
+            lastErrorMessage = visibleErrorMessage(for: error, sessionStore: sessionStore)
+        }
     }
 
     func deleteFamily(sessionStore: SessionStore) async {
@@ -945,11 +1006,13 @@ final class FamilyContextStore {
     }
 
     func activateFamilyHome() {
+        cancelMemberFinanceRefresh()
         guard let familyID = family?.id else { return }
         activeContext = FamilyContext(scope: .familyHome(familyID: familyID))
     }
 
     func activateSelfView() {
+        cancelMemberFinanceRefresh()
         activeContext = .personalSelf
     }
 
@@ -961,14 +1024,25 @@ final class FamilyContextStore {
         defer { isSwitchingContext = false }
 
         if member.userID == currentUserID {
+            cancelMemberFinanceRefresh()
             activeContext = .personalSelf
         } else {
+            cancelMemberFinanceRefresh(except: member.userID)
             activeContext = FamilyContext(scope: .member(userID: member.userID))
         }
     }
 
     func returnToSelf() {
+        cancelMemberFinanceRefresh()
         activeContext = .personalSelf
+    }
+
+    private func cancelMemberFinanceRefresh(except userID: UUID? = nil) {
+        guard refreshingMemberUserID != userID else { return }
+        memberFinanceRefreshTask?.cancel()
+        memberFinanceRefreshTask = nil
+        memberFinanceRefreshGeneration = nil
+        refreshingMemberUserID = nil
     }
 
     func capabilities(for member: FamilyMember) -> FamilyMemberAccessCapabilities {
@@ -1154,6 +1228,7 @@ final class FamilyContextStore {
 
 
     func clear() {
+        cancelMemberFinanceRefresh()
         activeContext = .personalSelf
         family = nil
         currentMembership = nil
@@ -1365,44 +1440,26 @@ final class FamilyContextStore {
         let accessibleUserIDs = userIDs
         guard !accessibleUserIDs.isEmpty else { return }
 
-        let financeSnapshot = try await service.fetchAccessibleFinanceSnapshot(
-            userIDs: Array(accessibleUserIDs),
-            session: session
-        )
+        let financeSnapshot: MistiaRemoteSnapshot
+        do {
+            let fetchSignpostID = MistiaPerformanceSignpost.begin("Remote Fetch")
+            defer { MistiaPerformanceSignpost.end("Remote Fetch", id: fetchSignpostID) }
+            financeSnapshot = try await service.fetchAccessibleFinanceSnapshot(
+                userIDs: Array(accessibleUserIDs),
+                session: session
+            )
+        }
+        try Task.checkCancellation()
         let reconciledFinanceSnapshot = MistiaSystemCategorySyncSupport.deduplicatingRemoteSystemCategories(
             financeSnapshot
         )
         let protectedRecordIDs = sessionStore.protectedQueuedRecordIDs()
-
-        let nonTransactionSnapshot = MistiaRemoteSnapshot(
-            wallets: reconciledFinanceSnapshot.wallets,
-            creditCardProfiles: reconciledFinanceSnapshot.creditCardProfiles,
-            categories: reconciledFinanceSnapshot.categories,
-            settlementGroups: reconciledFinanceSnapshot.settlementGroups,
-            settlementParticipants: reconciledFinanceSnapshot.settlementParticipants,
-            transactions: [],
-            budgetPlans: reconciledFinanceSnapshot.budgetPlans,
-            savingsGoals: reconciledFinanceSnapshot.savingsGoals,
-            recurringBillPlans: reconciledFinanceSnapshot.recurringBillPlans,
-            installmentPlans: reconciledFinanceSnapshot.installmentPlans,
-            dueOccurrences: reconciledFinanceSnapshot.dueOccurrences
-        )
-
-        try MistiaSyncLocalStore.applySnapshotIncrementally(
-            nonTransactionSnapshot,
-            shouldPruneMissing: false,
+        try await persistenceWorker.applyAccessibleFinanceSnapshot(
+            reconciledFinanceSnapshot,
             protectedRecordIDs: protectedRecordIDs,
-            preserveLocalNewerRows: preserveLocalNewerRows,
-            familyCategoryScopedTo: session.user.id,
-            familyCategoryPruneOwnerIDs: accessibleUserIDs.subtracting([session.user.id]),
-            in: modelContainer
-        )
-        try MistiaSyncLocalStore.mergeAccessibleTransactions(
-            reconciledFinanceSnapshot.transactions,
-            protectedRecordIDs: protectedRecordIDs,
-            familyCategoryScopedTo: session.user.id,
-            preserveLocalNewerRows: preserveLocalNewerRows,
-            in: modelContainer
+            localUserID: session.user.id,
+            pruneOwnerIDs: accessibleUserIDs.subtracting([session.user.id]),
+            preserveLocalNewerRows: preserveLocalNewerRows
         )
     }
 

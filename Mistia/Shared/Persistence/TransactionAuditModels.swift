@@ -2,7 +2,7 @@ import Foundation
 import SwiftData
 
 @Model
-final class TransactionAuditRecord {
+nonisolated final class TransactionAuditRecord {
     @Attribute(.unique) var transactionID: UUID
     var createdByUserID: UUID
     var lastModifiedByUserID: UUID
@@ -21,7 +21,7 @@ final class TransactionAuditRecord {
     }
 }
 
-enum TransactionAuditStore {
+nonisolated enum TransactionAuditStore {
     static func auditMap(
         from records: [TransactionAuditRecord]
     ) -> [UUID: TransactionAuditRecord] {

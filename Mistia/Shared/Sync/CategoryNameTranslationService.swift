@@ -338,7 +338,7 @@ private struct CategoryNameTranslationErrorResponse: Codable {
     let message: String?
 }
 
-private extension String {
+nonisolated private extension String {
     var nilIfBlank: String? {
         let trimmed = trimmingCharacters(in: .whitespacesAndNewlines)
         return trimmed.isEmpty ? nil : trimmed
@@ -350,7 +350,7 @@ private struct CategoryNameTranslationSource {
     let language: MistiaAppLanguage
 }
 
-private extension TransactionCategory {
+nonisolated private extension TransactionCategory {
     var needsCategoryNameTranslationRetry: Bool {
         if pendingTranslationSourceName?.nilIfBlank != nil,
            pendingTranslationSourceLanguageRawValue.flatMap(MistiaAppLanguage.init(rawValue:)) != nil {
@@ -382,7 +382,7 @@ private extension TransactionCategory {
     }
 }
 
-private extension MistiaAppLanguage {
+nonisolated private extension MistiaAppLanguage {
     var translationLocaleLanguage: Locale.Language {
         switch self {
         case .vietnamese:
@@ -395,7 +395,7 @@ private extension MistiaAppLanguage {
     }
 }
 
-private extension String {
+nonisolated private extension String {
     var containsJapaneseCharacters: Bool {
         range(of: "[ぁ-んァ-ン一-龯]", options: .regularExpression) != nil
     }

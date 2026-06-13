@@ -2,7 +2,7 @@ import Foundation
 import SwiftData
 
 @Model
-final class LedgerWallet: Identifiable, Hashable {
+nonisolated final class LedgerWallet: Identifiable, Hashable {
     static func == (lhs: LedgerWallet, rhs: LedgerWallet) -> Bool {
         lhs.id == rhs.id
     }
@@ -72,7 +72,7 @@ final class LedgerWallet: Identifiable, Hashable {
 }
 
 @Model
-final class CreditCardProfile {
+nonisolated final class CreditCardProfile {
     @Attribute(.unique) var id: UUID
     var issuerName: String
     var networkRawValue: String
@@ -130,7 +130,7 @@ final class CreditCardProfile {
 }
 
 @Model
-final class TransactionCategory {
+nonisolated final class TransactionCategory {
     @Attribute(.unique) var id: UUID
     var name: String
     var nameEnglish: String?
@@ -236,7 +236,7 @@ final class TransactionCategory {
 }
 
 @Model
-final class LedgerTransaction {
+nonisolated final class LedgerTransaction {
     @Attribute(.unique) var id: UUID
     var primaryKindRawValue: String
     var transferSubtypeRawValue: String?
@@ -387,7 +387,7 @@ final class LedgerTransaction {
 }
 
 @Model
-final class SettlementGroup {
+nonisolated final class SettlementGroup {
     @Attribute(.unique) var id: UUID
     var kindRawValue: String
     var statusRawValue: String
@@ -474,7 +474,7 @@ final class SettlementGroup {
 }
 
 @Model
-final class SettlementParticipant {
+nonisolated final class SettlementParticipant {
     @Attribute(.unique) var id: UUID
     var groupID: UUID
     var displayName: String

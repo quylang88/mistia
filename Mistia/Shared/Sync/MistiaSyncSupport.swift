@@ -27,7 +27,7 @@ struct MistiaInitialSyncPreview: Identifiable, Equatable {
     }
 }
 
-enum MistiaSyncConflictKind: String, Codable, CaseIterable {
+enum MistiaSyncConflictKind: String, Codable, CaseIterable, Sendable {
     case createCreate
     case editEdit
     case editDelete
@@ -67,7 +67,7 @@ struct MistiaSyncPossibleDuplicate: Identifiable, Equatable {
     let reason: MistiaSyncPossibleDuplicateReason
 }
 
-enum MistiaSyncDeviceIdentity {
+nonisolated enum MistiaSyncDeviceIdentity {
     nonisolated private static let defaultsKey = "mistia.sync.device-id"
 
     nonisolated static func current(defaults: UserDefaults = .standard) -> UUID {
@@ -82,7 +82,7 @@ enum MistiaSyncDeviceIdentity {
     }
 }
 
-protocol MistiaSyncLocalRecord: AnyObject, PersistentModel {
+nonisolated protocol MistiaSyncLocalRecord: AnyObject, PersistentModel {
     static var syncEntity: MistiaSyncEntity { get }
 
     var id: UUID { get }
@@ -92,7 +92,7 @@ protocol MistiaSyncLocalRecord: AnyObject, PersistentModel {
     var remoteVersion: Int64 { get set }
 }
 
-extension MistiaSyncLocalRecord {
+nonisolated extension MistiaSyncLocalRecord {
     var isDeletedForSync: Bool {
         deletedAt != nil
     }
@@ -108,51 +108,51 @@ extension MistiaSyncLocalRecord {
     }
 }
 
-extension LedgerWallet: MistiaSyncLocalRecord {
+nonisolated extension LedgerWallet: MistiaSyncLocalRecord {
     static let syncEntity: MistiaSyncEntity = .wallet
 }
 
-extension CreditCardProfile: MistiaSyncLocalRecord {
+nonisolated extension CreditCardProfile: MistiaSyncLocalRecord {
     static let syncEntity: MistiaSyncEntity = .creditCardProfile
 }
 
-extension TransactionCategory: MistiaSyncLocalRecord {
+nonisolated extension TransactionCategory: MistiaSyncLocalRecord {
     static let syncEntity: MistiaSyncEntity = .category
 }
 
-extension LedgerTransaction: MistiaSyncLocalRecord {
+nonisolated extension LedgerTransaction: MistiaSyncLocalRecord {
     static let syncEntity: MistiaSyncEntity = .transaction
 }
 
-extension SettlementGroup: MistiaSyncLocalRecord {
+nonisolated extension SettlementGroup: MistiaSyncLocalRecord {
     static let syncEntity: MistiaSyncEntity = .settlementGroup
 }
 
-extension SettlementParticipant: MistiaSyncLocalRecord {
+nonisolated extension SettlementParticipant: MistiaSyncLocalRecord {
     static let syncEntity: MistiaSyncEntity = .settlementParticipant
 }
 
-extension BudgetPlan: MistiaSyncLocalRecord {
+nonisolated extension BudgetPlan: MistiaSyncLocalRecord {
     static let syncEntity: MistiaSyncEntity = .budgetPlan
 }
 
-extension SavingsGoal: MistiaSyncLocalRecord {
+nonisolated extension SavingsGoal: MistiaSyncLocalRecord {
     static let syncEntity: MistiaSyncEntity = .savingsGoal
 }
 
-extension RecurringBillPlan: MistiaSyncLocalRecord {
+nonisolated extension RecurringBillPlan: MistiaSyncLocalRecord {
     static let syncEntity: MistiaSyncEntity = .recurringBillPlan
 }
 
-extension InstallmentPlan: MistiaSyncLocalRecord {
+nonisolated extension InstallmentPlan: MistiaSyncLocalRecord {
     static let syncEntity: MistiaSyncEntity = .installmentPlan
 }
 
-extension DueOccurrenceRecord: MistiaSyncLocalRecord {
+nonisolated extension DueOccurrenceRecord: MistiaSyncLocalRecord {
     static let syncEntity: MistiaSyncEntity = .dueOccurrenceRecord
 }
 
-extension SyncConflict {
+nonisolated extension SyncConflict {
     var entity: MistiaSyncEntity {
         MistiaSyncEntity(rawValue: entityRawValue) ?? .transaction
     }
@@ -228,7 +228,7 @@ extension SyncConflict {
     }
 }
 
-private extension MistiaSyncUploadRecord {
+nonisolated private extension MistiaSyncUploadRecord {
     var recordSummary: MistiaSyncConflictRecordSummary {
         switch self {
         case .wallet(let row):
@@ -595,7 +595,7 @@ private extension MistiaSyncUploadRecord {
     }
 }
 
-private enum MistiaSyncConflictDifferenceBuilder {
+nonisolated private enum MistiaSyncConflictDifferenceBuilder {
     static func build(
         @MistiaSyncConflictDifferenceListBuilder _ body: () -> [MistiaSyncConflictDifference]
     ) -> [MistiaSyncConflictDifference] {
@@ -604,13 +604,13 @@ private enum MistiaSyncConflictDifferenceBuilder {
 }
 
 @resultBuilder
-private enum MistiaSyncConflictDifferenceListBuilder {
+nonisolated private enum MistiaSyncConflictDifferenceListBuilder {
     static func buildBlock(_ components: [MistiaSyncConflictDifference]...) -> [MistiaSyncConflictDifference] {
         components.flatMap { $0 }
     }
 }
 
-private func field(
+nonisolated private func field(
     _ id: String,
     _ title: String,
     _ localValue: String?,
@@ -631,7 +631,7 @@ private func field(
     ]
 }
 
-private func displayValue(_ value: String?) -> String {
+nonisolated private func displayValue(_ value: String?) -> String {
     guard let value, !value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
         return L10n.shared.sync.mistiasync.none
     }
@@ -641,14 +641,14 @@ private func displayValue(_ value: String?) -> String {
     return value
 }
 
-private func firstNonEmpty(_ values: String?...) -> String? {
+nonisolated private func firstNonEmpty(_ values: String?...) -> String? {
     values.first { value in
         guard let value else { return false }
         return !value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     } ?? nil
 }
 
-private func compactJoined(_ values: String?...) -> String {
+nonisolated private func compactJoined(_ values: String?...) -> String {
     values
         .compactMap { value -> String? in
             guard let value else { return nil }
@@ -658,46 +658,46 @@ private func compactJoined(_ values: String?...) -> String {
         .joined(separator: " • ")
 }
 
-private func number(_ value: Int) -> String {
+nonisolated private func number(_ value: Int) -> String {
     "\(value)"
 }
 
-private func number(_ value: Int64) -> String {
+nonisolated private func number(_ value: Int64) -> String {
     "\(value)"
 }
 
-private func currency(_ amountMinor: Int64, code: String) -> String {
+nonisolated private func currency(_ amountMinor: Int64, code: String) -> String {
     amountMinor.formattedCurrency(code: code)
 }
 
-private func formattedPlainAmount(_ amount: Int64) -> String {
+nonisolated private func formattedPlainAmount(_ amount: Int64) -> String {
     let formatter = NumberFormatter()
     formatter.numberStyle = .decimal
     return formatter.string(from: NSNumber(value: amount)) ?? "\(amount)"
 }
 
-private func date(_ value: Date?) -> String? {
+nonisolated private func date(_ value: Date?) -> String? {
     value.map { MistiaDateFormatting.dateTimeString(for: $0) }
 }
 
-private func uuid(_ value: UUID?) -> String? {
+nonisolated private func uuid(_ value: UUID?) -> String? {
     value.map { String($0.uuidString.lowercased().prefix(8)) }
 }
 
-private func yesNo(_ value: Bool) -> String {
+nonisolated private func yesNo(_ value: Bool) -> String {
     value
         ? L10n.shared.sync.mistiasync.yes
         : L10n.shared.sync.mistiasync.no
 }
 
-private func deleted(_ value: Date?) -> String {
+nonisolated private func deleted(_ value: Date?) -> String {
     if let value {
         return L10n.shared.sync.mistiasync.deletedAtValue(String(describing: MistiaDateFormatting.dateTimeString(for: value)))
     }
     return L10n.shared.sync.mistiasync.active2
 }
 
-private func recordState(isArchived: Bool, deletedAt: Date?) -> String {
+nonisolated private func recordState(isArchived: Bool, deletedAt: Date?) -> String {
     if deletedAt != nil {
         return L10n.shared.sync.mistiasync.deleted
     }
@@ -707,11 +707,11 @@ private func recordState(isArchived: Bool, deletedAt: Date?) -> String {
     return L10n.shared.sync.mistiasync.active
 }
 
-private func version(_ value: Int64) -> String {
+nonisolated private func version(_ value: Int64) -> String {
     "v\(value)"
 }
 
-private func rawPayloadDifferences(
+nonisolated private func rawPayloadDifferences(
     localJSON: String,
     remoteJSON: String
 ) -> [MistiaSyncConflictDifference] {
@@ -733,7 +733,7 @@ private func rawPayloadDifferences(
     }
 }
 
-private func rawPayloadFields(_ json: String) -> [String: String] {
+nonisolated private func rawPayloadFields(_ json: String) -> [String: String] {
     guard
         let data = json.data(using: .utf8),
         let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
@@ -755,7 +755,7 @@ private func rawPayloadFields(_ json: String) -> [String: String] {
     }
 }
 
-private func readableFieldName(_ key: String) -> String {
+nonisolated private func readableFieldName(_ key: String) -> String {
     switch key.lowercased() {
     case "wallet_id":
         return L10n.shared.sync.mistiasync.wallet2

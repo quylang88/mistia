@@ -1,12 +1,12 @@
 import Foundation
 import SwiftData
 
-private struct FamilyScopedSystemCategoryKey: Hashable {
+nonisolated private struct FamilyScopedSystemCategoryKey: Hashable {
     let ownerUserID: UUID
     let systemKey: String
 }
 
-enum MistiaSyncLocalStore {
+nonisolated enum MistiaSyncLocalStore {
     nonisolated private static func latestWallet(_ lhs: LedgerWallet, _ rhs: LedgerWallet) -> LedgerWallet {
         lhs.updatedAt >= rhs.updatedAt ? lhs : rhs
     }
@@ -434,7 +434,27 @@ enum MistiaSyncLocalStore {
         in container: ModelContainer
     ) throws {
         let context = ModelContext(container)
+        try applySnapshotIncrementally(
+            snapshot,
+            shouldPruneMissing: shouldPruneMissing,
+            protectedRecordIDs: protectedRecordIDs,
+            preserveLocalNewerRows: preserveLocalNewerRows,
+            familyCategoryScopedTo: localUserID,
+            familyCategoryPruneOwnerIDs: familyCategoryPruneOwnerIDs,
+            in: context
+        )
+        try context.save()
+    }
 
+    private static func applySnapshotIncrementally(
+        _ snapshot: MistiaRemoteSnapshot,
+        shouldPruneMissing: Bool,
+        protectedRecordIDs: Set<String>,
+        preserveLocalNewerRows: Bool,
+        familyCategoryScopedTo localUserID: UUID?,
+        familyCategoryPruneOwnerIDs: Set<UUID>,
+        in context: ModelContext
+    ) throws {
         let categories = try fetchCategories(context)
         let categoryIDMap = scopedCategoryIDMap(snapshot.categories, localUserID: localUserID)
         let categoryRows = scopedCategoryRows(
@@ -704,7 +724,6 @@ enum MistiaSyncLocalStore {
             )
         }
 
-        try context.save()
     }
 
 
@@ -832,6 +851,65 @@ enum MistiaSyncLocalStore {
         in container: ModelContainer
     ) throws {
         let context = ModelContext(container)
+        try mergeAccessibleTransactions(
+            rows,
+            protectedRecordIDs: protectedRecordIDs,
+            familyCategoryScopedTo: localUserID,
+            preserveLocalNewerRows: preserveLocalNewerRows,
+            in: context
+        )
+        try context.save()
+    }
+
+    static func applyAccessibleFinanceSnapshot(
+        _ snapshot: MistiaRemoteSnapshot,
+        protectedRecordIDs: Set<String>,
+        familyCategoryScopedTo localUserID: UUID,
+        familyCategoryPruneOwnerIDs: Set<UUID>,
+        preserveLocalNewerRows: Bool,
+        in container: ModelContainer
+    ) throws {
+        let context = ModelContext(container)
+        let nonTransactionSnapshot = MistiaRemoteSnapshot(
+            wallets: snapshot.wallets,
+            creditCardProfiles: snapshot.creditCardProfiles,
+            categories: snapshot.categories,
+            settlementGroups: snapshot.settlementGroups,
+            settlementParticipants: snapshot.settlementParticipants,
+            transactions: [],
+            budgetPlans: snapshot.budgetPlans,
+            savingsGoals: snapshot.savingsGoals,
+            recurringBillPlans: snapshot.recurringBillPlans,
+            installmentPlans: snapshot.installmentPlans,
+            dueOccurrences: snapshot.dueOccurrences
+        )
+
+        try applySnapshotIncrementally(
+            nonTransactionSnapshot,
+            shouldPruneMissing: false,
+            protectedRecordIDs: protectedRecordIDs,
+            preserveLocalNewerRows: preserveLocalNewerRows,
+            familyCategoryScopedTo: localUserID,
+            familyCategoryPruneOwnerIDs: familyCategoryPruneOwnerIDs,
+            in: context
+        )
+        try mergeAccessibleTransactions(
+            snapshot.transactions,
+            protectedRecordIDs: protectedRecordIDs,
+            familyCategoryScopedTo: localUserID,
+            preserveLocalNewerRows: preserveLocalNewerRows,
+            in: context
+        )
+        try context.save()
+    }
+
+    private static func mergeAccessibleTransactions(
+        _ rows: [RemoteLedgerTransaction],
+        protectedRecordIDs: Set<String>,
+        familyCategoryScopedTo localUserID: UUID?,
+        preserveLocalNewerRows: Bool,
+        in context: ModelContext
+    ) throws {
         let wallets = try fetchWallets(context)
         let categories = try fetchCategories(context)
         let transactions = try fetchTransactions(context)
@@ -904,7 +982,7 @@ enum MistiaSyncLocalStore {
                     remoteRecord: remoteRecord,
                     baseVersion: localTransaction.remoteVersion,
                     remoteVersion: row.syncVersion,
-                    in: container
+                    in: context
                 )
                 if localTransaction.deletedAt != nil, row.deletedAt == nil {
                     continue
@@ -920,7 +998,6 @@ enum MistiaSyncLocalStore {
             )
         }
 
-        try context.save()
     }
 
     static func saveConflict(
@@ -934,6 +1011,29 @@ enum MistiaSyncLocalStore {
         in container: ModelContainer
     ) throws {
         let context = ModelContext(container)
+        try saveConflict(
+            entity: entity,
+            recordID: recordID,
+            kind: kind,
+            localDraft: localDraft,
+            remoteRecord: remoteRecord,
+            baseVersion: baseVersion,
+            remoteVersion: remoteVersion,
+            in: context
+        )
+        try context.save()
+    }
+
+    private static func saveConflict(
+        entity: MistiaSyncEntity,
+        recordID: UUID,
+        kind: MistiaSyncConflictKind,
+        localDraft: MistiaSyncUploadRecord,
+        remoteRecord: MistiaSyncUploadRecord,
+        baseVersion: Int64,
+        remoteVersion: Int64,
+        in context: ModelContext
+    ) throws {
         let existing = try fetchConflicts(context).first {
             $0.entityRawValue == entity.rawValue && $0.recordID == recordID
         }
@@ -961,7 +1061,6 @@ enum MistiaSyncLocalStore {
         conflict.baseVersion = baseVersion
         conflict.remoteVersion = remoteVersion
         conflict.createdAt = .now
-        try context.save()
     }
 
     static func fetchConflict(
@@ -1007,26 +1106,31 @@ enum MistiaSyncLocalStore {
         []
     }
 
+    @MainActor
     static func clearAllData(in container: ModelContainer) throws {
         let context = ModelContext(container)
         try clearAllData(context: context)
     }
 
+    @MainActor
     static func clearLocalDeviceLiveData(in container: ModelContainer) throws {
         let context = ModelContext(container)
         try clearLocalDeviceLiveData(context: context)
     }
 
+    @MainActor
     static func clearLocalDeviceLiveData(context: ModelContext) throws {
         try clearAllData(context: context)
         try MistiaNotificationStore.clearAll(in: context)
     }
 
+    @MainActor
     static func clearAllProfileData(in container: ModelContainer) throws {
         let context = ModelContext(container)
         try clearAllBackupRestorableData(context: context)
     }
 
+    @MainActor
     static func exportBackupEnvelope(
         from container: ModelContainer,
         fallbackOwnerUserID: UUID,
@@ -1214,6 +1318,7 @@ enum MistiaSyncLocalStore {
         )
     }
 
+    @MainActor
     static func restoreBackupEnvelope(
         _ envelope: MistiaBackupEnvelopeV1,
         mode: MistiaBackupRestoreMode,
@@ -1241,6 +1346,7 @@ enum MistiaSyncLocalStore {
         try context.save()
     }
 
+    @MainActor
     private static func clearAllData(context: ModelContext) throws {
         try TransactionReceiptImageStore().deleteAll(context: context, saveContext: false)
 
@@ -1303,6 +1409,7 @@ enum MistiaSyncLocalStore {
         try context.save()
     }
 
+    @MainActor
     private static func clearAllBackupRestorableData(context: ModelContext) throws {
         try clearAllData(context: context)
 
@@ -1313,6 +1420,7 @@ enum MistiaSyncLocalStore {
         try context.save()
     }
 
+    @MainActor
     private static func clearBackupOperationalState(context: ModelContext) throws {
         for record in try fetchConflicts(context) {
             context.delete(record)
@@ -1321,6 +1429,7 @@ enum MistiaSyncLocalStore {
         try context.save()
     }
 
+    @MainActor
     private static func upsertBackupUserProfiles(
         _ rows: [MistiaBackupUserAccountProfileV1],
         context: ModelContext
@@ -1350,6 +1459,7 @@ enum MistiaSyncLocalStore {
         }
     }
 
+    @MainActor
     private static func upsertBackupOwnershipScopes(
         _ rows: [MistiaBackupOwnedRecordScopeV1],
         context: ModelContext
@@ -1378,6 +1488,7 @@ enum MistiaSyncLocalStore {
         }
     }
 
+    @MainActor
     private static func upsertBackupTransactionAudits(
         _ rows: [MistiaBackupTransactionAuditRecordV1],
         context: ModelContext
@@ -2811,7 +2922,7 @@ enum MistiaSyncLocalStore {
     }
 }
 
-private func mistiaCloudCategoryID(
+nonisolated private func mistiaCloudCategoryID(
     for category: TransactionCategory?,
     userID: UUID
 ) -> UUID? {
@@ -3425,7 +3536,7 @@ enum MistiaBackupStore {
     }
 }
 
-private enum MistiaBackupAvatarStore {
+nonisolated private enum MistiaBackupAvatarStore {
     static func loadAssets(for profiles: [UserAccountProfile]) throws -> [MistiaBackupAvatarAssetV1] {
         try profiles.compactMap { profile in
             guard let fileName = profile.avatarFileName else { return nil }

@@ -93,9 +93,22 @@ final class SyncAndBillPauseRegressionTests: XCTestCase {
             syncVersion: 2
         )
 
-        try MistiaSyncLocalStore.mergeAccessibleTransactions(
-            [remote],
+        try MistiaSyncLocalStore.applyAccessibleFinanceSnapshot(
+            MistiaRemoteSnapshot(
+                wallets: [],
+                creditCardProfiles: [],
+                categories: [],
+                settlementGroups: [],
+                transactions: [remote],
+                budgetPlans: [],
+                savingsGoals: [],
+                recurringBillPlans: [],
+                installmentPlans: [],
+                dueOccurrences: []
+            ),
             protectedRecordIDs: [],
+            familyCategoryScopedTo: userID,
+            familyCategoryPruneOwnerIDs: [userID],
             preserveLocalNewerRows: true,
             in: container
         )

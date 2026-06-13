@@ -9,7 +9,7 @@ private enum MistiaSyncSerializationError: LocalizedError {
     }
 }
 
-enum MistiaISO8601DateCoding {
+nonisolated enum MistiaISO8601DateCoding {
     private static let withFractionalSecondsCacheKey = "MistiaISO8601DateCoding.withFractionalSeconds"
     private static let withoutFractionalSecondsCacheKey = "MistiaISO8601DateCoding.withoutFractionalSeconds"
 
@@ -48,7 +48,7 @@ enum MistiaISO8601DateCoding {
     }
 }
 
-nonisolated protocol MistiaRemoteRow: Codable {
+nonisolated protocol MistiaRemoteRow: Codable, Sendable {
     static var entity: MistiaSyncEntity { get }
 
     var id: UUID { get }
@@ -924,7 +924,7 @@ nonisolated struct RemoteDueOccurrenceRecord: MistiaRemoteRow {
     }
 }
 
-struct RemoteRowVersion: Codable {
+struct RemoteRowVersion: Codable, Sendable {
     let id: UUID
     let updatedAt: Date
     let deletedAt: Date?
@@ -940,7 +940,7 @@ struct RemoteRowVersion: Codable {
     }
 }
 
-nonisolated struct MistiaRemoteSnapshot: Codable {
+nonisolated struct MistiaRemoteSnapshot: Codable, Sendable {
     let wallets: [RemoteLedgerWallet]
     let creditCardProfiles: [RemoteCreditCardProfile]
     let categories: [RemoteTransactionCategory]
@@ -1123,7 +1123,7 @@ private extension Array where Element: MistiaRemoteRow {
     }
 }
 
-enum MistiaSyncUploadRecord {
+nonisolated enum MistiaSyncUploadRecord: Sendable {
     case wallet(RemoteLedgerWallet)
     case creditCardProfile(RemoteCreditCardProfile)
     case category(RemoteTransactionCategory)
@@ -1838,13 +1838,13 @@ extension MistiaRemoteSnapshot {
     }
 }
 
-extension MistiaSyncUploadRecord {
+nonisolated extension MistiaSyncUploadRecord {
     var storageKey: String {
         "\(entity.rawValue):\(id.uuidString.lowercased())"
     }
 }
 
-extension MistiaSyncEntity {
+nonisolated extension MistiaSyncEntity {
     var displayTitle: String {
         switch self {
         case .wallet:
@@ -1907,7 +1907,7 @@ extension MistiaSyncConflictKind {
 }
 
 extension JSONDecoder {
-    static var mistiaSyncDecoder: JSONDecoder {
+    nonisolated static var mistiaSyncDecoder: JSONDecoder {
         let decoder = JSONDecoder()
         decoder.keyDecodingStrategy = .convertFromSnakeCase
         decoder.dateDecodingStrategy = .custom { decoder in
@@ -1940,7 +1940,7 @@ extension JSONDecoder {
         return decoder
     }
 
-    static var mistiaRemoteAPIDecoder: JSONDecoder {
+    nonisolated static var mistiaRemoteAPIDecoder: JSONDecoder {
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .custom { decoder in
             let container = try decoder.singleValueContainer()
@@ -1958,7 +1958,7 @@ extension JSONDecoder {
 }
 
 extension JSONEncoder {
-    static var mistiaSyncEncoder: JSONEncoder {
+    nonisolated static var mistiaSyncEncoder: JSONEncoder {
         let encoder = JSONEncoder()
         encoder.keyEncodingStrategy = .convertToSnakeCase
         encoder.outputFormatting = [.sortedKeys]
@@ -1969,7 +1969,7 @@ extension JSONEncoder {
         return encoder
     }
 
-    static var mistiaBackupEncoder: JSONEncoder {
+    nonisolated static var mistiaBackupEncoder: JSONEncoder {
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.sortedKeys]
         encoder.dateEncodingStrategy = .custom { date, encoder in

@@ -1,6 +1,6 @@
 import Foundation
 
-enum MistiaSyncEntity: String, CaseIterable, Codable, Hashable {
+nonisolated enum MistiaSyncEntity: String, CaseIterable, Codable, Hashable, Sendable {
     case wallet = "ledger_wallets"
     case creditCardProfile = "credit_card_profiles"
     case category = "transaction_categories"
@@ -32,12 +32,12 @@ enum MistiaSyncEntity: String, CaseIterable, Codable, Hashable {
     }
 }
 
-enum MistiaSyncMutationKind: String, Codable, Hashable {
+nonisolated enum MistiaSyncMutationKind: String, Codable, Hashable, Sendable {
     case upsert
     case delete
 }
 
-struct MistiaSyncMutation: Codable, Hashable, Identifiable {
+nonisolated struct MistiaSyncMutation: Codable, Hashable, Identifiable, Sendable {
     let entity: MistiaSyncEntity
     let recordID: UUID
     let subjectUserID: UUID
@@ -79,7 +79,7 @@ struct MistiaSyncMutation: Codable, Hashable, Identifiable {
     }
 }
 
-private struct MistiaSyncMutationStorageKey: Hashable {
+nonisolated private struct MistiaSyncMutationStorageKey: Hashable {
     let entity: MistiaSyncEntity
     let recordID: UUID
 
@@ -93,7 +93,7 @@ private struct MistiaSyncMutationStorageKey: Hashable {
     }
 }
 
-final class MistiaSyncOutbox {
+nonisolated final class MistiaSyncOutbox {
     private let defaults: UserDefaults
     private let key: String
     private let encoder = JSONEncoder.mistiaSyncEncoder

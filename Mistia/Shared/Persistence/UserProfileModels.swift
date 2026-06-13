@@ -2,7 +2,7 @@ import Foundation
 import SwiftData
 
 @Model
-final class UserAccountProfile {
+nonisolated final class UserAccountProfile {
     @Attribute(.unique) var userID: UUID
     var email: String
     var displayName: String

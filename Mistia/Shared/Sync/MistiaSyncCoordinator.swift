@@ -1,5 +1,155 @@
 import Foundation
+import os
 import SwiftData
+
+nonisolated enum MistiaPerformanceSignpost {
+    private static let log = OSLog(
+        subsystem: Bundle.main.bundleIdentifier ?? "Mistia",
+        category: "SyncPerformance"
+    )
+
+    static func begin(_ name: StaticString) -> OSSignpostID {
+        let id = OSSignpostID(log: log)
+        os_signpost(.begin, log: log, name: name, signpostID: id)
+        return id
+    }
+
+    static func end(_ name: StaticString, id: OSSignpostID) {
+        os_signpost(.end, log: log, name: name, signpostID: id)
+    }
+}
+
+nonisolated struct MistiaSyncConflictSnapshot: Sendable {
+    let entity: MistiaSyncEntity
+    let localPayloadJSON: String
+    let remotePayloadJSON: String
+    let remoteVersion: Int64
+}
+
+actor MistiaSyncPersistenceWorker {
+    private let modelContainer: ModelContainer
+
+    init(modelContainer: ModelContainer) {
+        self.modelContainer = modelContainer
+    }
+
+    func exportSnapshot(for userID: UUID) throws -> MistiaRemoteSnapshot {
+        let signpostID = MistiaPerformanceSignpost.begin("Local Export")
+        defer { MistiaPerformanceSignpost.end("Local Export", id: signpostID) }
+        return try MistiaSyncLocalStore.exportSnapshot(for: userID, from: modelContainer)
+    }
+
+    func exportSnapshotForUpload(for userID: UUID) throws -> MistiaRemoteSnapshot {
+        let signpostID = MistiaPerformanceSignpost.begin("Local Export")
+        defer { MistiaPerformanceSignpost.end("Local Export", id: signpostID) }
+        return try MistiaSyncLocalStore.exportSnapshotForUpload(for: userID, from: modelContainer)
+    }
+
+    func exportRecord(for mutation: MistiaSyncMutation) throws -> MistiaSyncUploadRecord? {
+        try MistiaSyncLocalStore.exportRecord(for: mutation, from: modelContainer)
+    }
+
+    func exportCategoryRecord(
+        id: UUID,
+        subjectUserID: UUID
+    ) throws -> MistiaSyncUploadRecord? {
+        try MistiaSyncLocalStore.exportCategoryRecord(
+            remoteCategoryID: id,
+            subjectUserID: subjectUserID,
+            from: modelContainer
+        )
+    }
+
+    func fingerprint(of snapshot: MistiaRemoteSnapshot) -> String {
+        let signpostID = MistiaPerformanceSignpost.begin("Snapshot Fingerprint")
+        defer { MistiaPerformanceSignpost.end("Snapshot Fingerprint", id: signpostID) }
+        return snapshot.fingerprint
+    }
+
+    func applySnapshot(
+        _ snapshot: MistiaRemoteSnapshot,
+        protectedRecordIDs: Set<String>
+    ) throws {
+        let signpostID = MistiaPerformanceSignpost.begin("Snapshot Apply")
+        defer { MistiaPerformanceSignpost.end("Snapshot Apply", id: signpostID) }
+        try MistiaSyncLocalStore.applySnapshotIncrementally(
+            snapshot,
+            shouldPruneMissing: false,
+            protectedRecordIDs: protectedRecordIDs,
+            in: modelContainer
+        )
+    }
+
+    func applyAccessibleFinanceSnapshot(
+        _ snapshot: MistiaRemoteSnapshot,
+        protectedRecordIDs: Set<String>,
+        localUserID: UUID,
+        pruneOwnerIDs: Set<UUID>,
+        preserveLocalNewerRows: Bool
+    ) throws {
+        let signpostID = MistiaPerformanceSignpost.begin("Member Apply")
+        defer { MistiaPerformanceSignpost.end("Member Apply", id: signpostID) }
+        try MistiaSyncLocalStore.applyAccessibleFinanceSnapshot(
+            snapshot,
+            protectedRecordIDs: protectedRecordIDs,
+            familyCategoryScopedTo: localUserID,
+            familyCategoryPruneOwnerIDs: pruneOwnerIDs,
+            preserveLocalNewerRows: preserveLocalNewerRows,
+            in: modelContainer
+        )
+    }
+
+    func applyRemoteRecord(
+        _ record: MistiaSyncUploadRecord,
+        localUserID: UUID? = nil,
+        preservesLocalSystemDefaults: Bool = true
+    ) throws {
+        try MistiaSyncLocalStore.applyRemoteRecord(
+            record,
+            localUserID: localUserID,
+            preservesLocalSystemDefaults: preservesLocalSystemDefaults,
+            in: modelContainer
+        )
+    }
+
+    func fetchConflict(id: UUID) throws -> MistiaSyncConflictSnapshot? {
+        guard let conflict = try MistiaSyncLocalStore.fetchConflict(id: id, from: modelContainer) else {
+            return nil
+        }
+        return MistiaSyncConflictSnapshot(
+            entity: conflict.entity,
+            localPayloadJSON: conflict.localPayloadJSON,
+            remotePayloadJSON: conflict.remotePayloadJSON,
+            remoteVersion: conflict.remoteVersion
+        )
+    }
+
+    func removeConflict(id: UUID) throws {
+        try MistiaSyncLocalStore.removeConflict(id: id, from: modelContainer)
+    }
+
+    func saveConflictAndApplyRemote(
+        entity: MistiaSyncEntity,
+        recordID: UUID,
+        kind: MistiaSyncConflictKind,
+        localDraft: MistiaSyncUploadRecord,
+        remoteRecord: MistiaSyncUploadRecord,
+        baseVersion: Int64,
+        remoteVersion: Int64
+    ) throws {
+        try MistiaSyncLocalStore.saveConflict(
+            entity: entity,
+            recordID: recordID,
+            kind: kind,
+            localDraft: localDraft,
+            remoteRecord: remoteRecord,
+            baseVersion: baseVersion,
+            remoteVersion: remoteVersion,
+            in: modelContainer
+        )
+        try MistiaSyncLocalStore.applyRemoteRecord(remoteRecord, in: modelContainer)
+    }
+}
 
 enum MistiaSyncResult {
     case idle
@@ -53,6 +203,7 @@ private nonisolated struct SyncRemoteSystemCategoryKey: Hashable {
 @MainActor
 final class SyncCoordinator {
     private let modelContainer: ModelContainer
+    private let persistenceWorker: MistiaSyncPersistenceWorker
     private let remoteStore: MistiaRemoteStore
     private let outbox: MistiaSyncOutbox
     private let deviceID: UUID
@@ -67,6 +218,7 @@ final class SyncCoordinator {
         deviceID: UUID = MistiaSyncDeviceIdentity.current()
     ) {
         self.modelContainer = modelContainer
+        self.persistenceWorker = MistiaSyncPersistenceWorker(modelContainer: modelContainer)
         self.remoteStore = remoteStore ?? SupabaseRemoteStore()
         self.outbox = outbox ?? MistiaSyncOutbox()
         self.deviceID = deviceID
@@ -106,10 +258,7 @@ final class SyncCoordinator {
     }
 
     func previewInitialSync(session: SupabaseAuthSession) async throws -> MistiaInitialSyncPreview {
-        let localSnapshot = try MistiaSyncLocalStore.exportSnapshot(
-            for: session.user.id,
-            from: modelContainer
-        )
+        let localSnapshot = try await persistenceWorker.exportSnapshot(for: session.user.id)
         let remoteSnapshot = try await fetchReconciledSnapshot(session: session)
 
         let localCount = localSnapshot.activeRowCount
@@ -135,13 +284,9 @@ final class SyncCoordinator {
         choice: MistiaInitialSyncChoice
     ) async throws -> MistiaSyncResult {
         onProgressUpdate?(0.05)
-        let localSnapshot = try MistiaSyncLocalStore.exportSnapshot(
-            for: session.user.id,
-            from: modelContainer
-        )
-        let uploadReadyLocalSnapshot = try MistiaSyncLocalStore.exportSnapshotForUpload(
-            for: session.user.id,
-            from: modelContainer
+        let localSnapshot = try await persistenceWorker.exportSnapshot(for: session.user.id)
+        let uploadReadyLocalSnapshot = try await persistenceWorker.exportSnapshotForUpload(
+            for: session.user.id
         )
         onProgressUpdate?(0.1)
         let rawRemoteSnapshot = try await fetchReconciledSnapshot(session: session)
@@ -152,7 +297,7 @@ final class SyncCoordinator {
         let remoteCount = remoteSnapshot.activeRowCount
 
         if localCount == 0 && remoteCount == 0 {
-            lastSnapshotFingerprint = remoteSnapshot.fingerprint
+            lastSnapshotFingerprint = await persistenceWorker.fingerprint(of: remoteSnapshot)
             onProgressUpdate?(1.0)
             return .idle
         }
@@ -168,7 +313,7 @@ final class SyncCoordinator {
             let mergedSnapshot = try await fetchReconciledSnapshot(session: session)
             onProgressUpdate?(0.9)
             let mergedCount = mergedSnapshot.activeRowCount
-            try applySnapshot(mergedSnapshot)
+            try await applySnapshot(mergedSnapshot)
             onProgressUpdate?(1.0)
             return .seeded(mergedCount)
         }
@@ -180,7 +325,7 @@ final class SyncCoordinator {
             let freshSnapshot = try await fetchReconciledSnapshot(session: session)
             onProgressUpdate?(0.6)
             let freshCount = freshSnapshot.activeRowCount
-            try applySnapshot(freshSnapshot)
+            try await applySnapshot(freshSnapshot)
             onProgressUpdate?(1.0)
             return .pulled(freshCount)
         }
@@ -210,7 +355,7 @@ final class SyncCoordinator {
         let mergedSnapshot = try await fetchReconciledSnapshot(session: session)
         onProgressUpdate?(0.9)
         let mergedCount = mergedSnapshot.activeRowCount
-        try applySnapshot(mergedSnapshot)
+        try await applySnapshot(mergedSnapshot)
         onProgressUpdate?(1.0)
         return .synced(mergedCount)
     }
@@ -223,7 +368,7 @@ final class SyncCoordinator {
         let mutations = outbox.allMutations.filter { $0.subjectUserID == session.user.id }
         let mutationCount = mutations.count
 
-        let sortedMutations = sortedMutationsForPush(mutations)
+        let sortedMutations = await sortedMutationsForPush(mutations)
 
         for (index, mutation) in sortedMutations.enumerated() {
             let progress = 0.05 + (Double(index) / Double(max(1, mutationCount))) * 0.45
@@ -242,10 +387,7 @@ final class SyncCoordinator {
         }
 
         onProgressUpdate?(0.55)
-        let localSnapshot = try MistiaSyncLocalStore.exportSnapshotForUpload(
-            for: session.user.id,
-            from: modelContainer
-        )
+        let localSnapshot = try await persistenceWorker.exportSnapshotForUpload(for: session.user.id)
         var rawRemoteSnapshot = try await fetchReconciledSnapshot(session: session)
         let remoteWasEmpty = rawRemoteSnapshot.activeRowCount == 0
 
@@ -277,7 +419,7 @@ final class SyncCoordinator {
         let snapshot = rawRemoteSnapshot
         let previousFingerprint = lastSnapshotFingerprint
         let snapshotActiveCount = snapshot.activeRowCount
-        let snapshotFingerprint = try applySnapshot(snapshot)
+        let snapshotFingerprint = try await applySnapshot(snapshot)
         onProgressUpdate?(1.0)
 
         if seededMissingRows && remoteWasEmpty {
@@ -291,8 +433,8 @@ final class SyncCoordinator {
         return (pushedMutations || seededMissingRows) ? .pushedOnly : .idle
     }
 
-    private func sortedMutationsForPush(_ mutations: [MistiaSyncMutation]) -> [MistiaSyncMutation] {
-        let categoryChildRecordIDs = categoryChildRecordIDsForPushSorting(mutations)
+    private func sortedMutationsForPush(_ mutations: [MistiaSyncMutation]) async -> [MistiaSyncMutation] {
+        let categoryChildRecordIDs = await categoryChildRecordIDsForPushSorting(mutations)
 
         return mutations.sorted { a, b in
             if a.entity.pushPriority != b.entity.pushPriority {
@@ -311,14 +453,14 @@ final class SyncCoordinator {
         }
     }
 
-    private func categoryChildRecordIDsForPushSorting(_ mutations: [MistiaSyncMutation]) -> Set<UUID> {
+    private func categoryChildRecordIDsForPushSorting(_ mutations: [MistiaSyncMutation]) async -> Set<UUID> {
         let categoryMutations = mutations.filter { $0.entity == .category }
         guard !categoryMutations.isEmpty else { return [] }
 
         var childRecordIDs: Set<UUID> = []
         var inspectedRecordIDs: Set<UUID> = []
         for mutation in categoryMutations where inspectedRecordIDs.insert(mutation.recordID).inserted {
-            guard let record = try? MistiaSyncLocalStore.exportRecord(for: mutation, from: modelContainer),
+            guard let record = try? await persistenceWorker.exportRecord(for: mutation),
                   record.parentID != nil else {
                 continue
             }
@@ -332,7 +474,7 @@ final class SyncCoordinator {
         session: SupabaseAuthSession
     ) async throws -> Bool {
         var pushedMutations = false
-        let sortedMutations = sortedMutationsForPush(mutations)
+        let sortedMutations = await sortedMutationsForPush(mutations)
 
         for mutation in sortedMutations {
             switch mutation.kind {
@@ -363,7 +505,7 @@ final class SyncCoordinator {
 
         for ownerID in ownerIDs {
             let ownerMutations = groupedByOwner[ownerID] ?? []
-            for mutation in sortedMutationsForPush(ownerMutations) {
+            for mutation in await sortedMutationsForPush(ownerMutations) {
                 switch mutation.kind {
                 case .upsert:
                     if try await processFamilyOwnerUpsertMutation(mutation, session: session) {
@@ -385,7 +527,7 @@ final class SyncCoordinator {
         resolution: MistiaSyncConflictResolution,
         session: SupabaseAuthSession
     ) async throws {
-        guard let conflict = try MistiaSyncLocalStore.fetchConflict(id: id, from: modelContainer) else {
+        guard let conflict = try await persistenceWorker.fetchConflict(id: id) else {
             return
         }
 
@@ -395,12 +537,11 @@ final class SyncCoordinator {
                 entity: conflict.entity,
                 jsonString: conflict.remotePayloadJSON
             )
-            try MistiaSyncLocalStore.applyRemoteRecord(
+            try await persistenceWorker.applyRemoteRecord(
                 remoteRecord,
-                preservesLocalSystemDefaults: false,
-                in: modelContainer
+                preservesLocalSystemDefaults: false
             )
-            try MistiaSyncLocalStore.removeConflict(id: id, from: modelContainer)
+            try await persistenceWorker.removeConflict(id: id)
         case .useLocal:
             let localRecord = try MistiaSyncUploadRecord.decode(
                 entity: conflict.entity,
@@ -412,7 +553,7 @@ final class SyncCoordinator {
                 remoteVersion: conflict.remoteVersion,
                 session: session
             )
-            try MistiaSyncLocalStore.removeConflict(id: id, from: modelContainer)
+            try await persistenceWorker.removeConflict(id: id)
         }
     }
 
@@ -420,10 +561,7 @@ final class SyncCoordinator {
         _ mutation: MistiaSyncMutation,
         session: SupabaseAuthSession
     ) async throws -> Bool {
-        guard let localRecord = try MistiaSyncLocalStore.exportRecord(
-            for: mutation,
-            from: modelContainer
-        ) else {
+        guard let localRecord = try await persistenceWorker.exportRecord(for: mutation) else {
             outbox.remove(mutation)
             return false
         }
@@ -441,7 +579,7 @@ final class SyncCoordinator {
         )
 
         if let remoteRecord, remoteRecord.payloadFingerprint == localRecord.payloadFingerprint {
-            try MistiaSyncLocalStore.applyRemoteRecord(remoteRecord, in: modelContainer)
+            try await persistenceWorker.applyRemoteRecord(remoteRecord)
             try await createFamilyActivityNotificationIfNeeded(
                 for: remoteRecord,
                 subjectUserID: mutation.subjectUserID,
@@ -477,7 +615,7 @@ final class SyncCoordinator {
                 subjectUserID: mutation.subjectUserID,
                 session: session
             )
-            try MistiaSyncLocalStore.applyRemoteRecord(created, in: modelContainer)
+            try await persistenceWorker.applyRemoteRecord(created)
             try await createFamilyActivityNotificationIfNeeded(
                 for: created,
                 subjectUserID: mutation.subjectUserID,
@@ -537,7 +675,7 @@ final class SyncCoordinator {
             subjectUserID: mutation.subjectUserID,
             session: session
         ) {
-            try MistiaSyncLocalStore.applyRemoteRecord(updated, in: modelContainer)
+            try await persistenceWorker.applyRemoteRecord(updated)
             try await createFamilyActivityNotificationIfNeeded(
                 for: updated,
                 subjectUserID: mutation.subjectUserID,
@@ -574,10 +712,7 @@ final class SyncCoordinator {
         _ mutation: MistiaSyncMutation,
         session: SupabaseAuthSession
     ) async throws -> Bool {
-        guard let localRecord = try MistiaSyncLocalStore.exportRecord(
-            for: mutation,
-            from: modelContainer
-        ) else {
+        guard let localRecord = try await persistenceWorker.exportRecord(for: mutation) else {
             outbox.remove(mutation)
             return false
         }
@@ -595,7 +730,7 @@ final class SyncCoordinator {
         }
 
         if remoteRecord.deletedAt != nil {
-            try MistiaSyncLocalStore.applyRemoteRecord(remoteRecord, in: modelContainer)
+            try await persistenceWorker.applyRemoteRecord(remoteRecord)
             outbox.remove(mutation)
             return false
         }
@@ -625,7 +760,7 @@ final class SyncCoordinator {
             deviceID: deviceID,
             session: session
         ) {
-            try MistiaSyncLocalStore.applyRemoteRecord(deletedRecord, in: modelContainer)
+            try await persistenceWorker.applyRemoteRecord(deletedRecord)
             try await createFamilyActivityNotificationIfNeeded(
                 for: deletedRecord,
                 subjectUserID: mutation.subjectUserID,
@@ -644,7 +779,7 @@ final class SyncCoordinator {
         ) ?? synthesizedDeletedRecord(from: localRecord, remoteVersion: mutation.baseVersion + 1)
 
         if latestRemote.deletedAt != nil {
-            try MistiaSyncLocalStore.applyRemoteRecord(latestRemote, in: modelContainer)
+            try await persistenceWorker.applyRemoteRecord(latestRemote)
             outbox.remove(mutation)
             return false
         }
@@ -668,10 +803,7 @@ final class SyncCoordinator {
         _ mutation: MistiaSyncMutation,
         session: SupabaseAuthSession
     ) async throws -> Bool {
-        guard let localRecord = try MistiaSyncLocalStore.exportRecord(
-            for: mutation,
-            from: modelContainer
-        ) else {
+        guard let localRecord = try await persistenceWorker.exportRecord(for: mutation) else {
             outbox.remove(mutation)
             return false
         }
@@ -683,10 +815,9 @@ final class SyncCoordinator {
         )
 
         if let remoteRecord, remoteRecord.payloadFingerprint == localRecord.payloadFingerprint {
-            try MistiaSyncLocalStore.applyRemoteRecord(
+            try await persistenceWorker.applyRemoteRecord(
                 remoteRecord,
-                localUserID: session.user.id,
-                in: modelContainer
+                localUserID: session.user.id
             )
             outbox.remove(mutation)
             return false
@@ -702,10 +833,9 @@ final class SyncCoordinator {
                 subjectUserID: mutation.subjectUserID,
                 session: session
             )
-            try MistiaSyncLocalStore.applyRemoteRecord(
+            try await persistenceWorker.applyRemoteRecord(
                 created,
-                localUserID: session.user.id,
-                in: modelContainer
+                localUserID: session.user.id
             )
             try await createFamilyActivityNotificationIfNeeded(
                 for: created,
@@ -734,10 +864,9 @@ final class SyncCoordinator {
             throw MistiaFamilyCloudFirstPushError.remoteChanged(mutation)
         }
 
-        try MistiaSyncLocalStore.applyRemoteRecord(
+        try await persistenceWorker.applyRemoteRecord(
             updated,
-            localUserID: session.user.id,
-            in: modelContainer
+            localUserID: session.user.id
         )
         try await createFamilyActivityNotificationIfNeeded(
             for: updated,
@@ -753,10 +882,7 @@ final class SyncCoordinator {
         _ mutation: MistiaSyncMutation,
         session: SupabaseAuthSession
     ) async throws -> Bool {
-        guard let localRecord = try MistiaSyncLocalStore.exportRecord(
-            for: mutation,
-            from: modelContainer
-        ) else {
+        guard let localRecord = try await persistenceWorker.exportRecord(for: mutation) else {
             outbox.remove(mutation)
             return false
         }
@@ -772,10 +898,9 @@ final class SyncCoordinator {
         }
 
         if remoteRecord.deletedAt != nil {
-            try MistiaSyncLocalStore.applyRemoteRecord(
+            try await persistenceWorker.applyRemoteRecord(
                 remoteRecord,
-                localUserID: session.user.id,
-                in: modelContainer
+                localUserID: session.user.id
             )
             outbox.remove(mutation)
             return false
@@ -797,10 +922,9 @@ final class SyncCoordinator {
             throw MistiaFamilyCloudFirstPushError.remoteChanged(mutation)
         }
 
-        try MistiaSyncLocalStore.applyRemoteRecord(
+        try await persistenceWorker.applyRemoteRecord(
             deletedRecord,
-            localUserID: session.user.id,
-            in: modelContainer
+            localUserID: session.user.id
         )
         try await createFamilyActivityNotificationIfNeeded(
             for: deletedRecord,
@@ -975,10 +1099,9 @@ final class SyncCoordinator {
             return
         }
 
-        guard let categoryRecord = try MistiaSyncLocalStore.exportCategoryRecord(
-            remoteCategoryID: categoryID,
-            subjectUserID: subjectUserID,
-            from: modelContainer
+        guard let categoryRecord = try await persistenceWorker.exportCategoryRecord(
+            id: categoryID,
+            subjectUserID: subjectUserID
         ) else {
             return
         }
@@ -997,10 +1120,9 @@ final class SyncCoordinator {
             subjectUserID: subjectUserID,
             session: session
         )
-        try MistiaSyncLocalStore.applyRemoteRecord(
+        try await persistenceWorker.applyRemoteRecord(
             upsertedCategory,
-            localUserID: localUserID,
-            in: modelContainer
+            localUserID: localUserID
         )
     }
 
@@ -1034,10 +1156,9 @@ final class SyncCoordinator {
             return
         }
 
-        guard let parentRecord = try MistiaSyncLocalStore.exportCategoryRecord(
-            remoteCategoryID: parentID,
-            subjectUserID: subjectUserID,
-            from: modelContainer
+        guard let parentRecord = try await persistenceWorker.exportCategoryRecord(
+            id: parentID,
+            subjectUserID: subjectUserID
         ) else {
             return
         }
@@ -1056,10 +1177,9 @@ final class SyncCoordinator {
             subjectUserID: subjectUserID,
             session: session
         )
-        try MistiaSyncLocalStore.applyRemoteRecord(
+        try await persistenceWorker.applyRemoteRecord(
             upsertedParent,
-            localUserID: localUserID,
-            in: modelContainer
+            localUserID: localUserID
         )
     }
 
@@ -1090,7 +1210,9 @@ final class SyncCoordinator {
         session: SupabaseAuthSession,
         subjectUserID: UUID? = nil
     ) async throws -> MistiaRemoteSnapshot {
-        try await remoteStore.fetchSnapshot(session: session, subjectUserID: subjectUserID)
+        let signpostID = MistiaPerformanceSignpost.begin("Remote Fetch")
+        defer { MistiaPerformanceSignpost.end("Remote Fetch", id: signpostID) }
+        return try await remoteStore.fetchSnapshot(session: session, subjectUserID: subjectUserID)
     }
 
     private func fetchReconciledSnapshot(
@@ -1337,17 +1459,15 @@ final class SyncCoordinator {
     }
 
     @discardableResult
-    private func applySnapshot(_ snapshot: MistiaRemoteSnapshot) throws -> String {
-        let fingerprint = snapshot.fingerprint
+    private func applySnapshot(_ snapshot: MistiaRemoteSnapshot) async throws -> String {
+        let fingerprint = await persistenceWorker.fingerprint(of: snapshot)
         guard fingerprint != lastSnapshotFingerprint else {
             return fingerprint
         }
 
-        try MistiaSyncLocalStore.applySnapshotIncrementally(
+        try await persistenceWorker.applySnapshot(
             snapshot,
-            shouldPruneMissing: false,
-            protectedRecordIDs: queuedMutationIDs(),
-            in: modelContainer
+            protectedRecordIDs: queuedMutationIDs()
         )
         lastSnapshotFingerprint = fingerprint
         return fingerprint
@@ -1374,10 +1494,10 @@ final class SyncCoordinator {
             )
             return true
         case .remote:
-            try MistiaSyncLocalStore.applyRemoteRecord(remoteRecord, in: modelContainer)
+            try await persistenceWorker.applyRemoteRecord(remoteRecord)
             return false
         case .unresolved:
-            try handleConflict(
+            try await handleConflict(
                 entity: entity,
                 recordID: recordID,
                 kind: kind,
@@ -1411,7 +1531,7 @@ final class SyncCoordinator {
             subjectUserID: subjectUserID,
             session: session
         )
-        try MistiaSyncLocalStore.applyRemoteRecord(pushedRecord, in: modelContainer)
+        try await persistenceWorker.applyRemoteRecord(pushedRecord)
         try await createFamilyActivityNotificationIfNeeded(
             for: pushedRecord,
             subjectUserID: subjectUserID,
@@ -1687,18 +1807,16 @@ final class SyncCoordinator {
         remoteRecord: MistiaSyncUploadRecord,
         baseVersion: Int64,
         remoteVersion: Int64
-    ) throws {
-        try MistiaSyncLocalStore.saveConflict(
+    ) async throws {
+        try await persistenceWorker.saveConflictAndApplyRemote(
             entity: entity,
             recordID: recordID,
             kind: kind,
             localDraft: localDraft,
             remoteRecord: remoteRecord,
             baseVersion: baseVersion,
-            remoteVersion: remoteVersion,
-            in: modelContainer
+            remoteVersion: remoteVersion
         )
-        try MistiaSyncLocalStore.applyRemoteRecord(remoteRecord, in: modelContainer)
     }
 
     private func hierarchicalSorted(_ records: [MistiaSyncUploadRecord]) -> [MistiaSyncUploadRecord] {

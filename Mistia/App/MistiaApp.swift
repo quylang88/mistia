@@ -58,17 +58,22 @@ struct MistiaApp: App {
                     sessionStore.setSubjectUserIDProvider { [weak store] in
                         store?.selectedSubjectUserID
                     }
-                    sessionStore.setPostSyncRefreshHandler { [weak store, sessionStore] in
+                    sessionStore.setPostSyncRefreshHandler { [weak store, sessionStore] trigger in
                         guard let store else { return }
+                        guard trigger == .manual || trigger == .backgroundRefresh || trigger == .initial else {
+                            return
+                        }
                         await store.refreshLatest(
                             sessionStore: sessionStore,
-                            source: .postManualSync
+                            source: .postSync
                         )
+                        let signpostID = MistiaPerformanceSignpost.begin("Maintenance")
                         await MistiaDueMaintenance.run(
                             modelContext: sessionStore.currentModelContainer.mainContext,
                             sessionStore: sessionStore,
                             familyContextStore: store
                         )
+                        MistiaPerformanceSignpost.end("Maintenance", id: signpostID)
                     }
                     familyContextStore.setModelContainer(sessionStore.currentModelContainer)
                     await runStartupTasks()
@@ -77,7 +82,7 @@ struct MistiaApp: App {
                 .onChange(of: scenePhase) { _, newPhase in
                     switch newPhase {
                     case .active:
-                        sessionStore.handleSceneDidBecomeActive(runsForegroundCatchUp: false)
+                        sessionStore.handleSceneDidBecomeActive()
                         if !sessionStore.isBootstrapping {
                             scheduleDeferredStartupWork()
                         }
@@ -155,9 +160,8 @@ struct MistiaApp: App {
         }
 
         _ = await sessionStore.runDeferredStartupSyncIfNeeded()
-        await MistiaCurrencyRateMaintenance.refreshIfNeeded()
-        await runCategoryTranslationMaintenance()
-        await runDueMaintenance()
+        // Heavy network/persistence maintenance now runs after manual, initial,
+        // or background sync. Active startup only validates the restored session.
     }
 
     @MainActor

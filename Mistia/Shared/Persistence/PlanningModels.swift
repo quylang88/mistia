@@ -1,10 +1,10 @@
 import Foundation
 import SwiftData
 
-let recurringBillPausedScheduleKindRawValue = "pausedRecurring"
+nonisolated let recurringBillPausedScheduleKindRawValue = "pausedRecurring"
 
 @Model
-final class BudgetPlan {
+nonisolated final class BudgetPlan {
     @Attribute(.unique) var id: UUID
     @Relationship(deleteRule: .nullify) var category: TransactionCategory?
     var categoryIDSnapshot: UUID?
@@ -104,7 +104,7 @@ final class BudgetPlan {
 }
 
 @Model
-final class SavingsGoal {
+nonisolated final class SavingsGoal {
     @Attribute(.unique) var id: UUID
     var name: String
     var iconSymbolName: String
@@ -154,7 +154,7 @@ final class SavingsGoal {
 }
 
 @Model
-final class RecurringBillPlan {
+nonisolated final class RecurringBillPlan {
     @Attribute(.unique) var id: UUID
     var name: String
     var iconSymbolName: String
@@ -271,7 +271,7 @@ final class RecurringBillPlan {
 }
 
 @Model
-final class InstallmentPlan {
+nonisolated final class InstallmentPlan {
     @Attribute(.unique) var id: UUID
     var name: String
     var iconSymbolName: String
@@ -321,7 +321,7 @@ final class InstallmentPlan {
 }
 
 @Model
-final class DueOccurrenceRecord {
+nonisolated final class DueOccurrenceRecord {
     @Attribute(.unique) var id: UUID
     var sourceKindRawValue: String
     var sourceID: UUID

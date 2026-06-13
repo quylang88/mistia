@@ -496,6 +496,126 @@ final class SessionStoreOfflineTests: XCTestCase {
         )
     }
 
+    func testFamilyMemberRefreshCoalescesRequestsForTheSameMember() async throws {
+        let currentUserID = UUID()
+        let memberUserID = UUID()
+        let session = makeSession(userID: currentUserID)
+        let container = try storeTestContainer()
+        let store = try makeSessionStore(
+            authService: SessionAuthServiceSpy(
+                persistedSession: session,
+                refreshResult: .success(session)
+            ),
+            userProfileStore: UserProfileStoreSpy(),
+            networkStatus: .connected,
+            modelContainer: container
+        )
+        let familyService = FamilyRemoteServiceSpy(
+            snapshot: makeFamilySnapshot(userID: currentUserID, ownerUserID: memberUserID)
+        )
+        familyService.fetchFinanceDelayNanoseconds = 200_000_000
+        let familyStore = FamilyContextStore(
+            modelContainer: container,
+            service: familyService
+        )
+
+        await store.bootstrapIfNeeded()
+        await familyStore.refreshFamilyMetadata(sessionStore: store)
+        guard let member = familyStore.members.first(where: { $0.userID == memberUserID }) else {
+            return XCTFail("Expected member")
+        }
+        familyStore.activateMemberView(member)
+
+        async let first: Void = familyStore.refreshMemberFinance(
+            sessionStore: store,
+            memberUserID: memberUserID
+        )
+        await waitUntil("member refresh to start") {
+            familyService.accessibleFinanceUserIDBatches.count == 1
+        }
+        XCTAssertTrue(familyStore.isRefreshingViewedMemberFinance)
+
+        async let second: Void = familyStore.refreshMemberFinance(
+            sessionStore: store,
+            memberUserID: memberUserID
+        )
+        _ = await (first, second)
+
+        XCTAssertEqual(familyService.accessibleFinanceUserIDBatches.count, 1)
+        XCTAssertFalse(familyStore.isRefreshingViewedMemberFinance)
+    }
+
+    func testFamilyMemberRefreshCancelsStaleRequestWhenViewedMemberChanges() async throws {
+        let currentUserID = UUID()
+        let firstMemberUserID = UUID()
+        let secondMemberUserID = UUID()
+        let session = makeSession(userID: currentUserID)
+        let container = try storeTestContainer()
+        let store = try makeSessionStore(
+            authService: SessionAuthServiceSpy(
+                persistedSession: session,
+                refreshResult: .success(session)
+            ),
+            userProfileStore: UserProfileStoreSpy(),
+            networkStatus: .connected,
+            modelContainer: container
+        )
+        var snapshot = makeFamilySnapshot(userID: currentUserID, ownerUserID: firstMemberUserID)
+        snapshot.members.append(
+            FamilyMember(
+                membershipID: UUID(),
+                familyID: snapshot.family!.id,
+                userID: secondMemberUserID,
+                displayName: "Second member",
+                avatarURL: nil,
+                role: .member,
+                policy: .preset(for: .member),
+                isCurrentUser: false
+            )
+        )
+        let familyService = FamilyRemoteServiceSpy(snapshot: snapshot)
+        familyService.fetchFinanceDelayNanoseconds = 300_000_000
+        let familyStore = FamilyContextStore(
+            modelContainer: container,
+            service: familyService
+        )
+
+        await store.bootstrapIfNeeded()
+        await familyStore.refreshFamilyMetadata(sessionStore: store)
+        let firstMember = try XCTUnwrap(
+            familyStore.members.first(where: { $0.userID == firstMemberUserID })
+        )
+        let secondMember = try XCTUnwrap(
+            familyStore.members.first(where: { $0.userID == secondMemberUserID })
+        )
+
+        familyStore.activateMemberView(firstMember)
+        let firstTask = Task {
+            await familyStore.refreshMemberFinance(
+                sessionStore: store,
+                memberUserID: firstMemberUserID
+            )
+        }
+        await waitUntil("first member refresh to start") {
+            familyService.accessibleFinanceUserIDBatches.count == 1
+        }
+
+        familyStore.activateMemberView(secondMember)
+        await familyStore.refreshMemberFinance(
+            sessionStore: store,
+            memberUserID: secondMemberUserID
+        )
+        await firstTask.value
+
+        XCTAssertEqual(
+            familyService.accessibleFinanceUserIDBatches.map(Set.init),
+            [Set([firstMemberUserID]), Set([secondMemberUserID])]
+        )
+        XCTAssertEqual(familyStore.viewedMember?.userID, secondMemberUserID)
+        XCTAssertFalse(familyStore.isRefreshingViewedMemberFinance)
+        XCTAssertNil(familyStore.lastErrorMessage)
+    }
+
     func testQueuedLocalMutationWaitsForAutomaticCadenceInsteadOfImmediateSync() async throws {
         let session = makeSession()
         let container = try storeTestContainer()
@@ -708,7 +828,7 @@ final class SessionStoreOfflineTests: XCTestCase {
         XCTAssertEqual(familyService.accessibleFinanceUserIDBatches.map(Set.init), [Set([memberUserID])])
     }
 
-    func testForegroundCatchUpRunsWhenLastSyncIsOlderThanTwentyMinutes() async throws {
+    func testForegroundActivationDoesNotRunAutomaticSyncWhenLastSyncIsOverdue() async throws {
         let session = makeSession()
         let container = try storeTestContainer()
         let syncRemoteStore = SessionSyncRemoteStoreSpy()
@@ -737,9 +857,113 @@ final class SessionStoreOfflineTests: XCTestCase {
 
         store.handleSceneDidBecomeActive()
 
-        await waitUntil("foreground catch-up syncs after twenty minutes") {
-            syncRemoteStore.fetchSnapshotCallCount > 0
+        try? await Task.sleep(for: .milliseconds(250))
+        XCTAssertEqual(syncRemoteStore.fetchSnapshotCallCount, 0)
+    }
+
+    func testManualSyncReportsManualPostSyncTrigger() async throws {
+        let session = makeSession()
+        let container = try storeTestContainer()
+        let syncRemoteStore = SessionSyncRemoteStoreSpy()
+        let store = try makeSessionStore(
+            authService: SessionAuthServiceSpy(
+                persistedSession: session,
+                refreshResult: .success(session)
+            ),
+            userProfileStore: UserProfileStoreSpy(),
+            networkStatus: .connected,
+            modelContainer: container,
+            syncCoordinator: SyncCoordinator(
+                modelContainer: container,
+                remoteStore: syncRemoteStore,
+                outbox: MistiaSyncOutbox(
+                    defaults: UserDefaults(suiteName: "MistiaTests.\(UUID().uuidString)") ?? .standard,
+                    key: "manual-post-sync-trigger"
+                )
+            )
+        )
+        var receivedTriggers: [SessionSyncTrigger] = []
+
+        await store.bootstrapIfNeeded()
+        store.requiresInitialSync = false
+        store.setPostSyncRefreshHandler { trigger in
+            receivedTriggers.append(trigger)
         }
+
+        let didSync = await store.syncNow(isManual: true)
+        XCTAssertTrue(didSync)
+        XCTAssertEqual(receivedTriggers, [.manual])
+    }
+
+    func testBackgroundRefreshReportsBackgroundPostSyncTrigger() async throws {
+        let session = makeSession()
+        let container = try storeTestContainer()
+        let syncRemoteStore = SessionSyncRemoteStoreSpy()
+        let store = try makeSessionStore(
+            authService: SessionAuthServiceSpy(
+                persistedSession: session,
+                refreshResult: .success(session)
+            ),
+            userProfileStore: UserProfileStoreSpy(),
+            networkStatus: .connected,
+            modelContainer: container,
+            syncCoordinator: SyncCoordinator(
+                modelContainer: container,
+                remoteStore: syncRemoteStore,
+                outbox: MistiaSyncOutbox(
+                    defaults: UserDefaults(suiteName: "MistiaTests.\(UUID().uuidString)") ?? .standard,
+                    key: "background-post-sync-trigger"
+                )
+            )
+        )
+        var receivedTriggers: [SessionSyncTrigger] = []
+
+        await store.bootstrapIfNeeded()
+        store.requiresInitialSync = false
+        store.lastSyncAt = Date().addingTimeInterval(-1_201)
+        store.setAutoSyncEnabled(true)
+        store.setPostSyncRefreshHandler { trigger in
+            receivedTriggers.append(trigger)
+        }
+
+        let didSync = await store.handleBackgroundRefresh()
+
+        XCTAssertTrue(didSync)
+        XCTAssertEqual(syncRemoteStore.fetchSnapshotCallCount, 2)
+        XCTAssertEqual(receivedTriggers, [.backgroundRefresh])
+    }
+
+    func testDeferredActiveStartupDoesNotFetchSyncSnapshotAfterInitialSyncCompleted() async throws {
+        let session = makeSession()
+        let container = try storeTestContainer()
+        let syncRemoteStore = SessionSyncRemoteStoreSpy()
+        let store = try makeSessionStore(
+            authService: SessionAuthServiceSpy(
+                persistedSession: session,
+                refreshResult: .success(session)
+            ),
+            userProfileStore: UserProfileStoreSpy(),
+            networkStatus: .connected,
+            modelContainer: container,
+            syncCoordinator: SyncCoordinator(
+                modelContainer: container,
+                remoteStore: syncRemoteStore,
+                outbox: MistiaSyncOutbox(
+                    defaults: UserDefaults(suiteName: "MistiaTests.\(UUID().uuidString)") ?? .standard,
+                    key: "deferred-startup-no-sync"
+                )
+            )
+        )
+
+        await store.bootstrapIfNeeded()
+        store.requiresInitialSync = false
+        store.lastSyncAt = Date().addingTimeInterval(-1_201)
+        store.setAutoSyncEnabled(true)
+
+        let didSync = await store.runDeferredStartupSyncIfNeeded()
+
+        XCTAssertFalse(didSync)
+        XCTAssertEqual(syncRemoteStore.fetchSnapshotCallCount, 0)
     }
 
     func testFamilyOverviewRefreshCoalescesRapidRequests() async throws {
@@ -1977,6 +2201,7 @@ private final class FamilyRemoteServiceSpy: FamilyRemoteServicing {
     private(set) var createPermissionRequestCallCount = 0
     private(set) var accessibleFinanceUserIDBatches: [[UUID]] = []
     var fetchStateDelayNanoseconds: UInt64?
+    var fetchFinanceDelayNanoseconds: UInt64?
     var fetchStateError: Error?
 
     init(snapshot: FamilyStateSnapshot) {
@@ -2057,6 +2282,9 @@ private final class FamilyRemoteServiceSpy: FamilyRemoteServicing {
         session: SupabaseAuthSession
     ) async throws -> MistiaRemoteSnapshot {
         accessibleFinanceUserIDBatches.append(userIDs)
+        if let fetchFinanceDelayNanoseconds {
+            try await Task.sleep(nanoseconds: fetchFinanceDelayNanoseconds)
+        }
         return .empty
     }
 

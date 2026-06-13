@@ -2,7 +2,7 @@ import Foundation
 import SwiftData
 
 @Model
-final class SyncConflict {
+nonisolated final class SyncConflict {
     @Attribute(.unique) var id: UUID
     var entityRawValue: String
     var recordID: UUID

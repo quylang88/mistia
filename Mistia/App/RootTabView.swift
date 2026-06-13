@@ -133,6 +133,14 @@ struct RootTabView: View {
 
         NotificationBadgeObserver()
 
+        if familyContextStore.isRefreshingViewedMemberFinance {
+          memberFinanceRefreshBadge
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+            .padding(.top, proxy.safeAreaInsets.top + 12)
+            .allowsHitTesting(false)
+            .transition(.opacity.combined(with: .scale(scale: 0.96)))
+        }
+
         if isQuickCreateMenuVisible, quickCreateAnchorFrame.width > 0 {
           Color.black
             .opacity(isQuickCreateMenuExpanded ? (colorScheme == .dark ? 0.18 : 0.08) : 0)
@@ -251,6 +259,16 @@ struct RootTabView: View {
 
   private var shortcutAccent: Color {
     colorScheme == .dark ? MistiaAccent.lightPurple.color : MistiaAccent.purple.color
+  }
+
+  private var memberFinanceRefreshBadge: some View {
+    ProgressView()
+      .controlSize(.small)
+      .padding(.horizontal, 12)
+      .padding(.vertical, 8)
+      .background(.ultraThinMaterial, in: Capsule())
+      .shadow(color: .black.opacity(colorScheme == .dark ? 0.22 : 0.08), radius: 10, y: 4)
+      .accessibilityLabel(Text(L10n.app.mistia.loadingYourData))
   }
 
   private var storedShortcutSelection: MistiaShortcutSelection {

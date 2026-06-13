@@ -1631,6 +1631,12 @@ private struct FamilyOverviewHeader: View {
                                     familyContextStore.activateSelfView()
                                 } else {
                                     familyContextStore.activateMemberView(member)
+                                    Task { @MainActor in
+                                        await familyContextStore.refreshMemberFinance(
+                                            sessionStore: sessionStore,
+                                            memberUserID: member.userID
+                                        )
+                                    }
                                 }
                             }
                         } label: {
@@ -1674,6 +1680,12 @@ private struct FamilyOverviewHeader: View {
                                         familyContextStore.activateSelfView()
                                     } else {
                                         familyContextStore.activateMemberView(member)
+                                        Task { @MainActor in
+                                            await familyContextStore.refreshMemberFinance(
+                                                sessionStore: sessionStore,
+                                                memberUserID: member.userID
+                                            )
+                                        }
                                     }
                                 } label: {
                                     Label(L10n.family.family.viewDetails, systemImage: "eye.fill")

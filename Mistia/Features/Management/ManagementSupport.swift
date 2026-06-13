@@ -160,6 +160,7 @@ enum ManagementPresetData {
 }
 
 extension LedgerWallet {
+    @MainActor
     var iconColor: Color {
         Color(hex: iconColorHex)
     }
@@ -193,6 +194,7 @@ extension LedgerWallet {
 }
 
 extension TransactionCategory {
+    @MainActor
     var iconColor: Color {
         Color(hex: iconColorHex)
     }
