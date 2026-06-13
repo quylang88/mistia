@@ -8,25 +8,105 @@ extension View {
     }
 }
 
-struct MistiaCurrencyInputField: UIViewRepresentable {
+struct MistiaCurrencyInputField: View {
     let placeholder: String
     @Binding var text: String
     var font: UIFont = .mistiaRounded(size: 17, weight: .regular)
     var textColor: UIColor = .label
     var placeholderColor: UIColor = .tertiaryLabel
+    var showsCalculatorButton: Bool = true
+
+    @Environment(\.isEnabled) private var isEnabled
+    @Environment(\.multilineTextAlignment) private var multilineTextAlignment
+    @State private var isCalculatorPresented = false
 
     init(
         _ placeholder: String,
         text: Binding<String>,
         font: UIFont = .mistiaRounded(size: 17, weight: .regular),
         textColor: UIColor = .label,
-        placeholderColor: UIColor = .tertiaryLabel
+        placeholderColor: UIColor = .tertiaryLabel,
+        showsCalculatorButton: Bool = true
     ) {
         self.placeholder = placeholder
         self._text = text
         self.font = font
         self.textColor = textColor
         self.placeholderColor = placeholderColor
+        self.showsCalculatorButton = showsCalculatorButton
+    }
+
+    var body: some View {
+        HStack(spacing: 8) {
+            MistiaCurrencyUITextField(
+                placeholder,
+                text: $text,
+                font: font,
+                textColor: textColor,
+                placeholderColor: placeholderColor,
+                textAlignment: multilineTextAlignment.uiTextAlignment,
+                isEnabled: isEnabled
+            )
+            .frame(maxWidth: .infinity, alignment: multilineTextAlignment.frameAlignment)
+
+            if showsCalculatorButton {
+                Button {
+                    UIApplication.shared.sendAction(
+                        #selector(UIResponder.resignFirstResponder),
+                        to: nil,
+                        from: nil,
+                        for: nil
+                    )
+                    isCalculatorPresented = true
+                } label: {
+                    Image(systemName: "plus.forwardslash.minus")
+                        .font(.system(size: 13, weight: .bold))
+                        .foregroundStyle(MistiaAccent.checkmarkPurple.color)
+                        .frame(width: 30, height: 30)
+                        .background {
+                            Circle()
+                                .fill(Color(UIColor.tertiarySystemFill))
+                        }
+                }
+                .buttonStyle(.plain)
+                .disabled(!isEnabled)
+                .opacity(isEnabled ? 1 : 0.4)
+                .accessibilityLabel(L10n.shared.amountCalculator.openCalculator)
+            }
+        }
+        .sheet(isPresented: $isCalculatorPresented) {
+            MistiaAmountCalculatorSheet(initialText: text) { committedText in
+                text = committedText
+            }
+        }
+    }
+}
+
+private struct MistiaCurrencyUITextField: UIViewRepresentable {
+    let placeholder: String
+    @Binding var text: String
+    var font: UIFont
+    var textColor: UIColor
+    var placeholderColor: UIColor
+    var textAlignment: NSTextAlignment
+    var isEnabled: Bool
+
+    init(
+        _ placeholder: String,
+        text: Binding<String>,
+        font: UIFont,
+        textColor: UIColor,
+        placeholderColor: UIColor,
+        textAlignment: NSTextAlignment,
+        isEnabled: Bool
+    ) {
+        self.placeholder = placeholder
+        self._text = text
+        self.font = font
+        self.textColor = textColor
+        self.placeholderColor = placeholderColor
+        self.textAlignment = textAlignment
+        self.isEnabled = isEnabled
     }
 
     func makeUIView(context: Context) -> UITextField {
@@ -34,6 +114,8 @@ struct MistiaCurrencyInputField: UIViewRepresentable {
         textField.keyboardType = .numberPad
         textField.font = font
         textField.textColor = textColor
+        textField.textAlignment = textAlignment
+        textField.isEnabled = isEnabled
         textField.adjustsFontForContentSizeCategory = true
         textField.delegate = context.coordinator
         textField.addTarget(
@@ -49,6 +131,8 @@ struct MistiaCurrencyInputField: UIViewRepresentable {
         context.coordinator.parent = self
         uiView.font = font
         uiView.textColor = textColor
+        uiView.textAlignment = textAlignment
+        uiView.isEnabled = isEnabled
         applyPlaceholder(to: uiView)
 
         let grouped = MistiaCurrencyInputFormatting.groupedInput(text)
@@ -69,9 +153,9 @@ struct MistiaCurrencyInputField: UIViewRepresentable {
     }
 
     final class Coordinator: NSObject, UITextFieldDelegate {
-        var parent: MistiaCurrencyInputField
+        var parent: MistiaCurrencyUITextField
 
-        init(parent: MistiaCurrencyInputField) {
+        init(parent: MistiaCurrencyUITextField) {
             self.parent = parent
         }
 
@@ -82,6 +166,30 @@ struct MistiaCurrencyInputField: UIViewRepresentable {
             if textField.text != grouped {
                 textField.text = grouped
             }
+        }
+    }
+}
+
+private extension TextAlignment {
+    var uiTextAlignment: NSTextAlignment {
+        switch self {
+        case .leading:
+            .natural
+        case .center:
+            .center
+        case .trailing:
+            .right
+        }
+    }
+
+    var frameAlignment: Alignment {
+        switch self {
+        case .leading:
+            .leading
+        case .center:
+            .center
+        case .trailing:
+            .trailing
         }
     }
 }

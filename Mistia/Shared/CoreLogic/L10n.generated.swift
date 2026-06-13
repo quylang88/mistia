@@ -2669,6 +2669,23 @@ nonisolated enum L10n {
 
     nonisolated enum shared {
 
+        nonisolated enum amountCalculator {
+            static var divisionByZero: String { L10n.tr("shared.amountCalculator.divisionByZero", vi: "Không thể chia cho 0", en: "Cannot divide by 0", ja: "0で割ることはできません") }
+            static func divisionByZero(language: MistiaAppLanguage) -> String { L10n.tr("shared.amountCalculator.divisionByZero", vi: "Không thể chia cho 0", en: "Cannot divide by 0", ja: "0で割ることはできません", language: language) }
+            static var expression: String { L10n.tr("shared.amountCalculator.expression", vi: "Phép tính", en: "Expression", ja: "計算式") }
+            static func expression(language: MistiaAppLanguage) -> String { L10n.tr("shared.amountCalculator.expression", vi: "Phép tính", en: "Expression", ja: "計算式", language: language) }
+            static var integerPositiveRequired: String { L10n.tr("shared.amountCalculator.integerPositiveRequired", vi: "Kết quả phải là số nguyên dương", en: "Result must be a positive integer", ja: "結果は正の整数にしてください") }
+            static func integerPositiveRequired(language: MistiaAppLanguage) -> String { L10n.tr("shared.amountCalculator.integerPositiveRequired", vi: "Kết quả phải là số nguyên dương", en: "Result must be a positive integer", ja: "結果は正の整数にしてください", language: language) }
+            static var openCalculator: String { L10n.tr("shared.amountCalculator.openCalculator", vi: "Mở máy tính nhanh", en: "Open quick calculator", ja: "クイック計算機を開く") }
+            static func openCalculator(language: MistiaAppLanguage) -> String { L10n.tr("shared.amountCalculator.openCalculator", vi: "Mở máy tính nhanh", en: "Open quick calculator", ja: "クイック計算機を開く", language: language) }
+            static var result: String { L10n.tr("shared.amountCalculator.result", vi: "Kết quả", en: "Result", ja: "結果") }
+            static func result(language: MistiaAppLanguage) -> String { L10n.tr("shared.amountCalculator.result", vi: "Kết quả", en: "Result", ja: "結果", language: language) }
+            static var resultTooLarge: String { L10n.tr("shared.amountCalculator.resultTooLarge", vi: "Kết quả quá lớn", en: "Result is too large", ja: "結果が大きすぎます") }
+            static func resultTooLarge(language: MistiaAppLanguage) -> String { L10n.tr("shared.amountCalculator.resultTooLarge", vi: "Kết quả quá lớn", en: "Result is too large", ja: "結果が大きすぎます", language: language) }
+            static var title: String { L10n.tr("shared.amountCalculator.title", vi: "Máy tính", en: "Calculator", ja: "計算機") }
+            static func title(language: MistiaAppLanguage) -> String { L10n.tr("shared.amountCalculator.title", vi: "Máy tính", en: "Calculator", ja: "計算機", language: language) }
+        }
+
         nonisolated enum corelogic {
 
             nonisolated enum financeenums {
