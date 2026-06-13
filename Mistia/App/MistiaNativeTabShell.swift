@@ -526,7 +526,7 @@ final class MistiaNativeTabBarController: UITabBarController, UITabBarController
     } else {
       pulseLayer = CAShapeLayer()
       pulseLayer.fillColor = UIColor.clear.cgColor
-      pulseLayer.lineWidth = 1.5
+      pulseLayer.lineWidth = 2.2
       shortcutPulseLayer = pulseLayer
       tabButton.layer.addSublayer(pulseLayer)
     }
@@ -569,7 +569,7 @@ final class MistiaNativeTabBarController: UITabBarController, UITabBarController
       iconCenter = CGPoint(x: tabButton.bounds.midX, y: tabButton.bounds.midY - 7)
     }
 
-    let side: CGFloat = 34
+    let side: CGFloat = 42
     let rect = CGRect(
       x: iconCenter.x - side / 2,
       y: iconCenter.y - side / 2,
@@ -581,7 +581,7 @@ final class MistiaNativeTabBarController: UITabBarController, UITabBarController
     CATransaction.setDisableActions(true)
     pulseLayer.frame = rect
     pulseLayer.path = UIBezierPath(
-      ovalIn: CGRect(origin: .zero, size: rect.size).insetBy(dx: 1.2, dy: 1.2)
+      ovalIn: CGRect(origin: .zero, size: rect.size).insetBy(dx: 1.1, dy: 1.1)
     ).cgPath
     pulseLayer.strokeColor = currentShortcutTint.cgColor
     pulseLayer.zPosition = 10

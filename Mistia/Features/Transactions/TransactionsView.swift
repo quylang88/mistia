@@ -2112,6 +2112,7 @@ struct TransactionCashflowRow: View {
                         .font(.system(size: 16, weight: .semibold, design: .rounded))
                         .foregroundStyle(.primary)
                         .lineLimit(1)
+                        .truncationMode(.tail)
 
                     if record.primaryKind == .transfer, let subtype = record.transferSubtype,
                        subtype == .debt {
@@ -2133,14 +2134,17 @@ struct TransactionCashflowRow: View {
                     .font(.system(size: 12, weight: .medium, design: .rounded))
                     .foregroundStyle(.secondary)
                     .lineLimit(2)
+                    .truncationMode(.tail)
 
                 if let auditSubtitle {
                     Text(auditSubtitle)
                         .font(.system(size: 11, weight: .semibold, design: .rounded))
                         .foregroundStyle(.tertiary)
                         .lineLimit(2)
+                        .truncationMode(.tail)
                 }
             }
+            .layoutPriority(1)
 
             Spacer(minLength: 8)
 
@@ -2149,7 +2153,7 @@ struct TransactionCashflowRow: View {
                     .font(.system(size: 16, weight: .bold, design: .rounded))
                     .foregroundStyle(cashflowColor)
                     .lineLimit(1)
-                    .minimumScaleFactor(0.74)
+                    .minimumScaleFactor(0.82)
 
                 if let secondaryAmountText {
                     Text(secondaryAmountText)
@@ -2158,6 +2162,8 @@ struct TransactionCashflowRow: View {
                         .lineLimit(1)
                 }
             }
+            .frame(minWidth: 96, alignment: .trailing)
+            .layoutPriority(2)
         }
     }
 

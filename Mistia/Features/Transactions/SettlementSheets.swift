@@ -621,80 +621,59 @@ struct SettlementEditorSheet: View {
             .listRowInsets(EdgeInsets(top: 0, leading: 0, bottom: 0, trailing: 0))
             .listRowBackground(Color.clear)
         } else {
-            VStack(spacing: 0) {
-                ForEach(Array(linkedSharedExpenseBills.enumerated()), id: \.element.id) { index, bill in
-                    HStack(alignment: .center, spacing: 10) {
-                        Button {
-                            billEditorTarget = SharedExpenseBillEditorTarget(transactionID: bill.id)
-                        } label: {
-                            TransactionCashflowRow(
-                                record: bill.snapshot,
-                                transaction: bill,
-                                auditRecord: transactionAuditMap[bill.id],
-                                walletOwnerMap: walletOwnerMap,
-                                transactionOwnerMap: transactionOwnerMap,
-                                familyContextStore: familyContextStore,
-                                hasFamilyOwnerConflict: false,
-                                primaryCurrencyCode: primaryCurrencyCode,
-                                exchangeRateIndex: MistiaExchangeRateIndex(rates: MistiaCurrencySettings.rates())
-                            )
-                        }
-                        .buttonStyle(.plain)
-
-                        Button {
-                            detachBill(bill)
-                        } label: {
-                            Image(systemName: "link.badge.minus")
-                                .font(.system(size: 16, weight: .semibold))
-                                .foregroundStyle(.secondary)
-                        }
-                        .buttonStyle(.plain)
-                    }
-                    .padding(.horizontal, 14)
+            ForEach(linkedSharedExpenseBills) { bill in
+                Button {
+                    billEditorTarget = SharedExpenseBillEditorTarget(transactionID: bill.id)
+                } label: {
+                    TransactionCashflowRow(
+                        record: bill.snapshot,
+                        transaction: bill,
+                        auditRecord: transactionAuditMap[bill.id],
+                        walletOwnerMap: walletOwnerMap,
+                        transactionOwnerMap: transactionOwnerMap,
+                        familyContextStore: familyContextStore,
+                        hasFamilyOwnerConflict: false,
+                        primaryCurrencyCode: primaryCurrencyCode,
+                        exchangeRateIndex: MistiaExchangeRateIndex(rates: MistiaCurrencySettings.rates())
+                    )
                     .padding(.vertical, 12)
-
-                    if index < linkedSharedExpenseBills.count - 1 || !contentfulBillRows.isEmpty {
-                        Divider()
-                            .padding(.leading, 52)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                }
+                .buttonStyle(.plain)
+                .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+                    Button(role: .destructive) {
+                        detachBill(bill)
+                    } label: {
+                        Label(L10n.common.delete, systemImage: "trash")
                     }
                 }
-
-                ForEach(billRows.indices, id: \.self) { index in
-                    if billRows[index].hasContent {
-                        SharedExpenseBillDraftRow(
-                            row: $billRows[index],
-                            existingTransactions: attachableExpenseTransactions,
-                            transactionAuditMap: transactionAuditMap,
-                            walletOwnerMap: walletOwnerMap,
-                            transactionOwnerMap: transactionOwnerMap,
-                            primaryCurrencyCode: primaryCurrencyCode,
-                            exchangeRateIndex: MistiaExchangeRateIndex(rates: MistiaCurrencySettings.rates()),
-                            familyContextStore: familyContextStore,
-                            currencyCode: activeCurrencyCode,
-                            onTap: { billEditorTarget = SharedExpenseBillEditorTarget(rowID: billRows[index].id) },
-                            onRemove: { removeBillRow(billRows[index].id) }
-                        )
-
-                        if index + 1 < billRows.count && billRows[(index + 1)...].contains(where: \.hasContent) {
-                            Divider()
-                                .padding(.leading, 52)
-                        }
-                    }
-                }
-
-                Divider()
-                    .padding(.leading, 52)
-
-                MistiaFooterAddButton(
-                    title: L10n.transactions.settlement.addExpense,
-                    accent: MistiaAccent.purple.color
-                ) {
-                    showingBillAddOptions = true
-                }
-                .padding(.horizontal, 14)
-                .padding(.vertical, 14)
             }
-            .listRowInsets(EdgeInsets(top: 0, leading: 0, bottom: 0, trailing: 0))
+
+            ForEach($billRows) { $row in
+                if row.hasContent {
+                    SharedExpenseBillDraftRow(
+                        row: $row,
+                        existingTransactions: attachableExpenseTransactions,
+                        transactionAuditMap: transactionAuditMap,
+                        walletOwnerMap: walletOwnerMap,
+                        transactionOwnerMap: transactionOwnerMap,
+                        primaryCurrencyCode: primaryCurrencyCode,
+                        exchangeRateIndex: MistiaExchangeRateIndex(rates: MistiaCurrencySettings.rates()),
+                        familyContextStore: familyContextStore,
+                        currencyCode: activeCurrencyCode,
+                        onTap: { billEditorTarget = SharedExpenseBillEditorTarget(rowID: row.id) },
+                        onRemove: { removeBillRow(row.id) }
+                    )
+                }
+            }
+
+            MistiaFooterAddButton(
+                title: L10n.transactions.settlement.addExpense,
+                accent: MistiaAccent.purple.color
+            ) {
+                showingBillAddOptions = true
+            }
+            .padding(.vertical, 14)
         }
     }
 
@@ -828,6 +807,21 @@ struct SettlementEditorSheet: View {
         if dismissBaselineSnapshot == nil {
             dismissBaselineSnapshot = sharedExpenseDismissalSnapshot
         }
+    }
+
+    private func markLinkedBillDetachedInDismissBaseline(_ billID: UUID) {
+        guard let baseline = dismissBaselineSnapshot else { return }
+        dismissBaselineSnapshot = MistiaSharedExpenseDismissalSnapshot(
+            eventTitle: baseline.eventTitle,
+            participantRows: baseline.participantRows,
+            selectedSharedWalletID: baseline.selectedSharedWalletID,
+            selectedSharedCategoryID: baseline.selectedSharedCategoryID,
+            eventNote: baseline.eventNote,
+            linkedBillIDs: baseline.linkedBillIDs
+                .filter { $0 != billID }
+                .sorted { $0.uuidString < $1.uuidString },
+            billRows: baseline.billRows
+        )
     }
 
     private func loadSharedExpenseDraftIfNeeded() {
@@ -1291,6 +1285,7 @@ struct SettlementEditorSheet: View {
                 ownerUserID: ownerUserID,
                 modifiedAt: now
             )
+            markLinkedBillDetachedInDismissBaseline(bill.id)
         } catch {
             alertMessage = error.localizedDescription
         }
@@ -2797,35 +2792,31 @@ private struct SharedExpenseBillDraftRow: View {
     let onRemove: () -> Void
 
     var body: some View {
-        HStack(alignment: .center, spacing: 10) {
-            Button(action: onTap) {
-                if let transaction = selectedTransaction {
-                    TransactionCashflowRow(
-                        record: transaction.snapshot,
-                        transaction: transaction,
-                        auditRecord: transactionAuditMap[transaction.id],
-                        walletOwnerMap: walletOwnerMap,
-                        transactionOwnerMap: transactionOwnerMap,
-                        familyContextStore: familyContextStore,
-                        hasFamilyOwnerConflict: false,
-                        primaryCurrencyCode: primaryCurrencyCode,
-                        exchangeRateIndex: exchangeRateIndex
-                    )
-                } else {
-                    placeholderContent
-                }
+        Button(action: onTap) {
+            if let transaction = selectedTransaction {
+                TransactionCashflowRow(
+                    record: transaction.snapshot,
+                    transaction: transaction,
+                    auditRecord: transactionAuditMap[transaction.id],
+                    walletOwnerMap: walletOwnerMap,
+                    transactionOwnerMap: transactionOwnerMap,
+                    familyContextStore: familyContextStore,
+                    hasFamilyOwnerConflict: false,
+                    primaryCurrencyCode: primaryCurrencyCode,
+                    exchangeRateIndex: exchangeRateIndex
+                )
+            } else {
+                placeholderContent
             }
-            .buttonStyle(.plain)
-
-            Button(action: onRemove) {
-                Image(systemName: "minus.circle.fill")
-                    .font(.system(size: 18, weight: .semibold))
-                    .foregroundStyle(.secondary)
-            }
-            .buttonStyle(.plain)
         }
-        .padding(.horizontal, 14)
+        .buttonStyle(.plain)
         .padding(.vertical, 12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+            Button(role: .destructive, action: onRemove) {
+                Label(L10n.common.delete, systemImage: "trash")
+            }
+        }
     }
 
     private var selectedStagedTransaction: LedgerTransaction? {
@@ -2858,12 +2849,15 @@ private struct SharedExpenseBillDraftRow: View {
                     .font(.system(size: 16, weight: .semibold, design: .rounded))
                     .foregroundStyle(.primary)
                     .lineLimit(1)
+                    .truncationMode(.tail)
 
                 Text(row.mode == .newExpense ? L10n.transactions.settlement.addNewExpense : L10n.transactions.settlement.chooseExistingExpense)
                     .font(.system(size: 12, weight: .medium, design: .rounded))
                     .foregroundStyle(.secondary)
                     .lineLimit(2)
+                    .truncationMode(.tail)
             }
+            .layoutPriority(1)
 
             Spacer(minLength: 8)
 
@@ -2871,8 +2865,10 @@ private struct SharedExpenseBillDraftRow: View {
                 .font(.system(size: 16, weight: .bold, design: .rounded))
                 .foregroundStyle(MistiaAccent.expense.color)
                 .lineLimit(1)
-                .minimumScaleFactor(0.74)
-            }
+                .minimumScaleFactor(0.82)
+                .frame(minWidth: 96, alignment: .trailing)
+                .layoutPriority(2)
+        }
     }
 }
 
