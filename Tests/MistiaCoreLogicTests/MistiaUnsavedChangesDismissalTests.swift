@@ -30,4 +30,33 @@ final class MistiaUnsavedChangesDismissalTests: XCTestCase {
             .confirmDiscard
         )
     }
+
+    func testSharedExpenseEditDetectsPersistedLinkedBillAddedDuringSession() {
+        let billID = UUID(uuidString: "AA67B2E4-4F28-44C1-8D5D-5BB71936C1A9")!
+        let baseline = MistiaSharedExpenseDismissalSnapshot(
+            eventTitle: "Tokyo Trip",
+            participantRows: [],
+            selectedSharedWalletID: nil,
+            selectedSharedCategoryID: nil,
+            eventNote: "",
+            linkedBillIDs: [],
+            billRows: []
+        )
+        let current = MistiaSharedExpenseDismissalSnapshot(
+            eventTitle: "Tokyo Trip",
+            participantRows: [],
+            selectedSharedWalletID: nil,
+            selectedSharedCategoryID: nil,
+            eventNote: "",
+            linkedBillIDs: [billID],
+            billRows: []
+        )
+
+        XCTAssertTrue(
+            MistiaSharedExpenseDismissalDecision.hasUnsavedChanges(
+                baseline: baseline,
+                current: current
+            )
+        )
+    }
 }

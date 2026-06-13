@@ -115,7 +115,7 @@ struct SettlementEditorSheet: View {
     @State private var eventNote = ""
     @State private var billRows: [SharedExpenseBillDraft] = []
     @State private var hasLoadedSharedExpenseDraft = false
-    @State private var dismissBaselineSnapshot: SharedExpenseDraftDismissalSnapshot?
+    @State private var dismissBaselineSnapshot: MistiaSharedExpenseDismissalSnapshot?
     @State private var alertMessage: String?
     @State private var billEditorTarget: SharedExpenseBillEditorTarget?
     @State private var billSearchTarget: SharedExpenseBillSearchTarget?
@@ -354,14 +354,17 @@ struct SettlementEditorSheet: View {
 
     private var hasUnsavedChangesForDismissal: Bool {
         guard let dismissBaselineSnapshot else { return false }
-        return sharedExpenseDismissalSnapshot != dismissBaselineSnapshot
+        return MistiaSharedExpenseDismissalDecision.hasUnsavedChanges(
+            baseline: dismissBaselineSnapshot,
+            current: sharedExpenseDismissalSnapshot
+        )
     }
 
-    private var sharedExpenseDismissalSnapshot: SharedExpenseDraftDismissalSnapshot {
-        SharedExpenseDraftDismissalSnapshot(
+    private var sharedExpenseDismissalSnapshot: MistiaSharedExpenseDismissalSnapshot {
+        MistiaSharedExpenseDismissalSnapshot(
             eventTitle: eventTitle.trimmingCharacters(in: .whitespacesAndNewlines),
             participantRows: participantRows.map {
-                SharedExpenseParticipantDismissalSnapshot(
+                MistiaSharedExpenseParticipantDismissalSnapshot(
                     id: $0.id,
                     name: $0.name.trimmingCharacters(in: .whitespacesAndNewlines)
                 )
@@ -369,10 +372,13 @@ struct SettlementEditorSheet: View {
             selectedSharedWalletID: selectedSharedWalletID,
             selectedSharedCategoryID: selectedSharedCategoryID,
             eventNote: eventNote.trimmingCharacters(in: .whitespacesAndNewlines),
+            linkedBillIDs: linkedSharedExpenseBills
+                .map(\.id)
+                .sorted { $0.uuidString < $1.uuidString },
             billRows: billRows.map {
-                SharedExpenseBillDismissalSnapshot(
+                MistiaSharedExpenseBillDismissalSnapshot(
                     id: $0.id,
-                    mode: $0.mode,
+                    modeRawValue: $0.mode.rawValue,
                     hasStagedTransaction: $0.stagedTransaction != nil,
                     existingTransactionID: $0.existingTransactionID
                 )
@@ -2702,27 +2708,6 @@ private struct SharedExpenseParticipantDraft: Identifiable, Hashable {
         self.name = name
         self.paidText = paidText
     }
-}
-
-private struct SharedExpenseParticipantDismissalSnapshot: Equatable {
-    let id: UUID
-    let name: String
-}
-
-private struct SharedExpenseBillDismissalSnapshot: Equatable {
-    let id: UUID
-    let mode: SharedExpenseBillDraftMode
-    let hasStagedTransaction: Bool
-    let existingTransactionID: UUID?
-}
-
-private struct SharedExpenseDraftDismissalSnapshot: Equatable {
-    let eventTitle: String
-    let participantRows: [SharedExpenseParticipantDismissalSnapshot]
-    let selectedSharedWalletID: UUID?
-    let selectedSharedCategoryID: UUID?
-    let eventNote: String
-    let billRows: [SharedExpenseBillDismissalSnapshot]
 }
 
 private enum SharedExpenseBillDraftMode: String, CaseIterable, Identifiable {
