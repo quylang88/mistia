@@ -7,6 +7,7 @@ struct MistiaAmountCalculatorSheet: View {
 
     @State private var tokens: [String]
     @State private var currentNumber: String
+    @State private var alertMessage: String?
 
     private let accent = MistiaAccent.purple.color
     private let groupedBackground = Color(UIColor.systemGroupedBackground)
@@ -21,14 +22,18 @@ struct MistiaAmountCalculatorSheet: View {
 
     var body: some View {
         NavigationStack {
-            VStack(spacing: 18) {
-                displayPanel
-                keypad
+            GeometryReader { proxy in
+                let metrics = CalculatorSheetMetrics(availableHeight: proxy.size.height)
+
+                VStack(spacing: metrics.stackSpacing) {
+                    displayPanel(metrics: metrics)
+                    keypad(metrics: metrics)
+                }
+                .padding(.horizontal, 18)
+                .padding(.top, metrics.topPadding)
+                .padding(.bottom, metrics.bottomPadding)
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
             }
-            .padding(.horizontal, 18)
-            .padding(.top, 14)
-            .padding(.bottom, 20)
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
             .background(groupedBackground.ignoresSafeArea())
             .navigationTitle(L10n.shared.amountCalculator.title)
             .navigationBarTitleDisplayMode(.inline)
@@ -56,7 +61,6 @@ struct MistiaAmountCalculatorSheet: View {
                     .buttonStyle(.glassProminent)
                     .buttonBorderShape(.circle)
                     .tint(accent)
-                    .disabled(!evaluation.canCommit)
                     .accessibilityLabel(L10n.common.ok)
                 }
             }
@@ -64,12 +68,22 @@ struct MistiaAmountCalculatorSheet: View {
         .presentationBackground(groupedBackground)
         .presentationDetents([.medium])
         .presentationDragIndicator(.hidden)
+        .alert(
+            L10n.shared.amountCalculator.title,
+            isPresented: Binding(get: { alertMessage != nil }, set: { if !$0 { alertMessage = nil } })
+        ) {
+            Button(L10n.common.ok, role: .cancel) { }
+        } message: {
+            if let alertMessage {
+                Text(alertMessage)
+            }
+        }
     }
 
-    private var displayPanel: some View {
-        VStack(alignment: .trailing, spacing: 8) {
+    private func displayPanel(metrics: CalculatorSheetMetrics) -> some View {
+        VStack(alignment: .trailing, spacing: metrics.displayTextSpacing) {
             Text(expressionText)
-                .font(.system(size: 15, weight: .medium, design: .rounded))
+                .font(.system(size: metrics.expressionFontSize, weight: .medium, design: .rounded))
                 .foregroundStyle(.secondary)
                 .lineLimit(1)
                 .minimumScaleFactor(0.72)
@@ -77,60 +91,53 @@ struct MistiaAmountCalculatorSheet: View {
                 .accessibilityLabel(L10n.shared.amountCalculator.expression)
 
             Text(resultText)
-                .font(.system(size: 36, weight: .bold, design: .rounded))
+                .font(.system(size: metrics.resultFontSize, weight: .bold, design: .rounded))
                 .foregroundStyle(evaluation.canCommit ? .primary : .secondary)
                 .lineLimit(1)
                 .minimumScaleFactor(0.58)
                 .frame(maxWidth: .infinity, alignment: .trailing)
                 .accessibilityLabel(L10n.shared.amountCalculator.result)
-
-            Text(validationText)
-                .font(.footnote.weight(.semibold))
-                .foregroundStyle(validationText.isEmpty ? .clear : .red)
-                .lineLimit(1)
-                .minimumScaleFactor(0.82)
-                .frame(maxWidth: .infinity, alignment: .trailing)
-                .accessibilityHidden(validationText.isEmpty)
         }
-        .padding(.horizontal, 18)
-        .padding(.vertical, 16)
+        .padding(.horizontal, metrics.displayHorizontalPadding)
+        .padding(.vertical, metrics.displayVerticalPadding)
+        .frame(height: metrics.displayHeight)
         .background(
             RoundedRectangle(cornerRadius: 18, style: .continuous)
                 .fill(Color(UIColor.secondarySystemGroupedBackground))
         )
     }
 
-    private var keypad: some View {
-        Grid(horizontalSpacing: 10, verticalSpacing: 10) {
+    private func keypad(metrics: CalculatorSheetMetrics) -> some View {
+        Grid(horizontalSpacing: metrics.gridSpacing, verticalSpacing: metrics.gridSpacing) {
             GridRow {
-                calculatorButton("C", role: .utility) { clear() }
-                calculatorButton("⌫", role: .utility) { deleteBackward() }
-                calculatorButton("÷", role: .operation) { appendOperator("÷") }
-                calculatorButton("×", role: .operation) { appendOperator("×") }
+                calculatorButton("C", role: .utility, metrics: metrics) { clear() }
+                calculatorButton("⌫", role: .utility, metrics: metrics) { deleteBackward() }
+                calculatorButton("÷", role: .operation, metrics: metrics) { appendOperator("÷") }
+                calculatorButton("×", role: .operation, metrics: metrics) { appendOperator("×") }
             }
             GridRow {
-                calculatorButton("7") { appendDigit("7") }
-                calculatorButton("8") { appendDigit("8") }
-                calculatorButton("9") { appendDigit("9") }
-                calculatorButton("-", role: .operation) { appendOperator("-") }
+                calculatorButton("7", metrics: metrics) { appendDigit("7") }
+                calculatorButton("8", metrics: metrics) { appendDigit("8") }
+                calculatorButton("9", metrics: metrics) { appendDigit("9") }
+                calculatorButton("-", role: .operation, metrics: metrics) { appendOperator("-") }
             }
             GridRow {
-                calculatorButton("4") { appendDigit("4") }
-                calculatorButton("5") { appendDigit("5") }
-                calculatorButton("6") { appendDigit("6") }
-                calculatorButton("+", role: .operation) { appendOperator("+") }
+                calculatorButton("4", metrics: metrics) { appendDigit("4") }
+                calculatorButton("5", metrics: metrics) { appendDigit("5") }
+                calculatorButton("6", metrics: metrics) { appendDigit("6") }
+                calculatorButton("+", role: .operation, metrics: metrics) { appendOperator("+") }
             }
             GridRow {
-                calculatorButton("1") { appendDigit("1") }
-                calculatorButton("2") { appendDigit("2") }
-                calculatorButton("3") { appendDigit("3") }
-                calculatorButton("=", role: .operation) { collapseToResultIfPossible() }
+                calculatorButton("1", metrics: metrics) { appendDigit("1") }
+                calculatorButton("2", metrics: metrics) { appendDigit("2") }
+                calculatorButton("3", metrics: metrics) { appendDigit("3") }
+                calculatorButton("=", role: .operation, metrics: metrics) { collapseToResultIfPossible() }
             }
             GridRow {
-                calculatorButton("0") { appendDigit("0") }
+                calculatorButton("0", metrics: metrics) { appendDigit("0") }
                     .gridCellColumns(2)
-                calculatorButton("00") { appendDigit("00") }
-                calculatorButton("OK", role: .confirm, isEnabled: evaluation.canCommit) { commit() }
+                calculatorButton("00", metrics: metrics) { appendDigit("00") }
+                calculatorButton("OK", role: .confirm, metrics: metrics) { commit() }
             }
         }
     }
@@ -138,17 +145,18 @@ struct MistiaAmountCalculatorSheet: View {
     private func calculatorButton(
         _ title: String,
         role: CalculatorButtonRole = .number,
+        metrics: CalculatorSheetMetrics,
         isEnabled: Bool = true,
         action: @escaping () -> Void
     ) -> some View {
         Button(action: action) {
             Text(title)
-                .font(buttonFont(for: title, role: role))
+                .font(buttonFont(for: title, role: role, metrics: metrics))
                 .foregroundStyle(role.foregroundStyle)
                 .frame(maxWidth: .infinity)
-                .frame(height: 50)
+                .frame(height: metrics.buttonHeight)
                 .background(
-                    RoundedRectangle(cornerRadius: 16, style: .continuous)
+                    RoundedRectangle(cornerRadius: metrics.buttonCornerRadius, style: .continuous)
                         .fill(role.backgroundStyle)
                 )
         }
@@ -185,23 +193,6 @@ struct MistiaAmountCalculatorSheet: View {
             ? tokens.last(where: { !isOperator($0) }) ?? ""
             : currentNumber
         return number.isEmpty ? "0" : MistiaCurrencyInputFormatting.groupedInput(number)
-    }
-
-    private var validationText: String {
-        switch evaluation.error {
-        case .divisionByZero:
-            L10n.shared.amountCalculator.divisionByZero
-        case .fractionalResult:
-            L10n.shared.amountCalculator.integerPositiveRequired
-        case .nonPositiveResult:
-            L10n.shared.amountCalculator.integerPositiveRequired
-        case .overflow:
-            L10n.shared.amountCalculator.resultTooLarge
-        case .invalidExpression, .incompleteExpression, .emptyExpression:
-            ""
-        case nil:
-            ""
-        }
     }
 
     private var evaluation: MistiaAmountCalculatorLogic.Evaluation {
@@ -266,25 +257,44 @@ struct MistiaAmountCalculatorSheet: View {
     }
 
     private func commit() {
-        guard let integerResult = evaluation.integerResult else { return }
+        guard let integerResult = evaluation.integerResult else {
+            alertMessage = validationMessage
+            return
+        }
         onCommit(MistiaAmountCalculatorLogic.committedInputText(for: integerResult))
         dismiss()
+    }
+
+    private var validationMessage: String {
+        switch evaluation.error {
+        case .divisionByZero:
+            L10n.shared.amountCalculator.divisionByZero
+        case .overflow:
+            L10n.shared.amountCalculator.resultTooLarge
+        case .fractionalResult,
+             .nonPositiveResult,
+             .invalidExpression,
+             .incompleteExpression,
+             .emptyExpression,
+             nil:
+            L10n.shared.amountCalculator.integerPositiveRequired
+        }
     }
 
     private func decimalDisplayText(for value: Decimal) -> String {
         NSDecimalNumber(decimal: value).stringValue
     }
 
-    private func buttonFont(for title: String, role: CalculatorButtonRole) -> Font {
+    private func buttonFont(for title: String, role: CalculatorButtonRole, metrics: CalculatorSheetMetrics) -> Font {
         if title == "OK" {
-            return .system(size: 17, weight: .bold, design: .rounded)
+            return .system(size: metrics.okFontSize, weight: .bold, design: .rounded)
         }
 
         switch role {
         case .number:
-            return .system(size: 22, weight: .semibold, design: .rounded)
+            return .system(size: metrics.numberFontSize, weight: .semibold, design: .rounded)
         case .operation, .utility, .confirm:
-            return .system(size: 20, weight: .semibold, design: .rounded)
+            return .system(size: metrics.operatorFontSize, weight: .semibold, design: .rounded)
         }
     }
 
@@ -299,6 +309,81 @@ struct MistiaAmountCalculatorSheet: View {
             with: "",
             options: .regularExpression
         )
+    }
+}
+
+private struct CalculatorSheetMetrics {
+    let availableHeight: CGFloat
+
+    private var compactness: CGFloat {
+        let normalized = (availableHeight - 360) / 140
+        return min(max(normalized, 0), 1)
+    }
+
+    var topPadding: CGFloat {
+        14 + (20 * compactness)
+    }
+
+    var bottomPadding: CGFloat {
+        10 + (8 * compactness)
+    }
+
+    var stackSpacing: CGFloat {
+        10 + (6 * compactness)
+    }
+
+    var gridSpacing: CGFloat {
+        7 + (3 * compactness)
+    }
+
+    var displayTextSpacing: CGFloat {
+        4 + (2 * compactness)
+    }
+
+    var displayHorizontalPadding: CGFloat {
+        16 + (2 * compactness)
+    }
+
+    var displayVerticalPadding: CGFloat {
+        14 + (6 * compactness)
+    }
+
+    var displayHeight: CGFloat {
+        88 + (24 * compactness)
+    }
+
+    var buttonHeight: CGFloat {
+        let reservedHeight = topPadding
+            + bottomPadding
+            + displayHeight
+            + stackSpacing
+            + (gridSpacing * 4)
+        let availableButtonHeight = (availableHeight - reservedHeight) / 5
+        return min(max(availableButtonHeight, 40), 50)
+    }
+
+    var buttonCornerRadius: CGFloat {
+        13 + (3 * compactness)
+    }
+
+    var expressionFontSize: CGFloat {
+        13 + (2 * compactness)
+    }
+
+    var resultFontSize: CGFloat {
+        29 + (7 * compactness)
+    }
+
+    var numberFontSize: CGFloat {
+        19 + (3 * compactness)
+    }
+
+    var operatorFontSize: CGFloat {
+        18 + (2 * compactness)
+    }
+
+    var okFontSize: CGFloat {
+        15 + (2 * compactness)
     }
 }
 
