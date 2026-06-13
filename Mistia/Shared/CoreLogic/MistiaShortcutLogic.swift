@@ -90,6 +90,20 @@ enum MistiaShortcutResolvedAction: Equatable {
     }
 }
 
+enum MistiaShortcutMemberOverviewTapAction: Equatable {
+    case enterMemberView
+    case promptExitMemberView
+}
+
+enum MistiaShortcutInteractionLogic {
+    static func memberOverviewTapAction(
+        targetUserID: UUID,
+        currentViewedMemberUserID: UUID?
+    ) -> MistiaShortcutMemberOverviewTapAction {
+        currentViewedMemberUserID == targetUserID ? .promptExitMemberView : .enterMemberView
+    }
+}
+
 struct MistiaShortcutPresentation: Equatable {
     let title: String
     let accessibilityLabel: String

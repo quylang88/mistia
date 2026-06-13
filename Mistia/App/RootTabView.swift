@@ -100,6 +100,7 @@ struct RootTabView: View {
   @State private var isSyncingShortcut = false
   @State private var isRefreshingQuickCreateAccess = false
   @State private var quickCreateAccessAlert: RootQuickCreateAccessAlert?
+  @State private var memberViewingExitPrompt: FamilyMemberViewingExitPrompt?
   @State private var showsReceiptSourceDialog = false
 
   private let quickCreateMenuAnimation = Animation.spring(response: 0.34, dampingFraction: 0.84)
@@ -117,6 +118,7 @@ struct RootTabView: View {
           showsShortcutTab: mistiaShortcutEnabled && !shouldHideShortcutTabInCurrentContext,
           isShortcutSyncing: isSyncingShortcut && !isPinnedShortcutDisabled,
           isShortcutDisabled: isPinnedShortcutDisabled,
+          isShortcutAttentionPulsing: isShortcutMemberAttentionPulsing,
           shortcutDisabledAccessibilityHint: shortcutDisabledAccessibilityHint,
           shortcutPresentation: shortcutResolution.presentation,
           onShortcutTap: handlePinnedShortcutTap,
@@ -170,6 +172,10 @@ struct RootTabView: View {
             .presentationDragIndicator(.hidden)
         case .settlement(let target):
           SettlementEditorSheet(target: target)
+            .presentationDetents([.large])
+            .presentationDragIndicator(.hidden)
+        case .managementShortcut(let destination):
+          RootManagementShortcutModal(destination: destination)
             .presentationDetents([.large])
             .presentationDragIndicator(.hidden)
         }
@@ -228,6 +234,10 @@ struct RootTabView: View {
       } message: {
         Text(L10n.app.roottab.chooseAReceiptImageSourceForAI)
       }
+      .familyMemberViewingExitAlert(
+        prompt: $memberViewingExitPrompt,
+        familyContextStore: familyContextStore
+      )
     }
   }
 
@@ -290,6 +300,16 @@ struct RootTabView: View {
 
   private var isPinnedShortcutDisabled: Bool {
     shortcutResolution.presentation.action.requiresRemoteAction && !sessionStore.canPerformRemoteActions
+  }
+
+  private var isShortcutMemberAttentionPulsing: Bool {
+    guard case .memberOverview(let shortcutUserID) = shortcutResolution.presentation.action,
+      case .member(let activeUserID) = familyContextStore.activeContext.scope
+    else {
+      return false
+    }
+
+    return shortcutUserID == activeUserID
   }
 
   private var shortcutDisabledAccessibilityHint: String? {
@@ -421,14 +441,14 @@ struct RootTabView: View {
 
     switch shortcutResolution.presentation.action {
     case .backupRestore:
-      openManagementRoute(.backupRestore)
+      activeSheet = .managementShortcut(.backupRestore)
 
     case .archivedItems:
-      openManagementRoute(.archivedItems)
+      activeSheet = .managementShortcut(.archivedItems)
 
     case .familyOverview:
       familyContextStore.activateFamilyHome()
-      openManagementRoute(.familyOverview)
+      activeSheet = .managementShortcut(.familyOverview)
       Task { @MainActor in
         await familyContextStore.refreshLatest(
           sessionStore: sessionStore,
@@ -438,8 +458,21 @@ struct RootTabView: View {
 
     case .memberOverview(let userID):
       guard let member = familyContextStore.members.first(where: { $0.userID == userID }) else {
-        openManagementRoute(.backupRestore)
+        activeSheet = .managementShortcut(.backupRestore)
         return
+      }
+
+      switch MistiaShortcutInteractionLogic.memberOverviewTapAction(
+        targetUserID: userID,
+        currentViewedMemberUserID: familyContextStore.viewedMember?.userID
+      ) {
+      case .promptExitMemberView:
+        let presentation = familyContextStore.memberViewingToolbarPresentation
+          ?? FamilyMemberViewingToolbarLogic.presentation(displayName: member.displayName)
+        memberViewingExitPrompt = FamilyMemberViewingExitPrompt(presentation: presentation)
+        return
+      case .enterMemberView:
+        break
       }
 
       familyContextStore.activateMemberView(member)
@@ -556,6 +589,7 @@ struct RootTabView: View {
 private enum RootSheet: Identifiable {
   case quickCreate(MistiaQuickCreateDestination, TransactionReceiptInitialSource?)
   case settlement(SettlementEditorTarget)
+  case managementShortcut(MistiaManagementNavigationDestination)
 
   var id: String {
     switch self {
@@ -563,6 +597,23 @@ private enum RootSheet: Identifiable {
       "quick-create-\(destination.rawValue)-\(receiptInitialSource?.rawValue ?? "none")"
     case .settlement(let target):
       "settlement-\(target.id)"
+    case .managementShortcut(let destination):
+      "management-shortcut-\(destination.id)"
+    }
+  }
+}
+
+private struct RootManagementShortcutModal: View {
+  let destination: MistiaManagementNavigationDestination
+
+  var body: some View {
+    switch destination {
+    case .backupRestore:
+      ManagementBackupRestoreView(isModalPresentation: true)
+    case .archivedItems:
+      ManagementArchivedItemsView(isModalPresentation: true)
+    case .familyOverview:
+      FamilyOverviewScreen(isModalPresentation: true)
     }
   }
 }

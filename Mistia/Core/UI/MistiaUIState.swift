@@ -5,6 +5,17 @@ enum MistiaManagementNavigationDestination: Equatable {
     case backupRestore
     case archivedItems
     case familyOverview
+
+    var id: String {
+        switch self {
+        case .backupRestore:
+            "backupRestore"
+        case .archivedItems:
+            "archivedItems"
+        case .familyOverview:
+            "familyOverview"
+        }
+    }
 }
 
 struct MistiaManagementNavigationRequest: Identifiable, Equatable {

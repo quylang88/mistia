@@ -52,6 +52,8 @@ struct ManagementArchivedItemsView: View {
     @Environment(\.colorScheme) private var colorScheme
     @Environment(SessionStore.self) private var sessionStore
 
+    var isModalPresentation: Bool = false
+
     @AppStorage(MistiaAppStorageKey.currencyCode) private var currencyCode = "JPY"
 
     @Query(filter: #Predicate<LedgerTransaction> { $0.deletedAt == nil && !$0.isArchived })
@@ -162,16 +164,16 @@ struct ManagementArchivedItemsView: View {
 
     var body: some View {
         MistiaPinnedTopBarScaffold(
-            tone: .standard,
+            tone: isModalPresentation ? .modal : .standard,
             title: navigationTitle,
             embedsInNavigationStack: false,
             showsLeadingAvatar: false,
-            leadingSystemImage: "chevron.left",
+            leadingSystemImage: isModalPresentation ? "xmark" : "chevron.left",
             trailingSystemImage: nil,
             hidesSystemBackButton: true,
             onLeadingTap: { dismiss() },
             contentSpacing: 16,
-            contentBottomPadding: isSelecting ? 96 : 150
+            contentBottomPadding: isSelecting ? 96 : (isModalPresentation ? 40 : 150)
         ) {
             EmptyView()
         } trailingAccessory: {

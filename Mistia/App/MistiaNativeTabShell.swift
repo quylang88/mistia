@@ -10,6 +10,7 @@ struct MistiaNativeTabShell: UIViewControllerRepresentable {
   var showsShortcutTab: Bool
   var isShortcutSyncing: Bool
   var isShortcutDisabled: Bool
+  var isShortcutAttentionPulsing: Bool
   var shortcutDisabledAccessibilityHint: String?
   var shortcutPresentation: MistiaShortcutPresentation
   var onShortcutTap: () -> Void
@@ -30,6 +31,7 @@ struct MistiaNativeTabShell: UIViewControllerRepresentable {
       shortcutPresentation: shortcutPresentation,
       isShortcutSyncing: isShortcutSyncing,
       isShortcutDisabled: isShortcutDisabled,
+      isShortcutAttentionPulsing: isShortcutAttentionPulsing,
       shortcutDisabledAccessibilityHint: shortcutDisabledAccessibilityHint,
       hidesQuickCreate: hidesQuickCreate,
       hidesTabBar: hidesTabBar,
@@ -48,6 +50,7 @@ struct MistiaNativeTabShell: UIViewControllerRepresentable {
       shortcutPresentation: shortcutPresentation,
       isShortcutSyncing: isShortcutSyncing,
       isShortcutDisabled: isShortcutDisabled,
+      isShortcutAttentionPulsing: isShortcutAttentionPulsing,
       shortcutDisabledAccessibilityHint: shortcutDisabledAccessibilityHint,
       hidesQuickCreate: hidesQuickCreate,
       hidesTabBar: hidesTabBar,
@@ -123,9 +126,11 @@ final class MistiaNativeTabBarController: UITabBarController, UITabBarController
   )
   private var isCurrentShortcutSyncing = false
   private var isCurrentShortcutDisabled = false
+  private var isCurrentShortcutAttentionPulsing = false
   private var currentShortcutDisabledAccessibilityHint: String?
   private var currentSelectedMistiaTab: MistiaTab?
   private var spinnerActivityIndicatorView: UIActivityIndicatorView?
+  private var shortcutPulseLayer: CAShapeLayer?
 
   private lazy var quickCreateController = UIHostingController(
     rootView: MistiaQuickCreateFloatingButton(appLanguage: currentAppLanguage) { [weak self] in
@@ -164,6 +169,7 @@ final class MistiaNativeTabBarController: UITabBarController, UITabBarController
   override func viewDidLayoutSubviews() {
     super.viewDidLayoutSubviews()
     alignQuickCreateButtonToSearchPill()
+    updateShortcutPulseFrame()
     notifyQuickCreateFrameChanged()
   }
 
@@ -179,6 +185,7 @@ final class MistiaNativeTabBarController: UITabBarController, UITabBarController
     shortcutPresentation: MistiaShortcutPresentation,
     isShortcutSyncing: Bool,
     isShortcutDisabled: Bool,
+    isShortcutAttentionPulsing: Bool,
     shortcutDisabledAccessibilityHint: String?,
     hidesQuickCreate: Bool,
     hidesTabBar: Bool,
@@ -192,6 +199,7 @@ final class MistiaNativeTabBarController: UITabBarController, UITabBarController
       currentShortcutPresentation != shortcutPresentation
       || isCurrentShortcutSyncing != isShortcutSyncing
       || isCurrentShortcutDisabled != isShortcutDisabled
+      || isCurrentShortcutAttentionPulsing != isShortcutAttentionPulsing
       || currentShortcutDisabledAccessibilityHint != shortcutDisabledAccessibilityHint
     let didChangeSelectedTab = currentSelectedMistiaTab != selectedTab
 
@@ -200,6 +208,7 @@ final class MistiaNativeTabBarController: UITabBarController, UITabBarController
     currentShortcutPresentation = shortcutPresentation
     isCurrentShortcutSyncing = isShortcutSyncing
     isCurrentShortcutDisabled = isShortcutDisabled
+    isCurrentShortcutAttentionPulsing = isShortcutAttentionPulsing
     currentShortcutDisabledAccessibilityHint = shortcutDisabledAccessibilityHint
     overrideUserInterfaceStyle = appearanceMode.interfaceStyle
 
@@ -217,6 +226,7 @@ final class MistiaNativeTabBarController: UITabBarController, UITabBarController
     }
 
     updateShortcutTabVisibilityIfNeeded(showsShortcutTab: showsShortcutTab)
+    updateShortcutPulseAnimation()
     updateQuickCreateVisibility(isHidden: hidesQuickCreate || hidesTabBar)
     updateTabBarVisibility(isHidden: hidesTabBar)
     if isFirstRender || didChangeSelectedTab || didChangeAppearance {
@@ -327,6 +337,7 @@ final class MistiaNativeTabBarController: UITabBarController, UITabBarController
 
     if isCurrentShortcutSyncing && !isCurrentShortcutDisabled {
       currentShortcutImageKey = "syncing_spinner"
+      stopShortcutPulseAnimation()
       startSpinnerAnimation()
       return
     }
@@ -341,11 +352,13 @@ final class MistiaNativeTabBarController: UITabBarController, UITabBarController
 
       guard let avatarURL else {
         shortcutTab.image = shortcutSystemImage("person.crop.circle.fill")
+        updateShortcutPulseAnimation()
         return
       }
 
       if let cachedImage = shortcutAvatarImageCache[avatarURL.absoluteString] {
         shortcutTab.image = cachedImage
+        updateShortcutPulseAnimation()
         return
       }
 
@@ -358,17 +371,21 @@ final class MistiaNativeTabBarController: UITabBarController, UITabBarController
 
       guard let avatarURL else {
         shortcutTab.image = fallbackImage
+        updateShortcutPulseAnimation()
         return
       }
 
       if let cachedImage = shortcutAvatarImageCache[avatarURL.absoluteString] {
         shortcutTab.image = cachedImage
+        updateShortcutPulseAnimation()
         return
       }
 
       shortcutTab.image = fallbackImage
       loadShortcutAvatarImage(from: avatarURL, fallbackImage: fallbackImage)
     }
+
+    updateShortcutPulseAnimation()
   }
 
   private func loadShortcutAvatarImage(from url: URL, fallbackImage: UIImage?) {
@@ -455,6 +472,7 @@ final class MistiaNativeTabBarController: UITabBarController, UITabBarController
 
   private func startSpinnerAnimation() {
     stopSpinnerAnimation()
+    stopShortcutPulseAnimation()
     guard let tabButton = findSearchTabButton() else { return }
 
     let iconView = tabButton.subviews.first(where: { $0 is UIImageView }) as? UIImageView
@@ -485,6 +503,95 @@ final class MistiaNativeTabBarController: UITabBarController, UITabBarController
       let iconView = tabButton.subviews.first(where: { $0 is UIImageView }) as? UIImageView
       iconView?.isHidden = false
     }
+  }
+
+  private func updateShortcutPulseAnimation() {
+    guard #available(iOS 18.0, *) else { return }
+    guard isCurrentShortcutAttentionPulsing,
+      !isCurrentShortcutDisabled,
+      !isCurrentShortcutSyncing,
+      let tabButton = findSearchTabButton()
+    else {
+      stopShortcutPulseAnimation()
+      return
+    }
+
+    let pulseLayer: CAShapeLayer
+    if let shortcutPulseLayer {
+      pulseLayer = shortcutPulseLayer
+      if pulseLayer.superlayer !== tabButton.layer {
+        pulseLayer.removeFromSuperlayer()
+        tabButton.layer.addSublayer(pulseLayer)
+      }
+    } else {
+      pulseLayer = CAShapeLayer()
+      pulseLayer.fillColor = UIColor.clear.cgColor
+      pulseLayer.lineWidth = 1.5
+      shortcutPulseLayer = pulseLayer
+      tabButton.layer.addSublayer(pulseLayer)
+    }
+
+    updateShortcutPulseFrame()
+
+    guard pulseLayer.animation(forKey: "mistia.shortcut.memberPulse") == nil else { return }
+
+    let opacity = CABasicAnimation(keyPath: "opacity")
+    opacity.fromValue = 0.82
+    opacity.toValue = 0
+    opacity.duration = 1.6
+
+    let scale = CABasicAnimation(keyPath: "transform.scale")
+    scale.fromValue = 1
+    scale.toValue = 1.62
+    scale.duration = 1.6
+
+    let group = CAAnimationGroup()
+    group.animations = [opacity, scale]
+    group.duration = 2.5
+    group.repeatCount = .infinity
+    group.timingFunction = CAMediaTimingFunction(name: .easeOut)
+    group.isRemovedOnCompletion = false
+
+    pulseLayer.opacity = 0
+    pulseLayer.add(group, forKey: "mistia.shortcut.memberPulse")
+  }
+
+  private func updateShortcutPulseFrame() {
+    guard let pulseLayer = shortcutPulseLayer,
+      let tabButton = findSearchTabButton()
+    else { return }
+
+    let iconView = tabButton.subviews.first(where: { $0 is UIImageView }) as? UIImageView
+    let iconCenter: CGPoint
+    if let iconView, let iconSuperview = iconView.superview {
+      iconCenter = tabButton.convert(iconView.center, from: iconSuperview)
+    } else {
+      iconCenter = CGPoint(x: tabButton.bounds.midX, y: tabButton.bounds.midY - 7)
+    }
+
+    let side: CGFloat = 34
+    let rect = CGRect(
+      x: iconCenter.x - side / 2,
+      y: iconCenter.y - side / 2,
+      width: side,
+      height: side
+    ).integral
+
+    CATransaction.begin()
+    CATransaction.setDisableActions(true)
+    pulseLayer.frame = rect
+    pulseLayer.path = UIBezierPath(
+      ovalIn: CGRect(origin: .zero, size: rect.size).insetBy(dx: 1.2, dy: 1.2)
+    ).cgPath
+    pulseLayer.strokeColor = currentShortcutTint.cgColor
+    pulseLayer.zPosition = 10
+    CATransaction.commit()
+  }
+
+  private func stopShortcutPulseAnimation() {
+    shortcutPulseLayer?.removeAllAnimations()
+    shortcutPulseLayer?.removeFromSuperlayer()
+    shortcutPulseLayer = nil
   }
 
   private func makeShortcutFallbackAvatarImage(initials: String) -> UIImage? {

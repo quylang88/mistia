@@ -1969,8 +1969,10 @@ private struct FamilyRoleBadge: View {
 // MARK: - Family Overview Screen
 
 struct FamilyOverviewScreen: View {
+    var isModalPresentation: Bool = false
+
     var body: some View {
-        FamilyOverviewDataHost()
+        FamilyOverviewDataHost(isModalPresentation: isModalPresentation)
     }
 }
 
@@ -1980,6 +1982,9 @@ private struct FamilyOverviewDataHost: View {
     @Environment(\.locale) private var locale
     @Environment(SessionStore.self) private var sessionStore
     @Environment(FamilyContextStore.self) private var familyContextStore
+
+    let isModalPresentation: Bool
+
     @AppStorage(MistiaAppStorageKey.currencyCode) private var currencyCode = "JPY"
     @AppStorage(MistiaCurrencySettings.StorageKey.rateMode) private var currencyRateMode = MistiaCurrencyRateMode.automatic.rawValue
     @AppStorage(MistiaCurrencySettings.StorageKey.manualJPYToVNDRate) private var manualJPYToVNDRate = ""
@@ -2407,9 +2412,9 @@ private struct FamilyOverviewDataHost: View {
         let dataKey = overviewDataCacheKey
 
         MistiaPinnedTopBarScaffold(
-            tone: .standard,
+            tone: isModalPresentation ? .modal : .standard,
             title: familyContextStore.family?.name ?? L10n.family.family.family,
-            leadingSystemImage: "chevron.left",
+            leadingSystemImage: isModalPresentation ? "xmark" : "chevron.left",
             trailingSystemImage: nil,
             hidesSystemBackButton: true,
             onLeadingTap: { dismiss() },
@@ -2420,6 +2425,7 @@ private struct FamilyOverviewDataHost: View {
                 )
             },
             contentSpacing: 18,
+            contentBottomPadding: isModalPresentation ? 40 : 150,
             titleDisplayMode: .large
         ) {
             if let data = cachedOverviewData {

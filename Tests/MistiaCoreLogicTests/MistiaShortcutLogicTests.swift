@@ -173,6 +173,18 @@ final class MistiaShortcutLogicTests: XCTestCase {
         XCTAssertEqual(resolution.presentation.title, "Sao lưu & Khôi phục")
     }
 
+    func testMemberShortcutTapPromptsExitWhenTargetIsAlreadyViewedMember() {
+        let memberID = UUID()
+
+        XCTAssertEqual(
+            MistiaShortcutInteractionLogic.memberOverviewTapAction(
+                targetUserID: memberID,
+                currentViewedMemberUserID: memberID
+            ),
+            .promptExitMemberView
+        )
+    }
+
     private func makeInput(
         familyID: UUID? = UUID(),
         canOpenFamilyHome: Bool = true,

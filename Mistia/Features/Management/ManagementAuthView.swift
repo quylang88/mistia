@@ -2735,12 +2735,12 @@ private struct ManagementEditProfileView: View {
                     showsPrivacySheet = true
                 } label: {
                     Text(privacyButtonTitle)
-                        .font(.system(size: 15, weight: .semibold, design: .rounded))
+                        .font(.system(size: 13, weight: .semibold, design: .rounded))
                         .foregroundStyle(accent)
-                        .multilineTextAlignment(.center)
-                        .frame(maxWidth: .infinity)
-                        .padding(.horizontal, 18)
-                        .padding(.vertical, 6)
+                        .multilineTextAlignment(.leading)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.horizontal, 4)
+                        .padding(.vertical, 4)
                 }
                 .buttonStyle(.plain)
             }
@@ -2806,7 +2806,7 @@ private struct ManagementEditProfileView: View {
             Text(profileErrorMessage ?? "")
         }
         .sheet(isPresented: $showsPrivacySheet) {
-            MistiaPrivacySheet()
+            MistiaPrivacySheet(context: .profile)
         }
         .task {
             draftAvatarURL = sessionStore.summary?.avatarURL ?? summary.avatarURL
@@ -3914,6 +3914,8 @@ struct ManagementBackupRestoreView: View {
     @Environment(\.colorScheme) private var colorScheme
     @Environment(SessionStore.self) private var sessionStore
 
+    var isModalPresentation: Bool = false
+
     @State private var restoreMode: MistiaBackupRestoreMode = .merge
     @State private var isImporting = false
     @State private var isRestoring = false
@@ -3936,15 +3938,16 @@ struct ManagementBackupRestoreView: View {
 
     var body: some View {
         MistiaPinnedTopBarScaffold(
-            tone: .standard,
+            tone: isModalPresentation ? .modal : .standard,
             title: L10n.management.managementauth.backupRestore,
             embedsInNavigationStack: false,
             showsLeadingAvatar: false,
-            leadingSystemImage: "chevron.left",
+            leadingSystemImage: isModalPresentation ? "xmark" : "chevron.left",
             trailingSystemImage: nil,
             hidesSystemBackButton: true,
             onLeadingTap: { dismiss() },
-            contentSpacing: 18
+            contentSpacing: 18,
+            contentBottomPadding: isModalPresentation ? 40 : 150
         ) {
             ManagementInlineMessageCard(
                 title: L10n.management.managementauth.emergencySnapshot,

@@ -11617,6 +11617,160 @@
         }
       }
     },
+    "management.profilePrivacy.mistiaUsesThisInformationToShow": {
+      "localizations": {
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Thông tin này được dùng để hiển thị hồ sơ trong màn quản lý, các form liên quan đến tài khoản, quyền truy cập và những khu vực cần biết ai đang thao tác. Việc sử dụng dữ liệu được giới hạn trong phạm vi cần thiết cho trải nghiệm quản lý tài khoản và không yêu cầu thêm thông tin ngoài mục đích bạn đang thực hiện."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This information is used to show your profile in management screens, account-related forms, access controls, and places where the app needs to identify who is acting. Data use is limited to what is necessary for the account experience and does not require extra information beyond the task you are performing."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "この情報は、管理画面、アカウント関連フォーム、アクセス権、誰が操作しているかを示す必要がある場所でプロフィールを表示するために使用されます。データの利用はアカウント体験に必要な範囲に限られ、実行中の目的を超える追加情報は求めません。"
+          }
+        }
+      }
+    },
+    "management.profilePrivacy.personalInformationPrivacy": {
+      "localizations": {
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Thông tin cá nhân & Bảo mật"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Personal Information & Privacy"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "個人情報とプライバシー"
+          }
+        }
+      }
+    },
+    "management.profilePrivacy.profileChangesUseYourSignedIn": {
+      "localizations": {
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Thay đổi hồ sơ được thực hiện trong phiên đăng nhập của bạn và nên được bảo vệ bằng các cơ chế bảo mật của iOS như khóa thiết bị, quyền truy cập ảnh hoặc camera và xác thực tài khoản. Khi bạn chọn ảnh đại diện, chỉ ảnh bạn chọn mới được dùng cho hồ sơ; Mistia không cần xem toàn bộ thư viện ngoài quyền bạn cấp tại thời điểm chọn."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Profile changes happen inside your signed-in session and should be protected by iOS security controls such as device lock, photo or camera permissions, and account authentication. When you choose a profile photo, only the photo you select is used for the profile; Mistia does not need broad access to your library beyond the permission you grant at the moment you choose it."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "プロフィールの変更はサインイン中のセッション内で行われ、デバイスロック、写真またはカメラの権限、アカウント認証などの iOS の保護機能で守られるべきものです。プロフィール写真を選ぶ場合、使用されるのは選択した写真だけで、選択時に許可した範囲を超えてライブラリ全体を見る必要はありません。"
+          }
+        }
+      }
+    },
+    "management.profilePrivacy.profileInformationHelpsMistiaKeepYour": {
+      "localizations": {
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hồ sơ giúp hiển thị đúng tên, ảnh đại diện và thông tin tài khoản cơ bản của bạn. Dữ liệu hồ sơ được dùng để nhận diện bạn trong ứng dụng, bảo vệ quyền kiểm soát của bạn và giải thích rõ nơi thông tin có thể xuất hiện."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Your profile helps show the right name, avatar, and basic account information. Profile data is used to identify you in the app, protect your control, and explain clearly where that information may appear."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "プロフィールは、正しい名前、アバター、基本的なアカウント情報を表示するために使われます。プロフィールデータは、アプリ内であなたを識別し、利用者のコントロールを守り、どこに情報が表示されるかを明確にするために使用されます。"
+          }
+        }
+      }
+    },
+    "management.profilePrivacy.sensitivePersonalDetailsShouldOnlyBe": {
+      "localizations": {
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Các thông tin nhạy cảm hơn, như ngày sinh, chỉ nên được cung cấp khi cần cho trải nghiệm tài khoản, độ tuổi hoặc quyền truy cập. Bạn có thể để trống các mục không bắt buộc; những gì bạn không nhập sẽ không được dùng để cá nhân hóa hoặc hiển thị trong hồ sơ."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "More sensitive details, such as birthday, should be provided only when needed for the account experience, age handling, or access rules. You can leave optional fields blank; information you do not enter is not used for personalization or profile display."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "誕生日など、より慎重に扱うべき情報は、アカウント体験、年齢に関する扱い、アクセス権に必要な場合だけ入力するものです。任意項目は空のままにでき、入力しない情報がパーソナライズやプロフィール表示に使われることはありません。"
+          }
+        }
+      }
+    },
+    "management.profilePrivacy.youStayInControlOfProfile": {
+      "localizations": {
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bạn vẫn kiểm soát hồ sơ của mình: có thể sửa tên, đổi ảnh, đăng xuất hoặc xóa tài khoản theo các lựa chọn trong ứng dụng. Nếu một thông tin xuất hiện ở nơi có người khác cùng sử dụng Mistia, màn hình đó chỉ nên hiển thị phần cần thiết như tên hoặc avatar để nhận biết đúng người, không phải toàn bộ thông tin cá nhân."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "You stay in control of your profile: you can edit your name, change your photo, sign out, or delete the account using the choices in the app. If information appears where another Mistia user may see it, that screen should show only what is needed to recognize the right person, such as name or avatar, not the full set of personal details."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "プロフィールの管理は利用者自身が行えます。アプリ内の選択肢から名前の編集、写真の変更、サインアウト、アカウント削除ができます。他のミスティア利用者が見る可能性のある場所に情報が表示される場合も、正しい人を識別するために必要な名前やアバターなどに限り、個人情報全体を表示しないことを前提にしています。"
+          }
+        }
+      }
+    },
+    "management.profilePrivacy.yourNameProfilePhotoEmailAnd": {
+      "localizations": {
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tên, ảnh đại diện, email và ngày sinh (nếu bạn thêm) là thông tin có thể liên kết với tài khoản của bạn. Những dữ liệu này được dùng để nhận diện hồ sơ, hỗ trợ đăng nhập, hiển thị thông tin tài khoản và giúp bạn phân biệt dữ liệu của mình với dữ liệu của người khác trên cùng thiết bị."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Your name, profile photo, email, and birthday if you add one are information that can be linked to your account. These details are used to identify the profile, support sign-in, show account information, and help separate your data from other people's data on the same device."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "名前、プロフィール写真、メールアドレス、入力した場合の誕生日は、アカウントに紐づく可能性のある情報です。これらはプロフィールの識別、サインインの補助、アカウント情報の表示、同じデバイス上の他の人のデータとの区別に使われます。"
+          }
+        }
+      }
+    },
     "management.managementauth.nameUnavailable": {
       "localizations": {
         "vi": {

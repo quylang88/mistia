@@ -1732,7 +1732,7 @@ struct ManagementBalanceAdjustmentSheet: View {
             }
             .alert(L10n.management.management.notice, isPresented: $showsConfirmation) {
                 Button(L10n.common.cancel, role: .cancel) { }
-                Button(L10n.management.management.agree) {
+                Button(L10n.management.management.agree, role: .destructive) {
                     save()
                 }
             } message: {

@@ -1,16 +1,51 @@
 import SwiftUI
 
+enum MistiaPrivacySheetContext {
+    case familySharing
+    case profile
+}
+
 struct MistiaPrivacySheet: View {
     @Environment(\.dismiss) private var dismiss
+
+    var context: MistiaPrivacySheetContext = .familySharing
+
+    private var content: MistiaPrivacySheetContent {
+        switch context {
+        case .familySharing:
+            MistiaPrivacySheetContent(
+                symbolName: "person.2.fill",
+                title: L10n.family.mistiaprivacy.familySharingPrivacy,
+                subtitle: L10n.family.mistiaprivacy.familySharingIsDesignedToProtectYour,
+                bullets: [
+                    L10n.family.mistiaprivacy.theAgeAndCountryOrRegionAssociated,
+                    L10n.family.mistiaprivacy.whenYouStartOrJoinAFamily,
+                    L10n.family.mistiaprivacy.mistiaUsesDataAboutYourFamilyMembership
+                ]
+            )
+        case .profile:
+            MistiaPrivacySheetContent(
+                symbolName: "person.text.rectangle.fill",
+                title: L10n.management.profilePrivacy.personalInformationPrivacy,
+                subtitle: L10n.management.profilePrivacy.profileInformationHelpsMistiaKeepYour,
+                bullets: [
+                    L10n.management.profilePrivacy.yourNameProfilePhotoEmailAnd,
+                    L10n.management.profilePrivacy.mistiaUsesThisInformationToShow,
+                    L10n.management.profilePrivacy.sensitivePersonalDetailsShouldOnlyBe,
+                    L10n.management.profilePrivacy.profileChangesUseYourSignedIn,
+                    L10n.management.profilePrivacy.youStayInControlOfProfile
+                ]
+            )
+        }
+    }
 
     var body: some View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: 28) {
-                    // Hero Icon
                     HStack {
                         Spacer()
-                        Image(systemName: "person.2.fill")
+                        Image(systemName: content.symbolName)
                             .font(.system(size: 64))
                             .foregroundStyle(MistiaAccent.purple.color)
                         Spacer()
@@ -18,27 +53,19 @@ struct MistiaPrivacySheet: View {
                     .padding(.top, 30)
 
                     VStack(alignment: .leading, spacing: 16) {
-                        Text(L10n.family.mistiaprivacy.familySharingPrivacy)
+                        Text(content.title)
                         .font(.system(size: 26, weight: .bold, design: .rounded))
                         .multilineTextAlignment(.leading)
 
-                        Text(L10n.family.mistiaprivacy.familySharingIsDesignedToProtectYour)
+                        Text(content.subtitle)
                         .font(.system(size: 16, weight: .medium, design: .rounded))
                         .foregroundStyle(.secondary)
                     }
 
                     VStack(alignment: .leading, spacing: 24) {
-                        privacyBulletItem(
-                            description: L10n.family.mistiaprivacy.theAgeAndCountryOrRegionAssociated
-                        )
-
-                        privacyBulletItem(
-                            description: L10n.family.mistiaprivacy.whenYouStartOrJoinAFamily
-                        )
-                        
-                        privacyBulletItem(
-                            description: L10n.family.mistiaprivacy.mistiaUsesDataAboutYourFamilyMembership
-                        )
+                        ForEach(Array(content.bullets.enumerated()), id: \.offset) { _, bullet in
+                            privacyBulletItem(description: bullet)
+                        }
                     }
                 }
                 .padding(.horizontal, 28)
@@ -71,4 +98,11 @@ struct MistiaPrivacySheet: View {
                 .fixedSize(horizontal: false, vertical: true)
         }
     }
+}
+
+private struct MistiaPrivacySheetContent {
+    let symbolName: String
+    let title: String
+    let subtitle: String
+    let bullets: [String]
 }

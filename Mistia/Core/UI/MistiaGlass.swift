@@ -3,6 +3,7 @@ import SwiftUI
 enum MistiaBackgroundTone {
     case standard
     case muted
+    case modal
 }
 
 struct MistiaBackgroundView: View {
@@ -31,6 +32,10 @@ struct MistiaBackgroundView: View {
             Color.black
         case (.muted, .light):
             Color(red: 0.97, green: 0.97, blue: 0.98)
+        case (.modal, .dark):
+            Color(UIColor.systemGroupedBackground)
+        case (.modal, .light):
+            Color(red: 0.93, green: 0.94, blue: 0.96)
         @unknown default:
             Color(red: 0.96, green: 0.96, blue: 0.98)
         }
