@@ -31,6 +31,7 @@ struct AIBillAnalysisView: View {
     @State private var isAnalyzing = false
     @State private var imageProcessingTask: Task<Void, Never>?
     @State private var hideRequestID = UUID()
+    @State private var renderContextCache: AIBillRenderContextCache?
 
     private let imageLimit = 5
 
@@ -42,14 +43,16 @@ struct AIBillAnalysisView: View {
     }()
 
     var body: some View {
+        let renderContextKey = renderContextCacheKey
+        let renderContext = renderContextKey.map(cachedRenderContext)
+
         ScrollView {
             VStack(spacing: 18) {
                 actionSection
                 modeSection
                 if bills.isEmpty {
                     emptyState
-                } else {
-                    let renderContext = makeRenderContext()
+                } else if let renderContext {
                     ForEach(bills) { bill in
                         billCard(bill, renderContext: renderContext)
                     }
@@ -150,6 +153,13 @@ struct AIBillAnalysisView: View {
             imageProcessingTask?.cancel()
             imageProcessingTask = nil
             isLoadingPhotos = false
+        }
+        .task(id: renderContextKey) {
+            guard let renderContextKey, let renderContext else {
+                renderContextCache = nil
+                return
+            }
+            refreshRenderContextCache(for: renderContextKey, context: renderContext)
         }
     }
 
@@ -710,18 +720,103 @@ struct AIBillAnalysisView: View {
 
     private var currentSelectionSnapshot: BillItemSelectionSnapshot {
         BillItemSelectionSnapshot(
-            bills: bills.map { bill in
-                BillItemSelectionBillSnapshot(
-                    billID: bill.id,
-                    walletID: bill.walletID,
-                    merchantName: bill.result?.merchantName,
-                    occurredAt: bill.result?.occurredAt,
-                    items: bill.result?.items ?? [],
-                    createdAllocations: bill.createdAllocations,
-                    lockedGroups: bill.lockedGroups
-                )
-            },
+            bills: billSelectionSnapshots,
             selectedQuantities: selectedQuantities
+        )
+    }
+
+    private var billSelectionSnapshots: [BillItemSelectionBillSnapshot] {
+        bills.map { bill in
+            BillItemSelectionBillSnapshot(
+                billID: bill.id,
+                walletID: bill.walletID,
+                merchantName: bill.result?.merchantName,
+                occurredAt: bill.result?.occurredAt,
+                items: bill.result?.items ?? [],
+                createdAllocations: bill.createdAllocations,
+                lockedGroups: bill.lockedGroups
+            )
+        }
+    }
+
+    private var renderContextCacheKey: AIBillRenderContextCacheKey? {
+        guard !bills.isEmpty else { return nil }
+        let access = walletPickerAccess
+        return AIBillRenderContextCacheKey(
+            mode: mode,
+            bills: billSelectionSnapshots,
+            selectedQuantities: selectedQuantities,
+            quickCreateSubjectUserID: quickCreateSubjectUserID,
+            currentSelfUserID: access.currentSelfUserID,
+            activeLocalProfileUserID: sessionStore.activeLocalProfileUserID,
+            signedInUserID: sessionStore.signedInUserID,
+            selectedSubjectUserID: familyContextStore.selectedSubjectUserID,
+            familyAccessSignature: familyAccessSignature,
+            walletSignature: MistiaCollectionChangeSignature.make(
+                storedWallets,
+                updatedAt: \.updatedAt,
+                deletedAt: \.deletedAt,
+                isArchived: \.isArchived,
+                remoteVersion: \.remoteVersion
+            ),
+            categorySignature: MistiaCollectionChangeSignature.make(
+                storedCategories,
+                updatedAt: \.updatedAt,
+                deletedAt: \.deletedAt,
+                isArchived: \.isArchived,
+                remoteVersion: \.remoteVersion
+            ),
+            ownershipSignature: MistiaCollectionChangeSignature.make(
+                ownershipScopes,
+                updatedAt: \.updatedAt,
+                deletedAt: { _ in nil }
+            )
+        )
+    }
+
+    private var familyAccessSignature: Int {
+        var hasher = Hasher()
+        hasher.combine(familyContextStore.family?.id)
+        hasher.combine(familyContextStore.activeContext.scope)
+        hasher.combine(familyContextStore.currentMembership?.id)
+        hasher.combine(familyContextStore.currentMembership?.updatedAt.timeIntervalSince1970)
+        hasher.combine(familyContextStore.members.count)
+        for member in familyContextStore.members {
+            hasher.combine(member.membershipID)
+            hasher.combine(member.userID)
+            hasher.combine(member.displayName)
+            hasher.combine(member.role.rawValue)
+            hasher.combine(member.hasSyncedCloudData)
+        }
+        hasher.combine(familyContextStore.permissionGrants.count)
+        for grant in familyContextStore.permissionGrants {
+            hasher.combine(grant.id)
+            hasher.combine(grant.granteeUserID)
+            hasher.combine(grant.ownerUserID)
+            hasher.combine(grant.resourceTypeRawValue)
+            hasher.combine(grant.resourceID)
+            hasher.combine(grant.permissionScopeRawValue)
+            hasher.combine(grant.updatedAt.timeIntervalSince1970)
+            hasher.combine(grant.revokedAt?.timeIntervalSince1970)
+        }
+        return hasher.finalize()
+    }
+
+    private func cachedRenderContext(for key: AIBillRenderContextCacheKey) -> AIBillRenderContext {
+        if let renderContextCache, renderContextCache.key == key {
+            return renderContextCache.context
+        }
+
+        return makeRenderContext()
+    }
+
+    private func refreshRenderContextCache(
+        for key: AIBillRenderContextCacheKey,
+        context: AIBillRenderContext
+    ) {
+        renderContextCache = AIBillRenderContextCache(
+            key: key,
+            context: context
         )
     }
 
@@ -1345,6 +1440,208 @@ struct AIBillDraft: Identifiable {
     var currencyCode: String {
         result?.currencyCode ?? "JPY"
     }
+}
+
+struct AIBillRenderContextCacheKey: Hashable {
+    private let modeRawValue: String
+    private let bills: [BillSignature]
+    private let selectedQuantities: [SelectionQuantitySignature]
+    private let quickCreateSubjectUserID: UUID?
+    private let currentSelfUserID: UUID?
+    private let activeLocalProfileUserID: UUID?
+    private let signedInUserID: UUID?
+    private let selectedSubjectUserID: UUID?
+    private let familyAccessSignature: Int
+    private let walletSignature: MistiaCollectionChangeSignature
+    private let categorySignature: MistiaCollectionChangeSignature
+    private let ownershipSignature: MistiaCollectionChangeSignature
+
+    init(
+        mode: BillItemTransactionMode,
+        bills: [BillItemSelectionBillSnapshot],
+        selectedQuantities: [BillItemSelectionID: Int],
+        quickCreateSubjectUserID: UUID?,
+        currentSelfUserID: UUID?,
+        activeLocalProfileUserID: UUID?,
+        signedInUserID: UUID?,
+        selectedSubjectUserID: UUID?,
+        familyAccessSignature: Int,
+        walletSignature: MistiaCollectionChangeSignature,
+        categorySignature: MistiaCollectionChangeSignature,
+        ownershipSignature: MistiaCollectionChangeSignature
+    ) {
+        self.modeRawValue = mode.rawValue
+        self.bills = Self.billSignatures(from: bills)
+        self.selectedQuantities = Self.selectionQuantitySignatures(from: selectedQuantities)
+        self.quickCreateSubjectUserID = quickCreateSubjectUserID
+        self.currentSelfUserID = currentSelfUserID
+        self.activeLocalProfileUserID = activeLocalProfileUserID
+        self.signedInUserID = signedInUserID
+        self.selectedSubjectUserID = selectedSubjectUserID
+        self.familyAccessSignature = familyAccessSignature
+        self.walletSignature = walletSignature
+        self.categorySignature = categorySignature
+        self.ownershipSignature = ownershipSignature
+    }
+
+    private static func billSignatures(
+        from bills: [BillItemSelectionBillSnapshot]
+    ) -> [BillSignature] {
+        var signatures: [BillSignature] = []
+        signatures.reserveCapacity(bills.count)
+
+        for bill in bills {
+            var itemSignatures: [ItemSignature] = []
+            itemSignatures.reserveCapacity(bill.items.count)
+            for item in bill.items {
+                itemSignatures.append(
+                    ItemSignature(
+                        lineID: item.lineID,
+                        lineTypeRawValue: item.lineType.rawValue,
+                        quantity: item.quantity,
+                        finalAmountMinor: item.finalAmountMinor,
+                        categoryID: item.categoryID
+                    )
+                )
+            }
+
+            var createdAllocationSignatures: [AllocationSignature] = []
+            createdAllocationSignatures.reserveCapacity(bill.createdAllocations.count)
+            for (itemID, allocation) in bill.createdAllocations {
+                createdAllocationSignatures.append(
+                    AllocationSignature(
+                        itemID: itemID,
+                        quantity: allocation.quantity,
+                        amountMinor: allocation.amountMinor
+                    )
+                )
+            }
+            createdAllocationSignatures.sort { $0.itemID < $1.itemID }
+
+            var lockedGroupSignatures: [LockedGroupSignature] = []
+            lockedGroupSignatures.reserveCapacity(bill.lockedGroups.count)
+            for group in bill.lockedGroups {
+                var allocationSignatures: [LockedGroupAllocationSignature] = []
+                allocationSignatures.reserveCapacity(group.itemAllocations.count)
+                for (id, allocation) in group.itemAllocations {
+                    allocationSignatures.append(
+                        LockedGroupAllocationSignature(
+                            billID: id.billID,
+                            itemID: id.itemID,
+                            quantity: allocation.quantity,
+                            amountMinor: allocation.amountMinor
+                        )
+                    )
+                }
+                allocationSignatures.sort {
+                    if $0.billID != $1.billID {
+                        return $0.billID.uuidString < $1.billID.uuidString
+                    }
+                    return $0.itemID < $1.itemID
+                }
+                lockedGroupSignatures.append(
+                    LockedGroupSignature(
+                        id: group.id,
+                        modeRawValue: group.mode.rawValue,
+                        amountMinor: group.amountMinor,
+                        itemAllocations: allocationSignatures
+                    )
+                )
+            }
+            lockedGroupSignatures.sort {
+                if $0.id != $1.id {
+                    return $0.id.uuidString < $1.id.uuidString
+                }
+                return $0.amountMinor < $1.amountMinor
+            }
+
+            signatures.append(
+                BillSignature(
+                    billID: bill.billID,
+                    walletID: bill.walletID,
+                    merchantName: bill.merchantName,
+                    occurredAt: bill.occurredAt?.timeIntervalSince1970,
+                    items: itemSignatures,
+                    createdAllocations: createdAllocationSignatures,
+                    lockedGroups: lockedGroupSignatures
+                )
+            )
+        }
+
+        return signatures
+    }
+
+    private static func selectionQuantitySignatures(
+        from selectedQuantities: [BillItemSelectionID: Int]
+    ) -> [SelectionQuantitySignature] {
+        var signatures: [SelectionQuantitySignature] = []
+        signatures.reserveCapacity(selectedQuantities.count)
+        for (id, quantity) in selectedQuantities {
+            signatures.append(
+                SelectionQuantitySignature(
+                    billID: id.billID,
+                    itemID: id.itemID,
+                    quantity: quantity
+                )
+            )
+        }
+        signatures.sort {
+            if $0.billID != $1.billID {
+                return $0.billID.uuidString < $1.billID.uuidString
+            }
+            return $0.itemID < $1.itemID
+        }
+        return signatures
+    }
+
+    private nonisolated struct BillSignature: Hashable {
+        let billID: UUID
+        let walletID: UUID?
+        let merchantName: String?
+        let occurredAt: TimeInterval?
+        let items: [ItemSignature]
+        let createdAllocations: [AllocationSignature]
+        let lockedGroups: [LockedGroupSignature]
+    }
+
+    private nonisolated struct ItemSignature: Hashable {
+        let lineID: String
+        let lineTypeRawValue: String
+        let quantity: Int?
+        let finalAmountMinor: Int64
+        let categoryID: UUID?
+    }
+
+    private nonisolated struct AllocationSignature: Hashable {
+        let itemID: String
+        let quantity: Int
+        let amountMinor: Int64
+    }
+
+    private nonisolated struct LockedGroupSignature: Hashable {
+        let id: UUID
+        let modeRawValue: String
+        let amountMinor: Int64
+        let itemAllocations: [LockedGroupAllocationSignature]
+    }
+
+    private nonisolated struct LockedGroupAllocationSignature: Hashable {
+        let billID: UUID
+        let itemID: String
+        let quantity: Int
+        let amountMinor: Int64
+    }
+
+    private nonisolated struct SelectionQuantitySignature: Hashable {
+        let billID: UUID
+        let itemID: String
+        let quantity: Int
+    }
+}
+
+private struct AIBillRenderContextCache {
+    let key: AIBillRenderContextCacheKey
+    let context: AIBillRenderContext
 }
 
 private struct AIBillRenderContext {
