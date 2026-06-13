@@ -59,4 +59,70 @@ final class MistiaUnsavedChangesDismissalTests: XCTestCase {
             )
         )
     }
+
+    func testSharedExpenseEditDetectsPersistedLinkedBillRemovedByTrash() {
+        let billID = UUID(uuidString: "A76F2322-891E-49C9-A10A-48C19574A61C")!
+        let baseline = MistiaSharedExpenseDismissalSnapshot(
+            eventTitle: "Tokyo Trip",
+            participantRows: [],
+            selectedSharedWalletID: nil,
+            selectedSharedCategoryID: nil,
+            eventNote: "",
+            linkedBillIDs: [billID],
+            billRows: []
+        )
+        let current = MistiaSharedExpenseDismissalSnapshot(
+            eventTitle: "Tokyo Trip",
+            participantRows: [],
+            selectedSharedWalletID: nil,
+            selectedSharedCategoryID: nil,
+            eventNote: "",
+            linkedBillIDs: [],
+            billRows: []
+        )
+
+        XCTAssertTrue(
+            MistiaSharedExpenseDismissalDecision.hasUnsavedChanges(
+                baseline: baseline,
+                current: current
+            )
+        )
+    }
+
+    func testSharedExpenseEditDetectsDraftBillRowRemovedByTrash() {
+        let rowID = UUID(uuidString: "7F3B26D5-3011-41C1-A826-0CDE257BE951")!
+        let transactionID = UUID(uuidString: "FA957E7B-4B8C-42D4-B715-BE24F69F2C51")!
+        let baseline = MistiaSharedExpenseDismissalSnapshot(
+            eventTitle: "Tokyo Trip",
+            participantRows: [],
+            selectedSharedWalletID: nil,
+            selectedSharedCategoryID: nil,
+            eventNote: "",
+            linkedBillIDs: [],
+            billRows: [
+                MistiaSharedExpenseBillDismissalSnapshot(
+                    id: rowID,
+                    modeRawValue: "existingExpense",
+                    hasStagedTransaction: false,
+                    existingTransactionID: transactionID
+                )
+            ]
+        )
+        let current = MistiaSharedExpenseDismissalSnapshot(
+            eventTitle: "Tokyo Trip",
+            participantRows: [],
+            selectedSharedWalletID: nil,
+            selectedSharedCategoryID: nil,
+            eventNote: "",
+            linkedBillIDs: [],
+            billRows: []
+        )
+
+        XCTAssertTrue(
+            MistiaSharedExpenseDismissalDecision.hasUnsavedChanges(
+                baseline: baseline,
+                current: current
+            )
+        )
+    }
 }

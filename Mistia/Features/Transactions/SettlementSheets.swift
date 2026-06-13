@@ -776,11 +776,6 @@ struct SettlementEditorSheet: View {
         billRows[index].stagedTransaction = nil
         selectedSharedWalletID = transaction.sourceWallet?.id ?? selectedSharedWalletID
         selectedSharedCategoryID = transaction.category?.id ?? selectedSharedCategoryID
-
-        if editingSharedExpenseGroup != nil {
-            persistLinkedBillUpdate(transaction)
-            billRows.removeAll { $0.id == rowID }
-        }
     }
 
     private func applyExistingTransaction(_ transaction: LedgerTransaction, toBillRow rowID: UUID) {
@@ -788,11 +783,6 @@ struct SettlementEditorSheet: View {
         billRows[index].mode = .existingExpense
         billRows[index].existingTransactionID = transaction.id
         billRows[index].stagedTransaction = nil
-
-        if editingSharedExpenseGroup != nil {
-            persistLinkedBillUpdate(transaction)
-            billRows.removeAll { $0.id == rowID }
-        }
     }
 
     private func sharedParticipantName(for id: UUID) -> String {
