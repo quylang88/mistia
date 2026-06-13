@@ -1876,6 +1876,8 @@ struct TransactionCashflowRow: View {
     let primaryCurrencyCode: String
     let exchangeRateIndex: MistiaExchangeRateIndex
     var showsExpenseMinusSign: Bool = true
+    var subtitleLineLimit: Int = 2
+    var showsAuditSubtitle: Bool = true
 
     private var icon: String {
         switch record.primaryKind {
@@ -2133,10 +2135,10 @@ struct TransactionCashflowRow: View {
                 Text(subtitle)
                     .font(.system(size: 12, weight: .medium, design: .rounded))
                     .foregroundStyle(.secondary)
-                    .lineLimit(2)
+                    .lineLimit(subtitleLineLimit)
                     .truncationMode(.tail)
 
-                if let auditSubtitle {
+                if showsAuditSubtitle, let auditSubtitle {
                     Text(auditSubtitle)
                         .font(.system(size: 11, weight: .semibold, design: .rounded))
                         .foregroundStyle(.tertiary)

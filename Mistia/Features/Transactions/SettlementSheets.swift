@@ -634,9 +634,11 @@ struct SettlementEditorSheet: View {
                         familyContextStore: familyContextStore,
                         hasFamilyOwnerConflict: false,
                         primaryCurrencyCode: primaryCurrencyCode,
-                        exchangeRateIndex: MistiaExchangeRateIndex(rates: MistiaCurrencySettings.rates())
+                        exchangeRateIndex: MistiaExchangeRateIndex(rates: MistiaCurrencySettings.rates()),
+                        subtitleLineLimit: 1,
+                        showsAuditSubtitle: false
                     )
-                    .padding(.vertical, 12)
+                    .padding(.vertical, 7)
                     .frame(maxWidth: .infinity, alignment: .leading)
                 }
                 .buttonStyle(.plain)
@@ -644,9 +646,11 @@ struct SettlementEditorSheet: View {
                     Button(role: .destructive) {
                         detachBill(bill)
                     } label: {
-                        Label(L10n.common.delete, systemImage: "trash")
+                        Image(systemName: "trash")
                     }
+                    .accessibilityLabel(L10n.common.delete)
                 }
+                .listRowInsets(EdgeInsets(top: 0, leading: 14, bottom: 0, trailing: 14))
             }
 
             ForEach($billRows) { $row in
@@ -673,7 +677,8 @@ struct SettlementEditorSheet: View {
             ) {
                 showingBillAddOptions = true
             }
-            .padding(.vertical, 14)
+            .padding(.vertical, 10)
+            .listRowInsets(EdgeInsets(top: 0, leading: 14, bottom: 0, trailing: 14))
         }
     }
 
@@ -2803,20 +2808,24 @@ private struct SharedExpenseBillDraftRow: View {
                     familyContextStore: familyContextStore,
                     hasFamilyOwnerConflict: false,
                     primaryCurrencyCode: primaryCurrencyCode,
-                    exchangeRateIndex: exchangeRateIndex
+                    exchangeRateIndex: exchangeRateIndex,
+                    subtitleLineLimit: 1,
+                    showsAuditSubtitle: false
                 )
             } else {
                 placeholderContent
             }
         }
         .buttonStyle(.plain)
-        .padding(.vertical, 12)
+        .padding(.vertical, 7)
         .frame(maxWidth: .infinity, alignment: .leading)
         .swipeActions(edge: .trailing, allowsFullSwipe: false) {
             Button(role: .destructive, action: onRemove) {
-                Label(L10n.common.delete, systemImage: "trash")
+                Image(systemName: "trash")
             }
+            .accessibilityLabel(L10n.common.delete)
         }
+        .listRowInsets(EdgeInsets(top: 0, leading: 14, bottom: 0, trailing: 14))
     }
 
     private var selectedStagedTransaction: LedgerTransaction? {
@@ -2854,7 +2863,7 @@ private struct SharedExpenseBillDraftRow: View {
                 Text(row.mode == .newExpense ? L10n.transactions.settlement.addNewExpense : L10n.transactions.settlement.chooseExistingExpense)
                     .font(.system(size: 12, weight: .medium, design: .rounded))
                     .foregroundStyle(.secondary)
-                    .lineLimit(2)
+                    .lineLimit(1)
                     .truncationMode(.tail)
             }
             .layoutPriority(1)
