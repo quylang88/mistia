@@ -638,7 +638,7 @@ struct SettlementEditorSheet: View {
                         subtitleLineLimit: 1,
                         showsAuditSubtitle: false
                     )
-                    .padding(.vertical, 7)
+                    .padding(.vertical, 12)
                     .frame(maxWidth: .infinity, alignment: .leading)
                 }
                 .buttonStyle(.plain)
@@ -2817,7 +2817,7 @@ private struct SharedExpenseBillDraftRow: View {
             }
         }
         .buttonStyle(.plain)
-        .padding(.vertical, 7)
+        .padding(.vertical, 12)
         .frame(maxWidth: .infinity, alignment: .leading)
         .swipeActions(edge: .trailing, allowsFullSwipe: false) {
             Button(role: .destructive, action: onRemove) {
