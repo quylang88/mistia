@@ -3521,12 +3521,7 @@ private struct ManagementSignedInDeviceRow: View {
     }
 
     private var modelText: String {
-        let displayName = trimmed(device.modelDisplayName)
-        if !displayName.isEmpty {
-            return displayName
-        }
-
-        return trimmed(device.modelIdentifier)
+        trimmed(device.modelListDisplayName)
     }
 
     private var systemText: String {
