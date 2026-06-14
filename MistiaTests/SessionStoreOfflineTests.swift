@@ -1601,6 +1601,35 @@ final class SessionStoreOfflineTests: XCTestCase {
         XCTAssertTrue(store.syncStatusDetail.contains("same account"))
     }
 
+    func testBootstrapRestoresLocalSessionWithoutWaitingForSlowAccountDeviceRefresh() async throws {
+        let session = makeSession()
+        let authService = SessionAuthServiceSpy(persistedSession: session)
+        let accountDeviceStore = BlockingFailingAccountDeviceRegistrySpy()
+        let store = try makeSessionStore(
+            authService: authService,
+            userProfileStore: UserProfileStoreSpy(),
+            networkStatus: .connected,
+            accountDeviceStore: accountDeviceStore
+        )
+
+        await store.bootstrapIfNeeded()
+
+        XCTAssertTrue(store.isSignedIn)
+        XCTAssertEqual(store.summary?.userID, session.user.id)
+        XCTAssertEqual(authService.loadPersistedSessionCallCount, 1)
+        XCTAssertEqual(accountDeviceStore.registerCurrentDeviceCallCount, 0)
+        XCTAssertEqual(accountDeviceStore.fetchDevicesCallCount, 0)
+
+        await waitUntil("background account device validation starts") {
+            accountDeviceStore.fetchCurrentDeviceCallCount == 1
+        }
+        accountDeviceStore.releaseFetchCurrentDeviceWithFailure()
+        await waitUntil("background account device validation records failure") {
+            store.accountDevicesErrorMessage != nil
+        }
+        XCTAssertTrue(store.isSignedIn)
+    }
+
     func testBootstrapRegistersCurrentAccountDevice() async throws {
         let userID = UUID()
         let sessionID = UUID()
@@ -1676,7 +1705,9 @@ final class SessionStoreOfflineTests: XCTestCase {
 
         await store.bootstrapIfNeeded()
 
-        XCTAssertFalse(store.isSignedIn)
+        await waitUntil("remote account device sign-out is processed after bootstrap") {
+            !store.isSignedIn
+        }
         XCTAssertTrue(accountDeviceStore.registeredDevices.isEmpty)
         XCTAssertEqual(accountDeviceStore.signedOutDevices, [MistiaSyncDeviceIdentity.current()])
     }
@@ -2191,6 +2222,48 @@ private final class SessionAuthServiceSpy: SessionAuthServicing {
 
     func clearPersistedSession() throws {
         clearPersistedSessionCallCount += 1
+    }
+}
+
+@MainActor
+private final class BlockingFailingAccountDeviceRegistrySpy: AccountDeviceRegistryServicing {
+    private(set) var registerCurrentDeviceCallCount = 0
+    private(set) var fetchDevicesCallCount = 0
+    private(set) var fetchCurrentDeviceCallCount = 0
+    private var fetchCurrentDeviceContinuation: CheckedContinuation<MistiaAccountDevice?, Error>?
+
+    func releaseFetchCurrentDeviceWithFailure() {
+        fetchCurrentDeviceContinuation?.resume(throwing: SessionRemoteAccessError.offline)
+        fetchCurrentDeviceContinuation = nil
+    }
+
+    func registerCurrentDevice(session: SupabaseAuthSession) async throws -> MistiaAccountDevice {
+        registerCurrentDeviceCallCount += 1
+        throw SessionRemoteAccessError.offline
+    }
+
+    func fetchDevices(session: SupabaseAuthSession) async throws -> [MistiaAccountDevice] {
+        fetchDevicesCallCount += 1
+        throw SessionRemoteAccessError.offline
+    }
+
+    func fetchCurrentDevice(session: SupabaseAuthSession) async throws -> MistiaAccountDevice? {
+        fetchCurrentDeviceCallCount += 1
+        return try await withCheckedThrowingContinuation { continuation in
+            fetchCurrentDeviceContinuation = continuation
+        }
+    }
+
+    func requestSignOut(deviceID: UUID, session: SupabaseAuthSession) async throws -> MistiaAccountDevice {
+        throw SessionRemoteAccessError.offline
+    }
+
+    func forgetDevice(deviceID: UUID, session: SupabaseAuthSession) async throws {
+        throw SessionRemoteAccessError.offline
+    }
+
+    func markCurrentDeviceSignedOut(session: SupabaseAuthSession?) async throws {
+        throw SessionRemoteAccessError.offline
     }
 }
 
