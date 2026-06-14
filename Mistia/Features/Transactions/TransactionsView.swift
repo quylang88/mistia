@@ -893,7 +893,7 @@ struct TransactionsView: View {
                                 message: "Các sự kiện chia chi phí sẽ xuất hiện ở đây.",
                                 buttonTitle: nil,
                                 accent: MistiaAccent.purple.color,
-                                symbols: ["calendar", "person.2.fill"]
+                                symbols: ["calendar", "person.2.fill", "receipt.fill", "checkmark.seal.fill"]
                             )
                             .padding(.top, 40)
                         } else {
