@@ -3522,20 +3522,11 @@ private struct ManagementSignedInDeviceRow: View {
 
     private var modelText: String {
         let displayName = trimmed(device.modelDisplayName)
-        let identifier = trimmed(device.modelIdentifier)
-
-        guard !displayName.isEmpty else {
-            return identifier
-        }
-
-        guard !identifier.isEmpty, identifier != displayName else {
+        if !displayName.isEmpty {
             return displayName
         }
 
-        return L10n.management.managementauth.deviceModelValue(
-            String(describing: displayName),
-            String(describing: identifier)
-        )
+        return trimmed(device.modelIdentifier)
     }
 
     private var systemText: String {
