@@ -776,7 +776,7 @@ struct TransactionEditorSheet: View {
                     VStack(alignment: .leading, spacing: 10) {
                         TextField(L10n.transactions.transactioneditor.resaleItemName, text: $bindableDraft.title)
                             .focused($focusedField, equals: .title)
-                            .textInputAutocapitalization(.words)
+                            .textInputAutocapitalization(.sentences)
                             .autocorrectionDisabled()
                             .onChange(of: focusedField) { _, newValue in
                                 if newValue == .title {
@@ -806,7 +806,7 @@ struct TransactionEditorSheet: View {
                         text: $bindableDraft.counterpartyName
                     )
                     .focused($focusedField, equals: .counterparty)
-                    .textInputAutocapitalization(.words)
+                    .textInputAutocapitalization(.sentences)
                     .autocorrectionDisabled()
                     .onChange(of: focusedField) { _, newValue in
                         if newValue == .counterparty {
@@ -853,7 +853,7 @@ struct TransactionEditorSheet: View {
                         VStack(alignment: .leading, spacing: 10) {
                             TextField(titleFieldPlaceholder, text: $bindableDraft.title)
                                 .focused($focusedField, equals: .title)
-                                .textInputAutocapitalization(.words)
+                                .textInputAutocapitalization(.sentences)
                                 .autocorrectionDisabled()
                                 .onChange(of: focusedField) { _, newValue in
                                     if newValue == .title {
@@ -1073,7 +1073,7 @@ struct TransactionEditorSheet: View {
                         text: $bindableDraft.counterpartyName
                     )
                     .focused($focusedField, equals: .counterparty)
-                    .textInputAutocapitalization(.words)
+                    .textInputAutocapitalization(.sentences)
                     .autocorrectionDisabled()
                     .onChange(of: focusedField) { _, newValue in
                         if newValue == .counterparty {
