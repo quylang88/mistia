@@ -116,6 +116,8 @@ struct SettlementEditorSheet: View {
     @State private var billRows: [SharedExpenseBillDraft] = []
     @State private var hasLoadedSharedExpenseDraft = false
     @State private var dismissBaselineSnapshot: MistiaSharedExpenseDismissalSnapshot?
+    @State private var currentLinkedBillIDs: Set<UUID> = []
+    @State private var initialLinkedBillIDs: Set<UUID> = []
     @State private var alertMessage: String?
     @State private var billEditorTarget: SharedExpenseBillEditorTarget?
     @State private var billSearchTarget: SharedExpenseBillSearchTarget?
@@ -204,11 +206,9 @@ struct SettlementEditorSheet: View {
     }
 
     private var linkedSharedExpenseBills: [LedgerTransaction] {
-        guard let groupID = editingSharedExpenseGroupID else { return [] }
-        return transactions
+        transactions
             .filter {
-                $0.settlementGroupID == groupID
-                    && $0.settlementRole == .sharedExpensePaid
+                currentLinkedBillIDs.contains($0.id)
                     && $0.deletedAt == nil
                     && !$0.isArchived
             }
@@ -644,7 +644,7 @@ struct SettlementEditorSheet: View {
                 .buttonStyle(.plain)
                 .swipeActions(edge: .trailing, allowsFullSwipe: false) {
                     Button(role: .destructive) {
-                        detachBill(bill)
+                        detachBillDraft(bill)
                     } label: {
                         Image(systemName: "trash")
                     }
@@ -825,6 +825,17 @@ struct SettlementEditorSheet: View {
               let group = editingSharedExpenseGroup else {
             return
         }
+
+        // Initialize linked bill IDs first
+        let dbLinked = transactions.filter {
+            $0.settlementGroupID == group.id
+                && $0.settlementRole == .sharedExpensePaid
+                && $0.deletedAt == nil
+                && !$0.isArchived
+        }
+        let dbLinkedIDs = Set(dbLinked.map(\.id))
+        initialLinkedBillIDs = dbLinkedIDs
+        currentLinkedBillIDs = dbLinkedIDs
 
         eventTitle = group.title
         eventNote = group.note ?? ""
@@ -1119,8 +1130,34 @@ struct SettlementEditorSheet: View {
             modifiedAt: now
         )
 
-        var transactions: [LedgerTransaction] = []
-        var attachedTransactions: [LedgerTransaction] = []
+        // 1. Process detached bills (those in initial but not current)
+        let detachedBillIDs = initialLinkedBillIDs.subtracting(currentLinkedBillIDs)
+        var detachedBills: [LedgerTransaction] = []
+        for billID in detachedBillIDs {
+            if let bill = transactions.first(where: { $0.id == billID }) {
+                let billOwnerUserID = bill.sourceWallet.flatMap { walletPickerAccess.walletOwnerUserID(for: $0) } ?? ownerUserID
+                bill.settlementGroupID = nil
+                bill.settlementObligationID = nil
+                bill.settlementRoleRawValue = nil
+                bill.reportingExpenseMinor = nil
+                bill.reportingIncomeMinor = nil
+                bill.updatedAt = now
+                if let billOwnerUserID {
+                    try? MistiaRecordOwnershipStore.upsert(
+                        entity: .transaction,
+                        recordID: bill.id,
+                        ownerUserID: billOwnerUserID,
+                        updatedAt: now,
+                        context: modelContext
+                    )
+                }
+                detachedBills.append(bill)
+            }
+        }
+
+        // 2. Process newly added/linked bills
+        var newlyCreatedTransactions: [LedgerTransaction] = []
+        var newlyAttachedTransactions: [LedgerTransaction] = []
 
         for row in billRows {
             switch row.mode {
@@ -1129,7 +1166,7 @@ struct SettlementEditorSheet: View {
                     continue
                 }
                 modelContext.insert(transaction)
-                transactions.append(transaction)
+                newlyCreatedTransactions.append(transaction)
             case .existingExpense:
                 guard let existingID = row.existingTransactionID,
                       let transaction = attachableExpenseTransactions.first(where: { $0.id == existingID }) else {
@@ -1140,22 +1177,24 @@ struct SettlementEditorSheet: View {
                 transaction.reportingExpenseMinor = max(transaction.amountMinor, 0)
                 transaction.reportingIncomeMinor = 0
                 transaction.updatedAt = now
-                attachedTransactions.append(transaction)
+                newlyAttachedTransactions.append(transaction)
             }
         }
 
-        let linkedTotal = transactionsForTotal(groupID: group.id, createdTransactions: transactions)
-            .reduce(Int64(0)) { $0 + max($1.amountMinor, 0) }
+        // 3. Recalculate group total using all active linked bills
+        let allLinkedBills = linkedSharedExpenseBills + newlyCreatedTransactions + newlyAttachedTransactions
+        let linkedTotal = allLinkedBills.reduce(Int64(0)) { $0 + max($1.amountMinor, 0) }
         group.totalMinor = linkedTotal
         group.expectedMinor = 0
         group.settledMinor = 0
         group.status = .preparing
         group.updatedAt = now
 
+        // 4. Save and register sync mutations
         persistPreparedSharedExpense(
             group: group,
             participants: participants,
-            transactions: transactions + attachedTransactions,
+            transactions: newlyCreatedTransactions + newlyAttachedTransactions + detachedBills,
             ownerUserID: ownerUserID,
             modifiedAt: now,
             dismissAfterSave: shouldDismissAfterSave
@@ -1228,6 +1267,10 @@ struct SettlementEditorSheet: View {
         } catch {
             alertMessage = error.localizedDescription
         }
+    }
+
+    private func detachBillDraft(_ bill: LedgerTransaction) {
+        currentLinkedBillIDs.remove(bill.id)
     }
 
     private func detachBill(_ bill: LedgerTransaction) {
