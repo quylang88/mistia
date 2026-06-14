@@ -12915,28 +12915,6 @@
         }
       }
     },
-    "management.managementauth.refreshDevices": {
-      "localizations": {
-        "vi": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Làm mới thiết bị"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Refresh devices"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "デバイスを更新"
-          }
-        }
-      }
-    },
     "management.managementauth.signOutDevice": {
       "localizations": {
         "vi": {
