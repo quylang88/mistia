@@ -828,7 +828,7 @@ final class SessionStoreOfflineTests: XCTestCase {
         XCTAssertEqual(familyService.accessibleFinanceUserIDBatches.map(Set.init), [Set([memberUserID])])
     }
 
-    func testForegroundActivationDoesNotRunAutomaticSyncWhenLastSyncIsOverdue() async throws {
+    func testForegroundActivationQueuesCatchUpWhenLastSyncIsOverdue() async throws {
         let session = makeSession()
         let container = try storeTestContainer()
         let syncRemoteStore = SessionSyncRemoteStoreSpy()
@@ -845,7 +845,7 @@ final class SessionStoreOfflineTests: XCTestCase {
                 remoteStore: syncRemoteStore,
                 outbox: MistiaSyncOutbox(
                     defaults: UserDefaults(suiteName: "MistiaTests.\(UUID().uuidString)") ?? .standard,
-                    key: "foreground-catch-up"
+                    key: "foreground-catch-up-overdue"
                 )
             )
         )
@@ -857,7 +857,74 @@ final class SessionStoreOfflineTests: XCTestCase {
 
         store.handleSceneDidBecomeActive()
 
-        try? await Task.sleep(for: .milliseconds(250))
+        await waitUntil("foreground catch-up sync runs", timeout: .seconds(4)) {
+            syncRemoteStore.fetchSnapshotCallCount > 0
+        }
+    }
+
+    func testForegroundActivationBeforeAutomaticIntervalDoesNotQueueCatchUp() async throws {
+        let session = makeSession()
+        let container = try storeTestContainer()
+        let syncRemoteStore = SessionSyncRemoteStoreSpy()
+        let store = try makeSessionStore(
+            authService: SessionAuthServiceSpy(
+                persistedSession: session,
+                refreshResult: .success(session)
+            ),
+            userProfileStore: UserProfileStoreSpy(),
+            networkStatus: .connected,
+            modelContainer: container,
+            syncCoordinator: SyncCoordinator(
+                modelContainer: container,
+                remoteStore: syncRemoteStore,
+                outbox: MistiaSyncOutbox(
+                    defaults: UserDefaults(suiteName: "MistiaTests.\(UUID().uuidString)") ?? .standard,
+                    key: "foreground-catch-up-fresh"
+                )
+            )
+        )
+
+        await store.bootstrapIfNeeded()
+        store.requiresInitialSync = false
+        store.lastSyncAt = Date().addingTimeInterval(-1_199)
+        store.setAutoSyncEnabled(true)
+
+        store.handleSceneDidBecomeActive()
+
+        try? await Task.sleep(for: .milliseconds(2_500))
+        XCTAssertEqual(syncRemoteStore.fetchSnapshotCallCount, 0)
+    }
+
+    func testForegroundActivationDoesNotQueueCatchUpWhenAutoSyncIsOff() async throws {
+        let session = makeSession()
+        let container = try storeTestContainer()
+        let syncRemoteStore = SessionSyncRemoteStoreSpy()
+        let store = try makeSessionStore(
+            authService: SessionAuthServiceSpy(
+                persistedSession: session,
+                refreshResult: .success(session)
+            ),
+            userProfileStore: UserProfileStoreSpy(),
+            networkStatus: .connected,
+            modelContainer: container,
+            syncCoordinator: SyncCoordinator(
+                modelContainer: container,
+                remoteStore: syncRemoteStore,
+                outbox: MistiaSyncOutbox(
+                    defaults: UserDefaults(suiteName: "MistiaTests.\(UUID().uuidString)") ?? .standard,
+                    key: "foreground-catch-up-auto-off"
+                )
+            )
+        )
+
+        await store.bootstrapIfNeeded()
+        store.requiresInitialSync = false
+        store.lastSyncAt = Date().addingTimeInterval(-1_201)
+        store.setAutoSyncEnabled(false)
+
+        store.handleSceneDidBecomeActive()
+
+        try? await Task.sleep(for: .milliseconds(2_500))
         XCTAssertEqual(syncRemoteStore.fetchSnapshotCallCount, 0)
     }
 

@@ -149,6 +149,7 @@ final class SessionStore {
     // MARK: - Auto-sync Configuration
     private static let AUTOMATIC_SYNC_INTERVAL: TimeInterval = 1_200 // 20 minutes in seconds
     private static let QUEUED_AUTO_SYNC_DEBOUNCE: Duration = .milliseconds(600)
+    private static let FOREGROUND_CATCH_UP_DEBOUNCE: Duration = .seconds(2)
     private static let FAMILY_OWNER_PUSH_CONFLICTS_KEY = "mistia.familyOwnerPushConflicts.v1"
     private static let BACKGROUND_SYNC_NEXT_REQUESTED_AT_KEY = "mistia.backgroundSync.nextRequestedAt.v1"
     private static let BACKGROUND_SYNC_LAST_ATTEMPT_AT_KEY = "mistia.backgroundSync.lastAttemptAt.v1"
@@ -205,6 +206,7 @@ final class SessionStore {
     @ObservationIgnored private var subjectUserIDProvider: (() -> UUID?)?
     @ObservationIgnored private var postSyncRefreshHandler: ((SessionSyncTrigger) async -> Void)?
     @ObservationIgnored private var pendingQueuedAutoSync = false
+    @ObservationIgnored private var foregroundCatchUpTask: Task<Void, Never>?
     @ObservationIgnored private var queuedFamilyOwnerPushTask: Task<Void, Never>?
     @ObservationIgnored private var pendingFamilyOwnerPush = false
     @ObservationIgnored private var reconnectValidationTask: Task<Void, Never>?
@@ -561,6 +563,7 @@ final class SessionStore {
             pendingInitialSyncChoice = nil
         }
         updateAutoSyncLoopState()
+        scheduleForegroundCatchUpIfNeeded()
         scheduleFamilyOwnerOutboxRecoveryIfNeeded()
         Task { @MainActor [weak self] in
             await self?.checkForRemoteAccountDeviceSignOutIfNeeded()
@@ -568,6 +571,7 @@ final class SessionStore {
     }
 
     func handleSceneDidEnterBackground() {
+        cancelForegroundCatchUp()
         updateAutoSyncLoopState()
     }
 
@@ -2335,6 +2339,7 @@ final class SessionStore {
 
         guard isReadyForAutomaticSync else {
             MistiaSyncBackgroundScheduler.shared.cancelPendingRefresh()
+            cancelForegroundCatchUp()
             return
         }
 
@@ -2347,6 +2352,30 @@ final class SessionStore {
         return Date().timeIntervalSince(lastSyncAt) >= Self.AUTOMATIC_SYNC_INTERVAL
     }
 
+    private func scheduleForegroundCatchUpIfNeeded() {
+        foregroundCatchUpTask?.cancel()
+        foregroundCatchUpTask = nil
+
+        guard shouldRunForegroundCatchUp() else { return }
+
+        foregroundCatchUpTask = Task { @MainActor [weak self] in
+            do {
+                try await Task.sleep(for: Self.FOREGROUND_CATCH_UP_DEBOUNCE)
+            } catch {
+                return
+            }
+
+            guard let self, self.shouldRunForegroundCatchUp() else { return }
+            self.foregroundCatchUpTask = nil
+            _ = await self.runMergeSync(trigger: .automaticLoop, showProgress: false)
+        }
+    }
+
+    private func cancelForegroundCatchUp() {
+        foregroundCatchUpTask?.cancel()
+        foregroundCatchUpTask = nil
+    }
+
     private func runInitialSyncFlow(showProgress: Bool = true) async -> Bool {
         return await drainSyncQueue(showProgress: showProgress, trigger: .initial)
     }
@@ -2357,6 +2386,7 @@ final class SessionStore {
         normalizesBeforeSync: Bool = true
     ) async -> Bool {
         guard currentSession != nil, !isSyncInFlight else { return false }
+        cancelForegroundCatchUp()
         if trigger != .manual {
             guard isReadyForAutomaticSync else { return false }
         }
@@ -2842,6 +2872,7 @@ final class SessionStore {
 
     private func cancelQueuedAutoSync() {
         pendingQueuedAutoSync = false
+        cancelForegroundCatchUp()
     }
 
     private func cancelQueuedFamilyOwnerPush() {
@@ -3158,6 +3189,9 @@ private extension SessionStore {
 
     func setRequiresManualSyncAfterRestore(_ isRequired: Bool) {
         requiresManualSyncAfterRestore = isRequired
+        if isRequired {
+            cancelForegroundCatchUp()
+        }
         let profileID = activeLocalProfileID
         userDefaults.set(isRequired, forKey: Self.manualSyncReviewRequiredKey(for: profileID))
         if profileID != nil {
