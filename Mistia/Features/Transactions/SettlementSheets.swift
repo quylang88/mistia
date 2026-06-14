@@ -543,7 +543,7 @@ struct SettlementEditorSheet: View {
         ForEach($participantRows) { $row in
             HStack(spacing: 10) {
                 TextField(L10n.transactions.settlement.participantName, text: $row.name)
-                    .textInputAutocapitalization(.words)
+                    .textInputAutocapitalization(.sentences)
                     .focused($focusedParticipantRowID, equals: row.id)
                     .onChange(of: row.name) { _, newValue in
                         clearHiddenParticipantSuggestionIfNeeded(
@@ -2412,7 +2412,7 @@ struct SettlementSplitCalculatorSheet: View {
 
                 ForEach($additionalRows) { $row in
                     TextField(L10n.transactions.settlement.participantName, text: $row.name)
-                        .textInputAutocapitalization(.words)
+                        .textInputAutocapitalization(.sentences)
                         .font(.system(size: 15, weight: .semibold, design: .rounded))
                         .padding(.vertical, 8)
                         .overlay(alignment: .bottom) { Divider() }
