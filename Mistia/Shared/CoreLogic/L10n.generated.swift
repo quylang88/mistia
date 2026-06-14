@@ -4020,6 +4020,8 @@ nonisolated enum L10n {
             static func notePlaceholder(language: MistiaAppLanguage) -> String { L10n.tr("transactions.settlement.notePlaceholder", vi: "Thêm ghi chú cho sự kiện", en: "Add an event note", ja: "イベントメモを追加", language: language) }
             static var ongoingEvents: String { L10n.tr("transactions.settlement.ongoingEvents", vi: "Sự kiện đang diễn ra", en: "Ongoing events", ja: "進行中のイベント") }
             static func ongoingEvents(language: MistiaAppLanguage) -> String { L10n.tr("transactions.settlement.ongoingEvents", vi: "Sự kiện đang diễn ra", en: "Ongoing events", ja: "進行中のイベント", language: language) }
+            static var completedEvents: String { L10n.tr("transactions.settlement.completedEvents", vi: "Sự kiện đã hoàn tất", en: "Completed events", ja: "完了したイベント") }
+            static func completedEvents(language: MistiaAppLanguage) -> String { L10n.tr("transactions.settlement.completedEvents", vi: "Sự kiện đã hoàn tất", en: "Completed events", ja: "完了したイベント", language: language) }
             static var openSettlements: String { L10n.tr("transactions.settlement.openSettlements", vi: "Chờ thu / chờ trả", en: "Pending settlements", ja: "未精算") }
             static func openSettlements(language: MistiaAppLanguage) -> String { L10n.tr("transactions.settlement.openSettlements", vi: "Chờ thu / chờ trả", en: "Pending settlements", ja: "未精算", language: language) }
             static var paid: String { L10n.tr("transactions.settlement.paid", vi: "Đã trả", en: "Paid", ja: "支払い済み") }

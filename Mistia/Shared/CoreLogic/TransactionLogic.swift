@@ -544,6 +544,14 @@ nonisolated enum SettlementLogic {
             }
     }
 
+    static func completedEventSnapshots(
+        allEvents: [PreparingSettlementEventSnapshot],
+        preparingEvents: [PreparingSettlementEventSnapshot]
+    ) -> [PreparingSettlementEventSnapshot] {
+        let preparingEventIDs = Set(preparingEvents.map(\.id))
+        return allEvents.filter { !preparingEventIDs.contains($0.id) }
+    }
+
     static func participantSuggestionRecords(
         from records: [TransactionRecordSnapshot],
         transactionOwnerMap: [UUID: UUID],
