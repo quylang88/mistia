@@ -609,10 +609,12 @@ final class SessionStore {
                     restoringExistingSession: true
                 )
                 applyLocalRestoredSessionStateIfNeeded()
-                await refreshAccountDevicesAfterAuthentication(
-                    session: restoredSession,
-                    respectsRemoteSignOut: true
-                )
+                Task { @MainActor [weak self] in
+                    await self?.refreshAccountDevicesAfterAuthentication(
+                        session: restoredSession,
+                        respectsRemoteSignOut: true
+                    )
+                }
             }
         } catch {
             lastErrorMessage = friendlyErrorMessage(for: error)
