@@ -872,7 +872,10 @@ struct FamilyRemoteService: FamilyRemoteServicing {
             userIDs: userIDs,
             session: session
         )
-        async let transactions: [RemoteLedgerTransaction] = fetchAccessibleTransactionRows(session: session)
+        async let transactions: [RemoteLedgerTransaction] = fetchAccessibleTransactionRows(
+            userIDs: userIDs,
+            session: session
+        )
         async let budgets: [RemoteBudgetPlan] = fetchFinanceRows(
             path: MistiaSyncEntity.budgetPlan.tableName,
             userIDs: userIDs,
@@ -1328,12 +1331,14 @@ struct FamilyRemoteService: FamilyRemoteServicing {
     }
 
     private func fetchAccessibleTransactionRows(
+        userIDs: [UUID],
         session: SupabaseAuthSession
     ) async throws -> [RemoteLedgerTransaction] {
         try await fetchRows(
             path: MistiaSyncEntity.transaction.tableName,
             filters: [
                 URLQueryItem(name: "select", value: "*"),
+                URLQueryItem(name: "user_id", value: inFilter(for: userIDs)),
                 URLQueryItem(name: "order", value: "updated_at.asc")
             ],
             session: session
