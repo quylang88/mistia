@@ -1,28 +1,52 @@
 import Foundation
 
-enum MistiaProfileAvatarCache {
+nonisolated enum MistiaProfileAvatarCache {
     static func cachedAvatarURL(for userID: UUID) -> URL? {
-        guard let directoryURL = try? avatarDirectoryURL() else { return nil }
-        let filePrefix = userID.uuidString.lowercased() + "."
+        cachedAvatarURLMap(forUserIDs: [userID])[userID]
+    }
+
+    static func loadCachedAvatarURLMap(for userIDs: [UUID]) async -> [UUID: URL] {
+        let uniqueUserIDs = Set(userIDs)
+        guard !uniqueUserIDs.isEmpty else { return [:] }
+
+        return await Task.detached(priority: .utility) {
+            cachedAvatarURLMap(forUserIDs: uniqueUserIDs)
+        }.value
+    }
+
+    private static func cachedAvatarURLMap(forUserIDs userIDs: Set<UUID>) -> [UUID: URL] {
+        guard let directoryURL = try? avatarDirectoryURL(create: false) else { return [:] }
         guard let cachedFiles = try? FileManager.default.contentsOfDirectory(
             at: directoryURL,
             includingPropertiesForKeys: [.contentModificationDateKey]
         ) else {
-            return nil
+            return [:]
         }
 
-        return cachedFiles
-            .filter { $0.lastPathComponent.hasPrefix(filePrefix) }
-            .sorted { lhs, rhs in
-                let lhsDate = (try? lhs.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate) ?? .distantPast
-                let rhsDate = (try? rhs.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate) ?? .distantPast
-                return lhsDate > rhsDate
+        var latestByUserID: [UUID: (url: URL, modifiedAt: Date)] = [:]
+        for fileURL in cachedFiles {
+            let fileName = fileURL.lastPathComponent
+            guard let separatorIndex = fileName.firstIndex(of: ".") else { continue }
+            let userIDString = String(fileName[..<separatorIndex])
+            guard let userID = UUID(uuidString: userIDString),
+                  userIDs.contains(userID) else {
+                continue
             }
-            .first
+
+            let modifiedAt = (try? fileURL.resourceValues(
+                forKeys: [.contentModificationDateKey]
+            ).contentModificationDate) ?? .distantPast
+            if let existing = latestByUserID[userID], existing.modifiedAt >= modifiedAt {
+                continue
+            }
+            latestByUserID[userID] = (fileURL, modifiedAt)
+        }
+
+        return latestByUserID.mapValues { $0.url }
     }
 
     static func cachedAvatarURL(forFileName fileName: String) -> URL? {
-        guard let directoryURL = try? avatarDirectoryURL() else { return nil }
+        guard let directoryURL = try? avatarDirectoryURL(create: false) else { return nil }
         let fileURL = directoryURL.appendingPathComponent(fileName)
         guard FileManager.default.fileExists(atPath: fileURL.path) else { return nil }
         return fileURL
@@ -66,7 +90,7 @@ enum MistiaProfileAvatarCache {
         sourceURL: URL,
         for userID: UUID
     ) throws -> String {
-        let directoryURL = try avatarDirectoryURL()
+        let directoryURL = try avatarDirectoryURL(create: true)
         let fileExtension = avatarFileExtension(mimeType: mimeType, sourceURL: sourceURL)
         let fileName = "\(userID.uuidString.lowercased()).\(fileExtension)"
         try removeCachedAvatarFiles(for: userID, keeping: fileName, in: directoryURL)
@@ -76,15 +100,17 @@ enum MistiaProfileAvatarCache {
         return fileName
     }
 
-    private static func avatarDirectoryURL() throws -> URL {
+    private static func avatarDirectoryURL(create: Bool) throws -> URL {
         let baseURL = try FileManager.default.url(
             for: .applicationSupportDirectory,
             in: .userDomainMask,
             appropriateFor: nil,
-            create: true
+            create: create
         )
         let directoryURL = baseURL.appendingPathComponent("ProfileAvatars", isDirectory: true)
-        try FileManager.default.createDirectory(at: directoryURL, withIntermediateDirectories: true)
+        if create {
+            try FileManager.default.createDirectory(at: directoryURL, withIntermediateDirectories: true)
+        }
         return directoryURL
     }
 

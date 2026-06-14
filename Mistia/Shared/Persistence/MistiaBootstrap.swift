@@ -1,12 +1,37 @@
 import Foundation
 import SwiftData
 
-struct MistiaCategoryResetResult {
+nonisolated struct MistiaCategoryResetResult {
     let restoredSystemCategoryCount: Int
     let archivedCustomCategoryCount: Int
 }
 
-enum MistiaBootstrap {
+nonisolated struct MistiaBootstrapSyncMutation: Equatable, Sendable {
+    let entity: MistiaSyncEntity
+    let recordID: UUID
+    let modifiedAt: Date
+}
+
+actor MistiaStartupMaintenanceWorker {
+    private let modelContainer: ModelContainer
+
+    init(modelContainer: ModelContainer) {
+        self.modelContainer = modelContainer
+    }
+
+    func seedDefaultCategoriesIfNeeded() throws -> [MistiaBootstrapSyncMutation] {
+        let context = ModelContext(modelContainer)
+        return try MistiaBootstrap.seedDefaultCategoriesIfNeeded(modelContext: context)
+    }
+
+    func seedDefaultCategoriesForLaunchIfNeeded() throws -> [MistiaBootstrapSyncMutation] {
+        let context = ModelContext(modelContainer)
+        return try MistiaBootstrap.seedDefaultCategoriesForLaunchIfNeeded(modelContext: context)
+    }
+}
+
+nonisolated enum MistiaBootstrap {
+    @MainActor
     static func cleanupExpiredArchivedData(
         modelContext: ModelContext,
         sessionStore: SessionStore
@@ -88,10 +113,21 @@ enum MistiaBootstrap {
         }
     }
 
+    @MainActor
+    @discardableResult
     static func seedDefaultCategoriesIfNeeded(
         modelContext: ModelContext,
-        sessionStore: SessionStore? = nil
-    ) throws {
+        sessionStore: SessionStore
+    ) throws -> [MistiaBootstrapSyncMutation] {
+        let syncMutations = try seedDefaultCategoriesIfNeeded(modelContext: modelContext)
+        queueSyncMutations(syncMutations, sessionStore: sessionStore)
+        return syncMutations
+    }
+
+    @discardableResult
+    static func seedDefaultCategoriesIfNeeded(
+        modelContext: ModelContext
+    ) throws -> [MistiaBootstrapSyncMutation] {
         var repairResult = try MistiaSystemCategorySyncSupport.reconcileDuplicateSystemCategories(
             modelContext: modelContext
         )
@@ -151,44 +187,58 @@ enum MistiaBootstrap {
             try modelContext.save()
         }
 
-        if let sessionStore {
-            let syncEligibleIDs = Set(existingCategories.filter { $0.cloudSyncEnabled }.map(\.id))
-            let repairedCategories = existingCategories.filter { 
-                repairResult.categoryIDsNeedingSync.contains($0.id) && $0.cloudSyncEnabled 
-            }
-            let validCategoriesNeedingSync = categoriesNeedingSync.filter { syncEligibleIDs.contains($0.id) }
-            
-            queueCategoryUpserts(repairedCategories + validCategoriesNeedingSync, sessionStore: sessionStore)
-            queueRepairRecordUpserts(
+        var syncMutations: [MistiaBootstrapSyncMutation] = []
+        let syncEligibleIDs = Set(existingCategories.filter { $0.cloudSyncEnabled }.map(\.id))
+        let repairedCategories = existingCategories.filter {
+            repairResult.categoryIDsNeedingSync.contains($0.id) && $0.cloudSyncEnabled
+        }
+        let validCategoriesNeedingSync = categoriesNeedingSync.filter { syncEligibleIDs.contains($0.id) }
+
+        syncMutations.append(
+            contentsOf: categoryUpsertMutations(repairedCategories + validCategoriesNeedingSync)
+        )
+        syncMutations.append(
+            contentsOf: repairRecordUpsertMutations(
                 recordIDs: repairResult.transactionIDsNeedingSync,
                 entity: .transaction,
-                modelContext: modelContext,
-                sessionStore: sessionStore
+                modelContext: modelContext
             )
-            queueRepairRecordUpserts(
+        )
+        syncMutations.append(
+            contentsOf: repairRecordUpsertMutations(
                 recordIDs: repairResult.budgetPlanIDsNeedingSync,
                 entity: .budgetPlan,
-                modelContext: modelContext,
-                sessionStore: sessionStore
+                modelContext: modelContext
             )
-            queueRepairRecordUpserts(
+        )
+        syncMutations.append(
+            contentsOf: repairRecordUpsertMutations(
                 recordIDs: repairResult.recurringBillPlanIDsNeedingSync,
                 entity: .recurringBillPlan,
-                modelContext: modelContext,
-                sessionStore: sessionStore
+                modelContext: modelContext
             )
-        }
+        )
+
+        return syncMutations
     }
 
+    @MainActor
+    @discardableResult
     static func seedDefaultCategoriesForLaunchIfNeeded(
         modelContext: ModelContext,
-        sessionStore: SessionStore? = nil
-    ) throws {
-        guard try needsDefaultCategoryLaunchRepair(modelContext: modelContext) else { return }
-        try seedDefaultCategoriesIfNeeded(
-            modelContext: modelContext,
-            sessionStore: sessionStore
-        )
+        sessionStore: SessionStore
+    ) throws -> [MistiaBootstrapSyncMutation] {
+        let syncMutations = try seedDefaultCategoriesForLaunchIfNeeded(modelContext: modelContext)
+        queueSyncMutations(syncMutations, sessionStore: sessionStore)
+        return syncMutations
+    }
+
+    @discardableResult
+    static func seedDefaultCategoriesForLaunchIfNeeded(
+        modelContext: ModelContext
+    ) throws -> [MistiaBootstrapSyncMutation] {
+        guard try needsDefaultCategoryLaunchRepair(modelContext: modelContext) else { return [] }
+        return try seedDefaultCategoriesIfNeeded(modelContext: modelContext)
     }
 
     private static func needsDefaultCategoryLaunchRepair(
@@ -932,18 +982,16 @@ enum MistiaBootstrap {
         return visible + 1
     }
 
-    private static func queueCategoryUpserts(
-        _ categories: [TransactionCategory],
-        sessionStore: SessionStore
-    ) {
-        guard sessionStore.canManageSync else { return }
-
+    private static func categoryUpsertMutations(
+        _ categories: [TransactionCategory]
+    ) -> [MistiaBootstrapSyncMutation] {
         let uniqueCategories = Dictionary(
             categories.map { ($0.id, $0) },
             uniquingKeysWith: { lhs, rhs in lhs.updatedAt >= rhs.updatedAt ? lhs : rhs }
         ).values
-        for category in uniqueCategories {
-            sessionStore.recordUpsert(
+
+        return uniqueCategories.map { category in
+            MistiaBootstrapSyncMutation(
                 entity: .category,
                 recordID: category.id,
                 modifiedAt: category.updatedAt
@@ -951,35 +999,66 @@ enum MistiaBootstrap {
         }
     }
 
-    private static func queueRepairRecordUpserts(
+    private static func repairRecordUpsertMutations(
         recordIDs: Set<UUID>,
         entity: MistiaSyncEntity,
-        modelContext: ModelContext,
-        sessionStore: SessionStore
-    ) {
-        guard !recordIDs.isEmpty else { return }
+        modelContext: ModelContext
+    ) -> [MistiaBootstrapSyncMutation] {
+        guard !recordIDs.isEmpty else { return [] }
 
         switch entity {
         case .transaction:
             let records = (try? modelContext.fetch(FetchDescriptor<LedgerTransaction>())) ?? []
-            for record in records where recordIDs.contains(record.id) {
-                sessionStore.recordUpsert(entity: entity, recordID: record.id, modifiedAt: record.updatedAt)
+            return records.compactMap { record in
+                guard recordIDs.contains(record.id) else { return nil }
+                return MistiaBootstrapSyncMutation(
+                    entity: entity,
+                    recordID: record.id,
+                    modifiedAt: record.updatedAt
+                )
             }
         case .budgetPlan:
             let records = (try? modelContext.fetch(FetchDescriptor<BudgetPlan>())) ?? []
-            for record in records where recordIDs.contains(record.id) {
-                sessionStore.recordUpsert(entity: entity, recordID: record.id, modifiedAt: record.updatedAt)
+            return records.compactMap { record in
+                guard recordIDs.contains(record.id) else { return nil }
+                return MistiaBootstrapSyncMutation(
+                    entity: entity,
+                    recordID: record.id,
+                    modifiedAt: record.updatedAt
+                )
             }
         case .recurringBillPlan:
             let records = (try? modelContext.fetch(FetchDescriptor<RecurringBillPlan>())) ?? []
-            for record in records where recordIDs.contains(record.id) {
-                sessionStore.recordUpsert(entity: entity, recordID: record.id, modifiedAt: record.updatedAt)
+            return records.compactMap { record in
+                guard recordIDs.contains(record.id) else { return nil }
+                return MistiaBootstrapSyncMutation(
+                    entity: entity,
+                    recordID: record.id,
+                    modifiedAt: record.updatedAt
+                )
             }
         case .wallet, .creditCardProfile, .category, .settlementGroup, .settlementParticipant, .savingsGoal, .installmentPlan, .dueOccurrenceRecord:
-            break
+            return []
         }
     }
 
+    @MainActor
+    static func queueSyncMutations(
+        _ mutations: [MistiaBootstrapSyncMutation],
+        sessionStore: SessionStore
+    ) {
+        guard sessionStore.canManageSync else { return }
+
+        for mutation in mutations {
+            sessionStore.recordUpsert(
+                entity: mutation.entity,
+                recordID: mutation.recordID,
+                modifiedAt: mutation.modifiedAt
+            )
+        }
+    }
+
+    @MainActor
     private static func queuePlanningUpserts<Record: PersistentModel>(
         _ records: [Record],
         entity: MistiaSyncEntity,

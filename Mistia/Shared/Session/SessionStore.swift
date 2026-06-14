@@ -1006,7 +1006,8 @@ final class SessionStore {
             syncCoordinator.clearQueuedMutations()
             initialSyncPreview = nil
             pendingInitialSyncChoice = nil
-            try MistiaBootstrap.seedDefaultCategoriesIfNeeded(modelContext: modelContainer.mainContext)
+            let startupWorker = MistiaStartupMaintenanceWorker(modelContainer: modelContainer)
+            _ = try await startupWorker.seedDefaultCategoriesIfNeeded()
 
             lastSyncAt = nil
             if let activeSession = currentSession {
@@ -1185,7 +1186,7 @@ final class SessionStore {
                 resolution: resolution,
                 session: validSession
             )
-            try normalizeCategoryHierarchyIfNeeded()
+            try await normalizeCategoryHierarchyIfNeeded()
             lastSyncAt = .now
             lastErrorMessage = nil
             syncStatusTitle = L10n.shared.session.session.conflictResolved
@@ -1749,7 +1750,7 @@ final class SessionStore {
             to: baseSummary,
             remoteAvatarURL: remoteProfile.avatarURL
         )
-        try normalizeCategoryHierarchyIfNeeded()
+        try await normalizeCategoryHierarchyIfNeeded()
         lastSyncAt = storedProfile.lastSyncAt
         lastErrorMessage = nil
         remoteUnavailableReason = nil
@@ -2361,7 +2362,7 @@ final class SessionStore {
                 session: validSession
             )
             if normalizesBeforeSync {
-                try normalizeCategoryHierarchyIfNeeded()
+                try await normalizeCategoryHierarchyIfNeeded()
             }
             let result = try await syncCoordinator.sync(session: validSession)
             lastSyncAt = .now
@@ -2437,7 +2438,7 @@ final class SessionStore {
             let pushedFamilyOwnerMutations = try await pushQueuedFamilyOwnerMutations(
                 session: validSession
             )
-            try normalizeCategoryHierarchyIfNeeded()
+            try await normalizeCategoryHierarchyIfNeeded()
             let result: MistiaSyncResult
 
             if requiresInitialSync {
@@ -2493,7 +2494,7 @@ final class SessionStore {
                 result = try await syncCoordinator.sync(session: validSession)
             }
 
-            try normalizeCategoryHierarchyIfNeeded()
+            try await normalizeCategoryHierarchyIfNeeded()
             lastSyncAt = .now
             lastErrorMessage = nil
             
@@ -2534,11 +2535,10 @@ final class SessionStore {
         }
     }
 
-    private func normalizeCategoryHierarchyIfNeeded() throws {
-        try MistiaBootstrap.seedDefaultCategoriesIfNeeded(
-            modelContext: modelContainer.mainContext,
-            sessionStore: self
-        )
+    private func normalizeCategoryHierarchyIfNeeded() async throws {
+        let startupWorker = MistiaStartupMaintenanceWorker(modelContainer: modelContainer)
+        let syncMutations = try await startupWorker.seedDefaultCategoriesIfNeeded()
+        MistiaBootstrap.queueSyncMutations(syncMutations, sessionStore: self)
     }
 
     private func queueReadyMutations(

@@ -133,11 +133,11 @@ struct MistiaApp: App {
     @MainActor
     private func runDeferredStartupWork() async {
         do {
-            let context = sessionStore.currentModelContainer.mainContext
-            try MistiaBootstrap.seedDefaultCategoriesForLaunchIfNeeded(
-                modelContext: context,
-                sessionStore: sessionStore
-            )
+            let worker = MistiaStartupMaintenanceWorker(modelContainer: sessionStore.currentModelContainer)
+            let signpostID = MistiaPerformanceSignpost.begin("Category Launch Repair")
+            defer { MistiaPerformanceSignpost.end("Category Launch Repair", id: signpostID) }
+            let syncMutations = try await worker.seedDefaultCategoriesForLaunchIfNeeded()
+            MistiaBootstrap.queueSyncMutations(syncMutations, sessionStore: sessionStore)
         } catch {
             print("Failed to seed category hierarchy: \(error)")
         }

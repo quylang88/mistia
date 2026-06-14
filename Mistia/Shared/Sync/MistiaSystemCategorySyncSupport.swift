@@ -1,7 +1,7 @@
 import Foundation
 import SwiftData
 
-struct MistiaSystemCategoryRepairResult {
+nonisolated struct MistiaSystemCategoryRepairResult {
     var categoryIDsNeedingSync: Set<UUID> = []
     var transactionIDsNeedingSync: Set<UUID> = []
     var budgetPlanIDsNeedingSync: Set<UUID> = []
@@ -68,8 +68,7 @@ private nonisolated struct MistiaRemoteSystemCategoryKey: Hashable {
     let systemKey: String
 }
 
-@MainActor
-enum MistiaSystemCategorySyncSupport {
+nonisolated enum MistiaSystemCategorySyncSupport {
     nonisolated static func deduplicatingRemoteSystemCategories(
         _ snapshot: MistiaRemoteSnapshot,
         preferCloudScopedIDs: Bool = false

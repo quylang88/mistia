@@ -286,7 +286,7 @@ final class FamilyContextStore {
 
         do {
             let snapshot = try await service.fetchState(session: session)
-            apply(snapshot: snapshot)
+            await applyPreparedSnapshot(snapshot)
             persistCachedState(currentSnapshot)
             hydrateFamilyAvatars(from: snapshot.members)
             lastErrorMessage = nil
@@ -561,7 +561,7 @@ final class FamilyContextStore {
 
         do {
             let snapshot = try await service.createFamily(name: name, session: session)
-            apply(snapshot: snapshot)
+            await applyPreparedSnapshot(snapshot)
             lastErrorMessage = nil
             if let familyID = snapshot.family?.id {
                 activeContext = FamilyContext(scope: .familyHome(familyID: familyID))
@@ -583,7 +583,7 @@ final class FamilyContextStore {
 
         do {
             let snapshot = try await service.joinInvite(code: inviteCode, session: session)
-            apply(snapshot: snapshot)
+            await applyPreparedSnapshot(snapshot)
             lastErrorMessage = nil
             if let familyID = snapshot.family?.id {
                 activeContext = FamilyContext(scope: .familyHome(familyID: familyID))
@@ -649,7 +649,7 @@ final class FamilyContextStore {
 
         do {
             let snapshot = try await service.acceptInvite(token: token, session: session)
-            apply(snapshot: snapshot)
+            await applyPreparedSnapshot(snapshot)
             persistCachedState(currentSnapshot)
             hydrateFamilyAvatars(from: snapshot.members)
             lastErrorMessage = nil
@@ -1243,10 +1243,22 @@ final class FamilyContextStore {
         avatarHydrationTask = nil
     }
 
-    private func apply(snapshot: FamilyStateSnapshot) {
+    private func applyPreparedSnapshot(_ snapshot: FamilyStateSnapshot) async {
+        let cachedAvatarURLs = await MistiaProfileAvatarCache.loadCachedAvatarURLMap(
+            for: snapshot.members.map(\.userID)
+        )
+        apply(snapshot: snapshot, cachedAvatarURLs: cachedAvatarURLs)
+    }
+
+    private func apply(
+        snapshot: FamilyStateSnapshot,
+        cachedAvatarURLs: [UUID: URL]
+    ) {
         family = snapshot.family
         currentMembership = snapshot.currentMembership
-        members = snapshot.members.map(memberWithCachedAvatar)
+        members = snapshot.members.map { member in
+            memberWithCachedAvatar(member, cachedAvatarURLs: cachedAvatarURLs)
+        }
         invites = snapshot.invites
         permissionGrants = snapshot.permissionGrants
         pendingPermissionRequests = snapshot.pendingPermissionRequests
@@ -1335,9 +1347,12 @@ final class FamilyContextStore {
         )
     }
 
-    private func memberWithCachedAvatar(_ member: FamilyMember) -> FamilyMember {
+    private func memberWithCachedAvatar(
+        _ member: FamilyMember,
+        cachedAvatarURLs: [UUID: URL]
+    ) -> FamilyMember {
         var resolvedMember = member
-        if let cachedAvatarURL = MistiaProfileAvatarCache.cachedAvatarURL(for: member.userID) {
+        if let cachedAvatarURL = cachedAvatarURLs[member.userID] {
             resolvedMember.avatarURL = cachedAvatarURL
         } else if member.avatarURL?.isFileURL == true,
                   let avatarURL = member.avatarURL,
@@ -1386,7 +1401,7 @@ final class FamilyContextStore {
             return false
         }
 
-        apply(snapshot: snapshot)
+        await applyPreparedSnapshot(snapshot)
         normalizeActiveContextAfterStateLoad()
         return true
     }
@@ -1450,12 +1465,9 @@ final class FamilyContextStore {
             )
         }
         try Task.checkCancellation()
-        let reconciledFinanceSnapshot = MistiaSystemCategorySyncSupport.deduplicatingRemoteSystemCategories(
-            financeSnapshot
-        )
         let protectedRecordIDs = sessionStore.protectedQueuedRecordIDs()
         try await persistenceWorker.applyAccessibleFinanceSnapshot(
-            reconciledFinanceSnapshot,
+            financeSnapshot,
             protectedRecordIDs: protectedRecordIDs,
             localUserID: session.user.id,
             pruneOwnerIDs: accessibleUserIDs.subtracting([session.user.id]),

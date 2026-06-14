@@ -60,6 +60,7 @@ struct MistiaNativeTabShell: UIViewControllerRepresentable {
 
   final class Coordinator: NSObject, MistiaNativeTabBarControllerDelegate {
     var parent: MistiaNativeTabShell
+    private var lastQuickCreateFrame: CGRect?
 
     init(parent: MistiaNativeTabShell) {
       self.parent = parent
@@ -83,7 +84,11 @@ struct MistiaNativeTabShell: UIViewControllerRepresentable {
     func nativeTabBarController(
       _ controller: MistiaNativeTabBarController, didUpdateQuickCreateFrame frame: CGRect
     ) {
-      parent.onQuickCreateFrameChange(frame)
+      guard lastQuickCreateFrame != frame else { return }
+      lastQuickCreateFrame = frame
+      DispatchQueue.main.async { [weak self] in
+        self?.parent.onQuickCreateFrameChange(frame)
+      }
     }
   }
 }

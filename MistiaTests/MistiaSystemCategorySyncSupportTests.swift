@@ -4,6 +4,17 @@ import XCTest
 
 @MainActor
 final class MistiaSystemCategorySyncSupportTests: XCTestCase {
+    func testStartupMaintenanceWorkerSeedsCategoriesUsingWorkerContext() async throws {
+        let container = try makeContainer()
+        let worker = MistiaStartupMaintenanceWorker(modelContainer: container)
+
+        let mutations = try await worker.seedDefaultCategoriesForLaunchIfNeeded()
+
+        let categories = try container.mainContext.fetch(FetchDescriptor<TransactionCategory>())
+        XCTAssertFalse(categories.isEmpty)
+        XCTAssertTrue(mutations.allSatisfy { $0.entity == .category })
+    }
+
     func testOwnerMapKeepsLatestDuplicateScope() {
         let recordID = UUID()
         let ownerA = UUID()

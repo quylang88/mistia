@@ -89,8 +89,11 @@ actor MistiaSyncPersistenceWorker {
     ) throws {
         let signpostID = MistiaPerformanceSignpost.begin("Member Apply")
         defer { MistiaPerformanceSignpost.end("Member Apply", id: signpostID) }
+        let reconciledSnapshot = MistiaSystemCategorySyncSupport.deduplicatingRemoteSystemCategories(
+            snapshot
+        )
         try MistiaSyncLocalStore.applyAccessibleFinanceSnapshot(
-            snapshot,
+            reconciledSnapshot,
             protectedRecordIDs: protectedRecordIDs,
             familyCategoryScopedTo: localUserID,
             familyCategoryPruneOwnerIDs: pruneOwnerIDs,
