@@ -296,6 +296,8 @@ final class SyncCoordinator {
         let remoteSnapshot = rawRemoteSnapshot
         onProgressUpdate?(0.2)
 
+        try Task.checkCancellation()
+
         let localCount = localSnapshot.activeRowCount
         let remoteCount = remoteSnapshot.activeRowCount
 
@@ -332,6 +334,8 @@ final class SyncCoordinator {
             onProgressUpdate?(1.0)
             return .pulled(freshCount)
         }
+
+        try Task.checkCancellation()
 
         switch choice {
         case .mergeSafely:
@@ -373,7 +377,10 @@ final class SyncCoordinator {
 
         let sortedMutations = await sortedMutationsForPush(mutations)
 
+        try Task.checkCancellation()
+
         for (index, mutation) in sortedMutations.enumerated() {
+            try Task.checkCancellation()
             let progress = 0.05 + (Double(index) / Double(max(1, mutationCount))) * 0.45
             onProgressUpdate?(progress)
 
@@ -388,6 +395,8 @@ final class SyncCoordinator {
                 }
             }
         }
+
+        try Task.checkCancellation()
 
         onProgressUpdate?(0.55)
         let localSnapshot = try await persistenceWorker.exportSnapshotForUpload(for: session.user.id)
@@ -408,6 +417,8 @@ final class SyncCoordinator {
             onProgressUpdate?(0.8)
         }
 
+        try Task.checkCancellation()
+
         if try await pushLocallyNewerRows(
             localSnapshot: localSnapshot,
             remoteSnapshot: rawRemoteSnapshot,
@@ -418,6 +429,8 @@ final class SyncCoordinator {
             pushedMutations = true
             rawRemoteSnapshot = try await fetchReconciledSnapshot(session: session)
         }
+
+        try Task.checkCancellation()
 
         let snapshot = rawRemoteSnapshot
         let previousFingerprint = lastSnapshotFingerprint
@@ -1049,6 +1062,7 @@ final class SyncCoordinator {
         let total = localOnly.count
 
         for (index, localRecord) in localOnly.enumerated() {
+            try Task.checkCancellation()
             let progress = progressStart + (Double(index) / Double(max(1, total))) * (progressEnd - progressStart)
             onProgressUpdate?(progress)
 
@@ -1445,6 +1459,7 @@ final class SyncCoordinator {
 
         let total = locallyNewer.count
         for (index, localRecord) in locallyNewer.enumerated() {
+            try Task.checkCancellation()
             let progress = progressStart + (Double(index) / Double(max(1, total))) * (progressEnd - progressStart)
             onProgressUpdate?(progress)
 

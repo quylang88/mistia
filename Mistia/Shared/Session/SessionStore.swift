@@ -2422,6 +2422,11 @@ final class SessionStore {
             }
             return true
         } catch {
+            if error is CancellationError {
+                updateAutoSyncLoopState()
+                return false
+            }
+
             if showProgress || trigger == .manual {
                 applySyncErrorState(error)
                 if showProgress {
@@ -2551,6 +2556,11 @@ final class SessionStore {
             }
             return true
         } catch {
+            if error is CancellationError {
+                updateAutoSyncLoopState()
+                return false
+            }
+
             if showProgress {
                 applySyncErrorState(error)
             }

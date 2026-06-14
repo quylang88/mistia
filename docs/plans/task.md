@@ -7,4 +7,4 @@
 | Task 3 | Add regression tests for cancellable/coalesced member refresh | `[x]` |
 | Task 4 | Implement background member persistence and stale-result protection | `[x]` |
 | Task 5 | Add sync/member performance signposts | `[x]` |
-| Task 6 | Run focused tests, build, review, and update audit memory | `[x]` |
+| Task 7 | Review commit d4de30f diffs and audit background sync flow | `[x]` |
