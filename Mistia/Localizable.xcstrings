@@ -34682,6 +34682,13 @@
         "ja": { "stringUnit": { "state": "translated", "value": "進行中のイベント" } }
       }
     },
+    "transactions.settlement.completedEvents": {
+      "localizations": {
+        "vi": { "stringUnit": { "state": "translated", "value": "Sự kiện đã hoàn tất" } },
+        "en": { "stringUnit": { "state": "translated", "value": "Completed events" } },
+        "ja": { "stringUnit": { "state": "translated", "value": "完了したイベント" } }
+      }
+    },
     "transactions.settlement.openSettlements": {
       "localizations": {
         "vi": { "stringUnit": { "state": "translated", "value": "Chờ thu / chờ trả" } },
