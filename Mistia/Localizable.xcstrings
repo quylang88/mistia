@@ -12612,19 +12612,19 @@
         "vi": {
           "stringUnit": {
             "state": "translated",
-            "value": "Hiện tại"
+            "value": "iPhone này"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Current"
+            "value": "This iPhone"
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "現在"
+            "value": "このiPhone"
           }
         }
       }

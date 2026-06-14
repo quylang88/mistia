@@ -3450,7 +3450,7 @@ private struct ManagementSignedInDeviceRow: View {
                     if device.isCurrentDevice() {
                         ManagementSignedInDevicePill(
                             title: L10n.management.managementauth.currentDeviceBadge,
-                            accent: .purple
+                            accent: .sky
                         )
                     }
                 }
