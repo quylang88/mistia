@@ -2141,14 +2141,21 @@ struct TransactionCashflowRow: View {
 
                     if record.primaryKind == .transfer, let subtype = record.transferSubtype,
                        subtype == .debt {
-                        TransactionMiniBadge(
+                        MistiaMiniBadge(
                             title: subtype.title,
                             tint: debtIntentTint(record.debtIntent)
                         )
                     }
 
+                    if record.settlementGroupID != nil {
+                        MistiaMiniBadge(
+                            title: L10n.transactions.settlement.eventTitle,
+                            tint: MistiaAccent.teal.color
+                        )
+                    }
+
                     if hasFamilyOwnerConflict {
-                        TransactionMiniBadge(
+                        MistiaMiniBadge(
                             title: L10n.shared.sync.familyOwnerPushConflict.badge,
                             tint: MistiaAccent.amber.color
                         )
@@ -2207,21 +2214,7 @@ private struct TransactionIconTile: View {
     }
 }
 
-private struct TransactionMiniBadge: View {
-    let title: String
-    let tint: Color
 
-    var body: some View {
-        Text(title)
-            .font(.system(size: 10, weight: .bold, design: .rounded))
-            .foregroundStyle(tint)
-            .padding(.horizontal, 8)
-            .padding(.vertical, 4)
-            .background {
-                MistiaCapsuleGlassBackground(tint: tint.opacity(0.12))
-            }
-    }
-}
 
 
 private struct TransactionToolbarChip: View {

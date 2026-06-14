@@ -246,6 +246,8 @@ struct TransactionEditorSheet: View {
     private var postedTransactions: [LedgerTransaction]
     @Query(filter: #Predicate<DueOccurrenceRecord> { $0.deletedAt == nil })
     private var storedDueOccurrences: [DueOccurrenceRecord]
+    @Query(filter: #Predicate<SettlementGroup> { $0.deletedAt == nil })
+    private var storedSettlementGroups: [SettlementGroup]
 
     let target: TransactionEditorTarget
     var onComplete: (TransactionEditorCompletion) -> Void = { _ in }
@@ -261,6 +263,10 @@ struct TransactionEditorSheet: View {
                    transaction.category?.id == MistiaSystemCategoryIdentity.balanceAdjustmentIncomeID
         }
         return false
+    }
+    private var linkedEvent: SettlementGroup? {
+        guard let groupID = target.transaction?.settlementGroupID else { return nil }
+        return storedSettlementGroups.first { $0.id == groupID }
     }
     @State private var showsCategoryPicker = false
     @State private var cachedTitleSuggestions: [TransactionTitleSuggestion] = []
@@ -886,6 +892,19 @@ struct TransactionEditorSheet: View {
                         selection: $bindableDraft.occurredAt,
                         mode: .dateAndTime
                     )
+
+                    if let event = linkedEvent {
+                        HStack {
+                            Text(L10n.transactions.settlement.eventTitle)
+                                .font(.system(size: 14, weight: .medium, design: .rounded))
+                                .foregroundStyle(.secondary)
+                            Spacer()
+                            MistiaMiniBadge(
+                                title: event.title,
+                                tint: MistiaAccent.teal.color
+                            )
+                        }
+                    }
                 }
             }
 

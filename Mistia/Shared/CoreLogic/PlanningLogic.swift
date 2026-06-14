@@ -296,10 +296,10 @@ nonisolated struct PlanningBudgetSpendingIndex {
         }
 
         for transaction in familyTransactions {
-            guard transaction.kind == .expense,
-                  !transaction.isAdjustment,
-                  !transaction.isCreditCardPayment,
-                  !transaction.isInstallmentPayment,
+            let expenseMinor = transaction.reportingExpenseMinor ?? (
+                (transaction.kind == .expense && !transaction.isAdjustment && !transaction.isCreditCardPayment && !transaction.isInstallmentPayment) ? transaction.amountMinor : 0
+            )
+            guard expenseMinor != 0,
                   transaction.occurredAt >= monthInterval.start,
                   transaction.occurredAt < monthInterval.end
             else {
@@ -373,8 +373,11 @@ nonisolated struct PlanningBudgetSpendingIndex {
 
         return familyTransactionsByCategoryKey[key]?
             .reduce(into: Int64.zero) { partial, transaction in
+                let expenseMinor = transaction.reportingExpenseMinor ?? (
+                    (transaction.kind == .expense && !transaction.isAdjustment && !transaction.isCreditCardPayment && !transaction.isInstallmentPayment) ? transaction.amountMinor : 0
+                )
                 partial += PlanningLogic.reportingAmount(
-                    amountMinor: transaction.amountMinor,
+                    amountMinor: expenseMinor,
                     sourceCurrencyCode: transaction.currencyCode,
                     currencyCode: currencyCode,
                     rateIndex: rateIndex
@@ -936,7 +939,8 @@ nonisolated enum PlanningLogic {
             health = .stable
         } else {
             let progress = Double(max(spentMinor, 0)) / Double(limitMinor)
-            health = progress > targetProgress * budgetPaceCautionMultiplier ? .caution : .stable
+            let threshold = targetProgress * budgetPaceCautionMultiplier
+            health = (progress - threshold) > 1e-9 ? .caution : .stable
         }
 
         return PlanningBudgetPaceAssessment(

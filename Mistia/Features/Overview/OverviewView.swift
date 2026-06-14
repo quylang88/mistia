@@ -1843,10 +1843,19 @@ private struct OverviewDayTransactionRow: View {
             MistiaFinanceIconView(icon: iconName, fallbackColor: amountColor, size: 34)
 
             VStack(alignment: .leading, spacing: 4) {
-                Text(titleText)
-                    .font(.system(size: 16, weight: .semibold, design: .rounded))
-                    .foregroundStyle(.primary)
-                    .lineLimit(1)
+                HStack(spacing: 8) {
+                    Text(titleText)
+                        .font(.system(size: 16, weight: .semibold, design: .rounded))
+                        .foregroundStyle(.primary)
+                        .lineLimit(1)
+
+                    if transaction.settlementGroupID != nil {
+                        MistiaMiniBadge(
+                            title: L10n.transactions.settlement.eventTitle,
+                            tint: MistiaAccent.teal.color
+                        )
+                    }
+                }
 
                 Text(subtitleText)
                     .font(.system(size: 12, weight: .medium, design: .rounded))
