@@ -50,6 +50,29 @@ final class AccountDeviceRegistryTests: XCTestCase {
         XCTAssertEqual(forgotten.status, .forgotten)
     }
 
+    func testDisplayNameUsesTrimmedDeviceNameWhenAvailable() {
+        let device = MistiaAccountDevice.fixture(
+            deviceName: "  Lan's Travel iPhone  ",
+            modelDisplayName: "iPhone 16 Pro"
+        )
+
+        XCTAssertEqual(device.displayName, "Lan's Travel iPhone")
+    }
+
+    func testDisplayNameFallsBackToIPhoneWhenDeviceNameIsBlank() {
+        let emptyDeviceName = MistiaAccountDevice.fixture(
+            deviceName: "",
+            modelDisplayName: "iPhone 16 Pro"
+        )
+        let whitespaceDeviceName = MistiaAccountDevice.fixture(
+            deviceName: "  \n\t  ",
+            modelDisplayName: "iPad"
+        )
+
+        XCTAssertEqual(emptyDeviceName.displayName, "iPhone")
+        XCTAssertEqual(whitespaceDeviceName.displayName, "iPhone")
+    }
+
     func testCurrentDeviceRequiresLocalSignOutWhenForgottenOrRemoteRequested() {
         let currentDeviceID = UUID()
         let now = Date()
@@ -156,15 +179,19 @@ private final class AccountDeviceURLProtocol: URLProtocol {
 }
 
 private extension MistiaAccountDevice {
-    static func fixture(deviceID: UUID = UUID()) -> MistiaAccountDevice {
+    static func fixture(
+        deviceID: UUID = UUID(),
+        deviceName: String = "Lan's iPhone",
+        modelDisplayName: String = "iPhone"
+    ) -> MistiaAccountDevice {
         let now = Date()
         return MistiaAccountDevice(
             userID: UUID(),
             deviceID: deviceID,
             sessionID: nil,
-            deviceName: "Lan's iPhone",
+            deviceName: deviceName,
             modelIdentifier: "iPhone16,2",
-            modelDisplayName: "iPhone",
+            modelDisplayName: modelDisplayName,
             systemName: "iOS",
             systemVersion: "26.4",
             appVersion: "1.0",

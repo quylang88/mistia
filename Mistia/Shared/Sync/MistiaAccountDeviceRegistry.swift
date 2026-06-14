@@ -45,8 +45,7 @@ struct MistiaAccountDevice: Codable, Equatable, Identifiable {
             return trimmedName
         }
 
-        let trimmedModel = modelDisplayName.trimmingCharacters(in: .whitespacesAndNewlines)
-        return trimmedModel.isEmpty ? "iPhone" : trimmedModel
+        return "iPhone"
     }
 
     func isCurrentDevice(currentDeviceID: UUID = MistiaSyncDeviceIdentity.current()) -> Bool {
