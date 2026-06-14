@@ -15,6 +15,24 @@ final class AccountDeviceRegistryTests: XCTestCase {
         XCTAssertEqual(MistiaAccountDevice.sessionID(fromAccessToken: token), sessionID)
     }
 
+    func testCurrentDeviceUsesMarketingNameForKnownModelIdentifier() {
+        let session = SupabaseAuthSession(
+            accessToken: "access-token",
+            refreshToken: "refresh-token",
+            tokenType: "bearer",
+            expiresAt: nil,
+            user: SupabaseAuthUser(id: UUID(), email: nil, userMetadata: nil)
+        )
+
+        let device = MistiaAccountDevice.current(
+            session: session,
+            modelIdentifierProvider: { "iPhone16,2" }
+        )
+
+        XCTAssertEqual(device.modelIdentifier, "iPhone16,2")
+        XCTAssertEqual(device.modelDisplayName, "iPhone 15 Pro Max")
+    }
+
     func testDeviceStatusPrefersForgottenThenSignedOutThenActive() {
         let userID = UUID()
         let deviceID = UUID()
