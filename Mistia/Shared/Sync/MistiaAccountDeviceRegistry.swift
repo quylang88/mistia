@@ -48,6 +48,21 @@ struct MistiaAccountDevice: Codable, Equatable, Identifiable {
         return "iPhone"
     }
 
+    var modelListDisplayName: String {
+        let displayName = modelDisplayName.trimmingCharacters(in: .whitespacesAndNewlines)
+        let identifier = modelIdentifier.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        if !identifier.isEmpty, Self.isGenericModelDisplayName(displayName, for: identifier) {
+            return identifier
+        }
+
+        if !displayName.isEmpty {
+            return displayName
+        }
+
+        return identifier
+    }
+
     func isCurrentDevice(currentDeviceID: UUID = MistiaSyncDeviceIdentity.current()) -> Bool {
         deviceID == currentDeviceID
     }
@@ -109,6 +124,12 @@ struct MistiaAccountDevice: Codable, Equatable, Identifiable {
             base64.append(String(repeating: "=", count: 4 - remainder))
         }
         return Data(base64Encoded: base64)
+    }
+
+    private static func isGenericModelDisplayName(_ displayName: String, for identifier: String) -> Bool {
+        guard !displayName.isEmpty else { return false }
+        return identifier.hasPrefix(displayName)
+            && displayName.rangeOfCharacter(from: .decimalDigits) == nil
     }
 
     private static func modelDisplayName(for identifier: String, fallbackDevice device: UIDevice) -> String {
