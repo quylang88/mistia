@@ -1364,8 +1364,6 @@ nonisolated enum L10n {
             static func reEnterYourPasswordToConfirmIt(language: MistiaAppLanguage) -> String { L10n.tr("management.managementauth.reEnterYourPasswordToConfirmIt", vi: "Nhập lại mật khẩu để xác nhận.", en: "Re-enter your password to confirm it.", ja: "確認のためパスワードを再入力してください。", language: language) }
             static var recommended: String { L10n.tr("management.managementauth.recommended", vi: "Khuyên dùng", en: "Recommended", ja: "おすすめ") }
             static func recommended(language: MistiaAppLanguage) -> String { L10n.tr("management.managementauth.recommended", vi: "Khuyên dùng", en: "Recommended", ja: "おすすめ", language: language) }
-            static var refreshDevices: String { L10n.tr("management.managementauth.refreshDevices", vi: "Làm mới thiết bị", en: "Refresh devices", ja: "デバイスを更新") }
-            static func refreshDevices(language: MistiaAppLanguage) -> String { L10n.tr("management.managementauth.refreshDevices", vi: "Làm mới thiết bị", en: "Refresh devices", ja: "デバイスを更新", language: language) }
             static var replaceLocal: String { L10n.tr("management.managementauth.replaceLocal", vi: "Thay local", en: "Replace local", ja: "ローカルを置換") }
             static func replaceLocal(language: MistiaAppLanguage) -> String { L10n.tr("management.managementauth.replaceLocal", vi: "Thay local", en: "Replace local", ja: "ローカルを置換", language: language) }
             static var replaceTheCurrentLocalSnapshotWithThe: String { L10n.tr("management.managementauth.replaceTheCurrentLocalSnapshotWithThe", vi: "Xóa snapshot local hiện tại rồi kéo toàn bộ cloud về máy.", en: "Replace the current local snapshot with the full cloud state.", ja: "現在のローカルスナップショットを置き換えて、クラウド全体を取得します。") }

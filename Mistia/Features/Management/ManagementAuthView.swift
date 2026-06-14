@@ -3344,21 +3344,6 @@ private struct ManagementSignedInDevicesView: View {
                     accent: .orange
                 )
             }
-
-            ManagementProfileListCard(tint: cardTint) {
-                ManagementProfileActionRow(
-                    title: L10n.management.managementauth.refreshDevices,
-                    icon: "arrow.clockwise.icloud",
-                    accent: .sky,
-                    subtitle: nil,
-                    isDisabled: sessionStore.isLoadingAccountDevices,
-                    showsProgress: sessionStore.isLoadingAccountDevices
-                ) {
-                    Task {
-                        await sessionStore.refreshAccountDevices()
-                    }
-                }
-            }
         }
         .task {
             await sessionStore.refreshAccountDevices()
