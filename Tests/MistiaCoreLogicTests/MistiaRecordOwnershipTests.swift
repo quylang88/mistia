@@ -2,6 +2,33 @@ import XCTest
 @testable import MistiaCoreLogic
 
 final class MistiaRecordOwnershipTests: XCTestCase {
+    func testOwnerMapsBuildsRequestedEntitiesAndKeepsLatestScope() {
+        let walletID = UUID()
+        let categoryID = UUID()
+        let transactionID = UUID()
+        let oldOwnerID = UUID()
+        let newOwnerID = UUID()
+        let categoryOwnerID = UUID()
+        let transactionOwnerID = UUID()
+        let olderDate = Date(timeIntervalSince1970: 1_000)
+        let newerDate = Date(timeIntervalSince1970: 2_000)
+        let scopes = [
+            OwnedRecordScope(entity: .wallet, recordID: walletID, ownerUserID: oldOwnerID, updatedAt: olderDate),
+            OwnedRecordScope(entity: .wallet, recordID: walletID, ownerUserID: newOwnerID, updatedAt: newerDate),
+            OwnedRecordScope(entity: .category, recordID: categoryID, ownerUserID: categoryOwnerID, updatedAt: olderDate),
+            OwnedRecordScope(entity: .transaction, recordID: transactionID, ownerUserID: transactionOwnerID, updatedAt: olderDate)
+        ]
+
+        let ownerMaps = MistiaRecordOwnershipStore.ownerMaps(
+            from: scopes,
+            entities: [.wallet, .category]
+        )
+
+        XCTAssertEqual(ownerMaps[.wallet][walletID], newOwnerID)
+        XCTAssertEqual(ownerMaps[.category][categoryID], categoryOwnerID)
+        XCTAssertNil(ownerMaps[.transaction][transactionID])
+    }
+
     func testVisibleCategoryRecordsUseSelectedSubjectOwnerOnly() {
         let selfUserID = UUID()
         let memberUserID = UUID()

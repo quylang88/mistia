@@ -67,11 +67,15 @@ struct MistiaDueMaintenanceSnapshot {
         )) ?? []
         let ownershipScopes = (try? modelContext.fetch(FetchDescriptor<OwnedRecordScope>())) ?? []
 
-        let walletOwnerMap = MistiaRecordOwnershipStore.ownerMap(from: ownershipScopes, entity: .wallet)
-        let transactionOwnerMap = MistiaRecordOwnershipStore.ownerMap(from: ownershipScopes, entity: .transaction)
-        let occurrenceOwnerMap = MistiaRecordOwnershipStore.ownerMap(from: ownershipScopes, entity: .dueOccurrenceRecord)
-        let billOwnerMap = MistiaRecordOwnershipStore.ownerMap(from: ownershipScopes, entity: .recurringBillPlan)
-        let budgetOwnerMap = MistiaRecordOwnershipStore.ownerMap(from: ownershipScopes, entity: .budgetPlan)
+        let ownerMaps = MistiaRecordOwnershipStore.ownerMaps(
+            from: ownershipScopes,
+            entities: [.wallet, .transaction, .dueOccurrenceRecord, .recurringBillPlan, .budgetPlan]
+        )
+        let walletOwnerMap = ownerMaps[.wallet]
+        let transactionOwnerMap = ownerMaps[.transaction]
+        let occurrenceOwnerMap = ownerMaps[.dueOccurrenceRecord]
+        let billOwnerMap = ownerMaps[.recurringBillPlan]
+        let budgetOwnerMap = ownerMaps[.budgetPlan]
 
         let activeWallets = storedWallets.filter {
             (walletOwnerMap[$0.id] ?? activeUserID) == activeUserID

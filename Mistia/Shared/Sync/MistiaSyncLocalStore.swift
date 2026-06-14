@@ -151,17 +151,33 @@ nonisolated enum MistiaSyncLocalStore {
         let context = ModelContext(container)
         let ownershipScopes = try context.fetch(FetchDescriptor<OwnedRecordScope>())
         let auditMap = try TransactionAuditStore.auditMap(from: fetchTransactionAudits(context))
-        let walletOwnerMap = MistiaRecordOwnershipStore.ownerMap(from: ownershipScopes, entity: .wallet)
-        let profileOwnerMap = MistiaRecordOwnershipStore.ownerMap(from: ownershipScopes, entity: .creditCardProfile)
-        let categoryOwnerMap = MistiaRecordOwnershipStore.ownerMap(from: ownershipScopes, entity: .category)
-        let settlementGroupOwnerMap = MistiaRecordOwnershipStore.ownerMap(from: ownershipScopes, entity: .settlementGroup)
-        let settlementParticipantOwnerMap = MistiaRecordOwnershipStore.ownerMap(from: ownershipScopes, entity: .settlementParticipant)
-        let transactionOwnerMap = MistiaRecordOwnershipStore.ownerMap(from: ownershipScopes, entity: .transaction)
-        let budgetOwnerMap = MistiaRecordOwnershipStore.ownerMap(from: ownershipScopes, entity: .budgetPlan)
-        let goalOwnerMap = MistiaRecordOwnershipStore.ownerMap(from: ownershipScopes, entity: .savingsGoal)
-        let recurringOwnerMap = MistiaRecordOwnershipStore.ownerMap(from: ownershipScopes, entity: .recurringBillPlan)
-        let installmentOwnerMap = MistiaRecordOwnershipStore.ownerMap(from: ownershipScopes, entity: .installmentPlan)
-        let occurrenceOwnerMap = MistiaRecordOwnershipStore.ownerMap(from: ownershipScopes, entity: .dueOccurrenceRecord)
+        let ownerMaps = MistiaRecordOwnershipStore.ownerMaps(
+            from: ownershipScopes,
+            entities: [
+                .wallet,
+                .creditCardProfile,
+                .category,
+                .settlementGroup,
+                .settlementParticipant,
+                .transaction,
+                .budgetPlan,
+                .savingsGoal,
+                .recurringBillPlan,
+                .installmentPlan,
+                .dueOccurrenceRecord
+            ]
+        )
+        let walletOwnerMap = ownerMaps[.wallet]
+        let profileOwnerMap = ownerMaps[.creditCardProfile]
+        let categoryOwnerMap = ownerMaps[.category]
+        let settlementGroupOwnerMap = ownerMaps[.settlementGroup]
+        let settlementParticipantOwnerMap = ownerMaps[.settlementParticipant]
+        let transactionOwnerMap = ownerMaps[.transaction]
+        let budgetOwnerMap = ownerMaps[.budgetPlan]
+        let goalOwnerMap = ownerMaps[.savingsGoal]
+        let recurringOwnerMap = ownerMaps[.recurringBillPlan]
+        let installmentOwnerMap = ownerMaps[.installmentPlan]
+        let occurrenceOwnerMap = ownerMaps[.dueOccurrenceRecord]
         let wallets = try fetchWallets(context)
             .filter { walletOwnerMap[$0.id] == nil || walletOwnerMap[$0.id] == userID }
         let creditCardProfiles = try fetchCreditCardProfiles(context)
@@ -915,9 +931,13 @@ nonisolated enum MistiaSyncLocalStore {
         let transactions = try fetchTransactions(context)
         let ownershipScopes = try context.fetch(FetchDescriptor<OwnedRecordScope>())
         let audits = try TransactionAuditStore.auditMap(from: fetchTransactionAudits(context))
-        let walletOwnerMap = MistiaRecordOwnershipStore.ownerMap(from: ownershipScopes, entity: .wallet)
-        let categoryOwnerMap = MistiaRecordOwnershipStore.ownerMap(from: ownershipScopes, entity: .category)
-        let transactionOwnerMap = MistiaRecordOwnershipStore.ownerMap(from: ownershipScopes, entity: .transaction)
+        let ownerMaps = MistiaRecordOwnershipStore.ownerMaps(
+            from: ownershipScopes,
+            entities: [.wallet, .category, .transaction]
+        )
+        let walletOwnerMap = ownerMaps[.wallet]
+        let categoryOwnerMap = ownerMaps[.category]
+        let transactionOwnerMap = ownerMaps[.transaction]
         let transactionRows = scopedTransactionRows(
             rows,
             categoryIDMap: remoteCategoryIDMap(
@@ -1142,17 +1162,33 @@ nonisolated enum MistiaSyncLocalStore {
         let auditRecords = try fetchTransactionAudits(context)
         let auditMap = TransactionAuditStore.auditMap(from: auditRecords)
 
-        let walletOwnerMap = MistiaRecordOwnershipStore.ownerMap(from: ownershipScopes, entity: .wallet)
-        let profileOwnerMap = MistiaRecordOwnershipStore.ownerMap(from: ownershipScopes, entity: .creditCardProfile)
-        let categoryOwnerMap = MistiaRecordOwnershipStore.ownerMap(from: ownershipScopes, entity: .category)
-        let settlementGroupOwnerMap = MistiaRecordOwnershipStore.ownerMap(from: ownershipScopes, entity: .settlementGroup)
-        let settlementParticipantOwnerMap = MistiaRecordOwnershipStore.ownerMap(from: ownershipScopes, entity: .settlementParticipant)
-        let transactionOwnerMap = MistiaRecordOwnershipStore.ownerMap(from: ownershipScopes, entity: .transaction)
-        let budgetOwnerMap = MistiaRecordOwnershipStore.ownerMap(from: ownershipScopes, entity: .budgetPlan)
-        let goalOwnerMap = MistiaRecordOwnershipStore.ownerMap(from: ownershipScopes, entity: .savingsGoal)
-        let recurringOwnerMap = MistiaRecordOwnershipStore.ownerMap(from: ownershipScopes, entity: .recurringBillPlan)
-        let installmentOwnerMap = MistiaRecordOwnershipStore.ownerMap(from: ownershipScopes, entity: .installmentPlan)
-        let occurrenceOwnerMap = MistiaRecordOwnershipStore.ownerMap(from: ownershipScopes, entity: .dueOccurrenceRecord)
+        let ownerMaps = MistiaRecordOwnershipStore.ownerMaps(
+            from: ownershipScopes,
+            entities: [
+                .wallet,
+                .creditCardProfile,
+                .category,
+                .settlementGroup,
+                .settlementParticipant,
+                .transaction,
+                .budgetPlan,
+                .savingsGoal,
+                .recurringBillPlan,
+                .installmentPlan,
+                .dueOccurrenceRecord
+            ]
+        )
+        let walletOwnerMap = ownerMaps[.wallet]
+        let profileOwnerMap = ownerMaps[.creditCardProfile]
+        let categoryOwnerMap = ownerMaps[.category]
+        let settlementGroupOwnerMap = ownerMaps[.settlementGroup]
+        let settlementParticipantOwnerMap = ownerMaps[.settlementParticipant]
+        let transactionOwnerMap = ownerMaps[.transaction]
+        let budgetOwnerMap = ownerMaps[.budgetPlan]
+        let goalOwnerMap = ownerMaps[.savingsGoal]
+        let recurringOwnerMap = ownerMaps[.recurringBillPlan]
+        let installmentOwnerMap = ownerMaps[.installmentPlan]
+        let occurrenceOwnerMap = ownerMaps[.dueOccurrenceRecord]
 
         let wallets = try fetchWallets(context).filter { $0.deletedAt == nil }
         let creditCardProfiles = try fetchCreditCardProfiles(context).filter { $0.deletedAt == nil }
@@ -1847,7 +1883,11 @@ nonisolated enum MistiaSyncLocalStore {
         categoryByID: inout [UUID: TransactionCategory]
     ) throws {
         let scopes = try context.fetch(FetchDescriptor<OwnedRecordScope>())
-        let ownerMap = MistiaRecordOwnershipStore.ownerMap(from: scopes, entity: .category)
+        let ownerMaps = MistiaRecordOwnershipStore.ownerMaps(
+            from: scopes,
+            entities: [.category, .transaction, .budgetPlan, .recurringBillPlan]
+        )
+        let ownerMap = ownerMaps[.category]
         let now = Date()
 
         let categories = Array(categoryByID.values)
@@ -1867,9 +1907,9 @@ nonisolated enum MistiaSyncLocalStore {
                 replacementByID: replacementByID,
                 categoryByID: categoryByID,
                 ownerUserIDs: ownerUserIDs,
-                transactionOwnerMap: MistiaRecordOwnershipStore.ownerMap(from: scopes, entity: .transaction),
-                budgetOwnerMap: MistiaRecordOwnershipStore.ownerMap(from: scopes, entity: .budgetPlan),
-                recurringOwnerMap: MistiaRecordOwnershipStore.ownerMap(from: scopes, entity: .recurringBillPlan),
+                transactionOwnerMap: ownerMaps[.transaction],
+                budgetOwnerMap: ownerMaps[.budgetPlan],
+                recurringOwnerMap: ownerMaps[.recurringBillPlan],
                 categoryOwnerMap: ownerMap,
                 transactions: transactions,
                 budgets: budgets,

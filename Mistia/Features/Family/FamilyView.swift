@@ -2041,13 +2041,25 @@ private struct FamilyOverviewDataHost: View {
         let selectedMonth = selectedMonth(for: timeframe, now: now)
         let interval = selectedInterval(for: timeframe, now: now, selectedMonth: selectedMonth)
         let familyMemberUserIDs = familyMemberIDs
-        let walletOwnerMap = MistiaRecordOwnershipStore.ownerMap(from: ownershipScopes, entity: .wallet)
-        let transactionOwnerMap = MistiaRecordOwnershipStore.ownerMap(from: ownershipScopes, entity: .transaction)
-        let budgetOwnerMap = MistiaRecordOwnershipStore.ownerMap(from: ownershipScopes, entity: .budgetPlan)
-        let goalOwnerMap = MistiaRecordOwnershipStore.ownerMap(from: ownershipScopes, entity: .savingsGoal)
-        let billOwnerMap = MistiaRecordOwnershipStore.ownerMap(from: ownershipScopes, entity: .recurringBillPlan)
-        let installmentOwnerMap = MistiaRecordOwnershipStore.ownerMap(from: ownershipScopes, entity: .installmentPlan)
-        let occurrenceOwnerMap = MistiaRecordOwnershipStore.ownerMap(from: ownershipScopes, entity: .dueOccurrenceRecord)
+        let ownerMaps = MistiaRecordOwnershipStore.ownerMaps(
+            from: ownershipScopes,
+            entities: [
+                .wallet,
+                .transaction,
+                .budgetPlan,
+                .savingsGoal,
+                .recurringBillPlan,
+                .installmentPlan,
+                .dueOccurrenceRecord
+            ]
+        )
+        let walletOwnerMap = ownerMaps[.wallet]
+        let transactionOwnerMap = ownerMaps[.transaction]
+        let budgetOwnerMap = ownerMaps[.budgetPlan]
+        let goalOwnerMap = ownerMaps[.savingsGoal]
+        let billOwnerMap = ownerMaps[.recurringBillPlan]
+        let installmentOwnerMap = ownerMaps[.installmentPlan]
+        let occurrenceOwnerMap = ownerMaps[.dueOccurrenceRecord]
         let transactionAuditMap = TransactionAuditStore.auditMap(from: transactionAuditRecords)
         let visibleWallets = visibleForFamilyOverview(
             storedWallets,

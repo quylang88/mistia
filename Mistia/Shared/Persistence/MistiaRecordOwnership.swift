@@ -47,20 +47,58 @@ nonisolated extension RecurringBillPlan: MistiaOwnedRecord {}
 nonisolated extension InstallmentPlan: MistiaOwnedRecord {}
 nonisolated extension DueOccurrenceRecord: MistiaOwnedRecord {}
 
+nonisolated struct MistiaRecordOwnerMaps {
+    private let ownersByEntity: [MistiaSyncEntity: [UUID: UUID]]
+
+    init(_ ownersByEntity: [MistiaSyncEntity: [UUID: UUID]]) {
+        self.ownersByEntity = ownersByEntity
+    }
+
+    subscript(entity: MistiaSyncEntity) -> [UUID: UUID] {
+        ownersByEntity[entity] ?? [:]
+    }
+}
+
 nonisolated enum MistiaRecordOwnershipStore {
     static func ownerMap(
         from scopes: [OwnedRecordScope],
         entity: MistiaSyncEntity
     ) -> [UUID: UUID] {
-        var ownersByRecordID: [UUID: (ownerUserID: UUID, updatedAt: Date)] = [:]
-        for scope in scopes where scope.entity == entity {
-            if let existing = ownersByRecordID[scope.recordID],
+        ownerMaps(from: scopes, entities: [entity])[entity]
+    }
+
+    static func ownerMaps(
+        from scopes: [OwnedRecordScope],
+        entities requestedEntities: Set<MistiaSyncEntity>? = nil
+    ) -> MistiaRecordOwnerMaps {
+        var ownersByEntity: [MistiaSyncEntity: [UUID: (ownerUserID: UUID, updatedAt: Date)]] = [:]
+        ownersByEntity.reserveCapacity(requestedEntities?.count ?? 0)
+
+        for scope in scopes {
+            let entity = scope.entity
+            if let requestedEntities, !requestedEntities.contains(entity) {
+                continue
+            }
+
+            if let existing = ownersByEntity[entity]?[scope.recordID],
                existing.updatedAt > scope.updatedAt {
                 continue
             }
-            ownersByRecordID[scope.recordID] = (scope.ownerUserID, scope.updatedAt)
+            ownersByEntity[entity, default: [:]][scope.recordID] = (scope.ownerUserID, scope.updatedAt)
         }
-        return ownersByRecordID.mapValues(\.ownerUserID)
+
+        var maps: [MistiaSyncEntity: [UUID: UUID]] = [:]
+        maps.reserveCapacity(ownersByEntity.count)
+        for (entity, ownersByRecordID) in ownersByEntity {
+            var ownerMap: [UUID: UUID] = [:]
+            ownerMap.reserveCapacity(ownersByRecordID.count)
+            for (recordID, owner) in ownersByRecordID {
+                ownerMap[recordID] = owner.ownerUserID
+            }
+            maps[entity] = ownerMap
+        }
+
+        return MistiaRecordOwnerMaps(maps)
     }
 
     @discardableResult
