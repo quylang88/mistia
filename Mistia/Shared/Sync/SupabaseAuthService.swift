@@ -165,15 +165,18 @@ struct SupabaseServiceErrorResponse: Codable {
 struct SupabaseAuthService: SessionAuthServicing {
     private let keychain: KeychainStore
     private let configurationProvider: () -> MistiaSyncConfiguration?
+    private let urlSession: URLSession
     private let decoder = JSONDecoder.mistiaSyncDecoder
     private let encoder = JSONEncoder.mistiaSyncEncoder
 
     init(
         keychain: KeychainStore = KeychainStore(),
-        configurationProvider: @escaping () -> MistiaSyncConfiguration? = { MistiaSyncConfiguration.load() }
+        configurationProvider: @escaping () -> MistiaSyncConfiguration? = { MistiaSyncConfiguration.load() },
+        urlSession: URLSession = .shared
     ) {
         self.keychain = keychain
         self.configurationProvider = configurationProvider
+        self.urlSession = urlSession
     }
 
     func loadPersistedSession() throws -> SupabaseAuthSession? {
@@ -310,13 +313,21 @@ struct SupabaseAuthService: SessionAuthServicing {
 
     func signOut(session: SupabaseAuthSession?) async throws {
         if let session, let configuration = configurationProvider() {
-            let url = configuration.authBaseURL.appending(path: "logout")
+            guard var components = URLComponents(url: configuration.authBaseURL.appending(path: "logout"), resolvingAgainstBaseURL: false) else {
+                throw SupabaseServiceError.invalidURL
+            }
+            components.queryItems = [
+                URLQueryItem(name: "scope", value: "local")
+            ]
+            guard let url = components.url else {
+                throw SupabaseServiceError.invalidURL
+            }
             var request = URLRequest(url: url)
             request.httpMethod = "POST"
             request.setValue("application/json", forHTTPHeaderField: "Content-Type")
             request.setValue(configuration.anonKey, forHTTPHeaderField: "apikey")
             request.setValue("Bearer \(session.accessToken)", forHTTPHeaderField: "Authorization")
-            _ = try? await URLSession.shared.data(for: request)
+            _ = try? await urlSession.data(for: request)
         }
 
         try clearPersistedSession()

@@ -226,12 +226,7 @@ struct ManagementAccountView: View {
             case .backupRestore:
                 ManagementBackupRestoreView()
             case .signedInDevices:
-                ManagementProfilePlaceholderView(
-                    title: L10n.management.managementauth.signedInDevices,
-                    systemImage: "desktopcomputer",
-                    accent: accent,
-                    message: L10n.management.managementauth.thisScreenWillListDevicesCurrentlySigned
-                )
+                ManagementSignedInDevicesView(accent: accent)
             case .editProfile:
                 if let summary = sessionStore.summary {
                     ManagementEditProfileView(summary: summary, accent: accent)
@@ -3261,6 +3256,397 @@ private struct ManagementProfilePersonalInfoItem: View {
 
     var body: some View {
         bodyView
+    }
+}
+
+private enum ManagementSignedInDeviceActionKind: String {
+    case signOut
+    case forget
+}
+
+private struct ManagementSignedInDevicePendingAction: Identifiable {
+    let kind: ManagementSignedInDeviceActionKind
+    let device: MistiaAccountDevice
+
+    var id: String {
+        "\(kind.rawValue)-\(device.id.uuidString)"
+    }
+
+    var confirmationTitle: String {
+        switch kind {
+        case .signOut:
+            L10n.management.managementauth.signOutDeviceConfirmationTitle
+        case .forget:
+            L10n.management.managementauth.forgetDeviceConfirmationTitle
+        }
+    }
+
+    var message: String {
+        switch kind {
+        case .signOut:
+            if device.isCurrentDevice() {
+                return L10n.management.managementauth.signOutThisDeviceConfirmationMessage
+            }
+            return L10n.management.managementauth.signOutDeviceConfirmationMessage
+        case .forget:
+            if device.status == .signedIn {
+                return L10n.management.managementauth.forgetSignedInDeviceConfirmationMessage
+            }
+            return L10n.management.managementauth.forgetSignedOutDeviceConfirmationMessage
+        }
+    }
+
+    var destructiveTitle: String {
+        switch kind {
+        case .signOut:
+            device.isCurrentDevice()
+                ? L10n.management.managementauth.signOutThisDevice
+                : L10n.management.managementauth.signOutDevice
+        case .forget:
+            L10n.management.managementauth.forgetDevice
+        }
+    }
+}
+
+private struct ManagementSignedInDevicesView: View {
+    @Environment(\.dismiss) private var dismiss
+    @Environment(\.colorScheme) private var colorScheme
+    @Environment(SessionStore.self) private var sessionStore
+
+    let accent: Color
+
+    @State private var pendingAction: ManagementSignedInDevicePendingAction?
+
+    private var cardTint: Color {
+        colorScheme == .dark ? Color(UIColor.secondarySystemGroupedBackground) : .white.opacity(0.22)
+    }
+
+    var body: some View {
+        MistiaPinnedTopBarScaffold(
+            tone: .standard,
+            title: L10n.management.managementauth.signedInDevices,
+            embedsInNavigationStack: false,
+            showsLeadingAvatar: false,
+            leadingSystemImage: "chevron.left",
+            trailingSystemImage: nil,
+            hidesSystemBackButton: true,
+            onLeadingTap: { dismiss() },
+            contentSpacing: 18
+        ) {
+            ManagementProfileListCard(tint: cardTint) {
+                deviceListContent
+            }
+
+            if let errorMessage = sessionStore.accountDevicesErrorMessage {
+                ManagementInlineMessageCard(
+                    title: L10n.management.managementauth.latestIssue,
+                    message: errorMessage,
+                    accent: .orange
+                )
+            }
+
+            ManagementProfileListCard(tint: cardTint) {
+                ManagementProfileActionRow(
+                    title: L10n.management.managementauth.refreshDevices,
+                    icon: "arrow.clockwise.icloud",
+                    accent: .sky,
+                    subtitle: nil,
+                    isDisabled: sessionStore.isLoadingAccountDevices,
+                    showsProgress: sessionStore.isLoadingAccountDevices
+                ) {
+                    Task {
+                        await sessionStore.refreshAccountDevices()
+                    }
+                }
+            }
+        }
+        .task {
+            await sessionStore.refreshAccountDevices()
+        }
+        .alert(
+            pendingAction?.confirmationTitle ?? "",
+            isPresented: Binding(
+                get: { pendingAction != nil },
+                set: { isPresented in
+                    if !isPresented {
+                        pendingAction = nil
+                    }
+                }
+            ),
+            presenting: pendingAction
+        ) { action in
+            Button(action.destructiveTitle, role: .destructive) {
+                perform(action)
+            }
+            Button(L10n.common.cancel, role: .cancel) {
+                pendingAction = nil
+            }
+        } message: { action in
+            Text(action.message)
+        }
+    }
+
+    @ViewBuilder
+    private var deviceListContent: some View {
+        if sessionStore.accountDevices.isEmpty {
+            if sessionStore.isLoadingAccountDevices {
+                ManagementSignedInDevicesLoadingRow(accent: .teal)
+            } else {
+                ManagementSignedInDevicesEmptyRow(accent: .teal)
+            }
+        } else {
+            VStack(spacing: 0) {
+                ForEach(Array(sessionStore.accountDevices.enumerated()), id: \.element.id) { index, device in
+                    if index > 0 {
+                        ManagementProfileRowDivider()
+                    }
+
+                    ManagementSignedInDeviceRow(
+                        device: device,
+                        isWorking: sessionStore.isLoadingAccountDevices,
+                        onSignOut: {
+                            pendingAction = ManagementSignedInDevicePendingAction(kind: .signOut, device: device)
+                        },
+                        onForget: {
+                            pendingAction = ManagementSignedInDevicePendingAction(kind: .forget, device: device)
+                        }
+                    )
+                }
+            }
+        }
+    }
+
+    private func perform(_ action: ManagementSignedInDevicePendingAction) {
+        pendingAction = nil
+        Task {
+            switch action.kind {
+            case .signOut:
+                await sessionStore.requestAccountDeviceSignOut(action.device)
+            case .forget:
+                await sessionStore.forgetAccountDevice(action.device)
+            }
+        }
+    }
+}
+
+private struct ManagementSignedInDeviceRow: View {
+    let device: MistiaAccountDevice
+    let isWorking: Bool
+    let onSignOut: () -> Void
+    let onForget: () -> Void
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 12) {
+            ManagementProfileIconTile(icon: "iphone", accent: .teal)
+
+            VStack(alignment: .leading, spacing: 8) {
+                HStack(alignment: .firstTextBaseline, spacing: 8) {
+                    Text(device.displayName)
+                        .font(.system(size: 16.5, weight: .semibold, design: .rounded))
+                        .foregroundStyle(.primary)
+                        .lineLimit(2)
+                        .fixedSize(horizontal: false, vertical: true)
+
+                    if device.isCurrentDevice() {
+                        ManagementSignedInDevicePill(
+                            title: L10n.management.managementauth.currentDeviceBadge,
+                            accent: .purple
+                        )
+                    }
+                }
+
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(metadataText)
+                        .font(.system(size: 13.5, weight: .medium, design: .rounded))
+                        .foregroundStyle(.secondary)
+                        .lineLimit(2)
+
+                    Text(lastSeenText)
+                        .font(.system(size: 13, weight: .medium, design: .rounded))
+                        .foregroundStyle(.tertiary)
+                        .lineLimit(1)
+                }
+
+                ManagementSignedInDevicePill(
+                    title: statusTitle,
+                    accent: statusAccent
+                )
+            }
+
+            Spacer(minLength: 10)
+
+            Menu {
+                if device.status == .signedIn {
+                    Button(role: .destructive, action: onSignOut) {
+                        Label(signOutTitle, systemImage: "rectangle.portrait.and.arrow.right")
+                    }
+                }
+
+                Button(role: .destructive, action: onForget) {
+                    Label(L10n.management.managementauth.forgetDevice, systemImage: "trash")
+                }
+            } label: {
+                Image(systemName: "ellipsis.circle")
+                    .font(.system(size: 21, weight: .semibold))
+                    .foregroundStyle(.secondary)
+                    .frame(width: 36, height: 36)
+                    .contentShape(Circle())
+            }
+            .menuOrder(.fixed)
+            .disabled(isWorking)
+            .opacity(isWorking ? 0.55 : 1)
+            .accessibilityLabel(L10n.management.managementauth.deviceActionsAccessibility)
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 15)
+    }
+
+    private var signOutTitle: String {
+        device.isCurrentDevice()
+            ? L10n.management.managementauth.signOutThisDevice
+            : L10n.management.managementauth.signOutDevice
+    }
+
+    private var lastSeenText: String {
+        L10n.management.managementauth.deviceLastSeenValue(
+            MistiaDateFormatting.relativeTimeLabel(for: device.lastSeenAt)
+        )
+    }
+
+    private var metadataText: String {
+        let model = modelText
+        let system = systemText
+
+        if !model.isEmpty, !system.isEmpty {
+            return L10n.management.managementauth.deviceMetadataValue(
+                String(describing: model),
+                String(describing: system)
+            )
+        }
+
+        if !model.isEmpty {
+            return model
+        }
+
+        if !system.isEmpty {
+            return system
+        }
+
+        return L10n.management.managementauth.deviceUnknownMetadata
+    }
+
+    private var modelText: String {
+        let displayName = trimmed(device.modelDisplayName)
+        let identifier = trimmed(device.modelIdentifier)
+
+        guard !displayName.isEmpty else {
+            return identifier
+        }
+
+        guard !identifier.isEmpty, identifier != displayName else {
+            return displayName
+        }
+
+        return L10n.management.managementauth.deviceModelValue(
+            String(describing: displayName),
+            String(describing: identifier)
+        )
+    }
+
+    private var systemText: String {
+        [trimmed(device.systemName), trimmed(device.systemVersion)]
+            .filter { !$0.isEmpty }
+            .joined(separator: " ")
+    }
+
+    private var statusTitle: String {
+        switch device.status {
+        case .signedIn:
+            L10n.management.managementauth.deviceStatusSignedIn
+        case .signedOut:
+            L10n.management.managementauth.deviceStatusSignedOut
+        case .forgotten:
+            L10n.management.managementauth.deviceStatusForgotten
+        case .unknown:
+            L10n.management.managementauth.deviceStatusUnknown
+        }
+    }
+
+    private var statusAccent: MistiaAccent {
+        switch device.status {
+        case .signedIn:
+            .mint
+        case .signedOut:
+            .slate
+        case .forgotten:
+            .amber
+        case .unknown:
+            .slate
+        }
+    }
+
+    private func trimmed(_ value: String) -> String {
+        value.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+}
+
+private struct ManagementSignedInDevicePill: View {
+    let title: String
+    let accent: MistiaAccent
+
+    var body: some View {
+        Text(title)
+            .font(.system(size: 11.5, weight: .bold, design: .rounded))
+            .foregroundStyle(accent.color)
+            .lineLimit(1)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 4)
+            .background(accent.color.opacity(0.12), in: Capsule())
+    }
+}
+
+private struct ManagementSignedInDevicesEmptyRow: View {
+    let accent: MistiaAccent
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 12) {
+            ManagementProfileIconTile(icon: "iphone.slash", accent: accent)
+
+            VStack(alignment: .leading, spacing: 4) {
+                Text(L10n.management.managementauth.signedInDevicesEmptyTitle)
+                    .font(.system(size: 16.5, weight: .semibold, design: .rounded))
+                    .foregroundStyle(.primary)
+
+                Text(L10n.management.managementauth.signedInDevicesEmptyMessage)
+                    .font(.system(size: 13.5, weight: .medium, design: .rounded))
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, 14)
+        .padding(.vertical, 15)
+    }
+}
+
+private struct ManagementSignedInDevicesLoadingRow: View {
+    let accent: MistiaAccent
+
+    var body: some View {
+        HStack(spacing: 12) {
+            ManagementProfileIconTile(icon: "iphone", accent: accent)
+
+            Text(L10n.management.managementauth.signedInDevicesLoading)
+                .font(.system(size: 16.5, weight: .semibold, design: .rounded))
+                .foregroundStyle(.primary)
+
+            Spacer(minLength: 12)
+
+            ProgressView()
+                .controlSize(.small)
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 15)
     }
 }
 

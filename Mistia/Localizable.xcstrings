@@ -12607,6 +12607,512 @@
         }
       }
     },
+    "management.managementauth.currentDeviceBadge": {
+      "localizations": {
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hiện tại"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Current"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "現在"
+          }
+        }
+      }
+    },
+    "management.managementauth.deviceActionsAccessibility": {
+      "localizations": {
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tùy chọn thiết bị"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Device actions"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "デバイスの操作"
+          }
+        }
+      }
+    },
+    "management.managementauth.deviceLastSeenValue": {
+      "localizations": {
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Lần cuối: %@"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Last seen: %@"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "最終使用: %@"
+          }
+        }
+      }
+    },
+    "management.managementauth.deviceMetadataValue": {
+      "localizations": {
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ • %@"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ • %@"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ • %@"
+          }
+        }
+      }
+    },
+    "management.managementauth.deviceModelValue": {
+      "localizations": {
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ (%@)"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ (%@)"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ (%@)"
+          }
+        }
+      }
+    },
+    "management.managementauth.deviceStatusForgotten": {
+      "localizations": {
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Đã quên"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Forgotten"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "削除済み"
+          }
+        }
+      }
+    },
+    "management.managementauth.deviceStatusSignedIn": {
+      "localizations": {
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Đang đăng nhập"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Signed in"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "サインイン中"
+          }
+        }
+      }
+    },
+    "management.managementauth.deviceStatusSignedOut": {
+      "localizations": {
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Đã đăng xuất"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Signed out"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "サインアウト済み"
+          }
+        }
+      }
+    },
+    "management.managementauth.deviceStatusUnknown": {
+      "localizations": {
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Không rõ"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Unknown"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "不明"
+          }
+        }
+      }
+    },
+    "management.managementauth.deviceUnknownMetadata": {
+      "localizations": {
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Không có thông tin thiết bị"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Device details unavailable"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "デバイス情報なし"
+          }
+        }
+      }
+    },
+    "management.managementauth.forgetDevice": {
+      "localizations": {
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Quên thiết bị"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Forget device"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "デバイスを削除"
+          }
+        }
+      }
+    },
+    "management.managementauth.forgetDeviceConfirmationTitle": {
+      "localizations": {
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Quên thiết bị?"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Forget device?"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "デバイスを削除しますか？"
+          }
+        }
+      }
+    },
+    "management.managementauth.forgetSignedInDeviceConfirmationMessage": {
+      "localizations": {
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Thiết bị đang đăng nhập sẽ được yêu cầu đăng xuất, rồi bị xóa khỏi danh sách thiết bị."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mistia will ask this signed-in device to sign out, then remove it from the device list."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "サインイン中のこのデバイスにサインアウトを要求し、その後デバイス一覧から削除します。"
+          }
+        }
+      }
+    },
+    "management.managementauth.forgetSignedOutDeviceConfirmationMessage": {
+      "localizations": {
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Thiết bị này sẽ bị xóa khỏi danh sách thiết bị."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mistia will remove this device from the device list."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "このデバイスをデバイス一覧から削除します。"
+          }
+        }
+      }
+    },
+    "management.managementauth.refreshDevices": {
+      "localizations": {
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Làm mới thiết bị"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Refresh devices"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "デバイスを更新"
+          }
+        }
+      }
+    },
+    "management.managementauth.signOutDevice": {
+      "localizations": {
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Đăng xuất khỏi thiết bị"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sign out of device"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "デバイスからサインアウト"
+          }
+        }
+      }
+    },
+    "management.managementauth.signOutDeviceConfirmationMessage": {
+      "localizations": {
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mistia sẽ yêu cầu thiết bị này đăng xuất ở lần mở app, đồng bộ hoặc kiểm tra phiên tiếp theo."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mistia will ask this device to sign out the next time it opens the app, syncs, or checks the session."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "次にアプリを開く、同期する、またはセッション確認を行うタイミングで、このデバイスにサインアウトを要求します。"
+          }
+        }
+      }
+    },
+    "management.managementauth.signOutDeviceConfirmationTitle": {
+      "localizations": {
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Đăng xuất thiết bị?"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sign out device?"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "デバイスからサインアウトしますか？"
+          }
+        }
+      }
+    },
+    "management.managementauth.signOutThisDevice": {
+      "localizations": {
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Đăng xuất khỏi thiết bị này"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sign out of this device"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "このデバイスからサインアウト"
+          }
+        }
+      }
+    },
+    "management.managementauth.signOutThisDeviceConfirmationMessage": {
+      "localizations": {
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mistia sẽ đăng xuất tài khoản khỏi thiết bị hiện tại. Dữ liệu cục bộ vẫn được giữ như thao tác đăng xuất thông thường."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mistia will sign the account out of this device. Local data is kept, matching the normal sign-out flow."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "このデバイスからアカウントをサインアウトします。通常のサインアウトと同じくローカルデータは保持されます。"
+          }
+        }
+      }
+    },
+    "management.managementauth.signedInDevicesEmptyMessage": {
+      "localizations": {
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Thiết bị sẽ xuất hiện ở đây sau khi tài khoản đăng nhập và đồng bộ."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Devices appear here after the account signs in and syncs."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "アカウントがサインインして同期すると、ここにデバイスが表示されます。"
+          }
+        }
+      }
+    },
+    "management.managementauth.signedInDevicesEmptyTitle": {
+      "localizations": {
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Chưa có thiết bị"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No devices yet"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "デバイスはまだありません"
+          }
+        }
+      }
+    },
+    "management.managementauth.signedInDevicesLoading": {
+      "localizations": {
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Đang tải thiết bị"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Loading devices"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "デバイスを読み込み中"
+          }
+        }
+      }
+    },
     "management.managementauth.snapshotRestored": {
       "localizations": {
         "vi": {
@@ -12889,28 +13395,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "この端末には %@ 件、クラウドには %@ 件のレコードがあります。ミスティアはまずデータの安全性を優先します。"
-          }
-        }
-      }
-    },
-    "management.managementauth.thisScreenWillListDevicesCurrentlySigned": {
-      "localizations": {
-        "vi": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Màn này sẽ hiển thị các thiết bị đã đăng nhập vào tài khoản Mistia của bạn."
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "This screen will list devices currently signed in to your Mistia account."
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "この画面ではミスティアアカウントにログインしている端末を表示します。"
           }
         }
       }

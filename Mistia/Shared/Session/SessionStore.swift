@@ -175,9 +175,13 @@ final class SessionStore {
 
     var networkStatus: SessionNetworkStatus = .checking
     var remoteUnavailableReason: String?
+    var accountDevices: [MistiaAccountDevice] = []
+    var isLoadingAccountDevices = false
+    var accountDevicesErrorMessage: String?
 
     @ObservationIgnored private let authService: any SessionAuthServicing
     @ObservationIgnored private let userProfileStore: any UserProfileRemoteStoring
+    @ObservationIgnored private let accountDeviceStore: any AccountDeviceRegistryServicing
     @ObservationIgnored private let launchState: MistiaDataStack.LaunchState?
     @ObservationIgnored private var modelContainer: ModelContainer
     @ObservationIgnored private var syncCoordinator: SyncCoordinator
@@ -207,6 +211,7 @@ final class SessionStore {
         userDefaults: UserDefaults = .standard,
         authService: (any SessionAuthServicing)? = nil,
         userProfileStore: (any UserProfileRemoteStoring)? = nil,
+        accountDeviceStore: (any AccountDeviceRegistryServicing)? = nil,
         syncCoordinator providedSyncCoordinator: SyncCoordinator? = nil,
         connectivityMonitor providedConnectivityMonitor: SessionConnectivityMonitor? = nil,
         registerBackgroundRefresh: Bool = true
@@ -216,6 +221,7 @@ final class SessionStore {
         self.userDefaults = userDefaults
         self.authService = authService ?? SupabaseAuthService()
         self.userProfileStore = userProfileStore ?? SupabaseUserProfileStore()
+        self.accountDeviceStore = accountDeviceStore ?? MistiaAccountDeviceRegistryService()
         self.syncCoordinator = providedSyncCoordinator ?? SyncCoordinator(modelContainer: modelContainer)
         self.connectivityMonitor = providedConnectivityMonitor ?? SessionConnectivityMonitor()
         isAutoSyncEnabled = userDefaults.bool(forKey: MistiaAppStorageKey.syncAutoEnabled)
@@ -441,6 +447,88 @@ final class SessionStore {
         postSyncRefreshHandler = handler
     }
 
+    func refreshAccountDevices() async {
+        guard let currentSession, canPerformRemoteActions else {
+            accountDevices = []
+            accountDevicesErrorMessage = remoteUnavailableReason
+            return
+        }
+
+        isLoadingAccountDevices = true
+        accountDevicesErrorMessage = nil
+        defer { isLoadingAccountDevices = false }
+
+        do {
+            _ = try await accountDeviceStore.registerCurrentDevice(session: currentSession)
+            accountDevices = try await accountDeviceStore.fetchDevices(session: currentSession)
+        } catch {
+            accountDevicesErrorMessage = friendlyErrorMessage(for: error)
+        }
+    }
+
+    func requestAccountDeviceSignOut(_ device: MistiaAccountDevice) async {
+        if device.isCurrentDevice() {
+            await signOut()
+            return
+        }
+
+        guard let currentSession, canPerformRemoteActions else {
+            accountDevicesErrorMessage = remoteUnavailableReason
+            return
+        }
+
+        isLoadingAccountDevices = true
+        accountDevicesErrorMessage = nil
+        defer { isLoadingAccountDevices = false }
+
+        do {
+            let updatedDevice = try await accountDeviceStore.requestSignOut(
+                deviceID: device.deviceID,
+                session: currentSession
+            )
+            upsertAccountDevice(updatedDevice)
+        } catch {
+            accountDevicesErrorMessage = friendlyErrorMessage(for: error)
+        }
+    }
+
+    func forgetAccountDevice(_ device: MistiaAccountDevice) async {
+        guard let currentSession, canPerformRemoteActions else {
+            accountDevicesErrorMessage = remoteUnavailableReason
+            return
+        }
+
+        isLoadingAccountDevices = true
+        accountDevicesErrorMessage = nil
+        defer { isLoadingAccountDevices = false }
+
+        do {
+            try await accountDeviceStore.forgetDevice(deviceID: device.deviceID, session: currentSession)
+            accountDevices.removeAll { $0.deviceID == device.deviceID }
+            if device.isCurrentDevice() {
+                await signOut()
+            }
+        } catch {
+            accountDevicesErrorMessage = friendlyErrorMessage(for: error)
+        }
+    }
+
+    func checkForRemoteAccountDeviceSignOutIfNeeded() async {
+        guard let currentSession, canPerformRemoteActions else { return }
+
+        do {
+            guard let currentDevice = try await accountDeviceStore.fetchCurrentDevice(session: currentSession) else {
+                return
+            }
+            upsertAccountDevice(currentDevice)
+            if currentDevice.requiresLocalSignOut() {
+                await signOut()
+            }
+        } catch {
+            accountDevicesErrorMessage = friendlyErrorMessage(for: error)
+        }
+    }
+
     func handleSceneDidBecomeActive() {
         if requiresInitialSync && hasCompletedCloudSyncHistory() {
             requiresInitialSync = false
@@ -449,6 +537,9 @@ final class SessionStore {
         }
         updateAutoSyncLoopState()
         scheduleFamilyOwnerOutboxRecoveryIfNeeded()
+        Task { @MainActor [weak self] in
+            await self?.checkForRemoteAccountDeviceSignOutIfNeeded()
+        }
     }
 
     func handleSceneDidEnterBackground() {
@@ -518,6 +609,10 @@ final class SessionStore {
                     restoringExistingSession: true
                 )
                 applyLocalRestoredSessionStateIfNeeded()
+                await refreshAccountDevicesAfterAuthentication(
+                    session: restoredSession,
+                    respectsRemoteSignOut: true
+                )
             }
         } catch {
             lastErrorMessage = friendlyErrorMessage(for: error)
@@ -695,6 +790,10 @@ final class SessionStore {
         await beginAuthTransition()
         defer { endAuthTransition() }
 
+        if networkStatus != .disconnected {
+            await markCurrentAccountDeviceSignedOut(session: activeSession)
+        }
+
         do {
             try await authService.signOut(session: activeSession)
         } catch {
@@ -720,6 +819,10 @@ final class SessionStore {
 
         await beginAuthTransition()
         defer { endAuthTransition() }
+
+        if networkStatus != .disconnected {
+            await markCurrentAccountDeviceSignedOut(session: activeSession)
+        }
 
         do {
             try await authService.signOut(session: activeSession)
@@ -753,6 +856,7 @@ final class SessionStore {
 
         do {
             let activeSession = try await prepareRemoteSession()
+            await markCurrentAccountDeviceSignedOut(session: activeSession)
             try await authService.deleteAccount(session: activeSession)
             if let launchState, let currentDescriptor = launchState.activeProfileDescriptor {
                 try MistiaSyncLocalStore.detachFromCloud(in: modelContainer)
@@ -1664,6 +1768,52 @@ final class SessionStore {
         syncStatusSystemImage = "checkmark.circle"
         updateAutoSyncLoopState()
         scheduleFamilyOwnerOutboxRecoveryIfNeeded()
+        await refreshAccountDevicesAfterAuthentication(
+            session: session,
+            respectsRemoteSignOut: restoringExistingSession
+        )
+    }
+
+    private func refreshAccountDevicesAfterAuthentication(
+        session: SupabaseAuthSession,
+        respectsRemoteSignOut: Bool
+    ) async {
+        guard canPerformRemoteActions else { return }
+
+        do {
+            if respectsRemoteSignOut,
+               let currentDevice = try await accountDeviceStore.fetchCurrentDevice(session: session) {
+                upsertAccountDevice(currentDevice)
+                if currentDevice.requiresLocalSignOut() {
+                    await signOut()
+                    return
+                }
+            }
+
+            let registeredDevice = try await accountDeviceStore.registerCurrentDevice(session: session)
+            let devices = try await accountDeviceStore.fetchDevices(session: session)
+            accountDevices = devices.isEmpty ? [registeredDevice] : devices
+            accountDevicesErrorMessage = nil
+        } catch {
+            accountDevicesErrorMessage = friendlyErrorMessage(for: error)
+        }
+    }
+
+    private func markCurrentAccountDeviceSignedOut(session: SupabaseAuthSession?) async {
+        do {
+            try await accountDeviceStore.markCurrentDeviceSignedOut(session: session)
+        } catch {
+            lastErrorMessage = friendlyErrorMessage(for: error)
+        }
+    }
+
+    private func upsertAccountDevice(_ device: MistiaAccountDevice) {
+        accountDevices.removeAll { $0.deviceID == device.deviceID }
+        guard device.forgetAt == nil else { return }
+        accountDevices.append(device)
+        accountDevices.sort { lhs, rhs in
+            lhs.lastSeenAt > rhs.lastSeenAt
+        }
     }
 
     private func applySignedInOfflineState() {
@@ -2683,6 +2833,9 @@ final class SessionStore {
         lastSyncAt = nil
         lastErrorMessage = nil
         remoteUnavailableReason = nil
+        accountDevices = []
+        accountDevicesErrorMessage = nil
+        isLoadingAccountDevices = false
         initialSyncPreview = nil
         pendingInitialSyncChoice = nil
         syncCoordinator.clearQueuedMutations()

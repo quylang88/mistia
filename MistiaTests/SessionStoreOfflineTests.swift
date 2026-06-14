@@ -1583,10 +1583,12 @@ final class SessionStoreOfflineTests: XCTestCase {
     func testSignOutKeepsPreviousAccountAsEditableLocalProfile() async throws {
         let session = makeSession()
         let authService = SessionAuthServiceSpy(persistedSession: session)
+        let accountDeviceStore = AccountDeviceRegistrySpy()
         let store = try makeSessionStore(
             authService: authService,
             userProfileStore: UserProfileStoreSpy(),
-            networkStatus: .disconnected
+            networkStatus: .disconnected,
+            accountDeviceStore: accountDeviceStore
         )
 
         await store.bootstrapIfNeeded()
@@ -1597,6 +1599,107 @@ final class SessionStoreOfflineTests: XCTestCase {
         XCTAssertEqual(store.localModeProfileUserID, session.user.id)
         XCTAssertEqual(store.syncStatusTitle, "Local mode")
         XCTAssertTrue(store.syncStatusDetail.contains("same account"))
+    }
+
+    func testBootstrapRegistersCurrentAccountDevice() async throws {
+        let userID = UUID()
+        let sessionID = UUID()
+        let session = makeSession(
+            userID: userID,
+            accessToken: makeAccessToken(sessionID: sessionID)
+        )
+        let accountDeviceStore = AccountDeviceRegistrySpy()
+        let store = try makeSessionStore(
+            authService: SessionAuthServiceSpy(persistedSession: session),
+            userProfileStore: UserProfileStoreSpy(),
+            networkStatus: .connected,
+            accountDeviceStore: accountDeviceStore
+        )
+
+        await store.bootstrapIfNeeded()
+
+        await waitUntil("account device registration") {
+            accountDeviceStore.registeredDevices.count == 1
+        }
+        XCTAssertEqual(accountDeviceStore.registeredDevices.first?.sessionID, sessionID)
+        XCTAssertEqual(accountDeviceStore.registeredDevices.first?.userID, userID)
+        XCTAssertEqual(store.accountDevices.first?.sessionID, sessionID)
+    }
+
+    func testSignOutMarksCurrentAccountDeviceSignedOut() async throws {
+        let session = makeSession()
+        let accountDeviceStore = AccountDeviceRegistrySpy()
+        let store = try makeSessionStore(
+            authService: SessionAuthServiceSpy(persistedSession: session),
+            userProfileStore: UserProfileStoreSpy(),
+            networkStatus: .connected,
+            accountDeviceStore: accountDeviceStore
+        )
+
+        await store.bootstrapIfNeeded()
+        await store.signOut()
+
+        XCTAssertEqual(accountDeviceStore.signedOutDevices, [MistiaSyncDeviceIdentity.current()])
+    }
+
+    func testRemoteAccountDeviceSignOutRequestTriggersLocalSignOut() async throws {
+        let session = makeSession()
+        let accountDeviceStore = AccountDeviceRegistrySpy()
+        let store = try makeSessionStore(
+            authService: SessionAuthServiceSpy(persistedSession: session),
+            userProfileStore: UserProfileStoreSpy(),
+            networkStatus: .connected,
+            accountDeviceStore: accountDeviceStore
+        )
+
+        await store.bootstrapIfNeeded()
+        accountDeviceStore.requestRemoteSignOutForCurrentDevice()
+
+        await store.checkForRemoteAccountDeviceSignOutIfNeeded()
+
+        XCTAssertFalse(store.isSignedIn)
+        XCTAssertEqual(accountDeviceStore.signedOutDevices, [MistiaSyncDeviceIdentity.current()])
+    }
+
+    func testBootstrapHonorsRemoteAccountDeviceSignOutBeforeRegisteringAgain() async throws {
+        let session = makeSession()
+        var remoteRequestedDevice = MistiaAccountDevice.current(session: session)
+        remoteRequestedDevice.remoteSignOutRequestedAt = Date()
+        let accountDeviceStore = AccountDeviceRegistrySpy()
+        accountDeviceStore.stageCurrentDevice(remoteRequestedDevice)
+        let store = try makeSessionStore(
+            authService: SessionAuthServiceSpy(persistedSession: session),
+            userProfileStore: UserProfileStoreSpy(),
+            networkStatus: .connected,
+            accountDeviceStore: accountDeviceStore
+        )
+
+        await store.bootstrapIfNeeded()
+
+        XCTAssertFalse(store.isSignedIn)
+        XCTAssertTrue(accountDeviceStore.registeredDevices.isEmpty)
+        XCTAssertEqual(accountDeviceStore.signedOutDevices, [MistiaSyncDeviceIdentity.current()])
+    }
+
+    func testForgetCurrentAccountDeviceHidesDeviceAndSignsOut() async throws {
+        let session = makeSession()
+        let accountDeviceStore = AccountDeviceRegistrySpy()
+        let store = try makeSessionStore(
+            authService: SessionAuthServiceSpy(persistedSession: session),
+            userProfileStore: UserProfileStoreSpy(),
+            networkStatus: .connected,
+            accountDeviceStore: accountDeviceStore
+        )
+
+        await store.bootstrapIfNeeded()
+        let currentDevice = try XCTUnwrap(store.accountDevices.first)
+
+        await store.forgetAccountDevice(currentDevice)
+
+        XCTAssertFalse(store.isSignedIn)
+        XCTAssertTrue(store.accountDevices.isEmpty)
+        XCTAssertTrue(accountDeviceStore.registeredDevices.isEmpty)
+        XCTAssertEqual(accountDeviceStore.signedOutDevices, [MistiaSyncDeviceIdentity.current()])
     }
 
     func testGuestLocalEditIsOwnedByPreviousLocalProfile() throws {
@@ -1786,7 +1889,8 @@ final class SessionStoreOfflineTests: XCTestCase {
         networkStatus: SessionNetworkStatus,
         modelContainer: ModelContainer? = nil,
         userDefaults: UserDefaults? = nil,
-        syncCoordinator: SyncCoordinator? = nil
+        syncCoordinator: SyncCoordinator? = nil,
+        accountDeviceStore: (any AccountDeviceRegistryServicing)? = nil
     ) throws -> SessionStore {
         let resolvedContainer: ModelContainer
         if let modelContainer {
@@ -1800,6 +1904,7 @@ final class SessionStoreOfflineTests: XCTestCase {
             userDefaults: userDefaults ?? UserDefaults(suiteName: "MistiaTests.\(UUID().uuidString)") ?? .standard,
             authService: authService,
             userProfileStore: userProfileStore,
+            accountDeviceStore: accountDeviceStore,
             syncCoordinator: syncCoordinator,
             connectivityMonitor: SessionConnectivityMonitor(initialStatus: networkStatus),
             registerBackgroundRefresh: false
@@ -1846,6 +1951,15 @@ final class SessionStoreOfflineTests: XCTestCase {
                 )
             )
         )
+    }
+
+    private func makeAccessToken(sessionID: UUID) -> String {
+        let data = try! JSONEncoder().encode(["session_id": sessionID.uuidString])
+        let payload = data.base64EncodedString()
+            .replacingOccurrences(of: "+", with: "-")
+            .replacingOccurrences(of: "/", with: "_")
+            .replacingOccurrences(of: "=", with: "")
+        return "header.\(payload).signature"
     }
 
     private func makeFamilySnapshot(
@@ -2077,6 +2191,54 @@ private final class SessionAuthServiceSpy: SessionAuthServicing {
 
     func clearPersistedSession() throws {
         clearPersistedSessionCallCount += 1
+    }
+}
+
+@MainActor
+private final class AccountDeviceRegistrySpy: AccountDeviceRegistryServicing {
+    private(set) var registeredDevices: [MistiaAccountDevice] = []
+    private(set) var signedOutDevices: [UUID] = []
+    private var stagedCurrentDevice: MistiaAccountDevice?
+
+    func stageCurrentDevice(_ device: MistiaAccountDevice) {
+        stagedCurrentDevice = device
+    }
+
+    func requestRemoteSignOutForCurrentDevice() {
+        guard let index = registeredDevices.lastIndex(where: { $0.deviceID == MistiaSyncDeviceIdentity.current() }) else {
+            return
+        }
+        registeredDevices[index].remoteSignOutRequestedAt = Date()
+    }
+
+    func registerCurrentDevice(session: SupabaseAuthSession) async throws -> MistiaAccountDevice {
+        let device = MistiaAccountDevice.current(session: session)
+        stagedCurrentDevice = nil
+        registeredDevices.append(device)
+        return device
+    }
+
+    func fetchDevices(session: SupabaseAuthSession) async throws -> [MistiaAccountDevice] {
+        registeredDevices
+    }
+
+    func fetchCurrentDevice(session: SupabaseAuthSession) async throws -> MistiaAccountDevice? {
+        stagedCurrentDevice ?? registeredDevices.last
+    }
+
+    func requestSignOut(deviceID: UUID, session: SupabaseAuthSession) async throws -> MistiaAccountDevice {
+        var device = registeredDevices.first { $0.deviceID == deviceID }
+            ?? MistiaAccountDevice.current(session: session)
+        device.remoteSignOutRequestedAt = Date()
+        return device
+    }
+
+    func forgetDevice(deviceID: UUID, session: SupabaseAuthSession) async throws {
+        registeredDevices.removeAll { $0.deviceID == deviceID }
+    }
+
+    func markCurrentDeviceSignedOut(session: SupabaseAuthSession?) async throws {
+        signedOutDevices.append(MistiaSyncDeviceIdentity.current())
     }
 }
 

@@ -110,34 +110,34 @@ struct MistiaAmountCalculatorSheet: View {
     private func keypad(metrics: CalculatorSheetMetrics) -> some View {
         Grid(horizontalSpacing: metrics.gridSpacing, verticalSpacing: metrics.gridSpacing) {
             GridRow {
-                calculatorButton("C", role: .utility, metrics: metrics) { clear() }
-                calculatorButton("⌫", role: .utility, metrics: metrics) { deleteBackward() }
-                calculatorButton("÷", role: .operation, metrics: metrics) { appendOperator("÷") }
-                calculatorButton("×", role: .operation, metrics: metrics) { appendOperator("×") }
+                calculatorButton(String("C"), role: .utility, metrics: metrics) { clear() }
+                calculatorButton(String("⌫"), role: .utility, metrics: metrics) { deleteBackward() }
+                calculatorButton(String("÷"), role: .operation, metrics: metrics) { appendOperator("÷") }
+                calculatorButton(String("×"), role: .operation, metrics: metrics) { appendOperator("×") }
             }
             GridRow {
-                calculatorButton("7", metrics: metrics) { appendDigit("7") }
-                calculatorButton("8", metrics: metrics) { appendDigit("8") }
-                calculatorButton("9", metrics: metrics) { appendDigit("9") }
-                calculatorButton("-", role: .operation, metrics: metrics) { appendOperator("-") }
+                calculatorButton(String("7"), metrics: metrics) { appendDigit("7") }
+                calculatorButton(String("8"), metrics: metrics) { appendDigit("8") }
+                calculatorButton(String("9"), metrics: metrics) { appendDigit("9") }
+                calculatorButton(String("-"), role: .operation, metrics: metrics) { appendOperator("-") }
             }
             GridRow {
-                calculatorButton("4", metrics: metrics) { appendDigit("4") }
-                calculatorButton("5", metrics: metrics) { appendDigit("5") }
-                calculatorButton("6", metrics: metrics) { appendDigit("6") }
-                calculatorButton("+", role: .operation, metrics: metrics) { appendOperator("+") }
+                calculatorButton(String("4"), metrics: metrics) { appendDigit("4") }
+                calculatorButton(String("5"), metrics: metrics) { appendDigit("5") }
+                calculatorButton(String("6"), metrics: metrics) { appendDigit("6") }
+                calculatorButton(String("+"), role: .operation, metrics: metrics) { appendOperator("+") }
             }
             GridRow {
-                calculatorButton("1", metrics: metrics) { appendDigit("1") }
-                calculatorButton("2", metrics: metrics) { appendDigit("2") }
-                calculatorButton("3", metrics: metrics) { appendDigit("3") }
-                calculatorButton("=", role: .operation, metrics: metrics) { collapseToResultIfPossible() }
+                calculatorButton(String("1"), metrics: metrics) { appendDigit("1") }
+                calculatorButton(String("2"), metrics: metrics) { appendDigit("2") }
+                calculatorButton(String("3"), metrics: metrics) { appendDigit("3") }
+                calculatorButton(String("="), role: .operation, metrics: metrics) { collapseToResultIfPossible() }
             }
             GridRow {
-                calculatorButton("0", metrics: metrics) { appendDigit("0") }
+                calculatorButton(String("0"), metrics: metrics) { appendDigit("0") }
                     .gridCellColumns(2)
-                calculatorButton("00", metrics: metrics) { appendDigit("00") }
-                calculatorButton("OK", role: .confirm, metrics: metrics) { commit() }
+                calculatorButton(String("00"), metrics: metrics) { appendDigit("00") }
+                calculatorButton(String("OK"), role: .confirm, metrics: metrics) { commit() }
             }
         }
     }
