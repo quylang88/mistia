@@ -507,7 +507,7 @@ nonisolated enum SettlementLogic {
         }
 
         return groups
-            .filter { $0.kind == .sharedExpense && !$0.isArchived }
+            .filter { $0.kind == .sharedExpense && (!$0.isArchived || $0.status == .settled) }
             .map { group in
                 let groupParticipants = participantsByGroupID[group.id] ?? []
                 let visibleParticipantNames = groupParticipants
@@ -542,6 +542,14 @@ nonisolated enum SettlementLogic {
                     lastUpdatedAt: lastUpdatedAt
                 )
             }
+    }
+
+    static func completedEventSnapshots(
+        allEvents: [PreparingSettlementEventSnapshot],
+        preparingEvents: [PreparingSettlementEventSnapshot]
+    ) -> [PreparingSettlementEventSnapshot] {
+        let preparingEventIDs = Set(preparingEvents.map(\.id))
+        return allEvents.filter { !preparingEventIDs.contains($0.id) }
     }
 
     static func participantSuggestionRecords(

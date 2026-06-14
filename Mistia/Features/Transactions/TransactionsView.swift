@@ -881,49 +881,33 @@ struct TransactionsView: View {
                     }
                 ) {
                     if selectedSegment == .event {
-                        let events = listSnapshot.allSettlementEvents
-                        if events.isEmpty {
+                        let ongoingEvents = listSnapshot.preparingSettlementEvents
+                        let completedEvents = SettlementLogic.completedEventSnapshots(
+                            allEvents: listSnapshot.allSettlementEvents,
+                            preparingEvents: ongoingEvents
+                        )
+
+                        if ongoingEvents.isEmpty && completedEvents.isEmpty {
                             MistiaEmptyStateContent(
                                 title: "Chưa có sự kiện nào",
                                 message: "Các sự kiện chia chi phí sẽ xuất hiện ở đây.",
                                 buttonTitle: nil,
                                 accent: MistiaAccent.purple.color,
-                                symbols: ["calendar", "person.2.fill"]
+                                symbols: ["calendar", "person.2.fill", "receipt.fill", "checkmark.seal.fill"]
                             )
                             .padding(.top, 40)
                         } else {
-                            VStack(alignment: .leading, spacing: 10) {
-                                Text(L10n.transactions.settlement.splitExpenseEventLabel)
-                                    .font(.system(size: 13, weight: .bold, design: .rounded))
-                                    .foregroundStyle(.secondary)
-                                    .textCase(.uppercase)
-                                    .tracking(0.6)
-                                    .padding(.horizontal, 2)
-                                
-                                MistiaBlockCard(
-                                    cornerRadius: 22,
-                                    tint: Color(UIColor.secondarySystemGroupedBackground),
-                                    padding: 0
-                                ) {
-                                    VStack(spacing: 0) {
-                                        ForEach(Array(events.enumerated()), id: \.element.id) { index, event in
-                                            Button {
-                                                preparingSettlementTarget = PreparingSettlementEventSheetTarget(groupID: event.id)
-                                            } label: {
-                                                EventCashflowRow(event: event)
-                                                    .padding(.horizontal, 14)
-                                                    .padding(.vertical, 12)
-                                            }
-                                            .buttonStyle(MistiaPressableButtonStyle(cornerRadius: 18))
-                                            
-                                            if index < events.count - 1 {
-                                                Divider()
-                                                    .padding(.leading, 52)
-                                                    .padding(.trailing, 0)
-                                            }
-                                        }
-                                    }
-                                }
+                            if !ongoingEvents.isEmpty {
+                                eventSection(
+                                    title: L10n.transactions.settlement.ongoingEvents,
+                                    events: ongoingEvents
+                                )
+                            }
+                            if !completedEvents.isEmpty {
+                                eventSection(
+                                    title: L10n.transactions.settlement.completedEvents,
+                                    events: completedEvents
+                                )
                             }
                         }
                     } else {
@@ -1417,6 +1401,45 @@ struct TransactionsView: View {
             }
             .scrollClipDisabled()
             .padding(.horizontal, -18)
+        }
+    }
+
+    private func eventSection(
+        title: String,
+        events: [PreparingSettlementEventSnapshot]
+    ) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text(title)
+                .font(.system(size: 13, weight: .bold, design: .rounded))
+                .foregroundStyle(.secondary)
+                .textCase(.uppercase)
+                .tracking(0.6)
+                .padding(.horizontal, 2)
+
+            MistiaBlockCard(
+                cornerRadius: 22,
+                tint: Color(UIColor.secondarySystemGroupedBackground),
+                padding: 0
+            ) {
+                VStack(spacing: 0) {
+                    ForEach(Array(events.enumerated()), id: \.element.id) { index, event in
+                        Button {
+                            preparingSettlementTarget = PreparingSettlementEventSheetTarget(groupID: event.id)
+                        } label: {
+                            EventCashflowRow(event: event)
+                                .padding(.horizontal, 14)
+                                .padding(.vertical, 12)
+                        }
+                        .buttonStyle(MistiaPressableButtonStyle(cornerRadius: 18))
+
+                        if index < events.count - 1 {
+                            Divider()
+                                .padding(.leading, 52)
+                                .padding(.trailing, 0)
+                        }
+                    }
+                }
+            }
         }
     }
 

@@ -29,6 +29,66 @@ final class SettlementLogicTests: XCTestCase {
         )
     }
 
+    func testCompletedEventSnapshotsExcludePreparingEventIDs() {
+        let ongoingID = UUID(uuidString: "00000000-0000-0000-0000-00000000E001")!
+        let completedID = UUID(uuidString: "00000000-0000-0000-0000-00000000E002")!
+        let olderCompletedID = UUID(uuidString: "00000000-0000-0000-0000-00000000E003")!
+        let ongoingEvent = eventSnapshot(id: ongoingID, title: "Ongoing")
+        let completedEvent = eventSnapshot(id: completedID, title: "Completed")
+        let olderCompletedEvent = eventSnapshot(id: olderCompletedID, title: "Older completed")
+
+        let completedEvents = SettlementLogic.completedEventSnapshots(
+            allEvents: [completedEvent, ongoingEvent, olderCompletedEvent],
+            preparingEvents: [ongoingEvent]
+        )
+
+        XCTAssertEqual(completedEvents.map(\.id), [completedID, olderCompletedID])
+    }
+
+
+    func testAllEventSnapshotsIncludeArchivedSettledEvents() {
+        let activePreparingID = UUID(uuidString: "00000000-0000-0000-0000-00000000D001")!
+        let archivedSettledID = UUID(uuidString: "00000000-0000-0000-0000-00000000D002")!
+        let archivedPreparingID = UUID(uuidString: "00000000-0000-0000-0000-00000000D003")!
+        let now = Date(timeIntervalSince1970: 1_778_400_000)
+        let groups = [
+            settlementGroupSnapshot(id: activePreparingID, status: .preparing, title: "Active preparing", now: now),
+            settlementGroupSnapshot(
+                id: archivedSettledID,
+                status: .settled,
+                title: "Archived settled",
+                now: now,
+                isArchived: true,
+                archivedAt: now
+            ),
+            settlementGroupSnapshot(
+                id: archivedPreparingID,
+                status: .preparing,
+                title: "Archived preparing",
+                now: now,
+                isArchived: true,
+                archivedAt: now
+            )
+        ]
+
+        let allEvents = SettlementLogic.allEventSnapshots(
+            groups: groups,
+            participants: [],
+            records: []
+        )
+        let completedEvents = SettlementLogic.completedEventSnapshots(
+            allEvents: allEvents,
+            preparingEvents: SettlementLogic.preparingEventSnapshots(
+                groups: groups,
+                participants: [],
+                records: []
+            )
+        )
+
+        XCTAssertEqual(allEvents.map(\.id), [activePreparingID, archivedSettledID])
+        XCTAssertEqual(completedEvents.map(\.id), [archivedSettledID])
+    }
+
     func testPreparingEventSummarizesLinkedBillsAndVisibleParticipants() {
         let groupID = UUID(uuidString: "00000000-0000-0000-0000-00000000A001")!
         let selfID = UUID(uuidString: "00000000-0000-0000-0000-00000000A101")!
@@ -709,6 +769,49 @@ final class SettlementLogicTests: XCTestCase {
             categoryID: nil,
             counterpartyName: counterpartyName,
             normalizedCounterpartyKey: TransactionLogic.normalizeCounterpartyName(counterpartyName)
+        )
+    }
+
+    private func settlementGroupSnapshot(
+        id: UUID,
+        status: SettlementStatus,
+        title: String,
+        now: Date,
+        isArchived: Bool = false,
+        archivedAt: Date? = nil
+    ) -> SettlementGroupRecordSnapshot {
+        SettlementGroupRecordSnapshot(
+            id: id,
+            kind: .sharedExpense,
+            status: status,
+            title: title,
+            currencyCode: "JPY",
+            occurredAt: now,
+            totalMinor: 0,
+            expectedMinor: 0,
+            settledMinor: 0,
+            note: nil,
+            updatedAt: now,
+            isArchived: isArchived,
+            archivedAt: archivedAt
+        )
+    }
+
+    private func eventSnapshot(
+        id: UUID,
+        title: String
+    ) -> PreparingSettlementEventSnapshot {
+        let now = Date(timeIntervalSince1970: 1_778_400_000)
+        return PreparingSettlementEventSnapshot(
+            id: id,
+            title: title,
+            currencyCode: "JPY",
+            totalPaidMinor: 1_000,
+            billCount: 1,
+            participantNames: ["Linh"],
+            note: nil,
+            occurredAt: now,
+            lastUpdatedAt: now
         )
     }
 }

@@ -3344,21 +3344,6 @@ private struct ManagementSignedInDevicesView: View {
                     accent: .orange
                 )
             }
-
-            ManagementProfileListCard(tint: cardTint) {
-                ManagementProfileActionRow(
-                    title: L10n.management.managementauth.refreshDevices,
-                    icon: "arrow.clockwise.icloud",
-                    accent: .sky,
-                    subtitle: nil,
-                    isDisabled: sessionStore.isLoadingAccountDevices,
-                    showsProgress: sessionStore.isLoadingAccountDevices
-                ) {
-                    Task {
-                        await sessionStore.refreshAccountDevices()
-                    }
-                }
-            }
         }
         .task {
             await sessionStore.refreshAccountDevices()
@@ -3450,7 +3435,7 @@ private struct ManagementSignedInDeviceRow: View {
                     if device.isCurrentDevice() {
                         ManagementSignedInDevicePill(
                             title: L10n.management.managementauth.currentDeviceBadge,
-                            accent: .purple
+                            accent: .sky
                         )
                     }
                 }
@@ -3536,21 +3521,7 @@ private struct ManagementSignedInDeviceRow: View {
     }
 
     private var modelText: String {
-        let displayName = trimmed(device.modelDisplayName)
-        let identifier = trimmed(device.modelIdentifier)
-
-        guard !displayName.isEmpty else {
-            return identifier
-        }
-
-        guard !identifier.isEmpty, identifier != displayName else {
-            return displayName
-        }
-
-        return L10n.management.managementauth.deviceModelValue(
-            String(describing: displayName),
-            String(describing: identifier)
-        )
+        trimmed(device.modelListDisplayName)
     }
 
     private var systemText: String {

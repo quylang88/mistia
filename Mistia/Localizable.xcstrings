@@ -12612,19 +12612,19 @@
         "vi": {
           "stringUnit": {
             "state": "translated",
-            "value": "Hiện tại"
+            "value": "iPhone này"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Current"
+            "value": "This iPhone"
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "現在"
+            "value": "このiPhone"
           }
         }
       }
@@ -12911,28 +12911,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "このデバイスをデバイス一覧から削除します。"
-          }
-        }
-      }
-    },
-    "management.managementauth.refreshDevices": {
-      "localizations": {
-        "vi": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Làm mới thiết bị"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Refresh devices"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "デバイスを更新"
           }
         }
       }
@@ -34680,6 +34658,13 @@
         "vi": { "stringUnit": { "state": "translated", "value": "Sự kiện đang diễn ra" } },
         "en": { "stringUnit": { "state": "translated", "value": "Ongoing events" } },
         "ja": { "stringUnit": { "state": "translated", "value": "進行中のイベント" } }
+      }
+    },
+    "transactions.settlement.completedEvents": {
+      "localizations": {
+        "vi": { "stringUnit": { "state": "translated", "value": "Sự kiện đã hoàn tất" } },
+        "en": { "stringUnit": { "state": "translated", "value": "Completed events" } },
+        "ja": { "stringUnit": { "state": "translated", "value": "完了したイベント" } }
       }
     },
     "transactions.settlement.openSettlements": {
