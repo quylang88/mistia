@@ -150,6 +150,9 @@ final class SessionStore {
     private static let AUTOMATIC_SYNC_INTERVAL: TimeInterval = 1_200 // 20 minutes in seconds
     private static let QUEUED_AUTO_SYNC_DEBOUNCE: Duration = .milliseconds(600)
     private static let FAMILY_OWNER_PUSH_CONFLICTS_KEY = "mistia.familyOwnerPushConflicts.v1"
+    private static let BACKGROUND_SYNC_NEXT_REQUESTED_AT_KEY = "mistia.backgroundSync.nextRequestedAt.v1"
+    private static let BACKGROUND_SYNC_LAST_ATTEMPT_AT_KEY = "mistia.backgroundSync.lastAttemptAt.v1"
+    private static let BACKGROUND_SYNC_LAST_EVENT_KEY = "mistia.backgroundSync.lastEvent.v1"
     var summary: SessionSummary?
     var isWorking = false
     var isManualSyncInProgress = false
@@ -161,6 +164,9 @@ final class SessionStore {
     var syncStatusSystemImage: String
     var lastErrorMessage: String?
     var lastSyncAt: Date?
+    var backgroundSyncNextRequestedAt: Date?
+    var backgroundSyncLastAttemptAt: Date?
+    var backgroundSyncLastEvent: String?
     var initialSyncPreview: MistiaInitialSyncPreview?
     var isAutoSyncEnabled: Bool
     var authPhase: SessionAuthPhase = .signIn
@@ -227,6 +233,9 @@ final class SessionStore {
         isAutoSyncEnabled = userDefaults.bool(forKey: MistiaAppStorageKey.syncAutoEnabled)
         legacyLocalModeProfileUserID = Self.storedLocalModeProfileUserID(in: userDefaults)
         familyOwnerPushConflicts = Self.loadFamilyOwnerPushConflicts(from: userDefaults)
+        backgroundSyncNextRequestedAt = userDefaults.object(forKey: Self.BACKGROUND_SYNC_NEXT_REQUESTED_AT_KEY) as? Date
+        backgroundSyncLastAttemptAt = userDefaults.object(forKey: Self.BACKGROUND_SYNC_LAST_ATTEMPT_AT_KEY) as? Date
+        backgroundSyncLastEvent = userDefaults.string(forKey: Self.BACKGROUND_SYNC_LAST_EVENT_KEY)
         requiresManualSyncAfterRestore = Self.storedManualSyncReviewRequired(
             in: userDefaults,
             profileID: launchState?.activeProfileDescriptor?.id
@@ -526,6 +535,22 @@ final class SessionStore {
             }
         } catch {
             accountDevicesErrorMessage = friendlyErrorMessage(for: error)
+        }
+    }
+
+
+    func recordBackgroundSyncDiagnostic(event: String, nextRequestedAt: Date? = nil, attemptAt: Date? = nil) {
+        backgroundSyncLastEvent = event
+        userDefaults.set(event, forKey: Self.BACKGROUND_SYNC_LAST_EVENT_KEY)
+
+        if let nextRequestedAt {
+            backgroundSyncNextRequestedAt = nextRequestedAt
+            userDefaults.set(nextRequestedAt, forKey: Self.BACKGROUND_SYNC_NEXT_REQUESTED_AT_KEY)
+        }
+
+        if let attemptAt {
+            backgroundSyncLastAttemptAt = attemptAt
+            userDefaults.set(attemptAt, forKey: Self.BACKGROUND_SYNC_LAST_ATTEMPT_AT_KEY)
         }
     }
 
