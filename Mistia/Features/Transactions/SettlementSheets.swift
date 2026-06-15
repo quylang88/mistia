@@ -226,12 +226,14 @@ struct SettlementEditorSheet: View {
                 guard transaction.deletedAt == nil,
                       !transaction.isArchived,
                       transaction.entryStatus == .posted,
-                      transaction.primaryKind == .expense,
                       transaction.settlementGroupID == nil,
                       TransactionLogic.isExpenseSpending(transaction.snapshot) else {
                     return false
                 }
-                return transaction.sourceWallet != nil && transaction.category != nil
+                if transaction.primaryKind == .expense {
+                    return transaction.sourceWallet != nil && transaction.category != nil
+                }
+                return transaction.category != nil
             }
             .sorted {
                 if $0.occurredAt != $1.occurredAt {
