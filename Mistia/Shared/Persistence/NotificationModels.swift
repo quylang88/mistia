@@ -45,6 +45,7 @@ nonisolated enum MistiaFamilyNotificationResourceType: String, Codable, CaseIter
     case bill
     case due
     case installment
+    case event
 
     var localizedName: String {
         switch self {
@@ -72,6 +73,8 @@ nonisolated enum MistiaFamilyNotificationResourceType: String, Codable, CaseIter
             return L10n.shared.persistence.notification.paymentPlan
         case .installment:
             return L10n.shared.persistence.notification.installment
+        case .event:
+            return L10n.shared.persistence.notification.event
         }
     }
 }

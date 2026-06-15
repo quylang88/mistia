@@ -3857,6 +3857,12 @@ private struct FamilySharingSheet: View {
                         resourceID: nil,
                         scope: .edit
                     )
+                    sharingToggle(
+                        title: L10n.transactions.settlement.eventTitle,
+                        resourceType: .event,
+                        resourceID: nil,
+                        scope: .edit
+                    )
                 }
 
                 Section(L10n.family.family.createAccess) {
@@ -3911,6 +3917,12 @@ private struct FamilySharingSheet: View {
                     sharingToggle(
                         title: L10n.family.family.goals,
                         resourceType: .goal,
+                        resourceID: nil,
+                        scope: .create
+                    )
+                    sharingToggle(
+                        title: L10n.transactions.settlement.eventTitle,
+                        resourceType: .event,
                         resourceID: nil,
                         scope: .create
                     )

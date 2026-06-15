@@ -42,7 +42,9 @@ final class BillWorkflowTests: XCTestCase {
     func testMistiaFamilyNotificationResourceTypeCases() {
         XCTAssertEqual(MistiaFamilyNotificationResourceType.bill.rawValue, "bill")
         XCTAssertEqual(MistiaFamilyNotificationResourceType.familyTransfer.rawValue, "family_transfer")
-        }
+        XCTAssertEqual(MistiaFamilyNotificationResourceType.event.rawValue, "event")
+        XCTAssertEqual(MistiaFamilyNotificationResourceType.event.localizedName, "Sự kiện")
+    }
 
     func testLegacyRemoteCreditCardProfileDecodesAutoPayEnabledAsTrue() throws {
         let json = """

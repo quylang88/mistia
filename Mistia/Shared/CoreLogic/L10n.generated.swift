@@ -3221,6 +3221,8 @@ nonisolated enum L10n {
                 static func debt(language: MistiaAppLanguage) -> String { L10n.tr("shared.persistence.notification.debt", vi: "Khoản nợ", en: "Debt", ja: "借金", language: language) }
                 static var edit: String { L10n.tr("shared.persistence.notification.edit", vi: "chỉnh sửa", en: "edit", ja: "編集") }
                 static func edit(language: MistiaAppLanguage) -> String { L10n.tr("shared.persistence.notification.edit", vi: "chỉnh sửa", en: "edit", ja: "編集", language: language) }
+                static var event: String { L10n.tr("shared.persistence.notification.event", vi: "Sự kiện", en: "Event", ja: "イベント") }
+                static func event(language: MistiaAppLanguage) -> String { L10n.tr("shared.persistence.notification.event", vi: "Sự kiện", en: "Event", ja: "イベント", language: language) }
                 static var familyTransfer: String { L10n.tr("shared.persistence.notification.familyTransfer", vi: "Chuyển tiền gia đình", en: "Family transfer", ja: "ファミリー送金") }
                 static func familyTransfer(language: MistiaAppLanguage) -> String { L10n.tr("shared.persistence.notification.familyTransfer", vi: "Chuyển tiền gia đình", en: "Family transfer", ja: "ファミリー送金", language: language) }
                 static var goal: String { L10n.tr("shared.persistence.notification.goal", vi: "Mục tiêu", en: "Goal", ja: "目標") }

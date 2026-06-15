@@ -1155,6 +1155,14 @@ final class FamilyContextStore {
         )
     }
 
+    func canCreateEvent(for targetUser: UUID?) -> Bool {
+        canCreate(ownerUserID: targetUser, resourceType: .event)
+    }
+
+    func canEditEvent(for targetUser: UUID?) -> Bool {
+        canEdit(ownerUserID: targetUser, resourceType: .event)
+    }
+
     @discardableResult
     func refreshPermissionGrant(
         ownerUserID: UUID?,
