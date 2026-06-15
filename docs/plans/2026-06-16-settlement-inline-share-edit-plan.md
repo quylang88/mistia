@@ -10,6 +10,74 @@
 
 ---
 
+### Task 0: Hide the Self Participant From Editable Share Rows
+
+**Files:**
+- Modify: `Mistia/Features/Transactions/SettlementSheets.swift`
+
+- [x] **Step 1: Add the display-only participant collection**
+
+Add a computed property beside `splitResult`:
+
+```swift
+private var editableShareParticipants: [SettlementParticipantResult] {
+    guard let selfParticipantID = selfParticipant?.id else {
+        return splitResult.participants
+    }
+    return splitResult.participants.filter { $0.id != selfParticipantID }
+}
+```
+
+This property affects only rendered edit rows. Keep `splitResult.participants`
+unchanged for total-difference calculations, persistence, and settlement
+suggestions.
+
+- [x] **Step 2: Render only non-self share rows**
+
+In `splitSuggestionContent`, replace:
+
+```swift
+ForEach(splitResult.participants) { participant in
+```
+
+with:
+
+```swift
+ForEach(editableShareParticipants) { participant in
+```
+
+Do not change the other `ForEach(splitResult.participants)` call used by the
+legacy participant result card.
+
+- [x] **Step 3: Verify the app target**
+
+Run:
+
+```bash
+xcodebuild -project Mistia.xcodeproj -scheme Mistia \
+  -destination 'generic/platform=iOS' \
+  CODE_SIGNING_ALLOWED=NO build
+```
+
+Expected: `** BUILD SUCCEEDED **`.
+
+- [x] **Step 4: Verify scope and commit**
+
+Run:
+
+```bash
+git diff --check
+git diff -- Mistia/Features/Transactions/SettlementSheets.swift
+```
+
+Confirm only the editable share-row collection changed, then commit:
+
+```bash
+git add Mistia/Features/Transactions/SettlementSheets.swift \
+  docs/plans/2026-06-16-settlement-inline-share-edit-plan.md
+git commit -m "fix: hide self from settlement share rows"
+```
+
 ### Task 1: Preserve Automatic Shares When One Participant Is Edited
 
 **Files:**

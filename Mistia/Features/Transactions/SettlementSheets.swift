@@ -1998,6 +1998,13 @@ struct SettlementSplitCalculatorSheet: View {
         )
     }
 
+    private var editableShareParticipants: [SettlementParticipantResult] {
+        guard let selfParticipantID = selfParticipant?.id else {
+            return splitResult.participants
+        }
+        return splitResult.participants.filter { $0.id != selfParticipantID }
+    }
+
     private var suggestionsForSelf: [SettlementSuggestion] {
         guard allInputsProvided else { return [] }
         guard let selfID = selfParticipant?.id else { return [] }
@@ -2345,7 +2352,7 @@ struct SettlementSplitCalculatorSheet: View {
                 .italic()
                 .font(.system(size: 14, design: .rounded))
         } else {
-            ForEach(splitResult.participants) { participant in
+            ForEach(editableShareParticipants) { participant in
                 let baseShareMinor = baseShareMinorByParticipantID[participant.id] ?? participant.shareMinor
                 SharedExpenseParticipantShareEditRow(
                     participant: participant,
