@@ -1270,7 +1270,7 @@ struct NotificationCenterView: View {
         for resourceType: MistiaFamilyNotificationResourceType?
     ) -> MistiaTab {
         switch resourceType {
-        case .transaction:
+        case .transaction, .event:
             return .transactions
         case .wallet, .category:
             return .settings
